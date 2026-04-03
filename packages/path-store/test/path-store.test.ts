@@ -768,6 +768,42 @@ describe('PathStore', () => {
     expect(callOrder).toEqual(['specific:add:src/new.ts', 'wildcard:add']);
   });
 
+  test('supports unsubscribing listeners', () => {
+    const store = new PathStore({
+      paths: ['src/index.ts'],
+    });
+    const operations: string[] = [];
+
+    const unsubscribe = store.on('*', (event) => {
+      operations.push(event.operation);
+    });
+
+    store.add('src/first.ts');
+    unsubscribe();
+    store.add('src/second.ts');
+
+    expect(operations).toEqual(['add']);
+  });
+
+  test('propagates listener errors after committing the mutation and stops later listeners', () => {
+    const store = new PathStore({
+      paths: ['src/index.ts'],
+    });
+    const callOrder: string[] = [];
+
+    store.on('add', () => {
+      callOrder.push('specific');
+      throw new Error('listener boom');
+    });
+    store.on('*', () => {
+      callOrder.push('wildcard');
+    });
+
+    expect(() => store.add('src/new.ts')).toThrow('listener boom');
+    expect(callOrder).toEqual(['specific']);
+    expect(store.list()).toEqual(['src/index.ts', 'src/new.ts']);
+  });
+
   test('delivers batch commit listeners synchronously after child mutations are committed', () => {
     const store = new PathStore({
       paths: ['src/old.ts', 'tmp/'],
@@ -795,6 +831,67 @@ describe('PathStore', () => {
     });
 
     expect(callOrder).toEqual(['specific:batch:move,add', 'wildcard:batch']);
+  });
+
+  test('marks collapsed-subtree canonical mutations as projection-stable when visible rows do not change', () => {
+    const addStore = new PathStore({
+      flattenEmptyDirectories: false,
+      paths: ['src/a.ts', 'src/b.ts'],
+    });
+    const addEvents = collectWildcardEvents(addStore);
+    addStore.add('src/c.ts');
+    expect(addEvents).toEqual([
+      {
+        affectedAncestorIds: expect.any(Array),
+        affectedNodeIds: expect.any(Array),
+        canonicalChanged: true,
+        operation: 'add',
+        path: 'src/c.ts',
+        projectionChanged: false,
+        visibleCountDelta: 0,
+      },
+    ]);
+    expect(getVisiblePaths(addStore, 0, 9)).toEqual(['src/']);
+
+    const removeStore = new PathStore({
+      flattenEmptyDirectories: false,
+      paths: ['src/a.ts', 'src/b.ts', 'src/c.ts'],
+    });
+    const removeEvents = collectWildcardEvents(removeStore);
+    removeStore.remove('src/b.ts');
+    expect(removeEvents).toEqual([
+      {
+        affectedAncestorIds: expect.any(Array),
+        affectedNodeIds: expect.any(Array),
+        canonicalChanged: true,
+        operation: 'remove',
+        path: 'src/b.ts',
+        projectionChanged: false,
+        recursive: false,
+        visibleCountDelta: 0,
+      },
+    ]);
+    expect(getVisiblePaths(removeStore, 0, 9)).toEqual(['src/']);
+
+    const moveStore = new PathStore({
+      flattenEmptyDirectories: false,
+      paths: ['a/x.ts', 'a/z.ts', 'b/y.ts'],
+    });
+    const moveEvents = collectWildcardEvents(moveStore);
+    moveStore.move('a/x.ts', 'b/');
+    expect(moveEvents).toEqual([
+      {
+        affectedAncestorIds: expect.any(Array),
+        affectedNodeIds: expect.any(Array),
+        canonicalChanged: true,
+        from: 'a/x.ts',
+        operation: 'move',
+        projectionChanged: false,
+        to: 'b/x.ts',
+        visibleCountDelta: 0,
+      },
+    ]);
+    expect(getVisiblePaths(moveStore, 0, 9)).toEqual(['a/', 'b/']);
   });
 
   test('returns row metadata for the current visible window and clamps slice bounds', () => {

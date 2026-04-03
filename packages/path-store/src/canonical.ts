@@ -56,6 +56,8 @@ export function addPath(
   );
 
   const affectedNodeIds = new Set<NodeId>(createdNodeIds);
+  const previousChildCount = getDirectoryIndex(state, directoryId).childIds
+    .length;
   let addedNodeId = directoryId;
 
   if (preparedPath.isDirectory) {
@@ -78,7 +80,11 @@ export function addPath(
     affectedAncestorIds: collectAncestorIds(state, addedNodeId),
     affectedNodeIds: [...affectedNodeIds],
     path,
-    projectionChanged: true,
+    projectionChanged: didAddAffectProjection(
+      state,
+      directoryId,
+      previousChildCount
+    ),
   });
 }
 
@@ -108,6 +114,7 @@ export function removePath(
   }
 
   const parentId = node.parentId;
+  const previousChildCount = getDirectoryIndex(state, parentId).childIds.length;
   const removedNodeIds = removeSubtree(state, nodeId);
   removeChildReference(state, parentId, nodeId, node.nameId);
   promoteEmptyAncestorsToExplicit(state, parentId);
@@ -117,7 +124,11 @@ export function removePath(
     affectedAncestorIds: collectAncestorIds(state, parentId),
     affectedNodeIds: removedNodeIds,
     path,
-    projectionChanged: true,
+    projectionChanged: didRemoveAffectProjection(
+      state,
+      parentId,
+      previousChildCount
+    ),
     recursive: options.recursive === true,
   });
 }
@@ -140,6 +151,10 @@ export function movePath(
 
   const collision = options.collision ?? 'error';
   const moveTarget = resolveMoveTarget(state, sourceNodeId, toPath);
+  const previousParentChildCount = getDirectoryIndex(state, sourceNode.parentId)
+    .childIds.length;
+  const targetParentChildCount = getDirectoryIndex(state, moveTarget.parentId)
+    .childIds.length;
   const sourceName = getSegmentValue(
     state.snapshot.segmentTable,
     sourceNode.nameId
@@ -211,7 +226,14 @@ export function movePath(
     ],
     affectedNodeIds: [sourceNodeId],
     from: fromPath,
-    projectionChanged: true,
+    projectionChanged: didMoveAffectProjection(
+      state,
+      sourceNodeId,
+      previousParentId,
+      previousParentChildCount,
+      moveTarget.parentId,
+      targetParentChildCount
+    ),
     to: materializeNodePath(state, sourceNodeId),
   });
 }
@@ -843,6 +865,103 @@ function promoteEmptyAncestorsToExplicit(
     currentDirectoryId =
       currentNode.parentId === currentDirectoryId ? null : currentNode.parentId;
   }
+}
+
+function findNearestCollapsedAncestor(
+  state: PathStoreState,
+  startDirectoryId: NodeId
+): NodeId | null {
+  let currentDirectoryId: NodeId | null = startDirectoryId;
+
+  while (currentDirectoryId != null) {
+    const currentNode = requireNode(state, currentDirectoryId);
+    if (
+      currentNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY ||
+      (currentNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0
+    ) {
+      return null;
+    }
+
+    if (!isDirectoryExpanded(state, currentDirectoryId, currentNode)) {
+      return currentDirectoryId;
+    }
+
+    currentDirectoryId = currentNode.parentId;
+  }
+
+  return null;
+}
+
+// Marks obvious no-visible-change canonical edits inside collapsed subtrees as
+// projection-stable without trying to solve perfect visibility inference yet.
+function didAddAffectProjection(
+  state: PathStoreState,
+  parentId: NodeId,
+  previousChildCount: number
+): boolean {
+  const collapsedAncestorId = findNearestCollapsedAncestor(state, parentId);
+  if (collapsedAncestorId == null) {
+    return true;
+  }
+
+  return collapsedAncestorId === parentId && previousChildCount === 0;
+}
+
+function didRemoveAffectProjection(
+  state: PathStoreState,
+  parentId: NodeId,
+  previousChildCount: number
+): boolean {
+  const collapsedAncestorId = findNearestCollapsedAncestor(state, parentId);
+  if (collapsedAncestorId == null) {
+    return true;
+  }
+
+  return collapsedAncestorId === parentId && previousChildCount === 1;
+}
+
+function didMoveAffectProjection(
+  state: PathStoreState,
+  sourceNodeId: NodeId,
+  previousParentId: NodeId,
+  previousParentChildCount: number,
+  targetParentId: NodeId,
+  targetParentChildCount: number
+): boolean {
+  const sourceNode = requireNode(state, sourceNodeId);
+  if (
+    sourceNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+    findNearestCollapsedAncestor(state, sourceNodeId) == null
+  ) {
+    return true;
+  }
+
+  const sourceCollapsedAncestorId = findNearestCollapsedAncestor(
+    state,
+    previousParentId
+  );
+  if (sourceCollapsedAncestorId == null) {
+    return true;
+  }
+
+  const targetCollapsedAncestorId = findNearestCollapsedAncestor(
+    state,
+    targetParentId
+  );
+  if (targetCollapsedAncestorId == null) {
+    return true;
+  }
+
+  if (
+    sourceCollapsedAncestorId === previousParentId &&
+    previousParentChildCount === 1
+  ) {
+    return true;
+  }
+
+  return (
+    targetCollapsedAncestorId === targetParentId && targetParentChildCount === 0
+  );
 }
 
 function recomputeDepths(state: PathStoreState, nodeId: NodeId): void {
