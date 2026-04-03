@@ -551,7 +551,7 @@ describe('SSR + declarative shadow DOM', () => {
     expect(getIconHref('README.md')).toBe('#custom-default');
   });
 
-  test('preloadFileTree uses the simple icon set when icons are unset', () => {
+  test('preloadFileTree uses the complete icon set when icons are unset', () => {
     const payload = preloadFileTree({
       initialFiles: [
         'package.json',
@@ -594,19 +594,19 @@ describe('SSR + declarative shadow DOM', () => {
       return href;
     };
 
-    expect(getIconHref('package.json')).toBe('#file-tree-icon-file');
-    expect(getIconHref('index.ts')).toBe('#file-tree-icon-file');
-    expect(getIconHref('app.tsx')).toBe('#file-tree-icon-file');
-    expect(getIconHref('card.module.css')).toBe('#file-tree-icon-file');
-    expect(getIconHref('README.md')).toBe('#file-tree-icon-file');
-    expect(getIconHref('image.png')).toBe('#file-tree-icon-file');
-    expect(getIconHref('agent.mcp')).toBe('#file-tree-icon-file');
+    expect(getIconHref('package.json')).toBe('#file-tree-builtin-json');
+    expect(getIconHref('index.ts')).toBe('#file-tree-builtin-typescript');
+    expect(getIconHref('app.tsx')).toBe('#file-tree-builtin-react');
+    expect(getIconHref('card.module.css')).toBe('#file-tree-builtin-css');
+    expect(getIconHref('README.md')).toBe('#file-tree-builtin-markdown');
+    expect(getIconHref('image.png')).toBe('#file-tree-builtin-image');
+    expect(getIconHref('agent.mcp')).toBe('#file-tree-builtin-mcp');
   });
 
-  test('preloadFileTree uses the simple icon set when requested', () => {
+  test('preloadFileTree uses the minimal icon set when requested', () => {
     const payload = preloadFileTree({
       initialFiles: ['package.json', 'index.ts', 'app.tsx'],
-      icons: 'simple',
+      icons: 'minimal',
     });
 
     const container = document.createElement('file-tree-container');
@@ -633,7 +633,7 @@ describe('SSR + declarative shadow DOM', () => {
     ]);
   });
 
-  test('preloadFileTree uses the file-type icon set when requested', () => {
+  test('preloadFileTree uses the standard icon set when requested', () => {
     const payload = preloadFileTree({
       initialFiles: [
         'package.json',
@@ -644,7 +644,7 @@ describe('SSR + declarative shadow DOM', () => {
         'image.png',
         'agent.mcp',
       ],
-      icons: 'file-type',
+      icons: 'standard',
     });
 
     const container = document.createElement('file-tree-container');
@@ -677,28 +677,20 @@ describe('SSR + declarative shadow DOM', () => {
       return href;
     };
 
-    expect(getIconHref('package.json')).toBe(
-      '#file-tree-builtin-file-type-npm'
-    );
-    expect(getIconHref('index.ts')).toBe(
-      '#file-tree-builtin-file-type-typescript'
-    );
-    expect(getIconHref('app.tsx')).toBe('#file-tree-builtin-file-type-react');
-    expect(getIconHref('card.module.css')).toBe(
-      '#file-tree-builtin-file-type-css'
-    );
-    expect(getIconHref('README.md')).toBe(
-      '#file-tree-builtin-file-type-markdown'
-    );
-    expect(getIconHref('image.png')).toBe('#file-tree-builtin-file-type-image');
-    expect(getIconHref('agent.mcp')).toBe('#file-tree-builtin-file-type-mcp');
+    expect(getIconHref('package.json')).toBe('#file-tree-builtin-json');
+    expect(getIconHref('index.ts')).toBe('#file-tree-builtin-typescript');
+    expect(getIconHref('app.tsx')).toBe('#file-tree-builtin-typescript');
+    expect(getIconHref('card.module.css')).toBe('#file-tree-builtin-css');
+    expect(getIconHref('README.md')).toBe('#file-tree-builtin-markdown');
+    expect(getIconHref('image.png')).toBe('#file-tree-builtin-image');
+    expect(getIconHref('agent.mcp')).toBe('#file-tree-builtin-mcp');
   });
 
   test('setOptions swaps built-in icon sets and colored mode at runtime', () => {
     const container = document.createElement('file-tree-container');
     const ft = new FileTree({
       initialFiles: ['index.ts'],
-      icons: 'simple',
+      icons: 'minimal',
     });
 
     const origRender = preactRenderer.renderRoot;
@@ -712,19 +704,19 @@ describe('SSR + declarative shadow DOM', () => {
       ) as HTMLElement | null;
       expect(wrapper).not.toBeNull();
       expect(
-        shadowRoot?.querySelector('#file-tree-builtin-file-type-typescript')
+        shadowRoot?.querySelector('#file-tree-builtin-typescript')
       ).toBeNull();
       expect(wrapper?.dataset.fileTreeColoredIcons).toBeUndefined();
 
       ft.setOptions({
         icons: {
-          set: 'duo-tone',
+          set: 'complete',
           colored: true,
         },
       });
 
       expect(
-        shadowRoot?.querySelector('#file-tree-builtin-duo-tone-typescript')
+        shadowRoot?.querySelector('#file-tree-builtin-typescript')
       ).not.toBeNull();
       expect(wrapper?.dataset.fileTreeColoredIcons).toBe('true');
     } finally {

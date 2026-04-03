@@ -172,7 +172,7 @@ export const FILE_TREE_ICON_CONFIG_TYPE: PreloadFileOptions<undefined> = {
 // or inject your own SVG symbols.
 interface FileTreeIconConfig {
   // Optional: use one of the built-in sets, or "none" for custom-only rules.
-  set?: 'simple' | 'file-type' | 'duo-tone' | 'none';
+  set?: 'minimal' | 'standard' | 'complete' | 'none';
 
   // Optional: enable built-in per-file-type colors. Default: true.
   colored?: boolean;
@@ -213,7 +213,7 @@ interface FileTreeIconConfig {
 const options = {
   initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
   icons: {
-    set: 'file-type',
+    set: 'standard',
     colored: true,
     spriteSheet: \`
       <svg data-icon-sprite aria-hidden="true" width="0" height="0">

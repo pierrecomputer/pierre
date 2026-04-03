@@ -7,7 +7,7 @@ export type RemappedIcon =
       viewBox?: string;
     };
 
-export type FileTreeBuiltInIconSet = 'simple' | 'file-type' | 'duo-tone';
+export type FileTreeBuiltInIconSet = 'minimal' | 'standard' | 'complete';
 
 export interface FileTreeIconConfig {
   /** Use one of the built-in icon sets, or `none` for custom-only icon rules. */
@@ -48,7 +48,7 @@ export function normalizeFileTreeIcons(
 ): NormalizedFileTreeIconConfig {
   if (icons == null) {
     return {
-      set: 'simple',
+      set: 'complete',
       colored: true,
     };
   }
@@ -62,7 +62,7 @@ export function normalizeFileTreeIcons(
 
   return {
     ...icons,
-    set: icons.set ?? (hasCustomIconOverrides(icons) ? 'none' : 'simple'),
+    set: icons.set ?? (hasCustomIconOverrides(icons) ? 'none' : 'complete'),
     colored: icons.colored ?? true,
   };
 }

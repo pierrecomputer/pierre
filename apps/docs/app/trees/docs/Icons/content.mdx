@@ -4,12 +4,13 @@ Use the `icons` option inside `FileTreeOptions` to choose one of the built-in
 icon sets or inject your own SVG sprite. Try the live demo at
 [/preview/trees#custom-icons](/preview/trees#custom-icons).
 
-- `icons: 'simple' | 'file-type' | 'duo-tone'` — use one of the shipped icon
-  packs.
+- `icons: 'minimal' | 'standard' | 'complete'` — use one of the shipped icon
+  tiers. Each tier is cumulative: `standard` includes everything in `minimal`
+  plus language icons, and `complete` adds brands and tooling on top.
 - `set` — use the object form to combine a built-in set with `colored`,
   `spriteSheet`, or file-specific overrides.
-- `colored` — semantic per-file-type colors for built-in `file-type` and
-  `duo-tone` icons. Defaults to `true`; set `colored: false` to disable it.
+- `colored` — semantic per-file-type colors for built-in `standard` and
+  `complete` icons. Defaults to `true`; set `colored: false` to disable it.
   Override the palette with CSS variables like
   `--trees-file-icon-color-javascript`.
 - `spriteSheet` — an SVG string containing `<symbol>` definitions. It is

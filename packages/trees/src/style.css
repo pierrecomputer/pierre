@@ -45,17 +45,54 @@
 
       // Built-in File Icon Color Overrides
       --trees-file-icon-color
+      --trees-file-icon-color-astro
+      --trees-file-icon-color-babel
+      --trees-file-icon-color-bash
+      --trees-file-icon-color-biome
+      --trees-file-icon-color-bootstrap
+      --trees-file-icon-color-browserslist
+      --trees-file-icon-color-bun
+      --trees-file-icon-color-claude
       --trees-file-icon-color-css
+      --trees-file-icon-color-database
       --trees-file-icon-color-default
+      --trees-file-icon-color-docker
+      --trees-file-icon-color-eslint
       --trees-file-icon-color-git
+      --trees-file-icon-color-go
+      --trees-file-icon-color-graphql
+      --trees-file-icon-color-html
       --trees-file-icon-color-image
       --trees-file-icon-color-javascript
       --trees-file-icon-color-json
       --trees-file-icon-color-markdown
       --trees-file-icon-color-mcp
       --trees-file-icon-color-npm
+      --trees-file-icon-color-oxc
+      --trees-file-icon-color-postcss
+      --trees-file-icon-color-prettier
+      --trees-file-icon-color-python
       --trees-file-icon-color-react
+      --trees-file-icon-color-ruby
+      --trees-file-icon-color-rust
+      --trees-file-icon-color-sass
+      --trees-file-icon-color-svg
+      --trees-file-icon-color-svelte
+      --trees-file-icon-color-svgo
+      --trees-file-icon-color-swift
+      --trees-file-icon-color-table
+      --trees-file-icon-color-text
+      --trees-file-icon-color-tailwind
+      --trees-file-icon-color-terraform
       --trees-file-icon-color-typescript
+      --trees-file-icon-color-vite
+      --trees-file-icon-color-vscode
+      --trees-file-icon-color-vue
+      --trees-file-icon-color-wasm
+      --trees-file-icon-color-webpack
+      --trees-file-icon-color-yml
+      --trees-file-icon-color-zig
+      --trees-file-icon-color-zip
 
       // Available CSS Layout Overrides
       --trees-gap-override
@@ -206,6 +243,7 @@
 
     --trees-icon-gray: light-dark(#84848a, #adadb1);
     --trees-icon-red: light-dark(#d52c36, #ff6762);
+    --trees-icon-vermilion: light-dark(#ff8c5b, #d5512f);
     --trees-icon-orange: light-dark(#d47628, #ffa359);
     --trees-icon-yellow: light-dark(#d5a910, #ffd452);
     --trees-icon-green: light-dark(#199f43, #5ecc71);
@@ -213,17 +251,74 @@
     --trees-icon-cyan: light-dark(#1ca1c7, #68cdf2);
     --trees-icon-blue: light-dark(#1a85d4, #69b1ff);
     --trees-icon-indigo: light-dark(#693acf, #9d6afb);
+    --trees-icon-purple: light-dark(#a631be, #d568ea);
     --trees-icon-pink: light-dark(#d32a61, #ff678d);
 
     --trees-file-icon-color-default: var(
       --trees-file-icon-color,
       var(--trees-icon-gray)
     );
+    --trees-file-icon-color-astro: var(
+      --trees-file-icon-color,
+      var(--trees-icon-purple)
+    );
+    --trees-file-icon-color-babel: var(
+      --trees-file-icon-color,
+      var(--trees-icon-yellow)
+    );
+    --trees-file-icon-color-bash: var(
+      --trees-file-icon-color,
+      var(--trees-icon-green)
+    );
+    --trees-file-icon-color-biome: var(
+      --trees-file-icon-color,
+      var(--trees-icon-blue)
+    );
+    --trees-file-icon-color-bootstrap: var(
+      --trees-file-icon-color,
+      var(--trees-icon-indigo)
+    );
+    --trees-file-icon-color-browserslist: var(
+      --trees-file-icon-color,
+      var(--trees-icon-yellow)
+    );
+    --trees-file-icon-color-bun: var(
+      --trees-file-icon-color,
+      var(--trees-icon-pink)
+    );
+    --trees-file-icon-color-claude: var(
+      --trees-file-icon-color,
+      var(--trees-icon-orange)
+    );
     --trees-file-icon-color-css: var(
       --trees-file-icon-color,
       var(--trees-icon-indigo)
     );
+    --trees-file-icon-color-database: var(
+      --trees-file-icon-color,
+      var(--trees-icon-purple)
+    );
+    --trees-file-icon-color-docker: var(
+      --trees-file-icon-color,
+      var(--trees-icon-blue)
+    );
+    --trees-file-icon-color-eslint: var(
+      --trees-file-icon-color,
+      var(--trees-icon-indigo)
+    );
     --trees-file-icon-color-git: var(
+      --trees-file-icon-vermilion,
+      var(--trees-icon-vermilion)
+    );
+    --trees-file-icon-color-go: var(
+      --trees-file-icon-color,
+      var(--trees-icon-cyan)
+    );
+    --trees-file-icon-color-graphql: var(
+      --trees-file-icon-color,
+      var(--trees-icon-pink)
+    );
+    --trees-file-icon-color-html: var(
       --trees-file-icon-color,
       var(--trees-icon-orange)
     );
@@ -251,13 +346,105 @@
       --trees-file-icon-color,
       var(--trees-icon-red)
     );
+    --trees-file-icon-color-oxc: var(
+      --trees-file-icon-cyan,
+      var(--trees-icon-cyan)
+    );
+    --trees-file-icon-color-postcss: var(
+      --trees-file-icon-color,
+      var(--trees-icon-red)
+    );
+    --trees-file-icon-color-prettier: var(
+      --trees-file-icon-color,
+      var(--trees-icon-teal)
+    );
+    --trees-file-icon-color-python: var(
+      --trees-file-icon-color,
+      var(--trees-icon-blue)
+    );
     --trees-file-icon-color-react: var(
       --trees-file-icon-color,
       var(--trees-icon-cyan)
     );
+    --trees-file-icon-color-ruby: var(
+      --trees-file-icon-color,
+      var(--trees-icon-red)
+    );
+    --trees-file-icon-color-rust: var(
+      --trees-file-icon-color,
+      var(--trees-icon-orange)
+    );
+    --trees-file-icon-color-sass: var(
+      --trees-file-icon-color,
+      var(--trees-icon-pink)
+    );
+    --trees-file-icon-color-svg: var(
+      --trees-file-icon-color,
+      var(--trees-icon-orange)
+    );
+    --trees-file-icon-color-svelte: var(
+      --trees-file-icon-color,
+      var(--trees-icon-red)
+    );
+    --trees-file-icon-color-svgo: var(
+      --trees-file-icon-color,
+      var(--trees-icon-green)
+    );
+    --trees-file-icon-color-swift: var(
+      --trees-file-icon-color,
+      var(--trees-icon-orange)
+    );
+    --trees-file-icon-color-table: var(
+      --trees-file-icon-color,
+      var(--trees-icon-teal)
+    );
+    --trees-file-icon-color-text: var(
+      --trees-file-icon-color,
+      var(--trees-icon-gray)
+    );
+    --trees-file-icon-color-tailwind: var(
+      --trees-file-icon-color,
+      var(--trees-icon-cyan)
+    );
+    --trees-file-icon-color-terraform: var(
+      --trees-file-icon-color,
+      var(--trees-icon-indigo)
+    );
     --trees-file-icon-color-typescript: var(
       --trees-file-icon-color,
       var(--trees-icon-blue)
+    );
+    --trees-file-icon-color-vite: var(
+      --trees-file-icon-color,
+      var(--trees-icon-purple)
+    );
+    --trees-file-icon-color-vscode: var(
+      --trees-file-icon-color,
+      var(--trees-icon-blue)
+    );
+    --trees-file-icon-color-vue: var(
+      --trees-file-icon-color,
+      var(--trees-icon-green)
+    );
+    --trees-file-icon-color-wasm: var(
+      --trees-file-icon-color,
+      var(--trees-icon-indigo)
+    );
+    --trees-file-icon-color-webpack: var(
+      --trees-file-icon-color,
+      var(--trees-icon-blue)
+    );
+    --trees-file-icon-color-yml: var(
+      --trees-file-icon-color,
+      var(--trees-icon-red)
+    );
+    --trees-file-icon-color-zig: var(
+      --trees-file-icon-color,
+      var(--trees-icon-orange)
+    );
+    --trees-file-icon-color-zip: var(
+      --trees-file-icon-color,
+      var(--trees-icon-orange)
     );
 
     --trees-level-gap: var(--trees-level-gap-override, 8px);
@@ -454,14 +641,56 @@
   }
 
   [data-file-tree-colored-icons='true'] {
+    [data-icon-token='astro'] {
+      color: var(--trees-file-icon-color-astro);
+    }
+    [data-icon-token='babel'] {
+      color: var(--trees-file-icon-color-babel);
+    }
+    [data-icon-token='bash'] {
+      color: var(--trees-file-icon-color-bash);
+    }
+    [data-icon-token='biome'] {
+      color: var(--trees-file-icon-color-biome);
+    }
+    [data-icon-token='bootstrap'] {
+      color: var(--trees-file-icon-color-bootstrap);
+    }
+    [data-icon-token='browserslist'] {
+      color: var(--trees-file-icon-color-browserslist);
+    }
+    [data-icon-token='bun'] {
+      color: var(--trees-file-icon-color-bun);
+    }
+    [data-icon-token='claude'] {
+      color: var(--trees-file-icon-color-claude);
+    }
     [data-icon-token='css'] {
       color: var(--trees-file-icon-color-css);
+    }
+    [data-icon-token='database'] {
+      color: var(--trees-file-icon-color-database);
     }
     [data-icon-token='default'] {
       color: var(--trees-file-icon-color-default);
     }
+    [data-icon-token='docker'] {
+      color: var(--trees-file-icon-color-docker);
+    }
+    [data-icon-token='eslint'] {
+      color: var(--trees-file-icon-color-eslint);
+    }
     [data-icon-token='git'] {
       color: var(--trees-file-icon-color-git);
+    }
+    [data-icon-token='go'] {
+      color: var(--trees-file-icon-color-go);
+    }
+    [data-icon-token='graphql'] {
+      color: var(--trees-file-icon-color-graphql);
+    }
+    [data-icon-token='html'] {
+      color: var(--trees-file-icon-color-html);
     }
     [data-icon-token='image'] {
       color: var(--trees-file-icon-color-image);
@@ -481,11 +710,80 @@
     [data-icon-token='npm'] {
       color: var(--trees-file-icon-color-npm);
     }
+    [data-icon-token='oxc'] {
+      color: var(--trees-file-icon-color-oxc);
+    }
+    [data-icon-token='postcss'] {
+      color: var(--trees-file-icon-color-postcss);
+    }
+    [data-icon-token='prettier'] {
+      color: var(--trees-file-icon-color-prettier);
+    }
+    [data-icon-token='python'] {
+      color: var(--trees-file-icon-color-python);
+    }
     [data-icon-token='react'] {
       color: var(--trees-file-icon-color-react);
     }
+    [data-icon-token='ruby'] {
+      color: var(--trees-file-icon-color-ruby);
+    }
+    [data-icon-token='rust'] {
+      color: var(--trees-file-icon-color-rust);
+    }
+    [data-icon-token='sass'] {
+      color: var(--trees-file-icon-color-sass);
+    }
+    [data-icon-token='svg'] {
+      color: var(--trees-file-icon-color-svg);
+    }
+    [data-icon-token='svelte'] {
+      color: var(--trees-file-icon-color-svelte);
+    }
+    [data-icon-token='svgo'] {
+      color: var(--trees-file-icon-color-svgo);
+    }
+    [data-icon-token='swift'] {
+      color: var(--trees-file-icon-color-swift);
+    }
+    [data-icon-token='table'] {
+      color: var(--trees-file-icon-color-table);
+    }
+    [data-icon-token='text'] {
+      color: var(--trees-file-icon-color-text);
+    }
+    [data-icon-token='tailwind'] {
+      color: var(--trees-file-icon-color-tailwind);
+    }
+    [data-icon-token='terraform'] {
+      color: var(--trees-file-icon-color-terraform);
+    }
     [data-icon-token='typescript'] {
       color: var(--trees-file-icon-color-typescript);
+    }
+    [data-icon-token='vite'] {
+      color: var(--trees-file-icon-color-vite);
+    }
+    [data-icon-token='vscode'] {
+      color: var(--trees-file-icon-color-vscode);
+    }
+    [data-icon-token='vue'] {
+      color: var(--trees-file-icon-color-vue);
+    }
+    [data-icon-token='wasm'] {
+      color: var(--trees-file-icon-color-wasm);
+    }
+    [data-icon-token='webpack'] {
+      color: var(--trees-file-icon-color-webpack);
+    }
+    [data-icon-token='yml'] {
+      color: var(--trees-file-icon-color-yml);
+    }
+    [data-icon-token='zig'] {
+      color: var(--trees-file-icon-color-zig);
+    }
+    [data-icon-token='zip'] {
+      color: var(--trees-file-icon-color-zip);
     }
   }
 
@@ -625,8 +923,8 @@
 
   [data-item-git-status='added'] {
     &
-      > [data-item-section='icon']
-      > :not([data-icon-name='file-tree-icon-chevron']) {
+      > :where([data-item-section='icon'])
+      > :where(:not([data-icon-name='file-tree-icon-chevron'])) {
       color: var(--trees-git-added-color);
     }
     & > [data-item-section='content'] {
@@ -639,8 +937,8 @@
 
   [data-item-git-status='deleted'] {
     &
-      > [data-item-section='icon']
-      > :not([data-icon-name='file-tree-icon-chevron']) {
+      > :where([data-item-section='icon'])
+      > :where(:not([data-icon-name='file-tree-icon-chevron'])) {
       color: var(--trees-git-deleted-color);
     }
     & > [data-item-section='content'] {
@@ -653,8 +951,8 @@
 
   [data-item-git-status='modified'] {
     &
-      > [data-item-section='icon']
-      > :not([data-icon-name='file-tree-icon-chevron']) {
+      > :where([data-item-section='icon'])
+      > :where(:not([data-icon-name='file-tree-icon-chevron'])) {
       color: var(--trees-git-modified-color);
     }
     & > [data-item-section='content'] {
