@@ -1,17 +1,36 @@
-import type { PathStoreEvent } from './public-types';
+import { withBenchmarkPhase } from './internal/benchmarkInstrumentation';
+import type {
+  PathStoreAddEvent,
+  PathStoreBatchEvent,
+  PathStoreCollapseEvent,
+  PathStoreEvent,
+  PathStoreEventForType,
+  PathStoreEventType,
+  PathStoreExpandEvent,
+  PathStoreMoveEvent,
+  PathStoreRemoveEvent,
+  PathStoreSemanticEvent,
+} from './public-types';
 import { createTransactionFrame } from './state';
 import type { PathStoreState, TransactionFrame } from './state';
 
-export function subscribe(
+type EventInvalidationArgs = {
+  affectedAncestorIds?: readonly number[];
+  affectedNodeIds?: readonly number[];
+  projectionChanged: boolean;
+};
+
+export function subscribe<TType extends PathStoreEventType | '*'>(
   state: PathStoreState,
-  type: string,
-  handler: (event: PathStoreEvent) => void
+  type: TType,
+  handler: (event: PathStoreEventForType<TType>) => void
 ): () => void {
+  const rawHandler = handler as (event: PathStoreEvent) => void;
   const existingListeners = state.listeners.get(type);
   if (existingListeners != null) {
-    existingListeners.add(handler);
+    existingListeners.add(rawHandler);
   } else {
-    state.listeners.set(type, new Set([handler]));
+    state.listeners.set(type, new Set([rawHandler]));
   }
 
   return () => {
@@ -20,14 +39,98 @@ export function subscribe(
       return;
     }
 
-    listeners.delete(handler);
+    listeners.delete(rawHandler);
     if (listeners.size === 0) {
       state.listeners.delete(type);
     }
   };
 }
 
+export function createAddEvent(
+  args: EventInvalidationArgs & { path: string }
+): PathStoreAddEvent {
+  return {
+    affectedAncestorIds: args.affectedAncestorIds ?? [],
+    affectedNodeIds: args.affectedNodeIds ?? [],
+    canonicalChanged: true,
+    operation: 'add',
+    path: args.path,
+    projectionChanged: args.projectionChanged,
+    visibleCountDelta: null,
+  };
+}
+
+export function createRemoveEvent(
+  args: EventInvalidationArgs & { path: string; recursive: boolean }
+): PathStoreRemoveEvent {
+  return {
+    affectedAncestorIds: args.affectedAncestorIds ?? [],
+    affectedNodeIds: args.affectedNodeIds ?? [],
+    canonicalChanged: true,
+    operation: 'remove',
+    path: args.path,
+    projectionChanged: args.projectionChanged,
+    recursive: args.recursive,
+    visibleCountDelta: null,
+  };
+}
+
+export function createMoveEvent(
+  args: EventInvalidationArgs & { from: string; to: string }
+): PathStoreMoveEvent {
+  return {
+    affectedAncestorIds: args.affectedAncestorIds ?? [],
+    affectedNodeIds: args.affectedNodeIds ?? [],
+    canonicalChanged: true,
+    from: args.from,
+    operation: 'move',
+    projectionChanged: args.projectionChanged,
+    to: args.to,
+    visibleCountDelta: null,
+  };
+}
+
+export function createExpandEvent(
+  args: EventInvalidationArgs & { path: string }
+): PathStoreExpandEvent {
+  return {
+    affectedAncestorIds: args.affectedAncestorIds ?? [],
+    affectedNodeIds: args.affectedNodeIds ?? [],
+    canonicalChanged: false,
+    operation: 'expand',
+    path: args.path,
+    projectionChanged: true,
+    visibleCountDelta: null,
+  };
+}
+
+export function createCollapseEvent(
+  args: EventInvalidationArgs & { path: string }
+): PathStoreCollapseEvent {
+  return {
+    affectedAncestorIds: args.affectedAncestorIds ?? [],
+    affectedNodeIds: args.affectedNodeIds ?? [],
+    canonicalChanged: false,
+    operation: 'collapse',
+    path: args.path,
+    projectionChanged: true,
+    visibleCountDelta: null,
+  };
+}
+
+export function finalizeEvent(
+  state: PathStoreState,
+  previousVisibleCount: number,
+  event: PathStoreSemanticEvent
+): PathStoreSemanticEvent {
+  return {
+    ...event,
+    visibleCountDelta: getCurrentVisibleCount(state) - previousVisibleCount,
+  };
+}
+
 export function batchEvents(state: PathStoreState, run: () => void): void {
+  const previousVisibleCount = getCurrentVisibleCount(state);
   const frame = createTransactionFrame();
   state.transactionStack.push(frame);
 
@@ -38,12 +141,32 @@ export function batchEvents(state: PathStoreState, run: () => void): void {
     throw error;
   }
 
-  finishTransaction(state, frame, true);
+  finishTransaction(
+    state,
+    frame,
+    true,
+    getCurrentVisibleCount(state) - previousVisibleCount
+  );
 }
 
 export function recordEvent(
   state: PathStoreState,
-  event: PathStoreEvent
+  event: PathStoreSemanticEvent
+): void {
+  const instrumentation = state.instrumentation;
+  if (instrumentation == null) {
+    recordEventNow(state, event);
+    return;
+  }
+
+  withBenchmarkPhase(instrumentation, 'store.events.record', () =>
+    recordEventNow(state, event)
+  );
+}
+
+function recordEventNow(
+  state: PathStoreState,
+  event: PathStoreSemanticEvent
 ): void {
   const currentFrame =
     state.transactionStack[state.transactionStack.length - 1] ?? null;
@@ -53,23 +176,14 @@ export function recordEvent(
   }
 
   currentFrame.events.push(event);
-  if (event.affectedNodeIds != null) {
-    for (const nodeId of event.affectedNodeIds) {
-      currentFrame.affectedNodeIds.add(nodeId);
-    }
-  }
-
-  if (event.affectedAncestorIds != null) {
-    for (const nodeId of event.affectedAncestorIds) {
-      currentFrame.affectedAncestorIds.add(nodeId);
-    }
-  }
+  mergeEventMetadataIntoFrame(currentFrame, event);
 }
 
 function finishTransaction(
   state: PathStoreState,
   frame: TransactionFrame,
-  emit: boolean
+  emit: boolean,
+  visibleCountDelta: number | null = null
 ): void {
   const poppedFrame = state.transactionStack.pop();
   if (poppedFrame !== frame) {
@@ -80,24 +194,45 @@ function finishTransaction(
     return;
   }
 
-  const batchEvent = createBatchEvent(frame);
   const parentFrame =
     state.transactionStack[state.transactionStack.length - 1] ?? null;
   if (parentFrame != null) {
-    parentFrame.events.push(batchEvent);
-    mergeFrameMetadata(parentFrame, frame);
+    const instrumentation = state.instrumentation;
+    if (instrumentation == null) {
+      mergeBatchFrameIntoParent(parentFrame, frame);
+    } else {
+      withBenchmarkPhase(instrumentation, 'store.events.batch.merge', () =>
+        mergeBatchFrameIntoParent(parentFrame, frame)
+      );
+    }
     return;
   }
 
-  emitEvent(state, batchEvent);
+  const batchEvent = createBatchEvent(frame, visibleCountDelta);
+
+  const instrumentation = state.instrumentation;
+  if (instrumentation == null) {
+    emitEvent(state, batchEvent);
+    return;
+  }
+
+  withBenchmarkPhase(instrumentation, 'store.events.batch.commit', () =>
+    emitEvent(state, batchEvent)
+  );
 }
 
-function createBatchEvent(frame: TransactionFrame): PathStoreEvent {
+function createBatchEvent(
+  frame: TransactionFrame,
+  visibleCountDelta: number | null
+): PathStoreBatchEvent {
   return {
     affectedAncestorIds: [...frame.affectedAncestorIds],
     affectedNodeIds: [...frame.affectedNodeIds],
-    changeset: { events: frame.events },
+    canonicalChanged: frame.events.some((event) => event.canonicalChanged),
+    events: [...frame.events],
     operation: 'batch',
+    projectionChanged: frame.events.some((event) => event.projectionChanged),
+    visibleCountDelta,
   };
 }
 
@@ -114,9 +249,48 @@ function mergeFrameMetadata(
   }
 }
 
+function mergeBatchFrameIntoParent(
+  parentFrame: TransactionFrame,
+  frame: TransactionFrame
+): void {
+  for (const event of frame.events) {
+    parentFrame.events.push(event);
+  }
+  mergeFrameMetadata(parentFrame, frame);
+}
+
+function mergeEventMetadataIntoFrame(
+  frame: TransactionFrame,
+  event: PathStoreSemanticEvent
+): void {
+  for (const nodeId of event.affectedNodeIds) {
+    frame.affectedNodeIds.add(nodeId);
+  }
+
+  for (const nodeId of event.affectedAncestorIds) {
+    frame.affectedAncestorIds.add(nodeId);
+  }
+}
+
 function emitEvent(state: PathStoreState, event: PathStoreEvent): void {
+  const instrumentation = state.instrumentation;
+  if (instrumentation == null) {
+    emitEventNow(state, event);
+    return;
+  }
+
+  withBenchmarkPhase(instrumentation, 'store.events.emit', () =>
+    emitEventNow(state, event)
+  );
+}
+
+function emitEventNow(state: PathStoreState, event: PathStoreEvent): void {
   const specificListeners = state.listeners.get(event.operation);
   specificListeners?.forEach((handler) => handler(event));
   const wildcardListeners = state.listeners.get('*');
   wildcardListeners?.forEach((handler) => handler(event));
+}
+
+function getCurrentVisibleCount(state: PathStoreState): number {
+  return state.snapshot.nodes[state.snapshot.rootId]?.visibleSubtreeCount ?? 0;
 }

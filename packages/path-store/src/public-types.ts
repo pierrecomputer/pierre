@@ -45,12 +45,63 @@ export interface PathStoreVisibleRow {
   path: string;
 }
 
-export interface PathStoreEvent {
-  affectedAncestorIds?: readonly number[];
-  affectedNodeIds?: readonly number[];
-  changeset?: Record<string, unknown>;
-  operation: string;
+export interface PathStoreEventInvalidation {
+  affectedAncestorIds: readonly number[];
+  affectedNodeIds: readonly number[];
+  canonicalChanged: boolean;
+  projectionChanged: boolean;
+  visibleCountDelta: number | null;
 }
+
+export interface PathStoreAddEvent extends PathStoreEventInvalidation {
+  operation: 'add';
+  path: string;
+}
+
+export interface PathStoreRemoveEvent extends PathStoreEventInvalidation {
+  operation: 'remove';
+  path: string;
+  recursive: boolean;
+}
+
+export interface PathStoreMoveEvent extends PathStoreEventInvalidation {
+  from: string;
+  operation: 'move';
+  to: string;
+}
+
+export interface PathStoreExpandEvent extends PathStoreEventInvalidation {
+  operation: 'expand';
+  path: string;
+}
+
+export interface PathStoreCollapseEvent extends PathStoreEventInvalidation {
+  operation: 'collapse';
+  path: string;
+}
+
+export type PathStoreSemanticEvent =
+  | PathStoreAddEvent
+  | PathStoreRemoveEvent
+  | PathStoreMoveEvent
+  | PathStoreExpandEvent
+  | PathStoreCollapseEvent;
+
+export interface PathStoreBatchEvent extends PathStoreEventInvalidation {
+  events: readonly PathStoreSemanticEvent[];
+  operation: 'batch';
+}
+
+export type PathStoreEvent = PathStoreSemanticEvent | PathStoreBatchEvent;
+
+export type PathStoreEventType =
+  | PathStoreSemanticEvent['operation']
+  | PathStoreBatchEvent['operation'];
+
+export type PathStoreEventForType<TType extends PathStoreEventType | '*'> =
+  TType extends '*'
+    ? PathStoreEvent
+    : Extract<PathStoreEvent, { operation: TType }>;
 
 export interface PathStoreRemoveOptions {
   recursive?: boolean;

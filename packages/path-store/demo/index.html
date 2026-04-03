@@ -96,6 +96,26 @@
         white-space: pre-wrap;
         word-break: break-word;
       }
+
+      .event-panel {
+        border: 1px solid #111;
+        background: #fff;
+        padding: 12px;
+      }
+
+      .event-label {
+        font-size: 12px;
+        margin-bottom: 8px;
+      }
+
+      .event-output {
+        font-size: 11px;
+        margin: 0;
+        min-height: 132px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
     </style>
   </head>
   <body>
@@ -191,6 +211,10 @@
       </div>
       <div class="viewport">
         <div class="rows" id="rows"></div>
+      </div>
+      <div class="event-panel">
+        <div class="event-label">Last event</div>
+        <pre class="event-output" id="last-event"></pre>
       </div>
     </div>
     <script type="module" src="./main.js"></script>

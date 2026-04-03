@@ -17,6 +17,11 @@ Current useful API:
 - `initialExpansion` can seed directory visibility as `'closed'`, `'open'`, or a
   numeric depth, with `initialExpandedPaths` acting as explicit overrides on
   top.
+- `store.on(...)` now emits typed semantic events with:
+  - `canonicalChanged`
+  - `projectionChanged`
+  - `visibleCountDelta`
+  - operation-specific canonical paths like `path`, `from`, and `to`
 
 Benchmark workflow:
 
@@ -80,34 +85,53 @@ const store = new PathStore({
 });
 
 // Listen for modifications
-store.on('*', ({ operation, changeset }) => {
-  console.log('modification:', { operation, changeset });
+store.on('*', (event) => {
+  console.log('modification:', {
+    operation: event.operation,
+    projectionChanged: event.projectionChanged,
+    visibleCountDelta: event.visibleCountDelta,
+  });
 });
 
 // Perform modifications
 store.add('src/components/Card.tsx');
 // log: modification: {
 //   operation: 'add',
-//   changeset: { path: 'src/components/Card.tsx' }
+//   path: 'src/components/Card.tsx',
+//   canonicalChanged: true,
+//   projectionChanged: true,
+//   visibleCountDelta: 0,
 // }
 
 store.remove('README.md');
 // log: modification: {
 //   operation: 'remove',
-//   changeset: { path: 'README.md' }
+//   path: 'README.md',
+//   recursive: false,
+//   canonicalChanged: true,
+//   projectionChanged: true,
+//   visibleCountDelta: -1,
 // }
 
 store.move('package.json', 'src/package.json');
 // log: modification: {
 //   operation: 'move',
-//   changeset: { from: 'package.json', to: 'src/package.json' }
+//   from: 'package.json',
+//   to: 'src/package.json',
+//   canonicalChanged: true,
+//   projectionChanged: true,
+//   visibleCountDelta: 0,
 // }
 
 // Rename is just a move
 store.move('src/index.ts', 'src/index.mjs');
 // log: modification: {
 //   operation: 'move',
-//   changeset: { from: 'src/index.ts', to: 'src/index.mjs' }
+//   from: 'src/index.ts',
+//   to: 'src/index.mjs',
+//   canonicalChanged: true,
+//   projectionChanged: true,
+//   visibleCountDelta: 0,
 // }
 
 // Compute just the subtree of paths below here and return

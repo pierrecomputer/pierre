@@ -1996,6 +1996,14 @@ function formatPhaseLabel(name: string): string {
       return '  - store.collapse';
     case 'store.list':
       return '  - store.list';
+    case 'store.events.record':
+      return '    - Record event';
+    case 'store.events.batch.merge':
+      return '    - Merge batch invalidation';
+    case 'store.events.batch.commit':
+      return '    - Commit batch event';
+    case 'store.events.emit':
+      return '    - Emit listeners';
     case 'store.recomputeCountsUpwardFrom':
       return '    - Recompute counts upward';
     case 'store.recomputeNodeCounts':
@@ -2065,6 +2073,10 @@ function createPhaseRows(
   pushPhase('store.move');
   pushPhase('store.expand');
   pushPhase('store.collapse');
+  pushPhase('store.events.record');
+  pushPhase('store.events.batch.merge');
+  pushPhase('store.events.batch.commit');
+  pushPhase('store.events.emit');
   pushPhase('store.recomputeCountsUpwardFrom');
   pushPhase('store.recomputeNodeCounts');
   pushPhase('store.recomputeNodeCounts.rebuildChildAggregates');

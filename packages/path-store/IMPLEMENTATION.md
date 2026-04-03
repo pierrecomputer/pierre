@@ -87,6 +87,14 @@ Current implementation note:
   visible projection while preserving canonical topology and path-first
   mutations. It now defaults to enabled, with explicit `false` used in tests and
   fixtures that need canonical one-directory-per-row visibility.
+- Phase 6 now exposes typed semantic events with conservative structural
+  invalidation metadata:
+  - `canonicalChanged`
+  - `projectionChanged`
+  - operation-specific canonical paths like `path`, `from`, and `to`
+  - `visibleCountDelta` when it is honest to compute Advisory affected-ID fields
+    remain available, but they should not be treated as the long-term primary
+    contract until cleanup/compaction semantics are more explicit.
 
 For mutation scenarios, the benchmark contract should explicitly model the next
 store-side read the UI would perform after the mutation commits:

@@ -1804,11 +1804,29 @@ interface ReusedStoreMutationMeasurement {
   reset: (store: PathStore) => void;
 }
 
+type BenchmarkListenerType = '*' | 'batch' | 'move' | 'add';
+
 function maybeCollectGarbage(): void {
   const runtime = Bun as unknown as {
     gc?: (force?: boolean) => void;
   };
   runtime.gc?.(true);
+}
+
+function attachBenchmarkListener(
+  store: PathStore,
+  type: BenchmarkListenerType
+): void {
+  let eventCount = 0;
+  let visibleCountDeltaTotal = 0;
+
+  store.on(type, (event) => {
+    eventCount++;
+    visibleCountDeltaTotal += event.visibleCountDelta ?? 0;
+    do_not_optimize(event.operation);
+    do_not_optimize(eventCount);
+    do_not_optimize(visibleCountDeltaTotal);
+  });
 }
 
 function createProgressEmitter(
@@ -2641,6 +2659,90 @@ function createRenameLeafScenarioFactory(
   };
 }
 
+function createRenameLeafListenerScenarioFactory(
+  workload: BenchmarkWorkload,
+  viewport: ViewportMode,
+  listenerType: '*' | 'move'
+): BenchmarkScenarioFactory {
+  const listenerLabel = listenerType === '*' ? 'wildcard' : 'specific';
+  const name = `mutate/rename-leaf-listener-${listenerLabel}/${viewport}/${workload.name}/${MUTATION_WINDOW_SIZE}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createExpandedStore(workload);
+      const baselineBounds = getWindowBounds(
+        previewStore,
+        viewport,
+        MUTATION_WINDOW_SIZE
+      );
+      const baselineRead = readVisibleWindow(previewStore, baselineBounds);
+      const targetPath = requireVisibleFile(baselineRead.rows, name).path;
+      const renamedPath = renamePathWithSuffix(targetPath, 'benchmark-renamed');
+
+      const simulationStore = createExpandedStore(workload);
+      simulationStore.move(targetPath, renamedPath);
+      const readPlan = createRenderChangedWindowPlan(
+        simulationStore,
+        baselineBounds,
+        MUTATION_WINDOW_SIZE,
+        [renamedPath]
+      );
+      const postMutationRead = readVisibleWindow(
+        simulationStore,
+        readPlan.bounds
+      );
+
+      return {
+        manifest: {
+          afterPreview: getPreview(postMutationRead.rows),
+          baselineWindowEnd: baselineBounds.end,
+          baselineWindowStart: baselineBounds.start,
+          beforePreview: getPreview(baselineRead.rows),
+          category: 'mutation',
+          destinationPath: renamedPath,
+          fileCount: workload.fileCount,
+          name,
+          notes: [`Attached ${listenerLabel} listener to the store.`],
+          postMutationReadIntent: readPlan.intent,
+          renderTargetPath: readPlan.renderTargetPath,
+          targetPath,
+          targetVisible: true,
+          viewport,
+          visibleCount: postMutationRead.visibleCount,
+          windowEnd: readPlan.bounds.end,
+          windowShifted: readPlan.windowShifted,
+          windowSize: MUTATION_WINDOW_SIZE,
+          windowStart: readPlan.bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.move(targetPath, renamedPath);
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  const store = createExpandedStore(workload);
+                  attachBenchmarkListener(store, listenerType);
+                  return store;
+                },
+                reset(store) {
+                  store.move(renamedPath, targetPath);
+                },
+              },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
 function createDeleteLeafScenarioFactory(
   workload: BenchmarkWorkload,
   viewport: ViewportMode
@@ -2781,6 +2883,90 @@ function createAddSiblingScenarioFactory(
                 },
                 createStore() {
                   return createExpandedStore(workload);
+                },
+                reset(store) {
+                  store.remove(addedPath);
+                },
+              },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createAddSiblingListenerScenarioFactory(
+  workload: BenchmarkWorkload,
+  viewport: ViewportMode
+): BenchmarkScenarioFactory {
+  const name = `mutate/add-sibling-listener-wildcard/${viewport}/${workload.name}/${MUTATION_WINDOW_SIZE}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createExpandedStore(workload);
+      const baselineBounds = getWindowBounds(
+        previewStore,
+        viewport,
+        MUTATION_WINDOW_SIZE
+      );
+      const baselineRead = readVisibleWindow(previewStore, baselineBounds);
+      const targetPath = requireVisibleFile(baselineRead.rows, name).path;
+      const addedPath = createSiblingPath(targetPath, 'benchmark-added');
+
+      const simulationStore = createExpandedStore(workload);
+      simulationStore.add(addedPath);
+      const readPlan = createRenderChangedWindowPlan(
+        simulationStore,
+        baselineBounds,
+        MUTATION_WINDOW_SIZE,
+        [addedPath]
+      );
+      const postMutationRead = readVisibleWindow(
+        simulationStore,
+        readPlan.bounds
+      );
+
+      return {
+        manifest: {
+          afterPreview: getPreview(postMutationRead.rows),
+          baselineWindowEnd: baselineBounds.end,
+          baselineWindowStart: baselineBounds.start,
+          beforePreview: getPreview(baselineRead.rows),
+          category: 'mutation',
+          destinationPath: addedPath,
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            'Attached wildcard listener to a flatten-sensitive add-sibling case.',
+          ],
+          postMutationReadIntent: readPlan.intent,
+          renderTargetPath: readPlan.renderTargetPath,
+          targetPath,
+          targetVisible: true,
+          viewport,
+          visibleCount: postMutationRead.visibleCount,
+          windowEnd: readPlan.bounds.end,
+          windowShifted: readPlan.windowShifted,
+          windowSize: MUTATION_WINDOW_SIZE,
+          windowStart: readPlan.bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.add(addedPath);
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  const store = createExpandedStore(workload);
+                  attachBenchmarkListener(store, '*');
+                  return store;
                 },
                 reset(store) {
                   store.remove(addedPath);
@@ -3164,6 +3350,115 @@ function createBatchVisibleRenamesScenarioFactory(
   };
 }
 
+function createBatchVisibleRenamesListenerScenarioFactory(
+  workload: BenchmarkWorkload,
+  viewport: ViewportMode
+): BenchmarkScenarioFactory {
+  const name = `mutate/batch-visible-renames-listener-wildcard/${viewport}/${workload.name}/${MUTATION_WINDOW_SIZE}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createExpandedStore(workload);
+      const baselineBounds = getWindowBounds(
+        previewStore,
+        viewport,
+        MUTATION_WINDOW_SIZE
+      );
+      const baselineRead = readVisibleWindow(previewStore, baselineBounds);
+      const targetFiles = getVisibleFiles(baselineRead.rows).slice(0, 16);
+      if (targetFiles.length === 0) {
+        throw new Error(`No visible files available for ${name}`);
+      }
+
+      const renamedPairs = targetFiles.map((row, index) => ({
+        from: row.path,
+        to: renamePathWithSuffix(row.path, `batch-${index + 1}`),
+      }));
+      const destinationPaths = renamedPairs.map((pair) => pair.to);
+
+      const simulationStore = createExpandedStore(workload);
+      simulationStore.batch(
+        renamedPairs.map((pair) => ({
+          from: pair.from,
+          to: pair.to,
+          type: 'move' as const,
+        }))
+      );
+      const readPlan = createRenderChangedWindowPlan(
+        simulationStore,
+        baselineBounds,
+        MUTATION_WINDOW_SIZE,
+        destinationPaths
+      );
+      const postMutationRead = readVisibleWindow(
+        simulationStore,
+        readPlan.bounds
+      );
+
+      return {
+        manifest: {
+          afterPreview: getPreview(postMutationRead.rows),
+          baselineWindowEnd: baselineBounds.end,
+          baselineWindowStart: baselineBounds.start,
+          beforePreview: getPreview(baselineRead.rows),
+          category: 'mutation',
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            `Renames ${formatCount(renamedPairs.length)} visible files in one batch with a wildcard listener attached.`,
+          ],
+          postMutationReadIntent: readPlan.intent,
+          renderTargetPath: readPlan.renderTargetPath,
+          targetPath: renamedPairs[0]?.from,
+          targetVisible: true,
+          viewport,
+          visibleCount: postMutationRead.visibleCount,
+          windowEnd: readPlan.bounds.end,
+          windowShifted: readPlan.windowShifted,
+          windowSize: MUTATION_WINDOW_SIZE,
+          windowStart: readPlan.bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.batch(
+                    renamedPairs.map((pair) => ({
+                      from: pair.from,
+                      to: pair.to,
+                      type: 'move' as const,
+                    }))
+                  );
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  const store = createExpandedStore(workload);
+                  attachBenchmarkListener(store, '*');
+                  return store;
+                },
+                reset(store) {
+                  store.batch(
+                    renamedPairs.map((pair) => ({
+                      from: pair.to,
+                      to: pair.from,
+                      type: 'move' as const,
+                    }))
+                  );
+                },
+              },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
 function createExpandDirectoryScenarioFactory(
   workload: BenchmarkWorkload,
   viewport: ViewportMode
@@ -3504,6 +3799,30 @@ function createScenarioFactories(
   }
 
   if (profile.name === 'full') {
+    const listenerBenchmarkWorkload = loadWorkload('linux-5x');
+    for (const viewport of VIEWPORT_MODES) {
+      factories.push(
+        createRenameLeafListenerScenarioFactory(
+          listenerBenchmarkWorkload,
+          viewport,
+          '*'
+        )
+      );
+      factories.push(
+        createRenameLeafListenerScenarioFactory(
+          listenerBenchmarkWorkload,
+          viewport,
+          'move'
+        )
+      );
+      factories.push(
+        createBatchVisibleRenamesListenerScenarioFactory(
+          listenerBenchmarkWorkload,
+          viewport
+        )
+      );
+    }
+
     const wideDirectoryWorkload = loadWorkload(
       PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME
     );
@@ -3516,6 +3835,9 @@ function createScenarioFactories(
     );
     factories.push(
       createVisibleScenarioFactory(flattenChainWorkload, 'middle', 200)
+    );
+    factories.push(
+      createAddSiblingListenerScenarioFactory(flattenChainWorkload, 'first')
     );
   }
 

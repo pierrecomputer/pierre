@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { PathStore } from '../src/index';
+import type { PathStoreEvent } from '../src/public-types';
 
 const demoSmallPaths = [
   'alpha/docs/readme.md',
@@ -22,6 +23,14 @@ function createWideDirectoryPaths(count: number): string[] {
     { length: count },
     (_, index) => `wide/item${index + 1}.ts`
   );
+}
+
+function collectWildcardEvents(store: PathStore): PathStoreEvent[] {
+  const events: PathStoreEvent[] = [];
+  store.on('*', (event) => {
+    events.push(event);
+  });
+  return events;
 }
 
 function getVisiblePaths(
@@ -545,13 +554,11 @@ describe('PathStore', () => {
 
   test('throws on collisions by default and can batch operations into one event', () => {
     const store = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
       paths: ['README.md', 'src/index.ts', 'tmp/'],
     });
-    const operations: string[] = [];
-
-    store.on('*', (event) => {
-      operations.push(event.operation);
-    });
+    const events = collectWildcardEvents(store);
 
     expect(() => store.move('README.md', 'src/index.ts')).toThrow(
       'Destination already exists'
@@ -562,7 +569,26 @@ describe('PathStore', () => {
       batchStore.add('src/components/Button.tsx');
     });
 
-    expect(operations).toEqual(['batch']);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      canonicalChanged: true,
+      operation: 'batch',
+      projectionChanged: true,
+      visibleCountDelta: 2,
+    });
+    expect(events[0]?.operation === 'batch' ? events[0].events : []).toEqual([
+      expect.objectContaining({
+        from: 'README.md',
+        operation: 'move',
+        to: 'tmp/README.md',
+        visibleCountDelta: 0,
+      }),
+      expect.objectContaining({
+        operation: 'add',
+        path: 'src/components/Button.tsx',
+        visibleCountDelta: 2,
+      }),
+    ]);
     expect(store.list()).toEqual([
       'src/components/Button.tsx',
       'src/index.ts',
@@ -574,11 +600,7 @@ describe('PathStore', () => {
     const store = new PathStore({
       paths: ['src/old.ts', 'tmp/'],
     });
-    const events: string[] = [];
-
-    store.on('*', (event) => {
-      events.push(event.operation);
-    });
+    const events = collectWildcardEvents(store);
 
     store.batch(() => {
       store.batch(() => {
@@ -587,7 +609,20 @@ describe('PathStore', () => {
       store.add('src/new.ts');
     });
 
-    expect(events).toEqual(['batch']);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.operation).toBe('batch');
+    expect(events[0]?.visibleCountDelta).toBe(0);
+    expect(events[0]?.operation === 'batch' ? events[0].events : []).toEqual([
+      expect.objectContaining({
+        from: 'src/old.ts',
+        operation: 'move',
+        to: 'tmp/old.ts',
+      }),
+      expect.objectContaining({
+        operation: 'add',
+        path: 'src/new.ts',
+      }),
+    ]);
     expect(store.list()).toEqual(['src/new.ts', 'tmp/old.ts']);
   });
 
@@ -619,28 +654,11 @@ describe('PathStore', () => {
     ]);
   });
 
-  test('emits expand and collapse events with affected metadata', () => {
+  test('emits expand and collapse events with typed invalidation metadata', () => {
     const store = new PathStore({
       paths: ['src/index.ts', 'src/components/Button.tsx'],
     });
-    const events: Array<{
-      affectedAncestorIds?: readonly number[];
-      affectedNodeIds?: readonly number[];
-      operation: string;
-      path?: string;
-    }> = [];
-
-    store.on('*', (event) => {
-      events.push({
-        affectedAncestorIds: event.affectedAncestorIds,
-        affectedNodeIds: event.affectedNodeIds,
-        operation: event.operation,
-        path:
-          typeof event.changeset?.path === 'string'
-            ? event.changeset.path
-            : undefined,
-      });
-    });
+    const events = collectWildcardEvents(store);
 
     store.expand('src/');
     store.collapse('src/');
@@ -649,18 +667,134 @@ describe('PathStore', () => {
       {
         affectedAncestorIds: expect.any(Array),
         affectedNodeIds: expect.any(Array),
+        canonicalChanged: false,
         operation: 'expand',
         path: 'src/',
+        projectionChanged: true,
+        visibleCountDelta: 2,
       },
       {
         affectedAncestorIds: expect.any(Array),
         affectedNodeIds: expect.any(Array),
+        canonicalChanged: false,
         operation: 'collapse',
         path: 'src/',
+        projectionChanged: true,
+        visibleCountDelta: -2,
       },
     ]);
     expect(events[0]?.affectedNodeIds).toHaveLength(1);
     expect(events[1]?.affectedNodeIds).toHaveLength(1);
+  });
+
+  test('emits add, remove, and move events with typed semantic fields', () => {
+    const addStore = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['src/index.ts'],
+    });
+    const addEvents = collectWildcardEvents(addStore);
+    addStore.add('src/components/Button.tsx');
+    expect(addEvents).toEqual([
+      {
+        affectedAncestorIds: expect.any(Array),
+        affectedNodeIds: expect.any(Array),
+        canonicalChanged: true,
+        operation: 'add',
+        path: 'src/components/Button.tsx',
+        projectionChanged: true,
+        visibleCountDelta: 2,
+      },
+    ]);
+
+    const removeStore = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['src/components/Button.tsx', 'src/index.ts'],
+    });
+    const removeEvents = collectWildcardEvents(removeStore);
+    removeStore.remove('src/components/Button.tsx');
+    expect(removeEvents).toHaveLength(1);
+    expect(removeEvents[0]).toMatchObject({
+      affectedAncestorIds: expect.any(Array),
+      affectedNodeIds: expect.any(Array),
+      canonicalChanged: true,
+      operation: 'remove',
+      path: 'src/components/Button.tsx',
+      projectionChanged: true,
+      recursive: false,
+      visibleCountDelta: -1,
+    });
+
+    const moveStore = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['src/components/Button.tsx', 'src/index.ts', 'tmp/'],
+    });
+    const moveEvents = collectWildcardEvents(moveStore);
+    moveStore.move('src/components/', 'tmp/');
+    expect(moveEvents).toEqual([
+      {
+        affectedAncestorIds: expect.any(Array),
+        affectedNodeIds: expect.any(Array),
+        canonicalChanged: true,
+        from: 'src/components/',
+        operation: 'move',
+        projectionChanged: true,
+        to: 'tmp/components/',
+        visibleCountDelta: 0,
+      },
+    ]);
+  });
+
+  test('delivers operation listeners before wildcard listeners synchronously', () => {
+    const store = new PathStore({
+      paths: ['src/index.ts'],
+    });
+    const callOrder: string[] = [];
+
+    store.on('add', (event) => {
+      if (event.operation !== 'add') {
+        return;
+      }
+      callOrder.push(`specific:${event.operation}:${event.path}`);
+    });
+    store.on('*', (event) => {
+      callOrder.push(`wildcard:${event.operation}`);
+    });
+
+    store.add('src/new.ts');
+
+    expect(callOrder).toEqual(['specific:add:src/new.ts', 'wildcard:add']);
+  });
+
+  test('delivers batch commit listeners synchronously after child mutations are committed', () => {
+    const store = new PathStore({
+      paths: ['src/old.ts', 'tmp/'],
+    });
+    const callOrder: string[] = [];
+
+    store.on('batch', (event) => {
+      if (event.operation !== 'batch') {
+        return;
+      }
+      callOrder.push(
+        `specific:${event.operation}:${event.events
+          .map((childEvent) => childEvent.operation)
+          .join(',')}`
+      );
+      expect(store.list()).toEqual(['src/new.ts', 'tmp/old.ts']);
+    });
+    store.on('*', (event) => {
+      callOrder.push(`wildcard:${event.operation}`);
+    });
+
+    store.batch(() => {
+      store.move('src/old.ts', 'tmp/');
+      store.add('src/new.ts');
+    });
+
+    expect(callOrder).toEqual(['specific:batch:move,add', 'wildcard:batch']);
   });
 
   test('returns row metadata for the current visible window and clamps slice bounds', () => {
@@ -876,6 +1010,41 @@ describe('PathStore', () => {
     expect(store.list()).toEqual(['src/new.ts', 'tmp/old.ts']);
   });
 
+  test('marks flatten-sensitive add and remove operations as projection changes', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: true,
+      initialExpansion: 'open',
+      paths: ['a/b/c/file.ts'],
+    });
+    const events = collectWildcardEvents(store);
+
+    store.add('a/b/peer.ts');
+    store.remove('a/b/peer.ts');
+
+    expect(events).toEqual([
+      {
+        affectedAncestorIds: expect.any(Array),
+        affectedNodeIds: expect.any(Array),
+        canonicalChanged: true,
+        operation: 'add',
+        path: 'a/b/peer.ts',
+        projectionChanged: true,
+        visibleCountDelta: 2,
+      },
+      {
+        affectedAncestorIds: expect.any(Array),
+        affectedNodeIds: expect.any(Array),
+        canonicalChanged: true,
+        operation: 'remove',
+        path: 'a/b/peer.ts',
+        projectionChanged: true,
+        recursive: false,
+        visibleCountDelta: -2,
+      },
+    ]);
+    expect(getVisiblePaths(store, 0, 9)).toEqual(['a/b/c/', 'a/b/c/file.ts']);
+  });
+
   test('supports skip and replace collision strategies for file moves', () => {
     const store = new PathStore({
       paths: ['a.ts', 'b.ts'],
@@ -1008,6 +1177,7 @@ describe('PathStore', () => {
       initialExpansion: 'open',
       paths: ['a/b/c/file.ts'],
     });
+    const events = collectWildcardEvents(store);
 
     expect(getVisibleRowsSansIds(store, 0, 9)).toEqual([
       {
@@ -1110,6 +1280,15 @@ describe('PathStore', () => {
       },
     ]);
     assertMatchesRebuild(store, { flattenEmptyDirectories: true });
+    expect(events[0]).toEqual({
+      affectedAncestorIds: expect.any(Array),
+      affectedNodeIds: expect.any(Array),
+      canonicalChanged: true,
+      operation: 'add',
+      path: 'a/b/peer.ts',
+      projectionChanged: true,
+      visibleCountDelta: 2,
+    });
 
     store.remove('a/b/peer.ts');
     expect(getVisibleRowsSansIds(store, 0, 9)).toEqual([
@@ -1153,6 +1332,16 @@ describe('PathStore', () => {
       },
     ]);
     assertMatchesRebuild(store, { flattenEmptyDirectories: true });
+    expect(events[1]).toEqual({
+      affectedAncestorIds: expect.any(Array),
+      affectedNodeIds: expect.any(Array),
+      canonicalChanged: true,
+      operation: 'remove',
+      path: 'a/b/peer.ts',
+      projectionChanged: true,
+      recursive: false,
+      visibleCountDelta: -2,
+    });
   });
 
   test('selects middle windows correctly inside wide roots and wide directories', () => {

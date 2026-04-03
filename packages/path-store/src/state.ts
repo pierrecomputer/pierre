@@ -6,12 +6,16 @@ import type {
 import { PATH_STORE_NODE_FLAG_ROOT } from './internal-types';
 import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
 import type { BenchmarkInstrumentation } from './internal/benchmarkInstrumentation';
-import type { PathStoreEvent, PathStoreInitialExpansion } from './public-types';
+import type {
+  PathStoreEvent,
+  PathStoreInitialExpansion,
+  PathStoreSemanticEvent,
+} from './public-types';
 
 export interface TransactionFrame {
   readonly affectedAncestorIds: Set<NodeId>;
   readonly affectedNodeIds: Set<NodeId>;
-  readonly events: PathStoreEvent[];
+  readonly events: PathStoreSemanticEvent[];
 }
 
 export interface MoveTarget {
@@ -98,7 +102,7 @@ function isDirectoryExpandedByDefault(
 export function isDirectoryExpanded(
   state: PathStoreState,
   nodeId: NodeId,
-  node = state.snapshot.nodes[nodeId]
+  node: PathStoreNode | undefined = state.snapshot.nodes[nodeId]
 ): boolean {
   if (node == null || node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
     return false;
@@ -119,7 +123,7 @@ export function setDirectoryExpanded(
   state: PathStoreState,
   nodeId: NodeId,
   expanded: boolean,
-  node = state.snapshot.nodes[nodeId]
+  node: PathStoreNode | undefined = state.snapshot.nodes[nodeId]
 ): void {
   if (node == null || node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
     return;

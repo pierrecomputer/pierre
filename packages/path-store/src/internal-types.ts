@@ -10,9 +10,9 @@ export type PathStoreNodeKind =
   | typeof PATH_STORE_NODE_KIND_FILE
   | typeof PATH_STORE_NODE_KIND_DIRECTORY;
 
-export const PATH_STORE_NODE_FLAG_EXPLICIT = 1 << 0;
-export const PATH_STORE_NODE_FLAG_ROOT = 1 << 1;
-export const PATH_STORE_NODE_FLAG_REMOVED = 1 << 2;
+export const PATH_STORE_NODE_FLAG_EXPLICIT: number = 1 << 0;
+export const PATH_STORE_NODE_FLAG_ROOT: number = 1 << 1;
+export const PATH_STORE_NODE_FLAG_REMOVED: number = 1 << 2;
 
 export interface SegmentSortKey {
   lowerValue: string;

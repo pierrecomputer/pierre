@@ -110,6 +110,7 @@ const benchmarkModulePromise = instrumentationEnabled
  *       usedJSHeapSize: number;
  *     } | null
  *   ) => DemoBenchmarkInstrumentationSummary;
+ *   reset: () => void;
  * }} DemoBenchmarkCollector
  */
 
@@ -118,6 +119,7 @@ const flattenInput = document.querySelector('#flatten-directories');
 const visibleCountInput = document.querySelector('#visible-count');
 const offsetInput = document.querySelector('#offset');
 const offsetValueElement = document.querySelector('#offset-value');
+const lastEventElement = document.querySelector('#last-event');
 const renderButton = document.querySelector('#render-button');
 const rowsElement = document.querySelector('#rows');
 const workloadInput = document.querySelector('#workload');
@@ -127,6 +129,7 @@ if (
   visibleCountInput == null ||
   offsetInput == null ||
   offsetValueElement == null ||
+  lastEventElement == null ||
   renderButton == null ||
   rowsElement == null ||
   workloadInput == null
@@ -137,6 +140,10 @@ if (
 let buildTimeMs = 0;
 /** @type {PathStore | null} */
 let currentStore = null;
+/** @type {null | (() => void)} */
+let currentStoreEventUnsubscribe = null;
+/** @type {import('../src/public-types').PathStoreEvent | null} */
+let lastEvent = null;
 /** @type {DemoLongTaskEntry[]} */
 const longTaskEntries = [];
 const longTaskObserver =
@@ -191,6 +198,28 @@ function clearProfileSummary() {
   delete window.__pathStoreDemoProfile;
   performance.clearMarks(PROFILE_START_MARK_NAME);
   performance.clearMarks(PROFILE_END_MARK_NAME);
+}
+
+function renderLastEvent() {
+  if (!(lastEventElement instanceof HTMLElement)) {
+    return;
+  }
+
+  lastEventElement.textContent =
+    lastEvent == null ? '' : JSON.stringify(lastEvent, null, 2);
+}
+
+function clearLastEvent() {
+  lastEvent = null;
+  renderLastEvent();
+}
+
+function subscribeToStoreEvents(store) {
+  currentStoreEventUnsubscribe?.();
+  currentStoreEventUnsubscribe = store.on('*', (event) => {
+    lastEvent = event;
+    renderLastEvent();
+  });
 }
 
 function getTaskOverlapMs(entry, startTime, endTime) {
@@ -983,6 +1012,8 @@ function createStore(benchmark = null) {
           () => new PathStore(storeOptions)
         );
   buildTimeMs = performance.now() - buildStartedAt;
+  clearLastEvent();
+  subscribeToStoreEvents(currentStore);
   const visibleRowCount =
     benchmark == null ? currentStore.getVisibleCount().toLocaleString() : null;
   logDemoMessage(
@@ -1200,24 +1231,37 @@ function runPreparedActionWithBenchmark(preparedAction, benchmark = null) {
 }
 
 async function profilePreparedAction(actionId, prepared) {
-  if (currentStore == null) {
-    throw new Error('Render the store before running demo actions.');
-  }
-
   const action = demoActionById.get(actionId);
   if (action == null) {
     throw new Error(`Unknown demo action: ${actionId}`);
   }
 
-  const beforeView = getViewContext(currentStore);
   const benchmark = await createBenchmarkCollector();
+  const demoState = {
+    flattenEmptyDirectories: getFlattenEmptyDirectoriesEnabled(),
+    offset: getParsedInputNumber(offsetInput, 0),
+    visibleCount: getRequestedVisibleCount(),
+    workloadName: getSelectedWorkloadName(),
+  };
+
+  configureDemo(demoState);
+  createStore(benchmark);
+  renderCurrentWindow(demoState.offset, benchmark);
+  applyProfileActionSetup(actionId);
+
+  if (currentStore == null) {
+    throw new Error('Render the store before running demo actions.');
+  }
+
+  const beforeView = getViewContext(currentStore);
   const preparedAction = {
     action,
-    prepared,
+    prepared: prepared ?? action.prepare(currentStore, beforeView),
     view: beforeView,
   };
 
   clearProfileSummary();
+  benchmark?.reset();
   const startedAt = performance.now();
   const heapBefore = benchmark?.readHeapSnapshot() ?? null;
   performance.mark(PROFILE_START_MARK_NAME);
@@ -1286,6 +1330,7 @@ function getDemoState() {
   return {
     flattenEmptyDirectories: getFlattenEmptyDirectoriesEnabled(),
     hasStore: currentStore != null,
+    lastEvent,
     offset: getParsedInputNumber(offsetInput, 0),
     visibleCount: getRequestedVisibleCount(),
     workload: getSelectedWorkloadSummary(),
@@ -1351,6 +1396,7 @@ window.pathStoreDemo = {
   profileRenderStore,
   renderStoreForSetup,
   runPreparedAction,
+  getLastEvent: () => lastEvent,
   store: currentStore,
   workload: null,
 };

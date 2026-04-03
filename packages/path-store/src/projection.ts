@@ -7,6 +7,7 @@ import {
   requireNode,
 } from './canonical';
 import { selectChildIndexByVisibleIndex } from './child-index';
+import { createCollapseEvent, createExpandEvent } from './events';
 import {
   collectFlattenedDirectoryChainIds,
   getFlattenedTerminalDirectoryId,
@@ -17,7 +18,11 @@ import {
   setBenchmarkCounter,
   withBenchmarkPhase,
 } from './internal/benchmarkInstrumentation';
-import type { PathStoreEvent, PathStoreVisibleRow } from './public-types';
+import type {
+  PathStoreCollapseEvent,
+  PathStoreExpandEvent,
+  PathStoreVisibleRow,
+} from './public-types';
 import { getSegmentValue } from './segments';
 import { isDirectoryExpanded, setDirectoryExpanded } from './state';
 import type { PathStoreState } from './state';
@@ -114,7 +119,7 @@ export function getVisibleSlice(
 export function expandPath(
   state: PathStoreState,
   path: string
-): PathStoreEvent | null {
+): PathStoreExpandEvent | null {
   const directoryNodeId = findNodeId(state, path);
   if (directoryNodeId == null) {
     throw new Error(`Path does not exist: "${path}"`);
@@ -131,18 +136,18 @@ export function expandPath(
 
   setDirectoryExpanded(state, directoryNodeId, true, directoryNode);
   recomputeCountsUpwardFrom(state, directoryNodeId);
-  return {
+  return createExpandEvent({
     affectedAncestorIds: collectAncestorIds(state, directoryNodeId),
     affectedNodeIds: [directoryNodeId],
-    changeset: { path },
-    operation: 'expand',
-  };
+    path,
+    projectionChanged: true,
+  });
 }
 
 export function collapsePath(
   state: PathStoreState,
   path: string
-): PathStoreEvent | null {
+): PathStoreCollapseEvent | null {
   const directoryNodeId = findNodeId(state, path);
   if (directoryNodeId == null) {
     throw new Error(`Path does not exist: "${path}"`);
@@ -159,12 +164,12 @@ export function collapsePath(
 
   setDirectoryExpanded(state, directoryNodeId, false, directoryNode);
   recomputeCountsUpwardFrom(state, directoryNodeId);
-  return {
+  return createCollapseEvent({
     affectedAncestorIds: collectAncestorIds(state, directoryNodeId),
     affectedNodeIds: [directoryNodeId],
-    changeset: { path },
-    operation: 'collapse',
-  };
+    path,
+    projectionChanged: true,
+  });
 }
 
 function selectVisibleRow(

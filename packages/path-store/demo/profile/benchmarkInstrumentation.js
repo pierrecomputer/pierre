@@ -95,6 +95,18 @@ export function createBenchmarkInstrumentation() {
     },
   };
 
+  const reset = () => {
+    for (const phaseName of Object.keys(phaseTotals)) {
+      delete phaseTotals[phaseName];
+    }
+
+    for (const counterName of Object.keys(counters)) {
+      delete counters[counterName];
+    }
+
+    phaseStack.length = 0;
+  };
+
   /**
    * @returns {HeapSnapshot | null}
    */
@@ -122,6 +134,7 @@ export function createBenchmarkInstrumentation() {
     },
     instrumentation,
     readHeapSnapshot,
+    reset,
     summarize(heapBefore, heapAfter) {
       return {
         counters: { ...counters },

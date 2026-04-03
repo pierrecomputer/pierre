@@ -38,6 +38,14 @@ function getRowsLocator(page) {
 
 /**
  * @param {Page} page
+ * @returns {Locator}
+ */
+function getLastEventLocator(page) {
+  return page.locator('#last-event');
+}
+
+/**
+ * @param {Page} page
  * @returns {Promise<string[]>}
  */
 async function getRenderedRows(page) {
@@ -47,11 +55,39 @@ async function getRenderedRows(page) {
 
 /**
  * @param {Page} page
+ * @returns {Promise<Record<string, unknown> | null>}
+ */
+async function getLastEvent(page) {
+  const text = await getLastEventLocator(page).innerText();
+  if (text.trim() === '') {
+    return null;
+  }
+
+  /** @type {unknown} */
+  const parsed = JSON.parse(text);
+  return parsed != null && typeof parsed === 'object'
+    ? /** @type {Record<string, unknown>} */ (parsed)
+    : null;
+}
+
+/**
+ * @param {Page} page
  * @param {readonly string[]} expectedRows
  * @returns {Promise<void>}
  */
 async function expectRenderedRows(page, expectedRows) {
   await expect.poll(() => getRenderedRows(page)).toEqual(expectedRows);
+}
+
+/**
+ * @param {Page} page
+ * @param {Record<string, unknown>} expectedSubset
+ * @returns {Promise<void>}
+ */
+async function expectLastEventMatches(page, expectedSubset) {
+  await expect
+    .poll(() => getLastEvent(page))
+    .toEqual(expect.objectContaining(expectedSubset));
 }
 
 /**
@@ -67,6 +103,7 @@ async function renderDemo(
 ) {
   await page.goto('/');
   await expect(getRowsLocator(page)).toHaveText('');
+  await expect(getLastEventLocator(page)).toHaveText('');
   await expect(page.locator('#offset')).toBeDisabled();
 
   await page.locator('#workload').selectOption(workload);
@@ -231,6 +268,13 @@ test('demo-small collapse-visible-folder collapses the first visible folder with
     'beta/archive/',
     'beta/archive/notes.txt',
   ]);
+  await expectLastEventMatches(page, {
+    canonicalChanged: false,
+    operation: 'collapse',
+    path: 'alpha/',
+    projectionChanged: true,
+    visibleCountDelta: -7,
+  });
   expect(pageErrors).toEqual([]);
 });
 
@@ -258,6 +302,13 @@ test('demo-small collapse-visible-folder works on a flattened directory row', as
     'gamma/logs/',
     'zeta.md',
   ]);
+  await expectLastEventMatches(page, {
+    canonicalChanged: false,
+    operation: 'collapse',
+    path: 'gamma/logs/',
+    projectionChanged: true,
+    visibleCountDelta: -1,
+  });
   expect(pageErrors).toEqual([]);
 });
 
@@ -375,6 +426,14 @@ test('demo-small delete-visible-leaf removes the first visible file in the curre
     'alpha/src/utils/math.ts',
     'alpha/src/app.ts',
   ]);
+  await expectLastEventMatches(page, {
+    canonicalChanged: true,
+    operation: 'remove',
+    path: 'alpha/docs/readme.md',
+    projectionChanged: true,
+    recursive: false,
+    visibleCountDelta: -1,
+  });
   expect(pageErrors).toEqual([]);
 });
 
@@ -396,6 +455,14 @@ test('demo-small rename-visible-leaf renames the first visible file in the curre
     'alpha/src/utils/',
     'alpha/src/utils/math.ts',
   ]);
+  await expectLastEventMatches(page, {
+    canonicalChanged: true,
+    from: 'alpha/docs/readme.md',
+    operation: 'move',
+    projectionChanged: true,
+    to: 'alpha/docs/readme-demo-renamed.md',
+    visibleCountDelta: 0,
+  });
   expect(pageErrors).toEqual([]);
 });
 

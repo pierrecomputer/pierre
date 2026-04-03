@@ -5,6 +5,7 @@ import {
   rebuildVisibleChildChunks,
   updateChildPositionsFrom,
 } from './child-index';
+import { createAddEvent, createMoveEvent, createRemoveEvent } from './events';
 import { getFlattenedChildDirectoryId } from './flatten';
 import type {
   DirectoryChildIndex,
@@ -19,10 +20,12 @@ import { PATH_STORE_NODE_KIND_FILE } from './internal-types';
 import { withBenchmarkPhase } from './internal/benchmarkInstrumentation';
 import { parseInputPath, parseLookupPath } from './path';
 import type {
+  PathStoreAddEvent,
   PathStoreCollisionStrategy,
   PathStoreCompareEntry,
-  PathStoreEvent,
+  PathStoreMoveEvent,
   PathStoreMoveOptions,
+  PathStoreRemoveEvent,
   PathStoreRemoveOptions,
 } from './public-types';
 import { getSegmentValue, internSegment } from './segments';
@@ -39,7 +42,10 @@ export function listPaths(state: PathStoreState, path?: string): string[] {
   return collectCanonicalEntries(state, nodeId);
 }
 
-export function addPath(state: PathStoreState, path: string): PathStoreEvent {
+export function addPath(
+  state: PathStoreState,
+  path: string
+): PathStoreAddEvent {
   const preparedPath = parseInputPath(path);
   const parentSegments = preparedPath.isDirectory
     ? preparedPath.segments
@@ -68,19 +74,19 @@ export function addPath(state: PathStoreState, path: string): PathStoreEvent {
   }
 
   recomputeCountsUpwardFrom(state, directoryId);
-  return {
+  return createAddEvent({
     affectedAncestorIds: collectAncestorIds(state, addedNodeId),
     affectedNodeIds: [...affectedNodeIds],
-    changeset: { path },
-    operation: 'add',
-  };
+    path,
+    projectionChanged: true,
+  });
 }
 
 export function removePath(
   state: PathStoreState,
   path: string,
   options: PathStoreRemoveOptions
-): PathStoreEvent {
+): PathStoreRemoveEvent {
   const nodeId = findNodeId(state, path);
   if (nodeId == null) {
     throw new Error(`Path does not exist: "${path}"`);
@@ -107,12 +113,13 @@ export function removePath(
   promoteEmptyAncestorsToExplicit(state, parentId);
   recomputeCountsUpwardFrom(state, parentId);
 
-  return {
+  return createRemoveEvent({
     affectedAncestorIds: collectAncestorIds(state, parentId),
     affectedNodeIds: removedNodeIds,
-    changeset: { path, recursive: options.recursive === true },
-    operation: 'remove',
-  };
+    path,
+    projectionChanged: true,
+    recursive: options.recursive === true,
+  });
 }
 
 export function movePath(
@@ -120,7 +127,7 @@ export function movePath(
   fromPath: string,
   toPath: string,
   options: PathStoreMoveOptions
-): PathStoreEvent | null {
+): PathStoreMoveEvent | null {
   const sourceNodeId = findNodeId(state, fromPath);
   if (sourceNodeId == null) {
     throw new Error(`Source path does not exist: "${fromPath}"`);
@@ -175,7 +182,6 @@ export function movePath(
   }
 
   const previousParentId = sourceNode.parentId;
-  const previousSubtreeSize = sourceNode.subtreeNodeCount;
   removeChildReference(
     state,
     previousParentId,
@@ -196,7 +202,7 @@ export function movePath(
     recomputeCountsUpwardFrom(state, moveTarget.parentId);
   }
 
-  return {
+  return createMoveEvent({
     affectedAncestorIds: [
       ...new Set([
         ...collectAncestorIds(state, previousParentId),
@@ -204,13 +210,10 @@ export function movePath(
       ]),
     ],
     affectedNodeIds: [sourceNodeId],
-    changeset: {
-      from: fromPath,
-      subtreeNodeCount: previousSubtreeSize,
-      to: materializeNodePath(state, sourceNodeId),
-    },
-    operation: 'move',
-  };
+    from: fromPath,
+    projectionChanged: true,
+    to: materializeNodePath(state, sourceNodeId),
+  });
 }
 
 // Materializes canonical paths only for nodes the caller actually touches, so
