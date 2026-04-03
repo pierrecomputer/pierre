@@ -54,6 +54,7 @@
       --trees-file-icon-color-bun
       --trees-file-icon-color-claude
       --trees-file-icon-color-css
+      --trees-file-icon-color-database
       --trees-file-icon-color-default
       --trees-file-icon-color-docker
       --trees-file-icon-color-eslint
@@ -66,6 +67,7 @@
       --trees-file-icon-color-json
       --trees-file-icon-color-markdown
       --trees-file-icon-color-mcp
+      --trees-file-icon-color-npm
       --trees-file-icon-color-oxc
       --trees-file-icon-color-postcss
       --trees-file-icon-color-prettier
@@ -74,9 +76,12 @@
       --trees-file-icon-color-ruby
       --trees-file-icon-color-rust
       --trees-file-icon-color-sass
+      --trees-file-icon-color-svg
       --trees-file-icon-color-svelte
       --trees-file-icon-color-svgo
       --trees-file-icon-color-swift
+      --trees-file-icon-color-table
+      --trees-file-icon-color-text
       --trees-file-icon-color-tailwind
       --trees-file-icon-color-terraform
       --trees-file-icon-color-typescript
@@ -87,6 +92,7 @@
       --trees-file-icon-color-webpack
       --trees-file-icon-color-yml
       --trees-file-icon-color-zig
+      --trees-file-icon-color-zip
 
       // Available CSS Layout Overrides
       --trees-gap-override
@@ -237,6 +243,7 @@
 
     --trees-icon-gray: light-dark(#84848a, #adadb1);
     --trees-icon-red: light-dark(#d52c36, #ff6762);
+    --trees-icon-vermilion: light-dark(#ff8c5b, #d5512f);
     --trees-icon-orange: light-dark(#d47628, #ffa359);
     --trees-icon-yellow: light-dark(#d5a910, #ffd452);
     --trees-icon-green: light-dark(#199f43, #5ecc71);
@@ -287,6 +294,10 @@
       --trees-file-icon-color,
       var(--trees-icon-indigo)
     );
+    --trees-file-icon-color-database: var(
+      --trees-file-icon-color,
+      var(--trees-icon-purple)
+    );
     --trees-file-icon-color-docker: var(
       --trees-file-icon-color,
       var(--trees-icon-blue)
@@ -296,8 +307,8 @@
       var(--trees-icon-indigo)
     );
     --trees-file-icon-color-git: var(
-      --trees-file-icon-color,
-      var(--trees-icon-orange)
+      --trees-file-icon-vermilion,
+      var(--trees-icon-vermilion)
     );
     --trees-file-icon-color-go: var(
       --trees-file-icon-color,
@@ -331,9 +342,13 @@
       --trees-file-icon-color,
       var(--trees-icon-teal)
     );
-    --trees-file-icon-color-oxc: var(
+    --trees-file-icon-color-npm: var(
       --trees-file-icon-color,
-      var(--trees-icon-orange)
+      var(--trees-icon-red)
+    );
+    --trees-file-icon-color-oxc: var(
+      --trees-file-icon-cyan,
+      var(--trees-icon-cyan)
     );
     --trees-file-icon-color-postcss: var(
       --trees-file-icon-color,
@@ -363,6 +378,10 @@
       --trees-file-icon-color,
       var(--trees-icon-pink)
     );
+    --trees-file-icon-color-svg: var(
+      --trees-file-icon-color,
+      var(--trees-icon-orange)
+    );
     --trees-file-icon-color-svelte: var(
       --trees-file-icon-color,
       var(--trees-icon-red)
@@ -374,6 +393,14 @@
     --trees-file-icon-color-swift: var(
       --trees-file-icon-color,
       var(--trees-icon-orange)
+    );
+    --trees-file-icon-color-table: var(
+      --trees-file-icon-color,
+      var(--trees-icon-teal)
+    );
+    --trees-file-icon-color-text: var(
+      --trees-file-icon-color,
+      var(--trees-icon-gray)
     );
     --trees-file-icon-color-tailwind: var(
       --trees-file-icon-color,
@@ -412,6 +439,10 @@
       var(--trees-icon-red)
     );
     --trees-file-icon-color-zig: var(
+      --trees-file-icon-color,
+      var(--trees-icon-orange)
+    );
+    --trees-file-icon-color-zip: var(
       --trees-file-icon-color,
       var(--trees-icon-orange)
     );
@@ -637,6 +668,9 @@
     [data-icon-token='css'] {
       color: var(--trees-file-icon-color-css);
     }
+    [data-icon-token='database'] {
+      color: var(--trees-file-icon-color-database);
+    }
     [data-icon-token='default'] {
       color: var(--trees-file-icon-color-default);
     }
@@ -673,6 +707,9 @@
     [data-icon-token='mcp'] {
       color: var(--trees-file-icon-color-mcp);
     }
+    [data-icon-token='npm'] {
+      color: var(--trees-file-icon-color-npm);
+    }
     [data-icon-token='oxc'] {
       color: var(--trees-file-icon-color-oxc);
     }
@@ -697,6 +734,9 @@
     [data-icon-token='sass'] {
       color: var(--trees-file-icon-color-sass);
     }
+    [data-icon-token='svg'] {
+      color: var(--trees-file-icon-color-svg);
+    }
     [data-icon-token='svelte'] {
       color: var(--trees-file-icon-color-svelte);
     }
@@ -705,6 +745,12 @@
     }
     [data-icon-token='swift'] {
       color: var(--trees-file-icon-color-swift);
+    }
+    [data-icon-token='table'] {
+      color: var(--trees-file-icon-color-table);
+    }
+    [data-icon-token='text'] {
+      color: var(--trees-file-icon-color-text);
     }
     [data-icon-token='tailwind'] {
       color: var(--trees-file-icon-color-tailwind);
@@ -735,6 +781,9 @@
     }
     [data-icon-token='zig'] {
       color: var(--trees-file-icon-color-zig);
+    }
+    [data-icon-token='zip'] {
+      color: var(--trees-file-icon-color-zip);
     }
   }
 
@@ -874,8 +923,8 @@
 
   [data-item-git-status='added'] {
     &
-      > [data-item-section='icon']
-      > :not([data-icon-name='file-tree-icon-chevron']) {
+      > :where([data-item-section='icon'])
+      > :where(:not([data-icon-name='file-tree-icon-chevron'])) {
       color: var(--trees-git-added-color);
     }
     & > [data-item-section='content'] {
@@ -888,8 +937,8 @@
 
   [data-item-git-status='deleted'] {
     &
-      > [data-item-section='icon']
-      > :not([data-icon-name='file-tree-icon-chevron']) {
+      > :where([data-item-section='icon'])
+      > :where(:not([data-icon-name='file-tree-icon-chevron'])) {
       color: var(--trees-git-deleted-color);
     }
     & > [data-item-section='content'] {
@@ -902,8 +951,8 @@
 
   [data-item-git-status='modified'] {
     &
-      > [data-item-section='icon']
-      > :not([data-icon-name='file-tree-icon-chevron']) {
+      > :where([data-item-section='icon'])
+      > :where(:not([data-icon-name='file-tree-icon-chevron'])) {
       color: var(--trees-git-modified-color);
     }
     & > [data-item-section='content'] {

@@ -26,6 +26,10 @@ const TIER_FILES = [
   'font.woff2',
   '.gitignore',
   'config.mcp',
+  'notes.txt',
+  'data.csv',
+  'schema.sql',
+  'archive.zip',
 
   // Complete tier — frameworks, brands, tooling
   'Layout.astro',
@@ -39,11 +43,13 @@ const TIER_FILES = [
   'eslint.config.js',
   'schema.graphql',
   'next.config.ts',
+  'package.json',
   '.oxlintrc.json',
   'postcss.config.js',
   '.prettierrc',
   'styles.scss',
   '.stylelintrc',
+  'icon.svg',
   'App.svelte',
   'svgo.config.js',
   'tailwind.config.ts',
@@ -57,7 +63,7 @@ const TIER_FILES = [
   'main.zig',
 
   // Falls through to `default` token
-  'unknown.txt',
+  'unknown.xyz',
 ];
 
 const TIERS: { set: FileTreeBuiltInIconSet; label: string }[] = [

@@ -48,7 +48,7 @@ export function normalizeFileTreeIcons(
 ): NormalizedFileTreeIconConfig {
   if (icons == null) {
     return {
-      set: 'minimal',
+      set: 'complete',
       colored: true,
     };
   }
@@ -62,7 +62,7 @@ export function normalizeFileTreeIcons(
 
   return {
     ...icons,
-    set: icons.set ?? (hasCustomIconOverrides(icons) ? 'none' : 'minimal'),
+    set: icons.set ?? (hasCustomIconOverrides(icons) ? 'none' : 'complete'),
     colored: icons.colored ?? true,
   };
 }

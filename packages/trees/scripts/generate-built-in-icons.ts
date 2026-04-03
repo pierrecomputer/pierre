@@ -35,6 +35,7 @@ interface TokenDef {
 
 const TOKEN_DEFS: Record<string, TokenDef> = {
   // -- standard tier: languages, common file types -------------------------
+  database: { icon: 'server-duo', tier: 'standard' },
   default: { icon: 'file-duo', tier: 'standard' },
   bash: { icon: 'bash-duo', tier: 'standard' },
   css: { icon: 'lang-css-duo', tier: 'standard' },
@@ -51,7 +52,10 @@ const TOKEN_DEFS: Record<string, TokenDef> = {
   ruby: { icon: 'lang-ruby', tier: 'standard' },
   rust: { icon: 'lang-rust', tier: 'standard' },
   swift: { icon: 'lang-swift', tier: 'standard' },
+  table: { icon: 'file-table-duo', tier: 'standard' },
+  text: { icon: 'file-text-duo', tier: 'standard' },
   typescript: { icon: 'lang-typescript-duo', tier: 'standard' },
+  zip: { icon: 'folder-zip-duo', tier: 'standard' },
 
   // -- complete tier: frameworks, brands, tooling -------------------------
   astro: { icon: 'astro', tier: 'complete' },
@@ -65,12 +69,14 @@ const TOKEN_DEFS: Record<string, TokenDef> = {
   eslint: { icon: 'eslint', tier: 'complete' },
   graphql: { icon: 'graphql', tier: 'complete' },
   nextjs: { icon: 'nextjs', tier: 'complete' },
+  npm: { icon: 'npm-duo', tier: 'complete' },
   oxc: { icon: 'oxc', tier: 'complete' },
   postcss: { icon: 'postcss', tier: 'complete' },
   prettier: { icon: 'prettier', tier: 'complete' },
   react: { icon: 'react', tier: 'complete' },
   sass: { icon: 'sass', tier: 'complete' },
   stylelint: { icon: 'stylelint', tier: 'complete' },
+  svg: { icon: 'svg-2', tier: 'complete' },
   svelte: { icon: 'svelte', tier: 'complete' },
   svgo: { icon: 'svgo', tier: 'complete' },
   tailwind: { icon: 'tailwind', tier: 'complete' },
@@ -91,11 +97,15 @@ const ICON_TO_TOKEN: Record<string, string> = {};
 for (const [token, def] of Object.entries(TOKEN_DEFS)) {
   ICON_TO_TOKEN[def.icon] = token;
 }
+// Theme uses file-zip-duo for extensions, but we render with folder-zip-duo
+ICON_TO_TOKEN['file-zip-duo'] = 'zip';
 
 // Manual additions not covered by the theme data
 const MANUAL_EXTENSION_TOKENS: Record<string, string> = {
+  log: 'text',
   mcp: 'mcp',
   'mdx.tsx': 'markdown',
+  txt: 'text',
 };
 
 const MANUAL_FILENAME_TOKENS: Record<string, string> = {
