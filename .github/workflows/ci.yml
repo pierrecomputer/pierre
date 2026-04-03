@@ -170,6 +170,9 @@ jobs:
       - name: Run tests - trees
         run: bun ws trees test
 
+      - name: Run tests - path-store
+        run: bun ws path-store test
+
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
