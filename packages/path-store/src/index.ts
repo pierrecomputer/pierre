@@ -10,6 +10,7 @@ export type {
   PathStoreOperation,
   PathStoreOptions,
   PathStorePathComparator,
+  PathStorePreparedInput,
   PathStoreRemoveOptions,
   PathStoreVisibleRow,
 } from './public-types';

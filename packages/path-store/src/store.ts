@@ -1,6 +1,9 @@
 import {
+  getPreparedInputEntries,
   PathStoreBuilder,
+  prepareInput as prepareCanonicalInput,
   preparePaths as prepareCanonicalPaths,
+  preparePresortedInput as prepareCanonicalPresortedInput,
   preparePathEntries,
 } from './builder';
 import {
@@ -31,6 +34,7 @@ import type {
   PathStoreMoveOptions,
   PathStoreOperation,
   PathStoreOptions,
+  PathStorePreparedInput,
   PathStoreRemoveOptions,
   PathStoreVisibleRow,
 } from './public-types';
@@ -48,16 +52,22 @@ export class PathStore {
       'store.builder.create',
       () => new PathStoreBuilder(options)
     );
-    const inputPaths = options.paths ?? [];
-
-    if (options.presorted === true) {
-      builder.appendPaths(inputPaths);
-    } else {
+    if (options.preparedInput != null) {
       builder.appendPreparedPaths(
-        withBenchmarkPhase(instrumentation, 'store.preparePathEntries', () =>
-          preparePathEntries(inputPaths, options)
-        )
+        getPreparedInputEntries(options.preparedInput)
       );
+    } else {
+      const inputPaths = options.paths ?? [];
+
+      if (options.presorted === true) {
+        builder.appendPaths(inputPaths);
+      } else {
+        builder.appendPreparedPaths(
+          withBenchmarkPhase(instrumentation, 'store.preparePathEntries', () =>
+            preparePathEntries(inputPaths, options)
+          )
+        );
+      }
     }
 
     this.#state = withBenchmarkPhase(
@@ -87,6 +97,19 @@ export class PathStore {
     options: PathStoreOptions = {}
   ): string[] {
     return prepareCanonicalPaths(paths, options);
+  }
+
+  public static prepareInput(
+    paths: readonly string[],
+    options: PathStoreOptions = {}
+  ): PathStorePreparedInput {
+    return prepareCanonicalInput(paths, options);
+  }
+
+  public static preparePresortedInput(
+    paths: readonly string[]
+  ): PathStorePreparedInput {
+    return prepareCanonicalPresortedInput(paths);
   }
 
   public list(path?: string): string[] {

@@ -1,3 +1,4 @@
+import { sortCanonicalPaths } from '@pierre/tree-test-data';
 import { describe, expect, test } from 'bun:test';
 
 import { PathStore } from '../src/index';
@@ -176,6 +177,87 @@ describe('preparePaths', () => {
         sort,
       })
     ).toEqual(['b.ts', 'a.ts', 'dir/']);
+  });
+});
+
+describe('prepareInput', () => {
+  test('returns presorted string paths and builds without reparsing raw unsorted input', () => {
+    const preparedInput = PathStore.prepareInput([
+      'b.txt',
+      'a/file.ts',
+      'a10.txt',
+      'a2.txt',
+      'a1.txt',
+      'a/',
+    ]);
+
+    expect(preparedInput.paths).toEqual([
+      'a/',
+      'a/file.ts',
+      'a1.txt',
+      'a2.txt',
+      'a10.txt',
+      'b.txt',
+    ]);
+
+    const store = new PathStore({
+      preparedInput,
+    });
+
+    expect(getVisiblePaths(store, 0, 9)).toEqual([
+      'a/',
+      'a1.txt',
+      'a2.txt',
+      'a10.txt',
+      'b.txt',
+    ]);
+    expect(store.list()).toEqual([
+      'a/file.ts',
+      'a1.txt',
+      'a2.txt',
+      'a10.txt',
+      'b.txt',
+    ]);
+  });
+
+  test('prepares already sorted string paths without changing their order', () => {
+    const presortedPaths = ['a/', 'a/file.ts', 'a1.txt', 'a2.txt', 'a10.txt'];
+    const preparedInput = PathStore.preparePresortedInput(presortedPaths);
+
+    expect(preparedInput.paths).toEqual(presortedPaths);
+
+    const store = new PathStore({
+      preparedInput,
+    });
+
+    expect(store.list()).toEqual(['a/file.ts', 'a1.txt', 'a2.txt', 'a10.txt']);
+  });
+
+  test('matches tree-test-data canonical sorting for a representative small fixture', () => {
+    const fixture = [
+      'README.md',
+      'a10.txt',
+      'a2.txt',
+      'a1.txt',
+      'a/',
+      'a/file.ts',
+      'src/index.ts',
+      'src/lib/',
+      'src/lib/util10.ts',
+      'src/lib/util2.ts',
+      'src/Alpha.ts',
+      'src/alpha.ts',
+      'docs/',
+      'docs/guide10.md',
+      'docs/guide2.md',
+      'tmp/',
+      'tmp/10.log',
+      'tmp/2.log',
+    ];
+
+    expect(sortCanonicalPaths(fixture)).toEqual(
+      PathStore.preparePaths(fixture)
+    );
   });
 });
 

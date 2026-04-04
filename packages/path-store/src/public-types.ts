@@ -18,10 +18,15 @@ export interface PathStoreOptions {
 
 export type PathStoreInitialExpansion = 'closed' | 'open' | number;
 
+export interface PathStorePreparedInput {
+  paths: readonly string[];
+}
+
 export interface PathStoreConstructorOptions extends PathStoreOptions {
   initialExpansion?: PathStoreInitialExpansion;
   initialExpandedPaths?: readonly string[];
   paths?: readonly string[];
+  preparedInput?: PathStorePreparedInput;
   presorted?: boolean;
 }
 

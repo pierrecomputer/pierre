@@ -1,4 +1,5 @@
 import type { PathStorePathComparator } from './public-types';
+import type { PathStorePreparedInput } from './public-types';
 
 export type NodeId = number;
 export type SegmentId = number;
@@ -58,6 +59,10 @@ export interface PreparedPath {
   path: string;
   segments: readonly string[];
 }
+
+export type InternalPreparedInput = PathStorePreparedInput & {
+  readonly preparedPaths: readonly PreparedPath[];
+};
 
 export interface LookupPath {
   requiresDirectory: boolean;

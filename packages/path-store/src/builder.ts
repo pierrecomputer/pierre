@@ -2,6 +2,7 @@ import { appendChildReference, createDirectoryChildIndex } from './child-index';
 import { rebuildDirectoryChildAggregates } from './child-index';
 import type {
   DirectoryChildIndex,
+  InternalPreparedInput,
   NodeId,
   PathStoreNode,
   PathStoreSnapshot,
@@ -86,11 +87,59 @@ function getDirectoryDepth(preparedPath: PreparedPath): number {
     : preparedPath.segments.length - 1;
 }
 
+function isPreparedPathArray(value: unknown): value is readonly PreparedPath[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (entry) =>
+        entry != null &&
+        typeof entry === 'object' &&
+        typeof entry.path === 'string' &&
+        Array.isArray(entry.segments) &&
+        typeof entry.basename === 'string' &&
+        typeof entry.isDirectory === 'boolean'
+    )
+  );
+}
+
 export function preparePaths(
   paths: readonly string[],
   options: PathStoreOptions = {}
 ): string[] {
   return preparePathEntries(paths, options).map((entry) => entry.path);
+}
+
+export function prepareInput(
+  paths: readonly string[],
+  options: PathStoreOptions = {}
+): InternalPreparedInput {
+  const preparedPaths = preparePathEntries(paths, options);
+  return {
+    paths: preparedPaths.map((entry) => entry.path),
+    preparedPaths,
+  };
+}
+
+export function preparePresortedInput(
+  paths: readonly string[]
+): InternalPreparedInput {
+  const preparedPaths = paths.map((path) => parseInputPath(path));
+  return {
+    paths: [...paths],
+    preparedPaths,
+  };
+}
+
+export function getPreparedInputEntries(
+  preparedInput: import('./public-types').PathStorePreparedInput
+): readonly PreparedPath[] {
+  const internalPreparedInput = preparedInput as Partial<InternalPreparedInput>;
+  const preparedPaths = internalPreparedInput.preparedPaths;
+  if (!isPreparedPathArray(preparedPaths)) {
+    throw new Error('preparedInput must come from PathStore.prepareInput()');
+  }
+
+  return preparedPaths;
 }
 
 export function preparePathEntries(

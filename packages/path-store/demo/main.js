@@ -116,6 +116,7 @@ const benchmarkModulePromise = instrumentationEnabled
 
 const actionButtons = document.querySelectorAll('button[data-action-id]');
 const flattenInput = document.querySelector('#flatten-directories');
+const sortInput = document.querySelector('#sort-input');
 const visibleCountInput = document.querySelector('#visible-count');
 const offsetInput = document.querySelector('#offset');
 const offsetValueElement = document.querySelector('#offset-value');
@@ -126,6 +127,7 @@ const workloadInput = document.querySelector('#workload');
 
 if (
   flattenInput == null ||
+  sortInput == null ||
   visibleCountInput == null ||
   offsetInput == null ||
   offsetValueElement == null ||
@@ -188,6 +190,18 @@ function getFlattenEmptyDirectoriesEnabled() {
   return (
     flattenInput instanceof HTMLInputElement && flattenInput.checked === true
   );
+}
+
+function getSortInputEnabled() {
+  return sortInput instanceof HTMLInputElement && sortInput.checked === true;
+}
+
+function warmPresortedFilesIfNeeded() {
+  if (getSortInputEnabled()) {
+    return;
+  }
+
+  void getSelectedWorkload().presortedFiles;
 }
 
 function logDemoMessage(message) {
@@ -393,6 +407,7 @@ function getSelectedWorkloadSummary() {
     flattenEmptyDirectories: getFlattenEmptyDirectoriesEnabled(),
     label: workload.label,
     name: workload.name,
+    presortedInput: !getSortInputEnabled(),
   };
 }
 
@@ -981,19 +996,44 @@ const demoActionById = new Map(
 function createStore(benchmark = null) {
   const workload = getSelectedWorkload();
   const flattenEmptyDirectories = getFlattenEmptyDirectoriesEnabled();
+  const sortInput = getSortInputEnabled();
   const buildStartedAt = performance.now();
+  let preparedInput = null;
+  if (!sortInput) {
+    preparedInput =
+      benchmark == null
+        ? PathStore.preparePresortedInput(workload.presortedFiles)
+        : benchmark.instrumentation.measurePhase(
+            'page.preparePresortedInput',
+            () => PathStore.preparePresortedInput(workload.presortedFiles)
+          );
+  }
   const storeOptions =
     benchmark == null
-      ? {
-          flattenEmptyDirectories,
-          initialExpansion: 'open',
-          paths: workload.files,
-        }
-      : benchmark.attach({
-          flattenEmptyDirectories,
-          initialExpansion: 'open',
-          paths: workload.files,
-        });
+      ? preparedInput == null
+        ? {
+            flattenEmptyDirectories,
+            initialExpansion: 'open',
+            paths: workload.files,
+          }
+        : {
+            flattenEmptyDirectories,
+            initialExpansion: 'open',
+            preparedInput,
+          }
+      : benchmark.attach(
+          preparedInput == null
+            ? {
+                flattenEmptyDirectories,
+                initialExpansion: 'open',
+                paths: workload.files,
+              }
+            : {
+                flattenEmptyDirectories,
+                initialExpansion: 'open',
+                preparedInput,
+              }
+        );
   if (benchmark != null) {
     benchmark.instrumentation.setCounter(
       'workload.inputFiles',
@@ -1039,6 +1079,7 @@ async function profileRenderStore() {
   setActionButtonsDisabled(true);
   clearProfileSummary();
   const benchmark = await createBenchmarkCollector();
+  warmPresortedFilesIfNeeded();
 
   const startedAt = performance.now();
   const heapBefore = benchmark?.readHeapSnapshot() ?? null;
@@ -1237,6 +1278,7 @@ async function profilePreparedAction(actionId, prepared) {
   }
 
   const benchmark = await createBenchmarkCollector();
+  warmPresortedFilesIfNeeded();
   const demoState = {
     flattenEmptyDirectories: getFlattenEmptyDirectoriesEnabled(),
     offset: getParsedInputNumber(offsetInput, 0),
@@ -1297,6 +1339,7 @@ async function profilePreparedAction(actionId, prepared) {
 function configureDemo({
   flattenEmptyDirectories,
   offset,
+  sortInputEnabled,
   visibleCount,
   workloadName,
 }) {
@@ -1306,6 +1349,10 @@ function configureDemo({
 
   if (typeof flattenEmptyDirectories === 'boolean') {
     flattenInput.checked = flattenEmptyDirectories;
+  }
+
+  if (typeof sortInputEnabled === 'boolean') {
+    sortInput.checked = sortInputEnabled;
   }
 
   if (Number.isFinite(visibleCount)) {
@@ -1321,6 +1368,7 @@ function configureDemo({
   return {
     flattenEmptyDirectories: getFlattenEmptyDirectoriesEnabled(),
     offset: getParsedInputNumber(offsetInput, 0),
+    sortInputEnabled: getSortInputEnabled(),
     visibleCount: getRequestedVisibleCount(),
     workloadName: getSelectedWorkloadName(),
   };
@@ -1332,6 +1380,7 @@ function getDemoState() {
     hasStore: currentStore != null,
     lastEvent,
     offset: getParsedInputNumber(offsetInput, 0),
+    sortInputEnabled: getSortInputEnabled(),
     visibleCount: getRequestedVisibleCount(),
     workload: getSelectedWorkloadSummary(),
   };
@@ -1346,6 +1395,16 @@ visibleCountInput.addEventListener('input', () => {
 });
 
 flattenInput.addEventListener('input', () => {
+  if (currentStore == null) {
+    return;
+  }
+
+  const currentOffset = getParsedInputNumber(offsetInput, 0);
+  createStore();
+  renderCurrentWindow(currentOffset);
+});
+
+sortInput.addEventListener('input', () => {
   if (currentStore == null) {
     return;
   }

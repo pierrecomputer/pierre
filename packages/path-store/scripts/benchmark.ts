@@ -13,6 +13,7 @@ const VIEWPORT_MODES = ['first', 'middle'] as const;
 const VISIBLE_WINDOW_SIZES = [30, 100, 200, 500] as const;
 const QUICK_VISIBLE_WINDOW_SIZES = [30, 200] as const;
 const BENCHMARK_PROFILE_NAMES = ['quick', 'full'] as const;
+const BENCHMARK_PRESET_NAMES = ['presorted-render'] as const;
 const QUICK_WORKLOAD_NAMES = ['linux-5x'] as const;
 const MUTATION_SCENARIO_KINDS = [
   'rename-leaf',
@@ -67,6 +68,7 @@ type BenchmarkWorkloadName =
   | typeof PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME
   | typeof PHASE_5_FLATTEN_CHAIN_WORKLOAD_NAME;
 type BenchmarkProfileName = (typeof BENCHMARK_PROFILE_NAMES)[number];
+type BenchmarkPresetName = (typeof BENCHMARK_PRESET_NAMES)[number];
 type ViewportMode = (typeof VIEWPORT_MODES)[number];
 type ScenarioCategory =
   | 'prepare'
@@ -93,6 +95,7 @@ interface BenchmarkCliOptions {
   includeSamples: boolean;
   json: boolean;
   minEffectPct: number;
+  preset?: BenchmarkPresetName;
   profile: BenchmarkProfileName;
 }
 
@@ -100,6 +103,8 @@ interface BenchmarkWorkload {
   fileCount: number;
   fileCountLabel: string;
   getPreparedFiles: () => readonly string[];
+  getPreparedInput: () => import('../src/public-types').PathStorePreparedInput;
+  getPresortedFiles: () => readonly string[];
   label: string;
   name: BenchmarkWorkloadName;
   rawFiles: readonly string[];
@@ -208,6 +213,7 @@ interface MitataJsonResult {
 }
 
 interface BenchmarkRunOutput {
+  derivedSummaries?: DerivedBenchmarkSummaryOutput[];
   generatedAt: string;
   intent: string;
   kind: 'path-store-benchmark-run';
@@ -266,7 +272,32 @@ interface BenchmarkCompareOutput {
 }
 
 interface HumanBenchmarkRun {
+  derivedSummaries: DerivedBenchmarkSummary[];
   results: MitataJsonResult;
+}
+
+interface ScenarioMeasurementResult {
+  name: string;
+  preparationTimeMs: number;
+  stats: MeasuredRunStats;
+  wallTimeMs: number;
+}
+
+interface DerivedBenchmarkSummary {
+  components: readonly string[];
+  name: string;
+  preparationTimeMs: number;
+  stats: MeasuredRunStats;
+  wallTimeMs: number;
+}
+
+interface DerivedBenchmarkSummaryOutput {
+  components: readonly string[];
+  name: string;
+  preparationTimeMs: number;
+  sampleStrategy: 'min-component-samples';
+  stats: MitataRunStats;
+  wallTimeMs: number;
 }
 
 interface BenchmarkProfile {
@@ -295,6 +326,13 @@ function styleText(text: string, ...styles: readonly string[]): string {
   return `${styles.join('')}${text}${ANSI.reset}`;
 }
 
+function getPresetFilter(preset: BenchmarkPresetName): RegExp {
+  switch (preset) {
+    case 'presorted-render':
+      return /^(prepare-presorted-input\/linux-5x|build\/linux-5x|visible-first\/linux-5x\/30)$/;
+  }
+}
+
 function parseArgs(argv: readonly string[]): BenchmarkCliOptions {
   let bootstrapResamples = COMPARE_DEFAULT_BOOTSTRAP_RESAMPLES;
   let compare:
@@ -307,6 +345,7 @@ function parseArgs(argv: readonly string[]): BenchmarkCliOptions {
   let includeSamples = false;
   let json = false;
   let minEffectPct = COMPARE_DEFAULT_MIN_EFFECT_PCT;
+  let preset: BenchmarkPresetName | undefined;
   let profile: BenchmarkProfileName = 'quick';
 
   for (let index = 0; index < argv.length; index++) {
@@ -402,6 +441,24 @@ function parseArgs(argv: readonly string[]): BenchmarkCliOptions {
       continue;
     }
 
+    if (argument === '--preset') {
+      const value = argv[index + 1];
+      if (value == null || value.length === 0) {
+        throw new Error('Expected a value after --preset');
+      }
+
+      if (!(BENCHMARK_PRESET_NAMES as readonly string[]).includes(value)) {
+        throw new Error(
+          `Unknown benchmark preset: ${value}. Expected one of: ${BENCHMARK_PRESET_NAMES.join(', ')}`
+        );
+      }
+
+      preset = value as BenchmarkPresetName;
+      filter = getPresetFilter(preset);
+      index++;
+      continue;
+    }
+
     if (argument === '--filter') {
       const value = argv[index + 1];
       if (value == null || value.length === 0) {
@@ -421,6 +478,9 @@ function parseArgs(argv: readonly string[]): BenchmarkCliOptions {
         '  --profile <name>  Scenario profile: quick (default) or full'
       );
       console.log('  --full            Shortcut for --profile full');
+      console.log(
+        `  --preset <name>   Apply a named scenario filter preset (${BENCHMARK_PRESET_NAMES.join(', ')})`
+      );
       console.log(
         '  --filter <regex>   Run only scenarios whose names match the regex'
       );
@@ -452,6 +512,7 @@ function parseArgs(argv: readonly string[]): BenchmarkCliOptions {
     includeSamples,
     json,
     minEffectPct,
+    preset,
     profile,
   };
 }
@@ -496,8 +557,7 @@ function createExpandedStore(
   const store = new PathStore({
     flattenEmptyDirectories: true,
     initialExpansion: 'open',
-    paths: workload.getPreparedFiles(),
-    presorted: true,
+    preparedInput: workload.getPreparedInput(),
   });
 
   for (const path of seededPaths) {
@@ -967,6 +1027,16 @@ function getHumanBenchmarkFactoryNameWidth(
   return Math.min(HUMAN_BENCHMARK_NAME_MAX_WIDTH, maxWidth);
 }
 
+function getHumanBenchmarkNameWidth(names: readonly string[]): number {
+  let maxWidth = HUMAN_BENCHMARK_NAME_MIN_WIDTH;
+
+  for (const name of names) {
+    maxWidth = Math.max(maxWidth, name.length);
+  }
+
+  return Math.min(HUMAN_BENCHMARK_NAME_MAX_WIDTH, maxWidth);
+}
+
 function padBenchmarkLabel(label: string, width: number): string {
   if (label.length <= width) {
     return label.padEnd(width);
@@ -1027,6 +1097,9 @@ function printHumanBenchmarkBootBanner(
 ): void {
   console.log(styleText('path-store benchmark', ANSI.bold, ANSI.cyan));
   console.log(`${styleText('profile:', ANSI.dim)} ${profile.name}`);
+  if (cliOptions.preset != null) {
+    console.log(`${styleText('preset:', ANSI.dim)} ${cliOptions.preset}`);
+  }
   console.log(
     `${styleText('workloads:', ANSI.dim)} ${profile.workloadNames.join(', ')}`
   );
@@ -1200,6 +1273,38 @@ function printHumanBenchmarkRow(
   console.log(row);
 }
 
+function printHumanDerivedBenchmarkSummaries(
+  summaries: readonly DerivedBenchmarkSummary[],
+  nameWidth: number
+): void {
+  if (summaries.length === 0) {
+    return;
+  }
+
+  console.log('');
+  console.log(styleText('derived summaries', ANSI.bold, ANSI.cyan));
+  console.log(
+    `${styleText('note:', ANSI.dim)} sums independently measured component scenarios; samples shows the minimum component sample count.`
+  );
+  console.log(
+    styleText(
+      `${'benchmark'.padEnd(nameWidth)} ${'p50'.padStart(10)} ${'p95'.padStart(10)} ${'min'.padStart(10)} ${'max'.padStart(10)} ${'prep'.padStart(10)} ${'wall'.padStart(10)} ${'samples'.padStart(10)}`,
+      ANSI.bold
+    )
+  );
+  console.log(styleText('-'.repeat(nameWidth + 83), ANSI.dim));
+
+  for (const summary of summaries) {
+    printHumanBenchmarkRow(
+      summary.name,
+      summary.stats,
+      summary.preparationTimeMs,
+      summary.wallTimeMs,
+      nameWidth
+    );
+  }
+}
+
 function printHumanMeasurementProgress(
   index: number,
   total: number,
@@ -1331,16 +1436,130 @@ function createBenchmarkResult(
   };
 }
 
+function parseVisibleFirstScenarioName(
+  name: string
+): { windowSize: number; workload: BenchmarkWorkloadName } | null {
+  const match = /^visible-first\/([^/]+)\/(\d+)$/.exec(name);
+  if (match == null) {
+    return null;
+  }
+
+  const workload = match[1] as BenchmarkWorkloadName;
+  const windowSize = Number(match[2]);
+  if (!Number.isInteger(windowSize) || windowSize <= 0) {
+    return null;
+  }
+
+  return { windowSize, workload };
+}
+
+function sumMeasuredRunStats(
+  componentStats: readonly MeasuredRunStats[]
+): MeasuredRunStats {
+  return {
+    avg: componentStats.reduce((total, stats) => total + stats.avg, 0),
+    max: componentStats.reduce((total, stats) => total + stats.max, 0),
+    min: componentStats.reduce((total, stats) => total + stats.min, 0),
+    p50: componentStats.reduce((total, stats) => total + stats.p50, 0),
+    p75: componentStats.reduce((total, stats) => total + stats.p75, 0),
+    p95: componentStats.reduce((total, stats) => total + stats.p95, 0),
+    p99: componentStats.reduce((total, stats) => total + stats.p99, 0),
+    samples: [],
+    ticks: componentStats.reduce(
+      (minimum, stats) => Math.min(minimum, stats.ticks),
+      Number.MAX_SAFE_INTEGER
+    ),
+  };
+}
+
+function createDerivedBenchmarkSummaries(
+  results: readonly ScenarioMeasurementResult[]
+): DerivedBenchmarkSummary[] {
+  const resultByName = new Map(results.map((result) => [result.name, result]));
+  const summaries: DerivedBenchmarkSummary[] = [];
+
+  for (const result of results) {
+    const visibleFirst = parseVisibleFirstScenarioName(result.name);
+    if (visibleFirst == null) {
+      continue;
+    }
+
+    const buildResult = resultByName.get(`build/${visibleFirst.workload}`);
+    if (buildResult == null) {
+      continue;
+    }
+
+    const preparePresortedResult = resultByName.get(
+      `prepare-presorted-input/${visibleFirst.workload}`
+    );
+    if (preparePresortedResult != null) {
+      summaries.push({
+        components: [
+          preparePresortedResult.name,
+          buildResult.name,
+          result.name,
+        ],
+        name: `equivalent-presorted-first-render/${visibleFirst.workload}/${visibleFirst.windowSize}`,
+        preparationTimeMs:
+          preparePresortedResult.preparationTimeMs +
+          buildResult.preparationTimeMs +
+          result.preparationTimeMs,
+        stats: sumMeasuredRunStats([
+          preparePresortedResult.stats,
+          buildResult.stats,
+          result.stats,
+        ]),
+        wallTimeMs:
+          preparePresortedResult.wallTimeMs +
+          buildResult.wallTimeMs +
+          result.wallTimeMs,
+      });
+    } else {
+      summaries.push({
+        components: [buildResult.name, result.name],
+        name: `equivalent-presorted-warm-first-render/${visibleFirst.workload}/${visibleFirst.windowSize}`,
+        preparationTimeMs:
+          buildResult.preparationTimeMs + result.preparationTimeMs,
+        stats: sumMeasuredRunStats([buildResult.stats, result.stats]),
+        wallTimeMs: buildResult.wallTimeMs + result.wallTimeMs,
+      });
+    }
+
+    const prepareResult = resultByName.get(`prepare/${visibleFirst.workload}`);
+    if (prepareResult != null) {
+      summaries.push({
+        components: [prepareResult.name, buildResult.name, result.name],
+        name: `equivalent-raw-unsorted-first-render/${visibleFirst.workload}/${visibleFirst.windowSize}`,
+        preparationTimeMs:
+          prepareResult.preparationTimeMs +
+          buildResult.preparationTimeMs +
+          result.preparationTimeMs,
+        stats: sumMeasuredRunStats([
+          prepareResult.stats,
+          buildResult.stats,
+          result.stats,
+        ]),
+        wallTimeMs:
+          prepareResult.wallTimeMs + buildResult.wallTimeMs + result.wallTimeMs,
+      });
+    }
+  }
+
+  return summaries;
+}
+
 async function runBenchmarksForJson(
   scenarioFactories: readonly BenchmarkScenarioFactory[],
   includeSamples: boolean
 ): Promise<{
+  derivedSummaries: DerivedBenchmarkSummaryOutput[];
   preparationTimeMs: number;
   results: MitataJsonResult;
   scenarios: ScenarioManifest[];
 }> {
   const benchmarks: MitataJsonResult['benchmarks'] = [];
   const manifests: ScenarioManifest[] = [];
+  const results: ScenarioMeasurementResult[] = [];
   let preparationTimeMs = 0;
 
   for (let index = 0; index < scenarioFactories.length; index++) {
@@ -1360,6 +1579,12 @@ async function runBenchmarksForJson(
     const wallTimeStart = performance.now();
     const stats = await scenario.measure();
     const wallTimeMs = performance.now() - wallTimeStart;
+    results.push({
+      name: scenario.name,
+      preparationTimeMs: scenarioPreparationTimeMs,
+      stats,
+      wallTimeMs,
+    });
 
     benchmarks.push(
       createBenchmarkResult(scenario.name, stats, wallTimeMs, includeSamples)
@@ -1369,6 +1594,16 @@ async function runBenchmarksForJson(
   }
 
   return {
+    derivedSummaries: createDerivedBenchmarkSummaries(results).map(
+      (summary) => ({
+        components: summary.components,
+        name: summary.name,
+        preparationTimeMs: summary.preparationTimeMs,
+        sampleStrategy: 'min-component-samples',
+        stats: sanitizeMeasuredRunStats(summary.stats),
+        wallTimeMs: summary.wallTimeMs,
+      })
+    ),
     preparationTimeMs,
     results: {
       benchmarks,
@@ -2101,12 +2336,7 @@ async function runBenchmarksForHuman(
 
   printHumanBenchmarkHeader(context, scenarioFactories.length, nameWidth);
 
-  const results: Array<{
-    name: string;
-    preparationTimeMs: number;
-    stats: MeasuredRunStats;
-    wallTimeMs: number;
-  }> = [];
+  const results: ScenarioMeasurementResult[] = [];
   let preparationTimeMs = 0;
 
   for (let index = 0; index < scenarioFactories.length; index++) {
@@ -2158,6 +2388,7 @@ async function runBenchmarksForHuman(
   }
 
   return {
+    derivedSummaries: createDerivedBenchmarkSummaries(results),
     preparationTimeMs,
     results: {
       benchmarks: results.map((result) =>
@@ -2185,13 +2416,25 @@ function loadWorkload(workloadName: BenchmarkWorkloadName): BenchmarkWorkload {
 
   const workload = getVirtualizationWorkload(workloadName);
   let preparedFiles: readonly string[] | undefined;
+  let preparedInput:
+    | import('../src/public-types').PathStorePreparedInput
+    | undefined;
 
   return {
     fileCount: workload.files.length,
     fileCountLabel: workload.fileCountLabel,
     getPreparedFiles() {
-      preparedFiles ??= PathStore.preparePaths(workload.files);
+      preparedFiles ??= workload.presortedFiles;
       return preparedFiles;
+    },
+    getPreparedInput() {
+      preparedInput ??= PathStore.preparePresortedInput(
+        workload.presortedFiles
+      );
+      return preparedInput;
+    },
+    getPresortedFiles() {
+      return workload.presortedFiles;
     },
     label: workload.label,
     name: workloadName,
@@ -2207,11 +2450,22 @@ function createWideDirectoryWorkload(): BenchmarkWorkload {
     (_, index) => `wide/item${index + 1}.ts`
   );
   let preparedFiles: readonly string[] | undefined;
+  let preparedInput:
+    | import('../src/public-types').PathStorePreparedInput
+    | undefined;
 
   return {
     fileCount: rawFiles.length,
     fileCountLabel: `${rawFiles.length.toLocaleString()} files in one wide directory`,
     getPreparedFiles() {
+      preparedFiles ??= PathStore.preparePaths(rawFiles);
+      return preparedFiles;
+    },
+    getPreparedInput() {
+      preparedInput ??= PathStore.prepareInput(rawFiles);
+      return preparedInput;
+    },
+    getPresortedFiles() {
       preparedFiles ??= PathStore.preparePaths(rawFiles);
       return preparedFiles;
     },
@@ -2237,11 +2491,22 @@ function createFlattenChainWorkload(): BenchmarkWorkload {
     }
   );
   let preparedFiles: readonly string[] | undefined;
+  let preparedInput:
+    | import('../src/public-types').PathStorePreparedInput
+    | undefined;
 
   return {
     fileCount: rawFiles.length,
     fileCountLabel: `${rawFiles.length.toLocaleString()} files in repeated flattenable chains`,
     getPreparedFiles() {
+      preparedFiles ??= PathStore.preparePaths(rawFiles);
+      return preparedFiles;
+    },
+    getPreparedInput() {
+      preparedInput ??= PathStore.prepareInput(rawFiles);
+      return preparedInput;
+    },
+    getPresortedFiles() {
       preparedFiles ??= PathStore.preparePaths(rawFiles);
       return preparedFiles;
     },
@@ -2296,6 +2561,45 @@ function createPrepareScenarioFactory(
           return Promise.resolve(
             measureFunctionSamples(
               () => do_not_optimize(PathStore.preparePaths(workload.rawFiles)),
+              getScenarioSampleCount('prepare'),
+              {},
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createPreparePresortedInputScenarioFactory(
+  workload: BenchmarkWorkload
+): BenchmarkScenarioFactory {
+  const name = `prepare-presorted-input/${workload.name}`;
+
+  return {
+    name,
+    build() {
+      const presortedFiles = workload.getPresortedFiles();
+
+      return {
+        manifest: {
+          category: 'prepare',
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            'Parses already-canonical presorted strings into prepared input.',
+          ],
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFunctionSamples(
+              () =>
+                do_not_optimize(
+                  PathStore.preparePresortedInput(presortedFiles)
+                ),
               getScenarioSampleCount('prepare'),
               {},
               progressReporter
@@ -3721,6 +4025,7 @@ function createScenarioFactories(
   for (const workload of workloads) {
     if (profile.includePrepare) {
       factories.push(createPrepareScenarioFactory(workload));
+      factories.push(createPreparePresortedInputScenarioFactory(workload));
     }
 
     factories.push(createListScenarioFactory(workload));
@@ -3885,6 +4190,7 @@ if (cliOptions.compare != null) {
       cliOptions.includeSamples
     );
     const runOutput: BenchmarkRunOutput = {
+      derivedSummaries: jsonRun.derivedSummaries,
       generatedAt: new Date().toISOString(),
       intent: BENCHMARK_INTENT,
       kind: 'path-store-benchmark-run',
@@ -3897,6 +4203,14 @@ if (cliOptions.compare != null) {
     console.log(JSON.stringify(runOutput));
   } else {
     const humanRun = await runBenchmarksForHuman(selectedFactories);
+    const derivedNameWidth = getHumanBenchmarkNameWidth(
+      humanRun.derivedSummaries.map((summary) => summary.name)
+    );
+    const nameWidth = Math.max(
+      getHumanBenchmarkFactoryNameWidth(selectedFactories),
+      derivedNameWidth
+    );
+    printHumanDerivedBenchmarkSummaries(humanRun.derivedSummaries, nameWidth);
     console.log('');
     console.log(
       `${styleText('Completed', ANSI.green, ANSI.bold)} ${formatCount(humanRun.results.benchmarks.length)} scenarios. Use --json for detailed scenario metadata.`
