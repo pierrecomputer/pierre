@@ -4,6 +4,8 @@ import type {
   PathStoreApplyChildPatchEvent,
   PathStoreBatchEvent,
   PathStoreBeginChildLoadEvent,
+  PathStoreCleanupEvent,
+  PathStoreCleanupResult,
   PathStoreCollapseEvent,
   PathStoreCompleteChildLoadEvent,
   PathStoreEvent,
@@ -215,6 +217,35 @@ export function createFailChildLoadEvent(
     path: args.path,
     projectionChanged: args.projectionChanged,
     stale: args.stale,
+    visibleCountDelta: null,
+  };
+}
+
+export function createCleanupEvent(
+  args: EventInvalidationArgs & PathStoreCleanupResult
+): PathStoreCleanupEvent {
+  return {
+    activeNodeCountAfter: args.activeNodeCountAfter,
+    activeNodeCountBefore: args.activeNodeCountBefore,
+    affectedAncestorIds: args.affectedAncestorIds ?? [],
+    affectedNodeIds: args.affectedNodeIds ?? [],
+    cachedPathEntryCountAfter: args.cachedPathEntryCountAfter,
+    cachedPathEntryCountBefore: args.cachedPathEntryCountBefore,
+    canonicalChanged: false,
+    idsPreserved: args.idsPreserved,
+    loadInfoEntryCountAfter: args.loadInfoEntryCountAfter,
+    loadInfoEntryCountBefore: args.loadInfoEntryCountBefore,
+    mode: args.mode,
+    operation: 'cleanup',
+    projectionChanged: args.projectionChanged,
+    reclaimedCachedPathEntryCount: args.reclaimedCachedPathEntryCount,
+    reclaimedLoadInfoEntryCount: args.reclaimedLoadInfoEntryCount,
+    reclaimedNodeSlotCount: args.reclaimedNodeSlotCount,
+    reclaimedSegmentCount: args.reclaimedSegmentCount,
+    segmentCountAfter: args.segmentCountAfter,
+    segmentCountBefore: args.segmentCountBefore,
+    totalNodeSlotCountAfter: args.totalNodeSlotCountAfter,
+    totalNodeSlotCountBefore: args.totalNodeSlotCountBefore,
     visibleCountDelta: null,
   };
 }

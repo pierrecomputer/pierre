@@ -17,6 +17,7 @@ const BENCHMARK_FILTER_PRESET_NAMES = [
   'presorted-render',
   'async',
   'mutation',
+  'cleanup',
 ] as const;
 const QUICK_WORKLOAD_NAMES = ['linux-5x'] as const;
 const MUTATION_SCENARIO_KINDS = [
@@ -43,6 +44,7 @@ const PREPARE_AND_E2E_SCENARIO_SAMPLE_COUNT = 3;
 const MUTATION_SCENARIO_SAMPLE_COUNT = 100;
 const DESTRUCTIVE_MUTATION_SCENARIO_SAMPLE_COUNT = 10;
 const MUTATION_SCENARIO_WARMUP_COUNT = 5;
+const CLEANUP_SCENARIO_SAMPLE_COUNT = 3;
 const COOPERATIVE_MUTATION_SCENARIO_SAMPLE_COUNT = 20;
 const COOPERATIVE_YIELDY_SCENARIO_SAMPLE_COUNT = 10;
 const TARGET_SHORT_SCENARIO_WALL_TIME_MS = 2_000;
@@ -97,7 +99,8 @@ type ScenarioCategory =
   | 'scroll'
   | 'list'
   | 'e2e'
-  | 'mutation';
+  | 'mutation'
+  | 'cleanup';
 type MutationScenarioKind = (typeof MUTATION_SCENARIO_KINDS)[number];
 type MutationReadIntent = 'render-changed-window' | 'preserve-viewport';
 type MutationProgressPhase = 'warmup' | 'sample';
@@ -361,6 +364,10 @@ const BENCHMARK_PRESETS: Record<BenchmarkPresetName, BenchmarkPresetSelection> =
       filter: /^(async\/|cooperative\/)/,
       profile: 'full',
     },
+    cleanup: {
+      filter: /^cleanup\//,
+      profile: 'full',
+    },
     full: {
       profile: 'full',
     },
@@ -600,6 +607,39 @@ function createCooperativeBenchStore(
   const store = createExpandedStore(workload, directoryPaths);
   for (const directoryPath of directoryPaths) {
     store.markDirectoryUnloaded(directoryPath);
+  }
+  return store;
+}
+
+// Leaves one real removed path plus many trailing tombstones so cleanup
+// benchmarks measure compaction work against a store that has meaningful
+// reclaimable state instead of a pristine snapshot.
+function createCleanupChurnedStore(workload: BenchmarkWorkload): PathStore {
+  const store = createExpandedStore(workload);
+  const visibleRowLimit = Math.min(
+    511,
+    Math.max(0, store.getVisibleCount() - 1)
+  );
+  const visibleRows =
+    visibleRowLimit < 0 ? [] : store.getVisibleSlice(0, visibleRowLimit);
+  const removedPath =
+    visibleRows.find((row) => row.kind === 'file')?.path ?? store.list()[0];
+
+  if (removedPath == null) {
+    throw new Error(
+      `No removable canonical path available for cleanup/${workload.name}.`
+    );
+  }
+
+  for (let index = 0; index < 128; index++) {
+    const tempPath = `zzz-cleanup-temp-${index}.ts`;
+    store.add(tempPath);
+    store.remove(tempPath);
+  }
+
+  store.remove(removedPath, { recursive: removedPath.endsWith('/') });
+  if (visibleRowLimit >= 0) {
+    do_not_optimize(store.getVisibleSlice(0, visibleRowLimit));
   }
   return store;
 }
@@ -1273,7 +1313,7 @@ function printHumanBenchmarkBootBanner(
     `${styleText('filter:', ANSI.dim)} ${cliOptions.filter?.source ?? 'none'}`
   );
   console.log(
-    `${styleText('base samples:', ANSI.dim)} build=${formatCount(BUILD_SCENARIO_SAMPLE_COUNT)}, prepare/e2e=${formatCount(PREPARE_AND_E2E_SCENARIO_SAMPLE_COUNT)}, visible=${formatCount(VISIBLE_SCENARIO_SAMPLE_COUNT)}, visible-cold=${formatCount(COLD_VISIBLE_SCENARIO_SAMPLE_COUNT)}, list/scroll=${formatCount(LIST_AND_SCROLL_SCENARIO_SAMPLE_COUNT)}, mutation=${formatCount(MUTATION_SCENARIO_SAMPLE_COUNT)} (+ ${formatCount(MUTATION_SCENARIO_WARMUP_COUNT)} warmup, reused store where possible; delete-subtree=${formatCount(DESTRUCTIVE_MUTATION_SCENARIO_SAMPLE_COUNT)} fresh-store samples)`
+    `${styleText('base samples:', ANSI.dim)} build=${formatCount(BUILD_SCENARIO_SAMPLE_COUNT)}, prepare/e2e=${formatCount(PREPARE_AND_E2E_SCENARIO_SAMPLE_COUNT)}, visible=${formatCount(VISIBLE_SCENARIO_SAMPLE_COUNT)}, visible-cold=${formatCount(COLD_VISIBLE_SCENARIO_SAMPLE_COUNT)}, list/scroll=${formatCount(LIST_AND_SCROLL_SCENARIO_SAMPLE_COUNT)}, mutation=${formatCount(MUTATION_SCENARIO_SAMPLE_COUNT)} (+ ${formatCount(MUTATION_SCENARIO_WARMUP_COUNT)} warmup, reused store where possible; delete-subtree=${formatCount(DESTRUCTIVE_MUTATION_SCENARIO_SAMPLE_COUNT)} fresh-store samples), cleanup=${formatCount(CLEANUP_SCENARIO_SAMPLE_COUNT)}`
   );
   console.log(
     `${styleText('short runs:', ANSI.dim)} scenarios under ${formatDuration(TARGET_SHORT_SCENARIO_WALL_TIME_MS * 1_000_000)} wall time scale sample counts upward toward that target`
@@ -1548,6 +1588,8 @@ function getScenarioSampleCount(category: ScenarioCategory): number {
       return LIST_AND_SCROLL_SCENARIO_SAMPLE_COUNT;
     case 'mutation':
       return MUTATION_SCENARIO_SAMPLE_COUNT;
+    case 'cleanup':
+      return CLEANUP_SCENARIO_SAMPLE_COUNT;
     case 'build':
       return BUILD_SCENARIO_SAMPLE_COUNT;
     case 'prepare':
@@ -4884,6 +4926,66 @@ function createCooperativeCancelMidQueueScenarioFactory(
   };
 }
 
+function createCleanupScenarioFactory(
+  workload: BenchmarkWorkload,
+  mode: 'stable' | 'aggressive'
+): BenchmarkScenarioFactory {
+  const name = `cleanup/${mode}/${workload.name}/churned`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createCleanupChurnedStore(workload);
+      const previewBounds = getWindowBounds(previewStore, 'first', 200);
+      const previewRead = readVisibleWindow(previewStore, previewBounds);
+      const cleanupResult = previewStore.cleanup({ mode });
+      const postCleanupRead = readVisibleWindow(previewStore, previewBounds);
+
+      return {
+        manifest: {
+          afterPreview: getPreview(postCleanupRead.rows),
+          beforePreview: getPreview(previewRead.rows),
+          category: 'cleanup',
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            `Manual ${mode} cleanup after deterministic churn (temp add/remove plus one persisted removal).`,
+            cleanupResult.idsPreserved
+              ? 'Cleanup preserved visible identities.'
+              : 'Cleanup reset visible identities explicitly.',
+          ],
+          visibleCount: postCleanupRead.visibleCount,
+          windowEnd: previewBounds.end,
+          windowSize:
+            previewBounds.end < previewBounds.start
+              ? 0
+              : previewBounds.end - previewBounds.start + 1,
+          windowStart: previewBounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFreshSampleBench(
+              {
+                createSample() {
+                  return createCleanupChurnedStore(workload);
+                },
+                runSample(store) {
+                  return do_not_optimize(store.cleanup({ mode }));
+                },
+              },
+              getScenarioSampleCount('cleanup'),
+              { innerGc: true },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
 function createExpandDirectoryScenarioFactory(
   workload: BenchmarkWorkload,
   viewport: ViewportMode
@@ -5293,6 +5395,12 @@ function createScenarioFactories(
     );
     factories.push(
       createCooperativeCancelMidQueueScenarioFactory(listenerBenchmarkWorkload)
+    );
+    factories.push(
+      createCleanupScenarioFactory(listenerBenchmarkWorkload, 'stable')
+    );
+    factories.push(
+      createCleanupScenarioFactory(listenerBenchmarkWorkload, 'aggressive')
     );
   }
 

@@ -19,9 +19,14 @@ import {
   requireNode,
 } from './canonical';
 import {
+  cleanupPathStoreState,
+  hasActiveCleanupBlockingLoads,
+} from './cleanup';
+import {
   batchEvents,
   createApplyChildPatchEvent,
   createBeginChildLoadEvent,
+  createCleanupEvent,
   createCompleteChildLoadEvent,
   createFailChildLoadEvent,
   createMarkDirectoryUnloadedEvent,
@@ -42,6 +47,8 @@ import {
 } from './projection';
 import type {
   PathStoreChildPatch,
+  PathStoreCleanupOptions,
+  PathStoreCleanupResult,
   PathStoreConstructorOptions,
   PathStoreDirectoryLoadState,
   PathStoreEventForType,
@@ -528,7 +535,47 @@ export class PathStore {
     );
   }
 
-  public cleanup(): void {}
+  public cleanup(
+    options: PathStoreCleanupOptions = {}
+  ): PathStoreCleanupResult {
+    return withBenchmarkPhase(
+      this.#state.instrumentation,
+      'store.cleanup',
+      () => {
+        if (this.#state.transactionStack.length > 0) {
+          throw new Error(
+            'Cleanup cannot run during an open batch or transaction.'
+          );
+        }
+
+        if (hasActiveCleanupBlockingLoads(this.#state)) {
+          throw new Error(
+            'Cleanup cannot run while directory loads are active.'
+          );
+        }
+
+        const previousVisibleCount = getVisibleCount(this.#state);
+        const result = cleanupPathStoreState(
+          this.#state,
+          options.mode ?? 'stable'
+        );
+        recordEvent(
+          this.#state,
+          finalizeEvent(
+            this.#state,
+            previousVisibleCount,
+            createCleanupEvent({
+              ...result,
+              affectedAncestorIds: [],
+              affectedNodeIds: [],
+              projectionChanged: result.idsPreserved === false,
+            })
+          )
+        );
+        return result;
+      }
+    );
+  }
 
   public getNodeCount(): number {
     return this.#state.activeNodeCount;

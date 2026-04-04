@@ -22,6 +22,31 @@ export interface PathStorePreparedInput {
   paths: readonly string[];
 }
 
+export type PathStoreCleanupMode = 'stable' | 'aggressive';
+
+export interface PathStoreCleanupOptions {
+  mode?: PathStoreCleanupMode;
+}
+
+export interface PathStoreCleanupResult {
+  activeNodeCountAfter: number;
+  activeNodeCountBefore: number;
+  cachedPathEntryCountAfter: number;
+  cachedPathEntryCountBefore: number;
+  idsPreserved: boolean;
+  loadInfoEntryCountAfter: number;
+  loadInfoEntryCountBefore: number;
+  mode: PathStoreCleanupMode;
+  reclaimedCachedPathEntryCount: number;
+  reclaimedLoadInfoEntryCount: number;
+  reclaimedNodeSlotCount: number;
+  reclaimedSegmentCount: number;
+  segmentCountAfter: number;
+  segmentCountBefore: number;
+  totalNodeSlotCountAfter: number;
+  totalNodeSlotCountBefore: number;
+}
+
 export type PathStoreDirectoryLoadState =
   | 'unloaded'
   | 'loading'
@@ -139,6 +164,11 @@ export interface PathStoreFailChildLoadEvent extends PathStoreEventInvalidation 
   stale: boolean;
 }
 
+export interface PathStoreCleanupEvent
+  extends PathStoreEventInvalidation, PathStoreCleanupResult {
+  operation: 'cleanup';
+}
+
 export type PathStoreSemanticEvent =
   | PathStoreAddEvent
   | PathStoreRemoveEvent
@@ -149,7 +179,8 @@ export type PathStoreSemanticEvent =
   | PathStoreBeginChildLoadEvent
   | PathStoreApplyChildPatchEvent
   | PathStoreCompleteChildLoadEvent
-  | PathStoreFailChildLoadEvent;
+  | PathStoreFailChildLoadEvent
+  | PathStoreCleanupEvent;
 
 export interface PathStoreBatchEvent extends PathStoreEventInvalidation {
   events: readonly PathStoreSemanticEvent[];

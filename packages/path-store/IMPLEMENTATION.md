@@ -864,7 +864,7 @@ class PathStore {
   expand(path: string): void;
   collapse(path: string): void;
   on(type: string, handler: (event: PathStoreEvent) => void): () => void;
-  cleanup(): void;
+  cleanup(options?: CleanupOptions): CleanupResult;
 }
 ```
 
@@ -886,6 +886,18 @@ Reasons:
 
 The store should expose a cleanup/compaction API that users can call when they
 want to trade a heavier one-time rebuild for better long-term memory density.
+
+Current Phase 8A status:
+
+- cleanup is a **manual** API surface, not an automatic/background policy
+- the stable cleanup path preserves observable node IDs by default
+- an explicit aggressive cleanup mode may reset IDs for denser compaction
+- stable cleanup only reclaims **trailing** tombstone slots; aggressive mode is
+  the path for fully dense node-array compaction
+- stable cleanup clears path caches intentionally, trading a later
+  rematerialization cost for immediate memory reclamation
+- static/read-only mode exploration remains deferred to 8B
+- worker follow-up from 7B remains a separate deferred thread
 
 Potential cleanup tasks:
 
