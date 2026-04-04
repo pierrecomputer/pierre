@@ -9,6 +9,18 @@ const now = () => {
 };
 
 /**
+ * @param {unknown} value
+ * @returns {value is PromiseLike<unknown>}
+ */
+function isPromiseLike(value) {
+  return (
+    value != null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof value.then === 'function'
+  );
+}
+
+/**
  * @typedef {{
  *   childDurationMs: number;
  *   name: string;
@@ -61,9 +73,7 @@ export function createBenchmarkInstrumentation() {
       };
       phaseStack.push(frame);
 
-      try {
-        return fn();
-      } finally {
+      const finalize = () => {
         phaseStack.pop();
         const durationMs = now() - frame.startedAt;
         const exclusiveMs = Math.max(0, durationMs - frame.childDurationMs);
@@ -84,6 +94,20 @@ export function createBenchmarkInstrumentation() {
         if (parentFrame != null) {
           parentFrame.childDurationMs += durationMs;
         }
+      };
+
+      try {
+        const result = fn();
+        if (isPromiseLike(result)) {
+          const promisedResult = Promise.resolve(result);
+          return promisedResult.finally(finalize);
+        }
+
+        finalize();
+        return result;
+      } catch (error) {
+        finalize();
+        throw error;
       }
     },
     setCounter(name, value) {

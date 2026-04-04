@@ -306,6 +306,8 @@ const ALL_ACTION_IDS = [
   'apply-async-patch',
   'complete-async-load',
   'fail-async-load',
+  'cooperative-apply-async-patch',
+  'cooperative-apply-async-patch-yieldy',
 ] as const;
 const KNOWN_ACTION_IDS = new Set<string>(ALL_ACTION_IDS);
 const TOP_LEVEL_TASK_NAMES = new Set([
@@ -2008,6 +2010,22 @@ function formatPhaseLabel(name: string): string {
       return '  - store.completeChildLoad';
     case 'store.failChildLoad':
       return '  - store.failChildLoad';
+    case 'scheduler.enqueue':
+      return '  - scheduler.enqueue';
+    case 'scheduler.begin':
+      return '  - scheduler.begin';
+    case 'scheduler.createPatch':
+      return '  - scheduler.createPatch';
+    case 'scheduler.apply':
+      return '  - scheduler.apply';
+    case 'scheduler.complete':
+      return '  - scheduler.complete';
+    case 'scheduler.fail':
+      return '  - scheduler.fail';
+    case 'scheduler.cancel':
+      return '  - scheduler.cancel';
+    case 'scheduler.yield':
+      return '  - scheduler.yield';
     case 'store.list':
       return '  - store.list';
     case 'store.events.record':
@@ -2092,6 +2110,14 @@ function createPhaseRows(
   pushPhase('store.applyChildPatch');
   pushPhase('store.completeChildLoad');
   pushPhase('store.failChildLoad');
+  pushPhase('scheduler.enqueue');
+  pushPhase('scheduler.begin');
+  pushPhase('scheduler.createPatch');
+  pushPhase('scheduler.apply');
+  pushPhase('scheduler.complete');
+  pushPhase('scheduler.fail');
+  pushPhase('scheduler.cancel');
+  pushPhase('scheduler.yield');
   pushPhase('store.events.record');
   pushPhase('store.events.batch.merge');
   pushPhase('store.events.batch.commit');
@@ -2290,6 +2316,28 @@ function printRunHumanSummary(
       'Flattened segments read',
       instrumentationCounters['workload.flattenedSegmentsRead'],
     ],
+    ['Scheduler queue depth', instrumentationCounters['scheduler.queueDepth']],
+    [
+      'Scheduler active tasks',
+      instrumentationCounters['scheduler.activeTaskCount'],
+    ],
+    [
+      'Scheduler completed tasks',
+      instrumentationCounters['scheduler.completedTaskCount'],
+    ],
+    [
+      'Scheduler cancelled tasks',
+      instrumentationCounters['scheduler.cancelledTaskCount'],
+    ],
+    [
+      'Scheduler failed tasks',
+      instrumentationCounters['scheduler.failedTaskCount'],
+    ],
+    [
+      'Scheduler rejected tasks',
+      instrumentationCounters['scheduler.rejectedTaskCount'],
+    ],
+    ['Scheduler yields', instrumentationCounters['scheduler.yieldCount']],
   ].filter(([, value]) => typeof value === 'number') as Array<[string, number]>;
 
   if (counterDefinitions.length > 0) {

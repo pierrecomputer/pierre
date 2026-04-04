@@ -72,6 +72,18 @@ async function getLastEvent(page) {
 
 /**
  * @param {Page} page
+ * @returns {Promise<Record<string, unknown>>}
+ */
+async function getDemoState(page) {
+  return page.evaluate(() => {
+    return /** @type {Record<string, unknown>} */ (
+      window.pathStoreDemo.getState()
+    );
+  });
+}
+
+/**
+ * @param {Page} page
  * @param {readonly string[]} expectedRows
  * @returns {Promise<void>}
  */
@@ -645,6 +657,94 @@ test('demo-small fail-async-load shows an error row and event', async ({
     stale: false,
     visibleCountDelta: 0,
   });
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small cooperative-apply-async-patch uses the scheduler helper without completing the load', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await page
+    .locator('[data-action-id="cooperative-apply-async-patch"]')
+    .click();
+
+  await expectRenderedRows(page, [
+    'aaa-async-demo/ [loading]',
+    'aaa-async-demo/inner/',
+    'aaa-async-demo/inner/file.ts',
+    'alpha/',
+  ]);
+  await expectLastEventMatches(page, {
+    canonicalChanged: true,
+    operation: 'apply-child-patch',
+    path: 'aaa-async-demo/',
+    projectionChanged: true,
+  });
+  await expect
+    .poll(async () => {
+      const state = await getDemoState(page);
+      const schedulerMetrics =
+        state.schedulerMetrics != null &&
+        typeof state.schedulerMetrics === 'object'
+          ? /** @type {Record<string, unknown>} */ (state.schedulerMetrics)
+          : null;
+      return {
+        completedTaskCount: schedulerMetrics?.completedTaskCount ?? null,
+        schedulerUpdateCount: state.schedulerUpdateCount ?? null,
+      };
+    })
+    .toEqual({
+      completedTaskCount: 1,
+      schedulerUpdateCount: expect.any(Number),
+    });
+
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small cooperative-apply-async-patch-yieldy exposes multiple scheduler slices and final rows', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 6);
+  await page
+    .locator('[data-action-id="cooperative-apply-async-patch-yieldy"]')
+    .click();
+
+  await expectRenderedRows(page, [
+    'aaa-cooperative-demo-a/ [loading]',
+    'aaa-cooperative-demo-a/file-a.ts',
+    'aaa-cooperative-demo-b/ [loading]',
+    'aaa-cooperative-demo-b/file-b.ts',
+    'aaa-cooperative-demo-c/ [loading]',
+    'aaa-cooperative-demo-c/file-c.ts',
+  ]);
+  await expect
+    .poll(async () => {
+      const state = await getDemoState(page);
+      const schedulerMetrics =
+        state.schedulerMetrics != null &&
+        typeof state.schedulerMetrics === 'object'
+          ? /** @type {Record<string, unknown>} */ (state.schedulerMetrics)
+          : null;
+      return {
+        backlogDepth: schedulerMetrics?.backlogDepth ?? null,
+        completedTaskCount: schedulerMetrics?.completedTaskCount ?? null,
+        yieldCount: schedulerMetrics?.yieldCount ?? null,
+        schedulerUpdateCount: state.schedulerUpdateCount ?? null,
+      };
+    })
+    .toEqual({
+      backlogDepth: 0,
+      completedTaskCount: 3,
+      yieldCount: 2,
+      schedulerUpdateCount: expect.any(Number),
+    });
+
   expect(pageErrors).toEqual([]);
 });
 

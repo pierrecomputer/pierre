@@ -772,6 +772,18 @@ Async ingest should be provided as layered scheduling strategies:
 - worker-backed ingest where available
 - cooperative main-thread chunking as fallback
 
+Current Phase 7B status:
+
+- cooperative scheduling now exists as an **optional helper** via the root
+  package export: `createPathStoreScheduler({ store, ... })`
+- the helper owns queueing, yielding, cancellation, and backpressure mechanics
+  around the existing 7A store primitives
+- caller code still owns load ordering and priority; first 7B intentionally does
+  **not** ship built-in viewport-aware prioritization, prefetch heuristics, or
+  reservation/count-hint strategy
+- worker-backed execution remains a documented follow-up seam rather than a
+  public first-pass runtime contract
+
 ### Why Worker Mode Is Optional
 
 Posting millions of strings to a worker can be expensive because strings are

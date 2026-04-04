@@ -1,6 +1,6 @@
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 
-import { PathStore } from '../src/index.ts';
+import { createPathStoreScheduler, PathStore } from '../src/index.ts';
 import {
   findMoveVisibleFolderToParentCandidate,
   findMoveVisibleLeafToParentCandidate,
@@ -14,6 +14,16 @@ const MAX_VISIBLE_WINDOW_SIZE = 500;
 const DEFAULT_VISIBLE_WINDOW_SIZE = 30;
 const ASYNC_DEMO_DIRECTORY_PATH = 'aaa-async-demo/';
 const ASYNC_DEMO_PATCH_FILE_PATH = 'aaa-async-demo/inner/file.ts';
+const COOPERATIVE_ASYNC_DEMO_DIRECTORY_PATHS = [
+  'aaa-cooperative-demo-a/',
+  'aaa-cooperative-demo-b/',
+  'aaa-cooperative-demo-c/',
+];
+const COOPERATIVE_ASYNC_DEMO_PATCH_FILE_PATHS = [
+  'aaa-cooperative-demo-a/file-a.ts',
+  'aaa-cooperative-demo-b/file-b.ts',
+  'aaa-cooperative-demo-c/file-c.ts',
+];
 const PROFILE_END_LABEL = 'path-store-demo-profile-end';
 const PROFILE_END_MARK_NAME = 'path-store-demo-profile-end';
 const PROFILE_START_LABEL = 'path-store-demo-profile-start';
@@ -50,7 +60,11 @@ const benchmarkModulePromise = instrumentationEnabled
  * @typedef {{
  *   id: string;
  *   prepare: (store: PathStore, view: DemoViewContext) => Record<string, unknown>;
- *   run: (store: PathStore, prepared: Record<string, unknown>) => DemoActionResult;
+ *   run: (
+ *     store: PathStore,
+ *     prepared: Record<string, unknown>,
+ *     benchmark?: DemoBenchmarkCollector | null
+ *   ) => DemoActionResult | Promise<DemoActionResult>;
  * }} DemoAction
  */
 
@@ -144,12 +158,19 @@ if (
 let buildTimeMs = 0;
 /** @type {PathStore | null} */
 let currentStore = null;
+/** @type {import('../src/index.ts').PathStoreScheduler | null} */
+let currentScheduler = null;
+/** @type {null | (() => void)} */
+let currentSchedulerUnsubscribe = null;
+/** @type {import('../src/index.ts').PathStoreSchedulerMetrics | null} */
+let currentSchedulerMetrics = null;
 /** @type {null | (() => void)} */
 let currentStoreEventUnsubscribe = null;
 /** @type {import('../src/public-types').PathStoreLoadAttempt | null} */
 let currentAsyncLoadAttempt = null;
 /** @type {import('../src/public-types').PathStoreEvent | null} */
 let lastEvent = null;
+let schedulerUpdateCount = 0;
 /** @type {DemoLongTaskEntry[]} */
 const longTaskEntries = [];
 const longTaskObserver =
@@ -232,11 +253,35 @@ function clearLastEvent() {
   renderLastEvent();
 }
 
+// Cooperative helpers are created on demand, so reset their metrics whenever
+// the demo switches stores or returns to direct non-scheduled actions.
+function clearSchedulerState(dispose = true) {
+  currentSchedulerUnsubscribe?.();
+  currentSchedulerUnsubscribe = null;
+  if (dispose) {
+    currentScheduler?.dispose();
+  }
+  currentScheduler = null;
+  currentSchedulerMetrics = null;
+  schedulerUpdateCount = 0;
+}
+
 function subscribeToStoreEvents(store) {
   currentStoreEventUnsubscribe?.();
   currentStoreEventUnsubscribe = store.on('*', (event) => {
     lastEvent = event;
     renderLastEvent();
+  });
+}
+
+// The scheduler metrics power both Playwright progress checks and profile
+// output, so keep the latest snapshot available through getState().
+function subscribeToScheduler(scheduler) {
+  clearSchedulerState(false);
+  currentScheduler = scheduler;
+  currentSchedulerUnsubscribe = scheduler.subscribe((metrics) => {
+    currentSchedulerMetrics = metrics;
+    schedulerUpdateCount += 1;
   });
 }
 
@@ -830,18 +875,117 @@ function getRevealOffset(store, targetPath, fallbackOffset, windowSize) {
 }
 
 function ensureAsyncDemoDirectory(store) {
+  ensureAsyncDemoDirectories(store, [ASYNC_DEMO_DIRECTORY_PATH]);
+}
+
+/**
+ * Marks the reset async placeholder directories as unloaded so either the raw
+ * 7A controls or the cooperative helper can begin loading them immediately.
+ *
+ * @param {PathStore} store
+ * @param {readonly string[]} directoryPaths
+ */
+function markDirectoriesUnloaded(store, directoryPaths) {
+  for (const directoryPath of directoryPaths) {
+    store.markDirectoryUnloaded(directoryPath);
+  }
+}
+
+/**
+ * Keeps async demo fixtures deterministic by clearing any previously loaded
+ * subtree before re-adding the placeholder directories that the async actions
+ * mutate.
+ *
+ * @param {PathStore} store
+ * @param {readonly string[]} directoryPaths
+ */
+function ensureAsyncDemoDirectories(store, directoryPaths) {
   /** @type {string[]} */
   const canonicalPaths = store.list();
-  const hasAsyncPatchFile = canonicalPaths.includes(ASYNC_DEMO_PATCH_FILE_PATH);
-  const hasAsyncDirectory = canonicalPaths.includes(ASYNC_DEMO_DIRECTORY_PATH);
+  for (const directoryPath of directoryPaths) {
+    const hasDirectory = canonicalPaths.includes(directoryPath);
+    const hasKnownChildren = canonicalPaths.some((path) =>
+      path.startsWith(directoryPath)
+    );
 
-  if (hasAsyncPatchFile === true) {
-    store.remove(ASYNC_DEMO_DIRECTORY_PATH, { recursive: true });
-  } else if (hasAsyncDirectory === true) {
-    store.remove(ASYNC_DEMO_DIRECTORY_PATH);
+    if (hasKnownChildren) {
+      store.remove(directoryPath, { recursive: true });
+    } else if (hasDirectory) {
+      store.remove(directoryPath);
+    }
+
+    store.add(directoryPath);
+  }
+}
+
+/**
+ * Schedulers are optional helpers, so the demo creates and disposes them on
+ * demand around cooperative actions instead of wiring one into the store core.
+ *
+ * @param {DemoBenchmarkCollector | null | undefined} [benchmark]
+ * @param {{
+ *   chunkBudgetMs?: number;
+ *   maxQueueSize?: number;
+ *   maxTasksPerSlice?: number;
+ *   yieldDelayMs?: number;
+ * }} [overrides]
+ */
+function createDemoScheduler(benchmark = null, overrides = {}) {
+  if (currentStore == null) {
+    throw new Error('Render the store before creating a scheduler.');
   }
 
-  store.add(ASYNC_DEMO_DIRECTORY_PATH);
+  const schedulerOptions =
+    benchmark == null
+      ? {
+          ...overrides,
+          store: currentStore,
+        }
+      : benchmark.attach({
+          ...overrides,
+          store: currentStore,
+        });
+  const scheduler = createPathStoreScheduler(schedulerOptions);
+  subscribeToScheduler(scheduler);
+  return scheduler;
+}
+
+/**
+ * @param {readonly {
+ *   completeOnSuccess?: boolean;
+ *   createPatch: () => import('../src/public-types').PathStoreChildPatch | Promise<import('../src/public-types').PathStoreChildPatch>;
+ *   path: string;
+ *   priority: number;
+ * }[]} tasks
+ * @param {DemoBenchmarkCollector | null | undefined} [benchmark]
+ * @param {{
+ *   chunkBudgetMs?: number;
+ *   maxQueueSize?: number;
+ *   maxTasksPerSlice?: number;
+ *   yieldDelayMs?: number;
+ * }} [overrides]
+ */
+async function runCooperativeDemoTasks(
+  tasks,
+  benchmark = null,
+  overrides = {}
+) {
+  const scheduler = createDemoScheduler(benchmark, overrides);
+  const handles = tasks.map((task) => {
+    const enqueueResult = scheduler.enqueue(task);
+    if (enqueueResult.status === 'rejected') {
+      throw new Error(
+        `Scheduler rejected ${task.path}: ${enqueueResult.reason}`
+      );
+    }
+    return enqueueResult.handle;
+  });
+
+  await scheduler.whenIdle();
+  return {
+    completions: await Promise.all(handles.map((handle) => handle.result)),
+    metrics: scheduler.getMetrics(),
+  };
 }
 
 function requireAsyncLoadAttempt(actionId) {
@@ -1093,6 +1237,97 @@ const demoActions = [
       };
     },
   },
+  {
+    id: 'cooperative-apply-async-patch',
+    prepare() {
+      return {};
+    },
+    async run(store, _prepared, benchmark = null) {
+      ensureAsyncDemoDirectory(store);
+      markDirectoriesUnloaded(store, [ASYNC_DEMO_DIRECTORY_PATH]);
+      const { completions } = await runCooperativeDemoTasks(
+        [
+          {
+            completeOnSuccess: false,
+            createPatch() {
+              return {
+                operations: [{ path: ASYNC_DEMO_PATCH_FILE_PATH, type: 'add' }],
+              };
+            },
+            path: ASYNC_DEMO_DIRECTORY_PATH,
+            priority: 100,
+          },
+        ],
+        benchmark
+      );
+      const completion = completions[0];
+      if (completion == null || completion.status !== 'completed') {
+        throw new Error(
+          `Cooperative async patch did not complete successfully for ${ASYNC_DEMO_DIRECTORY_PATH}.`
+        );
+      }
+
+      return {
+        detail: `Last action: cooperatively applied async patch to ${ASYNC_DEMO_DIRECTORY_PATH}`,
+        revealPath: ASYNC_DEMO_PATCH_FILE_PATH,
+      };
+    },
+  },
+  {
+    id: 'cooperative-apply-async-patch-yieldy',
+    prepare() {
+      return {};
+    },
+    async run(store, _prepared, benchmark = null) {
+      ensureAsyncDemoDirectories(store, COOPERATIVE_ASYNC_DEMO_DIRECTORY_PATHS);
+      markDirectoriesUnloaded(store, COOPERATIVE_ASYNC_DEMO_DIRECTORY_PATHS);
+
+      const { completions, metrics } = await runCooperativeDemoTasks(
+        COOPERATIVE_ASYNC_DEMO_DIRECTORY_PATHS.map((directoryPath, index) => {
+          const patchFilePath = COOPERATIVE_ASYNC_DEMO_PATCH_FILE_PATHS[index];
+          if (patchFilePath == null) {
+            throw new Error('Missing cooperative demo patch path.');
+          }
+
+          return {
+            completeOnSuccess: false,
+            createPatch() {
+              return {
+                operations: [{ path: patchFilePath, type: 'add' }],
+              };
+            },
+            path: directoryPath,
+            priority: 100 - index,
+          };
+        }),
+        benchmark,
+        {
+          chunkBudgetMs: 0,
+          maxTasksPerSlice: 1,
+          yieldDelayMs: 16,
+        }
+      );
+
+      const failedCompletion = completions.find(
+        (completion) => completion.status !== 'completed'
+      );
+      if (failedCompletion != null) {
+        throw new Error(
+          `Cooperative yieldy async patch failed for ${failedCompletion.path}.`
+        );
+      }
+      if (metrics.yieldCount <= 1) {
+        throw new Error(
+          `Expected cooperative yieldy async patch to yield more than once, received ${metrics.yieldCount}.`
+        );
+      }
+
+      return {
+        detail: `Last action: cooperatively applied ${completions.length} async patches across ${metrics.yieldCount} yields`,
+        revealPath: COOPERATIVE_ASYNC_DEMO_PATCH_FILE_PATHS[0],
+      };
+    },
+  },
 ];
 
 const demoActionById = new Map(
@@ -1107,6 +1342,7 @@ function createStore(benchmark = null) {
   const flattenEmptyDirectories = getFlattenEmptyDirectoriesEnabled();
   const sortInput = getSortInputEnabled();
   const buildStartedAt = performance.now();
+  clearSchedulerState();
   let preparedInput = null;
   if (!sortInput) {
     preparedInput =
@@ -1338,15 +1574,38 @@ function applyProfileActionSetup(actionId) {
       ASYNC_DEMO_DIRECTORY_PATH
     );
     renderCurrentWindow(0);
+    return;
+  }
+
+  if (actionId === 'cooperative-apply-async-patch') {
+    ensureAsyncDemoDirectory(currentStore);
+    markDirectoriesUnloaded(currentStore, [ASYNC_DEMO_DIRECTORY_PATH]);
+    clearSchedulerState();
+    renderCurrentWindow(0);
+    return;
+  }
+
+  if (actionId === 'cooperative-apply-async-patch-yieldy') {
+    ensureAsyncDemoDirectories(
+      currentStore,
+      COOPERATIVE_ASYNC_DEMO_DIRECTORY_PATHS
+    );
+    markDirectoriesUnloaded(
+      currentStore,
+      COOPERATIVE_ASYNC_DEMO_DIRECTORY_PATHS
+    );
+    clearSchedulerState();
+    renderCurrentWindow(0);
   }
 }
 
 /**
  * @param {PreparedDemoAction} preparedAction
- * @returns {DemoActionResult}
+ * @returns {Promise<DemoActionResult>}
  */
-function runPreparedAction(preparedAction) {
-  return runPreparedActionWithBenchmark(preparedAction, null).actionResult;
+async function runPreparedAction(preparedAction) {
+  return (await runPreparedActionWithBenchmark(preparedAction, null))
+    .actionResult;
 }
 
 /**
@@ -1355,9 +1614,12 @@ function runPreparedAction(preparedAction) {
  *
  * @param {PreparedDemoAction} preparedAction
  * @param {DemoBenchmarkCollector | null | undefined} [benchmark]
- * @returns {{ actionResult: DemoActionResult; afterView: DemoViewContext | null }}
+ * @returns {Promise<{ actionResult: DemoActionResult; afterView: DemoViewContext | null }>}
  */
-function runPreparedActionWithBenchmark(preparedAction, benchmark = null) {
+async function runPreparedActionWithBenchmark(
+  preparedAction,
+  benchmark = null
+) {
   if (currentStore == null) {
     throw new Error('Render the store before running demo actions.');
   }
@@ -1365,9 +1627,17 @@ function runPreparedActionWithBenchmark(preparedAction, benchmark = null) {
   const startedAt = performance.now();
   const actionResult =
     benchmark == null
-      ? preparedAction.action.run(currentStore, preparedAction.prepared)
-      : benchmark.instrumentation.measurePhase('page.action.run', () =>
-          preparedAction.action.run(currentStore, preparedAction.prepared)
+      ? await preparedAction.action.run(
+          currentStore,
+          preparedAction.prepared,
+          null
+        )
+      : await benchmark.instrumentation.measurePhase('page.action.run', () =>
+          preparedAction.action.run(
+            currentStore,
+            preparedAction.prepared,
+            benchmark
+          )
         );
   const preferredOffset =
     actionResult.revealPath == null
@@ -1433,7 +1703,7 @@ async function profilePreparedAction(actionId, prepared) {
   performance.mark(PROFILE_START_MARK_NAME);
   console.timeStamp(PROFILE_START_LABEL);
 
-  const { actionResult, afterView } = runPreparedActionWithBenchmark(
+  const { actionResult, afterView } = await runPreparedActionWithBenchmark(
     preparedAction,
     benchmark
   );
@@ -1504,6 +1774,8 @@ function getDemoState() {
     hasStore: currentStore != null,
     lastEvent,
     offset: getParsedInputNumber(offsetInput, 0),
+    schedulerMetrics: currentSchedulerMetrics,
+    schedulerUpdateCount,
     sortInputEnabled: getSortInputEnabled(),
     visibleCount: getRequestedVisibleCount(),
     workload: getSelectedWorkloadSummary(),
@@ -1550,23 +1822,31 @@ for (let index = 0; index < actionButtons.length; index++) {
   }
 
   button.addEventListener('click', () => {
-    if (button.dataset.actionId === 'reset') {
-      void boot();
-      return;
-    }
+    void (async () => {
+      if (button.dataset.actionId === 'reset') {
+        await boot();
+        return;
+      }
 
-    try {
-      const preparedAction = prepareAction(button.dataset.actionId ?? '');
-      runPreparedAction(preparedAction);
-    } catch (error) {
-      logDemoMessage(
-        error instanceof Error
-          ? `Last action failed: ${error.message}`
-          : 'Last action failed.'
-      );
-      renderCurrentWindow();
-      throw error;
-    }
+      renderButton.disabled = true;
+      setActionButtonsDisabled(true);
+
+      try {
+        const preparedAction = prepareAction(button.dataset.actionId ?? '');
+        await runPreparedAction(preparedAction);
+      } catch (error) {
+        logDemoMessage(
+          error instanceof Error
+            ? `Last action failed: ${error.message}`
+            : 'Last action failed.'
+        );
+        renderCurrentWindow();
+        throw error;
+      } finally {
+        renderButton.disabled = false;
+        setActionButtonsDisabled(currentStore == null);
+      }
+    })();
   });
 }
 
