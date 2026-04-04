@@ -3,7 +3,11 @@ import { do_not_optimize } from 'mitata';
 import { cpus } from 'node:os';
 import { basename, resolve } from 'node:path';
 
-import { createPathStoreScheduler, PathStore } from '../src/index';
+import {
+  createPathStoreScheduler,
+  PathStore,
+  StaticPathStore,
+} from '../src/index';
 import type { PathStoreVisibleRow } from '../src/public-types';
 
 const WORKLOAD_NAMES = ['linux-5x', 'linux-10x'] as const;
@@ -18,6 +22,7 @@ const BENCHMARK_FILTER_PRESET_NAMES = [
   'async',
   'mutation',
   'cleanup',
+  'static',
 ] as const;
 const QUICK_WORKLOAD_NAMES = ['linux-5x'] as const;
 const MUTATION_SCENARIO_KINDS = [
@@ -142,6 +147,19 @@ interface WindowBounds {
 interface VisibleWindowRead {
   rows: readonly PathStoreVisibleRow[];
   visibleCount: number;
+}
+
+interface ProjectionReadableBenchmarkStore {
+  getVisibleCount: () => number;
+  getVisibleSlice: (
+    start: number,
+    end: number
+  ) => readonly PathStoreVisibleRow[];
+}
+
+interface ExpandableProjectionBenchmarkStore extends ProjectionReadableBenchmarkStore {
+  collapse: (path: string) => void;
+  expand: (path: string) => void;
 }
 
 interface MutationReadPlan {
@@ -375,6 +393,10 @@ const BENCHMARK_PRESETS: Record<BenchmarkPresetName, BenchmarkPresetSelection> =
       filter: /^mutate\//,
       profile: 'full',
     },
+    static: {
+      filter: /^static\//,
+      profile: 'full',
+    },
     'presorted-render': {
       filter:
         /^(prepare-presorted-input\/linux-5x|build\/linux-5x|visible-first\/linux-5x\/30)$/,
@@ -594,6 +616,19 @@ function createExpandedStore(
   return store;
 }
 
+// Builds the read-only counterpart against the same prepared input so static
+// scenarios measure representation differences rather than different parsing
+// paths.
+function createStaticExpandedStore(
+  workload: BenchmarkWorkload
+): StaticPathStore {
+  return new StaticPathStore({
+    flattenEmptyDirectories: true,
+    initialExpansion: 'open',
+    preparedInput: workload.getPreparedInput(),
+  });
+}
+
 function createAsyncBenchStore(workload: BenchmarkWorkload): PathStore {
   const store = createExpandedStore(workload, [ASYNC_BENCH_DIRECTORY_PATH]);
   store.markDirectoryUnloaded(ASYNC_BENCH_DIRECTORY_PATH);
@@ -701,6 +736,33 @@ function getWindowBounds(
   };
 }
 
+function getWindowBoundsForProjectionStore(
+  store: ProjectionReadableBenchmarkStore,
+  viewport: ViewportMode,
+  windowSize: number
+): WindowBounds {
+  const visibleCount = store.getVisibleCount();
+  if (visibleCount === 0) {
+    return { end: -1, start: 0 };
+  }
+
+  if (viewport === 'first') {
+    return {
+      end: Math.min(visibleCount - 1, windowSize - 1),
+      start: 0,
+    };
+  }
+
+  const maxStart = Math.max(0, visibleCount - windowSize);
+  const middleStart = Math.floor(visibleCount / 2) - Math.floor(windowSize / 2);
+  const start = Math.max(0, Math.min(maxStart, middleStart));
+
+  return {
+    end: Math.min(visibleCount - 1, start + windowSize - 1),
+    start,
+  };
+}
+
 function getWindowBoundsAtStart(
   visibleCount: number,
   start: number,
@@ -742,7 +804,7 @@ function getSequentialScrollBounds(
 }
 
 function getWindowRows(
-  store: PathStore,
+  store: ProjectionReadableBenchmarkStore,
   bounds: WindowBounds
 ): readonly PathStoreVisibleRow[] {
   if (bounds.end < bounds.start) {
@@ -754,6 +816,20 @@ function getWindowRows(
 
 function readVisibleWindow(
   store: PathStore,
+  bounds: WindowBounds
+): VisibleWindowRead {
+  const visibleCount = store.getVisibleCount();
+  return {
+    rows:
+      bounds.end < bounds.start
+        ? []
+        : store.getVisibleSlice(bounds.start, bounds.end),
+    visibleCount,
+  };
+}
+
+function readVisibleWindowFromProjectionStore(
+  store: ProjectionReadableBenchmarkStore,
   bounds: WindowBounds
 ): VisibleWindowRead {
   const visibleCount = store.getVisibleCount();
@@ -790,7 +866,7 @@ function getWindowBoundsContainingIndex(
 }
 
 function findVisiblePathInBounds(
-  store: PathStore,
+  store: ProjectionReadableBenchmarkStore,
   bounds: WindowBounds,
   targetPaths: readonly string[]
 ): { index: number; path: string } | null {
@@ -817,7 +893,7 @@ function findVisiblePathInBounds(
 // Most changed-window mutations stay near the current viewport, so search there
 // first and only fall back to chunked scans if the mutation moved farther away.
 function findVisiblePathNearBounds(
-  store: PathStore,
+  store: ProjectionReadableBenchmarkStore,
   baselineBounds: WindowBounds,
   targetPaths: readonly string[]
 ): { index: number; path: string } | null {
@@ -872,7 +948,7 @@ function createPreservedViewportReadPlan(
 // Mutation scenarios need an explicit read model after the write commits:
 // either keep the current viewport, or shift just enough to render the change.
 function createRenderChangedWindowPlan(
-  store: PathStore,
+  store: ProjectionReadableBenchmarkStore,
   baselineBounds: WindowBounds,
   windowSize: number,
   targetPaths: readonly string[]
@@ -2253,6 +2329,14 @@ interface ReusedStoreMutationMeasurement {
   reset: (store: PathStore) => void;
 }
 
+interface ReusedProjectionMutationMeasurement<
+  TStore extends ExpandableProjectionBenchmarkStore,
+> {
+  apply: (store: TStore) => unknown;
+  createStore: () => TStore;
+  reset: (store: TStore) => void;
+}
+
 type BenchmarkListenerType = '*' | 'batch' | 'move' | 'add';
 
 function maybeCollectGarbage(): void {
@@ -2572,6 +2656,74 @@ async function measureAsyncFreshSampleBench<TSample>(
 // should reuse that store and only reset state between timed iterations.
 function measureMutationWithReusedStore(
   measurement: ReusedStoreMutationMeasurement,
+  progressReporter?: ((progress: ScenarioProgress) => void) | undefined
+): MeasuredRunStats {
+  const store = measurement.createStore();
+  const timings: number[] = [];
+  const progress = createProgressEmitter(progressReporter);
+
+  progress.report({
+    completed: 0,
+    phase: 'warmup',
+    total: MUTATION_SCENARIO_WARMUP_COUNT,
+  });
+
+  for (
+    let warmupIndex = 0;
+    warmupIndex < MUTATION_SCENARIO_WARMUP_COUNT;
+    warmupIndex++
+  ) {
+    const result = measurement.apply(store);
+
+    do_not_optimize(result);
+    measurement.reset(store);
+    progress.report({
+      completed: warmupIndex + 1,
+      phase: 'warmup',
+      total: MUTATION_SCENARIO_WARMUP_COUNT,
+    });
+  }
+
+  progress.report({
+    completed: 0,
+    phase: 'sample',
+    total: MUTATION_SCENARIO_SAMPLE_COUNT,
+  });
+
+  const measurementStartedAt = performance.now();
+  let sampleIndex = 0;
+
+  while (sampleIndex < MAX_DYNAMIC_SAMPLE_COUNT) {
+    const startTime = process.hrtime.bigint();
+    const result = measurement.apply(store);
+    const endTime = process.hrtime.bigint();
+
+    do_not_optimize(result);
+    measurement.reset(store);
+    timings.push(Number(endTime - startTime));
+    sampleIndex++;
+
+    const elapsedMs = performance.now() - measurementStartedAt;
+    const reachedMinimum = sampleIndex >= MUTATION_SCENARIO_SAMPLE_COUNT;
+
+    progress.report({
+      completed: sampleIndex,
+      phase: 'sample',
+      total: reachedMinimum ? undefined : MUTATION_SCENARIO_SAMPLE_COUNT,
+    });
+
+    if (reachedMinimum && elapsedMs >= TARGET_SHORT_SCENARIO_WALL_TIME_MS) {
+      break;
+    }
+  }
+
+  return summarizeSamples(timings);
+}
+
+function measureProjectionMutationWithReusedStore<
+  TStore extends ExpandableProjectionBenchmarkStore,
+>(
+  measurement: ReusedProjectionMutationMeasurement<TStore>,
   progressReporter?: ((progress: ScenarioProgress) => void) | undefined
 ): MeasuredRunStats {
   const store = measurement.createStore();
@@ -2958,6 +3110,45 @@ function createBuildScenarioFactory(
   };
 }
 
+function createStaticBuildScenarioFactory(
+  workload: BenchmarkWorkload
+): BenchmarkScenarioFactory {
+  const name = `static/build/${workload.name}`;
+
+  return {
+    name,
+    build() {
+      const previewVisibleCount =
+        createStaticExpandedStore(workload).getVisibleCount();
+
+      return {
+        manifest: {
+          category: 'build',
+          fileCount: workload.fileCount,
+          name,
+          notes: ['Builds the public static/read-only representation.'],
+          visibleCount: previewVisibleCount,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFunctionSamples(
+              () =>
+                do_not_optimize(
+                  createStaticExpandedStore(workload).getVisibleCount()
+                ),
+              getScenarioSampleCount('build'),
+              { innerGc: true, warmupCount: 2 },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
 function createListScenarioFactory(
   workload: BenchmarkWorkload
 ): BenchmarkScenarioFactory {
@@ -2974,6 +3165,45 @@ function createListScenarioFactory(
           category: 'list',
           fileCount: workload.fileCount,
           name,
+          preview,
+          visibleCount: previewStore.getVisibleCount(),
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFunctionSamples(
+              () => do_not_optimize(previewStore.list()),
+              getScenarioSampleCount('list'),
+              { innerGc: true },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createStaticListScenarioFactory(
+  workload: BenchmarkWorkload
+): BenchmarkScenarioFactory {
+  const name = `static/list/${workload.name}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createStaticExpandedStore(workload);
+      const preview = previewStore.list().slice(0, PREVIEW_LIMIT);
+
+      return {
+        manifest: {
+          category: 'list',
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            'Enumerates canonical entries from the static/read-only mode.',
+          ],
           preview,
           visibleCount: previewStore.getVisibleCount(),
           workload: workload.name,
@@ -3027,6 +3257,159 @@ function createVisibleScenarioFactory(
               () => do_not_optimize(readVisibleWindow(store, bounds)),
               getScenarioSampleCount('visible'),
               {},
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createStaticVisibleScenarioFactory(
+  workload: BenchmarkWorkload,
+  viewport: ViewportMode,
+  windowSize: number
+): BenchmarkScenarioFactory {
+  const name = `static/visible-${viewport}/${workload.name}/${windowSize}`;
+
+  return {
+    name,
+    build() {
+      const store = createStaticExpandedStore(workload);
+      const bounds = getWindowBoundsForProjectionStore(
+        store,
+        viewport,
+        windowSize
+      );
+      const read = readVisibleWindowFromProjectionStore(store, bounds);
+
+      return {
+        manifest: {
+          category: 'visible',
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            'Reads the static/read-only projection with the mutable-compatible row shape.',
+          ],
+          preview: getPreview(read.rows),
+          viewport,
+          visibleCount: read.visibleCount,
+          windowEnd: bounds.end,
+          windowSize,
+          windowStart: bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureFunctionSamples(
+              () =>
+                do_not_optimize(
+                  readVisibleWindowFromProjectionStore(store, bounds)
+                ),
+              getScenarioSampleCount('visible'),
+              {},
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createStaticExpandDirectoryScenarioFactory(
+  workload: BenchmarkWorkload,
+  viewport: ViewportMode
+): BenchmarkScenarioFactory {
+  const name = `static/expand-directory/${viewport}/${workload.name}/${MUTATION_WINDOW_SIZE}`;
+
+  return {
+    name,
+    build() {
+      const expandedStore = createStaticExpandedStore(workload);
+      const expandedBounds = getWindowBoundsForProjectionStore(
+        expandedStore,
+        viewport,
+        MUTATION_WINDOW_SIZE
+      );
+      const expandedRead = readVisibleWindowFromProjectionStore(
+        expandedStore,
+        expandedBounds
+      );
+      const targetPath = requireVisibleDirectoryWithRoom(
+        expandedRead.rows,
+        name
+      ).path;
+
+      const collapsedStore = createStaticExpandedStore(workload);
+      collapsedStore.collapse(targetPath);
+      const baselineBounds = getWindowBoundsForProjectionStore(
+        collapsedStore,
+        viewport,
+        MUTATION_WINDOW_SIZE
+      );
+      const baselineRead = readVisibleWindowFromProjectionStore(
+        collapsedStore,
+        baselineBounds
+      );
+      const readPlan = createRenderChangedWindowPlan(
+        expandedStore,
+        baselineBounds,
+        MUTATION_WINDOW_SIZE,
+        [targetPath]
+      );
+      const postExpandRead = readVisibleWindowFromProjectionStore(
+        expandedStore,
+        readPlan.bounds
+      );
+
+      return {
+        manifest: {
+          afterPreview: getPreview(postExpandRead.rows),
+          baselineWindowEnd: baselineBounds.end,
+          baselineWindowStart: baselineBounds.start,
+          beforePreview: getPreview(baselineRead.rows),
+          category: 'mutation',
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            'Measures static expand/collapse cost, including the full visible-count recompute.',
+          ],
+          postMutationReadIntent: readPlan.intent,
+          renderTargetPath: readPlan.renderTargetPath,
+          targetPath,
+          targetVisible: hasVisiblePath(baselineRead.rows, targetPath),
+          viewport,
+          visibleCount: postExpandRead.visibleCount,
+          windowEnd: readPlan.bounds.end,
+          windowShifted: readPlan.windowShifted,
+          windowSize: MUTATION_WINDOW_SIZE,
+          windowStart: readPlan.bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          return Promise.resolve(
+            measureProjectionMutationWithReusedStore(
+              {
+                apply(store) {
+                  store.expand(targetPath);
+                  return readVisibleWindowFromProjectionStore(
+                    store,
+                    readPlan.bounds
+                  );
+                },
+                createStore() {
+                  const store = createStaticExpandedStore(workload);
+                  store.collapse(targetPath);
+                  return store;
+                },
+                reset(store) {
+                  store.collapse(targetPath);
+                },
+              },
               progressReporter
             )
           );
@@ -5401,6 +5784,24 @@ function createScenarioFactories(
     );
     factories.push(
       createCleanupScenarioFactory(listenerBenchmarkWorkload, 'aggressive')
+    );
+    factories.push(createStaticBuildScenarioFactory(listenerBenchmarkWorkload));
+    factories.push(createStaticListScenarioFactory(listenerBenchmarkWorkload));
+    factories.push(
+      createStaticVisibleScenarioFactory(listenerBenchmarkWorkload, 'first', 30)
+    );
+    factories.push(
+      createStaticVisibleScenarioFactory(
+        listenerBenchmarkWorkload,
+        'middle',
+        200
+      )
+    );
+    factories.push(
+      createStaticExpandDirectoryScenarioFactory(
+        listenerBenchmarkWorkload,
+        'first'
+      )
     );
   }
 

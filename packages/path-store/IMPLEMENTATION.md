@@ -917,7 +917,24 @@ That mode could choose different tradeoffs, such as:
 - more aggressive full-path caching
 - denser compact structures
 
-But mutable mode is the primary design target for the first implementation.
+Current Phase 8B status:
+
+- `StaticPathStore` is now a public read-only type
+- it preserves the current read/query surface:
+  - `list()`
+  - `getVisibleCount()`
+  - `getVisibleSlice()`
+  - `expand()`
+  - `collapse()`
+- it intentionally omits topology mutation APIs and the mutable-mode event
+  emitter
+- it ships because the representative `linux-5x` benchmarks show read wins over
+  the mutable baseline on:
+  - canonical `list()`
+  - `visible-first`
+  - `visible-middle`
+- its expand/collapse path currently recomputes static visible counts globally,
+  and that cost is now measured explicitly in the benchmark suite
 
 ## Testing Strategy
 

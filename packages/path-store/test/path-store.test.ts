@@ -1,7 +1,7 @@
 import { sortCanonicalPaths } from '@pierre/tree-test-data';
 import { describe, expect, test } from 'bun:test';
 
-import { PathStore } from '../src/index';
+import { PathStore, StaticPathStore } from '../src/index';
 import type {
   PathStoreCleanupEvent,
   PathStoreEvent,
@@ -17,6 +17,31 @@ const demoSmallPaths = [
   'gamma/logs/today.txt',
   'zeta.md',
 ];
+
+interface ProjectionReadableStore {
+  getVisibleCount(): number;
+  getVisibleSlice(
+    start: number,
+    end: number
+  ): readonly {
+    depth: number;
+    flattenedSegments?: readonly {
+      isTerminal: boolean;
+      name: string;
+      nodeId: number;
+      path: string;
+    }[];
+    hasChildren: boolean;
+    id: number;
+    isExpanded: boolean;
+    isFlattened: boolean;
+    isLoading: boolean;
+    kind: 'directory' | 'file';
+    loadState?: string;
+    name: string;
+    path: string;
+  }[];
+}
 
 function createWideRootFilePaths(count: number): string[] {
   return Array.from({ length: count }, (_, index) => `item${index + 1}.ts`);
@@ -38,7 +63,7 @@ function collectWildcardEvents(store: PathStore): PathStoreEvent[] {
 }
 
 function getVisiblePaths(
-  store: PathStore,
+  store: ProjectionReadableStore,
   start = 0,
   end = Number.MAX_SAFE_INTEGER
 ): string[] {
@@ -46,7 +71,7 @@ function getVisiblePaths(
 }
 
 function getVisibleRowsSansIds(
-  store: PathStore,
+  store: ProjectionReadableStore,
   start = 0,
   end = Number.MAX_SAFE_INTEGER
 ) {
@@ -59,7 +84,7 @@ function getVisibleRowsSansIds(
 }
 
 function getVisibleRowIdentitySnapshot(
-  store: PathStore,
+  store: ProjectionReadableStore,
   start = 0,
   end = Number.MAX_SAFE_INTEGER
 ) {
@@ -158,6 +183,14 @@ function assertMatchesRebuild(
 
 function createDemoSmallStore(): PathStore {
   return new PathStore({
+    flattenEmptyDirectories: false,
+    initialExpansion: 'open',
+    paths: demoSmallPaths,
+  });
+}
+
+function createStaticDemoSmallStore(): StaticPathStore {
+  return new StaticPathStore({
     flattenEmptyDirectories: false,
     initialExpansion: 'open',
     paths: demoSmallPaths,
@@ -1575,6 +1608,85 @@ describe('PathStore', () => {
       'tmp/',
       'tmp/file.ts',
     ]);
+  });
+
+  test('static store matches mutable canonical and visible reads for the same input', () => {
+    const mutableStore = createDemoSmallStore();
+    const staticStore = createStaticDemoSmallStore();
+
+    expect(staticStore.list()).toEqual(mutableStore.list());
+    expect(staticStore.list('alpha/src/')).toEqual(
+      mutableStore.list('alpha/src/')
+    );
+    expect(staticStore.getVisibleCount()).toBe(mutableStore.getVisibleCount());
+    expect(getVisibleRowsSansIds(staticStore, 0, 20)).toEqual(
+      getVisibleRowsSansIds(mutableStore, 0, 20)
+    );
+  });
+
+  test('static store stays projection-compatible after expand and collapse', () => {
+    const mutableStore = new PathStore({
+      flattenEmptyDirectories: true,
+      initialExpansion: 1,
+      paths: ['a/b/c/file.ts', 'a/b/peer.ts', 'src/index.ts'],
+    });
+    const staticStore = new StaticPathStore({
+      flattenEmptyDirectories: true,
+      initialExpansion: 1,
+      paths: ['a/b/c/file.ts', 'a/b/peer.ts', 'src/index.ts'],
+    });
+
+    expect(getVisibleRowsSansIds(staticStore, 0, 20)).toEqual(
+      getVisibleRowsSansIds(mutableStore, 0, 20)
+    );
+
+    mutableStore.collapse('a/');
+    staticStore.collapse('a/');
+    expect(getVisibleRowsSansIds(staticStore, 0, 20)).toEqual(
+      getVisibleRowsSansIds(mutableStore, 0, 20)
+    );
+
+    mutableStore.expand('a/');
+    staticStore.expand('a/');
+    expect(getVisibleRowsSansIds(staticStore, 0, 20)).toEqual(
+      getVisibleRowsSansIds(mutableStore, 0, 20)
+    );
+  });
+
+  test('static store honors initialExpandedPaths on top of default closed expansion', () => {
+    const mutableStore = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpandedPaths: ['alpha/', 'alpha/src/'],
+      initialExpansion: 'closed',
+      paths: demoSmallPaths,
+    });
+    const staticStore = new StaticPathStore({
+      flattenEmptyDirectories: false,
+      initialExpandedPaths: ['alpha/', 'alpha/src/'],
+      initialExpansion: 'closed',
+      paths: demoSmallPaths,
+    });
+
+    expect(staticStore.getVisibleCount()).toBe(mutableStore.getVisibleCount());
+    expect(getVisibleRowsSansIds(staticStore, 0, 20)).toEqual(
+      getVisibleRowsSansIds(mutableStore, 0, 20)
+    );
+  });
+
+  test('static store exposes no topology mutation methods', () => {
+    const staticStore = createStaticDemoSmallStore();
+
+    expect(typeof staticStore.list).toBe('function');
+    expect(typeof staticStore.getVisibleCount).toBe('function');
+    expect(typeof staticStore.getVisibleSlice).toBe('function');
+    expect(typeof staticStore.expand).toBe('function');
+    expect(typeof staticStore.collapse).toBe('function');
+    expect('add' in (staticStore as object)).toBe(false);
+    expect('remove' in (staticStore as object)).toBe(false);
+    expect('move' in (staticStore as object)).toBe(false);
+    expect('batch' in (staticStore as object)).toBe(false);
+    expect('cleanup' in (staticStore as object)).toBe(false);
+    expect('on' in (staticStore as object)).toBe(false);
   });
 
   test('preserves expansion state when moving an expanded directory subtree', () => {

@@ -1,5 +1,6 @@
 export { PathStore } from './store';
 export { createPathStoreScheduler } from './scheduler';
+export { StaticPathStore } from './static-store';
 export type {
   PathStoreChildPatch,
   PathStoreCleanupEvent,
