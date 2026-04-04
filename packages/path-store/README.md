@@ -22,6 +22,24 @@ Current useful API:
   - `projectionChanged`
   - `visibleCountDelta`
   - operation-specific canonical paths like `path`, `from`, and `to`
+- Phase 7A async primitives now exist for explicit child-state / patching:
+  - `markDirectoryUnloaded(path)`
+  - `beginChildLoad(path)`
+  - `applyChildPatch(attempt, patch)`
+  - `completeChildLoad(attempt)`
+  - `failChildLoad(attempt, errorMessage?)`
+  - `getDirectoryLoadState(path)`
+- `PathStoreChildPatch.metadata` is currently reserved for future async/count
+  hints and is intentionally ignored in Phase 7A.
+- `markDirectoryUnloaded(path)` is intentionally narrow in 7A: it only works for
+  directories that do not currently have known children.
+- Visible rows now expose async state sparsely:
+  - `isLoading` is the fast convenience flag
+  - `loadState` only appears when a directory row is not in the default loaded
+    state
+- Phase 7A covers store-owned async semantics only. Scheduler/worker strategy,
+  placeholder reservation, and `knownChildCount` product behavior remain
+  deferred to later work.
 
 Benchmark workflow:
 

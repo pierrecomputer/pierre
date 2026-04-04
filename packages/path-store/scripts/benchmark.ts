@@ -47,6 +47,8 @@ const SCROLL_WINDOW_COUNT = 10;
 const PREVIEW_LIMIT = 12;
 const ROOT_FILE_SEED_PATH = 'zz-benchmark-root-file.ts';
 const ROOT_FILE_RENAMED_PATH = 'zz-benchmark-root-file-renamed.ts';
+const ASYNC_BENCH_DIRECTORY_PATH = 'aaa-async-bench/';
+const ASYNC_BENCH_PATCH_FILE_PATH = 'aaa-async-bench/inner/file.ts';
 const PHASE_4_WIDE_DIRECTORY_FILE_COUNT = 5_000;
 const HUMAN_BENCHMARK_NAME_MIN_WIDTH = 32;
 const HUMAN_BENCHMARK_NAME_MAX_WIDTH = 72;
@@ -564,6 +566,12 @@ function createExpandedStore(
     store.add(path);
   }
 
+  return store;
+}
+
+function createAsyncBenchStore(workload: BenchmarkWorkload): PathStore {
+  const store = createExpandedStore(workload, [ASYNC_BENCH_DIRECTORY_PATH]);
+  store.markDirectoryUnloaded(ASYNC_BENCH_DIRECTORY_PATH);
   return store;
 }
 
@@ -3763,6 +3771,348 @@ function createBatchVisibleRenamesListenerScenarioFactory(
   };
 }
 
+function createAsyncBeginLoadScenarioFactory(
+  workload: BenchmarkWorkload
+): BenchmarkScenarioFactory {
+  const name = `async/begin-child-load/${workload.name}/${MUTATION_WINDOW_SIZE}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createAsyncBenchStore(workload);
+      const baselineBounds = getWindowBounds(
+        previewStore,
+        'first',
+        MUTATION_WINDOW_SIZE
+      );
+      const simulationStore = createAsyncBenchStore(workload);
+      const readPlan = createRenderChangedWindowPlan(
+        (() => {
+          const attempt = simulationStore.beginChildLoad(
+            ASYNC_BENCH_DIRECTORY_PATH
+          );
+          do_not_optimize(attempt);
+          return simulationStore;
+        })(),
+        baselineBounds,
+        MUTATION_WINDOW_SIZE,
+        [ASYNC_BENCH_DIRECTORY_PATH]
+      );
+      const postMutationRead = readVisibleWindow(
+        simulationStore,
+        readPlan.bounds
+      );
+
+      return {
+        manifest: {
+          afterPreview: getPreview(postMutationRead.rows),
+          baselineWindowEnd: baselineBounds.end,
+          baselineWindowStart: baselineBounds.start,
+          beforePreview: getPreview(
+            getWindowRows(previewStore, baselineBounds)
+          ),
+          category: 'mutation',
+          fileCount: workload.fileCount,
+          name,
+          postMutationReadIntent: readPlan.intent,
+          renderTargetPath: readPlan.renderTargetPath,
+          targetPath: ASYNC_BENCH_DIRECTORY_PATH,
+          targetVisible: true,
+          visibleCount: postMutationRead.visibleCount,
+          windowEnd: readPlan.bounds.end,
+          windowShifted: readPlan.windowShifted,
+          windowSize: MUTATION_WINDOW_SIZE,
+          windowStart: readPlan.bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          let attempt: import('../src').PathStoreLoadAttempt | null = null;
+
+          return Promise.resolve(
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  attempt = store.beginChildLoad(ASYNC_BENCH_DIRECTORY_PATH);
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  return createAsyncBenchStore(workload);
+                },
+                reset(store) {
+                  if (attempt != null) {
+                    store.failChildLoad(attempt, 'benchmark reset');
+                  }
+                  store.markDirectoryUnloaded(ASYNC_BENCH_DIRECTORY_PATH);
+                  attempt = null;
+                },
+              },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createAsyncApplyPatchScenarioFactory(
+  workload: BenchmarkWorkload
+): BenchmarkScenarioFactory {
+  const name = `async/apply-child-patch/${workload.name}/${MUTATION_WINDOW_SIZE}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createAsyncBenchStore(workload);
+      const previewAttempt = previewStore.beginChildLoad(
+        ASYNC_BENCH_DIRECTORY_PATH
+      );
+      const baselineBounds = getWindowBounds(
+        previewStore,
+        'first',
+        MUTATION_WINDOW_SIZE
+      );
+
+      const simulationStore = createAsyncBenchStore(workload);
+      const simulationAttempt = simulationStore.beginChildLoad(
+        ASYNC_BENCH_DIRECTORY_PATH
+      );
+      simulationStore.applyChildPatch(simulationAttempt, {
+        operations: [{ path: ASYNC_BENCH_PATCH_FILE_PATH, type: 'add' }],
+      });
+      const readPlan = createRenderChangedWindowPlan(
+        simulationStore,
+        baselineBounds,
+        MUTATION_WINDOW_SIZE,
+        [ASYNC_BENCH_PATCH_FILE_PATH]
+      );
+      const postMutationRead = readVisibleWindow(
+        simulationStore,
+        readPlan.bounds
+      );
+      do_not_optimize(previewAttempt);
+
+      return {
+        manifest: {
+          afterPreview: getPreview(postMutationRead.rows),
+          baselineWindowEnd: baselineBounds.end,
+          baselineWindowStart: baselineBounds.start,
+          beforePreview: getPreview(
+            getWindowRows(previewStore, baselineBounds)
+          ),
+          category: 'mutation',
+          fileCount: workload.fileCount,
+          name,
+          notes: ['Flatten-sensitive async child patch.'],
+          postMutationReadIntent: readPlan.intent,
+          renderTargetPath: readPlan.renderTargetPath,
+          targetPath: ASYNC_BENCH_PATCH_FILE_PATH,
+          targetVisible: true,
+          visibleCount: postMutationRead.visibleCount,
+          windowEnd: readPlan.bounds.end,
+          windowShifted: readPlan.windowShifted,
+          windowSize: MUTATION_WINDOW_SIZE,
+          windowStart: readPlan.bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          let attempt: import('../src').PathStoreLoadAttempt | null = null;
+
+          return Promise.resolve(
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  attempt = store.beginChildLoad(ASYNC_BENCH_DIRECTORY_PATH);
+                  store.applyChildPatch(attempt, {
+                    operations: [
+                      { path: ASYNC_BENCH_PATCH_FILE_PATH, type: 'add' },
+                    ],
+                  });
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  return createAsyncBenchStore(workload);
+                },
+                reset(store) {
+                  store.remove(ASYNC_BENCH_DIRECTORY_PATH, { recursive: true });
+                  store.add(ASYNC_BENCH_DIRECTORY_PATH);
+                  store.markDirectoryUnloaded(ASYNC_BENCH_DIRECTORY_PATH);
+                  attempt = null;
+                },
+              },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createAsyncCompleteLoadScenarioFactory(
+  workload: BenchmarkWorkload
+): BenchmarkScenarioFactory {
+  const name = `async/complete-child-load/${workload.name}/${MUTATION_WINDOW_SIZE}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createAsyncBenchStore(workload);
+      const baselineBounds = getWindowBounds(
+        previewStore,
+        'first',
+        MUTATION_WINDOW_SIZE
+      );
+      const simulationStore = createAsyncBenchStore(workload);
+      const simulationAttempt = simulationStore.beginChildLoad(
+        ASYNC_BENCH_DIRECTORY_PATH
+      );
+      simulationStore.completeChildLoad(simulationAttempt);
+      const readPlan = createRenderChangedWindowPlan(
+        simulationStore,
+        baselineBounds,
+        MUTATION_WINDOW_SIZE,
+        [ASYNC_BENCH_DIRECTORY_PATH]
+      );
+      const postMutationRead = readVisibleWindow(
+        simulationStore,
+        readPlan.bounds
+      );
+
+      return {
+        manifest: {
+          afterPreview: getPreview(postMutationRead.rows),
+          baselineWindowEnd: baselineBounds.end,
+          baselineWindowStart: baselineBounds.start,
+          beforePreview: getPreview(
+            getWindowRows(previewStore, baselineBounds)
+          ),
+          category: 'mutation',
+          fileCount: workload.fileCount,
+          name,
+          postMutationReadIntent: readPlan.intent,
+          renderTargetPath: readPlan.renderTargetPath,
+          targetPath: ASYNC_BENCH_DIRECTORY_PATH,
+          targetVisible: true,
+          visibleCount: postMutationRead.visibleCount,
+          windowEnd: readPlan.bounds.end,
+          windowShifted: readPlan.windowShifted,
+          windowSize: MUTATION_WINDOW_SIZE,
+          windowStart: readPlan.bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          let attempt: import('../src').PathStoreLoadAttempt | null = null;
+
+          return Promise.resolve(
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  attempt = store.beginChildLoad(ASYNC_BENCH_DIRECTORY_PATH);
+                  store.completeChildLoad(attempt);
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  return createAsyncBenchStore(workload);
+                },
+                reset(store) {
+                  store.markDirectoryUnloaded(ASYNC_BENCH_DIRECTORY_PATH);
+                  attempt = null;
+                },
+              },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
+function createAsyncFailLoadScenarioFactory(
+  workload: BenchmarkWorkload
+): BenchmarkScenarioFactory {
+  const name = `async/fail-child-load/${workload.name}/${MUTATION_WINDOW_SIZE}`;
+
+  return {
+    name,
+    build() {
+      const previewStore = createAsyncBenchStore(workload);
+      const baselineBounds = getWindowBounds(
+        previewStore,
+        'first',
+        MUTATION_WINDOW_SIZE
+      );
+      const simulationStore = createAsyncBenchStore(workload);
+      const simulationAttempt = simulationStore.beginChildLoad(
+        ASYNC_BENCH_DIRECTORY_PATH
+      );
+      simulationStore.failChildLoad(simulationAttempt, 'benchmark failure');
+      const readPlan = createRenderChangedWindowPlan(
+        simulationStore,
+        baselineBounds,
+        MUTATION_WINDOW_SIZE,
+        [ASYNC_BENCH_DIRECTORY_PATH]
+      );
+      const postMutationRead = readVisibleWindow(
+        simulationStore,
+        readPlan.bounds
+      );
+
+      return {
+        manifest: {
+          afterPreview: getPreview(postMutationRead.rows),
+          baselineWindowEnd: baselineBounds.end,
+          baselineWindowStart: baselineBounds.start,
+          beforePreview: getPreview(
+            getWindowRows(previewStore, baselineBounds)
+          ),
+          category: 'mutation',
+          fileCount: workload.fileCount,
+          name,
+          postMutationReadIntent: readPlan.intent,
+          renderTargetPath: readPlan.renderTargetPath,
+          targetPath: ASYNC_BENCH_DIRECTORY_PATH,
+          targetVisible: true,
+          visibleCount: postMutationRead.visibleCount,
+          windowEnd: readPlan.bounds.end,
+          windowShifted: readPlan.windowShifted,
+          windowSize: MUTATION_WINDOW_SIZE,
+          windowStart: readPlan.bounds.start,
+          workload: workload.name,
+        },
+        measure(progressReporter) {
+          let attempt: import('../src').PathStoreLoadAttempt | null = null;
+
+          return Promise.resolve(
+            measureMutationWithReusedStore(
+              {
+                apply(store) {
+                  attempt = store.beginChildLoad(ASYNC_BENCH_DIRECTORY_PATH);
+                  store.failChildLoad(attempt, 'benchmark failure');
+                  return readVisibleWindow(store, readPlan.bounds);
+                },
+                createStore() {
+                  return createAsyncBenchStore(workload);
+                },
+                reset(store) {
+                  store.markDirectoryUnloaded(ASYNC_BENCH_DIRECTORY_PATH);
+                  attempt = null;
+                },
+              },
+              progressReporter
+            )
+          );
+        },
+        name,
+      };
+    },
+  };
+}
+
 function createExpandDirectoryScenarioFactory(
   workload: BenchmarkWorkload,
   viewport: ViewportMode
@@ -4143,6 +4493,19 @@ function createScenarioFactories(
     );
     factories.push(
       createAddSiblingListenerScenarioFactory(flattenChainWorkload, 'first')
+    );
+
+    factories.push(
+      createAsyncBeginLoadScenarioFactory(listenerBenchmarkWorkload)
+    );
+    factories.push(
+      createAsyncApplyPatchScenarioFactory(listenerBenchmarkWorkload)
+    );
+    factories.push(
+      createAsyncCompleteLoadScenarioFactory(listenerBenchmarkWorkload)
+    );
+    factories.push(
+      createAsyncFailLoadScenarioFactory(listenerBenchmarkWorkload)
     );
   }
 

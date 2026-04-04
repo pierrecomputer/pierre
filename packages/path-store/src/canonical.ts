@@ -30,7 +30,7 @@ import type {
 } from './public-types';
 import { getSegmentValue, internSegment } from './segments';
 import { compareSegmentSortKeys, getSegmentSortKey } from './sort';
-import { isDirectoryExpanded } from './state';
+import { clearDirectoryLoadInfo, isDirectoryExpanded } from './state';
 import type { MoveTarget, PathStoreState } from './state';
 
 export function listPaths(state: PathStoreState, path?: string): string[] {
@@ -819,6 +819,7 @@ function removeSubtree(state: PathStoreState, nodeId: NodeId): NodeId[] {
       node.pathCacheVersion = -1;
       state.collapsedDirectoryIds.delete(frame.nodeId);
       state.expandedDirectoryIds.delete(frame.nodeId);
+      clearDirectoryLoadInfo(state, frame.nodeId);
       state.activeNodeCount--;
       removedNodeIds.push(frame.nodeId);
       continue;

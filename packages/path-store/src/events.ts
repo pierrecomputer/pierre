@@ -1,12 +1,17 @@
 import { withBenchmarkPhase } from './internal/benchmarkInstrumentation';
 import type {
   PathStoreAddEvent,
+  PathStoreApplyChildPatchEvent,
   PathStoreBatchEvent,
+  PathStoreBeginChildLoadEvent,
   PathStoreCollapseEvent,
+  PathStoreCompleteChildLoadEvent,
   PathStoreEvent,
   PathStoreEventForType,
   PathStoreEventType,
   PathStoreExpandEvent,
+  PathStoreFailChildLoadEvent,
+  PathStoreMarkDirectoryUnloadedEvent,
   PathStoreMoveEvent,
   PathStoreRemoveEvent,
   PathStoreSemanticEvent,
@@ -114,6 +119,102 @@ export function createCollapseEvent(
     operation: 'collapse',
     path: args.path,
     projectionChanged: true,
+    visibleCountDelta: null,
+  };
+}
+
+export function createMarkDirectoryUnloadedEvent(
+  args: EventInvalidationArgs & { path: string }
+): PathStoreMarkDirectoryUnloadedEvent {
+  return {
+    affectedAncestorIds: args.affectedAncestorIds ?? [],
+    affectedNodeIds: args.affectedNodeIds ?? [],
+    canonicalChanged: false,
+    operation: 'mark-directory-unloaded',
+    path: args.path,
+    projectionChanged: args.projectionChanged,
+    visibleCountDelta: null,
+  };
+}
+
+export function createBeginChildLoadEvent(
+  args: EventInvalidationArgs & {
+    attemptId: number;
+    path: string;
+    reused: boolean;
+  }
+): PathStoreBeginChildLoadEvent {
+  return {
+    affectedAncestorIds: args.affectedAncestorIds ?? [],
+    affectedNodeIds: args.affectedNodeIds ?? [],
+    attemptId: args.attemptId,
+    canonicalChanged: false,
+    operation: 'begin-child-load',
+    path: args.path,
+    projectionChanged: args.projectionChanged,
+    reused: args.reused,
+    visibleCountDelta: null,
+  };
+}
+
+export function createApplyChildPatchEvent(
+  args: EventInvalidationArgs & {
+    attemptId: number;
+    childEvents: readonly PathStoreSemanticEvent[];
+    path: string;
+  }
+): PathStoreApplyChildPatchEvent {
+  return {
+    affectedAncestorIds: args.affectedAncestorIds ?? [],
+    affectedNodeIds: args.affectedNodeIds ?? [],
+    attemptId: args.attemptId,
+    canonicalChanged: args.childEvents.some((event) => event.canonicalChanged),
+    childEvents: args.childEvents,
+    operation: 'apply-child-patch',
+    path: args.path,
+    projectionChanged: args.projectionChanged,
+    visibleCountDelta: null,
+  };
+}
+
+export function createCompleteChildLoadEvent(
+  args: EventInvalidationArgs & {
+    attemptId: number;
+    path: string;
+    stale: boolean;
+  }
+): PathStoreCompleteChildLoadEvent {
+  return {
+    affectedAncestorIds: args.affectedAncestorIds ?? [],
+    affectedNodeIds: args.affectedNodeIds ?? [],
+    attemptId: args.attemptId,
+    canonicalChanged: false,
+    operation: 'complete-child-load',
+    path: args.path,
+    projectionChanged: args.projectionChanged,
+    stale: args.stale,
+    visibleCountDelta: null,
+  };
+}
+
+export function createFailChildLoadEvent(
+  args: EventInvalidationArgs & {
+    attemptId: number;
+    errorMessage: string | undefined;
+    path: string;
+    stale: boolean;
+  }
+): PathStoreFailChildLoadEvent {
+  return {
+    affectedAncestorIds: args.affectedAncestorIds ?? [],
+    affectedNodeIds: args.affectedNodeIds ?? [],
+    attemptId: args.attemptId,
+    canonicalChanged: false,
+    errorMessage: args.errorMessage,
+    operation: 'fail-child-load',
+    path: args.path,
+    projectionChanged: args.projectionChanged,
+    stale: args.stale,
     visibleCountDelta: null,
   };
 }

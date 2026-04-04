@@ -1,5 +1,8 @@
-import type { PathStorePathComparator } from './public-types';
-import type { PathStorePreparedInput } from './public-types';
+import type {
+  PathStoreDirectoryLoadState,
+  PathStorePathComparator,
+  PathStorePreparedInput,
+} from './public-types';
 
 export type NodeId = number;
 export type SegmentId = number;
@@ -37,6 +40,13 @@ export interface PathStoreNode {
   visibleSubtreeCount: number;
   pathCache: string | null;
   pathCacheVersion: number;
+}
+
+export interface DirectoryLoadInfo {
+  activeAttemptId: number | null;
+  errorMessage: string | null;
+  nextAttemptId: number;
+  state: PathStoreDirectoryLoadState;
 }
 
 export interface DirectoryChildIndex {

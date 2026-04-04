@@ -20,11 +20,16 @@ import {
 } from './internal/benchmarkInstrumentation';
 import type {
   PathStoreCollapseEvent,
+  PathStoreDirectoryLoadState,
   PathStoreExpandEvent,
   PathStoreVisibleRow,
 } from './public-types';
 import { getSegmentValue } from './segments';
-import { isDirectoryExpanded, setDirectoryExpanded } from './state';
+import {
+  getDirectoryLoadState,
+  isDirectoryExpanded,
+  setDirectoryExpanded,
+} from './state';
 import type { PathStoreState } from './state';
 
 interface VisibleRowCursor {
@@ -365,6 +370,10 @@ function materializeVisibleRow(
   cursor: VisibleRowCursor
 ): PathStoreVisibleRow {
   const terminalNode = requireNode(state, cursor.terminalNodeId);
+  const loadState =
+    terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY
+      ? getVisibleRowLoadState(state, cursor)
+      : null;
   const path = materializeNodePath(state, cursor.terminalNodeId);
   const name = getSegmentValue(
     state.snapshot.segmentTable,
@@ -418,12 +427,58 @@ function materializeVisibleRow(
       terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
       isDirectoryExpanded(state, cursor.terminalNodeId, terminalNode),
     isFlattened,
-    isLoading: false,
+    isLoading: loadState === 'loading',
     kind:
       terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY
         ? 'directory'
         : 'file',
+    loadState:
+      loadState == null || loadState === 'loaded'
+        ? undefined
+        : (loadState as PathStoreDirectoryLoadState),
     name,
     path,
   };
+}
+
+function getVisibleRowLoadState(
+  state: PathStoreState,
+  cursor: VisibleRowCursor
+): PathStoreDirectoryLoadState {
+  if (cursor.headNodeId === cursor.terminalNodeId) {
+    return getDirectoryLoadState(state, cursor.terminalNodeId);
+  }
+
+  const chainNodeIds = collectFlattenedDirectoryChainIds(
+    state,
+    cursor.headNodeId
+  );
+  let hasUnloaded = false;
+  let hasError = false;
+
+  for (const nodeId of chainNodeIds) {
+    const loadState = getDirectoryLoadState(state, nodeId);
+    if (loadState === 'loading') {
+      return 'loading';
+    }
+
+    if (loadState === 'error') {
+      hasError = true;
+      continue;
+    }
+
+    if (loadState === 'unloaded') {
+      hasUnloaded = true;
+    }
+  }
+
+  if (hasError) {
+    return 'error';
+  }
+
+  if (hasUnloaded) {
+    return 'unloaded';
+  }
+
+  return 'loaded';
 }

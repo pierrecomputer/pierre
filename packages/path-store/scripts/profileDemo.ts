@@ -302,6 +302,10 @@ const ALL_ACTION_IDS = [
   'move-visible-folder-to-parent',
   'move-visible-leaf-to-parent',
   'collapse-folder-above-viewport',
+  'begin-async-load',
+  'apply-async-patch',
+  'complete-async-load',
+  'fail-async-load',
 ] as const;
 const KNOWN_ACTION_IDS = new Set<string>(ALL_ACTION_IDS);
 const TOP_LEVEL_TASK_NAMES = new Set([
@@ -1994,6 +1998,16 @@ function formatPhaseLabel(name: string): string {
       return '  - store.expand';
     case 'store.collapse':
       return '  - store.collapse';
+    case 'store.markDirectoryUnloaded':
+      return '  - store.markDirectoryUnloaded';
+    case 'store.beginChildLoad':
+      return '  - store.beginChildLoad';
+    case 'store.applyChildPatch':
+      return '  - store.applyChildPatch';
+    case 'store.completeChildLoad':
+      return '  - store.completeChildLoad';
+    case 'store.failChildLoad':
+      return '  - store.failChildLoad';
     case 'store.list':
       return '  - store.list';
     case 'store.events.record':
@@ -2073,6 +2087,11 @@ function createPhaseRows(
   pushPhase('store.move');
   pushPhase('store.expand');
   pushPhase('store.collapse');
+  pushPhase('store.markDirectoryUnloaded');
+  pushPhase('store.beginChildLoad');
+  pushPhase('store.applyChildPatch');
+  pushPhase('store.completeChildLoad');
+  pushPhase('store.failChildLoad');
   pushPhase('store.events.record');
   pushPhase('store.events.batch.merge');
   pushPhase('store.events.batch.commit');

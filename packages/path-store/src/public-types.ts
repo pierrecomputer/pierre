@@ -22,6 +22,25 @@ export interface PathStorePreparedInput {
   paths: readonly string[];
 }
 
+export type PathStoreDirectoryLoadState =
+  | 'unloaded'
+  | 'loading'
+  | 'loaded'
+  | 'error';
+
+export interface PathStoreChildPatch {
+  metadata?: {
+    knownChildCount?: number;
+  };
+  operations: readonly PathStoreOperation[];
+}
+
+export interface PathStoreLoadAttempt {
+  attemptId: number;
+  nodeId: number;
+  reused: boolean;
+}
+
 export interface PathStoreConstructorOptions extends PathStoreOptions {
   initialExpansion?: PathStoreInitialExpansion;
   initialExpandedPaths?: readonly string[];
@@ -46,6 +65,7 @@ export interface PathStoreVisibleRow {
   isFlattened: boolean;
   isLoading: boolean;
   kind: 'directory' | 'file';
+  loadState?: PathStoreDirectoryLoadState;
   name: string;
   path: string;
 }
@@ -85,12 +105,51 @@ export interface PathStoreCollapseEvent extends PathStoreEventInvalidation {
   path: string;
 }
 
+export interface PathStoreMarkDirectoryUnloadedEvent extends PathStoreEventInvalidation {
+  operation: 'mark-directory-unloaded';
+  path: string;
+}
+
+export interface PathStoreBeginChildLoadEvent extends PathStoreEventInvalidation {
+  attemptId: number;
+  operation: 'begin-child-load';
+  path: string;
+  reused: boolean;
+}
+
+export interface PathStoreApplyChildPatchEvent extends PathStoreEventInvalidation {
+  attemptId: number;
+  childEvents: readonly PathStoreSemanticEvent[];
+  operation: 'apply-child-patch';
+  path: string;
+}
+
+export interface PathStoreCompleteChildLoadEvent extends PathStoreEventInvalidation {
+  attemptId: number;
+  operation: 'complete-child-load';
+  path: string;
+  stale: boolean;
+}
+
+export interface PathStoreFailChildLoadEvent extends PathStoreEventInvalidation {
+  attemptId: number;
+  errorMessage?: string;
+  operation: 'fail-child-load';
+  path: string;
+  stale: boolean;
+}
+
 export type PathStoreSemanticEvent =
   | PathStoreAddEvent
   | PathStoreRemoveEvent
   | PathStoreMoveEvent
   | PathStoreExpandEvent
-  | PathStoreCollapseEvent;
+  | PathStoreCollapseEvent
+  | PathStoreMarkDirectoryUnloadedEvent
+  | PathStoreBeginChildLoadEvent
+  | PathStoreApplyChildPatchEvent
+  | PathStoreCompleteChildLoadEvent
+  | PathStoreFailChildLoadEvent;
 
 export interface PathStoreBatchEvent extends PathStoreEventInvalidation {
   events: readonly PathStoreSemanticEvent[];

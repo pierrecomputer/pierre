@@ -95,6 +95,22 @@ Current implementation note:
   - `visibleCountDelta` when it is honest to compute Advisory affected-ID fields
     remain available, but they should not be treated as the long-term primary
     contract until cleanup/compaction semantics are more explicit.
+- Phase 7A now starts the async model with explicit store-owned primitives for:
+  - marking a directory unloaded
+  - beginning a child load with deduped attempt handles
+  - applying incremental child patches
+  - completing or failing a load attempt Runtime/scheduler policy remains
+    outside the store for now. `markDirectoryUnloaded(path)` is intentionally
+    limited to directories without known children, and visible-row `loadState`
+    is intentionally sparse: the always-available fast flag is `isLoading`,
+    while `loadState` only appears when a directory row is not in the default
+    loaded state. `PathStoreChildPatch.metadata` is reserved for future
+    count/reservation hints and is intentionally ignored in 7A. The current
+    `applyChildPatch()` preflight validates patches against a throwaway subtree
+    store before mutating the real store so failed later operations cannot leave
+    partial state behind. That is an intentional correctness-first O(n) tradeoff
+    for large directories and a likely future optimization target once 7A
+    semantics are stable.
 
 For mutation scenarios, the benchmark contract should explicitly model the next
 store-side read the UI would perform after the mutation commits:

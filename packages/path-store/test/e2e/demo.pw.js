@@ -571,6 +571,83 @@ test('demo-small profile prepare can collapse a folder above the viewport from o
   expect(pageErrors).toEqual([]);
 });
 
+test('demo-small begin-async-load shows a visible loading row and event', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await page.locator('[data-action-id="begin-async-load"]').click();
+
+  await expectRenderedRows(page, [
+    'aaa-async-demo/ [loading]',
+    'alpha/',
+    'alpha/docs/',
+    'alpha/docs/readme.md',
+  ]);
+  await expectLastEventMatches(page, {
+    operation: 'begin-child-load',
+    path: 'aaa-async-demo/',
+    projectionChanged: true,
+    reused: false,
+    visibleCountDelta: 0,
+  });
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small apply-async-patch shows a flatten-sensitive loading row and child', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small', true);
+  await setVisibleCount(page, 4);
+  await page.locator('[data-action-id="begin-async-load"]').click();
+  await page.locator('[data-action-id="apply-async-patch"]').click();
+
+  await expectRenderedRows(page, [
+    'aaa-async-demo/inner/ [loading]',
+    'aaa-async-demo/inner/file.ts',
+    'alpha/',
+    'alpha/docs/',
+  ]);
+  await expectLastEventMatches(page, {
+    operation: 'apply-child-patch',
+    path: 'aaa-async-demo/',
+    projectionChanged: true,
+    visibleCountDelta: 1,
+  });
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small fail-async-load shows an error row and event', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+  await page.locator('[data-action-id="begin-async-load"]').click();
+  await page.locator('[data-action-id="fail-async-load"]').click();
+
+  await expectRenderedRows(page, [
+    'aaa-async-demo/ [error]',
+    'alpha/',
+    'alpha/docs/',
+    'alpha/docs/readme.md',
+  ]);
+  await expectLastEventMatches(page, {
+    errorMessage: 'demo failure',
+    operation: 'fail-child-load',
+    path: 'aaa-async-demo/',
+    projectionChanged: true,
+    stale: false,
+    visibleCountDelta: 0,
+  });
+  expect(pageErrors).toEqual([]);
+});
+
 test('demo-small reset restores the exact baseline window after a mutation', async ({
   page,
 }) => {
@@ -592,6 +669,94 @@ test('demo-small reset restores the exact baseline window after a mutation', asy
   await page.locator('[data-action-id="reset"]').click();
 
   await expectRenderedRows(page, baselineRows);
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small async load actions show loading, patch, and completion on visible rows', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small', true);
+  await setVisibleCount(page, 4);
+
+  await page.locator('[data-action-id="begin-async-load"]').click();
+  await expectRenderedRows(page, [
+    'aaa-async-demo/ [loading]',
+    'alpha/',
+    'alpha/docs/',
+    'alpha/docs/readme.md',
+  ]);
+  await expectLastEventMatches(page, {
+    canonicalChanged: false,
+    operation: 'begin-child-load',
+    path: 'aaa-async-demo/',
+    projectionChanged: true,
+    reused: false,
+    visibleCountDelta: 0,
+  });
+
+  await page.locator('[data-action-id="apply-async-patch"]').click();
+  await expectRenderedRows(page, [
+    'aaa-async-demo/inner/ [loading]',
+    'aaa-async-demo/inner/file.ts',
+    'alpha/',
+    'alpha/docs/',
+  ]);
+  await expectLastEventMatches(page, {
+    canonicalChanged: true,
+    operation: 'apply-child-patch',
+    path: 'aaa-async-demo/',
+    projectionChanged: true,
+    visibleCountDelta: 1,
+  });
+
+  await page.locator('[data-action-id="complete-async-load"]').click();
+  await expectRenderedRows(page, [
+    'aaa-async-demo/inner/',
+    'aaa-async-demo/inner/file.ts',
+    'alpha/',
+    'alpha/docs/',
+  ]);
+  await expectLastEventMatches(page, {
+    canonicalChanged: false,
+    operation: 'complete-child-load',
+    path: 'aaa-async-demo/',
+    projectionChanged: true,
+    stale: false,
+    visibleCountDelta: 0,
+  });
+
+  expect(pageErrors).toEqual([]);
+});
+
+test('demo-small async load failure surfaces error state visibly', async ({
+  page,
+}) => {
+  const pageErrors = trackPageErrors(page);
+
+  await renderDemo(page, 'demo-small');
+  await setVisibleCount(page, 4);
+
+  await page.locator('[data-action-id="begin-async-load"]').click();
+  await page.locator('[data-action-id="fail-async-load"]').click();
+
+  await expectRenderedRows(page, [
+    'aaa-async-demo/ [error]',
+    'alpha/',
+    'alpha/docs/',
+    'alpha/docs/readme.md',
+  ]);
+  await expectLastEventMatches(page, {
+    canonicalChanged: false,
+    errorMessage: 'demo failure',
+    operation: 'fail-child-load',
+    path: 'aaa-async-demo/',
+    projectionChanged: true,
+    stale: false,
+    visibleCountDelta: 0,
+  });
+
   expect(pageErrors).toEqual([]);
 });
 

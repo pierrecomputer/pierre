@@ -12,6 +12,8 @@ import {
 const DEFAULT_WORKLOAD_NAME = 'linux-5x';
 const MAX_VISIBLE_WINDOW_SIZE = 500;
 const DEFAULT_VISIBLE_WINDOW_SIZE = 30;
+const ASYNC_DEMO_DIRECTORY_PATH = 'aaa-async-demo/';
+const ASYNC_DEMO_PATCH_FILE_PATH = 'aaa-async-demo/inner/file.ts';
 const PROFILE_END_LABEL = 'path-store-demo-profile-end';
 const PROFILE_END_MARK_NAME = 'path-store-demo-profile-end';
 const PROFILE_START_LABEL = 'path-store-demo-profile-start';
@@ -144,6 +146,8 @@ let buildTimeMs = 0;
 let currentStore = null;
 /** @type {null | (() => void)} */
 let currentStoreEventUnsubscribe = null;
+/** @type {import('../src/public-types').PathStoreLoadAttempt | null} */
+let currentAsyncLoadAttempt = null;
 /** @type {import('../src/public-types').PathStoreEvent | null} */
 let lastEvent = null;
 /** @type {DemoLongTaskEntry[]} */
@@ -349,6 +353,7 @@ function renderCurrentWindow(preferredOffset = undefined, benchmark = null) {
   offsetInput.disabled = false;
   offsetInput.max = String(maxOffset);
   setOffsetValue(view.offset);
+  /** @type {string} */
   const rowsText =
     benchmark == null
       ? view.rows
@@ -356,7 +361,7 @@ function renderCurrentWindow(preferredOffset = undefined, benchmark = null) {
             /**
              * @param {PathStoreVisibleRow} row
              */
-            (row) => row.path
+            (row) => formatVisibleRowText(row)
           )
           .join('\n')
       : benchmark.instrumentation.measurePhase(
@@ -367,7 +372,7 @@ function renderCurrentWindow(preferredOffset = undefined, benchmark = null) {
                 /**
                  * @param {PathStoreVisibleRow} row
                  */
-                (row) => row.path
+                (row) => formatVisibleRowText(row)
               )
               .join('\n')
         );
@@ -409,6 +414,14 @@ function getSelectedWorkloadSummary() {
     name: workload.name,
     presortedInput: !getSortInputEnabled(),
   };
+}
+
+function formatVisibleRowText(row) {
+  if (row.loadState == null) {
+    return /** @type {string} */ (row.path);
+  }
+
+  return `${row.path} [${row.loadState}]`;
 }
 
 /**
@@ -816,6 +829,29 @@ function getRevealOffset(store, targetPath, fallbackOffset, windowSize) {
   return Math.max(minOffset, Math.min(maxAllowedOffset, fallbackOffset));
 }
 
+function ensureAsyncDemoDirectory(store) {
+  /** @type {string[]} */
+  const canonicalPaths = store.list();
+  const hasAsyncPatchFile = canonicalPaths.includes(ASYNC_DEMO_PATCH_FILE_PATH);
+  const hasAsyncDirectory = canonicalPaths.includes(ASYNC_DEMO_DIRECTORY_PATH);
+
+  if (hasAsyncPatchFile === true) {
+    store.remove(ASYNC_DEMO_DIRECTORY_PATH, { recursive: true });
+  } else if (hasAsyncDirectory === true) {
+    store.remove(ASYNC_DEMO_DIRECTORY_PATH);
+  }
+
+  store.add(ASYNC_DEMO_DIRECTORY_PATH);
+}
+
+function requireAsyncLoadAttempt(actionId) {
+  if (currentAsyncLoadAttempt == null) {
+    throw new Error(`No active async load attempt available for ${actionId}.`);
+  }
+
+  return currentAsyncLoadAttempt;
+}
+
 /** @type {readonly DemoAction[]} */
 const demoActions = [
   {
@@ -984,6 +1020,79 @@ const demoActions = [
       };
     },
   },
+  {
+    id: 'begin-async-load',
+    prepare() {
+      return {};
+    },
+    run(store) {
+      ensureAsyncDemoDirectory(store);
+      store.markDirectoryUnloaded(ASYNC_DEMO_DIRECTORY_PATH);
+      currentAsyncLoadAttempt = store.beginChildLoad(ASYNC_DEMO_DIRECTORY_PATH);
+      return {
+        detail: `Last action: began async load for ${ASYNC_DEMO_DIRECTORY_PATH}`,
+        revealPath: ASYNC_DEMO_DIRECTORY_PATH,
+      };
+    },
+  },
+  {
+    id: 'apply-async-patch',
+    prepare() {
+      return {};
+    },
+    run(store) {
+      const attempt = requireAsyncLoadAttempt(this.id);
+      const applied = store.applyChildPatch(attempt, {
+        operations: [{ path: ASYNC_DEMO_PATCH_FILE_PATH, type: 'add' }],
+      });
+      if (!applied) {
+        throw new Error(`Async child patch was stale for ${this.id}.`);
+      }
+
+      return {
+        detail: `Last action: applied async child patch to ${ASYNC_DEMO_DIRECTORY_PATH}`,
+        revealPath: ASYNC_DEMO_PATCH_FILE_PATH,
+      };
+    },
+  },
+  {
+    id: 'complete-async-load',
+    prepare() {
+      return {};
+    },
+    run(store) {
+      const attempt = requireAsyncLoadAttempt(this.id);
+      const completed = store.completeChildLoad(attempt);
+      currentAsyncLoadAttempt = null;
+      if (!completed) {
+        throw new Error(`Async load completion was stale for ${this.id}.`);
+      }
+
+      return {
+        detail: `Last action: completed async load for ${ASYNC_DEMO_DIRECTORY_PATH}`,
+        revealPath: ASYNC_DEMO_DIRECTORY_PATH,
+      };
+    },
+  },
+  {
+    id: 'fail-async-load',
+    prepare() {
+      return {};
+    },
+    run(store) {
+      const attempt = requireAsyncLoadAttempt(this.id);
+      const failed = store.failChildLoad(attempt, 'demo failure');
+      currentAsyncLoadAttempt = null;
+      if (!failed) {
+        throw new Error(`Async load failure was stale for ${this.id}.`);
+      }
+
+      return {
+        detail: `Last action: failed async load for ${ASYNC_DEMO_DIRECTORY_PATH}`,
+        revealPath: ASYNC_DEMO_DIRECTORY_PATH,
+      };
+    },
+  },
 ];
 
 const demoActionById = new Map(
@@ -1052,6 +1161,7 @@ function createStore(benchmark = null) {
           () => new PathStore(storeOptions)
         );
   buildTimeMs = performance.now() - buildStartedAt;
+  currentAsyncLoadAttempt = null;
   clearLastEvent();
   subscribeToStoreEvents(currentStore);
   const visibleRowCount =
@@ -1214,6 +1324,20 @@ function applyProfileActionSetup(actionId) {
             Math.max(1, visibleCount - 1)
           );
     renderCurrentWindow(targetOffset);
+    return;
+  }
+
+  if (
+    actionId === 'apply-async-patch' ||
+    actionId === 'complete-async-load' ||
+    actionId === 'fail-async-load'
+  ) {
+    ensureAsyncDemoDirectory(currentStore);
+    currentStore.markDirectoryUnloaded(ASYNC_DEMO_DIRECTORY_PATH);
+    currentAsyncLoadAttempt = currentStore.beginChildLoad(
+      ASYNC_DEMO_DIRECTORY_PATH
+    );
+    renderCurrentWindow(0);
   }
 }
 
