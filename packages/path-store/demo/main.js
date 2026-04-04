@@ -173,6 +173,7 @@ let lastEvent = null;
 let schedulerUpdateCount = 0;
 /** @type {DemoLongTaskEntry[]} */
 const longTaskEntries = [];
+let presortedWarmupGeneration = 0;
 const longTaskObserver =
   typeof PerformanceObserver !== 'undefined' &&
   PerformanceObserver.supportedEntryTypes?.includes('longtask')
@@ -227,6 +228,24 @@ function warmPresortedFilesIfNeeded() {
   }
 
   void getSelectedWorkload().presortedFiles;
+}
+
+// Prewarms the lazily sorted string cache shortly after the UI settles so the
+// default presorted demo path is less likely to pay that cold cost on the
+// first explicit render click.
+function schedulePresortedWarmup() {
+  const generation = ++presortedWarmupGeneration;
+  if (getSortInputEnabled()) {
+    return;
+  }
+
+  setTimeout(() => {
+    if (generation !== presortedWarmupGeneration || getSortInputEnabled()) {
+      return;
+    }
+
+    warmPresortedFilesIfNeeded();
+  }, 0);
 }
 
 function logDemoMessage(message) {
@@ -1344,13 +1363,17 @@ function createStore(benchmark = null) {
   const buildStartedAt = performance.now();
   clearSchedulerState();
   let preparedInput = null;
+  let presortedCacheFillTimeMs = 0;
   if (!sortInput) {
+    const presortedFilesStartedAt = performance.now();
+    const presortedFiles = workload.presortedFiles;
+    presortedCacheFillTimeMs = performance.now() - presortedFilesStartedAt;
     preparedInput =
       benchmark == null
-        ? PathStore.preparePresortedInput(workload.presortedFiles)
+        ? PathStore.preparePresortedInput(presortedFiles)
         : benchmark.instrumentation.measurePhase(
             'page.preparePresortedInput',
-            () => PathStore.preparePresortedInput(workload.presortedFiles)
+            () => PathStore.preparePresortedInput(presortedFiles)
           );
   }
   const storeOptions =
@@ -1405,7 +1428,7 @@ function createStore(benchmark = null) {
   logDemoMessage(
     visibleRowCount == null
       ? `Loaded ${workload.label} in ${buildTimeMs.toFixed(1)}ms.`
-      : `Loaded ${workload.label} in ${buildTimeMs.toFixed(1)}ms with ${visibleRowCount} visible rows.`
+      : `Loaded ${workload.label} in ${buildTimeMs.toFixed(1)}ms with ${visibleRowCount} visible rows${presortedCacheFillTimeMs >= 1 ? ` (${presortedCacheFillTimeMs.toFixed(1)}ms presort cache fill)` : ''}.`
   );
 
   window.pathStoreDemo = {
@@ -1801,13 +1824,19 @@ flattenInput.addEventListener('input', () => {
 });
 
 sortInput.addEventListener('input', () => {
+  presortedWarmupGeneration += 1;
   if (currentStore == null) {
+    schedulePresortedWarmup();
     return;
   }
 
   const currentOffset = getParsedInputNumber(offsetInput, 0);
   createStore();
   renderCurrentWindow(currentOffset);
+});
+
+workloadInput.addEventListener('input', () => {
+  schedulePresortedWarmup();
 });
 
 offsetInput.addEventListener('input', () => {
@@ -1864,3 +1893,4 @@ window.pathStoreDemo = {
   workload: null,
 };
 window.__pathStoreDemoFixtureReady = true;
+schedulePresortedWarmup();
