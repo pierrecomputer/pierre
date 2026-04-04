@@ -8,6 +8,51 @@ import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import { FeatureHeader } from '../FeatureHeader';
 import { type CSSHoverInfo, lookupCSSToken } from './css-index';
 
+/**
+ * Reconstruct compound CSS tokens from adjacent sibling elements.
+ * Pierre's Shiki theme splits selectors into individual tokens
+ * (e.g. `.` + `card-grid`, `&` + `:` + `hover`, `@` + `container`),
+ * so we look at neighboring siblings to build the full identifier.
+ */
+function resolveCompoundToken(
+  tokenText: string,
+  tokenElement: HTMLElement
+): string {
+  const prev = tokenElement.previousElementSibling;
+  const prevText = prev?.textContent ?? '';
+  const next = tokenElement.nextElementSibling;
+  const nextText = next?.textContent ?? '';
+
+  // `@` + keyword  →  `@container`, `@layer`, `@media`, etc.
+  if (prevText === '@') return `@${tokenText}`;
+
+  // `.` or `#` prefix  →  `.card-grid`, `#main`, etc.
+  if (prevText === '.' || prevText === '#') return `${prevText}${tokenText}`;
+
+  // `:` between `&` and a pseudo-class name  →  `&:hover`
+  // Tokens arrive as `&`, `:`, `hover` — when hovering `:`, combine with neighbors
+  if (tokenText === ':' && nextText.length > 0 && !/\s/.test(nextText[0])) {
+    const pseudo = `:${nextText}`;
+    if (prevText === '&') return `&${pseudo}`;
+    return pseudo;
+  }
+
+  // bare pseudo-class name after `:`  →  `:hover`, `:focus-visible`
+  if (prevText === ':') {
+    const grandPrev = prev?.previousElementSibling?.textContent ?? '';
+    const pseudo = `:${tokenText}`;
+    if (grandPrev === '&') return `&${pseudo}`;
+    return pseudo;
+  }
+
+  // standalone `.` or `#` followed by a name  →  `.card-grid`
+  if ((tokenText === '.' || tokenText === '#') && nextText.length > 0) {
+    return `${tokenText}${nextText}`;
+  }
+
+  return tokenText;
+}
+
 interface TokenHoverProps {
   prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
 }
@@ -104,12 +149,7 @@ export function TokenHover({ prerenderedDiff }: TokenHoverProps) {
     ({ tokenText, tokenElement }: DiffTokenEventBaseProps) => {
       cancelDismiss();
 
-      let resolvedText = tokenText;
-      const prevSibling = tokenElement.previousElementSibling;
-      if (prevSibling != null && prevSibling.textContent === '@') {
-        resolvedText = `@${tokenText}`;
-      }
-
+      const resolvedText = resolveCompoundToken(tokenText, tokenElement);
       const info = lookupCSSToken(resolvedText);
       if (info == null) {
         clearHover();
@@ -278,6 +318,14 @@ const HoverTooltip = forwardRef<HTMLDivElement, HoverTooltipProps>(
             <code className="block rounded bg-neutral-800 px-2 py-1 font-mono text-xs leading-relaxed text-emerald-300/90">
               {info.syntax}
             </code>
+          )}
+          {info.specificity != null && (
+            <span className="text-xs text-neutral-400">
+              Specificity:{' '}
+              <span className="font-mono text-purple-300/90">
+                {info.specificity}
+              </span>
+            </span>
           )}
           {info.origin != null && (
             <span className="text-xs text-neutral-500">

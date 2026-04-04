@@ -11,6 +11,8 @@ export interface CSSHoverInfo {
     | 'function';
   mdnURL?: string;
   origin?: string;
+  /** CSS specificity as a (A, B, C) tuple string, e.g. "(0, 1, 0)". */
+  specificity?: string;
 }
 
 const CSS_PROPERTIES: Record<string, CSSHoverInfo> = {
@@ -717,7 +719,7 @@ const SELECTOR_PATTERNS: Array<{
     getInfo: () => ({
       name: '&',
       description:
-        'The nesting selector — refers to the selector of the parent rule. Enables native CSS nesting without a preprocessor.',
+        'The nesting selector — refers to the selector of the parent rule. Enables native CSS nesting without a preprocessor. Takes the specificity of its parent selector.',
       syntax: '.parent { & .child { ... } }',
       category: 'selector',
       mdnURL:
@@ -750,6 +752,7 @@ const SELECTOR_PATTERNS: Array<{
     getInfo: (t) => ({
       name: t,
       description: `Pseudo-element — targets a specific part of the selected element (e.g. ${t}).`,
+      specificity: '(0, 0, 1)',
       category: 'selector',
       mdnURL: `https://developer.mozilla.org/en-US/docs/Web/CSS/${t}`,
     }),
@@ -760,6 +763,7 @@ const SELECTOR_PATTERNS: Array<{
       name: ':hover',
       description:
         'Matches when the user hovers over an element with a pointing device.',
+      specificity: '(0, 1, 0)',
       category: 'selector',
       mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/:hover',
     }),
@@ -770,6 +774,7 @@ const SELECTOR_PATTERNS: Array<{
       name: ':focus',
       description:
         'Matches when an element has received focus (via tab, click, or programmatically).',
+      specificity: '(0, 1, 0)',
       category: 'selector',
       mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/:focus',
     }),
@@ -780,6 +785,7 @@ const SELECTOR_PATTERNS: Array<{
       name: ':focus-visible',
       description:
         'Matches when an element has focus and the user agent determines the focus should be visibly indicated (keyboard navigation).',
+      specificity: '(0, 1, 0)',
       category: 'selector',
       mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/:focus-visible',
     }),
@@ -789,6 +795,7 @@ const SELECTOR_PATTERNS: Array<{
     getInfo: () => ({
       name: ':first-child',
       description: 'Matches an element that is the first child of its parent.',
+      specificity: '(0, 1, 0)',
       category: 'selector',
       mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/:first-child',
     }),
@@ -798,6 +805,7 @@ const SELECTOR_PATTERNS: Array<{
     getInfo: () => ({
       name: ':last-child',
       description: 'Matches an element that is the last child of its parent.',
+      specificity: '(0, 1, 0)',
       category: 'selector',
       mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/:last-child',
     }),
@@ -807,8 +815,9 @@ const SELECTOR_PATTERNS: Array<{
     getInfo: () => ({
       name: ':not()',
       description:
-        'The negation pseudo-class — matches elements that do not match the argument selector.',
+        'The negation pseudo-class — matches elements that do not match the argument selector. Its specificity is the specificity of its argument.',
       syntax: ':not(<selector>)',
+      specificity: 'of argument',
       category: 'selector',
       mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/:not',
     }),
@@ -818,8 +827,9 @@ const SELECTOR_PATTERNS: Array<{
     getInfo: () => ({
       name: ':is()',
       description:
-        'Takes a selector list and matches any element that can be selected by one of them. Keeps the highest specificity of the list.',
+        'Takes a selector list and matches any element that can be selected by one of them. Takes the specificity of the most specific argument.',
       syntax: ':is(<selector-list>)',
+      specificity: 'of most specific argument',
       category: 'selector',
       mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/:is',
     }),
@@ -831,6 +841,7 @@ const SELECTOR_PATTERNS: Array<{
       description:
         'Like :is() but with zero specificity — useful for defaults that are easy to override.',
       syntax: ':where(<selector-list>)',
+      specificity: '(0, 0, 0)',
       category: 'selector',
       mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/:where',
     }),
@@ -840,8 +851,9 @@ const SELECTOR_PATTERNS: Array<{
     getInfo: () => ({
       name: ':has()',
       description:
-        'The relational pseudo-class — selects an element if any of its relative selectors match. Often called the "parent selector".',
+        'The relational pseudo-class — selects an element if any of its relative selectors match. Often called the "parent selector". Takes the specificity of its argument.',
       syntax: ':has(<relative-selector-list>)',
+      specificity: 'of argument',
       category: 'selector',
       mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/:has',
     }),
@@ -851,6 +863,7 @@ const SELECTOR_PATTERNS: Array<{
     getInfo: (t) => ({
       name: t,
       description: `Pseudo-class — selects elements based on state or structural position (${t}).`,
+      specificity: '(0, 1, 0)',
       category: 'selector',
     }),
   },
@@ -858,8 +871,9 @@ const SELECTOR_PATTERNS: Array<{
     test: (t) => t.startsWith('.') && t.length > 1,
     getInfo: (t) => ({
       name: t,
-      description: `Class selector — matches elements with class="${t.slice(1)}" in their class list.`,
+      description: `Class selector — matches elements with class="${t.slice(1)}" in their class list. Multiple classes can be chained for higher specificity.`,
       syntax: `${t} { ... }`,
+      specificity: '(0, 1, 0)',
       category: 'selector',
       mdnURL:
         'https://developer.mozilla.org/en-US/docs/Web/CSS/Class_selectors',
@@ -869,8 +883,9 @@ const SELECTOR_PATTERNS: Array<{
     test: (t) => t.startsWith('#') && t.length > 1,
     getInfo: (t) => ({
       name: t,
-      description: `ID selector — matches the element with id="${t.slice(1)}". IDs should be unique per page.`,
+      description: `ID selector — matches the element with id="${t.slice(1)}". IDs should be unique per page. Higher specificity than classes.`,
       syntax: `${t} { ... }`,
+      specificity: '(1, 0, 0)',
       category: 'selector',
       mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/ID_selectors',
     }),
