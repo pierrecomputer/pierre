@@ -1,4 +1,7 @@
-import { sortCanonicalPaths } from '@pierre/tree-test-data';
+import {
+  getVirtualizationWorkload,
+  sortCanonicalPaths,
+} from '@pierre/tree-test-data';
 import { describe, expect, test } from 'bun:test';
 
 import { PathStore, StaticPathStore } from '../src/index';
@@ -336,9 +339,36 @@ describe('prepareInput', () => {
       'tmp/10.log',
       'tmp/2.log',
     ];
+    const expectedOrder = [
+      'a/',
+      'a/file.ts',
+      'docs/',
+      'docs/guide2.md',
+      'docs/guide10.md',
+      'src/lib/',
+      'src/lib/util2.ts',
+      'src/lib/util10.ts',
+      'src/Alpha.ts',
+      'src/alpha.ts',
+      'src/index.ts',
+      'tmp/',
+      'tmp/2.log',
+      'tmp/10.log',
+      'a1.txt',
+      'a2.txt',
+      'a10.txt',
+      'README.md',
+    ];
 
-    expect(sortCanonicalPaths(fixture)).toEqual(
-      PathStore.preparePaths(fixture)
+    expect(sortCanonicalPaths(fixture)).toEqual(expectedOrder);
+    expect(PathStore.preparePaths(fixture)).toEqual(expectedOrder);
+  });
+
+  test('matches tree-test-data workload presorting for the demo-small fixture', () => {
+    const workload = getVirtualizationWorkload('demo-small');
+
+    expect(workload.presortedFiles).toEqual(
+      PathStore.preparePaths(workload.files)
     );
   });
 });

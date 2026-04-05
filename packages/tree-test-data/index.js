@@ -1,3 +1,4 @@
+import { preparePaths as sortCanonicalPathsFromPathStore } from '../path-store/src/builder.ts';
 import linuxFixture from './linux-files.json';
 import pierreSnapshotFiles from './pierre-snapshot-files.json';
 
@@ -77,167 +78,15 @@ function deriveExpandedFolders(paths) {
   return [...folders];
 }
 
-const DIGIT_SEQUENCE_REGEX = /\d+/g;
-
-/**
- * @param {string} value
- * @returns {(number | string)[]}
- */
-function splitIntoNaturalTokens(value) {
-  /** @type {(number | string)[]} */
-  const tokens = [];
-  let lastIndex = 0;
-
-  for (const match of value.matchAll(DIGIT_SEQUENCE_REGEX)) {
-    const matchIndex = match.index ?? 0;
-    if (matchIndex > lastIndex) {
-      tokens.push(value.slice(lastIndex, matchIndex));
-    }
-
-    const numberValue = Number.parseInt(match[0], 10);
-    tokens.push(Number.isNaN(numberValue) ? match[0] : numberValue);
-    lastIndex = matchIndex + match[0].length;
-  }
-
-  if (lastIndex < value.length) {
-    tokens.push(value.slice(lastIndex));
-  }
-
-  return tokens;
-}
-
-/**
- * @param {readonly (number | string)[]} leftTokens
- * @param {readonly (number | string)[]} rightTokens
- * @returns {number}
- */
-function compareNaturalTokens(leftTokens, rightTokens) {
-  const tokenCount = Math.min(leftTokens.length, rightTokens.length);
-
-  for (let index = 0; index < tokenCount; index++) {
-    const leftToken = leftTokens[index];
-    const rightToken = rightTokens[index];
-
-    if (leftToken === rightToken) {
-      continue;
-    }
-
-    if (typeof leftToken === 'number' && typeof rightToken === 'number') {
-      return leftToken < rightToken ? -1 : 1;
-    }
-
-    const leftString = String(leftToken);
-    const rightString = String(rightToken);
-    if (leftString !== rightString) {
-      return leftString < rightString ? -1 : 1;
-    }
-  }
-
-  if (leftTokens.length !== rightTokens.length) {
-    return leftTokens.length < rightTokens.length ? -1 : 1;
-  }
-
-  return 0;
-}
-
-/**
- * @param {string} left
- * @param {string} right
- * @returns {number}
- */
-function compareSegmentValues(left, right) {
-  const leftLower = left.toLowerCase();
-  const rightLower = right.toLowerCase();
-  const tokenComparison = compareNaturalTokens(
-    splitIntoNaturalTokens(leftLower),
-    splitIntoNaturalTokens(rightLower)
-  );
-  if (tokenComparison !== 0) {
-    return tokenComparison;
-  }
-
-  if (leftLower !== rightLower) {
-    return leftLower < rightLower ? -1 : 1;
-  }
-
-  if (left === right) {
-    return 0;
-  }
-
-  return left < right ? -1 : 1;
-}
-
-/**
- * @param {string} path
- * @returns {{ isDirectory: boolean; segments: string[] }}
- */
-function parsePathForSort(path) {
-  const isDirectory = path.endsWith('/');
-  const normalizedPath = isDirectory ? path.slice(0, -1) : path;
-  return {
-    isDirectory,
-    segments: normalizedPath.split('/'),
-  };
-}
-
-/**
- * @param {{ isDirectory: boolean; segments: readonly string[] }} entry
- * @param {number} depth
- * @returns {'directory' | 'file'}
- */
-function getKindAtDepth(entry, depth) {
-  const isTerminalSegment = depth === entry.segments.length - 1;
-  if (!isTerminalSegment) {
-    return 'directory';
-  }
-
-  return entry.isDirectory ? 'directory' : 'file';
-}
-
-/**
- * @param {string} leftPath
- * @param {string} rightPath
- * @returns {number}
- */
-function compareCanonicalPaths(leftPath, rightPath) {
-  const left = parsePathForSort(leftPath);
-  const right = parsePathForSort(rightPath);
-  const sharedDepth = Math.min(left.segments.length, right.segments.length);
-
-  for (let depth = 0; depth < sharedDepth; depth++) {
-    const leftSegment = left.segments[depth];
-    const rightSegment = right.segments[depth];
-
-    if (leftSegment === rightSegment) {
-      continue;
-    }
-
-    const leftKind = getKindAtDepth(left, depth);
-    const rightKind = getKindAtDepth(right, depth);
-    if (leftKind !== rightKind) {
-      return leftKind === 'directory' ? -1 : 1;
-    }
-
-    return compareSegmentValues(leftSegment, rightSegment);
-  }
-
-  if (left.segments.length !== right.segments.length) {
-    return left.segments.length < right.segments.length ? -1 : 1;
-  }
-
-  if (left.isDirectory === right.isDirectory) {
-    return 0;
-  }
-
-  return left.isDirectory ? -1 : 1;
-}
+// Tree fixtures reuse path-store's canonical sorter so the benchmark and
+// workload data stay aligned with the runtime package's ordering rules.
 
 /**
  * @param {readonly string[]} files
  * @returns {string[]}
  */
 export function sortCanonicalPaths(files) {
-  return [...files].sort(compareCanonicalPaths);
+  return sortCanonicalPathsFromPathStore(files);
 }
 
 /**
