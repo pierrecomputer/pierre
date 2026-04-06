@@ -1,5 +1,6 @@
 import {
   getPreparedInputEntries,
+  getPreparedInputPresortedPaths,
   PathStoreBuilder,
   preparePathEntries,
 } from './builder';
@@ -118,7 +119,10 @@ function createStaticSnapshot(
     options: sourceSnapshot.options,
     rootId: sourceSnapshot.rootId,
     segmentTable: {
-      idByValue: new Map(),
+      idByValue: Object.assign(
+        Object.create(null),
+        sourceSnapshot.segmentTable.idByValue
+      ) as typeof sourceSnapshot.segmentTable.idByValue,
       sortKeyById: [...sourceSnapshot.segmentTable.sortKeyById],
       valueById: [...sourceSnapshot.segmentTable.valueById],
     },
@@ -831,9 +835,20 @@ export class StaticPathStore {
   public constructor(options: PathStoreConstructorOptions = {}) {
     const builder = new PathStoreBuilder(options);
     if (options.preparedInput != null) {
-      builder.appendPreparedPaths(
-        getPreparedInputEntries(options.preparedInput)
+      const presortedPaths = getPreparedInputPresortedPaths(
+        options.preparedInput
       );
+      if (presortedPaths != null) {
+        builder.appendPresortedPaths(presortedPaths);
+      } else {
+        // preparedInput is the caller's explicit fast path, so skip the
+        // builder's redundant monotonic-order validation and only keep
+        // duplicate checks.
+        builder.appendPreparedPaths(
+          getPreparedInputEntries(options.preparedInput),
+          false
+        );
+      }
     } else {
       const inputPaths = options.paths ?? [];
       if (options.presorted === true) {

@@ -1,5 +1,6 @@
 import {
   getPreparedInputEntries,
+  getPreparedInputPresortedPaths,
   PathStoreBuilder,
   prepareInput as prepareCanonicalInput,
   preparePaths as prepareCanonicalPaths,
@@ -18,6 +19,7 @@ import {
   removePath,
   requireNode,
 } from './canonical';
+import { rebuildVisibleChildChunks } from './child-index';
 import {
   cleanupPathStoreState,
   hasActiveCleanupBlockingLoads,
@@ -34,7 +36,10 @@ import {
   recordEvent,
   subscribe,
 } from './events';
-import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
+import {
+  PATH_STORE_NODE_FLAG_ROOT,
+  PATH_STORE_NODE_KIND_DIRECTORY,
+} from './internal-types';
 import {
   getBenchmarkInstrumentation,
   withBenchmarkPhase,
@@ -74,6 +79,89 @@ import {
 import { createPathStoreState } from './state';
 import type { PathStoreState } from './state';
 
+// Initializes the common all-directories-open startup shape without rerunning
+// the generic count-repair walk the constructor uses for arbitrary expansion
+// overrides. This keeps the presorted first-render path from paying for a
+// second full-tree pass after the builder has already finalized subtree counts.
+function initializeOpenVisibleCounts(state: PathStoreState): void {
+  const { directories, nodes, options, rootId } = state.snapshot;
+
+  const computeVisibleCounts = (nodeId: number): number => {
+    const currentNode = nodes[nodeId];
+    if (currentNode == null) {
+      throw new Error(`Unknown node ID: ${String(nodeId)}`);
+    }
+
+    if (currentNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+      currentNode.visibleSubtreeCount = 1;
+      return 1;
+    }
+
+    const currentIndex = directories.get(nodeId);
+    if (currentIndex == null) {
+      throw new Error(
+        `Unknown directory child index for node ${String(nodeId)}`
+      );
+    }
+
+    let totalChildSubtreeNodeCount = 0;
+    let totalChildVisibleSubtreeCount = 0;
+    const childIds = currentIndex.childIds;
+    for (let ci = 0; ci < childIds.length; ci++) {
+      const childId = childIds[ci];
+      if (childId == null) {
+        continue;
+      }
+      const childNode = nodes[childId];
+      totalChildSubtreeNodeCount += childNode.subtreeNodeCount;
+      // Inline the file-node case to avoid a recursive call for each file.
+      // Files always have visibleSubtreeCount = 1 (already set during
+      // construction), so we can accumulate directly.
+      if (childNode.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
+        totalChildVisibleSubtreeCount += computeVisibleCounts(childId);
+      } else {
+        totalChildVisibleSubtreeCount += 1;
+      }
+    }
+
+    currentIndex.totalChildSubtreeNodeCount = totalChildSubtreeNodeCount;
+    currentIndex.totalChildVisibleSubtreeCount = totalChildVisibleSubtreeCount;
+    rebuildVisibleChildChunks(nodes, currentIndex);
+
+    if ((currentNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0) {
+      currentNode.visibleSubtreeCount = totalChildVisibleSubtreeCount;
+      return totalChildVisibleSubtreeCount;
+    }
+
+    const flattenedChildId =
+      options.flattenEmptyDirectories === true &&
+      currentIndex.childIds.length === 1
+        ? currentIndex.childIds[0]
+        : null;
+    const flattenedChildNode =
+      flattenedChildId == null ? null : nodes[flattenedChildId];
+    const isFlattenedDirectory =
+      flattenedChildNode?.kind === PATH_STORE_NODE_KIND_DIRECTORY;
+
+    currentNode.visibleSubtreeCount = isFlattenedDirectory
+      ? totalChildVisibleSubtreeCount
+      : 1 + totalChildVisibleSubtreeCount;
+    return currentNode.visibleSubtreeCount;
+  };
+
+  computeVisibleCounts(rootId);
+}
+
+function canInitializeOpenVisibleCounts(
+  options: PathStoreConstructorOptions
+): boolean {
+  return (
+    options.initialExpansion === 'open' &&
+    (options.initialExpandedPaths == null ||
+      options.initialExpandedPaths.length === 0)
+  );
+}
+
 export class PathStore {
   readonly #state: PathStoreState;
 
@@ -85,9 +173,20 @@ export class PathStore {
       () => new PathStoreBuilder(options)
     );
     if (options.preparedInput != null) {
-      builder.appendPreparedPaths(
-        getPreparedInputEntries(options.preparedInput)
+      const presortedPaths = getPreparedInputPresortedPaths(
+        options.preparedInput
       );
+      if (presortedPaths != null) {
+        builder.appendPresortedPaths(presortedPaths);
+      } else {
+        // preparedInput is the caller's explicit fast path, so skip the
+        // builder's redundant monotonic-order validation and only keep
+        // duplicate checks.
+        builder.appendPreparedPaths(
+          getPreparedInputEntries(options.preparedInput),
+          false
+        );
+      }
     } else {
       const inputPaths = options.paths ?? [];
 
@@ -119,9 +218,17 @@ export class PathStore {
       'store.state.initializeExpandedPaths',
       () => this.initializeExpandedPaths(options.initialExpandedPaths)
     );
-    withBenchmarkPhase(instrumentation, 'store.state.recomputeCounts', () =>
-      recomputeCountsRecursive(this.#state, this.#state.snapshot.rootId)
-    );
+    if (canInitializeOpenVisibleCounts(options)) {
+      withBenchmarkPhase(
+        instrumentation,
+        'store.state.initializeOpenVisibleCounts',
+        () => initializeOpenVisibleCounts(this.#state)
+      );
+    } else {
+      withBenchmarkPhase(instrumentation, 'store.state.recomputeCounts', () =>
+        recomputeCountsRecursive(this.#state, this.#state.snapshot.rootId)
+      );
+    }
   }
 
   public static preparePaths(

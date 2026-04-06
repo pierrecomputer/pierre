@@ -5,25 +5,30 @@ export const ROOT_SEGMENT_VALUE = '';
 
 export function createSegmentTable(): SegmentTable {
   return {
-    idByValue: new Map<string, SegmentId>([[ROOT_SEGMENT_VALUE, 0]]),
+    idByValue: Object.assign(Object.create(null), {
+      [ROOT_SEGMENT_VALUE]: 0,
+    }) as Record<string, SegmentId | undefined>,
     valueById: [ROOT_SEGMENT_VALUE],
     sortKeyById: [createSegmentSortKey(ROOT_SEGMENT_VALUE)],
   };
 }
 
+// Bulk ingest touches every segment name, but most startup paths never compare
+// every segment naturally. Defer sort-key construction until a caller actually
+// needs ordering metadata for that segment.
 export function internSegment(
   segmentTable: SegmentTable,
   value: string
 ): SegmentId {
-  const existingId = segmentTable.idByValue.get(value);
+  const existingId = segmentTable.idByValue[value];
   if (existingId !== undefined) {
     return existingId;
   }
 
   const nextId = segmentTable.valueById.length;
-  segmentTable.idByValue.set(value, nextId);
+  segmentTable.idByValue[value] = nextId;
   segmentTable.valueById.push(value);
-  segmentTable.sortKeyById.push(createSegmentSortKey(value));
+  segmentTable.sortKeyById.push(undefined);
   return nextId;
 }
 

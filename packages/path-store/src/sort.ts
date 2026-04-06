@@ -7,25 +7,40 @@ import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
 import { PATH_STORE_NODE_KIND_FILE } from './internal-types';
 import type { PathStoreCompareEntry } from './public-types';
 
-const DIGIT_SEQUENCE_REGEX = /\d+/g;
+function isDigitCode(characterCode: number): boolean {
+  return characterCode >= 48 && characterCode <= 57;
+}
 
 function splitIntoNaturalTokens(value: string): readonly (number | string)[] {
   const tokens: (number | string)[] = [];
-  let lastIndex = 0;
+  let tokenStart = 0;
+  let index = 0;
 
-  for (const match of value.matchAll(DIGIT_SEQUENCE_REGEX)) {
-    const matchIndex = match.index ?? 0;
-    if (matchIndex > lastIndex) {
-      tokens.push(value.slice(lastIndex, matchIndex));
+  while (index < value.length) {
+    while (index < value.length && !isDigitCode(value.charCodeAt(index))) {
+      index += 1;
     }
 
-    const numberValue = Number.parseInt(match[0], 10);
-    tokens.push(Number.isNaN(numberValue) ? match[0] : numberValue);
-    lastIndex = matchIndex + match[0].length;
+    if (index >= value.length) {
+      break;
+    }
+
+    if (index > tokenStart) {
+      tokens.push(value.slice(tokenStart, index));
+    }
+
+    let numberValue = 0;
+    while (index < value.length && isDigitCode(value.charCodeAt(index))) {
+      numberValue = numberValue * 10 + (value.charCodeAt(index) - 48);
+      index += 1;
+    }
+
+    tokens.push(numberValue);
+    tokenStart = index;
   }
 
-  if (lastIndex < value.length) {
-    tokens.push(value.slice(lastIndex));
+  if (tokenStart < value.length || tokens.length === 0) {
+    tokens.push(value.slice(tokenStart));
   }
 
   return tokens;
@@ -87,9 +102,13 @@ export function compareSegmentSortKeys(
   return 0;
 }
 
-export function compareSegmentValues(left: string, right: string): number {
-  const leftKey = createSegmentSortKey(left);
-  const rightKey = createSegmentSortKey(right);
+function compareSegmentValuesWithSortKeyLookup(
+  left: string,
+  right: string,
+  getSortKey: (value: string) => SegmentSortKey
+): number {
+  const leftKey = getSortKey(left);
+  const rightKey = getSortKey(right);
   const comparison = compareSegmentSortKeys(leftKey, rightKey);
   if (comparison !== 0) {
     return comparison;
@@ -100,6 +119,14 @@ export function compareSegmentValues(left: string, right: string): number {
   }
 
   return left < right ? -1 : 1;
+}
+
+export function compareSegmentValues(left: string, right: string): number {
+  return compareSegmentValuesWithSortKeyLookup(
+    left,
+    right,
+    createSegmentSortKey
+  );
 }
 
 function getKindAtDepth(
@@ -155,6 +182,55 @@ export function comparePreparedPaths(
   right: PreparedPath
 ): number {
   return comparePreparedEntries(left, right);
+}
+
+export function comparePreparedPathsWithCachedSortKeys(
+  left: PreparedPath,
+  right: PreparedPath,
+  cache: Map<string, SegmentSortKey>
+): number {
+  const getCachedSortKey = (value: string): SegmentSortKey => {
+    const existingKey = cache.get(value);
+    if (existingKey != null) {
+      return existingKey;
+    }
+
+    const nextKey = createSegmentSortKey(value);
+    cache.set(value, nextKey);
+    return nextKey;
+  };
+  const sharedDepth = Math.min(left.segments.length, right.segments.length);
+
+  for (let depth = 0; depth < sharedDepth; depth++) {
+    const leftSegment = left.segments[depth];
+    const rightSegment = right.segments[depth];
+
+    if (leftSegment === rightSegment) {
+      continue;
+    }
+
+    const leftKind = getKindAtDepth(left, depth);
+    const rightKind = getKindAtDepth(right, depth);
+    if (leftKind !== rightKind) {
+      return leftKind === PATH_STORE_NODE_KIND_DIRECTORY ? -1 : 1;
+    }
+
+    return compareSegmentValuesWithSortKeyLookup(
+      leftSegment,
+      rightSegment,
+      getCachedSortKey
+    );
+  }
+
+  if (left.segments.length !== right.segments.length) {
+    return left.segments.length < right.segments.length ? -1 : 1;
+  }
+
+  if (left.isDirectory === right.isDirectory) {
+    return 0;
+  }
+
+  return left.isDirectory ? -1 : 1;
 }
 
 export function compareCompareEntries(

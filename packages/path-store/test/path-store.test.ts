@@ -318,6 +318,36 @@ describe('prepareInput', () => {
     expect(store.list()).toEqual(['a/file.ts', 'a1.txt', 'a2.txt', 'a10.txt']);
   });
 
+  test('matches the generic constructor path for prepared input with open flattened visibility', () => {
+    const presortedPaths = sortCanonicalPaths([
+      'docs/guide.md',
+      'src/components/Button.tsx',
+      'src/components/forms/Field.tsx',
+      'src/components/forms/utils.ts',
+      'src/index.ts',
+      'tmp/',
+    ]);
+    const preparedInput = PathStore.preparePresortedInput(presortedPaths);
+
+    const preparedStore = new PathStore({
+      flattenEmptyDirectories: true,
+      initialExpansion: 'open',
+      preparedInput,
+    });
+    const rawStore = new PathStore({
+      flattenEmptyDirectories: true,
+      initialExpansion: 'open',
+      paths: presortedPaths,
+      presorted: true,
+    });
+
+    expect(preparedStore.list()).toEqual(rawStore.list());
+    expect(preparedStore.getVisibleCount()).toBe(rawStore.getVisibleCount());
+    expect(getVisibleRowsSansIds(preparedStore)).toEqual(
+      getVisibleRowsSansIds(rawStore)
+    );
+  });
+
   test('matches tree-test-data canonical sorting for a representative small fixture', () => {
     const fixture = [
       'README.md',

@@ -6,7 +6,10 @@ import {
   recomputeCountsUpwardFrom,
   requireNode,
 } from './canonical';
-import { selectChildIndexByVisibleIndex } from './child-index';
+import {
+  ensureChildPositions,
+  selectChildIndexByVisibleIndex,
+} from './child-index';
 import { createCollapseEvent, createExpandEvent } from './events';
 import {
   collectFlattenedDirectoryChainIds,
@@ -340,7 +343,8 @@ function getNextVisibleRowCursor(
 
     const parentId = currentNode.parentId;
     const parentIndex = getDirectoryIndex(state, parentId);
-    const siblingIndex = parentIndex.childPositionById.get(currentNodeId) ?? -1;
+    const siblingIndex =
+      ensureChildPositions(parentIndex).get(currentNodeId) ?? -1;
     if (siblingIndex < 0) {
       throw new Error(
         `Child ${String(currentNodeId)} was not found in its parent index`

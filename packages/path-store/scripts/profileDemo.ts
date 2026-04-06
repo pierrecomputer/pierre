@@ -1964,6 +1964,8 @@ function formatPhaseLabel(name: string): string {
       return '  - Parse presorted paths';
     case 'store.builder.appendPreparedPaths':
       return '  - Append prepared paths';
+    case 'store.builder.appendPresortedPaths':
+      return '  - Append presorted paths';
     case 'store.builder.computeSubtreeCounts':
       return '  - Compute subtree counts';
     case 'store.builder.finish':
@@ -1972,6 +1974,8 @@ function formatPhaseLabel(name: string): string {
       return '  - Create store state';
     case 'store.state.initializeExpandedPaths':
       return '  - Apply expanded paths';
+    case 'store.state.initializeOpenVisibleCounts':
+      return '  - Initialize open visible counts';
     case 'store.state.recomputeCounts':
       return '  - Recompute visible counts';
     case 'store.getVisibleCount':

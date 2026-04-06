@@ -24,9 +24,9 @@ export interface SegmentSortKey {
 }
 
 export interface SegmentTable {
-  idByValue: Map<string, SegmentId>;
+  idByValue: Record<string, SegmentId | undefined>;
   valueById: string[];
-  sortKeyById: SegmentSortKey[];
+  sortKeyById: Array<SegmentSortKey | undefined>;
 }
 
 export interface PathStoreNode {
@@ -51,8 +51,8 @@ export interface DirectoryLoadInfo {
 
 export interface DirectoryChildIndex {
   childIds: NodeId[];
-  childIdByNameId: Map<SegmentId, NodeId>;
-  childPositionById: Map<NodeId, number>;
+  childIdByNameId: Map<SegmentId, NodeId> | null;
+  childPositionById: Map<NodeId, number> | null;
   childVisibleChunkSums: number[] | null;
   totalChildSubtreeNodeCount: number;
   totalChildVisibleSubtreeCount: number;
@@ -71,7 +71,8 @@ export interface PreparedPath {
 }
 
 export type InternalPreparedInput = PathStorePreparedInput & {
-  readonly preparedPaths: readonly PreparedPath[];
+  readonly preparedPaths?: readonly PreparedPath[];
+  readonly presortedPaths?: readonly string[];
 };
 
 export interface LookupPath {
