@@ -290,7 +290,12 @@ const TRACE_CATEGORIES = [
 const FIXTURE_READY_EXPRESSION = `window.__pathStoreDemoFixtureReady === true`;
 const PROFILE_START_LABEL = 'path-store-demo-profile-start';
 const PROFILE_END_LABEL = 'path-store-demo-profile-end';
-const KNOWN_WORKLOAD_NAMES = new Set(['demo-small', 'linux', 'linux-5x']);
+const KNOWN_WORKLOAD_NAMES = new Set([
+  'demo-small',
+  'linux',
+  'linux-5x',
+  'linux-10x',
+]);
 const ALL_ACTION_IDS = [
   'render',
   'collapse-visible-folder',
