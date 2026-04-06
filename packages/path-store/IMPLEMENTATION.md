@@ -233,9 +233,9 @@ Planned shape:
 
 ```ts
 type SegmentTable = {
-  idByValue: Map<string, SegmentId>;
+  idByValue: Record<string, SegmentId | undefined>; // null-prototype object for fast bracket access
   valueById: string[];
-  sortKeyById: SegmentSortKey[];
+  sortKeyById: Array<SegmentSortKey | undefined>; // lazily populated on first sort comparison
 };
 ```
 

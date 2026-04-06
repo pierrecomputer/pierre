@@ -251,6 +251,8 @@ export class PathStoreBuilder {
         let cachedDirDepth = 0;
 
         for (const path of paths) {
+          // Only catches adjacent duplicates — presorted input guarantees
+          // duplicates are consecutive, so this is sufficient.
           if (previousPath === path) {
             throw new Error(`Duplicate path: "${path}"`);
           }

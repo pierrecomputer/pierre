@@ -36,10 +36,6 @@ export function createPresortedDirectoryChildIndex(): DirectoryChildIndex {
   };
 }
 
-// Lazily rebuilds the child-position map from the childIds array.  This is
-// called on first mutation or sibling lookup after presorted bulk ingest,
-// which defers position-map population to avoid per-child Map.set overhead
-// during construction.
 // Lazily rebuilds the child-name-id lookup map from the childIds array and
 // the stored nameId on each node.  Called on first path lookup or mutation
 // after presorted bulk ingest, which defers map population to avoid per-child
