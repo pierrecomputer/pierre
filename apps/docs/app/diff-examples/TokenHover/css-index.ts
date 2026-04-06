@@ -176,6 +176,14 @@ const CSS_PROPERTIES: Record<string, CSSHoverInfo> = {
     category: 'property',
     mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/border',
   },
+  'border-color': {
+    name: 'border-color',
+    description:
+      'Sets the color of the border on all four sides of an element. Can specify one to four values.',
+    syntax: 'border-color: <color>{1,4}',
+    category: 'property',
+    mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/border-color',
+  },
   'box-shadow': {
     name: 'box-shadow',
     description:
@@ -227,8 +235,8 @@ const CSS_PROPERTIES: Record<string, CSSHoverInfo> = {
   container: {
     name: 'container',
     description:
-      'Shorthand for container-name and container-type, establishing a containment context for container queries.',
-    syntax: 'container: <name>? / <type>',
+      'Shorthand for container-name and container-type, establishing a containment context for container queries. For example, container: cards / inline-size sets container-name to "cards" and container-type to inline-size.',
+    syntax: 'container: <name> / <type>',
     category: 'property',
     mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/container',
   },
@@ -393,8 +401,9 @@ const CSS_VALUES: Record<string, CSSHoverInfo> = {
   'inline-size': {
     name: 'inline-size',
     description:
-      'A container-type value that enables container queries on the inline dimension (width in horizontal writing modes).',
+      'A container-type value that enables container queries on the inline dimension (width in horizontal writing modes). Used in the container shorthand after the / separator, e.g. container: cards / inline-size.',
     category: 'value',
+    mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/container-type',
   },
   column: {
     name: 'column',
@@ -859,7 +868,7 @@ const SELECTOR_PATTERNS: Array<{
     }),
   },
   {
-    test: (t) => t.startsWith(':') && !t.startsWith('::'),
+    test: (t) => t.length > 1 && t.startsWith(':') && !t.startsWith('::'),
     getInfo: (t) => ({
       name: t,
       description: `Pseudo-class — selects elements based on state or structural position (${t}).`,
@@ -929,6 +938,95 @@ export function lookupCSSToken(tokenText: string): CSSHoverInfo | null {
   for (const pattern of SELECTOR_PATTERNS) {
     if (pattern.test(trimmed)) return pattern.getInfo(trimmed);
   }
+
+  // Some themes bundle a property name with its value into one token
+  // (e.g. "container: cards"). Extract the property and value, then return
+  // a value-level description when available, otherwise the property info.
+  const colonIdx = trimmed.indexOf(':');
+  if (colonIdx > 0) {
+    const prop = trimmed.slice(0, colonIdx).trim();
+    const value = trimmed.slice(colonIdx + 1).trim();
+    if (value.length > 0) {
+      const valueInfo = lookupCSSPropertyValue(prop, value);
+      if (valueInfo != null) return valueInfo;
+    }
+    if (CSS_PROPERTIES[prop] != null) return CSS_PROPERTIES[prop];
+  }
+
+  return null;
+}
+
+/**
+ * Generates value-level descriptions for property values that are
+ * multi-part shorthands or otherwise benefit from contextual explanation.
+ */
+const VALUE_DESCRIPTIONS: Record<
+  string,
+  (value: string) => CSSHoverInfo | null
+> = {
+  container: (value) => {
+    const parts = value.split('/').map((s) => s.trim());
+    const name = parts[0] ?? '';
+    const type = parts[1] ?? '';
+    if (name.length > 0 && type.length > 0) {
+      return {
+        name: `${name} / ${type}`,
+        description: `Shorthand value for the container property. Sets container-name to "${name}" and container-type to ${type}. Equivalent to writing container-name: ${name} and container-type: ${type} separately.`,
+        syntax: `container: ${name} / ${type}`,
+        category: 'value',
+        mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/container',
+      };
+    }
+    if (name.length > 0) {
+      return {
+        name,
+        description: `Container name — identifies this containment context so @container rules can target it with @container ${name} (...).`,
+        syntax: `container: ${name} / <type>`,
+        category: 'value',
+        mdnURL:
+          'https://developer.mozilla.org/en-US/docs/Web/CSS/container-name',
+      };
+    }
+    return null;
+  },
+  transition: (value) => {
+    const entries = value.split(',').map((s) => s.trim());
+    if (entries.length === 0) return null;
+    const parsed = entries
+      .map((entry) => {
+        const parts = entry.split(/\s+/);
+        return parts[0] ?? '';
+      })
+      .filter((p) => p.length > 0);
+    if (parsed.length === 0) return null;
+    return {
+      name: value.trim(),
+      description: `Transition shorthand value. Animates ${parsed.map((p) => `"${p}"`).join(' and ')} when they change.`,
+      syntax: `transition: ${parsed.join(', ')} <duration> <timing>? <delay>?`,
+      category: 'value',
+      mdnURL: 'https://developer.mozilla.org/en-US/docs/Web/CSS/transition',
+    };
+  },
+};
+
+/**
+ * Look up a property value in context. When the tokenizer separates a
+ * property name from its value, this provides value-specific hover info
+ * rather than showing the generic property description.
+ */
+export function lookupCSSPropertyValue(
+  property: string,
+  rawValue: string
+): CSSHoverInfo | null {
+  const value = rawValue.trim();
+  if (value.length === 0) return null;
+
+  // Try the individual value in the general values table first
+  if (CSS_VALUES[value] != null) return CSS_VALUES[value];
+
+  // Try property-specific value descriptions for shorthands
+  const describer = VALUE_DESCRIPTIONS[property];
+  if (describer != null) return describer(value);
 
   return null;
 }

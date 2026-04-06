@@ -6,7 +6,17 @@ import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
-import { type CSSHoverInfo, lookupCSSToken } from './css-index';
+import {
+  type CSSHoverInfo,
+  lookupCSSPropertyValue,
+  lookupCSSToken,
+} from './css-index';
+
+interface ResolvedToken {
+  text: string;
+  /** When set, the token is a property value and this is the property name. */
+  propertyContext?: string;
+}
 
 /**
  * Reconstruct compound CSS tokens from adjacent sibling elements.
@@ -17,40 +27,56 @@ import { type CSSHoverInfo, lookupCSSToken } from './css-index';
 function resolveCompoundToken(
   tokenText: string,
   tokenElement: HTMLElement
-): string {
+): ResolvedToken {
   const prev = tokenElement.previousElementSibling;
   const prevText = prev?.textContent ?? '';
   const next = tokenElement.nextElementSibling;
   const nextText = next?.textContent ?? '';
 
   // `@` + keyword  →  `@container`, `@layer`, `@media`, etc.
-  if (prevText === '@') return `@${tokenText}`;
+  if (prevText === '@') return { text: `@${tokenText}` };
 
   // `.` or `#` prefix  →  `.card-grid`, `#main`, etc.
-  if (prevText === '.' || prevText === '#') return `${prevText}${tokenText}`;
+  if (prevText === '.' || prevText === '#')
+    return { text: `${prevText}${tokenText}` };
 
   // `:` between `&` and a pseudo-class name  →  `&:hover`
-  // Tokens arrive as `&`, `:`, `hover` — when hovering `:`, combine with neighbors
+  // Tokens arrive as `&`, `:`, `hover` — when hovering `:`, combine with neighbors.
+  // Skip if the next token starts with whitespace — that's a property value colon,
+  // not a pseudo-class colon (e.g. `container` `:` ` cards / inline-size`).
   if (tokenText === ':' && nextText.length > 0 && !/\s/.test(nextText[0])) {
     const pseudo = `:${nextText}`;
-    if (prevText === '&') return `&${pseudo}`;
-    return pseudo;
+    if (prevText === '&' || prevText.endsWith('&'))
+      return { text: `&${pseudo}` };
+    return { text: pseudo };
   }
 
   // bare pseudo-class name after `:`  →  `:hover`, `:focus-visible`
-  if (prevText === ':') {
+  // Only when the token doesn't start with whitespace (rules out property values).
+  if (prevText === ':' && tokenText.length > 0 && !/\s/.test(tokenText[0])) {
     const grandPrev = prev?.previousElementSibling?.textContent ?? '';
     const pseudo = `:${tokenText}`;
-    if (grandPrev === '&') return `&${pseudo}`;
-    return pseudo;
+    if (grandPrev === '&' || grandPrev.endsWith('&'))
+      return { text: `&${pseudo}` };
+    return { text: pseudo };
   }
 
   // standalone `.` or `#` followed by a name  →  `.card-grid`
   if ((tokenText === '.' || tokenText === '#') && nextText.length > 0) {
-    return `${tokenText}${nextText}`;
+    return { text: `${tokenText}${nextText}` };
   }
 
-  return tokenText;
+  // Value token after a property colon — walk back past `:` to find the
+  // property name so we can show value-specific info.
+  if (prevText === ':' && tokenText.length > 0 && /\s/.test(tokenText[0])) {
+    const propEl = prev?.previousElementSibling;
+    const propText = propEl?.textContent?.trim() ?? '';
+    if (propText.length > 0) {
+      return { text: tokenText, propertyContext: propText };
+    }
+  }
+
+  return { text: tokenText };
 }
 
 interface TokenHoverProps {
@@ -149,8 +175,11 @@ export function TokenHover({ prerenderedDiff }: TokenHoverProps) {
     ({ tokenText, tokenElement }: DiffTokenEventBaseProps) => {
       cancelDismiss();
 
-      const resolvedText = resolveCompoundToken(tokenText, tokenElement);
-      const info = lookupCSSToken(resolvedText);
+      const resolved = resolveCompoundToken(tokenText, tokenElement);
+      const info =
+        resolved.propertyContext != null
+          ? lookupCSSPropertyValue(resolved.propertyContext, resolved.text)
+          : lookupCSSToken(resolved.text);
       if (info == null) {
         clearHover();
         return;
