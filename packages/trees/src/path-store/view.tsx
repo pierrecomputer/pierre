@@ -6,6 +6,8 @@ import { Icon } from '../components/Icon';
 import { MiddleTruncate, Truncate } from '../components/OverflowText';
 import { PathStoreTreesController } from './controller';
 import type {
+  PathStoreTreesDirectoryHandle,
+  PathStoreTreesItemHandle,
   PathStoreTreesViewProps,
   PathStoreTreesVisibleRow,
 } from './types';
@@ -41,6 +43,12 @@ function formatFlattenedSegments(
   );
 }
 
+function isPathStoreTreesDirectoryHandle(
+  item: PathStoreTreesItemHandle | null
+): item is PathStoreTreesDirectoryHandle {
+  return item != null && 'toggle' in item;
+}
+
 function renderStyledRow(
   controller: PathStoreTreesController,
   row: PathStoreTreesVisibleRow,
@@ -51,10 +59,7 @@ function renderStyledRow(
       row.path)
     : row.path;
   const item = controller.getItem(targetPath);
-  const directoryItem =
-    item != null && item.isDirectory() === true && 'toggle' in item
-      ? item
-      : null;
+  const directoryItem = isPathStoreTreesDirectoryHandle(item) ? item : null;
 
   return (
     <button
@@ -152,6 +157,8 @@ export function PathStoreTreesView({
         0,
         nextItemCount * itemHeight - nextViewportHeight
       );
+      // Collapse can shrink total height under the current scroll position, so
+      // clamp scrollTop before recomputing the visible window range.
       if (scrollElement.scrollTop > maxScrollTop) {
         scrollElement.scrollTop = maxScrollTop;
       }

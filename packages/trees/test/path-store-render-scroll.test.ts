@@ -138,6 +138,46 @@ describe('path-store render + scroll', () => {
     controller.destroy();
   });
 
+  test('deep initialExpandedPaths expands ancestor directories in handle state and visible rows', async () => {
+    const { PathStoreTreesController } = await import('../src/path-store');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpandedPaths: ['src/lib'],
+      paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
+    });
+
+    const srcItem = controller.getItem('src');
+    const libItem = controller.getItem('src/lib');
+
+    if (
+      srcItem == null ||
+      srcItem.isDirectory() !== true ||
+      !('isExpanded' in srcItem)
+    ) {
+      throw new Error('expected src directory item');
+    }
+    if (
+      libItem == null ||
+      libItem.isDirectory() !== true ||
+      !('isExpanded' in libItem)
+    ) {
+      throw new Error('expected src/lib directory item');
+    }
+
+    expect(srcItem.isExpanded()).toBe(true);
+    expect(libItem.isExpanded()).toBe(true);
+    expect(controller.getVisibleRows(0, 10).map((row) => row.path)).toEqual([
+      'src/',
+      'src/lib/',
+      'src/lib/util.ts',
+      'src/index.ts',
+      'README.md',
+    ]);
+
+    controller.destroy();
+  });
+
   test('directory row collapses on the first click when initialExpandedPaths uses bare directory paths', async () => {
     const { cleanup, dom } = installDom();
     try {

@@ -13,7 +13,10 @@ const controller = new PathStoreTreesController({
 });
 
 const fileHitPaths = workload.files.slice(0, 2_000);
-const directoryHitPaths = workload.expandedFolders.slice(0, 2_000);
+const directoryAliasHitPaths = workload.expandedFolders.slice(0, 2_000);
+const directoryCanonicalHitPaths = directoryAliasHitPaths.map(
+  (path) => `${path}/`
+);
 const missPaths = fileHitPaths.map(
   (path, index) => `${path}.missing-${index.toString(36)}`
 );
@@ -29,8 +32,14 @@ function timeLookups(paths: readonly string[]): number {
 console.log(
   JSON.stringify(
     {
-      directoryHitCount: directoryHitPaths.length,
-      directoryHitDurationMs: Number(timeLookups(directoryHitPaths).toFixed(3)),
+      directoryAliasHitCount: directoryAliasHitPaths.length,
+      directoryAliasHitDurationMs: Number(
+        timeLookups(directoryAliasHitPaths).toFixed(3)
+      ),
+      directoryCanonicalHitCount: directoryCanonicalHitPaths.length,
+      directoryCanonicalHitDurationMs: Number(
+        timeLookups(directoryCanonicalHitPaths).toFixed(3)
+      ),
       fileHitCount: fileHitPaths.length,
       fileHitDurationMs: Number(timeLookups(fileHitPaths).toFixed(3)),
       missCount: missPaths.length,
