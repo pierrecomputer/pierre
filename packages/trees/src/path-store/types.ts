@@ -27,6 +27,27 @@ export interface PathStoreTreesVisibleRow {
   path: PathStoreTreesPublicId;
 }
 
+export interface PathStoreTreesItemHandleBase {
+  getPath(): PathStoreTreesPublicId;
+  isDirectory(): boolean;
+}
+
+export interface PathStoreTreesDirectoryHandle extends PathStoreTreesItemHandleBase {
+  collapse(): void;
+  expand(): void;
+  isDirectory(): true;
+  isExpanded(): boolean;
+  toggle(): void;
+}
+
+export interface PathStoreTreesFileHandle extends PathStoreTreesItemHandleBase {
+  isDirectory(): false;
+}
+
+export type PathStoreTreesItemHandle =
+  | PathStoreTreesDirectoryHandle
+  | PathStoreTreesFileHandle;
+
 export interface PathStoreTreesRenderOptions {
   itemHeight?: number;
   overscan?: number;

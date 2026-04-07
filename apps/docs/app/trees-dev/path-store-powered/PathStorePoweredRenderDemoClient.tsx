@@ -75,7 +75,7 @@ export function PathStorePoweredRenderDemoClient({
   const options = useMemo<PathStoreFileTreeOptions>(
     () => ({
       ...sharedOptions,
-      id: 'pst-phase1',
+      id: 'pst-phase2',
       preparedInput,
     }),
     [preparedInput, sharedOptions]
@@ -87,18 +87,19 @@ export function PathStorePoweredRenderDemoClient({
         <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           Path-store lane · provisional
         </p>
-        <h1 className="text-2xl font-bold">Render + Scroll</h1>
+        <h1 className="text-2xl font-bold">Expansion + Collapse</h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
-          Phase 1 is the first real product slice of the path-store-powered
-          trees lane: always-virtualized rendering with compatible row markup.
+          Phase 2 adds the first full pointer-driven interaction slice to the
+          path-store-powered trees lane: directory expansion and collapse on top
+          of the always-virtualized renderer.
         </p>
       </header>
 
       <HydratedPathStoreExample
         containerHtml={containerHtml}
-        description="Always-virtualized render + scroll with the compatible row markup the new lane will keep building on."
+        description="Click any directory row to toggle expansion. File rows stay inert, flattened rows toggle the terminal directory, and the renderer remains always virtualized."
         options={options}
-        title="Render + Scroll"
+        title="Expansion + Collapse"
       />
 
       <section className="space-y-3 rounded-lg border p-4">

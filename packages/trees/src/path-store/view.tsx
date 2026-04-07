@@ -42,9 +42,20 @@ function formatFlattenedSegments(
 }
 
 function renderStyledRow(
+  controller: PathStoreTreesController,
   row: PathStoreTreesVisibleRow,
   itemHeight: number
 ): JSX.Element {
+  const targetPath = row.isFlattened
+    ? (row.flattenedSegments?.findLast((segment) => segment.isTerminal)?.path ??
+      row.path)
+    : row.path;
+  const item = controller.getItem(targetPath);
+  const directoryItem =
+    item != null && item.isDirectory() === true && 'toggle' in item
+      ? item
+      : null;
+
   return (
     <button
       key={row.path}
@@ -53,6 +64,7 @@ function renderStyledRow(
       data-item-type={row.hasChildren ? 'folder' : 'file'}
       aria-label={row.path}
       aria-expanded={row.hasChildren ? row.isExpanded : undefined}
+      onClick={directoryItem == null ? undefined : () => directoryItem.toggle()}
       tabIndex={-1}
       style={{ minHeight: `${itemHeight}px` }}
     >
@@ -94,7 +106,7 @@ function renderRangeChildren(
 
   return controller
     .getVisibleRows(range.start, range.end)
-    .map((row) => renderStyledRow(row, itemHeight));
+    .map((row) => renderStyledRow(controller, row, itemHeight));
 }
 
 /**
@@ -136,6 +148,14 @@ export function PathStoreTreesView({
         scrollElement.clientHeight > 0
           ? scrollElement.clientHeight
           : viewportHeight;
+      const maxScrollTop = Math.max(
+        0,
+        nextItemCount * itemHeight - nextViewportHeight
+      );
+      if (scrollElement.scrollTop > maxScrollTop) {
+        scrollElement.scrollTop = maxScrollTop;
+      }
+      const scrollTop = Math.min(scrollElement.scrollTop, maxScrollTop);
       setItemCount((previousCount) =>
         previousCount === nextItemCount ? previousCount : nextItemCount
       );
@@ -150,7 +170,7 @@ export function PathStoreTreesView({
             itemCount: nextItemCount,
             itemHeight,
             overscan,
-            scrollTop: scrollElement.scrollTop,
+            scrollTop,
             viewportHeight: nextViewportHeight,
           },
           previousRange

@@ -23,7 +23,7 @@ export default function PathStorePoweredPage() {
 
   const payload = preloadPathStoreFileTree({
     ...sharedOptions,
-    id: 'pst-phase1',
+    id: 'pst-phase2',
     preparedInput: linuxKernelPreparedInput,
   });
 

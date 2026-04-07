@@ -20,6 +20,7 @@ import type {
   PathStoreFileTreeSsrPayload,
   PathStoreTreeHydrationProps,
   PathStoreTreeRenderProps,
+  PathStoreTreesItemHandle,
 } from './types';
 import { PathStoreTreesView } from './view';
 import { PATH_STORE_TREES_DEFAULT_VIEWPORT_HEIGHT } from './virtualization';
@@ -106,6 +107,10 @@ export class PathStoreFileTree {
 
   public getFileTreeContainer(): HTMLElement | undefined {
     return this.#fileTreeContainer;
+  }
+
+  public getItem(path: string): PathStoreTreesItemHandle | null {
+    return this.#controller.getItem(path);
   }
 
   public hydrate({ fileTreeContainer }: PathStoreTreeHydrationProps): void {
