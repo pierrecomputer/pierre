@@ -1,6 +1,6 @@
 import type { ExtensionFormatMap, SupportedLanguages } from '../types';
 
-export const CUSTOM_EXTENSION_TO_FILE_FORMAT: Map<string, SupportedLanguages> =
+const CUSTOM_EXTENSION_TO_FILE_FORMAT: Map<string, SupportedLanguages> =
   new Map();
 
 let customExtensionsVersion = 0;
