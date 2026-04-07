@@ -119,6 +119,8 @@ export function computeStickyWindowLayout({
     totalHeight,
     offsetHeight,
     windowHeight,
+    // The sticky window is usually taller than the viewport once overscan is
+    // included, so a negative inset keeps the full overscanned slice pinned.
     stickyInset: Math.min(0, viewportHeight - windowHeight),
   };
 }
