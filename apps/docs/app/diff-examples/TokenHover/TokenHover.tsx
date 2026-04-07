@@ -230,10 +230,14 @@ export function TokenHover({ prerenderedDiff }: TokenHoverProps) {
         description={
           <>
             Attach hover callbacks to individual syntax tokens with{' '}
-            <code>onTokenEnter</code> and <code>onTokenLeave</code>. This
-            example pairs them with a static CSS knowledge index to show
-            Intellisense-style tooltips — no LSP required. Try hovering over CSS
-            properties, values, and at-rules below.
+            <code>onTokenEnter</code> and <code>onTokenLeave</code>. Here we’ve
+            added a static CSS knowledge index to show information-rich tooltips
+            on hover. Try hovering over CSS properties, values, and at-rules
+            below. See the{' '}
+            <a href="/docs#token-hooks" className="underline">
+              Token Hooks docs
+            </a>{' '}
+            for the full API.
           </>
         }
       />
