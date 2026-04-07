@@ -22,7 +22,6 @@ const PoolOptions: WorkerPoolOptions = {
 
 const HighlighterOptions: WorkerInitializationRenderOptions = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  useTokenTransformer: true,
   langs: [
     'cpp',
     'css',

@@ -43,6 +43,7 @@
       "@types/react": "19.2.7",
       "@types/react-dom": "19.2.3",
       "@typescript/native-preview": "7.0.0-dev.20260128.1",
+      "@vscode/web-custom-data": "0.6.3",
       "@vitejs/plugin-react": "5.0.3",
       "autoprefixer": "10.4.22",
       "babel-plugin-react-compiler": "1.0.0",

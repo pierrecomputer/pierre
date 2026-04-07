@@ -28,6 +28,12 @@ export const TOKEN_HOVER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
   cursor: pointer;
 }
 
+.card-grid .card h3 {
+  font-size: 1rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
 .card-grid .card:hover {
   border: 1px solid var(--color-border);
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
@@ -58,6 +64,7 @@ export const TOKEN_HOVER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
     padding-inline: 1.5rem;
     max-width: 960px;
     margin: 0 auto;
+    margin-trim: in-flow;
   }
 
   .card-grid .card {
@@ -78,6 +85,15 @@ export const TOKEN_HOVER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
 
     &:focus-visible {
       outline: 2px solid var(--color-accent);
+    }
+
+    h3 {
+      font-size: 1rem;
+      line-height: 1.4;
+      margin: 0;
+      text-wrap: balance;
+      text-box-trim: trim-start;
+      text-box-edge: cap alphabetic;
     }
   }
 

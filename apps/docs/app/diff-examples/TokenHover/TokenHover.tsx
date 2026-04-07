@@ -3,6 +3,13 @@
 import type { DiffTokenEventBaseProps } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
+import {
+  IconBolt,
+  IconCheckCheck,
+  IconCiWarningFill,
+  IconFlagFill,
+  IconWrench,
+} from '@pierre/icons';
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 
 import { FeatureHeader } from '../FeatureHeader';
@@ -235,6 +242,7 @@ export function TokenHover({ prerenderedDiff }: TokenHoverProps) {
         <MultiFileDiff
           {...prerenderedDiff}
           className="overflow-hidden rounded-lg border dark:border-neutral-800"
+          disableWorkerPool
           options={{
             ...prerenderedDiff.options,
             onTokenEnter,
@@ -265,6 +273,99 @@ const CATEGORY_LABELS: Record<CSSHoverInfo['category'], string> = {
   selector: 'selector',
   function: 'function',
 };
+
+function BaselineBadge({
+  baseline,
+}: {
+  baseline: NonNullable<CSSHoverInfo['baseline']>;
+}) {
+  const isWidelyAvailable = baseline.status === 'high';
+  const isNewlyAvailable = baseline.status === 'low';
+  const date = isWidelyAvailable
+    ? baseline.highDate
+    : isNewlyAvailable
+      ? baseline.lowDate
+      : undefined;
+
+  let label: string;
+  let colorClass: string;
+  let Icon: typeof IconCheckCheck;
+  if (isWidelyAvailable) {
+    label = 'Widely available';
+    colorClass = 'text-emerald-400';
+    Icon = IconCheckCheck;
+  } else if (isNewlyAvailable) {
+    label = 'Newly available';
+    colorClass = 'text-cyan-400';
+    Icon = IconBolt;
+  } else {
+    label = 'Limited availability';
+    colorClass = 'text-amber-400';
+    Icon = IconCiWarningFill;
+  }
+
+  return (
+    <span className={`mt-1 inline-flex items-center gap-1 ${colorClass}`}>
+      <Icon size={12} />
+      {label}
+      {date != null && (
+        <span className="opacity-50">since {formatBaselineDate(date)}</span>
+      )}
+    </span>
+  );
+}
+
+function formatBaselineDate(iso: string): string {
+  const [year, month] = iso.split('-');
+  const monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  const monthName = monthNames[Number(month) - 1] ?? month;
+  return `${monthName} ${year}`;
+}
+
+const STATUS_BADGE_CONFIG = {
+  experimental: {
+    label: 'Experimental',
+    colorClass: 'text-purple-400',
+    Icon: IconFlagFill,
+  },
+  nonstandard: {
+    label: 'Non-standard',
+    colorClass: 'text-orange-400',
+    Icon: IconWrench,
+  },
+  obsolete: {
+    label: 'Obsolete',
+    colorClass: 'text-red-400',
+    Icon: IconCiWarningFill,
+  },
+} as const;
+
+function StatusBadge({
+  status,
+}: {
+  status: NonNullable<CSSHoverInfo['statusBadge']>;
+}) {
+  const { label, colorClass, Icon } = STATUS_BADGE_CONFIG[status];
+  return (
+    <span className={`inline-flex items-center gap-1 ${colorClass}`}>
+      <Icon size={12} />
+      {label}
+    </span>
+  );
+}
 
 interface HoverTooltipProps {
   info: CSSHoverInfo;
@@ -363,6 +464,16 @@ const HoverTooltip = forwardRef<HTMLDivElement, HoverTooltipProps>(
                 {info.origin}
               </span>
             </span>
+          )}
+          {(info.baseline != null || info.statusBadge != null) && (
+            <div className="flex items-baseline gap-2.5 text-xs">
+              {info.baseline != null && (
+                <BaselineBadge baseline={info.baseline} />
+              )}
+              {info.statusBadge != null && (
+                <StatusBadge status={info.statusBadge} />
+              )}
+            </div>
           )}
           {info.mdnURL != null && (
             <a
