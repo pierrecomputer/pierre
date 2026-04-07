@@ -52,9 +52,7 @@
     "test:e2e:server": "vite --config test/e2e/vite.config.ts",
     "tsc": "tsgo --noEmit --pretty",
     "generate-icons": "bun scripts/generate-built-in-icons.ts",
-    "prepublishOnly": "bun run build",
-    "benchmark:path-store-render": "bun run ./scripts/benchmarkPathStoreRenderScroll.ts",
-    "profile:path-store-render": "bun run ./scripts/profilePathStoreRenderScroll.ts"
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "@pierre/path-store": "workspace:*",
