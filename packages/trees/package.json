@@ -53,8 +53,6 @@
     "tsc": "tsgo --noEmit --pretty",
     "generate-icons": "bun scripts/generate-built-in-icons.ts",
     "prepublishOnly": "bun run build",
-    "benchmark:path-store-bootstrap": "bun run ./scripts/benchmarkPathStoreBootstrap.ts",
-    "profile:path-store-bootstrap": "bun run ./scripts/profilePathStoreBootstrap.ts",
     "benchmark:path-store-render": "bun run ./scripts/benchmarkPathStoreRenderScroll.ts",
     "profile:path-store-render": "bun run ./scripts/profilePathStoreRenderScroll.ts"
   },

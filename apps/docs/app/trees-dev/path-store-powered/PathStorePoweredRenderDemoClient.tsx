@@ -12,13 +12,12 @@ import { createPresortedPreparedInput } from './createPresortedPreparedInput';
 
 interface SharedDemoOptions extends Omit<
   PathStoreFileTreeOptions,
-  'id' | 'preparedInput' | 'renderMode'
+  'id' | 'preparedInput'
 > {}
 
 interface PathStorePoweredRenderDemoClientProps {
-  plainContainerHtml: string;
+  containerHtml: string;
   sharedOptions: SharedDemoOptions;
-  styledContainerHtml: string;
 }
 
 function HydratedPathStoreExample({
@@ -66,29 +65,18 @@ function HydratedPathStoreExample({
 }
 
 export function PathStorePoweredRenderDemoClient({
-  plainContainerHtml,
+  containerHtml,
   sharedOptions,
-  styledContainerHtml,
 }: PathStorePoweredRenderDemoClientProps) {
   const preparedInput = useMemo(
     () => createPresortedPreparedInput(sharedOptions.paths),
     [sharedOptions.paths]
   );
-  const plainOptions = useMemo<PathStoreFileTreeOptions>(
+  const options = useMemo<PathStoreFileTreeOptions>(
     () => ({
       ...sharedOptions,
-      id: 'pst-phase1a',
+      id: 'pst-phase1',
       preparedInput,
-      renderMode: 'plain',
-    }),
-    [preparedInput, sharedOptions]
-  );
-  const styledOptions = useMemo<PathStoreFileTreeOptions>(
-    () => ({
-      ...sharedOptions,
-      id: 'pst-phase1b',
-      preparedInput,
-      renderMode: 'styled',
     }),
     [preparedInput, sharedOptions]
   );
@@ -102,25 +90,16 @@ export function PathStorePoweredRenderDemoClient({
         <h1 className="text-2xl font-bold">Render + Scroll</h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
           Phase 1 is the first real product slice of the path-store-powered
-          trees lane. This page keeps the internal 1A/1B split visible even
-          though both checkpoints can merge together.
+          trees lane: always-virtualized rendering with compatible row markup.
         </p>
       </header>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <HydratedPathStoreExample
-          containerHtml={plainContainerHtml}
-          description="Phase 1A: functional always-virtualized render + scroll with simple path-text rows."
-          options={plainOptions}
-          title="1A · Functional Render + Scroll"
-        />
-        <HydratedPathStoreExample
-          containerHtml={styledContainerHtml}
-          description="Phase 1B: compatible markup/styling for implemented pieces so the lane starts to resemble existing trees."
-          options={styledOptions}
-          title="1B · Compatible Markup + Styling"
-        />
-      </div>
+      <HydratedPathStoreExample
+        containerHtml={containerHtml}
+        description="Always-virtualized render + scroll with the compatible row markup the new lane will keep building on."
+        options={options}
+        title="Render + Scroll"
+      />
 
       <section className="space-y-3 rounded-lg border p-4">
         <h2 className="text-lg font-semibold">Capability / phase matrix</h2>

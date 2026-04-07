@@ -19,10 +19,8 @@ loader/core seam.
 5. The default durable public identity is the canonical path string unless a
    later phase explicitly proves a better contract.
 
-## Phase 0 consequences
+## Early-phase consequences
 
-- The bootstrap shell may show snapshot data, but it should not freeze a final
-  row/component contract.
 - SSR-safe usage is a design constraint immediately, even before the dedicated
   SSR phase lands.
 - React-facing abstractions are intentionally deferred.

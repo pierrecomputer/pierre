@@ -23,7 +23,7 @@ const DEMO_PAGES = [
 ] as const;
 
 const PATH_STORE_LANE_PAGES = [
-  { slug: 'path-store-powered', label: 'Bootstrap Smoke' },
+  { slug: 'path-store-powered', label: 'Render + Scroll' },
 ] as const;
 
 export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {

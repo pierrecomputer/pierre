@@ -27,19 +27,8 @@ const itemHeight = PATH_STORE_TREES_DEFAULT_ITEM_HEIGHT;
 const overscan = PATH_STORE_TREES_DEFAULT_OVERSCAN;
 
 const renderStart = performance.now();
-const plainHtml = renderToString(
-  h(PathStoreTreesView, {
-    controller,
-    renderMode: 'plain',
-    viewportHeight,
-  })
-);
-const styledHtml = renderToString(
-  h(PathStoreTreesView, {
-    controller,
-    renderMode: 'styled',
-    viewportHeight,
-  })
+const html = renderToString(
+  h(PathStoreTreesView, { controller, viewportHeight })
 );
 const renderDurationMs = performance.now() - renderStart;
 
@@ -64,10 +53,9 @@ console.log(
   JSON.stringify(
     {
       itemCount,
-      plainHtmlLength: plainHtml.length,
+      htmlLength: html.length,
       renderDurationMs: Number(renderDurationMs.toFixed(3)),
       scrollDurationMs: Number(scrollDurationMs.toFixed(3)),
-      styledHtmlLength: styledHtml.length,
       windowSize: range.end >= range.start ? range.end - range.start + 1 : 0,
       workload: 'linux-5x',
     },

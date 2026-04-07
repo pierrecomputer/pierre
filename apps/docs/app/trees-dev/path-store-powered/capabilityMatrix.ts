@@ -9,7 +9,7 @@ export const pathStoreCapabilityMatrix: readonly PathStoreCapabilityMatrixRow[] 
     {
       currentDemo: 'Rendering',
       notes:
-        'Bootstrap shell and SSR-safe smoke path land in Phase 0; real render/scroll arrives in Phase 1 and SSR grows again in Phase 12.',
+        'An initial SSR-safe smoke path lands in Phase 0; real render/scroll arrives in Phase 1 and SSR grows again in Phase 12.',
       targetPhases: [0, 1, 12],
     },
     {

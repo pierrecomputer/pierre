@@ -50,30 +50,18 @@ const layout = computeStickyWindowLayout({
   viewportHeight,
 });
 
-const plainHtml = renderToString(
-  h(PathStoreTreesView, {
-    controller,
-    renderMode: 'plain',
-    viewportHeight,
-  })
-);
-const styledHtml = renderToString(
-  h(PathStoreTreesView, {
-    controller,
-    renderMode: 'styled',
-    viewportHeight,
-  })
+const html = renderToString(
+  h(PathStoreTreesView, { controller, viewportHeight })
 );
 
 console.log(
   JSON.stringify(
     {
+      htmlLength: html.length,
       itemCount,
       layout,
       midRange,
-      plainHtmlLength: plainHtml.length,
-      styledHtmlLength: styledHtml.length,
-      visibleCount: controller.getSnapshot().visibleCount,
+      visibleCount: controller.getVisibleCount(),
       workload: 'linux-5x',
     },
     null,

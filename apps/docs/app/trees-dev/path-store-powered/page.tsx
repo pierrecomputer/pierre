@@ -13,34 +13,24 @@ const linuxKernelPreparedInput = createPresortedPreparedInput(
 );
 
 export default function PathStorePoweredPage() {
-  const sharedOptions: Omit<
-    PathStoreFileTreeOptions,
-    'id' | 'preparedInput' | 'renderMode'
-  > = {
-    flattenEmptyDirectories: true,
-    initialExpandedPaths: linuxKernelWorkload.expandedFolders,
-    paths: linuxKernelWorkload.files,
-    viewportHeight: 500,
-  };
+  const sharedOptions: Omit<PathStoreFileTreeOptions, 'id' | 'preparedInput'> =
+    {
+      flattenEmptyDirectories: true,
+      initialExpandedPaths: linuxKernelWorkload.expandedFolders,
+      paths: linuxKernelWorkload.files,
+      viewportHeight: 500,
+    };
 
-  const plainPayload = preloadPathStoreFileTree({
+  const payload = preloadPathStoreFileTree({
     ...sharedOptions,
-    id: 'pst-phase1a',
+    id: 'pst-phase1',
     preparedInput: linuxKernelPreparedInput,
-    renderMode: 'plain',
-  });
-  const styledPayload = preloadPathStoreFileTree({
-    ...sharedOptions,
-    id: 'pst-phase1b',
-    preparedInput: linuxKernelPreparedInput,
-    renderMode: 'styled',
   });
 
   return (
     <PathStorePoweredRenderDemoClient
-      plainContainerHtml={plainPayload.html}
+      containerHtml={payload.html}
       sharedOptions={sharedOptions}
-      styledContainerHtml={styledPayload.html}
     />
   );
 }

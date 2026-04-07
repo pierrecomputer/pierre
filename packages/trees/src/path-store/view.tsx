@@ -6,7 +6,6 @@ import { Icon } from '../components/Icon';
 import { MiddleTruncate, Truncate } from '../components/OverflowText';
 import { PathStoreTreesController } from './controller';
 import type {
-  PathStoreTreesRenderMode,
   PathStoreTreesViewProps,
   PathStoreTreesVisibleRow,
 } from './types';
@@ -38,27 +37,6 @@ function formatFlattenedSegments(
         </span>
       ))}
     </span>
-  );
-}
-
-function renderPlainRow(
-  row: PathStoreTreesVisibleRow,
-  itemHeight: number
-): JSX.Element {
-  return (
-    <div
-      key={row.path}
-      data-path-store-render-row="plain"
-      style={{
-        alignItems: 'center',
-        display: 'flex',
-        minHeight: `${itemHeight}px`,
-        paddingInlineStart: `${row.depth * 16 + 8}px`,
-        paddingInlineEnd: '8px',
-      }}
-    >
-      <code>{row.path}</code>
-    </div>
   );
 }
 
@@ -104,20 +82,9 @@ function renderStyledRow(
   );
 }
 
-function renderRow(
-  mode: PathStoreTreesRenderMode,
-  row: PathStoreTreesVisibleRow,
-  itemHeight: number
-): JSX.Element {
-  return mode === 'plain'
-    ? renderPlainRow(row, itemHeight)
-    : renderStyledRow(row, itemHeight);
-}
-
 function renderRangeChildren(
   controller: PathStoreTreesController,
   range: { start: number; end: number },
-  mode: PathStoreTreesRenderMode,
   itemHeight: number
 ): JSX.Element[] {
   if (range.end < range.start) {
@@ -126,7 +93,7 @@ function renderRangeChildren(
 
   return controller
     .getVisibleRows(range.start, range.end)
-    .map((row) => renderRow(mode, row, itemHeight));
+    .map((row) => renderStyledRow(row, itemHeight));
 }
 
 /**
@@ -137,7 +104,6 @@ export function PathStoreTreesView({
   controller,
   itemHeight = PATH_STORE_TREES_DEFAULT_ITEM_HEIGHT,
   overscan = PATH_STORE_TREES_DEFAULT_OVERSCAN,
-  renderMode = 'plain',
   viewportHeight = PATH_STORE_TREES_DEFAULT_VIEWPORT_HEIGHT,
 }: PathStoreTreesViewProps): JSX.Element {
   'use no memo';
@@ -253,7 +219,7 @@ export function PathStoreTreesView({
               bottom: `${stickyLayout.stickyInset}px`,
             }}
           >
-            {renderRangeChildren(controller, range, renderMode, itemHeight)}
+            {renderRangeChildren(controller, range, itemHeight)}
           </div>
         </div>
       </div>

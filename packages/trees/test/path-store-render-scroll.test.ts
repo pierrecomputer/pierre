@@ -75,6 +75,23 @@ function installDom() {
 }
 
 describe('path-store render + scroll', () => {
+  test('controller exposes path-first visible rows without leaking numeric ids', async () => {
+    const { PathStoreTreesController } = await import('../src/path-store');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['z.ts', 'a.ts'],
+    });
+
+    const [firstRow] = controller.getVisibleRows(0, 0);
+
+    expect(firstRow?.path).toBe('a.ts');
+    expect(Reflect.has(firstRow ?? {}, 'id')).toBe(false);
+
+    controller.destroy();
+  });
+
   test('computes a stable window range and sticky layout', () => {
     const initialRange = computeWindowRange({
       itemCount: 200,
@@ -116,7 +133,6 @@ describe('path-store render + scroll', () => {
       flattenEmptyDirectories: true,
       initialExpansion: 'open',
       paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
-      renderMode: 'plain',
       viewportHeight: 120,
     });
 
@@ -141,7 +157,6 @@ describe('path-store render + scroll', () => {
       const fileTree = new PathStoreFileTree({
         flattenEmptyDirectories: false,
         paths,
-        renderMode: 'plain',
         viewportHeight: 120,
       });
 
@@ -177,7 +192,7 @@ describe('path-store render + scroll', () => {
     }
   });
 
-  test('styled mode uses compatible row markup for implemented pieces only', async () => {
+  test('uses compatible row markup for implemented pieces only', async () => {
     const { cleanup, dom } = installDom();
     try {
       const { PathStoreFileTree } = await import('../src/path-store');
@@ -188,7 +203,6 @@ describe('path-store render + scroll', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['src/lib/index.ts', 'src/lib/utils.ts', 'README.md'],
-        renderMode: 'styled',
         viewportHeight: 120,
       });
 

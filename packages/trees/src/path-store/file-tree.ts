@@ -74,25 +74,18 @@ export class PathStoreFileTree {
   readonly #id: string;
   readonly #viewOptions: Pick<
     PathStoreFileTreeOptions,
-    'itemHeight' | 'overscan' | 'renderMode' | 'viewportHeight'
+    'itemHeight' | 'overscan' | 'viewportHeight'
   >;
   #fileTreeContainer: HTMLElement | undefined;
   #wrapper: HTMLDivElement | undefined;
 
   public constructor(options: PathStoreFileTreeOptions) {
-    const {
-      id,
-      itemHeight,
-      overscan,
-      renderMode,
-      viewportHeight,
-      ...controllerOptions
-    } = options;
+    const { id, itemHeight, overscan, viewportHeight, ...controllerOptions } =
+      options;
     this.#id = createClientId(id);
     this.#viewOptions = {
       itemHeight,
       overscan,
-      renderMode,
       viewportHeight,
     };
     this.#controller = new PathStoreTreesController(controllerOptions);
@@ -142,7 +135,6 @@ export class PathStoreFileTree {
   #getResolvedViewOptions(host: HTMLElement): {
     itemHeight?: number;
     overscan?: number;
-    renderMode?: 'plain' | 'styled';
     viewportHeight: number;
   } {
     const viewportHeight =
@@ -153,7 +145,6 @@ export class PathStoreFileTree {
     return {
       itemHeight: this.#viewOptions.itemHeight,
       overscan: this.#viewOptions.overscan,
-      renderMode: this.#viewOptions.renderMode,
       viewportHeight,
     };
   }
@@ -210,14 +201,8 @@ export class PathStoreFileTree {
 export function preloadPathStoreFileTree(
   options: PathStoreFileTreeOptions
 ): PathStoreFileTreeSsrPayload {
-  const {
-    id,
-    itemHeight,
-    overscan,
-    renderMode,
-    viewportHeight,
-    ...controllerOptions
-  } = options;
+  const { id, itemHeight, overscan, viewportHeight, ...controllerOptions } =
+    options;
   const resolvedId = createServerId(id);
   const controller = new PathStoreTreesController(controllerOptions);
   const resolvedViewportHeight =
@@ -228,7 +213,6 @@ export function preloadPathStoreFileTree(
       controller,
       itemHeight,
       overscan,
-      renderMode,
       viewportHeight: resolvedViewportHeight,
     })
   );

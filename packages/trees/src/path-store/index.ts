@@ -1,23 +1,13 @@
-export {
-  PATH_STORE_TREES_PUBLIC_IDENTITY,
-  PathStoreTreesController,
-} from './controller';
+export { PathStoreTreesController } from './controller';
 export { PathStoreFileTree, preloadPathStoreFileTree } from './file-tree';
-export {
-  mountPathStoreTreesBootstrapShell,
-  renderPathStoreTreesBootstrapShell,
-} from './render-shell';
 export type {
   PathStoreFileTreeOptions,
   PathStoreFileTreeSsrPayload,
   PathStoreTreeHydrationProps,
   PathStoreTreeRenderProps,
-  PathStoreTreesBootstrapItem,
-  PathStoreTreesBootstrapSnapshot,
   PathStoreTreesControllerListener,
   PathStoreTreesControllerOptions,
   PathStoreTreesPublicId,
-  PathStoreTreesRenderMode,
   PathStoreTreesRenderOptions,
   PathStoreTreesRange,
   PathStoreTreesStickyWindowLayout,

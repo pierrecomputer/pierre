@@ -6,10 +6,7 @@ import type { PathStoreConstructorOptions } from '@pierre/path-store';
  */
 export type PathStoreTreesPublicId = string;
 
-export type PathStoreTreesRenderMode = 'plain' | 'styled';
-
 export interface PathStoreTreesControllerOptions extends PathStoreConstructorOptions {
-  controllerId?: string;
   paths: readonly string[];
 }
 
@@ -30,25 +27,9 @@ export interface PathStoreTreesVisibleRow {
   path: PathStoreTreesPublicId;
 }
 
-export interface PathStoreTreesBootstrapItem {
-  isFlattened: boolean;
-  kind: 'directory' | 'file';
-  name: string;
-  path: PathStoreTreesPublicId;
-}
-
-export interface PathStoreTreesBootstrapSnapshot {
-  controllerId: string;
-  firstVisibleItem: PathStoreTreesBootstrapItem | null;
-  phase: 'bootstrap';
-  publicIdentity: 'path';
-  visibleCount: number;
-}
-
 export interface PathStoreTreesRenderOptions {
   itemHeight?: number;
   overscan?: number;
-  renderMode?: PathStoreTreesRenderMode;
   viewportHeight?: number;
 }
 
@@ -81,10 +62,6 @@ export interface PathStoreTreesViewProps extends PathStoreTreesRenderOptions {
   controller: import('./controller').PathStoreTreesController;
 }
 
-export interface PathStoreTreesShellTarget {
-  innerHTML: string;
-}
-
 export interface PathStoreTreeRenderProps {
   containerWrapper?: HTMLElement;
   fileTreeContainer?: HTMLElement;
@@ -100,6 +77,4 @@ export interface PathStoreFileTreeSsrPayload {
   shadowHtml: string;
 }
 
-export type PathStoreTreesControllerListener = (
-  snapshot: PathStoreTreesBootstrapSnapshot
-) => void;
+export type PathStoreTreesControllerListener = () => void;
