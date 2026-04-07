@@ -1,8 +1,6 @@
 export {
-  createPathStoreTreesPreparedInput,
   PATH_STORE_TREES_PUBLIC_IDENTITY,
   PathStoreTreesController,
-  preparePathStoreTreesPaths,
 } from './controller';
 export { PathStoreFileTree, preloadPathStoreFileTree } from './file-tree';
 export {

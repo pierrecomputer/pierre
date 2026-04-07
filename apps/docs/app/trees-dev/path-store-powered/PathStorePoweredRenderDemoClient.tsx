@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  createPathStoreTreesPreparedInput,
   PathStoreFileTree,
   type PathStoreFileTreeOptions,
 } from '@pierre/trees/path-store';
@@ -9,6 +8,7 @@ import { useCallback, useMemo } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
 import { pathStoreCapabilityMatrix } from './capabilityMatrix';
+import { createPresortedPreparedInput } from './createPresortedPreparedInput';
 
 interface SharedDemoOptions extends Omit<
   PathStoreFileTreeOptions,
@@ -71,7 +71,7 @@ export function PathStorePoweredRenderDemoClient({
   styledContainerHtml,
 }: PathStorePoweredRenderDemoClientProps) {
   const preparedInput = useMemo(
-    () => createPathStoreTreesPreparedInput(sharedOptions.paths),
+    () => createPresortedPreparedInput(sharedOptions.paths),
     [sharedOptions.paths]
   );
   const plainOptions = useMemo<PathStoreFileTreeOptions>(

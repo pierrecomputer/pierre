@@ -1,8 +1,5 @@
 import { PathStore } from '@pierre/path-store';
-import type {
-  PathStorePreparedInput,
-  PathStoreVisibleRow,
-} from '@pierre/path-store';
+import type { PathStoreVisibleRow } from '@pierre/path-store';
 
 import type {
   PathStoreTreesBootstrapItem,
@@ -15,25 +12,6 @@ import type {
 let controllerCount = 0;
 
 export const PATH_STORE_TREES_PUBLIC_IDENTITY = 'path' as const;
-
-// Builds the canonical path order once so large demos can reuse the same
-// sorted input across SSR and hydration instead of re-sorting per instance.
-export function preparePathStoreTreesPaths(
-  paths: readonly string[]
-): readonly string[] {
-  return PathStore.preparePaths(paths);
-}
-
-// Reuses an already-sorted path array as the path-store prepared-input fast
-// path without cloning it again for each consumer instance.
-export function createPathStoreTreesPreparedInput(
-  paths: readonly string[]
-): PathStorePreparedInput {
-  return {
-    paths,
-    presortedPaths: paths,
-  } as PathStorePreparedInput;
-}
 
 function createControllerId(): string {
   controllerCount += 1;

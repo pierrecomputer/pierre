@@ -1,11 +1,9 @@
+import { PathStore } from '@pierre/path-store';
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 import { h } from 'preact';
 import { renderToString } from 'preact-render-to-string';
 
-import {
-  createPathStoreTreesPreparedInput,
-  PathStoreTreesController,
-} from '../src/path-store/controller';
+import { PathStoreTreesController } from '../src/path-store/controller';
 import { PathStoreTreesView } from '../src/path-store/view';
 import {
   computeWindowRange,
@@ -15,7 +13,7 @@ import {
 } from '../src/path-store/virtualization';
 
 const workload = getVirtualizationWorkload('linux-5x');
-const preparedInput = createPathStoreTreesPreparedInput(workload.files);
+const preparedInput = PathStore.preparePresortedInput(workload.files);
 const controller = new PathStoreTreesController({
   flattenEmptyDirectories: true,
   initialExpandedPaths: workload.expandedFolders,

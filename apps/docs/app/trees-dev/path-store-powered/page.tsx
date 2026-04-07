@@ -1,14 +1,14 @@
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 import {
-  createPathStoreTreesPreparedInput,
   type PathStoreFileTreeOptions,
   preloadPathStoreFileTree,
 } from '@pierre/trees/path-store';
 
+import { createPresortedPreparedInput } from './createPresortedPreparedInput';
 import { PathStorePoweredRenderDemoClient } from './PathStorePoweredRenderDemoClient';
 
 const linuxKernelWorkload = getVirtualizationWorkload('linux-1x');
-const linuxKernelPreparedInput = createPathStoreTreesPreparedInput(
+const linuxKernelPreparedInput = createPresortedPreparedInput(
   linuxKernelWorkload.files
 );
 
