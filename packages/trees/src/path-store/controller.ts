@@ -16,6 +16,23 @@ interface PathStoreTreesItemMetadata {
   path: string;
 }
 
+function resolvePathStoreTreesItemPath(
+  itemMetadata: ReadonlyMap<string, PathStoreTreesItemMetadata>,
+  path: string
+): string | null {
+  const directMatch = itemMetadata.get(path);
+  if (directMatch != null) {
+    return directMatch.path;
+  }
+
+  if (path.endsWith('/')) {
+    return null;
+  }
+
+  const directoryMatch = itemMetadata.get(`${path}/`);
+  return directoryMatch?.kind === 'directory' ? directoryMatch.path : null;
+}
+
 // Expanding a nested directory should make that directory visible, so this
 // helper walks its ancestor chain in canonical path form.
 function getAncestorDirectoryPaths(path: string): readonly string[] {
@@ -117,8 +134,12 @@ function createInitialExpandedDirectories(
   }
 
   for (const path of initialExpandedPaths ?? []) {
-    if (itemMetadata.get(path)?.kind === 'directory') {
-      expandedDirectories.add(path);
+    const resolvedPath = resolvePathStoreTreesItemPath(itemMetadata, path);
+    if (
+      resolvedPath != null &&
+      itemMetadata.get(resolvedPath)?.kind === 'directory'
+    ) {
+      expandedDirectories.add(resolvedPath);
     }
   }
 
@@ -134,6 +155,7 @@ export class PathStoreTreesController {
   readonly #listeners = new Set<PathStoreTreesControllerListener>();
   #expandedDirectories = new Set<string>();
   #itemHandles = new Map<string, PathStoreTreesItemHandle>();
+  #itemMetadata = new Map<string, PathStoreTreesItemMetadata>();
   #store: PathStore;
   #unsubscribe: (() => void) | null;
 
@@ -170,7 +192,13 @@ export class PathStoreTreesController {
   }
 
   public getItem(path: string): PathStoreTreesItemHandle | null {
-    return this.#itemHandles.get(path) ?? null;
+    const resolvedPath = resolvePathStoreTreesItemPath(
+      this.#itemMetadata,
+      path
+    );
+    return resolvedPath == null
+      ? null
+      : (this.#itemHandles.get(resolvedPath) ?? null);
   }
 
   public subscribe(listener: PathStoreTreesControllerListener): () => void {
@@ -202,9 +230,11 @@ export class PathStoreTreesController {
   #applyItemState(itemState: {
     expandedDirectories: Set<string>;
     itemHandles: Map<string, PathStoreTreesItemHandle>;
+    itemMetadata: Map<string, PathStoreTreesItemMetadata>;
   }): void {
     this.#expandedDirectories = itemState.expandedDirectories;
     this.#itemHandles = itemState.itemHandles;
+    this.#itemMetadata = itemState.itemMetadata;
   }
 
   #emit(): void {
@@ -265,6 +295,7 @@ export class PathStoreTreesController {
   #createItemState(paths: readonly string[]): {
     expandedDirectories: Set<string>;
     itemHandles: Map<string, PathStoreTreesItemHandle>;
+    itemMetadata: Map<string, PathStoreTreesItemMetadata>;
   } {
     const itemMetadata = createPathStoreTreesItemMetadata(paths);
     const expandedDirectories = createInitialExpandedDirectories(
@@ -284,6 +315,7 @@ export class PathStoreTreesController {
     return {
       expandedDirectories,
       itemHandles,
+      itemMetadata,
     };
   }
 

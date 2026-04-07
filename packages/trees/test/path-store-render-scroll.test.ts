@@ -116,7 +116,7 @@ describe('path-store render + scroll', () => {
     });
 
     const fileItem = controller.getItem('README.md');
-    const directoryItem = controller.getItem('src/');
+    const directoryItem = controller.getItem('src');
 
     expect(fileItem?.getPath()).toBe('README.md');
     expect(fileItem?.isDirectory()).toBe(false);
@@ -136,6 +136,35 @@ describe('path-store render + scroll', () => {
     expect(controller.getItem('missing.ts')).toBeNull();
 
     controller.destroy();
+  });
+
+  test('directory row collapses on the first click when initialExpandedPaths uses bare directory paths', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['src'],
+        paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      expect(shadowRoot?.innerHTML).toContain('src/index.ts');
+      clickItem(shadowRoot, dom, 'src/');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(shadowRoot?.innerHTML).not.toContain('src/index.ts');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
   });
 
   test('computes a stable window range and sticky layout', () => {
