@@ -22,6 +22,10 @@ const DEMO_PAGES = [
   { slug: 'virtualization', label: 'Virtualization' },
 ] as const;
 
+const PATH_STORE_LANE_PAGES = [
+  { slug: 'path-store-powered', label: 'Bootstrap Smoke' },
+] as const;
+
 export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const {
@@ -46,6 +50,21 @@ export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {
           slug === ''
             ? pathname === '/trees-dev'
             : pathname.startsWith(`/trees-dev/${slug}`);
+        return (
+          <NavLink key={slug} href={href} active={isActive}>
+            {label}
+          </NavLink>
+        );
+      })}
+
+      <Separator className="my-2" />
+
+      <p className="text-muted-foreground px-3 pb-1 text-xs font-medium">
+        Path-Store Lane (Provisional)
+      </p>
+      {PATH_STORE_LANE_PAGES.map(({ slug, label }) => {
+        const href = `/trees-dev/${slug}`;
+        const isActive = pathname.startsWith(href);
         return (
           <NavLink key={slug} href={href} active={isActive}>
             {label}
