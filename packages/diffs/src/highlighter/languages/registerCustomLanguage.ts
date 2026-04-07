@@ -1,6 +1,6 @@
 import type { DynamicImportLanguageRegistration } from 'shiki';
 
-import { CUSTOM_EXTENSION_TO_FILE_FORMAT } from '../../utils/getFiletypeFromFileName';
+import { setCustomExtension } from '../../utils/getFiletypeFromFileName';
 import { RegisteredCustomLanguages } from './constants';
 
 /**
@@ -31,6 +31,6 @@ export function registerCustomLanguage(
   }
   RegisteredCustomLanguages.set(lang, loader);
   for (const extension of extensionsOrFilenames) {
-    CUSTOM_EXTENSION_TO_FILE_FORMAT.set(extension, lang);
+    setCustomExtension(extension, lang);
   }
 }

@@ -1,5 +1,6 @@
 import type {
   DiffsThemeNames,
+  ExtensionFormatMap,
   FileContents,
   FileDiffMetadata,
   HighlighterTypes,
@@ -49,6 +50,8 @@ export interface RenderFileRequest {
   id: WorkerRequestId;
   file: FileContents;
   resolvedLanguages?: ResolvedLanguage[];
+  customExtensionsVersion?: number;
+  customExtensionMap?: ExtensionFormatMap;
 }
 
 export interface RenderDiffRequest {
@@ -56,6 +59,8 @@ export interface RenderDiffRequest {
   id: WorkerRequestId;
   diff: FileDiffMetadata;
   resolvedLanguages?: ResolvedLanguage[];
+  customExtensionsVersion?: number;
+  customExtensionMap?: ExtensionFormatMap;
 }
 
 export interface InitializeWorkerRequest {
@@ -65,6 +70,8 @@ export interface InitializeWorkerRequest {
   preferredHighlighter: HighlighterTypes;
   resolvedThemes: ThemeRegistrationResolved[];
   resolvedLanguages?: ResolvedLanguage[];
+  customExtensionsVersion?: number;
+  customExtensionMap?: ExtensionFormatMap;
 }
 
 export interface ResolvedLanguage {

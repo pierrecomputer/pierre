@@ -3,6 +3,8 @@ import type { ExtensionFormatMap, SupportedLanguages } from '../types';
 export const CUSTOM_EXTENSION_TO_FILE_FORMAT: Map<string, SupportedLanguages> =
   new Map();
 
+let customExtensionsVersion = 0;
+
 export const EXTENSION_TO_FILE_FORMAT: ExtensionFormatMap = {
   '1c': '1c',
   abap: 'abap',
@@ -361,11 +363,48 @@ export function getFiletypeFromFileName(fileName: string): SupportedLanguages {
   return EXTENSION_TO_FILE_FORMAT[simpleMatch] ?? 'text';
 }
 
-export function extendFileFormatMap(map: ExtensionFormatMap): void {
+export function replaceCustomExtensions(
+  version: number,
+  map: ExtensionFormatMap
+): boolean {
+  if (version <= customExtensionsVersion) {
+    return false;
+  }
+  CUSTOM_EXTENSION_TO_FILE_FORMAT.clear();
   for (const key in map) {
     const lang = map[key];
     if (lang != null) {
       CUSTOM_EXTENSION_TO_FILE_FORMAT.set(key, lang);
     }
   }
+  customExtensionsVersion = version;
+  return true;
+}
+
+export function getCustomExtensionsVersion(): number {
+  return customExtensionsVersion;
+}
+
+export function setCustomExtension(
+  key: string,
+  lang: SupportedLanguages
+): boolean {
+  const existing = CUSTOM_EXTENSION_TO_FILE_FORMAT.get(key);
+  if (existing === lang) {
+    return false;
+  }
+  if (existing != null) {
+    console.warn(
+      `setCustomExtension: overriding custom mapping for "${key}" from "${existing}" to "${lang}"`
+    );
+  }
+  CUSTOM_EXTENSION_TO_FILE_FORMAT.set(key, lang);
+  customExtensionsVersion++;
+  return true;
+}
+
+export function getCustomExtensionsMap(): ExtensionFormatMap {
+  return Object.fromEntries(
+    CUSTOM_EXTENSION_TO_FILE_FORMAT
+  ) as ExtensionFormatMap;
 }

@@ -27,7 +27,11 @@ import type {
 import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
-import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
+import {
+  getCustomExtensionsMap,
+  getCustomExtensionsVersion,
+  getFiletypeFromFileName,
+} from '../utils/getFiletypeFromFileName';
 import { getThemes } from '../utils/getThemes';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isFilePlainText } from '../utils/isFilePlainText';
@@ -37,6 +41,7 @@ import type {
   AllWorkerTasks,
   DiffRendererInstance,
   FileRendererInstance,
+  InitializeWorkerRequest,
   InitializeWorkerTask,
   RenderDiffRequest,
   RenderDiffTask,
@@ -65,6 +70,7 @@ interface ManagedWorker {
   request_id: string | undefined;
   initialized: boolean;
   langs: Set<SupportedLanguages>;
+  customExtensionsVersion: number;
 }
 
 interface ThemeSubscriber {
@@ -388,6 +394,9 @@ export class WorkerPoolManager {
   ): Promise<void> {
     this.workersFailed = false;
     const initPromises: Promise<unknown>[] = [];
+    const customExtensionVersion = getCustomExtensionsVersion();
+    const customExtensionMap =
+      customExtensionVersion > 0 ? getCustomExtensionsMap() : undefined;
     if (this.workers.length > 0) {
       this.terminateWorkers();
     }
@@ -398,6 +407,7 @@ export class WorkerPoolManager {
         request_id: undefined,
         initialized: false,
         langs: new Set(['text', ...resolvedLanguages.map(({ name }) => name)]),
+        customExtensionsVersion: 0,
       };
       worker.addEventListener(
         'message',
@@ -422,6 +432,9 @@ export class WorkerPoolManager {
               preferredHighlighter: this.preferredHighlighter,
               resolvedThemes,
               resolvedLanguages,
+              customExtensionsVersion:
+                customExtensionMap != null ? customExtensionVersion : undefined,
+              customExtensionMap,
             },
             resolve() {
               managedWorker.initialized = true;
@@ -690,6 +703,7 @@ export class WorkerPoolManager {
             if (task.type !== 'initialize') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
+            this.syncCustomExtensionVersion(managedWorker, task.request);
             task.resolve();
             break;
           case 'set-render-options':
@@ -704,6 +718,7 @@ export class WorkerPoolManager {
             }
             const { result, options } = response;
             const { instance, request } = task;
+            this.syncCustomExtensionVersion(managedWorker, request);
             if (request.file.cacheKey != null) {
               this.fileCache.set(request.file.cacheKey, { result, options });
             }
@@ -716,6 +731,7 @@ export class WorkerPoolManager {
             }
             const { result, options } = response;
             const { instance, request } = task;
+            this.syncCustomExtensionVersion(managedWorker, request);
             if (request.diff.cacheKey != null) {
               this.diffCache.set(request.diff.cacheKey, { result, options });
             }
@@ -775,6 +791,9 @@ export class WorkerPoolManager {
     managedWorker: ManagedWorker,
     task: AllWorkerTasks
   ): void {
+    if (shouldSyncCustomExtensions(task.request)) {
+      this.maybeAttachCustomExtensions(managedWorker, task.request);
+    }
     this.assignWorkerToTask(task, managedWorker);
     for (const lang of getLangsFromTask(task)) {
       managedWorker.langs.add(lang);
@@ -791,6 +810,31 @@ export class WorkerPoolManager {
       }
     }
     this.queueBroadcastStateChanges();
+  }
+
+  private maybeAttachCustomExtensions(
+    managedWorker: ManagedWorker,
+    request: InitializeWorkerRequest | RenderFileRequest | RenderDiffRequest
+  ): void {
+    if (request.customExtensionsVersion != null) {
+      return;
+    }
+    const version = getCustomExtensionsVersion();
+    if (managedWorker.customExtensionsVersion >= version) {
+      return;
+    }
+    request.customExtensionsVersion = version;
+    request.customExtensionMap = getCustomExtensionsMap();
+  }
+
+  private syncCustomExtensionVersion(
+    managedWorker: ManagedWorker,
+    request: InitializeWorkerRequest | RenderFileRequest | RenderDiffRequest
+  ): void {
+    if (request.customExtensionsVersion == null) {
+      return;
+    }
+    managedWorker.customExtensionsVersion = request.customExtensionsVersion;
   }
 
   private getAvailableWorker(
@@ -822,6 +866,16 @@ export class WorkerPoolManager {
   private generateRequestId(): WorkerRequestId {
     return `req_${++this.nextRequestId}`;
   }
+}
+
+function shouldSyncCustomExtensions(
+  request: AllWorkerTasks['request']
+): request is InitializeWorkerRequest | RenderFileRequest | RenderDiffRequest {
+  return (
+    request.type === 'initialize' ||
+    request.type === 'file' ||
+    request.type === 'diff'
+  );
 }
 
 function getLangsFromTask(task: AllWorkerTasks): SupportedLanguages[] {

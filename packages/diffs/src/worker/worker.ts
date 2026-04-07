@@ -13,6 +13,7 @@ import type {
   ThemedDiffResult,
   ThemedFileResult,
 } from '../types';
+import { replaceCustomExtensions } from '../utils/getFiletypeFromFileName';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type {
@@ -79,11 +80,17 @@ async function handleInitialize({
   preferredHighlighter,
   resolvedThemes,
   resolvedLanguages,
+  customExtensionsVersion,
+  customExtensionMap,
 }: InitializeWorkerRequest): Promise<void> {
   let highlighter = getHighlighter(preferredHighlighter);
   if ('then' in highlighter) {
     highlighter = await highlighter;
   }
+  syncCustomExtensionsFromRequest({
+    customExtensionsVersion,
+    customExtensionMap,
+  });
   attachResolvedThemes(resolvedThemes, highlighter);
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
@@ -120,11 +127,17 @@ async function handleRenderFile({
   id,
   file,
   resolvedLanguages,
+  customExtensionsVersion,
+  customExtensionMap,
 }: RenderFileRequest): Promise<void> {
   let highlighter = getHighlighter();
   if ('then' in highlighter) {
     highlighter = await highlighter;
   }
+  syncCustomExtensionsFromRequest({
+    customExtensionsVersion,
+    customExtensionMap,
+  });
   // Load resolved languages if provided
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
@@ -145,11 +158,17 @@ async function handleRenderDiff({
   id,
   diff,
   resolvedLanguages,
+  customExtensionsVersion,
+  customExtensionMap,
 }: RenderDiffRequest): Promise<void> {
   let highlighter = getHighlighter();
   if ('then' in highlighter) {
     highlighter = await highlighter;
   }
+  syncCustomExtensionsFromRequest({
+    customExtensionsVersion,
+    customExtensionMap,
+  });
   // Load resolved languages if provided
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
@@ -170,6 +189,24 @@ function getHighlighter(
         : createJavaScriptRegexEngine(),
   }) as Promise<DiffsHighlighter>;
   return highlighter;
+}
+
+function syncCustomExtensionsFromRequest({
+  customExtensionsVersion,
+  customExtensionMap,
+}: Pick<
+  InitializeWorkerRequest | RenderFileRequest | RenderDiffRequest,
+  'customExtensionsVersion' | 'customExtensionMap'
+>) {
+  if (customExtensionsVersion == null && customExtensionMap == null) {
+    return;
+  }
+  if (customExtensionsVersion == null || customExtensionMap == null) {
+    throw new Error(
+      'Worker request must include both customExtensionsVersion and customExtensionMap'
+    );
+  }
+  replaceCustomExtensions(customExtensionsVersion, customExtensionMap);
 }
 
 function sendFileSuccess(
