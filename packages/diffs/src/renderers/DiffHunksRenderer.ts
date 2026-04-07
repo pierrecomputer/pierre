@@ -63,6 +63,12 @@ import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import {
+  getLineDecorationContentProperties,
+  getLineDecorationGutterProperties,
+  mergeHastProperties,
+  mergeNormalizedLineDecorations,
+} from '../utils/getLineDecorationProperties';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
 import {
   createGutterGap,
@@ -862,7 +868,24 @@ export class DiffHunksRenderer<
       : this.additionDecorationsByLine[lineNumber];
   }
 
-  private createAnnotationElement = (span: AnnotationSpan): HASTElement => {
+  protected mergeLineDecoration(
+    decoration: LineDecoration,
+    lineDecorations: NormalizedLineDecorations | undefined
+  ): LineDecoration {
+    return {
+      ...decoration,
+      gutterProperties: mergeHastProperties(
+        decoration.gutterProperties,
+        getLineDecorationGutterProperties(lineDecorations)
+      ),
+      contentProperties: mergeHastProperties(
+        decoration.contentProperties,
+        getLineDecorationContentProperties(lineDecorations)
+      ),
+    };
+  }
+
+  protected createAnnotationElement = (span: AnnotationSpan): HASTElement => {
     return createDefaultAnnotationElement(span);
   };
 
@@ -1656,19 +1679,30 @@ export class DiffHunksRenderer<
             additionLineIndex: additionLine?.lineIndex,
             deletionLineIndex: deletionLine?.lineIndex,
           });
+          const unifiedLineDecoration = this.mergeLineDecoration(
+            lineDecoration,
+            mergeNormalizedLineDecorations(
+              deletionLine != null
+                ? this.getLineDecorations('deletions', deletionLine.lineNumber)
+                : undefined,
+              additionLine != null
+                ? this.getLineDecorations('additions', additionLine.lineNumber)
+                : undefined
+            )
+          );
           pushGutterLineNumber(
             'unified',
-            lineDecoration.gutterLineType,
+            unifiedLineDecoration.gutterLineType,
             additionLine != null
               ? additionLine.lineNumber
               : deletionLine.lineNumber,
             `${unifiedLineIndex},${splitLineIndex}`,
-            lineDecoration.gutterProperties
+            unifiedLineDecoration.gutterProperties
           );
           if (additionLineContent != null) {
             additionLineContent = withContentProperties(
               additionLineContent,
-              lineDecoration.contentProperties,
+              unifiedLineDecoration.contentProperties,
               isRenderCacheDirty && additionLine != null
                 ? {
                     'data-line': additionLine.lineNumber,
@@ -1679,7 +1713,7 @@ export class DiffHunksRenderer<
           } else if (deletionLineContent != null) {
             deletionLineContent = withContentProperties(
               deletionLineContent,
-              lineDecoration.contentProperties,
+              unifiedLineDecoration.contentProperties,
               isRenderCacheDirty && deletionLine != null
                 ? {
                     'data-line': deletionLine.lineNumber,
@@ -1736,6 +1770,18 @@ export class DiffHunksRenderer<
             type,
             lineIndex: additionLine?.lineIndex,
           });
+          const decoratedDeletionLine = this.mergeLineDecoration(
+            deletionLineDecoration,
+            deletionLine != null
+              ? this.getLineDecorations('deletions', deletionLine.lineNumber)
+              : undefined
+          );
+          const decoratedAdditionLine = this.mergeLineDecoration(
+            additionLineDecoration,
+            additionLine != null
+              ? this.getLineDecorations('additions', additionLine.lineNumber)
+              : undefined
+          );
 
           if (deletionLineContent == null && additionLineContent == null) {
             const errorMessage =
@@ -1785,7 +1831,7 @@ export class DiffHunksRenderer<
           if (deletionLine != null) {
             const deletionLineDecorated = withContentProperties(
               deletionLineContent,
-              deletionLineDecoration.contentProperties,
+              decoratedDeletionLine.contentProperties,
               isRenderCacheDirty
                 ? {
                     'data-line': deletionLine.lineNumber,
@@ -1795,10 +1841,10 @@ export class DiffHunksRenderer<
             );
             pushGutterLineNumber(
               'deletions',
-              deletionLineDecoration.gutterLineType,
+              decoratedDeletionLine.gutterLineType,
               deletionLine.lineNumber,
               `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
-              deletionLineDecoration.gutterProperties
+              decoratedDeletionLine.gutterProperties
             );
             if (deletionLineDecorated != null) {
               deletionLineContent = deletionLineDecorated;
@@ -1807,7 +1853,7 @@ export class DiffHunksRenderer<
           if (additionLine != null) {
             const additionLineDecorated = withContentProperties(
               additionLineContent,
-              additionLineDecoration.contentProperties,
+              decoratedAdditionLine.contentProperties,
               isRenderCacheDirty
                 ? {
                     'data-line': additionLine.lineNumber,
@@ -1817,10 +1863,10 @@ export class DiffHunksRenderer<
             );
             pushGutterLineNumber(
               'additions',
-              additionLineDecoration.gutterLineType,
+              decoratedAdditionLine.gutterLineType,
               additionLine.lineNumber,
               `${additionLine.unifiedLineIndex},${splitLineIndex}`,
-              additionLineDecoration.gutterProperties
+              decoratedAdditionLine.gutterProperties
             );
             if (additionLineDecorated != null) {
               additionLineContent = additionLineDecorated;
@@ -2521,8 +2567,7 @@ function withContentProperties(
   return {
     ...lineNode,
     properties: {
-      ...lineNode.properties,
-      ...contentProperties,
+      ...(mergeHastProperties(lineNode.properties, contentProperties) ?? {}),
       ...extendProperties,
     },
   };
