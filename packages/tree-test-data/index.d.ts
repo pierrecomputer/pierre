@@ -18,6 +18,7 @@ export type VirtualizationWorkloadName =
   | 'pierre-snapshot'
   | 'half-linux'
   | 'linux'
+  | 'linux-1x'
   | 'linux-5x'
   | 'linux-10x';
 

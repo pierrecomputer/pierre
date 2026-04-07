@@ -3,7 +3,7 @@ import linuxFixture from './linux-files.json';
 import pierreSnapshotFiles from './pierre-snapshot-files.json';
 
 /**
- * @typedef {'demo-small' | 'pierre-snapshot' | 'half-linux' | 'linux' | 'linux-5x' | 'linux-10x'} VirtualizationWorkloadName
+ * @typedef {'demo-small' | 'pierre-snapshot' | 'half-linux' | 'linux' | 'linux-1x' | 'linux-5x' | 'linux-10x'} VirtualizationWorkloadName
  */
 
 /**
@@ -31,6 +31,7 @@ export const VIRTUALIZATION_WORKLOAD_NAMES = [
   'pierre-snapshot',
   'half-linux',
   'linux',
+  'linux-1x',
   'linux-5x',
   'linux-10x',
 ];
@@ -137,9 +138,16 @@ function cloneFileTreeIntoRoots(files, folders, roots) {
  * @param {number} rootCount
  * @returns {VirtualizationWorkload}
  */
-function createWorkload(name, label, files, expandedFolders, rootCount) {
+function createWorkload(
+  name,
+  label,
+  files,
+  expandedFolders,
+  rootCount,
+  filesArePresorted = false
+) {
   /** @type {string[] | undefined} */
-  let presortedFiles;
+  let presortedFiles = filesArePresorted ? files : undefined;
 
   return {
     expandedFolders,
@@ -155,7 +163,10 @@ function createWorkload(name, label, files, expandedFolders, rootCount) {
   };
 }
 
-const halfLinuxFiles = linuxFixture.files.filter((_, index) => index % 2 === 0);
+const linuxFiles = sortCanonicalPaths(linuxFixture.files);
+const halfLinuxFiles = sortCanonicalPaths(
+  linuxFixture.files.filter((_, index) => index % 2 === 0)
+);
 const demoSmallFiles = [
   'alpha/docs/readme.md',
   'alpha/src/app.ts',
@@ -167,12 +178,12 @@ const demoSmallFiles = [
   'zeta.md',
 ];
 const linux5xWorkloadData = cloneFileTreeIntoRoots(
-  linuxFixture.files,
+  linuxFiles,
   linuxFixture.folders,
   createReplicaRootNames(5)
 );
 const linux10xWorkloadData = cloneFileTreeIntoRoots(
-  linuxFixture.files,
+  linuxFiles,
   linuxFixture.folders,
   createReplicaRootNames(10)
 );
@@ -198,28 +209,40 @@ const workloadsByName = {
     'Half Linux fixture',
     halfLinuxFiles,
     deriveExpandedFolders(halfLinuxFiles),
-    1
+    1,
+    true
   ),
   linux: createWorkload(
     'linux',
     'Linux fixture',
-    linuxFixture.files,
+    linuxFiles,
     linuxFixture.folders,
-    1
+    1,
+    true
+  ),
+  'linux-1x': createWorkload(
+    'linux-1x',
+    'Linux fixture x1',
+    linuxFiles,
+    linuxFixture.folders,
+    1,
+    true
   ),
   'linux-5x': createWorkload(
     'linux-5x',
     'Linux fixture x5',
-    linux5xWorkloadData.files,
+    sortCanonicalPaths(linux5xWorkloadData.files),
     linux5xWorkloadData.expandedFolders,
-    5
+    5,
+    true
   ),
   'linux-10x': createWorkload(
     'linux-10x',
     'Linux fixture x10',
-    linux10xWorkloadData.files,
+    sortCanonicalPaths(linux10xWorkloadData.files),
     linux10xWorkloadData.expandedFolders,
-    10
+    10,
+    true
   ),
 };
 

@@ -1,15 +1,39 @@
 import { PathStore } from '@pierre/path-store';
+import type {
+  PathStorePreparedInput,
+  PathStoreVisibleRow,
+} from '@pierre/path-store';
 
 import type {
   PathStoreTreesBootstrapItem,
   PathStoreTreesBootstrapSnapshot,
   PathStoreTreesControllerListener,
   PathStoreTreesControllerOptions,
+  PathStoreTreesVisibleRow,
 } from './types';
 
 let controllerCount = 0;
 
 export const PATH_STORE_TREES_PUBLIC_IDENTITY = 'path' as const;
+
+// Builds the canonical path order once so large demos can reuse the same
+// sorted input across SSR and hydration instead of re-sorting per instance.
+export function preparePathStoreTreesPaths(
+  paths: readonly string[]
+): readonly string[] {
+  return PathStore.preparePaths(paths);
+}
+
+// Reuses an already-sorted path array as the path-store prepared-input fast
+// path without cloning it again for each consumer instance.
+export function createPathStoreTreesPreparedInput(
+  paths: readonly string[]
+): PathStorePreparedInput {
+  return {
+    paths,
+    presortedPaths: paths,
+  } as PathStorePreparedInput;
+}
 
 function createControllerId(): string {
   controllerCount += 1;
@@ -32,9 +56,26 @@ function toBootstrapItem(
   };
 }
 
+function toVisibleRow(row: PathStoreVisibleRow): PathStoreTreesVisibleRow {
+  return {
+    depth: row.depth,
+    flattenedSegments: row.flattenedSegments?.map((segment) => ({
+      isTerminal: segment.isTerminal,
+      name: segment.name,
+      path: segment.path,
+    })),
+    hasChildren: row.hasChildren,
+    isExpanded: row.isExpanded,
+    isFlattened: row.isFlattened,
+    kind: row.kind,
+    name: row.name,
+    path: row.path,
+  };
+}
+
 /**
- * Owns the live PathStore instance and exposes a tiny action/subscription
- * boundary we can evolve in later phases without leaking internal store IDs.
+ * Owns the live PathStore instance and exposes a small path-first boundary we
+ * can evolve in later phases without leaking internal store IDs.
  */
 export class PathStoreTreesController {
   readonly #controllerId: string;
@@ -67,6 +108,10 @@ export class PathStoreTreesController {
     this.#listeners.clear();
   }
 
+  public getControllerId(): string {
+    return this.#controllerId;
+  }
+
   public getSnapshot(): PathStoreTreesBootstrapSnapshot {
     const firstVisibleRow = this.#store.getVisibleSlice(0, 1)[0];
 
@@ -78,6 +123,21 @@ export class PathStoreTreesController {
       publicIdentity: PATH_STORE_TREES_PUBLIC_IDENTITY,
       visibleCount: this.#store.getVisibleCount(),
     };
+  }
+
+  public getVisibleCount(): number {
+    return this.#store.getVisibleCount();
+  }
+
+  public getVisibleRows(
+    start: number,
+    end: number
+  ): readonly PathStoreTreesVisibleRow[] {
+    if (end < start) {
+      return [];
+    }
+
+    return this.#store.getVisibleSlice(start, end).map(toVisibleRow);
   }
 
   public subscribe(listener: PathStoreTreesControllerListener): () => void {
