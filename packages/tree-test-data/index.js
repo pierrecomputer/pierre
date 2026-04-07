@@ -163,10 +163,10 @@ function createWorkload(
   };
 }
 
-const linuxFiles = sortCanonicalPaths(linuxFixture.files);
-const halfLinuxFiles = sortCanonicalPaths(
-  linuxFixture.files.filter((_, index) => index % 2 === 0)
-);
+// linux-files.json stores canonical path order so the main linux workload can
+// be used directly without re-sorting on every consumer load.
+const linuxFiles = linuxFixture.files;
+const halfLinuxFiles = linuxFiles.filter((_, index) => index % 2 === 0);
 const demoSmallFiles = [
   'alpha/docs/readme.md',
   'alpha/src/app.ts',
@@ -180,12 +180,12 @@ const demoSmallFiles = [
 const linux5xWorkloadData = cloneFileTreeIntoRoots(
   linuxFiles,
   linuxFixture.folders,
-  createReplicaRootNames(5)
+  sortCanonicalPaths(createReplicaRootNames(5))
 );
 const linux10xWorkloadData = cloneFileTreeIntoRoots(
   linuxFiles,
   linuxFixture.folders,
-  createReplicaRootNames(10)
+  sortCanonicalPaths(createReplicaRootNames(10))
 );
 
 /** @type {Record<VirtualizationWorkloadName, VirtualizationWorkload>} */
@@ -231,7 +231,7 @@ const workloadsByName = {
   'linux-5x': createWorkload(
     'linux-5x',
     'Linux fixture x5',
-    sortCanonicalPaths(linux5xWorkloadData.files),
+    linux5xWorkloadData.files,
     linux5xWorkloadData.expandedFolders,
     5,
     true
@@ -239,7 +239,7 @@ const workloadsByName = {
   'linux-10x': createWorkload(
     'linux-10x',
     'Linux fixture x10',
-    sortCanonicalPaths(linux10xWorkloadData.files),
+    linux10xWorkloadData.files,
     linux10xWorkloadData.expandedFolders,
     10,
     true
