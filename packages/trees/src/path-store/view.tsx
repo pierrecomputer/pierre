@@ -21,6 +21,7 @@ import {
 function formatFlattenedSegments(
   row: PathStoreTreesVisibleRow
 ): JSX.Element | string {
+  'use no memo';
   const segments = row.flattenedSegments;
   if (segments == null || segments.length === 0) {
     return row.name;

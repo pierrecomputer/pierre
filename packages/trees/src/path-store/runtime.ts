@@ -1,5 +1,4 @@
-/** @jsxImportSource preact */
-import { hydrate, render } from 'preact';
+import { h, hydrate, render } from 'preact';
 
 import type { PathStoreTreesViewProps } from './types';
 import { PathStoreTreesView } from './view';
@@ -10,10 +9,10 @@ export const pathStoreTreesRenderer: {
   unmountRoot: (element: HTMLElement) => void;
 } = {
   hydrateRoot: (element, props) => {
-    hydrate(<PathStoreTreesView {...props} />, element);
+    hydrate(h(PathStoreTreesView, props), element);
   },
   renderRoot: (element, props) => {
-    render(<PathStoreTreesView {...props} />, element);
+    render(h(PathStoreTreesView, props), element);
   },
   unmountRoot: (element) => {
     render(null, element);
