@@ -5,6 +5,15 @@ const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const textDecoder = new TextDecoder();
 
 function runClientRenderBenchmark(args: string[]) {
+  const env: Record<string, string> = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => entry[1] != null
+    )
+  );
+  env.AGENT = '1';
+  delete env.FORCE_COLOR;
+  delete env.NO_COLOR;
+
   const result = Bun.spawnSync({
     cmd: [
       'bun',
@@ -13,10 +22,7 @@ function runClientRenderBenchmark(args: string[]) {
       ...args,
     ],
     cwd: packageRoot,
-    env: {
-      ...process.env,
-      AGENT: '1',
-    },
+    env,
     stdout: 'pipe',
     stderr: 'pipe',
   });

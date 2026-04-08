@@ -4,9 +4,11 @@ import {
   PathStoreFileTree,
   type PathStoreFileTreeOptions,
 } from '@pierre/trees/path-store';
+import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
+import { StateLog, useStateLog } from '../_components/StateLog';
 import { pathStoreCapabilityMatrix } from './capabilityMatrix';
 import { createPresortedPreparedInput } from './createPresortedPreparedInput';
 
@@ -23,11 +25,13 @@ interface PathStorePoweredRenderDemoClientProps {
 function HydratedPathStoreExample({
   containerHtml,
   description,
+  footer,
   options,
   title,
 }: {
   containerHtml: string;
   description: string;
+  footer?: ReactNode;
   options: PathStoreFileTreeOptions;
   title: string;
 }) {
@@ -53,7 +57,7 @@ function HydratedPathStoreExample({
   );
 
   return (
-    <ExampleCard title={title} description={description}>
+    <ExampleCard title={title} description={description} footer={footer}>
       <div
         ref={ref}
         style={{ height: `${String(options.viewportHeight ?? 420)}px` }}
@@ -68,17 +72,25 @@ export function PathStorePoweredRenderDemoClient({
   containerHtml,
   sharedOptions,
 }: PathStorePoweredRenderDemoClientProps) {
+  const { addLog, log } = useStateLog();
   const preparedInput = useMemo(
     () => createPresortedPreparedInput(sharedOptions.paths),
     [sharedOptions.paths]
   );
+  const handleSelectionChange = useCallback(
+    (selectedPaths: readonly string[]) => {
+      addLog(`selected: [${selectedPaths.join(', ')}]`);
+    },
+    [addLog]
+  );
   const options = useMemo<PathStoreFileTreeOptions>(
     () => ({
       ...sharedOptions,
-      id: 'pst-phase3',
+      id: 'pst-phase4',
+      onSelectionChange: handleSelectionChange,
       preparedInput,
     }),
-    [preparedInput, sharedOptions]
+    [handleSelectionChange, preparedInput, sharedOptions]
   );
 
   return (
@@ -87,19 +99,21 @@ export function PathStorePoweredRenderDemoClient({
         <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           Path-store lane · provisional
         </p>
-        <h1 className="text-2xl font-bold">Focus + Navigation</h1>
+        <h1 className="text-2xl font-bold">Focus + Selection</h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
-          Phase 3 adds the first full keyboard interaction slice to the
-          path-store-powered trees lane: single-item focus, baseline tree
-          navigation, and virtualization-safe DOM focus recovery.
+          Phase 4 keeps the landed focus/navigation model and adds selection:
+          click and keyboard selection semantics, path-first imperative item
+          methods, and lightweight selection-change observation in the existing
+          path-store-powered demo.
         </p>
       </header>
 
       <HydratedPathStoreExample
         containerHtml={containerHtml}
-        description="Click or focus any row, then use Arrow keys plus Home/End. Directory rows keep the Phase 2 toggle behavior, flattened rows target the terminal directory, and keyboard navigation survives virtualization."
+        description="Click a row to select it, use Ctrl/Cmd-click and Shift-click for multi-selection, and try Ctrl+Space, Shift+ArrowUp/Down, and Ctrl+A. Directory rows still keep the Phase 2 toggle behavior on plain click, and selection changes are logged below."
+        footer={<StateLog entries={log} />}
         options={options}
-        title="Focus + Navigation"
+        title="Focus + Selection"
       />
 
       <section className="space-y-3 rounded-lg border p-4">

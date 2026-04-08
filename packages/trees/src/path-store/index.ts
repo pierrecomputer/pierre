@@ -13,6 +13,7 @@ export type {
   PathStoreTreesPublicId,
   PathStoreTreesRenderOptions,
   PathStoreTreesRange,
+  PathStoreTreesSelectionChangeListener,
   PathStoreTreesStickyWindowLayout,
   PathStoreTreesVisibleRow,
 } from './types';

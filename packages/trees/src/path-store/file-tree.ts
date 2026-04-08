@@ -21,6 +21,7 @@ import type {
   PathStoreTreeHydrationProps,
   PathStoreTreeRenderProps,
   PathStoreTreesItemHandle,
+  PathStoreTreesSelectionChangeListener,
 } from './types';
 import { PathStoreTreesView } from './view';
 import { PATH_STORE_TREES_DEFAULT_VIEWPORT_HEIGHT } from './virtualization';
@@ -73,23 +74,42 @@ export class PathStoreFileTree {
 
   readonly #controller: PathStoreTreesController;
   readonly #id: string;
+  readonly #onSelectionChange:
+    | PathStoreTreesSelectionChangeListener
+    | undefined;
   readonly #viewOptions: Pick<
     PathStoreFileTreeOptions,
     'itemHeight' | 'overscan' | 'viewportHeight'
   >;
   #fileTreeContainer: HTMLElement | undefined;
+  #selectionSnapshot: string;
+  #selectionSubscription: (() => void) | null = null;
   #wrapper: HTMLDivElement | undefined;
 
   public constructor(options: PathStoreFileTreeOptions) {
-    const { id, itemHeight, overscan, viewportHeight, ...controllerOptions } =
-      options;
+    const {
+      id,
+      itemHeight,
+      onSelectionChange,
+      overscan,
+      viewportHeight,
+      ...controllerOptions
+    } = options;
     this.#id = createClientId(id);
+    this.#onSelectionChange = onSelectionChange;
     this.#viewOptions = {
       itemHeight,
       overscan,
       viewportHeight,
     };
     this.#controller = new PathStoreTreesController(controllerOptions);
+    this.#selectionSnapshot = this.#createSelectionSnapshot();
+    this.#selectionSubscription =
+      this.#onSelectionChange == null
+        ? null
+        : this.#controller.subscribe(() => {
+            this.#emitSelectionChange();
+          });
   }
 
   public cleanUp(): void {
@@ -102,6 +122,8 @@ export class PathStoreFileTree {
       delete this.#fileTreeContainer.dataset.fileTreeVirtualized;
       this.#fileTreeContainer = undefined;
     }
+    this.#selectionSubscription?.();
+    this.#selectionSubscription = null;
     this.#controller.destroy();
   }
 
@@ -111,6 +133,10 @@ export class PathStoreFileTree {
 
   public getItem(path: string): PathStoreTreesItemHandle | null {
     return this.#controller.getItem(path);
+  }
+
+  public getSelectedPaths(): readonly string[] {
+    return this.#controller.getSelectedPaths();
   }
 
   public hydrate({ fileTreeContainer }: PathStoreTreeHydrationProps): void {
@@ -152,6 +178,25 @@ export class PathStoreFileTree {
       overscan: this.#viewOptions.overscan,
       viewportHeight,
     };
+  }
+
+  #createSelectionSnapshot(): string {
+    return this.#controller.getSelectedPaths().join('|');
+  }
+
+  #emitSelectionChange(): void {
+    const onSelectionChange = this.#onSelectionChange;
+    if (onSelectionChange == null) {
+      return;
+    }
+
+    const nextSnapshot = this.#createSelectionSnapshot();
+    if (nextSnapshot === this.#selectionSnapshot) {
+      return;
+    }
+
+    this.#selectionSnapshot = nextSnapshot;
+    onSelectionChange(this.#controller.getSelectedPaths());
   }
 
   #getOrCreateWrapper(host: HTMLElement): HTMLDivElement {
@@ -206,8 +251,14 @@ export class PathStoreFileTree {
 export function preloadPathStoreFileTree(
   options: PathStoreFileTreeOptions
 ): PathStoreFileTreeSsrPayload {
-  const { id, itemHeight, overscan, viewportHeight, ...controllerOptions } =
-    options;
+  const {
+    id,
+    itemHeight,
+    onSelectionChange: _onSelectionChange,
+    overscan,
+    viewportHeight,
+    ...controllerOptions
+  } = options;
   const resolvedId = createServerId(id);
   const controller = new PathStoreTreesController(controllerOptions);
   const resolvedViewportHeight =

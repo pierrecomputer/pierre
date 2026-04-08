@@ -23,6 +23,7 @@ export interface PathStoreTreesVisibleRow {
   hasChildren: boolean;
   index: number;
   isFocused: boolean;
+  isSelected: boolean;
   isExpanded: boolean;
   isFlattened: boolean;
   kind: 'directory' | 'file';
@@ -34,10 +35,14 @@ export interface PathStoreTreesVisibleRow {
 }
 
 export interface PathStoreTreesItemHandleBase {
+  deselect(): void;
   focus(): void;
   getPath(): PathStoreTreesPublicId;
   isFocused(): boolean;
   isDirectory(): boolean;
+  isSelected(): boolean;
+  select(): void;
+  toggleSelect(): void;
 }
 
 export interface PathStoreTreesDirectoryHandle extends PathStoreTreesItemHandleBase {
@@ -65,6 +70,7 @@ export interface PathStoreTreesRenderOptions {
 export interface PathStoreFileTreeOptions
   extends PathStoreTreesControllerOptions, PathStoreTreesRenderOptions {
   id?: string;
+  onSelectionChange?: PathStoreTreesSelectionChangeListener;
 }
 
 export interface PathStoreTreesViewportMetrics {
@@ -107,3 +113,7 @@ export interface PathStoreFileTreeSsrPayload {
 }
 
 export type PathStoreTreesControllerListener = () => void;
+
+export type PathStoreTreesSelectionChangeListener = (
+  selectedPaths: readonly PathStoreTreesPublicId[]
+) => void;

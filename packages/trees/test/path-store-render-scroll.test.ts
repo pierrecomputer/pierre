@@ -118,19 +118,44 @@ function getTreeRoot(
 function clickItem(
   shadowRoot: ShadowRoot | null | undefined,
   dom: JSDOM,
-  path: string
+  path: string,
+  init: MouseEventInit = {}
 ): void {
   const buttonElement = getItemButton(shadowRoot, dom, path);
-  buttonElement.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+  buttonElement.dispatchEvent(
+    new dom.window.MouseEvent('click', { bubbles: true, ...init })
+  );
 }
 
-function pressKey(target: HTMLElement, dom: JSDOM, key: string): void {
+function pressKey(
+  target: HTMLElement,
+  dom: JSDOM,
+  key: string,
+  init: KeyboardEventInit = {}
+): void {
   target.dispatchEvent(
     new dom.window.KeyboardEvent('keydown', {
       bubbles: true,
       key,
+      ...init,
     })
   );
+}
+
+function getSelectedItemPaths(
+  shadowRoot: ShadowRoot | null | undefined,
+  dom: JSDOM
+): string[] {
+  return Array.from(
+    shadowRoot?.querySelectorAll('[data-item-selected="true"]') ?? []
+  )
+    .filter(
+      (element): element is HTMLButtonElement =>
+        element instanceof dom.window.HTMLButtonElement
+    )
+    .filter((button) => button.dataset.itemParked !== 'true')
+    .map((button) => button.dataset.itemPath)
+    .filter((path): path is string => path != null);
 }
 
 describe('path-store render + scroll', () => {
@@ -151,7 +176,7 @@ describe('path-store render + scroll', () => {
     controller.destroy();
   });
 
-  test('controller getItem returns minimal file/directory handles, single focus state, and null on miss', async () => {
+  test('controller getItem returns minimal file/directory handles with selection + focus state and null on miss', async () => {
     const { PathStoreTreesController } = await import('../src/path-store');
 
     const controller = new PathStoreTreesController({
@@ -166,6 +191,7 @@ describe('path-store render + scroll', () => {
     expect(fileItem?.getPath()).toBe('README.md');
     expect(fileItem?.isDirectory()).toBe(false);
     expect(fileItem?.isFocused()).toBe(false);
+    expect(fileItem?.isSelected()).toBe(false);
     expect('expand' in (fileItem ?? {})).toBe(false);
 
     expect(directoryItem?.getPath()).toBe('src/');
@@ -180,10 +206,20 @@ describe('path-store render + scroll', () => {
 
     expect(directoryItem.isExpanded()).toBe(true);
     expect(directoryItem.isFocused()).toBe(true);
+    expect(directoryItem.isSelected()).toBe(false);
     fileItem?.focus();
     expect(fileItem?.isFocused()).toBe(true);
     expect(directoryItem.isFocused()).toBe(false);
     expect(controller.getFocusedPath()).toBe('README.md');
+
+    fileItem?.select();
+    expect(fileItem?.isSelected()).toBe(true);
+    directoryItem.select();
+    expect(controller.getSelectedPaths()).toEqual(['README.md', 'src/']);
+    directoryItem.toggleSelect();
+    expect(controller.getSelectedPaths()).toEqual(['README.md']);
+    fileItem?.deselect();
+    expect(controller.getSelectedPaths()).toEqual([]);
     expect(controller.getItem('missing.ts')).toBeNull();
 
     controller.destroy();
@@ -292,6 +328,240 @@ describe('path-store render + scroll', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(shadowRoot?.innerHTML).not.toContain('src/index.ts');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('modified clicks recreate the baseline selection semantics in spirit', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths: ['a.ts', 'b.ts', 'c.ts', 'd.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      clickItem(shadowRoot, dom, 'b.ts');
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['b.ts']);
+
+      clickItem(shadowRoot, dom, 'd.ts', { shiftKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([
+        'b.ts',
+        'c.ts',
+        'd.ts',
+      ]);
+
+      clickItem(shadowRoot, dom, 'a.ts', { metaKey: true, shiftKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([
+        'a.ts',
+        'b.ts',
+        'c.ts',
+        'd.ts',
+      ]);
+
+      clickItem(shadowRoot, dom, 'c.ts', { ctrlKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([
+        'a.ts',
+        'b.ts',
+        'd.ts',
+      ]);
+      expect(fileTree.getItem('c.ts')?.isFocused()).toBe(true);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keyboard selection hotkeys preserve focus continuity', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths: ['a.ts', 'b.ts', 'c.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const firstButton = getItemButton(shadowRoot, dom, 'a.ts');
+      firstButton.focus();
+      await flushDom();
+
+      pressKey(firstButton, dom, ' ', { code: 'Space', ctrlKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['a.ts']);
+
+      pressKey(firstButton, dom, 'ArrowDown', { shiftKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['a.ts', 'b.ts']);
+      expect(fileTree.getItem('b.ts')?.isFocused()).toBe(true);
+
+      pressKey(getItemButton(shadowRoot, dom, 'b.ts'), dom, 'ArrowDown', {
+        shiftKey: true,
+      });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([
+        'a.ts',
+        'b.ts',
+        'c.ts',
+      ]);
+      expect(fileTree.getItem('c.ts')?.isFocused()).toBe(true);
+
+      pressKey(getItemButton(shadowRoot, dom, 'c.ts'), dom, 'ArrowUp', {
+        shiftKey: true,
+      });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['a.ts', 'b.ts']);
+      expect(fileTree.getItem('b.ts')?.isFocused()).toBe(true);
+
+      pressKey(getItemButton(shadowRoot, dom, 'b.ts'), dom, 'a', {
+        ctrlKey: true,
+      });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([
+        'a.ts',
+        'b.ts',
+        'c.ts',
+      ]);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('selection change callbacks stay path-first and selection survives collapse/remount with explicit anchor fallback', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+      const selectionEvents: string[][] = [];
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['src/lib/'],
+        onSelectionChange: (items) => {
+          selectionEvents.push([...items]);
+        },
+        paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      clickItem(shadowRoot, dom, 'src/lib/util.ts');
+      await flushDom();
+      expect(fileTree.getSelectedPaths()).toEqual(['src/lib/util.ts']);
+      expect(selectionEvents.at(-1)).toEqual(['src/lib/util.ts']);
+
+      const sourceDirectory = fileTree.getItem('src/lib/');
+      if (
+        sourceDirectory == null ||
+        sourceDirectory.isDirectory() !== true ||
+        !('collapse' in sourceDirectory)
+      ) {
+        throw new Error('missing source directory item');
+      }
+
+      sourceDirectory.collapse();
+      await flushDom();
+      expect(fileTree.getSelectedPaths()).toEqual(['src/lib/util.ts']);
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([]);
+
+      sourceDirectory.expand();
+      await flushDom();
+      expect(
+        getItemButton(shadowRoot, dom, 'src/lib/util.ts').dataset.itemSelected
+      ).toBe('true');
+
+      sourceDirectory.collapse();
+      await flushDom();
+      clickItem(shadowRoot, dom, 'README.md', { shiftKey: true });
+      await flushDom();
+      expect(fileTree.getSelectedPaths()).toEqual(['README.md']);
+      expect(selectionEvents.at(-1)).toEqual(['README.md']);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('selection persists across virtualization and selected markup returns on remount', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const paths = Array.from(
+        { length: 120 },
+        (_, index) => `item${String(index).padStart(3, '0')}.ts`
+      );
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths,
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      const viewport = scrollElement as HTMLElement;
+      viewport.scrollTop = 1500;
+      viewport.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+
+      clickItem(shadowRoot, dom, 'item050.ts');
+      await flushDom();
+      expect(fileTree.getSelectedPaths()).toEqual(['item050.ts']);
+      expect(
+        getItemButton(shadowRoot, dom, 'item050.ts').dataset.itemSelected
+      ).toBe('true');
+
+      viewport.scrollTop = 3000;
+      viewport.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+      await flushDom();
+
+      expect(fileTree.getSelectedPaths()).toEqual(['item050.ts']);
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([]);
+
+      viewport.scrollTop = 1500;
+      viewport.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+      await flushDom();
+
+      expect(
+        getItemButton(shadowRoot, dom, 'item050.ts').dataset.itemSelected
+      ).toBe('true');
 
       fileTree.cleanUp();
     } finally {
@@ -779,7 +1049,7 @@ describe('path-store render + scroll', () => {
     }
   });
 
-  test('directory row clicks toggle expansion while file clicks stay inert', async () => {
+  test('directory row clicks preserve plain-click toggle behavior while modifier clicks stay selection-only', async () => {
     const { cleanup, dom } = installDom();
     try {
       const { PathStoreFileTree } = await import('../src/path-store');
@@ -798,14 +1068,22 @@ describe('path-store render + scroll', () => {
       clickItem(shadowRoot, dom, 'README.md');
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(shadowRoot?.innerHTML).not.toContain('src/index.ts');
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['README.md']);
 
       clickItem(shadowRoot, dom, 'src/');
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(shadowRoot?.innerHTML).toContain('src/index.ts');
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['src/']);
+
+      clickItem(shadowRoot, dom, 'src/', { ctrlKey: true });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(shadowRoot?.innerHTML).toContain('src/index.ts');
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([]);
 
       clickItem(shadowRoot, dom, 'src/');
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(shadowRoot?.innerHTML).not.toContain('src/index.ts');
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['src/']);
 
       fileTree.cleanUp();
     } finally {
@@ -906,7 +1184,7 @@ describe('path-store render + scroll', () => {
     }
   });
 
-  test('uses compatible row markup for the implemented focus/navigation pieces only', async () => {
+  test('uses compatible row markup for the implemented focus/navigation and selection pieces', async () => {
     const { cleanup, dom } = installDom();
     try {
       const { PathStoreFileTree } = await import('../src/path-store');
@@ -949,6 +1227,16 @@ describe('path-store render + scroll', () => {
       expect(focusedButton.dataset.itemFocused).toBe('true');
       expect(focusedButton.getAttribute('role')).toBe('treeitem');
       expect(focusedButton.getAttribute('aria-selected')).toBe('false');
+
+      clickItem(shadowRoot, dom, 'README.md');
+      await flushDom();
+
+      const selectedButton = getItemButton(shadowRoot, dom, 'README.md');
+      expect(selectedButton.dataset.itemSelected).toBe('true');
+      expect(selectedButton.getAttribute('aria-selected')).toBe('true');
+      expect(
+        shadowRoot?.querySelector('[data-item-selected="true"]')
+      ).not.toBeNull();
 
       fileTree.cleanUp();
     } finally {

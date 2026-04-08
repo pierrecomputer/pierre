@@ -34,6 +34,32 @@ interface PathStoreTreesVisibleProjection {
   visibleRows: readonly PathStoreVisibleRow[];
 }
 
+function arePathSetsEqual(
+  currentPaths: ReadonlySet<string>,
+  nextPaths: readonly string[]
+): boolean {
+  if (currentPaths.size !== nextPaths.length) {
+    return false;
+  }
+
+  for (const path of nextPaths) {
+    if (!currentPaths.has(path)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function getVisibleSelectionTargetPath(
+  row: Pick<PathStoreVisibleRow, 'flattenedSegments' | 'isFlattened' | 'path'>
+): string {
+  return row.isFlattened
+    ? (row.flattenedSegments?.findLast((segment) => segment.isTerminal)?.path ??
+        row.path)
+    : row.path;
+}
+
 function resolvePathStoreTreesItemPath(
   itemMetadata: ReadonlyMap<string, PathStoreTreesItemMetadata>,
   path: string
@@ -239,6 +265,8 @@ export class PathStoreTreesController {
   #itemMetadata = new Map<string, PathStoreTreesItemMetadata>();
   #parentPaths = new Map<string, string | null>();
   #projectionRows: readonly PathStoreVisibleTreeProjectionRow[] = [];
+  #selectionAnchorPath: string | null = null;
+  #selectedPaths = new Set<string>();
   #store: PathStore;
   #unsubscribe: (() => void) | null;
   #visibleIndexByPath = new Map<string, number>();
@@ -336,6 +364,10 @@ export class PathStoreTreesController {
     return this.#focusedPath;
   }
 
+  public getSelectedPaths(): readonly string[] {
+    return [...this.#selectedPaths];
+  }
+
   public getVisibleCount(): number {
     return this.#visibleRows.length;
   }
@@ -377,6 +409,9 @@ export class PathStoreTreesController {
           isExpanded: row.isExpanded,
           isFlattened: row.isFlattened,
           isFocused: projectionRow.path === this.#focusedPath,
+          isSelected: this.#selectedPaths.has(
+            getVisibleSelectionTargetPath(row)
+          ),
           kind: row.kind,
           level: row.depth,
           name: row.name,
@@ -403,6 +438,169 @@ export class PathStoreTreesController {
       : (this.#itemHandles.get(resolvedPath) ?? null);
   }
 
+  public selectAllVisiblePaths(): void {
+    const nextSelectedPaths = this.#visibleRows.map((row) =>
+      getVisibleSelectionTargetPath(row)
+    );
+    this.#applySelection(
+      nextSelectedPaths,
+      this.#focusedPath ?? this.#selectionAnchorPath
+    );
+  }
+
+  public selectOnlyPath(path: string): void {
+    const resolvedPath = this.#resolveSelectionPath(path);
+    if (resolvedPath == null) {
+      return;
+    }
+
+    this.#applySelection([resolvedPath], resolvedPath);
+  }
+
+  public selectPath(path: string): void {
+    const resolvedPath = this.#resolveSelectionPath(path);
+    if (resolvedPath == null || this.#selectedPaths.has(resolvedPath)) {
+      return;
+    }
+
+    this.#applySelection([...this.#selectedPaths, resolvedPath]);
+  }
+
+  public deselectPath(path: string): void {
+    const resolvedPath = this.#resolveSelectionPath(path);
+    if (resolvedPath == null || !this.#selectedPaths.has(resolvedPath)) {
+      return;
+    }
+
+    this.#applySelection(
+      [...this.#selectedPaths].filter(
+        (selectedPath) => selectedPath !== resolvedPath
+      )
+    );
+  }
+
+  public toggleFocusedSelection(): void {
+    if (this.#focusedPath == null) {
+      return;
+    }
+
+    this.togglePathSelection(this.#focusedPath);
+  }
+
+  public togglePathSelection(path: string): void {
+    const resolvedPath = this.#resolveSelectionPath(path);
+    if (resolvedPath == null) {
+      return;
+    }
+
+    if (this.#selectedPaths.has(resolvedPath)) {
+      this.deselectPath(resolvedPath);
+      return;
+    }
+
+    this.selectPath(resolvedPath);
+  }
+
+  public togglePathSelectionFromInput(path: string): void {
+    const resolvedPath = this.#resolveSelectionPath(path);
+    if (resolvedPath == null) {
+      return;
+    }
+
+    if (this.#selectedPaths.has(resolvedPath)) {
+      this.#applySelection(
+        [...this.#selectedPaths].filter(
+          (selectedPath) => selectedPath !== resolvedPath
+        ),
+        resolvedPath
+      );
+      return;
+    }
+
+    this.#applySelection([...this.#selectedPaths, resolvedPath], resolvedPath);
+  }
+
+  public selectPathRange(path: string, unionSelection: boolean): void {
+    const resolvedPath = this.#resolveSelectionPath(path);
+    if (resolvedPath == null) {
+      return;
+    }
+
+    const anchorPath = this.#selectionAnchorPath;
+    if (
+      anchorPath == null ||
+      !this.#visibleIndexByPath.has(anchorPath) ||
+      !this.#visibleIndexByPath.has(resolvedPath)
+    ) {
+      const nextSelectedPaths = unionSelection
+        ? [...this.#selectedPaths, resolvedPath]
+        : [resolvedPath];
+      this.#applySelection(nextSelectedPaths, resolvedPath);
+      return;
+    }
+
+    const anchorIndex = this.#visibleIndexByPath.get(anchorPath);
+    const targetIndex = this.#visibleIndexByPath.get(resolvedPath);
+    if (anchorIndex == null || targetIndex == null) {
+      return;
+    }
+
+    const [startIndex, endIndex] =
+      anchorIndex <= targetIndex
+        ? [anchorIndex, targetIndex]
+        : [targetIndex, anchorIndex];
+    const rangePaths = this.#visibleRows
+      .slice(startIndex, endIndex + 1)
+      .map((row) => getVisibleSelectionTargetPath(row));
+    const nextSelectedPaths = unionSelection
+      ? [...this.#selectedPaths, ...rangePaths]
+      : rangePaths;
+    this.#applySelection(nextSelectedPaths, anchorPath);
+  }
+
+  public extendSelectionFromFocused(offset: -1 | 1): void {
+    if (this.#focusedPath == null) {
+      return;
+    }
+
+    const focusedIndex = this.getFocusedIndex();
+    if (focusedIndex === -1) {
+      return;
+    }
+
+    const nextIndex = Math.min(
+      this.#projectionRows.length - 1,
+      Math.max(0, focusedIndex + offset)
+    );
+    if (nextIndex === focusedIndex) {
+      return;
+    }
+
+    const currentRow = this.#visibleRows[focusedIndex];
+    const nextRow = this.#visibleRows[nextIndex];
+    const currentPath =
+      currentRow == null ? null : getVisibleSelectionTargetPath(currentRow);
+    const nextPath =
+      nextRow == null ? null : getVisibleSelectionTargetPath(nextRow);
+    if (currentPath == null || nextPath == null || nextRow == null) {
+      return;
+    }
+
+    const nextSelectedPaths = new Set(this.#selectedPaths);
+    if (nextSelectedPaths.has(currentPath) && nextSelectedPaths.has(nextPath)) {
+      nextSelectedPaths.delete(currentPath);
+    } else {
+      nextSelectedPaths.add(nextPath);
+    }
+
+    this.#applySelection(
+      [...nextSelectedPaths],
+      this.#selectionAnchorPath ?? currentPath,
+      false
+    );
+    this.#setFocusedPath(nextRow.path);
+  }
+
   public subscribe(listener: PathStoreTreesControllerListener): () => void {
     this.#listeners.add(listener);
     listener();
@@ -423,10 +621,28 @@ export class PathStoreTreesController {
       paths,
     });
     const previousFocusedPath = this.#focusedPath;
+    const previousSelectedPaths = this.getSelectedPaths();
+    const previousSelectionAnchorPath = this.#selectionAnchorPath;
 
     this.#unsubscribe?.();
     this.#store = nextStore;
     this.#applyItemState(nextItemState);
+    this.#selectedPaths = new Set(
+      previousSelectedPaths.filter(
+        (selectedPath) =>
+          resolvePathStoreTreesItemPath(
+            nextItemState.itemMetadata,
+            selectedPath
+          ) != null
+      )
+    );
+    this.#selectionAnchorPath =
+      previousSelectionAnchorPath == null
+        ? null
+        : (resolvePathStoreTreesItemPath(
+            nextItemState.itemMetadata,
+            previousSelectionAnchorPath
+          ) ?? null);
     this.#rebuildVisibleProjection(previousFocusedPath);
     this.#unsubscribe = this.#subscribe();
     this.#emit();
@@ -458,10 +674,35 @@ export class PathStoreTreesController {
     this.#store.collapse(path);
   }
 
+  #applySelection(
+    nextSelectedPaths: readonly string[],
+    nextAnchorPath: string | null = this.#selectionAnchorPath,
+    emit: boolean = true
+  ): void {
+    const uniqueSelectedPaths = [...new Set(nextSelectedPaths)];
+    const selectionChanged = !arePathSetsEqual(
+      this.#selectedPaths,
+      uniqueSelectedPaths
+    );
+    const anchorChanged = this.#selectionAnchorPath !== nextAnchorPath;
+    if (!selectionChanged && !anchorChanged) {
+      return;
+    }
+
+    this.#selectedPaths = new Set(uniqueSelectedPaths);
+    this.#selectionAnchorPath = nextAnchorPath;
+    if (emit) {
+      this.#emit();
+    }
+  }
+
   #createDirectoryHandle(path: string): PathStoreTreesDirectoryHandle {
     return {
       collapse: () => {
         this.#collapseDirectory(path);
+      },
+      deselect: () => {
+        this.deselectPath(path);
       },
       expand: () => {
         this.#expandDirectory(path);
@@ -473,6 +714,13 @@ export class PathStoreTreesController {
       isDirectory: () => true,
       isExpanded: () => this.#expandedDirectories.has(path),
       isFocused: () => this.#focusedPath === path,
+      isSelected: () => this.#selectedPaths.has(path),
+      select: () => {
+        this.selectPath(path);
+      },
+      toggleSelect: () => {
+        this.togglePathSelection(path);
+      },
       toggle: () => {
         this.#toggleDirectory(path);
       },
@@ -481,12 +729,22 @@ export class PathStoreTreesController {
 
   #createFileHandle(path: string): PathStoreTreesFileHandle {
     return {
+      deselect: () => {
+        this.deselectPath(path);
+      },
       focus: () => {
         this.focusPath(path);
       },
       getPath: () => path,
       isDirectory: () => false,
       isFocused: () => this.#focusedPath === path,
+      isSelected: () => this.#selectedPaths.has(path),
+      select: () => {
+        this.selectPath(path);
+      },
+      toggleSelect: () => {
+        this.togglePathSelection(path);
+      },
     };
   }
 
@@ -566,7 +824,11 @@ export class PathStoreTreesController {
     this.#visibleRows = projection.visibleRows;
   }
 
-  #setFocusedPath(path: string): void {
+  #resolveSelectionPath(path: string): string | null {
+    return resolvePathStoreTreesItemPath(this.#itemMetadata, path);
+  }
+
+  #setFocusedPath(path: string, emit: boolean = true): void {
     const currentFocusedPath = this.#focusedPath;
     if (currentFocusedPath === path) {
       return;
@@ -576,7 +838,9 @@ export class PathStoreTreesController {
       return;
     }
     this.#focusedPath = path;
-    this.#emit();
+    if (emit) {
+      this.#emit();
+    }
   }
 
   #subscribe(): () => void {

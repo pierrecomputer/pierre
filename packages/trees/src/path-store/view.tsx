@@ -101,6 +101,12 @@ function isPathStoreTreesDirectoryHandle(
   return item != null && 'toggle' in item;
 }
 
+function isSpaceSelectionKey(event: KeyboardEvent): boolean {
+  return (
+    event.code === 'Space' || event.key === ' ' || event.key === 'Spacebar'
+  );
+}
+
 // Focus changes should keep the logical focused row visible without relying on
 // browser scrollIntoView heuristics inside the virtualized shadow root.
 // Keeps a newly focused row inside the viewport without relying on
@@ -186,6 +192,7 @@ function renderStyledRow(
     row.isFocused && activeItemPath === targetPath
       ? { 'data-item-focused': true }
       : {};
+  const selectedProps = row.isSelected ? { 'data-item-selected': true } : {};
 
   return (
     <button
@@ -202,15 +209,24 @@ function renderStyledRow(
       aria-label={getPathStoreTreesRowAriaLabel(row)}
       aria-level={row.level + 1}
       aria-posinset={row.posInSet + 1}
-      aria-selected="false"
+      aria-selected={row.isSelected ? 'true' : 'false'}
       aria-setsize={row.setSize}
       onClick={(event) => {
-        item?.focus();
-        if (event.ctrlKey || event.metaKey || event.shiftKey) {
-          return;
+        if (event.shiftKey) {
+          controller.selectPathRange(
+            targetPath,
+            event.ctrlKey || event.metaKey
+          );
+        } else if (event.ctrlKey || event.metaKey) {
+          controller.togglePathSelectionFromInput(targetPath);
+        } else {
+          controller.selectOnlyPath(targetPath);
         }
 
-        directoryItem?.toggle();
+        item?.focus();
+        if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
+          directoryItem?.toggle();
+        }
       }}
       onFocus={() => {
         item?.focus();
@@ -220,6 +236,7 @@ function renderStyledRow(
       tabIndex={row.isFocused ? 0 : -1}
       style={{ minHeight: `${itemHeight}px`, ...style }}
       {...focusedProps}
+      {...selectedProps}
     >
       {row.depth > 0 ? (
         <div data-item-section="spacing">
@@ -327,43 +344,63 @@ export function PathStoreTreesView({
       ? focusedItem
       : null;
     let handled = true;
-    switch (event.key) {
-      case 'ArrowDown':
-        controller.focusNextItem();
-        break;
-      case 'ArrowUp':
-        controller.focusPreviousItem();
-        break;
-      case 'ArrowRight':
-        if (focusedDirectoryItem == null || focusedDirectoryItem.isExpanded()) {
+    if (event.shiftKey && event.key === 'ArrowDown') {
+      controller.extendSelectionFromFocused(1);
+    } else if (event.shiftKey && event.key === 'ArrowUp') {
+      controller.extendSelectionFromFocused(-1);
+    } else if ((event.ctrlKey || event.metaKey) && isSpaceSelectionKey(event)) {
+      controller.toggleFocusedSelection();
+    } else if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key.toLowerCase() === 'a'
+    ) {
+      controller.selectAllVisiblePaths();
+    } else {
+      switch (event.key) {
+        case 'ArrowDown':
           controller.focusNextItem();
-        } else {
-          focusedDirectoryItem.expand();
-        }
-        break;
-      case 'ArrowLeft':
-        if (focusedDirectoryItem != null && focusedDirectoryItem.isExpanded()) {
-          focusedDirectoryItem.collapse();
-        } else {
-          controller.focusParentItem();
-        }
-        break;
-      case 'Home':
-        controller.focusFirstItem();
-        break;
-      case 'End':
-        controller.focusLastItem();
-        break;
-      default:
-        handled = false;
+          break;
+        case 'ArrowUp':
+          controller.focusPreviousItem();
+          break;
+        case 'ArrowRight':
+          if (
+            focusedDirectoryItem == null ||
+            focusedDirectoryItem.isExpanded()
+          ) {
+            controller.focusNextItem();
+          } else {
+            focusedDirectoryItem.expand();
+          }
+          break;
+        case 'ArrowLeft':
+          if (
+            focusedDirectoryItem != null &&
+            focusedDirectoryItem.isExpanded()
+          ) {
+            focusedDirectoryItem.collapse();
+          } else {
+            controller.focusParentItem();
+          }
+          break;
+        case 'Home':
+          controller.focusFirstItem();
+          break;
+        case 'End':
+          controller.focusLastItem();
+          break;
+        default:
+          handled = false;
+      }
     }
 
     if (!handled) {
       return;
     }
 
-    // Focus-only controller updates do not change range/itemCount, so force a
-    // render tick before the DOM-focus sync effect runs.
+    // Focus-only and selection-only controller updates do not change
+    // range/itemCount, so force a render tick before the DOM-focus sync effect
+    // runs.
     setControllerRevision((revision) => revision + 1);
     event.preventDefault();
     event.stopPropagation();
