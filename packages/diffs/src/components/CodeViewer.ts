@@ -41,6 +41,8 @@ interface LineScrollPosition {
 }
 
 interface AdvancedVirtualizedBaseItem {
+  /** Current index of this record in the ordered items array. */
+  index: number;
   /** Absolute top offset of this item inside the scroll content. */
   top: number;
   /** Total measured height reserved for this item. */
@@ -89,7 +91,7 @@ export class CodeViewer<LAnnotation = undefined> {
     new Map();
   private instanceToItem: Map<object, AdvancedVirtualizedItem<LAnnotation>> =
     new Map();
-  private changedItems: Set<AdvancedVirtualizedItem<LAnnotation>> = new Set();
+  private layoutDirtyIndex: number | undefined;
   private scrollHeight = 0;
 
   private lastContainerHeight = -1;
@@ -174,7 +176,7 @@ export class CodeViewer<LAnnotation = undefined> {
     this.items.length = 0;
     this.idToItem.clear();
     this.instanceToItem.clear();
-    this.changedItems.clear();
+    this.layoutDirtyIndex = undefined;
     this.stickyContainer.textContent = '';
     this.stickyOffset.style.height = '';
     this.container?.style.removeProperty('height');
@@ -244,18 +246,53 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   public addItems(inputs: readonly CodeViewerItem<LAnnotation>[]): void {
+    this.appendItemsInternal(inputs);
+  }
+
+  public setItems(items: readonly CodeViewerItem<LAnnotation>[]): void {
+    if (items.length === 0) {
+      this.reset();
+      return;
+    }
+
+    if (this.items.length === 0) {
+      this.appendItemsInternal(items);
+      return;
+    }
+
+    if (this.tryAppendItems(items)) {
+      return;
+    }
+
+    this.reconcileItems(items);
+  }
+
+  /**
+   * Append new records to the viewer while preserving existing layout state.
+   * This is the shared path for imperative adds and the append-only reconcile
+   * fast path, so it measures new items immediately and only triggers render
+   * once at the end.
+   */
+  private appendItemsInternal(
+    inputs: readonly CodeViewerItem<LAnnotation>[],
+    render = true
+  ): void {
     if (inputs.length === 0) {
       return;
     }
 
     let nextTop =
       this.items.length === 0 ? 0 : this.scrollHeight + this.viewerMetrics.gap;
-    for (const input of inputs) {
+    for (let index = 0; index < inputs.length; index++) {
+      const input = inputs[index];
+      if (input == null) {
+        throw new Error('CodeViewer.appendItemsInternal: missing input item');
+      }
       if (this.idToItem.has(input.id)) {
         throw new Error(`CodeViewer.addItem: duplicate id "${input.id}"`);
       }
 
-      const item = this.createItem(input, nextTop);
+      const item = this.createItem(input, this.items.length, nextTop);
       this.items.push(item);
       this.idToItem.set(item.item.id, item);
       this.instanceToItem.set(item.instance, item);
@@ -265,12 +302,9 @@ export class CodeViewer<LAnnotation = undefined> {
 
     this.scrollHeight = nextTop - this.viewerMetrics.gap;
     this.scrollDirty = true;
-    this.render();
-  }
-
-  public setItems(items: readonly CodeViewerItem<LAnnotation>[]): void {
-    this.reset();
-    this.addItems(items);
+    if (render) {
+      this.render();
+    }
   }
 
   public setDiffAnnotations(
@@ -285,7 +319,7 @@ export class CodeViewer<LAnnotation = undefined> {
       ...item.item,
       annotations,
     };
-    this.changedItems.add(item);
+    this.markItemLayoutDirty(item);
     this.render();
   }
 
@@ -301,7 +335,7 @@ export class CodeViewer<LAnnotation = undefined> {
       ...item.item,
       annotations,
     };
-    this.changedItems.add(item);
+    this.markItemLayoutDirty(item);
     this.scrollDirty = true;
     this.render();
   }
@@ -329,7 +363,7 @@ export class CodeViewer<LAnnotation = undefined> {
         'CodeViewer.instanceChanged: An instance has changed that is not registered'
       );
     }
-    this.changedItems.add(item);
+    this.markItemLayoutDirty(item);
     this.render();
   }
 
@@ -349,12 +383,14 @@ export class CodeViewer<LAnnotation = undefined> {
 
   private createItem(
     input: CodeViewerItem<LAnnotation>,
+    index: number,
     top: number
   ): AdvancedVirtualizedItem<LAnnotation> {
     if (input.type === 'diff') {
       return {
         type: 'diff',
         item: input,
+        index,
         instance: new VirtualizedFileDiff<LAnnotation>(
           this.options,
           this,
@@ -371,6 +407,7 @@ export class CodeViewer<LAnnotation = undefined> {
     return {
       type: 'file',
       item: input,
+      index,
       instance: new VirtualizedFile<LAnnotation>(
         this.options as unknown as FileOptions<LAnnotation>,
         this,
@@ -382,6 +419,192 @@ export class CodeViewer<LAnnotation = undefined> {
       height: 0,
       element: undefined,
     };
+  }
+
+  /**
+   * Track the earliest index whose measured layout may now be stale. Later
+   * render passes relayout from this point forward so we do not have to rebuild
+   * positions for the whole list after every change.
+   */
+  private markLayoutDirtyFromIndex(index: number): void {
+    this.layoutDirtyIndex = Math.min(this.layoutDirtyIndex ?? index, index);
+  }
+
+  /**
+   * Mark the earliest affected item as layout-dirty after an imperative change.
+   * Each record carries its current array index so this stays O(1) even when
+   * the viewer holds a very large number of items.
+   */
+  private markItemLayoutDirty(
+    item: AdvancedVirtualizedItem<LAnnotation>
+  ): void {
+    if (this.items[item.index] !== item) {
+      throw new Error(
+        `CodeViewer.markItemLayoutDirty: unknown item id "${item.item.id}"`
+      );
+    }
+
+    this.markLayoutDirtyFromIndex(item.index);
+  }
+
+  /**
+   * Detect the common controlled-update case where the new list simply extends
+   * the existing ordered prefix. When that happens we can reuse every current
+   * record in place, sync any versioned payload changes, and append only the new
+   * tail instead of rebuilding the whole list.
+   */
+  private tryAppendItems(
+    items: readonly CodeViewerItem<LAnnotation>[]
+  ): boolean {
+    if (items.length <= this.items.length) {
+      return false;
+    }
+
+    for (let index = 0; index < this.items.length; index++) {
+      const existingItem = this.items[index];
+      if (existingItem == null) {
+        throw new Error('CodeViewer.tryAppendItems: missing existing item');
+      }
+      const nextItem = items[index];
+      if (
+        nextItem == null ||
+        existingItem.item.id !== nextItem.id ||
+        existingItem.type !== nextItem.type
+      ) {
+        return false;
+      }
+    }
+
+    for (let index = 0; index < this.items.length; index++) {
+      const existingItem = this.items[index];
+      if (existingItem == null) {
+        throw new Error('CodeViewer.tryAppendItems: missing existing item');
+      }
+      const nextItem = items[index];
+      if (nextItem == null) {
+        throw new Error(
+          'CodeViewer.tryAppendItems: append candidate missing prefix item'
+        );
+      }
+      if (this.syncItemRecord(existingItem, nextItem)) {
+        this.markLayoutDirtyFromIndex(index);
+      }
+    }
+
+    this.appendItemsInternal(items.slice(this.items.length), false);
+    this.scrollDirty = true;
+    this.render();
+    return true;
+  }
+
+  /**
+   * Reconcile a new controlled item list against the existing records by id.
+   * This reuses records and instances when type matches, cleans up removed
+   * records, rebuilds the lookup maps, and marks layout dirty whenever order,
+   * membership, or versioned item data changes.
+   */
+  private reconcileItems(items: readonly CodeViewerItem<LAnnotation>[]): void {
+    const { items: previousItems, idToItem: previousById } = this;
+    const removedItems = new Set(previousItems);
+    const nextItems: AdvancedVirtualizedItem<LAnnotation>[] = [];
+    const nextIdToItem: Map<
+      string,
+      AdvancedVirtualizedItem<LAnnotation>
+    > = new Map();
+    const nextInstanceToItem: Map<
+      object,
+      AdvancedVirtualizedItem<LAnnotation>
+    > = new Map();
+    let firstDirtyIndex: number | undefined;
+
+    for (let index = 0; index < items.length; index++) {
+      const input = items[index];
+      if (input == null) {
+        throw new Error('CodeViewer.reconcileItems: missing input item');
+      }
+      if (nextIdToItem.has(input.id)) {
+        throw new Error(`CodeViewer.setItems: duplicate id "${input.id}"`);
+      }
+
+      const previousItem = previousById.get(input.id);
+      const item =
+        previousItem != null && previousItem.type === input.type
+          ? previousItem
+          : this.createItem(input, index, 0);
+
+      item.index = index;
+
+      if (previousItem != null && previousItem.type === input.type) {
+        removedItems.delete(previousItem);
+        if (this.syncItemRecord(item, input)) {
+          firstDirtyIndex = Math.min(firstDirtyIndex ?? index, index);
+        }
+      } else {
+        firstDirtyIndex = Math.min(firstDirtyIndex ?? index, index);
+      }
+
+      if (previousItems[index] !== item) {
+        firstDirtyIndex = Math.min(firstDirtyIndex ?? index, index);
+      }
+
+      nextItems.push(item);
+      nextIdToItem.set(input.id, item);
+      nextInstanceToItem.set(item.instance, item);
+    }
+
+    for (let index = 0; index < previousItems.length; index++) {
+      const removedItem = previousItems[index];
+      if (removedItem == null || !removedItems.has(removedItem)) {
+        continue;
+      }
+      cleanRenderedItem(removedItem);
+      const dirtyIndex = Math.max(nextItems.length - 1, 0);
+      firstDirtyIndex = Math.min(firstDirtyIndex ?? dirtyIndex, dirtyIndex);
+    }
+
+    if (firstDirtyIndex == null) {
+      return;
+    }
+
+    this.items = nextItems;
+    this.idToItem = nextIdToItem;
+    this.instanceToItem = nextInstanceToItem;
+
+    if (this.renderState.firstIndex >= nextItems.length) {
+      this.renderState.firstIndex = -1;
+      this.renderState.lastIndex = -1;
+      this.renderState.height = 0;
+    } else if (this.renderState.lastIndex >= nextItems.length) {
+      this.renderState.lastIndex = nextItems.length - 1;
+    }
+
+    this.markLayoutDirtyFromIndex(firstDirtyIndex);
+    this.scrollDirty = true;
+    this.render();
+  }
+
+  /**
+   * Update a reused record from the latest controlled item only when its item
+   * version changes. Matching versions mean CodeViewer keeps the current record
+   * snapshot, which lets imperative updates remain in place until the caller
+   * intentionally publishes a newer version.
+   */
+  private syncItemRecord(
+    item: AdvancedVirtualizedItem<LAnnotation>,
+    nextItem: CodeViewerItem<LAnnotation>
+  ): boolean {
+    if (item.type !== nextItem.type) {
+      throw new Error(
+        `CodeViewer.syncItemRecord: type mismatch for id "${nextItem.id}"`
+      );
+    }
+
+    if (item.item.version === nextItem.version) {
+      return false;
+    }
+
+    item.item = nextItem;
+    return true;
   }
 
   private resolveScrollTargetTop(target: CodeViewerScrollTarget): number {
@@ -448,8 +671,13 @@ export class CodeViewer<LAnnotation = undefined> {
     ) {
       return;
     }
-    const scrollTop = this.getScrollTop();
     const height = this.getHeight();
+    if (this.layoutDirtyIndex != null) {
+      this.recomputeLayout(this.layoutDirtyIndex);
+      this.layoutDirtyIndex = undefined;
+    }
+
+    const scrollTop = this.getScrollTop();
     const scrollHeight = this.getScrollHeight();
     const containerOffset = 0;
     const fitPerfectly =
@@ -464,13 +692,6 @@ export class CodeViewer<LAnnotation = undefined> {
       fitPerfectly,
       overscrollSize: this.config.overscrollSize,
     });
-
-    if (this.changedItems.size > 0) {
-      this.recomputeLayout();
-      // TODO(amadeus): May need to figure out a local height caching system to
-      // avoid unnecessary re-computation with these instances
-      this.changedItems.clear();
-    }
 
     const { top, bottom } = this.windowSpecs;
     this.lastRenderedScrollY = scrollTop;
@@ -495,32 +716,25 @@ export class CodeViewer<LAnnotation = undefined> {
     }
 
     let prevElement: HTMLElement | undefined;
-    // NOTE(amadeus): We'll probably want to figure out how to not have to
-    // iterate through this entire array if not necessary? Maybe by hunking
-    // into positional groups at some point
     const updatedItems = new Set<AdvancedVirtualizedItem<LAnnotation>>();
-    let startingIndex: number | undefined;
-    let lastRenderedIndex = -1;
-    for (const [itemIndex, item] of this.items.entries()) {
+    const startingIndex = this.findFirstVisibleIndex(top);
+    const lastRenderedIndex = this.findLastVisibleIndex(bottom);
+
+    for (
+      let itemIndex = startingIndex;
+      itemIndex <= lastRenderedIndex;
+      itemIndex++
+    ) {
+      const item = this.items[itemIndex];
+      if (item == null) {
+        throw new Error(`CodeViewer.computeRenderRangeAndEmit: missing item`);
+      }
       const { instance } = item;
-      // We can stop iterating when we get to elements after the window
-      if (item.top > bottom) {
-        break;
-      }
-      if (item.top < top - item.height) {
-        continue;
-      }
-      startingIndex ??= itemIndex;
-      lastRenderedIndex = itemIndex;
       // If the item isn't rendered yet, we need to create a wrapper element
       // for it and render it
       if (item.element == null) {
         item.element = document.createElement(DIFFS_TAG_NAME);
-        if (prevElement == null) {
-          this.stickyContainer.prepend(item.element);
-        } else if (prevElement.nextSibling !== item.element) {
-          prevElement.after(item.element);
-        }
+        syncRenderedItemOrder(this.stickyContainer, item.element, prevElement);
         instance.virtualizedSetup();
         if (onRender(item, item.element)) {
           updatedItems.add(item);
@@ -529,6 +743,7 @@ export class CodeViewer<LAnnotation = undefined> {
       }
       // Otherwise kick off a render as necessary
       else {
+        syncRenderedItemOrder(this.stickyContainer, item.element, prevElement);
         if (onRender(item)) {
           updatedItems.add(item);
         }
@@ -536,7 +751,8 @@ export class CodeViewer<LAnnotation = undefined> {
       }
     }
 
-    this.renderState.firstIndex = startingIndex ?? -1;
+    this.renderState.firstIndex =
+      startingIndex <= lastRenderedIndex ? startingIndex : -1;
     this.renderState.lastIndex = lastRenderedIndex;
 
     this.reconcileRenderedItems(updatedItems);
@@ -817,22 +1033,101 @@ export class CodeViewer<LAnnotation = undefined> {
     return this.scrollHeight;
   }
 
-  private recomputeLayout(): void {
+  /**
+   * Find the first item whose bottom edge crosses into the viewport window.
+   * This lets scroll-time rendering jump directly near the visible range instead
+   * of linearly scanning from the start of very large item lists.
+   */
+  private findFirstVisibleIndex(top: number): number {
+    let low = 0;
+    let high = this.items.length - 1;
+    let result = this.items.length;
+
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      const item = this.items[mid];
+      if (item == null) {
+        throw new Error('CodeViewer.findFirstVisibleIndex: invalid item index');
+      }
+
+      if (item.top + item.height > top) {
+        result = mid;
+        high = mid - 1;
+      } else {
+        low = mid + 1;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Find the last item whose top edge is still within the viewport window.
+   * Paired with findFirstVisibleIndex, this bounds the render loop to only the
+   * slice of items that can actually intersect the current scroll range.
+   */
+  private findLastVisibleIndex(bottom: number): number {
+    let low = 0;
+    let high = this.items.length - 1;
+    let result = -1;
+
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      const item = this.items[mid];
+      if (item == null) {
+        throw new Error('CodeViewer.findLastVisibleIndex: invalid item index');
+      }
+
+      if (item.top <= bottom) {
+        result = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Recompute measured tops and heights starting from the earliest dirty item.
+   * Earlier items keep their existing layout, while everything from startIndex
+   * onward is remeasured so downstream positions and total scroll height stay
+   * consistent after inserts, removals, or versioned item updates.
+   */
+  private recomputeLayout(startIndex = 0): void {
+    if (this.items.length === 0) {
+      this.scrollHeight = 0;
+      return;
+    }
+
     let runningTop = 0;
-    let index = 0;
-    for (const item of this.items) {
-      if (index++ > 0) {
-        runningTop += this.viewerMetrics.gap;
+    if (startIndex > 0) {
+      const previousItem = this.items[startIndex - 1];
+      if (previousItem == null) {
+        throw new Error('CodeViewer.recomputeLayout: invalid dirty index');
+      }
+      runningTop =
+        previousItem.top + previousItem.height + this.viewerMetrics.gap;
+    }
+
+    for (let index = startIndex; index < this.items.length; index++) {
+      const item = this.items[index];
+      if (item == null) {
+        throw new Error('CodeViewer.recomputeLayout: invalid item index');
       }
       item.top = runningTop;
       if (item.type === 'diff') {
         item.height = item.instance.prepareVirtualizedItem(item.item.fileDiff);
-        runningTop += item.height;
       } else {
         item.height = item.instance.prepareVirtualizedItem(item.item.file);
-        runningTop += item.height;
+      }
+      runningTop += item.height;
+      if (index < this.items.length - 1) {
+        runningTop += this.viewerMetrics.gap;
       }
     }
+
     if (runningTop !== this.scrollHeight) {
       this.scrollDirty = true;
     }
@@ -881,6 +1176,29 @@ function onRender<LAnnotation>(
       file: item.item.file,
       lineAnnotations: item.item.annotations,
     });
+  }
+}
+
+/**
+ * Keep the rendered DOM order aligned with the current record order even when
+ * we reuse existing elements. Reused items may already be mounted elsewhere in
+ * the sticky container, so this moves them into the correct sibling position
+ * before rendering updates.
+ */
+function syncRenderedItemOrder(
+  container: HTMLElement,
+  element: HTMLElement,
+  prevElement: HTMLElement | undefined
+): void {
+  if (prevElement == null) {
+    if (container.firstChild !== element) {
+      container.prepend(element);
+    }
+    return;
+  }
+
+  if (prevElement.nextSibling !== element) {
+    prevElement.after(element);
   }
 }
 
