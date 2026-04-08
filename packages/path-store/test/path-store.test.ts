@@ -2552,6 +2552,35 @@ describe('PathStore', () => {
     ]);
   });
 
+  test('static store matches mutable wide-directory visible windows after collapse and re-expand', () => {
+    const paths = createWideDirectoryPaths(160);
+    const mutableStore = new PathStore({
+      initialExpansion: 'open',
+      paths,
+    });
+    const staticStore = new StaticPathStore({
+      initialExpansion: 'open',
+      paths,
+    });
+
+    expect(staticStore.getVisibleCount()).toBe(mutableStore.getVisibleCount());
+    expect(getVisibleRowsSansIds(staticStore, 95, 99)).toEqual(
+      getVisibleRowsSansIds(mutableStore, 95, 99)
+    );
+
+    mutableStore.collapse('wide/');
+    staticStore.collapse('wide/');
+    expect(getVisibleRowsSansIds(staticStore, 0, 1)).toEqual(
+      getVisibleRowsSansIds(mutableStore, 0, 1)
+    );
+
+    mutableStore.expand('wide/');
+    staticStore.expand('wide/');
+    expect(getVisibleRowsSansIds(staticStore, 95, 99)).toEqual(
+      getVisibleRowsSansIds(mutableStore, 95, 99)
+    );
+  });
+
   test('matches a rebuild after wide-directory mutations cross chunk boundaries', () => {
     const store = new PathStore({
       initialExpansion: 'open',

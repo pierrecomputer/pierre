@@ -5745,6 +5745,12 @@ function createScenarioFactories(
     factories.push(
       createVisibleScenarioFactory(wideDirectoryWorkload, 'middle', 200)
     );
+    factories.push(
+      createVisibleScenarioFactory(wideDirectoryWorkload, 'middle', 30)
+    );
+    factories.push(
+      createVisibleScenarioFactory(wideDirectoryWorkload, 'middle', 500)
+    );
 
     const flattenChainWorkload = loadWorkload(
       PHASE_5_FLATTEN_CHAIN_WORKLOAD_NAME

@@ -1125,6 +1125,28 @@ The main rejected primary directions are:
 - large-directory indexed aggregates
 - visible jump benchmarks
 
+Phase 4 closure note (2026-04-08):
+
+- width thresholds are implemented in both mutable and static selection paths.
+- medium-directory chunk summaries are implemented in both mutable and static
+  selection paths.
+- large-directory indexed aggregates are **deferred intentionally**. The current
+  wide-directory benchmark evidence does not show Phase 4 as blocking enough to
+  justify a heavier second-tier structure yet.
+- visible jump benchmarks are now recorded with:
+  - `bun ws path-store benchmark -- --filter '^visible-middle/wide-directory-5k/(30|200|500)$'`
+  - `visible-middle/wide-directory-5k/30` → p50 `1.04 µs`, p95 `1.50 µs`
+  - `visible-middle/wide-directory-5k/200` → p50 `6.17 µs`, p95 `7.83 µs`
+  - `visible-middle/wide-directory-5k/500` → p50 `15.92 µs`, p95 `18.50 µs`
+- If large-directory aggregates are revisited later, the first candidate should
+  remain a Fenwick-style index or equivalent local aggregate tree rather than a
+  global visible-order structure.
+- Reopen this question only when same-workload wide-directory visible jumps are
+  shown to be a real bottleneck, or when a prototype clears a meaningful gate:
+  at least 20% p50 improvement on the primary scenario, no more than 10% p95
+  regression on same-workload guardrails, and no correctness or mutation-cost
+  regressions.
+
 ### Phase 5: Flattening Projection
 
 - flatten chain detection
