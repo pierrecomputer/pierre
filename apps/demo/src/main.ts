@@ -420,6 +420,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
       const fileAnnotations = patchAnnotations[hunkIndex];
       let isEditing = false;
       const options: FileDiffOptions<LineCommentMetadata> = {
+        expandUnchanged: true,
         theme: DEMO_THEME,
         themeType,
         diffStyle: unified ? 'unified' : 'split',
@@ -478,7 +479,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         // expandUnchanged: true,
 
         // Hover Decoration Snippets
-        enableGutterUtility: true,
+        // enableGutterUtility: true,
         // onGutterUtilityClick(event) {
         //   console.log('onGutterUtilityClick', event);
         // },
@@ -970,27 +971,39 @@ const DECORATIONS: FileDecorationItem[] = [
 
 const DECORATIONS_DIFF: DiffDecorationItem[] = [
   {
-    lineNumber: 1,
-    side: 'deletions',
-    bar: true,
-    /* color: 'red' */
-  },
-  {
     lineNumber: 2,
     endLineNumber: 6,
     side: 'additions',
     bar: true,
+    // color: 'red',
     background: 'red',
-    // color: 'blue',
   },
   {
     lineNumber: 5,
-    endLineNumber: 11,
+    endLineNumber: 6,
     side: 'additions',
     bar: true,
     background: true,
-    // background: '#123456',
-    // color: 'orange',
+  },
+  {
+    lineNumber: 7,
+    side: 'additions',
+    bar: true,
+    background: true,
+  },
+  {
+    lineNumber: 9,
+    endLineNumber: 15,
+    side: 'additions',
+    bar: true,
+    background: true,
+  },
+  {
+    lineNumber: 12,
+    endLineNumber: 15,
+    side: 'additions',
+    bar: true,
+    background: true,
   },
 ];
 
@@ -1190,7 +1203,7 @@ if (renderFileButton != null) {
       // },
 
       // Hover Decoration Snippets
-      enableGutterUtility: true,
+      // enableGutterUtility: true,
       // onGutterUtilityClick(event) {
       //   console.log('onGutterUtilityClick', event);
       // },
@@ -1289,7 +1302,7 @@ if (renderFileConflictButton != null) {
             }
           : null),
         enableLineSelection: true,
-        enableGutterUtility: true,
+        // enableGutterUtility: true,
         maxContextLines: 4,
 
         // Token Testing Helpers

@@ -151,6 +151,7 @@ export function normalizeFileDecorations<Metadata>(
   for (const [sourceIndex, decoration] of decorations.entries()) {
     applyDecorationRange(normalized, decoration, sourceIndex);
   }
+  finalizeBarDepths(normalized);
   return normalized;
 }
 
@@ -164,6 +165,8 @@ export function normalizeDiffDecorations<Metadata>(
   for (const [sourceIndex, decoration] of decorations.entries()) {
     applyDecorationRange(normalized[decoration.side], decoration, sourceIndex);
   }
+  finalizeBarDepths(normalized.additions);
+  finalizeBarDepths(normalized.deletions);
   return normalized;
 }
 
@@ -399,6 +402,80 @@ function resolveMergedBarLayerCaps(
 
 function cloneVisibleBarLayer(layer: VisibleBarLayer): VisibleBarLayer {
   return { ...layer };
+}
+
+function finalizeBarDepths(map: NormalizedLineDecorationMap): void {
+  const priorityBySourceIndex = new Map<
+    number,
+    { lineNumber: number; sourceIndex: number }
+  >();
+  const higherNeighborsBySourceIndex = new Map<number, Set<number>>();
+
+  for (const lineDecorations of Object.values(map)) {
+    const barLayers = lineDecorations?.barLayers;
+    if (barLayers == null || barLayers.length === 0) {
+      continue;
+    }
+
+    for (const layer of barLayers) {
+      if (!priorityBySourceIndex.has(layer.sourceIndex)) {
+        priorityBySourceIndex.set(layer.sourceIndex, {
+          lineNumber: layer.lineNumber,
+          sourceIndex: layer.sourceIndex,
+        });
+      }
+    }
+
+    for (let index = 0; index < barLayers.length - 1; index++) {
+      const lowerLayer = barLayers[index];
+      const higherLayer = barLayers[index + 1];
+      if (lowerLayer == null || higherLayer == null) {
+        continue;
+      }
+
+      const higherNeighbors =
+        higherNeighborsBySourceIndex.get(lowerLayer.sourceIndex) ?? new Set();
+      higherNeighborsBySourceIndex.set(
+        lowerLayer.sourceIndex,
+        higherNeighbors
+      );
+      higherNeighbors.add(higherLayer.sourceIndex);
+    }
+  }
+
+  const coveredDepthBySourceIndex = new Map<number, number>();
+  const sortedSourceIndices = [...priorityBySourceIndex.values()]
+    .sort((first, second) => compareDecorationPriority(second, first))
+    .map(({ sourceIndex }) => sourceIndex);
+
+  for (const sourceIndex of sortedSourceIndices) {
+    const higherNeighbors = higherNeighborsBySourceIndex.get(sourceIndex);
+    if (higherNeighbors == null || higherNeighbors.size === 0) {
+      coveredDepthBySourceIndex.set(sourceIndex, 0);
+      continue;
+    }
+
+    let maxCoveredDepth = 0;
+    for (const higherSourceIndex of higherNeighbors) {
+      const higherCoveredDepth = coveredDepthBySourceIndex.get(higherSourceIndex) ?? 0;
+      if (higherCoveredDepth + 1 > maxCoveredDepth) {
+        maxCoveredDepth = higherCoveredDepth + 1;
+      }
+    }
+
+    coveredDepthBySourceIndex.set(sourceIndex, maxCoveredDepth);
+  }
+
+  for (const lineDecorations of Object.values(map)) {
+    const topBarSourceIndex = lineDecorations?.barSourceIndex;
+    if (topBarSourceIndex == null || lineDecorations == null) {
+      continue;
+    }
+
+    const coveredCount = coveredDepthBySourceIndex.get(topBarSourceIndex) ?? 0;
+    lineDecorations.barDepth =
+      coveredCount > 0 ? getDecorationDepth(coveredCount) : undefined;
+  }
 }
 
 function incrementDecorationDepth(

@@ -95,10 +95,24 @@ describe('Decoration Rendering', () => {
     expect(
       gutterLine1BarStack.properties['data-decoration-bar-layer-count']
     ).toBe('2');
-    expect(gutterLine1BarStack.children).toHaveLength(0);
-    expect(gutterLine1BarStack.properties.style).toBe(
-      '--diffs-decoration-bar-layer-count:2;--diffs-decoration-bar-color-1:green;--diffs-decoration-bar-tier-1:1;--diffs-decoration-bar-start-cap-1:1;--diffs-decoration-bar-end-cap-1:0;--diffs-decoration-bar-color-2:red;--diffs-decoration-bar-tier-2:2;--diffs-decoration-bar-start-cap-2:1;--diffs-decoration-bar-end-cap-2:0;'
+    expect(gutterLine1BarStack.properties['data-decoration-bar-overlap']).toBe(
+      ''
     );
+    expect(gutterLine1BarStack.properties['data-decoration-bar-second']).toBe(
+      ''
+    );
+    expect(
+      gutterLine1BarStack.properties['data-decoration-bar-third']
+    ).toBeUndefined();
+    expect(gutterLine1BarStack.children).toHaveLength(0);
+    expectStyleContains(gutterLine1BarStack.properties.style, [
+      '--diffs-decoration-bar-width-1:6px;',
+      '--diffs-decoration-bar-color-1:green;',
+      '--diffs-decoration-bar-start-radius-1:4px;',
+      '--diffs-decoration-bar-end-radius-1:0px;',
+      '--diffs-decoration-bar-width-2:10px;',
+      'color-mix(in lab, red 74%, var(--diffs-bg))',
+    ]);
     expect(gutterLine1.properties['data-decoration-bar-depth']).toBe('2');
     expect(gutterLine1.properties['data-decoration-bar-start']).toBe('0,1');
     expect(gutterLine1.properties['data-decoration-bar-end']).toBe('0');
@@ -106,10 +120,24 @@ describe('Decoration Rendering', () => {
     expect(
       gutterLine2BarStack.properties['data-decoration-bar-layer-count']
     ).toBe('2');
-    expect(gutterLine2BarStack.children).toHaveLength(0);
-    expect(gutterLine2BarStack.properties.style).toBe(
-      '--diffs-decoration-bar-layer-count:2;--diffs-decoration-bar-color-1:orange;--diffs-decoration-bar-tier-1:1;--diffs-decoration-bar-start-cap-1:1;--diffs-decoration-bar-end-cap-1:1;--diffs-decoration-bar-color-2:green;--diffs-decoration-bar-tier-2:2;--diffs-decoration-bar-start-cap-2:0;--diffs-decoration-bar-end-cap-2:0;'
+    expect(gutterLine2BarStack.properties['data-decoration-bar-overlap']).toBe(
+      ''
     );
+    expect(gutterLine2BarStack.properties['data-decoration-bar-second']).toBe(
+      ''
+    );
+    expect(
+      gutterLine2BarStack.properties['data-decoration-bar-third']
+    ).toBeUndefined();
+    expect(gutterLine2BarStack.children).toHaveLength(0);
+    expectStyleContains(gutterLine2BarStack.properties.style, [
+      '--diffs-decoration-bar-width-1:6px;',
+      '--diffs-decoration-bar-color-1:orange;',
+      '--diffs-decoration-bar-start-radius-1:4px;',
+      '--diffs-decoration-bar-end-radius-1:4px;',
+      '--diffs-decoration-bar-width-2:10px;',
+      'color-mix(in lab, green 74%, var(--diffs-bg))',
+    ]);
     expect(gutterLine2.properties['data-decoration-bar-depth']).toBe('2');
     expect(gutterLine2.properties['data-decoration-bar-start']).toBe('2,3');
     expect(gutterLine2.properties['data-decoration-bar-end']).toBe('3');
@@ -122,10 +150,22 @@ describe('Decoration Rendering', () => {
     expect(
       gutterLine3BarStack.properties['data-decoration-bar-layer-count']
     ).toBe('1');
+    expect(
+      gutterLine3BarStack.properties['data-decoration-bar-overlap']
+    ).toBeUndefined();
+    expect(
+      gutterLine3BarStack.properties['data-decoration-bar-second']
+    ).toBeUndefined();
+    expect(
+      gutterLine3BarStack.properties['data-decoration-bar-third']
+    ).toBeUndefined();
     expect(gutterLine3BarStack.children).toHaveLength(0);
-    expect(gutterLine3BarStack.properties.style).toBe(
-      '--diffs-decoration-bar-layer-count:1;--diffs-decoration-bar-color-1:green;--diffs-decoration-bar-tier-1:1;--diffs-decoration-bar-start-cap-1:0;--diffs-decoration-bar-end-cap-1:1;'
-    );
+    expectStyleContains(gutterLine3BarStack.properties.style, [
+      '--diffs-decoration-bar-width-1:6px;',
+      '--diffs-decoration-bar-color-1:green;',
+      '--diffs-decoration-bar-end-radius-1:4px;',
+      '--diffs-decoration-bar-shadow-3:none;',
+    ]);
     expect(gutterLine3.properties['data-decoration-bar-depth']).toBe('1');
     expect(gutterLine3.properties['data-decoration-bar-start']).toBeUndefined();
     expect(gutterLine3.properties['data-decoration-bar-end']).toBe('1');
@@ -196,6 +236,64 @@ describe('Decoration Rendering', () => {
     );
   });
 
+  test('file renderer keeps the visible bar when a higher overlapping decoration has no bar', async () => {
+    const file = {
+      name: 'example.ts',
+      contents: ['one', 'two', 'three'].join('\n'),
+    };
+    const decorations: FileDecorationItem[] = [
+      { lineNumber: 1, endLineNumber: 3, bar: true, color: 'red' },
+      { lineNumber: 2, endLineNumber: 3, background: '#111111' },
+    ];
+
+    const renderer = new FileRenderer();
+    renderer.setDecorations(decorations);
+    const result = await renderer.asyncRender(file);
+    const codeAST = renderer.renderCodeAST(result) as HASTElement[];
+    const [gutter, content] = codeAST;
+    assertDefined(gutter, 'expected gutter column');
+    assertDefined(content, 'expected content column');
+
+    const gutterLine2 = findElementByProperty(
+      gutter.children,
+      'data-column-number',
+      2
+    );
+    const contentLine2 = findElementByProperty(
+      content.children,
+      'data-line',
+      2
+    );
+
+    assertDefined(gutterLine2, 'expected second gutter line');
+    assertDefined(contentLine2, 'expected second content line');
+
+    const gutterLine2BarStack = findElementByProperty(
+      gutterLine2.children,
+      'data-decoration-bar-stack',
+      ''
+    );
+
+    assertDefined(gutterLine2BarStack, 'expected second gutter bar stack');
+    expect(gutterLine2.properties['data-decoration-bar']).toBe('0');
+    expect(gutterLine2.properties['data-decoration-bar-depth']).toBe('1');
+    expect(gutterLine2.properties.style).toBe(
+      '--diffs-decoration-bar-color:red;'
+    );
+    expect(
+      gutterLine2BarStack.properties['data-decoration-bar-layer-count']
+    ).toBe('1');
+    expectStyleContains(gutterLine2BarStack.properties.style, [
+      '--diffs-decoration-bar-color-1:red;',
+      '--diffs-decoration-bar-width-1:6px;',
+      '--diffs-decoration-bar-shadow-3:none;',
+    ]);
+    expect(contentLine2.properties['data-decoration-bg']).toBe('1');
+    expect(contentLine2.properties.style).toBe(
+      '--diffs-decoration-bg:#111111;'
+    );
+  });
+
   test('file renderer keeps one bar stack element while bar depth clamps at 3', async () => {
     const file = {
       name: 'example.ts',
@@ -235,10 +333,126 @@ describe('Decoration Rendering', () => {
     expect(
       gutterLine4BarStack.properties['data-decoration-bar-layer-count']
     ).toBe('4');
-    expect(gutterLine4BarStack.children).toHaveLength(0);
-    expect(gutterLine4BarStack.properties.style).toBe(
-      '--diffs-decoration-bar-layer-count:4;--diffs-decoration-bar-color-1:yellow;--diffs-decoration-bar-tier-1:1;--diffs-decoration-bar-start-cap-1:0;--diffs-decoration-bar-end-cap-1:1;--diffs-decoration-bar-color-2:green;--diffs-decoration-bar-tier-2:2;--diffs-decoration-bar-start-cap-2:0;--diffs-decoration-bar-end-cap-2:1;--diffs-decoration-bar-color-3:blue;--diffs-decoration-bar-tier-3:3;--diffs-decoration-bar-start-cap-3:0;--diffs-decoration-bar-end-cap-3:1;--diffs-decoration-bar-color-4:red;--diffs-decoration-bar-tier-4:3;--diffs-decoration-bar-start-cap-4:0;--diffs-decoration-bar-end-cap-4:1;'
+    expect(gutterLine4BarStack.properties['data-decoration-bar-overlap']).toBe(
+      ''
     );
+    expect(gutterLine4BarStack.properties['data-decoration-bar-second']).toBe(
+      ''
+    );
+    expect(gutterLine4BarStack.properties['data-decoration-bar-third']).toBe(
+      ''
+    );
+    expect(gutterLine4BarStack.children).toHaveLength(0);
+    expectStyleContains(gutterLine4BarStack.properties.style, [
+      '--diffs-decoration-bar-width-1:6px;',
+      '--diffs-decoration-bar-width-2:10px;',
+      '--diffs-decoration-bar-width-3:14px;',
+      '--diffs-decoration-bar-color-3:color-mix(in lab, blue 58%, var(--diffs-bg));',
+      '--diffs-decoration-bar-shadow-3:0 0 0 2px var(--diffs-bg),-4px 0 0 2px var(--diffs-bg),-4px 0 0 0 color-mix(in lab, red 58%, var(--diffs-bg));',
+    ]);
+    expectStyleNotContains(gutterLine4BarStack.properties.style, [
+      '--diffs-decoration-bar-color-4:',
+    ]);
+  });
+
+  test('diff renderer collapses overlapping same-color bars into one continuous visual bar', async () => {
+    const oldFile = {
+      name: 'example.ts',
+      contents: '',
+    };
+    const newFile = {
+      name: 'example.ts',
+      contents: Array.from(
+        { length: 12 },
+        (_, index) => `line ${index + 1}`
+      ).join('\n'),
+    };
+    const diff = parseDiffFromFile(oldFile, newFile);
+    const decorations: DiffDecorationItem[] = [
+      {
+        side: 'additions',
+        lineNumber: 2,
+        endLineNumber: 6,
+        bar: true,
+        background: 'red',
+      },
+      {
+        side: 'additions',
+        lineNumber: 5,
+        endLineNumber: 11,
+        bar: true,
+        background: true,
+      },
+    ];
+
+    const renderer = new DiffHunksRenderer({
+      diffStyle: 'split',
+      expandUnchanged: true,
+    });
+    renderer.setDecorations(decorations);
+    const result = await renderer.asyncRender(diff);
+    assertDefined(result.additionsGutterAST, 'expected additions gutter AST');
+
+    const additionsLine5 = findElementByProperty(
+      result.additionsGutterAST,
+      'data-column-number',
+      5
+    );
+    const additionsLine6 = findElementByProperty(
+      result.additionsGutterAST,
+      'data-column-number',
+      6
+    );
+
+    assertDefined(additionsLine5, 'expected additions gutter line 5');
+    assertDefined(additionsLine6, 'expected additions gutter line 6');
+
+    const additionsLine5BarStack = findElementByProperty(
+      additionsLine5.children,
+      'data-decoration-bar-stack',
+      ''
+    );
+    const additionsLine6BarStack = findElementByProperty(
+      additionsLine6.children,
+      'data-decoration-bar-stack',
+      ''
+    );
+
+    assertDefined(
+      additionsLine5BarStack,
+      'expected additions line 5 bar stack'
+    );
+    assertDefined(
+      additionsLine6BarStack,
+      'expected additions line 6 bar stack'
+    );
+
+    expect(additionsLine5.properties['data-decoration-bar']).toBe('0,1');
+    expect(additionsLine6.properties['data-decoration-bar']).toBe('0,1');
+    expect(additionsLine5.properties['data-decoration-bar-depth']).toBe('2');
+    expect(additionsLine6.properties['data-decoration-bar-depth']).toBe('2');
+    expect(
+      additionsLine5BarStack.properties['data-decoration-bar-layer-count']
+    ).toBe('1');
+    expect(
+      additionsLine6BarStack.properties['data-decoration-bar-layer-count']
+    ).toBe('1');
+    expectStyleContains(additionsLine5BarStack.properties.style, [
+      '--diffs-decoration-bar-color-1:var(--diffs-modified-base);',
+      '--diffs-decoration-bar-width-1:6px;',
+    ]);
+    expectStyleContains(additionsLine6BarStack.properties.style, [
+      '--diffs-decoration-bar-color-1:var(--diffs-modified-base);',
+      '--diffs-decoration-bar-width-1:6px;',
+    ]);
+    expectStyleNotContains(additionsLine5BarStack.properties.style, [
+      'color-mix(',
+      '--diffs-decoration-bar-width-2:',
+    ]);
+    expectStyleNotContains(additionsLine6BarStack.properties.style, [
+      'color-mix(',
+      '--diffs-decoration-bar-width-2:',
+    ]);
   });
 
   test('merged normalized decorations keep source-order identity and line-number winners', () => {
@@ -832,10 +1046,23 @@ describe('Decoration Rendering', () => {
     expect(
       unifiedLine1BarStack.properties['data-decoration-bar-layer-count']
     ).toBe('2');
-    expect(unifiedLine1BarStack.children).toHaveLength(0);
-    expect(unifiedLine1BarStack.properties.style).toBe(
-      '--diffs-decoration-bar-layer-count:2;--diffs-decoration-bar-color-1:blue;--diffs-decoration-bar-tier-1:1;--diffs-decoration-bar-start-cap-1:1;--diffs-decoration-bar-end-cap-1:1;--diffs-decoration-bar-color-2:red;--diffs-decoration-bar-tier-2:2;--diffs-decoration-bar-start-cap-2:1;--diffs-decoration-bar-end-cap-2:1;'
+    expect(unifiedLine1BarStack.properties['data-decoration-bar-overlap']).toBe(
+      ''
     );
+    expect(unifiedLine1BarStack.properties['data-decoration-bar-second']).toBe(
+      ''
+    );
+    expect(
+      unifiedLine1BarStack.properties['data-decoration-bar-third']
+    ).toBeUndefined();
+    expect(unifiedLine1BarStack.children).toHaveLength(0);
+    expectStyleContains(unifiedLine1BarStack.properties.style, [
+      '--diffs-decoration-bar-width-1:6px;',
+      '--diffs-decoration-bar-color-1:blue;',
+      '--diffs-decoration-bar-start-radius-2:4px;',
+      '--diffs-decoration-bar-end-radius-2:4px;',
+      'color-mix(in lab, red 74%, var(--diffs-bg))',
+    ]);
     expect(unifiedLine1Gutter.properties['data-decoration-bar-depth']).toBe(
       '2'
     );
@@ -981,6 +1208,23 @@ function findElementByProperty(
   value: string | number
 ): HASTElement | undefined {
   return findElementByProperties(nodes, { [property]: value });
+}
+
+function expectStyleContains(style: unknown, expectedParts: string[]): void {
+  expect(typeof style).toBe('string');
+  for (const expectedPart of expectedParts) {
+    expect(style).toContain(expectedPart);
+  }
+}
+
+function expectStyleNotContains(
+  style: unknown,
+  unexpectedParts: string[]
+): void {
+  expect(typeof style).toBe('string');
+  for (const unexpectedPart of unexpectedParts) {
+    expect(style).not.toContain(unexpectedPart);
+  }
 }
 
 function findElementByProperties(

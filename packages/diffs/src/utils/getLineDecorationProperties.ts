@@ -51,13 +51,20 @@ export function getLineDecorationGutterChildren(
     return undefined;
   }
 
+  const visualBarLayers = collapseBarLayersForRendering(barLayers);
+
   return [
     createHastElement({
       tagName: 'span',
       properties: {
         'data-decoration-bar-stack': '',
-        'data-decoration-bar-layer-count': String(barLayers.length),
-        style: getLineDecorationBarStackStyle(barLayers),
+        'data-decoration-bar-layer-count': String(visualBarLayers.length),
+        'data-decoration-bar-overlap':
+          visualBarLayers.length > 1 ? '' : undefined,
+        'data-decoration-bar-second':
+          visualBarLayers.length > 1 ? '' : undefined,
+        'data-decoration-bar-third':
+          visualBarLayers.length > 2 ? '' : undefined,
       },
     }),
   ];
@@ -131,6 +138,12 @@ export function mergeNormalizedLineDecorations(
     second.barLayers
   );
   const topBar = barLayers?.at(-1);
+  const topBarDepth =
+    topBar?.sourceIndex === first.barSourceIndex
+      ? first.barDepth
+      : topBar?.sourceIndex === second.barSourceIndex
+        ? second.barDepth
+        : undefined;
 
   return {
     barIndices,
@@ -143,7 +156,7 @@ export function mergeNormalizedLineDecorations(
     backgroundColor: background?.color,
     backgroundLineNumber: background?.lineNumber,
     backgroundSourceIndex: background?.sourceIndex,
-    barDepth: mergeDecorationDepth(first.barDepth, second.barDepth),
+    barDepth: topBarDepth,
     barLayers,
     backgroundDepth: mergeDecorationDepth(
       first.backgroundDepth,
@@ -155,6 +168,8 @@ export function mergeNormalizedLineDecorations(
 function getLineDecorationBarProperties(
   decorations: NormalizedLineDecorations | undefined
 ): Properties | undefined {
+  const topmostBarEndIndices = getTopmostBarEndIndices(decorations);
+
   return mergeHastProperties(
     mergeHastProperties(
       getLineDecorationProperties(
@@ -173,42 +188,45 @@ function getLineDecorationBarProperties(
       'data-decoration-bar-start',
       decorations?.startIndices,
       'data-decoration-bar-end',
-      decorations?.endIndices
+      topmostBarEndIndices
     )
   );
 }
 
-function getLineDecorationBarStackStyle(barLayers: VisibleBarLayer[]): string {
-  const serializedLayers = [...barLayers].reverse();
-  const styles = [
-    `--diffs-decoration-bar-layer-count:${serializedLayers.length};`,
-  ];
-
-  for (const [index, layer] of serializedLayers.entries()) {
-    const layerNumber = index + 1;
-    styles.push(`--diffs-decoration-bar-color-${layerNumber}:${layer.color};`);
-    styles.push(
-      `--diffs-decoration-bar-tier-${layerNumber}:${getBarVisualTier(layerNumber)};`
-    );
-    styles.push(
-      `--diffs-decoration-bar-start-cap-${layerNumber}:${layer.showStartCap ? 1 : 0};`
-    );
-    styles.push(
-      `--diffs-decoration-bar-end-cap-${layerNumber}:${layer.showEndCap ? 1 : 0};`
-    );
+function getTopmostBarEndIndices(
+  decorations: NormalizedLineDecorations | undefined
+): number[] | undefined {
+  const topmostBarSourceIndex = decorations?.barSourceIndex;
+  if (topmostBarSourceIndex == null) {
+    return undefined;
   }
 
-  return styles.join('');
+  return (decorations?.endIndices?.includes(topmostBarSourceIndex) ?? false)
+    ? [topmostBarSourceIndex]
+    : undefined;
 }
 
-function getBarVisualTier(layerNumber: number): 1 | 2 | 3 {
-  if (layerNumber <= 1) {
-    return 1;
+// When adjacent visible layers share the same bar color, render them as one
+// continuous visual bar so overlap identity does not create artificial gaps.
+function collapseBarLayersForRendering(
+  barLayers: VisibleBarLayer[]
+): VisibleBarLayer[] {
+  const serializedLayers = [...barLayers].reverse();
+  const collapsed: VisibleBarLayer[] = [];
+
+  for (const layer of serializedLayers) {
+    const previousLayer = collapsed.at(-1);
+    if (previousLayer?.color !== layer.color) {
+      collapsed.push({ ...layer });
+      continue;
+    }
+
+    previousLayer.showStartCap =
+      previousLayer.showStartCap && layer.showStartCap;
+    previousLayer.showEndCap = previousLayer.showEndCap && layer.showEndCap;
   }
-  if (layerNumber === 2) {
-    return 2;
-  }
-  return 3;
+
+  return collapsed.reverse();
 }
 
 function getLineDecorationProperties(
