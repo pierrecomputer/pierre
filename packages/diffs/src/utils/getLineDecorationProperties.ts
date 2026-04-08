@@ -1,10 +1,15 @@
-import type { Properties } from 'hast';
+import type { ElementContent, Properties } from 'hast';
 
+import { createHastElement } from './hast_utils';
 import {
   getHigherPriorityDecoration,
   mergeDecorationDepth,
+  mergeVisibleBarLayerStacks,
 } from './normalizeLineDecorations';
-import type { NormalizedLineDecorations } from './normalizeLineDecorations';
+import type {
+  NormalizedLineDecorations,
+  VisibleBarLayer,
+} from './normalizeLineDecorations';
 
 export function getLineDecorationGutterProperties(
   decorations: NormalizedLineDecorations | undefined
@@ -36,6 +41,26 @@ export function getLineDecorationContentProperties(
       )
     )
   );
+}
+
+export function getLineDecorationGutterChildren(
+  decorations: NormalizedLineDecorations | undefined
+): ElementContent[] | undefined {
+  const barLayers = decorations?.barLayers;
+  if (barLayers == null || barLayers.length === 0) {
+    return undefined;
+  }
+
+  return [
+    createHastElement({
+      tagName: 'span',
+      properties: {
+        'data-decoration-bar-stack': '',
+        'data-decoration-bar-layer-count': String(barLayers.length),
+        style: getLineDecorationBarStackStyle(barLayers),
+      },
+    }),
+  ];
 }
 
 export function mergeHastProperties(
@@ -101,19 +126,25 @@ export function mergeNormalizedLineDecorations(
       sourceIndex: second.backgroundSourceIndex,
     }
   );
+  const barLayers = mergeVisibleBarLayerStacks(
+    first.barLayers,
+    second.barLayers
+  );
+  const topBar = barLayers?.at(-1);
 
   return {
     barIndices,
     startIndices: mergeSortedIndices(first.startIndices, second.startIndices),
     endIndices: mergeSortedIndices(first.endIndices, second.endIndices),
     backgroundIndices,
-    barColor: bar?.color,
-    barLineNumber: bar?.lineNumber,
-    barSourceIndex: bar?.sourceIndex,
+    barColor: topBar?.color ?? bar?.color,
+    barLineNumber: topBar?.lineNumber ?? bar?.lineNumber,
+    barSourceIndex: topBar?.sourceIndex ?? bar?.sourceIndex,
     backgroundColor: background?.color,
     backgroundLineNumber: background?.lineNumber,
     backgroundSourceIndex: background?.sourceIndex,
     barDepth: mergeDecorationDepth(first.barDepth, second.barDepth),
+    barLayers,
     backgroundDepth: mergeDecorationDepth(
       first.backgroundDepth,
       second.backgroundDepth
@@ -145,6 +176,39 @@ function getLineDecorationBarProperties(
       decorations?.endIndices
     )
   );
+}
+
+function getLineDecorationBarStackStyle(barLayers: VisibleBarLayer[]): string {
+  const serializedLayers = [...barLayers].reverse();
+  const styles = [
+    `--diffs-decoration-bar-layer-count:${serializedLayers.length};`,
+  ];
+
+  for (const [index, layer] of serializedLayers.entries()) {
+    const layerNumber = index + 1;
+    styles.push(`--diffs-decoration-bar-color-${layerNumber}:${layer.color};`);
+    styles.push(
+      `--diffs-decoration-bar-tier-${layerNumber}:${getBarVisualTier(layerNumber)};`
+    );
+    styles.push(
+      `--diffs-decoration-bar-start-cap-${layerNumber}:${layer.showStartCap ? 1 : 0};`
+    );
+    styles.push(
+      `--diffs-decoration-bar-end-cap-${layerNumber}:${layer.showEndCap ? 1 : 0};`
+    );
+  }
+
+  return styles.join('');
+}
+
+function getBarVisualTier(layerNumber: number): 1 | 2 | 3 {
+  if (layerNumber <= 1) {
+    return 1;
+  }
+  if (layerNumber === 2) {
+    return 2;
+  }
+  return 3;
 }
 
 function getLineDecorationProperties(

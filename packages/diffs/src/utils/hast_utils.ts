@@ -98,8 +98,21 @@ export function createGutterItem(
   lineType: LineTypes | 'buffer' | 'separator' | 'annotation',
   lineNumber: number,
   lineIndex: string,
-  properties: Properties = {}
+  properties: Properties = {},
+  additionalChildren: ElementContent[] = []
 ): HASTElement {
+  const children: ElementContent[] = [];
+  if (lineNumber != null) {
+    children.push(
+      createHastElement({
+        tagName: 'span',
+        properties: { 'data-line-number-content': '' },
+        children: [createTextNodeElement(`${lineNumber}`)],
+      })
+    );
+  }
+  children.push(...additionalChildren);
+
   return createHastElement({
     tagName: 'div',
     properties: {
@@ -108,16 +121,7 @@ export function createGutterItem(
       'data-line-index': lineIndex,
       ...properties,
     },
-    children:
-      lineNumber != null
-        ? [
-            createHastElement({
-              tagName: 'span',
-              properties: { 'data-line-number-content': '' },
-              children: [createTextNodeElement(`${lineNumber}`)],
-            }),
-          ]
-        : undefined,
+    children: children.length > 0 ? children : undefined,
   });
 }
 

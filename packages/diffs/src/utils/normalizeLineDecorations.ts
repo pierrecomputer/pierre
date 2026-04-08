@@ -1,9 +1,18 @@
 import type { DiffDecorationItem, FileDecorationItem } from '../types';
 
 const DEFAULT_DECORATION_COLOR = 'var(--diffs-modified-base)';
-const MAX_VISIBLE_DECORATION_DEPTH = 3;
+const MAX_DECORATION_VISUAL_DEPTH = 3;
 
 export type DecorationOverlapDepth = 1 | 2 | 3;
+
+export interface VisibleBarLayer {
+  color: string;
+  lineNumber: number;
+  endLineNumber: number;
+  sourceIndex: number;
+  showStartCap: boolean;
+  showEndCap: boolean;
+}
 
 export interface NormalizedLineDecorations {
   barIndices?: number[];
@@ -17,6 +26,7 @@ export interface NormalizedLineDecorations {
   backgroundLineNumber?: number;
   backgroundSourceIndex?: number;
   barDepth?: DecorationOverlapDepth;
+  barLayers?: VisibleBarLayer[];
   backgroundDepth?: DecorationOverlapDepth;
 }
 
@@ -74,7 +84,12 @@ function applyDecorationRange<Metadata>(
   const barState =
     barColor == null
       ? undefined
-      : createDecorationWinner(decoration.lineNumber, sourceIndex, barColor);
+      : createVisibleBarLayer(
+          decoration.lineNumber,
+          range.endLineNumber,
+          sourceIndex,
+          barColor
+        );
   const backgroundState =
     backgroundColor == null
       ? undefined
@@ -97,17 +112,15 @@ function applyDecorationRange<Metadata>(
       lineDecorations.barDepth = incrementDecorationDepth(
         lineDecorations.barDepth
       );
-      const nextBar = getHigherPriorityDecoration(
-        {
-          color: lineDecorations.barColor,
-          lineNumber: lineDecorations.barLineNumber,
-          sourceIndex: lineDecorations.barSourceIndex,
-        },
-        barState
+      lineDecorations.barLayers = mergeVisibleBarLayersForLine(
+        lineDecorations.barLayers,
+        barState,
+        lineNumber
       );
-      lineDecorations.barColor = nextBar?.color;
-      lineDecorations.barLineNumber = nextBar?.lineNumber;
-      lineDecorations.barSourceIndex = nextBar?.sourceIndex;
+      const topBar = lineDecorations.barLayers.at(-1);
+      lineDecorations.barColor = topBar?.color;
+      lineDecorations.barLineNumber = topBar?.lineNumber;
+      lineDecorations.barSourceIndex = topBar?.sourceIndex;
     }
     if (backgroundState != null) {
       const backgroundIndices = lineDecorations.backgroundIndices ?? [];
@@ -226,6 +239,24 @@ export function mergeDecorationDepth(
   return getDecorationDepth(first + second);
 }
 
+export function mergeVisibleBarLayerStacks(
+  first: VisibleBarLayer[] | undefined,
+  second: VisibleBarLayer[] | undefined
+): VisibleBarLayer[] | undefined {
+  if (first == null || first.length === 0) {
+    return second;
+  }
+  if (second == null || second.length === 0) {
+    return first;
+  }
+
+  const merged = sortVisibleBarLayers([
+    ...first.map(cloneVisibleBarLayer),
+    ...second.map(cloneVisibleBarLayer),
+  ]);
+  return resolveMergedBarLayerCaps(merged);
+}
+
 function getNormalizedRange(
   lineNumber: number,
   endLineNumber: number | undefined
@@ -275,6 +306,22 @@ function createDecorationWinner(
   };
 }
 
+function createVisibleBarLayer(
+  lineNumber: number,
+  endLineNumber: number,
+  sourceIndex: number,
+  color: string
+): VisibleBarLayer {
+  return {
+    color,
+    lineNumber,
+    endLineNumber,
+    sourceIndex,
+    showStartCap: false,
+    showEndCap: false,
+  };
+}
+
 // This keeps overlap resolution incremental so renderers can read one finished
 // winner per line instead of re-sorting active decorations.
 function compareDecorationPriority(
@@ -287,6 +334,71 @@ function compareDecorationPriority(
   }
 
   return first.sourceIndex - second.sourceIndex;
+}
+
+function mergeVisibleBarLayersForLine(
+  current: VisibleBarLayer[] | undefined,
+  next: VisibleBarLayer,
+  lineNumber: number
+): VisibleBarLayer[] {
+  const merged = sortVisibleBarLayers(
+    current == null
+      ? [cloneVisibleBarLayer(next)]
+      : [...current.map(cloneVisibleBarLayer), cloneVisibleBarLayer(next)]
+  );
+  return resolveBarLayerCapsForLine(merged, lineNumber);
+}
+
+function compareVisibleBarLayerPriority(
+  first: VisibleBarLayer,
+  second: VisibleBarLayer
+): number {
+  return compareDecorationPriority(first, second);
+}
+
+function sortVisibleBarLayers(layers: VisibleBarLayer[]): VisibleBarLayer[] {
+  layers.sort(compareVisibleBarLayerPriority);
+  return layers;
+}
+
+function resolveBarLayerCapsForLine(
+  layers: VisibleBarLayer[],
+  lineNumber: number
+): VisibleBarLayer[] {
+  const resolved = layers.map((layer) => ({
+    ...layer,
+    showStartCap: layer.lineNumber === lineNumber,
+    showEndCap: false,
+  }));
+  let hasHigherContinuingBelow = false;
+  for (let index = resolved.length - 1; index >= 0; index--) {
+    const layer = resolved[index];
+    layer.showEndCap =
+      layer.endLineNumber === lineNumber && !hasHigherContinuingBelow;
+    if (layer.endLineNumber > lineNumber) {
+      hasHigherContinuingBelow = true;
+    }
+  }
+  return resolved;
+}
+
+function resolveMergedBarLayerCaps(
+  layers: VisibleBarLayer[]
+): VisibleBarLayer[] {
+  const resolved = layers.map(cloneVisibleBarLayer);
+  let hasHigherContinuingBelow = false;
+  for (let index = resolved.length - 1; index >= 0; index--) {
+    const layer = resolved[index];
+    layer.showEndCap = layer.showEndCap && !hasHigherContinuingBelow;
+    if (!layer.showEndCap) {
+      hasHigherContinuingBelow = true;
+    }
+  }
+  return resolved;
+}
+
+function cloneVisibleBarLayer(layer: VisibleBarLayer): VisibleBarLayer {
+  return { ...layer };
 }
 
 function incrementDecorationDepth(
@@ -302,5 +414,5 @@ function getDecorationDepth(depth: number): DecorationOverlapDepth {
   if (depth === 2) {
     return 2;
   }
-  return MAX_VISIBLE_DECORATION_DEPTH;
+  return MAX_DECORATION_VISUAL_DEPTH;
 }

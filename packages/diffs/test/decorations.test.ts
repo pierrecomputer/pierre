@@ -5,6 +5,10 @@ import { DiffHunksRenderer, FileRenderer, parseDiffFromFile } from '../src';
 import { UnresolvedFileHunksRenderer } from '../src/renderers/UnresolvedFileHunksRenderer';
 import type { DiffDecorationItem, FileDecorationItem } from '../src/types';
 import { mergeNormalizedLineDecorations } from '../src/utils/getLineDecorationProperties';
+import {
+  normalizeDiffDecorations,
+  normalizeFileDecorations,
+} from '../src/utils/normalizeLineDecorations';
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
 import { assertDefined, collectAllElements } from './testUtils';
 
@@ -67,11 +71,45 @@ describe('Decoration Rendering', () => {
     assertDefined(contentLine2, 'expected second content line');
     assertDefined(contentLine3, 'expected third content line');
 
+    const gutterLine1BarStack = findElementByProperty(
+      gutterLine1.children,
+      'data-decoration-bar-stack',
+      ''
+    );
+    const gutterLine2BarStack = findElementByProperty(
+      gutterLine2.children,
+      'data-decoration-bar-stack',
+      ''
+    );
+    const gutterLine3BarStack = findElementByProperty(
+      gutterLine3.children,
+      'data-decoration-bar-stack',
+      ''
+    );
+
+    assertDefined(gutterLine1BarStack, 'expected first gutter bar stack');
+    assertDefined(gutterLine2BarStack, 'expected second gutter bar stack');
+    assertDefined(gutterLine3BarStack, 'expected third gutter bar stack');
+
     expect(gutterLine1.properties['data-decoration-bar']).toBe('0,1');
+    expect(
+      gutterLine1BarStack.properties['data-decoration-bar-layer-count']
+    ).toBe('2');
+    expect(gutterLine1BarStack.children).toHaveLength(0);
+    expect(gutterLine1BarStack.properties.style).toBe(
+      '--diffs-decoration-bar-layer-count:2;--diffs-decoration-bar-color-1:green;--diffs-decoration-bar-tier-1:1;--diffs-decoration-bar-start-cap-1:1;--diffs-decoration-bar-end-cap-1:0;--diffs-decoration-bar-color-2:red;--diffs-decoration-bar-tier-2:2;--diffs-decoration-bar-start-cap-2:1;--diffs-decoration-bar-end-cap-2:0;'
+    );
     expect(gutterLine1.properties['data-decoration-bar-depth']).toBe('2');
     expect(gutterLine1.properties['data-decoration-bar-start']).toBe('0,1');
     expect(gutterLine1.properties['data-decoration-bar-end']).toBe('0');
     expect(gutterLine2.properties['data-decoration-bar']).toBe('1,3');
+    expect(
+      gutterLine2BarStack.properties['data-decoration-bar-layer-count']
+    ).toBe('2');
+    expect(gutterLine2BarStack.children).toHaveLength(0);
+    expect(gutterLine2BarStack.properties.style).toBe(
+      '--diffs-decoration-bar-layer-count:2;--diffs-decoration-bar-color-1:orange;--diffs-decoration-bar-tier-1:1;--diffs-decoration-bar-start-cap-1:1;--diffs-decoration-bar-end-cap-1:1;--diffs-decoration-bar-color-2:green;--diffs-decoration-bar-tier-2:2;--diffs-decoration-bar-start-cap-2:0;--diffs-decoration-bar-end-cap-2:0;'
+    );
     expect(gutterLine2.properties['data-decoration-bar-depth']).toBe('2');
     expect(gutterLine2.properties['data-decoration-bar-start']).toBe('2,3');
     expect(gutterLine2.properties['data-decoration-bar-end']).toBe('3');
@@ -81,6 +119,13 @@ describe('Decoration Rendering', () => {
       '--diffs-decoration-bar-color:orange;'
     );
     expect(gutterLine3.properties['data-decoration-bar']).toBe('1');
+    expect(
+      gutterLine3BarStack.properties['data-decoration-bar-layer-count']
+    ).toBe('1');
+    expect(gutterLine3BarStack.children).toHaveLength(0);
+    expect(gutterLine3BarStack.properties.style).toBe(
+      '--diffs-decoration-bar-layer-count:1;--diffs-decoration-bar-color-1:green;--diffs-decoration-bar-tier-1:1;--diffs-decoration-bar-start-cap-1:0;--diffs-decoration-bar-end-cap-1:1;'
+    );
     expect(gutterLine3.properties['data-decoration-bar-depth']).toBe('1');
     expect(gutterLine3.properties['data-decoration-bar-start']).toBeUndefined();
     expect(gutterLine3.properties['data-decoration-bar-end']).toBe('1');
@@ -151,6 +196,51 @@ describe('Decoration Rendering', () => {
     );
   });
 
+  test('file renderer keeps one bar stack element while bar depth clamps at 3', async () => {
+    const file = {
+      name: 'example.ts',
+      contents: ['one', 'two', 'three', 'four'].join('\n'),
+    };
+    const decorations: FileDecorationItem[] = [
+      { lineNumber: 1, endLineNumber: 4, bar: true, color: 'red' },
+      { lineNumber: 2, endLineNumber: 4, bar: true, color: 'blue' },
+      { lineNumber: 2, endLineNumber: 4, bar: true, color: 'green' },
+      { lineNumber: 3, endLineNumber: 4, bar: true, color: 'yellow' },
+    ];
+
+    const renderer = new FileRenderer();
+    renderer.setDecorations(decorations);
+    const result = await renderer.asyncRender(file);
+    const codeAST = renderer.renderCodeAST(result) as HASTElement[];
+    const [gutter] = codeAST;
+    assertDefined(gutter, 'expected gutter column');
+
+    const gutterLine4 = findElementByProperty(
+      gutter.children,
+      'data-column-number',
+      4
+    );
+
+    assertDefined(gutterLine4, 'expected fourth gutter line');
+
+    const gutterLine4BarStack = findElementByProperty(
+      gutterLine4.children,
+      'data-decoration-bar-stack',
+      ''
+    );
+
+    assertDefined(gutterLine4BarStack, 'expected fourth gutter bar stack');
+    expect(gutterLine4.properties['data-decoration-bar']).toBe('0,1,2,3');
+    expect(gutterLine4.properties['data-decoration-bar-depth']).toBe('3');
+    expect(
+      gutterLine4BarStack.properties['data-decoration-bar-layer-count']
+    ).toBe('4');
+    expect(gutterLine4BarStack.children).toHaveLength(0);
+    expect(gutterLine4BarStack.properties.style).toBe(
+      '--diffs-decoration-bar-layer-count:4;--diffs-decoration-bar-color-1:yellow;--diffs-decoration-bar-tier-1:1;--diffs-decoration-bar-start-cap-1:0;--diffs-decoration-bar-end-cap-1:1;--diffs-decoration-bar-color-2:green;--diffs-decoration-bar-tier-2:2;--diffs-decoration-bar-start-cap-2:0;--diffs-decoration-bar-end-cap-2:1;--diffs-decoration-bar-color-3:blue;--diffs-decoration-bar-tier-3:3;--diffs-decoration-bar-start-cap-3:0;--diffs-decoration-bar-end-cap-3:1;--diffs-decoration-bar-color-4:red;--diffs-decoration-bar-tier-4:3;--diffs-decoration-bar-start-cap-4:0;--diffs-decoration-bar-end-cap-4:1;'
+    );
+  });
+
   test('merged normalized decorations keep source-order identity and line-number winners', () => {
     const merged = mergeNormalizedLineDecorations(
       {
@@ -173,6 +263,339 @@ describe('Decoration Rendering', () => {
     expect(merged.backgroundIndices).toEqual([0, 1]);
     expect(merged.backgroundDepth).toBe(2);
     expect(merged.backgroundColor).toBe('#111111');
+  });
+
+  test('merged normalized decorations recompute bar end caps against merged visible order', () => {
+    const merged = mergeNormalizedLineDecorations(
+      {
+        barIndices: [0],
+        barDepth: 1,
+        barColor: 'red',
+        barLineNumber: 1,
+        barSourceIndex: 0,
+        barLayers: [
+          {
+            color: 'red',
+            lineNumber: 1,
+            endLineNumber: 1,
+            sourceIndex: 0,
+            showStartCap: true,
+            showEndCap: true,
+          },
+        ],
+      },
+      {
+        barIndices: [1],
+        barDepth: 1,
+        barColor: 'blue',
+        barLineNumber: 2,
+        barSourceIndex: 1,
+        barLayers: [
+          {
+            color: 'blue',
+            lineNumber: 2,
+            endLineNumber: 3,
+            sourceIndex: 1,
+            showStartCap: false,
+            showEndCap: false,
+          },
+        ],
+      }
+    );
+
+    assertDefined(merged, 'expected merged line decorations');
+    expect(merged.barDepth).toBe(2);
+    expect(merged.barColor).toBe('blue');
+    expect(merged.barLayers).toEqual([
+      {
+        color: 'red',
+        lineNumber: 1,
+        endLineNumber: 1,
+        sourceIndex: 0,
+        showStartCap: true,
+        showEndCap: false,
+      },
+      {
+        color: 'blue',
+        lineNumber: 2,
+        endLineNumber: 3,
+        sourceIndex: 1,
+        showStartCap: false,
+        showEndCap: false,
+      },
+    ]);
+  });
+
+  test('merged normalized decorations keep all bar layers while clamping depth', () => {
+    const merged = mergeNormalizedLineDecorations(
+      {
+        barIndices: [0, 1],
+        barDepth: 2,
+        barColor: 'blue',
+        barLineNumber: 2,
+        barSourceIndex: 1,
+        barLayers: [
+          {
+            color: 'red',
+            lineNumber: 1,
+            endLineNumber: 4,
+            sourceIndex: 0,
+            showStartCap: false,
+            showEndCap: true,
+          },
+          {
+            color: 'blue',
+            lineNumber: 2,
+            endLineNumber: 4,
+            sourceIndex: 1,
+            showStartCap: false,
+            showEndCap: true,
+          },
+        ],
+      },
+      {
+        barIndices: [2, 3],
+        barDepth: 2,
+        barColor: 'yellow',
+        barLineNumber: 3,
+        barSourceIndex: 3,
+        barLayers: [
+          {
+            color: 'green',
+            lineNumber: 2,
+            endLineNumber: 4,
+            sourceIndex: 2,
+            showStartCap: false,
+            showEndCap: true,
+          },
+          {
+            color: 'yellow',
+            lineNumber: 3,
+            endLineNumber: 4,
+            sourceIndex: 3,
+            showStartCap: false,
+            showEndCap: true,
+          },
+        ],
+      }
+    );
+
+    assertDefined(merged, 'expected merged line decorations');
+    expect(merged.barDepth).toBe(3);
+    expect(merged.barColor).toBe('yellow');
+    expect(merged.barLayers).toEqual([
+      {
+        color: 'red',
+        lineNumber: 1,
+        endLineNumber: 4,
+        sourceIndex: 0,
+        showStartCap: false,
+        showEndCap: true,
+      },
+      {
+        color: 'blue',
+        lineNumber: 2,
+        endLineNumber: 4,
+        sourceIndex: 1,
+        showStartCap: false,
+        showEndCap: true,
+      },
+      {
+        color: 'green',
+        lineNumber: 2,
+        endLineNumber: 4,
+        sourceIndex: 2,
+        showStartCap: false,
+        showEndCap: true,
+      },
+      {
+        color: 'yellow',
+        lineNumber: 3,
+        endLineNumber: 4,
+        sourceIndex: 3,
+        showStartCap: false,
+        showEndCap: true,
+      },
+    ]);
+  });
+
+  test('file normalization keeps all visible bar layers while clamping bar depth', () => {
+    const normalized = normalizeFileDecorations<undefined>([
+      { lineNumber: 1, endLineNumber: 4, bar: true, color: 'red' },
+      { lineNumber: 2, endLineNumber: 4, bar: true, color: 'blue' },
+      { lineNumber: 2, endLineNumber: 4, bar: true, color: 'green' },
+      { lineNumber: 3, endLineNumber: 4, bar: true, color: 'yellow' },
+    ]);
+
+    const line2 = normalized[2];
+    const line4 = normalized[4];
+
+    assertDefined(line2, 'expected normalized line 2 decorations');
+    assertDefined(line4, 'expected normalized line 4 decorations');
+
+    expect(line2.barDepth).toBe(3);
+    expect(line2.barColor).toBe('green');
+    expect(line2.barLineNumber).toBe(2);
+    expect(line2.barSourceIndex).toBe(2);
+    expect(line2.barLayers).toEqual([
+      {
+        color: 'red',
+        lineNumber: 1,
+        endLineNumber: 4,
+        sourceIndex: 0,
+        showStartCap: false,
+        showEndCap: false,
+      },
+      {
+        color: 'blue',
+        lineNumber: 2,
+        endLineNumber: 4,
+        sourceIndex: 1,
+        showStartCap: true,
+        showEndCap: false,
+      },
+      {
+        color: 'green',
+        lineNumber: 2,
+        endLineNumber: 4,
+        sourceIndex: 2,
+        showStartCap: true,
+        showEndCap: false,
+      },
+    ]);
+
+    expect(line4.barIndices).toEqual([0, 1, 2, 3]);
+    expect(line4.barDepth).toBe(3);
+    expect(line4.barColor).toBe('yellow');
+    expect(line4.barLineNumber).toBe(3);
+    expect(line4.barSourceIndex).toBe(3);
+    expect(line4.barLayers).toEqual([
+      {
+        color: 'red',
+        lineNumber: 1,
+        endLineNumber: 4,
+        sourceIndex: 0,
+        showStartCap: false,
+        showEndCap: true,
+      },
+      {
+        color: 'blue',
+        lineNumber: 2,
+        endLineNumber: 4,
+        sourceIndex: 1,
+        showStartCap: false,
+        showEndCap: true,
+      },
+      {
+        color: 'green',
+        lineNumber: 2,
+        endLineNumber: 4,
+        sourceIndex: 2,
+        showStartCap: false,
+        showEndCap: true,
+      },
+      {
+        color: 'yellow',
+        lineNumber: 3,
+        endLineNumber: 4,
+        sourceIndex: 3,
+        showStartCap: false,
+        showEndCap: true,
+      },
+    ]);
+  });
+
+  test('file normalization hides lower bar end caps when a higher layer continues below', () => {
+    const normalized = normalizeFileDecorations<undefined>([
+      { lineNumber: 1, endLineNumber: 1, bar: true, color: 'red' },
+      { lineNumber: 1, endLineNumber: 2, bar: true, color: 'blue' },
+    ]);
+
+    expect(normalized[1]?.barLayers).toEqual([
+      {
+        color: 'red',
+        lineNumber: 1,
+        endLineNumber: 1,
+        sourceIndex: 0,
+        showStartCap: true,
+        showEndCap: false,
+      },
+      {
+        color: 'blue',
+        lineNumber: 1,
+        endLineNumber: 2,
+        sourceIndex: 1,
+        showStartCap: true,
+        showEndCap: false,
+      },
+    ]);
+    expect(normalized[2]?.barLayers).toEqual([
+      {
+        color: 'blue',
+        lineNumber: 1,
+        endLineNumber: 2,
+        sourceIndex: 1,
+        showStartCap: false,
+        showEndCap: true,
+      },
+    ]);
+  });
+
+  test('diff normalization keeps per-side visible bar layers', () => {
+    const normalized = normalizeDiffDecorations<undefined>([
+      {
+        side: 'deletions',
+        lineNumber: 1,
+        endLineNumber: 2,
+        bar: true,
+        color: 'red',
+      },
+      {
+        side: 'additions',
+        lineNumber: 1,
+        endLineNumber: 2,
+        bar: true,
+        color: 'blue',
+      },
+      {
+        side: 'deletions',
+        lineNumber: 2,
+        endLineNumber: 2,
+        bar: true,
+        color: 'green',
+      },
+    ]);
+
+    expect(normalized.deletions[2]?.barLayers).toEqual([
+      {
+        color: 'red',
+        lineNumber: 1,
+        endLineNumber: 2,
+        sourceIndex: 0,
+        showStartCap: false,
+        showEndCap: true,
+      },
+      {
+        color: 'green',
+        lineNumber: 2,
+        endLineNumber: 2,
+        sourceIndex: 2,
+        showStartCap: true,
+        showEndCap: true,
+      },
+    ]);
+    expect(normalized.deletions[2]?.barColor).toBe('green');
+    expect(normalized.additions[2]?.barLayers).toEqual([
+      {
+        color: 'blue',
+        lineNumber: 1,
+        endLineNumber: 2,
+        sourceIndex: 1,
+        showStartCap: false,
+        showEndCap: true,
+      },
+    ]);
+    expect(normalized.additions[2]?.barColor).toBe('blue');
   });
 
   test('diff renderer keeps split decorations side-owned and combines unified overlaps', async () => {
@@ -397,7 +820,22 @@ describe('Decoration Rendering', () => {
     assertDefined(unifiedLine2Deletion, 'expected unified deletion line 2');
     assertDefined(unifiedLine2Addition, 'expected unified addition line 2');
 
+    const unifiedLine1BarStack = findElementByProperty(
+      unifiedLine1Gutter.children,
+      'data-decoration-bar-stack',
+      ''
+    );
+
+    assertDefined(unifiedLine1BarStack, 'expected unified gutter bar stack');
+
     expect(unifiedLine1Gutter.properties['data-decoration-bar']).toBe('0,1');
+    expect(
+      unifiedLine1BarStack.properties['data-decoration-bar-layer-count']
+    ).toBe('2');
+    expect(unifiedLine1BarStack.children).toHaveLength(0);
+    expect(unifiedLine1BarStack.properties.style).toBe(
+      '--diffs-decoration-bar-layer-count:2;--diffs-decoration-bar-color-1:blue;--diffs-decoration-bar-tier-1:1;--diffs-decoration-bar-start-cap-1:1;--diffs-decoration-bar-end-cap-1:1;--diffs-decoration-bar-color-2:red;--diffs-decoration-bar-tier-2:2;--diffs-decoration-bar-start-cap-2:1;--diffs-decoration-bar-end-cap-2:1;'
+    );
     expect(unifiedLine1Gutter.properties['data-decoration-bar-depth']).toBe(
       '2'
     );

@@ -1,9 +1,11 @@
 import {
   DEFAULT_THEMES,
+  type DiffDecorationItem,
   DIFFS_TAG_NAME,
   type DiffsThemeNames,
   File,
   type FileContents,
+  type FileDecorationItem,
   FileDiff,
   type FileDiffContentsLoader,
   type FileDiffOptions,
@@ -60,8 +62,8 @@ import {
   renderDiffAnnotation,
 } from './utils/renderAnnotation';
 
-// FAKE_DIFF_LINE_ANNOTATIONS.length = 0;
-// FAKE_LINE_ANNOTATIONS.length = 0;
+FAKE_DIFF_LINE_ANNOTATIONS.length = 0;
+FAKE_LINE_ANNOTATIONS.length = 0;
 const DEMO_THEME: DiffsThemeNames | ThemesType = DEFAULT_THEMES;
 const WORKER_POOL = true;
 const VIRTUALIZE = true;
@@ -646,6 +648,7 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         fileDiff,
         lineAnnotations: fileAnnotations,
         fileContainer,
+        decorations: DECORATIONS_DIFF,
       });
       diffInstances.push(instance);
       hunkIndex++;
@@ -944,6 +947,53 @@ const fileExample: FileContents | Promise<FileContents> = (() => {
   };
 })();
 
+const DECORATIONS: FileDecorationItem[] = [
+  {
+    lineNumber: 1,
+    bar: true,
+    /* color: 'red' */
+  },
+  {
+    lineNumber: 2,
+    endLineNumber: 4,
+    background: true,
+    /* color: 'blue' */
+  },
+  {
+    lineNumber: 5,
+    endLineNumber: 11,
+    bar: true,
+    // background: '#123456',
+    // color: 'orange',
+  },
+];
+
+const DECORATIONS_DIFF: DiffDecorationItem[] = [
+  {
+    lineNumber: 1,
+    side: 'deletions',
+    bar: true,
+    /* color: 'red' */
+  },
+  {
+    lineNumber: 2,
+    endLineNumber: 6,
+    side: 'additions',
+    bar: true,
+    background: 'red',
+    // color: 'blue',
+  },
+  {
+    lineNumber: 5,
+    endLineNumber: 11,
+    side: 'additions',
+    bar: true,
+    background: true,
+    // background: '#123456',
+    // color: 'orange',
+  },
+];
+
 const fileConflict: FileContents = {
   name: 'file.ts',
   contents: FILE_CONFLICT,
@@ -1207,6 +1257,7 @@ if (renderFileButton != null) {
       file,
       lineAnnotations: FAKE_LINE_ANNOTATIONS,
       fileContainer,
+      decorations: DECORATIONS,
     });
     fileInstances.push(instance);
   });
@@ -1351,15 +1402,15 @@ function createToggle(
 
 // For quick testing diffs
 // FAKE_DIFF_LINE_ANNOTATIONS.length = 0;
-// (() => {
-//   const oldFile = {
-//     name: 'file_old.ts',
-//     contents: FILE_OLD,
-//   };
-//   const newFile = {
-//     name: 'file_new.ts',
-//     contents: FILE_NEW,
-//   };
-//   const parsed = parseDiffFromFile(oldFile, newFile);
-//   renderDiff([{ files: [parsed] }], poolManager);
-// })();
+(() => {
+  const oldFile = {
+    name: 'file_old.ts',
+    contents: FILE_OLD,
+  };
+  const newFile = {
+    name: 'file_new.ts',
+    contents: FILE_NEW,
+  };
+  const parsed = parseDiffFromFile(oldFile, newFile);
+  renderDiff([{ files: [parsed] }], poolManager);
+})();
