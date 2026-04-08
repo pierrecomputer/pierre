@@ -95,6 +95,19 @@ export interface PathStoreVisibleRow {
   path: string;
 }
 
+export interface PathStoreVisibleTreeProjectionRow {
+  index: number;
+  parentPath: string | null;
+  path: string;
+  posInSet: number;
+  setSize: number;
+}
+
+export interface PathStoreVisibleTreeProjection {
+  rows: readonly PathStoreVisibleTreeProjectionRow[];
+  visibleIndexByPath: Map<string, number>;
+}
+
 export interface PathStoreEventInvalidation {
   affectedAncestorIds: readonly number[];
   affectedNodeIds: readonly number[];

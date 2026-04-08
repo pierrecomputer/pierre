@@ -13,9 +13,10 @@ import {
 import { createCollapseEvent, createExpandEvent } from './events';
 import {
   collectFlattenedDirectoryChainIds,
+  getFlattenedChildDirectoryId,
   getFlattenedTerminalDirectoryId,
 } from './flatten';
-import type { NodeId } from './internal-types';
+import type { DirectoryChildIndex, NodeId } from './internal-types';
 import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
 import {
   setBenchmarkCounter,
@@ -63,6 +64,12 @@ export function getVisibleSlice(
   );
 
   if (instrumentation == null) {
+    // Fast path: full-tree DFS avoids the expensive parent-walk for finding
+    // next siblings that getNextVisibleRowCursor performs.
+    if (normalizedStart === 0) {
+      return collectVisibleRowsDFS(state, normalizedEnd + 1);
+    }
+
     const rows: PathStoreVisibleRow[] = [];
     let currentCursor = selectVisibleRow(state, normalizedStart);
 
@@ -309,6 +316,20 @@ function createVisibleRowCursor(
   };
 }
 
+function isVisibleRowHeadNode(state: PathStoreState, nodeId: NodeId): boolean {
+  const node = requireNode(state, nodeId);
+  if (node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+    return true;
+  }
+
+  const parentId = node.parentId;
+  if (parentId === state.snapshot.rootId) {
+    return true;
+  }
+
+  return getFlattenedChildDirectoryId(state, parentId) !== nodeId;
+}
+
 // Walks the visible preorder sequence without materializing the full row list.
 function getNextVisibleRowCursor(
   state: PathStoreState,
@@ -361,12 +382,100 @@ function getNextVisibleRowCursor(
       );
     }
 
-    if (currentNodeId === currentCursor.headNodeId) {
+    if (isVisibleRowHeadNode(state, currentNodeId)) {
       currentVisibleDepth--;
     }
-
     currentNodeId = parentId;
   }
+}
+
+// Iterative depth-first traversal that collects visible rows by walking the
+// child arrays directly.  This is faster than the cursor-based approach for
+// large contiguous slices starting from index 0, because it never needs to
+// walk up the tree to locate the next sibling.
+function collectVisibleRowsDFS(
+  state: PathStoreState,
+  maxRows: number
+): PathStoreVisibleRow[] {
+  // Pre-allocate output array to avoid dynamic resizing from push().
+  const rows: PathStoreVisibleRow[] = new Array(maxRows);
+  let rowCount = 0;
+  // Stack frame: [directoryChildIndex, childOffset, visibleDepth]
+  // Caching the DirectoryChildIndex directly avoids a Map.get per child
+  // iteration — the lookup is done once when entering the directory.
+  const { nodes, directories, segmentTable } = state.snapshot;
+  const stack: Array<[DirectoryChildIndex, number, number]> = [
+    [directories.get(state.snapshot.rootId)!, 0, -1],
+  ];
+  const segmentValues = segmentTable.valueById;
+  const flattenEnabled = state.snapshot.options.flattenEmptyDirectories;
+  const pathCacheVersion = state.pathCacheVersion;
+
+  while (stack.length > 0 && rowCount < maxRows) {
+    const frame = stack[stack.length - 1];
+    const dirIndex = frame[0];
+
+    if (frame[1] >= dirIndex.childIds.length) {
+      stack.pop();
+      continue;
+    }
+
+    const childId = dirIndex.childIds[frame[1]++];
+    const childNode = nodes[childId];
+
+    const visibleDepth = frame[2] + 1;
+
+    if (childNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+      // File node — inline materialization avoids cursor allocation and
+      // directory-specific checks (load state, flattening, expansion).
+      rows[rowCount++] = {
+        depth: visibleDepth,
+        flattenedSegments: undefined,
+        hasChildren: false,
+        id: childId,
+        isExpanded: false,
+        isFlattened: false,
+        isLoading: false,
+        kind: 'file',
+        loadState: undefined,
+        name: segmentValues[childNode.nameId],
+        path:
+          childNode.pathCache != null &&
+          childNode.pathCacheVersion === pathCacheVersion
+            ? childNode.pathCache
+            : materializeNodePath(state, childId),
+      };
+      continue;
+    }
+
+    // Directory node — delegate to materializeVisibleRow which correctly
+    // handles load states, flattened chains, and all edge cases.
+    const terminalNodeId = flattenEnabled
+      ? getFlattenedTerminalDirectoryId(state, childId)
+      : childId;
+    const cursor: VisibleRowCursor = {
+      headNodeId: childId,
+      terminalNodeId,
+      visibleDepth,
+    };
+    rows[rowCount++] = materializeVisibleRow(state, cursor);
+
+    // Descend into expanded directories.
+    const terminalNode = nodes[terminalNodeId];
+    if (
+      terminalNode != null &&
+      terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+      isDirectoryExpanded(state, terminalNodeId, terminalNode)
+    ) {
+      stack.push([directories.get(terminalNodeId)!, 0, visibleDepth]);
+    }
+  }
+
+  if (rowCount < maxRows) {
+    rows.length = rowCount;
+  }
+
+  return rows;
 }
 
 function materializeVisibleRow(

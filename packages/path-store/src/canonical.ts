@@ -285,19 +285,42 @@ export function recomputeCountsUpwardFrom(
   );
 }
 
+// Iterative post-order traversal that recomputes subtree and visible counts
+// bottom-up. Uses an explicit stack to avoid recursive function-call overhead
+// while preserving tree-order traversal for cache locality.
 export function recomputeCountsRecursive(
   state: PathStoreState,
   nodeId: NodeId
 ): void {
-  const currentNode = requireNode(state, nodeId);
-  if (currentNode.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
-    const currentIndex = getDirectoryIndex(state, nodeId);
-    for (const childId of currentIndex.childIds) {
-      recomputeCountsRecursive(state, childId);
-    }
-  }
+  // Stack frames: [nodeId, childOffset].  When childOffset equals the child
+  // count, all children have been processed and we recompute this node.
+  const stack: Array<[NodeId, number]> = [[nodeId, 0]];
+  const { nodes, directories } = state.snapshot;
 
-  recomputeNodeCounts(state, nodeId, currentNode, true);
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1];
+    const nid = frame[0];
+    const node = nodes[nid];
+
+    if (node == null || node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+      // File or unknown — recompute immediately and pop.
+      recomputeNodeCounts(state, nid, node, true);
+      stack.pop();
+      continue;
+    }
+
+    const dirIndex = directories.get(nid);
+    if (dirIndex == null || frame[1] >= dirIndex.childIds.length) {
+      // All children processed — recompute this directory and pop.
+      recomputeNodeCounts(state, nid, node, true);
+      stack.pop();
+      continue;
+    }
+
+    // Push next child for processing.
+    const childId = dirIndex.childIds[frame[1]++];
+    stack.push([childId, 0]);
+  }
 }
 
 export function collectAncestorIds(

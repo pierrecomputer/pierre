@@ -17,18 +17,26 @@ export interface PathStoreTreesVisibleSegment {
 }
 
 export interface PathStoreTreesVisibleRow {
+  ancestorPaths: readonly PathStoreTreesPublicId[];
   depth: number;
   flattenedSegments?: readonly PathStoreTreesVisibleSegment[];
   hasChildren: boolean;
+  index: number;
+  isFocused: boolean;
   isExpanded: boolean;
   isFlattened: boolean;
   kind: 'directory' | 'file';
+  level: number;
   name: string;
   path: PathStoreTreesPublicId;
+  posInSet: number;
+  setSize: number;
 }
 
 export interface PathStoreTreesItemHandleBase {
+  focus(): void;
   getPath(): PathStoreTreesPublicId;
+  isFocused(): boolean;
   isDirectory(): boolean;
 }
 

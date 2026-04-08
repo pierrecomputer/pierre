@@ -23,7 +23,7 @@ const DEMO_PAGES = [
 ] as const;
 
 const PATH_STORE_LANE_PAGES = [
-  { slug: 'path-store-powered', label: 'Expansion + Collapse' },
+  { slug: 'path-store-powered', label: 'Focus + Navigation' },
 ] as const;
 
 export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {

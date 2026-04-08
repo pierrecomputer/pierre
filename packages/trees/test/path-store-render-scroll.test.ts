@@ -74,18 +74,63 @@ function installDom() {
   };
 }
 
+async function flushDom(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function getFocusedTreeElement(
+  shadowRoot: ShadowRoot | null | undefined,
+  dom: JSDOM
+): HTMLElement | null {
+  const activeElement = shadowRoot?.activeElement ?? null;
+  return activeElement instanceof dom.window.HTMLElement
+    ? (activeElement as HTMLElement)
+    : null;
+}
+
+function getItemButton(
+  shadowRoot: ShadowRoot | null | undefined,
+  dom: JSDOM,
+  path: string
+): HTMLButtonElement {
+  const button = shadowRoot?.querySelector(`[data-item-path="${path}"]`);
+  if (!(button instanceof dom.window.HTMLButtonElement)) {
+    throw new Error(`missing button for ${path}`);
+  }
+
+  return button as HTMLButtonElement;
+}
+
+function getTreeRoot(
+  shadowRoot: ShadowRoot | null | undefined,
+  dom: JSDOM
+): HTMLDivElement {
+  const root = shadowRoot?.querySelector(
+    '[data-file-tree-virtualized-root="true"]'
+  );
+  if (!(root instanceof dom.window.HTMLDivElement)) {
+    throw new Error('missing tree root');
+  }
+
+  return root as HTMLDivElement;
+}
+
 function clickItem(
   shadowRoot: ShadowRoot | null | undefined,
   dom: JSDOM,
   path: string
 ): void {
-  const button = shadowRoot?.querySelector(`button[aria-label="${path}"]`);
-  if (!(button instanceof dom.window.HTMLButtonElement)) {
-    throw new Error(`missing button for ${path}`);
-  }
-
-  const buttonElement = button as HTMLButtonElement;
+  const buttonElement = getItemButton(shadowRoot, dom, path);
   buttonElement.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+}
+
+function pressKey(target: HTMLElement, dom: JSDOM, key: string): void {
+  target.dispatchEvent(
+    new dom.window.KeyboardEvent('keydown', {
+      bubbles: true,
+      key,
+    })
+  );
 }
 
 describe('path-store render + scroll', () => {
@@ -106,7 +151,7 @@ describe('path-store render + scroll', () => {
     controller.destroy();
   });
 
-  test('controller getItem returns minimal file/directory handles and null on miss', async () => {
+  test('controller getItem returns minimal file/directory handles, single focus state, and null on miss', async () => {
     const { PathStoreTreesController } = await import('../src/path-store');
 
     const controller = new PathStoreTreesController({
@@ -120,6 +165,7 @@ describe('path-store render + scroll', () => {
 
     expect(fileItem?.getPath()).toBe('README.md');
     expect(fileItem?.isDirectory()).toBe(false);
+    expect(fileItem?.isFocused()).toBe(false);
     expect('expand' in (fileItem ?? {})).toBe(false);
 
     expect(directoryItem?.getPath()).toBe('src/');
@@ -133,7 +179,53 @@ describe('path-store render + scroll', () => {
     }
 
     expect(directoryItem.isExpanded()).toBe(true);
+    expect(directoryItem.isFocused()).toBe(true);
+    fileItem?.focus();
+    expect(fileItem?.isFocused()).toBe(true);
+    expect(directoryItem.isFocused()).toBe(false);
+    expect(controller.getFocusedPath()).toBe('README.md');
     expect(controller.getItem('missing.ts')).toBeNull();
+
+    controller.destroy();
+  });
+
+  test('controller focus helpers keep exactly one focused visible item', async () => {
+    const { PathStoreTreesController } = await import('../src/path-store');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
+    });
+
+    const getFocusedPaths = () =>
+      controller
+        .getVisibleRows(0, controller.getVisibleCount() - 1)
+        .filter((row) => row.isFocused)
+        .map((row) => row.path);
+
+    expect(getFocusedPaths()).toEqual(['src/']);
+
+    controller.focusNextItem();
+    expect(controller.getFocusedPath()).toBe('src/lib/');
+    expect(getFocusedPaths()).toEqual(['src/lib/']);
+
+    controller.focusLastItem();
+    expect(controller.getFocusedPath()).toBe('README.md');
+    expect(getFocusedPaths()).toEqual(['README.md']);
+
+    controller.focusPreviousItem();
+    expect(controller.getFocusedPath()).toBe('src/index.ts');
+
+    controller.focusPath('src/lib/util.ts');
+    expect(controller.getFocusedPath()).toBe('src/lib/util.ts');
+
+    controller.focusParentItem();
+    expect(controller.getFocusedPath()).toBe('src/lib/');
+
+    controller.focusFirstItem();
+    expect(controller.getFocusedPath()).toBe('src/');
+    expect(getFocusedPaths()).toEqual(['src/']);
 
     controller.destroy();
   });
@@ -307,6 +399,386 @@ describe('path-store render + scroll', () => {
     }
   });
 
+  test('marks the virtualized list as scrolling to suppress hover styles', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const paths = Array.from(
+        { length: 120 },
+        (_, index) => `item${String(index).padStart(3, '0')}.ts`
+      );
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths,
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      const listElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-list="true"]'
+      );
+
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+      if (!(listElement instanceof dom.window.HTMLDivElement)) {
+        throw new Error('missing list element');
+      }
+
+      const viewport = scrollElement as HTMLElement;
+      const list = listElement as HTMLDivElement;
+
+      expect(list.dataset.isScrolling).toBeUndefined();
+
+      viewport.scrollTop = 1500;
+      viewport.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+
+      expect(list.dataset.isScrolling).toBe('');
+
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(list.dataset.isScrolling).toBeUndefined();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('renders roving tabindex and baseline accessibility attributes', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        initialExpansion: 1,
+        paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const treeRoot = getTreeRoot(shadowRoot, dom);
+      const sourceButton = getItemButton(shadowRoot, dom, 'src/');
+      const readmeButton = getItemButton(shadowRoot, dom, 'README.md');
+
+      expect(treeRoot.getAttribute('role')).toBe('tree');
+      expect(treeRoot.getAttribute('aria-activedescendant')).toBeNull();
+      expect(treeRoot.style.outline).toBe('none');
+      expect(sourceButton.getAttribute('role')).toBe('treeitem');
+      expect(sourceButton.getAttribute('aria-level')).toBe('1');
+      expect(sourceButton.getAttribute('aria-posinset')).toBe('1');
+      expect(sourceButton.getAttribute('aria-setsize')).toBe('2');
+      expect(sourceButton.getAttribute('aria-expanded')).toBe('true');
+      expect(sourceButton.getAttribute('aria-selected')).toBe('false');
+      expect(sourceButton.tabIndex).toBe(0);
+      expect(sourceButton.dataset.itemFocused).toBeUndefined();
+      expect(readmeButton.getAttribute('aria-expanded')).toBeNull();
+      expect(readmeButton.tabIndex).toBe(-1);
+
+      sourceButton.focus();
+      await flushDom();
+      expect(sourceButton.dataset.itemFocused).toBe('true');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('focused rows keep the matching separator line prominent', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['src/lib/'],
+        paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const fileButton = getItemButton(shadowRoot, dom, 'src/lib/util.ts');
+
+      fileButton.focus();
+      await flushDom();
+
+      const guideStyle = shadowRoot?.querySelector(
+        '[data-path-store-guide-style="true"]'
+      );
+      const spacingItems = fileButton.querySelectorAll(
+        '[data-item-section="spacing-item"]'
+      );
+
+      expect(spacingItems[0]?.getAttribute('data-ancestor-path')).toBe('src/');
+      expect(spacingItems[1]?.getAttribute('data-ancestor-path')).toBe(
+        'src/lib/'
+      );
+      expect(guideStyle?.innerHTML).toContain(
+        '[data-item-section="spacing-item"][data-ancestor-path="src/lib/"]'
+      );
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keyboard navigation matches the baseline tree behavior', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        initialExpansion: 1,
+        paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      getItemButton(shadowRoot, dom, 'src/').focus();
+      await flushDom();
+
+      pressKey(getItemButton(shadowRoot, dom, 'src/'), dom, 'ArrowDown');
+      await flushDom();
+      expect(fileTree.getItem('src/lib/')?.isFocused()).toBe(true);
+
+      pressKey(getItemButton(shadowRoot, dom, 'src/lib/'), dom, 'ArrowRight');
+      await flushDom();
+      expect(shadowRoot?.innerHTML).toContain('src/lib/util.ts');
+      expect(fileTree.getItem('src/lib/')?.isFocused()).toBe(true);
+
+      pressKey(getItemButton(shadowRoot, dom, 'src/lib/'), dom, 'ArrowRight');
+      await flushDom();
+      expect(fileTree.getItem('src/lib/util.ts')?.isFocused()).toBe(true);
+
+      pressKey(
+        getItemButton(shadowRoot, dom, 'src/lib/util.ts'),
+        dom,
+        'ArrowLeft'
+      );
+      await flushDom();
+      expect(fileTree.getItem('src/lib/')?.isFocused()).toBe(true);
+
+      pressKey(getItemButton(shadowRoot, dom, 'src/lib/'), dom, 'End');
+      await flushDom();
+      await flushDom();
+      expect(fileTree.getItem('README.md')?.isFocused()).toBe(true);
+
+      pressKey(getTreeRoot(shadowRoot, dom), dom, 'Home');
+      await flushDom();
+      await flushDom();
+      expect(fileTree.getItem('src/')?.isFocused()).toBe(true);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('collapse moves focus to the nearest visible ancestor', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['src/lib/'],
+        paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      getItemButton(shadowRoot, dom, 'src/lib/util.ts').focus();
+      await flushDom();
+
+      const sourceDirectory = fileTree.getItem('src/lib/');
+      if (
+        sourceDirectory == null ||
+        sourceDirectory.isDirectory() !== true ||
+        !('collapse' in sourceDirectory)
+      ) {
+        throw new Error('missing source directory item');
+      }
+
+      sourceDirectory.collapse();
+      await flushDom();
+
+      expect(fileTree.getItem('src/lib/')?.isFocused()).toBe(true);
+      expect(shadowRoot?.innerHTML).not.toContain('src/lib/util.ts');
+      expect(getFocusedTreeElement(shadowRoot, dom)?.dataset.itemPath).toBe(
+        'src/lib/'
+      );
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keyboard navigation survives virtualization when the focused row unmounts', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const paths = Array.from(
+        { length: 120 },
+        (_, index) => `item${String(index).padStart(3, '0')}.ts`
+      );
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths,
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      const viewport = scrollElement as HTMLElement;
+      viewport.scrollTop = 1500;
+      viewport.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+
+      getItemButton(shadowRoot, dom, 'item050.ts').focus();
+      await flushDom();
+      expect(fileTree.getItem('item050.ts')?.isFocused()).toBe(true);
+
+      viewport.scrollTop = 3000;
+      viewport.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+      await flushDom();
+
+      expect(viewport.scrollTop).toBe(3000);
+      expect(shadowRoot?.innerHTML).toContain('item100.ts');
+      expect(
+        getItemButton(shadowRoot, dom, 'item050.ts').dataset.itemParked
+      ).toBe('true');
+      expect(getFocusedTreeElement(shadowRoot, dom)?.dataset.itemPath).toBe(
+        'item050.ts'
+      );
+
+      pressKey(getItemButton(shadowRoot, dom, 'item050.ts'), dom, 'ArrowDown');
+      await flushDom();
+      await flushDom();
+
+      expect(fileTree.getItem('item051.ts')?.isFocused()).toBe(true);
+      expect(viewport.scrollTop).toBe(
+        51 * PATH_STORE_TREES_DEFAULT_ITEM_HEIGHT
+      );
+      expect(
+        getItemButton(shadowRoot, dom, 'item051.ts').dataset.itemFocused
+      ).toBe('true');
+      expect(getFocusedTreeElement(shadowRoot, dom)?.dataset.itemPath).toBe(
+        'item051.ts'
+      );
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('flattened rows use terminal-directory keyboard semantics', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: true,
+        initialExpandedPaths: ['src/'],
+        paths: ['src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      getItemButton(shadowRoot, dom, 'src/lib/').focus();
+      await flushDom();
+
+      pressKey(getItemButton(shadowRoot, dom, 'src/lib/'), dom, 'ArrowRight');
+      await flushDom();
+      expect(shadowRoot?.innerHTML).toContain('util.ts');
+      expect(fileTree.getItem('src/lib/')?.isFocused()).toBe(true);
+
+      pressKey(getItemButton(shadowRoot, dom, 'src/lib/'), dom, 'ArrowRight');
+      await flushDom();
+      expect(fileTree.getItem('src/lib/util.ts')?.isFocused()).toBe(true);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('flattened row markup does not wrap separators in extra spans', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: true,
+        initialExpandedPaths: ['src/'],
+        paths: ['src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const flattenedContainer = shadowRoot?.querySelector(
+        '[data-item-flattened-subitems]'
+      );
+
+      expect(flattenedContainer?.innerHTML).toContain(' / ');
+      expect(
+        flattenedContainer?.querySelectorAll(
+          ':scope > [data-item-flattened-subitem]'
+        ).length
+      ).toBe(2);
+      expect(
+        flattenedContainer?.querySelector(
+          ':scope > span:not([data-item-flattened-subitem])'
+        )
+      ).toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('directory row clicks toggle expansion while file clicks stay inert', async () => {
     const { cleanup, dom } = installDom();
     try {
@@ -434,7 +906,7 @@ describe('path-store render + scroll', () => {
     }
   });
 
-  test('uses compatible row markup for implemented pieces only', async () => {
+  test('uses compatible row markup for the implemented focus/navigation pieces only', async () => {
     const { cleanup, dom } = installDom();
     try {
       const { PathStoreFileTree } = await import('../src/path-store');
@@ -450,6 +922,12 @@ describe('path-store render + scroll', () => {
 
       fileTree.render({ containerWrapper });
       const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const focusedRow = shadowRoot?.querySelector(
+        '[data-item-focused="true"]'
+      );
+      const treeRoot = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-root="true"]'
+      );
 
       expect(
         shadowRoot?.querySelector('[data-item-section="icon"]')
@@ -457,12 +935,20 @@ describe('path-store render + scroll', () => {
       expect(
         shadowRoot?.querySelector('[data-item-section="content"]')
       ).not.toBeNull();
-      expect(
-        shadowRoot?.querySelector('[data-item-focused="true"]')
-      ).toBeNull();
+      expect(focusedRow).toBeNull();
       expect(
         shadowRoot?.querySelector('[data-item-selected="true"]')
       ).toBeNull();
+      expect(treeRoot?.getAttribute('role')).toBe('tree');
+      expect(treeRoot?.getAttribute('aria-activedescendant')).toBeNull();
+
+      getItemButton(shadowRoot, dom, 'src/lib/').focus();
+      await flushDom();
+
+      const focusedButton = getItemButton(shadowRoot, dom, 'src/lib/');
+      expect(focusedButton.dataset.itemFocused).toBe('true');
+      expect(focusedButton.getAttribute('role')).toBe('treeitem');
+      expect(focusedButton.getAttribute('aria-selected')).toBe('false');
 
       fileTree.cleanUp();
     } finally {

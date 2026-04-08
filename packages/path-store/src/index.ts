@@ -1,6 +1,7 @@
 export { PathStore } from './store';
 export { createPathStoreScheduler } from './scheduler';
 export { StaticPathStore } from './static-store';
+export { createVisibleTreeProjection } from './visible-tree-projection';
 export type {
   PathStoreChildPatch,
   PathStoreCleanupEvent,
@@ -22,6 +23,8 @@ export type {
   PathStorePreparedInput,
   PathStoreRemoveOptions,
   PathStoreVisibleRow,
+  PathStoreVisibleTreeProjection,
+  PathStoreVisibleTreeProjectionRow,
 } from './public-types';
 export type {
   PathStoreScheduler,

@@ -466,6 +466,23 @@ function collectStaticFlattenedDirectoryChainIds(
   }
 }
 
+function isStaticVisibleRowHeadNode(
+  state: StaticPathStoreState,
+  nodeId: number
+): boolean {
+  const node = requireStaticNode(state, nodeId);
+  if (node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+    return true;
+  }
+
+  const parentId = node.parentId;
+  if (parentId === state.snapshot.rootId) {
+    return true;
+  }
+
+  return getStaticFlattenedChildDirectoryId(state, parentId) !== nodeId;
+}
+
 function selectStaticChildIndexByVisibleIndex(
   state: StaticPathStoreState,
   directoryNodeId: number,
@@ -709,10 +726,9 @@ function getStaticNextVisibleRowCursor(
           );
     }
 
-    if (currentNodeId === currentCursor.headNodeId) {
+    if (isStaticVisibleRowHeadNode(state, currentNodeId)) {
       currentVisibleDepth -= 1;
     }
-
     currentNodeId = currentNode.parentId;
   }
 }

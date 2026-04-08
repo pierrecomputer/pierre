@@ -75,7 +75,7 @@ export function PathStorePoweredRenderDemoClient({
   const options = useMemo<PathStoreFileTreeOptions>(
     () => ({
       ...sharedOptions,
-      id: 'pst-phase2',
+      id: 'pst-phase3',
       preparedInput,
     }),
     [preparedInput, sharedOptions]
@@ -87,19 +87,19 @@ export function PathStorePoweredRenderDemoClient({
         <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           Path-store lane · provisional
         </p>
-        <h1 className="text-2xl font-bold">Expansion + Collapse</h1>
+        <h1 className="text-2xl font-bold">Focus + Navigation</h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
-          Phase 2 adds the first full pointer-driven interaction slice to the
-          path-store-powered trees lane: directory expansion and collapse on top
-          of the always-virtualized renderer.
+          Phase 3 adds the first full keyboard interaction slice to the
+          path-store-powered trees lane: single-item focus, baseline tree
+          navigation, and virtualization-safe DOM focus recovery.
         </p>
       </header>
 
       <HydratedPathStoreExample
         containerHtml={containerHtml}
-        description="Click any directory row to toggle expansion. File rows stay inert, flattened rows toggle the terminal directory, and the renderer remains always virtualized."
+        description="Click or focus any row, then use Arrow keys plus Home/End. Directory rows keep the Phase 2 toggle behavior, flattened rows target the terminal directory, and keyboard navigation survives virtualization."
         options={options}
-        title="Expansion + Collapse"
+        title="Focus + Navigation"
       />
 
       <section className="space-y-3 rounded-lg border p-4">

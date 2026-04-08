@@ -822,6 +822,22 @@ export class PathStoreBuilder {
         parentNode.visibleSubtreeCount += node.visibleSubtreeCount;
       }
     }
+
+    // Eagerly build name-id lookup maps so later path lookups (e.g.,
+    // initializeExpandedPaths) don't pay the lazy-rebuild cost per directory.
+    // This is O(n) total and cache-friendlier than building maps on-demand
+    // during random tree walks.
+    for (const dirIndex of directories.values()) {
+      if (dirIndex.childIdByNameId == null && dirIndex.childIds.length > 0) {
+        const map = new Map<number, number>();
+        const childIds = dirIndex.childIds;
+        for (let ci = 0; ci < childIds.length; ci++) {
+          const childId = childIds[ci];
+          map.set(nodes[childId].nameId, childId);
+        }
+        dirIndex.childIdByNameId = map;
+      }
+    }
   }
 
   // Builds directory-child indexes in the same layout as buildPresortedFinish
