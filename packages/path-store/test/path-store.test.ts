@@ -1912,6 +1912,48 @@ describe('PathStore', () => {
     ]);
   });
 
+  test('supports visible tree projection depths beyond the initial typed-array capacity', () => {
+    const depth = 80;
+    const rows = Array.from({ length: depth }, (_, index) => ({
+      depth: index,
+      path: `${Array.from({ length: index + 1 }, (_, segmentIndex) => `level${segmentIndex + 1}`).join('/')}/`,
+    }));
+    rows.push({
+      depth,
+      path: `${Array.from({ length: depth }, (_, index) => `level${index + 1}`).join('/')}/leaf.txt`,
+    });
+    rows.push({
+      depth: 0,
+      path: 'root.txt',
+    });
+
+    const projection = createVisibleTreeProjection(rows);
+    const deepLeafRow = projection.rows[depth];
+    const rootSiblingRow = projection.rows[depth + 1];
+
+    expect(deepLeafRow).toEqual({
+      index: depth,
+      parentPath: `${Array.from({ length: depth }, (_, index) => `level${index + 1}`).join('/')}/`,
+      path: `${Array.from({ length: depth }, (_, index) => `level${index + 1}`).join('/')}/leaf.txt`,
+      posInSet: 0,
+      setSize: 1,
+    });
+    expect(rootSiblingRow).toEqual({
+      index: depth + 1,
+      parentPath: null,
+      path: 'root.txt',
+      posInSet: 1,
+      setSize: 2,
+    });
+    expect(
+      projection.rows.every(
+        ({ posInSet, setSize }) =>
+          Number.isFinite(posInSet) && Number.isFinite(setSize)
+      )
+    ).toBe(true);
+    expect(projection.visibleIndexByPath.get('root.txt')).toBe(depth + 1);
+  });
+
   test('updates visible rows immediately when adding and removing inside expanded directories', () => {
     const store = new PathStore({
       flattenEmptyDirectories: false,

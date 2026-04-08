@@ -4,6 +4,9 @@ import type {
   PathStoreVisibleTreeProjectionRow,
 } from './public-types';
 
+const INITIAL_DEPTH_CAPACITY = 64;
+type ProjectionDepthTable = Int32Array<ArrayBufferLike>;
+
 /**
  * Builds path-first tree metadata from visible rows using only visible depths,
  * so callers can derive ARIA sibling info without reparsing every row path.
@@ -33,12 +36,15 @@ export function createVisibleTreeProjection(
   // lastRowAtDepth[d+1] stores the projection-row index of the most recent row
   // at depth d. Index 0 is the virtual root. Offset by +1 so depth 0 maps to
   // lastRowAtDepth[1] and the virtual root is at lastRowAtDepth[0] = -1.
-  const lastRowAtDepth = new Int32Array(64);
-  lastRowAtDepth[0] = -1;
+  let lastRowAtDepth: ProjectionDepthTable = new Int32Array(
+    INITIAL_DEPTH_CAPACITY
+  );
+  lastRowAtDepth.fill(-1);
 
   for (let index = 0; index < rowCount; index++) {
     const row = rows[index];
     const depth = row.depth;
+    lastRowAtDepth = ensureDepthCapacity(lastRowAtDepth, depth);
 
     // Parent is the most recent row at depth-1 (offset: depth-1+1 = depth).
     const parentIdx = lastRowAtDepth[depth];
@@ -81,4 +87,24 @@ export function createVisibleTreeProjection(
       return cachedVisibleIndexByPath;
     },
   };
+}
+
+function ensureDepthCapacity(
+  depthTable: ProjectionDepthTable,
+  depth: number
+): ProjectionDepthTable {
+  const requiredLength = depth + 2;
+  if (requiredLength <= depthTable.length) {
+    return depthTable;
+  }
+
+  let nextLength = depthTable.length;
+  while (nextLength < requiredLength) {
+    nextLength *= 2;
+  }
+
+  const nextDepthTable: ProjectionDepthTable = new Int32Array(nextLength);
+  nextDepthTable.fill(-1);
+  nextDepthTable.set(depthTable);
+  return nextDepthTable;
 }
