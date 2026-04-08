@@ -1,13 +1,18 @@
 import type { ObservedAnnotationNodes, ObservedGridNodes } from '../types';
 
-type CodeColumnUpdate = [HTMLElement, number];
+interface QueuedCodeColumnUpdate {
+  codeInlineSize?: number;
+  numberInlineSize?: number;
+  measuredNumberInlineSize?: number;
+}
 
 export class ResizeManager {
   private observedNodes = new Map<
     HTMLElement,
     ObservedAnnotationNodes | ObservedGridNodes
   >();
-  private queuedUpdates: Map<ObservedGridNodes, CodeColumnUpdate[]> = new Map();
+  private queuedUpdates: Map<ObservedGridNodes, QueuedCodeColumnUpdate> =
+    new Map();
 
   cleanUp(): void {
     // Disconnect any existing observer
@@ -217,66 +222,81 @@ export class ResizeManager {
         );
         this.applyNewHeight(item, newHeight);
       } else if (item.type === 'code') {
-        const update: CodeColumnUpdate = [target, contentBoxSize[0].inlineSize];
-        const updates = this.queuedUpdates.get(item) ?? [];
-        updates.push(update);
-        this.queuedUpdates.set(item, updates);
+        const update = this.queuedUpdates.get(item) ?? {};
+        const inlineSize = contentBoxSize[0].inlineSize;
+        if (target === item.codeElement) {
+          update.codeInlineSize = inlineSize;
+        } else if (target === item.numberElement) {
+          update.numberInlineSize = inlineSize;
+        }
+        this.queuedUpdates.set(item, update);
       }
     }
     this.handleColumnChange();
   };
 
   private handleColumnChange = () => {
-    for (const [item, updates] of this.queuedUpdates) {
-      for (const [target, targetInlineSize] of updates) {
-        // FIXME(amadeus): This needs to be re-worked with display: contents,
-        // not sure setting to auto is a good assumption most of the time...
-        if (target === item.codeElement) {
-          const inlineSize = Math.max(Math.floor(targetInlineSize), 0);
-          if (inlineSize !== item.codeWidth) {
-            const targetWidth = Math.max(inlineSize - item.numberWidth, 0);
-            item.codeWidth = inlineSize === 0 ? 'auto' : inlineSize;
-            item.codeElement.style.setProperty(
-              '--diffs-column-content-width',
-              `${targetWidth > 0 ? `${targetWidth}px` : 'auto'}`
-            );
-            item.codeElement.style.setProperty(
-              '--diffs-column-width',
-              `${typeof item.codeWidth === 'number' ? `${item.codeWidth}px` : 'auto'}`
-            );
-          }
-          if (
-            item.numberElement != null &&
-            typeof item.codeWidth === 'number' &&
-            item.numberWidth === 0
-          ) {
-            updates.push([
-              item.numberElement,
-              item.numberElement.getBoundingClientRect().width,
-            ]);
-          }
-        } else if (target === item.numberElement) {
-          const inlineSize = Math.max(Math.ceil(targetInlineSize), 0);
-          if (inlineSize !== item.numberWidth) {
-            item.numberWidth = inlineSize;
-            item.codeElement.style.setProperty(
-              '--diffs-column-number-width',
-              `${item.numberWidth === 0 ? 'auto' : `${item.numberWidth}px`}`
-            );
-            // We probably need to update code width variable if
-            // `numberWidth` changed
-            if (item.codeWidth !== 'auto') {
-              const targetWidth = Math.max(
-                item.codeWidth - item.numberWidth,
-                0
-              );
-              item.codeElement.style.setProperty(
-                '--diffs-column-content-width',
-                `${targetWidth === 0 ? 'auto' : `${targetWidth}px`}`
-              );
-            }
-          }
-        }
+    // Measure any fallback widths up front so we do not interleave layout reads
+    // with the style writes below.
+    for (const [item, update] of this.queuedUpdates) {
+      if (
+        update.codeInlineSize != null &&
+        update.numberInlineSize == null &&
+        item.numberElement != null &&
+        item.numberWidth === 0
+      ) {
+        update.measuredNumberInlineSize =
+          item.numberElement.getBoundingClientRect().width;
+      }
+    }
+
+    for (const [item, update] of this.queuedUpdates) {
+      const nextCodeWidth =
+        update.codeInlineSize != null
+          ? resolveCodeWidth(update.codeInlineSize)
+          : item.codeWidth;
+      const nextNumberWidth =
+        update.numberInlineSize != null
+          ? resolveNumberWidth(update.numberInlineSize)
+          : update.measuredNumberInlineSize != null
+            ? resolveNumberWidth(update.measuredNumberInlineSize)
+            : item.numberWidth;
+      const codeWidthChanged = nextCodeWidth !== item.codeWidth;
+      const numberWidthChanged = nextNumberWidth !== item.numberWidth;
+
+      if (!codeWidthChanged && !numberWidthChanged) {
+        continue;
+      }
+
+      item.codeWidth = nextCodeWidth;
+      item.numberWidth = nextNumberWidth;
+
+      if (codeWidthChanged) {
+        item.codeElement.style.setProperty(
+          '--diffs-column-width',
+          `${typeof nextCodeWidth === 'number' ? `${nextCodeWidth}px` : 'auto'}`
+        );
+      }
+
+      if (numberWidthChanged) {
+        item.codeElement.style.setProperty(
+          '--diffs-column-number-width',
+          `${nextNumberWidth === 0 ? 'auto' : `${nextNumberWidth}px`}`
+        );
+      }
+
+      if (
+        codeWidthChanged ||
+        (numberWidthChanged && nextCodeWidth !== 'auto')
+      ) {
+        const targetWidth =
+          typeof nextCodeWidth === 'number'
+            ? Math.max(nextCodeWidth - nextNumberWidth, 0)
+            : 0;
+        item.codeElement.style.setProperty(
+          '--diffs-column-content-width',
+          `${targetWidth > 0 ? `${targetWidth}px` : 'auto'}`
+        );
       }
     }
     this.queuedUpdates.clear();
@@ -295,4 +315,13 @@ export class ResizeManager {
       );
     }
   }
+}
+
+function resolveCodeWidth(inlineSize: number): number | 'auto' {
+  const width = Math.max(Math.floor(inlineSize), 0);
+  return width === 0 ? 'auto' : width;
+}
+
+function resolveNumberWidth(inlineSize: number): number {
+  return Math.max(Math.ceil(inlineSize), 0);
 }
