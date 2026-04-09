@@ -632,13 +632,11 @@ export class PathStoreTreesController {
     this.#unsubscribe?.();
     this.#store = nextStore;
     this.#applyItemState(nextItemState);
-    const nextSelectedPaths = previousSelectedPaths.filter(
-      (selectedPath) =>
-        resolvePathStoreTreesItemPath(
-          nextItemState.itemMetadata,
-          selectedPath
-        ) != null
-    );
+    const nextSelectedPaths = previousSelectedPaths
+      .map((selectedPath) =>
+        resolvePathStoreTreesItemPath(nextItemState.itemMetadata, selectedPath)
+      )
+      .filter((resolved): resolved is string => resolved != null);
     const selectionChanged = !arePathSetsEqual(
       this.#selectedPaths,
       nextSelectedPaths

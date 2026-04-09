@@ -288,6 +288,30 @@ describe('path-store render + scroll', () => {
     controller.destroy();
   });
 
+  test('replacePaths canonicalizes selected paths when a file becomes a directory', async () => {
+    const { PathStoreTreesController } = await import('../src/path-store');
+
+    // Start with "src/foo" as a plain file.
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['src/foo'],
+    });
+
+    controller.selectOnlyPath('src/foo');
+    expect(controller.getSelectedPaths()).toEqual(['src/foo']);
+
+    // After a refresh "src/foo" is now a directory ("src/foo/") with a child.
+    // The old selected path "src/foo" resolves to the new canonical "src/foo/"
+    // via the trailing-slash fallback — replacePaths must store the resolved
+    // canonical form so that visible-row selection checks match.
+    controller.replacePaths(['src/foo/bar.ts']);
+    expect(controller.getSelectedPaths()).toEqual(['src/foo/']);
+    expect(controller.getItem('src/foo/')?.isSelected()).toBe(true);
+
+    controller.destroy();
+  });
+
   test('deep initialExpandedPaths expands ancestor directories in handle state and visible rows', async () => {
     const { PathStoreTreesController } = await import('../src/path-store');
 
