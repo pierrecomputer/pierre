@@ -484,7 +484,7 @@ export class PathStoreTreesController {
       return;
     }
 
-    this.togglePathSelection(this.#focusedPath);
+    this.togglePathSelectionFromInput(this.#focusedPath);
   }
 
   public togglePathSelection(path: string): void {

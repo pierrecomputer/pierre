@@ -449,6 +449,44 @@ describe('path-store render + scroll', () => {
     }
   });
 
+  test('Ctrl+Space seeds the range anchor for a later Shift-click', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths: ['a.ts', 'b.ts', 'c.ts', 'd.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const firstButton = getItemButton(shadowRoot, dom, 'a.ts');
+      firstButton.focus();
+      await flushDom();
+
+      pressKey(firstButton, dom, ' ', { code: 'Space', ctrlKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['a.ts']);
+
+      clickItem(shadowRoot, dom, 'd.ts', { shiftKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([
+        'a.ts',
+        'b.ts',
+        'c.ts',
+        'd.ts',
+      ]);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('selection change callbacks stay path-first and selection survives collapse/remount with explicit anchor fallback', async () => {
     const { cleanup, dom } = installDom();
     try {
