@@ -1049,6 +1049,10 @@ describe('path-store render + scroll', () => {
       expect(readmeButton.getAttribute('aria-expanded')).toBeNull();
       expect(readmeButton.tabIndex).toBe(-1);
 
+      // Collapsed directory should render aria-expanded="false"
+      const libButton = getItemButton(shadowRoot, dom, 'src/lib/');
+      expect(libButton.getAttribute('aria-expanded')).toBe('false');
+
       sourceButton.focus();
       await flushDom();
       expect(sourceButton.dataset.itemFocused).toBe('true');
@@ -1150,6 +1154,118 @@ describe('path-store render + scroll', () => {
       await flushDom();
       await flushDom();
       expect(fileTree.getItem('src/')?.isFocused()).toBe(true);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('ArrowLeft on expanded directory collapses it without moving focus', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['src/lib/'],
+        paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      // src/lib/ is expanded — ArrowLeft should collapse it, not move focus
+      getItemButton(shadowRoot, dom, 'src/lib/').focus();
+      await flushDom();
+      expect(shadowRoot?.innerHTML).toContain('src/lib/util.ts');
+
+      pressKey(getItemButton(shadowRoot, dom, 'src/lib/'), dom, 'ArrowLeft');
+      await flushDom();
+      expect(fileTree.getItem('src/lib/')?.isFocused()).toBe(true);
+      expect(shadowRoot?.innerHTML).not.toContain('src/lib/util.ts');
+
+      // Now src/lib/ is collapsed — ArrowLeft should move focus to parent src/
+      pressKey(getItemButton(shadowRoot, dom, 'src/lib/'), dom, 'ArrowLeft');
+      await flushDom();
+      expect(fileTree.getItem('src/')?.isFocused()).toBe(true);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('ArrowLeft at root level is a no-op and ArrowRight on a leaf moves focus forward', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        initialExpansion: 0,
+        paths: ['a.ts', 'b.ts', 'c.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      // Focus first root-level item — ArrowLeft should be a no-op
+      getItemButton(shadowRoot, dom, 'a.ts').focus();
+      await flushDom();
+      pressKey(getItemButton(shadowRoot, dom, 'a.ts'), dom, 'ArrowLeft');
+      await flushDom();
+      expect(fileTree.getItem('a.ts')?.isFocused()).toBe(true);
+
+      // ArrowRight on a leaf file should move focus to next item
+      pressKey(getItemButton(shadowRoot, dom, 'a.ts'), dom, 'ArrowRight');
+      await flushDom();
+      expect(fileTree.getItem('b.ts')?.isFocused()).toBe(true);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('focus stays clamped at first and last visible items', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths: ['a.ts', 'b.ts', 'c.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      // ArrowUp at first item stays put
+      getItemButton(shadowRoot, dom, 'a.ts').focus();
+      await flushDom();
+      pressKey(getItemButton(shadowRoot, dom, 'a.ts'), dom, 'ArrowUp');
+      await flushDom();
+      expect(fileTree.getItem('a.ts')?.isFocused()).toBe(true);
+
+      // ArrowDown at last item stays put
+      pressKey(getItemButton(shadowRoot, dom, 'a.ts'), dom, 'End');
+      await flushDom();
+      await flushDom();
+      expect(fileTree.getItem('c.ts')?.isFocused()).toBe(true);
+
+      pressKey(getItemButton(shadowRoot, dom, 'c.ts'), dom, 'ArrowDown');
+      await flushDom();
+      expect(fileTree.getItem('c.ts')?.isFocused()).toBe(true);
 
       fileTree.cleanUp();
     } finally {
