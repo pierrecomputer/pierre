@@ -1559,6 +1559,326 @@ describe('path-store render + scroll', () => {
     }
   });
 
+  test('Shift-click range selection works when anchor or target is a flattened row', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: true,
+        initialExpandedPaths: ['src/'],
+        paths: ['README.md', 'src/lib/util.ts', 'src/lib/helpers.ts'],
+        viewportHeight: 200,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      // Click the flattened row (src / lib) to set it as anchor
+      clickItem(shadowRoot, dom, 'src/lib/');
+      await flushDom();
+      expect(fileTree.getSelectedPaths()).toEqual(['src/lib/']);
+
+      // Shift-click a file below — should produce a range from the flattened
+      // row through the target, not fall back to single selection.
+      clickItem(shadowRoot, dom, 'src/lib/helpers.ts', { shiftKey: true });
+      await flushDom();
+      expect(fileTree.getSelectedPaths()).toContain('src/lib/');
+      expect(fileTree.getSelectedPaths()).toContain('src/lib/helpers.ts');
+
+      // Now test the reverse: anchor on a regular file, Shift-click the
+      // flattened row.
+      clickItem(shadowRoot, dom, 'src/lib/helpers.ts');
+      await flushDom();
+
+      clickItem(shadowRoot, dom, 'src/lib/', { shiftKey: true });
+      await flushDom();
+      expect(fileTree.getSelectedPaths()).toContain('src/lib/');
+      expect(fileTree.getSelectedPaths()).toContain('src/lib/helpers.ts');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('expansion between selected items does not corrupt index-based selection', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        initialExpansion: 0,
+        paths: ['a.ts', 'src/index.ts', 'src/lib/util.ts', 'z.ts'],
+        viewportHeight: 200,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      // Select a.ts, then Shift-click z.ts while the collapsed src/ row sits
+      // outside the anchored visible range because directories sort ahead of
+      // root files in this lane.
+      clickItem(shadowRoot, dom, 'a.ts');
+      await flushDom();
+      clickItem(shadowRoot, dom, 'z.ts', { shiftKey: true });
+      await flushDom();
+      expect(fileTree.getSelectedPaths()).toEqual(['a.ts', 'z.ts']);
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['a.ts', 'z.ts']);
+
+      // Expand src/ — new children appear but selection stays path-based
+      const srcDir = fileTree.getItem('src/');
+      if (srcDir == null || !srcDir.isDirectory() || !('expand' in srcDir)) {
+        throw new Error('missing src directory');
+      }
+      srcDir.expand();
+      await flushDom();
+
+      // Only the original selected root-file range should remain selected, not
+      // the newly visible children.
+      expect(fileTree.getSelectedPaths()).toEqual(['a.ts', 'z.ts']);
+      expect(
+        getItemButton(shadowRoot, dom, 'src/index.ts').dataset.itemSelected
+      ).toBeUndefined();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('onSelectionChange does not fire on collapse even when selected items become hidden', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+      const selectionEvents: string[][] = [];
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['src/'],
+        onSelectionChange: (items) => {
+          selectionEvents.push([...items]);
+        },
+        paths: ['src/index.ts', 'src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      clickItem(shadowRoot, dom, 'src/index.ts');
+      await flushDom();
+      expect(selectionEvents.length).toBe(1);
+
+      // Collapse the parent — selected item disappears from DOM but stays
+      // in the selection set, so the callback should NOT fire again.
+      const srcDir = fileTree.getItem('src/');
+      if (srcDir == null || !srcDir.isDirectory() || !('collapse' in srcDir)) {
+        throw new Error('missing src directory');
+      }
+      srcDir.collapse();
+      await flushDom();
+
+      expect(selectionEvents.length).toBe(1);
+      expect(fileTree.getSelectedPaths()).toEqual(['src/index.ts']);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('empty paths array creates a valid tree with no crashes', async () => {
+    const { PathStoreTreesController } = await import('../src/path-store');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      paths: [],
+    });
+
+    expect(controller.getVisibleCount()).toBe(0);
+    expect(controller.getFocusedPath()).toBeNull();
+    expect(controller.getFocusedIndex()).toBe(-1);
+    expect(controller.getFocusedItem()).toBeNull();
+    expect(controller.getSelectedPaths()).toEqual([]);
+    expect(controller.getItem('anything')).toBeNull();
+
+    // Navigation methods should be no-ops, not throw.
+    controller.focusNextItem();
+    controller.focusPreviousItem();
+    controller.focusFirstItem();
+    controller.focusLastItem();
+    controller.focusParentItem();
+    controller.selectAllVisiblePaths();
+    controller.extendSelectionFromFocused(1);
+    controller.extendSelectionFromFocused(-1);
+    controller.selectPathRange('missing.ts', false);
+    controller.selectOnlyPath('missing.ts');
+
+    expect(controller.getVisibleCount()).toBe(0);
+
+    controller.destroy();
+  });
+
+  test('single item tree handles all navigation and selection gracefully', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths: ['only.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const button = getItemButton(shadowRoot, dom, 'only.ts');
+      button.focus();
+      await flushDom();
+
+      // ArrowDown/Up at the only item should stay put
+      pressKey(button, dom, 'ArrowDown');
+      await flushDom();
+      expect(fileTree.getItem('only.ts')?.isFocused()).toBe(true);
+
+      pressKey(button, dom, 'ArrowUp');
+      await flushDom();
+      expect(fileTree.getItem('only.ts')?.isFocused()).toBe(true);
+
+      // Ctrl+A selects the single item
+      pressKey(button, dom, 'a', { ctrlKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['only.ts']);
+
+      // Shift+ArrowDown at boundary is a no-op
+      pressKey(button, dom, 'ArrowDown', { shiftKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['only.ts']);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('Ctrl-click deselects the anchor then Shift-click still ranges from it', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths: ['a.ts', 'b.ts', 'c.ts', 'd.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      // Click b.ts to set it as anchor and select it
+      clickItem(shadowRoot, dom, 'b.ts');
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['b.ts']);
+
+      // Ctrl-click b.ts to deselect it — anchor should remain b.ts
+      clickItem(shadowRoot, dom, 'b.ts', { ctrlKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([]);
+
+      // Shift-click d.ts — should range from anchor b.ts to d.ts
+      clickItem(shadowRoot, dom, 'd.ts', { shiftKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([
+        'b.ts',
+        'c.ts',
+        'd.ts',
+      ]);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('replacePaths preserves focus on surviving paths and resets focus when focused path is removed', async () => {
+    const { PathStoreTreesController } = await import('../src/path-store');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['a.ts', 'b.ts', 'c.ts'],
+    });
+
+    controller.focusPath('b.ts');
+    expect(controller.getFocusedPath()).toBe('b.ts');
+
+    // Replace paths keeping b.ts — focus should survive
+    controller.replacePaths(['a.ts', 'b.ts', 'd.ts']);
+    expect(controller.getFocusedPath()).toBe('b.ts');
+
+    // Replace paths removing b.ts — focus should fall back
+    controller.replacePaths(['a.ts', 'd.ts']);
+    expect(controller.getFocusedPath()).not.toBe('b.ts');
+    expect(controller.getFocusedPath()).not.toBeNull();
+
+    // Replace with empty — focus should be null
+    controller.replacePaths([]);
+    expect(controller.getFocusedPath()).toBeNull();
+
+    controller.destroy();
+  });
+
+  test('controller subscribe fires when replacePaths prunes selected items', async () => {
+    const { PathStoreTreesController } = await import('../src/path-store');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['a.ts', 'b.ts', 'c.ts'],
+    });
+
+    controller.selectOnlyPath('a.ts');
+    controller.selectPathRange('c.ts', false);
+    expect(controller.getSelectedPaths()).toEqual(['a.ts', 'b.ts', 'c.ts']);
+    const versionBeforeReplace = controller.getSelectionVersion();
+
+    // Remove b.ts — selection should prune it
+    controller.replacePaths(['a.ts', 'c.ts']);
+    expect(controller.getSelectedPaths()).toEqual(['a.ts', 'c.ts']);
+    expect(controller.getSelectionVersion()).toBeGreaterThan(
+      versionBeforeReplace
+    );
+
+    // Replace with all new paths — selection fully pruned
+    const versionBeforeFullPrune = controller.getSelectionVersion();
+    controller.replacePaths(['x.ts', 'y.ts']);
+    expect(controller.getSelectedPaths()).toEqual([]);
+    expect(controller.getSelectionVersion()).toBeGreaterThan(
+      versionBeforeFullPrune
+    );
+
+    // Replace that doesn't affect selection — version stays the same
+    controller.selectOnlyPath('x.ts');
+    const versionBeforeNoOp = controller.getSelectionVersion();
+    controller.replacePaths(['x.ts', 'z.ts']);
+    expect(controller.getSelectedPaths()).toEqual(['x.ts']);
+    expect(controller.getSelectionVersion()).toBe(versionBeforeNoOp);
+
+    controller.destroy();
+  });
+
   test('collapse preserves a coherent virtualized window when affected rows move above and below the fold', async () => {
     const { cleanup, dom } = installDom();
     try {

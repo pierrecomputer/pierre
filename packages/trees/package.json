@@ -44,6 +44,7 @@
     "benchmark:path-store-get-item": "bun run ./scripts/benchmarkPathStoreGetItem.ts",
     "benchmark:render": "bun run ./scripts/benchmarkVirtualizedFileTreeRender.ts",
     "benchmark:render:client": "bun run ./scripts/benchmarkVirtualizedFileTreeClientMount.ts",
+    "profile:pathstore": "bun run ./scripts/profileTreesPathStore.ts",
     "profile:virtualization": "bun run ./scripts/profileTreesDevVirtualization.ts",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "test": "bun test",
