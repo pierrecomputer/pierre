@@ -266,6 +266,28 @@ describe('path-store render + scroll', () => {
     controller.destroy();
   });
 
+  test('replacePaths prunes stale selections and resets a hidden range anchor', async () => {
+    const { PathStoreTreesController } = await import('../src/path-store');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['a.ts', 'b.ts', 'c.ts'],
+    });
+
+    controller.selectOnlyPath('a.ts');
+    controller.selectPathRange('c.ts', false);
+    expect(controller.getSelectedPaths()).toEqual(['a.ts', 'b.ts', 'c.ts']);
+
+    controller.replacePaths(['b.ts', 'd.ts']);
+    expect(controller.getSelectedPaths()).toEqual(['b.ts']);
+
+    controller.selectPathRange('d.ts', false);
+    expect(controller.getSelectedPaths()).toEqual(['d.ts']);
+
+    controller.destroy();
+  });
+
   test('deep initialExpandedPaths expands ancestor directories in handle state and visible rows', async () => {
     const { PathStoreTreesController } = await import('../src/path-store');
 
@@ -449,6 +471,37 @@ describe('path-store render + scroll', () => {
     }
   });
 
+  test('Shift+Arrow from an unselected focused row selects only the next row', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths: ['a.ts', 'b.ts', 'c.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const firstButton = getItemButton(shadowRoot, dom, 'a.ts');
+      firstButton.focus();
+      await flushDom();
+
+      pressKey(firstButton, dom, 'ArrowDown', { shiftKey: true });
+      await flushDom();
+
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['b.ts']);
+      expect(fileTree.getItem('b.ts')?.isFocused()).toBe(true);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('Ctrl+Space seeds the range anchor for a later Shift-click', async () => {
     const { cleanup, dom } = installDom();
     try {
@@ -480,6 +533,113 @@ describe('path-store render + scroll', () => {
         'c.ts',
         'd.ts',
       ]);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('Shift-click without an existing anchor falls back to single selection', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths: ['a.ts', 'b.ts', 'c.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      clickItem(shadowRoot, dom, 'c.ts', { shiftKey: true });
+      await flushDom();
+
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['c.ts']);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('repeated Shift-clicks contract and extend the same anchored range', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths: ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      clickItem(shadowRoot, dom, 'a.ts');
+      await flushDom();
+      clickItem(shadowRoot, dom, 'd.ts', { shiftKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([
+        'a.ts',
+        'b.ts',
+        'c.ts',
+        'd.ts',
+      ]);
+
+      clickItem(shadowRoot, dom, 'b.ts', { shiftKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['a.ts', 'b.ts']);
+
+      clickItem(shadowRoot, dom, 'e.ts', { shiftKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([
+        'a.ts',
+        'b.ts',
+        'c.ts',
+        'd.ts',
+        'e.ts',
+      ]);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('reselecting the same selection set does not emit duplicate change callbacks', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+      const selectionEvents: string[][] = [];
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        onSelectionChange: (selectedPaths) => {
+          selectionEvents.push([...selectedPaths]);
+        },
+        paths: ['a.ts', 'b.ts', 'c.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      clickItem(shadowRoot, dom, 'b.ts');
+      await flushDom();
+      clickItem(shadowRoot, dom, 'b.ts');
+      await flushDom();
+
+      expect(selectionEvents).toEqual([['b.ts']]);
 
       fileTree.cleanUp();
     } finally {
@@ -539,6 +699,77 @@ describe('path-store render + scroll', () => {
       await flushDom();
       expect(fileTree.getSelectedPaths()).toEqual(['README.md']);
       expect(selectionEvents.at(-1)).toEqual(['README.md']);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('Ctrl+A selects only currently visible rows', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        initialExpansion: 0,
+        paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const sourceButton = getItemButton(shadowRoot, dom, 'src/');
+      sourceButton.focus();
+      await flushDom();
+
+      pressKey(sourceButton, dom, 'a', { ctrlKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([
+        'src/',
+        'README.md',
+      ]);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('Ctrl+A keeps the focused row as the next Shift-click anchor', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        paths: ['a.ts', 'b.ts', 'c.ts', 'd.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const secondButton = getItemButton(shadowRoot, dom, 'b.ts');
+      secondButton.focus();
+      await flushDom();
+
+      pressKey(secondButton, dom, 'a', { ctrlKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([
+        'a.ts',
+        'b.ts',
+        'c.ts',
+        'd.ts',
+      ]);
+
+      clickItem(shadowRoot, dom, 'c.ts', { shiftKey: true });
+      await flushDom();
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['b.ts', 'c.ts']);
 
       fileTree.cleanUp();
     } finally {
@@ -1150,6 +1381,37 @@ describe('path-store render + scroll', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(shadowRoot?.innerHTML).toContain('util.ts');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('flattened row selection targets the terminal directory path', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: true,
+        initialExpandedPaths: ['src/'],
+        paths: ['src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      clickItem(shadowRoot, dom, 'src/lib/');
+      await flushDom();
+
+      expect(fileTree.getSelectedPaths()).toEqual(['src/lib/']);
+      expect(
+        getItemButton(shadowRoot, dom, 'src/lib/').dataset.itemSelected
+      ).toBe('true');
 
       fileTree.cleanUp();
     } finally {

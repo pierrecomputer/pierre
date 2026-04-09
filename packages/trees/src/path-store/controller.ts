@@ -267,6 +267,7 @@ export class PathStoreTreesController {
   #projectionRows: readonly PathStoreVisibleTreeProjectionRow[] = [];
   #selectionAnchorPath: string | null = null;
   #selectedPaths = new Set<string>();
+  #selectionVersion = 0;
   #store: PathStore;
   #unsubscribe: (() => void) | null;
   #visibleIndexByPath = new Map<string, number>();
@@ -366,6 +367,10 @@ export class PathStoreTreesController {
 
   public getSelectedPaths(): readonly string[] {
     return [...this.#selectedPaths];
+  }
+
+  public getSelectionVersion(): number {
+    return this.#selectionVersion;
   }
 
   public getVisibleCount(): number {
@@ -627,15 +632,21 @@ export class PathStoreTreesController {
     this.#unsubscribe?.();
     this.#store = nextStore;
     this.#applyItemState(nextItemState);
-    this.#selectedPaths = new Set(
-      previousSelectedPaths.filter(
-        (selectedPath) =>
-          resolvePathStoreTreesItemPath(
-            nextItemState.itemMetadata,
-            selectedPath
-          ) != null
-      )
+    const nextSelectedPaths = previousSelectedPaths.filter(
+      (selectedPath) =>
+        resolvePathStoreTreesItemPath(
+          nextItemState.itemMetadata,
+          selectedPath
+        ) != null
     );
+    const selectionChanged = !arePathSetsEqual(
+      this.#selectedPaths,
+      nextSelectedPaths
+    );
+    this.#selectedPaths = new Set(nextSelectedPaths);
+    if (selectionChanged) {
+      this.#selectionVersion += 1;
+    }
     this.#selectionAnchorPath =
       previousSelectionAnchorPath == null
         ? null
@@ -691,6 +702,9 @@ export class PathStoreTreesController {
 
     this.#selectedPaths = new Set(uniqueSelectedPaths);
     this.#selectionAnchorPath = nextAnchorPath;
+    if (selectionChanged) {
+      this.#selectionVersion += 1;
+    }
     if (emit) {
       this.#emit();
     }

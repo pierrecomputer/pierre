@@ -82,7 +82,7 @@ export class PathStoreFileTree {
     'itemHeight' | 'overscan' | 'viewportHeight'
   >;
   #fileTreeContainer: HTMLElement | undefined;
-  #selectionSnapshot: string;
+  #selectionVersion: number;
   #selectionSubscription: (() => void) | null = null;
   #wrapper: HTMLDivElement | undefined;
 
@@ -103,7 +103,7 @@ export class PathStoreFileTree {
       viewportHeight,
     };
     this.#controller = new PathStoreTreesController(controllerOptions);
-    this.#selectionSnapshot = this.#createSelectionSnapshot();
+    this.#selectionVersion = this.#controller.getSelectionVersion();
     this.#selectionSubscription =
       this.#onSelectionChange == null
         ? null
@@ -180,22 +180,18 @@ export class PathStoreFileTree {
     };
   }
 
-  #createSelectionSnapshot(): string {
-    return this.#controller.getSelectedPaths().join('|');
-  }
-
   #emitSelectionChange(): void {
     const onSelectionChange = this.#onSelectionChange;
     if (onSelectionChange == null) {
       return;
     }
 
-    const nextSnapshot = this.#createSelectionSnapshot();
-    if (nextSnapshot === this.#selectionSnapshot) {
+    const nextSelectionVersion = this.#controller.getSelectionVersion();
+    if (nextSelectionVersion === this.#selectionVersion) {
       return;
     }
 
-    this.#selectionSnapshot = nextSnapshot;
+    this.#selectionVersion = nextSelectionVersion;
     onSelectionChange(this.#controller.getSelectedPaths());
   }
 
