@@ -14,7 +14,7 @@
 - [React API](https://diffs.com/preview/trees/docs#react-api): FileTree React component and props
 - [Vanilla JS API](https://diffs.com/preview/trees/docs#vanilla-js-api): FileTree class, constructor options, instance methods, and FileTreeStateConfig
 - [Git Status](https://diffs.com/preview/trees/docs#git-status): Git-style file status indicators
-- [Custom Icons](https://diffs.com/preview/trees/docs#custom-icons): Custom SVG sprite sheets and icon remapping
+- [Icons](https://diffs.com/preview/trees/docs#icons): Custom SVG sprite sheets and icon remapping
 - [Utilities](https://diffs.com/preview/trees/docs#utilities): sortChildren, generateSyncDataLoader, generateLazyDataLoader
 - [Styling](https://diffs.com/preview/trees/docs#styling): CSS variables and inline style overrides
 - [SSR](https://diffs.com/preview/trees/docs#ssr): preloadFileTree for server-side rendering and vanilla hydration

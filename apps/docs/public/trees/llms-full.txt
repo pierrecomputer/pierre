@@ -127,7 +127,7 @@ folder containing `index.ts`, `utils/helpers.ts`, and a `components` folder with
 | `lockedPaths`             | Optional list of file/folder paths that cannot be dragged when drag and drop is enabled.                                                                                                                                    |
 | `onCollision`             | Optional callback for drag collisions. Return `true` to overwrite destination.                                                                                                                                              |
 | `gitStatus`               | Optional `GitStatusEntry[]` used to show Git-style file status (`added`, `modified`, `deleted`). Folders with changed descendants also receive a change indicator. [Live demo](/preview/trees#path-colors).                 |
-| `icons`                   | Optional `FileTreeIconConfig` to provide a custom SVG sprite sheet and remap built-in icon names to your own symbols. [Live demo](/preview/trees#custom-icons).                                                             |
+| `icons`                   | Optional built-in icon set selection or `FileTreeIconConfig` for semantic colors, CSS-themable palettes, and custom sprite overrides. [Live demo](/preview/trees#custom-icons).                                             |
 | `sort`                    | Sort children within each directory. `true` (default) uses the standard sort (folders first, dot-prefixed next, case-insensitive alphabetical). `false` preserves insertion order. `{ comparator: fn }` for custom sorting. |
 | `virtualize`              | Enable virtualized rendering so only visible items are rendered. Pass `{ threshold: number }` to activate when item count exceeds the threshold, or `false` to disable. Default: `undefined` (off).                         |
 
@@ -174,8 +174,15 @@ const fileTreeOptions = {
 ```typescript
 import type { FileTreeIconConfig } from '@pierre/trees';
 
-// FileTreeIconConfig lets you replace built-in icons with custom SVG symbols.
+// FileTreeIconConfig lets you pick a built-in set, enable semantic colors,
+// or inject your own SVG symbols.
 interface FileTreeIconConfig {
+  // Optional: use one of the built-in sets, or "none" for custom-only rules.
+  set?: 'minimal' | 'standard' | 'complete' | 'none';
+
+  // Optional: enable built-in per-file-type colors. Default: true.
+  colored?: boolean;
+
   // An SVG string with <symbol> definitions injected into the shadow DOM.
   spriteSheet?: string;
 
@@ -185,12 +192,35 @@ interface FileTreeIconConfig {
     | string
     | { name: string; width?: number; height?: number; viewBox?: string }
   >;
+
+  // Remap file icons by exact basename (e.g. package.json, .gitignore).
+  byFileName?: Record<
+    string,
+    | string
+    | { name: string; width?: number; height?: number; viewBox?: string }
+  >;
+
+  // Remap file icons by extension (e.g. ts, tsx, spec.ts).
+  byFileExtension?: Record<
+    string,
+    | string
+    | { name: string; width?: number; height?: number; viewBox?: string }
+  >;
+
+  // Remap file icons when filename contains a substring (e.g. dockerfile).
+  byFileNameContains?: Record<
+    string,
+    | string
+    | { name: string; width?: number; height?: number; viewBox?: string }
+  >;
 }
 
-// Example: replace the file and chevron icons with custom symbols.
+// Example: use the built-in file-type set with colors enabled, then override one icon.
 const options = {
   initialFiles: ['src/index.ts', 'src/components/Button.tsx'],
   icons: {
+    set: 'standard',
+    colored: true,
     spriteSheet: `
       <svg data-icon-sprite aria-hidden="true" width="0" height="0">
         <symbol id="my-file" viewBox="0 0 24 24" fill="none"
@@ -204,8 +234,10 @@ const options = {
         </symbol>
       </svg>
     `,
+    byFileExtension: {
+      ts: 'my-file',
+    },
     remap: {
-      'file-tree-icon-file': 'my-file',
       'file-tree-icon-chevron': { name: 'my-folder', width: 16, height: 16 },
     },
   },
@@ -217,7 +249,7 @@ const options = {
 ```typescript
 import type {
   FileTreeOptions,
-  FileTreeIconConfig,
+  FileTreeIcons,
   FileTreeStateConfig,
   FileTreeSearchMode,
   FileTreeCollision,
@@ -252,8 +284,8 @@ interface FileTreeOptions {
   // Optional: Git status entries for file status indicators.
   gitStatus?: GitStatusEntry[];
 
-  // Optional: custom SVG sprite sheet and icon remapping.
-  icons?: FileTreeIconConfig;
+  // Optional: built-in icon set selection, colors, and custom remapping.
+  icons?: FileTreeIcons;
 
   // Optional: paths that cannot be dragged when drag and drop is enabled.
   lockedPaths?: string[];
@@ -433,26 +465,14 @@ React component:
 ```tsx
 import { FileTree } from '@pierre/trees/react';
 
-const customSpriteSheet = `
-  <svg data-icon-sprite aria-hidden="true" width="0" height="0">
-    <symbol id="my-file" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" stroke-width="2">
-      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-      <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
-    </symbol>
-  </svg>
-`;
-
-export function CustomIconsTree() {
+export function IconSetTree() {
   return (
     <FileTree
       options={{
-        id: 'custom-icons-tree',
+        id: 'icon-set-tree',
         icons: {
-          spriteSheet: customSpriteSheet,
-          remap: {
-            'file-tree-icon-file': 'my-file',
-          },
+          set: 'standard',
+          colored: true,
         },
       }}
       initialFiles={[
@@ -623,16 +643,6 @@ constructor's second argument. Use it for defaults (`initialExpandedItems`,
 ```typescript
 import { FileTree } from '@pierre/trees';
 
-const customSpriteSheet = `
-  <svg data-icon-sprite aria-hidden="true" width="0" height="0">
-    <symbol id="my-file" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" stroke-width="2">
-      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-      <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
-    </symbol>
-  </svg>
-`;
-
 const fileTree = new FileTree({
   initialFiles: [
     'src/index.ts',
@@ -640,10 +650,8 @@ const fileTree = new FileTree({
     'package.json',
   ],
   icons: {
-    spriteSheet: customSpriteSheet,
-    remap: {
-      'file-tree-icon-file': 'my-file',
-    },
+    set: 'standard',
+    colored: true,
   },
 });
 
@@ -788,19 +796,38 @@ target:
 - `data-item-git-status="added" | "modified" | "deleted"` on changed files
 - `data-item-contains-git-change="true"` on folders that contain changed files
 
-## Custom Icons
+## Icons
 
-Use the `icons` option inside `FileTreeOptions` to swap built-in icons with your
-own SVG symbols. Try the live demo at
+Use the `icons` option inside `FileTreeOptions` to choose one of the built-in
+icon sets or inject your own SVG sprite. Try the live demo at
 [/preview/trees#custom-icons](/preview/trees#custom-icons).
 
+- `icons: 'minimal' | 'standard' | 'complete'` — use one of the shipped icon
+  tiers. Each tier is cumulative: `standard` includes everything in `minimal`
+  plus language icons, and `complete` adds brands and tooling on top.
+- `set` — use the object form to combine a built-in set with `colored`,
+  `spriteSheet`, or file-specific overrides.
+- `colored` — semantic per-file-type colors for built-in `standard` and
+  `complete` icons. Defaults to `true`; set `colored: false` to disable it.
+  Override the palette with CSS variables like
+  `--trees-file-icon-color-javascript`.
 - `spriteSheet` — an SVG string containing `<symbol>` definitions. It is
-  injected into the shadow DOM alongside the default sprite sheet.
+  injected into the shadow DOM alongside the selected built-in sprite sheet.
 - `remap` — a map from a built-in icon name to either a replacement symbol id
   (string) or an object with `name`, optional `width`, `height`, and `viewBox`.
+- `byFileName` — remap the file icon for exact basenames (for example
+  `package.json` or `.gitignore`).
+- `byFileNameContains` — remap the file icon when a basename contains a pattern
+  (for example `dockerfile` or `license`).
+- `byFileExtension` — remap the file icon by extension (for example `ts`, `tsx`,
+  `spec.ts`, or `json`).
 
-You can re-map any of the existing, default icons (listed below) by creating new
-SVG symbols that use the same IDs.
+You can remap any of the existing built-in icon slots (listed below) by creating
+new SVG symbols that use the same IDs.
+
+For file rows, icon resolution order is: `byFileName` → `byFileNameContains` →
+`byFileExtension` (most specific suffix first) → built-in set mapping →
+`remap['file-tree-icon-file']` → fallback file icon.
 
 | Icon ID                  | Description                                                         |
 | ------------------------ | ------------------------------------------------------------------- |
