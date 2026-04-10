@@ -179,6 +179,7 @@ function renderStyledRow(
   itemHeight: number,
   registerButton: (path: string, element: HTMLButtonElement | null) => void,
   onKeyDown: (event: KeyboardEvent) => void,
+  key: string | number,
   options: {
     isParked?: boolean;
     style?: Record<string, string | undefined>;
@@ -196,7 +197,7 @@ function renderStyledRow(
 
   return (
     <button
-      key={row.path}
+      key={key}
       ref={(element) => {
         registerButton(targetPath, element);
       }}
@@ -281,16 +282,21 @@ function renderRangeChildren(
     return [];
   }
 
+  // Reuse DOM nodes by viewport slot instead of item identity so rebasing the
+  // overscanned window does not make still-visible rows jump to a new slot.
+  // That keeps sticky virtualization Safari-friendly while avoiding large
+  // layout shifts during scroll in browsers that track CLS inside scrollers.
   return controller
     .getVisibleRows(range.start, range.end)
-    .map((row) =>
+    .map((row, slotIndex) =>
       renderStyledRow(
         controller,
         row,
         activeItemPath,
         itemHeight,
         registerButton,
-        onKeyDown
+        onKeyDown,
+        slotIndex
       )
     );
 }
@@ -702,6 +708,7 @@ export function PathStoreTreesView({
                     rowButtonRefs.current.set(path, element);
                   },
                   handleTreeKeyDown,
+                  `parked:${parkedFocusedRow.path}`,
                   {
                     isParked: true,
                     style: {
