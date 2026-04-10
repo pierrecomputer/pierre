@@ -90,6 +90,22 @@ export function compareSegmentSortKeys(
   leftKey: SegmentSortKey,
   rightKey: SegmentSortKey
 ): number {
+  // Segments without numeric runs produce a single string token, so they can
+  // compare directly on the cached lower-case string without walking the token
+  // arrays or coercing tokens back through String().
+  if (
+    leftKey.tokens.length === 1 &&
+    rightKey.tokens.length === 1 &&
+    typeof leftKey.tokens[0] === 'string' &&
+    typeof rightKey.tokens[0] === 'string'
+  ) {
+    if (leftKey.lowerValue === rightKey.lowerValue) {
+      return 0;
+    }
+
+    return leftKey.lowerValue < rightKey.lowerValue ? -1 : 1;
+  }
+
   const tokenComparison = compareNaturalTokens(leftKey.tokens, rightKey.tokens);
   if (tokenComparison !== 0) {
     return tokenComparison;
