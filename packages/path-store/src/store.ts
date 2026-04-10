@@ -1,6 +1,7 @@
 import {
   getPreparedInputEntries,
   getPreparedInputPresortedPaths,
+  getPreparedInputPresortedPathsContainDirectories,
   PathStoreBuilder,
   prepareInput as prepareCanonicalInput,
   preparePaths as prepareCanonicalPaths,
@@ -49,6 +50,8 @@ import {
   expandPath,
   getVisibleCount,
   getVisibleSlice,
+  getVisibleTreeProjectionData as getVisibleTreeProjectionDataFromState,
+  getVisibleTreeProjection as getVisibleTreeProjectionFromState,
 } from './projection';
 import type {
   PathStoreChildPatch,
@@ -62,10 +65,18 @@ import type {
   PathStoreMoveOptions,
   PathStoreOperation,
   PathStoreOptions,
+  PathStorePathInfo,
   PathStorePreparedInput,
   PathStoreRemoveOptions,
   PathStoreVisibleRow,
+  PathStoreVisibleTreeProjection,
+  PathStoreVisibleTreeProjectionData,
 } from './public-types';
+import {
+  compareSegmentSortKeys,
+  createSegmentSortKey,
+  getSegmentSortKey,
+} from './sort';
 import {
   beginDirectoryLoad,
   completeDirectoryLoad,
@@ -177,7 +188,12 @@ export class PathStore {
         options.preparedInput
       );
       if (presortedPaths != null) {
-        builder.appendPresortedPaths(presortedPaths);
+        builder.appendPresortedPaths(
+          presortedPaths,
+          getPreparedInputPresortedPathsContainDirectories(
+            options.preparedInput
+          )
+        );
       } else {
         // preparedInput is the caller's explicit fast path, so skip the
         // builder's redundant monotonic-order validation and only keep
@@ -213,12 +229,22 @@ export class PathStore {
           instrumentation
         )
     );
-    withBenchmarkPhase(
+    const expandedDirectoryCount = withBenchmarkPhase(
       instrumentation,
       'store.state.initializeExpandedPaths',
       () => this.initializeExpandedPaths(options.initialExpandedPaths)
     );
-    if (canInitializeOpenVisibleCounts(options)) {
+    const canUseOpenVisibleCounts =
+      canInitializeOpenVisibleCounts(options) ||
+      ((options.initialExpansion ?? 'closed') === 'closed' &&
+        expandedDirectoryCount === this.#state.snapshot.directories.size - 1) ||
+      ((options.initialExpandedPaths?.length ?? 0) > 0 &&
+        withBenchmarkPhase(
+          instrumentation,
+          'store.state.checkAllDirectoriesExpanded',
+          () => this.hasAllDirectoriesExpanded()
+        ));
+    if (canUseOpenVisibleCounts) {
       withBenchmarkPhase(
         instrumentation,
         'store.state.initializeOpenVisibleCounts',
@@ -345,6 +371,54 @@ export class PathStore {
       this.#state.instrumentation,
       'store.getVisibleSlice',
       () => getVisibleSlice(this.#state, start, end)
+    );
+  }
+
+  public getVisibleTreeProjection(): PathStoreVisibleTreeProjection {
+    return getVisibleTreeProjectionFromState(this.#state);
+  }
+
+  public getVisibleTreeProjectionData(
+    maxRows?: number
+  ): PathStoreVisibleTreeProjectionData {
+    return getVisibleTreeProjectionDataFromState(this.#state, maxRows);
+  }
+
+  /**
+   * Resolves a lookup path to the store's canonical path and item kind.
+   * Lets tree adapters answer path-first queries without building a second
+   * whole-tree metadata index alongside the store.
+   */
+  public getPathInfo(path: string): PathStorePathInfo | null {
+    return withBenchmarkPhase(
+      this.#state.instrumentation,
+      'store.getPathInfo',
+      () => {
+        const nodeId = findNodeId(this.#state, path);
+        if (nodeId == null) {
+          return null;
+        }
+
+        const node = requireNode(this.#state, nodeId);
+        return {
+          depth: node.depth,
+          kind:
+            node.kind === PATH_STORE_NODE_KIND_DIRECTORY ? 'directory' : 'file',
+          path: materializeNodePath(this.#state, nodeId),
+        } satisfies PathStorePathInfo;
+      }
+    );
+  }
+
+  public isExpanded(path: string): boolean {
+    return withBenchmarkPhase(
+      this.#state.instrumentation,
+      'store.isExpanded',
+      () => {
+        const directoryNodeId = this.requireDirectoryNodeId(path);
+        const directoryNode = requireNode(this.#state, directoryNodeId);
+        return isDirectoryExpanded(this.#state, directoryNodeId, directoryNode);
+      }
     );
   }
 
@@ -690,24 +764,208 @@ export class PathStore {
 
   private initializeExpandedPaths(
     expandedPaths: readonly string[] | undefined
-  ): void {
+  ): number {
     if (expandedPaths == null || expandedPaths.length === 0) {
-      return;
+      return 0;
     }
 
+    let expandedDirectoryCount = 0;
+    const previousChildOffsets: number[] = [];
+    const previousNodeIds: number[] = [];
+    let previousEndIndex = 0;
+    let previousPath: string | null = null;
+    const segmentTable = this.#state.snapshot.segmentTable;
+    const segmentValues = segmentTable.valueById;
+    const nodes = this.#state.snapshot.nodes;
+    const targetSegmentSortKeyCache = new Map<
+      string,
+      ReturnType<typeof createSegmentSortKey>
+    >();
+
     for (const path of expandedPaths) {
-      const directoryNodeId = findNodeId(this.#state, path);
-      if (directoryNodeId == null) {
-        throw new Error(`Path does not exist: "${path}"`);
+      if (previousPath != null && path < previousPath) {
+        previousPath = null;
+        previousEndIndex = 0;
+        previousChildOffsets.length = 0;
+        previousNodeIds.length = 0;
+      }
+
+      const hasTrailingSlash =
+        path.length > 0 && path.charCodeAt(path.length - 1) === 47;
+      const endIndex = hasTrailingSlash ? path.length - 1 : path.length;
+      if (endIndex === 0) {
+        previousPath = path;
+        previousEndIndex = endIndex;
+        previousChildOffsets.length = 0;
+        previousNodeIds.length = 0;
+        continue;
+      }
+
+      let sharedDepth = 0;
+      let unsharedSegmentStart = 0;
+      if (previousPath != null) {
+        const compareLength = Math.min(endIndex, previousEndIndex);
+        let prefixMatched = true;
+        for (let charIndex = 0; charIndex < compareLength; charIndex += 1) {
+          const charCode = path.charCodeAt(charIndex);
+          if (charCode !== previousPath.charCodeAt(charIndex)) {
+            prefixMatched = false;
+            break;
+          }
+          if (charCode === 47) {
+            sharedDepth += 1;
+            unsharedSegmentStart = charIndex + 1;
+          }
+        }
+
+        if (prefixMatched) {
+          if (
+            compareLength === previousEndIndex &&
+            endIndex > compareLength &&
+            path.charCodeAt(compareLength) === 47
+          ) {
+            sharedDepth += 1;
+            unsharedSegmentStart = compareLength + 1;
+          } else if (
+            compareLength === endIndex &&
+            previousEndIndex > compareLength &&
+            previousPath.charCodeAt(compareLength) === 47
+          ) {
+            sharedDepth += 1;
+            unsharedSegmentStart = endIndex + 1;
+          }
+        }
+
+        sharedDepth = Math.min(sharedDepth, previousNodeIds.length);
+      }
+
+      let currentDirectoryId =
+        sharedDepth === 0
+          ? this.#state.snapshot.rootId
+          : (previousNodeIds[sharedDepth - 1] ?? this.#state.snapshot.rootId);
+      let resolvedDepth = sharedDepth;
+      let foundDirectory = true;
+      let segmentStart = unsharedSegmentStart;
+
+      while (segmentStart <= endIndex) {
+        const slashIndex = path.indexOf('/', segmentStart);
+        const segmentEnd =
+          slashIndex === -1 || slashIndex > endIndex ? endIndex : slashIndex;
+        const segment = path.slice(segmentStart, segmentEnd);
+        const currentIndex = getDirectoryIndex(this.#state, currentDirectoryId);
+        const childIds = currentIndex.childIds;
+        const searchStartIndex =
+          resolvedDepth === sharedDepth
+            ? (previousChildOffsets[resolvedDepth] ?? 0)
+            : 0;
+        let nextChildOffset = searchStartIndex;
+        let nextNodeId: number | undefined;
+        const targetSegmentSortKey =
+          targetSegmentSortKeyCache.get(segment) ??
+          createSegmentSortKey(segment);
+        targetSegmentSortKeyCache.set(segment, targetSegmentSortKey);
+        const searchForSegment = (
+          startIndex: number,
+          endIndex: number
+        ): boolean => {
+          for (
+            nextChildOffset = startIndex;
+            nextChildOffset < endIndex;
+            nextChildOffset += 1
+          ) {
+            const candidateNodeId = childIds[nextChildOffset];
+            const candidateNode = nodes[candidateNodeId];
+            const candidateSegment = segmentValues[candidateNode.nameId];
+            if (candidateSegment === segment) {
+              nextNodeId = candidateNodeId;
+              return true;
+            }
+            const orderComparison = compareSegmentSortKeys(
+              getSegmentSortKey(segmentTable, candidateNode.nameId),
+              targetSegmentSortKey
+            );
+            if (
+              orderComparison > 0 ||
+              (orderComparison === 0 && candidateSegment > segment)
+            ) {
+              return false;
+            }
+          }
+          return false;
+        };
+
+        const foundFromStart = searchForSegment(
+          searchStartIndex,
+          childIds.length
+        );
+        if (!foundFromStart && searchStartIndex > 0) {
+          searchForSegment(0, searchStartIndex);
+        }
+        if (nextNodeId === undefined) {
+          foundDirectory = false;
+          break;
+        }
+
+        const nextNode = requireNode(this.#state, nextNodeId);
+        if (nextNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+          foundDirectory = false;
+          break;
+        }
+
+        previousChildOffsets[resolvedDepth] = nextChildOffset;
+        previousNodeIds[resolvedDepth] = nextNodeId;
+        currentDirectoryId = nextNodeId;
+        resolvedDepth += 1;
+        if (segmentEnd === endIndex) {
+          break;
+        }
+        segmentStart = segmentEnd + 1;
+      }
+
+      previousPath = path;
+      previousEndIndex = endIndex;
+      previousChildOffsets.length = resolvedDepth;
+      previousNodeIds.length = resolvedDepth;
+      if (!foundDirectory) {
+        continue;
+      }
+
+      for (
+        let depthIndex = sharedDepth;
+        depthIndex < resolvedDepth;
+        depthIndex += 1
+      ) {
+        const directoryNodeId = previousNodeIds[depthIndex];
+        if (directoryNodeId == null) {
+          continue;
+        }
+
+        const directoryNode = requireNode(this.#state, directoryNodeId);
+        if (isDirectoryExpanded(this.#state, directoryNodeId, directoryNode)) {
+          continue;
+        }
+
+        setDirectoryExpanded(this.#state, directoryNodeId, true, directoryNode);
+        expandedDirectoryCount += 1;
+      }
+    }
+
+    return expandedDirectoryCount;
+  }
+
+  private hasAllDirectoriesExpanded(): boolean {
+    for (const directoryNodeId of this.#state.snapshot.directories.keys()) {
+      if (directoryNodeId === this.#state.snapshot.rootId) {
+        continue;
       }
 
       const directoryNode = requireNode(this.#state, directoryNodeId);
-      if (directoryNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
-        throw new Error(`Path is not a directory: "${path}"`);
+      if (!isDirectoryExpanded(this.#state, directoryNodeId, directoryNode)) {
+        return false;
       }
-
-      setDirectoryExpanded(this.#state, directoryNodeId, true, directoryNode);
     }
+
+    return true;
   }
 
   private requireDirectoryNodeId(path: string): number {

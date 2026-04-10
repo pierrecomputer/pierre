@@ -75,6 +75,11 @@ export function createVisibleTreeProjection(
   // only read .rows don’t pay the ~98K Map.set cost.
   let cachedVisibleIndexByPath: Map<string, number> | null = null;
   return {
+    getParentIndex(index: number): number {
+      return index < 0 || index >= rowCount
+        ? -1
+        : (parentRowIndex[index] ?? -1);
+    },
     rows: projectionRows,
     get visibleIndexByPath(): Map<string, number> {
       if (cachedVisibleIndexByPath == null) {

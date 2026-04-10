@@ -83,6 +83,7 @@ export function createPathStorePresortedPreparedInput(
   return {
     paths,
     presortedPaths: paths,
+    presortedPathsContainDirectories: false,
   } as PathStorePreparedInput;
 }
 

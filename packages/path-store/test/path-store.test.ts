@@ -2150,6 +2150,41 @@ describe('PathStore', () => {
     ]);
   });
 
+  test('path info resolves canonical directory lookups and initialExpandedPaths expands ancestors', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpandedPaths: ['src/components'],
+      paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
+    });
+
+    expect(store.getPathInfo('src/components')).toEqual({
+      depth: 2,
+      kind: 'directory',
+      path: 'src/components/',
+    });
+    expect(store.getPathInfo('src/components/')).toEqual({
+      depth: 2,
+      kind: 'directory',
+      path: 'src/components/',
+    });
+    expect(store.getPathInfo('README.md')).toEqual({
+      depth: 1,
+      kind: 'file',
+      path: 'README.md',
+    });
+    expect(store.getPathInfo('missing.ts')).toBeNull();
+
+    expect(store.isExpanded('src/')).toBe(true);
+    expect(store.isExpanded('src/components')).toBe(true);
+    expect(getVisiblePaths(store, 0, 9)).toEqual([
+      'src/',
+      'src/components/',
+      'src/components/Button.tsx',
+      'src/index.ts',
+      'README.md',
+    ]);
+  });
+
   test('keeps sibling positions correct after removing one child and moving another', () => {
     const store = new PathStore({
       flattenEmptyDirectories: false,

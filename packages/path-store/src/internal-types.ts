@@ -73,6 +73,7 @@ export interface PreparedPath {
 export type InternalPreparedInput = PathStorePreparedInput & {
   readonly preparedPaths?: readonly PreparedPath[];
   readonly presortedPaths?: readonly string[];
+  readonly presortedPathsContainDirectories?: boolean;
 };
 
 export interface LookupPath {

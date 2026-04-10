@@ -81,6 +81,12 @@ export interface PathStoreFlattenedRowSegment {
   path: string;
 }
 
+export interface PathStorePathInfo {
+  depth: number;
+  kind: 'directory' | 'file';
+  path: string;
+}
+
 export interface PathStoreVisibleRow {
   depth: number;
   flattenedSegments?: readonly PathStoreFlattenedRowSegment[];
@@ -104,7 +110,16 @@ export interface PathStoreVisibleTreeProjectionRow {
 }
 
 export interface PathStoreVisibleTreeProjection {
+  getParentIndex(index: number): number;
   rows: readonly PathStoreVisibleTreeProjectionRow[];
+  visibleIndexByPath: Map<string, number>;
+}
+
+export interface PathStoreVisibleTreeProjectionData {
+  getParentIndex(index: number): number;
+  paths: readonly string[];
+  posInSetByIndex: Int32Array<ArrayBufferLike>;
+  setSizeByIndex: Int32Array<ArrayBufferLike>;
   visibleIndexByPath: Map<string, number>;
 }
 

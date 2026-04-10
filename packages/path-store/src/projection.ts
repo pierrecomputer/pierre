@@ -27,6 +27,9 @@ import type {
   PathStoreDirectoryLoadState,
   PathStoreExpandEvent,
   PathStoreVisibleRow,
+  PathStoreVisibleTreeProjection,
+  PathStoreVisibleTreeProjectionData,
+  PathStoreVisibleTreeProjectionRow,
 } from './public-types';
 import { getSegmentValue } from './segments';
 import {
@@ -36,10 +39,33 @@ import {
 } from './state';
 import type { PathStoreState } from './state';
 
+const INITIAL_PROJECTION_DEPTH_CAPACITY = 64;
+type ProjectionDepthTable = Int32Array<ArrayBufferLike>;
+
 interface VisibleRowCursor {
   headNodeId: NodeId;
   terminalNodeId: NodeId;
   visibleDepth: number;
+}
+
+function ensureProjectionDepthCapacity(
+  depthTable: ProjectionDepthTable,
+  depth: number
+): ProjectionDepthTable {
+  const requiredLength = depth + 2;
+  if (requiredLength <= depthTable.length) {
+    return depthTable;
+  }
+
+  let nextLength = depthTable.length;
+  while (nextLength < requiredLength) {
+    nextLength *= 2;
+  }
+
+  const nextDepthTable = new Int32Array(nextLength);
+  nextDepthTable.fill(-1);
+  nextDepthTable.set(depthTable);
+  return nextDepthTable;
 }
 
 export function getVisibleCount(state: PathStoreState): number {
@@ -129,6 +155,30 @@ export function getVisibleSlice(
     flattenedSegmentCount
   );
   return rows;
+}
+
+export function getVisibleTreeProjectionData(
+  state: PathStoreState,
+  maxRows: number = getVisibleCount(state)
+): PathStoreVisibleTreeProjectionData {
+  const instrumentation = state.instrumentation;
+  if (instrumentation == null) {
+    return buildVisibleTreeProjectionDataDFS(state, maxRows);
+  }
+
+  return withBenchmarkPhase(
+    instrumentation,
+    'store.getVisibleTreeProjection',
+    () => buildVisibleTreeProjectionDataDFS(state, maxRows)
+  );
+}
+
+export function getVisibleTreeProjection(
+  state: PathStoreState
+): PathStoreVisibleTreeProjection {
+  return createVisibleTreeProjectionFromData(
+    getVisibleTreeProjectionData(state)
+  );
 }
 
 export function expandPath(
@@ -387,6 +437,150 @@ function getNextVisibleRowCursor(
     }
     currentNodeId = parentId;
   }
+}
+
+function createVisibleTreeProjectionFromData(
+  projection: PathStoreVisibleTreeProjectionData
+): PathStoreVisibleTreeProjection {
+  const rowCount = projection.paths.length;
+  const projectionRows: PathStoreVisibleTreeProjectionRow[] = new Array(
+    rowCount
+  );
+
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const parentIndex = projection.getParentIndex(rowIndex);
+    projectionRows[rowIndex] = {
+      index: rowIndex,
+      parentPath:
+        parentIndex >= 0 ? (projection.paths[parentIndex] ?? null) : null,
+      path: projection.paths[rowIndex] ?? '',
+      posInSet: projection.posInSetByIndex[rowIndex] ?? 0,
+      setSize: projection.setSizeByIndex[rowIndex] ?? 0,
+    };
+  }
+
+  return {
+    getParentIndex: projection.getParentIndex,
+    rows: projectionRows,
+    get visibleIndexByPath(): Map<string, number> {
+      return projection.visibleIndexByPath;
+    },
+  };
+}
+
+// Walks the full visible preorder and builds the ARIA projection data directly
+// into path and typed-array buffers so tree startup can avoid allocating a
+// projection row object for every visible item.
+function buildVisibleTreeProjectionDataDFS(
+  state: PathStoreState,
+  maxRows: number
+): PathStoreVisibleTreeProjectionData {
+  const paths = new Array<string>(maxRows);
+  const parentRowIndex = new Int32Array(maxRows);
+  const posInSetByIndex = new Int32Array(maxRows);
+  const childCount = new Int32Array(maxRows + 1);
+  let lastRowAtDepth: ProjectionDepthTable = new Int32Array(
+    INITIAL_PROJECTION_DEPTH_CAPACITY
+  );
+  lastRowAtDepth.fill(-1);
+
+  let rowCount = 0;
+  const { nodes, directories, segmentTable } = state.snapshot;
+  const stack: Array<[DirectoryChildIndex, number, number, string]> = [
+    [directories.get(state.snapshot.rootId)!, 0, -1, ''],
+  ];
+  const flattenEnabled = state.snapshot.options.flattenEmptyDirectories;
+  const pathCacheVersion = state.pathCacheVersion;
+  const segmentValues = segmentTable.valueById;
+
+  while (stack.length > 0 && rowCount < maxRows) {
+    const frame = stack[stack.length - 1];
+    const dirIndex = frame[0];
+
+    if (frame[1] >= dirIndex.childIds.length) {
+      stack.pop();
+      continue;
+    }
+
+    const childId = dirIndex.childIds[frame[1]++];
+    const childNode = nodes[childId];
+    const visibleDepth = frame[2] + 1;
+    const parentPath = frame[3];
+    lastRowAtDepth = ensureProjectionDepthCapacity(
+      lastRowAtDepth,
+      visibleDepth
+    );
+
+    let path: string;
+    let terminalNodeId = childId;
+    if (childNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+      path =
+        childNode.pathCache != null &&
+        childNode.pathCacheVersion === pathCacheVersion
+          ? childNode.pathCache
+          : `${parentPath}${segmentValues[childNode.nameId]}`;
+    } else {
+      terminalNodeId = flattenEnabled
+        ? getFlattenedTerminalDirectoryId(state, childId)
+        : childId;
+      path =
+        terminalNodeId === childId
+          ? `${parentPath}${segmentValues[childNode.nameId]}/`
+          : materializeNodePath(state, terminalNodeId);
+    }
+
+    const parentIdx = lastRowAtDepth[visibleDepth];
+    parentRowIndex[rowCount] = parentIdx;
+    const countSlot = parentIdx + 1;
+    childCount[countSlot] += 1;
+    paths[rowCount] = path;
+    posInSetByIndex[rowCount] = childCount[countSlot] - 1;
+    lastRowAtDepth[visibleDepth + 1] = rowCount;
+
+    rowCount += 1;
+
+    const terminalNode = nodes[terminalNodeId];
+    if (
+      terminalNode != null &&
+      terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+      isDirectoryExpanded(state, terminalNodeId, terminalNode)
+    ) {
+      stack.push([directories.get(terminalNodeId)!, 0, visibleDepth, path]);
+    }
+  }
+
+  if (rowCount < maxRows) {
+    paths.length = rowCount;
+  }
+
+  const setSizeByIndex = new Int32Array(rowCount);
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    setSizeByIndex[rowIndex] = childCount[parentRowIndex[rowIndex] + 1] ?? 0;
+  }
+
+  const finalParentRowIndex = parentRowIndex.subarray(0, rowCount);
+  const finalPosInSetByIndex = posInSetByIndex.subarray(0, rowCount);
+  let cachedVisibleIndexByPath: Map<string, number> | null = null;
+  return {
+    getParentIndex(index: number): number {
+      return index < 0 || index >= rowCount
+        ? -1
+        : (finalParentRowIndex[index] ?? -1);
+    },
+    paths,
+    posInSetByIndex: finalPosInSetByIndex,
+    setSizeByIndex,
+    get visibleIndexByPath(): Map<string, number> {
+      if (cachedVisibleIndexByPath == null) {
+        cachedVisibleIndexByPath = new Map<string, number>();
+        for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+          cachedVisibleIndexByPath.set(paths[rowIndex] ?? '', rowIndex);
+        }
+      }
+
+      return cachedVisibleIndexByPath;
+    },
+  };
 }
 
 // Iterative depth-first traversal that collects visible rows by walking the

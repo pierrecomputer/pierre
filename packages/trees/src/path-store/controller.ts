@@ -1,7 +1,7 @@
-import { createVisibleTreeProjection, PathStore } from '@pierre/path-store';
+import { PathStore } from '@pierre/path-store';
 import type {
-  PathStoreVisibleRow,
-  PathStoreVisibleTreeProjectionRow,
+  PathStorePathInfo,
+  PathStoreVisibleTreeProjectionData,
 } from '@pierre/path-store';
 
 import type {
@@ -13,26 +13,22 @@ import type {
   PathStoreTreesVisibleRow,
 } from './types';
 
-interface PathStoreTreesItemMetadata {
-  depth: number;
-  kind: 'directory' | 'file';
-  path: string;
-}
-
-interface PathStoreTreesItemState {
-  expandedDirectories: Set<string>;
-  initialExpandedPaths: readonly string[];
-  itemHandles: Map<string, PathStoreTreesItemHandle>;
-  itemMetadata: Map<string, PathStoreTreesItemMetadata>;
-}
+type ProjectionIndexBuffer = Int32Array<ArrayBufferLike>;
 
 interface PathStoreTreesVisibleProjection {
-  focusedPath: string | null;
-  parentPaths: Map<string, string | null>;
-  projectionRows: readonly PathStoreVisibleTreeProjectionRow[];
-  visibleIndexByPath: Map<string, number>;
-  visibleRows: readonly PathStoreVisibleRow[];
+  focusedIndex: number;
+  getParentIndex(index: number): number;
+  paths: readonly string[];
+  posInSetByIndex: ProjectionIndexBuffer;
+  setSizeByIndex: ProjectionIndexBuffer;
+  visibleIndexByPath: Map<string, number> | null;
+  visibleIndexByPathFactory: () => Map<string, number>;
 }
+
+// Initial render only mounts a tiny viewport slice, so controller startup can
+// cap its first projection build and defer the full 494k-row metadata walk
+// until the user actually navigates outside that initial window.
+const INITIAL_PROJECTION_ROW_LIMIT = 512;
 
 function arePathSetsEqual(
   currentPaths: ReadonlySet<string>,
@@ -49,32 +45,6 @@ function arePathSetsEqual(
   }
 
   return true;
-}
-
-function getVisibleSelectionTargetPath(
-  row: Pick<PathStoreVisibleRow, 'flattenedSegments' | 'isFlattened' | 'path'>
-): string {
-  return row.isFlattened
-    ? (row.flattenedSegments?.findLast((segment) => segment.isTerminal)?.path ??
-        row.path)
-    : row.path;
-}
-
-function resolvePathStoreTreesItemPath(
-  itemMetadata: ReadonlyMap<string, PathStoreTreesItemMetadata>,
-  path: string
-): string | null {
-  const directMatch = itemMetadata.get(path);
-  if (directMatch != null) {
-    return directMatch.path;
-  }
-
-  if (path.endsWith('/')) {
-    return null;
-  }
-
-  const directoryMatch = itemMetadata.get(`${path}/`);
-  return directoryMatch?.kind === 'directory' ? directoryMatch.path : null;
 }
 
 // Expanding a nested directory should make that directory visible, so this
@@ -108,18 +78,19 @@ function findNearestVisibleAncestorPath(
 
 // Keeps logical focus on a visible row. When a focused descendant disappears,
 // this falls back to the nearest visible ancestor before defaulting to row 0.
-function resolveFocusedPath(
-  targetPaths: readonly string[],
+function resolveFocusedIndex(
+  rowCount: number,
   visibleIndexByPath: ReadonlyMap<string, number>,
   candidatePath: string | null
-): string | null {
-  if (targetPaths.length === 0) {
-    return null;
+): number {
+  if (rowCount === 0) {
+    return -1;
   }
 
   if (candidatePath != null) {
-    if (visibleIndexByPath.has(candidatePath)) {
-      return candidatePath;
+    const directIndex = visibleIndexByPath.get(candidatePath);
+    if (directIndex != null) {
+      return directIndex;
     }
 
     const ancestorPath = findNearestVisibleAncestorPath(
@@ -127,11 +98,11 @@ function resolveFocusedPath(
       candidatePath
     );
     if (ancestorPath != null) {
-      return ancestorPath;
+      return visibleIndexByPath.get(ancestorPath) ?? 0;
     }
   }
 
-  return targetPaths[0] ?? null;
+  return 0;
 }
 
 // Rebuilds the visible-row projection once so focus/navigation can use
@@ -139,116 +110,47 @@ function resolveFocusedPath(
 // Derives the row metadata that the renderer needs for roving tabindex and
 // treeitem ARIA attrs without exposing path-store's numeric row identities.
 function createVisibleProjection(
-  rows: readonly PathStoreVisibleRow[],
+  projection: PathStoreVisibleTreeProjectionData,
   focusedPathCandidate: string | null
 ): PathStoreTreesVisibleProjection {
-  const projection = createVisibleTreeProjection(rows);
-  const targetPaths = projection.rows.map((row) => row.path);
-
-  const focusedPath = resolveFocusedPath(
-    targetPaths,
-    projection.visibleIndexByPath,
-    focusedPathCandidate
-  );
-  const parentPaths = new Map<string, string | null>();
-  for (const row of projection.rows) {
-    parentPaths.set(row.path, row.parentPath);
+  if (projection.paths.length === 0) {
+    return {
+      focusedIndex: -1,
+      getParentIndex: projection.getParentIndex,
+      paths: projection.paths,
+      posInSetByIndex: projection.posInSetByIndex,
+      setSizeByIndex: projection.setSizeByIndex,
+      visibleIndexByPath: null,
+      visibleIndexByPathFactory: () => projection.visibleIndexByPath,
+    };
   }
 
+  if (focusedPathCandidate == null) {
+    return {
+      focusedIndex: 0,
+      getParentIndex: projection.getParentIndex,
+      paths: projection.paths,
+      posInSetByIndex: projection.posInSetByIndex,
+      setSizeByIndex: projection.setSizeByIndex,
+      visibleIndexByPath: null,
+      visibleIndexByPathFactory: () => projection.visibleIndexByPath,
+    };
+  }
+
+  const visibleIndexByPath = projection.visibleIndexByPath;
   return {
-    focusedPath,
-    parentPaths,
-    projectionRows: projection.rows,
-    visibleIndexByPath: projection.visibleIndexByPath,
-    visibleRows: rows,
+    focusedIndex: resolveFocusedIndex(
+      projection.paths.length,
+      visibleIndexByPath,
+      focusedPathCandidate
+    ),
+    getParentIndex: projection.getParentIndex,
+    paths: projection.paths,
+    posInSetByIndex: projection.posInSetByIndex,
+    setSizeByIndex: projection.setSizeByIndex,
+    visibleIndexByPath,
+    visibleIndexByPathFactory: () => visibleIndexByPath,
   };
-}
-
-// Builds a path-first lookup table so `getItem(path)` can stay fast without
-// reaching into path-store internals for every lookup.
-function createPathStoreTreesItemMetadata(
-  paths: readonly string[]
-): Map<string, PathStoreTreesItemMetadata> {
-  const itemMetadata = new Map<string, PathStoreTreesItemMetadata>();
-
-  const ensureDirectory = (path: string, depth: number): void => {
-    if (itemMetadata.has(path)) {
-      return;
-    }
-
-    itemMetadata.set(path, {
-      depth,
-      kind: 'directory',
-      path,
-    });
-  };
-
-  for (const path of paths) {
-    const isDirectory = path.endsWith('/');
-    const normalizedPath = isDirectory ? path.slice(0, -1) : path;
-    if (normalizedPath.length === 0) {
-      continue;
-    }
-
-    const segments = normalizedPath.split('/');
-    const directoryCount = isDirectory ? segments.length : segments.length - 1;
-
-    for (let index = 0; index < directoryCount; index += 1) {
-      const directoryPath = `${segments.slice(0, index + 1).join('/')}/`;
-      ensureDirectory(directoryPath, index + 1);
-    }
-
-    if (!isDirectory) {
-      itemMetadata.set(path, {
-        depth: segments.length,
-        kind: 'file',
-        path,
-      });
-    }
-  }
-
-  return itemMetadata;
-}
-
-// Mirrors path-store's initial expansion contract so item handles can answer
-// `isExpanded()` without reaching into path-store private state.
-function createInitialExpandedDirectories(
-  itemMetadata: ReadonlyMap<string, PathStoreTreesItemMetadata>,
-  options: Omit<PathStoreTreesControllerOptions, 'paths'>
-): readonly string[] {
-  const expandedDirectories = new Set<string>();
-  const { initialExpansion = 'closed', initialExpandedPaths } = options;
-
-  if (initialExpansion === 'open') {
-    for (const [path, metadata] of itemMetadata) {
-      if (metadata.kind === 'directory') {
-        expandedDirectories.add(path);
-      }
-    }
-  } else if (typeof initialExpansion === 'number') {
-    for (const [path, metadata] of itemMetadata) {
-      if (metadata.kind === 'directory' && metadata.depth <= initialExpansion) {
-        expandedDirectories.add(path);
-      }
-    }
-  }
-
-  for (const path of initialExpandedPaths ?? []) {
-    const resolvedPath = resolvePathStoreTreesItemPath(itemMetadata, path);
-    if (
-      resolvedPath == null ||
-      itemMetadata.get(resolvedPath)?.kind !== 'directory'
-    ) {
-      continue;
-    }
-
-    for (const ancestorPath of getAncestorDirectoryPaths(resolvedPath)) {
-      expandedDirectories.add(ancestorPath);
-    }
-    expandedDirectories.add(resolvedPath);
-  }
-
-  return [...expandedDirectories];
 }
 
 /**
@@ -258,34 +160,32 @@ function createInitialExpandedDirectories(
 export class PathStoreTreesController {
   readonly #baseOptions: Omit<PathStoreTreesControllerOptions, 'paths'>;
   readonly #listeners = new Set<PathStoreTreesControllerListener>();
-  #ancestorPathsByPath = new Map<string, readonly string[]>();
-  #expandedDirectories = new Set<string>();
+  #ancestorPathsByIndex = new Map<number, readonly string[]>();
+  #focusedIndex = -1;
   #focusedPath: string | null = null;
+  #hasFullProjection = false;
+  #getParentIndexForVisibleRow = (_index: number): number => -1;
   #itemHandles = new Map<string, PathStoreTreesItemHandle>();
-  #itemMetadata = new Map<string, PathStoreTreesItemMetadata>();
-  #parentPaths = new Map<string, string | null>();
-  #projectionRows: readonly PathStoreVisibleTreeProjectionRow[] = [];
+  #projectionPaths: readonly string[] = [];
+  #projectionPosInSetByIndex: ProjectionIndexBuffer = new Int32Array(0);
+  #projectionSetSizeByIndex: ProjectionIndexBuffer = new Int32Array(0);
   #selectionAnchorPath: string | null = null;
   #selectedPaths = new Set<string>();
   #selectionVersion = 0;
   #store: PathStore;
+  #visibleCount = 0;
   #unsubscribe: (() => void) | null;
-  #visibleIndexByPath = new Map<string, number>();
-  #visibleRows: readonly PathStoreVisibleRow[] = [];
+  #visibleIndexByPath: Map<string, number> | null = null;
+  #visibleIndexByPathFactory: (() => Map<string, number>) | null = null;
 
   public constructor(options: PathStoreTreesControllerOptions) {
     const { paths, ...baseOptions } = options;
     this.#baseOptions = baseOptions;
-    const itemState = this.#createItemState(paths);
     this.#store = new PathStore({
       ...baseOptions,
-      initialExpandedPaths: itemState.initialExpandedPaths,
       paths,
     });
-    // Item handles close over `this.#store`, so apply them only after the live
-    // store instance exists.
-    this.#applyItemState(itemState);
-    this.#rebuildVisibleProjection(null);
+    this.#rebuildVisibleProjection(null, false);
     this.#unsubscribe = this.#subscribe();
   }
 
@@ -296,17 +196,18 @@ export class PathStoreTreesController {
   }
 
   public focusFirstItem(): void {
-    const firstRow = this.#visibleRows[0];
-    if (firstRow != null) {
-      this.#setFocusedPath(firstRow.path);
+    if (this.#projectionPaths.length > 0) {
+      this.#setFocusedIndex(0);
     }
   }
 
   public focusLastItem(): void {
-    const lastRow = this.#visibleRows[this.#visibleRows.length - 1];
-    if (lastRow != null) {
-      this.#setFocusedPath(lastRow.path);
+    if (this.#visibleCount <= 0) {
+      return;
     }
+
+    this.#ensureFullProjection();
+    this.#setFocusedIndex(this.#visibleCount - 1);
   }
 
   public focusNextItem(): void {
@@ -314,32 +215,26 @@ export class PathStoreTreesController {
   }
 
   public focusParentItem(): void {
-    if (this.#focusedPath == null) {
+    if (this.#focusedIndex < 0) {
       return;
     }
 
-    const parentPath = this.#parentPaths.get(this.#focusedPath) ?? null;
-    if (parentPath != null) {
-      this.#setFocusedPath(parentPath);
+    const parentIndex = this.#getParentIndexForVisibleRow(this.#focusedIndex);
+    if (parentIndex >= 0) {
+      this.#setFocusedIndex(parentIndex);
     }
   }
 
   public focusPath(path: string): void {
-    const resolvedPath = resolvePathStoreTreesItemPath(
-      this.#itemMetadata,
-      path
-    );
+    const resolvedPath = this.#store.getPathInfo(path)?.path ?? null;
     if (resolvedPath == null) {
       return;
     }
 
-    const nextFocusedPath = resolveFocusedPath(
-      this.#visibleRows.map((row) => row.path),
-      this.#visibleIndexByPath,
-      resolvedPath
-    );
-    if (nextFocusedPath != null) {
-      this.#setFocusedPath(nextFocusedPath);
+    this.#ensureFullProjection();
+    const nextFocusedIndex = this.#resolveFocusedIndex(resolvedPath);
+    if (nextFocusedIndex >= 0) {
+      this.#setFocusedIndex(nextFocusedIndex);
     }
   }
 
@@ -348,17 +243,13 @@ export class PathStoreTreesController {
   }
 
   public getFocusedIndex(): number {
-    if (this.#focusedPath == null) {
-      return -1;
-    }
-
-    return this.#visibleIndexByPath.get(this.#focusedPath) ?? -1;
+    return this.#focusedIndex;
   }
 
   public getFocusedItem(): PathStoreTreesItemHandle | null {
     return this.#focusedPath == null
       ? null
-      : (this.#itemHandles.get(this.#focusedPath) ?? null);
+      : this.#getOrCreateItemHandle(this.#focusedPath);
   }
 
   public getFocusedPath(): string | null {
@@ -374,35 +265,40 @@ export class PathStoreTreesController {
   }
 
   public getVisibleCount(): number {
-    return this.#visibleRows.length;
+    return this.#visibleCount;
   }
 
   public getVisibleRows(
     start: number,
     end: number
   ): readonly PathStoreTreesVisibleRow[] {
-    if (end < start || this.#visibleRows.length === 0) {
+    if (end < start || this.#visibleCount === 0) {
       return [];
     }
 
+    if (!this.#hasFullProjection && end >= this.#projectionPaths.length) {
+      this.#ensureFullProjection();
+    }
+
     const boundedStart = Math.max(0, start);
-    const boundedEnd = Math.min(this.#visibleRows.length - 1, end);
+    const boundedEnd = Math.min(this.#visibleCount - 1, end);
     if (boundedEnd < boundedStart) {
       return [];
     }
 
-    return this.#visibleRows
-      .slice(boundedStart, boundedEnd + 1)
+    return this.#store
+      .getVisibleSlice(boundedStart, boundedEnd)
       .map((row, offset) => {
-        const projectionRow = this.#projectionRows[boundedStart + offset];
-        if (projectionRow == null) {
+        const index = boundedStart + offset;
+        const projectionPath = this.#projectionPaths[index];
+        if (projectionPath == null) {
           throw new Error(
-            `Missing projection row for visible index ${String(boundedStart + offset)}`
+            `Missing projection path for visible index ${String(index)}`
           );
         }
 
         return {
-          ancestorPaths: this.#getAncestorPaths(projectionRow.path),
+          ancestorPaths: this.#getAncestorPaths(index),
           depth: row.depth,
           flattenedSegments: row.flattenedSegments?.map((segment) => ({
             isTerminal: segment.isTerminal,
@@ -410,19 +306,17 @@ export class PathStoreTreesController {
             path: segment.path,
           })),
           hasChildren: row.hasChildren,
-          index: projectionRow.index,
+          index,
           isExpanded: row.isExpanded,
           isFlattened: row.isFlattened,
-          isFocused: projectionRow.path === this.#focusedPath,
-          isSelected: this.#selectedPaths.has(
-            getVisibleSelectionTargetPath(row)
-          ),
+          isFocused: projectionPath === this.#focusedPath,
+          isSelected: this.#selectedPaths.has(projectionPath),
           kind: row.kind,
           level: row.depth,
           name: row.name,
-          path: projectionRow.path,
-          posInSet: projectionRow.posInSet,
-          setSize: projectionRow.setSize,
+          path: projectionPath,
+          posInSet: this.#projectionPosInSetByIndex[index] ?? 0,
+          setSize: this.#projectionSetSizeByIndex[index] ?? 0,
         } satisfies PathStoreTreesVisibleRow;
       });
   }
@@ -434,19 +328,15 @@ export class PathStoreTreesController {
    * paths (`src`) so callers do not need to know the canonical slash rules.
    */
   public getItem(path: string): PathStoreTreesItemHandle | null {
-    const resolvedPath = resolvePathStoreTreesItemPath(
-      this.#itemMetadata,
-      path
-    );
-    return resolvedPath == null
+    const itemInfo = this.#store.getPathInfo(path);
+    return itemInfo == null
       ? null
-      : (this.#itemHandles.get(resolvedPath) ?? null);
+      : this.#getOrCreateItemHandle(itemInfo.path, itemInfo);
   }
 
   public selectAllVisiblePaths(): void {
-    const nextSelectedPaths = this.#visibleRows.map((row) =>
-      getVisibleSelectionTargetPath(row)
-    );
+    this.#ensureFullProjection();
+    const nextSelectedPaths = [...this.#projectionPaths];
     this.#applySelection(
       nextSelectedPaths,
       this.#focusedPath ?? this.#selectionAnchorPath
@@ -531,12 +421,12 @@ export class PathStoreTreesController {
       return;
     }
 
+    this.#ensureFullProjection();
     const anchorPath = this.#selectionAnchorPath;
-    if (
-      anchorPath == null ||
-      !this.#visibleIndexByPath.has(anchorPath) ||
-      !this.#visibleIndexByPath.has(resolvedPath)
-    ) {
+    const anchorIndex =
+      anchorPath == null ? -1 : this.#findVisibleIndexByPath(anchorPath);
+    const targetIndex = this.#findVisibleIndexByPath(resolvedPath);
+    if (anchorIndex === -1 || targetIndex === -1) {
       const nextSelectedPaths = unionSelection
         ? [...this.#selectedPaths, resolvedPath]
         : [resolvedPath];
@@ -544,19 +434,11 @@ export class PathStoreTreesController {
       return;
     }
 
-    const anchorIndex = this.#visibleIndexByPath.get(anchorPath);
-    const targetIndex = this.#visibleIndexByPath.get(resolvedPath);
-    if (anchorIndex == null || targetIndex == null) {
-      return;
-    }
-
     const [startIndex, endIndex] =
       anchorIndex <= targetIndex
         ? [anchorIndex, targetIndex]
         : [targetIndex, anchorIndex];
-    const rangePaths = this.#visibleRows
-      .slice(startIndex, endIndex + 1)
-      .map((row) => getVisibleSelectionTargetPath(row));
+    const rangePaths = this.#projectionPaths.slice(startIndex, endIndex + 1);
     const nextSelectedPaths = unionSelection
       ? [...this.#selectedPaths, ...rangePaths]
       : rangePaths;
@@ -568,26 +450,26 @@ export class PathStoreTreesController {
       return;
     }
 
-    const focusedIndex = this.getFocusedIndex();
+    const focusedIndex = this.#focusedIndex;
     if (focusedIndex === -1) {
       return;
     }
 
     const nextIndex = Math.min(
-      this.#projectionRows.length - 1,
+      this.#visibleCount - 1,
       Math.max(0, focusedIndex + offset)
     );
     if (nextIndex === focusedIndex) {
       return;
     }
 
-    const currentRow = this.#visibleRows[focusedIndex];
-    const nextRow = this.#visibleRows[nextIndex];
-    const currentPath =
-      currentRow == null ? null : getVisibleSelectionTargetPath(currentRow);
-    const nextPath =
-      nextRow == null ? null : getVisibleSelectionTargetPath(nextRow);
-    if (currentPath == null || nextPath == null || nextRow == null) {
+    if (!this.#hasFullProjection && nextIndex >= this.#projectionPaths.length) {
+      this.#ensureFullProjection();
+    }
+
+    const currentPath = this.#projectionPaths[focusedIndex] ?? null;
+    const nextPath = this.#projectionPaths[nextIndex] ?? null;
+    if (currentPath == null || nextPath == null) {
       return;
     }
 
@@ -603,7 +485,7 @@ export class PathStoreTreesController {
       this.#selectionAnchorPath ?? currentPath,
       false
     );
-    this.#setFocusedPath(nextRow.path);
+    this.#setFocusedIndex(nextIndex);
   }
 
   public subscribe(listener: PathStoreTreesControllerListener): () => void {
@@ -619,10 +501,8 @@ export class PathStoreTreesController {
    * can evolve the action model without exposing the raw PathStore instance.
    */
   public replacePaths(paths: readonly string[]): void {
-    const nextItemState = this.#createItemState(paths);
     const nextStore = new PathStore({
       ...this.#baseOptions,
-      initialExpandedPaths: nextItemState.initialExpandedPaths,
       paths,
     });
     const previousFocusedPath = this.#focusedPath;
@@ -631,11 +511,9 @@ export class PathStoreTreesController {
 
     this.#unsubscribe?.();
     this.#store = nextStore;
-    this.#applyItemState(nextItemState);
+    this.#itemHandles.clear();
     const nextSelectedPaths = previousSelectedPaths
-      .map((selectedPath) =>
-        resolvePathStoreTreesItemPath(nextItemState.itemMetadata, selectedPath)
-      )
+      .map((selectedPath) => nextStore.getPathInfo(selectedPath)?.path ?? null)
       .filter((resolved): resolved is string => resolved != null);
     const selectionChanged = !arePathSetsEqual(
       this.#selectedPaths,
@@ -648,38 +526,84 @@ export class PathStoreTreesController {
     this.#selectionAnchorPath =
       previousSelectionAnchorPath == null
         ? null
-        : (resolvePathStoreTreesItemPath(
-            nextItemState.itemMetadata,
-            previousSelectionAnchorPath
-          ) ?? null);
-    this.#rebuildVisibleProjection(previousFocusedPath);
+        : (nextStore.getPathInfo(previousSelectionAnchorPath)?.path ?? null);
+    this.#rebuildVisibleProjection(
+      previousFocusedPath,
+      previousFocusedPath != null ||
+        nextSelectedPaths.length > 0 ||
+        this.#selectionAnchorPath != null
+    );
     this.#unsubscribe = this.#subscribe();
     this.#emit();
   }
 
-  #applyItemState(itemState: PathStoreTreesItemState): void {
-    this.#expandedDirectories = itemState.expandedDirectories;
-    this.#itemHandles = itemState.itemHandles;
-    this.#itemMetadata = itemState.itemMetadata;
+  #ensureVisibleIndexByPath(): ReadonlyMap<string, number> {
+    this.#visibleIndexByPath ??=
+      this.#visibleIndexByPathFactory?.() ?? new Map();
+
+    return this.#visibleIndexByPath;
   }
 
-  #getAncestorPaths(path: string): readonly string[] {
-    const cached = this.#ancestorPathsByPath.get(path);
+  #findVisibleIndexByPath(path: string): number {
+    return this.#ensureVisibleIndexByPath().get(path) ?? -1;
+  }
+
+  #resolveFocusedIndex(path: string): number {
+    const directIndex = this.#findVisibleIndexByPath(path);
+    if (directIndex !== -1) {
+      return directIndex;
+    }
+
+    const ancestorPath = findNearestVisibleAncestorPath(
+      this.#ensureVisibleIndexByPath(),
+      path
+    );
+    return ancestorPath == null
+      ? -1
+      : this.#findVisibleIndexByPath(ancestorPath);
+  }
+
+  #getOrCreateItemHandle(
+    path: string,
+    itemInfo?: PathStorePathInfo
+  ): PathStoreTreesItemHandle | null {
+    const cachedHandle = this.#itemHandles.get(path);
+    if (cachedHandle != null) {
+      return cachedHandle;
+    }
+
+    const resolvedItemInfo = itemInfo ?? this.#store.getPathInfo(path);
+    if (resolvedItemInfo == null) {
+      return null;
+    }
+
+    const handle =
+      resolvedItemInfo.kind === 'directory'
+        ? this.#createDirectoryHandle(resolvedItemInfo.path)
+        : this.#createFileHandle(resolvedItemInfo.path);
+    this.#itemHandles.set(resolvedItemInfo.path, handle);
+    return handle;
+  }
+
+  #getAncestorPaths(index: number): readonly string[] {
+    const cached = this.#ancestorPathsByIndex.get(index);
     if (cached != null) {
       return cached;
     }
 
-    const parentPath = this.#parentPaths.get(path) ?? null;
+    const parentIndex = this.#getParentIndexForVisibleRow(index);
     const ancestorPaths =
-      parentPath == null
+      parentIndex < 0
         ? []
-        : [...this.#getAncestorPaths(parentPath), parentPath];
-    this.#ancestorPathsByPath.set(path, ancestorPaths);
+        : [
+            ...this.#getAncestorPaths(parentIndex),
+            this.#projectionPaths[parentIndex] ?? '',
+          ].filter((path) => path !== '');
+    this.#ancestorPathsByIndex.set(index, ancestorPaths);
     return ancestorPaths;
   }
 
   #collapseDirectory(path: string): void {
-    this.#expandedDirectories.delete(path);
     this.#store.collapse(path);
   }
 
@@ -724,7 +648,7 @@ export class PathStoreTreesController {
       },
       getPath: () => path,
       isDirectory: () => true,
-      isExpanded: () => this.#expandedDirectories.has(path),
+      isExpanded: () => this.#store.isExpanded(path),
       isFocused: () => this.#focusedPath === path,
       isSelected: () => this.#selectedPaths.has(path),
       select: () => {
@@ -760,31 +684,6 @@ export class PathStoreTreesController {
     };
   }
 
-  #createItemState(paths: readonly string[]): PathStoreTreesItemState {
-    const itemMetadata = createPathStoreTreesItemMetadata(paths);
-    const initialExpandedPaths = createInitialExpandedDirectories(
-      itemMetadata,
-      this.#baseOptions
-    );
-    const expandedDirectories = new Set(initialExpandedPaths);
-    const itemHandles = new Map<string, PathStoreTreesItemHandle>();
-
-    for (const metadata of itemMetadata.values()) {
-      const handle =
-        metadata.kind === 'directory'
-          ? this.#createDirectoryHandle(metadata.path)
-          : this.#createFileHandle(metadata.path);
-      itemHandles.set(metadata.path, handle);
-    }
-
-    return {
-      expandedDirectories,
-      initialExpandedPaths,
-      itemHandles,
-      itemMetadata,
-    };
-  }
-
   #emit(): void {
     for (const listener of this.#listeners) {
       listener();
@@ -793,77 +692,103 @@ export class PathStoreTreesController {
 
   #expandDirectory(path: string): void {
     for (const ancestorPath of getAncestorDirectoryPaths(path)) {
-      if (this.#expandedDirectories.has(ancestorPath)) {
+      if (this.#store.isExpanded(ancestorPath)) {
         continue;
       }
 
-      this.#expandedDirectories.add(ancestorPath);
       this.#store.expand(ancestorPath);
     }
 
-    this.#expandedDirectories.add(path);
-    this.#store.expand(path);
+    if (!this.#store.isExpanded(path)) {
+      this.#store.expand(path);
+    }
   }
 
   #moveFocus(offset: -1 | 1): void {
-    const itemCount = this.#projectionRows.length;
+    const itemCount = this.#visibleCount;
     if (itemCount === 0) {
       return;
     }
 
-    const focusedIndex = this.getFocusedIndex();
-    const currentIndex = focusedIndex === -1 ? 0 : focusedIndex;
+    const currentIndex = this.#focusedIndex === -1 ? 0 : this.#focusedIndex;
     const nextIndex = Math.min(
       itemCount - 1,
       Math.max(0, currentIndex + offset)
     );
-    const nextRow = this.#visibleRows[nextIndex];
-    if (nextRow != null) {
-      this.#setFocusedPath(nextRow.path);
+    if (!this.#hasFullProjection && nextIndex >= this.#projectionPaths.length) {
+      this.#ensureFullProjection();
+    }
+    if (nextIndex !== currentIndex || this.#focusedIndex === -1) {
+      this.#setFocusedIndex(nextIndex);
     }
   }
 
-  #rebuildVisibleProjection(focusedPathCandidate: string | null): void {
-    const visibleCount = this.#store.getVisibleCount();
-    const rows =
-      visibleCount > 0 ? this.#store.getVisibleSlice(0, visibleCount - 1) : [];
-    const projection = createVisibleProjection(rows, focusedPathCandidate);
-    this.#ancestorPathsByPath.clear();
-    this.#focusedPath = projection.focusedPath;
-    this.#parentPaths = projection.parentPaths;
-    this.#projectionRows = projection.projectionRows;
+  #rebuildVisibleProjection(
+    focusedPathCandidate: string | null,
+    full: boolean = true
+  ): void {
+    this.#visibleCount = this.#store.getVisibleCount();
+    const projection = createVisibleProjection(
+      this.#store.getVisibleTreeProjectionData(
+        full
+          ? undefined
+          : Math.min(this.#visibleCount, INITIAL_PROJECTION_ROW_LIMIT)
+      ),
+      focusedPathCandidate
+    );
+    this.#ancestorPathsByIndex.clear();
+    this.#hasFullProjection = projection.paths.length >= this.#visibleCount;
+    this.#focusedIndex = projection.focusedIndex;
+    this.#focusedPath =
+      projection.focusedIndex < 0
+        ? null
+        : (projection.paths[projection.focusedIndex] ?? null);
+    this.#getParentIndexForVisibleRow = projection.getParentIndex;
+    this.#projectionPaths = projection.paths;
+    this.#projectionPosInSetByIndex = projection.posInSetByIndex;
+    this.#projectionSetSizeByIndex = projection.setSizeByIndex;
     this.#visibleIndexByPath = projection.visibleIndexByPath;
-    this.#visibleRows = projection.visibleRows;
+    this.#visibleIndexByPathFactory = projection.visibleIndexByPathFactory;
   }
 
   #resolveSelectionPath(path: string): string | null {
-    return resolvePathStoreTreesItemPath(this.#itemMetadata, path);
+    return this.#store.getPathInfo(path)?.path ?? null;
   }
 
-  #setFocusedPath(path: string, emit: boolean = true): void {
-    const currentFocusedPath = this.#focusedPath;
-    if (currentFocusedPath === path) {
+  #setFocusedIndex(index: number, emit: boolean = true): void {
+    const nextPath = this.#projectionPaths[index];
+    if (nextPath == null) {
       return;
     }
 
-    if (!this.#visibleIndexByPath.has(path)) {
+    if (this.#focusedIndex === index && this.#focusedPath === nextPath) {
       return;
     }
-    this.#focusedPath = path;
+
+    this.#focusedIndex = index;
+    this.#focusedPath = nextPath;
     if (emit) {
       this.#emit();
     }
   }
 
+  #ensureFullProjection(): void {
+    if (this.#hasFullProjection) {
+      return;
+    }
+
+    this.#rebuildVisibleProjection(this.#focusedPath, true);
+  }
+
   #subscribe(): () => void {
     return this.#store.on('*', () => {
-      this.#rebuildVisibleProjection(this.#focusedPath);
+      this.#rebuildVisibleProjection(this.#focusedPath, true);
       this.#emit();
     });
   }
 
   #toggleDirectory(path: string): void {
-    if (this.#expandedDirectories.has(path)) {
+    if (this.#store.isExpanded(path)) {
       this.#collapseDirectory(path);
       return;
     }

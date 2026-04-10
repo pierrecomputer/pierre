@@ -20,10 +20,12 @@ export type {
   PathStoreOperation,
   PathStoreOptions,
   PathStorePathComparator,
+  PathStorePathInfo,
   PathStorePreparedInput,
   PathStoreRemoveOptions,
   PathStoreVisibleRow,
   PathStoreVisibleTreeProjection,
+  PathStoreVisibleTreeProjectionData,
   PathStoreVisibleTreeProjectionRow,
 } from './public-types';
 export type {
