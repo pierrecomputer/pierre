@@ -239,33 +239,42 @@ function renderStyledRow(
       {...focusedProps}
       {...selectedProps}
     >
-      {row.depth > 0 ? (
-        <div data-item-section="spacing">
-          {Array.from({ length: row.depth }).map((_, index) => (
-            <div
-              key={index}
-              data-item-section="spacing-item"
-              data-ancestor-path={row.ancestorPaths[index]}
-            />
-          ))}
+      {/*
+        Reuse the outer row shell by viewport slot, but remount the row's inner
+        layout when the slot is reassigned to a different path. This avoids the
+        remaining CLS source from the trace where indent/icon/content DIVs slide
+        horizontally when one slot is recycled across rows with different tree
+        depths.
+      */}
+      <Fragment key={row.path}>
+        {row.depth > 0 ? (
+          <div data-item-section="spacing">
+            {Array.from({ length: row.depth }).map((_, index) => (
+              <div
+                key={index}
+                data-item-section="spacing-item"
+                data-ancestor-path={row.ancestorPaths[index]}
+              />
+            ))}
+          </div>
+        ) : null}
+        <div data-item-section="icon">
+          {row.hasChildren ? (
+            <Icon name="file-tree-icon-chevron" />
+          ) : (
+            <Icon name="file-tree-icon-file" />
+          )}
         </div>
-      ) : null}
-      <div data-item-section="icon">
-        {row.hasChildren ? (
-          <Icon name="file-tree-icon-chevron" />
-        ) : (
-          <Icon name="file-tree-icon-file" />
-        )}
-      </div>
-      <div data-item-section="content">
-        {row.isFlattened ? (
-          formatFlattenedSegments(row)
-        ) : (
-          <MiddleTruncate minimumLength={5} split="extension">
-            {row.name}
-          </MiddleTruncate>
-        )}
-      </div>
+        <div data-item-section="content">
+          {row.isFlattened ? (
+            formatFlattenedSegments(row)
+          ) : (
+            <MiddleTruncate minimumLength={5} split="extension">
+              {row.name}
+            </MiddleTruncate>
+          )}
+        </div>
+      </Fragment>
     </button>
   );
 }
