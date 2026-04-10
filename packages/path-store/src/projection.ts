@@ -478,7 +478,7 @@ function buildVisibleTreeProjectionDataDFS(
   const paths = new Array<string>(maxRows);
   const parentRowIndex = new Int32Array(maxRows);
   const posInSetByIndex = new Int32Array(maxRows);
-  const childCount = new Int32Array(maxRows + 1);
+  const setSizeByIndex = new Int32Array(maxRows);
   let lastRowAtDepth: ProjectionDepthTable = new Int32Array(
     INITIAL_PROJECTION_DEPTH_CAPACITY
   );
@@ -502,6 +502,7 @@ function buildVisibleTreeProjectionDataDFS(
       continue;
     }
 
+    const childOffset = frame[1];
     const childId = dirIndex.childIds[frame[1]++];
     const childNode = nodes[childId];
     const visibleDepth = frame[2] + 1;
@@ -531,10 +532,11 @@ function buildVisibleTreeProjectionDataDFS(
 
     const parentIdx = lastRowAtDepth[visibleDepth];
     parentRowIndex[rowCount] = parentIdx;
-    const countSlot = parentIdx + 1;
-    childCount[countSlot] += 1;
     paths[rowCount] = path;
-    posInSetByIndex[rowCount] = childCount[countSlot] - 1;
+    posInSetByIndex[rowCount] = childOffset;
+    // The current frame iterates the full child array for the row's parent, so
+    // childIds.length stays correct even when we cap the emitted projection.
+    setSizeByIndex[rowCount] = dirIndex.childIds.length;
     lastRowAtDepth[visibleDepth + 1] = rowCount;
 
     rowCount += 1;
@@ -553,13 +555,9 @@ function buildVisibleTreeProjectionDataDFS(
     paths.length = rowCount;
   }
 
-  const setSizeByIndex = new Int32Array(rowCount);
-  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-    setSizeByIndex[rowIndex] = childCount[parentRowIndex[rowIndex] + 1] ?? 0;
-  }
-
   const finalParentRowIndex = parentRowIndex.subarray(0, rowCount);
   const finalPosInSetByIndex = posInSetByIndex.subarray(0, rowCount);
+  const finalSetSizeByIndex = setSizeByIndex.subarray(0, rowCount);
   let cachedVisibleIndexByPath: Map<string, number> | null = null;
   return {
     getParentIndex(index: number): number {
@@ -569,7 +567,7 @@ function buildVisibleTreeProjectionDataDFS(
     },
     paths,
     posInSetByIndex: finalPosInSetByIndex,
-    setSizeByIndex,
+    setSizeByIndex: finalSetSizeByIndex,
     get visibleIndexByPath(): Map<string, number> {
       if (cachedVisibleIndexByPath == null) {
         cachedVisibleIndexByPath = new Map<string, number>();

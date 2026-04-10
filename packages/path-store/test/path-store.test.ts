@@ -1912,6 +1912,26 @@ describe('PathStore', () => {
     ]);
   });
 
+  test('capped visible tree projection data keeps full sibling counts', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: createWideDirectoryPaths(1000),
+    });
+
+    const projection = store.getVisibleTreeProjectionData(512);
+
+    expect(projection.paths.length).toBe(512);
+    expect(projection.paths[0]).toBe('wide/');
+    expect(projection.setSizeByIndex[0]).toBe(1);
+    expect(projection.paths[1]).toBe('wide/item1.ts');
+    expect(projection.posInSetByIndex[1]).toBe(0);
+    expect(projection.setSizeByIndex[1]).toBe(1000);
+    expect(projection.paths[511]).toBe('wide/item511.ts');
+    expect(projection.posInSetByIndex[511]).toBe(510);
+    expect(projection.setSizeByIndex[511]).toBe(1000);
+  });
+
   test('supports visible tree projection depths beyond the initial typed-array capacity', () => {
     const depth = 80;
     const rows = Array.from({ length: depth }, (_, index) => ({
@@ -2147,6 +2167,25 @@ describe('PathStore', () => {
       'src/',
       'Button.tsx',
       'README.md',
+    ]);
+  });
+
+  test('ignores unresolved initialExpandedPaths entries without poisoning later valid prefixes', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpandedPaths: ['a/b/abc.ts', 'a/cab/c'],
+      initialExpansion: 'closed',
+      paths: ['a/cab/c/c.ts'],
+    });
+
+    expect(store.isExpanded('a/')).toBe(true);
+    expect(store.isExpanded('a/cab/')).toBe(true);
+    expect(store.isExpanded('a/cab/c/')).toBe(true);
+    expect(getVisiblePaths(store, 0, 9)).toEqual([
+      'a/',
+      'a/cab/',
+      'a/cab/c/',
+      'a/cab/c/c.ts',
     ]);
   });
 

@@ -927,6 +927,13 @@ export class PathStore {
       previousChildOffsets.length = resolvedDepth;
       previousNodeIds.length = resolvedDepth;
       if (!foundDirectory) {
+        // A missing or non-directory lookup path must not leave behind a shared
+        // prefix cache for the next entry. Otherwise the next valid path can
+        // inherit an ancestor depth that was never actually expanded.
+        previousPath = null;
+        previousEndIndex = 0;
+        previousChildOffsets.length = 0;
+        previousNodeIds.length = 0;
         continue;
       }
 
