@@ -1,4 +1,3 @@
-import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { readSettingsCookies } from './_components/readSettingsCookies';
@@ -10,9 +9,9 @@ export default async function TreesDevLayout({
 }: {
   children: ReactNode;
 }) {
-  if (process.env.NODE_ENV !== 'development') {
-    return notFound();
-  }
+  // if (process.env.NODE_ENV !== 'development') {
+  //   return notFound();
+  // }
 
   const { flattenEmptyDirectories, useLazyDataLoader } =
     await readSettingsCookies();
