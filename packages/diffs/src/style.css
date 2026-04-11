@@ -753,6 +753,11 @@
     background-color: var(--diffs-bg-separator);
   }
 
+  [data-expand-index] [data-separator-content]:hover {
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
   [data-expand-button] {
     justify-content: center;
     flex-shrink: 0;
