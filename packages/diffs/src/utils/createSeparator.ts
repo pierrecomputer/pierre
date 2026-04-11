@@ -44,6 +44,7 @@ export function createSeparator({
   isFirstHunk,
   isLastHunk,
 }: CreateSeparatorProps): HASTElement {
+  let buttonCount = 0;
   const children = [];
   if (type === 'metadata' && content != null) {
     children.push(
@@ -63,12 +64,15 @@ export function createSeparator({
             !isFirstHunk && !isLastHunk ? 'both' : isFirstHunk ? 'down' : 'up'
           )
         );
+        buttonCount++;
       } else {
         if (!isFirstHunk) {
           contentChildren.push(createExpandButton('up'));
+          buttonCount++;
         }
         if (!isLastHunk) {
           contentChildren.push(createExpandButton('down'));
+          buttonCount++;
         }
       }
     }
@@ -85,14 +89,25 @@ export function createSeparator({
         properties: { 'data-separator-content': '' },
       })
     );
+    if (chunked && expandIndex != null) {
+      contentChildren.push(
+        createHastElement({
+          tagName: 'span',
+          children: [createTextNodeElement('Expand All')],
+          properties: {
+            'data-expand-button': '',
+            'data-expand-all-button': '',
+          },
+        })
+      );
+    }
     children.push(
       createHastElement({
         tagName: 'div',
         children: contentChildren,
         properties: {
           'data-separator-wrapper': '',
-          'data-separator-multi-button':
-            contentChildren.length > 2 ? '' : undefined,
+          'data-separator-multi-button': buttonCount > 1 ? '' : undefined,
         },
       })
     );

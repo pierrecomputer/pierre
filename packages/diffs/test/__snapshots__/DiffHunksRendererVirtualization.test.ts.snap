@@ -1834,6 +1834,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -4061,6 +4075,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -13621,6 +13649,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -14348,6 +14390,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -15252,6 +15308,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -16886,6 +16956,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -19038,6 +19122,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -27488,6 +27586,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -28242,6 +28354,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -29182,6 +29308,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -30578,6 +30718,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -33154,6 +33308,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -42712,6 +42880,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -43439,6 +43621,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -44343,6 +44539,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -45497,6 +45707,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -48011,6 +48235,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -56459,6 +56697,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -57213,6 +57465,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -58153,6 +58419,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -59245,6 +59525,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -59811,6 +60105,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -61322,6 +61630,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -62302,6 +62624,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -71862,6 +72198,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -72589,6 +72939,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -73495,6 +73859,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": undefined,
@@ -74333,6 +74711,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -74919,6 +75311,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -76325,6 +76731,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -77343,6 +77763,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -85793,6 +86227,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": "",
@@ -86547,6 +86995,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -87489,6 +87951,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
               "tagName": "div",
               "type": "element",
             },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
+              "type": "element",
+            },
           ],
           "properties": {
             "data-separator-multi-button": undefined,
@@ -88304,6 +88780,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],
@@ -89662,6 +90152,20 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
                 "data-separator-content": "",
               },
               "tagName": "div",
+              "type": "element",
+            },
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Expand All",
+                },
+              ],
+              "properties": {
+                "data-expand-all-button": "",
+                "data-expand-button": "",
+              },
+              "tagName": "span",
               "type": "element",
             },
           ],

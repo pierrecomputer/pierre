@@ -765,6 +765,10 @@
     &:hover {
       color: var(--diffs-fg);
     }
+
+    &[data-expand-all-button] {
+      display: none;
+    }
   }
 
   [data-expand-down] [data-icon] {

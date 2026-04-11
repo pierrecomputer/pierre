@@ -26,6 +26,7 @@ interface TokenCache {
 interface ExpandCache {
   hunkIndex: number | undefined;
   direction: ExpansionDirections;
+  all: boolean;
 }
 
 export type LogTypes = 'click' | 'move' | 'both' | 'none';
@@ -77,6 +78,7 @@ interface ExpandoEventProps {
   type: 'line-info';
   hunkIndex: number;
   direction: ExpansionDirections;
+  all: boolean;
 }
 
 export type GetHoveredLineResult<TMode extends InteractionManagerMode> =
@@ -517,8 +519,8 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         if (isExpandoPointerTarget(target) && onHunkExpand != null) {
           onHunkExpand(
             target.hunkIndex,
-            event.shiftKey ? 'both' : target.direction,
-            event.shiftKey ? Number.POSITIVE_INFINITY : undefined
+            target.all || event.shiftKey ? 'both' : target.direction,
+            target.all || event.shiftKey ? Number.POSITIVE_INFINITY : undefined
           );
           break;
         }
@@ -1458,7 +1460,11 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         continue;
       }
 
-      if (expandInfo == null && element.hasAttribute('data-expand-button')) {
+      if (
+        expandInfo == null &&
+        (element.hasAttribute('data-expand-button') ||
+          element.hasAttribute('data-unmodified-lines'))
+      ) {
         expandInfo = {
           hunkIndex: undefined,
           direction: (() => {
@@ -1470,6 +1476,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
             }
             return 'both';
           })(),
+          all: element.hasAttribute('data-expand-all-button'),
         };
         continue;
       }
@@ -1501,6 +1508,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         type: 'line-info',
         hunkIndex: expandInfo.hunkIndex,
         direction: expandInfo.direction,
+        all: expandInfo.all,
       } as ResolvedPointerTarget<TMode>;
     }
 
