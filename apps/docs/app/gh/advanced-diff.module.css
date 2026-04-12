@@ -6,6 +6,9 @@
   padding-inline: 20px;
   overflow-anchor: none;
   position: relative;
+  contain: strict;
+  /* Unclear if we should ship with this... */
+  will-change: scroll-position;
 }
 
 .scrollContainer[data-scrolled] {

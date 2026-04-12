@@ -154,6 +154,7 @@ export class CodeViewer<LAnnotation = undefined> {
     }
     this.root = root;
     this.container ??= document.createElement('div');
+    this.container.style.contain = 'layout size style contents';
     this.container.style.marginTop = `${this.viewerMetrics.paddingTop}px`;
     this.container.style.marginBottom = `${this.viewerMetrics.paddingBottom}px`;
     this.container.appendChild(this.stickyOffset);

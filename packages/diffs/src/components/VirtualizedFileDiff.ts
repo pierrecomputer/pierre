@@ -43,6 +43,7 @@ export class VirtualizedFileDiff<
   private isVisible: boolean = false;
   private isSetup: boolean = false;
   private virtualizer: Virtualizer | CodeViewer<LAnnotation>;
+  private forceRenderOverride: true | undefined;
 
   constructor(
     options: FileDiffOptions<LAnnotation> | undefined,
@@ -360,6 +361,19 @@ export class VirtualizedFileDiff<
     }
   }
 
+  override rerender(): void {
+    if (
+      !this.enabled ||
+      (this.fileDiff == null &&
+        this.additionFile == null &&
+        this.deletionFile == null)
+    ) {
+      return;
+    }
+    this.forceRenderOverride = true;
+    this.virtualizer.instanceChanged(this);
+  }
+
   // Compute the approximate size of the file using cached line heights.
   // Uses lineHeight for lines without cached measurements.
   // We should probably optimize this if there are no custom line heights...
@@ -474,9 +488,11 @@ export class VirtualizedFileDiff<
     oldFile,
     newFile,
     fileDiff,
+    forceRender = false,
     ...props
   }: FileDiffRenderProps<LAnnotation> = {}): boolean {
-    const { isSetup } = this;
+    const { forceRenderOverride, isSetup } = this;
+    this.forceRenderOverride = undefined;
 
     this.fileDiff ??=
       fileDiff ??
@@ -537,6 +553,7 @@ export class VirtualizedFileDiff<
       renderRange,
       oldFile,
       newFile,
+      forceRender: forceRenderOverride ?? forceRender,
       ...props,
     });
   }

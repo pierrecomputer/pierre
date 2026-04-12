@@ -66,6 +66,7 @@ export interface FileDiffRenderProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   oldFile?: FileContents;
   newFile?: FileContents;
+  deferManagers?: boolean;
   forceRender?: boolean;
   preventEmit?: boolean;
   fileContainer?: HTMLElement;
@@ -203,6 +204,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
     new Map();
   protected lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
+  protected managersDirty = false;
 
   protected deletionFile: FileContents | undefined;
   protected additionFile: FileContents | undefined;
@@ -423,10 +425,32 @@ export class FileDiff<LAnnotation = undefined> {
     this.interactionManager.setSelection(range);
   }
 
+  public flushManagers(): void {
+    if (!this.managersDirty || this.pre == null) {
+      this.managersDirty = false;
+      return;
+    }
+
+    const { diffStyle = 'split', overflow = 'scroll' } = this.options;
+    this.interactionManager.setup(this.pre);
+    this.resizeManager.setup(this.pre, overflow === 'wrap');
+    if (overflow === 'scroll' && diffStyle === 'split') {
+      this.scrollSyncManager.setup(
+        this.pre,
+        this.codeDeletions,
+        this.codeAdditions
+      );
+    } else {
+      this.scrollSyncManager.cleanUp();
+    }
+    this.managersDirty = false;
+  }
+
   public cleanUp(recycle: boolean = false): void {
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
     this.scrollSyncManager.cleanUp();
+    this.managersDirty = false;
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.renderRange = undefined;
 
@@ -434,18 +458,10 @@ export class FileDiff<LAnnotation = undefined> {
     if (!this.isContainerManaged) {
       this.fileContainer?.remove();
     }
-    if (this.fileContainer?.shadowRoot != null) {
-      // Manually help garbage collection
-      this.fileContainer.shadowRoot.textContent = '';
-    }
     this.fileContainer = undefined;
     this.lineAnnotations = [];
     this.annotationCache.clear();
-    // Manually help garbage collection
-    if (this.pre != null) {
-      this.pre.textContent = '';
-      this.pre = undefined;
-    }
+    this.pre = undefined;
     this.codeUnified = undefined;
     this.codeDeletions = undefined;
     this.codeAdditions = undefined;
@@ -592,7 +608,6 @@ export class FileDiff<LAnnotation = undefined> {
   }: HydrationSetup<LAnnotation>): void {
     // It's possible we are hydrating a pure-rename and therefore there will be
     // no pre element
-    const { diffStyle = 'split', overflow = 'scroll' } = this.options;
     this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
     this.additionFile = newFile;
     this.deletionFile = oldFile;
@@ -612,15 +627,8 @@ export class FileDiff<LAnnotation = undefined> {
     this.renderAnnotations();
     this.renderGutterUtility();
     this.injectUnsafeCSS();
-    this.interactionManager.setup(this.pre);
-    this.resizeManager.setup(this.pre, overflow === 'wrap');
-    if (overflow === 'scroll' && diffStyle === 'split') {
-      this.scrollSyncManager.setup(
-        this.pre,
-        this.codeDeletions,
-        this.codeAdditions
-      );
-    }
+    this.managersDirty = true;
+    this.flushManagers();
   }
 
   public rerender(): void {
@@ -665,6 +673,7 @@ export class FileDiff<LAnnotation = undefined> {
     oldFile,
     newFile,
     fileDiff,
+    deferManagers = false,
     forceRender = false,
     preventEmit = false,
     lineAnnotations,
@@ -735,10 +744,8 @@ export class FileDiff<LAnnotation = undefined> {
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
 
     const {
-      diffStyle = 'split',
       disableErrorHandling = false,
       disableFileHeader = false,
-      overflow = 'scroll',
       themeType = 'system',
     } = this.options;
 
@@ -851,16 +858,9 @@ export class FileDiff<LAnnotation = undefined> {
       this.renderAnnotations();
       this.renderGutterUtility();
 
-      this.interactionManager.setup(pre);
-      this.resizeManager.setup(pre, overflow === 'wrap');
-      if (overflow === 'scroll' && diffStyle === 'split') {
-        this.scrollSyncManager.setup(
-          pre,
-          this.codeDeletions,
-          this.codeAdditions
-        );
-      } else {
-        this.scrollSyncManager.cleanUp();
+      this.managersDirty = true;
+      if (!deferManagers) {
+        this.flushManagers();
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {
@@ -2086,9 +2086,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   private applyErrorToDOM(error: Error, container: HTMLElement) {
     this.cleanupErrorWrapper();
-    const pre = this.getOrCreatePreNode(container);
-    pre.textContent = '';
-    pre.remove();
+    this.pre?.remove();
     this.pre = undefined;
     this.appliedPreAttributes = undefined;
     const shadowRoot =

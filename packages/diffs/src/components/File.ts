@@ -53,6 +53,7 @@ export interface FileRenderProps<LAnnotation> {
   file: FileContents;
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
+  deferManagers?: boolean;
   forceRender?: boolean;
   preventEmit?: boolean;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
@@ -150,6 +151,7 @@ export class File<LAnnotation = undefined> {
   protected annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
     new Map();
   protected lineAnnotations: LineAnnotation<LAnnotation>[] = [];
+  protected managersDirty = false;
 
   protected file: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
@@ -230,18 +232,28 @@ export class File<LAnnotation = undefined> {
     this.interactionManager.setSelection(range);
   }
 
+  public flushManagers(): void {
+    if (!this.managersDirty || this.pre == null) {
+      this.managersDirty = false;
+      return;
+    }
+
+    const { overflow = 'scroll' } = this.options;
+    this.interactionManager.setup(this.pre);
+    this.resizeManager.setup(this.pre, overflow === 'wrap');
+    this.managersDirty = false;
+  }
+
   public cleanUp(recycle = false): void {
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
+    this.managersDirty = false;
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.renderRange = undefined;
 
     // Clean up the elements
     if (!this.isContainerManaged) {
       this.fileContainer?.remove();
-    }
-    if (this.fileContainer?.shadowRoot != null) {
-      this.fileContainer.shadowRoot.textContent = '';
     }
     this.fileContainer = undefined;
     this.lineAnnotations = [];
@@ -358,7 +370,6 @@ export class File<LAnnotation = undefined> {
     file,
     lineAnnotations,
   }: HydrationSetup<LAnnotation>): void {
-    const { overflow = 'scroll' } = this.options;
     this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
     this.file = file;
     this.fileRenderer.setOptions({
@@ -373,8 +384,8 @@ export class File<LAnnotation = undefined> {
     this.renderAnnotations();
     this.renderGutterUtility();
     this.injectUnsafeCSS();
-    this.interactionManager.setup(this.pre);
-    this.resizeManager.setup(this.pre, overflow === 'wrap');
+    this.managersDirty = true;
+    this.flushManagers();
   }
 
   public getOrCreateLineCache(
@@ -391,6 +402,7 @@ export class File<LAnnotation = undefined> {
     forceRender = false,
     preventEmit = false,
     containerWrapper,
+    deferManagers = false,
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
@@ -430,11 +442,8 @@ export class File<LAnnotation = undefined> {
     }
     this.fileRenderer.setLineAnnotations(this.lineAnnotations);
 
-    const {
-      disableErrorHandling = false,
-      disableFileHeader = false,
-      overflow = 'scroll',
-    } = this.options;
+    const { disableErrorHandling = false, disableFileHeader = false } =
+      this.options;
     if (disableFileHeader) {
       // Remove existing header from DOM
       if (this.headerElement != null) {
@@ -517,8 +526,10 @@ export class File<LAnnotation = undefined> {
 
       this.applyBuffers(pre, nextRenderRange);
       this.injectUnsafeCSS();
-      this.interactionManager.setup(pre);
-      this.resizeManager.setup(pre, overflow === 'wrap');
+      this.managersDirty = true;
+      if (!deferManagers) {
+        this.flushManagers();
+      }
       this.renderAnnotations();
       this.renderGutterUtility();
     } catch (error: unknown) {
@@ -1226,9 +1237,7 @@ export class File<LAnnotation = undefined> {
 
   private applyErrorToDOM(error: Error, container: HTMLElement) {
     this.cleanupErrorWrapper();
-    const pre = this.getOrCreatePreNode(container);
-    pre.textContent = '';
-    pre.remove();
+    this.pre?.remove();
     this.pre = undefined;
     this.appliedPreAttributes = undefined;
     const shadowRoot =
