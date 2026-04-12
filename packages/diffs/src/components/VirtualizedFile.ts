@@ -26,6 +26,7 @@ export class VirtualizedFile<
   // height
   private heightCache: Map<number, number> = new Map();
   private isVisible: boolean = false;
+  private forceRenderOverride: true | undefined;
 
   constructor(
     options: FileOptions<LAnnotation> | undefined,
@@ -308,11 +309,22 @@ export class VirtualizedFile<
     }
   }
 
+  override rerender(): void {
+    if (!this.enabled || this.file == null) {
+      return;
+    }
+    this.forceRenderOverride = true;
+    this.virtualizer.instanceChanged(this);
+  }
+
   override render({
     fileContainer,
     file,
+    forceRender = false,
     ...props
   }: FileRenderProps<LAnnotation>): boolean {
+    const { forceRenderOverride } = this;
+    this.forceRenderOverride = undefined;
     const isFirstRender = this.fileContainer == null;
 
     this.file ??= file;
@@ -363,6 +375,7 @@ export class VirtualizedFile<
       file: this.file,
       fileContainer,
       renderRange,
+      forceRender: forceRenderOverride ?? forceRender,
       ...props,
     });
   }

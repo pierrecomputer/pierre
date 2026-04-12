@@ -42,6 +42,7 @@ export class VirtualizedFileDiff<
   private heightCache: Map<number, number> = new Map();
   private isVisible: boolean = false;
   private virtualizer: Virtualizer | CodeViewer<LAnnotation>;
+  private forceRenderOverride: true | undefined;
 
   constructor(
     options: FileDiffOptions<LAnnotation> | undefined,
@@ -358,6 +359,19 @@ export class VirtualizedFileDiff<
     }
   }
 
+  override rerender(): void {
+    if (
+      !this.enabled ||
+      (this.fileDiff == null &&
+        this.additionFile == null &&
+        this.deletionFile == null)
+    ) {
+      return;
+    }
+    this.forceRenderOverride = true;
+    this.virtualizer.instanceChanged(this);
+  }
+
   // Compute the approximate size of the file using cached line heights.
   // Uses lineHeight for lines without cached measurements.
   // We should probably optimize this if there are no custom line heights...
@@ -472,8 +486,11 @@ export class VirtualizedFileDiff<
     oldFile,
     newFile,
     fileDiff,
+    forceRender = false,
     ...props
   }: FileDiffRenderProps<LAnnotation> = {}): boolean {
+    const { forceRenderOverride } = this;
+    this.forceRenderOverride = undefined;
     // NOTE(amadeus): Probably not the safest way to determine first render...
     // but for now...
     const isFirstRender = this.fileContainer == null;
@@ -536,6 +553,7 @@ export class VirtualizedFileDiff<
       renderRange,
       oldFile,
       newFile,
+      forceRender: forceRenderOverride ?? forceRender,
       ...props,
     });
   }
