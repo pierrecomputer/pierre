@@ -73,9 +73,10 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     ReactAPI:
       'MultiFileDiff, PatchDiff, FileDiff, File components and shared props',
     VanillaAPI:
-      'FileDiff and File classes, props, custom hunk separators, and low-level renderers',
+      'FileDiff and File classes, props, deprecated vanilla custom hunk separators, and low-level renderers',
     Virtualization: 'Virtual scrolling for large diffs and files',
-    CustomHunkSeparators: 'Built-in separator presets and custom separator UI',
+    CustomHunkSeparators:
+      'Built-in separator presets, CSS customization hooks, and the discouraged vanilla escape hatch',
     Utilities:
       'parseDiffFromFile, parsePatchFiles, highlighter management, accept/reject hunks',
     Styling: 'CSS variables, inline styles, and unsafe CSS injection',

@@ -1,24 +1,48 @@
-## Custom Hunk Separators
+## Hunk Separators
 
-Use `hunkSeparators` to control how collapsed unchanged regions are displayed.
-This example lets you swap between built-in separator presets, plus a `custom`
-mode that fully overrides the separator UI.
+The `hunkSeparators` option controls how collapsed unchanged regions are
+displayed. For customization, we recommend starting with a built-in preset and
+layering `unsafeCSS` on top.
+
+Passing a render function is only documented for the Vanilla JS APIs. It is
+being phased out, does not work well with the container-managed and
+virtualization-oriented React APIs, and is not compatible with SSR. We strongly
+recommend avoiding that path and customizing built-in separators with
+`unsafeCSS` instead.
+
+The Custom CSS example below keeps the built-in `line-info-basic` markup and
+tweaks it with CSS.
+
+- blends the separator row with the diff background
+- hunk content and controls are rendered in every gutter and content region, but
+  the custom CSS targets only the left-most gutter elements
+- aligns the arrow glyphs with the number column
+- replaces the built-in SVG icon with CSS-generated arrows
+- renders the `Expand All` button, which is normally hidden by default
 
 <CustomHunkSeparators
   prerenderedDiff={customHunkSeparatorsExample}
   showHeader={false}
 />
 
-### Prebuilt Separator Types
+### Built-in Types
 
-- `line-info`: Full-width separator with collapsed line count and expand
+- `line-info`: Rounded corner separator with collapsed line count and expansion
   controls.
-- `line-info-basic`: Compact, full-width variant of line-info.
-- `metadata`: Patch-style separator (`@@ -x,y +a,b @@`).
+- `line-info-basic`: Compact, full-width variant of `line-info` with expansion
+  controls.
+- `metadata`: Patch-style separator (`@@ -x,y +a,b @@`) with no expansion
+  controls.
 - `simple`: Minimal separator bar.
-- `custom`: Lets you provide your own separator renderer so you can fully
-  control the UI and expansion behavior.
 
-### React Example
+### Custom CSS Example
 
 <DocsCodeExample {...customHunkSeparatorsSwitcher} />
+
+<Notice icon={<IconCiWarningFill />}>
+  If CSS hooks are not enough, the low-level `hunkSeparators(hunkData,
+  instance)` function still exists on the Vanilla JS `FileDiff` API. We only
+  recommend that escape hatch as a last resort. It is being phased out, and it
+  does not fit the container-managed and virtualization-oriented APIs that the
+  React components rely on.
+</Notice>

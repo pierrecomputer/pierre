@@ -54,8 +54,14 @@ examples, payload details, performance notes, and Worker Pool caveats.
 
 #### Custom Hunk Separators
 
-If you want to render custom hunk separators that won't scroll with the content,
-there are a few tricks you will need to employ. See the following code snippet:
+Start with the [Hunk Separators](#hunk-separators) section first. In most cases,
+styling the built-in separator markup with `unsafeCSS` is the better approach.
+
+If that is still not enough, the low-level `hunkSeparators(hunkData, instance)`
+function remains available in Vanilla JS as a last-resort escape hatch. It is
+being phased out and is not the recommended path for new integrations, but the
+example below shows how it works when you truly need to render your own
+elements:
 
 <DocsCodeExample {...customHunk} />
 

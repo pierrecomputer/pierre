@@ -13,122 +13,137 @@ const fileOptions = {
 export const CUSTOM_HUNK_SEPARATORS_SWITCHER: PreloadFileOptions<undefined> = {
   file: {
     name: 'custom_hunk_separators.tsx',
-    contents: `import type { ExpansionDirections, HunkData } from '@pierre/diffs';
-import { FileDiff } from '@pierre/diffs';
+    contents: `import type { FileContents } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
-import { useState } from 'react';
 
-type SeparatorOption =
-  | 'line-info'
-  | 'line-info-basic'
-  | 'metadata'
-  | 'simple'
-  | 'custom';
-
-const classes = {
-  wrapper: 'relative',
-  root: "absolute top-0 left-0 flex items-center gap-2 pl-[22px] text-[0.75rem] [font-family:var(--diffs-header-font-family,var(--diffs-header-font-fallback))]",
-  controls: 'inline-flex gap-1',
-  button:
-    'relative m-0 inline-flex cursor-pointer appearance-none items-center border-0 bg-transparent p-0 text-inherit',
-  icon: '[font-family:var(--diffs-font-family,var(--diffs-font-fallback))] text-base leading-none',
-  label:
-    'ml-3 whitespace-nowrap text-[color:var(--diffs-fg-number)] [font-family:var(--diffs-header-font-family,var(--diffs-header-font-fallback))] hover:underline',
-  separatorDot: 'text-[color:var(--diffs-fg-number)]',
-  expandChunk:
-    'm-0 inline-flex cursor-pointer appearance-none items-center whitespace-nowrap border-0 bg-transparent p-0 text-[0.75rem] text-[color:var(--diffs-fg-number)] [font-family:var(--diffs-header-font-family,var(--diffs-header-font-fallback))] hover:underline',
-} as const;
-
-function renderCustomSeparator(
-  hunkData: HunkData,
-  instance: FileDiff<undefined>
-) {
-  const wrapper = document.createElement('div');
-  wrapper.className = classes.wrapper;
-
-  const root = document.createElement('div');
-  root.className = classes.root;
-
-  const controls = document.createElement('div');
-  controls.className = classes.controls;
-
-  if (hunkData.type === 'additions') {
-    const spacer = document.createElement('span');
-    spacer.textContent = ' ';
-    wrapper.append(spacer, root);
-    return wrapper;
-  }
-
-  const lineLabel = hunkData.lines === 1 ? 'line' : 'lines';
-  const labelText = \`\${hunkData.lines} unmodified \${lineLabel}\`;
-
-  function createControl(direction: ExpansionDirections) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = classes.button;
-    const icon = document.createElement('span');
-    icon.className = classes.icon;
-    icon.textContent =
-      direction === 'up' ? '↓' : direction === 'down' ? '↑' : '↕';
-    const label = document.createElement('span');
-    label.className = classes.label;
-    label.textContent = labelText;
-    button.append(icon, label);
-    button.onclick = () => instance.expandHunk(hunkData.hunkIndex, direction);
-    return button;
-  }
-
-  if (hunkData.expandable?.up && hunkData.expandable?.down) {
-    controls.append(createControl('both'));
-  } else if (hunkData.expandable?.up) {
-    controls.append(createControl('up'));
-  } else if (hunkData.expandable?.down) {
-    controls.append(createControl('down'));
-  }
-
-  if (hunkData.expandable?.chunked) {
-    const separatorDot = document.createElement('span');
-    separatorDot.className = classes.separatorDot;
-    separatorDot.textContent = '·';
-    const expandChunk = document.createElement('button');
-    expandChunk.type = 'button';
-    expandChunk.className = classes.expandChunk;
-    expandChunk.textContent = 'Expand entire hunk';
-    expandChunk.onclick = () =>
-      instance.expandHunk(
-        hunkData.hunkIndex,
-        'both',
-        Number.POSITIVE_INFINITY
-      );
-    root.append(controls, separatorDot, expandChunk);
-  } else {
-    root.append(controls);
-  }
-
-  const spacer = document.createElement('span');
-  spacer.textContent = ' ';
-  wrapper.append(spacer, root);
-  return wrapper;
+const customSeparatorCSS = \
+\`
+/* Fix bg colors to mux with background */
+[data-separator="line-info-basic"] {
+  height: 24px;
+  background: var(--diffs-bg);
+  position: relative;
 }
 
-function HunkSeparatorDemo({ oldFile, newFile }) {
-  const [separator, setSeparator] = useState<SeparatorOption>('line-info');
-
-  if (separator === 'custom') {
-    const instance = new FileDiff({
-      expansionLineCount: 5,
-      hunkSeparators: (hunkData, fileDiffInstance) =>
-        renderCustomSeparator(hunkData, fileDiffInstance),
-    });
-    instance.render({ oldFile, newFile, containerWrapper: document.body });
-    return null;
+/* Styles are made to target always the leftside gutter, however technically
+ * these elements are rendered into every gutter and every content row giving you
+ * lots of flexibility in how you may want to show or style them */
+[data-diff-type="single"] [data-gutter],
+[data-diff-type="split"] [data-deletions] [data-gutter] {
+  [data-separator-wrapper] {
+    position: absolute;
+    left: 100%;
+    display: flex;
+    align-items: center;
+    gap: unset;
+    width: max-content;
+    background: transparent;
+    color: var(--diffs-fg-number);
+    font-family: var(--diffs-header-font-family, var(--diffs-header-font-fallback));
+    font-size: 0.75rem;
+    /* Ensure Arrows align with number column */
+    margin-left: calc(-2ch - 2px);
   }
 
+  [data-separator-wrapper][data-separator-multi-button] {
+    margin-left: calc(-3ch - 2px);
+  }
+
+  [data-expand-button],
+  [data-separator-content] {
+    display: block;
+    align-self: unset;
+    min-width: unset;
+    min-height: unset;
+    padding: 0;
+    flex-shrink: 0;
+    grid-column: unset;
+    border: none;
+    width: auto;
+    height: auto;
+    background-color: unset;
+    color: inherit;
+    font: inherit;
+  }
+
+  [data-expand-button]:not([data-expand-all-button]) {
+    &[data-expand-down]::before {
+      content: '↑';
+    }
+
+    &[data-expand-up]::before {
+      content: '↓';
+    }
+
+    &[data-expand-both]::before {
+      content: '↕';
+    }
+
+    /* Hide built in icon */
+    svg {
+      display: none;
+    }
+  }
+
+  [data-separator-content] {
+    background: transparent;
+    margin-left: calc(2px + 1ch);
+  }
+
+  /* Expand all button will only appear if the collapsed region is larger than
+   * an expand chunk */
+  [data-expand-all-button] {
+    position: relative;
+    margin-left: 14px;
+    text-transform: lowercase;
+
+    &:hover {
+      color: var(--diffs-fg);
+      text-decoration: underline;
+    }
+  }
+
+  /* A little dot separator */
+  [data-expand-all-button]::before {
+    content: '';
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: -8px;
+    margin-top: -1px;
+    width: 3px;
+    height: 3px;
+    border-radius: 2px;
+    background-color: var(--diffs-fg-number);
+    pointer-events: none;
+  }
+
+  [data-separator-content]:hover,
+  [data-expand-button]:hover,
+  [data-expand-all-button]:hover {
+    color: var(--diffs-fg);
+  }
+}
+\`;
+
+interface CustomSeparatorExampleProps {
+  oldFile: FileContents;
+  newFile: FileContents;
+}
+
+export function CustomSeparatorExample({
+  oldFile,
+  newFile,
+}: CustomSeparatorExampleProps) {
   return (
     <MultiFileDiff
       oldFile={oldFile}
       newFile={newFile}
-      options={{ expansionLineCount: 5, hunkSeparators: separator }}
+      options={{
+        hunkSeparators: 'line-info-basic',
+        expansionLineCount: 5,
+        unsafeCSS: customSeparatorCSS,
+      }}
     />
   );
 }`,

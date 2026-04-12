@@ -199,7 +199,9 @@ const instance = new FileDiff({
   // 'line-info-basic' - slightly more compact full width line-info variant
   // 'metadata' - shows patch format like '@@ -60,6 +60,22 @@'
   // 'simple' - subtle bar separator
-  // Or pass a function for custom rendering (see Hunk Separators section)
+  // Prefer the built-in presets plus CSS first (see the Hunk Separators
+  // section). The low-level functional API is documented only for vanilla JS,
+  // is being phased out, and should be treated as a last-resort escape hatch.
   hunkSeparators: 'line-info',
 
   // Force unchanged context to always render (default: false)
@@ -689,6 +691,11 @@ export const VANILLA_API_CUSTOM_HUNK_FILE: PreloadFileOptions<undefined> = {
   file: {
     name: 'hunks_example.ts',
     contents: `import { FileDiff } from '@pierre/diffs';
+
+// This is a low-level vanilla-only escape hatch.
+// Prefer built-in hunk separators plus CSS customization when possible.
+// This function-based API is being phased out and does not fit the
+// container-managed and virtualization-oriented APIs.
 
 // A hunk separator that utilizes the existing grid to have
 // a number column and a content column where neither will

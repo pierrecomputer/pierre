@@ -17,7 +17,7 @@ const SEPARATOR_OPTIONS: {
   { value: 'line-info-basic', label: 'Line Info Basic' },
   { value: 'metadata', label: 'Metadata' },
   { value: 'simple', label: 'Simple' },
-  { value: 'custom', label: 'Custom' },
+  { value: 'custom', label: 'Custom CSS' },
 ];
 
 function isHunkSeparatorOption(value: unknown): value is HunkSeparators {

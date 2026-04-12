@@ -87,6 +87,10 @@ interface DiffOptions {
   // 'line-info-basic' - slightly more compact full width line-info variant
   // 'metadata' - shows patch format like '@@ -60,6 +60,22 @@'
   // 'simple' - subtle bar separator
+  // We recommend sticking to these built-in string presets in React.
+  // The low-level functional separator API is only documented for vanilla JS,
+  // is being phased out, and is a poor fit for the container-managed and
+  // virtualization-oriented React APIs.
   hunkSeparators: 'line-info',
 
   // Force unchanged context to always render (default: false)
