@@ -380,10 +380,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private async initializeHighlighter(): Promise<DiffsHighlighter> {
-    if (this.diff != null) {
-      this.computedLang =
-        this.diff?.lang ?? getFiletypeFromFileName(this.diff.name);
-    }
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, this.options)
     );
@@ -415,6 +411,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     // Lets attempt to get the highlighter/languages ready immediately
     else if (this.highlighter == null) {
+      this.computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
       void this.initializeHighlighter();
     }
   }
