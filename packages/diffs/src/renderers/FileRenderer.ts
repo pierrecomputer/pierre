@@ -142,12 +142,16 @@ export class FileRenderer<LAnnotation = undefined> {
       // FIXME(amadeus): Add support for renderRanges
       renderRange: undefined,
     };
-    if (
-      this.workerManager?.isWorkingPool() === true &&
-      this.renderCache.result == null
-    ) {
-      // We should only kick off a preload of the AST if we have a WorkerPool
-      this.workerManager.highlightFileAST(this, file);
+    if (this.workerManager?.isWorkingPool() === true) {
+      if (this.renderCache.result == null) {
+        // We should only kick off a preload of the AST if we have a WorkerPool
+        this.workerManager.highlightFileAST(this, file);
+      }
+    }
+    // Lets attempt to get the highlighter/languages ready immediately
+    else if (this.highlighter == null) {
+      this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+      void this.initializeHighlighter();
     }
   }
 
@@ -283,6 +287,11 @@ export class FileRenderer<LAnnotation = undefined> {
       // and languages
       if (!hasThemes || !hasLangs) {
         void this.asyncHighlight(file).then(({ result, options }) => {
+          // In this case we need to force a re-render, so we can do that by
+          // reaching into renderCache
+          if (this.renderCache != null) {
+            this.renderCache.highlighted = false;
+          }
           this.onHighlightSuccess(file, result, options);
         });
       }

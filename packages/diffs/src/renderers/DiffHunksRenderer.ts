@@ -380,6 +380,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private async initializeHighlighter(): Promise<DiffsHighlighter> {
+    if (this.diff != null) {
+      this.computedLang =
+        this.diff?.lang ?? getFiletypeFromFileName(this.diff.name);
+    }
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, this.options)
     );
@@ -403,12 +407,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       result: cache?.result,
       renderRange: undefined,
     };
-    if (
-      this.workerManager?.isWorkingPool() === true &&
-      this.renderCache.result == null
-    ) {
-      // We should only kick off a preload of the AST if we have a WorkerPool
-      this.workerManager.highlightDiffAST(this, this.diff);
+    if (this.workerManager?.isWorkingPool() === true) {
+      if (this.renderCache.result == null) {
+        // We should only kick off a preload of the AST if we have a WorkerPool
+        this.workerManager.highlightDiffAST(this, this.diff);
+      }
+    }
+    // Lets attempt to get the highlighter/languages ready immediately
+    else if (this.highlighter == null) {
+      void this.initializeHighlighter();
     }
   }
 
@@ -535,6 +542,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // and languages
       if (!hasThemes || !hasLangs) {
         void this.asyncHighlight(diff).then(({ result, options }) => {
+          // In this case we need to force a re-render, so we can do that by
+          // reaching into renderCache
+          if (this.renderCache != null) {
+            this.renderCache.highlighted = false;
+          }
           this.onHighlightSuccess(diff, result, options);
         });
       }
