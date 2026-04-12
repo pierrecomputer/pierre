@@ -27,6 +27,7 @@ function createExpandButton(type: ExpansionDirections) {
       }),
     ],
     properties: {
+      role: 'button',
       'data-expand-button': '',
       'data-expand-both': type === 'both' ? '' : undefined,
       'data-expand-up': type === 'up' ? '' : undefined,
@@ -92,9 +93,10 @@ export function createSeparator({
     if (chunked && expandIndex != null) {
       contentChildren.push(
         createHastElement({
-          tagName: 'span',
-          children: [createTextNodeElement('Expand All')],
+          tagName: 'div',
+          children: [createTextNodeElement('Expand all')],
           properties: {
+            role: 'button',
             'data-expand-button': '',
             'data-expand-all-button': '',
           },
