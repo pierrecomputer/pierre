@@ -87,7 +87,9 @@ export function PathStorePoweredRenderDemoClient({
     () => ({
       ...sharedOptions,
       composition: {
+        ...sharedOptions.composition,
         header: {
+          ...sharedOptions.composition?.header,
           render: () => {
             const header = document.createElement('div');
             header.style.alignItems = 'center';

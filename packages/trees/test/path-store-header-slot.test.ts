@@ -77,6 +77,11 @@ describe('path-store header slot', () => {
     const { preloadPathStoreFileTree } = await import('../src/path-store');
 
     const payload = preloadPathStoreFileTree({
+      composition: {
+        header: {
+          html: '<button data-test-ssr-header>Header action</button>',
+        },
+      },
       flattenEmptyDirectories: true,
       initialExpansion: 'open',
       paths: ['README.md', 'src/index.ts'],
@@ -84,6 +89,8 @@ describe('path-store header slot', () => {
     });
 
     expect(payload.shadowHtml).toContain('slot name="header"');
+    expect(payload.html).toContain('slot="header"');
+    expect(payload.html).toContain('data-test-ssr-header');
   });
 
   test('render attaches and cleanup removes host-managed header content', async () => {
@@ -130,6 +137,11 @@ describe('path-store header slot', () => {
       const { PathStoreFileTree, preloadPathStoreFileTree } =
         await import('../src/path-store');
       const payload = preloadPathStoreFileTree({
+        composition: {
+          header: {
+            html: '<div data-test-ssr-header="true">Hydrated header</div>',
+          },
+        },
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
@@ -144,6 +156,7 @@ describe('path-store header slot', () => {
       if (!(host instanceof dom.window.HTMLElement)) {
         throw new Error('expected SSR host');
       }
+      expect(host.querySelectorAll('[slot="header"]')).toHaveLength(1);
 
       const fileTree = new PathStoreFileTree({
         composition: {
@@ -172,6 +185,9 @@ describe('path-store header slot', () => {
       expect(
         host.querySelector('[data-test-hydrated-header="true"]')
       ).not.toBeNull();
+      expect(
+        host.querySelectorAll('[data-test-ssr-header="true"]')
+      ).toHaveLength(0);
 
       fileTree.cleanUp();
     } finally {

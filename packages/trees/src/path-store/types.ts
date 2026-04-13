@@ -120,6 +120,7 @@ export type PathStoreTreesSelectionChangeListener = (
 ) => void;
 
 export interface PathStoreTreesHeaderCompositionOptions {
+  html?: string;
   render?: () => HTMLElement | null;
 }
 

@@ -64,6 +64,17 @@ function parseSpriteSheet(spriteSheet: string): SVGElement | undefined {
   return svg instanceof SVGElement ? svg : undefined;
 }
 
+function getHeaderSlotHtml(
+  composition: PathStoreTreesCompositionOptions | undefined
+): string {
+  const headerHtml = composition?.header?.html?.trim();
+  if (headerHtml == null || headerHtml.length === 0) {
+    return '';
+  }
+
+  return `<div slot="${HEADER_SLOT_NAME}" data-path-store-managed-slot="${HEADER_SLOT_NAME}">${headerHtml}</div>`;
+}
+
 function ensureBuiltInSpriteSheet(shadowRoot: ShadowRoot): void {
   if (shadowRoot.querySelector('svg[data-icon-sprite]') != null) {
     return;
@@ -212,6 +223,13 @@ export class PathStoreFileTree {
   // Keeps header slot content attached to the host light DOM so hydration and
   // later composition surfaces can share one host-managed slot path.
   #syncHeaderSlotContent(): void {
+    if (
+      this.#composition?.header != null &&
+      this.#composition.header.render == null
+    ) {
+      return;
+    }
+
     const renderHeader = this.#composition?.header?.render;
     this.#slotHost.setSlotContent(
       HEADER_SLOT_NAME,
@@ -273,6 +291,7 @@ export function preloadPathStoreFileTree(
   options: PathStoreFileTreeOptions
 ): PathStoreFileTreeSsrPayload {
   const {
+    composition,
     id,
     itemHeight,
     onSelectionChange: _onSelectionChange,
@@ -296,7 +315,8 @@ export function preloadPathStoreFileTree(
   controller.destroy();
 
   const shadowHtml = `${getBuiltInSpriteSheet('minimal')}<style ${FILE_TREE_STYLE_ATTRIBUTE}>${fileTreeStyles}</style><div data-file-tree-id="${resolvedId}" data-file-tree-virtualized-wrapper="true">${bodyHtml}</div>`;
-  const html = `<file-tree-container id="${resolvedId}" data-file-tree-virtualized="true"><template shadowrootmode="open">${shadowHtml}</template></file-tree-container>`;
+  const headerSlotHtml = getHeaderSlotHtml(composition);
+  const html = `<file-tree-container id="${resolvedId}" data-file-tree-virtualized="true"><template shadowrootmode="open">${shadowHtml}</template>${headerSlotHtml}</file-tree-container>`;
   return {
     html,
     id: resolvedId,

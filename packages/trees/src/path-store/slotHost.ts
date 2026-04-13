@@ -17,6 +17,8 @@ export class PathStoreTreesManagedSlotHost {
       return;
     }
 
+    this.#adoptExistingManagedContent(host);
+
     for (const [slotName, content] of this.#contentBySlot) {
       this.#attachContent(slotName, content);
     }
@@ -43,8 +45,24 @@ export class PathStoreTreesManagedSlotHost {
 
   #attachContent(slotName: string, content: HTMLElement): void {
     content.slot = slotName;
+    content.dataset.pathStoreManagedSlot = slotName;
     if (this.#host != null && content.parentNode !== this.#host) {
       this.#host.appendChild(content);
+    }
+  }
+
+  #adoptExistingManagedContent(host: HTMLElement): void {
+    for (const element of Array.from(host.children)) {
+      if (!(element instanceof HTMLElement)) {
+        continue;
+      }
+
+      const slotName = element.dataset.pathStoreManagedSlot;
+      if (slotName == null || this.#contentBySlot.has(slotName)) {
+        continue;
+      }
+
+      this.#contentBySlot.set(slotName, element);
     }
   }
 }
