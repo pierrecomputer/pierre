@@ -1,10 +1,12 @@
 export { PathStoreTreesController } from './controller';
 export { PathStoreFileTree, preloadPathStoreFileTree } from './file-tree';
 export type {
+  PathStoreTreesCompositionOptions,
   PathStoreTreesDirectoryHandle,
   PathStoreFileTreeOptions,
   PathStoreFileTreeSsrPayload,
   PathStoreTreesFileHandle,
+  PathStoreTreesHeaderCompositionOptions,
   PathStoreTreeHydrationProps,
   PathStoreTreesItemHandle,
   PathStoreTreeRenderProps,

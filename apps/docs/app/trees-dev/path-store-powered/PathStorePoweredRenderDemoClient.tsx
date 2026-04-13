@@ -86,11 +86,36 @@ export function PathStorePoweredRenderDemoClient({
   const options = useMemo<PathStoreFileTreeOptions>(
     () => ({
       ...sharedOptions,
+      composition: {
+        header: {
+          render: () => {
+            const header = document.createElement('div');
+            header.style.alignItems = 'center';
+            header.style.display = 'flex';
+            header.style.gap = '12px';
+            header.style.padding = '8px 12px';
+
+            const label = document.createElement('strong');
+            label.textContent = 'Provisional header slot';
+            header.append(label);
+
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = 'Log header action';
+            button.addEventListener('click', () => {
+              addLog('header action: clicked');
+            });
+            header.append(button);
+
+            return header;
+          },
+        },
+      },
       id: 'pst-phase4',
       onSelectionChange: handleSelectionChange,
       preparedInput,
     }),
-    [handleSelectionChange, preparedInput, sharedOptions]
+    [addLog, handleSelectionChange, preparedInput, sharedOptions]
   );
 
   return (
@@ -99,21 +124,22 @@ export function PathStorePoweredRenderDemoClient({
         <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           Path-store lane · provisional
         </p>
-        <h1 className="text-2xl font-bold">Focus + Selection</h1>
+        <h1 className="text-2xl font-bold">Focus + Selection + Header Slot</h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
           Phase 4 keeps the landed focus/navigation model and adds selection:
           click and keyboard selection semantics, path-first imperative item
-          methods, and lightweight selection-change observation in the existing
+          methods, lightweight selection-change observation, and now the first
+          simple composition surface via a slotted header in the existing
           path-store-powered demo.
         </p>
       </header>
 
       <HydratedPathStoreExample
         containerHtml={containerHtml}
-        description="Click a row to select it, use Ctrl/Cmd-click and Shift-click for multi-selection, and try Ctrl+Space, Shift+ArrowUp/Down, and Ctrl+A. Directory rows still keep the Phase 2 toggle behavior on plain click, and selection changes are logged below."
+        description="Click a row to select it, use Ctrl/Cmd-click and Shift-click for multi-selection, and try the slotted header button above the tree. Directory rows still keep the Phase 2 toggle behavior on plain click, and selection changes are logged below."
         footer={<StateLog entries={log} />}
         options={options}
-        title="Focus + Selection"
+        title="Focus + Selection + Header Slot"
       />
 
       <section className="space-y-3 rounded-lg border p-4">

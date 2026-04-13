@@ -7,7 +7,11 @@ import {
   ensureFileTreeStyles,
   FileTreeContainerLoaded,
 } from '../components/web-components';
-import { FILE_TREE_STYLE_ATTRIBUTE, FILE_TREE_TAG_NAME } from '../constants';
+import {
+  FILE_TREE_STYLE_ATTRIBUTE,
+  FILE_TREE_TAG_NAME,
+  HEADER_SLOT_NAME,
+} from '../constants';
 import fileTreeStyles from '../style.css';
 import { PathStoreTreesController } from './controller';
 import {
@@ -15,11 +19,13 @@ import {
   renderPathStoreTreesRoot,
   unmountPathStoreTreesRoot,
 } from './runtime';
+import { PathStoreTreesManagedSlotHost } from './slotHost';
 import type {
   PathStoreFileTreeOptions,
   PathStoreFileTreeSsrPayload,
   PathStoreTreeHydrationProps,
   PathStoreTreeRenderProps,
+  PathStoreTreesCompositionOptions,
   PathStoreTreesItemHandle,
   PathStoreTreesSelectionChangeListener,
 } from './types';
@@ -72,11 +78,13 @@ function ensureBuiltInSpriteSheet(shadowRoot: ShadowRoot): void {
 export class PathStoreFileTree {
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
 
+  readonly #composition: PathStoreTreesCompositionOptions | undefined;
   readonly #controller: PathStoreTreesController;
   readonly #id: string;
   readonly #onSelectionChange:
     | PathStoreTreesSelectionChangeListener
     | undefined;
+  readonly #slotHost = new PathStoreTreesManagedSlotHost();
   readonly #viewOptions: Pick<
     PathStoreFileTreeOptions,
     'itemHeight' | 'overscan' | 'viewportHeight'
@@ -88,6 +96,7 @@ export class PathStoreFileTree {
 
   public constructor(options: PathStoreFileTreeOptions) {
     const {
+      composition,
       id,
       itemHeight,
       onSelectionChange,
@@ -95,6 +104,7 @@ export class PathStoreFileTree {
       viewportHeight,
       ...controllerOptions
     } = options;
+    this.#composition = composition;
     this.#id = createClientId(id);
     this.#onSelectionChange = onSelectionChange;
     this.#viewOptions = {
@@ -118,6 +128,8 @@ export class PathStoreFileTree {
       delete this.#wrapper.dataset.fileTreeVirtualizedWrapper;
       this.#wrapper = undefined;
     }
+    this.#slotHost.clearAll();
+    this.#slotHost.setHost(null);
     if (this.#fileTreeContainer != null) {
       delete this.#fileTreeContainer.dataset.fileTreeVirtualized;
       this.#fileTreeContainer = undefined;
@@ -142,6 +154,7 @@ export class PathStoreFileTree {
   public hydrate({ fileTreeContainer }: PathStoreTreeHydrationProps): void {
     const host = this.#prepareHost(fileTreeContainer);
     const wrapper = this.#getOrCreateWrapper(host);
+    this.#syncHeaderSlotContent();
     hydratePathStoreTreesRoot(wrapper, {
       controller: this.#controller,
       ...this.#getResolvedViewOptions(host),
@@ -157,6 +170,7 @@ export class PathStoreFileTree {
       containerWrapper
     );
     const wrapper = this.#getOrCreateWrapper(host);
+    this.#syncHeaderSlotContent();
     renderPathStoreTreesRoot(wrapper, {
       controller: this.#controller,
       ...this.#getResolvedViewOptions(host),
@@ -193,6 +207,16 @@ export class PathStoreFileTree {
 
     this.#selectionVersion = nextSelectionVersion;
     onSelectionChange(this.#controller.getSelectedPaths());
+  }
+
+  // Keeps header slot content attached to the host light DOM so hydration and
+  // later composition surfaces can share one host-managed slot path.
+  #syncHeaderSlotContent(): void {
+    const renderHeader = this.#composition?.header?.render;
+    this.#slotHost.setSlotContent(
+      HEADER_SLOT_NAME,
+      renderHeader == null ? null : renderHeader()
+    );
   }
 
   #getOrCreateWrapper(host: HTMLElement): HTMLDivElement {
@@ -239,6 +263,7 @@ export class PathStoreFileTree {
     ensureBuiltInSpriteSheet(shadowRoot);
     host.dataset.fileTreeVirtualized = 'true';
     host.style.display = 'flex';
+    this.#slotHost.setHost(host);
     this.#fileTreeContainer = host;
     return host;
   }

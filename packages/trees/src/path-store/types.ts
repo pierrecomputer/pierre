@@ -69,6 +69,7 @@ export interface PathStoreTreesRenderOptions {
 
 export interface PathStoreFileTreeOptions
   extends PathStoreTreesControllerOptions, PathStoreTreesRenderOptions {
+  composition?: PathStoreTreesCompositionOptions;
   id?: string;
   onSelectionChange?: PathStoreTreesSelectionChangeListener;
 }
@@ -117,3 +118,11 @@ export type PathStoreTreesControllerListener = () => void;
 export type PathStoreTreesSelectionChangeListener = (
   selectedPaths: readonly PathStoreTreesPublicId[]
 ) => void;
+
+export interface PathStoreTreesHeaderCompositionOptions {
+  render?: () => HTMLElement | null;
+}
+
+export interface PathStoreTreesCompositionOptions {
+  header?: PathStoreTreesHeaderCompositionOptions;
+}

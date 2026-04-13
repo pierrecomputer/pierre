@@ -5,6 +5,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { Icon } from '../components/Icon';
 import { MiddleTruncate, Truncate } from '../components/OverflowText';
+import { HEADER_SLOT_NAME } from '../constants';
 import { PathStoreTreesController } from './controller';
 import type {
   PathStoreTreesDirectoryHandle,
@@ -668,6 +669,7 @@ export function PathStoreTreesView({
         data-path-store-guide-style="true"
         dangerouslySetInnerHTML={{ __html: guideStyleText }}
       />
+      <slot name={HEADER_SLOT_NAME} data-type="header-slot" />
       <div ref={scrollRef} data-file-tree-virtualized-scroll="true">
         <div
           ref={listRef}
