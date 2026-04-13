@@ -87,7 +87,11 @@ export class VirtualizedFileDiff<
       previousCollapsed !== this.options.collapsed
     ) {
       this.heightCache.clear();
-      this.computeApproximateSize();
+      // NOTE(amadeus): In CodeViewer we intentionally batch computes to all
+      // happen at the same time, so we shouldn't trigger this here
+      if (this.isSimpleMode()) {
+        this.computeApproximateSize();
+      }
       this.renderRange = undefined;
     }
     this.virtualizer.instanceChanged(this);

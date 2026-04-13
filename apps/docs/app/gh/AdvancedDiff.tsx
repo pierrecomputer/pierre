@@ -1,39 +1,86 @@
 'use client';
 
 import {
-  CodeViewer,
+  type CodeViewer as CodeViewerClass,
   type CodeViewerItem,
   DEFAULT_THEMES,
+  DEFAULT_VIRTUAL_FILE_METRICS,
   type DiffLineAnnotation,
   parsePatchFiles,
 } from '@pierre/diffs';
-import { useStableCallback, useWorkerPool } from '@pierre/diffs/react';
-import { type SyntheticEvent, useEffect, useRef, useState } from 'react';
+import {
+  CodeViewer,
+  type LineAnnotation,
+  useStableCallback,
+} from '@pierre/diffs/react';
+import {
+  IconDiffSplit,
+  IconDiffUnified,
+  IconParagraph,
+  IconWordWrap,
+} from '@pierre/icons';
+import {
+  createContext,
+  type Dispatch,
+  memo,
+  type ReactNode,
+  type RefObject,
+  type SetStateAction,
+  type SyntheticEvent,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import styles from './advanced-diff.module.css';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/ui/button';
+
+const ExampleContext = createContext(0);
+
+interface ExampleAnnotationProps {
+  annotation: DiffLineAnnotation<CommentMetadata>;
+}
+
+export function ExampleAnnotation({ annotation }: ExampleAnnotationProps) {
+  const value = useContext(ExampleContext);
+  return (
+    <div
+      style={{
+        margin: 8,
+        padding: 8,
+        border: '1px solid var(--color-border)',
+        borderRadius: 6,
+        background: 'var(--color-muted)',
+        overflow: 'hidden',
+        maxWidth: 600,
+      }}
+    >
+      <strong style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>
+        {annotation.metadata.author}, with context value of: {value}
+      </strong>
+      <p style={{ margin: 0, fontSize: 13, whiteSpace: 'normal' }}>
+        {annotation.metadata.message}
+      </p>
+    </div>
+  );
+}
 
 interface CommentMetadata {
   author: string;
   message: string;
 }
 
-function renderAnnotation(
-  annotation: DiffLineAnnotation<CommentMetadata>
-): HTMLElement {
-  const wrapper = document.createElement('div');
-  wrapper.style.cssText =
-    'margin: 8px; padding: 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-muted); overflow: hidden; max-width: 600px;';
-  const author = document.createElement('strong');
-  author.style.cssText = 'font-size: 13px; display: block; margin-bottom: 4px;';
-  author.textContent = annotation.metadata.author;
-  const message = document.createElement('p');
-  message.style.cssText = 'margin: 0; font-size: 13px; white-space: normal;';
-  message.textContent = annotation.metadata.message;
-  wrapper.appendChild(author);
-  wrapper.appendChild(message);
-  return wrapper;
+export function renderAnnotation(
+  annotation:
+    | DiffLineAnnotation<CommentMetadata>
+    | LineAnnotation<CommentMetadata>
+): ReactNode {
+  if (!('side' in annotation)) {
+    return null;
+  }
+  return <ExampleAnnotation annotation={annotation} />;
 }
 
 const unsafeCSS = `[data-diffs-header] {
@@ -41,6 +88,8 @@ const unsafeCSS = `[data-diffs-header] {
   container-name: sticky-header;
   position: sticky;
   top: 0;
+  z-index: 1;
+  background-color: var(--diffs-bg);
 }
 @container sticky-header scroll-state(stuck: top) {
   [data-diffs-header]::after {
@@ -76,13 +125,131 @@ function getPullRequestPath(input: string): string | undefined {
   }
 }
 
+const VIEWER_METRICS = { gap: 12, paddingBottom: 20, paddingTop: 1 };
+
 export function AdvancedDiff() {
-  const workerPool = useWorkerPool();
-  const [fetching, setFetching] = useState(false);
-  const [url, setURL] = useState(DEFAULT_PR_URL);
-  const codeViewerRef = useRef<CodeViewer<CommentMetadata>>(null);
-  const lastLoadedURLRef = useRef<string | null>(null);
+  const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
+  const [key, setKey] = useState(0);
+  const [items, setItems] = useState<CodeViewerItem<CommentMetadata>[]>([]);
+  const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
   const scrollRef = useRef<HTMLDivElement>(null);
+  return (
+    <>
+      <ExampleContext.Provider value={10}>
+        <Header
+          diffStyle={diffStyle}
+          overflow={overflow}
+          setItems={setItems}
+          setOverflow={setOverflow}
+          setDiffStyle={setDiffStyle}
+          setKey={setKey}
+        />
+        <CodeViewerWrapper
+          key={key}
+          diffStyle={diffStyle}
+          overflow={overflow}
+          scrollRef={scrollRef}
+          items={items}
+        />
+        <WorkerPoolStatus scrollRef={scrollRef} />
+      </ExampleContext.Provider>
+    </>
+  );
+}
+
+interface CodeViewerWrapperProps {
+  diffStyle: 'split' | 'unified';
+  overflow: 'wrap' | 'scroll';
+  scrollRef: RefObject<HTMLDivElement | null>;
+  items: CodeViewerItem<CommentMetadata>[];
+}
+
+const CodeViewerWrapper = memo(function CodeViewerWrapper({
+  diffStyle,
+  overflow,
+  scrollRef,
+  items,
+}: CodeViewerWrapperProps) {
+  const isScrolledRef = useRef(false);
+  const handleScroll = useStableCallback(
+    (scrollTop: number, viewer: CodeViewerClass<CommentMetadata>) => {
+      const container = viewer.getContainerElement();
+      if (container == null) {
+        return;
+      }
+
+      if (scrollTop > 0 && !isScrolledRef.current) {
+        container.setAttribute('data-scrolled', '');
+        isScrolledRef.current = true;
+      } else if (scrollTop === 0 && isScrolledRef.current) {
+        container.removeAttribute('data-scrolled');
+        isScrolledRef.current = false;
+      }
+    }
+  );
+  // NOTE(amadeus): For some insane reason, the react compiler did not know how
+  // to properly memoize this, so we pulled it into a `useMemo` for safety...
+  const options = useMemo(
+    () => ({
+      theme: DEFAULT_THEMES,
+      diffStyle,
+      overflow,
+      // hunkSeparators: 'line-info-basic',
+      // FIXME(amadeus): We need to optimize this...
+      // enableLineSelection: true,
+      unsafeCSS,
+    }),
+    [diffStyle, overflow]
+  );
+  return (
+    <CodeViewer<CommentMetadata>
+      containerRef={scrollRef}
+      items={items}
+      className={styles.scrollContainer}
+      viewerMetrics={VIEWER_METRICS}
+      options={options}
+      onScroll={handleScroll}
+      // To test annotations and headers and stuff...
+      renderAnnotation={renderAnnotation}
+      // metrics={CUSTOM_HEADER_METRICS}
+      // renderCustomHeader={renderHeader}
+    />
+  );
+});
+
+export const CUSTOM_HEADER_METRICS = {
+  ...DEFAULT_VIRTUAL_FILE_METRICS,
+  diffHeaderHeight: 20,
+};
+
+export function renderHeader(item: CodeViewerItem<CommentMetadata>) {
+  if (item.type === 'diff') {
+    return <div>{item.fileDiff.name}</div>;
+  }
+  return null;
+}
+
+interface HeaderProps {
+  diffStyle: 'split' | 'unified';
+  setDiffStyle: Dispatch<SetStateAction<'split' | 'unified'>>;
+  setItems: Dispatch<SetStateAction<CodeViewerItem<CommentMetadata>[]>>;
+  overflow: 'wrap' | 'scroll';
+  setOverflow: Dispatch<SetStateAction<'wrap' | 'scroll'>>;
+  setKey: Dispatch<SetStateAction<number>>;
+}
+
+const Header = memo(function Header({
+  diffStyle,
+  overflow,
+  setItems,
+  setOverflow,
+  setDiffStyle,
+  setKey,
+}: HeaderProps) {
+  const hasFetched = useRef(false);
+  const [fetching, setFetching] = useState(false);
+  const lastLoadedURLRef = useRef<string | null>(null);
+  const [url, setURL] = useState(DEFAULT_PR_URL);
   const renderPullRequest = useStableCallback(async (input: string) => {
     const normalizedURL = input.trim();
     const prPath = getPullRequestPath(normalizedURL);
@@ -95,25 +262,6 @@ export function AdvancedDiff() {
     lastLoadedURLRef.current = normalizedURL;
 
     try {
-      if (scrollRef.current == null) {
-        console.error('No valid container to run the virtualizer with');
-        return undefined;
-      }
-      codeViewerRef.current ??= new CodeViewer<CommentMetadata>(
-        { gap: 12, paddingBottom: 20, paddingTop: 1 },
-        {
-          theme: DEFAULT_THEMES,
-          diffStyle: 'split',
-          overflow: 'wrap',
-          enableLineSelection: true,
-          unsafeCSS,
-          renderAnnotation,
-        },
-        undefined,
-        workerPool
-      );
-      codeViewerRef.current.setup(scrollRef.current);
-      codeViewerRef.current.reset();
       console.time('--     request time');
       const response = await fetch(
         `/api/fetch-pr-patch?path=${encodeURIComponent(prPath)}`
@@ -175,7 +323,13 @@ export function AdvancedDiff() {
           });
         }
       }
-      codeViewerRef.current.addItems(items);
+      // Don't key on the first fetch... for testing purposes
+      if (hasFetched.current) {
+        setKey((value) => ++value);
+      } else {
+        hasFetched.current = true;
+      }
+      setItems(items);
       console.timeEnd('-- computing layout');
       // DEBUG AREA
       // window.scrollTo({ top: 4762353 });
@@ -191,7 +345,6 @@ export function AdvancedDiff() {
       setFetching(false);
     }
   });
-
   const handleSubmit = useStableCallback(
     async (event: SyntheticEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -202,74 +355,70 @@ export function AdvancedDiff() {
       setURL(normalizedURL);
     }
   );
-  const scrollStateRef = useRef({
-    isScrolled: false,
-    handleScroll() {
-      const { current: currentTarget } = scrollRef;
-      if (currentTarget == null) return;
-      const { scrollTop } = currentTarget;
-      if (
-        (scrollTop > 0 && scrollStateRef.current.isScrolled) ||
-        (scrollTop <= 0 && !scrollStateRef.current.isScrolled)
-      ) {
-        return;
-      }
-      if (scrollTop > 0) {
-        currentTarget.setAttribute('data-scrolled', '');
-        scrollStateRef.current.isScrolled = true;
-      } else {
-        currentTarget.removeAttribute('data-scrolled');
-        scrollStateRef.current.isScrolled = false;
-      }
-    },
-  });
-  const handleRef = useStableCallback((node: HTMLDivElement | null) => {
-    if (scrollRef.current != null) {
-      scrollRef.current.removeEventListener(
-        'scroll',
-        scrollStateRef.current.handleScroll
-      );
-    }
-    scrollRef.current = node;
-    if (scrollRef.current != null) {
-      scrollRef.current.addEventListener(
-        'scroll',
-        scrollStateRef.current.handleScroll,
-        {
-          passive: true,
-        }
-      );
-    }
-  });
-  useEffect(() => {
-    codeViewerRef.current?.cleanUp();
-  }, []);
   return (
-    <>
-      <div className="bg-muted mx-5 mb-5 max-w-full rounded-lg p-2">
-        <form
-          className="flex w-full flex-col gap-2 md:flex-row md:gap-2"
-          // eslint-disable-next-line @typescript-eslint/no-misused-promises
-          onSubmit={handleSubmit}
+    <div className="bg-muted mx-5 mb-5 max-w-full rounded-lg p-2">
+      <form
+        className="flex w-full flex-col gap-2 md:flex-row md:gap-2"
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises
+        onSubmit={handleSubmit}
+      >
+        <div className="bg-background focus-within:ring-ring flex w-full flex-col items-start rounded-md border-1 px-3 py-3 focus-within:ring-2 focus-within:ring-offset-[-1px] md:flex-row md:items-center md:gap-2 md:py-1">
+          <label className="text-muted-foreground block text-sm text-nowrap">
+            GitHub URL
+          </label>
+          <input
+            className="block w-full text-sm focus-visible:outline-none"
+            value={url}
+            onChange={({ currentTarget }) => setURL(currentTarget.value)}
+            placeholder="e.g. https://github.com/twbs/bootstrap/pull/42139"
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-pressed={diffStyle === 'split'}
+          title={
+            diffStyle === 'split'
+              ? 'Switch to unified view'
+              : 'Switch to split view'
+          }
+          className="border-border/80 rounded-lg"
+          onClick={() =>
+            setDiffStyle((currentStyle) =>
+              currentStyle === 'split' ? 'unified' : 'split'
+            )
+          }
         >
-          <div className="bg-background focus-within:ring-ring flex w-full flex-col items-start rounded-md border-1 px-3 py-3 focus-within:ring-2 focus-within:ring-offset-[-1px] md:flex-row md:items-center md:gap-2 md:py-1">
-            <label className="text-muted-foreground block text-sm text-nowrap">
-              GitHub URL
-            </label>
-            <input
-              className="block w-full text-sm focus-visible:outline-none"
-              value={url}
-              onChange={({ currentTarget }) => setURL(currentTarget.value)}
-              placeholder="e.g. https://github.com/twbs/bootstrap/pull/42139"
-            />
-          </div>
-          <Button type="submit" disabled={fetching}>
-            {fetching ? 'Fetching…' : 'Render Diff'}
-          </Button>
-        </form>
-      </div>
-      <div ref={handleRef} className={styles.scrollContainer} />
-      <WorkerPoolStatus scrollRef={scrollRef} />
-    </>
+          {diffStyle === 'split' ? (
+            <IconDiffSplit className="size-4" />
+          ) : (
+            <IconDiffUnified className="size-4" />
+          )}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-pressed={overflow === 'wrap'}
+          title={overflow === 'wrap' ? 'Disable wrapping' : 'Enable wrapping'}
+          className="border-border/80 rounded-lg"
+          onClick={() =>
+            setOverflow((currentOverflow) =>
+              currentOverflow === 'wrap' ? 'scroll' : 'wrap'
+            )
+          }
+        >
+          {overflow === 'wrap' ? (
+            <IconWordWrap className="size-4" />
+          ) : (
+            <IconParagraph className="size-4" />
+          )}
+        </Button>
+        <Button type="submit" disabled={fetching}>
+          {fetching ? 'Fetching…' : 'Render Diff'}
+        </Button>
+      </form>
+    </div>
   );
-}
+});
