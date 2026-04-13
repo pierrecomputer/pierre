@@ -7,6 +7,7 @@ import { Icon } from '../components/Icon';
 import { MiddleTruncate, Truncate } from '../components/OverflowText';
 import { HEADER_SLOT_NAME } from '../constants';
 import { PathStoreTreesController } from './controller';
+import { createPathStoreIconResolver } from './iconResolver';
 import type {
   PathStoreTreesDirectoryHandle,
   PathStoreTreesItemHandle,
@@ -179,6 +180,7 @@ function renderStyledRow(
   activeItemPath: string | null,
   itemHeight: number,
   registerButton: (path: string, element: HTMLButtonElement | null) => void,
+  resolveIcon: ReturnType<typeof createPathStoreIconResolver>['resolveIcon'],
   onKeyDown: (event: KeyboardEvent) => void,
   key: string | number,
   options: {
@@ -261,9 +263,9 @@ function renderStyledRow(
         ) : null}
         <div data-item-section="icon">
           {row.hasChildren ? (
-            <Icon name="file-tree-icon-chevron" />
+            <Icon {...resolveIcon('file-tree-icon-chevron')} />
           ) : (
-            <Icon name="file-tree-icon-file" />
+            <Icon {...resolveIcon('file-tree-icon-file', targetPath)} />
           )}
         </div>
         <div data-item-section="content">
@@ -286,6 +288,7 @@ function renderRangeChildren(
   activeItemPath: string | null,
   itemHeight: number,
   registerButton: (path: string, element: HTMLButtonElement | null) => void,
+  resolveIcon: ReturnType<typeof createPathStoreIconResolver>['resolveIcon'],
   onKeyDown: (event: KeyboardEvent) => void
 ): JSX.Element[] {
   if (range.end < range.start) {
@@ -305,6 +308,7 @@ function renderRangeChildren(
         activeItemPath,
         itemHeight,
         registerButton,
+        resolveIcon,
         onKeyDown,
         slotIndex
       )
@@ -317,6 +321,7 @@ function renderRangeChildren(
  */
 export function PathStoreTreesView({
   controller,
+  icons,
   itemHeight = PATH_STORE_TREES_DEFAULT_ITEM_HEIGHT,
   overscan = PATH_STORE_TREES_DEFAULT_OVERSCAN,
   viewportHeight = PATH_STORE_TREES_DEFAULT_VIEWPORT_HEIGHT,
@@ -344,6 +349,10 @@ export function PathStoreTreesView({
       scrollTop: 0,
       viewportHeight,
     })
+  );
+  const { resolveIcon } = useMemo(
+    () => createPathStoreIconResolver(icons),
+    [icons]
   );
   const focusedPath = controller.getFocusedPath();
   const focusedIndex = controller.getFocusedIndex();
@@ -702,6 +711,7 @@ export function PathStoreTreesView({
 
                 rowButtonRefs.current.set(path, element);
               },
+              resolveIcon,
               handleTreeKeyDown
             )}
             {parkedFocusedRow != null && parkedFocusedRowOffset != null
@@ -718,6 +728,7 @@ export function PathStoreTreesView({
 
                     rowButtonRefs.current.set(path, element);
                   },
+                  resolveIcon,
                   handleTreeKeyDown,
                   `parked:${parkedFocusedRow.path}`,
                   {

@@ -1,5 +1,7 @@
 import type { PathStoreConstructorOptions } from '@pierre/path-store';
 
+import type { FileTreeIcons } from '../iconConfig';
+
 /**
  * The provisional public identity stays path-first so later phases can evolve
  * internal row bookkeeping without freezing path-store numeric IDs.
@@ -71,6 +73,7 @@ export interface PathStoreFileTreeOptions
   extends PathStoreTreesControllerOptions, PathStoreTreesRenderOptions {
   composition?: PathStoreTreesCompositionOptions;
   id?: string;
+  icons?: FileTreeIcons;
   onSelectionChange?: PathStoreTreesSelectionChangeListener;
 }
 
@@ -96,6 +99,7 @@ export interface PathStoreTreesStickyWindowLayout {
 
 export interface PathStoreTreesViewProps extends PathStoreTreesRenderOptions {
   controller: import('./controller').PathStoreTreesController;
+  icons?: FileTreeIcons;
 }
 
 export interface PathStoreTreeRenderProps {

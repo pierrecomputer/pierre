@@ -1,7 +1,10 @@
 import { h } from 'preact';
 import { renderToString } from 'preact-render-to-string';
 
-import { getBuiltInSpriteSheet } from '../builtInIcons';
+import {
+  getBuiltInSpriteSheet,
+  isColoredBuiltInIconSet,
+} from '../builtInIcons';
 import {
   adoptDeclarativeShadowDom,
   ensureFileTreeStyles,
@@ -12,6 +15,7 @@ import {
   FILE_TREE_TAG_NAME,
   HEADER_SLOT_NAME,
 } from '../constants';
+import { normalizeFileTreeIcons } from '../iconConfig';
 import fileTreeStyles from '../style.css';
 import { PathStoreTreesController } from './controller';
 import {
@@ -75,15 +79,20 @@ function getHeaderSlotHtml(
   return `<div slot="${HEADER_SLOT_NAME}" data-path-store-managed-slot="${HEADER_SLOT_NAME}">${headerHtml}</div>`;
 }
 
-function ensureBuiltInSpriteSheet(shadowRoot: ShadowRoot): void {
-  if (shadowRoot.querySelector('svg[data-icon-sprite]') != null) {
-    return;
-  }
+function isBuiltInSpriteSheet(spriteSheet: SVGElement): boolean {
+  return (
+    spriteSheet.querySelector('#file-tree-icon-chevron') instanceof
+      SVGElement &&
+    spriteSheet.querySelector('#file-tree-icon-file') instanceof SVGElement &&
+    spriteSheet.querySelector('#file-tree-icon-dot') instanceof SVGElement &&
+    spriteSheet.querySelector('#file-tree-icon-lock') instanceof SVGElement
+  );
+}
 
-  const spriteSheet = parseSpriteSheet(getBuiltInSpriteSheet('minimal'));
-  if (spriteSheet != null) {
-    shadowRoot.prepend(spriteSheet);
-  }
+function getTopLevelSpriteSheets(shadowRoot: ShadowRoot): SVGElement[] {
+  return Array.from(shadowRoot.children).filter(
+    (element): element is SVGElement => element instanceof SVGElement
+  );
 }
 
 export class PathStoreFileTree {
@@ -92,6 +101,7 @@ export class PathStoreFileTree {
   readonly #composition: PathStoreTreesCompositionOptions | undefined;
   readonly #controller: PathStoreTreesController;
   readonly #id: string;
+  readonly #icons: PathStoreFileTreeOptions['icons'];
   readonly #onSelectionChange:
     | PathStoreTreesSelectionChangeListener
     | undefined;
@@ -109,6 +119,7 @@ export class PathStoreFileTree {
     const {
       composition,
       id,
+      icons,
       itemHeight,
       onSelectionChange,
       overscan,
@@ -117,6 +128,7 @@ export class PathStoreFileTree {
     } = options;
     this.#composition = composition;
     this.#id = createClientId(id);
+    this.#icons = icons;
     this.#onSelectionChange = onSelectionChange;
     this.#viewOptions = {
       itemHeight,
@@ -168,6 +180,7 @@ export class PathStoreFileTree {
     this.#syncHeaderSlotContent();
     hydratePathStoreTreesRoot(wrapper, {
       controller: this.#controller,
+      icons: this.#icons,
       ...this.#getResolvedViewOptions(host),
     });
   }
@@ -184,6 +197,7 @@ export class PathStoreFileTree {
     this.#syncHeaderSlotContent();
     renderPathStoreTreesRoot(wrapper, {
       controller: this.#controller,
+      icons: this.#icons,
       ...this.#getResolvedViewOptions(host),
     });
   }
@@ -235,6 +249,81 @@ export class PathStoreFileTree {
     );
   }
 
+  #syncBuiltInSpriteSheet(shadowRoot: ShadowRoot): void {
+    const currentBuiltInSprite = getTopLevelSpriteSheets(shadowRoot).find(
+      (sprite) => isBuiltInSpriteSheet(sprite)
+    );
+    const nextBuiltInSprite = parseSpriteSheet(
+      getBuiltInSpriteSheet(normalizeFileTreeIcons(this.#icons).set)
+    );
+    if (nextBuiltInSprite == null) {
+      return;
+    }
+
+    if (
+      currentBuiltInSprite != null &&
+      currentBuiltInSprite.outerHTML === nextBuiltInSprite.outerHTML
+    ) {
+      return;
+    }
+
+    if (currentBuiltInSprite != null) {
+      currentBuiltInSprite.replaceWith(nextBuiltInSprite);
+    } else {
+      shadowRoot.prepend(nextBuiltInSprite);
+    }
+  }
+
+  #syncCustomSpriteSheet(shadowRoot: ShadowRoot): void {
+    const topLevelSprites = getTopLevelSpriteSheets(shadowRoot);
+    const builtInSprite = topLevelSprites.find((sprite) =>
+      isBuiltInSpriteSheet(sprite)
+    );
+    const currentCustomSprites = topLevelSprites.filter(
+      (sprite) => sprite !== builtInSprite
+    );
+    const customSpriteSheet =
+      normalizeFileTreeIcons(this.#icons).spriteSheet?.trim() ?? '';
+    if (customSpriteSheet.length === 0) {
+      for (const currentCustomSprite of currentCustomSprites) {
+        currentCustomSprite.remove();
+      }
+      return;
+    }
+
+    const customSprite = parseSpriteSheet(customSpriteSheet);
+    if (customSprite == null) {
+      for (const currentCustomSprite of currentCustomSprites) {
+        currentCustomSprite.remove();
+      }
+      return;
+    }
+
+    if (
+      currentCustomSprites.length === 1 &&
+      currentCustomSprites[0].outerHTML === customSprite.outerHTML
+    ) {
+      return;
+    }
+
+    for (const currentCustomSprite of currentCustomSprites) {
+      currentCustomSprite.remove();
+    }
+    shadowRoot.appendChild(customSprite);
+  }
+
+  #syncIconModeAttrs(wrapper: HTMLElement): void {
+    const normalizedIcons = normalizeFileTreeIcons(this.#icons);
+    if (
+      normalizedIcons.colored &&
+      isColoredBuiltInIconSet(normalizedIcons.set)
+    ) {
+      wrapper.dataset.fileTreeColoredIcons = 'true';
+    } else {
+      delete wrapper.dataset.fileTreeColoredIcons;
+    }
+  }
+
   #getOrCreateWrapper(host: HTMLElement): HTMLDivElement {
     if (this.#wrapper != null) {
       return this.#wrapper;
@@ -253,6 +342,7 @@ export class PathStoreFileTree {
     this.#wrapper = existingWrapper ?? document.createElement('div');
     this.#wrapper.dataset.fileTreeId = this.#id;
     this.#wrapper.dataset.fileTreeVirtualizedWrapper = 'true';
+    this.#syncIconModeAttrs(this.#wrapper);
 
     if (this.#wrapper.parentNode !== shadowRoot) {
       shadowRoot.appendChild(this.#wrapper);
@@ -276,7 +366,8 @@ export class PathStoreFileTree {
     const shadowRoot = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
     adoptDeclarativeShadowDom(host, shadowRoot);
     ensureFileTreeStyles(shadowRoot);
-    ensureBuiltInSpriteSheet(shadowRoot);
+    this.#syncBuiltInSpriteSheet(shadowRoot);
+    this.#syncCustomSpriteSheet(shadowRoot);
     host.dataset.fileTreeVirtualized = 'true';
     host.style.display = 'flex';
     this.#slotHost.setHost(host);
@@ -291,6 +382,7 @@ export function preloadPathStoreFileTree(
   const {
     composition,
     id,
+    icons,
     itemHeight,
     onSelectionChange: _onSelectionChange,
     overscan,
@@ -301,10 +393,17 @@ export function preloadPathStoreFileTree(
   const controller = new PathStoreTreesController(controllerOptions);
   const resolvedViewportHeight =
     viewportHeight ?? PATH_STORE_TREES_DEFAULT_VIEWPORT_HEIGHT;
+  const normalizedIcons = normalizeFileTreeIcons(icons);
+  const customSpriteSheet = normalizedIcons.spriteSheet?.trim() ?? '';
+  const coloredIconsAttr =
+    normalizedIcons.colored && isColoredBuiltInIconSet(normalizedIcons.set)
+      ? ' data-file-tree-colored-icons="true"'
+      : '';
 
   const bodyHtml = renderToString(
     h(PathStoreTreesView, {
       controller,
+      icons,
       itemHeight,
       overscan,
       viewportHeight: resolvedViewportHeight,
@@ -312,7 +411,7 @@ export function preloadPathStoreFileTree(
   );
   controller.destroy();
 
-  const shadowHtml = `${getBuiltInSpriteSheet('minimal')}<style ${FILE_TREE_STYLE_ATTRIBUTE}>${fileTreeStyles}</style><div data-file-tree-id="${resolvedId}" data-file-tree-virtualized-wrapper="true">${bodyHtml}</div>`;
+  const shadowHtml = `${getBuiltInSpriteSheet(normalizedIcons.set)}${customSpriteSheet}<style ${FILE_TREE_STYLE_ATTRIBUTE}>${fileTreeStyles}</style><div data-file-tree-id="${resolvedId}" data-file-tree-virtualized-wrapper="true"${coloredIconsAttr}>${bodyHtml}</div>`;
   const headerSlotHtml = getHeaderSlotHtml(composition);
   const html = `<file-tree-container id="${resolvedId}" data-file-tree-virtualized="true"><template shadowrootmode="open">${shadowHtml}</template>${headerSlotHtml}</file-tree-container>`;
   return {

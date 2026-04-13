@@ -11,6 +11,7 @@ import { ExampleCard } from '../_components/ExampleCard';
 import { StateLog, useStateLog } from '../_components/StateLog';
 import { pathStoreCapabilityMatrix } from './capabilityMatrix';
 import { createPresortedPreparedInput } from './createPresortedPreparedInput';
+import { PATH_STORE_DEMO_ICONS } from './pathStoreDemoIcons';
 
 interface SharedDemoOptions extends Omit<
   PathStoreFileTreeOptions,
@@ -113,7 +114,8 @@ export function PathStorePoweredRenderDemoClient({
           },
         },
       },
-      id: 'pst-phase4',
+      icons: PATH_STORE_DEMO_ICONS,
+      id: 'pst-phase5-icons',
       onSelectionChange: handleSelectionChange,
       preparedInput,
     }),
@@ -126,22 +128,22 @@ export function PathStorePoweredRenderDemoClient({
         <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           Path-store lane · provisional
         </p>
-        <h1 className="text-2xl font-bold">Focus + Selection + Header Slot</h1>
+        <h1 className="text-2xl font-bold">
+          Focus + Selection + Header Slot + Icons
+        </h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
-          Phase 4 keeps the landed focus/navigation model and adds selection:
-          click and keyboard selection semantics, path-first imperative item
-          methods, lightweight selection-change observation, and now the first
-          simple composition surface via a slotted header in the existing
-          path-store-powered demo.
+          The path-store lane keeps the landed focus and selection model,
+          preserves the header slot, and now proves custom README and TypeScript
+          icon remaps without pulling in context-menu behavior yet.
         </p>
       </header>
 
       <HydratedPathStoreExample
         containerHtml={containerHtml}
-        description="Click a row to select it, use Ctrl/Cmd-click and Shift-click for multi-selection, and try the slotted header button above the tree. Directory rows still keep the Phase 2 toggle behavior on plain click, and selection changes are logged below."
+        description="Click a row to select it, use Ctrl/Cmd-click and Shift-click for multi-selection, try the slotted header button above the tree, and inspect the custom README and TypeScript icons rendered through the shared path-store icon configuration."
         footer={<StateLog entries={log} />}
         options={options}
-        title="Focus + Selection + Header Slot"
+        title="Focus + Selection + Header Slot + Icons"
       />
 
       <section className="space-y-3 rounded-lg border p-4">
