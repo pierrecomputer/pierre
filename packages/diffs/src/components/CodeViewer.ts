@@ -15,8 +15,6 @@ import type {
   CodeViewerLineScrollTarget,
   CodeViewerMetrics,
   CodeViewerScrollTarget,
-  DiffLineAnnotation,
-  LineAnnotation,
   VirtualFileMetrics,
   VirtualWindowSpecs,
 } from '../types';
@@ -76,6 +74,39 @@ type AdvancedVirtualizedItem<LAnnotation> =
   | AdvancedVirtualizedDiffItem<LAnnotation>
   | AdvancedVirtualizedFileItem<LAnnotation>;
 
+export interface CodeViewerRenderedDiffItem<LAnnotation> {
+  id: string;
+  type: 'diff';
+  item: CodeViewerDiffItem<LAnnotation>;
+  element: HTMLElement;
+  instance: VirtualizedFileDiff<LAnnotation>;
+}
+
+export interface CodeViewerRenderedFileItem<LAnnotation> {
+  id: string;
+  type: 'file';
+  item: CodeViewerFileItem<LAnnotation>;
+  element: HTMLElement;
+  instance: VirtualizedFile<LAnnotation>;
+}
+
+export type CodeViewerRenderedItem<LAnnotation> =
+  | CodeViewerRenderedDiffItem<LAnnotation>
+  | CodeViewerRenderedFileItem<LAnnotation>;
+
+export interface CodeViewerCoordinator<LAnnotation> {
+  hasHeaderRenderers: boolean;
+  hasAnnotationRenderer: boolean;
+  onSnapshotChange(
+    snapshot: CodeViewerRenderedItem<LAnnotation>[] | undefined
+  ): void;
+}
+
+export type CodeViewerScrollListener<LAnnotation> = (
+  scrollTop: number,
+  viewer: CodeViewer<LAnnotation>
+) => void;
+
 export class CodeViewer<LAnnotation = undefined> {
   static __STOP = false;
   static __lastScrollPosition = 0;
@@ -92,6 +123,10 @@ export class CodeViewer<LAnnotation = undefined> {
   private instanceToItem: Map<object, AdvancedVirtualizedItem<LAnnotation>> =
     new Map();
   private layoutDirtyIndex: number | undefined;
+  private slotCoordinator: CodeViewerCoordinator<LAnnotation> | undefined;
+  private slotSnapshot: CodeViewerRenderedItem<LAnnotation>[] | undefined;
+  private scrollListeners: Set<CodeViewerScrollListener<LAnnotation>> =
+    new Set();
   private scrollHeight = 0;
 
   private lastContainerHeight = -1;
@@ -130,22 +165,6 @@ export class CodeViewer<LAnnotation = undefined> {
     this.stickyContainer.style.display = 'flex';
     this.stickyContainer.style.flexDirection = 'column';
     this.stickyContainer.style.gap = `${this.viewerMetrics.gap}px`;
-
-    // FIXME(amadeus): Remove me before release
-    window.__INSTANCE = this;
-    window.__TOGGLE = () => {
-      if (CodeViewer.__STOP) {
-        CodeViewer.__STOP = false;
-        this.scrollTo({
-          type: 'position',
-          position: CodeViewer.__lastScrollPosition,
-          behavior: 'instant',
-        });
-      } else {
-        CodeViewer.__lastScrollPosition = this.getScrollTop();
-        CodeViewer.__STOP = true;
-      }
-    };
   }
 
   public setup(root: HTMLElement): void {
@@ -170,6 +189,22 @@ export class CodeViewer<LAnnotation = undefined> {
     });
     this.resizeObserver.observe(this.root);
     this.render(true);
+
+    // FIXME(amadeus): Remove me before release
+    window.__INSTANCE = this;
+    window.__TOGGLE = () => {
+      if (CodeViewer.__STOP) {
+        CodeViewer.__STOP = false;
+        this.scrollTo({
+          type: 'position',
+          position: CodeViewer.__lastScrollPosition,
+          behavior: 'instant',
+        });
+      } else {
+        CodeViewer.__lastScrollPosition = this.getScrollTop();
+        CodeViewer.__STOP = true;
+      }
+    };
   }
 
   public reset(): void {
@@ -193,6 +228,12 @@ export class CodeViewer<LAnnotation = undefined> {
       lastIndex: -1,
       height: 0,
     };
+    // NOTE(amadeus): Container managed CodeViewer controls when flushing
+    // occurs. This is mostly to make imperative vanilla js api easier to work
+    // with
+    if (!this.isContainerManaged) {
+      this.flushSlotCoordinator();
+    }
   }
 
   public cleanUp(): void {
@@ -239,6 +280,7 @@ export class CodeViewer<LAnnotation = undefined> {
     // NOTE(amadeus): We'll probably need to figure out how to make the smooth
     // variation of this properly work in a way that can adjust scroll position
     // target as we go - i.e. a spring based lad...
+    this.scrollDirty = true;
     this.root.scrollTo({ top: clampedTop, behavior: target.behavior });
   }
 
@@ -253,19 +295,11 @@ export class CodeViewer<LAnnotation = undefined> {
   public setItems(items: readonly CodeViewerItem<LAnnotation>[]): void {
     if (items.length === 0) {
       this.reset();
-      return;
-    }
-
-    if (this.items.length === 0) {
+    } else if (this.items.length === 0) {
       this.appendItemsInternal(items);
-      return;
+    } else if (!this.tryAppendItems(items)) {
+      this.reconcileItems(items);
     }
-
-    if (this.tryAppendItems(items)) {
-      return;
-    }
-
-    this.reconcileItems(items);
   }
 
   /**
@@ -308,41 +342,41 @@ export class CodeViewer<LAnnotation = undefined> {
     }
   }
 
-  public setDiffAnnotations(
-    id: string,
-    annotations: DiffLineAnnotation<LAnnotation>[]
-  ): void {
-    const item = this.idToItem.get(id);
-    if (item == null || item.type !== 'diff') {
-      throw new Error(`CodeViewer.setDiffAnnotations: invalid diff id "${id}"`);
+  public setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
+    if (options == null) {
+      return;
     }
-    item.item = {
-      ...item.item,
-      annotations,
-    };
-    this.markItemLayoutDirty(item);
-    this.render();
-  }
 
-  public setFileAnnotations(
-    id: string,
-    annotations: LineAnnotation<LAnnotation>[]
-  ): void {
-    const item = this.idToItem.get(id);
-    if (item == null || item.type !== 'file') {
-      throw new Error(`CodeViewer.setFileAnnotations: invalid file id "${id}"`);
+    // NOTE(amadeus): This is also something that's probably ridiculously
+    // expensive to pull off, and we should probably figure out some way to
+    // incrementally version/render stuff
+    this.options = options;
+    for (let index = 0; index < this.items.length; index++) {
+      const item = this.items[index];
+      if (item == null) {
+        throw new Error('CodeViewer.setOptions: invalid item index');
+      }
+
+      if (item.type === 'diff') {
+        item.instance.setOptions(options);
+      } else {
+        item.instance.setOptions(
+          options as unknown as FileOptions<LAnnotation>
+        );
+      }
     }
-    item.item = {
-      ...item.item,
-      annotations,
-    };
-    this.markItemLayoutDirty(item);
+
+    this.markLayoutDirtyFromIndex(0);
     this.scrollDirty = true;
-    this.render();
+    if (!this.isContainerManaged && this.items.length > 0) {
+      this.render();
+    }
   }
 
   public render(immediate = false): void {
-    if (CodeViewer.__STOP || this.items.length === 0) return;
+    if (CodeViewer.__STOP) {
+      return;
+    }
     if (immediate) {
       dequeueRender(this.computeRenderRangeAndEmit);
       this.computeRenderRangeAndEmit();
@@ -370,6 +404,72 @@ export class CodeViewer<LAnnotation = undefined> {
 
   public getWindowSpecs(): VirtualWindowSpecs {
     return this.windowSpecs;
+  }
+
+  public getContainerElement(): HTMLElement | undefined {
+    return this.root;
+  }
+
+  public getRenderedItems(): CodeViewerRenderedItem<LAnnotation>[] {
+    const { firstIndex, lastIndex } = this.renderState;
+    if (firstIndex === -1 || lastIndex === -1 || lastIndex < firstIndex) {
+      return [];
+    }
+
+    const renderedItems: CodeViewerRenderedItem<LAnnotation>[] = [];
+
+    for (let index = firstIndex; index <= lastIndex; index++) {
+      const item = this.items[index];
+      if (item?.element == null) {
+        continue;
+      }
+
+      if (item.type === 'diff') {
+        renderedItems.push({
+          id: item.item.id,
+          type: 'diff',
+          item: item.item,
+          element: item.element,
+          instance: item.instance,
+        });
+      } else {
+        renderedItems.push({
+          id: item.item.id,
+          type: 'file',
+          item: item.item,
+          element: item.element,
+          instance: item.instance,
+        });
+      }
+    }
+
+    return renderedItems;
+  }
+
+  public setSlotCoordinator(
+    coordinator?: CodeViewerCoordinator<LAnnotation>
+  ): boolean {
+    if (coordinator === this.slotCoordinator) {
+      return false;
+    }
+    this.slotCoordinator = coordinator;
+    this.slotSnapshot = undefined;
+    return true;
+  }
+
+  public getSlotSnapshot(
+    coordinator: CodeViewerCoordinator<LAnnotation>
+  ): CodeViewerRenderedItem<LAnnotation>[] | undefined {
+    return getSlotSnapshot(this.getRenderedItems(), coordinator);
+  }
+
+  public subscribeToScroll(
+    listener: CodeViewerScrollListener<LAnnotation>
+  ): () => void {
+    this.scrollListeners.add(listener);
+    return () => {
+      this.scrollListeners.delete(listener);
+    };
   }
 
   public getTopForInstance(instance: object): number {
@@ -665,11 +765,7 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private computeRenderRangeAndEmit = (): void => {
-    if (
-      this.items.length === 0 ||
-      CodeViewer.__STOP ||
-      this.container == null
-    ) {
+    if (CodeViewer.__STOP || this.container == null) {
       return;
     }
     const height = this.getHeight();
@@ -680,7 +776,6 @@ export class CodeViewer<LAnnotation = undefined> {
 
     const scrollTop = this.getScrollTop();
     const scrollHeight = this.getScrollHeight();
-    const containerOffset = 0;
     const fitPerfectly =
       this.lastRenderedScrollY === -1 ||
       Math.abs(scrollTop - this.lastRenderedScrollY) >
@@ -689,7 +784,6 @@ export class CodeViewer<LAnnotation = undefined> {
       scrollTop,
       height,
       scrollHeight,
-      containerOffset,
       fitPerfectly,
       overscrollSize: this.config.overscrollSize,
     });
@@ -697,15 +791,14 @@ export class CodeViewer<LAnnotation = undefined> {
     const { top, bottom } = this.windowSpecs;
     this.lastRenderedScrollY = scrollTop;
     const anchor = this.getScrollAnchor();
-    if (this.renderState.firstIndex >= 0) {
-      for (
-        let index = this.renderState.firstIndex;
-        index <= this.renderState.lastIndex;
-        index++
-      ) {
+    const { firstIndex, lastIndex } = this.renderState;
+    if (firstIndex >= 0) {
+      for (let index = firstIndex; index <= lastIndex; index++) {
         const item = this.items[index];
         if (item == null) {
-          throw new Error(`no item`);
+          throw new Error(
+            `CodeViewer.computeRenderRangeAndEmit: No item at index: ${index}`
+          );
         }
         const renderedTop = item.top;
         const renderedHeight = item.height;
@@ -737,7 +830,7 @@ export class CodeViewer<LAnnotation = undefined> {
         item.element = document.createElement(DIFFS_TAG_NAME);
         syncRenderedItemOrder(this.stickyContainer, item.element, prevElement);
         instance.virtualizedSetup();
-        if (onRender(item, item.element)) {
+        if (renderItem(item, item.element)) {
           updatedItems.add(item);
         }
         prevElement = item.element;
@@ -745,7 +838,7 @@ export class CodeViewer<LAnnotation = undefined> {
       // Otherwise kick off a render as necessary
       else {
         syncRenderedItemOrder(this.stickyContainer, item.element, prevElement);
-        if (onRender(item)) {
+        if (renderItem(item)) {
           updatedItems.add(item);
         }
         prevElement = item.element;
@@ -756,6 +849,7 @@ export class CodeViewer<LAnnotation = undefined> {
       startingIndex <= lastRenderedIndex ? startingIndex : -1;
     this.renderState.lastIndex = lastRenderedIndex;
 
+    this.flushSlotCoordinator();
     this.reconcileRenderedItems(updatedItems);
     this.updateStickyPositioning();
     this.scrollFix(anchor);
@@ -765,11 +859,20 @@ export class CodeViewer<LAnnotation = undefined> {
       this.container.style.height = `${totalScrollHeight}px`;
       this.lastContainerHeight = totalScrollHeight;
     }
+    this.flushManagers(updatedItems);
 
     if (fitPerfectly) {
       this.render();
     }
   };
+
+  private flushManagers(
+    updatedItems: Set<AdvancedVirtualizedItem<LAnnotation>>
+  ): void {
+    for (const item of updatedItems) {
+      item.instance.flushManagers();
+    }
+  }
 
   private reconcileRenderedItems(
     updatedItems?: Set<AdvancedVirtualizedItem<LAnnotation>>
@@ -852,7 +955,11 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private handleScroll = (): void => {
+    if (CodeViewer.__STOP) {
+      return;
+    }
     this.scrollDirty = true;
+    this.notifyScroll();
     this.render();
   };
 
@@ -863,6 +970,8 @@ export class CodeViewer<LAnnotation = undefined> {
       if (entry.target === this.stickyContainer) {
         const blockSize = entry.borderBoxSize[0].blockSize;
         if (blockSize !== this.renderState.height) {
+          // NOTE(amadeus): I don't think this anchoring actually
+          // works or is useful?
           const anchor = this.getScrollAnchor();
           this.reconcileRenderedItems();
           this.updateStickyPositioning();
@@ -878,10 +987,6 @@ export class CodeViewer<LAnnotation = undefined> {
     }
   };
 
-  private getScrollContainerElement(): HTMLElement | undefined {
-    return this.root;
-  }
-
   private getScrollAnchor(): ScrollAnchor | undefined {
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex === -1 || lastIndex === -1) {
@@ -889,7 +994,7 @@ export class CodeViewer<LAnnotation = undefined> {
     }
 
     const viewportHeight = this.getHeight();
-    const scrollContainer = this.getScrollContainerElement();
+    const scrollContainer = this.getContainerElement();
     let bestAnchor: ScrollAnchor | undefined;
 
     for (let index = firstIndex; index <= lastIndex; index++) {
@@ -978,7 +1083,7 @@ export class CodeViewer<LAnnotation = undefined> {
     if (anchor == null) {
       return;
     }
-    const scrollContainer = this.getScrollContainerElement();
+    const scrollContainer = this.getContainerElement();
     const { lineIndex, lineOffset, fileElement, fileOffset } = anchor;
     if (lineIndex != null && lineOffset != null) {
       const element = fileElement.shadowRoot?.querySelector(
@@ -1032,6 +1137,32 @@ export class CodeViewer<LAnnotation = undefined> {
 
   private getScrollHeight(): number {
     return this.scrollHeight;
+  }
+
+  private flushSlotCoordinator(): void {
+    if (this.slotCoordinator == null) {
+      return;
+    }
+    const { onSnapshotChange } = this.slotCoordinator;
+
+    const slotSnapshot = getSlotSnapshot(
+      this.getRenderedItems(),
+      this.slotCoordinator
+    );
+
+    if (areSlotSnapshotsEqual(this.slotSnapshot, slotSnapshot)) {
+      return;
+    }
+
+    this.slotSnapshot = slotSnapshot;
+    onSnapshotChange(slotSnapshot);
+  }
+
+  private notifyScroll(): void {
+    const scrollTop = this.getScrollTop();
+    for (const listener of this.scrollListeners) {
+      listener(scrollTop, this);
+    }
   }
 
   /**
@@ -1141,12 +1272,6 @@ function cleanRenderedItem<LAnnotation>(
 ) {
   item.instance.cleanUp(true);
   item.element?.remove();
-  if (item.element != null) {
-    item.element.textContent = '';
-    if (item.element.shadowRoot != null) {
-      item.element.shadowRoot.textContent = '';
-    }
-  }
   item.element = undefined;
 }
 
@@ -1161,18 +1286,20 @@ function prepareItemInstance<LAnnotation>(
   }
 }
 
-function onRender<LAnnotation>(
+function renderItem<LAnnotation>(
   item: AdvancedVirtualizedItem<LAnnotation>,
   fileContainer?: HTMLElement
 ): boolean {
   if (item.type === 'diff') {
     return item.instance.render({
+      deferManagers: true,
       fileContainer,
       fileDiff: item.item.fileDiff,
       lineAnnotations: item.item.annotations,
     });
   } else {
     return item.instance.render({
+      deferManagers: true,
       fileContainer,
       file: item.item.file,
       lineAnnotations: item.item.annotations,
@@ -1210,4 +1337,70 @@ function getRelativeBoundingTop(
   const rect = element.getBoundingClientRect();
   const scrollContainerTop = scrollContainer?.getBoundingClientRect().top ?? 0;
   return rect.top - scrollContainerTop;
+}
+
+function hasAnnotations<LAnnotation>(
+  item: CodeViewerItem<LAnnotation>
+): boolean {
+  return (item.annotations?.length ?? 0) > 0;
+}
+
+function getSlotSnapshot<LAnnotation>(
+  renderedItems: CodeViewerRenderedItem<LAnnotation>[],
+  {
+    hasHeaderRenderers,
+    hasAnnotationRenderer,
+  }: CodeViewerCoordinator<LAnnotation>
+): CodeViewerRenderedItem<LAnnotation>[] | undefined {
+  if (renderedItems.length === 0) {
+    return undefined;
+  }
+
+  if (hasHeaderRenderers) {
+    return renderedItems;
+  }
+
+  if (!hasAnnotationRenderer) {
+    return undefined;
+  }
+
+  const slotSnapshot: CodeViewerRenderedItem<LAnnotation>[] = [];
+
+  for (const renderedItem of renderedItems) {
+    if (hasAnnotations(renderedItem.item)) {
+      slotSnapshot.push(renderedItem);
+    }
+  }
+
+  return slotSnapshot.length > 0 ? slotSnapshot : undefined;
+}
+
+function areSlotSnapshotsEqual<LAnnotation>(
+  previous: CodeViewerRenderedItem<LAnnotation>[] | undefined,
+  next: CodeViewerRenderedItem<LAnnotation>[] | undefined
+): boolean {
+  if (previous == null || next == null) {
+    return previous === next;
+  }
+
+  if (previous.length !== next.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previous.length; index++) {
+    const previousItem = previous[index];
+    const nextItem = next[index];
+    if (
+      previousItem == null ||
+      nextItem == null ||
+      previousItem.id !== nextItem.id ||
+      previousItem.type !== nextItem.type ||
+      previousItem.element !== nextItem.element ||
+      previousItem.item.version !== nextItem.item.version
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }

@@ -2,6 +2,7 @@
 /// <reference path="./jsx.d.ts" />
 
 export * from '../types';
+export * from './CodeViewer';
 export * from './File';
 export * from './FileDiff';
 export * from './UnresolvedFile';

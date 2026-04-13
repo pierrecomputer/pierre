@@ -3,7 +3,7 @@
 import { areWorkerStatsEqual, queueRender } from '@pierre/diffs';
 import { useWorkerPool } from '@pierre/diffs/react';
 import type { WorkerStats } from '@pierre/diffs/worker';
-import { type RefObject, useEffect, useState } from 'react';
+import { memo, type RefObject, useEffect, useState } from 'react';
 
 class AutoScrollTester {
   static SPEED = 1000;
@@ -53,7 +53,9 @@ interface WorkerPoolStatusProps {
   scrollRef: RefObject<HTMLDivElement | null>;
 }
 
-export function WorkerPoolStatus({ scrollRef }: WorkerPoolStatusProps) {
+export const WorkerPoolStatus = memo(function WorkerPoolStatus({
+  scrollRef,
+}: WorkerPoolStatusProps) {
   const pool = useWorkerPool();
   const [stats, setStats] = useState<WorkerStats | undefined>(undefined);
   useEffect(() => {
@@ -72,7 +74,7 @@ export function WorkerPoolStatus({ scrollRef }: WorkerPoolStatusProps) {
     }
   }, [pool]);
   return stats != null && <StatsDisplay stats={stats} scrollRef={scrollRef} />;
-}
+});
 
 interface StatItemProps {
   label: string;
