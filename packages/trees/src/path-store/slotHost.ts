@@ -43,6 +43,24 @@ export class PathStoreTreesManagedSlotHost {
     this.#attachContent(slotName, content);
   }
 
+  public setSlotHtml(slotName: string, html: string | null): void {
+    const normalizedHtml = html?.trim() ?? '';
+    if (normalizedHtml.length === 0) {
+      this.setSlotContent(slotName, null);
+      return;
+    }
+
+    const currentContent = this.#contentBySlot.get(slotName) ?? null;
+    if (currentContent != null && currentContent.innerHTML === normalizedHtml) {
+      this.#attachContent(slotName, currentContent);
+      return;
+    }
+
+    const nextContent = document.createElement('div');
+    nextContent.innerHTML = normalizedHtml;
+    this.setSlotContent(slotName, nextContent);
+  }
+
   #attachContent(slotName: string, content: HTMLElement): void {
     content.slot = slotName;
     content.dataset.pathStoreManagedSlot = slotName;

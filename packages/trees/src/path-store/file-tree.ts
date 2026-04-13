@@ -223,17 +223,15 @@ export class PathStoreFileTree {
   // Keeps header slot content attached to the host light DOM so hydration and
   // later composition surfaces can share one host-managed slot path.
   #syncHeaderSlotContent(): void {
-    if (
-      this.#composition?.header != null &&
-      this.#composition.header.render == null
-    ) {
+    const renderHeader = this.#composition?.header?.render;
+    if (renderHeader != null) {
+      this.#slotHost.setSlotContent(HEADER_SLOT_NAME, renderHeader());
       return;
     }
 
-    const renderHeader = this.#composition?.header?.render;
-    this.#slotHost.setSlotContent(
+    this.#slotHost.setSlotHtml(
       HEADER_SLOT_NAME,
-      renderHeader == null ? null : renderHeader()
+      this.#composition?.header?.html ?? null
     );
   }
 

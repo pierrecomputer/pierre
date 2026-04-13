@@ -131,6 +131,41 @@ describe('path-store header slot', () => {
     }
   });
 
+  test('render attaches HTML-only header content without requiring SSR markup', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new PathStoreFileTree({
+        composition: {
+          header: {
+            html: '<button data-test-html-header="true">HTML header</button>',
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      expect(host?.querySelectorAll('[slot="header"]')).toHaveLength(1);
+      expect(
+        host?.querySelector('[data-test-html-header="true"]')?.textContent
+      ).toBe('HTML header');
+
+      fileTree.cleanUp();
+      expect(host?.querySelector('[slot="header"]')).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('hydrate keeps header slot content to a single host-managed node', async () => {
     const { cleanup, dom } = installDom();
     try {
