@@ -191,6 +191,35 @@ function isContextMenuOpenKey(event: KeyboardEvent): boolean {
   return (event.shiftKey && event.key === 'F10') || event.key === 'ContextMenu';
 }
 
+const BLOCKED_CONTEXT_MENU_NAV_KEYS = new Set([
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'End',
+  'Home',
+  'PageDown',
+  'PageUp',
+]);
+
+function isEventInContextMenu(event: Event): boolean {
+  for (const entry of event.composedPath()) {
+    if (!(entry instanceof HTMLElement)) {
+      continue;
+    }
+
+    if (entry.dataset.type === 'context-menu-anchor') {
+      return true;
+    }
+
+    if (entry.getAttribute('slot') === CONTEXT_MENU_SLOT_NAME) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function serializeAnchorRect(
   rect: DOMRect
 ): PathStoreTreesContextMenuOpenContext['anchorRect'] {
@@ -276,7 +305,7 @@ function focusFirstMenuElement(menuElement: HTMLElement | null): void {
 function renderStyledRow(
   controller: PathStoreTreesController,
   row: PathStoreTreesVisibleRow,
-  activeItemPath: string | null,
+  visualFocusPath: string | null,
   contextHoverPath: string | null,
   itemHeight: number,
   contextMenuEnabled: boolean,
@@ -303,7 +332,7 @@ function renderStyledRow(
   const { isParked = false, style } = options;
   const decoration = renderDecorationForRow(row, targetPath);
   const focusedProps =
-    row.isFocused && activeItemPath === targetPath
+    row.isFocused && visualFocusPath === targetPath
       ? { 'data-item-focused': true }
       : {};
   const selectedProps = row.isSelected ? { 'data-item-selected': true } : {};
@@ -490,6 +519,9 @@ export function PathStoreTreesView({
   const [contextMenuAnchorTop, setContextMenuAnchorTop] = useState<
     number | null
   >(null);
+  const [lastContextMenuInteraction, setLastContextMenuInteraction] = useState<
+    'focus' | 'pointer' | null
+  >(null);
   const [contextMenuState, setContextMenuState] = useState<{
     item: PathStoreTreesContextMenuItem;
     path: string;
@@ -532,6 +564,27 @@ export function PathStoreTreesView({
       }) ?? null,
     [renderRowDecoration]
   );
+  const restoreContextMenuFocus = useCallback(
+    (restorePath: string | null): boolean => {
+      const focusedButton =
+        restorePath == null
+          ? null
+          : (rowButtonRefs.current.get(restorePath) ?? null);
+      if (focusElement(focusedButton)) {
+        return true;
+      }
+
+      return focusElement(rootRef.current);
+    },
+    []
+  );
+  const restoreFocusToTree = useCallback(
+    (path: string | null): void => {
+      const nextFocusedPath = controller.focusNearestPath(path);
+      restoreContextMenuFocus(nextFocusedPath);
+    },
+    [controller, restoreContextMenuFocus]
+  );
   const closeContextMenu = useCallback((): void => {
     if (contextMenuState == null) {
       slotHost?.clearSlotContent(CONTEXT_MENU_SLOT_NAME);
@@ -539,14 +592,15 @@ export function PathStoreTreesView({
     }
 
     slotHost?.clearSlotContent(CONTEXT_MENU_SLOT_NAME);
-    const nextFocusedPath = contextMenuState.path;
     setContextMenuState(null);
-    queueMicrotask(() => {
-      const focusedButton = rowButtonRefs.current.get(nextFocusedPath) ?? null;
-      focusElement(focusedButton);
-    });
     composition?.contextMenu?.onClose?.();
-  }, [composition?.contextMenu, contextMenuState, slotHost]);
+    restoreFocusToTree(contextMenuState.path);
+  }, [
+    composition?.contextMenu,
+    contextMenuState,
+    restoreFocusToTree,
+    slotHost,
+  ]);
   const updateTriggerPosition = useCallback(
     (itemButton: HTMLButtonElement | null): void => {
       const nextTop =
@@ -580,6 +634,12 @@ export function PathStoreTreesView({
     if (contextMenuState != null) {
       if (event.key === 'Escape') {
         closeContextMenu();
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      if (BLOCKED_CONTEXT_MENU_NAV_KEYS.has(event.key)) {
         event.preventDefault();
         event.stopPropagation();
       }
@@ -662,6 +722,8 @@ export function PathStoreTreesView({
     if (!handled) {
       return;
     }
+
+    setLastContextMenuInteraction('focus');
 
     // Focus-only and selection-only controller updates do not change
     // range/itemCount, so force a render tick before the DOM-focus sync effect
@@ -774,7 +836,9 @@ export function PathStoreTreesView({
         closeContextMenu();
       }
       isScrollingRef.current = true;
-      setContextHoverPath(null);
+      setContextHoverPath((previousPath) =>
+        previousPath == null ? previousPath : null
+      );
 
       // Mark the list as scrolling to suppress hover styles on items.
       // Applied to the list (inside the scroll container) so the container
@@ -842,6 +906,9 @@ export function PathStoreTreesView({
       anchorElement,
       anchorRect: serializeAnchorRect(anchorElement.getBoundingClientRect()),
       close: closeContextMenu,
+      restoreFocus: () => {
+        restoreFocusToTree(contextMenuState.path);
+      },
     };
     const menuContent =
       composition?.contextMenu?.render?.(contextMenuState.item, context) ??
@@ -854,7 +921,13 @@ export function PathStoreTreesView({
     return () => {
       slotHost?.clearSlotContent(CONTEXT_MENU_SLOT_NAME);
     };
-  }, [closeContextMenu, composition?.contextMenu, contextMenuState, slotHost]);
+  }, [
+    closeContextMenu,
+    composition?.contextMenu,
+    contextMenuState,
+    restoreFocusToTree,
+    slotHost,
+  ]);
 
   useLayoutEffect(() => {
     if (
@@ -965,7 +1038,12 @@ export function PathStoreTreesView({
   const focusTriggerPath =
     domFocusOwnerRef.current === true ? (activeItemPath ?? focusedPath) : null;
   const triggerPath =
-    contextMenuState?.path ?? contextHoverPath ?? focusTriggerPath;
+    contextMenuState?.path ??
+    (lastContextMenuInteraction === 'pointer'
+      ? contextHoverPath
+      : lastContextMenuInteraction === 'focus'
+        ? focusTriggerPath
+        : null);
 
   useLayoutEffect(() => {
     const triggerButton =
@@ -986,6 +1064,10 @@ export function PathStoreTreesView({
       return;
     }
 
+    if (isEventInContextMenu(event)) {
+      return;
+    }
+
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
       return;
@@ -1003,6 +1085,11 @@ export function PathStoreTreesView({
         ? (rowButton.dataset.itemPath ?? null)
         : null;
 
+    if (nextPath != null) {
+      setLastContextMenuInteraction((previousMode) =>
+        previousMode === 'pointer' ? previousMode : 'pointer'
+      );
+    }
     setContextHoverPath((previousPath) =>
       previousPath === nextPath ? previousPath : nextPath
     );
@@ -1045,6 +1132,8 @@ export function PathStoreTreesView({
   const guideStyleText = getPathStoreGuideStyleText(
     focusedVisibleRow?.ancestorPaths.at(-1) ?? null
   );
+  const visualFocusPath = contextMenuState?.path ?? activeItemPath;
+  const visualContextHoverPath = contextMenuState?.path ?? contextHoverPath;
   const triggerButton =
     triggerPath == null
       ? null
@@ -1123,8 +1212,8 @@ export function PathStoreTreesView({
             {renderRangeChildren(
               controller,
               range,
-              activeItemPath,
-              contextHoverPath,
+              visualFocusPath,
+              visualContextHoverPath,
               itemHeight,
               contextMenuEnabled,
               (path, element) => {
@@ -1144,8 +1233,8 @@ export function PathStoreTreesView({
               ? renderStyledRow(
                   controller,
                   parkedFocusedRow,
-                  activeItemPath,
-                  contextHoverPath,
+                  visualFocusPath,
+                  visualContextHoverPath,
                   itemHeight,
                   contextMenuEnabled,
                   (path, element) => {
@@ -1218,6 +1307,14 @@ export function PathStoreTreesView({
           onMouseDownCapture={(event) => {
             event.preventDefault();
             closeContextMenu();
+          }}
+          onTouchMoveCapture={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onWheelCapture={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
           }}
         />
       ) : null}

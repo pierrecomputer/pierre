@@ -138,6 +138,7 @@ export interface PathStoreTreesContextMenuOpenContext {
   anchorElement: HTMLElement;
   anchorRect: ContextMenuAnchorRect;
   close: () => void;
+  restoreFocus: () => void;
 }
 
 export interface PathStoreTreesHeaderCompositionOptions {

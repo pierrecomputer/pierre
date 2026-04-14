@@ -76,6 +76,22 @@ function findNearestVisibleAncestorPath(
   return null;
 }
 
+function getImmediateParentPath(path: string): string | null {
+  const ancestorPaths = getAncestorDirectoryPaths(path);
+  return ancestorPaths.at(-1) ?? null;
+}
+
+function getSiblingComparisonKey(
+  path: string,
+  parentPath: string | null
+): string {
+  if (parentPath == null) {
+    return path;
+  }
+
+  return path.startsWith(parentPath) ? path.slice(parentPath.length) : path;
+}
+
 // Keeps logical focus on a visible row. When a focused descendant disappears,
 // this falls back to the nearest visible ancestor before defaulting to row 0.
 function resolveFocusedIndex(
@@ -238,6 +254,21 @@ export class PathStoreTreesController {
     }
   }
 
+  public focusNearestPath(path: string | null): string | null {
+    const nextPath = this.resolveNearestVisiblePath(path);
+    if (nextPath == null) {
+      return null;
+    }
+
+    const nextFocusedIndex = this.#resolveFocusedIndex(nextPath);
+    if (nextFocusedIndex >= 0) {
+      this.#setFocusedIndex(nextFocusedIndex);
+      return this.#projectionPaths[nextFocusedIndex] ?? nextPath;
+    }
+
+    return null;
+  }
+
   public focusPreviousItem(): void {
     this.#moveFocus(-1);
   }
@@ -254,6 +285,29 @@ export class PathStoreTreesController {
 
   public getFocusedPath(): string | null {
     return this.#focusedPath;
+  }
+
+  public resolveNearestVisiblePath(path: string | null): string | null {
+    if (this.#visibleCount === 0) {
+      return null;
+    }
+
+    if (path == null) {
+      return this.#focusedPath ?? this.#projectionPaths[0] ?? null;
+    }
+
+    const resolvedPath = this.#store.getPathInfo(path)?.path ?? path;
+    const directIndex = this.#resolveFocusedIndex(resolvedPath);
+    if (directIndex >= 0) {
+      return this.#projectionPaths[directIndex] ?? resolvedPath;
+    }
+
+    const siblingPath = this.#findNearestVisibleSiblingPath(resolvedPath);
+    if (siblingPath != null) {
+      return siblingPath;
+    }
+
+    return this.#focusedPath ?? this.#projectionPaths[0] ?? null;
   }
 
   public getSelectedPaths(): readonly string[] {
@@ -546,6 +600,33 @@ export class PathStoreTreesController {
 
   #findVisibleIndexByPath(path: string): number {
     return this.#ensureVisibleIndexByPath().get(path) ?? -1;
+  }
+
+  #findNearestVisibleSiblingPath(path: string): string | null {
+    this.#ensureFullProjection();
+    const parentPath = getImmediateParentPath(path);
+    const candidateKey = getSiblingComparisonKey(path, parentPath);
+    let previousSiblingPath: string | null = null;
+    let nextSiblingPath: string | null = null;
+
+    for (const siblingPath of this.#projectionPaths) {
+      if (getImmediateParentPath(siblingPath) !== parentPath) {
+        continue;
+      }
+
+      const siblingKey = getSiblingComparisonKey(siblingPath, parentPath);
+      if (siblingKey < candidateKey) {
+        previousSiblingPath = siblingPath;
+        continue;
+      }
+
+      if (siblingKey > candidateKey) {
+        nextSiblingPath = siblingPath;
+        break;
+      }
+    }
+
+    return previousSiblingPath ?? nextSiblingPath;
   }
 
   #resolveFocusedIndex(path: string): number {

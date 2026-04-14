@@ -15,6 +15,7 @@ interface CapturedContextMenuOpenContext {
     y: number;
   };
   close: () => void;
+  restoreFocus: () => void;
 }
 
 function installDom() {
@@ -124,6 +125,23 @@ describe('path-store composition surfaces', () => {
     expect(payload.shadowHtml).toMatch(
       /data-file-tree-virtualized-scroll[\s\S]*data-type="context-menu-anchor"/
     );
+  });
+
+  test('preloadPathStoreFileTree omits context-menu affordance when the feature is disabled', async () => {
+    const { preloadPathStoreFileTree } = await import('../src/path-store');
+
+    const payload = preloadPathStoreFileTree({
+      flattenEmptyDirectories: true,
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/index.ts'],
+      viewportHeight: 120,
+    });
+
+    expect(payload.shadowHtml).not.toContain(
+      'data-type="context-menu-trigger"'
+    );
+    expect(payload.shadowHtml).not.toContain('slot name="context-menu"');
+    expect(payload.shadowHtml).not.toContain('data-type="context-menu-anchor"');
   });
 
   test('attaches and removes header slot content on the host', async () => {
@@ -239,6 +257,7 @@ describe('path-store composition surfaces', () => {
       expect(context.anchorElement.dataset.type).toBe('context-menu-trigger');
       expect(context.anchorRect).toBeDefined();
       expect(typeof context.close).toBe('function');
+      expect(typeof context.restoreFocus).toBe('function');
       expect(
         'canRename' in (context as unknown as Record<string, unknown>)
       ).toBe(false);
@@ -255,6 +274,473 @@ describe('path-store composition surfaces', () => {
 
       expect(host?.querySelector('[slot="context-menu"]')).toBeNull();
       fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('Shift+F10 opens the context menu for the focused row', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      let capturedContext: CapturedContextMenuOpenContext | null = null;
+
+      const fileTree = new PathStoreFileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: (_item, context): HTMLElement => {
+              capturedContext = context;
+              const menu = dom.window.document.createElement('div');
+              menu.textContent = 'Context Menu';
+              return menu as unknown as HTMLElement;
+            },
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const itemButton = getItemButton(shadowRoot, dom, 'README.md');
+      itemButton.focus();
+      itemButton.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          key: 'F10',
+          shiftKey: true,
+        })
+      );
+      await flushDom();
+
+      expect(capturedContext).not.toBeNull();
+      const openContext =
+        capturedContext as unknown as CapturedContextMenuOpenContext;
+      expect(openContext.anchorElement.dataset.type).toBe(
+        'context-menu-trigger'
+      );
+      expect(
+        shadowRoot?.querySelector(
+          '[data-type="context-menu-anchor"] slot[name="context-menu"]'
+        )
+      ).not.toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keeps the opened row visually focused and restores DOM focus on close', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      let capturedContext: CapturedContextMenuOpenContext | null = null;
+
+      const fileTree = new PathStoreFileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: (_item, context): HTMLElement => {
+              capturedContext = context;
+              const menu = dom.window.document.createElement('div');
+              const closeButton = dom.window.document.createElement('button');
+              closeButton.textContent = 'Close';
+              closeButton.addEventListener('click', () => {
+                context.close();
+              });
+              menu.append(closeButton);
+              return menu as unknown as HTMLElement;
+            },
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      const shadowRoot = host?.shadowRoot;
+      const button = getItemButton(shadowRoot, dom, 'README.md');
+
+      button.dispatchEvent(
+        new dom.window.MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      await flushDom();
+
+      expect(button.dataset.itemFocused).toBe('true');
+      expect(dom.window.document.activeElement).not.toBe(button);
+
+      if (capturedContext == null) {
+        throw new Error('expected captured context');
+      }
+      const closeContext =
+        capturedContext as unknown as CapturedContextMenuOpenContext;
+      closeContext.close();
+      await flushDom();
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      expect(host?.shadowRoot?.activeElement).toBe(button);
+      expect(button.dataset.itemFocused).toBe('true');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('blocks tree keyboard navigation while context menu is open', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new PathStoreFileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: (): HTMLElement => {
+              const menu = dom.window.document.createElement('div');
+              menu.textContent = 'Menu';
+              return menu as unknown as HTMLElement;
+            },
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const itemButton = getItemButton(shadowRoot, dom, 'README.md');
+      itemButton.focus();
+      itemButton.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          key: 'F10',
+          shiftKey: true,
+        })
+      );
+      await flushDom();
+
+      const treeRoot = shadowRoot?.querySelector('[role="tree"]');
+      const blockedArrowKey = new dom.window.KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'ArrowDown',
+      });
+      treeRoot?.dispatchEvent(blockedArrowKey);
+
+      expect(blockedArrowKey.defaultPrevented).toBe(true);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('renders an interaction wash and keeps trigger and hover styling while open', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new PathStoreFileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: (): HTMLElement => {
+              const menu = dom.window.document.createElement('div');
+              menu.textContent = 'Menu';
+              return menu as unknown as HTMLElement;
+            },
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const itemButton = getItemButton(shadowRoot, dom, 'README.md');
+      const trigger = shadowRoot?.querySelector(
+        '[data-type="context-menu-trigger"]'
+      ) as HTMLButtonElement | null;
+
+      itemButton.focus();
+      itemButton.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          key: 'F10',
+          shiftKey: true,
+        })
+      );
+      await flushDom();
+
+      const wash = shadowRoot?.querySelector(
+        '[data-type="context-menu-wash"]'
+      ) as HTMLDivElement | null;
+      expect(wash).not.toBeNull();
+      expect(wash?.getAttribute('aria-hidden')).toBe('true');
+      expect(trigger?.dataset.visible).toBe('true');
+      expect(itemButton.dataset.itemContextHover).toBe('true');
+
+      const treeRoot = shadowRoot?.querySelector('[role="tree"]');
+      treeRoot?.dispatchEvent(
+        new dom.window.Event('pointerleave', { bubbles: true, composed: true })
+      );
+      expect(trigger?.dataset.visible).toBe('true');
+      expect(itemButton.dataset.itemContextHover).toBe('true');
+
+      const wheelEvent = new dom.window.Event('wheel', {
+        bubbles: true,
+        cancelable: true,
+      });
+      wash?.dispatchEvent(wheelEvent);
+      expect(wheelEvent.defaultPrevented).toBe(true);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keeps row hover when pointer moves from row to options anchor and open menu', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new PathStoreFileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: (): HTMLElement => {
+              const menu = dom.window.document.createElement('div');
+              menu.textContent = 'Menu';
+              return menu as unknown as HTMLElement;
+            },
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      const shadowRoot = host?.shadowRoot;
+      const itemButton = getItemButton(shadowRoot, dom, 'README.md');
+      const contextMenuAnchor = shadowRoot?.querySelector(
+        '[data-type="context-menu-anchor"]'
+      ) as HTMLDivElement | null;
+
+      itemButton.dispatchEvent(
+        new dom.window.Event('pointerover', { bubbles: true, composed: true })
+      );
+      await flushDom();
+      expect(itemButton.dataset.itemContextHover).toBe('true');
+
+      contextMenuAnchor?.dispatchEvent(
+        new dom.window.Event('pointerover', { bubbles: true, composed: true })
+      );
+      await flushDom();
+      expect(itemButton.dataset.itemContextHover).toBe('true');
+
+      itemButton.focus();
+      itemButton.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          key: 'F10',
+          shiftKey: true,
+        })
+      );
+      await flushDom();
+
+      const contextMenuContent = host?.querySelector('[slot="context-menu"]');
+      contextMenuContent?.dispatchEvent(
+        new dom.window.Event('pointerover', { bubbles: true, composed: true })
+      );
+      await flushDom();
+      expect(itemButton.dataset.itemContextHover).toBe('true');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keeps pointer-driven trigger state from falling back to the focused row after scroll', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new PathStoreFileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const root = shadowRoot?.querySelector('[role="tree"]');
+      const viewport = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      const firstRow = getItemButton(shadowRoot, dom, 'README.md');
+      const secondRow = getItemButton(shadowRoot, dom, 'src/index.ts');
+      const thirdRow = getItemButton(shadowRoot, dom, 'src/lib/utils.ts');
+      const trigger = shadowRoot?.querySelector(
+        '[data-type="context-menu-trigger"]'
+      );
+
+      if (
+        !(root instanceof dom.window.HTMLElement) ||
+        !(viewport instanceof dom.window.HTMLElement) ||
+        !(trigger instanceof dom.window.HTMLButtonElement)
+      ) {
+        throw new Error('expected virtualized tree elements');
+      }
+      const treeRoot = root as HTMLElement;
+      const scrollViewport = viewport as HTMLElement;
+      const triggerButton = trigger as HTMLButtonElement;
+
+      firstRow.focus();
+      firstRow.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          key: 'ArrowDown',
+        })
+      );
+      await flushDom();
+      expect(triggerButton.dataset.visible).toBe('true');
+
+      thirdRow.dispatchEvent(
+        new dom.window.Event('pointerover', { bubbles: true, composed: true })
+      );
+      await flushDom();
+
+      expect(triggerButton.dataset.visible).toBe('true');
+      expect(thirdRow.dataset.itemContextHover).toBe('true');
+      expect(secondRow.dataset.itemContextHover).toBeUndefined();
+
+      scrollViewport.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+
+      expect(triggerButton.dataset.visible).toBe('false');
+      expect(thirdRow.dataset.itemContextHover).toBeUndefined();
+      expect(secondRow.dataset.itemContextHover).toBeUndefined();
+
+      treeRoot.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          key: 'ArrowDown',
+        })
+      );
+      await flushDom();
+
+      expect(triggerButton.dataset.visible).toBe('true');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('adds aria-haspopup=menu only when context menu is enabled', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+
+      const disabledMount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(disabledMount);
+      const disabled = new PathStoreFileTree({
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md'],
+        viewportHeight: 120,
+      });
+      disabled.render({ containerWrapper: disabledMount });
+      await flushDom();
+
+      const disabledShadowRoot = disabled.getFileTreeContainer()?.shadowRoot;
+      const disabledItem = getItemButton(disabledShadowRoot, dom, 'README.md');
+      expect(disabledItem.getAttribute('aria-haspopup')).toBeNull();
+      expect(
+        disabledShadowRoot?.querySelector('[data-type="context-menu-trigger"]')
+      ).toBeNull();
+
+      const enabledMount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(enabledMount);
+      const enabled = new PathStoreFileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md'],
+        viewportHeight: 120,
+      });
+      enabled.render({ containerWrapper: enabledMount });
+      await flushDom();
+
+      const enabledShadowRoot = enabled.getFileTreeContainer()?.shadowRoot;
+      const enabledItem = getItemButton(enabledShadowRoot, dom, 'README.md');
+      expect(enabledItem.getAttribute('aria-haspopup')).toBe('menu');
+      expect(
+        enabledShadowRoot?.querySelector('[data-type="context-menu-trigger"]')
+      ).not.toBeNull();
+
+      disabled.cleanUp();
+      enabled.cleanUp();
     } finally {
       cleanup();
     }
@@ -321,6 +807,42 @@ describe('path-store composition surfaces', () => {
     } finally {
       cleanup();
     }
+  });
+
+  test('controller restores nearest parent before considering sibling fallbacks', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['src/index.ts', 'src/other.ts'],
+    });
+
+    controller.replacePaths(['src/other.ts']);
+
+    expect(controller.resolveNearestVisiblePath('src/index.ts')).toBe('src/');
+    expect(controller.focusNearestPath('src/index.ts')).toBe('src/');
+    expect(controller.getFocusedPath()).toBe('src/');
+
+    controller.destroy();
+  });
+
+  test('controller falls back to the previous sibling before the next sibling', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['alpha.ts', 'charlie.ts'],
+    });
+
+    expect(controller.resolveNearestVisiblePath('bravo.ts')).toBe('alpha.ts');
+    expect(controller.focusNearestPath('bravo.ts')).toBe('alpha.ts');
+    expect(controller.getFocusedPath()).toBe('alpha.ts');
+
+    controller.destroy();
   });
 
   test('supports icon remaps and render-only row decorators', async () => {

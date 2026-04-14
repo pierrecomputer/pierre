@@ -49,11 +49,21 @@
             render: (item, context) => {
               const menu = document.createElement('div');
               menu.dataset.testPathStoreMenu = item.path;
+              menu.dataset.testContextMenu = 'true';
               menu.setAttribute('role', 'menu');
 
               const label = document.createElement('div');
               label.textContent = item.path;
               menu.append(label);
+
+              const deleteButton = document.createElement('button');
+              deleteButton.type = 'button';
+              deleteButton.dataset.testMenuDelete = item.path;
+              deleteButton.textContent = 'Delete';
+              deleteButton.addEventListener('click', () => {
+                context.close();
+              });
+              menu.append(deleteButton);
 
               const closeButton = document.createElement('button');
               closeButton.type = 'button';

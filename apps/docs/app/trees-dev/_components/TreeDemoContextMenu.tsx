@@ -36,7 +36,7 @@ export function TreeDemoContextMenu({
   context,
 }: {
   item: ContextMenuDemoItem;
-  context: ContextMenuOpenContext;
+  context: ContextMenuOpenContext & { restoreFocus?: () => void };
 }) {
   const itemType = item.isFolder ? 'Folder' : 'File';
   const handleRenameSelect = () => context.startRenaming?.();
@@ -67,6 +67,10 @@ export function TreeDemoContextMenu({
         side="right"
         sideOffset={8}
         className="min-w-[220px]"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          context.restoreFocus?.();
+        }}
       >
         <DropdownMenuLabel className="max-w-[280px] truncate">
           {itemType}: {item.path}
