@@ -202,6 +202,8 @@ const BLOCKED_CONTEXT_MENU_NAV_KEYS = new Set([
   'PageUp',
 ]);
 
+const CONTEXT_MENU_ROW_ANCHOR_NAME = '--path-store-context-row';
+
 function isEventInContextMenu(event: Event): boolean {
   for (const entry of event.composedPath()) {
     if (!(entry instanceof HTMLElement)) {
@@ -248,6 +250,20 @@ function getContextMenuAnchorTop(
   const itemRect = itemElement.getBoundingClientRect();
   const scrollRect = scrollElement.getBoundingClientRect();
   return itemRect.top - scrollRect.top + scrollElement.scrollTop;
+}
+
+function getContextMenuRowAnchorName(path: string): string {
+  const normalized = path.toLowerCase().replaceAll(/[^a-z0-9_-]+/g, '-');
+  return `--path-store-context-row-${normalized}`;
+}
+
+function supportsContextMenuAnchorPositioning(): boolean {
+  return (
+    typeof CSS !== 'undefined' &&
+    CSS.supports('anchor-name', CONTEXT_MENU_ROW_ANCHOR_NAME) &&
+    CSS.supports('position-anchor', CONTEXT_MENU_ROW_ANCHOR_NAME) &&
+    CSS.supports('top', 'anchor(top)')
+  );
 }
 
 function createContextMenuItem(
@@ -306,6 +322,8 @@ function renderStyledRow(
   controller: PathStoreTreesController,
   row: PathStoreTreesVisibleRow,
   visualFocusPath: string | null,
+  contextAnchorName: string | null,
+  contextAnchorPath: string | null,
   contextHoverPath: string | null,
   itemHeight: number,
   contextMenuEnabled: boolean,
@@ -336,6 +354,14 @@ function renderStyledRow(
       ? { 'data-item-focused': true }
       : {};
   const selectedProps = row.isSelected ? { 'data-item-selected': true } : {};
+  const contextAnchorProps =
+    contextAnchorPath === targetPath
+      ? { 'data-item-context-anchor': 'true' }
+      : {};
+  const contextAnchorStyle =
+    contextAnchorPath === targetPath && contextAnchorName != null
+      ? { anchorName: contextAnchorName }
+      : undefined;
   const contextHoverProps =
     contextHoverPath === targetPath
       ? { 'data-item-context-hover': 'true' }
@@ -391,9 +417,14 @@ function renderStyledRow(
       onKeyDown={onKeyDown}
       role="treeitem"
       tabIndex={row.isFocused ? 0 : -1}
-      style={{ minHeight: `${itemHeight}px`, ...style }}
+      style={{
+        minHeight: `${itemHeight}px`,
+        ...contextAnchorStyle,
+        ...style,
+      }}
       {...focusedProps}
       {...selectedProps}
+      {...contextAnchorProps}
       {...contextHoverProps}
     >
       {/*
@@ -445,6 +476,8 @@ function renderRangeChildren(
   controller: PathStoreTreesController,
   range: { start: number; end: number },
   activeItemPath: string | null,
+  contextAnchorName: string | null,
+  contextAnchorPath: string | null,
   contextHoverPath: string | null,
   itemHeight: number,
   contextMenuEnabled: boolean,
@@ -475,6 +508,8 @@ function renderRangeChildren(
         controller,
         row,
         activeItemPath,
+        contextAnchorName,
+        contextAnchorPath,
         contextHoverPath,
         itemHeight,
         contextMenuEnabled,
@@ -545,6 +580,8 @@ export function PathStoreTreesView({
     composition?.contextMenu?.render != null ||
     composition?.contextMenu?.onOpen != null ||
     composition?.contextMenu?.onClose != null;
+  const contextMenuUsesAnchorPositioning =
+    supportsContextMenuAnchorPositioning();
   const { resolveIcon } = useMemo(
     () => createPathStoreIconResolver(icons),
     [icons]
@@ -603,6 +640,11 @@ export function PathStoreTreesView({
   ]);
   const updateTriggerPosition = useCallback(
     (itemButton: HTMLButtonElement | null): void => {
+      if (contextMenuUsesAnchorPositioning) {
+        setContextMenuAnchorTop(null);
+        return;
+      }
+
       const nextTop =
         itemButton == null
           ? null
@@ -611,7 +653,7 @@ export function PathStoreTreesView({
         previousTop === nextTop ? previousTop : nextTop
       );
     },
-    []
+    [contextMenuUsesAnchorPositioning]
   );
   const openContextMenuForRow = useCallback(
     (row: PathStoreTreesVisibleRow, targetPath: string): void => {
@@ -1132,7 +1174,12 @@ export function PathStoreTreesView({
   const guideStyleText = getPathStoreGuideStyleText(
     focusedVisibleRow?.ancestorPaths.at(-1) ?? null
   );
+  const contextAnchorName =
+    contextMenuUsesAnchorPositioning && triggerPath != null
+      ? getContextMenuRowAnchorName(triggerPath)
+      : null;
   const visualFocusPath = contextMenuState?.path ?? activeItemPath;
+  const contextAnchorPath = triggerPath;
   const visualContextHoverPath = contextMenuState?.path ?? contextHoverPath;
   const triggerButton =
     triggerPath == null
@@ -1141,14 +1188,21 @@ export function PathStoreTreesView({
   const triggerButtonVisible =
     contextMenuEnabled &&
     triggerButton != null &&
-    contextMenuAnchorTop != null &&
-    triggerPath != null;
+    triggerPath != null &&
+    (contextMenuUsesAnchorPositioning || contextMenuAnchorTop != null);
   const contextMenuAnchorStyle =
-    triggerButtonVisible && contextMenuAnchorTop != null
+    contextMenuUsesAnchorPositioning && contextAnchorName != null
       ? {
-          top: `${contextMenuAnchorTop}px`,
+          positionAnchor: contextAnchorName,
+          top: 'anchor(top)',
         }
-      : undefined;
+      : !contextMenuUsesAnchorPositioning &&
+          triggerButtonVisible &&
+          contextMenuAnchorTop != null
+        ? {
+            top: `${contextMenuAnchorTop}px`,
+          }
+        : undefined;
   const openMenuFromTrigger = (): void => {
     if (triggerPath == null || triggerButton == null) {
       return;
@@ -1213,6 +1267,8 @@ export function PathStoreTreesView({
               controller,
               range,
               visualFocusPath,
+              contextAnchorName,
+              contextAnchorPath,
               visualContextHoverPath,
               itemHeight,
               contextMenuEnabled,
@@ -1234,6 +1290,8 @@ export function PathStoreTreesView({
                   controller,
                   parkedFocusedRow,
                   visualFocusPath,
+                  contextAnchorName,
+                  contextAnchorPath,
                   visualContextHoverPath,
                   itemHeight,
                   contextMenuEnabled,
@@ -1267,6 +1325,9 @@ export function PathStoreTreesView({
           <div
             ref={contextMenuAnchorRef}
             data-type="context-menu-anchor"
+            data-anchor-positioning={
+              contextMenuUsesAnchorPositioning ? 'true' : undefined
+            }
             data-visible={triggerButtonVisible ? 'true' : 'false'}
             style={contextMenuAnchorStyle}
           >

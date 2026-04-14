@@ -23,6 +23,7 @@ function installDom() {
     url: 'http://localhost',
   });
   const originalValues = {
+    CSS: Reflect.get(globalThis, 'CSS'),
     CSSStyleSheet: Reflect.get(globalThis, 'CSSStyleSheet'),
     customElements: Reflect.get(globalThis, 'customElements'),
     document: Reflect.get(globalThis, 'document'),
@@ -689,6 +690,78 @@ describe('path-store composition surfaces', () => {
 
       fileTree.cleanUp();
     } finally {
+      cleanup();
+    }
+  });
+
+  test('uses CSS anchor positioning for the floating trigger when supported', async () => {
+    const { cleanup, dom } = installDom();
+    const originalCss = Reflect.get(globalThis, 'CSS');
+    try {
+      Object.assign(globalThis, {
+        CSS: {
+          supports(property: string, value?: string): boolean {
+            return (
+              (property === 'anchor-name' &&
+                value === '--path-store-context-row') ||
+              (property === 'position-anchor' &&
+                value === '--path-store-context-row') ||
+              (property === 'top' && value === 'anchor(top)')
+            );
+          },
+        },
+      });
+
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new PathStoreFileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const itemButton = getItemButton(shadowRoot, dom, 'README.md');
+      itemButton.dispatchEvent(
+        new dom.window.Event('pointerover', { bubbles: true, composed: true })
+      );
+      await flushDom();
+
+      const contextMenuAnchor = shadowRoot?.querySelector(
+        '[data-type="context-menu-anchor"]'
+      );
+      expect(contextMenuAnchor?.getAttribute('data-anchor-positioning')).toBe(
+        'true'
+      );
+      expect(itemButton.dataset.itemContextAnchor).toBe('true');
+      expect(itemButton.getAttribute('style')).toContain(
+        'anchor-name: --path-store-context-row-readme-md;'
+      );
+      expect(contextMenuAnchor?.getAttribute('style')).toContain(
+        'position-anchor: --path-store-context-row-readme-md;'
+      );
+      expect(contextMenuAnchor?.getAttribute('style')).toContain(
+        'top: anchor(top);'
+      );
+
+      fileTree.cleanUp();
+    } finally {
+      if (originalCss === undefined) {
+        Reflect.deleteProperty(globalThis, 'CSS');
+      } else {
+        Object.assign(globalThis, { CSS: originalCss });
+      }
       cleanup();
     }
   });

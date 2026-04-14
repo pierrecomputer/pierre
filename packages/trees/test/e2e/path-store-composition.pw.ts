@@ -33,6 +33,35 @@ async function pressFocusedRowKey(page: Page, key: string): Promise<void> {
 }
 
 test.describe('path-store composition surfaces', () => {
+  test('moves the floating trigger when the active row changes', async ({
+    page,
+  }) => {
+    await page.goto('/test/e2e/fixtures/path-store-composition.html');
+    await page.waitForFunction(
+      () => window.__pathStoreCompositionFixtureReady === true
+    );
+
+    const firstRow = page.locator(
+      'file-tree-container button[data-item-path="src/lib/theme.ts"]'
+    );
+    const secondRow = page.locator(
+      'file-tree-container button[data-item-path="README.md"]'
+    );
+    const trigger = page.locator(
+      'file-tree-container button[data-type="context-menu-trigger"][data-visible="true"]'
+    );
+
+    await firstRow.hover();
+    const firstBox = await trigger.boundingBox();
+    expect(firstBox).not.toBeNull();
+
+    await secondRow.hover();
+    const secondBox = await trigger.boundingBox();
+    expect(secondBox).not.toBeNull();
+
+    expect(secondBox?.y).toBeGreaterThan((firstBox?.y ?? 0) + 20);
+  });
+
   test('keeps the context-menu shell slotted in light DOM while anchoring from the shadow tree', async ({
     page,
   }) => {
