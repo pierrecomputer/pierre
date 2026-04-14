@@ -266,7 +266,7 @@ describe('path-store render + scroll', () => {
     controller.destroy();
   });
 
-  test('replacePaths prunes stale selections and resets a hidden range anchor', async () => {
+  test('resetPaths prunes stale selections and resets a hidden range anchor', async () => {
     const { PathStoreTreesController } = await import('../src/path-store');
 
     const controller = new PathStoreTreesController({
@@ -279,7 +279,7 @@ describe('path-store render + scroll', () => {
     controller.selectPathRange('c.ts', false);
     expect(controller.getSelectedPaths()).toEqual(['a.ts', 'b.ts', 'c.ts']);
 
-    controller.replacePaths(['b.ts', 'd.ts']);
+    controller.resetPaths(['b.ts', 'd.ts']);
     expect(controller.getSelectedPaths()).toEqual(['b.ts']);
 
     controller.selectPathRange('d.ts', false);
@@ -288,7 +288,7 @@ describe('path-store render + scroll', () => {
     controller.destroy();
   });
 
-  test('replacePaths canonicalizes selected paths when a file becomes a directory', async () => {
+  test('resetPaths canonicalizes selected paths when a file becomes a directory', async () => {
     const { PathStoreTreesController } = await import('../src/path-store');
 
     // Start with "src/foo" as a plain file.
@@ -303,9 +303,9 @@ describe('path-store render + scroll', () => {
 
     // After a refresh "src/foo" is now a directory ("src/foo/") with a child.
     // The old selected path "src/foo" resolves to the new canonical "src/foo/"
-    // via the trailing-slash fallback — replacePaths must store the resolved
+    // via the trailing-slash fallback — resetPaths must store the resolved
     // canonical form so that visible-row selection checks match.
-    controller.replacePaths(['src/foo/bar.ts']);
+    controller.resetPaths(['src/foo/bar.ts']);
     expect(controller.getSelectedPaths()).toEqual(['src/foo/']);
     expect(controller.getItem('src/foo/')?.isSelected()).toBe(true);
 
@@ -1812,7 +1812,7 @@ describe('path-store render + scroll', () => {
     }
   });
 
-  test('replacePaths preserves focus on surviving paths and resets focus when focused path is removed', async () => {
+  test('resetPaths preserves focus on surviving paths and resets focus when focused path is removed', async () => {
     const { PathStoreTreesController } = await import('../src/path-store');
 
     const controller = new PathStoreTreesController({
@@ -1825,22 +1825,22 @@ describe('path-store render + scroll', () => {
     expect(controller.getFocusedPath()).toBe('b.ts');
 
     // Replace paths keeping b.ts — focus should survive
-    controller.replacePaths(['a.ts', 'b.ts', 'd.ts']);
+    controller.resetPaths(['a.ts', 'b.ts', 'd.ts']);
     expect(controller.getFocusedPath()).toBe('b.ts');
 
     // Replace paths removing b.ts — focus should fall back
-    controller.replacePaths(['a.ts', 'd.ts']);
+    controller.resetPaths(['a.ts', 'd.ts']);
     expect(controller.getFocusedPath()).not.toBe('b.ts');
     expect(controller.getFocusedPath()).not.toBeNull();
 
     // Replace with empty — focus should be null
-    controller.replacePaths([]);
+    controller.resetPaths([]);
     expect(controller.getFocusedPath()).toBeNull();
 
     controller.destroy();
   });
 
-  test('controller subscribe fires when replacePaths prunes selected items', async () => {
+  test('controller subscribe fires when resetPaths prunes selected items', async () => {
     const { PathStoreTreesController } = await import('../src/path-store');
 
     const controller = new PathStoreTreesController({
@@ -1855,7 +1855,7 @@ describe('path-store render + scroll', () => {
     const versionBeforeReplace = controller.getSelectionVersion();
 
     // Remove b.ts — selection should prune it
-    controller.replacePaths(['a.ts', 'c.ts']);
+    controller.resetPaths(['a.ts', 'c.ts']);
     expect(controller.getSelectedPaths()).toEqual(['a.ts', 'c.ts']);
     expect(controller.getSelectionVersion()).toBeGreaterThan(
       versionBeforeReplace
@@ -1863,7 +1863,7 @@ describe('path-store render + scroll', () => {
 
     // Replace with all new paths — selection fully pruned
     const versionBeforeFullPrune = controller.getSelectionVersion();
-    controller.replacePaths(['x.ts', 'y.ts']);
+    controller.resetPaths(['x.ts', 'y.ts']);
     expect(controller.getSelectedPaths()).toEqual([]);
     expect(controller.getSelectionVersion()).toBeGreaterThan(
       versionBeforeFullPrune
@@ -1872,7 +1872,7 @@ describe('path-store render + scroll', () => {
     // Replace that doesn't affect selection — version stays the same
     controller.selectOnlyPath('x.ts');
     const versionBeforeNoOp = controller.getSelectionVersion();
-    controller.replacePaths(['x.ts', 'z.ts']);
+    controller.resetPaths(['x.ts', 'z.ts']);
     expect(controller.getSelectedPaths()).toEqual(['x.ts']);
     expect(controller.getSelectionVersion()).toBe(versionBeforeNoOp);
 

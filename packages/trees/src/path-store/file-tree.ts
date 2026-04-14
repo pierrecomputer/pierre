@@ -1,3 +1,8 @@
+import type {
+  PathStoreMoveOptions,
+  PathStoreOperation,
+  PathStoreRemoveOptions,
+} from '@pierre/path-store';
 import { h } from 'preact';
 import { renderToString } from 'preact-render-to-string';
 
@@ -31,6 +36,10 @@ import type {
   PathStoreTreeRenderProps,
   PathStoreTreesCompositionOptions,
   PathStoreTreesItemHandle,
+  PathStoreTreesMutationEventForType,
+  PathStoreTreesMutationEventType,
+  PathStoreTreesMutationHandle,
+  PathStoreTreesResetOptions,
   PathStoreTreesRowDecorationRenderer,
   PathStoreTreesSelectionChangeListener,
 } from './types';
@@ -96,7 +105,7 @@ function getTopLevelSpriteSheets(shadowRoot: ShadowRoot): SVGElement[] {
   );
 }
 
-export class PathStoreFileTree {
+export class PathStoreFileTree implements PathStoreTreesMutationHandle {
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
 
   readonly #composition: PathStoreTreesCompositionOptions | undefined;
@@ -178,6 +187,40 @@ export class PathStoreFileTree {
 
   public getSelectedPaths(): readonly string[] {
     return this.#controller.getSelectedPaths();
+  }
+
+  public add(path: string): void {
+    this.#controller.add(path);
+  }
+
+  public batch(operations: readonly PathStoreOperation[]): void {
+    this.#controller.batch(operations);
+  }
+
+  public move(
+    fromPath: string,
+    toPath: string,
+    options?: PathStoreMoveOptions
+  ): void {
+    this.#controller.move(fromPath, toPath, options);
+  }
+
+  public onMutation<TType extends PathStoreTreesMutationEventType | '*'>(
+    type: TType,
+    handler: (event: PathStoreTreesMutationEventForType<TType>) => void
+  ): () => void {
+    return this.#controller.onMutation(type, handler);
+  }
+
+  public remove(path: string, options?: PathStoreRemoveOptions): void {
+    this.#controller.remove(path, options);
+  }
+
+  public resetPaths(
+    paths: readonly string[],
+    options?: PathStoreTreesResetOptions
+  ): void {
+    this.#controller.resetPaths(paths, options);
   }
 
   public setIcons(icons?: PathStoreFileTreeOptions['icons']): void {

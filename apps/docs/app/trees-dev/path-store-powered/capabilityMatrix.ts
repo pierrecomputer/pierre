@@ -21,7 +21,7 @@ export const pathStoreCapabilityMatrix: readonly PathStoreCapabilityMatrixRow[] 
     {
       currentDemo: 'Dynamic Files',
       notes:
-        'Path-store-native mutation workflows return after the core controller phases stabilize.',
+        'Phase 6 restores a mutation-first add/remove/move/batch/reset boundary rather than the legacy controlled-files model.',
       targetPhases: [6],
     },
     {
@@ -63,8 +63,8 @@ export const pathStoreCapabilityMatrix: readonly PathStoreCapabilityMatrixRow[] 
     {
       currentDemo: 'Context Menu',
       notes:
-        'Context menu shell and anchoring return with the composition-surface phase.',
-      targetPhases: [5],
+        'The Phase 5 shell returns first, then Phase 6 can reuse it for low-cost delete and narrow rename mutation proof.',
+      targetPhases: [5, 6],
     },
     {
       currentDemo: 'Virtualization',

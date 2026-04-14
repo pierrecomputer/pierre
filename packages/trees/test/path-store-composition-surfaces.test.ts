@@ -893,7 +893,7 @@ describe('path-store composition surfaces', () => {
       paths: ['src/index.ts', 'src/other.ts'],
     });
 
-    controller.replacePaths(['src/other.ts']);
+    controller.resetPaths(['src/other.ts']);
 
     expect(controller.resolveNearestVisiblePath('src/index.ts')).toBe('src/');
     expect(controller.focusNearestPath('src/index.ts')).toBe('src/');

@@ -1,15 +1,28 @@
 import { PathStore } from '@pierre/path-store';
 import type {
+  PathStoreEvent,
+  PathStoreMoveOptions,
+  PathStoreOperation,
   PathStorePathInfo,
+  PathStorePreparedInput,
+  PathStoreRemoveOptions,
   PathStoreVisibleTreeProjectionData,
 } from '@pierre/path-store';
 
 import type {
+  PathStoreTreesBatchEvent,
   PathStoreTreesControllerListener,
   PathStoreTreesControllerOptions,
   PathStoreTreesDirectoryHandle,
   PathStoreTreesFileHandle,
   PathStoreTreesItemHandle,
+  PathStoreTreesMutationEvent,
+  PathStoreTreesMutationEventForType,
+  PathStoreTreesMutationEventType,
+  PathStoreTreesMutationHandle,
+  PathStoreTreesMutationSemanticEvent,
+  PathStoreTreesResetEvent,
+  PathStoreTreesResetOptions,
   PathStoreTreesVisibleRow,
 } from './types';
 
@@ -24,6 +37,12 @@ interface PathStoreTreesVisibleProjection {
   visibleIndexByPath: Map<string, number> | null;
   visibleIndexByPathFactory: () => Map<string, number>;
 }
+
+type MutationListener = (event: PathStoreTreesMutationEvent) => void;
+type MutationListenerByType = Map<
+  PathStoreTreesMutationEventType | '*',
+  Set<MutationListener>
+>;
 
 // Initial render only mounts a tiny viewport slice, so controller startup can
 // cap its first projection build and defer the full 494k-row metadata walk
@@ -90,6 +109,154 @@ function getSiblingComparisonKey(
   }
 
   return path.startsWith(parentPath) ? path.slice(parentPath.length) : path;
+}
+
+// Applies a directory/file move to a tracked public path so focus/selection can
+// follow moved items instead of falling back as if they were deleted.
+function remapMovedPath(
+  path: string,
+  fromPath: string,
+  toPath: string
+): string {
+  if (path === fromPath) {
+    return toPath;
+  }
+
+  return fromPath.endsWith('/') && path.startsWith(fromPath)
+    ? `${toPath}${path.slice(fromPath.length)}`
+    : path;
+}
+
+// Determines whether a tracked public path disappeared because a remove event
+// deleted that exact item or a whole removed directory subtree.
+function isPathRemoved(path: string, removedPath: string): boolean {
+  return (
+    path === removedPath ||
+    (removedPath.endsWith('/') && path.startsWith(removedPath))
+  );
+}
+
+// Rewrites focus/selection paths through mutation events so controller state
+// stays aligned with the mutated topology before the next projection rebuild.
+function remapPathThroughMutation(
+  path: string | null,
+  event: PathStoreEvent,
+  preserveRemovedPath: boolean = false
+): string | null {
+  if (path == null) {
+    return null;
+  }
+
+  switch (event.operation) {
+    case 'add':
+    case 'expand':
+    case 'collapse':
+    case 'mark-directory-unloaded':
+    case 'begin-child-load':
+    case 'apply-child-patch':
+    case 'complete-child-load':
+    case 'fail-child-load':
+    case 'cleanup':
+      return path;
+    case 'remove':
+      return isPathRemoved(path, event.path)
+        ? preserveRemovedPath
+          ? path
+          : null
+        : path;
+    case 'move':
+      return remapMovedPath(path, event.from, event.to);
+    case 'batch': {
+      let nextPath: string | null = path;
+      for (const childEvent of event.events) {
+        nextPath = remapPathThroughMutation(
+          nextPath,
+          childEvent,
+          preserveRemovedPath
+        );
+        if (nextPath == null) {
+          return null;
+        }
+      }
+      return nextPath;
+    }
+  }
+}
+
+function createMutationInvalidation(event: PathStoreEvent): {
+  canonicalChanged: boolean;
+  projectionChanged: boolean;
+  visibleCountDelta: number | null;
+} {
+  return {
+    canonicalChanged: event.canonicalChanged,
+    projectionChanged: event.projectionChanged,
+    visibleCountDelta: event.visibleCountDelta,
+  };
+}
+
+function toTreesMutationSemanticEvent(
+  event: Extract<PathStoreEvent, { operation: 'add' | 'remove' | 'move' }>
+): PathStoreTreesMutationSemanticEvent {
+  switch (event.operation) {
+    case 'add':
+      return {
+        ...createMutationInvalidation(event),
+        operation: 'add',
+        path: event.path,
+      };
+    case 'remove':
+      return {
+        ...createMutationInvalidation(event),
+        operation: 'remove',
+        path: event.path,
+        recursive: event.recursive,
+      };
+    case 'move':
+      return {
+        ...createMutationInvalidation(event),
+        from: event.from,
+        operation: 'move',
+        to: event.to,
+      };
+  }
+}
+
+function toTreesBatchEvent(
+  event: Extract<PathStoreEvent, { operation: 'batch' }>
+): PathStoreTreesBatchEvent {
+  return {
+    ...createMutationInvalidation(event),
+    events: event.events
+      .filter(
+        (
+          childEvent
+        ): childEvent is Extract<
+          PathStoreEvent,
+          { operation: 'add' | 'remove' | 'move' }
+        > =>
+          childEvent.operation === 'add' ||
+          childEvent.operation === 'remove' ||
+          childEvent.operation === 'move'
+      )
+      .map((childEvent) => toTreesMutationSemanticEvent(childEvent)),
+    operation: 'batch',
+  };
+}
+
+function toTreesMutationEvent(
+  event: PathStoreEvent
+): PathStoreTreesMutationEvent | null {
+  switch (event.operation) {
+    case 'add':
+    case 'remove':
+    case 'move':
+      return toTreesMutationSemanticEvent(event);
+    case 'batch':
+      return toTreesBatchEvent(event);
+    default:
+      return null;
+  }
 }
 
 // Keeps logical focus on a visible row. When a focused descendant disappears,
@@ -173,9 +340,13 @@ function createVisibleProjection(
  * Owns the live PathStore instance and exposes a small path-first boundary we
  * can evolve in later phases without leaking internal store IDs.
  */
-export class PathStoreTreesController {
-  readonly #baseOptions: Omit<PathStoreTreesControllerOptions, 'paths'>;
+export class PathStoreTreesController implements PathStoreTreesMutationHandle {
+  readonly #baseOptions: Omit<
+    PathStoreTreesControllerOptions,
+    'paths' | 'preparedInput'
+  >;
   readonly #listeners = new Set<PathStoreTreesControllerListener>();
+  readonly #mutationListeners: MutationListenerByType = new Map();
   #ancestorPathsByIndex = new Map<number, readonly string[]>();
   #focusedIndex = -1;
   #focusedPath: string | null = null;
@@ -195,12 +366,9 @@ export class PathStoreTreesController {
   #visibleIndexByPathFactory: (() => Map<string, number>) | null = null;
 
   public constructor(options: PathStoreTreesControllerOptions) {
-    const { paths, ...baseOptions } = options;
+    const { paths, preparedInput, ...baseOptions } = options;
     this.#baseOptions = baseOptions;
-    this.#store = new PathStore({
-      ...baseOptions,
-      paths,
-    });
+    this.#store = this.#createStore(paths, preparedInput);
     this.#rebuildVisibleProjection(null, false);
     this.#unsubscribe = this.#subscribe();
   }
@@ -551,14 +719,61 @@ export class PathStoreTreesController {
   }
 
   /**
-   * Replaces controller-owned paths through an explicit action so later phases
-   * can evolve the action model without exposing the raw PathStore instance.
+   * Applies one path-store-native file/directory addition through the shared
+   * mutation handle without exposing the raw store to tree consumers.
    */
-  public replacePaths(paths: readonly string[]): void {
-    const nextStore = new PathStore({
-      ...this.#baseOptions,
-      paths,
-    });
+  public add(path: string): void {
+    this.#store.add(path);
+  }
+
+  public remove(path: string, options: PathStoreRemoveOptions = {}): void {
+    this.#store.remove(path, options);
+  }
+
+  public move(
+    fromPath: string,
+    toPath: string,
+    options: PathStoreMoveOptions = {}
+  ): void {
+    this.#store.move(fromPath, toPath, options);
+  }
+
+  public batch(operations: readonly PathStoreOperation[]): void {
+    this.#store.batch(operations);
+  }
+
+  public onMutation<TType extends PathStoreTreesMutationEventType | '*'>(
+    type: TType,
+    handler: (event: PathStoreTreesMutationEventForType<TType>) => void
+  ): () => void {
+    const key = type;
+    const typedHandler = handler as MutationListener;
+    let listenersForType = this.#mutationListeners.get(key);
+    if (listenersForType == null) {
+      listenersForType = new Set();
+      this.#mutationListeners.set(key, listenersForType);
+    }
+    listenersForType.add(typedHandler);
+    return () => {
+      const registeredListeners = this.#mutationListeners.get(key);
+      registeredListeners?.delete(typedHandler);
+      if (registeredListeners?.size === 0) {
+        this.#mutationListeners.delete(key);
+      }
+    };
+  }
+
+  /**
+   * Rebuilds the controller around a new full path set. This is intentionally a
+   * coarse whole-tree reset path rather than a localized mutation fast path.
+   */
+  public resetPaths(
+    paths: readonly string[],
+    options: PathStoreTreesResetOptions = {}
+  ): void {
+    const previousPathCount = this.#store.list().length;
+    const previousVisibleCount = this.#visibleCount;
+    const nextStore = this.#createStore(paths, options.preparedInput);
     const previousFocusedPath = this.#focusedPath;
     const previousSelectedPaths = this.getSelectedPaths();
     const previousSelectionAnchorPath = this.#selectionAnchorPath;
@@ -589,6 +804,15 @@ export class PathStoreTreesController {
     );
     this.#unsubscribe = this.#subscribe();
     this.#emit();
+    this.#emitMutation({
+      canonicalChanged: true,
+      operation: 'reset',
+      pathCountAfter: paths.length,
+      pathCountBefore: previousPathCount,
+      projectionChanged: true,
+      usedPreparedInput: options.preparedInput != null,
+      visibleCountDelta: this.#visibleCount - previousVisibleCount,
+    } satisfies PathStoreTreesResetEvent);
   }
 
   #ensureVisibleIndexByPath(): ReadonlyMap<string, number> {
@@ -765,10 +989,30 @@ export class PathStoreTreesController {
     };
   }
 
+  #createStore(
+    paths: readonly string[],
+    preparedInput?: PathStorePreparedInput
+  ): PathStore {
+    return new PathStore({
+      ...this.#baseOptions,
+      paths,
+      preparedInput,
+    });
+  }
+
   #emit(): void {
     for (const listener of this.#listeners) {
       listener();
     }
+  }
+
+  #emitMutation(event: PathStoreTreesMutationEvent): void {
+    this.#mutationListeners.get(event.operation)?.forEach((listener) => {
+      listener(event);
+    });
+    this.#mutationListeners.get('*')?.forEach((listener) => {
+      listener(event);
+    });
   }
 
   #expandDirectory(path: string): void {
@@ -861,10 +1105,53 @@ export class PathStoreTreesController {
     this.#rebuildVisibleProjection(this.#focusedPath, true);
   }
 
+  #applyMutationState(event: PathStoreEvent): void {
+    const nextFocusedPath = remapPathThroughMutation(
+      this.#focusedPath,
+      event,
+      true
+    );
+    const nextSelectedPaths = [...this.#selectedPaths]
+      .map((selectedPath) => remapPathThroughMutation(selectedPath, event))
+      .filter((resolvedPath): resolvedPath is string => resolvedPath != null)
+      .map(
+        (resolvedPath) => this.#store.getPathInfo(resolvedPath)?.path ?? null
+      )
+      .filter((resolvedPath): resolvedPath is string => resolvedPath != null);
+    const nextSelectionAnchorPath = remapPathThroughMutation(
+      this.#selectionAnchorPath,
+      event
+    );
+    const canonicalAnchorPath =
+      nextSelectionAnchorPath == null
+        ? null
+        : (this.#store.getPathInfo(nextSelectionAnchorPath)?.path ?? null);
+    const uniqueNextSelectedPaths = [...new Set(nextSelectedPaths)];
+    const selectionChanged = !arePathSetsEqual(
+      this.#selectedPaths,
+      uniqueNextSelectedPaths
+    );
+    if (selectionChanged) {
+      this.#selectedPaths = new Set(uniqueNextSelectedPaths);
+      this.#selectionVersion += 1;
+    }
+
+    this.#selectionAnchorPath = canonicalAnchorPath;
+    this.#focusedPath =
+      nextFocusedPath == null
+        ? null
+        : (this.#store.getPathInfo(nextFocusedPath)?.path ?? nextFocusedPath);
+  }
+
   #subscribe(): () => void {
-    return this.#store.on('*', () => {
+    return this.#store.on('*', (event) => {
+      this.#applyMutationState(event);
       this.#rebuildVisibleProjection(this.#focusedPath, true);
       this.#emit();
+      const mutationEvent = toTreesMutationEvent(event);
+      if (mutationEvent != null) {
+        this.#emitMutation(mutationEvent);
+      }
     });
   }
 

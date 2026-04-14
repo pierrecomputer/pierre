@@ -29,4 +29,4 @@ tsconfig.tsbuildinfo
 .vercel
 .claude/*
 .codemogger/*
-.omx/*
+.omx/

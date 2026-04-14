@@ -16,7 +16,7 @@ export function ExampleCard({
   footer?: ReactNode;
 }) {
   return (
-    <div className="@container/card">
+    <div className="@container/card max-w-[480px]">
       <h2 className="text-sm font-bold">{title}</h2>
       <p className="text-muted-foreground mb-2 min-h-[3rem] text-xs">
         {description}

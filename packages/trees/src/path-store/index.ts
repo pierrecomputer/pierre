@@ -1,6 +1,8 @@
 export { PathStoreTreesController } from './controller';
 export { PathStoreFileTree, preloadPathStoreFileTree } from './file-tree';
 export type {
+  PathStoreTreesAddEvent,
+  PathStoreTreesBatchEvent,
   PathStoreTreesCompositionOptions,
   PathStoreTreesContextMenuItem,
   PathStoreTreesContextMenuOpenContext,
@@ -11,7 +13,17 @@ export type {
   PathStoreTreesHeaderCompositionOptions,
   PathStoreTreeHydrationProps,
   PathStoreTreesItemHandle,
+  PathStoreTreesMoveEvent,
+  PathStoreTreesMutationEvent,
+  PathStoreTreesMutationEventForType,
+  PathStoreTreesMutationEventInvalidation,
+  PathStoreTreesMutationEventType,
+  PathStoreTreesMutationHandle,
+  PathStoreTreesMutationSemanticEvent,
   PathStoreTreeRenderProps,
+  PathStoreTreesRemoveEvent,
+  PathStoreTreesResetEvent,
+  PathStoreTreesResetOptions,
   PathStoreTreesControllerListener,
   PathStoreTreesControllerOptions,
   PathStoreTreesPublicId,
