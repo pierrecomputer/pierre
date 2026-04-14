@@ -819,10 +819,10 @@ describe('path-store composition surfaces', () => {
       );
       expect(itemButton.dataset.itemContextAnchor).toBe('true');
       expect(itemButton.getAttribute('style')).toContain(
-        'anchor-name: --path-store-context-row-readme-md;'
+        'anchor-name: --path-store-context-row;'
       );
       expect(contextMenuAnchor?.getAttribute('style')).toContain(
-        'position-anchor: --path-store-context-row-readme-md;'
+        'position-anchor: --path-store-context-row;'
       );
 
       fileTree.cleanUp();

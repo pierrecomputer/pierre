@@ -203,6 +203,8 @@ const BLOCKED_CONTEXT_MENU_NAV_KEYS = new Set([
 ]);
 
 const CONTEXT_MENU_ROW_ANCHOR_NAME = '--path-store-context-row';
+let cachedAnchorSupportCss: typeof CSS | null | undefined;
+let cachedAnchorSupportValue: boolean | null = null;
 
 function isEventInContextMenu(event: Event): boolean {
   for (const entry of event.composedPath()) {
@@ -252,18 +254,23 @@ function getContextMenuAnchorTop(
   return itemRect.top - scrollRect.top + scrollElement.scrollTop;
 }
 
-function getContextMenuRowAnchorName(path: string): string {
-  const normalized = path.toLowerCase().replaceAll(/[^a-z0-9_-]+/g, '-');
-  return `--path-store-context-row-${normalized}`;
-}
-
 function supportsContextMenuAnchorPositioning(): boolean {
-  return (
-    typeof CSS !== 'undefined' &&
-    CSS.supports('anchor-name', CONTEXT_MENU_ROW_ANCHOR_NAME) &&
-    CSS.supports('position-anchor', CONTEXT_MENU_ROW_ANCHOR_NAME) &&
-    CSS.supports('top', 'anchor(top)')
-  );
+  const currentCss = typeof CSS === 'undefined' ? null : CSS;
+  if (
+    cachedAnchorSupportCss === currentCss &&
+    cachedAnchorSupportValue != null
+  ) {
+    return cachedAnchorSupportValue;
+  }
+
+  cachedAnchorSupportCss = currentCss;
+  cachedAnchorSupportValue =
+    currentCss != null &&
+    currentCss.supports('anchor-name', CONTEXT_MENU_ROW_ANCHOR_NAME) &&
+    currentCss.supports('position-anchor', CONTEXT_MENU_ROW_ANCHOR_NAME) &&
+    currentCss.supports('top', 'anchor(top)');
+
+  return cachedAnchorSupportValue;
 }
 
 function createContextMenuItem(
@@ -624,6 +631,8 @@ export function PathStoreTreesView({
     },
     [controller, restoreContextMenuFocus]
   );
+  const restoreFocusToTreeRef = useRef(restoreFocusToTree);
+  restoreFocusToTreeRef.current = restoreFocusToTree;
   const closeContextMenuRef = useRef<() => void>(() => {});
   const closeContextMenu = useCallback((): void => {
     const currentContextMenuState = contextMenuStateRef.current;
@@ -938,9 +947,13 @@ export function PathStoreTreesView({
     const context: PathStoreTreesContextMenuOpenContext = {
       anchorElement,
       anchorRect: serializeAnchorRect(anchorElement.getBoundingClientRect()),
-      close: closeContextMenu,
+      close: () => {
+        closeContextMenuRef.current();
+      },
       restoreFocus: () => {
-        restoreFocusToTree(contextMenuState.path);
+        restoreFocusToTreeRef.current(
+          contextMenuStateRef.current?.path ?? null
+        );
       },
     };
     const menuContent =
@@ -965,13 +978,7 @@ export function PathStoreTreesView({
     return () => {
       slotHost?.clearSlotContent(CONTEXT_MENU_SLOT_NAME);
     };
-  }, [
-    closeContextMenu,
-    composition?.contextMenu,
-    contextMenuState,
-    restoreFocusToTree,
-    slotHost,
-  ]);
+  }, [composition?.contextMenu, contextMenuState, slotHost]);
 
   useLayoutEffect(() => {
     if (
@@ -1180,7 +1187,7 @@ export function PathStoreTreesView({
   );
   const contextAnchorName =
     contextMenuUsesAnchorPositioning && triggerPath != null
-      ? getContextMenuRowAnchorName(triggerPath)
+      ? CONTEXT_MENU_ROW_ANCHOR_NAME
       : null;
   const visualFocusPath = contextMenuState?.path ?? activeItemPath;
   const contextAnchorPath = triggerPath;
