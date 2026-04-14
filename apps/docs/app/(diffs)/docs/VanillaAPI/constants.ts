@@ -615,7 +615,7 @@ const instance = new File({
   // ─────────────────────────────────────────────────────────────
 
   // Render custom content in the file header
-  renderCustomMetadata(file) {
+  renderHeaderMetadata(file) {
     const span = document.createElement('span');
     span.textContent = file.name;
     return span;

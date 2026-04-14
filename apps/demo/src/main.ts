@@ -683,7 +683,7 @@ if (renderFileButton != null) {
       theme: DEMO_THEME,
       themeType: getThemeType(),
       renderAnnotation,
-      renderCustomMetadata() {
+      renderHeaderMetadata() {
         return createCollapsedToggle(
           instance?.options.collapsed ?? false,
           (checked) => {
