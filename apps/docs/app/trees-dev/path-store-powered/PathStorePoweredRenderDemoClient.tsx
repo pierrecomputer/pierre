@@ -40,7 +40,8 @@ function HydratedPathStoreExample({
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const fileTreeRef = useRef<PathStoreFileTree | null>(null);
-  const initialIconsRef = useRef(icons);
+  const latestIconsRef = useRef(icons);
+  latestIconsRef.current = icons;
 
   useEffect(() => {
     const node = ref.current;
@@ -50,7 +51,7 @@ function HydratedPathStoreExample({
 
     const fileTree = new PathStoreFileTree({
       ...options,
-      icons: initialIconsRef.current,
+      icons: latestIconsRef.current,
     });
     fileTreeRef.current = fileTree;
     const fileTreeContainer = node.querySelector('file-tree-container');
