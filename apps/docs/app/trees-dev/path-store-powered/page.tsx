@@ -5,7 +5,6 @@ import {
 } from '@pierre/trees/path-store';
 
 import { createPresortedPreparedInput } from './createPresortedPreparedInput';
-import { PATH_STORE_DEMO_ICONS } from './pathStoreDemoIcons';
 import { PathStorePoweredRenderDemoClient } from './PathStorePoweredRenderDemoClient';
 
 const linuxKernelWorkload = getVirtualizationWorkload('linux-1x');
@@ -24,7 +23,6 @@ export default function PathStorePoweredPage() {
         },
       },
       flattenEmptyDirectories: true,
-      icons: PATH_STORE_DEMO_ICONS,
       initialExpandedPaths: linuxKernelWorkload.expandedFolders,
       paths: linuxKernelWorkload.files,
       viewportHeight: 500,
@@ -32,6 +30,7 @@ export default function PathStorePoweredPage() {
 
   const payload = preloadPathStoreFileTree({
     ...sharedOptions,
+    icons: 'complete',
     id: 'pst-phase5-icons',
     preparedInput: linuxKernelPreparedInput,
   });

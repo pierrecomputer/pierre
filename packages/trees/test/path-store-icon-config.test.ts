@@ -169,4 +169,117 @@ describe('path-store icon config', () => {
       cleanup();
     }
   });
+
+  test('setIcons swaps icon modes without resetting expanded state', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        icons: 'complete',
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const directoryItem = fileTree.getItem('src');
+      if (
+        directoryItem == null ||
+        directoryItem.isDirectory() !== true ||
+        !('collapse' in directoryItem)
+      ) {
+        throw new Error('expected src directory handle');
+      }
+
+      directoryItem.collapse();
+      await flushDom();
+
+      let shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      expect(
+        shadowRoot?.querySelector('[data-item-path="src/index.ts"]')
+      ).toBeNull();
+
+      fileTree.setIcons({
+        byFileName: {
+          'readme.md': 'pst-test-readme',
+        },
+        spriteSheet:
+          '<svg data-icon-sprite aria-hidden="true" width="0" height="0"><symbol id="pst-test-readme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor" /></symbol></svg>',
+      });
+      await flushDom();
+
+      shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      expect(
+        shadowRoot?.querySelector('[data-item-path="src/index.ts"]')
+      ).toBeNull();
+
+      const readmeButton = getItemButton(shadowRoot, dom, 'README.md');
+      expect(readmeButton.querySelector('use')?.getAttribute('href')).toBe(
+        '#pst-test-readme'
+      );
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('hydrate reuses the existing SSR wrapper when the tree id matches', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree, preloadPathStoreFileTree } =
+        await import('../src/path-store');
+
+      const payload = preloadPathStoreFileTree({
+        flattenEmptyDirectories: true,
+        icons: 'complete',
+        id: 'pst-hydrate-icons',
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
+        viewportHeight: 120,
+      });
+
+      const mount = dom.window.document.createElement('div');
+      mount.innerHTML = payload.html;
+      dom.window.document.body.appendChild(mount);
+
+      const host = mount.querySelector('file-tree-container');
+      if (!(host instanceof dom.window.HTMLElement)) {
+        throw new Error('expected SSR host');
+      }
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: true,
+        icons: 'complete',
+        id: 'pst-hydrate-icons',
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.hydrate({ fileTreeContainer: host });
+      await flushDom();
+
+      const shadowRoot = host.shadowRoot;
+      const wrapperCountAfter = shadowRoot?.querySelectorAll(
+        '[data-file-tree-virtualized-wrapper="true"]'
+      ).length;
+      const readmeButtons = shadowRoot?.querySelectorAll(
+        '[data-item-path="README.md"]'
+      ).length;
+
+      expect(wrapperCountAfter).toBe(1);
+      expect(readmeButtons).toBe(1);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
 });

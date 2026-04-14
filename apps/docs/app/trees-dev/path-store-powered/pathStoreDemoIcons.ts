@@ -1,6 +1,6 @@
 import type { FileTreeIcons } from '@pierre/trees';
 
-export const PATH_STORE_DEMO_ICONS: FileTreeIcons = {
+export const PATH_STORE_CUSTOM_ICONS: FileTreeIcons = {
   byFileExtension: {
     ts: 'pst-phase5-icon-typescript',
   },

@@ -101,7 +101,6 @@ export class PathStoreFileTree {
   readonly #composition: PathStoreTreesCompositionOptions | undefined;
   readonly #controller: PathStoreTreesController;
   readonly #id: string;
-  readonly #icons: PathStoreFileTreeOptions['icons'];
   readonly #onSelectionChange:
     | PathStoreTreesSelectionChangeListener
     | undefined;
@@ -111,6 +110,7 @@ export class PathStoreFileTree {
     'itemHeight' | 'overscan' | 'viewportHeight'
   >;
   #fileTreeContainer: HTMLElement | undefined;
+  #icons: PathStoreFileTreeOptions['icons'];
   #selectionVersion: number;
   #selectionSubscription: (() => void) | null = null;
   #wrapper: HTMLDivElement | undefined;
@@ -174,6 +174,23 @@ export class PathStoreFileTree {
     return this.#controller.getSelectedPaths();
   }
 
+  public setIcons(icons?: PathStoreFileTreeOptions['icons']): void {
+    this.#icons = icons;
+
+    const host = this.#fileTreeContainer;
+    const wrapper = this.#wrapper;
+    if (host == null || wrapper == null) {
+      return;
+    }
+
+    this.#syncIconSurface(host, wrapper);
+    renderPathStoreTreesRoot(wrapper, {
+      controller: this.#controller,
+      icons: this.#icons,
+      ...this.#getResolvedViewOptions(host),
+    });
+  }
+
   public hydrate({ fileTreeContainer }: PathStoreTreeHydrationProps): void {
     const host = this.#prepareHost(fileTreeContainer);
     const wrapper = this.#getOrCreateWrapper(host);
@@ -217,6 +234,16 @@ export class PathStoreFileTree {
       overscan: this.#viewOptions.overscan,
       viewportHeight,
     };
+  }
+
+  #syncIconSurface(host: HTMLElement, wrapper: HTMLElement): void {
+    const shadowRoot = host.shadowRoot;
+    if (shadowRoot != null) {
+      this.#syncBuiltInSpriteSheet(shadowRoot);
+      this.#syncCustomSpriteSheet(shadowRoot);
+    }
+
+    this.#syncIconModeAttrs(wrapper);
   }
 
   #emitSelectionChange(): void {
@@ -342,7 +369,7 @@ export class PathStoreFileTree {
     this.#wrapper = existingWrapper ?? document.createElement('div');
     this.#wrapper.dataset.fileTreeId = this.#id;
     this.#wrapper.dataset.fileTreeVirtualizedWrapper = 'true';
-    this.#syncIconModeAttrs(this.#wrapper);
+    this.#syncIconSurface(host, this.#wrapper);
 
     if (this.#wrapper.parentNode !== shadowRoot) {
       shadowRoot.appendChild(this.#wrapper);
@@ -366,8 +393,6 @@ export class PathStoreFileTree {
     const shadowRoot = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
     adoptDeclarativeShadowDom(host, shadowRoot);
     ensureFileTreeStyles(shadowRoot);
-    this.#syncBuiltInSpriteSheet(shadowRoot);
-    this.#syncCustomSpriteSheet(shadowRoot);
     host.dataset.fileTreeVirtualized = 'true';
     host.style.display = 'flex';
     this.#slotHost.setHost(host);
