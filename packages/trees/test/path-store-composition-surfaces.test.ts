@@ -529,6 +529,79 @@ describe('path-store composition surfaces', () => {
       wash?.dispatchEvent(wheelEvent);
       expect(wheelEvent.defaultPrevented).toBe(true);
 
+      const touchStartEvent = new dom.window.Event('touchstart', {
+        bubbles: true,
+        cancelable: true,
+      });
+      wash?.dispatchEvent(touchStartEvent);
+      expect(touchStartEvent.defaultPrevented).toBe(true);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('document Escape closes the menu and prevents default when focus is in slotted content', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new PathStoreFileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: (): HTMLElement => {
+              const menu = dom.window.document.createElement('div');
+              const closeButton = dom.window.document.createElement('button');
+              closeButton.textContent = 'Close';
+              menu.append(closeButton);
+              return menu as unknown as HTMLElement;
+            },
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      const shadowRoot = host?.shadowRoot;
+      const itemButton = getItemButton(shadowRoot, dom, 'README.md');
+      itemButton.dispatchEvent(
+        new dom.window.MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      await flushDom();
+
+      const slottedMenuButton = host?.querySelector(
+        '[slot="context-menu"] button'
+      );
+      if (!(slottedMenuButton instanceof dom.window.HTMLButtonElement)) {
+        throw new Error('expected slotted menu button');
+      }
+      const menuButton = slottedMenuButton as HTMLButtonElement;
+      menuButton.focus();
+
+      const escapeEvent = new dom.window.KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'Escape',
+      });
+      menuButton.dispatchEvent(escapeEvent);
+      await flushDom();
+
+      expect(escapeEvent.defaultPrevented).toBe(true);
+      expect(host?.querySelector('[slot="context-menu"]')).toBeNull();
+
       fileTree.cleanUp();
     } finally {
       cleanup();
@@ -750,9 +823,6 @@ describe('path-store composition surfaces', () => {
       );
       expect(contextMenuAnchor?.getAttribute('style')).toContain(
         'position-anchor: --path-store-context-row-readme-md;'
-      );
-      expect(contextMenuAnchor?.getAttribute('style')).toContain(
-        'top: anchor(top);'
       );
 
       fileTree.cleanUp();

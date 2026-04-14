@@ -561,6 +561,8 @@ export function PathStoreTreesView({
     item: PathStoreTreesContextMenuItem;
     path: string;
   } | null>(null);
+  const contextMenuStateRef = useRef(contextMenuState);
+  contextMenuStateRef.current = contextMenuState;
   const [itemCount, setItemCount] = useState(() =>
     controller.getVisibleCount()
   );
@@ -622,22 +624,18 @@ export function PathStoreTreesView({
     },
     [controller, restoreContextMenuFocus]
   );
+  const closeContextMenuRef = useRef<() => void>(() => {});
   const closeContextMenu = useCallback((): void => {
-    if (contextMenuState == null) {
-      slotHost?.clearSlotContent(CONTEXT_MENU_SLOT_NAME);
+    const currentContextMenuState = contextMenuStateRef.current;
+    if (currentContextMenuState == null) {
       return;
     }
 
-    slotHost?.clearSlotContent(CONTEXT_MENU_SLOT_NAME);
     setContextMenuState(null);
     composition?.contextMenu?.onClose?.();
-    restoreFocusToTree(contextMenuState.path);
-  }, [
-    composition?.contextMenu,
-    contextMenuState,
-    restoreFocusToTree,
-    slotHost,
-  ]);
+    restoreFocusToTree(currentContextMenuState.path);
+  }, [composition?.contextMenu, restoreFocusToTree]);
+  closeContextMenuRef.current = closeContextMenu;
   const updateTriggerPosition = useCallback(
     (itemButton: HTMLButtonElement | null): void => {
       if (contextMenuUsesAnchorPositioning) {
@@ -874,8 +872,8 @@ export function PathStoreTreesView({
     });
     const onScroll = (): void => {
       update();
-      if (contextMenuState != null) {
-        closeContextMenu();
+      if (contextMenuStateRef.current != null) {
+        closeContextMenuRef.current();
       }
       isScrollingRef.current = true;
       setContextHoverPath((previousPath) =>
@@ -923,14 +921,7 @@ export function PathStoreTreesView({
       isScrollingRef.current = false;
       resizeObserver?.disconnect();
     };
-  }, [
-    closeContextMenu,
-    contextMenuState,
-    controller,
-    itemHeight,
-    overscan,
-    viewportHeight,
-  ]);
+  }, [controller, itemHeight, overscan, viewportHeight]);
 
   useLayoutEffect(() => {
     if (contextMenuState == null) {
@@ -959,6 +950,17 @@ export function PathStoreTreesView({
     slotHost?.setSlotContent(CONTEXT_MENU_SLOT_NAME, menuContent);
     composition?.contextMenu?.onOpen?.(contextMenuState.item, context);
     focusFirstMenuElement(menuContent);
+    queueMicrotask(() => {
+      if (menuContent == null || !menuContent.isConnected) {
+        return;
+      }
+
+      if (document.activeElement !== menuContent) {
+        return;
+      }
+
+      focusFirstMenuElement(menuContent);
+    });
 
     return () => {
       slotHost?.clearSlotContent(CONTEXT_MENU_SLOT_NAME);
@@ -1006,6 +1008,8 @@ export function PathStoreTreesView({
     };
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
         closeContextMenu();
       }
     };
@@ -1367,6 +1371,11 @@ export function PathStoreTreesView({
           aria-hidden="true"
           onMouseDownCapture={(event) => {
             event.preventDefault();
+            closeContextMenu();
+          }}
+          onTouchStartCapture={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
             closeContextMenu();
           }}
           onTouchMoveCapture={(event) => {
