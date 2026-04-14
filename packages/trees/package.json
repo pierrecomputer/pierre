@@ -50,7 +50,6 @@
     "test": "bun test",
     "coverage": "bun test --coverage",
     "test:e2e": "bun run build && (bun ./test/e2e/check-playwright-binary.ts || bun run test:e2e:installbinary) && bunx playwright test -c test/e2e/playwright.config.ts",
-    "test:e2e:docs-anchor": "bun run build && (bun ./test/e2e/check-playwright-binary.ts || bun run test:e2e:installbinary) && PATH_STORE_DOCS_E2E=1 bunx playwright test -c test/e2e/playwright.config.ts test/e2e/path-store-docs-anchor.pw.ts --reporter=line",
     "test:e2e:installbinary": "bunx playwright@1.51.1 install chromium",
     "test:e2e:server": "vite --config test/e2e/vite.config.ts",
     "tsc": "tsgo --noEmit --pretty",

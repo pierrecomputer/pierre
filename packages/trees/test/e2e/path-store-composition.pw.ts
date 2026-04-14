@@ -33,6 +33,83 @@ async function pressFocusedRowKey(page: Page, key: string): Promise<void> {
 }
 
 test.describe('path-store composition surfaces', () => {
+  test('hovering a scrolled tree does not change the visible slice or scroll position', async ({
+    page,
+  }) => {
+    await page.goto('/test/e2e/fixtures/path-store-composition.html');
+    await page.waitForFunction(
+      () => window.__pathStoreCompositionFixtureReady === true
+    );
+
+    const measurement = await page.evaluate(async () => {
+      const host = document.querySelector('file-tree-container');
+      const shadowRoot = host?.shadowRoot;
+      const scroll = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scroll instanceof HTMLElement)) {
+        return null;
+      }
+
+      const nextFrame = () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve());
+        });
+
+      const pickPaths = [
+        'src/lib/theme.ts',
+        'src/lib/utils.ts',
+        'src/index.ts',
+        'README.md',
+      ];
+      const measure = () => ({
+        rows: pickPaths.map((path) => {
+          const row = shadowRoot?.querySelector(
+            `button[data-item-path="${path}"]`
+          );
+          return row instanceof HTMLElement
+            ? {
+                path,
+                top: row.getBoundingClientRect().top,
+              }
+            : {
+                path,
+                top: null,
+              };
+        }),
+        scrollTop: scroll.scrollTop,
+      });
+
+      scroll.scrollTop = 60;
+      await nextFrame();
+      await nextFrame();
+
+      const before = measure();
+      const hoverRow = shadowRoot?.querySelector(
+        'button[data-item-path="src/index.ts"]'
+      );
+      if (!(hoverRow instanceof HTMLElement)) {
+        return { before, after: null };
+      }
+
+      hoverRow.dispatchEvent(
+        new PointerEvent('pointerover', { bubbles: true, composed: true })
+      );
+      await nextFrame();
+      await nextFrame();
+
+      return {
+        after: measure(),
+        before,
+      };
+    });
+
+    expect(measurement).not.toBeNull();
+    expect(measurement?.after).not.toBeNull();
+    expect(measurement?.after?.scrollTop).toBe(measurement?.before.scrollTop);
+    expect(measurement?.after?.rows).toEqual(measurement?.before.rows);
+  });
+
   test('moves the floating trigger when the active row changes', async ({
     page,
   }) => {
