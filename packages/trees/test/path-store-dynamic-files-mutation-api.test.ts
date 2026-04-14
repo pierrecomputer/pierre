@@ -127,11 +127,72 @@ describe('path-store dynamic files / mutation API', () => {
     ]);
     expect(events[3]).toMatchObject({
       operation: 'reset',
+      pathCountBefore: 4,
       pathCountAfter: 1,
       usedPreparedInput: true,
     });
 
     unsubscribe();
+    controller.destroy();
+  });
+
+  test('typed onMutation listeners stay filtered while subscribe still tracks non-mutation rerenders', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/index.ts'],
+    });
+    const subscribeNotifications: number[] = [];
+    const addEvents: string[] = [];
+    const removeEvents: Array<{ path: string; recursive: boolean }> = [];
+
+    const unsubscribeRerender = controller.subscribe(() => {
+      subscribeNotifications.push(controller.getVisibleCount());
+    });
+    const unsubscribeAdd = controller.onMutation('add', (event) => {
+      addEvents.push(event.path);
+    });
+    const unsubscribeRemove = controller.onMutation('remove', (event) => {
+      removeEvents.push({
+        path: event.path,
+        recursive: event.recursive,
+      });
+    });
+
+    const subscribeCountBeforeCollapse = subscribeNotifications.length;
+    const srcDirectory = controller.getItem('src/');
+    if (
+      srcDirectory == null ||
+      srcDirectory.isDirectory() !== true ||
+      !('collapse' in srcDirectory)
+    ) {
+      throw new Error('expected src/ directory handle');
+    }
+    srcDirectory.collapse();
+
+    expect(subscribeNotifications.length).toBeGreaterThan(
+      subscribeCountBeforeCollapse
+    );
+    expect(addEvents).toEqual([]);
+    expect(removeEvents).toEqual([]);
+
+    controller.add('src/utils.ts');
+    controller.remove('README.md');
+
+    expect(addEvents).toEqual(['src/utils.ts']);
+    expect(removeEvents).toEqual([
+      {
+        path: 'README.md',
+        recursive: false,
+      },
+    ]);
+
+    unsubscribeRemove();
+    unsubscribeAdd();
+    unsubscribeRerender();
     controller.destroy();
   });
 
@@ -157,6 +218,104 @@ describe('path-store dynamic files / mutation API', () => {
     expect(controller.getSelectedPaths()).toEqual([]);
     expect(controller.getFocusedPath()).toBe('src/');
 
+    controller.destroy();
+  });
+
+  test('directory moves remap focused selections and range anchors', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/index.ts', 'src/utils.ts'],
+    });
+
+    controller.focusPath('src/index.ts');
+    controller.selectOnlyPath('src/index.ts');
+    controller.move('src/', 'lib/');
+
+    expect(controller.getFocusedPath()).toBe('lib/index.ts');
+    expect(controller.getSelectedPaths()).toEqual(['lib/index.ts']);
+
+    controller.selectPathRange('lib/utils.ts', false);
+
+    expect(controller.getSelectedPaths()).toEqual([
+      'lib/index.ts',
+      'lib/utils.ts',
+    ]);
+
+    controller.destroy();
+  });
+
+  test('directory lookup-path moves still remap focused descendants', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/index.ts', 'src/utils.ts'],
+    });
+
+    controller.focusPath('src/index.ts');
+    controller.selectOnlyPath('src/index.ts');
+    controller.selectPath('src/utils.ts');
+    controller.move('src', 'lib/');
+
+    expect(controller.getFocusedPath()).toBe('lib/index.ts');
+    expect(controller.getSelectedPaths()).toEqual([
+      'lib/index.ts',
+      'lib/utils.ts',
+    ]);
+
+    controller.destroy();
+  });
+
+  test('recursive directory removal falls focus back to the nearest surviving row', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/index.ts', 'src/utils.ts'],
+    });
+
+    controller.focusPath('src/index.ts');
+    controller.remove('src/', { recursive: true });
+
+    expect(controller.getFocusedPath()).toBe('README.md');
+    expect(controller.getItem('src/')).toBeNull();
+
+    controller.destroy();
+  });
+
+  test('batch supports mixed add, move, and remove operations', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/old.ts'],
+    });
+    const batchEvents: Array<readonly string[]> = [];
+    const unsubscribe = controller.onMutation('batch', (event) => {
+      batchEvents.push(event.events.map((entry) => entry.operation));
+    });
+
+    controller.batch([
+      { path: 'src/new.ts', type: 'add' },
+      { from: 'src/new.ts', to: 'src/renamed.ts', type: 'move' },
+      { path: 'src/old.ts', type: 'remove' },
+    ]);
+
+    expect(batchEvents).toEqual([['add', 'move', 'remove']]);
+    expect(controller.getItem('src/old.ts')).toBeNull();
+    expect(controller.getItem('src/renamed.ts')).not.toBeNull();
+
+    unsubscribe();
     controller.destroy();
   });
 
@@ -209,6 +368,130 @@ describe('path-store dynamic files / mutation API', () => {
     } finally {
       cleanup();
     }
+  });
+
+  test('empty directories render as folders even before they gain children', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        initialExpansion: 'open',
+        paths: ['docs/'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const docsButton = getItemButton(shadowRoot, dom, 'docs/');
+
+      expect(docsButton.dataset.itemType).toBe('folder');
+      expect(docsButton.getAttribute('aria-expanded')).toBe('true');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('getItem returns fresh handles after move and remove mutations', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md', 'lib/', 'src/foo.ts'],
+    });
+
+    const movedHandleBefore = controller.getItem('src/foo.ts');
+    expect(movedHandleBefore).not.toBeNull();
+
+    controller.move('src/foo.ts', 'lib/foo.ts');
+
+    expect(controller.getItem('src/foo.ts')).toBeNull();
+    const movedHandleAfter = controller.getItem('lib/foo.ts');
+    expect(movedHandleAfter).not.toBeNull();
+    expect(movedHandleAfter?.getPath()).toBe('lib/foo.ts');
+    expect(movedHandleAfter?.isDirectory()).toBe(false);
+
+    controller.remove('lib/foo.ts');
+
+    expect(controller.getItem('lib/foo.ts')).toBeNull();
+
+    controller.destroy();
+  });
+
+  test('adding under a collapsed directory keeps the directory collapsed until re-expanded', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/index.ts'],
+    });
+
+    const srcDirectory = controller.getItem('src/');
+    if (
+      srcDirectory == null ||
+      srcDirectory.isDirectory() !== true ||
+      !('collapse' in srcDirectory) ||
+      !('expand' in srcDirectory)
+    ) {
+      throw new Error('expected src/ directory handle');
+    }
+
+    srcDirectory.collapse();
+    controller.add('src/utils.ts');
+
+    expect(
+      controller.getVisibleRows(0, controller.getVisibleCount())
+    ).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/utils.ts',
+        }),
+      ])
+    );
+
+    srcDirectory.expand();
+
+    expect(controller.getVisibleRows(0, controller.getVisibleCount())).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/utils.ts',
+        }),
+      ])
+    );
+
+    controller.destroy();
+  });
+
+  test('shared mutation handle intentionally omits raw-store callback batching', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md'],
+    });
+
+    const assertBatchCallbackIsRejected = (): void => {
+      // @ts-expect-error raw PathStore callback batching is intentionally not exposed on the shared trees handle
+      controller.batch((store) => {
+        store.add('src/index.ts');
+      });
+    };
+    void assertBatchCallbackIsRejected;
+
+    controller.destroy();
   });
 
   test('context-menu delete proof removes the item and restores focus coherently', async () => {

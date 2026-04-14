@@ -44,6 +44,20 @@ type MutationListenerByType = Map<
   Set<MutationListener>
 >;
 
+function isPathMutationEvent(
+  event: PathStoreEvent
+): event is Extract<
+  PathStoreEvent,
+  { operation: 'add' | 'remove' | 'move' | 'batch' }
+> {
+  return (
+    event.operation === 'add' ||
+    event.operation === 'remove' ||
+    event.operation === 'move' ||
+    event.operation === 'batch'
+  );
+}
+
 // Initial render only mounts a tiny viewport slice, so controller startup can
 // cap its first projection build and defer the full 494k-row metadata walk
 // until the user actually navigates outside that initial window.
@@ -122,9 +136,13 @@ function remapMovedPath(
     return toPath;
   }
 
-  return fromPath.endsWith('/') && path.startsWith(fromPath)
-    ? `${toPath}${path.slice(fromPath.length)}`
-    : path;
+  const descendantPrefix = fromPath.endsWith('/') ? fromPath : `${fromPath}/`;
+  if (!path.startsWith(descendantPrefix)) {
+    return path;
+  }
+
+  const targetPrefix = toPath.endsWith('/') ? toPath : `${toPath}/`;
+  return `${targetPrefix}${path.slice(descendantPrefix.length)}`;
 }
 
 // Determines whether a tracked public path disappeared because a remove event
@@ -376,7 +394,9 @@ export class PathStoreTreesController implements PathStoreTreesMutationHandle {
   public destroy(): void {
     this.#unsubscribe?.();
     this.#unsubscribe = null;
+    this.#mutationListeners.clear();
     this.#listeners.clear();
+    this.#itemHandles.clear();
   }
 
   public focusFirstItem(): void {
@@ -1105,7 +1125,12 @@ export class PathStoreTreesController implements PathStoreTreesMutationHandle {
     this.#rebuildVisibleProjection(this.#focusedPath, true);
   }
 
-  #applyMutationState(event: PathStoreEvent): void {
+  #applyMutationState(
+    event: Extract<
+      PathStoreEvent,
+      { operation: 'add' | 'remove' | 'move' | 'batch' }
+    >
+  ): string | null {
     const nextFocusedPath = remapPathThroughMutation(
       this.#focusedPath,
       event,
@@ -1137,16 +1162,18 @@ export class PathStoreTreesController implements PathStoreTreesMutationHandle {
     }
 
     this.#selectionAnchorPath = canonicalAnchorPath;
-    this.#focusedPath =
-      nextFocusedPath == null
-        ? null
-        : (this.#store.getPathInfo(nextFocusedPath)?.path ?? nextFocusedPath);
+    return nextFocusedPath;
   }
 
   #subscribe(): () => void {
     return this.#store.on('*', (event) => {
-      this.#applyMutationState(event);
-      this.#rebuildVisibleProjection(this.#focusedPath, true);
+      const focusPathCandidate = isPathMutationEvent(event)
+        ? this.#applyMutationState(event)
+        : this.#focusedPath;
+      if (event.canonicalChanged) {
+        this.#itemHandles.clear();
+      }
+      this.#rebuildVisibleProjection(focusPathCandidate, true);
       this.#emit();
       const mutationEvent = toTreesMutationEvent(event);
       if (mutationEvent != null) {
