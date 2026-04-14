@@ -95,6 +95,56 @@ export function PathStorePoweredRenderDemoClient({
       ...sharedOptions,
       composition: {
         ...sharedOptions.composition,
+        contextMenu: {
+          enabled: true,
+          onClose: () => {
+            addLog('context menu: closed');
+          },
+          onOpen: (item) => {
+            addLog(`context menu: opened for ${item.path}`);
+          },
+          render: (item, context) => {
+            const menu = document.createElement('div');
+            menu.dataset.testPathStoreMenu = item.path;
+            menu.style.background = 'var(--background, white)';
+            menu.style.border = '1px solid rgba(0, 0, 0, 0.15)';
+            menu.style.borderRadius = '8px';
+            menu.style.boxShadow = '0 12px 32px rgba(0, 0, 0, 0.18)';
+            menu.style.display = 'grid';
+            menu.style.gap = '4px';
+            menu.style.marginLeft = '8px';
+            menu.style.minWidth = '220px';
+            menu.style.padding = '8px';
+
+            const label = document.createElement('div');
+            label.textContent = item.path;
+            label.style.fontSize = '12px';
+            label.style.fontWeight = '600';
+            label.style.opacity = '0.75';
+            menu.append(label);
+
+            const infoButton = document.createElement('button');
+            infoButton.textContent = `Log ${item.kind}`;
+            infoButton.type = 'button';
+            infoButton.addEventListener('click', () => {
+              addLog(
+                `menu action: ${item.kind} @ ${Math.round(context.anchorRect.left)},${Math.round(context.anchorRect.top)}`
+              );
+              context.close();
+            });
+            menu.append(infoButton);
+
+            const closeButton = document.createElement('button');
+            closeButton.dataset.testPathStoreMenuClose = item.path;
+            closeButton.textContent = 'Close';
+            closeButton.type = 'button';
+            closeButton.addEventListener('click', () => {
+              context.close();
+            });
+            menu.append(closeButton);
+            return menu;
+          },
+        },
         header: {
           ...sharedOptions.composition?.header,
           render: () => {
@@ -123,6 +173,12 @@ export function PathStorePoweredRenderDemoClient({
       id: 'pst-phase5-icons',
       onSelectionChange: handleSelectionChange,
       preparedInput,
+      renderRowDecoration: ({ item }) =>
+        item.path.endsWith('.ts')
+          ? { text: 'TS', title: 'TypeScript file' }
+          : item.kind === 'directory'
+            ? { text: 'DIR', title: 'Directory row' }
+            : null,
     }),
     [addLog, handleSelectionChange, preparedInput, sharedOptions]
   );
@@ -147,9 +203,9 @@ export function PathStorePoweredRenderDemoClient({
         </h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
           The path-store lane keeps the landed focus and selection model,
-          preserves the header slot, and now proves the built-in Minimal,
-          Standard, and Complete icon sets alongside a fully custom icon
-          configuration.
+          preserves the header slot, proves the built-in Minimal, Standard, and
+          Complete icon sets, and now restores the Phase 5 context-menu shell
+          plus simple row decorations.
         </p>
         <div className="flex flex-wrap gap-2 pt-2">
           <button
@@ -190,10 +246,10 @@ export function PathStorePoweredRenderDemoClient({
 
       <HydratedPathStoreExample
         containerHtml={containerHtml}
-        description="Click a row to select it, use Ctrl/Cmd-click and Shift-click for multi-selection, try the slotted header button above the tree, then switch between the Complete, Standard, Minimal, and Custom icon modes. Expansion, selection, and focus should stay intact while only the icons change."
+        description="Click a row to select it, use Ctrl/Cmd-click and Shift-click for multi-selection, try the slotted header button above the tree, switch between the Complete, Standard, and Minimal icon modes, and right-click or press Shift+F10 to open the slotted context menu. Expansion, selection, and focus should stay intact while only the icons change."
         onTreeReady={handleTreeReady}
         options={options}
-        title="Focus + Selection + Header Slot + Icon Sets"
+        title="Focus + Selection + Header Slot + Icon Sets + Context Menu"
       />
       <StateLog entries={log} />
 

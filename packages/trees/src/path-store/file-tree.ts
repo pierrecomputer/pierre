@@ -31,6 +31,7 @@ import type {
   PathStoreTreeRenderProps,
   PathStoreTreesCompositionOptions,
   PathStoreTreesItemHandle,
+  PathStoreTreesRowDecorationRenderer,
   PathStoreTreesSelectionChangeListener,
 } from './types';
 import { PathStoreTreesView } from './view';
@@ -104,6 +105,9 @@ export class PathStoreFileTree {
   readonly #onSelectionChange:
     | PathStoreTreesSelectionChangeListener
     | undefined;
+  readonly #renderRowDecoration:
+    | PathStoreTreesRowDecorationRenderer
+    | undefined;
   readonly #slotHost = new PathStoreTreesManagedSlotHost();
   readonly #viewOptions: Pick<
     PathStoreFileTreeOptions,
@@ -123,6 +127,7 @@ export class PathStoreFileTree {
       itemHeight,
       onSelectionChange,
       overscan,
+      renderRowDecoration,
       viewportHeight,
       ...controllerOptions
     } = options;
@@ -130,6 +135,7 @@ export class PathStoreFileTree {
     this.#id = createClientId(id);
     this.#icons = icons;
     this.#onSelectionChange = onSelectionChange;
+    this.#renderRowDecoration = renderRowDecoration;
     this.#viewOptions = {
       itemHeight,
       overscan,
@@ -185,8 +191,11 @@ export class PathStoreFileTree {
 
     this.#syncIconSurface(host, wrapper);
     renderPathStoreTreesRoot(wrapper, {
+      composition: this.#composition,
       controller: this.#controller,
       icons: this.#icons,
+      renderRowDecoration: this.#renderRowDecoration,
+      slotHost: this.#slotHost,
       ...this.#getResolvedViewOptions(host),
     });
   }
@@ -196,8 +205,11 @@ export class PathStoreFileTree {
     const wrapper = this.#getOrCreateWrapper(host);
     this.#syncHeaderSlotContent();
     hydratePathStoreTreesRoot(wrapper, {
+      composition: this.#composition,
       controller: this.#controller,
       icons: this.#icons,
+      renderRowDecoration: this.#renderRowDecoration,
+      slotHost: this.#slotHost,
       ...this.#getResolvedViewOptions(host),
     });
   }
@@ -213,8 +225,11 @@ export class PathStoreFileTree {
     const wrapper = this.#getOrCreateWrapper(host);
     this.#syncHeaderSlotContent();
     renderPathStoreTreesRoot(wrapper, {
+      composition: this.#composition,
       controller: this.#controller,
       icons: this.#icons,
+      renderRowDecoration: this.#renderRowDecoration,
+      slotHost: this.#slotHost,
       ...this.#getResolvedViewOptions(host),
     });
   }
@@ -411,6 +426,7 @@ export function preloadPathStoreFileTree(
     itemHeight,
     onSelectionChange: _onSelectionChange,
     overscan,
+    renderRowDecoration,
     viewportHeight,
     ...controllerOptions
   } = options;
@@ -427,10 +443,12 @@ export function preloadPathStoreFileTree(
 
   const bodyHtml = renderToString(
     h(PathStoreTreesView, {
+      composition,
       controller,
       icons,
       itemHeight,
       overscan,
+      renderRowDecoration,
       viewportHeight: resolvedViewportHeight,
     })
   );

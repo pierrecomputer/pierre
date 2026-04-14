@@ -18,6 +18,9 @@ export default function PathStorePoweredPage() {
   const sharedOptions: Omit<PathStoreFileTreeOptions, 'id' | 'preparedInput'> =
     {
       composition: {
+        contextMenu: {
+          enabled: true,
+        },
         header: {
           html: PATH_STORE_HEADER_HTML,
         },

@@ -2,6 +2,8 @@ export { PathStoreTreesController } from './controller';
 export { PathStoreFileTree, preloadPathStoreFileTree } from './file-tree';
 export type {
   PathStoreTreesCompositionOptions,
+  PathStoreTreesContextMenuItem,
+  PathStoreTreesContextMenuOpenContext,
   PathStoreTreesDirectoryHandle,
   PathStoreFileTreeOptions,
   PathStoreFileTreeSsrPayload,
@@ -14,8 +16,12 @@ export type {
   PathStoreTreesControllerOptions,
   PathStoreTreesPublicId,
   PathStoreTreesRenderOptions,
+  PathStoreTreesRowDecoration,
+  PathStoreTreesRowDecorationContext,
+  PathStoreTreesRowDecorationRenderer,
   PathStoreTreesRange,
   PathStoreTreesSelectionChangeListener,
+  PathStoreTreesSlotHost,
   PathStoreTreesStickyWindowLayout,
   PathStoreTreesVisibleRow,
 } from './types';

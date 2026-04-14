@@ -1,6 +1,7 @@
 import type { PathStoreConstructorOptions } from '@pierre/path-store';
 
-import type { FileTreeIcons } from '../iconConfig';
+import type { FileTreeIcons, RemappedIcon } from '../iconConfig';
+import type { ContextMenuAnchorRect } from '../types';
 
 /**
  * The provisional public identity stays path-first so later phases can evolve
@@ -75,6 +76,7 @@ export interface PathStoreFileTreeOptions
   id?: string;
   icons?: FileTreeIcons;
   onSelectionChange?: PathStoreTreesSelectionChangeListener;
+  renderRowDecoration?: PathStoreTreesRowDecorationRenderer;
 }
 
 export interface PathStoreTreesViewportMetrics {
@@ -99,7 +101,10 @@ export interface PathStoreTreesStickyWindowLayout {
 
 export interface PathStoreTreesViewProps extends PathStoreTreesRenderOptions {
   controller: import('./controller').PathStoreTreesController;
+  composition?: PathStoreTreesCompositionOptions;
   icons?: FileTreeIcons;
+  renderRowDecoration?: PathStoreTreesRowDecorationRenderer;
+  slotHost?: PathStoreTreesSlotHost;
 }
 
 export interface PathStoreTreeRenderProps {
@@ -123,11 +128,65 @@ export type PathStoreTreesSelectionChangeListener = (
   selectedPaths: readonly PathStoreTreesPublicId[]
 ) => void;
 
+export interface PathStoreTreesContextMenuItem {
+  kind: 'directory' | 'file';
+  name: string;
+  path: PathStoreTreesPublicId;
+}
+
+export interface PathStoreTreesContextMenuOpenContext {
+  anchorElement: HTMLElement;
+  anchorRect: ContextMenuAnchorRect;
+  close: () => void;
+}
+
 export interface PathStoreTreesHeaderCompositionOptions {
   html?: string;
   render?: () => HTMLElement | null;
 }
 
+export interface PathStoreTreesContextMenuCompositionOptions {
+  enabled?: boolean;
+  onOpen?: (
+    item: PathStoreTreesContextMenuItem,
+    context: PathStoreTreesContextMenuOpenContext
+  ) => void;
+  onClose?: () => void;
+  render?: (
+    item: PathStoreTreesContextMenuItem,
+    context: PathStoreTreesContextMenuOpenContext
+  ) => HTMLElement | null;
+}
+
 export interface PathStoreTreesCompositionOptions {
+  contextMenu?: PathStoreTreesContextMenuCompositionOptions;
   header?: PathStoreTreesHeaderCompositionOptions;
+}
+
+export interface PathStoreTreesRowDecorationText {
+  text: string;
+  title?: string;
+}
+
+export interface PathStoreTreesRowDecorationIcon {
+  icon: RemappedIcon;
+  title?: string;
+}
+
+export type PathStoreTreesRowDecoration =
+  | PathStoreTreesRowDecorationText
+  | PathStoreTreesRowDecorationIcon;
+
+export interface PathStoreTreesRowDecorationContext {
+  item: PathStoreTreesContextMenuItem;
+  row: PathStoreTreesVisibleRow;
+}
+
+export type PathStoreTreesRowDecorationRenderer = (
+  context: PathStoreTreesRowDecorationContext
+) => PathStoreTreesRowDecoration | null;
+
+export interface PathStoreTreesSlotHost {
+  clearSlotContent(slotName: string): void;
+  setSlotContent(slotName: string, content: HTMLElement | null): void;
 }

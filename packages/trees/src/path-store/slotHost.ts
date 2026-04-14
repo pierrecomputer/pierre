@@ -11,6 +11,16 @@ export class PathStoreTreesManagedSlotHost {
     this.#contentBySlot.clear();
   }
 
+  public clearSlotContent(slotName: string): void {
+    const currentContent = this.#contentBySlot.get(slotName);
+    if (currentContent == null) {
+      return;
+    }
+
+    currentContent.remove();
+    this.#contentBySlot.delete(slotName);
+  }
+
   public setHost(host: HTMLElement | null): void {
     this.#host = host;
     if (host == null) {
