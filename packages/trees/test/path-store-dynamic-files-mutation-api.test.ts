@@ -291,6 +291,27 @@ describe('path-store dynamic files / mutation API', () => {
     controller.destroy();
   });
 
+  test('directory lookup-path removals clear descendant selections and focused paths', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/index.ts', 'src/utils.ts'],
+    });
+
+    controller.focusPath('src/index.ts');
+    controller.selectOnlyPath('src/index.ts');
+    controller.selectPath('src/utils.ts');
+    controller.remove('src', { recursive: true });
+
+    expect(controller.getSelectedPaths()).toEqual([]);
+    expect(controller.getFocusedPath()).toBe('README.md');
+
+    controller.destroy();
+  });
+
   test('batch supports mixed add, move, and remove operations', async () => {
     const { PathStoreTreesController } =
       await import('../src/path-store/controller');

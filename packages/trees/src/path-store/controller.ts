@@ -148,10 +148,14 @@ function remapMovedPath(
 // Determines whether a tracked public path disappeared because a remove event
 // deleted that exact item or a whole removed directory subtree.
 function isPathRemoved(path: string, removedPath: string): boolean {
-  return (
-    path === removedPath ||
-    (removedPath.endsWith('/') && path.startsWith(removedPath))
-  );
+  if (path === removedPath) {
+    return true;
+  }
+
+  const descendantPrefix = removedPath.endsWith('/')
+    ? removedPath
+    : `${removedPath}/`;
+  return path.startsWith(descendantPrefix);
 }
 
 // Rewrites focus/selection paths through mutation events so controller state
