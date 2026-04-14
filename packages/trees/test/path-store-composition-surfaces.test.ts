@@ -120,6 +120,10 @@ describe('path-store composition surfaces', () => {
     expect(payload.shadowHtml).toContain('data-type="context-menu-anchor"');
     expect(payload.shadowHtml).toContain('data-type="context-menu-trigger"');
     expect(payload.shadowHtml).toContain('aria-haspopup="menu"');
+    expect(payload.shadowHtml).toContain('data-file-tree-virtualized-scroll');
+    expect(payload.shadowHtml).toMatch(
+      /data-file-tree-virtualized-scroll[\s\S]*data-type="context-menu-anchor"/
+    );
   });
 
   test('attaches and removes header slot content on the host', async () => {
@@ -201,6 +205,19 @@ describe('path-store composition surfaces', () => {
       const shadowRoot = host?.shadowRoot;
       const button = getItemButton(shadowRoot, dom, 'README.md');
       expect(button.getAttribute('aria-haspopup')).toBe('menu');
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      const anchorElement = shadowRoot?.querySelector(
+        '[data-type="context-menu-anchor"]'
+      );
+      expect(scrollElement?.contains(anchorElement ?? null)).toBe(true);
+      expect(anchorElement?.getAttribute('data-visible')).toBe('false');
+      expect(
+        shadowRoot
+          ?.querySelector('[data-type="context-menu-trigger"]')
+          ?.getAttribute('data-visible')
+      ).toBe('false');
 
       button.dispatchEvent(
         new dom.window.MouseEvent('contextmenu', {
@@ -219,6 +236,7 @@ describe('path-store composition surfaces', () => {
       const context =
         capturedContext as unknown as CapturedContextMenuOpenContext;
       expect(context.anchorElement).toBeDefined();
+      expect(context.anchorElement.dataset.type).toBe('context-menu-trigger');
       expect(context.anchorRect).toBeDefined();
       expect(typeof context.close).toBe('function');
       expect(

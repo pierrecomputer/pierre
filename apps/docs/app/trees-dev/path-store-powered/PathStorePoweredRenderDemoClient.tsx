@@ -5,9 +5,14 @@ import {
   type PathStoreFileTreeOptions,
 } from '@pierre/trees/path-store';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Root as ReactDomRoot } from 'react-dom/client';
 
 import { ExampleCard } from '../_components/ExampleCard';
 import { StateLog, useStateLog } from '../_components/StateLog';
+import {
+  clearVanillaContextMenuSlot,
+  renderVanillaContextMenuSlot,
+} from '../_components/TreeDemoContextMenu';
 import { pathStoreCapabilityMatrix } from './capabilityMatrix';
 import { createPresortedPreparedInput } from './createPresortedPreparedInput';
 import { PATH_STORE_CUSTOM_ICONS } from './pathStoreDemoIcons';
@@ -76,6 +81,8 @@ export function PathStorePoweredRenderDemoClient({
   sharedOptions,
 }: PathStorePoweredRenderDemoClientProps) {
   const { addLog, log } = useStateLog();
+  const contextMenuRootRef = useRef<ReactDomRoot | null>(null);
+  const contextMenuSlotRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<PathStoreFileTree | null>(null);
   const [iconMode, setIconMode] = useState<
     'complete' | 'custom' | 'minimal' | 'standard'
@@ -90,6 +97,20 @@ export function PathStorePoweredRenderDemoClient({
     },
     [addLog]
   );
+  useEffect(
+    () => () => {
+      if (contextMenuSlotRef.current == null) {
+        return;
+      }
+
+      clearVanillaContextMenuSlot({
+        menuRootRef: contextMenuRootRef,
+        slotElement: contextMenuSlotRef.current,
+        unmount: true,
+      });
+    },
+    []
+  );
   const options = useMemo<Omit<PathStoreFileTreeOptions, 'icons'>>(
     () => ({
       ...sharedOptions,
@@ -98,51 +119,29 @@ export function PathStorePoweredRenderDemoClient({
         contextMenu: {
           enabled: true,
           onClose: () => {
+            if (contextMenuSlotRef.current != null) {
+              clearVanillaContextMenuSlot({
+                menuRootRef: contextMenuRootRef,
+                slotElement: contextMenuSlotRef.current,
+              });
+            }
             addLog('context menu: closed');
           },
           onOpen: (item) => {
             addLog(`context menu: opened for ${item.path}`);
           },
           render: (item, context) => {
-            const menu = document.createElement('div');
-            menu.dataset.testPathStoreMenu = item.path;
-            menu.style.background = 'var(--background, white)';
-            menu.style.border = '1px solid rgba(0, 0, 0, 0.15)';
-            menu.style.borderRadius = '8px';
-            menu.style.boxShadow = '0 12px 32px rgba(0, 0, 0, 0.18)';
-            menu.style.display = 'grid';
-            menu.style.gap = '4px';
-            menu.style.marginLeft = '8px';
-            menu.style.minWidth = '220px';
-            menu.style.padding = '8px';
-
-            const label = document.createElement('div');
-            label.textContent = item.path;
-            label.style.fontSize = '12px';
-            label.style.fontWeight = '600';
-            label.style.opacity = '0.75';
-            menu.append(label);
-
-            const infoButton = document.createElement('button');
-            infoButton.textContent = `Log ${item.kind}`;
-            infoButton.type = 'button';
-            infoButton.addEventListener('click', () => {
-              addLog(
-                `menu action: ${item.kind} @ ${Math.round(context.anchorRect.left)},${Math.round(context.anchorRect.top)}`
-              );
-              context.close();
+            contextMenuSlotRef.current ??= document.createElement('div');
+            renderVanillaContextMenuSlot({
+              context,
+              item: {
+                isFolder: item.kind === 'directory',
+                path: item.path,
+              },
+              menuRootRef: contextMenuRootRef,
+              slotElement: contextMenuSlotRef.current,
             });
-            menu.append(infoButton);
-
-            const closeButton = document.createElement('button');
-            closeButton.dataset.testPathStoreMenuClose = item.path;
-            closeButton.textContent = 'Close';
-            closeButton.type = 'button';
-            closeButton.addEventListener('click', () => {
-              context.close();
-            });
-            menu.append(closeButton);
-            return menu;
+            return contextMenuSlotRef.current;
           },
         },
         header: {
@@ -176,9 +175,7 @@ export function PathStorePoweredRenderDemoClient({
       renderRowDecoration: ({ item }) =>
         item.path.endsWith('.ts')
           ? { text: 'TS', title: 'TypeScript file' }
-          : item.kind === 'directory'
-            ? { text: 'DIR', title: 'Directory row' }
-            : null,
+          : null,
     }),
     [addLog, handleSelectionChange, preparedInput, sharedOptions]
   );
