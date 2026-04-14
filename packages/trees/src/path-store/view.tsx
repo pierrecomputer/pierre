@@ -208,6 +208,10 @@ function isEventInContextMenu(event: Event): boolean {
       continue;
     }
 
+    if (entry.dataset.pathStoreContextMenuRoot === 'true') {
+      return true;
+    }
+
     if (entry.dataset.type === 'context-menu-anchor') {
       return true;
     }
@@ -351,8 +355,8 @@ function renderStyledRow(
       data-type="item"
       data-item-path={targetPath}
       data-item-parked={isParked ? 'true' : undefined}
-      data-item-type={row.hasChildren ? 'folder' : 'file'}
-      aria-expanded={row.hasChildren ? row.isExpanded : undefined}
+      data-item-type={row.kind === 'directory' ? 'folder' : 'file'}
+      aria-expanded={row.kind === 'directory' ? row.isExpanded : undefined}
       aria-label={getPathStoreTreesRowAriaLabel(row)}
       aria-level={row.level + 1}
       aria-haspopup={contextMenuEnabled ? 'menu' : undefined}
@@ -416,7 +420,7 @@ function renderStyledRow(
           </div>
         ) : null}
         <div data-item-section="icon">
-          {row.hasChildren ? (
+          {row.kind === 'directory' ? (
             <Icon {...resolveIcon('file-tree-icon-chevron')} />
           ) : (
             <Icon {...resolveIcon('file-tree-icon-file', targetPath)} />
@@ -951,6 +955,10 @@ export function PathStoreTreesView({
     const onPointerDown = (event: MouseEvent): void => {
       const target = event.target;
       if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (isEventInContextMenu(event)) {
         return;
       }
 

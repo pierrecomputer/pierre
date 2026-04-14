@@ -8,12 +8,21 @@ import {
   type PathStoreTreesMutationEvent,
 } from '@pierre/trees/path-store';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createRoot, type Root as ReactDomRoot } from 'react-dom/client';
 
 import { ExampleCard } from '../_components/ExampleCard';
 import { StateLog, useStateLog } from '../_components/StateLog';
 import { pathStoreCapabilityMatrix } from './capabilityMatrix';
 import { createPresortedPreparedInput } from './createPresortedPreparedInput';
 import { PATH_STORE_CUSTOM_ICONS } from './pathStoreDemoIcons';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface SharedDemoOptions extends Omit<
   PathStoreFileTreeOptions,
@@ -30,8 +39,6 @@ type PathStoreMutationOperation =
   | { from: string; to: string; type: 'move' };
 
 interface PathStoreMutationDemoTargets {
-  addFilePath: string;
-  addFolderPath: string;
   batchOperations: readonly PathStoreMutationOperation[];
   moveFromPath: string | null;
   moveToPath: string | null;
@@ -97,7 +104,8 @@ function renamePathSameParent(path: string, nextBasename: string): string {
 
 // Derives deterministic proof paths from the current workload instead of hardcoding one repo shape.
 function createMutationDemoTargets(
-  paths: readonly string[]
+  paths: readonly string[],
+  initialExpandedPaths: readonly string[] | undefined
 ): PathStoreMutationDemoTargets {
   const existingPaths = new Set(paths);
   const directoryPaths = new Set<string>();
@@ -113,17 +121,9 @@ function createMutationDemoTargets(
   }
 
   const sortedDirectoryPaths = [...directoryPaths].sort();
-  const firstDirectoryPath = sortedDirectoryPaths[0] ?? '';
+  const firstDirectoryPath =
+    initialExpandedPaths?.toSorted()[0] ?? sortedDirectoryPaths[0] ?? '';
   const filePaths = paths.filter((path) => !path.endsWith('/'));
-  const addFilePath = getUniquePath(
-    `${firstDirectoryPath}phase-6-demo-file.ts`,
-    existingPaths
-  );
-  const addFolderPath = getUniquePath(
-    `${firstDirectoryPath}phase-6-demo-folder/`,
-    existingPaths
-  );
-
   let moveFromPath: string | null = null;
   let moveToPath: string | null = null;
   for (const sourcePath of filePaths) {
@@ -158,12 +158,53 @@ function createMutationDemoTargets(
   }
 
   return {
-    addFilePath,
-    addFolderPath,
     batchOperations,
     moveFromPath,
     moveToPath,
   };
+}
+
+function getFirstVisibleDirectoryPath(tree: PathStoreFileTree): string {
+  const firstVisiblePath =
+    tree
+      .getFileTreeContainer()
+      ?.shadowRoot?.querySelector<HTMLButtonElement>('button[data-type="item"]')
+      ?.dataset.itemPath ?? '';
+  if (firstVisiblePath.endsWith('/')) {
+    return firstVisiblePath;
+  }
+
+  return getParentPath(firstVisiblePath);
+}
+
+function getFirstVisibleFileParentPath(tree: PathStoreFileTree): string {
+  const visibleButtons =
+    tree
+      .getFileTreeContainer()
+      ?.shadowRoot?.querySelectorAll<HTMLButtonElement>(
+        'button[data-type="item"]'
+      ) ?? [];
+  for (const button of visibleButtons) {
+    const itemPath = button.dataset.itemPath;
+    if (itemPath != null && itemPath.endsWith('/') === false) {
+      return getParentPath(itemPath);
+    }
+  }
+
+  return getFirstVisibleDirectoryPath(tree);
+}
+
+function getAvailableMutationPath(
+  tree: PathStoreFileTree,
+  basePath: string
+): string {
+  let candidatePath = basePath;
+  let suffix = 1;
+  while (tree.getItem(candidatePath) != null) {
+    candidatePath = getSuffixedPath(basePath, suffix);
+    suffix += 1;
+  }
+  return candidatePath;
 }
 
 function formatMutationEvent(event: PathStoreTreesMutationEvent): string {
@@ -179,6 +220,131 @@ function formatMutationEvent(event: PathStoreTreesMutationEvent): string {
     case 'reset':
       return `mutation:reset ${String(event.pathCountBefore)} -> ${String(event.pathCountAfter)} paths`;
   }
+}
+
+function PathStoreMutationContextMenu({
+  item,
+  context,
+  onDelete,
+  onRename,
+}: {
+  item: PathStoreTreesContextMenuItem;
+  context: Pick<PathStoreTreesContextMenuOpenContext, 'close' | 'restoreFocus'>;
+  onDelete: () => void;
+  onRename: () => void;
+}) {
+  const itemType = item.kind === 'directory' ? 'Folder' : 'File';
+
+  return (
+    <DropdownMenu
+      open
+      modal={false}
+      onOpenChange={(open) => !open && context.close()}
+    >
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-hidden="true"
+          tabIndex={-1}
+          style={{
+            width: 1,
+            height: 1,
+            opacity: 0,
+            pointerEvents: 'none',
+            border: 0,
+            padding: 0,
+          }}
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        data-test-context-menu="true"
+        data-path-store-context-menu-root="true"
+        align="start"
+        side="right"
+        sideOffset={8}
+        className="min-w-[220px]"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          context.restoreFocus();
+        }}
+      >
+        <DropdownMenuLabel className="max-w-[280px] truncate">
+          {itemType}: {item.path}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          data-test-menu-rename={item.path}
+          onSelect={() => {
+            onRename();
+            context.close();
+          }}
+        >
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          data-test-menu-delete={item.path}
+          className="text-destructive focus:text-destructive"
+          onSelect={() => {
+            onDelete();
+            context.close();
+          }}
+        >
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// Renders the mutation proof menu through a slotted React root so the dropdown
+// keeps the Phase 5 anchoring behavior without layout-shifting the trigger.
+function renderMutationContextMenuSlot({
+  item,
+  menuRootRef,
+  onDelete,
+  onRename,
+  slotElement,
+  context,
+}: {
+  item: PathStoreTreesContextMenuItem;
+  menuRootRef: { current: ReactDomRoot | null };
+  onDelete: () => void;
+  onRename: () => void;
+  slotElement: HTMLDivElement;
+  context: Pick<PathStoreTreesContextMenuOpenContext, 'close' | 'restoreFocus'>;
+}): void {
+  menuRootRef.current ??= createRoot(slotElement);
+  slotElement.style.display = 'block';
+  menuRootRef.current.render(
+    <PathStoreMutationContextMenu
+      item={item}
+      context={context}
+      onDelete={onDelete}
+      onRename={onRename}
+    />
+  );
+}
+
+function clearMutationContextMenuSlot({
+  menuRootRef,
+  slotElement,
+  unmount = false,
+}: {
+  menuRootRef: { current: ReactDomRoot | null };
+  slotElement: HTMLDivElement;
+  unmount?: boolean;
+}): void {
+  if (menuRootRef.current == null) {
+    return;
+  }
+
+  if (unmount) {
+    menuRootRef.current.unmount();
+    menuRootRef.current = null;
+  } else {
+    menuRootRef.current.render(null);
+  }
+  slotElement.style.display = 'none';
 }
 
 const HydratedPathStoreExample = memo(function HydratedPathStoreExample({
@@ -235,6 +401,8 @@ export function PathStorePoweredRenderDemoClient({
   sharedOptions,
 }: PathStorePoweredRenderDemoClientProps) {
   const { addLog, log } = useStateLog();
+  const contextMenuRootRef = useRef<ReactDomRoot | null>(null);
+  const contextMenuSlotRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<PathStoreFileTree | null>(null);
   const mutationUnsubscribeRef = useRef<(() => void) | null>(null);
   const [iconMode, setIconMode] = useState<
@@ -245,8 +413,12 @@ export function PathStorePoweredRenderDemoClient({
     [sharedOptions.paths]
   );
   const demoTargets = useMemo(
-    () => createMutationDemoTargets(sharedOptions.paths),
-    [sharedOptions.paths]
+    () =>
+      createMutationDemoTargets(
+        sharedOptions.paths,
+        sharedOptions.initialExpandedPaths
+      ),
+    [sharedOptions.initialExpandedPaths, sharedOptions.paths]
   );
   const handleSelectionChange = useCallback(
     (selectedPaths: readonly string[]) => {
@@ -259,6 +431,15 @@ export function PathStorePoweredRenderDemoClient({
     return () => {
       mutationUnsubscribeRef.current?.();
       mutationUnsubscribeRef.current = null;
+      if (contextMenuSlotRef.current == null) {
+        return;
+      }
+
+      clearMutationContextMenuSlot({
+        menuRootRef: contextMenuRootRef,
+        slotElement: contextMenuSlotRef.current,
+        unmount: true,
+      });
     };
   }, []);
 
@@ -287,6 +468,12 @@ export function PathStorePoweredRenderDemoClient({
         contextMenu: {
           enabled: true,
           onClose: () => {
+            if (contextMenuSlotRef.current != null) {
+              clearMutationContextMenuSlot({
+                menuRootRef: contextMenuRootRef,
+                slotElement: contextMenuSlotRef.current,
+              });
+            }
             addLog('context menu: closed');
           },
           onOpen: (item) => {
@@ -296,69 +483,40 @@ export function PathStorePoweredRenderDemoClient({
             item: PathStoreTreesContextMenuItem,
             context: PathStoreTreesContextMenuOpenContext
           ) => {
-            const menu = document.createElement('div');
-            menu.dataset.testPathStoreMutationMenu = item.path;
-            menu.dataset.testContextMenu = 'true';
-            menu.style.display = 'grid';
-            menu.style.gap = '8px';
-            menu.style.minWidth = '220px';
-            menu.style.padding = '8px';
-            menu.style.border = '1px solid var(--color-border, #666)';
-            menu.style.borderRadius = '8px';
-            menu.style.background = 'var(--color-bg, #fff)';
-            menu.style.boxShadow = '0 6px 18px rgba(0, 0, 0, 0.2)';
-
-            const label = document.createElement('div');
-            label.textContent = `${item.kind === 'directory' ? 'Folder' : 'File'}: ${item.path}`;
-            menu.append(label);
-
-            const renameButton = document.createElement('button');
-            renameButton.type = 'button';
-            renameButton.dataset.pathStoreMenuAction = 'rename';
-            renameButton.textContent = 'Rename';
-            renameButton.addEventListener('click', () => {
-              const nextBasename = window.prompt(
-                'Rename path',
-                getPathBasename(item.path)
-              );
-              if (nextBasename == null || nextBasename.trim().length === 0) {
-                addLog(`rename: cancelled for ${item.path}`);
-                context.close();
-                return;
-              }
-
-              runMutation(`rename ${item.path}`, (tree) => {
-                const nextPath = renamePathSameParent(item.path, nextBasename);
-                tree.move(item.path, nextPath);
-              });
-              context.close();
-            });
-            menu.append(renameButton);
-
-            const deleteButton = document.createElement('button');
-            deleteButton.type = 'button';
-            deleteButton.dataset.pathStoreMenuAction = 'delete';
-            deleteButton.textContent = 'Delete';
-            deleteButton.addEventListener('click', () => {
-              runMutation(`delete ${item.path}`, (tree) => {
-                tree.remove(
-                  item.path,
-                  item.kind === 'directory' ? { recursive: true } : undefined
+            contextMenuSlotRef.current ??= document.createElement('div');
+            renderMutationContextMenuSlot({
+              context,
+              item,
+              menuRootRef: contextMenuRootRef,
+              onDelete: () => {
+                runMutation(`delete ${item.path}`, (tree) => {
+                  tree.remove(
+                    item.path,
+                    item.kind === 'directory' ? { recursive: true } : undefined
+                  );
+                });
+              },
+              onRename: () => {
+                const nextBasename = window.prompt(
+                  'Rename path',
+                  getPathBasename(item.path)
                 );
-              });
-              context.close();
-            });
-            menu.append(deleteButton);
+                if (nextBasename == null || nextBasename.trim().length === 0) {
+                  addLog(`rename: cancelled for ${item.path}`);
+                  return;
+                }
 
-            const closeButton = document.createElement('button');
-            closeButton.type = 'button';
-            closeButton.dataset.pathStoreMenuAction = 'close';
-            closeButton.textContent = 'Close';
-            closeButton.addEventListener('click', () => {
-              context.close();
+                runMutation(`rename ${item.path}`, (tree) => {
+                  const nextPath = renamePathSameParent(
+                    item.path,
+                    nextBasename
+                  );
+                  tree.move(item.path, nextPath);
+                });
+              },
+              slotElement: contextMenuSlotRef.current,
             });
-            menu.append(closeButton);
-            return menu;
+            return contextMenuSlotRef.current;
           },
         },
         header: {
@@ -419,24 +577,26 @@ export function PathStorePoweredRenderDemoClient({
   }, [activeIcons]);
 
   const handleAddFile = useCallback(() => {
-    runMutation(`add ${demoTargets.addFilePath}`, (tree) => {
-      if (tree.getItem(demoTargets.addFilePath) != null) {
-        addLog(`add: ${demoTargets.addFilePath} already exists`);
-        return;
-      }
-      tree.add(demoTargets.addFilePath);
+    runMutation('add demo file', (tree) => {
+      const firstVisibleDirectoryPath = getFirstVisibleFileParentPath(tree);
+      const nextPath = getAvailableMutationPath(
+        tree,
+        `${firstVisibleDirectoryPath}000-phase-6-demo-file.ts`
+      );
+      tree.add(nextPath);
     });
-  }, [addLog, demoTargets.addFilePath, runMutation]);
+  }, [runMutation]);
 
   const handleAddFolder = useCallback(() => {
-    runMutation(`add ${demoTargets.addFolderPath}`, (tree) => {
-      if (tree.getItem(demoTargets.addFolderPath) != null) {
-        addLog(`add: ${demoTargets.addFolderPath} already exists`);
-        return;
-      }
-      tree.add(demoTargets.addFolderPath);
+    runMutation('add demo folder', (tree) => {
+      const firstVisibleDirectoryPath = getFirstVisibleDirectoryPath(tree);
+      const nextPath = getAvailableMutationPath(
+        tree,
+        `${firstVisibleDirectoryPath}000-phase-6-demo-folder/`
+      );
+      tree.add(nextPath);
     });
-  }, [addLog, demoTargets.addFolderPath, runMutation]);
+  }, [runMutation]);
 
   const handleMove = useCallback(() => {
     if (demoTargets.moveFromPath == null || demoTargets.moveToPath == null) {
