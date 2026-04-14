@@ -76,7 +76,7 @@ export interface FileOptions<LAnnotation>
    */
   enableHoverUtility?: boolean;
   renderHeaderPrefix?: RenderFileMetadata;
-  renderCustomMetadata?: RenderFileMetadata;
+  renderHeaderMetadata?: RenderFileMetadata;
   renderCustomHeader?: RenderFileMetadata;
   /**
    * When true, errors during rendering are rethrown instead of being caught
@@ -1066,7 +1066,7 @@ export class File<LAnnotation = undefined> {
 
     if (this.isContainerManaged) return;
 
-    const { renderHeaderPrefix, renderCustomHeader, renderCustomMetadata } =
+    const { renderHeaderPrefix, renderCustomHeader, renderHeaderMetadata } =
       this.options;
 
     if (renderCustomHeader != null) {
@@ -1083,7 +1083,7 @@ export class File<LAnnotation = undefined> {
       this.headerMetadata = undefined;
     } else {
       const prefix = renderHeaderPrefix?.(file) ?? undefined;
-      const content = renderCustomMetadata?.(file) ?? undefined;
+      const content = renderHeaderMetadata?.(file) ?? undefined;
       this.headerPrefix = this.upsertHeaderSlotElement(
         container,
         this.headerPrefix,
