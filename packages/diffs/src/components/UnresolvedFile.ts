@@ -108,6 +108,13 @@ interface ResolveConflictReturn {
   markerRows: MergeConflictMarkerRow[];
 }
 
+interface PendingControlledRender<LAnnotation> {
+  fileDiff: FileDiffMetadata;
+  actions: (MergeConflictDiffAction | undefined)[];
+  markerRows: MergeConflictMarkerRow[];
+  lineAnnotations: UnresolvedFileRenderProps<LAnnotation>['lineAnnotations'];
+}
+
 type UnresolvedFileDataCache = GetOrComputeDiffProps;
 
 let instanceId = -1;
@@ -128,6 +135,9 @@ export class UnresolvedFile<
   private markerRows: MergeConflictMarkerRow[] = [];
   private conflictActionCache: Map<string, MergeConflictActionElementCache> =
     new Map();
+  private pendingControlledRender:
+    | PendingControlledRender<LAnnotation>
+    | undefined;
 
   constructor(
     public override options: UnresolvedFileOptions<LAnnotation> = {
@@ -210,6 +220,7 @@ export class UnresolvedFile<
       markerRows: undefined,
     };
     this.conflictActions = [];
+    this.pendingControlledRender = undefined;
     super.cleanUp();
   }
 
