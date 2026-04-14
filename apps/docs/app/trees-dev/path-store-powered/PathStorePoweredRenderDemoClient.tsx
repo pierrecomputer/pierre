@@ -4,8 +4,7 @@ import {
   PathStoreFileTree,
   type PathStoreFileTreeOptions,
 } from '@pierre/trees/path-store';
-import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
 import { StateLog, useStateLog } from '../_components/StateLog';
@@ -23,25 +22,20 @@ interface PathStorePoweredRenderDemoClientProps {
   sharedOptions: SharedDemoOptions;
 }
 
-function HydratedPathStoreExample({
+const HydratedPathStoreExample = memo(function HydratedPathStoreExample({
   containerHtml,
-  icons,
   description,
-  footer,
+  onTreeReady,
   options,
   title,
 }: {
   containerHtml: string;
   description: string;
-  footer?: ReactNode;
-  icons: PathStoreFileTreeOptions['icons'];
+  onTreeReady: (fileTree: PathStoreFileTree | null) => void;
   options: Omit<PathStoreFileTreeOptions, 'icons'>;
   title: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const fileTreeRef = useRef<PathStoreFileTree | null>(null);
-  const latestIconsRef = useRef(icons);
-  latestIconsRef.current = icons;
 
   useEffect(() => {
     const node = ref.current;
@@ -49,11 +43,8 @@ function HydratedPathStoreExample({
       return;
     }
 
-    const fileTree = new PathStoreFileTree({
-      ...options,
-      icons: latestIconsRef.current,
-    });
-    fileTreeRef.current = fileTree;
+    const fileTree = new PathStoreFileTree(options);
+    onTreeReady(fileTree);
     const fileTreeContainer = node.querySelector('file-tree-container');
     if (fileTreeContainer instanceof HTMLElement) {
       fileTree.hydrate({ fileTreeContainer });
@@ -64,16 +55,12 @@ function HydratedPathStoreExample({
 
     return () => {
       fileTree.cleanUp();
-      fileTreeRef.current = null;
+      onTreeReady(null);
     };
-  }, [containerHtml, options]);
-
-  useEffect(() => {
-    fileTreeRef.current?.setIcons(icons);
-  }, [icons]);
+  }, [containerHtml, onTreeReady, options]);
 
   return (
-    <ExampleCard title={title} description={description} footer={footer}>
+    <ExampleCard title={title} description={description}>
       <div
         ref={ref}
         style={{ height: `${String(options.viewportHeight ?? 420)}px` }}
@@ -82,13 +69,14 @@ function HydratedPathStoreExample({
       />
     </ExampleCard>
   );
-}
+});
 
 export function PathStorePoweredRenderDemoClient({
   containerHtml,
   sharedOptions,
 }: PathStorePoweredRenderDemoClientProps) {
   const { addLog, log } = useStateLog();
+  const treeRef = useRef<PathStoreFileTree | null>(null);
   const [iconMode, setIconMode] = useState<
     'complete' | 'custom' | 'minimal' | 'standard'
   >('complete');
@@ -140,6 +128,13 @@ export function PathStorePoweredRenderDemoClient({
   );
   const activeIcons =
     iconMode === 'custom' ? PATH_STORE_CUSTOM_ICONS : iconMode;
+  const handleTreeReady = useCallback((fileTree: PathStoreFileTree | null) => {
+    treeRef.current = fileTree;
+  }, []);
+
+  useEffect(() => {
+    treeRef.current?.setIcons(activeIcons);
+  }, [activeIcons]);
 
   return (
     <div className="space-y-6">
@@ -190,28 +185,17 @@ export function PathStorePoweredRenderDemoClient({
           >
             Show Minimal icons
           </button>
-          <button
-            type="button"
-            className="rounded-md border px-3 py-1.5 text-sm font-medium"
-            aria-pressed={iconMode === 'custom'}
-            onClick={() => {
-              setIconMode('custom');
-              addLog('icons: custom');
-            }}
-          >
-            Show Custom icons
-          </button>
         </div>
       </header>
 
       <HydratedPathStoreExample
         containerHtml={containerHtml}
         description="Click a row to select it, use Ctrl/Cmd-click and Shift-click for multi-selection, try the slotted header button above the tree, then switch between the Complete, Standard, Minimal, and Custom icon modes. Expansion, selection, and focus should stay intact while only the icons change."
-        footer={<StateLog entries={log} />}
-        icons={activeIcons}
+        onTreeReady={handleTreeReady}
         options={options}
         title="Focus + Selection + Header Slot + Icon Sets"
       />
+      <StateLog entries={log} />
 
       <section className="space-y-3 rounded-lg border p-4">
         <h2 className="text-lg font-semibold">Capability / phase matrix</h2>
