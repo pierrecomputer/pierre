@@ -100,11 +100,8 @@ export interface PathStoreTreesSearchSessionHandle {
 export interface PathStoreFileTreeOptions
   extends PathStoreTreesControllerOptions, PathStoreTreesRenderOptions {
   composition?: PathStoreTreesCompositionOptions;
-  fileTreeSearchMode?: PathStoreTreesSearchMode;
   id?: string;
-  initialSearchQuery?: string | null;
   icons?: FileTreeIcons;
-  onSearchChange?: PathStoreTreesSearchChangeListener;
   onSelectionChange?: PathStoreTreesSelectionChangeListener;
   renderRowDecoration?: PathStoreTreesRowDecorationRenderer;
   search?: boolean;

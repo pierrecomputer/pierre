@@ -562,6 +562,7 @@
     color: inherit;
     font-family: var(--trees-font-family);
     font-size: var(--trees-font-size);
+    text-align: start;
     outline: none;
     background: transparent;
     border: none;

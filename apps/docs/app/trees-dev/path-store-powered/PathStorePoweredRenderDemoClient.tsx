@@ -679,9 +679,9 @@ export function PathStorePoweredRenderDemoClient({
       tree.setSearch('documentation');
     });
   }, [runSearchAction]);
-  const handleSearchDrivers = useCallback(() => {
-    runSearchAction('search drivers', (tree) => {
-      tree.setSearch('drivers');
+  const handleSearchBootp = useCallback(() => {
+    runSearchAction('search bootp', (tree) => {
+      tree.setSearch('bootp');
     });
   }, [runSearchAction]);
   const handleCloseSearch = useCallback(() => {
@@ -762,10 +762,10 @@ export function PathStorePoweredRenderDemoClient({
           <button
             type="button"
             className="rounded-md border px-3 py-1.5 text-sm font-medium"
-            data-path-store-search-action="drivers"
-            onClick={handleSearchDrivers}
+            data-path-store-search-action="bootp"
+            onClick={handleSearchBootp}
           >
-            Search “drivers”
+            Search “bootp”
           </button>
           <button
             type="button"

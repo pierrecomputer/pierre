@@ -566,6 +566,7 @@ export function PathStoreTreesView({
   const updateViewportRef = useRef<() => void>(() => {});
   const domFocusOwnerRef = useRef(false);
   const previousFocusedPathRef = useRef<string | null>(null);
+  const restoreTreeFocusAfterSearchCloseRef = useRef(false);
   const [, setControllerRevision] = useState(0);
   const [activeItemPath, setActiveItemPath] = useState<string | null>(null);
   const [contextHoverPath, setContextHoverPath] = useState<string | null>(null);
@@ -704,11 +705,14 @@ export function PathStoreTreesView({
 
     if (isSearchOpen) {
       if (event.key === 'Escape') {
+        restoreTreeFocusAfterSearchCloseRef.current = false;
         controller.closeSearch();
       } else if (event.key === 'Enter') {
-        if (focusedPath != null) {
-          controller.selectOnlyPath(focusedPath);
+        const currentFocusedPath = controller.getFocusedPath();
+        if (currentFocusedPath != null) {
+          controller.selectOnlyPath(currentFocusedPath);
         }
+        restoreTreeFocusAfterSearchCloseRef.current = true;
         controller.closeSearch();
       } else if (event.key === 'ArrowDown') {
         controller.focusNextSearchMatch();
@@ -1095,6 +1099,8 @@ export function PathStoreTreesView({
     const activeTreeElementPath = activeTreeElement?.dataset.itemPath ?? null;
     const searchInputOwnsFocus =
       searchEnabled && searchInputRef.current === activeTreeElement;
+    const shouldRestoreTreeFocusAfterSearchClose =
+      restoreTreeFocusAfterSearchCloseRef.current && !isSearchOpen;
     const focusWithinTree = activeTreeElement != null;
     const shouldOwnDomFocus = domFocusOwnerRef.current || focusWithinTree;
     const focusedPathChanged = previousFocusedPathRef.current !== focusedPath;
@@ -1117,22 +1123,33 @@ export function PathStoreTreesView({
       return;
     }
 
-    if (searchInputOwnsFocus) {
+    if (searchInputOwnsFocus && !shouldRestoreTreeFocusAfterSearchClose) {
       previousFocusedPathRef.current = focusedPath;
       return;
     }
 
     if (focusedButton == null) {
+      if (shouldRestoreTreeFocusAfterSearchClose && focusedIndex >= 0) {
+        scrollFocusedRowIntoView(
+          scrollElement,
+          focusedIndex,
+          itemHeight,
+          resolvedViewportHeight
+        );
+        updateViewportRef.current();
+      }
       previousFocusedPathRef.current = focusedPath;
       return;
     }
 
     if (
       focusedPathChanged ||
+      shouldRestoreTreeFocusAfterSearchClose ||
       activeTreeElementPath == null ||
       activeTreeElementPath !== focusedPath
     ) {
       focusElement(focusedButton);
+      restoreTreeFocusAfterSearchCloseRef.current = false;
     }
     previousFocusedPathRef.current = focusedPath;
   }, [
@@ -1141,6 +1158,7 @@ export function PathStoreTreesView({
     focusedPath,
     focusedRowIsMounted,
     itemHeight,
+    isSearchOpen,
     range,
     resolvedViewportHeight,
     searchEnabled,
@@ -1220,9 +1238,12 @@ export function PathStoreTreesView({
       }),
     [itemCount, itemHeight, range, resolvedViewportHeight]
   );
+  const shouldRenderParkedFocusedRow =
+    activeItemPath === focusedPath ||
+    restoreTreeFocusAfterSearchCloseRef.current;
   const parkedFocusedRow =
     focusedPath != null &&
-    activeItemPath === focusedPath &&
+    shouldRenderParkedFocusedRow &&
     !focusedRowIsMounted &&
     focusedIndex >= 0
       ? (controller.getVisibleRows(focusedIndex, focusedIndex)[0] ?? null)

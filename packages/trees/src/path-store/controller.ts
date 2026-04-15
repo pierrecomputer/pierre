@@ -130,8 +130,6 @@ function getSiblingComparisonKey(
 const normalizeSearchText = (value: string): string =>
   value.trim().toLowerCase().replaceAll('\\', '/');
 
-const normalizeSearchPath = (path: string): string => normalizeSearchText(path);
-
 function isFuzzySubsequenceMatch(search: string, target: string): boolean {
   let searchIndex = 0;
   let targetIndex = 0;
@@ -156,7 +154,7 @@ function defaultPathStoreSearchMatcher(search: string, path: string): boolean {
     return false;
   }
 
-  const normalizedPath = normalizeSearchPath(path);
+  const normalizedPath = normalizeSearchText(path);
   return (
     normalizedPath.includes(normalizedSearch) ||
     isFuzzySubsequenceMatch(normalizedSearch, normalizedPath)
@@ -415,6 +413,8 @@ export class PathStoreTreesController
   #hasFullProjection = false;
   #getParentIndexForVisibleRow = (_index: number): number => -1;
   #itemHandles = new Map<string, PathStoreTreesItemHandle>();
+  #knownDirectoryPaths: readonly string[] | null = null;
+  #knownPaths: readonly string[] | null = null;
   #onSearchChange: ((value: string | null) => void) | undefined;
   #projectionPaths: readonly string[] = [];
   #projectionPosInSetByIndex: ProjectionIndexBuffer = new Int32Array(0);
@@ -432,6 +432,7 @@ export class PathStoreTreesController
   #selectedPaths = new Set<string>();
   #selectionVersion = 0;
   #store: PathStore;
+  #storeVisibleCount = 0;
   #suppressStoreNotifications = false;
   #visibleCount = 0;
   #unsubscribe: (() => void) | null;
@@ -464,6 +465,7 @@ export class PathStoreTreesController
     this.#mutationListeners.clear();
     this.#listeners.clear();
     this.#itemHandles.clear();
+    this.#invalidateKnownPathCaches();
   }
 
   public focusFirstItem(): void {
@@ -965,6 +967,7 @@ export class PathStoreTreesController
     this.#unsubscribe?.();
     this.#store = nextStore;
     this.#itemHandles.clear();
+    this.#invalidateKnownPathCaches();
     const nextSelectedPaths = previousSelectedPaths
       .map((selectedPath) => nextStore.getPathInfo(selectedPath)?.path ?? null)
       .filter((resolved): resolved is string => resolved != null);
@@ -1183,6 +1186,10 @@ export class PathStoreTreesController
   }
 
   #getAllKnownPaths(): readonly string[] {
+    if (this.#knownPaths != null) {
+      return this.#knownPaths;
+    }
+
     const knownPaths = new Set<string>();
     for (const path of this.#store.list()) {
       knownPaths.add(path);
@@ -1191,13 +1198,30 @@ export class PathStoreTreesController
       }
     }
 
-    return [...knownPaths].sort();
+    this.#knownPaths = [...knownPaths].sort();
+    return this.#knownPaths;
+  }
+
+  #getAllKnownDirectoryPaths(): readonly string[] {
+    if (this.#knownDirectoryPaths != null) {
+      return this.#knownDirectoryPaths;
+    }
+
+    this.#knownDirectoryPaths = this.#getAllKnownPaths().filter((path) =>
+      path.endsWith('/')
+    );
+    return this.#knownDirectoryPaths;
+  }
+
+  #invalidateKnownPathCaches(): void {
+    this.#knownDirectoryPaths = null;
+    this.#knownPaths = null;
   }
 
   #getExpandedDirectoryPaths(): readonly string[] {
-    return this.#getAllKnownPaths()
-      .filter((path) => path.endsWith('/'))
-      .filter((path) => this.#store.isExpanded(path));
+    return this.#getAllKnownDirectoryPaths().filter((path) =>
+      this.#store.isExpanded(path)
+    );
   }
 
   #restoreSearchExpandedPaths(keepSelectedOpen: boolean): void {
@@ -1213,12 +1237,9 @@ export class PathStoreTreesController
   }
 
   #setExpandedPaths(expandedPaths: ReadonlySet<string>): void {
-    const directoryPaths = this.#getAllKnownPaths().filter((path) =>
-      path.endsWith('/')
-    );
     this.#suppressStoreNotifications = true;
     try {
-      for (const directoryPath of directoryPaths) {
+      for (const directoryPath of this.#getAllKnownDirectoryPaths()) {
         const shouldExpand = expandedPaths.has(directoryPath);
         const isExpanded = this.#store.isExpanded(directoryPath);
         if (shouldExpand && !isExpanded) {
@@ -1247,7 +1268,7 @@ export class PathStoreTreesController
       this.#searchVisibleIndices = null;
       this.#searchVisiblePaths = null;
       this.#searchVisibleIndexByPath = null;
-      this.#visibleCount = currentVisiblePaths.length;
+      this.#visibleCount = this.#storeVisibleCount;
       return;
     }
 
@@ -1351,18 +1372,21 @@ export class PathStoreTreesController
       return this.#focusedPath;
     }
 
+    const knownPaths = this.#getAllKnownPaths();
     const matchingPaths = this.#store
       .list()
       .filter((path) =>
         defaultPathStoreSearchMatcher(this.#searchValue ?? '', path)
       );
-    for (const path of this.#getAllKnownPaths()) {
+    const matchingPathSet = new Set(matchingPaths);
+    for (const path of knownPaths) {
       if (
         path.endsWith('/') &&
         defaultPathStoreSearchMatcher(this.#searchValue ?? '', path) &&
-        matchingPaths.includes(path) === false
+        !matchingPathSet.has(path)
       ) {
         matchingPaths.push(path);
+        matchingPathSet.add(path);
       }
     }
     this.#searchMatchPathSet = new Set(matchingPaths);
@@ -1420,8 +1444,7 @@ export class PathStoreTreesController
   }
 
   #moveFocus(offset: -1 | 1): void {
-    const visiblePaths = this.#getCurrentVisiblePaths();
-    const itemCount = visiblePaths.length;
+    const itemCount = this.#visibleCount;
     if (itemCount === 0) {
       return;
     }
@@ -1432,6 +1455,13 @@ export class PathStoreTreesController
       Math.max(0, currentIndex + offset)
     );
     if (nextIndex !== currentIndex || this.#focusedIndex === -1) {
+      if (
+        !this.#hasFullProjection &&
+        this.#searchVisibleIndices == null &&
+        nextIndex >= this.#projectionPaths.length
+      ) {
+        this.#ensureFullProjection();
+      }
       this.#setFocusedIndex(nextIndex);
     }
   }
@@ -1441,6 +1471,7 @@ export class PathStoreTreesController
     full: boolean = true
   ): void {
     const rawVisibleCount = this.#store.getVisibleCount();
+    this.#storeVisibleCount = rawVisibleCount;
     const projection = createVisibleProjection(
       this.#store.getVisibleTreeProjectionData(
         full
@@ -1544,6 +1575,10 @@ export class PathStoreTreesController
       if (this.#suppressStoreNotifications) {
         return;
       }
+      if (event.canonicalChanged) {
+        this.#itemHandles.clear();
+        this.#invalidateKnownPathCaches();
+      }
       const focusPathCandidate = isPathMutationEvent(event)
         ? this.#applyMutationState(event)
         : this.#focusedPath;
@@ -1553,9 +1588,6 @@ export class PathStoreTreesController
           : this.#searchValue === ''
             ? this.#focusedPath
             : focusPathCandidate;
-      if (event.canonicalChanged) {
-        this.#itemHandles.clear();
-      }
       this.#rebuildVisibleProjection(searchFocusCandidate, true);
       this.#emit();
       const mutationEvent = toTreesMutationEvent(event);

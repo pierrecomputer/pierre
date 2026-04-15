@@ -19,6 +19,11 @@ const SEARCH_NAV_FILES = [
   'src/utils/worker/deprecated/old-worker.ts',
 ] as const;
 
+const LARGE_VISIBLE_FILES = Array.from(
+  { length: 700 },
+  (_unused, index) => `file-${String(index).padStart(4, '0')}.ts`
+);
+
 function installDom() {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
     url: 'http://localhost',
@@ -219,6 +224,43 @@ describe('path-store search', () => {
     controller.destroy();
   });
 
+  test('closed-search visible count stays tied to the full store count before full projection expansion', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: LARGE_VISIBLE_FILES,
+    });
+
+    expect(controller.getVisibleCount()).toBe(LARGE_VISIBLE_FILES.length);
+    expect(controller.getVisibleRows(520, 520)[0]?.path).toBe(
+      LARGE_VISIBLE_FILES[520]
+    );
+
+    controller.destroy();
+  });
+
+  test('focusNextItem can cross the initial partial projection boundary', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: LARGE_VISIBLE_FILES,
+    });
+
+    for (let index = 0; index < 520; index += 1) {
+      controller.focusNextItem();
+    }
+
+    expect(controller.getFocusedPath()).toBe(LARGE_VISIBLE_FILES[520]);
+
+    controller.destroy();
+  });
+
   test('onSearchChange fires for typed input, key-open seeding, and close but not initialSearchQuery', async () => {
     const { PathStoreTreesController } =
       await import('../src/path-store/controller');
@@ -307,7 +349,7 @@ describe('path-store search', () => {
 
       const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
       const firstButton = shadowRoot?.querySelector<HTMLButtonElement>(
-        'button[data-type="item"][data-item-path="README.md"]'
+        'button[data-type="item"]'
       );
       expect(firstButton).not.toBeNull();
 
@@ -352,7 +394,7 @@ describe('path-store search', () => {
 
       const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
       const firstButton = shadowRoot?.querySelector<HTMLButtonElement>(
-        'button[data-type="item"][data-item-path="README.md"]'
+        'button[data-type="item"]'
       );
       expect(firstButton).not.toBeNull();
 
@@ -433,7 +475,7 @@ describe('path-store search', () => {
 
       const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
       const firstButton = shadowRoot?.querySelector<HTMLButtonElement>(
-        'button[data-type="item"][data-item-path="README.md"]'
+        'button[data-type="item"]'
       );
       const searchInput = shadowRoot?.querySelector<HTMLInputElement>(
         'input[data-file-tree-search-input]'
@@ -465,6 +507,83 @@ describe('path-store search', () => {
       expect(fileTree.getSelectedPaths()).toEqual(
         focusedPathBeforeSubmit == null ? [] : [focusedPathBeforeSubmit]
       );
+      const selectedRow = shadowRoot?.querySelector<HTMLButtonElement>(
+        'button[data-item-selected="true"]'
+      );
+      expect(selectedRow?.getAttribute('data-item-path')).toBe(
+        focusedPathBeforeSubmit
+      );
+      expect(shadowRoot?.activeElement).toBe(selectedRow);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('Enter immediately after ArrowDown still returns focus to the selected row', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const manyWorkerFiles = [
+        'README.md',
+        ...Array.from({ length: 24 }, (_unused, index) => {
+          return `src/utils/worker/match-${String(index)}.ts`;
+        }),
+      ];
+
+      const fileTree = new PathStoreFileTree({
+        fileTreeSearchMode: 'hide-non-matches',
+        flattenEmptyDirectories: false,
+        id: 'pst-search-enter-race-test',
+        initialExpansion: 'open',
+        overscan: 0,
+        paths: manyWorkerFiles,
+        search: true,
+        viewportHeight: 44,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const firstButton = shadowRoot?.querySelector<HTMLButtonElement>(
+        'button[data-type="item"]'
+      );
+      const searchInput = shadowRoot?.querySelector<HTMLInputElement>(
+        'input[data-file-tree-search-input]'
+      );
+      expect(firstButton).not.toBeNull();
+      expect(searchInput).not.toBeNull();
+
+      firstButton?.focus();
+      pressKey(firstButton as HTMLButtonElement, dom, 'w');
+      await flushDom();
+
+      setInputValue(searchInput as HTMLInputElement, dom, 'worker');
+      await flushDom();
+
+      pressKey(searchInput as HTMLInputElement, dom, 'ArrowDown', {
+        code: 'ArrowDown',
+      });
+      pressKey(searchInput as HTMLInputElement, dom, 'Enter', {
+        code: 'Enter',
+      });
+      await flushDom();
+      await flushDom();
+
+      const selectedRow = shadowRoot?.querySelector<HTMLButtonElement>(
+        'button[data-item-selected="true"]'
+      );
+      expect(fileTree.isSearchOpen()).toBe(false);
+      expect(selectedRow).not.toBeNull();
+      expect(selectedRow?.getAttribute('data-item-path')).toBe(
+        'src/utils/worker/match-1.ts'
+      );
+      expect(shadowRoot?.activeElement).toBe(selectedRow);
 
       fileTree.cleanUp();
     } finally {

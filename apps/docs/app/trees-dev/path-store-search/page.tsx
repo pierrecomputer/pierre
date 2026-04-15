@@ -4,31 +4,21 @@ import {
 } from '@pierre/trees/path-store';
 
 import { sharedDemoFileTreeOptions, sharedDemoStateConfig } from '../demo-data';
-import { createPresortedPreparedInput } from '../path-store-powered/createPresortedPreparedInput';
 import { PathStoreSearchDemoClient } from './PathStoreSearchDemoClient';
 
 const searchPaths = sharedDemoFileTreeOptions.initialFiles;
-const searchPreparedInput = createPresortedPreparedInput(searchPaths);
 
-function getPayload(
-  options: Omit<PathStoreFileTreeOptions, 'id' | 'preparedInput'>,
-  id: string
-) {
+function getPayload(options: Omit<PathStoreFileTreeOptions, 'id'>, id: string) {
   return preloadPathStoreFileTree({
     ...options,
     id,
-    preparedInput: searchPreparedInput,
   });
 }
 
 export default function PathStoreSearchPage() {
   const sharedOptions: Omit<
     PathStoreFileTreeOptions,
-    | 'fileTreeSearchMode'
-    | 'id'
-    | 'initialSearchQuery'
-    | 'preparedInput'
-    | 'search'
+    'fileTreeSearchMode' | 'id' | 'initialSearchQuery' | 'search'
   > = {
     flattenEmptyDirectories: true,
     initialExpandedPaths: sharedDemoStateConfig.initialExpandedItems,
