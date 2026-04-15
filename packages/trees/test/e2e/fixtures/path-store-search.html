@@ -67,6 +67,9 @@
         'src/index.ts',
         'src/components/Button.tsx',
         'src/components/Card.tsx',
+        ...Array.from({ length: 18 }, (_unused, index) => {
+          return `src/generated/file-${String(index)}.ts`;
+        }),
         'src/utils/worker/index.ts',
         'src/utils/worker/deprecated/old-worker.ts',
         'src/utils/worker.ts',

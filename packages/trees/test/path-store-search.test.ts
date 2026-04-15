@@ -590,4 +590,80 @@ describe('path-store search', () => {
       cleanup();
     }
   });
+
+  test('closing search scrolls a newly selected offscreen row back toward the viewport center', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const offscreenWorkerFiles = [
+        'README.md',
+        ...Array.from({ length: 24 }, (_unused, index) => {
+          return `src/generated/file-${String(index)}.ts`;
+        }),
+        ...Array.from({ length: 24 }, (_unused, index) => {
+          return `src/utils/worker/match-${String(index)}.ts`;
+        }),
+      ];
+
+      const fileTree = new PathStoreFileTree({
+        fileTreeSearchMode: 'hide-non-matches',
+        flattenEmptyDirectories: false,
+        id: 'pst-search-center-selected-row',
+        initialExpansion: 'open',
+        overscan: 0,
+        paths: offscreenWorkerFiles,
+        search: true,
+        viewportHeight: 44,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector<HTMLElement>(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      const firstButton = shadowRoot?.querySelector<HTMLButtonElement>(
+        'button[data-type="item"]'
+      );
+      const searchInput = shadowRoot?.querySelector<HTMLInputElement>(
+        'input[data-file-tree-search-input]'
+      );
+      expect(scrollElement).not.toBeNull();
+      expect(firstButton).not.toBeNull();
+      expect(searchInput).not.toBeNull();
+
+      firstButton?.focus();
+      pressKey(firstButton as HTMLButtonElement, dom, 'w');
+      await flushDom();
+
+      setInputValue(searchInput as HTMLInputElement, dom, 'worker');
+      await flushDom();
+
+      pressKey(searchInput as HTMLInputElement, dom, 'ArrowDown', {
+        code: 'ArrowDown',
+      });
+      pressKey(searchInput as HTMLInputElement, dom, 'Enter', {
+        code: 'Enter',
+      });
+      await flushDom();
+      await flushDom();
+
+      const selectedRow = shadowRoot?.querySelector<HTMLButtonElement>(
+        'button[data-item-selected="true"]'
+      );
+      expect(scrollElement?.scrollTop).toBeGreaterThan(0);
+      expect(selectedRow?.getAttribute('data-item-path')).toBe(
+        'src/utils/worker/match-1.ts'
+      );
+      expect(shadowRoot?.activeElement).toBe(selectedRow);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
 });

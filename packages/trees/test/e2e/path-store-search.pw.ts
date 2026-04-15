@@ -231,6 +231,11 @@ test.describe('path-store search proof', () => {
           key: 'ArrowDown',
         })
       );
+      const focusedBeforeSubmit = shadow.querySelector<HTMLButtonElement>(
+        'button[data-item-focused="true"]'
+      );
+      const focusedTopBefore =
+        focusedBeforeSubmit?.getBoundingClientRect().top ?? null;
       input.dispatchEvent(
         new KeyboardEvent('keydown', {
           bubbles: true,
@@ -244,10 +249,17 @@ test.describe('path-store search proof', () => {
         'button[data-item-selected="true"]'
       );
       const active = shadow.activeElement as HTMLElement | null;
+      const scrollElement = shadow.querySelector<HTMLElement>(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      const selectedTopAfter = selected?.getBoundingClientRect().top ?? null;
       return {
         activePath: active?.getAttribute('data-item-path') ?? null,
+        focusedTopBefore,
         inputFocused: active === input,
+        scrollTop: scrollElement?.scrollTop ?? null,
         selectedPath: selected?.getAttribute('data-item-path') ?? null,
+        selectedTopAfter,
       };
     });
 
@@ -255,5 +267,11 @@ test.describe('path-store search proof', () => {
     expect(result?.selectedPath).toBe('src/utils/worker/index.ts');
     expect(result?.activePath).toBe('src/utils/worker/index.ts');
     expect(result?.inputFocused).toBe(false);
+    expect(result?.scrollTop).toBeGreaterThan(0);
+    expect(
+      Math.abs(
+        (result?.selectedTopAfter ?? 0) - (result?.focusedTopBefore ?? 0)
+      )
+    ).toBeLessThan(2);
   });
 });
