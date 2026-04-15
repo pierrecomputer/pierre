@@ -224,6 +224,91 @@ describe('path-store search', () => {
     controller.destroy();
   });
 
+  test('focusNearestPath returns the correct visible path during filtered search', async () => {
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const controller = new PathStoreTreesController({
+      fileTreeSearchMode: 'hide-non-matches',
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: FILES,
+    });
+
+    controller.setSearch('worker');
+
+    expect(controller.resolveNearestVisiblePath('src/utils/worker.ts')).toBe(
+      'src/utils/worker.ts'
+    );
+    expect(controller.focusNearestPath('src/utils/worker.ts')).toBe(
+      'src/utils/worker.ts'
+    );
+
+    controller.destroy();
+  });
+
+  test('filtered visible rows fetch only the contiguous runs they need', async () => {
+    const { PathStore } = await import('@pierre/path-store');
+    const { PathStoreTreesController } =
+      await import('../src/path-store/controller');
+
+    const originalGetVisibleSlice = PathStore.prototype.getVisibleSlice;
+    const requestedRanges: Array<[number, number]> = [];
+    PathStore.prototype.getVisibleSlice = function getVisibleSlice(start, end) {
+      requestedRanges.push([start, end]);
+      return originalGetVisibleSlice.call(this, start, end);
+    };
+
+    try {
+      const controller = new PathStoreTreesController({
+        fileTreeSearchMode: 'hide-non-matches',
+        flattenEmptyDirectories: false,
+        initialExpansion: 'open',
+        paths: [
+          'a/worker-a.ts',
+          ...Array.from({ length: 24 }, (_unused, index) => {
+            return `b/fill-${String(index)}.ts`;
+          }),
+          'm/worker-m.ts',
+          ...Array.from({ length: 24 }, (_unused, index) => {
+            return `n/fill-${String(index)}.ts`;
+          }),
+          'z/worker-z.ts',
+        ],
+      });
+
+      controller.setSearch('worker');
+      requestedRanges.length = 0;
+
+      const visiblePaths = controller
+        .getVisibleRows(0, 5)
+        .map((row) => row.path);
+
+      expect(visiblePaths).toEqual([
+        'a/',
+        'a/worker-a.ts',
+        'm/',
+        'm/worker-m.ts',
+        'z/',
+        'z/worker-z.ts',
+      ]);
+      expect(requestedRanges).toHaveLength(3);
+      expect(requestedRanges.every(([start, end]) => end - start <= 1)).toBe(
+        true
+      );
+      expect(requestedRanges[0]?.[0]).toBeLessThan(
+        requestedRanges[1]?.[0] ?? 0
+      );
+      expect(requestedRanges[1]?.[0]).toBeLessThan(
+        requestedRanges[2]?.[0] ?? 0
+      );
+
+      controller.destroy();
+    } finally {
+      PathStore.prototype.getVisibleSlice = originalGetVisibleSlice;
+    }
+  });
+
   test('closed-search visible count stays tied to the full store count before full projection expansion', async () => {
     const { PathStoreTreesController } =
       await import('../src/path-store/controller');

@@ -525,7 +525,7 @@ export class PathStoreTreesController
     const nextFocusedIndex = this.#resolveFocusedIndex(nextPath);
     if (nextFocusedIndex >= 0) {
       this.#setFocusedIndex(nextFocusedIndex);
-      return this.#projectionPaths[nextFocusedIndex] ?? nextPath;
+      return this.#getCurrentVisiblePaths()[nextFocusedIndex] ?? nextPath;
     }
 
     return null;
@@ -550,18 +550,19 @@ export class PathStoreTreesController
   }
 
   public resolveNearestVisiblePath(path: string | null): string | null {
+    const currentVisiblePaths = this.#getCurrentVisiblePaths();
     if (this.#visibleCount === 0) {
       return null;
     }
 
     if (path == null) {
-      return this.#focusedPath ?? this.#projectionPaths[0] ?? null;
+      return this.#focusedPath ?? currentVisiblePaths[0] ?? null;
     }
 
     const resolvedPath = this.#store.getPathInfo(path)?.path ?? path;
     const directIndex = this.#resolveFocusedIndex(resolvedPath);
     if (directIndex >= 0) {
-      return this.#projectionPaths[directIndex] ?? resolvedPath;
+      return currentVisiblePaths[directIndex] ?? resolvedPath;
     }
 
     const siblingPath = this.#findNearestVisibleSiblingPath(resolvedPath);
@@ -569,7 +570,7 @@ export class PathStoreTreesController
       return siblingPath;
     }
 
-    return this.#focusedPath ?? this.#projectionPaths[0] ?? null;
+    return this.#focusedPath ?? currentVisiblePaths[0] ?? null;
   }
 
   public getSelectedPaths(): readonly string[] {
@@ -603,21 +604,43 @@ export class PathStoreTreesController
     }
 
     if (this.#searchVisibleIndices != null) {
-      const actualStartIndex =
-        this.#getProjectionIndexFromVisibleIndex(boundedStart);
-      const actualEndIndex =
-        this.#getProjectionIndexFromVisibleIndex(boundedEnd);
-      const visibleSlice = this.#store.getVisibleSlice(
-        actualStartIndex,
-        actualEndIndex
+      const projectionIndices = Array.from(
+        { length: boundedEnd - boundedStart + 1 },
+        (_, visibleOffset) =>
+          this.#getProjectionIndexFromVisibleIndex(boundedStart + visibleOffset)
       );
       const visibleRowByProjectionIndex = new Map<
         number,
-        (typeof visibleSlice)[number]
+        ReturnType<PathStore['getVisibleSlice']>[number]
       >();
-      visibleSlice.forEach((row, offset) => {
-        visibleRowByProjectionIndex.set(actualStartIndex + offset, row);
-      });
+      let runStartIndex = projectionIndices[0] ?? -1;
+      let runEndIndex = runStartIndex;
+      for (let index = 1; index <= projectionIndices.length; index += 1) {
+        const projectionIndex = projectionIndices[index];
+        if (projectionIndex != null && projectionIndex === runEndIndex + 1) {
+          runEndIndex = projectionIndex;
+          continue;
+        }
+
+        if (runStartIndex >= 0) {
+          const visibleSlice = this.#store.getVisibleSlice(
+            runStartIndex,
+            runEndIndex
+          );
+          visibleSlice.forEach((row, offset) => {
+            visibleRowByProjectionIndex.set(runStartIndex + offset, row);
+          });
+        }
+
+        if (projectionIndex == null) {
+          runStartIndex = -1;
+          runEndIndex = -1;
+          continue;
+        }
+
+        runStartIndex = projectionIndex;
+        runEndIndex = projectionIndex;
+      }
 
       return Array.from(
         { length: boundedEnd - boundedStart + 1 },
@@ -1016,7 +1039,7 @@ export class PathStoreTreesController
     let previousSiblingPath: string | null = null;
     let nextSiblingPath: string | null = null;
 
-    for (const siblingPath of this.#projectionPaths) {
+    for (const siblingPath of this.#getCurrentVisiblePaths()) {
       if (getImmediateParentPath(siblingPath) !== parentPath) {
         continue;
       }
