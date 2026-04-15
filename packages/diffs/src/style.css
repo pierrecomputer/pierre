@@ -37,27 +37,30 @@
 
     --diffs-bg-deletion-override
     --diffs-bg-deletion-number-override
-    --diffs-bg-deletion-hover-override
     --diffs-bg-deletion-emphasis-override
 
     --diffs-bg-addition-override
     --diffs-bg-addition-number-override
-    --diffs-bg-addition-hover-override
     --diffs-bg-addition-emphasis-override
+
+    --conflict-bg-current-override
+    --conflict-bg-current-number-override
+    --conflict-bg-current-header-override
+    --conflict-bg-incoming-override
+    --conflict-bg-incoming-number-override
+    --conflict-bg-incoming-header-override
 
     // Line Selection Color Overrides (for enableLineSelection)
     --diffs-selection-color-override
     --diffs-bg-selection-override
     --diffs-bg-selection-number-override
-    --diffs-bg-selection-background-override
-    --diffs-bg-selection-number-background-override
 
     // Available CSS Layout Overrides
     --diffs-gap-inline
     --diffs-gap-block
     --diffs-gap-style
     --diffs-tab-size
-  */
+    */
 
     color-scheme: light dark;
     display: block;
@@ -83,14 +86,6 @@
         color-mix(in lab, var(--diffs-bg) 92%, var(--diffs-mixer))
       )
     );
-    --diffs-bg-hover: var(
-      --diffs-bg-hover-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 97%, var(--diffs-mixer)),
-        color-mix(in lab, var(--diffs-bg) 91%, var(--diffs-mixer))
-      )
-    );
-
     --diffs-bg-context: var(
       --diffs-bg-context-override,
       light-dark(
@@ -98,124 +93,6 @@
         color-mix(in lab, var(--diffs-bg) 92.5%, var(--diffs-mixer))
       )
     );
-    --diffs-bg-context-number: var(
-      --diffs-bg-context-number-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg-context) 80%, var(--diffs-bg)),
-        color-mix(in lab, var(--diffs-bg-context) 60%, var(--diffs-bg))
-      )
-    );
-    --diffs-bg-conflict-marker: var(
-      --diffs-bg-conflict-marker-override,
-      light-dark(
-        color-mix(
-          in lab,
-          var(--diffs-bg-context) 88%,
-          var(--diffs-modified-base)
-        ),
-        color-mix(
-          in lab,
-          var(--diffs-bg-context) 80%,
-          var(--diffs-modified-base)
-        )
-      )
-    );
-    --diffs-bg-conflict-current: var(
-      --diffs-bg-conflict-current-override,
-      light-dark(#e5f8ea, #274432)
-    );
-    --diffs-bg-conflict-base: var(
-      --diffs-bg-conflict-base-override,
-      light-dark(
-        color-mix(
-          in lab,
-          var(--diffs-bg-context) 90%,
-          var(--diffs-modified-base)
-        ),
-        color-mix(
-          in lab,
-          var(--diffs-bg-context) 82%,
-          var(--diffs-modified-base)
-        )
-      )
-    );
-    --diffs-bg-conflict-incoming: var(
-      --diffs-bg-conflict-incoming-override,
-      light-dark(#e6f1ff, #253b5a)
-    );
-    --diffs-bg-conflict-marker-number: var(
-      --diffs-bg-conflict-marker-number-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg-conflict-marker) 72%, var(--diffs-bg)),
-        color-mix(in lab, var(--diffs-bg-conflict-marker) 54%, var(--diffs-bg))
-      )
-    );
-    --diffs-bg-conflict-current-number: var(
-      --diffs-bg-conflict-current-number-override,
-      light-dark(#d7f1de, #30533d)
-    );
-    --diffs-bg-conflict-base-number: var(
-      --diffs-bg-conflict-base-number-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg-conflict-base) 72%, var(--diffs-bg)),
-        color-mix(in lab, var(--diffs-bg-conflict-base) 54%, var(--diffs-bg))
-      )
-    );
-    --diffs-bg-conflict-incoming-number: var(
-      --diffs-bg-conflict-incoming-number-override,
-      light-dark(#d8e8ff, #2f4b73)
-    );
-    --conflict-bg-current: var(
-      --conflict-bg-current-override,
-      var(--diffs-bg-addition)
-    );
-    --conflict-bg-incoming: var(
-      --conflict-bg-incoming-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 88%, var(--diffs-modified-base)),
-        color-mix(in lab, var(--diffs-bg) 80%, var(--diffs-modified-base))
-      )
-    );
-    --conflict-bg-current-number: var(
-      --conflict-bg-current-number-override,
-      var(--diffs-bg-addition-number)
-    );
-    --conflict-bg-incoming-number: var(
-      --conflict-bg-incoming-number-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 91%, var(--diffs-modified-base)),
-        color-mix(in lab, var(--diffs-bg) 85%, var(--diffs-modified-base))
-      )
-    );
-    --conflict-bg-current-header: var(
-      --conflict-bg-current-header-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 78%, var(--diffs-addition-base)),
-        color-mix(in lab, var(--diffs-bg) 68%, var(--diffs-addition-base))
-      )
-    );
-    --conflict-bg-incoming-header: var(
-      --conflict-bg-incoming-header-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 78%, var(--diffs-modified-base)),
-        color-mix(in lab, var(--diffs-bg) 68%, var(--diffs-modified-base))
-      )
-    );
-    --conflict-bg-current-header-number: var(
-      --conflict-bg-current-header-number-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 72%, var(--diffs-addition-base)),
-        color-mix(in lab, var(--diffs-bg) 62%, var(--diffs-addition-base))
-      )
-    );
-    --conflict-bg-incoming-header-number: var(
-      --conflict-bg-incoming-header-number-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 72%, var(--diffs-modified-base)),
-        color-mix(in lab, var(--diffs-bg) 62%, var(--diffs-modified-base))
-      )
-    );
-
     --diffs-bg-separator: var(
       --diffs-bg-separator-override,
       light-dark(
@@ -287,20 +164,6 @@
         color-mix(in lab, var(--diffs-bg) 80%, var(--diffs-deletion-base))
       )
     );
-    --diffs-bg-deletion-number: var(
-      --diffs-bg-deletion-number-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 91%, var(--diffs-deletion-base)),
-        color-mix(in lab, var(--diffs-bg) 85%, var(--diffs-deletion-base))
-      )
-    );
-    --diffs-bg-deletion-hover: var(
-      --diffs-bg-deletion-hover-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 80%, var(--diffs-deletion-base)),
-        color-mix(in lab, var(--diffs-bg) 75%, var(--diffs-deletion-base))
-      )
-    );
     --diffs-bg-deletion-emphasis: var(
       --diffs-bg-deletion-emphasis-override,
       light-dark(
@@ -316,20 +179,6 @@
         color-mix(in lab, var(--diffs-bg) 80%, var(--diffs-addition-base))
       )
     );
-    --diffs-bg-addition-number: var(
-      --diffs-bg-addition-number-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 91%, var(--diffs-addition-base)),
-        color-mix(in lab, var(--diffs-bg) 85%, var(--diffs-addition-base))
-      )
-    );
-    --diffs-bg-addition-hover: var(
-      --diffs-bg-addition-hover-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 80%, var(--diffs-addition-base)),
-        color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-addition-base))
-      )
-    );
     --diffs-bg-addition-emphasis: var(
       --diffs-bg-addition-emphasis-override,
       light-dark(
@@ -343,21 +192,6 @@
       color-mix(in lab, var(--diffs-selection-base) 65%, var(--diffs-mixer)),
       color-mix(in lab, var(--diffs-selection-base) 75%, var(--diffs-mixer))
     );
-    --diffs-bg-selection: var(
-      --diffs-bg-selection-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 82%, var(--diffs-selection-base)),
-        color-mix(in lab, var(--diffs-bg) 75%, var(--diffs-selection-base))
-      )
-    );
-    --diffs-bg-selection-number: var(
-      --diffs-bg-selection-number-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-bg) 75%, var(--diffs-selection-base)),
-        color-mix(in lab, var(--diffs-bg) 60%, var(--diffs-selection-base))
-      )
-    );
-
     background-color: var(--diffs-bg);
     color: var(--diffs-fg);
   }
@@ -453,12 +287,412 @@
     );
   }
 
+  /* Line Color and BG Calculations */
   [data-line],
   [data-gutter-buffer],
+  [data-column-number],
   [data-line-annotation],
-  [data-no-newline] {
+  [data-no-newline],
+  [data-merge-conflict],
+  [data-merge-conflict-actions] {
+    /* Pre-fill css variables for appropriate up-mixing */
+    --diffs-computed-decoration-bg: var(--diffs-bg);
+    --diffs-computed-diff-line-bg: var(--diffs-bg);
+    --diffs-computed-selected-line-bg: var(--diffs-bg);
+
     color: var(--diffs-fg);
     background-color: var(--diffs-line-bg, var(--diffs-bg));
+
+    &:where([data-hovered]) {
+      --diffs-computed-hovered-line-bg: light-dark(
+        color-mix(
+          in lab,
+          var(--diffs-computed-selected-line-bg) 97%,
+          var(--diffs-bg-hover-override, var(--diffs-mixer))
+        ),
+        color-mix(
+          in lab,
+          var(--diffs-computed-selected-line-bg) 91%,
+          var(--diffs-bg-hover-override, var(--diffs-mixer))
+        )
+      );
+      --diffs-line-bg: var(--diffs-computed-hovered-line-bg, inherit);
+    }
+  }
+
+  [data-line],
+  [data-no-newline] {
+    &[data-decoration-bg] {
+      --mix-deco-light: 92%;
+      --mix-deco-dark: 85%;
+
+      &[data-decoration-bg-depth='2'] {
+        --mix-deco-light: 88%;
+        --mix-deco-dark: 80%;
+      }
+
+      &[data-decoration-bg-depth='3'] {
+        --mix-deco-light: 85%;
+        --mix-deco-dark: 78%;
+      }
+
+      &[data-hovered]:not([data-selected-line]) {
+        --mix-deco-light: 85%;
+        --mix-deco-dark: 85%;
+      }
+
+      &[data-hovered]:not([data-selected-line])[data-decoration-bg-depth='2'] {
+        --mix-deco-light: 83%;
+        --mix-deco-dark: 83%;
+      }
+
+      &[data-hovered]:not([data-selected-line])[data-decoration-bg-depth='3'] {
+        --mix-deco-light: 81%;
+        --mix-deco-dark: 81%;
+      }
+
+      --diffs-computed-decoration-bg: light-dark(
+        color-mix(
+          in lab,
+          var(--diffs-bg) var(--mix-deco-light),
+          var(--diffs-decoration-bg)
+        ),
+        color-mix(
+          in lab,
+          var(--diffs-bg) var(--mix-deco-dark),
+          var(--diffs-decoration-bg)
+        )
+      );
+      /* Lets up-select all lines */
+      --diffs-computed-diff-line-bg: var(--diffs-computed-decoration-bg);
+      --diffs-computed-selected-line-bg: var(--diffs-computed-decoration-bg);
+
+      /* Apply the appropriately computed bg line color */
+      --diffs-line-bg: var(--diffs-computed-decoration-bg);
+    }
+  }
+
+  [data-line-annotation],
+  [data-gutter-buffer='annotation'] {
+    --diffs-computed-decoration-bg: var(--diffs-bg-context);
+    --diffs-computed-diff-line-bg: var(--diffs-bg-context);
+    --diffs-computed-selected-line-bg: var(--diffs-bg-context);
+    --diffs-line-bg: var(--diffs-bg-context);
+  }
+
+  [data-merge-conflict-actions],
+  [data-gutter-buffer='merge-conflict-action'],
+  [data-gutter-buffer='merge-conflict-marker-base'],
+  [data-gutter-buffer='merge-conflict-marker-separator'],
+  [data-merge-conflict='marker-base'],
+  [data-merge-conflict='marker-separator'] {
+    --diffs-computed-decoration-bg: var(--diffs-bg-context);
+    --diffs-computed-diff-line-bg: var(--diffs-bg-context);
+    --diffs-computed-selected-line-bg: var(--diffs-bg-context);
+    --diffs-line-bg: var(--diffs-bg-context);
+  }
+
+  [data-gutter-buffer='merge-conflict-marker-start'],
+  [data-merge-conflict='marker-start'] {
+    --diffs-computed-decoration-bg: light-dark(
+      color-mix(
+        in lab,
+        var(--diffs-bg) 78%,
+        var(--conflict-bg-current-header-override, var(--diffs-addition-base))
+      ),
+      color-mix(
+        in lab,
+        var(--diffs-bg) 68%,
+        var(--conflict-bg-current-header-override, var(--diffs-addition-base))
+      )
+    );
+    --diffs-computed-diff-line-bg: var(--diffs-computed-decoration-bg);
+    --diffs-computed-selected-line-bg: var(--diffs-computed-decoration-bg);
+    --diffs-line-bg: var(--diffs-computed-decoration-bg);
+  }
+
+  [data-gutter-buffer='merge-conflict-marker-end'],
+  [data-merge-conflict='marker-end'] {
+    --diffs-computed-decoration-bg: light-dark(
+      color-mix(
+        in lab,
+        var(--diffs-bg) 78%,
+        var(--conflict-bg-incoming-header-override, var(--diffs-modified-base))
+      ),
+      color-mix(
+        in lab,
+        var(--diffs-bg) 68%,
+        var(--conflict-bg-incoming-header-override, var(--diffs-modified-base))
+      )
+    );
+    --diffs-computed-diff-line-bg: var(--diffs-computed-decoration-bg);
+    --diffs-computed-selected-line-bg: var(--diffs-computed-decoration-bg);
+    --diffs-line-bg: var(--diffs-computed-decoration-bg);
+  }
+
+  [data-has-merge-conflict] [data-line-annotation],
+  [data-has-merge-conflict] [data-gutter-buffer='annotation'] {
+    --diffs-computed-decoration-bg: var(--diffs-bg);
+    --diffs-computed-diff-line-bg: var(--diffs-bg);
+    --diffs-computed-selected-line-bg: var(--diffs-bg);
+    --diffs-line-bg: var(--diffs-bg);
+  }
+
+  /* We are using where here to not affect the nesting impacts later on for
+   * hover and selection */
+  :where([data-background]) {
+    [data-gutter-buffer],
+    [data-column-number] {
+      --mix-light: 91%;
+      --mix-dark: 85%;
+    }
+
+    [data-line],
+    [data-no-newline] {
+      --mix-light: 88%;
+      --mix-dark: 80%;
+    }
+
+    [data-gutter-buffer],
+    [data-column-number],
+    [data-line],
+    [data-no-newline] {
+      --diffs-diff-line-mix-target: var(--diffs-bg);
+
+      &[data-line-type='change-deletion'] {
+        --diffs-diff-line-mix-target: var(
+          --diffs-bg-deletion-override,
+          var(--diffs-deletion-base)
+        );
+
+        &[data-hovered] {
+          --mix-light: 80%;
+          --mix-dark: 75%;
+        }
+
+        &:where([data-gutter-buffer], [data-column-number]) {
+          color: var(
+            --diffs-fg-number-deletion-override,
+            var(--diffs-deletion-base)
+          );
+
+          --diffs-diff-line-mix-target: var(
+            --diffs-bg-deletion-number-override,
+            var(--diffs-deletion-base)
+          );
+        }
+
+        --diffs-computed-diff-line-bg: light-dark(
+          color-mix(
+            in lab,
+            var(--diffs-computed-decoration-bg) var(--mix-light),
+            var(--diffs-diff-line-mix-target)
+          ),
+          color-mix(
+            in lab,
+            var(--diffs-computed-decoration-bg) var(--mix-dark),
+            var(--diffs-diff-line-mix-target)
+          )
+        );
+
+        --diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
+        --diffs-line-bg: var(--diffs-computed-diff-line-bg, inherit);
+      }
+
+      &[data-line-type='change-addition'] {
+        --diffs-diff-line-mix-target: var(
+          --diffs-bg-addition-override,
+          var(--diffs-addition-base)
+        );
+
+        &[data-hovered] {
+          --mix-light: 80%;
+          --mix-dark: 70%;
+        }
+
+        &:where([data-gutter-buffer], [data-column-number]) {
+          color: var(
+            --diffs-fg-number-addition-override,
+            var(--diffs-addition-base)
+          );
+
+          --diffs-diff-line-mix-target: var(
+            --diffs-bg-addition-number-override,
+            var(--diffs-addition-base)
+          );
+        }
+
+        --diffs-computed-diff-line-bg: light-dark(
+          color-mix(
+            in lab,
+            var(--diffs-computed-decoration-bg) var(--mix-light),
+            var(--diffs-diff-line-mix-target)
+          ),
+          color-mix(
+            in lab,
+            var(--diffs-computed-decoration-bg) var(--mix-dark),
+            var(--diffs-diff-line-mix-target)
+          )
+        );
+
+        --diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
+        --diffs-line-bg: var(--diffs-computed-diff-line-bg, inherit);
+      }
+
+      &[data-merge-conflict='current'] {
+        --diffs-diff-line-mix-target: var(
+          --conflict-bg-current-override,
+          var(--diffs-addition-base)
+        );
+
+        &:where([data-gutter-buffer], [data-column-number]) {
+          color: var(
+            --diffs-fg-number-addition-override,
+            var(--diffs-addition-base)
+          );
+
+          --diffs-diff-line-mix-target: var(
+            --conflict-bg-current-number-override,
+            var(--diffs-addition-base)
+          );
+        }
+
+        &[data-hovered] {
+          --mix-light: 80%;
+          --mix-dark: 70%;
+        }
+
+        --diffs-computed-diff-line-bg: light-dark(
+          color-mix(
+            in lab,
+            var(--diffs-computed-decoration-bg) var(--mix-light),
+            var(--diffs-diff-line-mix-target)
+          ),
+          color-mix(
+            in lab,
+            var(--diffs-computed-decoration-bg) var(--mix-dark),
+            var(--diffs-diff-line-mix-target)
+          )
+        );
+
+        --diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
+        --diffs-line-bg: var(--diffs-computed-diff-line-bg, inherit);
+      }
+
+      &[data-merge-conflict='incoming'] {
+        --diffs-diff-line-mix-target: var(
+          --conflict-bg-incoming-override,
+          var(--diffs-modified-base)
+        );
+
+        &:where([data-gutter-buffer], [data-column-number]) {
+          color: var(--diffs-modified-base);
+
+          --diffs-diff-line-mix-target: var(
+            --conflict-bg-incoming-number-override,
+            var(--diffs-modified-base)
+          );
+        }
+
+        &[data-hovered] {
+          --mix-light: 80%;
+          --mix-dark: 70%;
+        }
+
+        --diffs-computed-diff-line-bg: light-dark(
+          color-mix(
+            in lab,
+            var(--diffs-computed-decoration-bg) var(--mix-light),
+            var(--diffs-diff-line-mix-target)
+          ),
+          color-mix(
+            in lab,
+            var(--diffs-computed-decoration-bg) var(--mix-dark),
+            var(--diffs-diff-line-mix-target)
+          )
+        );
+
+        --diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
+        --diffs-line-bg: var(--diffs-computed-diff-line-bg, inherit);
+      }
+    }
+  }
+
+  /* Order is important for rationalizing these selectors and for order of
+   * application, therefore we need to disable this style-lint rule */
+  /* stylelint-disable-next-line no-duplicate-selectors */
+  [data-gutter-buffer],
+  [data-column-number],
+  [data-line],
+  [data-line-annotation],
+  [data-merge-conflict],
+  [data-merge-conflict-actions],
+  [data-no-newline] {
+    --diffs-selection-mix-target: var(
+      --diffs-bg-selection-override,
+      var(--diffs-selection-base)
+    );
+
+    &:where(
+        [data-line],
+        [data-line-annotation],
+        [data-merge-conflict],
+        [data-merge-conflict-actions],
+        [data-no-newline]
+      )[data-selected-line] {
+      --mix-selection-light: 82%;
+      --mix-selection-dark: 75%;
+
+      &[data-hovered]:not(
+          [data-merge-conflict],
+          [data-line-type='change-addition'],
+          [data-line-type='change-deletion']
+        ) {
+        --mix-selection-light: 75%;
+        --mix-selection-dark: 70%;
+      }
+    }
+
+    &:where([data-gutter-buffer], [data-column-number])[data-selected-line] {
+      --mix-selection-light: 75%;
+      --mix-selection-dark: 60%;
+      --diffs-selection-mix-target: var(
+        --diffs-bg-selection-number-override,
+        var(--diffs-selection-base)
+      );
+
+      &[data-hovered]:not(
+          [data-merge-conflict],
+          [data-line-type='change-addition'],
+          [data-line-type='change-deletion']
+        ) {
+        --mix-selection-light: 70%;
+        --mix-selection-dark: 55%;
+      }
+    }
+
+    &[data-selected-line] {
+      --diffs-computed-selected-line-bg: light-dark(
+        color-mix(
+          in lab,
+          var(--diffs-computed-diff-line-bg) var(--mix-selection-light),
+          var(--diffs-selection-mix-target)
+        ),
+        color-mix(
+          in lab,
+          var(--diffs-computed-diff-line-bg) var(--mix-selection-dark),
+          var(--diffs-selection-mix-target)
+        )
+      );
+      --diffs-line-bg: var(--diffs-computed-selected-line-bg, inherit);
+    }
+  }
+
+  [data-gutter-buffer],
+  [data-column-number] {
+    &[data-selected-line] {
+      color: var(--diffs-selection-number-fg);
+    }
   }
 
   [data-no-newline] {
@@ -563,6 +797,7 @@
     grid-template-columns: subgrid;
     grid-column: 2;
     min-width: 0;
+    background-color: var(--diffs-bg);
   }
 
   [data-diff-type='split'][data-overflow='wrap'] {
@@ -603,25 +838,6 @@
     left: 0;
   }
 
-  [data-line-annotation][data-selected-line] {
-    background-color: unset;
-
-    &::before {
-      content: '';
-      /* FIXME(amadeus): This needs to be audited ... */
-      position: sticky;
-      top: 0;
-      left: 0;
-      display: block;
-      border-right: var(--diffs-gap-style, 1px solid var(--diffs-bg));
-      background-color: var(--diffs-bg-selection-number);
-    }
-
-    [data-annotation-content] {
-      background-color: var(--diffs-bg-selection);
-    }
-  }
-
   [data-interactive-lines] [data-line] {
     cursor: pointer;
   }
@@ -641,8 +857,7 @@
     background-size: 8px 8px;
     background-position: 0 0;
     background-origin: border-box;
-    background-color: var(--diffs-bg);
-    /* This is incredibley expensive... */
+    /* This is incredibly expensive... */
     background-image: repeating-linear-gradient(
       -45deg,
       transparent,
@@ -658,7 +873,6 @@
     background-size: 8px 8px;
     background-position: 5px 0;
     background-origin: border-box;
-    background-color: var(--diffs-bg);
     /* This is incredibley expensive... */
     background-image: repeating-linear-gradient(
       -45deg,
@@ -669,6 +883,8 @@
     );
   }
 
+  /* Hunk Separators */
+  /* --------------- */
   [data-separator] {
     box-sizing: content-box;
     background-color: var(--diffs-bg);
@@ -797,6 +1013,15 @@
       user-select: none;
       overflow: clip;
     }
+  }
+
+  [data-unmodified-lines] {
+    display: block;
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 0 1 auto;
   }
 
   @supports (width: 1cqi) {
@@ -986,29 +1211,12 @@
     }
   }
 
+  /* Hunk separator content is duplicated across gutters and content columns,
+   * so custom CSS can do some stuff. Lets hide things for defaults */
   [data-additions] [data-gutter] [data-separator-wrapper],
   [data-additions] [data-separator='line-info-basic'] [data-separator-wrapper],
   [data-content] [data-separator-wrapper] {
     display: none;
-  }
-
-  [data-line-annotation],
-  [data-gutter-buffer='annotation'] {
-    --diffs-line-bg: var(--diffs-bg-context);
-  }
-
-  [data-merge-conflict-actions],
-  [data-gutter-buffer='merge-conflict-action'] {
-    --diffs-line-bg: var(--diffs-bg-context);
-  }
-
-  [data-has-merge-conflict] [data-line-annotation],
-  [data-has-merge-conflict] [data-gutter-buffer='annotation'] {
-    --diffs-line-bg: var(--diffs-bg);
-  }
-
-  [data-has-merge-conflict] [data-gutter-buffer='merge-conflict-action'] {
-    --diffs-line-bg: var(--diffs-bg);
   }
 
   [data-line-annotation] {
@@ -1134,7 +1342,6 @@
     box-sizing: content-box;
     text-align: right;
     user-select: none;
-    background-color: var(--diffs-bg);
     color: var(--diffs-fg-number);
     padding-left: 2ch;
   }
@@ -1145,6 +1352,8 @@
       --diffs-min-number-column-width,
       var(--diffs-min-number-column-width-default, 3ch)
     );
+    position: relative;
+    z-index: 1;
   }
 
   [data-disable-line-numbers] {
@@ -1186,46 +1395,12 @@
     box-decoration-break: clone;
   }
 
-  [data-line-type='change-addition'] {
-    &[data-column-number] {
-      color: var(
-        --diffs-fg-number-addition-override,
-        var(--diffs-addition-base)
-      );
-    }
-
-    [data-diff-span] {
-      background-color: var(--diffs-bg-addition-emphasis);
-    }
+  [data-line-type='change-addition'] [data-diff-span] {
+    background-color: var(--diffs-bg-addition-emphasis);
   }
 
-  [data-line-type='change-deletion'] {
-    &[data-column-number] {
-      color: var(
-        --diffs-fg-number-deletion-override,
-        var(--diffs-deletion-base)
-      );
-    }
-
-    [data-diff-span] {
-      background-color: var(--diffs-bg-deletion-emphasis);
-    }
-  }
-
-  [data-background] [data-line-type='change-addition'] {
-    --diffs-line-bg: var(--diffs-bg-addition);
-
-    &[data-column-number] {
-      background-color: var(--diffs-bg-addition-number);
-    }
-  }
-
-  [data-background] [data-line-type='change-deletion'] {
-    --diffs-line-bg: var(--diffs-bg-deletion);
-
-    &[data-column-number] {
-      background-color: var(--diffs-bg-deletion-number);
-    }
+  [data-line-type='change-deletion'] [data-diff-span] {
+    background-color: var(--diffs-bg-deletion-emphasis);
   }
 
   [data-merge-conflict='marker-start'],
@@ -1262,104 +1437,52 @@
     content: '(Incoming Change)';
   }
 
-  [data-merge-conflict='marker-base'],
-  [data-merge-conflict='marker-end'] {
-    &[data-line],
-    &[data-no-newline] {
-      background-color: var(--diffs-bg-conflict-marker);
-    }
-
-    &[data-column-number] {
-      background-color: var(--diffs-bg-conflict-marker-number);
-      color: var(--diffs-fg-conflict-marker);
-
-      [data-line-number-content] {
-        color: var(--diffs-fg-conflict-marker);
-      }
-    }
+  [data-merge-conflict-actions-content] {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding-inline: 0.5rem;
+    min-height: 1.75rem;
+    font-family: var(
+      --diffs-header-font-family,
+      var(--diffs-header-font-fallback)
+    );
+    font-size: 0.75rem;
+    line-height: 1.2;
+    color: var(--diffs-fg);
   }
 
-  [data-merge-conflict='current'] {
-    &[data-line],
-    &[data-no-newline] {
-      background-color: var(--conflict-bg-current);
-    }
-
-    &[data-column-number] {
-      background-color: var(--conflict-bg-current-number);
-      color: var(--diffs-addition-base);
-    }
+  [data-merge-conflict-action] {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--diffs-fg-number);
+    font: inherit;
+    font-style: normal;
+    cursor: pointer;
+    padding: 0;
   }
 
-  [data-gutter-buffer='merge-conflict-marker-start'],
-  [data-merge-conflict='marker-start'] {
-    background-color: var(--conflict-bg-current-header);
+  [data-merge-conflict-action]:hover {
+    color: var(--diffs-fg);
   }
 
-  [data-gutter-buffer='merge-conflict-marker-end'],
-  [data-merge-conflict='marker-end'] {
-    background-color: var(--conflict-bg-incoming-header);
+  [data-merge-conflict-action='current']:hover {
+    color: var(--diffs-addition-base);
   }
 
-  [data-merge-conflict='marker-separator'] {
-    &[data-line],
-    &[data-no-newline] {
-      background-color: var(--diffs-bg);
-    }
-
-    &[data-column-number] {
-      background-color: var(--diffs-bg);
-    }
+  [data-merge-conflict-action='incoming']:hover {
+    color: var(--diffs-modified-base);
   }
 
-  [data-merge-conflict='base'] {
-    &[data-line],
-    &[data-no-newline] {
-      background-color: var(--diffs-bg-conflict-base);
-    }
-
-    &[data-column-number] {
-      background-color: var(--diffs-bg-conflict-base-number);
-      color: var(--diffs-modified-base);
-    }
+  [data-merge-conflict-action-separator] {
+    color: var(--diffs-fg-number);
+    opacity: 0.6;
+    user-select: none;
   }
 
-  [data-merge-conflict='incoming'] {
-    &[data-line],
-    &[data-no-newline] {
-      background-color: var(--conflict-bg-incoming);
-    }
-
-    &[data-column-number] {
-      background-color: var(--conflict-bg-incoming-number);
-      color: var(--diffs-modified-base);
-    }
-  }
-
-  @media (pointer: fine) {
-    [data-column-number],
-    [data-line] {
-      &[data-hovered] {
-        background-color: var(--diffs-bg-hover);
-      }
-    }
-
-    [data-background] {
-      [data-column-number],
-      [data-line] {
-        &[data-hovered] {
-          &[data-line-type='change-deletion'] {
-            background-color: var(--diffs-bg-deletion-hover);
-          }
-
-          &[data-line-type='change-addition'] {
-            background-color: var(--diffs-bg-addition-hover);
-          }
-        }
-      }
-    }
-  }
-
+  /* Default Header Styles */
+  /* --------------------- */
   [data-diffs-header='default'] {
     position: relative;
     background-color: var(--diffs-bg);
@@ -1421,80 +1544,6 @@
     color: var(--diffs-deletion-base);
   }
 
-  [data-annotation-content] {
-    position: relative;
-    display: flow-root;
-    align-self: flex-start;
-    z-index: 2;
-    min-width: 0;
-    isolation: isolate;
-  }
-
-  [data-merge-conflict-actions-content] {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding-inline: 0.5rem;
-    min-height: 1.75rem;
-    font-family: var(
-      --diffs-header-font-family,
-      var(--diffs-header-font-fallback)
-    );
-    font-size: 0.75rem;
-    line-height: 1.2;
-    color: var(--diffs-fg);
-  }
-
-  [data-merge-conflict-action] {
-    appearance: none;
-    border: 0;
-    background: transparent;
-    color: var(--diffs-fg-number);
-    font: inherit;
-    font-style: normal;
-    cursor: pointer;
-    padding: 0;
-  }
-
-  [data-merge-conflict-action]:hover {
-    color: var(--diffs-fg);
-  }
-
-  [data-merge-conflict-action='current']:hover {
-    color: var(--diffs-addition-base);
-  }
-
-  [data-merge-conflict-action='incoming']:hover {
-    color: var(--diffs-modified-base);
-  }
-
-  [data-merge-conflict-action-separator] {
-    color: var(--diffs-fg-number);
-    opacity: 0.6;
-    user-select: none;
-  }
-
-  /* Sticky positioning has a composite costs, so we should _only_ pay it if we
-   * need to */
-  [data-overflow='scroll'] [data-annotation-content] {
-    position: sticky;
-    width: var(--diffs-column-content-width, auto);
-    left: var(--diffs-column-number-width, 0);
-  }
-
-  [data-overflow='scroll'] [data-merge-conflict-actions-content] {
-    position: sticky;
-    width: var(--diffs-column-content-width, auto);
-    left: var(--diffs-column-number-width, 0);
-  }
-
-  /* Undo some of the stuff that the 'pre' tag does */
-  [data-annotation-slot] {
-    text-wrap-mode: wrap;
-    word-break: normal;
-    white-space-collapse: collapse;
-  }
-
   [data-change-icon] {
     fill: currentColor;
     flex-shrink: 0;
@@ -1518,55 +1567,34 @@
     opacity: 0.6;
   }
 
-  /* Line selection highlighting */
-  [data-selected-line] {
-    &[data-gutter-buffer='annotation'],
-    &[data-column-number] {
-      color: var(--diffs-selection-number-fg);
-      background-color: var(--diffs-bg-selection-number);
-    }
-
-    &[data-line] {
-      background-color: var(--diffs-bg-selection);
-    }
+  [data-annotation-content] {
+    position: relative;
+    display: flow-root;
+    align-self: flex-start;
+    z-index: 2;
+    min-width: 0;
+    isolation: isolate;
   }
 
-  [data-line-type='change-addition'],
-  [data-line-type='change-deletion'] {
-    &[data-selected-line] {
-      &[data-line],
-      &[data-line][data-hovered] {
-        background-color: light-dark(
-          color-mix(
-            in lab,
-            var(--diffs-line-bg, var(--diffs-bg)) 82%,
-            var(--diffs-selection-base)
-          ),
-          color-mix(
-            in lab,
-            var(--diffs-line-bg, var(--diffs-bg)) 75%,
-            var(--diffs-selection-base)
-          )
-        );
-      }
+  /* Sticky positioning has a composite costs, so we should _only_ pay it if we
+   * need to */
+  [data-overflow='scroll'] [data-annotation-content] {
+    position: sticky;
+    width: var(--diffs-column-content-width, auto);
+    left: var(--diffs-column-number-width, 0);
+  }
 
-      &[data-column-number],
-      &[data-column-number][data-hovered] {
-        color: var(--diffs-selection-number-fg);
-        background-color: light-dark(
-          color-mix(
-            in lab,
-            var(--diffs-line-bg, var(--diffs-bg)) 75%,
-            var(--diffs-selection-base)
-          ),
-          color-mix(
-            in lab,
-            var(--diffs-line-bg, var(--diffs-bg)) 60%,
-            var(--diffs-selection-base)
-          )
-        );
-      }
-    }
+  [data-overflow='scroll'] [data-merge-conflict-actions-content] {
+    position: sticky;
+    width: var(--diffs-column-content-width, auto);
+    left: var(--diffs-column-number-width, 0);
+  }
+
+  /* Undo some of the stuff that the 'pre' tag does */
+  [data-annotation-slot] {
+    text-wrap-mode: wrap;
+    word-break: normal;
+    white-space-collapse: collapse;
   }
 
   [data-gutter-utility-slot] {
@@ -1576,37 +1604,6 @@
     right: 0;
     display: flex;
     justify-content: flex-end;
-  }
-
-  [data-unmodified-lines] {
-    display: block;
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 0 1 auto;
-  }
-
-  [data-error-wrapper] {
-    overflow: auto;
-    padding: var(--diffs-gap-block, var(--diffs-gap-fallback))
-      var(--diffs-gap-inline, var(--diffs-gap-fallback));
-    max-height: 400px;
-    scrollbar-width: none;
-
-    [data-error-message] {
-      font-weight: bold;
-      font-size: 18px;
-      color: var(--diffs-deletion-base);
-    }
-
-    [data-error-stack] {
-      color: var(--diffs-fg-number);
-    }
-  }
-
-  [data-placeholder] {
-    contain: strict;
   }
 
   [data-utility-button] {
@@ -1628,5 +1625,124 @@
     fill: currentColor;
     position: relative;
     z-index: 4;
+  }
+
+  /* Decoration Bars */
+  /* --------------- */
+  [data-decoration-bar-stack] {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -2px;
+    width: 6px;
+    pointer-events: none;
+    isolation: isolate;
+    z-index: 1;
+    background-color: var(--diffs-decoration-bar-color, transparent);
+    /* overflow: clip visible; */
+    box-sizing: content-box;
+    border-left: 2px solid var(--diffs-bg);
+    border-right: 2px solid var(--diffs-bg);
+
+    [data-decoration-bar-depth='1'] & {
+      background-color: color-mix(
+        in lab,
+        var(--diffs-bg) 20%,
+        var(--diffs-decoration-bar-color, transparent)
+      );
+    }
+
+    [data-decoration-bar-depth='2'] & {
+      background-color: color-mix(
+        in lab,
+        var(--diffs-bg) 45%,
+        var(--diffs-decoration-bar-color, transparent)
+      );
+    }
+
+    [data-decoration-bar-depth='3'] & {
+      background-color: color-mix(
+        in lab,
+        var(--diffs-bg) 65%,
+        var(--diffs-decoration-bar-color, transparent)
+      );
+    }
+
+    [data-decoration-bar-start] & {
+      border-top-left-radius: 5px;
+      border-top-right-radius: 5px;
+
+      /* &::before { */
+      /*   content: ''; */
+      /*   position: absolute; */
+      /*   box-sizing: content-box; */
+      /*   display: block; */
+      /*   width: 6px; */
+      /*   height: 6px; */
+      /*   z-index: 1; */
+      /*   border-top-left-radius: 3px; */
+      /*   border-top-right-radius: 3px; */
+      /*   border-top: 2px solid var(--diffs-bg); */
+      /*   border-left: 2px solid var(--diffs-bg); */
+      /*   border-right: 2px solid var(--diffs-bg); */
+      /*   left: -2px; */
+      /*   top: -2px; */
+      /* } */
+    }
+
+    [data-decoration-bar-end] & {
+      z-index: 3;
+      border-bottom-left-radius: 5px;
+      border-bottom-right-radius: 5px;
+
+      /* &::after { */
+      /*   content: ''; */
+      /*   position: absolute; */
+      /*   box-sizing: content-box; */
+      /*   display: block; */
+      /*   width: 6px; */
+      /*   height: 6px; */
+      /*   border-bottom-left-radius: 3px; */
+      /*   border-bottom-right-radius: 3px; */
+      /*   border-bottom: 2px solid var(--diffs-bg); */
+      /*   border-left: 2px solid var(--diffs-bg); */
+      /*   border-right: 2px solid var(--diffs-bg); */
+      /*   left: -2px; */
+      /*   bottom: -2px; */
+      /* } */
+    }
+
+    /* [data-decoration-bar-end] & { */
+    /*   border-bottom-left-radius: 5px; */
+    /*   border-bottom-right-radius: 5px; */
+    /*   border-bottom: 2px solid var(--diffs-bg); */
+    /*   border-left: 2px solid var(--diffs-bg); */
+    /*   border-right: 2px solid var(--diffs-bg); */
+    /*   right: -2px; */
+    /*   bottom: -2px; */
+    /*   z-index: 3; */
+    /* } */
+  }
+
+  [data-placeholder] {
+    contain: strict;
+  }
+
+  [data-error-wrapper] {
+    overflow: auto;
+    padding: var(--diffs-gap-block, var(--diffs-gap-fallback))
+      var(--diffs-gap-inline, var(--diffs-gap-fallback));
+    max-height: 400px;
+    scrollbar-width: none;
+
+    [data-error-message] {
+      font-weight: bold;
+      font-size: 18px;
+      color: var(--diffs-deletion-base);
+    }
+
+    [data-error-stack] {
+      color: var(--diffs-fg-number);
+    }
   }
 }

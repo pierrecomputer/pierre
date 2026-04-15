@@ -39,14 +39,12 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined> = {
   --diffs-addition-color-override: yellow;
   --diffs-modified-color-override: purple;
 
-  /* Line selection colors - customize the highlighting when users
-   * select lines via enableLineSelection. These support light-dark()
-   * for automatic theme adaptation. */
+  /* Line selection colors - customize the staged selection tint that gets
+   * mixed into selected rows and their gutter/number cells. These support
+   * light-dark() for automatic theme adaptation. */
   --diffs-selection-color-override: rgb(37, 99, 235);
   --diffs-bg-selection-override: rgba(147, 197, 253, 0.28);
   --diffs-bg-selection-number-override: rgba(96, 165, 250, 0.55);
-  --diffs-bg-selection-background-override: rgba(96, 165, 250, 0.2);
-  --diffs-bg-selection-number-background-override: rgba(59, 130, 246, 0.4);
 
   /* Some basic variables for tweaking the layouts of some of the built in
    * components */
