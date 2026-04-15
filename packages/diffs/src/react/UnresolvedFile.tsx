@@ -72,7 +72,6 @@ export function UnresolvedFile<LAnnotation = undefined>({
   renderHeaderPrefix,
   renderHeaderMetadata,
   renderGutterUtility,
-  renderHoverUtility,
   renderMergeConflictUtility,
   disableWorkerPool = false,
 }: UnresolvedFileProps<LAnnotation>): React.JSX.Element {
@@ -84,8 +83,7 @@ export function UnresolvedFile<LAnnotation = undefined>({
       selectedLines,
       prerenderedHTML,
       hasConflictUtility: renderMergeConflictUtility != null,
-      hasGutterRenderUtility:
-        renderGutterUtility != null || renderHoverUtility != null,
+      hasGutterRenderUtility: renderGutterUtility != null,
       hasCustomHeader: renderCustomHeader != null,
       disableWorkerPool,
     });
@@ -96,7 +94,6 @@ export function UnresolvedFile<LAnnotation = undefined>({
     renderHeaderMetadata,
     renderAnnotation,
     renderGutterUtility,
-    renderHoverUtility,
     lineAnnotations,
     getHoveredLine,
     actions,

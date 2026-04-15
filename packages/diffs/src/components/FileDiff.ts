@@ -97,10 +97,6 @@ export interface FileDiffOptions<LAnnotation>
         instance: FileDiff<LAnnotation>
       ) => HTMLElement | DocumentFragment | null | undefined);
   disableFileHeader?: boolean;
-  /**
-   * @deprecated Use `enableGutterUtility` instead.
-   */
-  enableHoverUtility?: boolean;
   renderHeaderPrefix?: RenderHeaderPrefixCallback;
   renderHeaderMetadata?: RenderHeaderMetadataCallback;
   renderCustomHeader?: RenderHeaderMetadataCallback;
@@ -114,12 +110,6 @@ export interface FileDiffOptions<LAnnotation>
     annotation: DiffLineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
   renderGutterUtility?(
-    getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
-  ): HTMLElement | null | undefined;
-  /**
-   * @deprecated Use `renderGutterUtility` instead.
-   */
-  renderHoverUtility?(
     getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
   ): HTMLElement | null | undefined;
 
@@ -1059,8 +1049,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   protected renderGutterUtility(): void {
-    const renderGutterUtility =
-      this.options.renderGutterUtility ?? this.options.renderHoverUtility;
+    const { renderGutterUtility } = this.options;
     if (this.fileContainer == null || renderGutterUtility == null) {
       this.gutterUtilityContent?.remove();
       this.gutterUtilityContent = undefined;

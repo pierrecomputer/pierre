@@ -295,9 +295,6 @@ const instance = new FileDiff({
 
   // Must be true to enable renderGutterUtility
   enableGutterUtility: false,
-  // Deprecated alias: enableHoverUtility
-  // This boolean controls visibility for both built-in and 
-  // custom gutter utility UI.
 
   // Fires when clicking anywhere on a line
   onLineClick({ lineNumber, side, event }) {},
@@ -550,9 +547,6 @@ const instance = new File({
 
   // Must be true to enable renderGutterUtility
   enableGutterUtility: false,
-  // Deprecated alias: enableHoverUtility
-  // This boolean controls visibility for both built-in and 
-  // custom gutter utility UI.
 
   // Fires when clicking anywhere on a line
   onLineClick({ lineNumber, event }) {},

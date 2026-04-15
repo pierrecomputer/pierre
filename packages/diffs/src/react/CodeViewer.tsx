@@ -27,6 +27,7 @@ import {
   type CodeViewerRenderedItem,
   type CodeViewerScrollTarget,
   type DiffLineAnnotation,
+  type GetHoveredLineResult,
   type LineAnnotation,
   type VirtualFileMetrics,
   type VirtualWindowSpecs,
@@ -39,6 +40,10 @@ import { WorkerPoolContext } from './WorkerPoolContext';
 
 const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+type CodeViewerGutterUtilityGetter =
+  | (() => GetHoveredLineResult<'file'> | undefined)
+  | (() => GetHoveredLineResult<'diff'> | undefined);
 
 interface CodeViewerBaseProps<LAnnotation> {
   options?: CodeViewerOptions<LAnnotation>;
@@ -54,6 +59,10 @@ interface CodeViewerBaseProps<LAnnotation> {
   renderHeaderMetadata?(item: CodeViewerItem<LAnnotation>): ReactNode;
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation> | DiffLineAnnotation<LAnnotation>,
+    item: CodeViewerItem<LAnnotation>
+  ): ReactNode;
+  renderGutterUtility?(
+    getHoveredLine: CodeViewerGutterUtilityGetter,
     item: CodeViewerItem<LAnnotation>
   ): ReactNode;
 }
@@ -128,6 +137,7 @@ function CodeViewerInner<LAnnotation = undefined>(
     options,
     renderAnnotation,
     renderCustomHeader,
+    renderGutterUtility,
     renderHeaderMetadata,
     renderHeaderPrefix,
     style,
@@ -141,19 +151,22 @@ function CodeViewerInner<LAnnotation = undefined>(
   });
   const hasCustomHeader = renderCustomHeader != null;
   const hasAnnotationRenderer = renderAnnotation != null;
+  const hasGutterRenderer = renderGutterUtility != null;
   const hasHeaderRenderers =
     hasCustomHeader ||
     renderHeaderPrefix != null ||
     renderHeaderMetadata != null;
-  const hasRenderers = hasHeaderRenderers || hasAnnotationRenderer;
+  const hasRenderers =
+    hasHeaderRenderers || hasAnnotationRenderer || hasGutterRenderer;
 
   const managedOptions = useMemo(
     () =>
       createManagedCodeViewerOptions({
         options,
         hasCustomHeader,
+        hasGutterRenderer,
       }),
-    [options, hasCustomHeader]
+    [options, hasCustomHeader, hasGutterRenderer]
   );
 
   const [slotContentStore] = useState<ManagedContentStore<LAnnotation>>(() =>
@@ -214,12 +227,22 @@ function CodeViewerInner<LAnnotation = undefined>(
 
   const slotCoordinator: CodeViewerCoordinator<LAnnotation> | undefined =
     useMemo(() => {
-      if (!hasHeaderRenderers && !hasAnnotationRenderer) {
+      if (!hasHeaderRenderers && !hasAnnotationRenderer && !hasGutterRenderer) {
         return undefined;
       } else {
-        return { hasHeaderRenderers, hasAnnotationRenderer, onSnapshotChange };
+        return {
+          hasHeaderRenderers,
+          hasAnnotationRenderer,
+          hasGutterRenderer,
+          onSnapshotChange,
+        };
       }
-    }, [onSnapshotChange, hasAnnotationRenderer, hasHeaderRenderers]);
+    }, [
+      onSnapshotChange,
+      hasAnnotationRenderer,
+      hasGutterRenderer,
+      hasHeaderRenderers,
+    ]);
 
   useIsometricEffect(() => {
     return onScroll != null
@@ -324,6 +347,7 @@ function CodeViewerInner<LAnnotation = undefined>(
           renderHeaderPrefix={renderHeaderPrefix}
           renderHeaderMetadata={renderHeaderMetadata}
           renderAnnotation={renderAnnotation}
+          renderGutterUtility={renderGutterUtility}
         />
       )}
     </>
@@ -362,24 +386,40 @@ function createSlotContentStore<
   };
 }
 
+interface CreateManagedCodeViewerOptionsProps<LAnnotation> {
+  options: CodeViewerOptions<LAnnotation> | undefined;
+  hasCustomHeader: boolean;
+  hasGutterRenderer: boolean;
+}
+
 function createManagedCodeViewerOptions<LAnnotation>({
   options,
   hasCustomHeader,
-}: {
-  options: CodeViewerOptions<LAnnotation> | undefined;
-  hasCustomHeader: boolean;
-}): CodeViewerOptions<LAnnotation> | undefined {
-  if (!hasCustomHeader) {
+  hasGutterRenderer,
+}: CreateManagedCodeViewerOptionsProps<LAnnotation>):
+  | CodeViewerOptions<LAnnotation>
+  | undefined {
+  if (!hasCustomHeader && !hasGutterRenderer) {
     return options;
   }
+  options = { ...options };
 
-  return {
-    ...options,
-    // The imperative CodeViewer adapters use these callbacks' presence to switch
-    // file and diff headers into custom-slot mode. React portals provide the
-    // actual header content, so this placeholder intentionally returns nothing.
-    renderCustomHeader: () => undefined,
-  };
+  // The imperative CodeViewer adapters use this callback's presence to
+  // switch file and diff headers into custom-slot mode. React portals
+  // provide the actual header content, so this placeholder
+  // intentionally returns nothing.
+  if (hasCustomHeader) {
+    options.renderCustomHeader = noopRender;
+  }
+
+  // The imperative CodeViewer adapters use this callback's presence to
+  // create the custom gutter utility slot. React portals provide the
+  // actual content, so this placeholder intentionally returns nothing.
+  if (hasGutterRenderer) {
+    options.renderGutterUtility = noopRender;
+  }
+
+  return options;
 }
 
 interface RenderCodeViewerItemChildrenProps<LAnnotation> {
@@ -388,6 +428,7 @@ interface RenderCodeViewerItemChildrenProps<LAnnotation> {
   renderHeaderPrefix: CodeViewerBaseProps<LAnnotation>['renderHeaderPrefix'];
   renderHeaderMetadata: CodeViewerBaseProps<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: CodeViewerBaseProps<LAnnotation>['renderAnnotation'];
+  renderGutterUtility: CodeViewerBaseProps<LAnnotation>['renderGutterUtility'];
 }
 
 interface SlotPortalsProps<LAnnotation> {
@@ -396,6 +437,7 @@ interface SlotPortalsProps<LAnnotation> {
   renderHeaderPrefix: CodeViewerBaseProps<LAnnotation>['renderHeaderPrefix'];
   renderHeaderMetadata: CodeViewerBaseProps<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: CodeViewerBaseProps<LAnnotation>['renderAnnotation'];
+  renderGutterUtility: CodeViewerBaseProps<LAnnotation>['renderGutterUtility'];
 }
 
 const SlotPortals = memo(function SlotPortals<LAnnotation>({
@@ -404,6 +446,7 @@ const SlotPortals = memo(function SlotPortals<LAnnotation>({
   renderHeaderPrefix,
   renderHeaderMetadata,
   renderAnnotation,
+  renderGutterUtility,
 }: SlotPortalsProps<LAnnotation>) {
   const subscribe = useStableCallback((listener: () => void) =>
     managedContentStore.subscribe(listener)
@@ -422,6 +465,7 @@ const SlotPortals = memo(function SlotPortals<LAnnotation>({
         renderHeaderPrefix,
         renderHeaderMetadata,
         renderAnnotation,
+        renderGutterUtility,
       }),
       renderedItem.element,
       renderedItem.id
@@ -435,6 +479,7 @@ function renderCodeViewerItemChildren<LAnnotation>({
   renderHeaderPrefix,
   renderHeaderMetadata,
   renderAnnotation,
+  renderGutterUtility,
 }: RenderCodeViewerItemChildrenProps<LAnnotation>): ReactNode {
   if (renderedItem.type === 'diff') {
     const { item, instance } = renderedItem;
@@ -453,8 +498,10 @@ function renderCodeViewerItemChildren<LAnnotation>({
           ? (annotation) => renderAnnotation(annotation, item)
           : undefined,
       lineAnnotations: item.annotations,
-      renderGutterUtility: undefined,
-      renderHoverUtility: undefined,
+      renderGutterUtility:
+        renderGutterUtility != null
+          ? (getHoveredLine) => renderGutterUtility(getHoveredLine, item)
+          : undefined,
       getHoveredLine: instance.getHoveredLine,
     });
   } else {
@@ -474,9 +521,15 @@ function renderCodeViewerItemChildren<LAnnotation>({
           ? (annotation) => renderAnnotation(annotation, item)
           : undefined,
       lineAnnotations: item.annotations,
-      renderGutterUtility: undefined,
-      renderHoverUtility: undefined,
+      renderGutterUtility:
+        renderGutterUtility != null
+          ? (getHoveredLine) => renderGutterUtility(getHoveredLine, item)
+          : undefined,
       getHoveredLine: instance.getHoveredLine,
     });
   }
+}
+
+function noopRender() {
+  return undefined;
 }

@@ -30,7 +30,6 @@ export function FileDiff<LAnnotation = undefined>({
   renderHeaderPrefix,
   renderHeaderMetadata,
   renderGutterUtility,
-  renderHoverUtility,
   disableWorkerPool = false,
 }: FileDiffProps<LAnnotation>): React.JSX.Element {
   const { ref, getHoveredLine } = useFileDiffInstance({
@@ -40,8 +39,7 @@ export function FileDiff<LAnnotation = undefined>({
     lineAnnotations,
     selectedLines,
     prerenderedHTML,
-    hasGutterRenderUtility:
-      renderGutterUtility != null || renderHoverUtility != null,
+    hasGutterRenderUtility: renderGutterUtility != null,
     hasCustomHeader: renderCustomHeader != null,
     disableWorkerPool,
   });
@@ -53,7 +51,6 @@ export function FileDiff<LAnnotation = undefined>({
     renderAnnotation,
     renderGutterUtility,
     lineAnnotations,
-    renderHoverUtility,
     getHoveredLine,
   });
   return (
