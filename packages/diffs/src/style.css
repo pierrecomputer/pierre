@@ -875,7 +875,7 @@
 
     &::before {
       content: '';
-      display: inline-block;
+      display: block;
       min-width: var(
         --diffs-min-number-column-width,
         var(--diffs-min-number-column-width-default, 3ch)
