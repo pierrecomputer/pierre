@@ -17,7 +17,7 @@ import {
   getMergeConflictActionAnchor,
   type MergeConflictDiffAction,
 } from '../utils/parseMergeConflictDiffFromFile';
-import type { WorkerPoolManager } from '../worker';
+import type { HighlightRequestMetadata, WorkerPoolManager } from '../worker';
 import {
   DiffHunksRenderer,
   type DiffHunksRendererOptions,
@@ -82,7 +82,7 @@ export class UnresolvedFileHunksRenderer<
     options: UnresolvedFileHunksRendererOptions = {
       theme: DEFAULT_THEMES,
     },
-    onRenderUpdate?: () => unknown,
+    onRenderUpdate?: (metadata?: HighlightRequestMetadata) => unknown,
     workerManager?: WorkerPoolManager | undefined
   ) {
     super(undefined, onRenderUpdate, workerManager);
@@ -142,7 +142,8 @@ export class UnresolvedFileHunksRenderer<
 
   public override renderDiff(
     diff?: FileDiffMetadata | undefined,
-    renderRange: RenderRange = DEFAULT_RENDER_RANGE
+    renderRange: RenderRange = DEFAULT_RENDER_RANGE,
+    metadata?: HighlightRequestMetadata
   ): HunksRenderResult | undefined {
     if (diff != null) {
       this.syncInjectedRows(
@@ -151,7 +152,7 @@ export class UnresolvedFileHunksRenderer<
         diff
       );
     }
-    return super.renderDiff(diff, renderRange);
+    return super.renderDiff(diff, renderRange, metadata);
   }
 
   public override async asyncRender(
