@@ -263,6 +263,12 @@ export interface PathStoreTreesContextMenuItem {
 export interface PathStoreTreesContextMenuOpenContext {
   anchorElement: HTMLElement;
   anchorRect: ContextMenuAnchorRect;
+  /**
+   * Closes the current context menu. Pass `{ restoreFocus: false }` when the
+   * caller is about to transfer focus into another owned surface, such as the
+   * inline rename input, so the menu close path does not steal focus back to
+   * the row first.
+   */
   close: (options?: { restoreFocus?: boolean }) => void;
   restoreFocus: () => void;
 }

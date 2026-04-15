@@ -1470,7 +1470,7 @@ export function PathStoreTreesView({
 
     const rowButton = target.closest?.('[data-type="item"]');
     const nextPath =
-      rowButton instanceof HTMLButtonElement
+      rowButton instanceof HTMLElement
         ? (rowButton.dataset.itemPath ?? null)
         : null;
 
@@ -1561,6 +1561,7 @@ export function PathStoreTreesView({
     }
 
     updateTriggerPosition(triggerButton);
+    shouldRestoreContextMenuFocusRef.current = true;
     setContextMenuState({
       item: {
         kind: triggerItem.isDirectory() ? 'directory' : 'file',

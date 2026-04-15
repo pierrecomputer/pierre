@@ -269,11 +269,15 @@ describe('path-store renaming', () => {
     const { cleanup, dom } = installDom();
     try {
       const { PathStoreFileTree } = await import('../src/path-store/file-tree');
+      const searchChanges: Array<string | null> = [];
 
       const fileTree = new PathStoreFileTree({
         fileTreeSearchMode: 'hide-non-matches',
         flattenEmptyDirectories: false,
         initialExpansion: 'open',
+        onSearchChange: (value) => {
+          searchChanges.push(value);
+        },
         paths: [
           'README.md',
           'src/index.ts',
@@ -313,6 +317,7 @@ describe('path-store renaming', () => {
       expect(searchInput.value).toBe('');
       expect(getItemButton(shadowRoot, dom, 'README.md')).toBeDefined();
       expect(fileTree.getSelectedPaths()).toEqual(['src/utils/worker.ts']);
+      expect(searchChanges).toEqual(['w', 'worker', null]);
     } finally {
       cleanup();
     }

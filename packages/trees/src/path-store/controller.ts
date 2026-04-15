@@ -1052,6 +1052,7 @@ export class PathStoreTreesController
     this.#applySelection([canonicalPath], canonicalPath, false);
     if (this.#searchValue != null) {
       this.#setSearchState(null, false);
+      this.#onSearchChange?.(this.#searchValue);
     }
     this.#focusPathWithoutEmit(canonicalPath);
     this.#renamingPath = canonicalPath;

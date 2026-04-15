@@ -7,6 +7,15 @@ declare global {
 }
 
 test.describe('path-store rename proof', () => {
+  const getFocusedPath = async (page: import('@playwright/test').Page) =>
+    page.evaluate(() => {
+      const host = document.querySelectorAll('file-tree-container')[0];
+      const focusedItem = host?.shadowRoot?.querySelector(
+        '[data-type="item"][data-item-focused="true"]'
+      ) as HTMLElement | null;
+      return focusedItem?.dataset.itemPath ?? null;
+    });
+
   test('F2 starts inline rename and Enter commits the renamed path', async ({
     page,
   }) => {
@@ -67,6 +76,48 @@ test.describe('path-store rename proof', () => {
     await renameInput.press('Escape');
     await expect(renameInput).toHaveCount(0);
     await expect(indexRow).toBeVisible();
+  });
+
+  test('trigger-opened menu still restores focus after a prior rename flow disabled restoreFocus', async ({
+    page,
+  }) => {
+    await page.goto('/test/e2e/fixtures/path-store-rename.html');
+    await page.waitForFunction(
+      () => window.__pathStoreRenameFixtureReady === true
+    );
+
+    const mainTree = page.locator('file-tree-container').nth(0);
+    const indexRow = mainTree.locator(
+      'button[data-type="item"][data-item-path="src/index.ts"]'
+    );
+    await indexRow.click();
+
+    await indexRow.click({ button: 'right' });
+    await page.locator('[data-test-menu-rename="src/index.ts"]').click();
+    const renameInput = mainTree.locator('input[data-item-rename-input]');
+    await expect(renameInput).toBeFocused();
+    await renameInput.press('Escape');
+    await expect(renameInput).toHaveCount(0);
+
+    const focusedBeforeTrigger = await getFocusedPath(page);
+    expect(focusedBeforeTrigger).toBe('src/index.ts');
+
+    await indexRow.hover();
+    const trigger = mainTree.locator(
+      'button[data-type="context-menu-trigger"][data-visible="true"]'
+    );
+    await expect(trigger).toBeVisible();
+    await trigger.click();
+
+    const menu = page.locator('[data-test-context-menu="true"]');
+    await expect(menu).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+
+    await page.keyboard.press('ArrowDown');
+    await expect
+      .poll(() => getFocusedPath(page))
+      .not.toBe(focusedBeforeTrigger);
   });
 
   test('search-open rename clears the filter and keeps the target visible on the unfiltered tree', async ({
