@@ -275,8 +275,8 @@ function PathStoreMutationContextMenu({
         <DropdownMenuItem
           data-test-menu-rename={item.path}
           onSelect={() => {
+            context.close({ restoreFocus: false });
             onRename();
-            context.close();
           }}
         >
           Rename
@@ -509,22 +509,18 @@ export function PathStorePoweredRenderDemoClient({
                 });
               },
               onRename: () => {
-                const nextBasename = window.prompt(
-                  'Rename path',
-                  getPathBasename(item.path)
-                );
-                if (nextBasename == null || nextBasename.trim().length === 0) {
-                  addLog(`rename: cancelled for ${item.path}`);
+                const tree = treeRef.current;
+                if (tree == null) {
+                  addLog(`error: tree not ready for rename ${item.path}`);
                   return;
                 }
 
-                runMutation(`rename ${item.path}`, (tree) => {
-                  const nextPath = renamePathSameParent(
-                    item.path,
-                    nextBasename
-                  );
-                  tree.move(item.path, nextPath);
-                });
+                const started = tree.startRenaming(item.path);
+                addLog(
+                  started
+                    ? `rename: started for ${item.path}`
+                    : `rename: unavailable for ${item.path}`
+                );
               },
               slotElement: contextMenuSlotRef.current,
             });
@@ -541,7 +537,7 @@ export function PathStorePoweredRenderDemoClient({
             header.style.padding = '8px 12px';
 
             const label = document.createElement('strong');
-            label.textContent = 'Phase 6/7 path-store header';
+            label.textContent = 'Phase 8 path-store header';
             header.append(label);
 
             const button = document.createElement('button');
@@ -556,7 +552,17 @@ export function PathStorePoweredRenderDemoClient({
           },
         },
       },
-      id: 'pst-phase6-mutations',
+      id: 'pst-phase8-renaming',
+      renaming: {
+        onError: (error) => {
+          addLog(`rename:error ${error}`);
+        },
+        onRename: (event) => {
+          addLog(
+            `rename:commit ${event.sourcePath} -> ${event.destinationPath}`
+          );
+        },
+      },
       onSearchChange: (value) => {
         addLog(`search: ${value ?? '<closed>'}`);
       },
@@ -697,16 +703,16 @@ export function PathStorePoweredRenderDemoClient({
           Path-store lane · provisional
         </p>
         <h1 className="text-2xl font-bold">
-          Mutation API + Search + Context Menu Proof + Icon Sets
+          Mutation API + Search + Inline Rename + Icon Sets
         </h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
           Phase 6 turns the path-store lane into a mutation-first tree, and
-          Phase 7 now surfaces baseline built-in search directly on this same
-          demo: use the shared handle to add, move, batch, and reset paths, use
-          the built-in search input or quick-search buttons to drive filtering,
-          and use the existing context menu for low-cost delete and narrow
-          rename proof while the live tree and log stay coherent under
-          virtualization.
+          Phases 7 and 8 now surface baseline built-in search plus inline rename
+          directly on this same demo: use the shared handle to add, move, batch,
+          and reset paths, use the built-in search input or quick-search buttons
+          to drive filtering, and use the existing context menu or <kbd>F2</kbd>{' '}
+          for delete/rename actions while the live tree and log stay coherent
+          under virtualization.
         </p>
         <div className="flex flex-wrap gap-2 pt-2">
           <button
@@ -815,10 +821,10 @@ export function PathStorePoweredRenderDemoClient({
 
       <HydratedPathStoreExample
         containerHtml={containerHtml}
-        description="Phase 7 search is instrumented directly in this main demo now: use the built-in search input above the tree or the quick search buttons above to drive the hide-non-matches filter, then use the mutation buttons to confirm the tree stays coherent. Right-click or press Shift+F10 on a row for the low-cost delete and narrow rename proof path."
+        description="Phase 7 search is instrumented directly in this main demo now, and Phase 8 inline rename now lives beside it: use the built-in search input above the tree or the quick search buttons above to drive the hide-non-matches filter, then use the mutation buttons to confirm the tree stays coherent. Right-click or press Shift+F10 on a row for delete/rename actions, or press F2 on a focused row to start inline rename."
         onTreeReady={handleTreeReady}
         options={options}
-        title="Mutation + search tree proof"
+        title="Mutation + search + rename tree proof"
       />
       <StateLog entries={log} />
 

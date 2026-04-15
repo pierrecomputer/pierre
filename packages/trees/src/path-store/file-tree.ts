@@ -120,6 +120,7 @@ export class PathStoreFileTree
   readonly #renderRowDecoration:
     | PathStoreTreesRowDecorationRenderer
     | undefined;
+  readonly #renamingEnabled: boolean;
   readonly #searchEnabled: boolean;
   readonly #slotHost = new PathStoreTreesManagedSlotHost();
   readonly #viewOptions: Pick<
@@ -144,6 +145,7 @@ export class PathStoreFileTree
       onSelectionChange,
       overscan,
       renderRowDecoration,
+      renaming,
       search,
       viewportHeight,
       ...controllerOptions
@@ -153,6 +155,7 @@ export class PathStoreFileTree
     this.#icons = icons;
     this.#onSelectionChange = onSelectionChange;
     this.#renderRowDecoration = renderRowDecoration;
+    this.#renamingEnabled = renaming != null && renaming !== false;
     this.#searchEnabled = search === true;
     this.#viewOptions = {
       itemHeight,
@@ -164,6 +167,7 @@ export class PathStoreFileTree
       fileTreeSearchMode,
       initialSearchQuery,
       onSearchChange,
+      renaming,
     });
     this.#selectionVersion = this.#controller.getSelectionVersion();
     this.#selectionSubscription =
@@ -258,6 +262,10 @@ export class PathStoreFileTree
     this.#controller.focusPreviousSearchMatch();
   }
 
+  public startRenaming(path?: string): boolean {
+    return this.#controller.startRenaming(path);
+  }
+
   public remove(path: string, options?: PathStoreRemoveOptions): void {
     this.#controller.remove(path, options);
   }
@@ -284,6 +292,7 @@ export class PathStoreFileTree
       controller: this.#controller,
       icons: this.#icons,
       instanceId: this.#id,
+      renamingEnabled: this.#renamingEnabled,
       renderRowDecoration: this.#renderRowDecoration,
       searchEnabled: this.#searchEnabled,
       slotHost: this.#slotHost,
@@ -300,6 +309,7 @@ export class PathStoreFileTree
       controller: this.#controller,
       icons: this.#icons,
       instanceId: this.#id,
+      renamingEnabled: this.#renamingEnabled,
       renderRowDecoration: this.#renderRowDecoration,
       searchEnabled: this.#searchEnabled,
       slotHost: this.#slotHost,
@@ -322,6 +332,7 @@ export class PathStoreFileTree
       controller: this.#controller,
       icons: this.#icons,
       instanceId: this.#id,
+      renamingEnabled: this.#renamingEnabled,
       renderRowDecoration: this.#renderRowDecoration,
       searchEnabled: this.#searchEnabled,
       slotHost: this.#slotHost,
@@ -525,6 +536,7 @@ export function preloadPathStoreFileTree(
     onSelectionChange: _onSelectionChange,
     overscan,
     renderRowDecoration,
+    renaming,
     search,
     viewportHeight,
     ...controllerOptions
@@ -534,6 +546,7 @@ export function preloadPathStoreFileTree(
     ...controllerOptions,
     fileTreeSearchMode,
     initialSearchQuery,
+    renaming,
   });
   const resolvedViewportHeight =
     viewportHeight ?? PATH_STORE_TREES_DEFAULT_VIEWPORT_HEIGHT;
@@ -552,6 +565,7 @@ export function preloadPathStoreFileTree(
       instanceId: resolvedId,
       itemHeight,
       overscan,
+      renamingEnabled: renaming != null && renaming !== false,
       renderRowDecoration,
       searchEnabled: search === true,
       viewportHeight: resolvedViewportHeight,

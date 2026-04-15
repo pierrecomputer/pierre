@@ -63,8 +63,14 @@ export const pathStoreCapabilityMatrix: readonly PathStoreCapabilityMatrixRow[] 
     {
       currentDemo: 'Context Menu',
       notes:
-        'The Phase 5 shell returns first, then Phase 6 can reuse it for low-cost delete and narrow rename mutation proof.',
-      targetPhases: [5, 6],
+        'The Phase 5 shell returns first, then later interaction phases reuse it for delete and inline rename entry.',
+      targetPhases: [5, 6, 8],
+    },
+    {
+      currentDemo: 'Renaming',
+      notes:
+        'Phase 8 restores inline rename entry, draft, commit/cancel, and search-aware handoff on the path-store lane.',
+      targetPhases: [8],
     },
     {
       currentDemo: 'Virtualization',

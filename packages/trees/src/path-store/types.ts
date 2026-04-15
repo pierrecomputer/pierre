@@ -20,6 +20,7 @@ export interface PathStoreTreesControllerOptions extends PathStoreConstructorOpt
   initialSearchQuery?: string | null;
   onSearchChange?: PathStoreTreesSearchChangeListener;
   paths: readonly string[];
+  renaming?: boolean | PathStoreTreesRenamingConfig;
 }
 
 export interface PathStoreTreesVisibleSegment {
@@ -97,6 +98,23 @@ export interface PathStoreTreesSearchSessionHandle {
   setSearch(value: string | null): void;
 }
 
+export interface PathStoreTreesRenamingItem {
+  isFolder: boolean;
+  path: PathStoreTreesPublicId;
+}
+
+export interface PathStoreTreesRenameEvent {
+  destinationPath: PathStoreTreesPublicId;
+  isFolder: boolean;
+  sourcePath: PathStoreTreesPublicId;
+}
+
+export interface PathStoreTreesRenamingConfig {
+  canRename?: (item: PathStoreTreesRenamingItem) => boolean;
+  onError?: (error: string) => void;
+  onRename?: (event: PathStoreTreesRenameEvent) => void;
+}
+
 export interface PathStoreFileTreeOptions
   extends PathStoreTreesControllerOptions, PathStoreTreesRenderOptions {
   composition?: PathStoreTreesCompositionOptions;
@@ -132,6 +150,7 @@ export interface PathStoreTreesViewProps extends PathStoreTreesRenderOptions {
   composition?: PathStoreTreesCompositionOptions;
   icons?: FileTreeIcons;
   instanceId?: string;
+  renamingEnabled?: boolean;
   renderRowDecoration?: PathStoreTreesRowDecorationRenderer;
   searchEnabled?: boolean;
   slotHost?: PathStoreTreesSlotHost;
@@ -244,7 +263,7 @@ export interface PathStoreTreesContextMenuItem {
 export interface PathStoreTreesContextMenuOpenContext {
   anchorElement: HTMLElement;
   anchorRect: ContextMenuAnchorRect;
-  close: () => void;
+  close: (options?: { restoreFocus?: boolean }) => void;
   restoreFocus: () => void;
 }
 

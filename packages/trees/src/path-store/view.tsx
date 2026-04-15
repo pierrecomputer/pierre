@@ -16,7 +16,10 @@ import {
   CONTEXT_MENU_TRIGGER_TYPE,
   HEADER_SLOT_NAME,
 } from '../constants';
-import { PathStoreTreesController } from './controller';
+import {
+  PATH_STORE_TREES_RENAME_VIEW,
+  PathStoreTreesController,
+} from './controller';
 import { createPathStoreIconResolver } from './iconResolver';
 import type {
   PathStoreTreesContextMenuItem,
@@ -71,25 +74,64 @@ function getActiveTreeElement(rootElement: HTMLElement): HTMLElement | null {
     : null;
 }
 
+function RenameInput({
+  ariaLabel,
+  isFlattened = false,
+  ref,
+  value,
+  onBlur,
+  onInput,
+}: {
+  ariaLabel: string;
+  isFlattened?: boolean;
+  onBlur: () => void;
+  onInput: (event: Event) => void;
+  ref: (element: HTMLInputElement | null) => void;
+  value: string;
+}): JSX.Element {
+  return (
+    <input
+      ref={ref}
+      data-item-rename-input
+      {...(isFlattened ? { 'data-item-flattened-rename-input': true } : {})}
+      aria-label={ariaLabel}
+      value={value}
+      onBlur={onBlur}
+      onInput={onInput}
+      onClick={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+    />
+  );
+}
+
 function formatFlattenedSegments(
-  row: PathStoreTreesVisibleRow
+  row: PathStoreTreesVisibleRow,
+  renameInput: JSX.Element | null = null
 ): JSX.Element | string {
   'use no memo';
   const segments = row.flattenedSegments;
   if (segments == null || segments.length === 0) {
-    return row.name;
+    return renameInput ?? row.name;
   }
 
   return (
     <span data-item-flattened-subitems>
-      {segments.map((segment, index) => (
-        <Fragment key={segment.path}>
-          <span data-item-flattened-subitem={segment.path}>
-            <Truncate>{segment.name}</Truncate>
-          </span>
-          {index < segments.length - 1 ? ' / ' : ''}
-        </Fragment>
-      ))}
+      {segments.map((segment, index) => {
+        const isLast = index === segments.length - 1;
+        return (
+          <Fragment key={segment.path}>
+            <span data-item-flattened-subitem={segment.path}>
+              {isLast && renameInput != null ? (
+                renameInput
+              ) : (
+                <Truncate>{segment.name}</Truncate>
+              )}
+            </span>
+            {index < segments.length - 1 ? ' / ' : ''}
+          </Fragment>
+        );
+      })}
     </span>
   );
 }
@@ -380,13 +422,17 @@ function focusFirstMenuElement(menuElement: HTMLElement | null): void {
 
 function renderStyledRow(
   controller: PathStoreTreesController,
+  renameView: ReturnType<
+    PathStoreTreesController[typeof PATH_STORE_TREES_RENAME_VIEW]
+  >,
   row: PathStoreTreesVisibleRow,
   visualFocusPath: string | null,
   contextHoverPath: string | null,
   instanceId: string | undefined,
   itemHeight: number,
   contextMenuEnabled: boolean,
-  registerButton: (path: string, element: HTMLButtonElement | null) => void,
+  registerRenameInput: (element: HTMLInputElement | null) => void,
+  registerButton: (path: string, element: HTMLElement | null) => void,
   resolveIcon: ReturnType<typeof createPathStoreIconResolver>['resolveIcon'],
   renderDecorationForRow: (
     row: PathStoreTreesVisibleRow,
@@ -408,6 +454,23 @@ function renderStyledRow(
   const directoryItem = isPathStoreTreesDirectoryHandle(item) ? item : null;
   const { isParked = false, style } = options;
   const decoration = renderDecorationForRow(row, targetPath);
+  const renamingPath = renameView.getPath();
+  const isRenamingRow = renamingPath === targetPath;
+  const renamingValue = isRenamingRow ? renameView.getValue() : '';
+  const renameInput = !isRenamingRow ? null : (
+    <RenameInput
+      ref={registerRenameInput}
+      ariaLabel={`Rename ${getPathStoreTreesRowAriaLabel(row)}`}
+      isFlattened={row.isFlattened}
+      value={renamingValue}
+      onBlur={() => {
+        renameView.cancel();
+      }}
+      onInput={(event) => {
+        renameView.setValue((event.currentTarget as HTMLInputElement).value);
+      }}
+    />
+  );
   const focusedProps =
     row.isFocused && visualFocusPath === targetPath
       ? { 'data-item-focused': true }
@@ -421,25 +484,84 @@ function renderStyledRow(
     ? getPathStoreTreesFocusedRowDomId(instanceId, targetPath, isParked)
     : undefined;
 
+  const rowContent = (
+    <Fragment key={row.path}>
+      {row.depth > 0 ? (
+        <div data-item-section="spacing">
+          {Array.from({ length: row.depth }).map((_, index) => (
+            <div
+              key={index}
+              data-item-section="spacing-item"
+              data-ancestor-path={row.ancestorPaths[index]}
+            />
+          ))}
+        </div>
+      ) : null}
+      <div data-item-section="icon">
+        {row.kind === 'directory' ? (
+          <Icon {...resolveIcon('file-tree-icon-chevron')} />
+        ) : (
+          <Icon {...resolveIcon('file-tree-icon-file', targetPath)} />
+        )}
+      </div>
+      <div data-item-section="content">
+        {row.isFlattened
+          ? formatFlattenedSegments(row, renameInput)
+          : (renameInput ?? (
+              <MiddleTruncate minimumLength={5} split="extension">
+                {row.name}
+              </MiddleTruncate>
+            ))}
+      </div>
+      {decoration != null ? (
+        <div data-item-section="status">{renderRowDecoration(decoration)}</div>
+      ) : null}
+    </Fragment>
+  );
+  const commonProps = {
+    'aria-expanded': row.kind === 'directory' ? row.isExpanded : undefined,
+    'aria-haspopup': contextMenuEnabled ? 'menu' : undefined,
+    'aria-label': getPathStoreTreesRowAriaLabel(row),
+    'aria-level': row.level + 1,
+    'aria-posinset': row.posInSet + 1,
+    'aria-selected': row.isSelected ? 'true' : 'false',
+    'aria-setsize': row.setSize,
+    'data-item-parked': isParked ? 'true' : undefined,
+    'data-item-path': targetPath,
+    'data-item-type': row.kind === 'directory' ? 'folder' : 'file',
+    'data-type': 'item',
+    id: domId,
+    key,
+    onContextMenu: contextMenuEnabled
+      ? (event: MouseEvent) => {
+          event.preventDefault();
+          item?.focus();
+          openContextMenuForRow(row, targetPath);
+        }
+      : undefined,
+    onFocus: () => {
+      item?.focus();
+    },
+    onKeyDown,
+    ref: (element: HTMLElement | null) => {
+      registerButton(targetPath, element);
+    },
+    role: 'treeitem',
+    style: { minHeight: `${itemHeight}px`, ...style },
+    tabIndex: row.isFocused ? 0 : -1,
+    ...focusedProps,
+    ...selectedProps,
+    ...contextHoverProps,
+  } as const;
+
+  if (isRenamingRow) {
+    return <div {...commonProps}>{rowContent}</div>;
+  }
+
   return (
     <button
-      key={key}
-      ref={(element) => {
-        registerButton(targetPath, element);
-      }}
-      id={domId}
+      {...commonProps}
       type="button"
-      data-type="item"
-      data-item-path={targetPath}
-      data-item-parked={isParked ? 'true' : undefined}
-      data-item-type={row.kind === 'directory' ? 'folder' : 'file'}
-      aria-expanded={row.kind === 'directory' ? row.isExpanded : undefined}
-      aria-label={getPathStoreTreesRowAriaLabel(row)}
-      aria-level={row.level + 1}
-      aria-haspopup={contextMenuEnabled ? 'menu' : undefined}
-      aria-posinset={row.posInSet + 1}
-      aria-selected={row.isSelected ? 'true' : 'false'}
-      aria-setsize={row.setSize}
       onMouseDown={(event) => {
         if (controller.isSearchOpen()) {
           event.preventDefault();
@@ -466,80 +588,25 @@ function renderStyledRow(
           controller.closeSearch();
         }
       }}
-      onFocus={() => {
-        item?.focus();
-      }}
-      onContextMenu={
-        contextMenuEnabled
-          ? (event) => {
-              event.preventDefault();
-              item?.focus();
-              openContextMenuForRow(row, targetPath);
-            }
-          : undefined
-      }
-      onKeyDown={onKeyDown}
-      role="treeitem"
-      tabIndex={row.isFocused ? 0 : -1}
-      style={{ minHeight: `${itemHeight}px`, ...style }}
-      {...focusedProps}
-      {...selectedProps}
-      {...contextHoverProps}
     >
-      {/*
-        Reuse the outer row shell by viewport slot, but remount the row's inner
-        layout when the slot is reassigned to a different path. This avoids the
-        remaining CLS source from the trace where indent/icon/content DIVs slide
-        horizontally when one slot is recycled across rows with different tree
-        depths.
-      */}
-      <Fragment key={row.path}>
-        {row.depth > 0 ? (
-          <div data-item-section="spacing">
-            {Array.from({ length: row.depth }).map((_, index) => (
-              <div
-                key={index}
-                data-item-section="spacing-item"
-                data-ancestor-path={row.ancestorPaths[index]}
-              />
-            ))}
-          </div>
-        ) : null}
-        <div data-item-section="icon">
-          {row.kind === 'directory' ? (
-            <Icon {...resolveIcon('file-tree-icon-chevron')} />
-          ) : (
-            <Icon {...resolveIcon('file-tree-icon-file', targetPath)} />
-          )}
-        </div>
-        <div data-item-section="content">
-          {row.isFlattened ? (
-            formatFlattenedSegments(row)
-          ) : (
-            <MiddleTruncate minimumLength={5} split="extension">
-              {row.name}
-            </MiddleTruncate>
-          )}
-        </div>
-        {decoration != null ? (
-          <div data-item-section="status">
-            {renderRowDecoration(decoration)}
-          </div>
-        ) : null}
-      </Fragment>
+      {rowContent}
     </button>
   );
 }
 
 function renderRangeChildren(
   controller: PathStoreTreesController,
+  renameView: ReturnType<
+    PathStoreTreesController[typeof PATH_STORE_TREES_RENAME_VIEW]
+  >,
   range: { start: number; end: number },
   activeItemPath: string | null,
   contextHoverPath: string | null,
   instanceId: string | undefined,
   itemHeight: number,
   contextMenuEnabled: boolean,
-  registerButton: (path: string, element: HTMLButtonElement | null) => void,
+  registerRenameInput: (element: HTMLInputElement | null) => void,
+  registerButton: (path: string, element: HTMLElement | null) => void,
   resolveIcon: ReturnType<typeof createPathStoreIconResolver>['resolveIcon'],
   renderDecorationForRow: (
     row: PathStoreTreesVisibleRow,
@@ -564,12 +631,14 @@ function renderRangeChildren(
     .map((row, slotIndex) =>
       renderStyledRow(
         controller,
+        renameView,
         row,
         activeItemPath,
         contextHoverPath,
         instanceId,
         itemHeight,
         contextMenuEnabled,
+        registerRenameInput,
         registerButton,
         resolveIcon,
         renderDecorationForRow,
@@ -591,6 +660,7 @@ export function PathStoreTreesView({
   instanceId,
   itemHeight = PATH_STORE_TREES_DEFAULT_ITEM_HEIGHT,
   overscan = PATH_STORE_TREES_DEFAULT_OVERSCAN,
+  renamingEnabled = false,
   renderRowDecoration,
   searchEnabled = false,
   slotHost,
@@ -601,13 +671,15 @@ export function PathStoreTreesView({
   const contextMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const isScrollingRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const rowButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const rowButtonRefs = useRef(new Map<string, HTMLElement>());
   const updateViewportRef = useRef<() => void>(() => {});
   const domFocusOwnerRef = useRef(false);
   const previousFocusedPathRef = useRef<string | null>(null);
+  const previousRenamingPathRef = useRef<string | null>(null);
   const restoreTreeFocusAfterSearchCloseRef = useRef(false);
   const restoreTreeFocusViewportOffsetRef = useRef<number | null>(null);
   const [, setControllerRevision] = useState(0);
@@ -648,6 +720,9 @@ export function PathStoreTreesView({
     () => createPathStoreIconResolver(icons),
     [icons]
   );
+  const renameView = controller[PATH_STORE_TREES_RENAME_VIEW]();
+  const renamingPath = renameView.getPath();
+  const isRenaming = renamingPath != null;
   const isSearchOpen = controller.isSearchOpen();
   const searchValue = controller.getSearchValue();
   const focusedPath = controller.getFocusedPath();
@@ -689,20 +764,30 @@ export function PathStoreTreesView({
   );
   const restoreFocusToTreeRef = useRef(restoreFocusToTree);
   restoreFocusToTreeRef.current = restoreFocusToTree;
-  const closeContextMenuRef = useRef<() => void>(() => {});
-  const closeContextMenu = useCallback((): void => {
-    const currentContextMenuState = contextMenuStateRef.current;
-    if (currentContextMenuState == null) {
-      return;
-    }
+  const shouldRestoreContextMenuFocusRef = useRef(true);
+  const closeContextMenuRef = useRef<(restoreFocus?: boolean) => void>(
+    () => {}
+  );
+  const closeContextMenu = useCallback(
+    (restoreFocus: boolean = true): void => {
+      const currentContextMenuState = contextMenuStateRef.current;
+      if (currentContextMenuState == null) {
+        return;
+      }
 
-    setContextMenuState(null);
-    composition?.contextMenu?.onClose?.();
-    restoreFocusToTree(currentContextMenuState.path);
-  }, [composition?.contextMenu, restoreFocusToTree]);
+      shouldRestoreContextMenuFocusRef.current =
+        shouldRestoreContextMenuFocusRef.current && restoreFocus;
+      setContextMenuState(null);
+      composition?.contextMenu?.onClose?.();
+      if (shouldRestoreContextMenuFocusRef.current) {
+        restoreFocusToTree(currentContextMenuState.path);
+      }
+    },
+    [composition?.contextMenu, restoreFocusToTree]
+  );
   closeContextMenuRef.current = closeContextMenu;
   const updateTriggerPosition = useCallback(
-    (itemButton: HTMLButtonElement | null): void => {
+    (itemButton: HTMLElement | null): void => {
       const nextTop =
         itemButton == null
           ? null
@@ -722,12 +807,53 @@ export function PathStoreTreesView({
 
       item.focus();
       updateTriggerPosition(rowButtonRefs.current.get(targetPath) ?? null);
+      shouldRestoreContextMenuFocusRef.current = true;
       setContextMenuState({
         item: createContextMenuItem(row, targetPath),
         path: targetPath,
       });
     },
     [controller, updateTriggerPosition]
+  );
+  const startRenameFromPath = useCallback(
+    (path?: string): void => {
+      if (!renamingEnabled) {
+        return;
+      }
+
+      if (controller.isSearchOpen()) {
+        const scrollElement = scrollRef.current;
+        const viewportHeight =
+          scrollElement?.clientHeight != null && scrollElement.clientHeight > 0
+            ? scrollElement.clientHeight
+            : resolvedViewportHeight;
+        restoreTreeFocusViewportOffsetRef.current =
+          focusedIndex < 0 || scrollElement == null
+            ? null
+            : Math.max(
+                0,
+                Math.min(
+                  focusedIndex * itemHeight - scrollElement.scrollTop,
+                  Math.max(0, viewportHeight - itemHeight)
+                )
+              );
+        restoreTreeFocusAfterSearchCloseRef.current = true;
+      }
+
+      if (controller.startRenaming(path) === false) {
+        return;
+      }
+
+      setLastContextMenuInteraction('focus');
+      setControllerRevision((revision) => revision + 1);
+    },
+    [
+      controller,
+      focusedIndex,
+      itemHeight,
+      renamingEnabled,
+      resolvedViewportHeight,
+    ]
   );
 
   const handleTreeKeyDown = (event: KeyboardEvent): void => {
@@ -743,6 +869,29 @@ export function PathStoreTreesView({
         event.preventDefault();
         event.stopPropagation();
       }
+      return;
+    }
+
+    if (renameView.isActive()) {
+      if (event.key === 'Escape') {
+        renameView.cancel();
+      } else if (event.key === 'Enter') {
+        renameView.commit();
+      } else {
+        return;
+      }
+
+      setLastContextMenuInteraction('focus');
+      setControllerRevision((revision) => revision + 1);
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    if (renamingEnabled && event.key === 'F2') {
+      startRenameFromPath(focusedPath ?? undefined);
+      event.preventDefault();
+      event.stopPropagation();
       return;
     }
 
@@ -890,6 +1039,26 @@ export function PathStoreTreesView({
 
     focusElement(searchInputRef.current);
   }, [isSearchOpen, searchEnabled]);
+
+  useLayoutEffect(() => {
+    if (renamingPath == null) {
+      previousRenamingPathRef.current = null;
+      return;
+    }
+
+    if (previousRenamingPathRef.current === renamingPath) {
+      return;
+    }
+
+    previousRenamingPathRef.current = renamingPath;
+    const input = renameInputRef.current;
+    if (input == null) {
+      return;
+    }
+
+    focusElement(input);
+    input.select();
+  }, [renamingPath]);
 
   useLayoutEffect(() => {
     const rootElement = rootRef.current;
@@ -1056,10 +1225,13 @@ export function PathStoreTreesView({
     const context: PathStoreTreesContextMenuOpenContext = {
       anchorElement,
       anchorRect: serializeAnchorRect(anchorElement.getBoundingClientRect()),
-      close: () => {
-        closeContextMenuRef.current();
+      close: (options) => {
+        closeContextMenuRef.current(options?.restoreFocus ?? true);
       },
       restoreFocus: () => {
+        if (!shouldRestoreContextMenuFocusRef.current) {
+          return;
+        }
         restoreFocusToTreeRef.current(
           contextMenuStateRef.current?.path ?? null
         );
@@ -1158,6 +1330,8 @@ export function PathStoreTreesView({
         : (rowButtonRefs.current.get(focusedPath) ?? null);
     const activeTreeElement = getActiveTreeElement(rootElement);
     const activeTreeElementPath = activeTreeElement?.dataset.itemPath ?? null;
+    const renameInputOwnsFocus =
+      isRenaming && renameInputRef.current === activeTreeElement;
     const searchInputOwnsFocus =
       searchEnabled && searchInputRef.current === activeTreeElement;
     const shouldRestoreTreeFocusAfterSearchClose =
@@ -1194,6 +1368,11 @@ export function PathStoreTreesView({
     }
 
     if (!shouldOwnDomFocus) {
+      previousFocusedPathRef.current = focusedPath;
+      return;
+    }
+
+    if (renameInputOwnsFocus) {
       previousFocusedPathRef.current = focusedPath;
       return;
     }
@@ -1236,6 +1415,7 @@ export function PathStoreTreesView({
     focusedPath,
     focusedRowIsMounted,
     itemHeight,
+    isRenaming,
     isSearchOpen,
     itemCount,
     range,
@@ -1452,12 +1632,16 @@ export function PathStoreTreesView({
           >
             {renderRangeChildren(
               controller,
+              renameView,
               range,
               visualFocusPath,
               visualContextHoverPath,
               instanceId,
               itemHeight,
               contextMenuEnabled,
+              (element) => {
+                renameInputRef.current = element;
+              },
               (path, element) => {
                 if (element == null) {
                   rowButtonRefs.current.delete(path);
@@ -1474,12 +1658,16 @@ export function PathStoreTreesView({
             {parkedFocusedRow != null && parkedFocusedRowOffset != null
               ? renderStyledRow(
                   controller,
+                  renameView,
                   parkedFocusedRow,
                   visualFocusPath,
                   visualContextHoverPath,
                   instanceId,
                   itemHeight,
                   contextMenuEnabled,
+                  (element) => {
+                    renameInputRef.current = element;
+                  },
                   (path, element) => {
                     if (element == null) {
                       rowButtonRefs.current.delete(path);

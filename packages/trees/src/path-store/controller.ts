@@ -9,6 +9,7 @@ import type {
   PathStoreVisibleTreeProjectionData,
 } from '@pierre/path-store';
 
+import { renameFileTreePaths } from '../utils/renameFileTreePaths';
 import type {
   PathStoreTreesBatchEvent,
   PathStoreTreesControllerListener,
@@ -21,6 +22,8 @@ import type {
   PathStoreTreesMutationEventType,
   PathStoreTreesMutationHandle,
   PathStoreTreesMutationSemanticEvent,
+  PathStoreTreesRenameEvent,
+  PathStoreTreesRenamingConfig,
   PathStoreTreesResetEvent,
   PathStoreTreesResetOptions,
   PathStoreTreesSearchMode,
@@ -45,6 +48,19 @@ type MutationListenerByType = Map<
   PathStoreTreesMutationEventType | '*',
   Set<MutationListener>
 >;
+
+interface PathStoreTreesRenameViewState {
+  cancel(): void;
+  commit(): void;
+  getPath(): string | null;
+  getValue(): string;
+  isActive(): boolean;
+  setValue(value: string): void;
+}
+
+export const PATH_STORE_TREES_RENAME_VIEW = Symbol(
+  'PATH_STORE_TREES_RENAME_VIEW'
+);
 
 function isPathMutationEvent(
   event: PathStoreEvent
@@ -159,6 +175,31 @@ function defaultPathStoreSearchMatcher(search: string, path: string): boolean {
     normalizedPath.includes(normalizedSearch) ||
     isFuzzySubsequenceMatch(normalizedSearch, normalizedPath)
   );
+}
+
+function isCanonicalDirectoryPath(path: string): boolean {
+  return path.endsWith('/');
+}
+
+// Rename parity is defined around basename edits, so this helper strips the
+// trailing slash from canonical directory paths before deriving the visible
+// editable leaf segment.
+function getRenameLeafName(path: string): string {
+  const normalizedPath = path.endsWith('/') ? path.slice(0, -1) : path;
+  const separatorIndex = normalizedPath.lastIndexOf('/');
+  return separatorIndex < 0
+    ? normalizedPath
+    : normalizedPath.slice(separatorIndex + 1);
+}
+
+// The legacy rename helper reports folder paths without a trailing slash, but
+// the path-store mutation layer still moves canonical directory paths with `/`.
+function toRenameHelperPath(path: string): string {
+  return path.endsWith('/') ? path.slice(0, -1) : path;
+}
+
+function toCanonicalRenamePath(path: string, isFolder: boolean): string {
+  return isFolder && !path.endsWith('/') ? `${path}/` : path;
 }
 
 // Applies a directory/file move to a tracked public path so focus/selection can
@@ -415,10 +456,17 @@ export class PathStoreTreesController
   #itemHandles = new Map<string, PathStoreTreesItemHandle>();
   #knownDirectoryPaths: readonly string[] | null = null;
   #knownPaths: readonly string[] | null = null;
+  #onRename: ((event: PathStoreTreesRenameEvent) => void) | undefined;
+  #onRenameError: ((error: string) => void) | undefined;
   #onSearchChange: ((value: string | null) => void) | undefined;
   #projectionPaths: readonly string[] = [];
   #projectionPosInSetByIndex: ProjectionIndexBuffer = new Int32Array(0);
   #projectionSetSizeByIndex: ProjectionIndexBuffer = new Int32Array(0);
+  #renameCanRename: PathStoreTreesRenamingConfig['canRename'] | undefined =
+    undefined;
+  #renameEnabled = false;
+  #renamingPath: string | null = null;
+  #renamingValue = '';
   #searchMatchPathSet = new Set<string>();
   #searchMatchingPaths: readonly string[] = [];
   #searchMode: PathStoreTreesSearchMode;
@@ -443,12 +491,19 @@ export class PathStoreTreesController
     const {
       fileTreeSearchMode,
       initialSearchQuery,
+      renaming,
       onSearchChange,
       paths,
       preparedInput,
       ...baseOptions
     } = options;
     this.#baseOptions = baseOptions;
+    this.#renameEnabled = renaming != null && renaming !== false;
+    if (renaming != null && renaming !== false && renaming !== true) {
+      this.#renameCanRename = renaming.canRename;
+      this.#onRenameError = renaming.onError;
+      this.#onRename = renaming.onRename;
+    }
     this.#onSearchChange = onSearchChange;
     this.#searchMode = fileTreeSearchMode ?? 'hide-non-matches';
     this.#store = this.#createStore(paths, preparedInput);
@@ -972,6 +1027,118 @@ export class PathStoreTreesController
     this.#focusRelativeSearchMatch(-1);
   }
 
+  public startRenaming(path: string = this.#focusedPath ?? ''): boolean {
+    if (!this.#renameEnabled) {
+      return false;
+    }
+
+    const itemInfo = this.#store.getPathInfo(path);
+    if (itemInfo == null) {
+      return false;
+    }
+
+    const canonicalPath = itemInfo.path;
+    const isFolder = isCanonicalDirectoryPath(canonicalPath);
+    const publicPath = toRenameHelperPath(canonicalPath);
+    if (
+      this.#renameCanRename?.({
+        isFolder,
+        path: publicPath,
+      }) === false
+    ) {
+      return false;
+    }
+
+    this.#applySelection([canonicalPath], canonicalPath, false);
+    if (this.#searchValue != null) {
+      this.#setSearchState(null, false);
+    }
+    this.#focusPathWithoutEmit(canonicalPath);
+    this.#renamingPath = canonicalPath;
+    this.#renamingValue = getRenameLeafName(canonicalPath);
+    this.#emit();
+    return true;
+  }
+
+  public [PATH_STORE_TREES_RENAME_VIEW](): PathStoreTreesRenameViewState {
+    return {
+      cancel: () => {
+        this.#cancelRenaming();
+      },
+      commit: () => {
+        this.#completeRenaming();
+      },
+      getPath: () => this.#renamingPath,
+      getValue: () => this.#renamingValue,
+      isActive: () => this.#renamingPath != null,
+      setValue: (value: string) => {
+        this.#setRenamingValue(value);
+      },
+    };
+  }
+
+  #cancelRenaming(): void {
+    if (this.#renamingPath == null) {
+      return;
+    }
+
+    const renamingPath = this.#renamingPath;
+    this.#renamingPath = null;
+    this.#renamingValue = '';
+    this.#focusPathWithoutEmit(renamingPath);
+    this.#emit();
+  }
+
+  #completeRenaming(): void {
+    const renamingPath = this.#renamingPath;
+    if (renamingPath == null) {
+      return;
+    }
+
+    const isFolder = isCanonicalDirectoryPath(renamingPath);
+    const result = renameFileTreePaths({
+      files: this.#store.list(),
+      isFolder,
+      nextBasename: this.#renamingValue,
+      path: toRenameHelperPath(renamingPath),
+    });
+
+    this.#renamingPath = null;
+    this.#renamingValue = '';
+
+    if ('error' in result) {
+      this.#focusPathWithoutEmit(renamingPath);
+      this.#onRenameError?.(result.error);
+      this.#emit();
+      return;
+    }
+
+    if (result.sourcePath === result.destinationPath) {
+      this.#focusPathWithoutEmit(renamingPath);
+      this.#emit();
+      return;
+    }
+
+    this.#onRename?.({
+      destinationPath: result.destinationPath,
+      isFolder: result.isFolder,
+      sourcePath: result.sourcePath,
+    });
+    this.move(
+      toCanonicalRenamePath(result.sourcePath, isFolder),
+      toCanonicalRenamePath(result.destinationPath, isFolder)
+    );
+  }
+
+  #setRenamingValue(value: string): void {
+    if (this.#renamingPath == null || this.#renamingValue === value) {
+      return;
+    }
+
+    this.#renamingValue = value;
+    this.#emit();
+  }
+
   /**
    * Rebuilds the controller around a new full path set. This is intentionally a
    * coarse whole-tree reset path rather than a localized mutation fast path.
@@ -984,6 +1151,7 @@ export class PathStoreTreesController
     const previousVisibleCount = this.#visibleCount;
     const nextStore = this.#createStore(paths, options.preparedInput);
     const previousFocusedPath = this.#focusedPath;
+    const previousRenamingPath = this.#renamingPath;
     const previousSelectedPaths = this.getSelectedPaths();
     const previousSelectionAnchorPath = this.#selectionAnchorPath;
 
@@ -1006,6 +1174,13 @@ export class PathStoreTreesController
       previousSelectionAnchorPath == null
         ? null
         : (nextStore.getPathInfo(previousSelectionAnchorPath)?.path ?? null);
+    this.#renamingPath =
+      previousRenamingPath == null
+        ? null
+        : (nextStore.getPathInfo(previousRenamingPath)?.path ?? null);
+    if (this.#renamingPath == null) {
+      this.#renamingValue = '';
+    }
     this.#rebuildVisibleProjection(
       previousFocusedPath,
       previousFocusedPath != null ||
@@ -1528,6 +1703,17 @@ export class PathStoreTreesController
     return this.#store.getPathInfo(path)?.path ?? null;
   }
 
+  #focusPathWithoutEmit(path: string | null): void {
+    if (path == null) {
+      return;
+    }
+
+    const nextFocusedIndex = this.#resolveFocusedIndex(path);
+    if (nextFocusedIndex >= 0) {
+      this.#setFocusedIndex(nextFocusedIndex, false);
+    }
+  }
+
   #setFocusedIndex(index: number, emit: boolean = true): void {
     const nextPath = this.#getCurrentVisiblePaths()[index];
     if (nextPath == null) {
@@ -1559,6 +1745,14 @@ export class PathStoreTreesController
       { operation: 'add' | 'remove' | 'move' | 'batch' }
     >
   ): string | null {
+    const nextRenamingPath = remapPathThroughMutation(
+      this.#renamingPath,
+      event
+    );
+    if (nextRenamingPath == null && this.#renamingPath != null) {
+      this.#renamingValue = '';
+    }
+    this.#renamingPath = nextRenamingPath;
     const nextFocusedPath = remapPathThroughMutation(
       this.#focusedPath,
       event,
