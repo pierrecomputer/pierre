@@ -12,6 +12,7 @@ import type {
   CodeViewerDiffItem,
   CodeViewerFileItem,
   CodeViewerItem,
+  CodeViewerItemVersion,
   CodeViewerLineScrollTarget,
   CodeViewerMetrics,
   CodeViewerScrollTarget,
@@ -49,6 +50,8 @@ interface AdvancedVirtualizedBaseItem {
   /** Root <diffs-container> node currently mounted for this item, only exists
    * when rendered. */
   element: HTMLElement | undefined;
+  /** Last controlled version observed for this record. */
+  version: CodeViewerItemVersion | undefined;
 }
 
 interface CodeViewerDiffItemContext<
@@ -79,6 +82,7 @@ export interface CodeViewerRenderedDiffItem<LAnnotation> {
   id: string;
   type: 'diff';
   item: CodeViewerDiffItem<LAnnotation>;
+  version: CodeViewerItemVersion | undefined;
   element: HTMLElement;
   instance: VirtualizedFileDiff<LAnnotation>;
 }
@@ -87,6 +91,7 @@ export interface CodeViewerRenderedFileItem<LAnnotation> {
   id: string;
   type: 'file';
   item: CodeViewerFileItem<LAnnotation>;
+  version: CodeViewerItemVersion | undefined;
   element: HTMLElement;
   instance: VirtualizedFile<LAnnotation>;
 }
@@ -627,6 +632,7 @@ export class CodeViewer<LAnnotation = undefined> {
           id: item.item.id,
           type: 'diff',
           item: item.item,
+          version: item.version,
           element: item.element,
           instance: item.instance,
         });
@@ -635,6 +641,7 @@ export class CodeViewer<LAnnotation = undefined> {
           id: item.item.id,
           type: 'file',
           item: item.item,
+          version: item.version,
           element: item.element,
           instance: item.instance,
         });
@@ -691,6 +698,7 @@ export class CodeViewer<LAnnotation = undefined> {
       return {
         type: 'diff',
         item: input,
+        version: input.version,
         index,
         instance: new VirtualizedFileDiff<LAnnotation>(
           this.createOptions('diff', input.id),
@@ -708,6 +716,7 @@ export class CodeViewer<LAnnotation = undefined> {
     return {
       type: 'file',
       item: input,
+      version: input.version,
       index,
       instance: new VirtualizedFile<LAnnotation>(
         this.createOptions('file', input.id),
@@ -1005,11 +1014,12 @@ export class CodeViewer<LAnnotation = undefined> {
       );
     }
 
-    if (item.item.version === nextItem.version) {
+    if (item.version === nextItem.version) {
       return false;
     }
 
     item.item = nextItem;
+    item.version = nextItem.version;
     return true;
   }
 
@@ -1702,7 +1712,7 @@ function areSlotSnapshotsEqual<LAnnotation>(
       previousItem.id !== nextItem.id ||
       previousItem.type !== nextItem.type ||
       previousItem.element !== nextItem.element ||
-      previousItem.item.version !== nextItem.item.version
+      previousItem.version !== nextItem.version
     ) {
       return false;
     }
