@@ -1420,10 +1420,6 @@
     }
   }
 
-  [data-interactive-line-numbers] [data-column-number] {
-    cursor: pointer;
-  }
-
   [data-diff-span] {
     border-radius: 3px;
     box-decoration-break: clone;
