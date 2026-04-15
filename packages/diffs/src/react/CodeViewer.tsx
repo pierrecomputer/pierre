@@ -17,13 +17,13 @@ import {
 } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 
-import type { FileDiffOptions } from '../components/FileDiff';
 import {
   areOptionsEqual,
   CodeViewer as CodeViewerClass,
   type CodeViewerCoordinator,
   type CodeViewerItem,
   type CodeViewerMetrics,
+  type CodeViewerOptions,
   type CodeViewerRenderedItem,
   type CodeViewerScrollTarget,
   type DiffLineAnnotation,
@@ -41,7 +41,7 @@ const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface CodeViewerBaseProps<LAnnotation> {
-  options?: FileDiffOptions<LAnnotation>;
+  options?: CodeViewerOptions<LAnnotation>;
   viewerMetrics?: CodeViewerMetrics;
   metrics?: VirtualFileMetrics;
   className?: string;
@@ -104,7 +104,7 @@ interface ManagedContentStore<LAnnotation> {
 interface CachedDataRef<LAnnotation> {
   instance: CodeViewerClass<LAnnotation> | undefined;
   items: readonly CodeViewerItem<LAnnotation>[] | undefined;
-  managedOptions: FileDiffOptions<LAnnotation> | undefined;
+  managedOptions: CodeViewerOptions<LAnnotation> | undefined;
   disableFlushSync: boolean;
   slotCoordinator: CodeViewerCoordinator<LAnnotation> | undefined;
 }
@@ -366,17 +366,17 @@ function createManagedCodeViewerOptions<LAnnotation>({
   options,
   hasCustomHeader,
 }: {
-  options: FileDiffOptions<LAnnotation> | undefined;
+  options: CodeViewerOptions<LAnnotation> | undefined;
   hasCustomHeader: boolean;
-}): FileDiffOptions<LAnnotation> | undefined {
-  if (options == null || !hasCustomHeader) {
+}): CodeViewerOptions<LAnnotation> | undefined {
+  if (!hasCustomHeader) {
     return options;
   }
 
   return {
     ...options,
-    // The imperative renderers use this callback's presence to switch their
-    // internal header layout into custom-slot mode. React portals provide the
+    // The imperative CodeViewer adapters use these callbacks' presence to switch
+    // file and diff headers into custom-slot mode. React portals provide the
     // actual header content, so this placeholder intentionally returns nothing.
     renderCustomHeader: () => undefined,
   };

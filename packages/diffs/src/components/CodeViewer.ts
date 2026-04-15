@@ -15,6 +15,7 @@ import type {
   CodeViewerLineScrollTarget,
   CodeViewerMetrics,
   CodeViewerScrollTarget,
+  HunkSeparators,
   VirtualFileMetrics,
   VirtualWindowSpecs,
 } from '../types';
@@ -50,7 +51,7 @@ interface AdvancedVirtualizedBaseItem {
   element: HTMLElement | undefined;
 }
 
-interface AdvancedVirtualizedDiffItem<
+interface CodeViewerDiffItemContext<
   LAnnotation,
 > extends AdvancedVirtualizedBaseItem {
   type: 'diff';
@@ -60,7 +61,7 @@ interface AdvancedVirtualizedDiffItem<
   instance: VirtualizedFileDiff<LAnnotation>;
 }
 
-interface AdvancedVirtualizedFileItem<
+interface CodeViewerFileItemContext<
   LAnnotation,
 > extends AdvancedVirtualizedBaseItem {
   type: 'file';
@@ -70,9 +71,9 @@ interface AdvancedVirtualizedFileItem<
   instance: VirtualizedFile<LAnnotation>;
 }
 
-type AdvancedVirtualizedItem<LAnnotation> =
-  | AdvancedVirtualizedDiffItem<LAnnotation>
-  | AdvancedVirtualizedFileItem<LAnnotation>;
+type CodeViewerContextItem<LAnnotation> =
+  | CodeViewerDiffItemContext<LAnnotation>
+  | CodeViewerFileItemContext<LAnnotation>;
 
 export interface CodeViewerRenderedDiffItem<LAnnotation> {
   id: string;
@@ -107,6 +108,204 @@ export type CodeViewerScrollListener<LAnnotation> = (
   viewer: CodeViewer<LAnnotation>
 ) => void;
 
+type OverloadCallbackArgs<TCallback> = TCallback extends (
+  ...args: infer TArgs
+) => unknown
+  ? TArgs
+  : never;
+
+type CallbackReturn<TCallback> = TCallback extends (
+  ...args: never[]
+) => infer TReturn
+  ? TReturn
+  : never;
+
+type OverloadFileCallbackArgs<
+  LAnnotation,
+  TKey extends keyof FileOptions<LAnnotation>,
+> = OverloadCallbackArgs<NonNullable<FileOptions<LAnnotation>[TKey]>>;
+
+type OverloadDiffCallbackArgs<
+  LAnnotation,
+  TKey extends keyof FileDiffOptions<LAnnotation>,
+> = OverloadCallbackArgs<NonNullable<FileDiffOptions<LAnnotation>[TKey]>>;
+
+type CodeViewerFileOptionCallback<
+  LAnnotation,
+  TKey extends keyof FileOptions<LAnnotation>,
+> = (
+  ...args: [
+    ...OverloadFileCallbackArgs<LAnnotation, TKey>,
+    context: CodeViewerFileItemContext<LAnnotation>,
+  ]
+) => CallbackReturn<NonNullable<FileOptions<LAnnotation>[TKey]>>;
+
+type CodeViewerDiffOptionCallback<
+  LAnnotation,
+  TKey extends keyof FileDiffOptions<LAnnotation>,
+> = (
+  ...args: [
+    ...OverloadDiffCallbackArgs<LAnnotation, TKey>,
+    context: CodeViewerDiffItemContext<LAnnotation>,
+  ]
+) => CallbackReturn<NonNullable<FileDiffOptions<LAnnotation>[TKey]>>;
+
+type CodeViewerOptionCallback<
+  LAnnotation,
+  TKey extends keyof FileOptions<LAnnotation> &
+    keyof FileDiffOptions<LAnnotation>,
+> = {
+  (
+    ...args: [
+      ...OverloadFileCallbackArgs<LAnnotation, TKey>,
+      context: CodeViewerFileItemContext<LAnnotation>,
+    ]
+  ): CallbackReturn<NonNullable<FileOptions<LAnnotation>[TKey]>>;
+  (
+    ...args: [
+      ...OverloadDiffCallbackArgs<LAnnotation, TKey>,
+      context: CodeViewerDiffItemContext<LAnnotation>,
+    ]
+  ): CallbackReturn<NonNullable<FileDiffOptions<LAnnotation>[TKey]>>;
+};
+
+const CODE_VIEWER_DIFF_OPTION_KEYS = [
+  'theme',
+  'disableLineNumbers',
+  'overflow',
+  'themeType',
+  'collapsed',
+  'disableFileHeader',
+  'disableVirtualizationBuffers',
+  'preferredHighlighter',
+  'useCSSClasses',
+  'useTokenTransformer',
+  'tokenizeMaxLineLength',
+  'unsafeCSS',
+  'diffStyle',
+  'diffIndicators',
+  'disableBackground',
+  'expandUnchanged',
+  'collapsedContextThreshold',
+  'lineDiffType',
+  'maxLineDiffLength',
+  'expansionLineCount',
+  'lineHoverHighlight',
+  'enableTokenInteractionsOnWhitespace',
+  'enableGutterUtility',
+  'enableHoverUtility',
+  '__debugPointerEvents',
+  'enableLineSelection',
+  'disableErrorHandling',
+] as const;
+
+type CodeViewerDiffOptionKeys = (typeof CODE_VIEWER_DIFF_OPTION_KEYS)[number];
+
+const CODE_VIEWER_FILE_OPTION_KEYS = [
+  'theme',
+  'disableLineNumbers',
+  'overflow',
+  'themeType',
+  'collapsed',
+  'disableFileHeader',
+  'disableVirtualizationBuffers',
+  'preferredHighlighter',
+  'useCSSClasses',
+  'useTokenTransformer',
+  'tokenizeMaxLineLength',
+  'unsafeCSS',
+  'lineHoverHighlight',
+  'enableTokenInteractionsOnWhitespace',
+  'enableGutterUtility',
+  'enableHoverUtility',
+  '__debugPointerEvents',
+  'enableLineSelection',
+  'disableErrorHandling',
+] as const;
+
+type CodeViewerPassThroughOptions<LAnnotation> = Pick<
+  FileDiffOptions<LAnnotation>,
+  CodeViewerDiffOptionKeys
+>;
+
+type CodeViewerMode = 'file' | 'diff';
+
+type CodeViewerModeItemContext<
+  LAnnotation,
+  TMode extends CodeViewerMode,
+> = TMode extends 'file'
+  ? CodeViewerFileItemContext<LAnnotation>
+  : CodeViewerDiffItemContext<LAnnotation>;
+
+type CodeViewerModeOptionCallback<
+  LAnnotation,
+  TMode extends CodeViewerMode,
+  TKey extends CodeViewerSharedCallbackKeys,
+> = TMode extends 'file'
+  ? CodeViewerFileOptionCallback<LAnnotation, TKey>
+  : CodeViewerDiffOptionCallback<LAnnotation, TKey>;
+
+type CodeViewerModeInternalOptionCallback<
+  LAnnotation,
+  TMode extends CodeViewerMode,
+  TKey extends CodeViewerSharedCallbackKeys,
+> = (
+  ...args: [
+    ...OverloadCallbackArgs<
+      NonNullable<CodeViewerModeOptions<LAnnotation, TMode>[TKey]>
+    >,
+    CodeViewerModeItemContext<LAnnotation, TMode>,
+  ]
+) => CallbackReturn<
+  NonNullable<CodeViewerModeOptions<LAnnotation, TMode>[TKey]>
+>;
+
+type CodeViewerModeOptions<
+  LAnnotation,
+  TMode extends CodeViewerMode,
+> = TMode extends 'file'
+  ? FileOptions<LAnnotation>
+  : FileDiffOptions<LAnnotation>;
+
+const CODE_VIEWER_SHARED_CALLBACK_KEYS = [
+  'renderCustomHeader',
+  'renderHeaderPrefix',
+  'renderHeaderMetadata',
+  'renderAnnotation',
+  'renderGutterUtility',
+  'renderHoverUtility',
+  'onPostRender',
+  'onGutterUtilityClick',
+  'onLineClick',
+  'onLineNumberClick',
+  'onLineEnter',
+  'onLineLeave',
+  'onTokenClick',
+  'onTokenEnter',
+  'onTokenLeave',
+  'onLineSelected',
+  'onLineSelectionStart',
+  'onLineSelectionChange',
+  'onLineSelectionEnd',
+] as const;
+
+type CodeViewerSharedCallbackKeys =
+  (typeof CODE_VIEWER_SHARED_CALLBACK_KEYS)[number];
+
+type CodeViewerSharedCallbackOptions<LAnnotation> = {
+  [TKey in CodeViewerSharedCallbackKeys]?: CodeViewerOptionCallback<
+    LAnnotation,
+    TKey
+  >;
+};
+
+export interface CodeViewerOptions<LAnnotation>
+  extends
+    CodeViewerPassThroughOptions<LAnnotation>,
+    CodeViewerSharedCallbackOptions<LAnnotation> {
+  hunkSeparators?: Exclude<HunkSeparators, 'custom'>;
+}
+
 export class CodeViewer<LAnnotation = undefined> {
   static __STOP = false;
   static __lastScrollPosition = 0;
@@ -117,11 +316,14 @@ export class CodeViewer<LAnnotation = undefined> {
     intersectionObserverMargin: 0,
     resizeDebugging: false,
   };
-  private items: AdvancedVirtualizedItem<LAnnotation>[] = [];
-  private idToItem: Map<string, AdvancedVirtualizedItem<LAnnotation>> =
-    new Map();
-  private instanceToItem: Map<object, AdvancedVirtualizedItem<LAnnotation>> =
-    new Map();
+  private items: CodeViewerContextItem<LAnnotation>[] = [];
+  private idToItem: Map<string, CodeViewerContextItem<LAnnotation>> = new Map();
+  // NOTE(amadeus): We should probably attach an id to instances and use that
+  // for lookups, instead of maintaining this map...
+  private instanceToItem: Map<
+    VirtualizedFileDiff<LAnnotation> | VirtualizedFile<LAnnotation>,
+    CodeViewerContextItem<LAnnotation>
+  > = new Map();
   private layoutDirtyIndex: number | undefined;
   private slotCoordinator: CodeViewerCoordinator<LAnnotation> | undefined;
   private slotSnapshot: CodeViewerRenderedItem<LAnnotation>[] | undefined;
@@ -152,7 +354,7 @@ export class CodeViewer<LAnnotation = undefined> {
 
   constructor(
     private viewerMetrics: CodeViewerMetrics = DEFAULT_CODE_VIEWER_METRICS,
-    private options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
+    private options: CodeViewerOptions<LAnnotation> = { theme: DEFAULT_THEMES },
     private metrics: VirtualFileMetrics = DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS,
     private workerManager?: WorkerPoolManager | undefined,
     private isContainerManaged = false
@@ -342,7 +544,7 @@ export class CodeViewer<LAnnotation = undefined> {
     }
   }
 
-  public setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
+  public setOptions(options: CodeViewerOptions<LAnnotation> | undefined): void {
     if (options == null) {
       return;
     }
@@ -358,11 +560,9 @@ export class CodeViewer<LAnnotation = undefined> {
       }
 
       if (item.type === 'diff') {
-        item.instance.setOptions(options);
+        item.instance.setOptions(this.createOptions(item.type, item.item.id));
       } else {
-        item.instance.setOptions(
-          options as unknown as FileOptions<LAnnotation>
-        );
+        item.instance.setOptions(this.createOptions('file', item.item.id));
       }
     }
 
@@ -472,7 +672,9 @@ export class CodeViewer<LAnnotation = undefined> {
     };
   }
 
-  public getTopForInstance(instance: object): number {
+  public getTopForInstance(
+    instance: VirtualizedFile<LAnnotation> | VirtualizedFileDiff<LAnnotation>
+  ): number {
     const item = this.instanceToItem.get(instance);
     if (item == null) {
       throw new Error(
@@ -486,14 +688,14 @@ export class CodeViewer<LAnnotation = undefined> {
     input: CodeViewerItem<LAnnotation>,
     index: number,
     top: number
-  ): AdvancedVirtualizedItem<LAnnotation> {
+  ): CodeViewerContextItem<LAnnotation> {
     if (input.type === 'diff') {
       return {
         type: 'diff',
         item: input,
         index,
         instance: new VirtualizedFileDiff<LAnnotation>(
-          this.options,
+          this.createOptions('diff', input.id),
           this,
           this.metrics,
           this.workerManager,
@@ -502,7 +704,7 @@ export class CodeViewer<LAnnotation = undefined> {
         top,
         height: 0,
         element: undefined,
-      };
+      } satisfies CodeViewerDiffItemContext<LAnnotation>;
     }
 
     return {
@@ -510,7 +712,7 @@ export class CodeViewer<LAnnotation = undefined> {
       item: input,
       index,
       instance: new VirtualizedFile<LAnnotation>(
-        this.options as unknown as FileOptions<LAnnotation>,
+        this.createOptions('file', input.id),
         this,
         this.metrics,
         this.workerManager,
@@ -519,7 +721,114 @@ export class CodeViewer<LAnnotation = undefined> {
       top,
       height: 0,
       element: undefined,
+    } satisfies CodeViewerFileItemContext<LAnnotation>;
+  }
+
+  private getItemById(
+    itemId: string
+  ): CodeViewerContextItem<LAnnotation> | undefined {
+    const item = this.idToItem.get(itemId);
+    if (item == null) {
+      console.error(`CodeViewer.getItemById: unknown item id "${itemId}"`);
+    }
+    return item;
+  }
+
+  private getItemByMode<TMode extends CodeViewerMode>(
+    itemId: string,
+    mode: TMode
+  ): CodeViewerModeItemContext<LAnnotation, TMode> | undefined {
+    const item = this.getItemById(itemId);
+    if (item == null) {
+      return undefined;
+    }
+    if (item.type !== mode) {
+      console.error(
+        `CodeViewer.getItemByMode: item id "${itemId}" is not a ${mode}`
+      );
+      return undefined;
+    }
+    return item as CodeViewerModeItemContext<LAnnotation, TMode>;
+  }
+
+  private wrapCallbackWithContext<
+    TMode extends CodeViewerMode,
+    TArgs extends unknown[],
+    TResult,
+  >(
+    mode: TMode,
+    itemId: string,
+    callback: (
+      ...args: [...TArgs, CodeViewerModeItemContext<LAnnotation, TMode>]
+    ) => TResult
+  ): (...args: TArgs) => TResult | undefined {
+    return (...args: TArgs) => {
+      const item = this.getItemByMode(itemId, mode);
+      if (item == null) {
+        return undefined;
+      }
+      return callback(...args, item);
     };
+  }
+
+  private getWrappedOptionCallback<
+    TMode extends CodeViewerMode,
+    TKey extends CodeViewerSharedCallbackKeys,
+  >(
+    mode: TMode,
+    key: TKey,
+    itemId: string
+  ): CodeViewerModeOptions<LAnnotation, TMode>[TKey] | undefined {
+    const callback = this.options[key] as
+      | CodeViewerModeOptionCallback<LAnnotation, TMode, TKey>
+      | undefined;
+    if (callback == null) {
+      return undefined;
+    }
+    return this.wrapCallbackWithContext(
+      mode,
+      itemId,
+      callback as CodeViewerModeInternalOptionCallback<LAnnotation, TMode, TKey>
+    ) as CodeViewerModeOptions<LAnnotation, TMode>[TKey] | undefined;
+  }
+
+  private createOptions(mode: 'file', itemId: string): FileOptions<LAnnotation>;
+  private createOptions(
+    mode: 'diff',
+    itemId: string
+  ): FileDiffOptions<LAnnotation>;
+  private createOptions(
+    mode: CodeViewerMode,
+    itemId: string
+  ): FileOptions<LAnnotation> | FileDiffOptions<LAnnotation> {
+    const options =
+      mode === 'file'
+        ? ({} satisfies FileOptions<LAnnotation>)
+        : ({
+            hunkSeparators: this.options.hunkSeparators,
+          } satisfies FileDiffOptions<LAnnotation>);
+    // NOTE(amadeus): Hacks on hacks...
+    const target = options as Record<string, unknown>;
+    const passThroughKeys =
+      mode === 'file'
+        ? CODE_VIEWER_FILE_OPTION_KEYS
+        : CODE_VIEWER_DIFF_OPTION_KEYS;
+
+    for (const key of passThroughKeys) {
+      const value = this.options[key];
+      if (value !== undefined) {
+        target[key] = value;
+      }
+    }
+
+    for (const key of CODE_VIEWER_SHARED_CALLBACK_KEYS) {
+      const callback = this.getWrappedOptionCallback(mode, key, itemId);
+      if (callback !== undefined) {
+        target[key] = callback;
+      }
+    }
+
+    return options;
   }
 
   /**
@@ -536,9 +845,7 @@ export class CodeViewer<LAnnotation = undefined> {
    * Each record carries its current array index so this stays O(1) even when
    * the viewer holds a very large number of items.
    */
-  private markItemLayoutDirty(
-    item: AdvancedVirtualizedItem<LAnnotation>
-  ): void {
+  private markItemLayoutDirty(item: CodeViewerContextItem<LAnnotation>): void {
     if (this.items[item.index] !== item) {
       throw new Error(
         `CodeViewer.markItemLayoutDirty: unknown item id "${item.item.id}"`
@@ -607,14 +914,14 @@ export class CodeViewer<LAnnotation = undefined> {
   private reconcileItems(items: readonly CodeViewerItem<LAnnotation>[]): void {
     const { items: previousItems, idToItem: previousById } = this;
     const removedItems = new Set(previousItems);
-    const nextItems: AdvancedVirtualizedItem<LAnnotation>[] = [];
+    const nextItems: CodeViewerContextItem<LAnnotation>[] = [];
     const nextIdToItem: Map<
       string,
-      AdvancedVirtualizedItem<LAnnotation>
+      CodeViewerContextItem<LAnnotation>
     > = new Map();
     const nextInstanceToItem: Map<
-      object,
-      AdvancedVirtualizedItem<LAnnotation>
+      VirtualizedFileDiff<LAnnotation> | VirtualizedFile<LAnnotation>,
+      CodeViewerContextItem<LAnnotation>
     > = new Map();
     let firstDirtyIndex: number | undefined;
 
@@ -691,7 +998,7 @@ export class CodeViewer<LAnnotation = undefined> {
    * intentionally publishes a newer version.
    */
   private syncItemRecord(
-    item: AdvancedVirtualizedItem<LAnnotation>,
+    item: CodeViewerContextItem<LAnnotation>,
     nextItem: CodeViewerItem<LAnnotation>
   ): boolean {
     if (item.type !== nextItem.type) {
@@ -754,7 +1061,7 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private getLineScrollPosition(
-    item: AdvancedVirtualizedItem<LAnnotation>,
+    item: CodeViewerContextItem<LAnnotation>,
     target: CodeViewerLineScrollTarget
   ): LineScrollPosition | undefined {
     if (item.type === 'diff') {
@@ -810,7 +1117,7 @@ export class CodeViewer<LAnnotation = undefined> {
     }
 
     let prevElement: HTMLElement | undefined;
-    const updatedItems = new Set<AdvancedVirtualizedItem<LAnnotation>>();
+    const updatedItems = new Set<CodeViewerContextItem<LAnnotation>>();
     const startingIndex = this.findFirstVisibleIndex(top);
     const lastRenderedIndex = this.findLastVisibleIndex(bottom);
 
@@ -867,7 +1174,7 @@ export class CodeViewer<LAnnotation = undefined> {
   };
 
   private flushManagers(
-    updatedItems: Set<AdvancedVirtualizedItem<LAnnotation>>
+    updatedItems: Set<CodeViewerContextItem<LAnnotation>>
   ): void {
     for (const item of updatedItems) {
       item.instance.flushManagers();
@@ -875,7 +1182,7 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private reconcileRenderedItems(
-    updatedItems?: Set<AdvancedVirtualizedItem<LAnnotation>>
+    updatedItems?: Set<CodeViewerContextItem<LAnnotation>>
   ): void {
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex === -1) {
@@ -1268,7 +1575,7 @@ export class CodeViewer<LAnnotation = undefined> {
 }
 
 function cleanRenderedItem<LAnnotation>(
-  item: AdvancedVirtualizedItem<LAnnotation>
+  item: CodeViewerContextItem<LAnnotation>
 ) {
   item.instance.cleanUp(true);
   item.element?.remove();
@@ -1276,7 +1583,7 @@ function cleanRenderedItem<LAnnotation>(
 }
 
 function prepareItemInstance<LAnnotation>(
-  item: AdvancedVirtualizedItem<LAnnotation>
+  item: CodeViewerContextItem<LAnnotation>
 ): number {
   item.instance.cleanUp(true);
   if (item.type === 'diff') {
@@ -1287,7 +1594,7 @@ function prepareItemInstance<LAnnotation>(
 }
 
 function renderItem<LAnnotation>(
-  item: AdvancedVirtualizedItem<LAnnotation>,
+  item: CodeViewerContextItem<LAnnotation>,
   fileContainer?: HTMLElement
 ): boolean {
   if (item.type === 'diff') {
