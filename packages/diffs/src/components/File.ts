@@ -71,10 +71,6 @@ export interface FileHydrateProps<LAnnotation> extends Omit<
 export interface FileOptions<LAnnotation>
   extends BaseCodeOptions, InteractionManagerBaseOptions<'file'> {
   disableFileHeader?: boolean;
-  /**
-   * @deprecated Use `enableGutterUtility` instead.
-   */
-  enableHoverUtility?: boolean;
   renderHeaderPrefix?: RenderFileMetadata;
   renderHeaderMetadata?: RenderFileMetadata;
   renderCustomHeader?: RenderFileMetadata;
@@ -88,12 +84,6 @@ export interface FileOptions<LAnnotation>
     annotation: LineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
   renderGutterUtility?(
-    getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
-  ): HTMLElement | null | undefined;
-  /**
-   * @deprecated Use `renderGutterUtility` instead.
-   */
-  renderHoverUtility?(
     getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
   ): HTMLElement | null | undefined;
 
@@ -694,8 +684,7 @@ export class File<LAnnotation = undefined> {
   }
 
   private renderGutterUtility() {
-    const renderGutterUtility =
-      this.options.renderGutterUtility ?? this.options.renderHoverUtility;
+    const { renderGutterUtility } = this.options;
     if (this.fileContainer == null || renderGutterUtility == null) {
       this.gutterUtilityContent?.remove();
       this.gutterUtilityContent = undefined;

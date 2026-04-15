@@ -184,8 +184,6 @@ interface DiffOptions {
 
   // Must be true to enable renderGutterUtility prop
   enableGutterUtility: false,
-  // Deprecated alias: enableHoverUtility
-  // This boolean controls visibility for both built-in and custom gutter utility UI.
 
   // Callbacks for mouse events on diff lines
   onLineClick({ lineNumber, side, event }) {
@@ -724,9 +722,6 @@ interface FileOptions {
 
   // Must be true to enable renderGutterUtility prop
   enableGutterUtility: false,
-  // Deprecated alias: enableHoverUtility
-  // This boolean controls visibility for both built-in and custom gutter
-  // utility UI.
 
   // Callbacks for mouse events on file lines
   onLineClick({ lineNumber, event }) {

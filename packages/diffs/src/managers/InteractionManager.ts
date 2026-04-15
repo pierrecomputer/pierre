@@ -1619,11 +1619,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
 type InteractionPluckOptions<TMode extends InteractionManagerMode> =
   InteractionManagerBaseOptions<TMode> & {
-    enableHoverUtility?: boolean;
     renderGutterUtility?(
-      getHoveredRow: () => GetHoveredLineResult<TMode> | undefined
-    ): HTMLElement | null | undefined;
-    renderHoverUtility?(
       getHoveredRow: () => GetHoveredLineResult<TMode> | undefined
     ): HTMLElement | null | undefined;
   };
@@ -1632,7 +1628,6 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
   {
     enableTokenInteractionsOnWhitespace,
     enableGutterUtility,
-    enableHoverUtility,
     lineHoverHighlight,
     onGutterUtilityClick,
     onLineClick,
@@ -1643,7 +1638,6 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     onTokenEnter,
     onTokenLeave,
     renderGutterUtility,
-    renderHoverUtility,
     __debugPointerEvents,
     enableLineSelection,
     onLineSelected,
@@ -1663,13 +1657,10 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     enableTokenInteractionsOnWhitespace,
     enableGutterUtility: resolveEnableGutterUtilityOption({
       enableGutterUtility,
-      enableHoverUtility,
       renderGutterUtility,
-      renderHoverUtility,
       onGutterUtilityClick,
     }),
-    usesCustomGutterUtility:
-      renderGutterUtility != null || renderHoverUtility != null,
+    usesCustomGutterUtility: renderGutterUtility != null,
     lineHoverHighlight,
 
     onGutterUtilityClick,
@@ -1698,37 +1689,18 @@ function resolveEnableGutterUtilityOption<
   TMode extends InteractionManagerMode,
 >({
   enableGutterUtility,
-  enableHoverUtility,
   renderGutterUtility,
-  renderHoverUtility,
   onGutterUtilityClick,
 }: Pick<
   InteractionPluckOptions<TMode>,
-  | 'enableGutterUtility'
-  | 'enableHoverUtility'
-  | 'renderGutterUtility'
-  | 'renderHoverUtility'
-  | 'onGutterUtilityClick'
+  'enableGutterUtility' | 'renderGutterUtility' | 'onGutterUtilityClick'
 >): boolean {
-  if (enableGutterUtility !== undefined && enableHoverUtility !== undefined) {
+  if (onGutterUtilityClick != null && renderGutterUtility != null) {
     throw new Error(
-      "Cannot use both 'enableGutterUtility' and deprecated 'enableHoverUtility'. Use only 'enableGutterUtility'."
+      "Cannot use both 'onGutterUtilityClick' and 'renderGutterUtility'. Use only one gutter utility API."
     );
   }
-  if (renderGutterUtility != null && renderHoverUtility != null) {
-    throw new Error(
-      "Cannot use both 'renderGutterUtility' and deprecated 'renderHoverUtility'. Use only 'renderGutterUtility'."
-    );
-  }
-  if (
-    onGutterUtilityClick != null &&
-    (renderGutterUtility != null || renderHoverUtility != null)
-  ) {
-    throw new Error(
-      "Cannot use both 'onGutterUtilityClick' and render utility callbacks ('renderGutterUtility'/'renderHoverUtility'). Use only one gutter utility API."
-    );
-  }
-  return enableGutterUtility ?? enableHoverUtility ?? false;
+  return enableGutterUtility ?? false;
 }
 
 function isLinePointerTarget<TMode extends InteractionManagerMode>(

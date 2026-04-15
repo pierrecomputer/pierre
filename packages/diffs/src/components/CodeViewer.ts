@@ -98,6 +98,7 @@ export type CodeViewerRenderedItem<LAnnotation> =
 export interface CodeViewerCoordinator<LAnnotation> {
   hasHeaderRenderers: boolean;
   hasAnnotationRenderer: boolean;
+  hasGutterRenderer: boolean;
   onSnapshotChange(
     snapshot: CodeViewerRenderedItem<LAnnotation>[] | undefined
   ): void;
@@ -193,7 +194,6 @@ const CODE_VIEWER_DIFF_OPTION_KEYS = [
   'lineHoverHighlight',
   'enableTokenInteractionsOnWhitespace',
   'enableGutterUtility',
-  'enableHoverUtility',
   '__debugPointerEvents',
   'enableLineSelection',
   'disableErrorHandling',
@@ -217,7 +217,6 @@ const CODE_VIEWER_FILE_OPTION_KEYS = [
   'lineHoverHighlight',
   'enableTokenInteractionsOnWhitespace',
   'enableGutterUtility',
-  'enableHoverUtility',
   '__debugPointerEvents',
   'enableLineSelection',
   'disableErrorHandling',
@@ -273,7 +272,6 @@ const CODE_VIEWER_SHARED_CALLBACK_KEYS = [
   'renderHeaderMetadata',
   'renderAnnotation',
   'renderGutterUtility',
-  'renderHoverUtility',
   'onPostRender',
   'onGutterUtilityClick',
   'onLineClick',
@@ -1657,13 +1655,14 @@ function getSlotSnapshot<LAnnotation>(
   {
     hasHeaderRenderers,
     hasAnnotationRenderer,
+    hasGutterRenderer,
   }: CodeViewerCoordinator<LAnnotation>
 ): CodeViewerRenderedItem<LAnnotation>[] | undefined {
   if (renderedItems.length === 0) {
     return undefined;
   }
 
-  if (hasHeaderRenderers) {
+  if (hasHeaderRenderers || hasGutterRenderer) {
     return renderedItems;
   }
 

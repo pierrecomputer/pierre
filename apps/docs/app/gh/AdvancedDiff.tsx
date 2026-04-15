@@ -3,6 +3,7 @@
 import {
   type CodeViewer as CodeViewerClass,
   type CodeViewerItem,
+  type CodeViewerOptions,
   DEFAULT_THEMES,
   DEFAULT_VIRTUAL_FILE_METRICS,
   type DiffLineAnnotation,
@@ -189,15 +190,19 @@ const CodeViewerWrapper = memo(function CodeViewerWrapper({
   );
   // NOTE(amadeus): For some insane reason, the react compiler did not know how
   // to properly memoize this, so we pulled it into a `useMemo` for safety...
-  const options = useMemo(
+  const options: CodeViewerOptions<CommentMetadata> = useMemo(
     () => ({
       theme: DEFAULT_THEMES,
       diffStyle,
       overflow,
       // hunkSeparators: 'line-info-basic',
       // FIXME(amadeus): We need to optimize this...
-      // enableLineSelection: true,
+      enableLineSelection: true,
+      enableGutterUtility: true,
       unsafeCSS,
+      onLineSelected(range, context) {
+        console.log('Selected', range, context.item.id);
+      },
     }),
     [diffStyle, overflow]
   );

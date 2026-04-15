@@ -26,12 +26,6 @@ export interface DiffBasePropsReact<LAnnotation> {
   renderGutterUtility?(
     getHoveredLine: () => GetHoveredLineResult<'diff'> | undefined
   ): ReactNode;
-  /**
-   * @deprecated Use `renderGutterUtility` instead.
-   */
-  renderHoverUtility?(
-    getHoveredLine: () => GetHoveredLineResult<'diff'> | undefined
-  ): ReactNode;
   className?: string;
   style?: CSSProperties;
   prerenderedHTML?: string;
@@ -48,12 +42,6 @@ export interface FileProps<LAnnotation> {
   renderHeaderPrefix?(file: FileContents): ReactNode;
   renderHeaderMetadata?(file: FileContents): ReactNode;
   renderGutterUtility?(
-    getHoveredLine: () => GetHoveredLineResult<'file'> | undefined
-  ): ReactNode;
-  /**
-   * @deprecated Use `renderGutterUtility` instead.
-   */
-  renderHoverUtility?(
     getHoveredLine: () => GetHoveredLineResult<'file'> | undefined
   ): ReactNode;
   className?: string;
