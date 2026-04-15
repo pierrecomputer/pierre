@@ -27,7 +27,7 @@ export const pathStoreCapabilityMatrix: readonly PathStoreCapabilityMatrixRow[] 
     {
       currentDemo: 'Search Modes',
       notes:
-        'Search returns once the vanilla controller and identity model are established.',
+        'Phase 7 restores the baseline built-in search modes, input/session UX, and hotkeys on the dedicated path-store search route, with quick search instrumentation also surfaced on the main path-store-powered demo.',
       targetPhases: [7],
     },
     {

@@ -24,6 +24,7 @@ const DEMO_PAGES = [
 
 const PATH_STORE_LANE_PAGES = [
   { slug: 'path-store-powered', label: 'Focus + Navigation' },
+  { slug: 'path-store-search', label: 'Search' },
 ] as const;
 
 export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {

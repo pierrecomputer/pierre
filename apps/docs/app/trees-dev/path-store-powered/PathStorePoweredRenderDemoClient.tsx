@@ -426,6 +426,18 @@ export function PathStorePoweredRenderDemoClient({
     },
     [addLog]
   );
+  const runSearchAction = useCallback(
+    (label: string, action: (tree: PathStoreFileTree) => void): void => {
+      const tree = treeRef.current;
+      if (tree == null) {
+        addLog(`error: tree not ready for ${label}`);
+        return;
+      }
+
+      action(tree);
+    },
+    [addLog]
+  );
 
   useEffect(() => {
     return () => {
@@ -529,7 +541,7 @@ export function PathStorePoweredRenderDemoClient({
             header.style.padding = '8px 12px';
 
             const label = document.createElement('strong');
-            label.textContent = 'Phase 6 mutation header';
+            label.textContent = 'Phase 6/7 path-store header';
             header.append(label);
 
             const button = document.createElement('button');
@@ -545,6 +557,9 @@ export function PathStorePoweredRenderDemoClient({
         },
       },
       id: 'pst-phase6-mutations',
+      onSearchChange: (value) => {
+        addLog(`search: ${value ?? '<closed>'}`);
+      },
       onSelectionChange: handleSelectionChange,
       preparedInput,
       renderRowDecoration: ({ item }) =>
@@ -659,6 +674,21 @@ export function PathStorePoweredRenderDemoClient({
       tree.resetPaths(sharedOptions.paths, { preparedInput });
     });
   }, [preparedInput, runMutation, sharedOptions.paths]);
+  const handleSearchDocumentation = useCallback(() => {
+    runSearchAction('search documentation', (tree) => {
+      tree.setSearch('documentation');
+    });
+  }, [runSearchAction]);
+  const handleSearchDrivers = useCallback(() => {
+    runSearchAction('search drivers', (tree) => {
+      tree.setSearch('drivers');
+    });
+  }, [runSearchAction]);
+  const handleCloseSearch = useCallback(() => {
+    runSearchAction('close search', (tree) => {
+      tree.closeSearch();
+    });
+  }, [runSearchAction]);
 
   return (
     <div className="space-y-6">
@@ -667,13 +697,16 @@ export function PathStorePoweredRenderDemoClient({
           Path-store lane · provisional
         </p>
         <h1 className="text-2xl font-bold">
-          Mutation API + Context Menu Proof + Icon Sets
+          Mutation API + Search + Context Menu Proof + Icon Sets
         </h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
-          Phase 6 turns the path-store lane into a mutation-first tree: use the
-          shared handle to add, move, batch, and reset paths, use the existing
-          context menu for low-cost delete and narrow rename proof, and watch
-          the live tree plus mutation log stay coherent under virtualization.
+          Phase 6 turns the path-store lane into a mutation-first tree, and
+          Phase 7 now surfaces baseline built-in search directly on this same
+          demo: use the shared handle to add, move, batch, and reset paths, use
+          the built-in search input or quick-search buttons to drive filtering,
+          and use the existing context menu for low-cost delete and narrow
+          rename proof while the live tree and log stay coherent under
+          virtualization.
         </p>
         <div className="flex flex-wrap gap-2 pt-2">
           <button
@@ -721,6 +754,32 @@ export function PathStorePoweredRenderDemoClient({
           <button
             type="button"
             className="rounded-md border px-3 py-1.5 text-sm font-medium"
+            data-path-store-search-action="documentation"
+            onClick={handleSearchDocumentation}
+          >
+            Search “documentation”
+          </button>
+          <button
+            type="button"
+            className="rounded-md border px-3 py-1.5 text-sm font-medium"
+            data-path-store-search-action="drivers"
+            onClick={handleSearchDrivers}
+          >
+            Search “drivers”
+          </button>
+          <button
+            type="button"
+            className="rounded-md border px-3 py-1.5 text-sm font-medium"
+            data-path-store-search-action="close"
+            onClick={handleCloseSearch}
+          >
+            Close search
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2 pt-2">
+          <button
+            type="button"
+            className="rounded-md border px-3 py-1.5 text-sm font-medium"
             aria-pressed={iconMode === 'complete'}
             onClick={() => {
               setIconMode('complete');
@@ -756,10 +815,10 @@ export function PathStorePoweredRenderDemoClient({
 
       <HydratedPathStoreExample
         containerHtml={containerHtml}
-        description="Use the buttons above to exercise add, move, batch, and coarse reset operations. Right-click or press Shift+F10 on a row to use the low-cost delete and narrow rename proof path. The mutation log should show add/remove/move/batch/reset events while focus, selection, and virtualization stay coherent."
+        description="Phase 7 search is instrumented directly in this main demo now: use the built-in search input above the tree or the quick search buttons above to drive the hide-non-matches filter, then use the mutation buttons to confirm the tree stays coherent. Right-click or press Shift+F10 on a row for the low-cost delete and narrow rename proof path."
         onTreeReady={handleTreeReady}
         options={options}
-        title="Mutation-first tree proof"
+        title="Mutation + search tree proof"
       />
       <StateLog entries={log} />
 

@@ -41,6 +41,7 @@ import type {
   PathStoreTreesMutationHandle,
   PathStoreTreesResetOptions,
   PathStoreTreesRowDecorationRenderer,
+  PathStoreTreesSearchSessionHandle,
   PathStoreTreesSelectionChangeListener,
 } from './types';
 import { PathStoreTreesView } from './view';
@@ -105,7 +106,9 @@ function getTopLevelSpriteSheets(shadowRoot: ShadowRoot): SVGElement[] {
   );
 }
 
-export class PathStoreFileTree implements PathStoreTreesMutationHandle {
+export class PathStoreFileTree
+  implements PathStoreTreesMutationHandle, PathStoreTreesSearchSessionHandle
+{
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
 
   readonly #composition: PathStoreTreesCompositionOptions | undefined;
@@ -117,6 +120,7 @@ export class PathStoreFileTree implements PathStoreTreesMutationHandle {
   readonly #renderRowDecoration:
     | PathStoreTreesRowDecorationRenderer
     | undefined;
+  readonly #searchEnabled: boolean;
   readonly #slotHost = new PathStoreTreesManagedSlotHost();
   readonly #viewOptions: Pick<
     PathStoreFileTreeOptions,
@@ -131,12 +135,16 @@ export class PathStoreFileTree implements PathStoreTreesMutationHandle {
   public constructor(options: PathStoreFileTreeOptions) {
     const {
       composition,
+      fileTreeSearchMode,
       id,
+      initialSearchQuery,
       icons,
       itemHeight,
+      onSearchChange,
       onSelectionChange,
       overscan,
       renderRowDecoration,
+      search,
       viewportHeight,
       ...controllerOptions
     } = options;
@@ -145,12 +153,18 @@ export class PathStoreFileTree implements PathStoreTreesMutationHandle {
     this.#icons = icons;
     this.#onSelectionChange = onSelectionChange;
     this.#renderRowDecoration = renderRowDecoration;
+    this.#searchEnabled = search === true;
     this.#viewOptions = {
       itemHeight,
       overscan,
       viewportHeight,
     };
-    this.#controller = new PathStoreTreesController(controllerOptions);
+    this.#controller = new PathStoreTreesController({
+      ...controllerOptions,
+      fileTreeSearchMode,
+      initialSearchQuery,
+      onSearchChange,
+    });
     this.#selectionVersion = this.#controller.getSelectionVersion();
     this.#selectionSubscription =
       this.#onSelectionChange == null
@@ -212,6 +226,38 @@ export class PathStoreFileTree implements PathStoreTreesMutationHandle {
     return this.#controller.onMutation(type, handler);
   }
 
+  public setSearch(value: string | null): void {
+    this.#controller.setSearch(value);
+  }
+
+  public openSearch(initialValue?: string): void {
+    this.#controller.openSearch(initialValue);
+  }
+
+  public closeSearch(): void {
+    this.#controller.closeSearch();
+  }
+
+  public isSearchOpen(): boolean {
+    return this.#controller.isSearchOpen();
+  }
+
+  public getSearchValue(): string {
+    return this.#controller.getSearchValue();
+  }
+
+  public getSearchMatchingPaths(): readonly string[] {
+    return this.#controller.getSearchMatchingPaths();
+  }
+
+  public focusNextSearchMatch(): void {
+    this.#controller.focusNextSearchMatch();
+  }
+
+  public focusPreviousSearchMatch(): void {
+    this.#controller.focusPreviousSearchMatch();
+  }
+
   public remove(path: string, options?: PathStoreRemoveOptions): void {
     this.#controller.remove(path, options);
   }
@@ -237,7 +283,9 @@ export class PathStoreFileTree implements PathStoreTreesMutationHandle {
       composition: this.#composition,
       controller: this.#controller,
       icons: this.#icons,
+      instanceId: this.#id,
       renderRowDecoration: this.#renderRowDecoration,
+      searchEnabled: this.#searchEnabled,
       slotHost: this.#slotHost,
       ...this.#getResolvedViewOptions(host),
     });
@@ -251,7 +299,9 @@ export class PathStoreFileTree implements PathStoreTreesMutationHandle {
       composition: this.#composition,
       controller: this.#controller,
       icons: this.#icons,
+      instanceId: this.#id,
       renderRowDecoration: this.#renderRowDecoration,
+      searchEnabled: this.#searchEnabled,
       slotHost: this.#slotHost,
       ...this.#getResolvedViewOptions(host),
     });
@@ -271,7 +321,9 @@ export class PathStoreFileTree implements PathStoreTreesMutationHandle {
       composition: this.#composition,
       controller: this.#controller,
       icons: this.#icons,
+      instanceId: this.#id,
       renderRowDecoration: this.#renderRowDecoration,
+      searchEnabled: this.#searchEnabled,
       slotHost: this.#slotHost,
       ...this.#getResolvedViewOptions(host),
     });
@@ -464,17 +516,25 @@ export function preloadPathStoreFileTree(
 ): PathStoreFileTreeSsrPayload {
   const {
     composition,
+    fileTreeSearchMode,
     id,
+    initialSearchQuery,
     icons,
     itemHeight,
+    onSearchChange: _onSearchChange,
     onSelectionChange: _onSelectionChange,
     overscan,
     renderRowDecoration,
+    search,
     viewportHeight,
     ...controllerOptions
   } = options;
   const resolvedId = createServerId(id);
-  const controller = new PathStoreTreesController(controllerOptions);
+  const controller = new PathStoreTreesController({
+    ...controllerOptions,
+    fileTreeSearchMode,
+    initialSearchQuery,
+  });
   const resolvedViewportHeight =
     viewportHeight ?? PATH_STORE_TREES_DEFAULT_VIEWPORT_HEIGHT;
   const normalizedIcons = normalizeFileTreeIcons(icons);
@@ -489,9 +549,11 @@ export function preloadPathStoreFileTree(
       composition,
       controller,
       icons,
+      instanceId: resolvedId,
       itemHeight,
       overscan,
       renderRowDecoration,
+      searchEnabled: search === true,
       viewportHeight: resolvedViewportHeight,
     })
   );
