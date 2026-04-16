@@ -590,11 +590,20 @@
 
     &[data-item-focused='true'],
     &:focus-visible {
-      outline: var(--trees-focus-ring-width) solid var(--trees-focus-ring-color);
-      outline-offset: var(--trees-focus-ring-offset);
       z-index: 2;
 
-      &[data-item-selected='true'] {
+      &::before {
+        position: absolute;
+        inset: 0;
+        content: '';
+        display: block;
+        border-radius: var(--trees-border-radius);
+        outline: var(--trees-focus-ring-width) solid
+          var(--trees-focus-ring-color);
+        outline-offset: var(--trees-focus-ring-offset);
+      }
+
+      &[data-item-selected='true']::before {
         outline-color: var(--trees-selected-focused-border-color);
       }
     }
@@ -613,6 +622,16 @@
     &[data-item-search-match='true'] {
       font-weight: var(--trees-search-font-weight);
     }
+  }
+
+  [data-item-selected='true']:has(+ [data-item-selected='true']) {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  [data-item-selected='true'] + [data-item-selected='true'] {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
   }
 
   /* Flattened Directory Parts */
