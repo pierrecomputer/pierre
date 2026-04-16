@@ -917,6 +917,13 @@
     opacity: 0.75;
   }
 
+  [data-item-selected='true'],
+  [data-type='item']:focus-visible {
+    & [data-item-section='spacing-item'] {
+      height: 100%;
+    }
+  }
+
   /* Git status indicator */
 
   /* This is a folder that contains a git change */
