@@ -23,9 +23,8 @@ const DRAG_AND_DROP_DEMO_PATHS = [
   ),
 ] as const;
 
-const DRAG_AND_DROP_SORTED_PATHS = [...DRAG_AND_DROP_DEMO_PATHS].toSorted();
 const DRAG_AND_DROP_PREPARED_INPUT = createPresortedPreparedInput(
-  DRAG_AND_DROP_SORTED_PATHS
+  DRAG_AND_DROP_DEMO_PATHS
 );
 const PATH_STORE_DRAG_HEADER_HTML =
   '<div data-path-store-demo-header style="align-items:center;display:flex;gap:12px;padding:8px 12px"><strong>Phase 10 path-store drag and drop</strong><span>Pointer + touch, path-store-native moves</span></div>';
@@ -46,7 +45,7 @@ export default function PathStoreDragAndDropPage() {
       'src/lib/',
       'workspace/',
     ],
-    paths: DRAG_AND_DROP_SORTED_PATHS,
+    paths: DRAG_AND_DROP_PREPARED_INPUT.paths,
     preparedInput: DRAG_AND_DROP_PREPARED_INPUT,
     search: true,
     viewportHeight: 460,

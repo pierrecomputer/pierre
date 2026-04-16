@@ -913,14 +913,13 @@ describe('path-store render + scroll', () => {
     expect(payload.shadowHtml).toContain('README.md');
   });
 
-  test('hydration keeps row content aligned with row paths when SSR uses prepared input', async () => {
+  test('hydration keeps row content aligned with row paths when using a sorted presorted-path fast path built from unsorted input', async () => {
     const { cleanup, dom } = installDom();
     try {
-      const { PathStore } = await import('@pierre/path-store');
       const { PathStoreFileTree, preloadPathStoreFileTree } =
         await import('../src/path-store');
 
-      const paths = [
+      const unsortedPaths = [
         'README.md',
         'package.json',
         'assets/images/social/logo.png',
@@ -932,6 +931,15 @@ describe('path-store render + scroll', () => {
         'src/lib/theme.ts',
         'src/components/Button.tsx',
       ] as const;
+      // Mirror the docs helper contract: callers can start from unsorted
+      // fixtures, then hand the sorted fast path to both SSR and hydration.
+      const presortedPaths = [...unsortedPaths].toSorted();
+      const preparedInput = {
+        paths: presortedPaths,
+        presortedPaths,
+      } as NonNullable<
+        ConstructorParameters<typeof PathStoreFileTree>[0]['preparedInput']
+      >;
       const options = {
         dragAndDrop: true,
         flattenEmptyDirectories: true,
@@ -942,8 +950,8 @@ describe('path-store render + scroll', () => {
           'src/',
           'src/lib/',
         ],
-        paths,
-        preparedInput: PathStore.prepareInput(paths),
+        paths: preparedInput.paths,
+        preparedInput,
         viewportHeight: 460,
       } satisfies ConstructorParameters<typeof PathStoreFileTree>[0];
       const payload = preloadPathStoreFileTree(options);
@@ -957,23 +965,44 @@ describe('path-store render + scroll', () => {
         throw new Error('expected SSR host');
       }
 
+      const ssrPaths = Array.from(
+        payload.shadowHtml.matchAll(/data-item-path="([^"]+)"/g),
+        (match) => match[1] ?? ''
+      ).filter((path) => path.length > 0);
+
       const fileTree = new PathStoreFileTree(options);
       fileTree.hydrate({ fileTreeContainer: host });
       await flushDom();
 
       const shadowRoot = host.shadowRoot;
+      const hydratedPaths = Array.from(
+        shadowRoot?.querySelectorAll('button[data-type="item"]') ?? []
+      )
+        .filter(
+          (button): button is HTMLButtonElement =>
+            button instanceof dom.window.HTMLButtonElement
+        )
+        .map((button) => button.dataset.itemPath)
+        .filter((path): path is string => path != null);
       const getContentText = (path: string): string =>
         getItemButton(shadowRoot, dom, path)
           .querySelector('[data-item-section="content"]')
           ?.textContent?.replaceAll(/\s+/g, ' ')
           .trim() ?? '';
 
+      expect(hydratedPaths).toEqual(ssrPaths);
       expect(getContentText('README.md')).toContain('README');
       expect(getContentText('README.md')).not.toContain('assets');
       expect(getContentText('package.json')).toContain('package');
       expect(getContentText('package.json')).not.toContain('banner');
-      expect(getContentText('assets/images/social/')).toContain('assets');
-      expect(getContentText('assets/images/social/')).toContain('social');
+      const assetsContent = getItemButton(
+        shadowRoot,
+        dom,
+        'assets/'
+      ).querySelector('[data-item-section="content"]');
+      expect(getContentText('assets/')).not.toContain('banner');
+      expect(getContentText('assets/')).not.toContain('package');
+      expect(assetsContent?.querySelector('[data-icon-name]')).toBeNull();
       expect(
         getItemButton(shadowRoot, dom, 'README.md').querySelector(
           '[data-item-section="icon"] [data-icon-name]'
