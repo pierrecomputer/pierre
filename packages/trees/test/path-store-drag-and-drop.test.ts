@@ -709,6 +709,63 @@ describe('path-store drag and drop', () => {
     }
   });
 
+  test('multi-item collision errors do not partially move earlier paths', async () => {
+    const errors: string[] = [];
+    const rendered = await renderFileTree({
+      dragAndDrop: {
+        onDropError: (error: string) => {
+          errors.push(error);
+        },
+      },
+      flattenEmptyDirectories: true,
+      initialExpandedPaths: ['src/'],
+      paths: ['README.md', 'package.json', 'src/package.json'],
+      viewportHeight: 180,
+    });
+
+    try {
+      rendered.fileTree.getItem('README.md')?.select();
+      rendered.fileTree.getItem('package.json')?.select();
+      await flushDom();
+
+      const sourceButton = getItemButton(
+        rendered.shadowRoot,
+        rendered.dom,
+        'README.md'
+      );
+      const targetButton = getItemButton(
+        rendered.shadowRoot,
+        rendered.dom,
+        'src/'
+      );
+      const dataTransfer = createMockDataTransfer();
+      rendered.dom.window.document.elementFromPoint = () => targetButton;
+
+      dispatchDragEvent(sourceButton, rendered.dom, 'dragstart', {
+        dataTransfer,
+      });
+      await flushDom();
+      dispatchDragEvent(targetButton, rendered.dom, 'dragover', {
+        dataTransfer,
+      });
+      await flushDom();
+      dispatchDragEvent(rendered.treeRoot, rendered.dom, 'drop', {
+        dataTransfer,
+      });
+      await flushDom();
+
+      expect(errors).toEqual([
+        'Destination already exists: "src/package.json"',
+      ]);
+      expect(rendered.fileTree.getItem('README.md')).not.toBeNull();
+      expect(rendered.fileTree.getItem('src/README.md')).toBeNull();
+      expect(rendered.fileTree.getItem('package.json')).not.toBeNull();
+      expect(rendered.fileTree.getItem('src/package.json')).not.toBeNull();
+    } finally {
+      rendered.cleanup();
+    }
+  });
+
   test('onDropError reports collision failures without controlled mode', async () => {
     const errors: string[] = [];
     const rendered = await renderFileTree({

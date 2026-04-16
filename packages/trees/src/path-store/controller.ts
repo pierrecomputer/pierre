@@ -1102,6 +1102,7 @@ export class PathStoreTreesController
           collision: singleOperation.collision,
         });
       } else {
+        this.#validateBatchDropOperations(dropPlan.operations);
         this.#store.batch(dropPlan.operations);
       }
     } catch (error) {
@@ -1546,6 +1547,16 @@ export class PathStoreTreesController
         this.togglePathSelection(path);
       },
     };
+  }
+
+  // Validate multi-item drop batches against a throwaway store first so a later
+  // collision cannot partially mutate the live tree before surfacing the error.
+  #validateBatchDropOperations(
+    operations: readonly PathStoreOperation[]
+  ): void {
+    const currentPaths = this.#store.list();
+    const validationStore = this.#createStore(currentPaths);
+    validationStore.batch(operations);
   }
 
   #createStore(
