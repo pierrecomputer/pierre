@@ -601,6 +601,7 @@
         outline: var(--trees-focus-ring-width) solid
           var(--trees-focus-ring-color);
         outline-offset: var(--trees-focus-ring-offset);
+        pointer-events: none;
       }
 
       &[data-item-selected='true']::before {
