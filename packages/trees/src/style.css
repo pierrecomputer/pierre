@@ -900,7 +900,7 @@
   [data-item-selected='true'],
   [data-type='item']:focus-visible {
     & [data-item-section='spacing-item'] {
-      height: calc(100% - 2px);
+      height: 100%;
     }
   }
 
