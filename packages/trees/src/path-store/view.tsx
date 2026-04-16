@@ -1343,7 +1343,8 @@ export function PathStoreTreesView({
 
   const updateDragPoint = (clientX: number, clientY: number): void => {
     dragPointRef.current = { clientX, clientY };
-    dragAutoScrollFrameRef.current ??= requestDragAnimationFrame(runDragAutoScroll);
+    dragAutoScrollFrameRef.current ??=
+      requestDragAnimationFrame(runDragAutoScroll);
   };
 
   const handleRowDragStart = (
