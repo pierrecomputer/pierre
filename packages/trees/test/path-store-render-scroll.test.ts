@@ -913,6 +913,79 @@ describe('path-store render + scroll', () => {
     expect(payload.shadowHtml).toContain('README.md');
   });
 
+  test('hydration keeps row content aligned with row paths when SSR uses prepared input', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStore } = await import('@pierre/path-store');
+      const { PathStoreFileTree, preloadPathStoreFileTree } =
+        await import('../src/path-store');
+
+      const paths = [
+        'README.md',
+        'package.json',
+        'assets/images/social/logo.png',
+        'assets/images/social/banner.png',
+        'docs/guides/getting-started.md',
+        'docs/guides/faq.md',
+        'src/index.ts',
+        'src/lib/utils.ts',
+        'src/lib/theme.ts',
+        'src/components/Button.tsx',
+      ] as const;
+      const options = {
+        dragAndDrop: true,
+        flattenEmptyDirectories: true,
+        id: 'pst-hydrate-shape',
+        initialExpandedPaths: [
+          'assets/images/social/',
+          'docs/guides/',
+          'src/',
+          'src/lib/',
+        ],
+        paths,
+        preparedInput: PathStore.prepareInput(paths),
+        viewportHeight: 460,
+      } satisfies ConstructorParameters<typeof PathStoreFileTree>[0];
+      const payload = preloadPathStoreFileTree(options);
+
+      const mount = dom.window.document.createElement('div');
+      mount.innerHTML = payload.html;
+      dom.window.document.body.appendChild(mount);
+
+      const host = mount.querySelector('file-tree-container');
+      if (!(host instanceof dom.window.HTMLElement)) {
+        throw new Error('expected SSR host');
+      }
+
+      const fileTree = new PathStoreFileTree(options);
+      fileTree.hydrate({ fileTreeContainer: host });
+      await flushDom();
+
+      const shadowRoot = host.shadowRoot;
+      const getContentText = (path: string): string =>
+        getItemButton(shadowRoot, dom, path)
+          .querySelector('[data-item-section="content"]')
+          ?.textContent?.replaceAll(/\s+/g, ' ')
+          .trim() ?? '';
+
+      expect(getContentText('README.md')).toContain('README');
+      expect(getContentText('README.md')).not.toContain('assets');
+      expect(getContentText('package.json')).toContain('package');
+      expect(getContentText('package.json')).not.toContain('banner');
+      expect(getContentText('assets/images/social/')).toContain('assets');
+      expect(getContentText('assets/images/social/')).toContain('social');
+      expect(
+        getItemButton(shadowRoot, dom, 'README.md').querySelector(
+          '[data-item-section="icon"] [data-icon-name]'
+        )
+      ).not.toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('PathStoreFileTree renders and updates the visible window on scroll', async () => {
     const { cleanup, dom } = installDom();
     try {
@@ -1967,11 +2040,58 @@ describe('path-store render + scroll', () => {
         '[data-file-tree-virtualized-root="true"]'
       );
 
+      const flattenedFolderButton = getItemButton(shadowRoot, dom, 'src/lib/');
+      const nestedFileButton = getItemButton(
+        shadowRoot,
+        dom,
+        'src/lib/index.ts'
+      );
+      const rootFileButton = getItemButton(shadowRoot, dom, 'README.md');
+      const getSectionOrder = (button: HTMLButtonElement): string[] =>
+        Array.from(button.children)
+          .map((child) => child.getAttribute('data-item-section'))
+          .filter((section): section is string => section != null);
+
+      expect(getSectionOrder(flattenedFolderButton)).toEqual([
+        'icon',
+        'content',
+      ]);
+      expect(getSectionOrder(nestedFileButton)).toEqual([
+        'spacing',
+        'icon',
+        'content',
+      ]);
+      expect(getSectionOrder(rootFileButton)).toEqual(['icon', 'content']);
+
       expect(
-        shadowRoot?.querySelector('[data-item-section="icon"]')
+        flattenedFolderButton.querySelector(
+          '[data-item-section="icon"] [data-icon-name]'
+        )
       ).not.toBeNull();
       expect(
-        shadowRoot?.querySelector('[data-item-section="content"]')
+        nestedFileButton.querySelector(
+          '[data-item-section="spacing"] [data-item-section="spacing-item"]'
+        )
+      ).not.toBeNull();
+      expect(
+        nestedFileButton.querySelector(
+          '[data-item-section="icon"] [data-icon-name]'
+        )
+      ).not.toBeNull();
+      expect(
+        nestedFileButton.querySelector(
+          '[data-item-section="content"] [data-icon-name]'
+        )
+      ).toBeNull();
+      expect(
+        nestedFileButton.querySelector(
+          '[data-item-section="content"] [data-item-section="spacing-item"]'
+        )
+      ).toBeNull();
+      expect(
+        nestedFileButton.querySelector(
+          '[data-item-section="content"] [data-truncate-container]'
+        )
       ).not.toBeNull();
       expect(focusedRow).toBeNull();
       expect(

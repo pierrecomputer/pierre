@@ -43,10 +43,7 @@ export function PathStoreDragAndDropDemoClient({
   sharedOptions,
 }: {
   containerHtml: string;
-  sharedOptions: Omit<
-    PathStoreFileTreeOptions,
-    'dragAndDrop' | 'id' | 'preparedInput'
-  >;
+  sharedOptions: Omit<PathStoreFileTreeOptions, 'dragAndDrop' | 'id'>;
 }) {
   const { addLog, log } = useStateLog();
   const mountRef = useRef<HTMLDivElement | null>(null);
