@@ -7,7 +7,11 @@ import type {
 } from '@pierre/path-store';
 
 import type { FileTreeIcons, RemappedIcon } from '../iconConfig';
-import type { ContextMenuAnchorRect } from '../types';
+import type {
+  ContextMenuAnchorRect,
+  GitStatus,
+  GitStatusEntry,
+} from '../types';
 
 /**
  * The provisional public identity stays path-first so later phases can evolve
@@ -118,6 +122,7 @@ export interface PathStoreTreesRenamingConfig {
 export interface PathStoreFileTreeOptions
   extends PathStoreTreesControllerOptions, PathStoreTreesRenderOptions {
   composition?: PathStoreTreesCompositionOptions;
+  gitStatus?: readonly GitStatusEntry[];
   id?: string;
   icons?: FileTreeIcons;
   onSelectionChange?: PathStoreTreesSelectionChangeListener;
@@ -146,8 +151,10 @@ export interface PathStoreTreesStickyWindowLayout {
 }
 
 export interface PathStoreTreesViewProps extends PathStoreTreesRenderOptions {
-  controller: import('./controller').PathStoreTreesController;
   composition?: PathStoreTreesCompositionOptions;
+  controller: import('./controller').PathStoreTreesController;
+  directoriesWithGitChanges?: ReadonlySet<PathStoreTreesPublicId>;
+  gitStatusByPath?: ReadonlyMap<PathStoreTreesPublicId, GitStatus>;
   icons?: FileTreeIcons;
   instanceId?: string;
   renamingEnabled?: boolean;

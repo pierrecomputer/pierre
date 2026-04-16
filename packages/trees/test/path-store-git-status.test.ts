@@ -1,0 +1,460 @@
+import { describe, expect, test } from 'bun:test';
+// @ts-expect-error -- no @types/jsdom; only used in tests
+import { JSDOM } from 'jsdom';
+
+import type { GitStatusEntry } from '../src/types';
+
+const FILES = [
+  'README.md',
+  'package.json',
+  'src/index.ts',
+  'src/components/Button.tsx',
+  'src/components/Card.tsx',
+  'src/utils/worker.ts',
+  'src/utils/stream.ts',
+  'test/index.test.ts',
+] as const;
+
+function installDom() {
+  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
+    url: 'http://localhost',
+  });
+  const originalValues = {
+    CSSStyleSheet: Reflect.get(globalThis, 'CSSStyleSheet'),
+    customElements: Reflect.get(globalThis, 'customElements'),
+    document: Reflect.get(globalThis, 'document'),
+    Event: Reflect.get(globalThis, 'Event'),
+    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
+    HTMLButtonElement: Reflect.get(globalThis, 'HTMLButtonElement'),
+    HTMLDivElement: Reflect.get(globalThis, 'HTMLDivElement'),
+    HTMLInputElement: Reflect.get(globalThis, 'HTMLInputElement'),
+    HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
+    HTMLTemplateElement: Reflect.get(globalThis, 'HTMLTemplateElement'),
+    MutationObserver: Reflect.get(globalThis, 'MutationObserver'),
+    navigator: Reflect.get(globalThis, 'navigator'),
+    Node: Reflect.get(globalThis, 'Node'),
+    ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
+    SVGElement: Reflect.get(globalThis, 'SVGElement'),
+    ShadowRoot: Reflect.get(globalThis, 'ShadowRoot'),
+    window: Reflect.get(globalThis, 'window'),
+  };
+
+  class MockStyleSheet {
+    replaceSync(_value: string): void {}
+  }
+
+  class MockResizeObserver {
+    observe(_target: Element): void {}
+    disconnect(): void {}
+  }
+
+  Object.assign(globalThis, {
+    CSSStyleSheet: MockStyleSheet,
+    customElements: dom.window.customElements,
+    document: dom.window.document,
+    Event: dom.window.Event,
+    HTMLElement: dom.window.HTMLElement,
+    HTMLButtonElement: dom.window.HTMLButtonElement,
+    HTMLDivElement: dom.window.HTMLDivElement,
+    HTMLInputElement: dom.window.HTMLInputElement,
+    HTMLStyleElement: dom.window.HTMLStyleElement,
+    HTMLTemplateElement: dom.window.HTMLTemplateElement,
+    MutationObserver: dom.window.MutationObserver,
+    navigator: dom.window.navigator,
+    Node: dom.window.Node,
+    ResizeObserver: MockResizeObserver,
+    SVGElement: dom.window.SVGElement,
+    ShadowRoot: dom.window.ShadowRoot,
+    window: dom.window,
+  });
+
+  return {
+    cleanup() {
+      for (const [key, value] of Object.entries(originalValues)) {
+        if (value === undefined) {
+          Reflect.deleteProperty(globalThis, key);
+        } else {
+          Object.assign(globalThis, { [key]: value });
+        }
+      }
+      dom.window.close();
+    },
+    dom,
+  };
+}
+
+async function flushDom(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function getItemButton(
+  shadowRoot: ShadowRoot | null | undefined,
+  dom: JSDOM,
+  path: string
+): HTMLButtonElement {
+  const button = shadowRoot?.querySelector(`[data-item-path="${path}"]`);
+  if (!(button instanceof dom.window.HTMLButtonElement)) {
+    throw new Error(`missing button for ${path}`);
+  }
+
+  return button as HTMLButtonElement;
+}
+
+function getStatusLabel(button: HTMLButtonElement): string | null {
+  return (
+    button.querySelector('[data-item-section="status"]')?.textContent?.trim() ??
+    null
+  );
+}
+
+describe('path-store git status', () => {
+  test('renders file A/M/D markers and folder change attrs', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        gitStatus: [
+          { path: 'src/index.ts', status: 'modified' },
+          { path: 'src/components/Button.tsx', status: 'added' },
+          { path: 'test/index.test.ts', status: 'deleted' },
+        ],
+        initialExpansion: 'open',
+        paths: FILES,
+        viewportHeight: 180,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const indexButton = getItemButton(shadowRoot, dom, 'src/index.ts');
+      const addedButton = getItemButton(
+        shadowRoot,
+        dom,
+        'src/components/Button.tsx'
+      );
+      const deletedButton = getItemButton(
+        shadowRoot,
+        dom,
+        'test/index.test.ts'
+      );
+      const srcFolder = getItemButton(shadowRoot, dom, 'src/');
+
+      expect(indexButton.getAttribute('data-item-git-status')).toBe('modified');
+      expect(getStatusLabel(indexButton)).toBe('M');
+      expect(addedButton.getAttribute('data-item-git-status')).toBe('added');
+      expect(getStatusLabel(addedButton)).toBe('A');
+      expect(deletedButton.getAttribute('data-item-git-status')).toBe(
+        'deleted'
+      );
+      expect(getStatusLabel(deletedButton)).toBe('D');
+
+      expect(srcFolder.getAttribute('data-item-contains-git-change')).toBe(
+        'true'
+      );
+      expect(srcFolder.hasAttribute('data-item-git-status')).toBe(false);
+      expect(
+        srcFolder.querySelector('[data-icon-name="file-tree-icon-dot"]')
+      ).not.toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('renders explicit directory git statuses as A/M/D labels instead of a descendant dot', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        gitStatus: [{ path: 'src/', status: 'modified' }],
+        initialExpansion: 'open',
+        paths: FILES,
+        viewportHeight: 180,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const srcFolder = getItemButton(shadowRoot, dom, 'src/');
+      expect(srcFolder.getAttribute('data-item-git-status')).toBe('modified');
+      expect(
+        srcFolder.getAttribute('data-item-contains-git-change')
+      ).toBeNull();
+      expect(getStatusLabel(srcFolder)).toBe('M');
+      expect(
+        srcFolder.querySelector('[data-icon-name="file-tree-icon-dot"]')
+      ).toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('unknown leaf paths still mark known ancestor folders as changed', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        gitStatus: [{ path: 'src/new-file.ts', status: 'added' }],
+        initialExpansion: 'open',
+        paths: FILES,
+        viewportHeight: 180,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const srcFolder = getItemButton(shadowRoot, dom, 'src/');
+      expect(srcFolder.getAttribute('data-item-contains-git-change')).toBe(
+        'true'
+      );
+      expect(
+        srcFolder.querySelector('[data-icon-name="file-tree-icon-dot"]')
+      ).not.toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('flattened rows mark the rendered terminal directory instead of inventing a file status', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: true,
+        gitStatus: [{ path: 'src/lib/util.ts', status: 'modified' }],
+        initialExpandedPaths: ['src/'],
+        paths: ['src/lib/util.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const flattenedFolder = getItemButton(shadowRoot, dom, 'src/lib/');
+
+      expect(
+        flattenedFolder.getAttribute('data-item-contains-git-change')
+      ).toBe('true');
+      expect(flattenedFolder.hasAttribute('data-item-git-status')).toBe(false);
+      expect(
+        flattenedFolder.querySelector('[data-icon-name="file-tree-icon-dot"]')
+      ).not.toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('folder change dots keep the legacy 6px size and respect dot icon remaps', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        gitStatus: [{ path: 'src/index.ts', status: 'modified' }],
+        icons: {
+          remap: {
+            'file-tree-icon-dot': 'pst-test-dot',
+          },
+          spriteSheet:
+            '<svg data-icon-sprite aria-hidden="true" width="0" height="0"><symbol id="pst-test-dot" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="currentColor" /></symbol></svg>',
+        },
+        initialExpansion: 'open',
+        paths: FILES,
+        viewportHeight: 180,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const srcFolder = getItemButton(shadowRoot, dom, 'src/');
+      const dotIcon = srcFolder.querySelector(
+        '[data-item-section="status"] [data-icon-name="file-tree-icon-dot"]'
+      );
+      expect(dotIcon?.getAttribute('width')).toBe('6');
+      expect(dotIcon?.getAttribute('height')).toBe('6');
+      expect(dotIcon?.querySelector('use')?.getAttribute('href')).toBe(
+        '#pst-test-dot'
+      );
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('setGitStatus refreshes decorations even when the caller reuses the same array reference', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      const runtimeStatuses: GitStatusEntry[] = [
+        { path: 'src/index.ts', status: 'modified' },
+      ];
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        gitStatus: runtimeStatuses,
+        initialExpansion: 'open',
+        paths: FILES,
+        viewportHeight: 180,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      const shadowRoot = host?.shadowRoot;
+      const wrapperBefore = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-wrapper="true"]'
+      );
+      expect(
+        getItemButton(shadowRoot, dom, 'src/index.ts').getAttribute(
+          'data-item-git-status'
+        )
+      ).toBe('modified');
+
+      runtimeStatuses[0] = { path: 'README.md', status: 'added' };
+      fileTree.setGitStatus(runtimeStatuses);
+      await flushDom();
+
+      expect(
+        shadowRoot
+          ?.querySelector('[data-item-path="src/index.ts"]')
+          ?.getAttribute('data-item-git-status')
+      ).toBeNull();
+      expect(
+        getItemButton(shadowRoot, dom, 'README.md').getAttribute(
+          'data-item-git-status'
+        )
+      ).toBe('added');
+      expect(
+        shadowRoot?.querySelector('[data-file-tree-virtualized-wrapper="true"]')
+      ).toBe(wrapperBefore);
+
+      fileTree.setGitStatus(undefined);
+      await flushDom();
+
+      expect(shadowRoot?.querySelector('[data-item-git-status]')).toBeNull();
+      expect(
+        shadowRoot?.querySelector('[data-item-contains-git-change="true"]')
+      ).toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('custom row decorations override built-in status-slot content but keep git attrs', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        gitStatus: [{ path: 'src/index.ts', status: 'modified' }],
+        initialExpansion: 'open',
+        paths: FILES,
+        renderRowDecoration: ({ item }) =>
+          item.path === 'src/index.ts'
+            ? { text: 'TS', title: 'TypeScript file' }
+            : null,
+        viewportHeight: 180,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const indexButton = getItemButton(shadowRoot, dom, 'src/index.ts');
+      expect(indexButton.getAttribute('data-item-git-status')).toBe('modified');
+      expect(getStatusLabel(indexButton)).toBe('TS');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('preload and hydrate preserve git-status attrs without duplicating the SSR wrapper', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree, preloadPathStoreFileTree } =
+        await import('../src/path-store');
+      const options = {
+        flattenEmptyDirectories: false,
+        gitStatus: [{ path: 'src/index.ts', status: 'modified' as const }],
+        id: 'pst-git-status-ssr',
+        initialExpansion: 'open' as const,
+        paths: FILES,
+        viewportHeight: 180,
+      };
+      const payload = preloadPathStoreFileTree(options);
+
+      expect(payload.shadowHtml).toContain('data-item-git-status="modified"');
+      expect(payload.shadowHtml).toContain(
+        'data-item-contains-git-change="true"'
+      );
+
+      const mount = dom.window.document.createElement('div');
+      mount.innerHTML = payload.html;
+      dom.window.document.body.appendChild(mount);
+
+      const host = mount.querySelector('file-tree-container');
+      if (!(host instanceof dom.window.HTMLElement)) {
+        throw new Error('expected SSR host');
+      }
+
+      const fileTree = new PathStoreFileTree(options);
+      fileTree.hydrate({ fileTreeContainer: host });
+      await flushDom();
+
+      const shadowRoot = host.shadowRoot;
+      expect(
+        shadowRoot?.querySelectorAll(
+          '[data-file-tree-virtualized-wrapper="true"]'
+        ).length
+      ).toBe(1);
+      expect(
+        getItemButton(shadowRoot, dom, 'src/index.ts').getAttribute(
+          'data-item-git-status'
+        )
+      ).toBe('modified');
+      expect(
+        getItemButton(shadowRoot, dom, 'src/').getAttribute(
+          'data-item-contains-git-change'
+        )
+      ).toBe('true');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+});

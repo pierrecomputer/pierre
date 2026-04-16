@@ -39,7 +39,7 @@ export const pathStoreCapabilityMatrix: readonly PathStoreCapabilityMatrixRow[] 
     {
       currentDemo: 'Git Status',
       notes:
-        'Git decorations return after the new row decoration/composition layer exists.',
+        'Phase 9 restores git decorations and path-keyed runtime updates on the dedicated path-store git-status route.',
       targetPhases: [9],
     },
     {

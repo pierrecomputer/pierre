@@ -24,6 +24,10 @@ import { normalizeFileTreeIcons } from '../iconConfig';
 import fileTreeStyles from '../style.css';
 import { PathStoreTreesController } from './controller';
 import {
+  type PathStoreTreesGitStatusState,
+  resolvePathStoreGitStatusState,
+} from './gitStatus';
+import {
   hydratePathStoreTreesRoot,
   renderPathStoreTreesRoot,
   unmountPathStoreTreesRoot,
@@ -43,6 +47,7 @@ import type {
   PathStoreTreesRowDecorationRenderer,
   PathStoreTreesSearchSessionHandle,
   PathStoreTreesSelectionChangeListener,
+  PathStoreTreesViewProps,
 } from './types';
 import { PathStoreTreesView } from './view';
 import { PATH_STORE_TREES_DEFAULT_VIEWPORT_HEIGHT } from './virtualization';
@@ -128,6 +133,7 @@ export class PathStoreFileTree
     'itemHeight' | 'overscan' | 'viewportHeight'
   >;
   #fileTreeContainer: HTMLElement | undefined;
+  #gitStatusState: PathStoreTreesGitStatusState | null;
   #icons: PathStoreFileTreeOptions['icons'];
   #selectionVersion: number;
   #selectionSubscription: (() => void) | null = null;
@@ -137,6 +143,7 @@ export class PathStoreFileTree
     const {
       composition,
       fileTreeSearchMode,
+      gitStatus,
       id,
       initialSearchQuery,
       icons,
@@ -152,6 +159,7 @@ export class PathStoreFileTree
     } = options;
     this.#composition = composition;
     this.#id = createClientId(id);
+    this.#gitStatusState = resolvePathStoreGitStatusState(gitStatus);
     this.#icons = icons;
     this.#onSelectionChange = onSelectionChange;
     this.#renderRowDecoration = renderRowDecoration;
@@ -277,6 +285,21 @@ export class PathStoreFileTree
     this.#controller.resetPaths(paths, options);
   }
 
+  public setGitStatus(gitStatus?: PathStoreFileTreeOptions['gitStatus']): void {
+    this.#gitStatusState = resolvePathStoreGitStatusState(
+      gitStatus,
+      this.#gitStatusState
+    );
+
+    const host = this.#fileTreeContainer;
+    const wrapper = this.#wrapper;
+    if (host == null || wrapper == null) {
+      return;
+    }
+
+    renderPathStoreTreesRoot(wrapper, this.#getViewProps(host));
+  }
+
   public setIcons(icons?: PathStoreFileTreeOptions['icons']): void {
     this.#icons = icons;
 
@@ -287,34 +310,14 @@ export class PathStoreFileTree
     }
 
     this.#syncIconSurface(host, wrapper);
-    renderPathStoreTreesRoot(wrapper, {
-      composition: this.#composition,
-      controller: this.#controller,
-      icons: this.#icons,
-      instanceId: this.#id,
-      renamingEnabled: this.#renamingEnabled,
-      renderRowDecoration: this.#renderRowDecoration,
-      searchEnabled: this.#searchEnabled,
-      slotHost: this.#slotHost,
-      ...this.#getResolvedViewOptions(host),
-    });
+    renderPathStoreTreesRoot(wrapper, this.#getViewProps(host));
   }
 
   public hydrate({ fileTreeContainer }: PathStoreTreeHydrationProps): void {
     const host = this.#prepareHost(fileTreeContainer);
     const wrapper = this.#getOrCreateWrapper(host);
     this.#syncHeaderSlotContent();
-    hydratePathStoreTreesRoot(wrapper, {
-      composition: this.#composition,
-      controller: this.#controller,
-      icons: this.#icons,
-      instanceId: this.#id,
-      renamingEnabled: this.#renamingEnabled,
-      renderRowDecoration: this.#renderRowDecoration,
-      searchEnabled: this.#searchEnabled,
-      slotHost: this.#slotHost,
-      ...this.#getResolvedViewOptions(host),
-    });
+    hydratePathStoreTreesRoot(wrapper, this.#getViewProps(host));
   }
 
   public render({
@@ -327,17 +330,7 @@ export class PathStoreFileTree
     );
     const wrapper = this.#getOrCreateWrapper(host);
     this.#syncHeaderSlotContent();
-    renderPathStoreTreesRoot(wrapper, {
-      composition: this.#composition,
-      controller: this.#controller,
-      icons: this.#icons,
-      instanceId: this.#id,
-      renamingEnabled: this.#renamingEnabled,
-      renderRowDecoration: this.#renderRowDecoration,
-      searchEnabled: this.#searchEnabled,
-      slotHost: this.#slotHost,
-      ...this.#getResolvedViewOptions(host),
-    });
+    renderPathStoreTreesRoot(wrapper, this.#getViewProps(host));
   }
 
   #getResolvedViewOptions(host: HTMLElement): {
@@ -354,6 +347,22 @@ export class PathStoreFileTree
       itemHeight: this.#viewOptions.itemHeight,
       overscan: this.#viewOptions.overscan,
       viewportHeight,
+    };
+  }
+
+  #getViewProps(host: HTMLElement): PathStoreTreesViewProps {
+    return {
+      composition: this.#composition,
+      controller: this.#controller,
+      directoriesWithGitChanges: this.#gitStatusState?.directoriesWithChanges,
+      gitStatusByPath: this.#gitStatusState?.statusByPath,
+      icons: this.#icons,
+      instanceId: this.#id,
+      renamingEnabled: this.#renamingEnabled,
+      renderRowDecoration: this.#renderRowDecoration,
+      searchEnabled: this.#searchEnabled,
+      slotHost: this.#slotHost,
+      ...this.#getResolvedViewOptions(host),
     };
   }
 
@@ -528,6 +537,7 @@ export function preloadPathStoreFileTree(
   const {
     composition,
     fileTreeSearchMode,
+    gitStatus,
     id,
     initialSearchQuery,
     icons,
@@ -548,6 +558,7 @@ export function preloadPathStoreFileTree(
     initialSearchQuery,
     renaming,
   });
+  const gitStatusState = resolvePathStoreGitStatusState(gitStatus);
   const resolvedViewportHeight =
     viewportHeight ?? PATH_STORE_TREES_DEFAULT_VIEWPORT_HEIGHT;
   const normalizedIcons = normalizeFileTreeIcons(icons);
@@ -561,6 +572,8 @@ export function preloadPathStoreFileTree(
     h(PathStoreTreesView, {
       composition,
       controller,
+      directoriesWithGitChanges: gitStatusState?.directoriesWithChanges,
+      gitStatusByPath: gitStatusState?.statusByPath,
       icons,
       instanceId: resolvedId,
       itemHeight,

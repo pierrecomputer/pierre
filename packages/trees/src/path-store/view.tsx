@@ -16,6 +16,8 @@ import {
   CONTEXT_MENU_TRIGGER_TYPE,
   HEADER_SLOT_NAME,
 } from '../constants';
+import type { SVGSpriteNames } from '../sprite';
+import type { GitStatus } from '../types';
 import {
   PATH_STORE_TREES_RENAME_VIEW,
   PathStoreTreesController,
@@ -150,6 +152,41 @@ function getPathStoreTreesRowAriaLabel(row: PathStoreTreesVisibleRow): string {
   }
 
   return flattenedSegments.map((segment) => segment.name).join(' / ');
+}
+
+const PATH_STORE_GIT_STATUS_TEXT: Record<GitStatus, string> = {
+  added: 'A',
+  deleted: 'D',
+  modified: 'M',
+};
+
+const PATH_STORE_GIT_STATUS_TITLE: Record<GitStatus, string> = {
+  added: 'Git status: added',
+  deleted: 'Git status: deleted',
+  modified: 'Git status: modified',
+};
+
+// Built-in git decorations reuse the existing status slot so path-store rows can
+// inherit the shared git-status CSS contract without a second decoration API.
+function getBuiltInGitStatusDecoration(
+  gitStatus: GitStatus | null,
+  containsGitChange: boolean
+): PathStoreTreesRowDecoration | null {
+  if (gitStatus != null) {
+    return {
+      text: PATH_STORE_GIT_STATUS_TEXT[gitStatus],
+      title: PATH_STORE_GIT_STATUS_TITLE[gitStatus],
+    };
+  }
+
+  if (containsGitChange) {
+    return {
+      icon: { name: 'file-tree-icon-dot', width: 6, height: 6 },
+      title: 'Contains git changes',
+    };
+  }
+
+  return null;
 }
 
 function isPathStoreTreesDirectoryHandle(
@@ -379,8 +416,18 @@ function getPathStoreTreesFocusedRowDomId(
   return `${instanceId}__focused-item-${encodeURIComponent(path)}${parked ? '__parked' : ''}`;
 }
 
+function isBuiltInDecorationIconName(name: string): name is SVGSpriteNames {
+  return (
+    name === 'file-tree-icon-chevron' ||
+    name === 'file-tree-icon-dot' ||
+    name === 'file-tree-icon-file' ||
+    name === 'file-tree-icon-lock'
+  );
+}
+
 function renderRowDecoration(
-  decoration: PathStoreTreesRowDecoration | null
+  decoration: PathStoreTreesRowDecoration | null,
+  resolveIcon: ReturnType<typeof createPathStoreIconResolver>['resolveIcon']
 ): JSX.Element | null {
   if (decoration == null) {
     return null;
@@ -392,8 +439,16 @@ function renderRowDecoration(
 
   const icon =
     typeof decoration.icon === 'string'
-      ? { name: decoration.icon }
-      : decoration.icon;
+      ? isBuiltInDecorationIconName(decoration.icon)
+        ? resolveIcon(decoration.icon)
+        : { name: decoration.icon }
+      : isBuiltInDecorationIconName(decoration.icon.name)
+        ? (() => {
+            const resolvedIcon = resolveIcon(decoration.icon.name);
+            const { name: _ignoredName, ...iconOverrides } = decoration.icon;
+            return { ...resolvedIcon, ...iconOverrides };
+          })()
+        : decoration.icon;
   return (
     <span title={decoration.title}>
       <Icon {...icon} />
@@ -430,6 +485,8 @@ function renderStyledRow(
   contextHoverPath: string | null,
   instanceId: string | undefined,
   itemHeight: number,
+  directoriesWithGitChanges: ReadonlySet<string> | undefined,
+  gitStatusByPath: ReadonlyMap<string, GitStatus> | undefined,
   contextMenuEnabled: boolean,
   registerRenameInput: (element: HTMLInputElement | null) => void,
   registerButton: (path: string, element: HTMLElement | null) => void,
@@ -453,7 +510,13 @@ function renderStyledRow(
   const item = controller.getItem(targetPath);
   const directoryItem = isPathStoreTreesDirectoryHandle(item) ? item : null;
   const { isParked = false, style } = options;
-  const decoration = renderDecorationForRow(row, targetPath);
+  const ownGitStatus = gitStatusByPath?.get(targetPath) ?? null;
+  const containsGitChange =
+    row.kind === 'directory' &&
+    (directoriesWithGitChanges?.has(targetPath) ?? false);
+  const decoration =
+    renderDecorationForRow(row, targetPath) ??
+    getBuiltInGitStatusDecoration(ownGitStatus, containsGitChange);
   const renamingPath = renameView.getPath();
   const isRenamingRow = renamingPath === targetPath;
   const renamingValue = isRenamingRow ? renameView.getValue() : '';
@@ -480,6 +543,10 @@ function renderStyledRow(
     contextHoverPath === targetPath
       ? { 'data-item-context-hover': 'true' }
       : {};
+  const gitStatusProps = {
+    ...(ownGitStatus != null && { 'data-item-git-status': ownGitStatus }),
+    ...(containsGitChange ? { 'data-item-contains-git-change': 'true' } : {}),
+  };
   const domId = row.isFocused
     ? getPathStoreTreesFocusedRowDomId(instanceId, targetPath, isParked)
     : undefined;
@@ -514,7 +581,9 @@ function renderStyledRow(
             ))}
       </div>
       {decoration != null ? (
-        <div data-item-section="status">{renderRowDecoration(decoration)}</div>
+        <div data-item-section="status">
+          {renderRowDecoration(decoration, resolveIcon)}
+        </div>
       ) : null}
     </Fragment>
   );
@@ -552,6 +621,7 @@ function renderStyledRow(
     ...focusedProps,
     ...selectedProps,
     ...contextHoverProps,
+    ...gitStatusProps,
   } as const;
 
   if (isRenamingRow) {
@@ -604,6 +674,8 @@ function renderRangeChildren(
   contextHoverPath: string | null,
   instanceId: string | undefined,
   itemHeight: number,
+  directoriesWithGitChanges: ReadonlySet<string> | undefined,
+  gitStatusByPath: ReadonlyMap<string, GitStatus> | undefined,
   contextMenuEnabled: boolean,
   registerRenameInput: (element: HTMLInputElement | null) => void,
   registerButton: (path: string, element: HTMLElement | null) => void,
@@ -637,6 +709,8 @@ function renderRangeChildren(
         contextHoverPath,
         instanceId,
         itemHeight,
+        directoriesWithGitChanges,
+        gitStatusByPath,
         contextMenuEnabled,
         registerRenameInput,
         registerButton,
@@ -656,6 +730,8 @@ function renderRangeChildren(
 export function PathStoreTreesView({
   composition,
   controller,
+  directoriesWithGitChanges,
+  gitStatusByPath,
   icons,
   instanceId,
   itemHeight = PATH_STORE_TREES_DEFAULT_ITEM_HEIGHT,
@@ -1639,6 +1715,8 @@ export function PathStoreTreesView({
               visualContextHoverPath,
               instanceId,
               itemHeight,
+              directoriesWithGitChanges,
+              gitStatusByPath,
               contextMenuEnabled,
               (element) => {
                 renameInputRef.current = element;
@@ -1665,6 +1743,8 @@ export function PathStoreTreesView({
                   visualContextHoverPath,
                   instanceId,
                   itemHeight,
+                  directoriesWithGitChanges,
+                  gitStatusByPath,
                   contextMenuEnabled,
                   (element) => {
                     renameInputRef.current = element;
@@ -1686,6 +1766,7 @@ export function PathStoreTreesView({
                     isParked: true,
                     style: {
                       left: '0',
+                      opacity: '0',
                       position: 'absolute',
                       right: '0',
                       top: `${parkedFocusedRowOffset}px`,
