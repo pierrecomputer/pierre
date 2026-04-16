@@ -303,20 +303,22 @@
     color: var(--diffs-fg);
     background-color: var(--diffs-line-bg, var(--diffs-bg));
 
-    &:where([data-hovered]) {
-      --diffs-computed-hovered-line-bg: light-dark(
-        color-mix(
-          in lab,
-          var(--diffs-computed-selected-line-bg) 97%,
-          var(--diffs-bg-hover-override, var(--diffs-mixer))
-        ),
-        color-mix(
-          in lab,
-          var(--diffs-computed-selected-line-bg) 91%,
-          var(--diffs-bg-hover-override, var(--diffs-mixer))
-        )
-      );
-      --diffs-line-bg: var(--diffs-computed-hovered-line-bg, inherit);
+    @media (pointer: fine) {
+      &:where([data-hovered]) {
+        --diffs-computed-hovered-line-bg: light-dark(
+          color-mix(
+            in lab,
+            var(--diffs-computed-selected-line-bg) 97%,
+            var(--diffs-bg-hover-override, var(--diffs-mixer))
+          ),
+          color-mix(
+            in lab,
+            var(--diffs-computed-selected-line-bg) 91%,
+            var(--diffs-bg-hover-override, var(--diffs-mixer))
+          )
+        );
+        --diffs-line-bg: var(--diffs-computed-hovered-line-bg, inherit);
+      }
     }
   }
 
@@ -336,19 +338,25 @@
         --mix-deco-dark: 78%;
       }
 
-      &[data-hovered]:not([data-selected-line]) {
-        --mix-deco-light: 85%;
-        --mix-deco-dark: 85%;
-      }
+      @media (pointer: fine) {
+        &[data-hovered]:not([data-selected-line]) {
+          --mix-deco-light: 85%;
+          --mix-deco-dark: 85%;
+        }
 
-      &[data-hovered]:not([data-selected-line])[data-decoration-bg-depth='2'] {
-        --mix-deco-light: 83%;
-        --mix-deco-dark: 83%;
-      }
+        &[data-hovered]:not(
+            [data-selected-line]
+          )[data-decoration-bg-depth='2'] {
+          --mix-deco-light: 83%;
+          --mix-deco-dark: 83%;
+        }
 
-      &[data-hovered]:not([data-selected-line])[data-decoration-bg-depth='3'] {
-        --mix-deco-light: 81%;
-        --mix-deco-dark: 81%;
+        &[data-hovered]:not(
+            [data-selected-line]
+          )[data-decoration-bg-depth='3'] {
+          --mix-deco-light: 81%;
+          --mix-deco-dark: 81%;
+        }
       }
 
       --diffs-computed-decoration-bg: light-dark(
@@ -465,9 +473,11 @@
           var(--diffs-deletion-base)
         );
 
-        &[data-hovered] {
-          --mix-light: 80%;
-          --mix-dark: 75%;
+        @media (pointer: fine) {
+          &[data-hovered] {
+            --mix-light: 80%;
+            --mix-dark: 75%;
+          }
         }
 
         &:where([data-gutter-buffer], [data-column-number]) {
@@ -505,9 +515,11 @@
           var(--diffs-addition-base)
         );
 
-        &[data-hovered] {
-          --mix-light: 80%;
-          --mix-dark: 70%;
+        @media (pointer: fine) {
+          &[data-hovered] {
+            --mix-light: 80%;
+            --mix-dark: 70%;
+          }
         }
 
         &:where([data-gutter-buffer], [data-column-number]) {
@@ -557,9 +569,11 @@
           );
         }
 
-        &[data-hovered] {
-          --mix-light: 80%;
-          --mix-dark: 70%;
+        @media (pointer: fine) {
+          &[data-hovered] {
+            --mix-light: 80%;
+            --mix-dark: 70%;
+          }
         }
 
         --diffs-computed-diff-line-bg: light-dark(
@@ -594,9 +608,11 @@
           );
         }
 
-        &[data-hovered] {
-          --mix-light: 80%;
-          --mix-dark: 70%;
+        @media (pointer: fine) {
+          &[data-hovered] {
+            --mix-light: 80%;
+            --mix-dark: 70%;
+          }
         }
 
         --diffs-computed-diff-line-bg: light-dark(
@@ -643,13 +659,15 @@
       --mix-selection-light: 82%;
       --mix-selection-dark: 75%;
 
-      &[data-hovered]:not(
-          [data-merge-conflict],
-          [data-line-type='change-addition'],
-          [data-line-type='change-deletion']
-        ) {
-        --mix-selection-light: 75%;
-        --mix-selection-dark: 70%;
+      @media (pointer: fine) {
+        &[data-hovered]:not(
+            [data-merge-conflict],
+            [data-line-type='change-addition'],
+            [data-line-type='change-deletion']
+          ) {
+          --mix-selection-light: 75%;
+          --mix-selection-dark: 70%;
+        }
       }
     }
 
@@ -661,13 +679,15 @@
         var(--diffs-selection-base)
       );
 
-      &[data-hovered]:not(
-          [data-merge-conflict],
-          [data-line-type='change-addition'],
-          [data-line-type='change-deletion']
-        ) {
-        --mix-selection-light: 70%;
-        --mix-selection-dark: 55%;
+      @media (pointer: fine) {
+        &[data-hovered]:not(
+            [data-merge-conflict],
+            [data-line-type='change-addition'],
+            [data-line-type='change-deletion']
+          ) {
+          --mix-selection-light: 70%;
+          --mix-selection-dark: 55%;
+        }
       }
     }
 
