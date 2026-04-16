@@ -27,6 +27,7 @@ import type {
   PathStoreTreesContextMenuItem,
   PathStoreTreesContextMenuOpenContext,
   PathStoreTreesDirectoryHandle,
+  PathStoreTreesDropTarget,
   PathStoreTreesItemHandle,
   PathStoreTreesRowDecoration,
   PathStoreTreesViewProps,
@@ -109,7 +110,8 @@ function RenameInput({
 
 function formatFlattenedSegments(
   row: PathStoreTreesVisibleRow,
-  renameInput: JSX.Element | null = null
+  renameInput: JSX.Element | null = null,
+  dragTargetFlattenedSegmentPath: string | null = null
 ): JSX.Element | string {
   'use no memo';
   const segments = row.flattenedSegments;
@@ -123,7 +125,14 @@ function formatFlattenedSegments(
         const isLast = index === segments.length - 1;
         return (
           <Fragment key={segment.path}>
-            <span data-item-flattened-subitem={segment.path}>
+            <span
+              data-item-flattened-subitem={segment.path}
+              data-item-flattened-subitem-drag-target={
+                dragTargetFlattenedSegmentPath === segment.path
+                  ? 'true'
+                  : undefined
+              }
+            >
               {isLast && renameInput != null ? (
                 renameInput
               ) : (
@@ -152,6 +161,125 @@ function getPathStoreTreesRowAriaLabel(row: PathStoreTreesVisibleRow): string {
   }
 
   return flattenedSegments.map((segment) => segment.name).join(' / ');
+}
+
+const TOUCH_LONG_PRESS_DELAY = 400;
+const TOUCH_LONG_PRESS_MOVE_THRESHOLD = 10;
+const DRAG_EDGE_SCROLL_THRESHOLD = 40;
+const DRAG_EDGE_SCROLL_MAX_SPEED = 18;
+
+function getPointElement(
+  rootNode: Document | ShadowRoot,
+  clientX: number,
+  clientY: number
+): HTMLElement | null {
+  const pointRoot = rootNode as Document & {
+    elementFromPoint?: (x: number, y: number) => Element | null;
+  };
+  const documentElementFromPoint =
+    document.elementFromPoint?.bind(document) ?? null;
+  const element =
+    pointRoot.elementFromPoint?.(clientX, clientY) ??
+    documentElementFromPoint?.(clientX, clientY) ??
+    null;
+  return element instanceof HTMLElement ? element : null;
+}
+
+function resolveDropTargetFromElement(
+  target: HTMLElement | null
+): PathStoreTreesDropTarget | null {
+  const rowButton = target?.closest?.('[data-type="item"]');
+  if (!(rowButton instanceof HTMLElement)) {
+    return null;
+  }
+
+  const hoveredPath = rowButton.dataset.itemPath ?? null;
+  if (hoveredPath == null) {
+    return null;
+  }
+
+  const flattenedSegment = target?.closest?.('[data-item-flattened-subitem]');
+  const flattenedSegmentPath =
+    flattenedSegment instanceof HTMLElement
+      ? (flattenedSegment.getAttribute('data-item-flattened-subitem') ?? null)
+      : null;
+  if (flattenedSegmentPath != null && flattenedSegmentPath.endsWith('/')) {
+    return {
+      directoryPath: flattenedSegmentPath,
+      flattenedSegmentPath,
+      hoveredPath,
+      kind: 'directory',
+    };
+  }
+
+  if (rowButton.dataset.itemType === 'folder') {
+    return {
+      directoryPath: hoveredPath,
+      flattenedSegmentPath: null,
+      hoveredPath,
+      kind: 'directory',
+    };
+  }
+
+  const parentPath = rowButton.dataset.itemParentPath ?? null;
+  if (parentPath == null || parentPath.length === 0) {
+    return {
+      directoryPath: null,
+      flattenedSegmentPath: null,
+      hoveredPath,
+      kind: 'root',
+    };
+  }
+
+  return {
+    directoryPath: parentPath,
+    flattenedSegmentPath: null,
+    hoveredPath,
+    kind: 'directory',
+  };
+}
+
+function createDragPreviewElement(sourceElement: HTMLElement): HTMLElement {
+  const preview = sourceElement.cloneNode(true) as HTMLElement;
+  preview.removeAttribute('id');
+  preview.dataset.pathStoreDragPreview = 'true';
+  preview.setAttribute('aria-hidden', 'true');
+  preview.tabIndex = -1;
+  Object.assign(preview.style, {
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+    left: '0px',
+    margin: '0',
+    pointerEvents: 'none',
+    position: 'fixed',
+    top: '0px',
+    willChange: 'transform',
+    zIndex: '10000',
+  });
+  return preview;
+}
+
+function getDragEdgeScrollDelta(clientY: number, scrollRect: DOMRect): number {
+  const topDistance = clientY - scrollRect.top;
+  if (topDistance < DRAG_EDGE_SCROLL_THRESHOLD) {
+    const clampedDistance = Math.max(0, topDistance);
+    return -Math.ceil(
+      ((DRAG_EDGE_SCROLL_THRESHOLD - clampedDistance) /
+        DRAG_EDGE_SCROLL_THRESHOLD) *
+        DRAG_EDGE_SCROLL_MAX_SPEED
+    );
+  }
+
+  const bottomDistance = scrollRect.bottom - clientY;
+  if (bottomDistance < DRAG_EDGE_SCROLL_THRESHOLD) {
+    const clampedDistance = Math.max(0, bottomDistance);
+    return Math.ceil(
+      ((DRAG_EDGE_SCROLL_THRESHOLD - clampedDistance) /
+        DRAG_EDGE_SCROLL_THRESHOLD) *
+        DRAG_EDGE_SCROLL_MAX_SPEED
+    );
+  }
+
+  return 0;
 }
 
 const PATH_STORE_GIT_STATUS_TEXT: Record<GitStatus, string> = {
@@ -483,6 +611,21 @@ function renderStyledRow(
   row: PathStoreTreesVisibleRow,
   visualFocusPath: string | null,
   contextHoverPath: string | null,
+  draggedPathSet: ReadonlySet<string> | null,
+  dragTarget: PathStoreTreesDropTarget | null,
+  dragAndDropEnabled: boolean,
+  shouldSuppressContextMenu: () => boolean,
+  handleRowDragStart: (
+    event: DragEvent,
+    row: PathStoreTreesVisibleRow,
+    targetPath: string
+  ) => void,
+  handleRowDragEnd: () => void,
+  handleRowTouchStart: (
+    event: TouchEvent,
+    row: PathStoreTreesVisibleRow,
+    targetPath: string
+  ) => void,
   instanceId: string | undefined,
   itemHeight: number,
   directoriesWithGitChanges: ReadonlySet<string> | undefined,
@@ -543,6 +686,14 @@ function renderStyledRow(
     contextHoverPath === targetPath
       ? { 'data-item-context-hover': 'true' }
       : {};
+  const dragTargetProps =
+    dragTarget?.kind === 'directory' && dragTarget.directoryPath === targetPath
+      ? { 'data-item-drag-target': true }
+      : {};
+  const draggingProps =
+    draggedPathSet?.has(targetPath) === true
+      ? { 'data-item-dragging': true }
+      : {};
   const gitStatusProps = {
     ...(ownGitStatus != null && { 'data-item-git-status': ownGitStatus }),
     ...(containsGitChange ? { 'data-item-contains-git-change': 'true' } : {}),
@@ -550,6 +701,7 @@ function renderStyledRow(
   const domId = row.isFocused
     ? getPathStoreTreesFocusedRowDomId(instanceId, targetPath, isParked)
     : undefined;
+  const parentPath = row.ancestorPaths.at(-1) ?? '';
 
   const rowContent = (
     <Fragment key={row.path}>
@@ -573,7 +725,11 @@ function renderStyledRow(
       </div>
       <div data-item-section="content">
         {row.isFlattened
-          ? formatFlattenedSegments(row, renameInput)
+          ? formatFlattenedSegments(
+              row,
+              renameInput,
+              dragTarget?.flattenedSegmentPath ?? null
+            )
           : (renameInput ?? (
               <MiddleTruncate minimumLength={5} split="extension">
                 {row.name}
@@ -595,19 +751,30 @@ function renderStyledRow(
     'aria-posinset': row.posInSet + 1,
     'aria-selected': row.isSelected ? 'true' : 'false',
     'aria-setsize': row.setSize,
+    'data-item-parent-path': parentPath.length > 0 ? parentPath : undefined,
     'data-item-parked': isParked ? 'true' : undefined,
     'data-item-path': targetPath,
     'data-item-type': row.kind === 'directory' ? 'folder' : 'file',
     'data-type': 'item',
     id: domId,
     key,
-    onContextMenu: contextMenuEnabled
-      ? (event: MouseEvent) => {
-          event.preventDefault();
-          item?.focus();
-          openContextMenuForRow(row, targetPath);
-        }
-      : undefined,
+    onContextMenu:
+      contextMenuEnabled || dragAndDropEnabled
+        ? (event: MouseEvent) => {
+            if (shouldSuppressContextMenu()) {
+              event.preventDefault();
+              return;
+            }
+
+            if (!contextMenuEnabled) {
+              return;
+            }
+
+            event.preventDefault();
+            item?.focus();
+            openContextMenuForRow(row, targetPath);
+          }
+        : undefined,
     onFocus: () => {
       item?.focus();
     },
@@ -621,6 +788,8 @@ function renderStyledRow(
     ...focusedProps,
     ...selectedProps,
     ...contextHoverProps,
+    ...dragTargetProps,
+    ...draggingProps,
     ...gitStatusProps,
   } as const;
 
@@ -632,11 +801,27 @@ function renderStyledRow(
     <button
       {...commonProps}
       type="button"
+      draggable={dragAndDropEnabled && !isParked}
+      onDragEnd={dragAndDropEnabled && !isParked ? handleRowDragEnd : undefined}
+      onDragStart={
+        dragAndDropEnabled && !isParked
+          ? (event) => {
+              handleRowDragStart(event, row, targetPath);
+            }
+          : undefined
+      }
       onMouseDown={(event) => {
         if (controller.isSearchOpen()) {
           event.preventDefault();
         }
       }}
+      onTouchStart={
+        dragAndDropEnabled && !isParked
+          ? (event) => {
+              handleRowTouchStart(event, row, targetPath);
+            }
+          : undefined
+      }
       onClick={(event) => {
         const shouldCloseSearch = controller.isSearchOpen();
         if (event.shiftKey) {
@@ -672,6 +857,21 @@ function renderRangeChildren(
   range: { start: number; end: number },
   activeItemPath: string | null,
   contextHoverPath: string | null,
+  draggedPathSet: ReadonlySet<string> | null,
+  dragTarget: PathStoreTreesDropTarget | null,
+  dragAndDropEnabled: boolean,
+  shouldSuppressContextMenu: () => boolean,
+  handleRowDragStart: (
+    event: DragEvent,
+    row: PathStoreTreesVisibleRow,
+    targetPath: string
+  ) => void,
+  handleRowDragEnd: () => void,
+  handleRowTouchStart: (
+    event: TouchEvent,
+    row: PathStoreTreesVisibleRow,
+    targetPath: string
+  ) => void,
   instanceId: string | undefined,
   itemHeight: number,
   directoriesWithGitChanges: ReadonlySet<string> | undefined,
@@ -707,6 +907,13 @@ function renderRangeChildren(
         row,
         activeItemPath,
         contextHoverPath,
+        draggedPathSet,
+        dragTarget,
+        dragAndDropEnabled,
+        shouldSuppressContextMenu,
+        handleRowDragStart,
+        handleRowDragEnd,
+        handleRowTouchStart,
         instanceId,
         itemHeight,
         directoriesWithGitChanges,
@@ -718,7 +925,7 @@ function renderRangeChildren(
         renderDecorationForRow,
         openContextMenuForRow,
         onKeyDown,
-        slotIndex
+        range.start + slotIndex
       )
     );
 }
@@ -758,6 +965,27 @@ export function PathStoreTreesView({
   const previousRenamingPathRef = useRef<string | null>(null);
   const restoreTreeFocusAfterSearchCloseRef = useRef(false);
   const restoreTreeFocusViewportOffsetRef = useRef<number | null>(null);
+  const dragAutoScrollFrameRef = useRef<number | null>(null);
+  const dragHoverOpenKeyRef = useRef<string | null>(null);
+  const dragHoverOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const dragPointRef = useRef<{ clientX: number; clientY: number } | null>(
+    null
+  );
+  const dragPreviewRef = useRef<HTMLElement | null>(null);
+  const dragRowSnapshotRef = useRef<PathStoreTreesVisibleRow | null>(null);
+  const touchCleanupRef = useRef<(() => void) | null>(null);
+  const touchDragActiveRef = useRef(false);
+  const touchPreviewOffsetRef = useRef<{ x: number; y: number } | null>(null);
+  const touchSourceElementRef = useRef<HTMLElement | null>(null);
+  const touchStartPointRef = useRef<{
+    clientX: number;
+    clientY: number;
+  } | null>(null);
+  const touchLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const [, setControllerRevision] = useState(0);
   const [activeItemPath, setActiveItemPath] = useState<string | null>(null);
   const [contextHoverPath, setContextHoverPath] = useState<string | null>(null);
@@ -803,6 +1031,14 @@ export function PathStoreTreesView({
   const searchValue = controller.getSearchValue();
   const focusedPath = controller.getFocusedPath();
   const focusedIndex = controller.getFocusedIndex();
+  const dragAndDropEnabled = controller.isDragAndDropEnabled();
+  const dragSession = controller.getDragSession();
+  const draggedPathSet = useMemo(
+    () => (dragSession == null ? null : new Set(dragSession.draggedPaths)),
+    [dragSession]
+  );
+  const dragTarget = dragSession?.target ?? null;
+  const draggedPrimaryPath = dragSession?.primaryPath ?? null;
   const treeDomId = getPathStoreTreesRootDomId(instanceId);
   const focusedRowIsMounted =
     focusedIndex >= range.start && focusedIndex <= range.end;
@@ -931,6 +1167,375 @@ export function PathStoreTreesView({
       resolvedViewportHeight,
     ]
   );
+
+  const shouldSuppressContextMenu = (): boolean => {
+    return (
+      touchLongPressTimerRef.current != null ||
+      touchDragActiveRef.current === true
+    );
+  };
+
+  const requestDragAnimationFrame = (callback: () => void): number => {
+    return typeof window.requestAnimationFrame === 'function'
+      ? window.requestAnimationFrame(() => {
+          callback();
+        })
+      : window.setTimeout(callback, 16);
+  };
+
+  const cancelDragAnimationFrame = (handle: number | null): void => {
+    if (handle == null) {
+      return;
+    }
+
+    if (typeof window.cancelAnimationFrame === 'function') {
+      window.cancelAnimationFrame(handle);
+      return;
+    }
+
+    window.clearTimeout(handle);
+  };
+
+  const clearDragHoverOpen = (): void => {
+    if (dragHoverOpenTimerRef.current != null) {
+      clearTimeout(dragHoverOpenTimerRef.current);
+      dragHoverOpenTimerRef.current = null;
+    }
+    dragHoverOpenKeyRef.current = null;
+  };
+
+  const clearDragPreview = (): void => {
+    dragPreviewRef.current?.remove();
+    dragPreviewRef.current = null;
+  };
+
+  const stopDragAutoScroll = (): void => {
+    cancelDragAnimationFrame(dragAutoScrollFrameRef.current);
+    dragAutoScrollFrameRef.current = null;
+    dragPointRef.current = null;
+  };
+
+  const mountDragPreview = (preview: HTMLElement): void => {
+    const rootNode = rootRef.current?.getRootNode();
+    if (rootNode instanceof ShadowRoot) {
+      rootNode.append(preview);
+      return;
+    }
+
+    document.body.append(preview);
+  };
+
+  const clearTouchDragResources = (): void => {
+    touchCleanupRef.current?.();
+    touchCleanupRef.current = null;
+    if (touchLongPressTimerRef.current != null) {
+      clearTimeout(touchLongPressTimerRef.current);
+      touchLongPressTimerRef.current = null;
+    }
+    touchDragActiveRef.current = false;
+    touchPreviewOffsetRef.current = null;
+    touchStartPointRef.current = null;
+    if (touchSourceElementRef.current != null) {
+      touchSourceElementRef.current.style.removeProperty('touch-action');
+      touchSourceElementRef.current = null;
+    }
+    clearDragPreview();
+    clearDragHoverOpen();
+    stopDragAutoScroll();
+    dragRowSnapshotRef.current = null;
+  };
+
+  const syncDropTargetFromPoint = (
+    clientX: number,
+    clientY: number
+  ): PathStoreTreesDropTarget | null => {
+    const rootNode = rootRef.current?.getRootNode();
+    const pointRoot = rootNode instanceof ShadowRoot ? rootNode : document;
+    const pointElement = getPointElement(pointRoot, clientX, clientY);
+    const nextTarget = resolveDropTargetFromElement(pointElement);
+    controller.setDragTarget(nextTarget);
+    return controller.getDragSession()?.target ?? null;
+  };
+
+  const scheduleDragHoverOpen = (
+    nextTarget: PathStoreTreesDropTarget | null
+  ): void => {
+    const openDelay = controller.getDragAndDropConfig()?.openOnDropDelay ?? 800;
+    if (
+      nextTarget == null ||
+      nextTarget.kind !== 'directory' ||
+      nextTarget.directoryPath == null ||
+      openDelay <= 0
+    ) {
+      clearDragHoverOpen();
+      return;
+    }
+
+    const targetItem = controller.getItem(nextTarget.directoryPath);
+    const directoryItem = isPathStoreTreesDirectoryHandle(targetItem)
+      ? targetItem
+      : null;
+    if (directoryItem == null || directoryItem.isExpanded()) {
+      clearDragHoverOpen();
+      return;
+    }
+
+    const nextKey = `${nextTarget.directoryPath}::${nextTarget.flattenedSegmentPath ?? ''}`;
+    if (dragHoverOpenKeyRef.current === nextKey) {
+      return;
+    }
+
+    clearDragHoverOpen();
+    dragHoverOpenKeyRef.current = nextKey;
+    dragHoverOpenTimerRef.current = setTimeout(() => {
+      const currentTarget = controller.getDragSession()?.target;
+      if (
+        currentTarget?.kind !== 'directory' ||
+        currentTarget.directoryPath !== nextTarget.directoryPath ||
+        currentTarget.flattenedSegmentPath !== nextTarget.flattenedSegmentPath
+      ) {
+        return;
+      }
+
+      directoryItem.expand();
+    }, openDelay);
+  };
+
+  const runDragAutoScroll = (): void => {
+    dragAutoScrollFrameRef.current = null;
+    const dragPoint = dragPointRef.current;
+    const scrollElement = scrollRef.current;
+    if (
+      dragPoint == null ||
+      scrollElement == null ||
+      controller.getDragSession() == null
+    ) {
+      return;
+    }
+
+    const scrollRect = scrollElement.getBoundingClientRect();
+    const scrollDelta = getDragEdgeScrollDelta(dragPoint.clientY, scrollRect);
+    if (scrollDelta === 0) {
+      return;
+    }
+
+    const maxScrollTop = Math.max(
+      0,
+      scrollElement.scrollHeight - scrollElement.clientHeight
+    );
+    const boundedScrollTop = Math.max(
+      0,
+      Math.min(maxScrollTop, scrollElement.scrollTop + scrollDelta)
+    );
+    if (boundedScrollTop !== scrollElement.scrollTop) {
+      scrollElement.scrollTop = boundedScrollTop;
+      updateViewportRef.current();
+    }
+
+    const nextTarget = syncDropTargetFromPoint(
+      dragPoint.clientX,
+      dragPoint.clientY
+    );
+    scheduleDragHoverOpen(nextTarget);
+    dragAutoScrollFrameRef.current =
+      requestDragAnimationFrame(runDragAutoScroll);
+  };
+
+  const updateDragPoint = (clientX: number, clientY: number): void => {
+    dragPointRef.current = { clientX, clientY };
+    dragAutoScrollFrameRef.current ??= requestDragAnimationFrame(runDragAutoScroll);
+  };
+
+  const handleRowDragStart = (
+    event: DragEvent,
+    row: PathStoreTreesVisibleRow,
+    targetPath: string
+  ): void => {
+    const dragSource = event.currentTarget as HTMLElement | null;
+    if (dragSource == null) {
+      return;
+    }
+
+    clearTouchDragResources();
+    clearDragPreview();
+    clearDragHoverOpen();
+    stopDragAutoScroll();
+    if (controller.startDrag(targetPath) === false) {
+      event.preventDefault();
+      return;
+    }
+
+    dragRowSnapshotRef.current = row;
+    const preview = createDragPreviewElement(dragSource);
+    const rect = dragSource.getBoundingClientRect();
+    Object.assign(preview.style, {
+      height: `${rect.height}px`,
+      opacity: '0.85',
+      transform: 'translate3d(-9999px, 0px, 0)',
+      width: `${rect.width}px`,
+    });
+    mountDragPreview(preview);
+    dragPreviewRef.current = preview;
+    if (event.dataTransfer != null) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.dropEffect = 'move';
+      event.dataTransfer.setData('text/plain', targetPath);
+      event.dataTransfer.setDragImage(
+        preview,
+        Math.max(0, event.clientX - rect.left),
+        Math.max(0, event.clientY - rect.top)
+      );
+    }
+  };
+
+  const handleRowDragEnd = (): void => {
+    clearDragPreview();
+    clearDragHoverOpen();
+    stopDragAutoScroll();
+    dragRowSnapshotRef.current = null;
+    controller.cancelDrag();
+  };
+
+  const handleRowTouchStart = (
+    event: TouchEvent,
+    row: PathStoreTreesVisibleRow,
+    targetPath: string
+  ): void => {
+    if (touchLongPressTimerRef.current != null || touchDragActiveRef.current) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    const dragSource = event.currentTarget as HTMLElement | null;
+    if (touch == null || dragSource == null) {
+      return;
+    }
+
+    touchStartPointRef.current = {
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+    };
+
+    const clearPendingTouchStart = (): void => {
+      if (touchLongPressTimerRef.current != null) {
+        clearTimeout(touchLongPressTimerRef.current);
+        touchLongPressTimerRef.current = null;
+      }
+      document.removeEventListener('touchmove', handlePendingTouchMove);
+      document.removeEventListener('touchend', handlePendingTouchEnd);
+      document.removeEventListener('touchcancel', handlePendingTouchEnd);
+      if (touchCleanupRef.current === clearPendingTouchStart) {
+        touchCleanupRef.current = null;
+      }
+      if (!touchDragActiveRef.current) {
+        touchStartPointRef.current = null;
+      }
+    };
+
+    const handlePendingTouchMove = (moveEvent: globalThis.TouchEvent): void => {
+      const moveTouch = moveEvent.touches[0];
+      const startPoint = touchStartPointRef.current;
+      if (moveTouch == null || startPoint == null) {
+        return;
+      }
+
+      const deltaX = moveTouch.clientX - startPoint.clientX;
+      const deltaY = moveTouch.clientY - startPoint.clientY;
+      if (
+        deltaX * deltaX + deltaY * deltaY <=
+        TOUCH_LONG_PRESS_MOVE_THRESHOLD * TOUCH_LONG_PRESS_MOVE_THRESHOLD
+      ) {
+        return;
+      }
+
+      clearPendingTouchStart();
+    };
+
+    const handlePendingTouchEnd = (): void => {
+      clearPendingTouchStart();
+    };
+
+    document.addEventListener('touchmove', handlePendingTouchMove, {
+      passive: true,
+    });
+    document.addEventListener('touchend', handlePendingTouchEnd);
+    document.addEventListener('touchcancel', handlePendingTouchEnd);
+    touchCleanupRef.current = clearPendingTouchStart;
+    touchLongPressTimerRef.current = setTimeout(() => {
+      clearPendingTouchStart();
+      if (controller.startDrag(targetPath) === false) {
+        touchStartPointRef.current = null;
+        return;
+      }
+
+      touchDragActiveRef.current = true;
+      touchSourceElementRef.current = dragSource;
+      dragSource.style.setProperty('touch-action', 'none');
+      dragRowSnapshotRef.current = row;
+      const rect = dragSource.getBoundingClientRect();
+      const preview = createDragPreviewElement(dragSource);
+      Object.assign(preview.style, {
+        height: `${rect.height}px`,
+        opacity: '0.85',
+        transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
+        width: `${rect.width}px`,
+      });
+      mountDragPreview(preview);
+      dragPreviewRef.current = preview;
+      touchPreviewOffsetRef.current = {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
+      };
+
+      const handleActiveTouchMove = (
+        moveEvent: globalThis.TouchEvent
+      ): void => {
+        const moveTouch = moveEvent.touches[0];
+        if (moveTouch == null) {
+          return;
+        }
+
+        moveEvent.preventDefault();
+        const previewOffset = touchPreviewOffsetRef.current;
+        if (previewOffset != null && dragPreviewRef.current != null) {
+          dragPreviewRef.current.style.transform = `translate3d(${moveTouch.clientX - previewOffset.x}px, ${moveTouch.clientY - previewOffset.y}px, 0)`;
+        }
+
+        const nextTarget = syncDropTargetFromPoint(
+          moveTouch.clientX,
+          moveTouch.clientY
+        );
+        scheduleDragHoverOpen(nextTarget);
+        updateDragPoint(moveTouch.clientX, moveTouch.clientY);
+      };
+
+      const handleActiveTouchEnd = (endEvent: globalThis.TouchEvent): void => {
+        const endTouch = endEvent.changedTouches[0];
+        if (endTouch != null) {
+          syncDropTargetFromPoint(endTouch.clientX, endTouch.clientY);
+        }
+
+        controller.completeDrag();
+        clearTouchDragResources();
+      };
+
+      const handleActiveTouchCancel = (): void => {
+        controller.cancelDrag();
+        clearTouchDragResources();
+      };
+
+      touchCleanupRef.current = () => {
+        document.removeEventListener('touchmove', handleActiveTouchMove);
+        document.removeEventListener('touchend', handleActiveTouchEnd);
+        document.removeEventListener('touchcancel', handleActiveTouchCancel);
+      };
+      document.addEventListener('touchmove', handleActiveTouchMove, {
+        passive: false,
+      });
+      document.addEventListener('touchend', handleActiveTouchEnd);
+      document.addEventListener('touchcancel', handleActiveTouchCancel);
+    }, TOUCH_LONG_PRESS_DELAY);
+  };
 
   const handleTreeKeyDown = (event: KeyboardEvent): void => {
     if (contextMenuState != null) {
@@ -1564,6 +2169,85 @@ export function PathStoreTreesView({
     setContextHoverPath(null);
   }, []);
 
+  useLayoutEffect(() => {
+    if (!dragAndDropEnabled) {
+      return;
+    }
+
+    const handleWindowDragEnd = (): void => {
+      clearTouchDragResources();
+      controller.cancelDrag();
+    };
+
+    window.addEventListener('dragend', handleWindowDragEnd);
+    return () => {
+      window.removeEventListener('dragend', handleWindowDragEnd);
+      clearTouchDragResources();
+      controller.cancelDrag();
+    };
+  }, [controller, dragAndDropEnabled]);
+
+  const handleTreeDragOver = (event: DragEvent): void => {
+    if (
+      !dragAndDropEnabled ||
+      controller.getDragSession() == null ||
+      touchDragActiveRef.current
+    ) {
+      return;
+    }
+
+    const nextTarget = resolveDropTargetFromElement(
+      event.target instanceof HTMLElement ? event.target : null
+    );
+    controller.setDragTarget(nextTarget);
+    const resolvedTarget = controller.getDragSession()?.target ?? null;
+    scheduleDragHoverOpen(resolvedTarget);
+    updateDragPoint(event.clientX, event.clientY);
+    if (event.dataTransfer != null) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+    event.preventDefault();
+  };
+
+  const handleTreeDragLeave = (event: DragEvent): void => {
+    if (
+      !dragAndDropEnabled ||
+      controller.getDragSession() == null ||
+      touchDragActiveRef.current
+    ) {
+      return;
+    }
+
+    const nextTarget = event.relatedTarget;
+    if (
+      nextTarget instanceof Node &&
+      rootRef.current?.contains(nextTarget) === true
+    ) {
+      return;
+    }
+
+    clearDragHoverOpen();
+    stopDragAutoScroll();
+    controller.setDragTarget(null);
+  };
+
+  const handleTreeDrop = (event: DragEvent): void => {
+    if (
+      !dragAndDropEnabled ||
+      controller.getDragSession() == null ||
+      touchDragActiveRef.current
+    ) {
+      return;
+    }
+    event.preventDefault();
+    syncDropTargetFromPoint(event.clientX, event.clientY);
+    controller.completeDrag();
+    clearDragPreview();
+    clearDragHoverOpen();
+    stopDragAutoScroll();
+    dragRowSnapshotRef.current = null;
+  };
+
   const stickyLayout = useMemo(
     () =>
       computeStickyWindowLayout({
@@ -1589,6 +2273,30 @@ export function PathStoreTreesView({
       ? null
       : getParkedFocusedRowOffset(
           focusedIndex,
+          itemHeight,
+          range,
+          stickyLayout.windowHeight
+        );
+  const draggedRowSnapshot = dragRowSnapshotRef.current;
+  const draggedRowIsMounted =
+    draggedPrimaryPath != null &&
+    draggedRowSnapshot != null &&
+    draggedRowSnapshot.path === draggedPrimaryPath &&
+    draggedRowSnapshot.index >= range.start &&
+    draggedRowSnapshot.index <= range.end;
+  const parkedDraggedRow =
+    draggedPrimaryPath != null &&
+    draggedRowSnapshot != null &&
+    draggedRowSnapshot.path === draggedPrimaryPath &&
+    !draggedRowIsMounted &&
+    draggedRowSnapshot.path !== parkedFocusedRow?.path
+      ? draggedRowSnapshot
+      : null;
+  const parkedDraggedRowOffset =
+    parkedDraggedRow == null
+      ? null
+      : getParkedFocusedRowOffset(
+          parkedDraggedRow.index,
           itemHeight,
           range,
           stickyLayout.windowHeight
@@ -1653,6 +2361,9 @@ export function PathStoreTreesView({
       ref={rootRef}
       id={treeDomId}
       data-file-tree-virtualized-root="true"
+      onDragLeave={dragAndDropEnabled ? handleTreeDragLeave : undefined}
+      onDragOver={dragAndDropEnabled ? handleTreeDragOver : undefined}
+      onDrop={dragAndDropEnabled ? handleTreeDrop : undefined}
       onKeyDown={handleTreeKeyDown}
       onPointerLeave={contextMenuEnabled ? handleTreePointerLeave : undefined}
       onPointerOver={contextMenuEnabled ? handleTreePointerOver : undefined}
@@ -1713,6 +2424,13 @@ export function PathStoreTreesView({
               range,
               visualFocusPath,
               visualContextHoverPath,
+              draggedPathSet,
+              dragTarget,
+              dragAndDropEnabled,
+              shouldSuppressContextMenu,
+              handleRowDragStart,
+              handleRowDragEnd,
+              handleRowTouchStart,
               instanceId,
               itemHeight,
               directoriesWithGitChanges,
@@ -1741,6 +2459,13 @@ export function PathStoreTreesView({
                   parkedFocusedRow,
                   visualFocusPath,
                   visualContextHoverPath,
+                  draggedPathSet,
+                  dragTarget,
+                  dragAndDropEnabled,
+                  shouldSuppressContextMenu,
+                  handleRowDragStart,
+                  handleRowDragEnd,
+                  handleRowTouchStart,
                   instanceId,
                   itemHeight,
                   directoriesWithGitChanges,
@@ -1767,9 +2492,61 @@ export function PathStoreTreesView({
                     style: {
                       left: '0',
                       opacity: '0',
+                      pointerEvents:
+                        draggedPrimaryPath === parkedFocusedRow.path
+                          ? 'none'
+                          : undefined,
                       position: 'absolute',
                       right: '0',
                       top: `${parkedFocusedRowOffset}px`,
+                    },
+                  }
+                )
+              : null}
+            {parkedDraggedRow != null && parkedDraggedRowOffset != null
+              ? renderStyledRow(
+                  controller,
+                  renameView,
+                  parkedDraggedRow,
+                  visualFocusPath,
+                  visualContextHoverPath,
+                  draggedPathSet,
+                  dragTarget,
+                  dragAndDropEnabled,
+                  shouldSuppressContextMenu,
+                  handleRowDragStart,
+                  handleRowDragEnd,
+                  handleRowTouchStart,
+                  instanceId,
+                  itemHeight,
+                  directoriesWithGitChanges,
+                  gitStatusByPath,
+                  contextMenuEnabled,
+                  (element) => {
+                    renameInputRef.current = element;
+                  },
+                  (path, element) => {
+                    if (element == null) {
+                      rowButtonRefs.current.delete(path);
+                      return;
+                    }
+
+                    rowButtonRefs.current.set(path, element);
+                  },
+                  resolveIcon,
+                  renderDecorationForRow,
+                  openContextMenuForRow,
+                  handleTreeKeyDown,
+                  `parked-drag:${parkedDraggedRow.path}`,
+                  {
+                    isParked: true,
+                    style: {
+                      left: '0',
+                      opacity: '0',
+                      pointerEvents: 'none',
+                      position: 'absolute',
+                      right: '0',
+                      top: `${parkedDraggedRowOffset}px`,
                     },
                   }
                 )

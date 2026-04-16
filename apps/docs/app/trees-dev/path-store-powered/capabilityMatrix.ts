@@ -33,7 +33,7 @@ export const pathStoreCapabilityMatrix: readonly PathStoreCapabilityMatrixRow[] 
     {
       currentDemo: 'Drag and Drop',
       notes:
-        'Drag/drop is rebuilt later on top of the new identity and mutation model.',
+        'Phase 10 restores pointer + touch drag/drop on the dedicated path-store drag/drop route, with path-based policy hooks and direct move/batch mutations under the hood.',
       targetPhases: [10],
     },
     {

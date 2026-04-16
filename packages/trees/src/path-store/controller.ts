@@ -10,11 +10,21 @@ import type {
 } from '@pierre/path-store';
 
 import { renameFileTreePaths } from '../utils/renameFileTreePaths';
+import {
+  buildDropOperations,
+  createDropContext,
+  dropTargetsEqual,
+  isSelfOrDescendantDrop,
+  type PathStoreTreesDragSession,
+  resolveDraggedPathsForStart,
+} from './dragAndDrop';
 import type {
   PathStoreTreesBatchEvent,
   PathStoreTreesControllerListener,
   PathStoreTreesControllerOptions,
   PathStoreTreesDirectoryHandle,
+  PathStoreTreesDragAndDropConfig,
+  PathStoreTreesDropTarget,
   PathStoreTreesFileHandle,
   PathStoreTreesItemHandle,
   PathStoreTreesMutationEvent,
@@ -444,10 +454,12 @@ export class PathStoreTreesController
 {
   readonly #baseOptions: Omit<
     PathStoreTreesControllerOptions,
-    'paths' | 'preparedInput'
+    'dragAndDrop' | 'paths' | 'preparedInput'
   >;
   readonly #listeners = new Set<PathStoreTreesControllerListener>();
   readonly #mutationListeners: MutationListenerByType = new Map();
+  #dragAndDropConfig: PathStoreTreesDragAndDropConfig | null = null;
+  #dragSession: PathStoreTreesDragSession | null = null;
   #ancestorPathsByIndex = new Map<number, readonly string[]>();
   #focusedIndex = -1;
   #focusedPath: string | null = null;
@@ -489,6 +501,7 @@ export class PathStoreTreesController
 
   public constructor(options: PathStoreTreesControllerOptions) {
     const {
+      dragAndDrop,
       fileTreeSearchMode,
       initialSearchQuery,
       renaming,
@@ -498,6 +511,9 @@ export class PathStoreTreesController
       ...baseOptions
     } = options;
     this.#baseOptions = baseOptions;
+    if (dragAndDrop != null && dragAndDrop !== false) {
+      this.#dragAndDropConfig = dragAndDrop === true ? {} : dragAndDrop;
+    }
     this.#renameEnabled = renaming != null && renaming !== false;
     if (renaming != null && renaming !== false && renaming !== true) {
       this.#renameCanRename = renaming.canRename;
@@ -520,6 +536,7 @@ export class PathStoreTreesController
     this.#mutationListeners.clear();
     this.#listeners.clear();
     this.#itemHandles.clear();
+    this.#dragSession = null;
     this.#invalidateKnownPathCaches();
   }
 
@@ -940,6 +957,164 @@ export class PathStoreTreesController
       false
     );
     this.#setFocusedIndex(nextIndex);
+  }
+
+  public getDragAndDropConfig(): PathStoreTreesDragAndDropConfig | null {
+    return this.#dragAndDropConfig;
+  }
+
+  public isDragAndDropEnabled(): boolean {
+    return this.#dragAndDropConfig != null;
+  }
+
+  public getDragSession(): {
+    draggedPaths: readonly string[];
+    primaryPath: string;
+    target: PathStoreTreesDropTarget | null;
+  } | null {
+    if (this.#dragSession == null) {
+      return null;
+    }
+
+    return {
+      draggedPaths: [...this.#dragSession.draggedPaths],
+      primaryPath: this.#dragSession.primaryPath,
+      target:
+        this.#dragSession.target == null
+          ? null
+          : { ...this.#dragSession.target },
+    };
+  }
+
+  public startDrag(path: string): boolean {
+    if (this.#dragAndDropConfig == null) {
+      return false;
+    }
+
+    const resolvedPath = this.#resolveSelectionPath(path);
+    if (resolvedPath == null) {
+      return false;
+    }
+
+    if (this.#searchValue != null && this.#searchValue.length > 0) {
+      return false;
+    }
+
+    const selectedPaths = this.getSelectedPaths();
+    const draggedPaths = resolveDraggedPathsForStart(
+      resolvedPath,
+      selectedPaths
+    );
+    if (this.#dragAndDropConfig.canDrag?.(draggedPaths) === false) {
+      return false;
+    }
+
+    if (!selectedPaths.includes(resolvedPath)) {
+      this.#applySelection([resolvedPath], resolvedPath, false);
+    }
+
+    this.#focusPathWithoutEmit(resolvedPath);
+    this.#dragSession = {
+      draggedPaths,
+      primaryPath: resolvedPath,
+      target: null,
+    };
+    this.#emit();
+    return true;
+  }
+
+  public setDragTarget(target: PathStoreTreesDropTarget | null): void {
+    const dragSession = this.#dragSession;
+    if (dragSession == null) {
+      return;
+    }
+
+    let nextTarget = target;
+    if (nextTarget != null) {
+      const context = createDropContext(dragSession.draggedPaths, nextTarget);
+      if (
+        isSelfOrDescendantDrop(dragSession.draggedPaths, nextTarget) ||
+        this.#dragAndDropConfig?.canDrop?.(context) === false
+      ) {
+        nextTarget = null;
+      }
+    }
+
+    if (dropTargetsEqual(dragSession.target, nextTarget)) {
+      return;
+    }
+
+    this.#dragSession = {
+      ...dragSession,
+      target: nextTarget,
+    };
+    this.#emit();
+  }
+
+  public cancelDrag(): void {
+    if (this.#dragSession == null) {
+      return;
+    }
+
+    this.#dragSession = null;
+    this.#emit();
+  }
+
+  public completeDrag(): boolean {
+    const dragSession = this.#dragSession;
+    if (dragSession == null) {
+      return false;
+    }
+
+    this.#dragSession = null;
+    const target =
+      dragSession.target == null ? null : { ...dragSession.target };
+    if (target == null) {
+      this.#emit();
+      return false;
+    }
+
+    const dropContext = createDropContext(dragSession.draggedPaths, target);
+    if (
+      isSelfOrDescendantDrop(dragSession.draggedPaths, target) ||
+      this.#dragAndDropConfig?.canDrop?.(dropContext) === false
+    ) {
+      this.#emit();
+      return false;
+    }
+
+    const dropPlan = buildDropOperations(dragSession.draggedPaths, target);
+    if (dropPlan == null) {
+      this.#emit();
+      return false;
+    }
+
+    try {
+      if (dropPlan.operations.length === 1) {
+        const singleOperation = dropPlan.operations[0];
+        if (singleOperation == null || singleOperation.type !== 'move') {
+          throw new Error(
+            'Expected a single move operation for one-item drops'
+          );
+        }
+
+        this.#store.move(singleOperation.from, singleOperation.to, {
+          collision: singleOperation.collision,
+        });
+      } else {
+        this.#store.batch(dropPlan.operations);
+      }
+    } catch (error) {
+      this.#emit();
+      this.#dragAndDropConfig?.onDropError?.(
+        error instanceof Error ? error.message : String(error),
+        dropContext
+      );
+      return false;
+    }
+
+    this.#dragAndDropConfig?.onDropComplete?.(dropPlan.result);
+    return true;
   }
 
   public subscribe(listener: PathStoreTreesControllerListener): () => void {
@@ -1796,6 +1971,9 @@ export class PathStoreTreesController
       if (event.canonicalChanged) {
         this.#itemHandles.clear();
         this.#invalidateKnownPathCaches();
+      }
+      if (this.#dragSession != null && isPathMutationEvent(event)) {
+        this.#dragSession = null;
       }
       const focusPathCandidate = isPathMutationEvent(event)
         ? this.#applyMutationState(event)

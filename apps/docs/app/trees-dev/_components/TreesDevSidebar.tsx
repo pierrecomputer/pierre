@@ -26,6 +26,7 @@ const PATH_STORE_LANE_PAGES = [
   { slug: 'path-store-powered', label: 'Mutations + Search + Rename + Icons' },
   { slug: 'path-store-search', label: 'Search' },
   { slug: 'path-store-git-status', label: 'Git Status' },
+  { slug: 'path-store-drag-and-drop', label: 'Drag and Drop' },
 ] as const;
 
 export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {

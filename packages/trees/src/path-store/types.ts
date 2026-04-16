@@ -20,6 +20,7 @@ import type {
 export type PathStoreTreesPublicId = string;
 
 export interface PathStoreTreesControllerOptions extends PathStoreConstructorOptions {
+  dragAndDrop?: boolean | PathStoreTreesDragAndDropConfig;
   fileTreeSearchMode?: PathStoreTreesSearchMode;
   initialSearchQuery?: string | null;
   onSearchChange?: PathStoreTreesSearchChangeListener;
@@ -100,6 +101,30 @@ export interface PathStoreTreesSearchSessionHandle {
   isSearchOpen(): boolean;
   openSearch(initialValue?: string): void;
   setSearch(value: string | null): void;
+}
+
+export interface PathStoreTreesDropTarget {
+  directoryPath: PathStoreTreesPublicId | null;
+  flattenedSegmentPath: PathStoreTreesPublicId | null;
+  hoveredPath: PathStoreTreesPublicId | null;
+  kind: 'directory' | 'root';
+}
+
+export interface PathStoreTreesDropContext {
+  draggedPaths: readonly PathStoreTreesPublicId[];
+  target: PathStoreTreesDropTarget;
+}
+
+export interface PathStoreTreesDropResult extends PathStoreTreesDropContext {
+  operation: 'batch' | 'move';
+}
+
+export interface PathStoreTreesDragAndDropConfig {
+  canDrag?: (paths: readonly PathStoreTreesPublicId[]) => boolean;
+  canDrop?: (event: PathStoreTreesDropContext) => boolean;
+  onDropComplete?: (event: PathStoreTreesDropResult) => void;
+  onDropError?: (error: string, event: PathStoreTreesDropContext) => void;
+  openOnDropDelay?: number;
 }
 
 export interface PathStoreTreesRenamingItem {
