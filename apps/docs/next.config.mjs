@@ -1,6 +1,5 @@
 const site = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
 const isTrees = site === 'trees';
-const isDev = process.env.NODE_ENV === 'development';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -58,11 +57,7 @@ const nextConfig = {
         },
       ];
     }
-    // In dev both products are served locally; skip external redirects.
-    if (isDev) {
-      return [];
-    }
-    // On the diffs site in production, redirect /trees paths to the external trees domain.
+    // On the diffs site, redirect /trees paths to the external trees domain.
     return [
       {
         source: '/trees/:path*',
