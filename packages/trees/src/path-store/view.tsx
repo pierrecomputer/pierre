@@ -1914,6 +1914,14 @@ export function PathStoreTreesView({
   }, [controller, itemHeight, overscan, viewportHeight]);
 
   useLayoutEffect(() => {
+    if (contextMenuEnabled || contextMenuState == null) {
+      return;
+    }
+
+    closeContextMenu(false);
+  }, [closeContextMenu, contextMenuEnabled, contextMenuState]);
+
+  useLayoutEffect(() => {
     if (contextMenuState == null) {
       slotHost?.clearSlotContent(CONTEXT_MENU_SLOT_NAME);
       return;

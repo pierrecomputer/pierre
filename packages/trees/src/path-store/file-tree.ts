@@ -34,6 +34,7 @@ import {
 } from './runtime';
 import { PathStoreTreesManagedSlotHost } from './slotHost';
 import type {
+  PathStoreFileTreeListener,
   PathStoreFileTreeOptions,
   PathStoreFileTreeSsrPayload,
   PathStoreTreeHydrationProps,
@@ -116,9 +117,9 @@ export class PathStoreFileTree
 {
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
 
-  readonly #composition: PathStoreTreesCompositionOptions | undefined;
+  #composition: PathStoreTreesCompositionOptions | undefined;
   readonly #controller: PathStoreTreesController;
-  readonly #id: string;
+  #id: string;
   readonly #onSelectionChange:
     | PathStoreTreesSelectionChangeListener
     | undefined;
@@ -181,23 +182,28 @@ export class PathStoreFileTree
     this.#selectionSubscription =
       this.#onSelectionChange == null
         ? null
-        : this.#controller.subscribe(() => {
+        : this.subscribe(() => {
             this.#emitSelectionChange();
           });
   }
 
-  public cleanUp(): void {
+  public unmount(): void {
     if (this.#wrapper != null) {
       unmountPathStoreTreesRoot(this.#wrapper);
       delete this.#wrapper.dataset.fileTreeVirtualizedWrapper;
       this.#wrapper = undefined;
     }
+
     this.#slotHost.clearAll();
     this.#slotHost.setHost(null);
     if (this.#fileTreeContainer != null) {
       delete this.#fileTreeContainer.dataset.fileTreeVirtualized;
       this.#fileTreeContainer = undefined;
     }
+  }
+
+  public cleanUp(): void {
+    this.unmount();
     this.#selectionSubscription?.();
     this.#selectionSubscription = null;
     this.#controller.destroy();
@@ -211,8 +217,40 @@ export class PathStoreFileTree
     return this.#controller.getItem(path);
   }
 
+  public getFocusedItem(): PathStoreTreesItemHandle | null {
+    return this.#controller.getFocusedItem();
+  }
+
+  public getFocusedPath(): string | null {
+    return this.#controller.getFocusedPath();
+  }
+
   public getSelectedPaths(): readonly string[] {
     return this.#controller.getSelectedPaths();
+  }
+
+  public subscribe(listener: PathStoreFileTreeListener): () => void {
+    let hasSeenInitialSnapshot = false;
+
+    return this.#controller.subscribe(() => {
+      // useSyncExternalStore seeds the initial render through getSnapshot(), so
+      // the model-level subscribe wrapper suppresses the controller's immediate
+      // replay and only forwards subsequent store changes to React.
+      if (!hasSeenInitialSnapshot) {
+        hasSeenInitialSnapshot = true;
+        return;
+      }
+
+      listener();
+    });
+  }
+
+  public focusPath(path: string): void {
+    this.#controller.focusPath(path);
+  }
+
+  public focusNearestPath(path: string | null): string | null {
+    return this.#controller.focusNearestPath(path);
   }
 
   public add(path: string): void {
@@ -285,32 +323,51 @@ export class PathStoreFileTree
     this.#controller.resetPaths(paths, options);
   }
 
+  public setComposition(composition?: PathStoreTreesCompositionOptions): void {
+    this.#composition = composition;
+
+    const mountedTree = this.#getMountedTreeElements();
+    if (mountedTree == null) {
+      return;
+    }
+
+    this.#syncHeaderSlotContent();
+    renderPathStoreTreesRoot(
+      mountedTree.wrapper,
+      this.#getViewProps(mountedTree.host)
+    );
+  }
+
   public setGitStatus(gitStatus?: PathStoreFileTreeOptions['gitStatus']): void {
     this.#gitStatusState = resolvePathStoreGitStatusState(
       gitStatus,
       this.#gitStatusState
     );
 
-    const host = this.#fileTreeContainer;
-    const wrapper = this.#wrapper;
-    if (host == null || wrapper == null) {
+    const mountedTree = this.#getMountedTreeElements();
+    if (mountedTree == null) {
       return;
     }
 
-    renderPathStoreTreesRoot(wrapper, this.#getViewProps(host));
+    renderPathStoreTreesRoot(
+      mountedTree.wrapper,
+      this.#getViewProps(mountedTree.host)
+    );
   }
 
   public setIcons(icons?: PathStoreFileTreeOptions['icons']): void {
     this.#icons = icons;
 
-    const host = this.#fileTreeContainer;
-    const wrapper = this.#wrapper;
-    if (host == null || wrapper == null) {
+    const mountedTree = this.#getMountedTreeElements();
+    if (mountedTree == null) {
       return;
     }
 
-    this.#syncIconSurface(host, wrapper);
-    renderPathStoreTreesRoot(wrapper, this.#getViewProps(host));
+    this.#syncIconSurface(mountedTree.host, mountedTree.wrapper);
+    renderPathStoreTreesRoot(
+      mountedTree.wrapper,
+      this.#getViewProps(mountedTree.host)
+    );
   }
 
   public hydrate({ fileTreeContainer }: PathStoreTreeHydrationProps): void {
@@ -364,6 +421,20 @@ export class PathStoreFileTree
       slotHost: this.#slotHost,
       ...this.#getResolvedViewOptions(host),
     };
+  }
+
+  // Resolves the mounted DOM surfaces so runtime setters can rerender in place.
+  #getMountedTreeElements(): {
+    host: HTMLElement;
+    wrapper: HTMLDivElement;
+  } | null {
+    const host = this.#fileTreeContainer;
+    const wrapper = this.#wrapper;
+    if (host == null || wrapper == null) {
+      return null;
+    }
+
+    return { host, wrapper };
   }
 
   #syncIconSurface(host: HTMLElement, wrapper: HTMLElement): void {
@@ -491,11 +562,19 @@ export class PathStoreFileTree
       throw new Error('PathStoreFileTree requires a shadow root');
     }
 
-    const existingWrapper = Array.from(shadowRoot.children).find(
+    const wrapperCandidates = Array.from(shadowRoot.children).filter(
       (element): element is HTMLDivElement =>
         element instanceof HTMLDivElement &&
-        element.dataset.fileTreeId === this.#id
+        typeof element.dataset.fileTreeId === 'string' &&
+        element.dataset.fileTreeId.length > 0
     );
+    const existingWrapper =
+      wrapperCandidates.find(
+        (element) => element.dataset.fileTreeId === this.#id
+      ) ?? wrapperCandidates[0];
+    if (existingWrapper != null) {
+      this.#id = existingWrapper.dataset.fileTreeId ?? this.#id;
+    }
     this.#wrapper = existingWrapper ?? document.createElement('div');
     this.#wrapper.dataset.fileTreeId = this.#id;
     this.#wrapper.dataset.fileTreeVirtualizedWrapper = 'true';

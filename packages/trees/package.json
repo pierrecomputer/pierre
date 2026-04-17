@@ -31,6 +31,10 @@
     "./path-store": {
       "types": "./dist/path-store/index.d.ts",
       "import": "./dist/path-store/index.js"
+    },
+    "./path-store/react": {
+      "types": "./dist/path-store/react/index.d.ts",
+      "import": "./dist/path-store/react/index.js"
     }
   },
   "publishConfig": {

@@ -12,7 +12,7 @@ export class PathStoreTreesManagedSlotHost {
   }
 
   public clearSlotContent(slotName: string): void {
-    const currentContent = this.#contentBySlot.get(slotName);
+    const currentContent = this.#getCurrentContent(slotName);
     if (currentContent == null) {
       return;
     }
@@ -35,9 +35,10 @@ export class PathStoreTreesManagedSlotHost {
   }
 
   public setSlotContent(slotName: string, content: HTMLElement | null): void {
-    const currentContent = this.#contentBySlot.get(slotName) ?? null;
+    const currentContent = this.#getCurrentContent(slotName);
     if (currentContent === content) {
       if (content != null) {
+        this.#contentBySlot.set(slotName, content);
         this.#attachContent(slotName, content);
       }
       return;
@@ -60,8 +61,9 @@ export class PathStoreTreesManagedSlotHost {
       return;
     }
 
-    const currentContent = this.#contentBySlot.get(slotName) ?? null;
+    const currentContent = this.#getCurrentContent(slotName);
     if (currentContent != null && currentContent.innerHTML === normalizedHtml) {
+      this.#contentBySlot.set(slotName, currentContent);
       this.#attachContent(slotName, currentContent);
       return;
     }
@@ -69,6 +71,30 @@ export class PathStoreTreesManagedSlotHost {
     const nextContent = document.createElement('div');
     nextContent.innerHTML = normalizedHtml;
     this.setSlotContent(slotName, nextContent);
+  }
+
+  #getCurrentContent(slotName: string): HTMLElement | null {
+    const trackedContent = this.#contentBySlot.get(slotName) ?? null;
+    if (trackedContent != null) {
+      return trackedContent;
+    }
+
+    const host = this.#host;
+    if (host == null) {
+      return null;
+    }
+
+    for (const element of Array.from(host.children)) {
+      if (!(element instanceof HTMLElement)) {
+        continue;
+      }
+
+      if (element.dataset.pathStoreManagedSlot === slotName) {
+        return element;
+      }
+    }
+
+    return null;
   }
 
   #attachContent(slotName: string, content: HTMLElement): void {

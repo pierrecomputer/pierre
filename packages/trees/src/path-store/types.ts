@@ -287,6 +287,8 @@ export interface PathStoreTreesMutationHandle {
 
 export type PathStoreTreesControllerListener = () => void;
 
+export type PathStoreFileTreeListener = () => void;
+
 export type PathStoreTreesSelectionChangeListener = (
   selectedPaths: readonly PathStoreTreesPublicId[]
 ) => void;

@@ -24,6 +24,7 @@ const DEMO_PAGES = [
 
 const PATH_STORE_LANE_PAGES = [
   { slug: 'path-store-powered', label: 'Mutations + Search + Rename + Icons' },
+  { slug: 'path-store-react', label: 'React Wrapper' },
   { slug: 'path-store-search', label: 'Search' },
   { slug: 'path-store-git-status', label: 'Git Status' },
   { slug: 'path-store-drag-and-drop', label: 'Drag and Drop' },
@@ -41,7 +42,7 @@ export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav
-      className="sticky top-4 flex h-fit max-h-[calc(100vh-2rem)] flex-col gap-1 overflow-y-auto py-4 pl-4"
+      className="sticky top-4 flex h-fit max-h-[100dvh] flex-col gap-1 overflow-y-auto py-4 pl-4"
       onClick={onNavigate}
     >
       <p className="text-muted-foreground px-3 pb-1 text-xs font-medium">

@@ -14,6 +14,7 @@ export type {
   PathStoreTreesDropResult,
   PathStoreTreesDropTarget,
   PathStoreFileTreeOptions,
+  PathStoreFileTreeListener,
   PathStoreFileTreeSsrPayload,
   PathStoreTreesFileHandle,
   PathStoreTreesHeaderCompositionOptions,
