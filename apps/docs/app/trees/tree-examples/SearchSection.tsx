@@ -57,7 +57,7 @@ export function SearchSection() {
             Filter the tree by typing in the search field. Search across file
             paths and names. Trees includes three{' '}
             <Link
-              href="/preview/trees/docs#core-types-filetreesearchmode"
+              href="/trees/docs#core-types-filetreesearchmode"
               className="inline-link"
             >
               <code>fileTreeSearchMode</code>

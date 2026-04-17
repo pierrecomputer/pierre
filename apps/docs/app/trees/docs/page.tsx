@@ -2,9 +2,9 @@ import '@/app/prose.css';
 import { preloadFile } from '@pierre/diffs/ssr';
 import type { Metadata } from 'next';
 
-import { DocsLayout } from '../../../docs/DocsLayout';
-import { HeadingAnchors } from '../../../docs/HeadingAnchors';
-import { ProseWrapper } from '../../../docs/ProseWrapper';
+import { DocsLayout } from '../../docs/DocsLayout';
+import { HeadingAnchors } from '../../docs/HeadingAnchors';
+import { ProseWrapper } from '../../docs/ProseWrapper';
 import {
   FILE_TREE_OPTIONS_TYPE,
   FILE_TREE_SEARCH_MODE_TYPE,
@@ -12,47 +12,47 @@ import {
   FILE_TREE_STATE_CONFIG_TYPE,
   FILES_OPTION_EXAMPLE,
   ON_SELECTION_EXAMPLE,
-} from '../../../trees/docs/CoreTypes/constants';
+} from '../docs/CoreTypes/constants';
 import {
   INSTALLATION_EXAMPLES,
   PACKAGE_MANAGERS,
-} from '../../../trees/docs/Installation/constants';
+} from '../docs/Installation/constants';
 import {
   OVERVIEW_FILE_TREE_OPTIONS,
   TREES_REACT_BASIC_USAGE,
   TREES_VANILLA_BASIC_USAGE,
-} from '../../../trees/docs/Overview/constants';
+} from '../docs/Overview/constants';
 import {
   REACT_API_CUSTOM_ICONS_EXAMPLE,
   REACT_API_FILE_TREE,
   REACT_API_FILE_TREE_PROPS,
   REACT_API_GIT_STATUS_EXAMPLE,
-} from '../../../trees/docs/ReactAPI/constants';
+} from '../docs/ReactAPI/constants';
 import {
   SSR_HYDRATION_EXAMPLE,
   SSR_PRELOAD_FILE_TREE,
-} from '../../../trees/docs/SSR/constants';
+} from '../docs/SSR/constants';
 import {
   STYLING_CODE_GLOBAL,
   STYLING_CODE_INLINE,
   STYLING_CODE_UNSAFE,
   STYLING_CODE_VANILLA,
-} from '../../../trees/docs/Styling/constants';
+} from '../docs/Styling/constants';
 import {
   THEMING_CODE_CUSTOM_THEME,
   THEMING_CODE_RESOLVE_THEME,
-} from '../../../trees/docs/Theming/constants';
+} from '../docs/Theming/constants';
 import {
   HELPER_GENERATE_LAZY_DATA_LOADER,
   HELPER_GENERATE_SYNC_DATA_LOADER,
   HELPER_SORT_CHILDREN,
-} from '../../../trees/docs/Utilities/constants';
+} from '../docs/Utilities/constants';
 import {
   VANILLA_API_CUSTOM_ICONS_EXAMPLE,
   VANILLA_API_FILE_TREE_EXAMPLE,
   VANILLA_API_FILE_TREE_OPTIONS,
   VANILLA_API_GIT_STATUS_EXAMPLE,
-} from '../../../trees/docs/VanillaAPI/constants';
+} from '../docs/VanillaAPI/constants';
 import Footer from '@/components/Footer';
 import { renderMDX } from '@/lib/mdx';
 

@@ -194,7 +194,7 @@ export function ThemingSectionClient({
             colors come from your choice of themes. Pick a theme and switch
             light/dark to see the tree update live. Compare against our default
             themes in light and dark mode, too. See the{' '}
-            <Link href="/preview/trees/docs#themes" className="inline-link">
+            <Link href="/trees/docs#themes" className="inline-link">
               Theming docs
             </Link>{' '}
             for more.

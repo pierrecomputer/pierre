@@ -66,7 +66,7 @@ export function GitStatusSectionClient({
         description={
           <>
             Use the{' '}
-            <Link href="/preview/trees/docs#git-status" className="inline-link">
+            <Link href="/trees/docs#git-status" className="inline-link">
               <code>gitStatus</code>
             </Link>{' '}
             prop to show indicators on files for added, modified, and deleted

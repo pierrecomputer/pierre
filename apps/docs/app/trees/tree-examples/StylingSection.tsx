@@ -110,7 +110,7 @@ export function StylingSection() {
             override UI and theme colors. For example, below are three
             examples—custom light, dark, and Synthwave &apos;84— that override
             our default values and the CSS we use to style the tree. See the{' '}
-            <Link href="/preview/trees/docs#styling" className="inline-link">
+            <Link href="/trees/docs#styling" className="inline-link">
               Styling docs
             </Link>{' '}
             for more info.

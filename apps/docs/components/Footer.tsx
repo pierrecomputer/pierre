@@ -43,13 +43,13 @@ export default function Footer() {
           <h4 className="mb-2 text-sm font-medium">Trees</h4>
           <nav className="flex flex-col gap-1">
             <Link
-              href="/preview/trees"
+              href="/trees"
               className="text-muted-foreground hover:text-foreground text-sm transition-colors"
             >
               Home
             </Link>
             <Link
-              href="/preview/trees/docs"
+              href="/trees/docs"
               className="text-muted-foreground hover:text-foreground text-sm transition-colors"
             >
               Docs

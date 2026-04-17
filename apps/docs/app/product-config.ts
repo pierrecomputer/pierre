@@ -38,8 +38,8 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
       "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.",
     llmsDescription:
       'An open source file tree rendering library for the web. Built on @headless-tree/core for state management, with React and vanilla JS APIs, SSR support, and customizable styling.',
-    basePath: '/preview/trees',
-    docsPath: '/preview/trees/docs',
+    basePath: '/trees',
+    docsPath: '/trees/docs',
     packageName: '@pierre/trees',
     installCommand: 'bun i @pierre/trees',
     githubUrl: 'https://github.com/pierrecomputer/pierre',
@@ -54,7 +54,7 @@ export function getProductConfig(productId: ProductId): ProductConfig {
  * Determine which product we're in based on pathname
  */
 export function getProductFromPathname(pathname: string): ProductConfig {
-  if (pathname.startsWith('/preview/trees') || pathname.startsWith('/trees')) {
+  if (pathname.startsWith('/trees')) {
     return PRODUCTS.trees;
   }
   return PRODUCTS.diffs;
