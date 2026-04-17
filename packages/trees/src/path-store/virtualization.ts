@@ -114,6 +114,10 @@ export function computeStickyWindowLayout({
 
   const offsetHeight = range.start * itemHeight;
   const windowHeight = (range.end - range.start + 1) * itemHeight;
+  // NOTE: Using a random value that's in the range of 0 to  itemHeight, we can
+  // make fast scrolls don't feel like the elements are stuck on a grid (feels
+  // artificial)
+  const randomStickyOffset = (Math.random() * itemHeight) >> 0;
 
   return {
     totalHeight,
@@ -121,6 +125,9 @@ export function computeStickyWindowLayout({
     windowHeight,
     // The sticky window is usually taller than the viewport once overscan is
     // included, so a negative inset keeps the full overscanned slice pinned.
-    stickyInset: Math.min(0, viewportHeight - windowHeight),
+    stickyInset: Math.min(
+      0,
+      viewportHeight - windowHeight + randomStickyOffset
+    ),
   };
 }

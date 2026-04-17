@@ -1084,7 +1084,7 @@ describe('path-store render + scroll', () => {
     }
   });
 
-  test('marks the virtualized list as scrolling to suppress hover styles', async () => {
+  test('wheel input marks the virtualized list as scrolling before scroll updates and still avoids a sticky content wrapper', async () => {
     const { cleanup, dom } = installDom();
     try {
       const { PathStoreFileTree } = await import('../src/path-store');
@@ -1109,6 +1109,9 @@ describe('path-store render + scroll', () => {
       const listElement = shadowRoot?.querySelector(
         '[data-file-tree-virtualized-list="true"]'
       );
+      const stickyContentElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-sticky-content="true"]'
+      );
 
       if (!(scrollElement instanceof dom.window.HTMLElement)) {
         throw new Error('missing scroll element');
@@ -1119,16 +1122,26 @@ describe('path-store render + scroll', () => {
 
       const viewport = scrollElement as HTMLElement;
       const list = listElement as HTMLDivElement;
-
+      expect(stickyContentElement).toBeNull();
       expect(list.dataset.isScrolling).toBeUndefined();
+
+      viewport.dispatchEvent(
+        new dom.window.WheelEvent('wheel', { bubbles: true, deltaY: 80 })
+      );
+      expect(list.dataset.isScrolling).toBe('');
 
       viewport.scrollTop = 1500;
       viewport.dispatchEvent(new dom.window.Event('scroll'));
       await flushDom();
 
+      expect(
+        shadowRoot?.querySelector(
+          '[data-file-tree-virtualized-sticky-content="true"]'
+        )
+      ).toBeNull();
       expect(list.dataset.isScrolling).toBe('');
 
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      await new Promise((resolve) => setTimeout(resolve, 120));
       expect(list.dataset.isScrolling).toBeUndefined();
 
       fileTree.cleanUp();

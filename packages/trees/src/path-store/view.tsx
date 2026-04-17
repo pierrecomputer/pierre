@@ -163,6 +163,7 @@ function getPathStoreTreesRowAriaLabel(row: PathStoreTreesVisibleRow): string {
   return flattenedSegments.map((segment) => segment.name).join(' / ');
 }
 
+const SCROLL_HOVER_SUPPRESSION_DELAY = 100;
 const TOUCH_LONG_PRESS_DELAY = 400;
 const TOUCH_LONG_PRESS_MOVE_THRESHOLD = 10;
 const DRAG_EDGE_SCROLL_THRESHOLD = 40;
@@ -1007,20 +1008,20 @@ export function PathStoreTreesView({
   } | null>(null);
   const contextMenuStateRef = useRef(contextMenuState);
   contextMenuStateRef.current = contextMenuState;
-  const [itemCount, setItemCount] = useState(() =>
-    controller.getVisibleCount()
-  );
+  const initialItemCount = controller.getVisibleCount();
+  const initialRange = computeWindowRange({
+    itemCount: initialItemCount,
+    itemHeight,
+    overscan,
+    scrollTop: 0,
+    viewportHeight,
+  });
+  const [itemCount, setItemCount] = useState(() => initialItemCount);
   const [resolvedViewportHeight, setResolvedViewportHeight] =
     useState<number>(viewportHeight);
-  const [range, setRange] = useState(() =>
-    computeWindowRange({
-      itemCount: controller.getVisibleCount(),
-      itemHeight,
-      overscan,
-      scrollTop: 0,
-      viewportHeight,
-    })
-  );
+  const [range, setRange] = useState(() => initialRange);
+  const rangeRef = useRef(range);
+  rangeRef.current = range;
   const contextMenuEnabled =
     composition?.contextMenu?.enabled === true ||
     composition?.contextMenu?.render != null ||
@@ -1809,7 +1810,6 @@ export function PathStoreTreesView({
   useLayoutEffect(() => {
     let scrollTimer: ReturnType<typeof setTimeout> | null = null;
     const scrollElement = scrollRef.current;
-    const listElement = listRef.current;
     if (scrollElement == null) {
       return;
     }
@@ -1838,21 +1838,54 @@ export function PathStoreTreesView({
           ? previousHeight
           : nextViewportHeight
       );
-      setRange((previousRange) => {
-        const nextRange = computeWindowRange(
-          {
-            itemCount: nextItemCount,
-            itemHeight,
-            overscan,
-            scrollTop,
-            viewportHeight: nextViewportHeight,
-          },
-          previousRange
-        );
-        return rangesEqual(previousRange, nextRange)
-          ? previousRange
-          : nextRange;
-      });
+      const nextRange = computeWindowRange(
+        {
+          itemCount: nextItemCount,
+          itemHeight,
+          overscan,
+          scrollTop,
+          viewportHeight: nextViewportHeight,
+        },
+        rangeRef.current
+      );
+      if (!rangesEqual(rangeRef.current, nextRange)) {
+        rangeRef.current = nextRange;
+        setRange(nextRange);
+      }
+    };
+    let scheduledUpdateHandle: number | null = null;
+
+    // Coalesce scroll-driven range updates to one paint so wheel bursts do not
+    // queue repeated rerenders before the browser can present the next frame.
+    const scheduleUpdate = (): void => {
+      if (scheduledUpdateHandle != null) {
+        return;
+      }
+
+      const flushUpdate = (): void => {
+        scheduledUpdateHandle = null;
+        update();
+      };
+
+      scheduledUpdateHandle =
+        typeof window.requestAnimationFrame === 'function'
+          ? window.requestAnimationFrame(() => {
+              flushUpdate();
+            })
+          : window.setTimeout(flushUpdate, 0);
+    };
+
+    const cancelScheduledUpdate = (): void => {
+      if (scheduledUpdateHandle == null) {
+        return;
+      }
+
+      if (typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(scheduledUpdateHandle);
+      } else {
+        window.clearTimeout(scheduledUpdateHandle);
+      }
+      scheduledUpdateHandle = null;
     };
 
     updateViewportRef.current = update;
@@ -1860,8 +1893,8 @@ export function PathStoreTreesView({
       setControllerRevision((revision) => revision + 1);
       update();
     });
-    const onScroll = (): void => {
-      update();
+    const listElement = listRef.current;
+    const beginScrollSuppression = (): void => {
       if (contextMenuStateRef.current != null) {
         closeContextMenuRef.current();
       }
@@ -1870,29 +1903,36 @@ export function PathStoreTreesView({
         previousPath == null ? previousPath : null
       );
 
-      // Mark the list as scrolling to suppress hover styles on items.
-      // Applied to the list (inside the scroll container) so the container
-      // itself still receives scroll events.
       if (listElement != null) {
         listElement.dataset.isScrolling ??= '';
       }
       if (scrollTimer != null) {
         clearTimeout(scrollTimer);
       }
+      // Keep suppression active across short wheel gaps so hover styles do not
+      // flicker back on between consecutive input bursts.
       scrollTimer = setTimeout(() => {
         if (listElement != null) {
           delete listElement.dataset.isScrolling;
         }
         isScrollingRef.current = false;
         scrollTimer = null;
-      }, 50);
+      }, SCROLL_HOVER_SUPPRESSION_DELAY);
+    };
+    const onWheel = (): void => {
+      beginScrollSuppression();
+    };
+    const onScroll = (): void => {
+      scheduleUpdate();
+      beginScrollSuppression();
     };
 
+    scrollElement.addEventListener('wheel', onWheel, { passive: true });
     scrollElement.addEventListener('scroll', onScroll, { passive: true });
     const resizeObserver =
       typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => {
-            update();
+            scheduleUpdate();
           })
         : null;
     resizeObserver?.observe(scrollElement);
@@ -1901,7 +1941,9 @@ export function PathStoreTreesView({
     return () => {
       updateViewportRef.current = () => {};
       unsubscribe();
+      scrollElement.removeEventListener('wheel', onWheel);
       scrollElement.removeEventListener('scroll', onScroll);
+      cancelScheduledUpdate();
       if (scrollTimer != null) {
         clearTimeout(scrollTimer);
       }
