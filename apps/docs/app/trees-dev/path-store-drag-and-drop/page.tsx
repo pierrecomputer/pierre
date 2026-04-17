@@ -7,20 +7,20 @@ import { createPresortedPreparedInput } from '../path-store-powered/createPresor
 import { PathStoreDragAndDropDemoClient } from './PathStoreDragAndDropDemoClient';
 
 const DRAG_AND_DROP_DEMO_PATHS = [
-  'README.md',
-  'package.json',
-  'assets/images/social/logo.png',
   'assets/images/social/banner.png',
-  'docs/guides/getting-started.md',
+  'assets/images/social/logo.png',
   'docs/guides/faq.md',
-  'src/index.ts',
-  'src/lib/utils.ts',
-  'src/lib/theme.ts',
+  'docs/guides/getting-started.md',
   'src/components/Button.tsx',
+  'src/lib/theme.ts',
+  'src/lib/utils.ts',
+  'src/index.ts',
   ...Array.from(
     { length: 40 },
     (_, index) => `workspace/demo-${String(index).padStart(2, '0')}.ts`
   ),
+  'package.json',
+  'README.md',
 ] as const;
 
 const DRAG_AND_DROP_PREPARED_INPUT = createPresortedPreparedInput(

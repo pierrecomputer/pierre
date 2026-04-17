@@ -4,16 +4,14 @@ type PathStorePreparedInput = NonNullable<
   PathStoreFileTreeOptions['preparedInput']
 >;
 
-// Some docs demos start from intentionally unsorted fixture arrays. Sort once
-// here so any caller using the path-store presorted fast path hands SSR and
-// hydration the same canonical path order.
+// This helper exists for demos whose input is already ordered according to the
+// same path-store sort semantics the live tree will use. It does not sort or
+// validate; callers must pass presorted paths.
 export function createPresortedPreparedInput(
   paths: readonly string[]
 ): PathStorePreparedInput {
-  const presortedPaths = [...paths].toSorted();
-
   return {
-    paths: presortedPaths,
-    presortedPaths,
+    paths,
+    presortedPaths: paths,
   } as PathStorePreparedInput;
 }

@@ -913,7 +913,35 @@ describe('path-store render + scroll', () => {
     expect(payload.shadowHtml).toContain('README.md');
   });
 
-  test('hydration keeps row content aligned with row paths when using a sorted presorted-path fast path built from unsorted input', async () => {
+  test('preloadPathStoreFileTree sorts unsorted top-level directories before files', async () => {
+    const { preloadPathStoreFileTree } = await import('../src/path-store');
+
+    const payload = preloadPathStoreFileTree({
+      flattenEmptyDirectories: true,
+      paths: [
+        'README.md',
+        'package.json',
+        'assets/images/social/logo.png',
+        'assets/images/social/banner.png',
+        'docs/guides/getting-started.md',
+        'docs/guides/faq.md',
+        'src/index.ts',
+        'src/lib/utils.ts',
+        'src/lib/theme.ts',
+        'src/components/Button.tsx',
+      ],
+      viewportHeight: 460,
+    });
+
+    expect(
+      Array.from(
+        payload.shadowHtml.matchAll(/data-item-path="([^"]+)"/g),
+        (match) => match[1] ?? ''
+      ).filter((path) => path.length > 0)
+    ).toEqual(['assets/', 'docs/', 'src/', 'package.json', 'README.md']);
+  });
+
+  test('hydration keeps row content aligned with row paths for unsorted raw input', async () => {
     const { cleanup, dom } = installDom();
     try {
       const { PathStoreFileTree, preloadPathStoreFileTree } =
@@ -931,15 +959,6 @@ describe('path-store render + scroll', () => {
         'src/lib/theme.ts',
         'src/components/Button.tsx',
       ] as const;
-      // Mirror the docs helper contract: callers can start from unsorted
-      // fixtures, then hand the sorted fast path to both SSR and hydration.
-      const presortedPaths = [...unsortedPaths].toSorted();
-      const preparedInput = {
-        paths: presortedPaths,
-        presortedPaths,
-      } as NonNullable<
-        ConstructorParameters<typeof PathStoreFileTree>[0]['preparedInput']
-      >;
       const options = {
         dragAndDrop: true,
         flattenEmptyDirectories: true,
@@ -950,8 +969,7 @@ describe('path-store render + scroll', () => {
           'src/',
           'src/lib/',
         ],
-        paths: preparedInput.paths,
-        preparedInput,
+        paths: unsortedPaths,
         viewportHeight: 460,
       } satisfies ConstructorParameters<typeof PathStoreFileTree>[0];
       const payload = preloadPathStoreFileTree(options);
@@ -995,14 +1013,16 @@ describe('path-store render + scroll', () => {
       expect(getContentText('README.md')).not.toContain('assets');
       expect(getContentText('package.json')).toContain('package');
       expect(getContentText('package.json')).not.toContain('banner');
-      const assetsContent = getItemButton(
+      const flattenedAssetsContent = getItemButton(
         shadowRoot,
         dom,
-        'assets/'
+        'assets/images/social/'
       ).querySelector('[data-item-section="content"]');
-      expect(getContentText('assets/')).not.toContain('banner');
-      expect(getContentText('assets/')).not.toContain('package');
-      expect(assetsContent?.querySelector('[data-icon-name]')).toBeNull();
+      expect(getContentText('assets/images/social/')).toContain('assets');
+      expect(getContentText('assets/images/social/')).toContain('social');
+      expect(
+        flattenedAssetsContent?.querySelector('[data-icon-name]')
+      ).toBeNull();
       expect(
         getItemButton(shadowRoot, dom, 'README.md').querySelector(
           '[data-item-section="icon"] [data-icon-name]'
