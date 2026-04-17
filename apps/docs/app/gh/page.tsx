@@ -1,6 +1,6 @@
 'use client';
 
-import { AdvancedDiff } from './AdvancedDiff';
+import { GHViewer } from './GHViewer';
 import { Header } from '@/components/Header';
 import { WorkerPoolContext } from '@/components/WorkerPoolContext';
 
@@ -9,7 +9,7 @@ export default function AdvancedDiffPage() {
     <WorkerPoolContext>
       <div className="flex h-dvh flex-col">
         <Header className="px-5" />
-        <AdvancedDiff />
+        <GHViewer />
       </div>
     </WorkerPoolContext>
   );
