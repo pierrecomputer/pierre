@@ -175,7 +175,7 @@ export class ResizeManager {
 
   private handleResizeObserver = (entries: ResizeObserverEntry[]) => {
     for (const entry of entries) {
-      const { target, borderBoxSize } = entry;
+      const { target, borderBoxSize, contentBoxSize } = entry;
       if (!(target instanceof HTMLElement)) {
         console.error(
           'FileDiff.handleResizeObserver: Invalid element for ResizeObserver',
@@ -191,7 +191,6 @@ export class ResizeManager {
         );
         continue;
       }
-      const specs = borderBoxSize[0];
       if (item.type === 'annotations') {
         const column = (() => {
           if (target === item.column1.child) {
@@ -211,14 +210,14 @@ export class ResizeManager {
           continue;
         }
 
-        column.childHeight = specs.blockSize;
+        column.childHeight = borderBoxSize[0].blockSize;
         const newHeight = Math.max(
           item.column1.childHeight,
           item.column2.childHeight
         );
         this.applyNewHeight(item, newHeight);
       } else if (item.type === 'code') {
-        const update: CodeColumnUpdate = [target, specs.inlineSize];
+        const update: CodeColumnUpdate = [target, contentBoxSize[0].inlineSize];
         const updates = this.queuedUpdates.get(item) ?? [];
         updates.push(update);
         this.queuedUpdates.set(item, updates);
