@@ -34,59 +34,69 @@ function runClientRenderBenchmark(args: string[]) {
   };
 }
 
+// The benchmark CLI shells out to `bun run build` before measuring, so this
+// test's wall time is dominated by tsdown compiling the trees package. The
+// generous timeout keeps the default 5 s ceiling from masking real failures
+// with a "test timed out" message on slower machines.
+const BENCHMARK_TEST_TIMEOUT_MS = 60_000;
+
 describe('virtualized client render benchmark CLI', () => {
-  test('emits JSON for a tiny-flat smoke run', () => {
-    const { result, stdout, stderr } = runClientRenderBenchmark([
-      '--case=tiny-flat',
-      '--runs=1',
-      '--warmup-runs=0',
-      '--json',
-    ]);
+  test(
+    'emits JSON for a tiny-flat smoke run',
+    () => {
+      const { result, stdout, stderr } = runClientRenderBenchmark([
+        '--case=tiny-flat',
+        '--runs=1',
+        '--warmup-runs=0',
+        '--json',
+      ]);
 
-    expect(result.exitCode).toBe(0);
-    expect(stderr).toBe('');
+      expect(result.exitCode).toBe(0);
+      expect(stderr).toBe('');
 
-    const payload = JSON.parse(stdout) as {
-      benchmark: string;
-      runtime: {
-        codePath: string;
-        nodeEnv: string;
-        renderer: string;
-        mountHarness: string;
-        buildCommand: string;
+      const payload = JSON.parse(stdout) as {
+        benchmark: string;
+        runtime: {
+          codePath: string;
+          nodeEnv: string;
+          renderer: string;
+          mountHarness: string;
+          buildCommand: string;
+        };
+        config: {
+          runs: number;
+          warmupRuns: number;
+          caseFilters: string[];
+          viewportHeight: number;
+        };
+        cases: Array<{
+          name: string;
+          fileCount: number;
+          renderedItemCount: number;
+          shadowHtmlChecksum: number;
+        }>;
       };
-      config: {
-        runs: number;
-        warmupRuns: number;
-        caseFilters: string[];
-        viewportHeight: number;
-      };
-      cases: Array<{
-        name: string;
-        fileCount: number;
-        renderedItemCount: number;
-        shadowHtmlChecksum: number;
-      }>;
-    };
 
-    expect(payload.benchmark).toBe('virtualizedFileTreeClientMount');
-    expect(payload.runtime).toMatchObject({
-      codePath: 'dist',
-      nodeEnv: 'production',
-      renderer: 'preact-dom',
-      mountHarness: 'jsdom-fresh-filetree-render',
-      buildCommand: 'bun run build',
-    });
-    expect(payload.config.runs).toBe(1);
-    expect(payload.config.warmupRuns).toBe(0);
-    expect(payload.config.caseFilters).toEqual(['tiny-flat']);
-    expect(payload.config.viewportHeight).toBe(500);
-    expect(payload.cases).toHaveLength(1);
-    expect(payload.cases[0]).toMatchObject({
-      name: 'tiny-flat',
-      fileCount: 128,
-    });
-    expect(payload.cases[0]?.renderedItemCount).toBeGreaterThan(0);
-    expect(payload.cases[0]?.shadowHtmlChecksum).toBeGreaterThan(0);
-  });
+      expect(payload.benchmark).toBe('virtualizedFileTreeClientMount');
+      expect(payload.runtime).toMatchObject({
+        codePath: 'dist',
+        nodeEnv: 'production',
+        renderer: 'preact-dom',
+        mountHarness: 'jsdom-fresh-filetree-render',
+        buildCommand: 'bun run build',
+      });
+      expect(payload.config.runs).toBe(1);
+      expect(payload.config.warmupRuns).toBe(0);
+      expect(payload.config.caseFilters).toEqual(['tiny-flat']);
+      expect(payload.config.viewportHeight).toBe(500);
+      expect(payload.cases).toHaveLength(1);
+      expect(payload.cases[0]).toMatchObject({
+        name: 'tiny-flat',
+        fileCount: 128,
+      });
+      expect(payload.cases[0]?.renderedItemCount).toBeGreaterThan(0);
+      expect(payload.cases[0]?.shadowHtmlChecksum).toBeGreaterThan(0);
+    },
+    BENCHMARK_TEST_TIMEOUT_MS
+  );
 });
