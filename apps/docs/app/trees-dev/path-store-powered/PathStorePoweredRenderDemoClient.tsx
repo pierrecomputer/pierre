@@ -8,14 +8,29 @@ import {
   type PathStoreTreesDropResult,
   type PathStoreTreesMutationEvent,
 } from '@pierre/trees/path-store';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import {
+  memo,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import { createRoot, type Root as ReactDomRoot } from 'react-dom/client';
 
-import { ExampleCard } from '../_components/ExampleCard';
 import { StateLog, useStateLog } from '../_components/StateLog';
 import { pathStoreCapabilityMatrix } from './capabilityMatrix';
 import { createPresortedPreparedInput } from './createPresortedPreparedInput';
 import { PATH_STORE_CUSTOM_ICONS } from './pathStoreDemoIcons';
+import {
+  PATH_STORE_PROOF_VIEWPORT_HEIGHT,
+  type PathStorePoweredWorkloadDataPayload,
+  type PathStorePoweredWorkloadName,
+  type PathStorePoweredWorkloadOption,
+} from './pathStorePoweredWorkloadMeta';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,15 +39,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-interface SharedDemoOptions extends Omit<
-  PathStoreFileTreeOptions,
-  'id' | 'preparedInput'
-> {}
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface PathStorePoweredRenderDemoClientProps {
-  containerHtml: string;
-  sharedOptions: SharedDemoOptions;
+  children: ReactNode;
+  defaultWorkloadName: PathStorePoweredWorkloadName;
+  expansionMode: 'all' | 'collapsed' | 'workload';
+  treeMountId: string;
+  workloadData: PathStorePoweredWorkloadDataPayload;
+  workloadOptions: readonly PathStorePoweredWorkloadOption[];
 }
 
 type PathStoreMutationOperation =
@@ -360,60 +383,55 @@ function clearMutationContextMenuSlot({
   slotElement.style.display = 'none';
 }
 
-const HydratedPathStoreExample = memo(function HydratedPathStoreExample({
-  containerHtml,
-  description,
-  onTreeReady,
-  options,
-  title,
-}: {
-  containerHtml: string;
-  description: string;
-  onTreeReady: (fileTree: PathStoreFileTree | null) => void;
-  options: Omit<PathStoreFileTreeOptions, 'icons'>;
-  title: string;
-}) {
-  const ref = useRef<HTMLDivElement | null>(null);
+const HydratedPathStoreExampleController = memo(
+  function HydratedPathStoreExampleController({
+    onTreeReady,
+    options,
+    treeMountId,
+  }: {
+    onTreeReady: (fileTree: PathStoreFileTree | null) => void;
+    options: Omit<PathStoreFileTreeOptions, 'icons'>;
+    treeMountId: string;
+  }) {
+    useEffect(() => {
+      const node = document.getElementById(treeMountId);
+      if (!(node instanceof HTMLDivElement)) {
+        return;
+      }
 
-  useEffect(() => {
-    const node = ref.current;
-    if (node == null) {
-      return;
-    }
+      const fileTree = new PathStoreFileTree(options);
+      onTreeReady(fileTree);
+      const fileTreeContainer = node.querySelector('file-tree-container');
+      if (fileTreeContainer instanceof HTMLElement) {
+        fileTree.hydrate({ fileTreeContainer });
+      } else {
+        node.innerHTML = '';
+        fileTree.render({ containerWrapper: node });
+      }
 
-    const fileTree = new PathStoreFileTree(options);
-    onTreeReady(fileTree);
-    const fileTreeContainer = node.querySelector('file-tree-container');
-    if (fileTreeContainer instanceof HTMLElement) {
-      fileTree.hydrate({ fileTreeContainer });
-    } else {
-      node.innerHTML = '';
-      fileTree.render({ containerWrapper: node });
-    }
+      return () => {
+        fileTree.cleanUp();
+        onTreeReady(null);
+      };
+    }, [onTreeReady, options, treeMountId]);
 
-    return () => {
-      fileTree.cleanUp();
-      onTreeReady(null);
-    };
-  }, [containerHtml, onTreeReady, options]);
-
-  return (
-    <ExampleCard title={title} description={description}>
-      <div
-        ref={ref}
-        style={{ height: `${String(options.viewportHeight ?? 420)}px` }}
-        dangerouslySetInnerHTML={{ __html: containerHtml }}
-        suppressHydrationWarning
-      />
-    </ExampleCard>
-  );
-});
+    return null;
+  }
+);
 
 export function PathStorePoweredRenderDemoClient({
-  containerHtml,
-  sharedOptions,
+  children,
+  defaultWorkloadName,
+  expansionMode,
+  treeMountId,
+  workloadData,
+  workloadOptions,
 }: PathStorePoweredRenderDemoClientProps) {
   const { addLog, log } = useStateLog();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [isNavigatingDemoState, startDemoStateTransition] = useTransition();
   const contextMenuRootRef = useRef<ReactDomRoot | null>(null);
   const contextMenuSlotRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<PathStoreFileTree | null>(null);
@@ -421,9 +439,39 @@ export function PathStorePoweredRenderDemoClient({
   const [iconMode, setIconMode] = useState<
     'complete' | 'custom' | 'minimal' | 'standard'
   >('complete');
+  const [pendingWorkloadName, setPendingWorkloadName] = useState(
+    workloadData.selectedWorkload.name
+  );
+
+  useEffect(() => {
+    setPendingWorkloadName(workloadData.selectedWorkload.name);
+  }, [workloadData.selectedWorkload.name]);
+
   const preparedInput = useMemo(
-    () => createPresortedPreparedInput(sharedOptions.paths),
-    [sharedOptions.paths]
+    () =>
+      workloadData.pathsArePresorted
+        ? createPresortedPreparedInput(workloadData.paths)
+        : undefined,
+    [workloadData]
+  );
+  const sharedOptions = useMemo<
+    Omit<PathStoreFileTreeOptions, 'id' | 'preparedInput'>
+  >(
+    () => ({
+      composition: {
+        contextMenu: {
+          enabled: true,
+        },
+      },
+      dragAndDrop: true,
+      flattenEmptyDirectories: true,
+      fileTreeSearchMode: 'hide-non-matches',
+      initialExpandedPaths: workloadData.initialExpandedPaths,
+      paths: workloadData.paths,
+      search: true,
+      viewportHeight: PATH_STORE_PROOF_VIEWPORT_HEIGHT,
+    }),
+    [workloadData]
   );
   const demoTargets = useMemo(
     () =>
@@ -431,7 +479,47 @@ export function PathStorePoweredRenderDemoClient({
         sharedOptions.paths,
         sharedOptions.initialExpandedPaths
       ),
-    [sharedOptions.initialExpandedPaths, sharedOptions.paths]
+    [sharedOptions]
+  );
+  const activeWorkloadSummary = workloadData.selectedWorkload;
+
+  const handleWorkloadChange = useCallback(
+    (nextWorkloadName: string) => {
+      const nextSearchParams = new URLSearchParams(searchParams.toString());
+      setPendingWorkloadName(nextWorkloadName as PathStorePoweredWorkloadName);
+      if (nextWorkloadName === defaultWorkloadName) {
+        nextSearchParams.delete('workload');
+      } else {
+        nextSearchParams.set('workload', nextWorkloadName);
+      }
+
+      const nextUrl =
+        nextSearchParams.size > 0
+          ? `${pathname}?${nextSearchParams.toString()}`
+          : pathname;
+      startDemoStateTransition(() => {
+        router.replace(nextUrl, { scroll: false });
+      });
+    },
+    [
+      defaultWorkloadName,
+      pathname,
+      router,
+      searchParams,
+      startDemoStateTransition,
+    ]
+  );
+
+  const handleExpansionChange = useCallback(
+    (nextExpansionMode: 'all' | 'collapsed') => {
+      const nextSearchParams = new URLSearchParams(searchParams.toString());
+      nextSearchParams.set('expansion', nextExpansionMode);
+      const nextUrl = `${pathname}?${nextSearchParams.toString()}`;
+      startDemoStateTransition(() => {
+        router.replace(nextUrl, { scroll: false });
+      });
+    },
+    [pathname, router, searchParams, startDemoStateTransition]
   );
   const handleSelectionChange = useCallback(
     (selectedPaths: readonly string[]) => {
@@ -485,8 +573,8 @@ export function PathStorePoweredRenderDemoClient({
     [addLog]
   );
 
-  const options = useMemo<Omit<PathStoreFileTreeOptions, 'icons'>>(
-    () => ({
+  const options = useMemo<Omit<PathStoreFileTreeOptions, 'icons'>>(() => {
+    return {
       ...sharedOptions,
       composition: {
         ...sharedOptions.composition,
@@ -578,7 +666,12 @@ export function PathStorePoweredRenderDemoClient({
         },
         openOnDropDelay: 800,
       },
-      id: 'pst-phase8-renaming',
+      id: `pst-phase8-renaming-${workloadData.selectedWorkload.name}`,
+      onSearchChange: (value) => {
+        addLog(`search: ${value ?? '<closed>'}`);
+      },
+      onSelectionChange: handleSelectionChange,
+      preparedInput,
       renaming: {
         onError: (error) => {
           addLog(`rename:error ${error}`);
@@ -589,18 +682,19 @@ export function PathStorePoweredRenderDemoClient({
           );
         },
       },
-      onSearchChange: (value) => {
-        addLog(`search: ${value ?? '<closed>'}`);
-      },
-      onSelectionChange: handleSelectionChange,
-      preparedInput,
       renderRowDecoration: ({ item }) =>
         item.path.endsWith('.ts') === true
           ? { text: 'TS', title: 'TypeScript file' }
           : null,
-    }),
-    [addLog, handleSelectionChange, preparedInput, runMutation, sharedOptions]
-  );
+    };
+  }, [
+    addLog,
+    handleSelectionChange,
+    preparedInput,
+    runMutation,
+    sharedOptions,
+    workloadData.selectedWorkload.name,
+  ]);
   const activeIcons =
     iconMode === 'custom' ? PATH_STORE_CUSTOM_ICONS : iconMode;
   const handleTreeReady = useCallback(
@@ -646,33 +740,24 @@ export function PathStorePoweredRenderDemoClient({
   }, [runMutation]);
 
   const handleMove = useCallback(() => {
-    if (demoTargets.moveFromPath == null || demoTargets.moveToPath == null) {
+    const { moveFromPath, moveToPath } = demoTargets;
+    if (moveFromPath == null || moveToPath == null) {
       addLog('move: no demo move target available');
       return;
     }
 
-    runMutation(
-      `move ${demoTargets.moveFromPath} -> ${demoTargets.moveToPath}`,
-      (tree) => {
-        if (tree.getItem(demoTargets.moveFromPath as string) == null) {
-          addLog(
-            `move: ${demoTargets.moveFromPath} is already gone; reset to retry`
-          );
-          return;
-        }
-        if (tree.getItem(demoTargets.moveToPath as string) != null) {
-          addLog(
-            `move: ${demoTargets.moveToPath} already exists; reset to retry`
-          );
-          return;
-        }
-        tree.move(
-          demoTargets.moveFromPath as string,
-          demoTargets.moveToPath as string
-        );
+    runMutation(`move ${moveFromPath} -> ${moveToPath}`, (tree) => {
+      if (tree.getItem(moveFromPath) == null) {
+        addLog(`move: ${moveFromPath} is already gone; reset to retry`);
+        return;
       }
-    );
-  }, [addLog, demoTargets.moveFromPath, demoTargets.moveToPath, runMutation]);
+      if (tree.getItem(moveToPath) != null) {
+        addLog(`move: ${moveToPath} already exists; reset to retry`);
+        return;
+      }
+      tree.move(moveFromPath, moveToPath);
+    });
+  }, [addLog, demoTargets, runMutation]);
 
   const handleBatch = useCallback(() => {
     runMutation('batch demo', (tree) => {
@@ -699,13 +784,13 @@ export function PathStorePoweredRenderDemoClient({
 
       tree.batch(demoTargets.batchOperations);
     });
-  }, [addLog, demoTargets.batchOperations, runMutation]);
+  }, [addLog, demoTargets, runMutation]);
 
   const handleReset = useCallback(() => {
     runMutation('reset demo tree', (tree) => {
       tree.resetPaths(sharedOptions.paths, { preparedInput });
     });
-  }, [preparedInput, runMutation, sharedOptions.paths]);
+  }, [preparedInput, runMutation, sharedOptions]);
   const handleSearchDocumentation = useCallback(() => {
     runSearchAction('search documentation', (tree) => {
       tree.setSearch('documentation');
@@ -735,12 +820,85 @@ export function PathStorePoweredRenderDemoClient({
           Phase 6 turns the path-store lane into a mutation-first tree, Phases 7
           and 8 surface baseline built-in search plus inline rename, and Phase
           10 now enables internal drag and drop on this same demo. Use the
-          shared handle to add, move, batch, reset, and drag paths directly
-          inside the tree, use the built-in search input or quick-search buttons
-          to drive filtering, and use the existing context menu or <kbd>F2</kbd>{' '}
-          for delete/rename actions while the live tree and log stay coherent
-          under virtualization.
+          workload selector to re-run the same proof against different fixtures,
+          then add, move, batch, reset, and drag paths directly inside the tree,
+          use the built-in search input or quick-search buttons to drive
+          filtering, and use the existing context menu or <kbd>F2</kbd> for
+          delete/rename actions while the live tree and log stay coherent under
+          virtualization.
         </p>
+        <div className="bg-muted/30 flex flex-col gap-3 rounded-lg border p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Current workload</p>
+              <p className="text-muted-foreground text-sm leading-6">
+                {activeWorkloadSummary.label} ·{' '}
+                {activeWorkloadSummary.fileCountLabel} ·{' '}
+                {activeWorkloadSummary.rootCount.toLocaleString()} root
+                {activeWorkloadSummary.rootCount === 1 ? '' : 's'} ·{' '}
+                {expansionMode === 'all'
+                  ? 'fully expanded'
+                  : expansionMode === 'collapsed'
+                    ? 'fully collapsed'
+                    : 'workload defaults'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Select
+                value={pendingWorkloadName}
+                onValueChange={handleWorkloadChange}
+              >
+                <SelectTrigger
+                  className="w-full min-w-[240px] sm:w-[320px]"
+                  size="sm"
+                  disabled={isNavigatingDemoState}
+                  data-path-store-workload-select="true"
+                >
+                  <SelectValue placeholder="Select a workload" />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectGroup>
+                    <SelectLabel>Available workloads</SelectLabel>
+                    {workloadOptions.map((workload) => (
+                      <SelectItem key={workload.name} value={workload.name}>
+                        {workload.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {isNavigatingDemoState ? (
+                <span className="text-muted-foreground text-xs">Loading…</span>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-md border px-3 py-1.5 text-sm font-medium"
+              aria-pressed={expansionMode === 'all'}
+              disabled={isNavigatingDemoState || expansionMode === 'all'}
+              data-path-store-expansion-action="expand-all"
+              onClick={() => {
+                handleExpansionChange('all');
+              }}
+            >
+              Expand all
+            </button>
+            <button
+              type="button"
+              className="rounded-md border px-3 py-1.5 text-sm font-medium"
+              aria-pressed={expansionMode === 'collapsed'}
+              disabled={isNavigatingDemoState || expansionMode === 'collapsed'}
+              data-path-store-expansion-action="collapse-all"
+              onClick={() => {
+                handleExpansionChange('collapsed');
+              }}
+            >
+              Collapse all
+            </button>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2 pt-2">
           <button
             type="button"
@@ -846,13 +1004,12 @@ export function PathStorePoweredRenderDemoClient({
         </div>
       </header>
 
-      <HydratedPathStoreExample
-        containerHtml={containerHtml}
-        description="Phase 7 search is instrumented directly in this main demo now, Phase 8 inline rename lives beside it, and Phase 10 drag/drop now runs on the same hydrated tree: drag rows directly to folders or root, use the mutation buttons to confirm the tree stays coherent, and use the context menu or F2 for delete/rename actions."
+      <HydratedPathStoreExampleController
         onTreeReady={handleTreeReady}
         options={options}
-        title="Mutation + search + rename + drag-drop tree proof"
+        treeMountId={treeMountId}
       />
+      {children}
       <StateLog entries={log} />
 
       <section className="space-y-3 rounded-lg border p-4">

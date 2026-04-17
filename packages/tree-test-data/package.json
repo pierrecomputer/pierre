@@ -1,18 +1,16 @@
 {
   "name": "@pierre/tree-test-data",
   "version": "0.0.1",
+  "private": true,
   "license": "apache-2.0",
-  "files": [
-    "index.js",
-    "index.d.ts",
-    "linux-files.json",
-    "pierre-snapshot-files.json"
-  ],
   "type": "module",
   "exports": {
     ".": {
       "types": "./index.d.ts",
       "import": "./index.js"
     }
+  },
+  "scripts": {
+    "test": "bun test"
   }
 }

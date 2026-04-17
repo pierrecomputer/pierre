@@ -1,9 +1,10 @@
 import { preparePaths as sortCanonicalPathsFromPathStore } from '../path-store/src/builder.ts';
+import aospFiles from './aosp-files.json';
 import linuxFixture from './linux-files.json';
 import pierreSnapshotFiles from './pierre-snapshot-files.json';
 
 /**
- * @typedef {'demo-small' | 'pierre-snapshot' | 'half-linux' | 'linux' | 'linux-1x' | 'linux-5x' | 'linux-10x'} VirtualizationWorkloadName
+ * @typedef {'demo-small' | 'pierre-snapshot' | 'half-linux' | 'linux' | 'linux-1x' | 'linux-5x' | 'linux-10x' | 'aosp'} VirtualizationWorkloadName
  */
 
 /**
@@ -34,6 +35,7 @@ export const VIRTUALIZATION_WORKLOAD_NAMES = [
   'linux-1x',
   'linux-5x',
   'linux-10x',
+  'aosp',
 ];
 
 export const DEFAULT_VIRTUALIZATION_WORKLOAD_NAME = 'linux-5x';
@@ -66,7 +68,7 @@ function deriveExpandedFolders(paths) {
       ? normalizedPath.length
       : normalizedPath.lastIndexOf('/');
 
-    while (searchIndex >= 0 && searchIndex < limit) {
+    while (searchIndex >= 0 && searchIndex <= limit) {
       folders.add(normalizedPath.slice(0, searchIndex));
       searchIndex = normalizedPath.indexOf('/', searchIndex + 1);
     }
@@ -244,6 +246,7 @@ const workloadsByName = {
     10,
     true
   ),
+  aosp: createWorkload('aosp', 'AOSP fixture', aospFiles, [], 1, true),
 };
 
 /**

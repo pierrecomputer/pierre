@@ -20,7 +20,8 @@ export type VirtualizationWorkloadName =
   | 'linux'
   | 'linux-1x'
   | 'linux-5x'
-  | 'linux-10x';
+  | 'linux-10x'
+  | 'aosp';
 
 export const VIRTUALIZATION_WORKLOAD_NAMES: readonly VirtualizationWorkloadName[];
 export const DEFAULT_VIRTUALIZATION_WORKLOAD_NAME: VirtualizationWorkloadName;
