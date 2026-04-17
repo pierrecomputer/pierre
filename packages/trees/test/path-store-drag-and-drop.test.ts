@@ -300,6 +300,44 @@ describe('path-store drag and drop', () => {
     }
   });
 
+  test('touch pending drag disables native draggable until the touch ends', async () => {
+    const rendered = await renderFileTree({
+      dragAndDrop: true,
+      flattenEmptyDirectories: true,
+      initialExpandedPaths: ['src/'],
+      paths: ['README.md', 'src/index.ts'],
+      viewportHeight: 180,
+    });
+
+    try {
+      const sourceButton = getItemButton(
+        rendered.shadowRoot,
+        rendered.dom,
+        'README.md'
+      );
+      const touchStartEvent = new rendered.dom.window.Event('touchstart', {
+        bubbles: true,
+        cancelable: true,
+      });
+      Object.defineProperty(touchStartEvent, 'touches', {
+        configurable: true,
+        value: [{ clientX: 12, clientY: 12 }],
+      });
+
+      sourceButton.dispatchEvent(touchStartEvent);
+      await flushDom();
+      expect(sourceButton.getAttribute('draggable')).toBe('false');
+
+      rendered.dom.window.document.dispatchEvent(
+        new rendered.dom.window.Event('touchend', { bubbles: true })
+      );
+      await flushDom();
+      expect(sourceButton.getAttribute('draggable')).toBe('true');
+    } finally {
+      rendered.cleanup();
+    }
+  });
+
   test('root-level file hover resolves to a root drop and clears drag state after success', async () => {
     const dropResults: PathStoreTreesDropResult[] = [];
     const rendered = await renderFileTree({

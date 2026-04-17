@@ -258,6 +258,12 @@ function createDragPreviewElement(sourceElement: HTMLElement): HTMLElement {
   return preview;
 }
 
+// Safari mis-renders detached custom drag images, so keep its pointer drags on
+// the native preview path that the legacy tree already used successfully.
+function shouldUseCustomPointerDragImage(): boolean {
+  return navigator.vendor !== 'Apple Computer, Inc.';
+}
+
 function getDragEdgeScrollDelta(clientY: number, scrollRect: DOMRect): number {
   const topDistance = clientY - scrollRect.top;
   if (topDistance < DRAG_EDGE_SCROLL_THRESHOLD) {
@@ -1236,6 +1242,7 @@ export function PathStoreTreesView({
     touchPreviewOffsetRef.current = null;
     touchStartPointRef.current = null;
     if (touchSourceElementRef.current != null) {
+      touchSourceElementRef.current.setAttribute('draggable', 'true');
       touchSourceElementRef.current.style.removeProperty('touch-action');
       touchSourceElementRef.current = null;
     }
@@ -1367,25 +1374,28 @@ export function PathStoreTreesView({
     }
 
     dragRowSnapshotRef.current = row;
-    const preview = createDragPreviewElement(dragSource);
-    const rect = dragSource.getBoundingClientRect();
-    Object.assign(preview.style, {
-      height: `${rect.height}px`,
-      opacity: '0.85',
-      transform: 'translate3d(-9999px, 0px, 0)',
-      width: `${rect.width}px`,
-    });
-    mountDragPreview(preview);
-    dragPreviewRef.current = preview;
     if (event.dataTransfer != null) {
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.dropEffect = 'move';
       event.dataTransfer.setData('text/plain', targetPath);
-      event.dataTransfer.setDragImage(
-        preview,
-        Math.max(0, event.clientX - rect.left),
-        Math.max(0, event.clientY - rect.top)
-      );
+
+      if (shouldUseCustomPointerDragImage()) {
+        const preview = createDragPreviewElement(dragSource);
+        const rect = dragSource.getBoundingClientRect();
+        Object.assign(preview.style, {
+          height: `${rect.height}px`,
+          opacity: '0.85',
+          transform: 'translate3d(-9999px, 0px, 0)',
+          width: `${rect.width}px`,
+        });
+        mountDragPreview(preview);
+        dragPreviewRef.current = preview;
+        event.dataTransfer.setDragImage(
+          preview,
+          Math.max(0, event.clientX - rect.left),
+          Math.max(0, event.clientY - rect.top)
+        );
+      }
     }
   };
 
@@ -1416,6 +1426,8 @@ export function PathStoreTreesView({
       clientX: touch.clientX,
       clientY: touch.clientY,
     };
+    touchSourceElementRef.current = dragSource;
+    dragSource.setAttribute('draggable', 'false');
 
     const clearPendingTouchStart = (): void => {
       if (touchLongPressTimerRef.current != null) {
@@ -1429,6 +1441,10 @@ export function PathStoreTreesView({
         touchCleanupRef.current = null;
       }
       if (!touchDragActiveRef.current) {
+        dragSource.setAttribute('draggable', 'true');
+        if (touchSourceElementRef.current === dragSource) {
+          touchSourceElementRef.current = null;
+        }
         touchStartPointRef.current = null;
       }
     };
@@ -1465,12 +1481,17 @@ export function PathStoreTreesView({
     touchLongPressTimerRef.current = setTimeout(() => {
       clearPendingTouchStart();
       if (controller.startDrag(targetPath) === false) {
+        dragSource.setAttribute('draggable', 'true');
+        if (touchSourceElementRef.current === dragSource) {
+          touchSourceElementRef.current = null;
+        }
         touchStartPointRef.current = null;
         return;
       }
 
       touchDragActiveRef.current = true;
       touchSourceElementRef.current = dragSource;
+      dragSource.setAttribute('draggable', 'false');
       dragSource.style.setProperty('touch-action', 'none');
       dragRowSnapshotRef.current = row;
       const rect = dragSource.getBoundingClientRect();
