@@ -11,6 +11,7 @@ import { baseTreeOptions } from './demo-data';
 import { styleObjectToCss } from './styleToCss';
 import { TreeCssViewer } from './TreeCssViewer';
 import { TreeExampleSection } from './TreeExampleSection';
+import { PRODUCTS } from '@/app/product-config';
 
 /** Theme vars applied to the panel wrapper and to the FileTree host so shadow DOM sees them. */
 function lightTheme(): CSSProperties {
@@ -110,7 +111,10 @@ export function StylingSection() {
             override UI and theme colors. For example, below are three
             examples—custom light, dark, and Synthwave &apos;84— that override
             our default values and the CSS we use to style the tree. See the{' '}
-            <Link href="/trees/docs#styling" className="inline-link">
+            <Link
+              href={`${PRODUCTS.trees.docsPath}#styling`}
+              className="inline-link"
+            >
               Styling docs
             </Link>{' '}
             for more info.

@@ -8,6 +8,7 @@ import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { DEFAULT_FILE_TREE_PANEL_CLASS, flatteningOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
+import { PRODUCTS } from '@/app/product-config';
 
 const flattenStyle = {
   colorScheme: 'dark',
@@ -51,7 +52,7 @@ export function FlatteningSection() {
             <code>FileTreeOptions</code> to collapse single-child folder chains
             into one row for a more compact tree.{' '}
             <Link
-              href="/trees/docs#core-types-filetreeoptions"
+              href={`${PRODUCTS.trees.docsPath}#core-types-filetreeoptions`}
               className="inline-link"
             >
               More about FileTreeOptions…

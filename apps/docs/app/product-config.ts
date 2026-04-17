@@ -14,6 +14,9 @@ export interface ProductConfig {
   githubUrl: string;
 }
 
+const siteProduct = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
+const isTrees = siteProduct === 'trees';
+
 export const PRODUCTS: Record<ProductId, ProductConfig> = {
   diffs: {
     id: 'diffs',
@@ -38,22 +41,40 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
       "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.",
     llmsDescription:
       'An open source file tree rendering library for the web. Built on @headless-tree/core for state management, with React and vanilla JS APIs, SSR support, and customizable styling.',
-    basePath: '/trees',
-    docsPath: '/trees/docs',
+    basePath: isTrees ? '' : '/trees',
+    docsPath: isTrees ? '/docs' : '/trees/docs',
     packageName: '@pierre/trees',
     installCommand: 'bun i @pierre/trees',
     githubUrl: 'https://github.com/pierrecomputer/pierre',
   },
 };
 
+/** External base URL for the other product's site. */
+const EXTERNAL_URLS: Record<ProductId, string> = {
+  diffs: 'https://diffs.com',
+  trees: 'https://trees.software',
+};
+
+/**
+ * Return the external base URL for the given product.
+ * Useful for cross-site links when two products live on separate domains.
+ */
+export function getExternalUrl(productId: ProductId): string {
+  return EXTERNAL_URLS[productId];
+}
+
 export function getProductConfig(productId: ProductId): ProductConfig {
   return PRODUCTS[productId];
 }
 
 /**
- * Determine which product we're in based on pathname
+ * Determine which product we're in based on pathname.
+ * On the trees site (NEXT_PUBLIC_SITE=trees) every page is a trees page.
  */
 export function getProductFromPathname(pathname: string): ProductConfig {
+  if (isTrees) {
+    return PRODUCTS.trees;
+  }
   if (pathname.startsWith('/trees')) {
     return PRODUCTS.trees;
   }

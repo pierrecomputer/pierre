@@ -11,6 +11,7 @@ import {
   DEFAULT_FILE_TREE_PANEL_STYLE,
 } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
+import { PRODUCTS } from '@/app/product-config';
 
 const panelStyle = {
   ...DEFAULT_FILE_TREE_PANEL_STYLE,
@@ -66,7 +67,10 @@ export function CustomIconsSection() {
             tier is cumulative. Override the built-in palette with CSS variables
             like <code>--trees-file-icon-color-javascript</code>, or fall back
             to a fully custom sprite. See the{' '}
-            <a href="/trees/docs#custom-icons" className="inline-link">
+            <a
+              href={`${PRODUCTS.trees.docsPath}#custom-icons`}
+              className="inline-link"
+            >
               FileTreeIconConfig docs
             </a>{' '}
             for the full API.

@@ -8,6 +8,7 @@ import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { DEFAULT_FILE_TREE_PANEL_CLASS, searchOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
+import { PRODUCTS } from '@/app/product-config';
 
 const PREPOPULATED_SEARCH = 'tsx';
 const PRESELECTED_FILE = 'src/components/Button.tsx';
@@ -57,7 +58,7 @@ export function SearchSection() {
             Filter the tree by typing in the search field. Search across file
             paths and names. Trees includes three{' '}
             <Link
-              href="/trees/docs#core-types-filetreesearchmode"
+              href={`${PRODUCTS.trees.docsPath}#core-types-filetreesearchmode`}
               className="inline-link"
             >
               <code>fileTreeSearchMode</code>

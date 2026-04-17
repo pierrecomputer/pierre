@@ -6,6 +6,7 @@ import type { CSSProperties } from 'react';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { DEFAULT_FILE_TREE_PANEL_CLASS } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
+import { PRODUCTS } from '@/app/product-config';
 
 const EXTENSIONS = ['.ts', '.tsx', '.css', '.json', '.md', '.test.ts'];
 
@@ -219,7 +220,7 @@ export function VirtualizationSection() {
             virtualization. Only visible rows are in the DOM. Pass{' '}
             <code>virtualize</code> in{' '}
             <Link
-              href="/trees/docs#core-types-filetreeoptions"
+              href={`${PRODUCTS.trees.docsPath}#core-types-filetreeoptions`}
               className="inline-link"
             >
               <code>FileTreeOptions</code>

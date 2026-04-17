@@ -6,8 +6,15 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import NavLink from '../../components/NavLink';
-import { getProductFromPathname, PRODUCTS } from '@/app/product-config';
+import {
+  getExternalUrl,
+  getProductFromPathname,
+  PRODUCTS,
+} from '@/app/product-config';
 import { cn } from '@/lib/utils';
+
+const siteProduct = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
+const isTrees = siteProduct === 'trees';
 
 function MobileNavLink({
   href,
@@ -175,12 +182,22 @@ export function DocsSidebar({
               <MobileNavLink href={product.themePath}>Theme</MobileNavLink>
             )}
             {product.id === 'diffs' && (
-              <MobileNavLink href={PRODUCTS.trees.basePath}>
+              <MobileNavLink
+                href={
+                  isTrees ? PRODUCTS.trees.basePath : getExternalUrl('trees')
+                }
+                external={!isTrees}
+              >
                 Trees
               </MobileNavLink>
             )}
             {product.id === 'trees' && (
-              <MobileNavLink href="/">Diffs</MobileNavLink>
+              <MobileNavLink
+                href={isTrees ? getExternalUrl('diffs') : '/'}
+                external={isTrees}
+              >
+                Diffs
+              </MobileNavLink>
             )}
           </div>
         )}

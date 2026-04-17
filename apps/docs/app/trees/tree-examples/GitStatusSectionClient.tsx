@@ -18,6 +18,7 @@ import {
   GIT_STATUSES_B,
 } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
+import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Switch } from '@/components/ui/switch';
@@ -66,7 +67,10 @@ export function GitStatusSectionClient({
         description={
           <>
             Use the{' '}
-            <Link href="/trees/docs#git-status" className="inline-link">
+            <Link
+              href={`${PRODUCTS.trees.docsPath}#git-status`}
+              className="inline-link"
+            >
               <code>gitStatus</code>
             </Link>{' '}
             prop to show indicators on files for added, modified, and deleted

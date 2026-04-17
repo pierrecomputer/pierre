@@ -1,3 +1,6 @@
+const site = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
+const isTrees = site === 'trees';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactCompiler: true,
@@ -23,6 +26,48 @@ const nextConfig = {
             value: 'no-store, max-age=0',
           },
         ],
+      },
+    ];
+  },
+  rewrites() {
+    if (!isTrees) {
+      return [];
+    }
+    // On the trees site, serve tree pages at the root.
+    return {
+      beforeFiles: [
+        { source: '/', destination: '/trees' },
+        { source: '/docs', destination: '/trees/docs' },
+      ],
+    };
+  },
+  redirects() {
+    if (isTrees) {
+      // Canonicalize /trees → / and /trees/docs → /docs on the trees site.
+      return [
+        {
+          source: '/trees',
+          destination: '/',
+          permanent: true,
+        },
+        {
+          source: '/trees/docs',
+          destination: '/docs',
+          permanent: true,
+        },
+      ];
+    }
+    // On the diffs site, redirect /trees paths to the external trees domain.
+    return [
+      {
+        source: '/trees/:path*',
+        destination: 'https://trees.software/:path*',
+        permanent: false,
+      },
+      {
+        source: '/trees',
+        destination: 'https://trees.software',
+        permanent: false,
       },
     ];
   },

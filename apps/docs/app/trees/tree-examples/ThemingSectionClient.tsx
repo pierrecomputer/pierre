@@ -21,6 +21,7 @@ import {
   GIT_STATUSES_A,
 } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
+import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -194,7 +195,10 @@ export function ThemingSectionClient({
             colors come from your choice of themes. Pick a theme and switch
             light/dark to see the tree update live. Compare against our default
             themes in light and dark mode, too. See the{' '}
-            <Link href="/trees/docs#themes" className="inline-link">
+            <Link
+              href={`${PRODUCTS.trees.docsPath}#themes`}
+              className="inline-link"
+            >
               Theming docs
             </Link>{' '}
             for more.
