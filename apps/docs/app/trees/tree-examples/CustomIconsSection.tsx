@@ -3,6 +3,7 @@ import { FileTree } from '@pierre/trees/react';
 import { preloadFileTree } from '@pierre/trees/ssr';
 import type { CSSProperties } from 'react';
 
+import { PierreIconsFootnote } from '../../components/PierreIconsFootnote';
 import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import {
@@ -137,6 +138,7 @@ export function CustomIconsSection() {
           />
         </div>
       </div>
+      <PierreIconsFootnote />
     </TreeExampleSection>
   );
 }
