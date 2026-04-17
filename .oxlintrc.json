@@ -103,6 +103,7 @@
   "ignorePatterns": [
     "scripts/**",
     "**/dist/**",
+    "packages/tree-test-data/*-files.json",
     "{packages,apps}/*/node_modules/**",
     "{packages,apps}/*/.next/**",
     "{packages,apps}/*/out/**",
