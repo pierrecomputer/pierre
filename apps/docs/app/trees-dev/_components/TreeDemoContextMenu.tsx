@@ -41,7 +41,6 @@ export function TreeDemoContextMenu({
   item: ContextMenuDemoItem;
   context: TreeDemoContextMenuContext;
 }) {
-  const itemType = item.isFolder ? 'Folder' : 'File';
   const handleRenameSelect = () => context.startRenaming?.();
 
   return (
@@ -67,16 +66,16 @@ export function TreeDemoContextMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        side="right"
-        sideOffset={8}
-        className="min-w-[220px]"
+        side="left"
+        sideOffset={0}
+        className="mt-3 min-w-[180px]"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           context.restoreFocus?.();
         }}
       >
-        <DropdownMenuLabel className="max-w-[280px] truncate">
-          {itemType}: {item.path}
+        <DropdownMenuLabel className="max-w-[280px] truncate px-3 font-mono text-xs">
+          {item.path}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={context.close}>Open</DropdownMenuItem>
@@ -86,10 +85,7 @@ export function TreeDemoContextMenu({
         >
           Rename
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={context.close}
-          className="text-destructive focus:text-destructive"
-        >
+        <DropdownMenuItem onSelect={context.close} variant="danger">
           Delete
         </DropdownMenuItem>
       </DropdownMenuContent>

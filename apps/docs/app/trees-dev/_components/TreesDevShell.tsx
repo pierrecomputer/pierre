@@ -30,7 +30,7 @@ export function TreesDevShell({ children }: { children: ReactNode }) {
   }, [mobileOpen]);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-neutral-50 dark:bg-neutral-900">
       {/* Mobile hamburger button */}
       <button
         type="button"
@@ -52,14 +52,14 @@ export function TreesDevShell({ children }: { children: ReactNode }) {
 
       {/* Sidebar — always visible on desktop, slide-over on mobile */}
       <div
-        className={`bg-background fixed top-0 left-0 z-[55] h-full w-[220px] shrink-0 transition-transform duration-200 md:relative md:translate-x-0 ${
+        className={`fixed top-0 left-0 z-[55] h-full w-[220px] shrink-0 transition-transform duration-200 md:relative md:translate-x-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <TreesDevSidebar onNavigate={() => setMobileOpen(false)} />
       </div>
 
-      <main className="min-w-0 flex-1 p-4 pb-[800px]">{children}</main>
+      <main className="min-w-0 flex-1 p-6 pb-12">{children}</main>
     </div>
   );
 }

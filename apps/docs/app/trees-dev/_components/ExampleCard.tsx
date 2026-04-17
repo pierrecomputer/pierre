@@ -24,12 +24,7 @@ export function ExampleCard({
       {controls !== undefined && (
         <div className="mb-2 h-[68px]">{controls}</div>
       )}
-      <div
-        className="overflow-hidden rounded-md p-5"
-        style={{
-          boxShadow: '0 0 0 1px var(--color-border), 0 1px 3px #0000000d',
-        }}
-      >
+      <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-white p-3 shadow-xs dark:bg-black">
         {children}
       </div>
       {footer}

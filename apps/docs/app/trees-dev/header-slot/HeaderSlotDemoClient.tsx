@@ -4,13 +4,13 @@ import { FileTree } from '@pierre/trees';
 import type { FileTreeOptions, FileTreeStateConfig } from '@pierre/trees';
 import { FileTree as FileTreeReact } from '@pierre/trees/react';
 import '@pierre/trees/web-components';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { cleanupFileTreeInstance } from '../_components/cleanupFileTreeInstance';
 import {
-  DemoHeaderContent,
   injectSlotMarkup,
-  vanillaHeaderSlotMarkup,
+  ProjectHeader,
+  vanillaProjectHeaderMarkup,
 } from '../_components/DemoHeaderContent';
 import { ExampleCard } from '../_components/ExampleCard';
 import { StateLog, useStateLog } from '../_components/StateLog';
@@ -59,12 +59,14 @@ function VanillaSSRHeaderSlot({
 }) {
   const instanceRef = useRef<FileTree | null>(null);
   const hasHydratedRef = useRef(false);
+  const fileCounterRef = useRef(0);
+  const folderCounterRef = useRef(0);
   const { log, addLog } = useStateLog();
   const containerHtmlWithHeader = useMemo(
     () =>
       injectSlotMarkup(
         containerHtml,
-        vanillaHeaderSlotMarkup('Vanilla SSR Header')
+        vanillaProjectHeaderMarkup('Vanilla SSR Header')
       ),
     [containerHtml]
   );
@@ -80,13 +82,28 @@ function VanillaSSRHeaderSlot({
 
       cleanupFileTreeInstance(fileTreeContainer, instanceRef);
 
-      const headerButton = fileTreeContainer.querySelector(
-        '[data-demo-header-button="true"]'
+      const addFileBtn = fileTreeContainer.querySelector(
+        '[data-header-add-file="true"]'
       );
-      const handleHeaderClick = () => {
-        addLog('header: clicked');
+      const addFolderBtn = fileTreeContainer.querySelector(
+        '[data-header-add-folder="true"]'
+      );
+      const handleAddFile = () => {
+        const ft = instanceRef.current;
+        if (ft == null) return;
+        const name = `new-file-${++fileCounterRef.current}.ts`;
+        ft.setFiles([...ft.getFiles(), name]);
+        addLog(`added file: ${name}`);
       };
-      headerButton?.addEventListener('click', handleHeaderClick);
+      const handleAddFolder = () => {
+        const ft = instanceRef.current;
+        if (ft == null) return;
+        const name = `new-folder-${++folderCounterRef.current}/placeholder`;
+        ft.setFiles([...ft.getFiles(), name]);
+        addLog(`added folder: new-folder-${folderCounterRef.current}`);
+      };
+      addFileBtn?.addEventListener('click', handleAddFile);
+      addFolderBtn?.addEventListener('click', handleAddFolder);
 
       const fileTree = new FileTree(options, stateConfig);
 
@@ -102,7 +119,8 @@ function VanillaSSRHeaderSlot({
       instanceRef.current = fileTree;
 
       return () => {
-        headerButton?.removeEventListener('click', handleHeaderClick);
+        addFileBtn?.removeEventListener('click', handleAddFile);
+        addFolderBtn?.removeEventListener('click', handleAddFolder);
         fileTree.cleanUp();
         instanceRef.current = null;
       };
@@ -141,7 +159,22 @@ function ReactSSRHeaderSlot({
   stateConfig?: FileTreeStateConfig;
   prerenderedHTML: string;
 }) {
+  const [files, setFiles] = useState(initialFiles);
+  const fileCounterRef = useRef(0);
+  const folderCounterRef = useRef(0);
   const { log, addLog } = useStateLog();
+
+  const handleAddFile = useCallback(() => {
+    const name = `new-file-${++fileCounterRef.current}.ts`;
+    setFiles((prev) => [...(prev ?? []), name]);
+    addLog(`added file: ${name}`);
+  }, [addLog]);
+
+  const handleAddFolder = useCallback(() => {
+    const name = `new-folder-${++folderCounterRef.current}/placeholder`;
+    setFiles((prev) => [...(prev ?? []), name]);
+    addLog(`added folder: new-folder-${folderCounterRef.current}`);
+  }, [addLog]);
 
   return (
     <ExampleCard
@@ -156,14 +189,16 @@ function ReactSSRHeaderSlot({
     >
       <FileTreeReact
         options={options}
-        initialFiles={initialFiles}
+        files={files}
+        onFilesChange={setFiles}
         prerenderedHTML={prerenderedHTML}
         initialExpandedItems={stateConfig?.initialExpandedItems}
         onSelection={stateConfig?.onSelection}
         header={
-          <DemoHeaderContent
-            label="React SSR Header"
-            onClick={() => addLog('header: clicked')}
+          <ProjectHeader
+            projectName="React SSR Header"
+            onAddFile={handleAddFile}
+            onAddFolder={handleAddFolder}
           />
         }
       />
