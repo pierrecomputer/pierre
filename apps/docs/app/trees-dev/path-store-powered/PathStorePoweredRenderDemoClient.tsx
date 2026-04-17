@@ -465,8 +465,7 @@ export function PathStorePoweredRenderDemoClient({
   const treeRef = useRef<PathStoreFileTree | null>(null);
   const mutationUnsubscribeRef = useRef<(() => void) | null>(null);
   const upgradeAbortRef = useRef<AbortController | null>(null);
-  const upgradedPathsRef = useRef<readonly string[] | null>(null);
-  const upgradedExpandedPathsRef = useRef<readonly string[] | null>(null);
+  const hasUpgradedRef = useRef(false);
   const [iconMode, setIconMode] = useState<
     'complete' | 'custom' | 'minimal' | 'standard'
   >('complete');
@@ -731,26 +730,20 @@ export function PathStorePoweredRenderDemoClient({
   const activeIcons =
     iconMode === 'custom' ? PATH_STORE_CUSTOM_ICONS : iconMode;
   const upgradeDataUrl = workloadData.upgradeDataUrl;
-  const handleTreeReady = useCallback(
-    (fileTree: PathStoreFileTree | null) => {
-      mutationUnsubscribeRef.current?.();
-      mutationUnsubscribeRef.current = null;
-      upgradeAbortRef.current?.abort();
-      upgradeAbortRef.current = null;
-      treeRef.current = fileTree;
-      if (fileTree == null) {
-        return;
-      }
 
-      mutationUnsubscribeRef.current = fileTree.onMutation('*', (event) => {
-        addLog(formatMutationEvent(event));
-      });
-
+  // Runs the gzip → decompress → resetPaths pipeline for a given tree. Used on
+  // initial mount and whenever the user asks to reset a tree that started as a
+  // server-side preview. We deliberately don't keep the parsed path arrays
+  // alive after handing them to path-store — that retention was ~115 MB on
+  // AOSP and pushed iOS WKWebView over its per-tab memory cap.
+  const runUpgrade = useCallback(
+    (fileTree: PathStoreFileTree): AbortController | null => {
       if (upgradeDataUrl == null) {
-        return;
+        return null;
       }
 
       const abortController = new AbortController();
+      upgradeAbortRef.current?.abort();
       upgradeAbortRef.current = abortController;
       addLog(`upgrade: fetching ${upgradeDataUrl}`);
       const fetchStartedAt = performance.now();
@@ -764,13 +757,12 @@ export function PathStorePoweredRenderDemoClient({
           addLog(
             `upgrade: fetched ${fullPaths.length.toLocaleString()} paths + ${allExpandedPaths.length.toLocaleString()} expandable folders in ${Math.round(fetchedAt - fetchStartedAt).toString()}ms`
           );
-          upgradedPathsRef.current = fullPaths;
-          upgradedExpandedPathsRef.current =
-            expansionMode === 'all' ? allExpandedPaths : [];
           fileTree.resetPaths(fullPaths, {
-            initialExpandedPaths: upgradedExpandedPathsRef.current,
+            initialExpandedPaths:
+              expansionMode === 'all' ? allExpandedPaths : [],
             preparedInput: createPresortedPreparedInput(fullPaths),
           });
+          hasUpgradedRef.current = true;
           addLog(
             `upgrade: reset tree in ${Math.round(performance.now() - fetchedAt).toString()}ms`
           );
@@ -784,8 +776,30 @@ export function PathStorePoweredRenderDemoClient({
             `upgrade:error ${error instanceof Error ? error.message : String(error)}`
           );
         });
+      return abortController;
     },
     [addLog, expansionMode, upgradeDataUrl]
+  );
+
+  const handleTreeReady = useCallback(
+    (fileTree: PathStoreFileTree | null) => {
+      mutationUnsubscribeRef.current?.();
+      mutationUnsubscribeRef.current = null;
+      upgradeAbortRef.current?.abort();
+      upgradeAbortRef.current = null;
+      hasUpgradedRef.current = false;
+      treeRef.current = fileTree;
+      if (fileTree == null) {
+        return;
+      }
+
+      mutationUnsubscribeRef.current = fileTree.onMutation('*', (event) => {
+        addLog(formatMutationEvent(event));
+      });
+
+      runUpgrade(fileTree);
+    },
+    [addLog, runUpgrade]
   );
 
   useEffect(() => {
@@ -862,19 +876,32 @@ export function PathStorePoweredRenderDemoClient({
   }, [addLog, demoTargets, runMutation]);
 
   const handleReset = useCallback(() => {
-    runMutation('reset demo tree', (tree) => {
-      const upgradedPaths = upgradedPathsRef.current;
-      if (upgradedPaths != null) {
-        tree.resetPaths(upgradedPaths, {
-          initialExpandedPaths: upgradedExpandedPathsRef.current ?? [],
-          preparedInput: createPresortedPreparedInput(upgradedPaths),
-        });
+    // For upgraded workloads we re-fetch the gzip payload instead of holding
+    // the ~115 MB decoded arrays in memory — browser HTTP caching keeps this
+    // snappy in practice and the transient peak is shorter-lived than the
+    // steady-state retention was.
+    if (upgradeDataUrl != null) {
+      const tree = treeRef.current;
+      if (tree == null) {
+        addLog('error: tree not ready for reset demo tree');
         return;
       }
 
+      runUpgrade(tree);
+      return;
+    }
+
+    runMutation('reset demo tree', (tree) => {
       tree.resetPaths(sharedOptions.paths, { preparedInput });
     });
-  }, [preparedInput, runMutation, sharedOptions]);
+  }, [
+    addLog,
+    preparedInput,
+    runMutation,
+    runUpgrade,
+    sharedOptions,
+    upgradeDataUrl,
+  ]);
   const handleSearchDocumentation = useCallback(() => {
     runSearchAction('search documentation', (tree) => {
       tree.setSearch('documentation');
