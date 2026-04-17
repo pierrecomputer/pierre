@@ -272,6 +272,34 @@ describe('path-store drag and drop', () => {
     }
   });
 
+  test('external path mutations abort an in-flight drag session', async () => {
+    const { PathStoreTreesController } = await import('../src/path-store');
+
+    const controller = new PathStoreTreesController({
+      dragAndDrop: true,
+      flattenEmptyDirectories: true,
+      initialExpandedPaths: ['src/'],
+      paths: ['README.md', 'src/index.ts'],
+    });
+
+    try {
+      expect(controller.startDrag('README.md')).toBe(true);
+      expect(controller.getDragSession()).toEqual({
+        draggedPaths: ['README.md'],
+        primaryPath: 'README.md',
+        target: null,
+      });
+
+      controller.move('src/index.ts', 'src/main.ts');
+
+      expect(controller.getDragSession()).toBeNull();
+      expect(controller.getItem('src/main.ts')).not.toBeNull();
+      expect(controller.getItem('src/index.ts')).toBeNull();
+    } finally {
+      controller.destroy();
+    }
+  });
+
   test('root-level file hover resolves to a root drop and clears drag state after success', async () => {
     const dropResults: PathStoreTreesDropResult[] = [];
     const rendered = await renderFileTree({

@@ -5,6 +5,7 @@ import {
   type PathStoreFileTreeOptions,
   type PathStoreTreesContextMenuItem,
   type PathStoreTreesContextMenuOpenContext,
+  type PathStoreTreesDropResult,
   type PathStoreTreesMutationEvent,
 } from '@pierre/trees/path-store';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -220,6 +221,18 @@ function formatMutationEvent(event: PathStoreTreesMutationEvent): string {
     case 'reset':
       return `mutation:reset ${String(event.pathCountBefore)} -> ${String(event.pathCountAfter)} paths`;
   }
+}
+
+function formatDropResult(event: PathStoreTreesDropResult): string {
+  const targetLabel =
+    event.target.kind === 'root'
+      ? 'root'
+      : (event.target.directoryPath ?? 'unknown');
+  const flattenedSegmentLabel =
+    event.target.flattenedSegmentPath == null
+      ? ''
+      : ` via ${event.target.flattenedSegmentPath}`;
+  return `drop:${event.operation} [${event.draggedPaths.join(', ')}] -> ${targetLabel}${flattenedSegmentLabel}`;
 }
 
 function PathStoreMutationContextMenu({
@@ -537,7 +550,7 @@ export function PathStorePoweredRenderDemoClient({
             header.style.padding = '8px 12px';
 
             const label = document.createElement('strong');
-            label.textContent = 'Phase 8 path-store header';
+            label.textContent = 'Phase 10 path-store header';
             header.append(label);
 
             const button = document.createElement('button');
@@ -551,6 +564,19 @@ export function PathStorePoweredRenderDemoClient({
             return header;
           },
         },
+      },
+      dragAndDrop: {
+        onDropComplete: (event) => {
+          addLog(formatDropResult(event));
+        },
+        onDropError: (error, event) => {
+          const targetLabel =
+            event.target.kind === 'root'
+              ? 'root'
+              : (event.target.directoryPath ?? 'unknown');
+          addLog(`drop:error ${error} -> ${targetLabel}`);
+        },
+        openOnDropDelay: 800,
       },
       id: 'pst-phase8-renaming',
       renaming: {
@@ -703,13 +729,14 @@ export function PathStorePoweredRenderDemoClient({
           Path-store lane · provisional
         </p>
         <h1 className="text-2xl font-bold">
-          Mutation API + Search + Inline Rename + Icon Sets
+          Mutation API + Search + Inline Rename + Drag and Drop + Icon Sets
         </h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
-          Phase 6 turns the path-store lane into a mutation-first tree, and
-          Phases 7 and 8 now surface baseline built-in search plus inline rename
-          directly on this same demo: use the shared handle to add, move, batch,
-          and reset paths, use the built-in search input or quick-search buttons
+          Phase 6 turns the path-store lane into a mutation-first tree, Phases 7
+          and 8 surface baseline built-in search plus inline rename, and Phase
+          10 now enables internal drag and drop on this same demo. Use the
+          shared handle to add, move, batch, reset, and drag paths directly
+          inside the tree, use the built-in search input or quick-search buttons
           to drive filtering, and use the existing context menu or <kbd>F2</kbd>{' '}
           for delete/rename actions while the live tree and log stay coherent
           under virtualization.
@@ -821,10 +848,10 @@ export function PathStorePoweredRenderDemoClient({
 
       <HydratedPathStoreExample
         containerHtml={containerHtml}
-        description="Phase 7 search is instrumented directly in this main demo now, and Phase 8 inline rename now lives beside it: use the built-in search input above the tree or the quick search buttons above to drive the hide-non-matches filter, then use the mutation buttons to confirm the tree stays coherent. Right-click or press Shift+F10 on a row for delete/rename actions, or press F2 on a focused row to start inline rename."
+        description="Phase 7 search is instrumented directly in this main demo now, Phase 8 inline rename lives beside it, and Phase 10 drag/drop now runs on the same hydrated tree: drag rows directly to folders or root, use the mutation buttons to confirm the tree stays coherent, and use the context menu or F2 for delete/rename actions."
         onTreeReady={handleTreeReady}
         options={options}
-        title="Mutation + search + rename tree proof"
+        title="Mutation + search + rename + drag-drop tree proof"
       />
       <StateLog entries={log} />
 

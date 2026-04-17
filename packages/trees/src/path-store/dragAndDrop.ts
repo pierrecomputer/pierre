@@ -159,6 +159,10 @@ export function buildDropOperations(
         return null;
       }
 
+      // PathStore interprets `to: "dir/"` as "move into that directory using the
+      // source basename", so drag/drop can stay path-based without recomputing the
+      // full destination leaf path here.
+
       return {
         from: draggedPath,
         to: destinationPath,

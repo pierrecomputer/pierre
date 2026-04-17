@@ -1066,6 +1066,8 @@ export class PathStoreTreesController
       return false;
     }
 
+    // Clear the public drag session before mutating so any store event emitted
+    // by the committed move/batch sees drag state as already closed.
     this.#dragSession = null;
     const target =
       dragSession.target == null ? null : { ...dragSession.target };
