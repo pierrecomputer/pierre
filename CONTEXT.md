@@ -92,6 +92,13 @@ controlled progress checkpoints to the live model instead of exposing every
 internal append chunk immediately. _Avoid_: per-chunk rerender thrash, end-only
 publication that hides useful progressive work
 
+**Reservation Hint**: Optional metadata such as `knownChildCount` lets the
+controller reserve space once to reduce viewport jumpiness as async data
+arrives; `knownChildCount` counts direct child entries only, and the tree
+remains correct when the hint is absent. _Avoid_: making reservation metadata
+mandatory for correctness, overloading `knownChildCount` with visible-row
+semantics, or ignoring it when good UX depends on it
+
 ## Relationships
 
 - A **Path-Store Tree** may start through **Synchronous Ingest**, **Reveal
@@ -104,6 +111,9 @@ publication that hides useful progressive work
 - **Reveal Loading** may insert sorted directory contents into the middle of the
   existing global order; that is normal subtree growth, not a violation of the
   bulk-ingest ordering contract.
+- **Reservation Hint** is recommended when the data source can provide it
+  because it improves scroll stability and reduces one-time layout jumps as
+  content fills in.
 - **Streaming Transport** is a delivery strategy, not a loading mode by itself.
 - **Streaming Transport** may feed **Cooperative Bulk Ingest** and is an
   important end-goal, but it is not a hard first-pass constraint.
@@ -163,3 +173,11 @@ publication that hides useful progressive work
 - "bulk publish cadence" was ambiguous between append chunks and user-visible
   progress — resolved: **Checkpoint Cadence** belongs to the controller/facade,
   not to each internal chunk.
+
+- "reservation hint" was ambiguous between optional UX metadata and a
+  correctness requirement — resolved: **Reservation Hint** is optional but
+  recommended when available.
+- "knownChildCount" was ambiguous between direct child entries and UI-derived
+  visible rows — resolved: it counts direct child entries only; any future
+  visible-row reservation hint would be a separate concept.
+- "retry policy" was ambiguous between failed background work and explicit user intent — resolved: the default reveal-loading policy auto-retries when the user explicitly expands a folder after a failed background prefetch.

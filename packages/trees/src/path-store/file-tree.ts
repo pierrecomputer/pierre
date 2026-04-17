@@ -323,6 +323,10 @@ export class PathStoreFileTree
     this.#controller.resetPaths(paths, options);
   }
 
+  // Deliberately rerenders even when the same object reference is passed again.
+  // Callers can reuse one composition object while changing what its render
+  // callbacks return, so identity alone is not a reliable no-op signal.
+
   public setComposition(composition?: PathStoreTreesCompositionOptions): void {
     this.#composition = composition;
 
