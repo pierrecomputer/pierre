@@ -12,9 +12,9 @@
 - [Installation](https://diffs.com/docs#installation): Package installation and entry points
 - [Core Types](https://diffs.com/docs#core-types): FileContents, FileDiffMetadata, and creating diffs from files or patches
 - [React API](https://diffs.com/docs#react-api): MultiFileDiff, PatchDiff, FileDiff, File components and shared props
-- [Vanilla JS API](https://diffs.com/docs#vanilla-js-api): FileDiff and File classes, props, custom hunk separators, and low-level renderers
+- [Vanilla JS API](https://diffs.com/docs#vanilla-js-api): FileDiff and File classes, props, deprecated vanilla custom hunk separators, and low-level renderers
 - [Virtualization](https://diffs.com/docs#virtualization): Virtual scrolling for large diffs and files
-- [Custom Hunk Separators](https://diffs.com/docs#custom-hunk-separators): Built-in separator presets and custom separator UI
+- [Hunk Separators](https://diffs.com/docs#hunk-separators): Built-in separator presets, CSS customization hooks, and the discouraged vanilla escape hatch
 - [Utilities](https://diffs.com/docs#utilities): parseDiffFromFile, parsePatchFiles, highlighter management, accept/reject hunks
 - [Styling](https://diffs.com/docs#styling): CSS variables, inline styles, and unsafe CSS injection
 - [Themes](https://diffs.com/docs#themes): Pierre Light/Dark themes, custom theme creation, and registration

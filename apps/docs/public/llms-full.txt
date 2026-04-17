@@ -770,6 +770,10 @@ interface DiffOptions {
   // 'line-info-basic' - slightly more compact full width line-info variant
   // 'metadata' - shows patch format like '@@ -60,6 +60,22 @@'
   // 'simple' - subtle bar separator
+  // We recommend sticking to these built-in string presets in React.
+  // The low-level functional separator API is only documented for vanilla JS,
+  // is being phased out, and is a poor fit for the container-managed and
+  // virtualization-oriented React APIs.
   hunkSeparators: 'line-info',
 
   // Force unchanged context to always render (default: false)
@@ -1461,8 +1465,14 @@ examples, payload details, performance notes, and Worker Pool caveats.
 
 #### Custom Hunk Separators
 
-If you want to render custom hunk separators that won't scroll with the content,
-there are a few tricks you will need to employ. See the following code snippet:
+Start with the [Hunk Separators](#hunk-separators) section first. In most cases,
+styling the built-in separator markup with `unsafeCSS` is the better approach.
+
+If that is still not enough, the low-level `hunkSeparators(hunkData, instance)`
+function remains available in Vanilla JS as a last-resort escape hatch. It is
+being phased out and is not the recommended path for new integrations, but the
+example below shows how it works when you truly need to render your own
+elements:
 
 ### Renderers
 
@@ -1493,6 +1503,11 @@ without any diff context.
 
 ```typescript
 import { FileDiff } from '@pierre/diffs';
+
+// This is a low-level vanilla-only escape hatch.
+// Prefer built-in hunk separators plus CSS customization when possible.
+// This function-based API is being phased out and does not fit the
+// container-managed and virtualization-oriented APIs.
 
 // A hunk separator that utilizes the existing grid to have
 // a number column and a content column where neither will
@@ -1647,7 +1662,9 @@ const instance = new FileDiff({
   // 'line-info-basic' - slightly more compact full width line-info variant
   // 'metadata' - shows patch format like '@@ -60,6 +60,22 @@'
   // 'simple' - subtle bar separator
-  // Or pass a function for custom rendering (see Hunk Separators section)
+  // Prefer the built-in presets plus CSS first (see the Hunk Separators
+  // section). The low-level functional API is documented only for vanilla JS,
+  // is being phased out, and should be treated as a last-resort escape hatch.
   hunkSeparators: 'line-info',
 
   // Force unchanged context to always render (default: false)
@@ -2627,143 +2644,179 @@ virtualizer.cleanUp();
 terminateWorkerPoolSingleton();
 ```
 
-## Custom Hunk Separators
+## Hunk Separators
 
-Use `hunkSeparators` to control how collapsed unchanged regions are displayed.
-This example lets you swap between built-in separator presets, plus a `custom`
-mode that fully overrides the separator UI.
+The `hunkSeparators` option controls how collapsed unchanged regions are
+displayed. For customization, we recommend starting with a built-in preset and
+layering `unsafeCSS` on top.
 
-### Prebuilt Separator Types
+Passing a render function is only documented for the Vanilla JS APIs. It is
+being phased out, does not work well with the container-managed and
+virtualization-oriented React APIs, and is not compatible with SSR. We strongly
+recommend avoiding that path and customizing built-in separators with
+`unsafeCSS` instead.
 
-- `line-info`: Full-width separator with collapsed line count and expand
+The Custom CSS example below keeps the built-in `line-info-basic` markup and
+tweaks it with CSS.
+
+- blends the separator row with the diff background
+- hunk content and controls are rendered in every gutter and content region, but
+  the custom CSS targets only the left-most gutter elements
+- aligns the arrow glyphs with the number column
+- replaces the built-in SVG icon with CSS-generated arrows
+- renders the `Expand All` button, which is normally hidden by default
+
+### Built-in Types
+
+- `line-info`: Rounded corner separator with collapsed line count and expansion
   controls.
-- `line-info-basic`: Compact, full-width variant of line-info.
-- `metadata`: Patch-style separator (`@@ -x,y +a,b @@`).
+- `line-info-basic`: Compact, full-width variant of `line-info` with expansion
+  controls.
+- `metadata`: Patch-style separator (`@@ -x,y +a,b @@`) with no expansion
+  controls.
 - `simple`: Minimal separator bar.
-- `custom`: Lets you provide your own separator renderer so you can fully
-  control the UI and expansion behavior.
 
-### React Example
+### Custom CSS Example
+
+> If CSS hooks are not enough, the low-level `hunkSeparators(hunkData,
+> instance)` function still exists on the Vanilla JS `FileDiff` API. We only
+> recommend that escape hatch as a last resort. It is being phased out, and it
+> does not fit the container-managed and virtualization-oriented APIs that the
+> React components rely on.
 
 **React Example** (`custom_hunk_separators.tsx`):
 
 ```tsx
-import type { ExpansionDirections, HunkData } from '@pierre/diffs';
-import { FileDiff } from '@pierre/diffs';
+import type { FileContents } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
-import { useState } from 'react';
 
-type SeparatorOption =
-  | 'line-info'
-  | 'line-info-basic'
-  | 'metadata'
-  | 'simple'
-  | 'custom';
-
-const classes = {
-  wrapper: 'relative',
-  root: "absolute top-0 left-0 flex items-center gap-2 pl-[22px] text-[0.75rem] [font-family:var(--diffs-header-font-family,var(--diffs-header-font-fallback))]",
-  controls: 'inline-flex gap-1',
-  button:
-    'relative m-0 inline-flex cursor-pointer appearance-none items-center border-0 bg-transparent p-0 text-inherit',
-  icon: '[font-family:var(--diffs-font-family,var(--diffs-font-fallback))] text-base leading-none',
-  label:
-    'ml-3 whitespace-nowrap text-[color:var(--diffs-fg-number)] [font-family:var(--diffs-header-font-family,var(--diffs-header-font-fallback))] hover:underline',
-  separatorDot: 'text-[color:var(--diffs-fg-number)]',
-  expandChunk:
-    'm-0 inline-flex cursor-pointer appearance-none items-center whitespace-nowrap border-0 bg-transparent p-0 text-[0.75rem] text-[color:var(--diffs-fg-number)] [font-family:var(--diffs-header-font-family,var(--diffs-header-font-fallback))] hover:underline',
-} as const;
-
-function renderCustomSeparator(
-  hunkData: HunkData,
-  instance: FileDiff<undefined>
-) {
-  const wrapper = document.createElement('div');
-  wrapper.className = classes.wrapper;
-
-  const root = document.createElement('div');
-  root.className = classes.root;
-
-  const controls = document.createElement('div');
-  controls.className = classes.controls;
-
-  if (hunkData.type === 'additions') {
-    const spacer = document.createElement('span');
-    spacer.textContent = ' ';
-    wrapper.append(spacer, root);
-    return wrapper;
-  }
-
-  const lineLabel = hunkData.lines === 1 ? 'line' : 'lines';
-  const labelText = `${hunkData.lines} unmodified ${lineLabel}`;
-
-  function createControl(direction: ExpansionDirections) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = classes.button;
-    const icon = document.createElement('span');
-    icon.className = classes.icon;
-    icon.textContent =
-      direction === 'up' ? '↓' : direction === 'down' ? '↑' : '↕';
-    const label = document.createElement('span');
-    label.className = classes.label;
-    label.textContent = labelText;
-    button.append(icon, label);
-    button.onclick = () => instance.expandHunk(hunkData.hunkIndex, direction);
-    return button;
-  }
-
-  if (hunkData.expandable?.up && hunkData.expandable?.down) {
-    controls.append(createControl('both'));
-  } else if (hunkData.expandable?.up) {
-    controls.append(createControl('up'));
-  } else if (hunkData.expandable?.down) {
-    controls.append(createControl('down'));
-  }
-
-  if (hunkData.expandable?.chunked) {
-    const separatorDot = document.createElement('span');
-    separatorDot.className = classes.separatorDot;
-    separatorDot.textContent = '·';
-    const expandChunk = document.createElement('button');
-    expandChunk.type = 'button';
-    expandChunk.className = classes.expandChunk;
-    expandChunk.textContent = 'Expand entire hunk';
-    expandChunk.onclick = () =>
-      instance.expandHunk(
-        hunkData.hunkIndex,
-        'both',
-        Number.POSITIVE_INFINITY
-      );
-    root.append(controls, separatorDot, expandChunk);
-  } else {
-    root.append(controls);
-  }
-
-  const spacer = document.createElement('span');
-  spacer.textContent = ' ';
-  wrapper.append(spacer, root);
-  return wrapper;
+const customSeparatorCSS = `
+/* Fix bg colors to mux with background */
+[data-separator="line-info-basic"] {
+  height: 24px;
+  background: var(--diffs-bg);
+  position: relative;
 }
 
-function HunkSeparatorDemo({ oldFile, newFile }) {
-  const [separator, setSeparator] = useState<SeparatorOption>('line-info');
-
-  if (separator === 'custom') {
-    const instance = new FileDiff({
-      expansionLineCount: 5,
-      hunkSeparators: (hunkData, fileDiffInstance) =>
-        renderCustomSeparator(hunkData, fileDiffInstance),
-    });
-    instance.render({ oldFile, newFile, containerWrapper: document.body });
-    return null;
+/* Styles are made to target always the leftside gutter, however technically
+ * these elements are rendered into every gutter and every content row giving you
+ * lots of flexibility in how you may want to show or style them */
+[data-diff-type="single"] [data-gutter],
+[data-diff-type="split"] [data-deletions] [data-gutter] {
+  [data-separator-wrapper] {
+    position: absolute;
+    left: 100%;
+    display: flex;
+    align-items: center;
+    gap: unset;
+    width: max-content;
+    background: transparent;
+    color: var(--diffs-fg-number);
+    font-family: var(--diffs-header-font-family, var(--diffs-header-font-fallback));
+    font-size: 0.75rem;
+    /* Ensure Arrows align with number column */
+    margin-left: calc(-2ch - 2px);
   }
 
+  [data-separator-wrapper][data-separator-multi-button] {
+    margin-left: calc(-3ch - 2px);
+  }
+
+  [data-expand-button],
+  [data-separator-content] {
+    display: block;
+    align-self: unset;
+    min-width: unset;
+    min-height: unset;
+    padding: 0;
+    flex-shrink: 0;
+    grid-column: unset;
+    border: none;
+    width: auto;
+    height: auto;
+    background-color: unset;
+    color: inherit;
+    font: inherit;
+  }
+
+  [data-expand-button]:not([data-expand-all-button]) {
+    &[data-expand-down]::before {
+      content: '↑';
+    }
+
+    &[data-expand-up]::before {
+      content: '↓';
+    }
+
+    &[data-expand-both]::before {
+      content: '↕';
+    }
+
+    /* Hide built in icon */
+    svg {
+      display: none;
+    }
+  }
+
+  [data-separator-content] {
+    background: transparent;
+    margin-left: calc(2px + 1ch);
+  }
+
+  /* Expand all button will only appear if the collapsed region is larger than
+   * an expand chunk */
+  [data-expand-all-button] {
+    position: relative;
+    margin-left: 14px;
+    text-transform: lowercase;
+
+    &:hover {
+      color: var(--diffs-fg);
+      text-decoration: underline;
+    }
+  }
+
+  /* A little dot separator */
+  [data-expand-all-button]::before {
+    content: '';
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: -8px;
+    margin-top: -1px;
+    width: 3px;
+    height: 3px;
+    border-radius: 2px;
+    background-color: var(--diffs-fg-number);
+    pointer-events: none;
+  }
+
+  [data-separator-content]:hover,
+  [data-expand-button]:hover,
+  [data-expand-all-button]:hover {
+    color: var(--diffs-fg);
+  }
+}
+`;
+
+interface CustomSeparatorExampleProps {
+  oldFile: FileContents;
+  newFile: FileContents;
+}
+
+export function CustomSeparatorExample({
+  oldFile,
+  newFile,
+}: CustomSeparatorExampleProps) {
   return (
     <MultiFileDiff
       oldFile={oldFile}
       newFile={newFile}
-      options={{ expansionLineCount: 5, hunkSeparators: separator }}
+      options={{
+        hunkSeparators: 'line-info-basic',
+        expansionLineCount: 5,
+        unsafeCSS: customSeparatorCSS,
+      }}
     />
   );
 }
