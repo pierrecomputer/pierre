@@ -2,12 +2,34 @@
 
 import { HEADER_SLOT_NAME } from '@pierre/trees';
 
+const UNITLESS_PROPERTIES = new Set([
+  'animationIterationCount',
+  'columns',
+  'columnCount',
+  'flex',
+  'flexGrow',
+  'flexShrink',
+  'fontWeight',
+  'gridColumn',
+  'gridRow',
+  'lineHeight',
+  'opacity',
+  'order',
+  'orphans',
+  'tabSize',
+  'widows',
+  'zIndex',
+]);
+
 /** Converts a React CSSProperties object to a CSS style attribute string. */
 function cssToStr(style: React.CSSProperties): string {
   return Object.entries(style)
     .map(([key, value]) => {
       const cssKey = key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
-      const cssValue = typeof value === 'number' ? `${value}px` : value;
+      const cssValue =
+        typeof value === 'number' && !UNITLESS_PROPERTIES.has(key)
+          ? `${value}px`
+          : value;
       return `${cssKey}:${cssValue}`;
     })
     .join(';');
