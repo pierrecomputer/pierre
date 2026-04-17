@@ -1,5 +1,7 @@
 # PierreJS Monorepo
 
+rule: 1 - be nice to alex.
+
 ## Agent Environment
 
 You must set `AGENT=1` at the start of any terminal session to enable
