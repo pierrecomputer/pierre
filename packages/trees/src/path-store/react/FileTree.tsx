@@ -7,6 +7,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -102,6 +103,37 @@ function hasExistingPreloadedContent(host: HTMLElement): boolean {
   );
 }
 
+function resolveComposition(
+  baselineComposition: PathStoreTreesCompositionOptions | undefined,
+  header: ReactNode,
+  hasContextMenu: boolean,
+  onClose: () => void,
+  onOpen: (
+    item: PathStoreTreesContextMenuItem,
+    context: PathStoreTreesContextMenuOpenContext
+  ) => void
+): PathStoreTreesCompositionOptions | undefined {
+  const nextComposition: PathStoreTreesCompositionOptions = {
+    ...(baselineComposition ?? {}),
+  };
+
+  if (header != null) {
+    delete nextComposition.header;
+  }
+
+  if (hasContextMenu) {
+    nextComposition.contextMenu = {
+      enabled: true,
+      onClose,
+      onOpen,
+    };
+  }
+
+  return nextComposition.header != null || nextComposition.contextMenu != null
+    ? nextComposition
+    : undefined;
+}
+
 export interface FileTreeProps extends Omit<
   HTMLAttributes<HTMLElement>,
   'children'
@@ -126,6 +158,14 @@ export function FileTree({
   const [activeContextMenu, setActiveContextMenu] =
     useState<ActiveContextMenuState | null>(null);
   const [hostElement, setHostElement] = useState<HTMLElement | null>(null);
+  const baselineCompositionRef = useRef<
+    PathStoreTreesCompositionOptions | undefined
+  >(model.getComposition());
+  const baselineModelRef = useRef(model);
+  if (baselineModelRef.current !== model) {
+    baselineModelRef.current = model;
+    baselineCompositionRef.current = model.getComposition();
+  }
 
   const hasContextMenu = renderContextMenu != null;
   const handleContextMenuClose = useCallback(() => {
@@ -140,21 +180,24 @@ export function FileTree({
     },
     []
   );
-  const composition = useMemo<
-    PathStoreTreesCompositionOptions | undefined
-  >(() => {
-    if (!hasContextMenu) {
-      return undefined;
-    }
-
-    return {
-      contextMenu: {
-        enabled: true,
-        onClose: handleContextMenuClose,
-        onOpen: handleContextMenuOpen,
-      },
-    };
-  }, [handleContextMenuClose, handleContextMenuOpen, hasContextMenu]);
+  const baselineComposition = baselineCompositionRef.current;
+  const composition = useMemo<PathStoreTreesCompositionOptions | undefined>(
+    () =>
+      resolveComposition(
+        baselineComposition,
+        header,
+        hasContextMenu,
+        handleContextMenuClose,
+        handleContextMenuOpen
+      ),
+    [
+      baselineComposition,
+      handleContextMenuClose,
+      handleContextMenuOpen,
+      hasContextMenu,
+      header,
+    ]
+  );
 
   const handleHostRef = useCallback((node: HTMLElement | null) => {
     setHostElement(node);
@@ -185,8 +228,9 @@ export function FileTree({
 
     return () => {
       model.unmount();
+      model.setComposition(baselineComposition);
     };
-  }, [hostElement, model, preloadedData]);
+  }, [baselineComposition, hostElement, model, preloadedData]);
 
   const children = renderPreloadedShadowDom(
     renderFileTreeChildren(header, renderContextMenu, activeContextMenu),

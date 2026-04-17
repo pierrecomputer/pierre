@@ -305,6 +305,96 @@ describe('path-store React lane', () => {
     }
   });
 
+  test('preserves a model header composition when the wrapper does not override it', async () => {
+    const model = new PathStoreFileTreeClass({
+      ...BASE_OPTIONS,
+      composition: {
+        header: {
+          html: '<button data-test-model-header="true">Model header</button>',
+        },
+      },
+    });
+
+    const localContainer = document.createElement('div');
+    document.body.appendChild(localContainer);
+    const localRoot = createRoot(localContainer);
+
+    try {
+      await act(async () => {
+        localRoot.render(<FileTreeReact model={model} />);
+        await flushDom();
+      });
+
+      const host = getHost(localContainer);
+      expect(
+        host.querySelector('[data-test-model-header="true"]')?.textContent
+      ).toBe('Model header');
+    } finally {
+      act(() => {
+        localRoot.unmount();
+      });
+      model.cleanUp();
+      localContainer.remove();
+    }
+  });
+
+  test('restores a model header composition after a wrapper override unmounts', async () => {
+    const model = new PathStoreFileTreeClass({
+      ...BASE_OPTIONS,
+      composition: {
+        header: {
+          html: '<button data-test-model-header="true">Model header</button>',
+        },
+      },
+    });
+    const firstContainer = document.createElement('div');
+    const secondContainer = document.createElement('div');
+    document.body.append(firstContainer, secondContainer);
+    const firstRoot = createRoot(firstContainer);
+    const secondRoot = createRoot(secondContainer);
+
+    try {
+      await act(async () => {
+        firstRoot.render(
+          <FileTreeReact
+            header={<button data-test-react-header>React header</button>}
+            model={model}
+          />
+        );
+        await flushDom();
+      });
+
+      const firstHost = getHost(firstContainer);
+      expect(
+        firstHost.querySelector('[data-test-react-header]')?.textContent
+      ).toBe('React header');
+      expect(
+        firstHost.querySelector('[data-test-model-header="true"]')
+      ).toBeNull();
+
+      act(() => {
+        firstRoot.unmount();
+      });
+
+      await act(async () => {
+        secondRoot.render(<FileTreeReact model={model} />);
+        await flushDom();
+      });
+
+      const secondHost = getHost(secondContainer);
+      expect(
+        secondHost.querySelector('[data-test-model-header="true"]')?.textContent
+      ).toBe('Model header');
+    } finally {
+      act(() => {
+        secondRoot.unmount();
+      });
+      model.cleanUp();
+      firstContainer.remove();
+      secondContainer.remove();
+    }
+  });
+
   test('header button clicks can mutate the model and focus the new item', async () => {
     function Harness() {
       const { model } = useFileTree(BASE_OPTIONS);

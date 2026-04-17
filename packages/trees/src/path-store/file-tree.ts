@@ -229,6 +229,10 @@ export class PathStoreFileTree
     return this.#controller.getSelectedPaths();
   }
 
+  public getComposition(): PathStoreTreesCompositionOptions | undefined {
+    return this.#composition;
+  }
+
   public subscribe(listener: PathStoreFileTreeListener): () => void {
     let hasSeenInitialSnapshot = false;
 
