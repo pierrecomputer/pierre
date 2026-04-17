@@ -1328,7 +1328,11 @@ export class PathStoreTreesController
   ): void {
     const previousPathCount = this.#store.list().length;
     const previousVisibleCount = this.#visibleCount;
-    const nextStore = this.#createStore(paths, options.preparedInput);
+    const nextStore = this.#createStore(
+      paths,
+      options.preparedInput,
+      options.initialExpandedPaths
+    );
     const previousFocusedPath = this.#focusedPath;
     const previousRenamingPath = this.#renamingPath;
     const previousSelectedPaths = this.getSelectedPaths();
@@ -1563,12 +1567,16 @@ export class PathStoreTreesController
 
   #createStore(
     paths: readonly string[],
-    preparedInput?: PathStorePreparedInput
+    preparedInput?: PathStorePreparedInput,
+    initialExpandedPathsOverride?: readonly string[]
   ): PathStore {
     return new PathStore({
       ...this.#baseOptions,
       paths,
       preparedInput,
+      ...(initialExpandedPathsOverride !== undefined
+        ? { initialExpandedPaths: initialExpandedPathsOverride }
+        : {}),
     });
   }
 

@@ -258,6 +258,11 @@ export type PathStoreTreesMutationEventForType<
   : Extract<PathStoreTreesMutationEvent, { operation: TType }>;
 
 export interface PathStoreTreesResetOptions {
+  // When provided, replaces the baseline expansion set stored at construction
+  // time. Useful when the caller is swapping in a dramatically different path
+  // list (e.g. upgrading from an SSR preview to a full dataset) and wants the
+  // fresh store to start with expansion state that reflects the new paths.
+  initialExpandedPaths?: readonly string[];
   preparedInput?: PathStorePreparedInput;
 }
 

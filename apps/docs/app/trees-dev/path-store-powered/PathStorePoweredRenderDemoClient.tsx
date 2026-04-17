@@ -231,6 +231,34 @@ function getAvailableMutationPath(
   return candidatePath;
 }
 
+interface UpgradePayload {
+  allExpandedPaths: readonly string[];
+  paths: readonly string[];
+}
+
+// Fetches a gzipped upgrade payload from the CDN, gunzips it in the browser
+// via DecompressionStream, and parses it. This is how the AOSP workload avoids
+// shipping 130 MB of uncompressed JSON through the Vercel serverless function
+// — the client downloads ~11 MB from the edge instead, and the expansion list
+// is precomputed so we don't walk 1.6 M paths after decompression.
+async function fetchUpgradePayload(
+  url: string,
+  signal: AbortSignal
+): Promise<UpgradePayload> {
+  const response = await fetch(url, { signal });
+  if (!response.ok || response.body == null) {
+    throw new Error(
+      `Failed to fetch upgrade path list (${String(response.status)})`
+    );
+  }
+
+  const decompressedStream = response.body.pipeThrough(
+    new DecompressionStream('gzip')
+  );
+  const decompressedText = await new Response(decompressedStream).text();
+  return JSON.parse(decompressedText) as UpgradePayload;
+}
+
 function formatMutationEvent(event: PathStoreTreesMutationEvent): string {
   switch (event.operation) {
     case 'add':
@@ -436,6 +464,9 @@ export function PathStorePoweredRenderDemoClient({
   const contextMenuSlotRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<PathStoreFileTree | null>(null);
   const mutationUnsubscribeRef = useRef<(() => void) | null>(null);
+  const upgradeAbortRef = useRef<AbortController | null>(null);
+  const upgradedPathsRef = useRef<readonly string[] | null>(null);
+  const upgradedExpandedPathsRef = useRef<readonly string[] | null>(null);
   const [iconMode, setIconMode] = useState<
     'complete' | 'custom' | 'minimal' | 'standard'
   >('complete');
@@ -544,6 +575,8 @@ export function PathStorePoweredRenderDemoClient({
     return () => {
       mutationUnsubscribeRef.current?.();
       mutationUnsubscribeRef.current = null;
+      upgradeAbortRef.current?.abort();
+      upgradeAbortRef.current = null;
       if (contextMenuSlotRef.current == null) {
         return;
       }
@@ -697,10 +730,13 @@ export function PathStorePoweredRenderDemoClient({
   ]);
   const activeIcons =
     iconMode === 'custom' ? PATH_STORE_CUSTOM_ICONS : iconMode;
+  const upgradeDataUrl = workloadData.upgradeDataUrl;
   const handleTreeReady = useCallback(
     (fileTree: PathStoreFileTree | null) => {
       mutationUnsubscribeRef.current?.();
       mutationUnsubscribeRef.current = null;
+      upgradeAbortRef.current?.abort();
+      upgradeAbortRef.current = null;
       treeRef.current = fileTree;
       if (fileTree == null) {
         return;
@@ -709,8 +745,47 @@ export function PathStorePoweredRenderDemoClient({
       mutationUnsubscribeRef.current = fileTree.onMutation('*', (event) => {
         addLog(formatMutationEvent(event));
       });
+
+      if (upgradeDataUrl == null) {
+        return;
+      }
+
+      const abortController = new AbortController();
+      upgradeAbortRef.current = abortController;
+      addLog(`upgrade: fetching ${upgradeDataUrl}`);
+      const fetchStartedAt = performance.now();
+      void fetchUpgradePayload(upgradeDataUrl, abortController.signal)
+        .then(({ allExpandedPaths, paths: fullPaths }) => {
+          if (abortController.signal.aborted || treeRef.current !== fileTree) {
+            return;
+          }
+
+          const fetchedAt = performance.now();
+          addLog(
+            `upgrade: fetched ${fullPaths.length.toLocaleString()} paths + ${allExpandedPaths.length.toLocaleString()} expandable folders in ${Math.round(fetchedAt - fetchStartedAt).toString()}ms`
+          );
+          upgradedPathsRef.current = fullPaths;
+          upgradedExpandedPathsRef.current =
+            expansionMode === 'all' ? allExpandedPaths : [];
+          fileTree.resetPaths(fullPaths, {
+            initialExpandedPaths: upgradedExpandedPathsRef.current,
+            preparedInput: createPresortedPreparedInput(fullPaths),
+          });
+          addLog(
+            `upgrade: reset tree in ${Math.round(performance.now() - fetchedAt).toString()}ms`
+          );
+        })
+        .catch((error: unknown) => {
+          if (abortController.signal.aborted) {
+            return;
+          }
+
+          addLog(
+            `upgrade:error ${error instanceof Error ? error.message : String(error)}`
+          );
+        });
     },
-    [addLog]
+    [addLog, expansionMode, upgradeDataUrl]
   );
 
   useEffect(() => {
@@ -788,6 +863,15 @@ export function PathStorePoweredRenderDemoClient({
 
   const handleReset = useCallback(() => {
     runMutation('reset demo tree', (tree) => {
+      const upgradedPaths = upgradedPathsRef.current;
+      if (upgradedPaths != null) {
+        tree.resetPaths(upgradedPaths, {
+          initialExpandedPaths: upgradedExpandedPathsRef.current ?? [],
+          preparedInput: createPresortedPreparedInput(upgradedPaths),
+        });
+        return;
+      }
+
       tree.resetPaths(sharedOptions.paths, { preparedInput });
     });
   }, [preparedInput, runMutation, sharedOptions]);

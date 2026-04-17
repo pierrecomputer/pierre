@@ -1,3 +1,4 @@
 # Mark large generated fixtures so they collapse in PR diffs
 packages/trees/scripts/fixtures/fileListToTree-monorepo-snapshot.txt linguist-generated
 packages/tree-test-data/aosp-files.json filter=lfs diff=lfs merge=lfs -text
+apps/docs/public/path-store-powered/aosp-files.json.gz filter=lfs diff=lfs merge=lfs -text

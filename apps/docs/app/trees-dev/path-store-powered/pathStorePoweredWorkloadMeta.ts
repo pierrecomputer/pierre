@@ -73,12 +73,20 @@ export interface PathStorePoweredWorkloadDataPayload {
   paths: readonly string[];
   pathsArePresorted: boolean;
   selectedWorkload: PathStorePoweredWorkloadSummary;
+  // When present, tells the client it can fetch a gzipped full path list and
+  // upgrade the path-store tree in place. SSR only ships a small preview slice
+  // for these workloads so the serverless function stays small and fast.
+  upgradeDataUrl?: string;
 }
 
 export const DEFAULT_PATH_STORE_POWERED_WORKLOAD_NAME: PathStorePoweredWorkloadName =
   'linux-1x';
 
 export const PATH_STORE_PROOF_VIEWPORT_HEIGHT = 700;
+
+// Committed by generateAospArtifacts.ts. Served by the Vercel CDN — never by
+// the Next serverless function, which can't afford the 130 MB decompression.
+export const AOSP_UPGRADE_DATA_URL = '/path-store-powered/aosp-files.json.gz';
 
 export function getRequestedSearchParamValue(
   value: string | readonly string[] | undefined

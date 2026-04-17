@@ -1,10 +1,13 @@
 import 'server-only';
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
-import { readFile } from 'node:fs/promises';
-import { resolve as resolvePath } from 'node:path';
 
-import { preparePaths as sortCanonicalPaths } from '../../../../../packages/path-store/src/builder';
 import {
+  AOSP_PREVIEW_ALL_EXPANDED_PATHS,
+  AOSP_PREVIEW_PATHS,
+  AOSP_TOTAL_PATH_COUNT,
+} from './aospPreview';
+import {
+  AOSP_UPGRADE_DATA_URL,
   getPathStorePoweredWorkloadOption,
   type PathStorePoweredExpansionMode,
   type PathStorePoweredWorkloadDataPayload,
@@ -12,37 +15,20 @@ import {
 } from './pathStorePoweredWorkloadMeta';
 
 interface PathStorePoweredLoadedWorkload {
-  defaultExpandedPaths: string[];
+  defaultExpandedPaths: readonly string[];
   fileCountLabel: string;
   label: string;
   name: PathStorePoweredWorkloadName;
   paths: readonly string[];
   pathsArePresorted: boolean;
   rootCount: number;
+  upgradeDataUrl?: string;
 }
 
 const workloadPromiseCache = new Map<
   PathStorePoweredWorkloadName,
   Promise<PathStorePoweredLoadedWorkload>
 >();
-let aospFilesPromise: Promise<string[]> | null = null;
-
-// AOSP fixture is stored via Git LFS and deliberately excluded from the shared
-// tree-test-data bundle. Loading it lazily via readFile keeps it out of every
-// consumer's JS bundle while still making it available to this server route.
-function loadAospFiles(): Promise<string[]> {
-  // Anchored at the docs app cwd (apps/docs in dev, /var/task/apps/docs on
-  // Vercel) because Turbopack strips import.meta.dirname and polyfills URL in
-  // a way that Node's fileURLToPath rejects.
-  const fixturePath = resolvePath(
-    process.cwd(),
-    '../../packages/tree-test-data/aosp-files.json'
-  );
-  aospFilesPromise ??= readFile(fixturePath, 'utf8').then(
-    (file) => JSON.parse(file) as string[]
-  );
-  return aospFilesPromise;
-}
 
 // Derives every ancestor folder path once so the demo can switch between the
 // workload default, fully expanded, and fully collapsed tree states.
@@ -89,7 +75,24 @@ function adaptSharedWorkload(
   };
 }
 
-async function loadPathStorePoweredWorkload(
+// The AOSP workload is served in two phases: SSR ships the baked preview so
+// the Vercel function never needs to parse the 141 MB source, and the client
+// upgrades the tree once it has downloaded and gunzipped the full path list
+// from the CDN-served static asset.
+function buildAospWorkload(): PathStorePoweredLoadedWorkload {
+  return {
+    defaultExpandedPaths: [],
+    fileCountLabel: `${AOSP_TOTAL_PATH_COUNT.toLocaleString()} files across 0 expanded folders`,
+    label: 'AOSP fixture',
+    name: 'aosp',
+    paths: AOSP_PREVIEW_PATHS,
+    pathsArePresorted: true,
+    rootCount: 1,
+    upgradeDataUrl: AOSP_UPGRADE_DATA_URL,
+  };
+}
+
+function loadPathStorePoweredWorkload(
   workloadName: PathStorePoweredWorkloadName
 ): Promise<PathStorePoweredLoadedWorkload> {
   const cachedWorkload = workloadPromiseCache.get(workloadName);
@@ -97,25 +100,11 @@ async function loadPathStorePoweredWorkload(
     return cachedWorkload;
   }
 
-  const workloadPromise =
-    (async (): Promise<PathStorePoweredLoadedWorkload> => {
-      if (workloadName === 'aosp') {
-        const rawPaths = await loadAospFiles();
-        const paths = sortCanonicalPaths(rawPaths);
-        return {
-          defaultExpandedPaths: [],
-          fileCountLabel: `${paths.length.toLocaleString()} files across 0 expanded folders`,
-          label: 'AOSP fixture',
-          name: 'aosp',
-          paths,
-          pathsArePresorted: true,
-          rootCount: 1,
-        };
-      }
-
-      return adaptSharedWorkload(workloadName);
-    })();
-
+  const workloadPromise = Promise.resolve(
+    workloadName === 'aosp'
+      ? buildAospWorkload()
+      : adaptSharedWorkload(workloadName)
+  );
   workloadPromiseCache.set(workloadName, workloadPromise);
   return workloadPromise;
 }
@@ -127,7 +116,9 @@ export async function loadPathStorePoweredWorkloadDataPayload(
   const workload = await loadPathStorePoweredWorkload(workloadName);
   const initialExpandedPaths =
     expansionMode === 'all'
-      ? deriveExpandedPaths(workload.paths)
+      ? workloadName === 'aosp'
+        ? AOSP_PREVIEW_ALL_EXPANDED_PATHS
+        : deriveExpandedPaths(workload.paths)
       : expansionMode === 'collapsed'
         ? []
         : workload.defaultExpandedPaths;
@@ -140,5 +131,6 @@ export async function loadPathStorePoweredWorkloadDataPayload(
       ...getPathStorePoweredWorkloadOption(workload.name),
       fileCountLabel: workload.fileCountLabel,
     },
+    upgradeDataUrl: workload.upgradeDataUrl,
   };
 }
