@@ -1,0 +1,91 @@
+import { preloadPathStoreFileTree } from '@pierre/trees/path-store';
+import type { Metadata } from 'next';
+
+import { HeadingAnchors } from '../../docs/HeadingAnchors';
+import { Hero } from '../../Hero';
+import type { ProductId } from '../../product-config';
+import { sampleFileList } from '../demo-data';
+import { GIT_STATUSES_A } from '../tree-examples/demo-data';
+import { DemoFlatten } from './DemoFlatten';
+import { DemoGitStatus } from './DemoGitStatus';
+import Footer from '@/components/Footer';
+import { Header } from '@/components/Header';
+import { PierreCompanySection } from '@/components/PierreCompanySection';
+
+const PRODUCT_ID: ProductId = 'trees';
+
+export const metadata: Metadata = {
+  title: 'Pierre Trees — A file tree rendering library.',
+  description:
+    "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.",
+};
+
+export default function TreesNewPage() {
+  const flattenHierarchicalPreloadedData = preloadPathStoreFileTree({
+    flattenEmptyDirectories: false,
+    id: 'path-store-flatten-demo-hierarchical',
+    initialExpansion: 'closed',
+    initialExpandedPaths: [
+      'build',
+      'build/assets',
+      'build/assets/images',
+      'build/assets/images/social',
+    ],
+    paths: sampleFileList,
+    search: false,
+    viewportHeight: 600,
+  });
+  const flattenFlattenedPreloadedData = preloadPathStoreFileTree({
+    flattenEmptyDirectories: true,
+    id: 'path-store-flatten-demo-flattened',
+    initialExpansion: 'closed',
+    initialExpandedPaths: ['build', 'build/assets/images/social'],
+    paths: sampleFileList,
+    search: false,
+    viewportHeight: 540,
+  });
+  const gitStatusFullViewportPreloadedData = preloadPathStoreFileTree({
+    flattenEmptyDirectories: true,
+    gitStatus: GIT_STATUSES_A,
+    id: 'path-store-git-status-demo-full',
+    initialExpandedPaths: ['src', 'src/components'],
+    paths: sampleFileList,
+    search: false,
+    viewportHeight: 690,
+  });
+  const gitStatusFilteredViewportPreloadedData = preloadPathStoreFileTree({
+    flattenEmptyDirectories: true,
+    gitStatus: GIT_STATUSES_A,
+    id: 'path-store-git-status-demo-filtered',
+    initialExpandedPaths: ['src', 'src/components'],
+    paths: sampleFileList,
+    search: false,
+    viewportHeight: 180,
+  });
+
+  return (
+    <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
+      <Header className="-mb-[1px]" />
+      <Hero productId={PRODUCT_ID} />
+
+      <HeadingAnchors />
+      <section className="space-y-12 pb-8">
+        <DemoFlatten
+          preloadedData={{
+            flattened: flattenFlattenedPreloadedData,
+            hierarchical: flattenHierarchicalPreloadedData,
+          }}
+        />
+        <DemoGitStatus
+          preloadedData={{
+            filteredViewport: gitStatusFilteredViewportPreloadedData,
+            fullViewport: gitStatusFullViewportPreloadedData,
+          }}
+        />
+      </section>
+
+      <PierreCompanySection />
+      <Footer />
+    </div>
+  );
+}

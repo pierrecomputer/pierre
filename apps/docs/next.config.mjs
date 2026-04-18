@@ -38,6 +38,7 @@ const nextConfig = {
       beforeFiles: [
         { source: '/', destination: '/trees' },
         { source: '/docs', destination: '/trees/docs' },
+        { source: '/new', destination: '/trees/new' },
       ],
     };
   },
@@ -53,6 +54,11 @@ const nextConfig = {
         {
           source: '/trees/docs',
           destination: '/docs',
+          permanent: true,
+        },
+        {
+          source: '/trees/new',
+          destination: '/new',
           permanent: true,
         },
       ];
