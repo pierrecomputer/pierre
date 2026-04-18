@@ -1,6 +1,6 @@
 'use client';
 
-import { IconSymbolDiffstat } from '@pierre/icons';
+import { IconColorDark, IconColorLight } from '@pierre/icons';
 import type { FileTreeOptions } from '@pierre/trees';
 import {
   FileTree,
@@ -26,10 +26,6 @@ import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Switch } from '@/components/ui/switch';
 
 const GIT_STATUS_EXPANDED_PATHS = ['src', 'src/components'] as const;
-const gitStatusPanelStyle = {
-  colorScheme: 'dark',
-  '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
-} as CSSProperties;
 
 const FILE_TREE_GIT_STATUS_BASE_OPTIONS: Omit<
   FileTreeOptions,
@@ -50,26 +46,31 @@ interface DemoGitStatusProps {
 }
 
 export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
-  const [enabled, setEnabled] = useState(true);
   const [showUnmodified, setShowUnmodified] = useState(true);
   const [useSetB, setUseSetB] = useState(false);
+  const [colorMode, setColorMode] = useState<'light' | 'dark'>('dark');
 
   const activeGitStatus = useMemo(
     () => (useSetB ? GIT_STATUSES_B : GIT_STATUSES_A),
     [useSetB]
   );
-  const gitStatus = useMemo(
-    () => (enabled ? activeGitStatus : undefined),
-    [activeGitStatus, enabled]
+  const isDark = colorMode === 'dark';
+  const panelStyle = useMemo(
+    () =>
+      ({
+        colorScheme: colorMode,
+        '--trees-search-bg-override': isDark ? 'oklch(14.5% 0 0)' : '#fff',
+      }) as CSSProperties,
+    [colorMode, isDark]
   );
   const visiblePaths = useMemo(() => {
-    if (!enabled || showUnmodified) {
+    if (showUnmodified) {
       return sampleFileList;
     }
 
     const changedPathSet = new Set(activeGitStatus.map((entry) => entry.path));
     return sampleFileList.filter((path) => changedPathSet.has(path));
-  }, [activeGitStatus, enabled, showUnmodified]);
+  }, [activeGitStatus, showUnmodified]);
 
   const { model: fullViewportModel } = useFileTree({
     ...FILE_TREE_GIT_STATUS_BASE_OPTIONS,
@@ -94,8 +95,8 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
     model.resetPaths(visiblePaths, {
       initialExpandedPaths: GIT_STATUS_EXPANDED_PATHS,
     });
-    model.setGitStatus(gitStatus);
-  }, [gitStatus, model, visiblePaths]);
+    model.setGitStatus(activeGitStatus);
+  }, [activeGitStatus, model, visiblePaths]);
 
   return (
     <TreeExampleSection>
@@ -125,25 +126,6 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
             <Button
               variant="outline"
               className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
-              onClick={() => setEnabled((previous) => !previous)}
-            >
-              <div className="flex items-center gap-2">
-                <IconSymbolDiffstat />
-                Show Git status
-              </div>
-            </Button>
-            <Switch
-              checked={enabled}
-              onCheckedChange={setEnabled}
-              onClick={(event) => event.stopPropagation()}
-              className="pointer-events-none mr-3 place-self-center justify-self-end"
-            />
-          </div>
-
-          <div className="gridstack">
-            <Button
-              variant="outline"
-              className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
               onClick={() => setShowUnmodified((previous) => !previous)}
             >
               Show unmodified
@@ -163,6 +145,21 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
             <ButtonGroupItem value="set-a">Changeset A</ButtonGroupItem>
             <ButtonGroupItem value="set-b">Changeset B</ButtonGroupItem>
           </ButtonGroup>
+
+          <ButtonGroup
+            value={colorMode}
+            onValueChange={(value) => setColorMode(value as 'light' | 'dark')}
+            className="md:ml-auto"
+          >
+            <ButtonGroupItem value="light">
+              <IconColorLight className="size-4" />
+              Light
+            </ButtonGroupItem>
+            <ButtonGroupItem value="dark">
+              <IconColorDark className="size-4" />
+              Dark
+            </ButtonGroupItem>
+          </ButtonGroup>
         </div>
 
         <FileTree
@@ -170,7 +167,7 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
           model={model}
           preloadedData={activePreloadedData}
           style={{
-            ...gitStatusPanelStyle,
+            ...panelStyle,
             height: `${String(viewportHeight)}px`,
           }}
         />
