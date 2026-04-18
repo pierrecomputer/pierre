@@ -477,7 +477,10 @@ function isEventInContextMenu(event: Event): boolean {
       return true;
     }
 
-    if (entry.dataset.type === 'context-menu-anchor') {
+    if (
+      entry.dataset.type === 'context-menu-anchor' ||
+      entry.dataset.type === CONTEXT_MENU_TRIGGER_TYPE
+    ) {
       return true;
     }
 
@@ -1982,9 +1985,7 @@ export function PathStoreTreesView({
     }
 
     const anchorElement =
-      contextMenuState.source === 'right-click'
-        ? contextMenuAnchorRef.current
-        : (contextMenuTriggerRef.current ?? contextMenuAnchorRef.current);
+      contextMenuTriggerRef.current ?? contextMenuAnchorRef.current;
     if (anchorElement == null) {
       return;
     }
@@ -2669,32 +2670,30 @@ export function PathStoreTreesView({
             data-visible={contextMenuAnchorVisible ? 'true' : 'false'}
             style={contextMenuAnchorStyle}
           >
-            {contextMenuButtonTriggerEnabled ? (
-              <button
-                ref={contextMenuTriggerRef}
-                type="button"
-                data-type={CONTEXT_MENU_TRIGGER_TYPE}
-                aria-label="Options"
-                aria-haspopup="menu"
-                data-visible={triggerButtonVisible ? 'true' : 'false'}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                }}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  if (contextMenuState != null) {
-                    closeContextMenu();
-                    return;
-                  }
+            <button
+              ref={contextMenuTriggerRef}
+              type="button"
+              data-type={CONTEXT_MENU_TRIGGER_TYPE}
+              aria-label="Options"
+              aria-haspopup="menu"
+              data-visible={triggerButtonVisible ? 'true' : 'false'}
+              onMouseDown={(event) => {
+                event.preventDefault();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (contextMenuState != null) {
+                  closeContextMenu();
+                  return;
+                }
 
-                  openMenuFromTrigger();
-                }}
-                tabIndex={-1}
-              >
-                <Icon {...resolveIcon('file-tree-icon-ellipsis')} />
-              </button>
-            ) : null}
+                openMenuFromTrigger();
+              }}
+              tabIndex={-1}
+            >
+              <Icon {...resolveIcon('file-tree-icon-ellipsis')} />
+            </button>
             {contextMenuState != null ? (
               <slot name={CONTEXT_MENU_SLOT_NAME} />
             ) : null}
