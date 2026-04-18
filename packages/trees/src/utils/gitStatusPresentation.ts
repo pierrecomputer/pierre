@@ -1,7 +1,5 @@
 import type { GitStatus } from '../types';
 
-// These labels keep the status slot width stable while still distinguishing
-// each supported git decoration in both tree renderers.
 export const GIT_STATUS_LABEL: Record<GitStatus, string | null> = {
   added: 'A',
   deleted: 'D',
