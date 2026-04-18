@@ -57,6 +57,7 @@
     "@pierre/tree-test-data": "workspace:*",
     "@pierre/vscode-icons": "catalog:",
     "@playwright/test": "catalog:",
+    "@radix-ui/react-dropdown-menu": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "autoprefixer": "catalog:",

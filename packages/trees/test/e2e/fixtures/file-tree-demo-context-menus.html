@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>file-tree demo context-menu fixtures</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+        background: #f7f7f8;
+      }
+
+      [data-demo-context-menu-shell] {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(2, minmax(0, 420px));
+      }
+
+      [data-demo-context-menu-card] {
+        max-width: 420px;
+      }
+
+      [data-demo-context-menu-card] h2 {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+
+      [data-demo-context-menu-frame] {
+        overflow: hidden;
+        border: 1px solid #d4d4d8;
+        border-radius: 12px;
+        background: white;
+        padding: 12px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+      }
+
+      [data-demo-context-menu-mount] {
+        height: 280px;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-demo-context-menu-shell>
+      <section data-demo-context-menu-card="radix-portaled">
+        <h2>Docs-like Radix context menu</h2>
+        <div data-demo-context-menu-frame>
+          <div data-demo-context-menu-mount="radix-portaled"></div>
+        </div>
+      </section>
+      <section data-demo-context-menu-card="react-client">
+        <h2>React client-rendered context menu</h2>
+        <div data-demo-context-menu-frame>
+          <div data-demo-context-menu-mount="react-client"></div>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="./file-tree-demo-context-menus.tsx"></script>
+  </body>
+</html>

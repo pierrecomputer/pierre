@@ -1053,7 +1053,8 @@
     display: flex;
   }
 
-  [data-type='context-menu-trigger']:hover {
+  [data-type='context-menu-trigger']:hover,
+  [data-type='context-menu-trigger'][aria-expanded='true'] {
     color: var(--trees-fg);
   }
 

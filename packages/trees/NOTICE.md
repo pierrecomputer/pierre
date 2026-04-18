@@ -1,15 +1,17 @@
-This project includes code derived from @headless-tree
-https://github.com/lukasbach/headless-tree
+This project includes some code derived from
+[@headless-tree/core](https://github.com/lukasbach/headless-tree).
 
-This work was primarily forked into the following locations before being
-modified:
+The initial version of this project used `headless-tree` as the underlying tree
+implementation. We have since written our own core at `packages/path-store`, but
+many of the best ideas from `headless-tree` made their way to `path-store` and
+`trees`. It's hard to identify exactly which code this is at this point, but
+definitely things like the drag and drop implementation and the general list
+approach to rendering and I'm sure more. The work that `@lukasbach` has
+contributed to this space is greatly appreciated. `<3`
 
-- `src/core/*`
-- `src/test/core/*`
-- `src/features/*`
+Original license for `headless-tree/core`:
 
-Original license for headless-tree:
-
+```
 MIT License
 
 Copyright (c) 2023 Lukas Bach
@@ -30,3 +32,4 @@ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```

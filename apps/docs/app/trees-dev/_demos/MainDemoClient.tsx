@@ -24,6 +24,7 @@ import { createRoot, type Root as ReactDomRoot } from 'react-dom/client';
 import { StateLog, useStateLog } from '../_components/StateLog';
 import { createPresortedPreparedInput } from '../_lib/createPresortedPreparedInput';
 import { DEMO_FILE_TREE_ICONS } from '../_lib/demoIcons';
+import { getFloatingContextMenuTriggerStyle } from '../_lib/getFloatingContextMenuTriggerStyle';
 import {
   FILE_TREE_PROOF_VIEWPORT_HEIGHT,
   type TreesWorkloadDataPayload,
@@ -289,7 +290,10 @@ function DemoMutationContextMenu({
   onRename,
 }: {
   item: ContextMenuItem;
-  context: Pick<ContextMenuOpenContext, 'close' | 'restoreFocus'>;
+  context: Pick<
+    ContextMenuOpenContext,
+    'anchorRect' | 'close' | 'restoreFocus'
+  >;
   onDelete: () => void;
   onRename: () => void;
 }) {
@@ -306,22 +310,15 @@ function DemoMutationContextMenu({
           type="button"
           aria-hidden="true"
           tabIndex={-1}
-          style={{
-            width: 1,
-            height: 1,
-            opacity: 0,
-            pointerEvents: 'none',
-            border: 0,
-            padding: 0,
-          }}
+          style={getFloatingContextMenuTriggerStyle(context.anchorRect)}
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         data-test-context-menu="true"
-        data-tree-demo-context-menu-root="true"
-        align="start"
-        side="right"
-        sideOffset={8}
+        data-file-tree-context-menu-root="true"
+        align="center"
+        side="bottom"
+        sideOffset={4}
         className="min-w-[220px]"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
@@ -371,7 +368,10 @@ function renderMutationContextMenuSlot({
   onDelete: () => void;
   onRename: () => void;
   slotElement: HTMLDivElement;
-  context: Pick<ContextMenuOpenContext, 'close' | 'restoreFocus'>;
+  context: Pick<
+    ContextMenuOpenContext,
+    'anchorRect' | 'close' | 'restoreFocus'
+  >;
 }): void {
   menuRootRef.current ??= createRoot(slotElement);
   slotElement.style.display = 'block';
@@ -394,17 +394,24 @@ function clearMutationContextMenuSlot({
   slotElement: HTMLDivElement;
   unmount?: boolean;
 }): void {
-  if (menuRootRef.current == null) {
+  const currentRoot = menuRootRef.current;
+  if (currentRoot == null) {
     return;
   }
 
-  if (unmount) {
-    menuRootRef.current.unmount();
-    menuRootRef.current = null;
-  } else {
-    menuRootRef.current.render(null);
-  }
   slotElement.style.display = 'none';
+  if (unmount) {
+    menuRootRef.current = null;
+    // Route transitions can unmount this helper while React is still rendering
+    // the next page. Defer the nested root teardown until the current render
+    // completes so React does not warn about a synchronous root unmount.
+    queueMicrotask(() => {
+      currentRoot.unmount();
+    });
+    return;
+  }
+
+  currentRoot.render(null);
 }
 
 const HydratedMainDemoController = memo(function HydratedMainDemoController({

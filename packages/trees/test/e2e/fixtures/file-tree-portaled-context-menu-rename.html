@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>file-tree portaled context-menu rename fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+
+      [data-file-tree-portaled-rename-shell] {
+        display: grid;
+        gap: 16px;
+        max-width: 560px;
+      }
+
+      [data-file-tree-portaled-rename-mount] {
+        width: 400px;
+        height: 320px;
+        border: 1px solid #ccc;
+      }
+
+      [data-file-tree-portaled-rename-log] {
+        height: 160px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        padding: 8px;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-file-tree-portaled-rename-shell>
+      <div>
+        <h2>Portaled context-menu rename tree</h2>
+        <div data-file-tree-portaled-rename-mount></div>
+      </div>
+      <div data-file-tree-portaled-rename-log></div>
+    </div>
+    <script
+      type="module"
+      src="./file-tree-portaled-context-menu-rename.tsx"
+    ></script>
+  </body>
+</html>

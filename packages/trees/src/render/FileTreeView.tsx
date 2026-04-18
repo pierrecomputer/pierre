@@ -2419,6 +2419,7 @@ export function FileTreeView({
     pointerAnchorRect != null
       ? {
           left: `${pointerAnchorRect.left}px`,
+          position: 'fixed',
           right: 'auto',
           top: `${pointerAnchorRect.top}px`,
         }
@@ -2427,6 +2428,12 @@ export function FileTreeView({
             top: `${contextMenuAnchorTop}px`,
           }
         : undefined;
+  const contextMenuTriggerStyle = isPointerContextMenuOpen
+    ? {
+        opacity: '0',
+      }
+    : undefined;
+
   const openMenuFromTrigger = (): void => {
     if (!contextMenuButtonTriggerEnabled) {
       return;
@@ -2668,6 +2675,7 @@ export function FileTreeView({
               data-type={CONTEXT_MENU_TRIGGER_TYPE}
               aria-label="Options"
               aria-haspopup="menu"
+              aria-expanded={contextMenuState != null ? 'true' : 'false'}
               data-visible={triggerButtonVisible ? 'true' : 'false'}
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -2683,6 +2691,7 @@ export function FileTreeView({
                 openMenuFromTrigger();
               }}
               tabIndex={-1}
+              style={contextMenuTriggerStyle}
             >
               <Icon {...resolveIcon('file-tree-icon-ellipsis')} />
             </button>

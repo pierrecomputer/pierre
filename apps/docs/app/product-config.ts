@@ -40,7 +40,7 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
     description:
       "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.",
     llmsDescription:
-      'An open source file tree rendering library for the web. Built on @headless-tree/core for state management, with React and vanilla JS APIs, SSR support, and customizable styling.',
+      'An open source file tree rendering library for the web. Built for extreme performance on large trees, with React and vanilla JS APIs, SSR support, and customizable styling.',
     basePath: isTrees ? '' : '/trees',
     docsPath: isTrees ? '/docs' : '/trees/docs',
     packageName: '@pierre/trees',

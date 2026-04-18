@@ -1,6 +1,10 @@
 'use client';
 
-import type { FileTreeOptions as DemoFileTreeOptions } from '@pierre/trees';
+import type {
+  ContextMenuItem,
+  ContextMenuOpenContext,
+  FileTreeOptions as DemoFileTreeOptions,
+} from '@pierre/trees';
 import {
   FileTree,
   type FileTreePreloadedData,
@@ -11,12 +15,77 @@ import {
 import { useState } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
+import { getFloatingContextMenuTriggerStyle } from '../_lib/getFloatingContextMenuTriggerStyle';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface ReactDemoClientProps {
   flattenEmptyDirectories: boolean;
   paths: readonly string[];
   preloadedData: FileTreePreloadedData;
   viewportHeight: number;
+}
+
+// Portals the client demo menu so the right-column example stays visible even
+// when the row itself sits close to the viewport edge.
+function ClientRenderedContextMenu({
+  context,
+  item,
+}: {
+  context: Pick<
+    ContextMenuOpenContext,
+    'anchorRect' | 'close' | 'restoreFocus'
+  >;
+  item: ContextMenuItem;
+}) {
+  const itemType = item.kind === 'directory' ? 'Folder' : 'File';
+
+  return (
+    <DropdownMenu
+      open
+      modal={false}
+      onOpenChange={(open) => !open && context.close()}
+    >
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-hidden="true"
+          tabIndex={-1}
+          style={getFloatingContextMenuTriggerStyle(context.anchorRect)}
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        data-file-tree-context-menu-root="true"
+        data-test-react-context-menu="true"
+        align="center"
+        side="bottom"
+        sideOffset={4}
+        className="min-w-[220px]"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          context.restoreFocus();
+        }}
+      >
+        <DropdownMenuLabel className="max-w-[280px] truncate">
+          {itemType}: {item.path}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() => {
+            context.close();
+          }}
+        >
+          Inspect selection
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 function ClientRenderedExample({
@@ -49,10 +118,8 @@ function ClientRenderedExample({
       </p>
       <FileTree
         model={model}
-        renderContextMenu={(item) => (
-          <div className="rounded-md border bg-white px-3 py-2 text-sm shadow-sm">
-            Menu for {item.path}
-          </div>
+        renderContextMenu={(item, context) => (
+          <ClientRenderedContextMenu context={context} item={item} />
         )}
         style={{ height: `${String(viewportHeight)}px` }}
         header={

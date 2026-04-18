@@ -89,6 +89,7 @@
         "zod": "catalog:",
       },
       "devDependencies": {
+        "@playwright/test": "catalog:",
         "@tailwindcss/postcss": "catalog:",
         "@types/hast": "catalog:",
         "@types/mdast": "catalog:",
@@ -101,7 +102,7 @@
     },
     "packages/diffs": {
       "name": "@pierre/diffs",
-      "version": "1.1.10",
+      "version": "1.1.15",
       "dependencies": {
         "@pierre/theme": "catalog:",
         "@shikijs/transformers": "^3.0.0",
@@ -199,6 +200,7 @@
         "@pierre/tree-test-data": "workspace:*",
         "@pierre/vscode-icons": "catalog:",
         "@playwright/test": "catalog:",
+        "@radix-ui/react-dropdown-menu": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
         "autoprefixer": "catalog:",

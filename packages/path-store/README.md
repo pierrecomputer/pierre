@@ -254,5 +254,7 @@ staticStore.getVisibleSlice(0, 9);
 
 ## Acknowledgements
 
-Inspired by [@headless-tree/core](https://github.com/lukasbach/headless-tree) by
-[@lukasbach](https://github.com/lukasbach).
+Thank you to [@lukasbach](https://github.com/lukasbach) for
+[@headless-tree/core](https://github.com/lukasbach/headless-tree). This project
+initially used `headless-tree` and it many of its ideas still exist in our
+implementation. More details and original license in `NOTICE.md`.

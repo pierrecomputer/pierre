@@ -325,6 +325,12 @@ export interface FileTreeContextMenuCompositionOptions {
     context: FileTreeContextMenuOpenContext
   ) => void;
   onClose?: () => void;
+  /**
+   * If the interactive menu surface renders through a portal instead of inside
+   * the returned element, mark that portaled root with
+   * `data-file-tree-context-menu-root="true"` so internal clicks are not
+   * treated as outside clicks.
+   */
   render?: (
     item: FileTreeContextMenuItem,
     context: FileTreeContextMenuOpenContext

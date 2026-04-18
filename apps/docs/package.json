@@ -19,6 +19,9 @@
     "prod": "bun run build && next start",
     "start": "next start",
     "generate-llms-txt": "bun scripts/generate-llms-txt.ts",
+    "test:e2e": "bun run build:deps && bun run build:next && (bun ./test/e2e/check-playwright-binary.ts || bun run test:e2e:installbinary) && bunx playwright test -c test/e2e/playwright.config.ts",
+    "test:e2e:installbinary": "bunx playwright@1.51.1 install chromium",
+    "test:e2e:server": "PORT=4174 bun run start",
     "tsc": "bun run build:deps && tsgo --noEmit --pretty"
   },
   "dependencies": {
@@ -69,6 +72,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@tailwindcss/postcss": "catalog:",
     "@types/hast": "catalog:",
     "@types/mdast": "catalog:",

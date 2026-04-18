@@ -78,6 +78,31 @@ test.describe('file-tree rename proof', () => {
     await expect(indexRow).toBeVisible();
   });
 
+  test('portaled context-menu rename keeps the inline input focused', async ({
+    page,
+  }) => {
+    await page.goto(
+      '/test/e2e/fixtures/file-tree-portaled-context-menu-rename.html'
+    );
+    await page.waitForFunction(
+      () => window.__fileTreeRenameFixtureReady === true
+    );
+
+    const tree = page.locator('file-tree-container').nth(0);
+    const indexRow = tree.locator(
+      'button[data-type="item"][data-item-path="src/index.ts"]'
+    );
+    await indexRow.click();
+    await indexRow.click({ button: 'right' });
+
+    const menu = page.locator('[data-test-context-menu-mode="portaled"]');
+    await expect(menu).toBeVisible();
+    await page.locator('[data-test-menu-rename="src/index.ts"]').click();
+
+    const renameInput = tree.locator('input[data-item-rename-input]');
+    await expect(renameInput).toBeFocused();
+    await expect(renameInput).toHaveValue('index.ts');
+  });
   test('trigger-opened menu still restores focus after a prior rename flow disabled restoreFocus', async ({
     page,
   }) => {

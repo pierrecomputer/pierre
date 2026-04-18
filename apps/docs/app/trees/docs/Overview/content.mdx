@@ -18,15 +18,14 @@ customizable styling.
 />
 
 We have an opinionated stance in our architecture: **file trees benefit from
-headless state management**. We lean into this by building on top of
-[`@headless-tree/core`](https://www.npmjs.com/package/@headless-tree/core) for
-expansion, selection, keyboard navigation, and search while keeping rendering
-ergonomic in React and vanilla JavaScript. The UI renders in Shadow DOM for
-style isolation.
+headless state management**. Our core path ingestion and tree store is highly
+optimized for fast ingestion of large trees and near constant time mutations.
+Most features are configurable, but are strongly integrated so that they can
+exist together coherently and performantly.
 
-Generally speaking, you'll want to use the `FileTree` component—it provides an
-easy-to-use API whether you're in vanilla JavaScript or React. For this
-overview, we'll show both; the React and vanilla APIs are equivalent.
+`FileTree` is a vanilla javascript class that can inject trees into a container
+on your page. We also expose a `@pierre/trees/react` implementation, which is
+just a thin wrapper around the vanilla javascript class.
 
 ## Rendering Trees
 

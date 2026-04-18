@@ -1,6 +1,6 @@
 # @pierre/trees
 
-> An open source file tree rendering library for the web. Built on @headless-tree/core for state management, with React and vanilla JS APIs, SSR support, and customizable styling.
+> An open source file tree rendering library for the web. Built for extreme performance on large trees, with React and vanilla JS APIs, SSR support, and customizable styling.
 
 - Package: `@pierre/trees` on [npm](https://www.npmjs.com/package/@pierre/trees)
 - GitHub: https://github.com/pierrecomputer/pierre
