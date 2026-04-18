@@ -20,6 +20,11 @@ import {
   FILE_TREE_RENAME_VIEW,
   FileTreeController,
 } from '../model/FileTreeController';
+import {
+  GIT_STATUS_DESCENDANT_TITLE,
+  GIT_STATUS_LABEL,
+  GIT_STATUS_TITLE,
+} from '../utils/gitStatusPresentation';
 import type {
   FileTreeContextMenuItem,
   FileTreeContextMenuOpenContext,
@@ -288,18 +293,6 @@ function getDragEdgeScrollDelta(clientY: number, scrollRect: DOMRect): number {
   return 0;
 }
 
-const PATH_STORE_GIT_STATUS_TEXT: Record<GitStatus, string> = {
-  added: 'A',
-  deleted: 'D',
-  modified: 'M',
-};
-
-const PATH_STORE_GIT_STATUS_TITLE: Record<GitStatus, string> = {
-  added: 'Git status: added',
-  deleted: 'Git status: deleted',
-  modified: 'Git status: modified',
-};
-
 // Built-in git decorations reuse the existing status slot so file-tree rows can
 // inherit the shared git-status CSS contract without a second decoration API.
 function getBuiltInGitStatusDecoration(
@@ -307,16 +300,21 @@ function getBuiltInGitStatusDecoration(
   containsGitChange: boolean
 ): FileTreeRowDecoration | null {
   if (gitStatus != null) {
+    const label = GIT_STATUS_LABEL[gitStatus];
+    if (label == null) {
+      return null;
+    }
+
     return {
-      text: PATH_STORE_GIT_STATUS_TEXT[gitStatus],
-      title: PATH_STORE_GIT_STATUS_TITLE[gitStatus],
+      text: label,
+      title: GIT_STATUS_TITLE[gitStatus],
     };
   }
 
   if (containsGitChange) {
     return {
       icon: { name: 'file-tree-icon-dot', width: 6, height: 6 },
-      title: 'Contains git changes',
+      title: GIT_STATUS_DESCENDANT_TITLE,
     };
   }
 

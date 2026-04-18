@@ -7,6 +7,10 @@ export const sharedDemoPaths: readonly string[] = [
   'Build/scripts.js',
   'Build/assets/images/social/logo.png',
   'config/project/app.config.json',
+  'node_modules/react/index.js',
+  'node_modules/react/jsx-runtime.js',
+  'node_modules/preact/index.js',
+  'node_modules/preact/hooks.js',
   'src/components/Button.tsx',
   'src/components/Card.tsx',
   'src/components/Header.tsx',
@@ -31,15 +35,21 @@ export const sharedInitialExpandedPaths: readonly string[] = [
 ];
 
 export const GIT_STATUSES_A: GitStatusEntry[] = [
+  { path: 'README.md', status: 'untracked' },
+  { path: 'package.json', status: 'renamed' },
+  { path: 'node_modules/', status: 'ignored' },
   { path: 'src/index.ts', status: 'modified' },
   { path: 'src/components/Button.tsx', status: 'added' },
+  { path: 'src/utils/worker.ts', status: 'copied' },
   { path: '.gitignore', status: 'deleted' },
 ];
 
 export const GIT_STATUSES_B: GitStatusEntry[] = [
   { path: 'README.md', status: 'modified' },
-  { path: 'src/lib/utils.ts', status: 'modified' },
-  { path: 'src/utils/worker.ts', status: 'added' },
+  { path: 'node_modules/', status: 'ignored' },
+  { path: 'src/lib/utils.ts', status: 'renamed' },
+  { path: 'src/utils/worker.ts', status: 'untracked' },
+  { path: 'src/utils/stream.ts', status: 'copied' },
 ];
 
 // Lucide icons converted to sprite sheet

@@ -1,6 +1,13 @@
 export type FileList = string[];
 
-export type GitStatus = 'added' | 'deleted' | 'modified';
+export type GitStatus =
+  | 'added'
+  | 'copied'
+  | 'deleted'
+  | 'ignored'
+  | 'modified'
+  | 'renamed'
+  | 'untracked';
 
 export type GitStatusEntry = {
   path: string;

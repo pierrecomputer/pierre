@@ -66,13 +66,16 @@
         'test/index.test.ts',
       ];
       const statusesA = [
+        { path: 'README.md', status: 'untracked' },
+        { path: 'package.json', status: 'renamed' },
         { path: 'src/index.ts', status: 'modified' },
         { path: 'src/components/Button.tsx', status: 'added' },
         { path: 'test/index.test.ts', status: 'deleted' },
       ];
       const statusesB = [
         { path: 'README.md', status: 'modified' },
-        { path: 'src/utils/worker.ts', status: 'added' },
+        { path: 'src/components/Card.tsx', status: 'ignored' },
+        { path: 'src/utils/worker.ts', status: 'copied' },
       ];
       const mount = document.querySelector('[data-file-tree-git-status-mount]');
       const state = document.querySelector('[data-file-tree-git-status-state]');

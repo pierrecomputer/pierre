@@ -62,15 +62,17 @@ export function GitStatusDemoClient({
       <header className="space-y-2">
         <h1 className="text-2xl font-bold">Git Status</h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
-          Changed files render A/M/D markers, folders with changed descendants
-          keep their shared dot indicator, and the controls below call
-          <code>setGitStatus()</code> on the live tree without recreating it.
+          Changed files render A, M, D, U, R, and C markers, ignored rows
+          keep their muted gitignored styling without a badge, folders with
+          changed descendants keep their shared dot indicator, and the controls
+          below call <code>setGitStatus()</code> on the live tree without
+          recreating it.
         </p>
       </header>
 
       <ExampleCard
         title="Git-status tree"
-        description="Toggle git status off or swap between the two demo sets. The hydrated tree keeps the same instance while the shared status slot and semantic row attrs update in place."
+        description="Toggle git status off or swap between the two demo sets. The hydrated tree keeps the same instance while the status slot and semantic row attrs update in place."
         controls={controls}
       >
         <div

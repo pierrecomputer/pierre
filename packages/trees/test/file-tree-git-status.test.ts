@@ -108,7 +108,7 @@ function getStatusLabel(button: HTMLButtonElement): string | null {
 }
 
 describe('file-tree git status', () => {
-  test('renders file A/M/D markers and folder change attrs', async () => {
+  test('renders markers for all supported file git statuses and folder change attrs', async () => {
     const { cleanup, dom } = installDom();
     try {
       const { FileTree } = await import('../src/render/FileTree');
@@ -117,8 +117,12 @@ describe('file-tree git status', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         gitStatus: [
+          { path: 'README.md', status: 'untracked' },
+          { path: 'package.json', status: 'renamed' },
           { path: 'src/index.ts', status: 'modified' },
           { path: 'src/components/Button.tsx', status: 'added' },
+          { path: 'src/components/Card.tsx', status: 'ignored' },
+          { path: 'src/utils/worker.ts', status: 'copied' },
           { path: 'test/index.test.ts', status: 'deleted' },
         ],
         initialExpansion: 'open',
@@ -130,11 +134,23 @@ describe('file-tree git status', () => {
       await flushDom();
 
       const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const readmeButton = getItemButton(shadowRoot, dom, 'README.md');
+      const packageButton = getItemButton(shadowRoot, dom, 'package.json');
       const indexButton = getItemButton(shadowRoot, dom, 'src/index.ts');
       const addedButton = getItemButton(
         shadowRoot,
         dom,
         'src/components/Button.tsx'
+      );
+      const ignoredButton = getItemButton(
+        shadowRoot,
+        dom,
+        'src/components/Card.tsx'
+      );
+      const copiedButton = getItemButton(
+        shadowRoot,
+        dom,
+        'src/utils/worker.ts'
       );
       const deletedButton = getItemButton(
         shadowRoot,
@@ -143,10 +159,24 @@ describe('file-tree git status', () => {
       );
       const srcFolder = getItemButton(shadowRoot, dom, 'src/');
 
+      expect(readmeButton.getAttribute('data-item-git-status')).toBe(
+        'untracked'
+      );
+      expect(getStatusLabel(readmeButton)).toBe('U');
+      expect(packageButton.getAttribute('data-item-git-status')).toBe(
+        'renamed'
+      );
+      expect(getStatusLabel(packageButton)).toBe('R');
       expect(indexButton.getAttribute('data-item-git-status')).toBe('modified');
       expect(getStatusLabel(indexButton)).toBe('M');
       expect(addedButton.getAttribute('data-item-git-status')).toBe('added');
       expect(getStatusLabel(addedButton)).toBe('A');
+      expect(ignoredButton.getAttribute('data-item-git-status')).toBe(
+        'ignored'
+      );
+      expect(getStatusLabel(ignoredButton)).toBeNull();
+      expect(copiedButton.getAttribute('data-item-git-status')).toBe('copied');
+      expect(getStatusLabel(copiedButton)).toBe('C');
       expect(deletedButton.getAttribute('data-item-git-status')).toBe(
         'deleted'
       );
@@ -166,7 +196,7 @@ describe('file-tree git status', () => {
     }
   });
 
-  test('renders explicit directory git statuses as A/M/D labels instead of a descendant dot', async () => {
+  test('renders explicit ignored directory statuses without a descendant dot', async () => {
     const { cleanup, dom } = installDom();
     try {
       const { FileTree } = await import('../src/render/FileTree');
@@ -174,7 +204,7 @@ describe('file-tree git status', () => {
       dom.window.document.body.appendChild(mount);
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
-        gitStatus: [{ path: 'src/', status: 'modified' }],
+        gitStatus: [{ path: 'src/', status: 'ignored' }],
         initialExpansion: 'open',
         paths: FILES,
         viewportHeight: 180,
@@ -185,11 +215,11 @@ describe('file-tree git status', () => {
 
       const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
       const srcFolder = getItemButton(shadowRoot, dom, 'src/');
-      expect(srcFolder.getAttribute('data-item-git-status')).toBe('modified');
+      expect(srcFolder.getAttribute('data-item-git-status')).toBe('ignored');
       expect(
         srcFolder.getAttribute('data-item-contains-git-change')
       ).toBeNull();
-      expect(getStatusLabel(srcFolder)).toBe('M');
+      expect(getStatusLabel(srcFolder)).toBeNull();
       expect(
         srcFolder.querySelector('[data-icon-name="file-tree-icon-dot"]')
       ).toBeNull();
@@ -409,7 +439,7 @@ describe('file-tree git status', () => {
         await import('../src/render/FileTree');
       const options = {
         flattenEmptyDirectories: false,
-        gitStatus: [{ path: 'src/index.ts', status: 'modified' as const }],
+        gitStatus: [{ path: 'src/index.ts', status: 'renamed' as const }],
         id: 'pst-git-status-ssr',
         initialExpansion: 'open' as const,
         paths: FILES,
@@ -417,7 +447,7 @@ describe('file-tree git status', () => {
       };
       const payload = preloadFileTree(options);
 
-      expect(payload.shadowHtml).toContain('data-item-git-status="modified"');
+      expect(payload.shadowHtml).toContain('data-item-git-status="renamed"');
       expect(payload.shadowHtml).toContain(
         'data-item-contains-git-change="true"'
       );
@@ -445,7 +475,7 @@ describe('file-tree git status', () => {
         getItemButton(shadowRoot, dom, 'src/index.ts').getAttribute(
           'data-item-git-status'
         )
-      ).toBe('modified');
+      ).toBe('renamed');
       expect(
         getItemButton(shadowRoot, dom, 'src/').getAttribute(
           'data-item-contains-git-change'
