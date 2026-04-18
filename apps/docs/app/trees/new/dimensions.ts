@@ -5,7 +5,7 @@ export const TREE_NEW_VIEWPORT_HEIGHTS = {
   contextMenu: 640,
   customIcons: TREE_NEW_DEFAULT_VIEWPORT_HEIGHT,
   dragDrop: 420,
-  flattenFlattened: TREE_NEW_DEFAULT_VIEWPORT_HEIGHT,
+  flattenFlattened: 540,
   flattenHierarchical: 600,
   gitStatusFiltered: 180,
   gitStatusFull: 690,
