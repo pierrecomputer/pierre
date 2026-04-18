@@ -21,7 +21,7 @@ import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Switch } from '@/components/ui/switch';
-import { FileTree } from '@/lib/treesCompat';
+import { FileTree } from '@/lib/treesCompatClient';
 
 export function GitStatusSectionClient({
   prerenderedHTML,

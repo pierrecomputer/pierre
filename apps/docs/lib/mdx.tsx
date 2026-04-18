@@ -32,7 +32,7 @@ import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
 import remarkTocIgnore from './remark-toc-ignore';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
-import { FileTree } from '@/lib/treesCompat';
+import { FileTree } from '@/lib/treesCompatClient';
 
 function MdxLink(props: ComponentPropsWithoutRef<'a'>) {
   const href = props.href;

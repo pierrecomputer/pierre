@@ -19,7 +19,7 @@ import { Swatches } from './Swatches';
 import { useTreeStatePreview } from './useTreeStatePreview';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
-import { FileTree } from '@/lib/treesCompat';
+import { FileTree } from '@/lib/treesCompatClient';
 
 function ModeToggle({
   mode,

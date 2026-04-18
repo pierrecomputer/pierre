@@ -11,7 +11,7 @@ import { TreeExampleSection } from './TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { FileTree } from '@/lib/treesCompat';
+import { FileTree } from '@/lib/treesCompatClient';
 
 const dragDropStyle = {
   colorScheme: 'dark',

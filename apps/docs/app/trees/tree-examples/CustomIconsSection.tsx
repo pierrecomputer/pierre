@@ -10,8 +10,9 @@ import {
   DEFAULT_FILE_TREE_PANEL_STYLE,
 } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
-import { FileTree, preloadFileTree } from '@/lib/treesCompat';
 import { PRODUCTS } from '@/app/product-config';
+import { preloadFileTree } from '@/lib/treesCompat';
+import { FileTree } from '@/lib/treesCompatClient';
 
 const panelStyle = {
   ...DEFAULT_FILE_TREE_PANEL_STYLE,

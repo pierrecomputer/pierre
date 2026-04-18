@@ -3,7 +3,8 @@ import type { CSSProperties } from 'react';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { baseTreeOptions, DEFAULT_FILE_TREE_PANEL_CLASS } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
-import { FileTree, preloadFileTree } from '@/lib/treesCompat';
+import { preloadFileTree } from '@/lib/treesCompat';
+import { FileTree } from '@/lib/treesCompatClient';
 
 const a11yStyle: CSSProperties = {
   colorScheme: 'dark',

@@ -9,8 +9,9 @@ import { baseTreeOptions } from './demo-data';
 import { styleObjectToCss } from './styleToCss';
 import { TreeCssViewer } from './TreeCssViewer';
 import { TreeExampleSection } from './TreeExampleSection';
-import { FileTree, preloadFileTree } from '@/lib/treesCompat';
 import { PRODUCTS } from '@/app/product-config';
+import { preloadFileTree } from '@/lib/treesCompat';
+import { FileTree } from '@/lib/treesCompatClient';
 
 /** Theme vars applied to the panel wrapper and to the FileTree host so shadow DOM sees them. */
 function lightTheme(): CSSProperties {

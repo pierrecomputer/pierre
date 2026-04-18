@@ -4,8 +4,9 @@ import type { CSSProperties } from 'react';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { DEFAULT_FILE_TREE_PANEL_CLASS } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
-import { FileTree, preloadFileTree } from '@/lib/treesCompat';
 import { PRODUCTS } from '@/app/product-config';
+import { preloadFileTree } from '@/lib/treesCompat';
+import { FileTree } from '@/lib/treesCompatClient';
 
 const EXTENSIONS = ['.ts', '.tsx', '.css', '.json', '.md', '.test.ts'];
 

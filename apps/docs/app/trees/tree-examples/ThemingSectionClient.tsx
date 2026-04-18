@@ -32,7 +32,7 @@ import {
   FileTree,
   themeToTreeStyles,
   type TreeThemeStyles,
-} from '@/lib/treesCompat';
+} from '@/lib/treesCompatClient';
 
 const DEFAULT_LIGHT = 'default-light' as const;
 const DEFAULT_DARK = 'default-dark' as const;
