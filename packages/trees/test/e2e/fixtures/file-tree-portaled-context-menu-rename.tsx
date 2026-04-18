@@ -4,8 +4,10 @@ import type {
   FileTree as FileTreeModelType,
 } from '../../../src/index';
 
+const fileTreeRuntimePath: string = '/dist/index.js';
+
 const { FileTree } = (await import(
-  /* @vite-ignore */ '/dist/index.js'
+  /* @vite-ignore */ fileTreeRuntimePath
 )) as typeof import('../../../src/index');
 
 declare global {

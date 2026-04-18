@@ -8,11 +8,14 @@ import type {
   ContextMenuOpenContext,
 } from '../../../src/index';
 
+const fileTreeRuntimePath: string = '/dist/index.js';
+const reactRuntimePath: string = '/dist/react/index.js';
+
 const { FileTree: FileTreeModel } = (await import(
-  /* @vite-ignore */ '/dist/index.js'
+  /* @vite-ignore */ fileTreeRuntimePath
 )) as typeof import('../../../src/index');
 const { FileTree, useFileTree } = (await import(
-  /* @vite-ignore */ '/dist/react/index.js'
+  /* @vite-ignore */ reactRuntimePath
 )) as typeof import('../../../src/react/index');
 
 declare global {
