@@ -173,14 +173,11 @@ jobs:
       - name: Run tests - path-store
         run: bun ws path-store test
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
+      - name: Mount Playwright browsers
+        uses: useblacksmith/stickydisk@v1
         with:
+          key: ${{ github.repository }}-playwright-browsers-${{ runner.os }}
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
-
       - name: Install Playwright browser - trees
         run: bunx playwright@1.51.1 install --with-deps chromium
 
