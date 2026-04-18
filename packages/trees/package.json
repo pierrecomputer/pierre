@@ -16,6 +16,14 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./path-store": {
+      "types": "./dist/path-store/index.d.ts",
+      "import": "./dist/path-store/index.js"
+    },
+    "./path-store/react": {
+      "types": "./dist/path-store/react/index.d.ts",
+      "import": "./dist/path-store/react/index.js"
+    },
     "./web-components": {
       "types": "./dist/web-components.d.ts",
       "import": "./dist/web-components.js"

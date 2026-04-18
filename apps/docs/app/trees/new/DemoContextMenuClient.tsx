@@ -17,7 +17,6 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { createRoot, type Root as ReactDomRoot } from 'react-dom/client';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { ProjectHeader } from '../../trees-dev/_components/DemoHeaderContent';
 import { sampleFileList } from '../demo-data';
 import { TreeExampleSection } from '../tree-examples/TreeExampleSection';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
@@ -59,6 +58,42 @@ const TRIGGER_MODE_DEMOS: readonly TriggerModeDemo[] = [
 
 interface DemoContextMenuClientProps {
   preloadedDataById: Readonly<Record<string, FileTreePreloadedData>>;
+}
+
+function LocalProjectHeader({
+  projectName,
+  onAddFile,
+  onAddFolder,
+}: {
+  projectName: string;
+  onAddFile: () => void;
+  onAddFolder: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-[#232323] px-2 py-1.5">
+      <div className="min-w-0 truncate text-xs font-semibold text-zinc-200">
+        {projectName}
+      </div>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          title="New file"
+          onClick={onAddFile}
+          className="h-5 w-5 rounded text-xs text-zinc-300 hover:bg-white/10"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          title="New folder"
+          onClick={onAddFolder}
+          className="h-5 w-5 rounded text-xs text-zinc-300 hover:bg-white/10"
+        >
+          #
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function getParentPath(path: string): string {
@@ -253,7 +288,7 @@ function useHeaderSlotRenderer(
     }
 
     headerRootRef.current.render(
-      <ProjectHeader
+      <LocalProjectHeader
         projectName={projectName}
         onAddFile={() => {
           model.add(getUniquePath(model, 'new-file.ts'));
