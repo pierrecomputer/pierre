@@ -4,7 +4,7 @@
 
 - Package: `@pierre/trees` on [npm](https://www.npmjs.com/package/@pierre/trees)
 - GitHub: https://github.com/pierrecomputer/pierre
-- Docs: https://diffs.com/preview/trees/docs
+- Docs: https://diffs.com/trees/docs
 
 ## Overview
 

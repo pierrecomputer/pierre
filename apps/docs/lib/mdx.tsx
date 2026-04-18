@@ -5,7 +5,6 @@ import {
   IconCiWarningFill,
   IconInfoFill,
 } from '@pierre/icons';
-import { FileTree } from '@pierre/trees/react';
 import { compileMDX } from 'next-mdx-remote/rsc';
 import Link from 'next/link';
 import { readFile } from 'node:fs/promises';
@@ -33,6 +32,7 @@ import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
 import remarkTocIgnore from './remark-toc-ignore';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
+import { FileTree } from '@/lib/treesCompat';
 
 function MdxLink(props: ComponentPropsWithoutRef<'a'>) {
   const href = props.href;

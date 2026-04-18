@@ -1,11 +1,11 @@
+import type { CSSProperties } from 'react';
+
+import { sharedDemoFileTreeOptions } from '../../trees/demo-data';
 import type {
   FileTreeOptions,
   FileTreeSearchMode,
   GitStatusEntry,
-} from '@pierre/trees';
-import type { CSSProperties } from 'react';
-
-import { sharedDemoFileTreeOptions } from '../../trees/demo-data';
+} from '@/lib/treesCompat';
 
 /** Default panel look for FileTree in docs examples. Apply via className + style on FileTree. */
 export const DEFAULT_FILE_TREE_PANEL_CLASS =

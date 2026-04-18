@@ -1,7 +1,6 @@
-import { preloadFileTree } from '@pierre/trees/ssr';
-
 import { dragDropOptions } from './demo-data';
 import { DragDropSectionClient } from './DragDropSectionClient';
+import { preloadFileTree } from '@/lib/treesCompat';
 
 const prerenderedHTML = preloadFileTree({
   ...dragDropOptions(['package.json']),

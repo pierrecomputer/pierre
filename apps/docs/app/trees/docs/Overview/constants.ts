@@ -1,7 +1,7 @@
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
-import type { FileTreeOptions } from '@pierre/trees';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
+import type { FileTreeOptions } from '@/lib/treesCompat';
 
 /** File list and options for the live FileTree in the Overview section */
 export const OVERVIEW_FILE_TREE_OPTIONS: FileTreeOptions = {

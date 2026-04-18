@@ -1,7 +1,6 @@
 'use client';
 
 import { IconLock, IconRefresh } from '@pierre/icons';
-import { FileTree } from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useCallback, useMemo, useState } from 'react';
@@ -12,6 +11,7 @@ import { TreeExampleSection } from './TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { FileTree } from '@/lib/treesCompat';
 
 const dragDropStyle = {
   colorScheme: 'dark',

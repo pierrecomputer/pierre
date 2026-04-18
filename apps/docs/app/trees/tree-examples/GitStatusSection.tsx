@@ -1,7 +1,6 @@
-import { preloadFileTree } from '@pierre/trees/ssr';
-
 import { baseTreeOptions, GIT_STATUSES_A } from './demo-data';
 import { GitStatusSectionClient } from './GitStatusSectionClient';
+import { preloadFileTree } from '@/lib/treesCompat';
 
 const initialVisibleFiles = baseTreeOptions.initialFiles ?? [];
 const prerenderedHTML = preloadFileTree(

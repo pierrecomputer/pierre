@@ -5,7 +5,6 @@ import {
   IconColorLight,
   IconSymbolDiffstat,
 } from '@pierre/icons';
-import { FileTree } from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
@@ -22,6 +21,7 @@ import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Switch } from '@/components/ui/switch';
+import { FileTree } from '@/lib/treesCompat';
 
 export function GitStatusSectionClient({
   prerenderedHTML,
@@ -46,13 +46,12 @@ export function GitStatusSectionClient({
   );
 
   const visibleFiles = useMemo(() => {
+    const allVisibleFiles = baseTreeOptions.initialFiles ?? [];
     if (!enabled || showUnmodified) {
-      return baseTreeOptions.initialFiles;
+      return allVisibleFiles;
     }
     const changedPaths = new Set(activeGitStatus.map((entry) => entry.path));
-    return baseTreeOptions.initialFiles.filter((path) =>
-      changedPaths.has(path)
-    );
+    return allVisibleFiles.filter((path) => changedPaths.has(path));
   }, [activeGitStatus, enabled, showUnmodified]);
   const panelStyle = {
     colorScheme: colorMode,

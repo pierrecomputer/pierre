@@ -1,6 +1,5 @@
-import type { GitStatusEntry } from '@pierre/trees';
-
 import { sampleFileList } from '../../trees/demo-data';
+import type { GitStatusEntry } from '@/lib/treesCompat';
 
 export interface ThemeGridItem {
   name: string;

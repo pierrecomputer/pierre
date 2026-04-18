@@ -2,7 +2,7 @@ import type {
   FileTreeOptions,
   FileTreeSelectionItem,
   FileTreeStateConfig,
-} from '@pierre/trees';
+} from '@/lib/treesCompat';
 
 export const sampleFileList: string[] = [
   'README.md',

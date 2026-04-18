@@ -1,8 +1,8 @@
 import { parseDiffFromFile, resolveTheme } from '@pierre/diffs';
-import { themeToTreeStyles } from '@pierre/trees';
 import { Suspense } from 'react';
 
 import { ThemesGridClient } from './ThemesGridClient';
+import { themeToTreeStyles } from '@/lib/treesCompat';
 
 const SAMPLE_OLD_FILE = {
   name: 'config.ts',

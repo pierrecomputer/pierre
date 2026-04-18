@@ -1,6 +1,4 @@
 import { IconBrush, IconFileTreeFill, IconFire } from '@pierre/icons';
-import { FileTree } from '@pierre/trees/react';
-import { preloadFileTree } from '@pierre/trees/ssr';
 import type { CSSProperties } from 'react';
 
 import { PierreIconsFootnote } from '../../components/PierreIconsFootnote';
@@ -12,6 +10,7 @@ import {
   DEFAULT_FILE_TREE_PANEL_STYLE,
 } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
+import { FileTree, preloadFileTree } from '@/lib/treesCompat';
 import { PRODUCTS } from '@/app/product-config';
 
 const panelStyle = {

@@ -1,6 +1,4 @@
 import { IconFileTreeFill, IconFolders } from '@pierre/icons';
-import { FileTree } from '@pierre/trees/react';
-import { preloadFileTree } from '@pierre/trees/ssr';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
@@ -8,6 +6,7 @@ import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { DEFAULT_FILE_TREE_PANEL_CLASS, flatteningOptions } from './demo-data';
 import { TreeExampleSection } from './TreeExampleSection';
+import { FileTree, preloadFileTree } from '@/lib/treesCompat';
 import { PRODUCTS } from '@/app/product-config';
 
 const flattenStyle = {

@@ -8,8 +8,6 @@ import {
   IconColorDark,
   IconColorLight,
 } from '@pierre/icons';
-import { themeToTreeStyles, type TreeThemeStyles } from '@pierre/trees';
-import { FileTree } from '@pierre/trees/react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -30,6 +28,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  FileTree,
+  themeToTreeStyles,
+  type TreeThemeStyles,
+} from '@/lib/treesCompat';
 
 const DEFAULT_LIGHT = 'default-light' as const;
 const DEFAULT_DARK = 'default-dark' as const;

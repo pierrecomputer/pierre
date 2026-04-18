@@ -1,8 +1,6 @@
-import type { TreeThemeStyles } from '@pierre/trees';
-import { preloadFileTree } from '@pierre/trees/ssr';
-
 import { baseTreeOptions, GIT_STATUSES_A } from './demo-data';
 import { ThemingSectionClient } from './ThemingSectionClient';
+import { preloadFileTree, type TreeThemeStyles } from '@/lib/treesCompat';
 
 const prerenderedHTML = preloadFileTree(
   {

@@ -1,6 +1,4 @@
 import { IconBulbFill } from '@pierre/icons';
-import { FileTree } from '@pierre/trees/react';
-import { preloadFileTree } from '@pierre/trees/ssr';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
@@ -11,6 +9,7 @@ import { baseTreeOptions } from './demo-data';
 import { styleObjectToCss } from './styleToCss';
 import { TreeCssViewer } from './TreeCssViewer';
 import { TreeExampleSection } from './TreeExampleSection';
+import { FileTree, preloadFileTree } from '@/lib/treesCompat';
 import { PRODUCTS } from '@/app/product-config';
 
 /** Theme vars applied to the panel wrapper and to the FileTree host so shadow DOM sees them. */

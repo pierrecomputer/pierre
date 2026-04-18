@@ -2,7 +2,6 @@
 
 import type { FileDiffMetadata } from '@pierre/diffs';
 import { FileDiff } from '@pierre/diffs/react';
-import { FileTree } from '@pierre/trees/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useRef, useState } from 'react';
 
@@ -20,6 +19,7 @@ import { Swatches } from './Swatches';
 import { useTreeStatePreview } from './useTreeStatePreview';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { FileTree } from '@/lib/treesCompat';
 
 function ModeToggle({
   mode,

@@ -8,16 +8,16 @@
 
 ## Docs
 
-- [Overview](https://diffs.com/preview/trees/docs#overview): What file tree is, architecture, and getting started
-- [Installation](https://diffs.com/preview/trees/docs#installation): Package installation and entry points
-- [Core Types](https://diffs.com/preview/trees/docs#core-types): FileTreeOptions, FileTreeSelectionItem, FileTreeSearchMode, and configuration
-- [React API](https://diffs.com/preview/trees/docs#react-api): FileTree React component and props
-- [Vanilla JS API](https://diffs.com/preview/trees/docs#vanilla-js-api): FileTree class, constructor options, instance methods, and FileTreeStateConfig
-- [Git Status](https://diffs.com/preview/trees/docs#git-status): Git-style file status indicators
-- [Icons](https://diffs.com/preview/trees/docs#icons): Custom SVG sprite sheets and icon remapping
-- [Utilities](https://diffs.com/preview/trees/docs#utilities): sortChildren, generateSyncDataLoader, generateLazyDataLoader
-- [Styling](https://diffs.com/preview/trees/docs#styling): CSS variables and inline style overrides
-- [SSR](https://diffs.com/preview/trees/docs#ssr): preloadFileTree for server-side rendering and vanilla hydration
+- [Overview](https://diffs.com/trees/docs#overview): What file tree is, architecture, and getting started
+- [Installation](https://diffs.com/trees/docs#installation): Package installation and entry points
+- [Core Types](https://diffs.com/trees/docs#core-types): FileTreeOptions, FileTreeSelectionItem, FileTreeSearchMode, and configuration
+- [React API](https://diffs.com/trees/docs#react-api): FileTree React component and props
+- [Vanilla JS API](https://diffs.com/trees/docs#vanilla-js-api): FileTree class, constructor options, instance methods, and FileTreeStateConfig
+- [Git Status](https://diffs.com/trees/docs#git-status): Git-style file status indicators
+- [Icons](https://diffs.com/trees/docs#icons): Custom SVG sprite sheets and icon remapping
+- [Utilities](https://diffs.com/trees/docs#utilities): sortChildren, generateSyncDataLoader, generateLazyDataLoader
+- [Styling](https://diffs.com/trees/docs#styling): CSS variables and inline style overrides
+- [SSR](https://diffs.com/trees/docs#ssr): preloadFileTree for server-side rendering and vanilla hydration
 
 ## See also
 
