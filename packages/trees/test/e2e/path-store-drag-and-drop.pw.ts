@@ -126,7 +126,7 @@ test.describe('path-store drag-and-drop proof', () => {
       'file-tree-container button[data-item-path="package.json"]'
     );
     const target = page.locator(
-      'file-tree-container button[data-item-path="docs/"]'
+      'file-tree-container [data-item-flattened-subitem="docs/guides/"]'
     );
     const sourceBox = await source.boundingBox();
     const targetBox = await target.boundingBox();
@@ -151,7 +151,7 @@ test.describe('path-store drag-and-drop proof', () => {
     }
 
     await page.waitForFunction(
-      () => window.__hasPath?.('docs/package.json') === true
+      () => window.__hasPath?.('docs/guides/package.json') === true
     );
     await expectDragStateCleared(page);
   });
