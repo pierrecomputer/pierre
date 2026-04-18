@@ -317,8 +317,14 @@ export interface PathStoreTreesHeaderCompositionOptions {
   render?: () => HTMLElement | null;
 }
 
+export type PathStoreTreesContextMenuTriggerMode =
+  | 'both'
+  | 'button'
+  | 'right-click';
+
 export interface PathStoreTreesContextMenuCompositionOptions {
   enabled?: boolean;
+  triggerMode?: PathStoreTreesContextMenuTriggerMode;
   onOpen?: (
     item: PathStoreTreesContextMenuItem,
     context: PathStoreTreesContextMenuOpenContext

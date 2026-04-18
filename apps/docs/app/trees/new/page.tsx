@@ -7,10 +7,12 @@ import type { ProductId } from '../../product-config';
 import { sampleFileList } from '../demo-data';
 import { GIT_STATUSES_A } from '../tree-examples/demo-data';
 import { DemoA11y } from './DemoA11y';
+import { DemoContextMenu } from './DemoContextMenu';
 import { DemoCustomIcons } from './DemoCustomIcons';
 import { DemoDragDrop } from './DemoDragDrop';
 import { DemoFlatten } from './DemoFlatten';
 import { DemoGitStatus } from './DemoGitStatus';
+import { DemoMiddotTruncation } from './DemoMiddotTruncation';
 import { DemoSearch } from './DemoSearch';
 import { DemoStyling } from './DemoStyling';
 import { DemoTheming } from './DemoTheming';
@@ -90,8 +92,10 @@ export default function TreesNewPage() {
             fullViewport: gitStatusFullViewportPreloadedData,
           }}
         />
+        <DemoContextMenu />
         <DemoDragDrop />
         <DemoSearch />
+        <DemoMiddotTruncation />
         <DemoVirtualization />
         <DemoA11y />
         <DemoCustomIcons />

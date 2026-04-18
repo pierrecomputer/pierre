@@ -6,6 +6,7 @@ export type {
   PathStoreTreesCompositionOptions,
   PathStoreTreesContextMenuItem,
   PathStoreTreesContextMenuOpenContext,
+  PathStoreTreesContextMenuTriggerMode,
   PathStoreTreesControllerListener,
   PathStoreTreesControllerOptions,
   PathStoreTreesDirectoryHandle,
