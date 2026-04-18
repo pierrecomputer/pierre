@@ -1,6 +1,5 @@
 'use client';
 
-import type { FileTreeOptions } from '@pierre/trees';
 import {
   createContext,
   type ReactNode,
@@ -14,7 +13,6 @@ import {
 
 import {
   FILE_TREE_COOKIE_FLATTEN,
-  FILE_TREE_COOKIE_LAZY,
   FILE_TREE_COOKIE_VERSION,
   FILE_TREE_COOKIE_VERSION_NAME,
 } from '../cookies';
@@ -22,13 +20,8 @@ import { sharedDemoFileTreeOptions } from '../demo-data';
 
 interface TreesDevSettingsContextValue {
   flattenEmptyDirectories: boolean;
-  useLazyDataLoader: boolean;
   setFlattenEmptyDirectories: (val: boolean) => void;
-  setUseLazyDataLoader: (val: boolean) => void;
   handleResetControls: () => void;
-  fileTreeOptions: FileTreeOptions;
-  reactOptions: Omit<FileTreeOptions, 'initialFiles'>;
-  reactFiles: string[] | undefined;
 }
 
 const TreesDevSettingsContext =
@@ -46,43 +39,28 @@ export function useTreesDevSettings(): TreesDevSettingsContextValue {
 
 export function TreesDevSettingsProvider({
   initialFlattenEmptyDirectories,
-  initialUseLazyDataLoader,
   children,
 }: {
   initialFlattenEmptyDirectories: boolean;
-  initialUseLazyDataLoader: boolean;
   children: ReactNode;
 }) {
   const defaultFlattenEmptyDirectories =
     sharedDemoFileTreeOptions.flattenEmptyDirectories ?? false;
-  const defaultUseLazyDataLoader =
-    sharedDemoFileTreeOptions.useLazyDataLoader ?? false;
   const [flattenEmptyDirectories, setFlattenEmptyDirectoriesState] = useState(
     initialFlattenEmptyDirectories
-  );
-  const [useLazyDataLoader, setUseLazyDataLoaderState] = useState(
-    initialUseLazyDataLoader
   );
   const skipCookieWriteRef = useRef(false);
 
   const setFlattenEmptyDirectories = (val: boolean) => {
     startTransition(() => setFlattenEmptyDirectoriesState(val));
   };
-  const setUseLazyDataLoader = (val: boolean) => {
-    startTransition(() => setUseLazyDataLoaderState(val));
-  };
 
   const handleResetControls = () => {
     skipCookieWriteRef.current = true;
-    const clearCookie = (name: string) => {
-      document.cookie = `${name}=; path=/; max-age=0`;
-    };
-    clearCookie(FILE_TREE_COOKIE_VERSION_NAME);
-    clearCookie(FILE_TREE_COOKIE_FLATTEN);
-    clearCookie(FILE_TREE_COOKIE_LAZY);
+    document.cookie = `${FILE_TREE_COOKIE_VERSION_NAME}=; path=/; max-age=0`;
+    document.cookie = `${FILE_TREE_COOKIE_FLATTEN}=; path=/; max-age=0`;
     startTransition(() => {
       setFlattenEmptyDirectoriesState(defaultFlattenEmptyDirectories);
-      setUseLazyDataLoaderState(defaultUseLazyDataLoader);
     });
   };
 
@@ -97,35 +75,15 @@ export function TreesDevSettingsProvider({
     document.cookie = `${FILE_TREE_COOKIE_FLATTEN}=${
       flattenEmptyDirectories ? '1' : '0'
     }${cookieSuffix}`;
-    document.cookie = `${FILE_TREE_COOKIE_LAZY}=${
-      useLazyDataLoader ? '1' : '0'
-    }${cookieSuffix}`;
-  }, [cookieMaxAge, flattenEmptyDirectories, useLazyDataLoader]);
-
-  const fileTreeOptions = useMemo<FileTreeOptions>(
-    () => ({
-      ...sharedDemoFileTreeOptions,
-      flattenEmptyDirectories,
-      useLazyDataLoader,
-    }),
-    [flattenEmptyDirectories, useLazyDataLoader]
-  );
-
-  const { initialFiles: reactFiles, ...reactOptions } = fileTreeOptions;
+  }, [cookieMaxAge, flattenEmptyDirectories]);
 
   const value = useMemo<TreesDevSettingsContextValue>(
     () => ({
       flattenEmptyDirectories,
-      useLazyDataLoader,
       setFlattenEmptyDirectories,
-      setUseLazyDataLoader,
       handleResetControls,
-      fileTreeOptions,
-      reactOptions,
-      reactFiles,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [flattenEmptyDirectories, useLazyDataLoader, fileTreeOptions]
+    [flattenEmptyDirectories]
   );
 
   return (

@@ -9,17 +9,11 @@ export default async function TreesDevLayout({
 }: {
   children: ReactNode;
 }) {
-  // if (process.env.NODE_ENV !== 'development') {
-  //   return notFound();
-  // }
-
-  const { flattenEmptyDirectories, useLazyDataLoader } =
-    await readSettingsCookies();
+  const { flattenEmptyDirectories } = await readSettingsCookies();
 
   return (
     <TreesDevSettingsProvider
       initialFlattenEmptyDirectories={flattenEmptyDirectories}
-      initialUseLazyDataLoader={useLazyDataLoader}
     >
       <TreesDevShell>{children}</TreesDevShell>
     </TreesDevSettingsProvider>

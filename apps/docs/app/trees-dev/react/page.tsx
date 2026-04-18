@@ -1,0 +1,33 @@
+import { preloadFileTree } from '@pierre/trees/ssr';
+
+import { readSettingsCookies } from '../_components/readSettingsCookies';
+import { PathStoreReactDemoClient } from '../path-store-react/PathStoreReactDemoClient';
+
+const DEMO_PATHS = [
+  'README.md',
+  'src/index.ts',
+  'src/components/Button.tsx',
+  'src/components/Button.test.tsx',
+] as const;
+const VIEWPORT_HEIGHT = 240;
+
+export default async function TreesDevReactPage() {
+  const { flattenEmptyDirectories } = await readSettingsCookies();
+  const ssrPayload = preloadFileTree({
+    flattenEmptyDirectories,
+    id: 'trees-dev-react-ssr',
+    initialExpansion: 'open',
+    paths: DEMO_PATHS,
+    search: true,
+    viewportHeight: VIEWPORT_HEIGHT,
+  });
+
+  return (
+    <PathStoreReactDemoClient
+      flattenEmptyDirectories={flattenEmptyDirectories}
+      paths={DEMO_PATHS}
+      preloadedData={ssrPayload}
+      viewportHeight={VIEWPORT_HEIGHT}
+    />
+  );
+}

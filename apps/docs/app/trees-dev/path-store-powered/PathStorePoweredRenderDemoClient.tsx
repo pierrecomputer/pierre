@@ -1,13 +1,13 @@
 'use client';
 
 import {
-  PathStoreFileTree,
-  type PathStoreFileTreeOptions,
-  type PathStoreTreesContextMenuItem,
-  type PathStoreTreesContextMenuOpenContext,
-  type PathStoreTreesDropResult,
-  type PathStoreTreesMutationEvent,
-} from '@pierre/trees/path-store';
+  FileTree as PathStoreFileTree,
+  type FileTreeOptions as PathStoreFileTreeOptions,
+  type ContextMenuItem as PathStoreTreesContextMenuItem,
+  type ContextMenuOpenContext as PathStoreTreesContextMenuOpenContext,
+  type FileTreeDropResult as PathStoreTreesDropResult,
+  type FileTreeMutationEvent as PathStoreTreesMutationEvent,
+} from '@pierre/trees';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   memo,
@@ -22,7 +22,6 @@ import {
 import { createRoot, type Root as ReactDomRoot } from 'react-dom/client';
 
 import { StateLog, useStateLog } from '../_components/StateLog';
-import { pathStoreCapabilityMatrix } from './capabilityMatrix';
 import { createPresortedPreparedInput } from './createPresortedPreparedInput';
 import { PATH_STORE_CUSTOM_ICONS } from './pathStoreDemoIcons';
 import {
@@ -670,7 +669,7 @@ export function PathStorePoweredRenderDemoClient({
             header.style.padding = '8px 12px';
 
             const label = document.createElement('strong');
-            label.textContent = 'Phase 10 path-store header';
+            label.textContent = 'Trees demo header';
             header.append(label);
 
             const button = document.createElement('button');
@@ -921,22 +920,12 @@ export function PathStorePoweredRenderDemoClient({
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-          Path-store lane · provisional
-        </p>
-        <h1 className="text-2xl font-bold">
-          Mutation API + Search + Inline Rename + Drag and Drop + Icon Sets
-        </h1>
+        <h1 className="text-2xl font-bold">Main Demo</h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
-          Phase 6 turns the path-store lane into a mutation-first tree, Phases 7
-          and 8 surface baseline built-in search plus inline rename, and Phase
-          10 now enables internal drag and drop on this same demo. Use the
-          workload selector to re-run the same proof against different fixtures,
-          then add, move, batch, reset, and drag paths directly inside the tree,
-          use the built-in search input or quick-search buttons to drive
-          filtering, and use the existing context menu or <kbd>F2</kbd> for
-          delete/rename actions while the live tree and log stay coherent under
-          virtualization.
+          One hydrated tree exercises mutation APIs, built-in search, inline
+          rename, drag and drop, and icon switching across the current workload.
+          Change the workload, rerun the same proof actions, and keep the log
+          visible while virtualization stays in place.
         </p>
         <div className="bg-muted/30 flex flex-col gap-3 rounded-lg border p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -1122,40 +1111,6 @@ export function PathStorePoweredRenderDemoClient({
       />
       {children}
       <StateLog entries={log} />
-
-      <section className="space-y-3 rounded-lg border p-4">
-        <h2 className="text-lg font-semibold">Capability / phase matrix</h2>
-        <p className="text-muted-foreground text-sm leading-6">
-          This committed matrix keeps the migration proof surfaces explicit
-          while the new lane grows feature by feature.
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="bg-muted/40">
-              <tr>
-                <th className="px-3 py-2 font-medium">Current demo</th>
-                <th className="px-3 py-2 font-medium">Target phase(s)</th>
-                <th className="px-3 py-2 font-medium">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pathStoreCapabilityMatrix.map((row) => (
-                <tr key={row.currentDemo} className="border-t align-top">
-                  <td className="px-3 py-2 font-medium">{row.currentDemo}</td>
-                  <td className="px-3 py-2">
-                    {row.targetPhases
-                      .map((phase) => `P${String(phase)}`)
-                      .join(', ')}
-                  </td>
-                  <td className="text-muted-foreground px-3 py-2">
-                    {row.notes}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
     </div>
   );
 }

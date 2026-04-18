@@ -1,11 +1,11 @@
 'use client';
 
 import {
-  PathStoreFileTree,
-  type PathStoreFileTreeOptions,
-  type PathStoreTreesDropResult,
-  type PathStoreTreesMutationEvent,
-} from '@pierre/trees/path-store';
+  FileTree as PathStoreFileTree,
+  type FileTreeOptions as PathStoreFileTreeOptions,
+  type FileTreeDropResult as PathStoreTreesDropResult,
+  type FileTreeMutationEvent as PathStoreTreesMutationEvent,
+} from '@pierre/trees';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
@@ -74,7 +74,7 @@ export function PathStoreDragAndDropDemoClient({
         },
         openOnDropDelay: 800,
       },
-      id: 'pst-phase10-dnd',
+      id: 'trees-drag-and-drop',
       onSearchChange: (value) => {
         addLog(`search:${value ?? '<closed>'}`);
       },
@@ -109,21 +109,17 @@ export function PathStoreDragAndDropDemoClient({
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-          Path-store lane · provisional
-        </p>
-        <h1 className="text-2xl font-bold">Path-store Drag and Drop</h1>
+        <h1 className="text-2xl font-bold">Drag and Drop</h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
-          Phase 10 restores internal single-tree pointer and touch drag/drop on
-          top of direct path-store mutations. Drops resolve to canonical folder
-          paths and commit through the built-in move or batch APIs rather than
-          the legacy controlled-files pipeline.
+          Pointer and touch drag and drop now runs on the same mutation-first
+          tree as search, rename, and runtime resets. Drops resolve to canonical
+          folder paths and commit through the built-in move or batch APIs.
         </p>
       </header>
 
       <ExampleCard
-        title="Hydrated path-store tree"
-        description="Drag with a mouse or long-press touch. Active filtered search blocks drag starts, hovering a collapsed folder for 800ms auto-opens it, and flattened path segments like assets / images / social target their exact canonical folder path."
+        title="Hydrated drag-and-drop tree"
+        description="Drag with a mouse or long-press touch. Active filtered search blocks drag starts, hovering a collapsed folder auto-opens it, and flattened path segments target their exact canonical folder path."
         controls={
           <div className="flex flex-col gap-2 text-xs leading-5">
             <label className="flex items-center gap-2">
@@ -148,7 +144,7 @@ export function PathStoreDragAndDropDemoClient({
             </label>
             <p className="text-muted-foreground">
               The log below shows both mutation events and drop observer hooks
-              so the proof stays path-first and mutation-first.
+              so the demo stays path-first and mutation-first.
             </p>
           </div>
         }

@@ -1,9 +1,9 @@
 'use client';
 
 import {
-  PathStoreFileTree,
-  type PathStoreFileTreeOptions,
-} from '@pierre/trees/path-store';
+  FileTree as PathStoreFileTree,
+  type FileTreeOptions as PathStoreFileTreeOptions,
+} from '@pierre/trees';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo, useRef } from 'react';
 
@@ -102,15 +102,11 @@ export function PathStoreSearchDemoClient({
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-          Path-store lane · provisional
-        </p>
-        <h1 className="text-2xl font-bold">Path-store Search</h1>
+        <h1 className="text-2xl font-bold">Search</h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
-          Phase 7 restores the existing baseline search behavior in the
-          path-store lane: the three legacy modes, built-in input/session UX,
-          open/close and hotkey behavior, plus an observational onSearchChange
-          hook — all on the main thread.
+          The canonical tree keeps the three search modes, built-in input and
+          session behavior, keyboard navigation, and an observable
+          <code>onSearchChange</code> hook on the same path-first model.
         </p>
       </header>
 
@@ -121,29 +117,29 @@ export function PathStoreSearchDemoClient({
           options={{
             ...baseOptions,
             fileTreeSearchMode: 'expand-matches',
-            id: 'pst-search-expand',
+            id: 'trees-search-expand',
             search: true,
           }}
           title="expand-matches"
         />
         <HydratedSearchExample
           containerHtml={collapseHtml}
-          description="Collapses folders not containing matches while keeping the full tree visible. This mirrors the current baseline behavior in older trees."
+          description="Collapses folders not containing matches while keeping the full tree visible."
           options={{
             ...baseOptions,
             fileTreeSearchMode: 'collapse-non-matches',
-            id: 'pst-search-collapse',
+            id: 'trees-search-collapse',
             search: true,
           }}
           title="collapse-non-matches"
         />
         <HydratedSearchExample
           containerHtml={hideHtml}
-          description="Hides rows that are neither matches nor ancestors of matches. This is the path-store parity target for the existing hide-non-matches mode."
+          description="Hides rows that are neither matches nor ancestors of matches."
           options={{
             ...baseOptions,
             fileTreeSearchMode: 'hide-non-matches',
-            id: 'pst-search-hide',
+            id: 'trees-search-hide',
             search: true,
           }}
           title="hide-non-matches"
@@ -174,14 +170,14 @@ export function PathStoreSearchDemoClient({
               </button>
             </div>
           }
-          description="Built-in input hidden, but the underlying programmatic session still works. This proves the legacy hidden-input behavior remains available without a fully controlled input model."
+          description="The built-in input can stay hidden while the underlying programmatic search session remains available."
           onTreeReady={(tree) => {
             hiddenTreeRef.current = tree;
           }}
           options={{
             ...baseOptions,
             fileTreeSearchMode: 'hide-non-matches',
-            id: 'pst-search-hidden',
+            id: 'trees-search-hidden',
             initialSearchQuery: null,
             search: false,
           }}

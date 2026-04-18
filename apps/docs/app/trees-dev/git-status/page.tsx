@@ -1,30 +1,33 @@
+import type { FileTreeOptions } from '@pierre/trees';
 import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { readSettingsCookies } from '../_components/readSettingsCookies';
 import {
   GIT_STATUSES_A,
   sharedDemoFileTreeOptions,
-  sharedDemoStateConfig,
+  sharedInitialExpandedPaths,
 } from '../demo-data';
-import { GitStatusDemoClient } from './GitStatusDemoClient';
+import { PathStoreGitStatusDemoClient } from '../path-store-git-status/PathStoreGitStatusDemoClient';
 
-export default async function GitStatusPage() {
-  const { flattenEmptyDirectories, useLazyDataLoader } =
-    await readSettingsCookies();
-  const fileTreeOptions = {
-    ...sharedDemoFileTreeOptions,
+export default async function TreesDevGitStatusPage() {
+  const { flattenEmptyDirectories } = await readSettingsCookies();
+  const sharedOptions: Omit<FileTreeOptions, 'gitStatus' | 'id'> = {
     flattenEmptyDirectories,
-    useLazyDataLoader,
+    initialExpandedPaths: sharedInitialExpandedPaths,
+    paths: sharedDemoFileTreeOptions.paths,
+    viewportHeight: 280,
   };
 
-  const gitStatusSsr = preloadFileTree(
-    { ...fileTreeOptions, gitStatus: GIT_STATUSES_A },
-    sharedDemoStateConfig
-  );
+  const payload = preloadFileTree({
+    ...sharedOptions,
+    gitStatus: GIT_STATUSES_A,
+    id: 'trees-git-status',
+  });
 
   return (
-    <GitStatusDemoClient
-      preloadedGitStatusFileTreeHtml={gitStatusSsr.shadowHtml}
+    <PathStoreGitStatusDemoClient
+      containerHtml={payload.html}
+      sharedOptions={sharedOptions}
     />
   );
 }

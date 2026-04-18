@@ -9,34 +9,18 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 
 const DEMO_PAGES = [
-  { slug: '', label: 'Rendering' },
-  { slug: 'state', label: 'State' },
-  { slug: 'dynamic-files', label: 'Dynamic Files' },
-  { slug: 'search', label: 'Search Modes' },
-  { slug: 'drag-and-drop', label: 'Drag and Drop' },
+  { slug: '', label: 'Main Demo' },
+  { slug: 'react', label: 'React' },
+  { slug: 'search', label: 'Search' },
   { slug: 'git-status', label: 'Git Status' },
-  { slug: 'custom-icons', label: 'Custom Icons' },
-  { slug: 'icon-tiers', label: 'Icon Tiers' },
-  { slug: 'header-slot', label: 'Header Slot' },
-  { slug: 'context-menu', label: 'Context Menu' },
-  { slug: 'virtualization', label: 'Virtualization' },
-] as const;
-
-const PATH_STORE_LANE_PAGES = [
-  { slug: 'path-store-powered', label: 'Mutations + Search + Rename + Icons' },
-  { slug: 'path-store-react', label: 'React Wrapper' },
-  { slug: 'path-store-search', label: 'Search' },
-  { slug: 'path-store-git-status', label: 'Git Status' },
-  { slug: 'path-store-drag-and-drop', label: 'Drag and Drop' },
+  { slug: 'drag-and-drop', label: 'Drag and Drop' },
 ] as const;
 
 export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const {
     flattenEmptyDirectories,
-    useLazyDataLoader,
     setFlattenEmptyDirectories,
-    setUseLazyDataLoader,
     handleResetControls,
   } = useTreesDevSettings();
 
@@ -46,7 +30,7 @@ export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {
       onClick={onNavigate}
     >
       <p className="text-muted-foreground px-3 pb-1 text-xs font-medium">
-        Examples
+        Demos
       </p>
       {DEMO_PAGES.map(({ slug, label }) => {
         const href = slug === '' ? '/trees-dev' : `/trees-dev/${slug}`;
@@ -60,25 +44,6 @@ export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {
           </NavLink>
         );
       })}
-
-      <Separator className="my-2" />
-
-      <p className="text-muted-foreground px-3 pb-1 text-xs font-medium">
-        Path-Store Lane (Provisional)
-      </p>
-      {PATH_STORE_LANE_PAGES.map(({ slug, label }) => {
-        const href = `/trees-dev/${slug}`;
-        const isActive = pathname.startsWith(href);
-        return (
-          <NavLink key={slug} href={href} active={isActive}>
-            {label}
-          </NavLink>
-        );
-      })}
-
-      <Separator className="my-2" />
-
-      <NavLink href="/trees-dev/themes">Themes</NavLink>
 
       <Separator className="my-2" />
 
@@ -98,17 +63,6 @@ export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {
             className="cursor-pointer text-xs"
           >
             Flatten Empty Dirs
-          </Label>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Switch
-            id="lazy-data-loader"
-            checked={useLazyDataLoader}
-            onCheckedChange={setUseLazyDataLoader}
-          />
-          <Label htmlFor="lazy-data-loader" className="cursor-pointer text-xs">
-            Lazy Loader
           </Label>
         </div>
 

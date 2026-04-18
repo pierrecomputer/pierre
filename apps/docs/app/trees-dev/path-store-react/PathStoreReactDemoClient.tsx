@@ -1,39 +1,37 @@
 'use client';
 
-import type { PathStoreFileTreeOptions } from '@pierre/trees/path-store';
+import type { FileTreeOptions as DemoFileTreeOptions } from '@pierre/trees';
 import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
   useFileTreeSearch,
   useFileTreeSelection,
-} from '@pierre/trees/path-store/react';
+} from '@pierre/trees/react';
 import { useState } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
 
 interface PathStoreReactDemoClientProps {
+  flattenEmptyDirectories: boolean;
   paths: readonly string[];
   preloadedData: FileTreePreloadedData;
   viewportHeight: number;
 }
 
-const BASE_OPTIONS: Omit<
-  PathStoreFileTreeOptions,
-  'composition' | 'id' | 'paths'
-> = {
-  flattenEmptyDirectories: true,
-  initialExpansion: 'open',
-  search: true,
-};
-
 function ClientRenderedExample({
+  flattenEmptyDirectories,
   paths,
   viewportHeight,
-}: Pick<PathStoreReactDemoClientProps, 'paths' | 'viewportHeight'>) {
+}: Pick<
+  PathStoreReactDemoClientProps,
+  'flattenEmptyDirectories' | 'paths' | 'viewportHeight'
+>) {
   const { model } = useFileTree({
-    ...BASE_OPTIONS,
+    flattenEmptyDirectories,
+    initialExpansion: 'open',
     paths,
+    search: true,
     viewportHeight,
   });
   const search = useFileTreeSearch(model);
@@ -126,21 +124,24 @@ function SsrHydratedHeader() {
 }
 
 function ServerRenderedExample({
+  flattenEmptyDirectories,
   paths,
   preloadedData,
   viewportHeight,
 }: PathStoreReactDemoClientProps) {
   const { model } = useFileTree({
-    ...BASE_OPTIONS,
+    flattenEmptyDirectories,
+    initialExpansion: 'open',
     paths,
+    search: true,
     viewportHeight,
-  });
+  } satisfies DemoFileTreeOptions);
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-neutral-600">
         The server preloads declarative shadow DOM, and the colocated React
-        wrapper hydrates it from one packaged `preloadedData` prop.
+        wrapper hydrates it from one packaged <code>preloadedData</code> prop.
       </p>
       <FileTree
         header={<SsrHydratedHeader />}
@@ -154,21 +155,20 @@ function ServerRenderedExample({
 export function PathStoreReactDemoClient(props: PathStoreReactDemoClientProps) {
   return (
     <>
-      <h1 className="mb-4 text-2xl font-bold">
-        Path-Store React (Provisional)
-      </h1>
+      <h1 className="mb-4 text-2xl font-bold">React</h1>
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <ExampleCard
-          title="Server Rendered"
-          description="Server preloads the path-store shadow DOM, and the React component hydrates it from one colocated prop."
+          title="Server rendered"
+          description="The server preloads the tree once, and the React wrapper hydrates the same DOM without a parallel API surface."
         >
           <ServerRenderedExample {...props} />
         </ExampleCard>
         <ExampleCard
-          title="Client Rendered"
-          description="Model-first React hook usage with selector hooks, explicit model mutations, and a narrow component surface."
+          title="Client rendered"
+          description="Model-first React hook usage with selector hooks, direct mutations, and the same composition surface the server-rendered example hydrates."
         >
           <ClientRenderedExample
+            flattenEmptyDirectories={props.flattenEmptyDirectories}
             paths={props.paths}
             viewportHeight={props.viewportHeight}
           />

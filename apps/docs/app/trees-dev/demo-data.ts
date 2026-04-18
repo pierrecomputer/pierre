@@ -1,11 +1,6 @@
-import type {
-  FileTreeOptions,
-  FileTreeSelectionItem,
-  FileTreeStateConfig,
-  GitStatusEntry,
-} from '@pierre/trees';
+import type { FileTreeOptions, GitStatusEntry } from '@pierre/trees';
 
-const sampleFileList: string[] = [
+export const sharedDemoPaths: readonly string[] = [
   'README.md',
   'package.json',
   'Build/index.mjs',
@@ -28,8 +23,12 @@ const sampleFileList: string[] = [
 
 export const sharedDemoFileTreeOptions: FileTreeOptions = {
   flattenEmptyDirectories: true,
-  initialFiles: sampleFileList,
+  paths: sharedDemoPaths,
 };
+
+export const sharedInitialExpandedPaths: readonly string[] = [
+  'Build/assets/images/social',
+];
 
 export const GIT_STATUSES_A: GitStatusEntry[] = [
   { path: 'src/index.ts', status: 'modified' },
@@ -42,13 +41,6 @@ export const GIT_STATUSES_B: GitStatusEntry[] = [
   { path: 'src/lib/utils.ts', status: 'modified' },
   { path: 'src/utils/worker.ts', status: 'added' },
 ];
-
-export const sharedDemoStateConfig: FileTreeStateConfig = {
-  initialExpandedItems: ['Build/assets/images/social'],
-  onSelection: (selection: FileTreeSelectionItem[]) => {
-    console.log('selection', selection);
-  },
-};
 
 // Lucide icons converted to sprite sheet
 export const customSpriteSheet = `

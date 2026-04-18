@@ -27,6 +27,8 @@ export const PATH_STORE_POWERED_WORKLOAD_OPTIONS = [
     name: 'demo-small',
     rootCount: 1,
   },
+  // This is a pinned fixture snapshot, not a live index of the current repo.
+  // It is allowed to drift when trees-dev files are deleted or renamed.
   {
     label: 'Pierre repo snapshot',
     name: 'pierre-snapshot',

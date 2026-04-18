@@ -1,60 +1,72 @@
-'use client';
+import type { FileTreeOptions } from '@pierre/trees';
+import { preloadFileTree } from '@pierre/trees/ssr';
 
-import { ExampleCard } from '../_components/ExampleCard';
-import { ReactClientRendered } from '../_components/ReactClientRendered';
-import { useTreesDevSettings } from '../_components/TreesDevSettingsProvider';
-import { sharedDemoStateConfig } from '../demo-data';
+import { readSettingsCookies } from '../_components/readSettingsCookies';
+import {
+  sharedDemoFileTreeOptions,
+  sharedInitialExpandedPaths,
+} from '../demo-data';
+import { PathStoreSearchDemoClient } from '../path-store-search/PathStoreSearchDemoClient';
 
-export default function SearchPage() {
-  const { reactOptions, reactFiles } = useTreesDevSettings();
+function getPayload(options: Omit<FileTreeOptions, 'id'>, id: string) {
+  return preloadFileTree({
+    ...options,
+    id,
+  });
+}
+
+export default async function TreesDevSearchPage() {
+  const { flattenEmptyDirectories } = await readSettingsCookies();
+  const sharedOptions: Omit<
+    FileTreeOptions,
+    'fileTreeSearchMode' | 'id' | 'initialSearchQuery' | 'search'
+  > = {
+    flattenEmptyDirectories,
+    initialExpandedPaths: sharedInitialExpandedPaths,
+    paths: sharedDemoFileTreeOptions.paths,
+    viewportHeight: 260,
+  };
+
+  const expandPayload = getPayload(
+    {
+      ...sharedOptions,
+      fileTreeSearchMode: 'expand-matches',
+      search: true,
+    },
+    'trees-search-expand'
+  );
+  const collapsePayload = getPayload(
+    {
+      ...sharedOptions,
+      fileTreeSearchMode: 'collapse-non-matches',
+      search: true,
+    },
+    'trees-search-collapse'
+  );
+  const hidePayload = getPayload(
+    {
+      ...sharedOptions,
+      fileTreeSearchMode: 'hide-non-matches',
+      search: true,
+    },
+    'trees-search-hide'
+  );
+  const hiddenPayload = getPayload(
+    {
+      ...sharedOptions,
+      fileTreeSearchMode: 'hide-non-matches',
+      search: false,
+    },
+    'trees-search-hidden'
+  );
 
   return (
-    <>
-      <h1 className="mb-4 text-2xl font-bold">Search Modes</h1>
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <ExampleCard
-          title="expand-matches"
-          description="Expands folders containing matches but keeps all items visible"
-        >
-          <ReactClientRendered
-            options={{
-              ...reactOptions,
-              search: true,
-              fileTreeSearchMode: 'expand-matches',
-            }}
-            initialFiles={reactFiles}
-            stateConfig={sharedDemoStateConfig}
-          />
-        </ExampleCard>
-        <ExampleCard
-          title="collapse-non-matches"
-          description="Collapses folders not containing matches"
-        >
-          <ReactClientRendered
-            options={{
-              ...reactOptions,
-              search: true,
-              fileTreeSearchMode: 'collapse-non-matches',
-            }}
-            initialFiles={reactFiles}
-            stateConfig={sharedDemoStateConfig}
-          />
-        </ExampleCard>
-        <ExampleCard
-          title="hide-non-matches"
-          description="Hides files and folders that don't contain matches"
-        >
-          <ReactClientRendered
-            options={{
-              ...reactOptions,
-              search: true,
-              fileTreeSearchMode: 'hide-non-matches',
-            }}
-            initialFiles={reactFiles}
-            stateConfig={sharedDemoStateConfig}
-          />
-        </ExampleCard>
-      </div>
-    </>
+    <PathStoreSearchDemoClient
+      collapseHtml={collapsePayload.html}
+      expandHtml={expandPayload.html}
+      hideHtml={hidePayload.html}
+      hiddenHtml={hiddenPayload.html}
+      sharedOptions={sharedOptions}
+    />
   );
 }
