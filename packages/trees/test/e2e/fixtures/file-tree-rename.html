@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>file-tree rename fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-file-tree-rename-shell] {
+        display: grid;
+        gap: 16px;
+        max-width: 900px;
+      }
+      [data-file-tree-rename-row] {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      [data-file-tree-rename-mount] {
+        width: 400px;
+        height: 320px;
+        border: 1px solid #ccc;
+      }
+      [data-file-tree-rename-log] {
+        height: 160px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        padding: 8px;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+      [data-test-context-menu='true'] {
+        display: inline-flex;
+        gap: 8px;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        background: white;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+      }
+    </style>
+  </head>
+  <body>
+    <div data-file-tree-rename-shell>
+      <div data-file-tree-rename-row>
+        <div>
+          <h2>Main rename tree</h2>
+          <div data-file-tree-rename-mount="main"></div>
+        </div>
+        <div>
+          <h2>Flattened rename tree</h2>
+          <div data-file-tree-rename-mount="flat"></div>
+        </div>
+      </div>
+      <div data-file-tree-rename-log></div>
+    </div>
+
+    <script type="module">
+      import { FileTree } from '/dist/index.js';
+
+      const log = document.querySelector('[data-file-tree-rename-log]');
+      const mainMount = document.querySelector(
+        '[data-file-tree-rename-mount="main"]'
+      );
+      const flatMount = document.querySelector(
+        '[data-file-tree-rename-mount="flat"]'
+      );
+      if (
+        !(log instanceof HTMLDivElement) ||
+        !(mainMount instanceof HTMLDivElement) ||
+        !(flatMount instanceof HTMLDivElement)
+      ) {
+        throw new Error('Missing rename fixture mounts.');
+      }
+
+      const appendLog = (message) => {
+        const row = document.createElement('div');
+        row.textContent = message;
+        log.append(row);
+        log.scrollTop = log.scrollHeight;
+      };
+
+      let mainTree;
+      const mainContextMenu = {
+        enabled: true,
+        render: (item, context) => {
+          const menu = document.createElement('div');
+          menu.setAttribute('data-test-context-menu', 'true');
+          const renameButton = document.createElement('button');
+          renameButton.type = 'button';
+          renameButton.textContent = 'Rename';
+          renameButton.setAttribute('data-test-menu-rename', item.path);
+          renameButton.addEventListener('click', () => {
+            context.close({ restoreFocus: false });
+            const started = mainTree.startRenaming(item.path);
+            appendLog(
+              started
+                ? `rename:start ${item.path}`
+                : `rename:unavailable ${item.path}`
+            );
+            queueMicrotask(() => {
+              context.close();
+              context.restoreFocus();
+            });
+          });
+          menu.append(renameButton);
+          return menu;
+        },
+      };
+
+      mainTree = new FileTree({
+        composition: {
+          contextMenu: mainContextMenu,
+        },
+        fileTreeSearchMode: 'hide-non-matches',
+        flattenEmptyDirectories: true,
+        id: 'ft-rename-main',
+        initialExpansion: 'open',
+        onSearchChange: (value) => appendLog(`search:${value ?? '<closed>'}`),
+        paths: [
+          'README.md',
+          'src/index.ts',
+          'src/utils/worker.ts',
+          'src/utils/stream.ts',
+          'docs/guide.md',
+        ],
+        renaming: {
+          onError: (error) => appendLog(`rename:error ${error}`),
+          onRename: (event) =>
+            appendLog(
+              `rename:commit ${event.sourcePath} -> ${event.destinationPath}`
+            ),
+        },
+        search: true,
+        viewportHeight: 300,
+      });
+      mainTree.render({ containerWrapper: mainMount });
+
+      const flatTree = new FileTree({
+        flattenEmptyDirectories: true,
+        id: 'ft-rename-flat',
+        initialExpansion: 'open',
+        paths: ['src/utils/deep/index.ts'],
+        renaming: {
+          onError: (error) => appendLog(`flat:error ${error}`),
+          onRename: (event) =>
+            appendLog(
+              `flat:commit ${event.sourcePath} -> ${event.destinationPath}`
+            ),
+        },
+        viewportHeight: 300,
+      });
+      flatTree.render({ containerWrapper: flatMount });
+
+      const waitForTree = async (mount) => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('file-tree-container');
+          if (
+            host instanceof HTMLElement &&
+            host.shadowRoot?.querySelector('button[data-type="item"]') != null
+          ) {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error(
+              'Timed out waiting for the file-tree rename fixture.'
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, 16));
+        }
+      };
+
+      await Promise.all([waitForTree(mainMount), waitForTree(flatMount)]);
+      window.__fileTreeRenameFixtureReady = true;
+    </script>
+  </body>
+</html>

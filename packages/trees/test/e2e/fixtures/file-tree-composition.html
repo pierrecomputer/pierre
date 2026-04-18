@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>file-tree composition fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+
+      [data-file-tree-composition-mount] {
+        width: 360px;
+        height: 260px;
+        border: 1px solid #ccc;
+      }
+
+      [data-test-file-tree-menu] {
+        display: grid;
+        gap: 8px;
+        min-width: 180px;
+        padding: 8px;
+        border: 1px solid #666;
+        border-radius: 6px;
+        background: #fff;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+      }
+    </style>
+  </head>
+  <body>
+    <div data-file-tree-composition-mount></div>
+
+    <script type="module">
+      import { FileTree } from '/dist/index.js';
+
+      const mount = document.querySelector(
+        '[data-file-tree-composition-mount]'
+      );
+      if (!(mount instanceof HTMLDivElement)) {
+        throw new Error('Missing file-tree composition mount.');
+      }
+
+      const fileTree = new FileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: (item, context) => {
+              const menu = document.createElement('div');
+              menu.dataset.testFileTreeMenu = item.path;
+              menu.dataset.testContextMenu = 'true';
+              menu.setAttribute('role', 'menu');
+
+              const label = document.createElement('div');
+              label.textContent = item.path;
+              menu.append(label);
+
+              const deleteButton = document.createElement('button');
+              deleteButton.type = 'button';
+              deleteButton.dataset.testMenuDelete = item.path;
+              deleteButton.textContent = 'Delete';
+              deleteButton.addEventListener('click', () => {
+                context.close();
+              });
+              menu.append(deleteButton);
+
+              const closeButton = document.createElement('button');
+              closeButton.type = 'button';
+              closeButton.dataset.testFileTreeMenuClose = item.path;
+              closeButton.textContent = 'Close';
+              closeButton.addEventListener('click', () => {
+                context.close();
+              });
+              menu.append(closeButton);
+              return menu;
+            },
+          },
+          header: {
+            render: () => {
+              const header = document.createElement('div');
+              header.dataset.testFileTreeHeader = 'true';
+              header.textContent = 'File tree header';
+              return header;
+            },
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: [
+          'README.md',
+          'src/index.ts',
+          'src/lib/utils.ts',
+          'src/lib/theme.ts',
+        ],
+        viewportHeight: 240,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+
+      const waitForTree = async () => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('file-tree-container');
+          if (
+            host instanceof HTMLElement &&
+            host.shadowRoot?.querySelector('button[data-type="item"]') != null
+          ) {
+            return host;
+          }
+
+          if (performance.now() - started > 5_000) {
+            throw new Error(
+              'Timed out waiting for the file-tree composition fixture.'
+            );
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 16));
+        }
+      };
+
+      await waitForTree();
+      window.__fileTreeCompositionFixtureReady = true;
+    </script>
+  </body>
+</html>

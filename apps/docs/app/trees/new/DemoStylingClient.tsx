@@ -5,7 +5,7 @@ import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
-} from '@pierre/trees/path-store/react';
+} from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useEffect } from 'react';
@@ -155,7 +155,7 @@ export function DemoStylingClient({ preloadedData }: DemoStylingClientProps) {
           <TreeExampleHeading>Light mode</TreeExampleHeading>
           <StyledTree
             className="min-h-[320px] rounded-lg border border-neutral-200 bg-neutral-50 p-2"
-            id="path-store-theming-demo-light"
+            id="trees-styling-demo-light"
             preloadedData={preloadedData.light}
             style={lightThemeStyles}
           />
@@ -168,7 +168,7 @@ export function DemoStylingClient({ preloadedData }: DemoStylingClientProps) {
           <TreeExampleHeading>Dark mode</TreeExampleHeading>
           <StyledTree
             className="min-h-[320px] rounded-lg border border-neutral-700 bg-neutral-900 p-2"
-            id="path-store-theming-demo-dark"
+            id="trees-styling-demo-dark"
             preloadedData={preloadedData.dark}
             style={darkThemeStyles}
           />
@@ -181,7 +181,7 @@ export function DemoStylingClient({ preloadedData }: DemoStylingClientProps) {
           <TreeExampleHeading>Synthwave &apos;84</TreeExampleHeading>
           <StyledTree
             className="min-h-[320px] rounded-lg border border-[#f92aad]/40 bg-[#1e1b2b] p-2 shadow-[inset_0_0_60px_rgba(249,42,173,0.08)]"
-            id="path-store-theming-demo-synthwave"
+            id="trees-styling-demo-synthwave"
             preloadedData={preloadedData.synthwave}
             style={synthwaveThemeStyles}
           />

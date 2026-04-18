@@ -3,34 +3,32 @@ import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { ExampleCard } from './_components/ExampleCard';
 import { readSettingsCookies } from './_components/readSettingsCookies';
-import { createPresortedPreparedInput } from './path-store-powered/createPresortedPreparedInput';
-import { PathStorePoweredRenderDemoClient } from './path-store-powered/PathStorePoweredRenderDemoClient';
-import { loadPathStorePoweredWorkloadDataPayload } from './path-store-powered/pathStorePoweredWorkloadLoader';
+import { MainDemoClient } from './_demos/MainDemoClient';
+import { createPresortedPreparedInput } from './_lib/createPresortedPreparedInput';
+import { loadWorkloadDataPayload } from './_lib/workloadLoader';
 import {
-  DEFAULT_PATH_STORE_POWERED_WORKLOAD_NAME,
+  DEFAULT_TREES_WORKLOAD_NAME,
+  FILE_TREE_PROOF_VIEWPORT_HEIGHT,
   getRequestedExpansionMode,
   getRequestedWorkloadName,
-  PATH_STORE_POWERED_WORKLOAD_OPTIONS,
-  PATH_STORE_PROOF_VIEWPORT_HEIGHT,
-  type PathStorePoweredPageSearchParams,
-} from './path-store-powered/pathStorePoweredWorkloadMeta';
+  TREES_WORKLOAD_OPTIONS,
+  type TreesPageSearchParams,
+} from './_lib/workloadMeta';
 
 const TREE_HEADER_HTML =
-  '<div data-path-store-demo-header style="align-items:center;display:flex;gap:12px;padding:8px 12px"><strong>Trees demo header</strong><button type="button">Log header action</button></div>';
+  '<div data-tree-demo-header style="align-items:center;display:flex;gap:12px;padding:8px 12px"><strong>Trees demo header</strong><button type="button">Log header action</button></div>';
 const MAIN_DEMO_TITLE = 'Main demo';
 
 export default async function TreesDevIndexPage({
   searchParams,
 }: {
-  searchParams?:
-    | Promise<PathStorePoweredPageSearchParams>
-    | PathStorePoweredPageSearchParams;
+  searchParams?: Promise<TreesPageSearchParams> | TreesPageSearchParams;
 }) {
   const { flattenEmptyDirectories } = await readSettingsCookies();
   const resolvedSearchParams = (await searchParams) ?? {};
   const selectedWorkloadName = getRequestedWorkloadName(resolvedSearchParams);
   const expansionMode = getRequestedExpansionMode(resolvedSearchParams);
-  const workloadData = await loadPathStorePoweredWorkloadDataPayload(
+  const workloadData = await loadWorkloadDataPayload(
     selectedWorkloadName,
     expansionMode
   );
@@ -49,7 +47,7 @@ export default async function TreesDevIndexPage({
     initialExpandedPaths: workloadData.initialExpandedPaths,
     paths: workloadData.paths,
     search: true,
-    viewportHeight: PATH_STORE_PROOF_VIEWPORT_HEIGHT,
+    viewportHeight: FILE_TREE_PROOF_VIEWPORT_HEIGHT,
   };
   const payload = preloadFileTree({
     ...sharedOptions,
@@ -62,13 +60,13 @@ export default async function TreesDevIndexPage({
   const treeMountId = `trees-dev-main-proof-${selectedWorkloadName}-${expansionMode}`;
 
   return (
-    <PathStorePoweredRenderDemoClient
+    <MainDemoClient
       key={`${selectedWorkloadName}-${expansionMode}`}
-      defaultWorkloadName={DEFAULT_PATH_STORE_POWERED_WORKLOAD_NAME}
+      defaultWorkloadName={DEFAULT_TREES_WORKLOAD_NAME}
       expansionMode={expansionMode}
       treeMountId={treeMountId}
       workloadData={workloadData}
-      workloadOptions={PATH_STORE_POWERED_WORKLOAD_OPTIONS}
+      workloadOptions={TREES_WORKLOAD_OPTIONS}
     >
       <ExampleCard
         title={MAIN_DEMO_TITLE}
@@ -76,11 +74,11 @@ export default async function TreesDevIndexPage({
       >
         <div
           id={treeMountId}
-          style={{ height: `${String(PATH_STORE_PROOF_VIEWPORT_HEIGHT)}px` }}
+          style={{ height: `${String(FILE_TREE_PROOF_VIEWPORT_HEIGHT)}px` }}
           dangerouslySetInnerHTML={{ __html: payload.html }}
           suppressHydrationWarning
         />
       </ExampleCard>
-    </PathStorePoweredRenderDemoClient>
+    </MainDemoClient>
   );
 }

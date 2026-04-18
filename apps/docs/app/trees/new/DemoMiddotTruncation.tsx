@@ -1,4 +1,4 @@
-import { preloadPathStoreFileTree } from '@pierre/trees/path-store';
+import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { DemoMiddotTruncationClient } from './DemoMiddotTruncationClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
@@ -16,7 +16,7 @@ const TRUNCATION_DEMO_PATHS = [
 const TRUNCATION_EXPANDED_PATHS = ['apps', 'packages', 'src'] as const;
 
 function createPreloadedData(id: string, flattenEmptyDirectories: boolean) {
-  return preloadPathStoreFileTree({
+  return preloadFileTree({
     flattenEmptyDirectories,
     id,
     initialExpandedPaths: TRUNCATION_EXPANDED_PATHS,
@@ -27,11 +27,11 @@ function createPreloadedData(id: string, flattenEmptyDirectories: boolean) {
 }
 
 const hierarchicalPreloadedData = createPreloadedData(
-  'path-store-middot-truncation-hierarchical',
+  'trees-middot-truncation-hierarchical',
   false
 );
 const flattenedPreloadedData = createPreloadedData(
-  'path-store-middot-truncation-flattened',
+  'trees-middot-truncation-flattened',
   true
 );
 

@@ -1,4 +1,4 @@
-import { preloadPathStoreFileTree } from '@pierre/trees/path-store';
+import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { DemoVirtualizationClient } from './DemoVirtualizationClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
@@ -182,9 +182,9 @@ function createVirtualizationDemoData(): {
 }
 
 const virtualizationDemoData = createVirtualizationDemoData();
-const virtualizationPreloadedData = preloadPathStoreFileTree({
+const virtualizationPreloadedData = preloadFileTree({
   flattenEmptyDirectories: true,
-  id: 'path-store-virtualization-demo',
+  id: 'trees-virtualization-demo',
   initialExpandedPaths: virtualizationDemoData.expandedPaths,
   paths: virtualizationDemoData.paths,
   viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.virtualization,

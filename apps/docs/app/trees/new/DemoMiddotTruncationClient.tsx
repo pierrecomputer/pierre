@@ -4,7 +4,7 @@ import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
-} from '@pierre/trees/path-store/react';
+} from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useState } from 'react';
@@ -39,7 +39,7 @@ export function DemoMiddotTruncationClient({
   const [widthMode, setWidthMode] = useState<'narrow' | 'wide'>('narrow');
   const { model: flattenedModel } = useFileTree({
     flattenEmptyDirectories: true,
-    id: 'path-store-middot-truncation-flattened',
+    id: 'trees-middot-truncation-flattened',
     initialExpandedPaths: TRUNCATION_EXPANDED_PATHS,
     paths,
     search: false,
@@ -47,7 +47,7 @@ export function DemoMiddotTruncationClient({
   });
   const { model: hierarchicalModel } = useFileTree({
     flattenEmptyDirectories: false,
-    id: 'path-store-middot-truncation-hierarchical',
+    id: 'trees-middot-truncation-hierarchical',
     initialExpandedPaths: TRUNCATION_EXPANDED_PATHS,
     paths,
     search: false,

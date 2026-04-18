@@ -1,12 +1,12 @@
 'use client';
 
 import { IconSymbolDiffstat } from '@pierre/icons';
-import type { PathStoreFileTreeOptions } from '@pierre/trees/path-store';
+import type { FileTreeOptions } from '@pierre/trees';
 import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
-} from '@pierre/trees/path-store/react';
+} from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
@@ -31,8 +31,8 @@ const gitStatusPanelStyle = {
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
 
-const GIT_STATUS_BASE_OPTIONS: Omit<
-  PathStoreFileTreeOptions,
+const FILE_TREE_GIT_STATUS_BASE_OPTIONS: Omit<
+  FileTreeOptions,
   'gitStatus' | 'id'
 > = {
   flattenEmptyDirectories: true,
@@ -72,14 +72,14 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
   }, [activeGitStatus, enabled, showUnmodified]);
 
   const { model: fullViewportModel } = useFileTree({
-    ...GIT_STATUS_BASE_OPTIONS,
+    ...FILE_TREE_GIT_STATUS_BASE_OPTIONS,
     gitStatus: GIT_STATUSES_A,
-    id: 'path-store-git-status-demo-full',
+    id: 'file-tree-git-status-demo-full',
   });
   const { model: filteredViewportModel } = useFileTree({
-    ...GIT_STATUS_BASE_OPTIONS,
+    ...FILE_TREE_GIT_STATUS_BASE_OPTIONS,
     gitStatus: GIT_STATUSES_A,
-    id: 'path-store-git-status-demo-filtered',
+    id: 'file-tree-git-status-demo-filtered',
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFiltered,
   });
   const model = showUnmodified ? fullViewportModel : filteredViewportModel;
@@ -111,7 +111,7 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
             >
               <code>gitStatus</code>
             </Link>{' '}
-            option with the path-store model to show indicators for added,
+            option with the file tree model to show indicators for added,
             modified, and deleted files. Folder rows derive a changed-descendant
             hint automatically. Toggle between two status datasets and
             optionally hide unmodified files.

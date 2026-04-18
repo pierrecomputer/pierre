@@ -2,11 +2,11 @@ import type { FileTreeOptions } from '@pierre/trees';
 import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { readSettingsCookies } from '../_components/readSettingsCookies';
+import { SearchDemoClient } from '../_demos/SearchDemoClient';
 import {
   sharedDemoFileTreeOptions,
   sharedInitialExpandedPaths,
 } from '../demo-data';
-import { PathStoreSearchDemoClient } from '../path-store-search/PathStoreSearchDemoClient';
 
 function getPayload(options: Omit<FileTreeOptions, 'id'>, id: string) {
   return preloadFileTree({
@@ -61,7 +61,7 @@ export default async function TreesDevSearchPage() {
   );
 
   return (
-    <PathStoreSearchDemoClient
+    <SearchDemoClient
       collapseHtml={collapsePayload.html}
       expandHtml={expandPayload.html}
       hideHtml={hidePayload.html}

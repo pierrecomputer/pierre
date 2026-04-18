@@ -1,24 +1,24 @@
-import { preloadPathStoreFileTree } from '@pierre/trees/path-store';
+import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { sampleFileList } from '../demo-data';
 import { DemoStylingClient } from './DemoStylingClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 
-const lightPreloadedData = preloadPathStoreFileTree({
+const lightPreloadedData = preloadFileTree({
   flattenEmptyDirectories: true,
-  id: 'path-store-theming-demo-light',
+  id: 'trees-styling-demo-light',
   paths: sampleFileList,
   viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.styling,
 });
-const darkPreloadedData = preloadPathStoreFileTree({
+const darkPreloadedData = preloadFileTree({
   flattenEmptyDirectories: true,
-  id: 'path-store-theming-demo-dark',
+  id: 'trees-styling-demo-dark',
   paths: sampleFileList,
   viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.styling,
 });
-const synthwavePreloadedData = preloadPathStoreFileTree({
+const synthwavePreloadedData = preloadFileTree({
   flattenEmptyDirectories: true,
-  id: 'path-store-theming-demo-synthwave',
+  id: 'trees-styling-demo-synthwave',
   paths: sampleFileList,
   viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.styling,
 });

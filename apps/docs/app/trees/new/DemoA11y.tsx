@@ -1,12 +1,12 @@
-import { preloadPathStoreFileTree } from '@pierre/trees/path-store';
+import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { sampleFileList } from '../demo-data';
 import { DemoA11yClient } from './DemoA11yClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 
-const preloadedData = preloadPathStoreFileTree({
+const preloadedData = preloadFileTree({
   flattenEmptyDirectories: true,
-  id: 'path-store-a11y-demo',
+  id: 'file-tree-a11y-demo',
   initialExpandedPaths: ['src', 'src/components'],
   paths: sampleFileList,
   viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.a11y,

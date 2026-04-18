@@ -1,4 +1,4 @@
-import { preloadPathStoreFileTree } from '@pierre/trees/path-store';
+import { preloadFileTree } from '@pierre/trees/ssr';
 import type { Metadata } from 'next';
 
 import { HeadingAnchors } from '../../docs/HeadingAnchors';
@@ -31,9 +31,9 @@ export const metadata: Metadata = {
 };
 
 export default function TreesNewPage() {
-  const flattenHierarchicalPreloadedData = preloadPathStoreFileTree({
+  const flattenHierarchicalPreloadedData = preloadFileTree({
     flattenEmptyDirectories: false,
-    id: 'path-store-flatten-demo-hierarchical',
+    id: 'file-tree-flatten-demo-hierarchical',
     initialExpansion: 'closed',
     initialExpandedPaths: [
       'build',
@@ -45,28 +45,28 @@ export default function TreesNewPage() {
     search: false,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.flattenHierarchical,
   });
-  const flattenFlattenedPreloadedData = preloadPathStoreFileTree({
+  const flattenFlattenedPreloadedData = preloadFileTree({
     flattenEmptyDirectories: true,
-    id: 'path-store-flatten-demo-flattened',
+    id: 'file-tree-flatten-demo-flattened',
     initialExpansion: 'closed',
     initialExpandedPaths: ['build', 'build/assets/images/social'],
     paths: sampleFileList,
     search: false,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.flattenFlattened,
   });
-  const gitStatusFullViewportPreloadedData = preloadPathStoreFileTree({
+  const gitStatusFullViewportPreloadedData = preloadFileTree({
     flattenEmptyDirectories: true,
     gitStatus: GIT_STATUSES_A,
-    id: 'path-store-git-status-demo-full',
+    id: 'file-tree-git-status-demo-full',
     initialExpandedPaths: ['src', 'src/components'],
     paths: sampleFileList,
     search: false,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFull,
   });
-  const gitStatusFilteredViewportPreloadedData = preloadPathStoreFileTree({
+  const gitStatusFilteredViewportPreloadedData = preloadFileTree({
     flattenEmptyDirectories: true,
     gitStatus: GIT_STATUSES_A,
-    id: 'path-store-git-status-demo-filtered',
+    id: 'file-tree-git-status-demo-filtered',
     initialExpandedPaths: ['src', 'src/components'],
     paths: sampleFileList,
     search: false,

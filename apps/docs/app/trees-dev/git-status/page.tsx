@@ -2,12 +2,12 @@ import type { FileTreeOptions } from '@pierre/trees';
 import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { readSettingsCookies } from '../_components/readSettingsCookies';
+import { GitStatusDemoClient } from '../_demos/GitStatusDemoClient';
 import {
   GIT_STATUSES_A,
   sharedDemoFileTreeOptions,
   sharedInitialExpandedPaths,
 } from '../demo-data';
-import { PathStoreGitStatusDemoClient } from '../path-store-git-status/PathStoreGitStatusDemoClient';
 
 export default async function TreesDevGitStatusPage() {
   const { flattenEmptyDirectories } = await readSettingsCookies();
@@ -25,7 +25,7 @@ export default async function TreesDevGitStatusPage() {
   });
 
   return (
-    <PathStoreGitStatusDemoClient
+    <GitStatusDemoClient
       containerHtml={payload.html}
       sharedOptions={sharedOptions}
     />

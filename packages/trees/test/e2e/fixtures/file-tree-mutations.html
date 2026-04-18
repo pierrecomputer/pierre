@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>file-tree mutations fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+
+      [data-file-tree-mutations-shell] {
+        display: grid;
+        gap: 12px;
+        max-width: 460px;
+      }
+
+      [data-file-tree-mutations-controls] {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      [data-file-tree-mutations-controls] button {
+        padding: 6px 10px;
+      }
+
+      [data-file-tree-mutations-mount] {
+        width: 360px;
+        height: 260px;
+        border: 1px solid #ccc;
+      }
+
+      [data-file-tree-mutations-log] {
+        height: 100px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        padding: 8px;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+
+      [data-test-file-tree-menu] {
+        display: grid;
+        gap: 8px;
+        min-width: 180px;
+        padding: 8px;
+        border: 1px solid #666;
+        border-radius: 6px;
+        background: #fff;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+      }
+    </style>
+  </head>
+  <body>
+    <div data-file-tree-mutations-shell>
+      <div data-file-tree-mutations-controls>
+        <button type="button" data-file-tree-mutation-action="add-file">
+          Add file
+        </button>
+        <button type="button" data-file-tree-mutation-action="move">
+          Move README
+        </button>
+        <button type="button" data-file-tree-mutation-action="batch">
+          Batch
+        </button>
+        <button type="button" data-file-tree-mutation-action="reset">
+          Reset
+        </button>
+      </div>
+      <div data-file-tree-mutations-mount></div>
+      <div data-file-tree-mutations-log></div>
+    </div>
+
+    <script type="module">
+      import { FileTree } from '/dist/index.js';
+
+      const mount = document.querySelector('[data-file-tree-mutations-mount]');
+      const log = document.querySelector('[data-file-tree-mutations-log]');
+      if (
+        !(mount instanceof HTMLDivElement) ||
+        !(log instanceof HTMLDivElement)
+      ) {
+        throw new Error('Missing file-tree mutations fixture shell.');
+      }
+
+      const initialPaths = ['README.md', 'src/index.ts', 'src/lib/utils.ts'];
+      const addFilePath = 'src/demo-added.ts';
+      const moveFromPath = 'README.md';
+      const moveToPath = 'src/README.md';
+      const batchFolderPath = 'src/batch-folder/';
+      const batchFilePath = 'src/batch-folder/notes.md';
+
+      const appendLog = (message) => {
+        const row = document.createElement('div');
+        row.textContent = message;
+        log.append(row);
+        log.scrollTop = log.scrollHeight;
+      };
+
+      const fileTree = new FileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: (item, context) => {
+              const menu = document.createElement('div');
+              menu.dataset.testFileTreeMenu = item.path;
+              menu.setAttribute('data-test-context-menu', 'true');
+              menu.className = 'data-test-file-tree-menu';
+              menu.innerHTML = `<div>${item.path}</div>`;
+
+              const deleteButton = document.createElement('button');
+              deleteButton.type = 'button';
+              deleteButton.dataset.testMenuDelete = item.path;
+              deleteButton.textContent = 'Delete';
+              deleteButton.addEventListener('click', () => {
+                fileTree.remove(
+                  item.path,
+                  item.kind === 'directory' ? { recursive: true } : undefined
+                );
+                context.close();
+              });
+              menu.append(deleteButton);
+
+              const closeButton = document.createElement('button');
+              closeButton.type = 'button';
+              closeButton.dataset.testMenuClose = item.path;
+              closeButton.textContent = 'Close';
+              closeButton.addEventListener('click', () => {
+                context.close();
+              });
+              menu.append(closeButton);
+              return menu;
+            },
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: initialPaths,
+        viewportHeight: 240,
+      });
+
+      fileTree.onMutation('*', (event) => {
+        appendLog(`mutation:${event.operation}`);
+      });
+      fileTree.render({ containerWrapper: mount });
+
+      document
+        .querySelector('[data-file-tree-mutation-action="add-file"]')
+        ?.addEventListener('click', () => {
+          if (fileTree.getItem(addFilePath) != null) {
+            appendLog('skip:add-file');
+            return;
+          }
+          fileTree.add(addFilePath);
+        });
+
+      document
+        .querySelector('[data-file-tree-mutation-action="move"]')
+        ?.addEventListener('click', () => {
+          if (
+            fileTree.getItem(moveFromPath) == null ||
+            fileTree.getItem(moveToPath) != null
+          ) {
+            appendLog('skip:move');
+            return;
+          }
+          fileTree.move(moveFromPath, moveToPath);
+        });
+
+      document
+        .querySelector('[data-file-tree-mutation-action="batch"]')
+        ?.addEventListener('click', () => {
+          if (
+            fileTree.getItem(batchFolderPath) != null ||
+            fileTree.getItem(batchFilePath) != null
+          ) {
+            appendLog('skip:batch');
+            return;
+          }
+          fileTree.batch([
+            { path: batchFolderPath, type: 'add' },
+            { path: batchFilePath, type: 'add' },
+          ]);
+        });
+
+      document
+        .querySelector('[data-file-tree-mutation-action="reset"]')
+        ?.addEventListener('click', () => {
+          fileTree.resetPaths(initialPaths);
+        });
+
+      const waitForTree = async () => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('file-tree-container');
+          if (
+            host instanceof HTMLElement &&
+            host.shadowRoot?.querySelector('button[data-type="item"]') != null
+          ) {
+            return host;
+          }
+
+          if (performance.now() - started > 5_000) {
+            throw new Error(
+              'Timed out waiting for the file-tree mutations fixture.'
+            );
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 16));
+        }
+      };
+
+      await waitForTree();
+      window.__fileTreeMutationsFixtureReady = true;
+    </script>
+  </body>
+</html>

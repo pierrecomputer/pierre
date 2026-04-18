@@ -1,12 +1,12 @@
 import type { FileTreeIcons } from '@pierre/trees';
-import { preloadPathStoreFileTree } from '@pierre/trees/path-store';
+import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { sampleFileList } from '../demo-data';
 import { DemoCustomIconsClient } from './DemoCustomIconsClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 
 function createIconDemoPreloadedData(id: string, icons: FileTreeIcons) {
-  return preloadPathStoreFileTree({
+  return preloadFileTree({
     dragAndDrop: true,
     flattenEmptyDirectories: true,
     icons,
@@ -18,15 +18,15 @@ function createIconDemoPreloadedData(id: string, icons: FileTreeIcons) {
 }
 
 const minimalPreloadedData = createIconDemoPreloadedData(
-  'path-store-built-in-icons-minimal',
+  'trees-built-in-icons-minimal',
   'minimal'
 );
 const standardPreloadedData = createIconDemoPreloadedData(
-  'path-store-built-in-icons-standard',
+  'trees-built-in-icons-standard',
   'standard'
 );
 const completePreloadedData = createIconDemoPreloadedData(
-  'path-store-built-in-icons-complete',
+  'trees-built-in-icons-complete',
   'complete'
 );
 
@@ -34,9 +34,9 @@ export function DemoCustomIcons() {
   return (
     <DemoCustomIconsClient
       preloadedDataById={{
-        'path-store-built-in-icons-complete': completePreloadedData,
-        'path-store-built-in-icons-minimal': minimalPreloadedData,
-        'path-store-built-in-icons-standard': standardPreloadedData,
+        'trees-built-in-icons-complete': completePreloadedData,
+        'trees-built-in-icons-minimal': minimalPreloadedData,
+        'trees-built-in-icons-standard': standardPreloadedData,
       }}
     />
   );

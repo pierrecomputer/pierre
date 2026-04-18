@@ -1,15 +1,15 @@
 import type { TreeThemeStyles } from '@pierre/trees';
-import { preloadPathStoreFileTree } from '@pierre/trees/path-store';
+import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { sampleFileList } from '../demo-data';
 import { GIT_STATUSES_A } from '../tree-examples/demo-data';
 import { DemoThemingClient } from './DemoThemingClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 
-const preloadedData = preloadPathStoreFileTree({
+const preloadedData = preloadFileTree({
   flattenEmptyDirectories: true,
   gitStatus: GIT_STATUSES_A,
-  id: 'path-store-shiki-themes-tree',
+  id: 'trees-shiki-themes-tree',
   initialExpandedPaths: ['src', 'src/components'],
   paths: sampleFileList,
   viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.theming,

@@ -4,7 +4,7 @@ import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
-} from '@pierre/trees/path-store/react';
+} from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
@@ -33,7 +33,7 @@ export function DemoVirtualizationClient({
 }: DemoVirtualizationClientProps) {
   const { model } = useFileTree({
     flattenEmptyDirectories: true,
-    id: 'path-store-virtualization-demo',
+    id: 'trees-virtualization-demo',
     initialExpandedPaths: expandedPaths,
     paths,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.virtualization,
@@ -47,7 +47,7 @@ export function DemoVirtualizationClient({
         description={
           <>
             Trees with thousands of items render instantly with built-in
-            path-store virtualization. Only visible rows are mounted. See{' '}
+            virtualization. Only visible rows are mounted. See{' '}
             <Link
               href={`${PRODUCTS.trees.docsPath}#core-types-filetreeoptions`}
               className="inline-link"

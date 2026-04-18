@@ -1,12 +1,12 @@
 'use client';
 
 import { IconLock, IconRefresh } from '@pierre/icons';
-import type { PathStoreFileTreeOptions } from '@pierre/trees/path-store';
+import type { FileTreeOptions } from '@pierre/trees';
 import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
-} from '@pierre/trees/path-store/react';
+} from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
@@ -25,7 +25,7 @@ const dragDropStyle = {
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
 
-const DRAG_DROP_BASE_OPTIONS: Omit<PathStoreFileTreeOptions, 'id' | 'paths'> = {
+const DRAG_DROP_BASE_OPTIONS: Omit<FileTreeOptions, 'id' | 'paths'> = {
   dragAndDrop: true,
   flattenEmptyDirectories: true,
   search: false,
@@ -51,7 +51,7 @@ export function DemoDragDropClient({ preloadedData }: DemoDragDropClientProps) {
         setHasDragged(true);
       },
     },
-    id: 'path-store-drag-drop-demo-locked',
+    id: 'file-tree-drag-drop-demo-locked',
     paths: sampleFileList,
   });
   const { model: unlockedModel } = useFileTree({
@@ -61,7 +61,7 @@ export function DemoDragDropClient({ preloadedData }: DemoDragDropClientProps) {
         setHasDragged(true);
       },
     },
-    id: 'path-store-drag-drop-demo-unlocked',
+    id: 'file-tree-drag-drop-demo-unlocked',
     paths: sampleFileList,
   });
 

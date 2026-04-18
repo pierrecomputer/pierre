@@ -2,8 +2,8 @@ import type { FileTreeOptions } from '@pierre/trees';
 import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { readSettingsCookies } from '../_components/readSettingsCookies';
-import { PathStoreDragAndDropDemoClient } from '../path-store-drag-and-drop/PathStoreDragAndDropDemoClient';
-import { createPresortedPreparedInput } from '../path-store-powered/createPresortedPreparedInput';
+import { DragAndDropDemoClient } from '../_demos/DragAndDropDemoClient';
+import { createPresortedPreparedInput } from '../_lib/createPresortedPreparedInput';
 
 const DRAG_AND_DROP_DEMO_PATHS = [
   'assets/images/social/banner.png',
@@ -26,7 +26,7 @@ const DRAG_AND_DROP_PREPARED_INPUT = createPresortedPreparedInput(
   DRAG_AND_DROP_DEMO_PATHS
 );
 const TREE_HEADER_HTML =
-  '<div data-path-store-demo-header style="align-items:center;display:flex;gap:12px;padding:8px 12px"><strong>Drag and drop demo</strong><span>Pointer + touch moves on the canonical tree</span></div>';
+  '<div data-tree-demo-header style="align-items:center;display:flex;gap:12px;padding:8px 12px"><strong>Drag and drop demo</strong><span>Pointer + touch moves on the canonical tree</span></div>';
 
 export default async function TreesDevDragAndDropPage() {
   const { flattenEmptyDirectories } = await readSettingsCookies();
@@ -58,7 +58,7 @@ export default async function TreesDevDragAndDropPage() {
   });
 
   return (
-    <PathStoreDragAndDropDemoClient
+    <DragAndDropDemoClient
       containerHtml={payload.html}
       sharedOptions={sharedOptions}
     />

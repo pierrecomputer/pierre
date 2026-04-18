@@ -1,7 +1,7 @@
 import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { readSettingsCookies } from '../_components/readSettingsCookies';
-import { PathStoreReactDemoClient } from '../path-store-react/PathStoreReactDemoClient';
+import { ReactDemoClient } from '../_demos/ReactDemoClient';
 
 const DEMO_PATHS = [
   'README.md',
@@ -23,7 +23,7 @@ export default async function TreesDevReactPage() {
   });
 
   return (
-    <PathStoreReactDemoClient
+    <ReactDemoClient
       flattenEmptyDirectories={flattenEmptyDirectories}
       paths={DEMO_PATHS}
       preloadedData={ssrPayload}

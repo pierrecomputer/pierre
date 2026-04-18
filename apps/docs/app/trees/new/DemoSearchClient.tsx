@@ -1,12 +1,12 @@
 'use client';
 
 import { IconCollapsedRow, IconEyeSlash, IconFolderOpen } from '@pierre/icons';
-import type { PathStoreTreesSearchMode } from '@pierre/trees/path-store';
+import type { FileTreeSearchMode } from '@pierre/trees';
 import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
-} from '@pierre/trees/path-store/react';
+} from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties, ReactNode } from 'react';
 import { useEffect } from 'react';
@@ -30,7 +30,7 @@ interface SearchModeDemo {
   description: string;
   id: string;
   icon: ReactNode;
-  mode: PathStoreTreesSearchMode;
+  mode: FileTreeSearchMode;
   title: string;
   viewportHeight: number;
 }
@@ -38,7 +38,7 @@ interface SearchModeDemo {
 const SEARCH_MODE_DEMOS: readonly SearchModeDemo[] = [
   {
     description: 'Hides files and folders without any matches',
-    id: 'path-store-search-demo-hide-non-matches',
+    id: 'file-tree-search-demo-hide-non-matches',
     icon: <IconEyeSlash />,
     mode: 'hide-non-matches',
     title: 'hide-non-matches',
@@ -46,7 +46,7 @@ const SEARCH_MODE_DEMOS: readonly SearchModeDemo[] = [
   },
   {
     description: 'Collapses folders without any matches',
-    id: 'path-store-search-demo-collapse-non-matches',
+    id: 'file-tree-search-demo-collapse-non-matches',
     icon: <IconCollapsedRow />,
     mode: 'collapse-non-matches',
     title: 'collapse-non-matches',
@@ -54,7 +54,7 @@ const SEARCH_MODE_DEMOS: readonly SearchModeDemo[] = [
   },
   {
     description: 'Keeps all items visible and expand folders with matches',
-    id: 'path-store-search-demo-expand-matches',
+    id: 'file-tree-search-demo-expand-matches',
     icon: <IconFolderOpen />,
     mode: 'expand-matches',
     title: 'expand-matches',

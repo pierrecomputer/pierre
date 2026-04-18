@@ -16,14 +16,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./path-store": {
-      "types": "./dist/path-store/index.d.ts",
-      "import": "./dist/path-store/index.js"
-    },
-    "./path-store/react": {
-      "types": "./dist/path-store/react/index.d.ts",
-      "import": "./dist/path-store/react/index.js"
-    },
     "./web-components": {
       "types": "./dist/web-components.d.ts",
       "import": "./dist/web-components.js"
@@ -43,8 +35,8 @@
   "scripts": {
     "build": "tsdown --clean",
     "benchmark": "bun run benchmark:file-tree-get-item",
-    "benchmark:file-tree-get-item": "bun run ./scripts/benchmarkPathStoreGetItem.ts",
-    "profile:file-tree": "bun run ./scripts/profileTreesPathStore.ts",
+    "benchmark:file-tree-get-item": "bun run ./scripts/benchmarkFileTreeGetItem.ts",
+    "profile:file-tree": "bun run ./scripts/profileFileTree.ts",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "test": "bun test",
     "coverage": "bun test --coverage",

@@ -21,7 +21,7 @@ export default defineConfig({
   },
   webServer: {
     command: `FILE_TREE_E2E_PORT=${e2ePort} bun run test:e2e:server`,
-    url: `${e2eBaseUrl}/test/e2e/fixtures/path-store-style-isolation.html`,
+    url: `${e2eBaseUrl}/test/e2e/fixtures/file-tree-style-isolation.html`,
     reuseExistingServer: false,
     timeout: 60_000,
   },

@@ -13,7 +13,7 @@ import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
-} from '@pierre/trees/path-store/react';
+} from '@pierre/trees/react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -134,7 +134,7 @@ export function DemoThemingClient({
   const { model } = useFileTree({
     flattenEmptyDirectories: true,
     gitStatus: GIT_STATUSES_A,
-    id: 'path-store-shiki-themes-tree',
+    id: 'trees-shiki-themes-tree',
     initialExpandedPaths: ['src', 'src/components'],
     paths: sampleFileList,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.theming,

@@ -1,0 +1,57 @@
+import { expect, test } from 'bun:test';
+// @ts-expect-error -- no @types/jsdom; only used in tests
+import { JSDOM } from 'jsdom';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import {
+  createFileTreeProfileFixtureOptions,
+  DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME,
+  FILE_TREE_PROFILE_VIEWPORT_HEIGHT,
+  FILE_TREE_PROFILE_WORKLOAD_NAMES,
+  getFileTreeProfileWorkload,
+} from '../scripts/lib/fileTreeProfileShared';
+
+const packageRoot = fileURLToPath(new URL('../', import.meta.url));
+
+test('file-tree profile fixture workload defaults mirror the intended tree profile set', () => {
+  expect(FILE_TREE_PROFILE_WORKLOAD_NAMES).toEqual([
+    'linux-5x',
+    'linux-10x',
+    'linux',
+    'demo-small',
+  ]);
+  expect(DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME).toBe('linux-5x');
+});
+
+test('file-tree profile fixture options mirror the Phase 4 docs tree behavior', () => {
+  const workload = getFileTreeProfileWorkload('linux-5x');
+  const options = createFileTreeProfileFixtureOptions(workload);
+
+  expect(options.flattenEmptyDirectories).toBe(true);
+  expect(options.initialExpandedPaths).toEqual(workload.expandedFolders);
+  expect(options.paths).toEqual(workload.files);
+  expect(options.viewportHeight).toBe(FILE_TREE_PROFILE_VIEWPORT_HEIGHT);
+  const preparedInput = options.preparedInput as {
+    paths: readonly string[];
+    presortedPaths: readonly string[];
+  };
+  expect(preparedInput.paths).toEqual(workload.files);
+  expect(preparedInput.presortedPaths).toEqual(workload.files);
+});
+
+test('file-tree profile fixture HTML stays minimal and idle-on-load', () => {
+  const html = readFileSync(
+    `${packageRoot}/test/e2e/fixtures/file-tree-profile.html`,
+    'utf8'
+  );
+  const dom = new JSDOM(html);
+  const { document } = dom.window;
+
+  expect(document.querySelector('[data-profile-render-button]')).not.toBeNull();
+  expect(document.querySelector('#workload')).not.toBeNull();
+  expect(document.querySelector('[data-profile-mount]')).not.toBeNull();
+  expect(document.querySelector('file-tree-container')).toBeNull();
+  expect(document.querySelector('h1')).toBeNull();
+  expect(html.includes('Capability / phase matrix')).toBe(false);
+});

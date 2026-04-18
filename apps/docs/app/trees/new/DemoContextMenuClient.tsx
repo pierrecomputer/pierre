@@ -1,16 +1,16 @@
 'use client';
 
 import type {
-  PathStoreFileTree,
-  PathStoreTreesContextMenuItem,
-  PathStoreTreesContextMenuOpenContext,
-  PathStoreTreesContextMenuTriggerMode,
-} from '@pierre/trees/path-store';
+  ContextMenuItem,
+  ContextMenuOpenContext,
+  ContextMenuTriggerMode,
+  FileTree as FileTreeModel,
+} from '@pierre/trees';
 import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
-} from '@pierre/trees/path-store/react';
+} from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -34,23 +34,23 @@ const IDE_EXPLORER_WIDTH_PX = 300;
 
 interface TriggerModeDemo {
   id: string;
-  mode: PathStoreTreesContextMenuTriggerMode;
+  mode: ContextMenuTriggerMode;
   title: string;
 }
 
 const TRIGGER_MODE_DEMOS: readonly TriggerModeDemo[] = [
   {
-    id: 'path-store-context-menu-demo-both',
+    id: 'file-tree-context-menu-demo-both',
     mode: 'both',
     title: 'both',
   },
   {
-    id: 'path-store-context-menu-demo-right-click',
+    id: 'file-tree-context-menu-demo-right-click',
     mode: 'right-click',
     title: 'right-click',
   },
   {
-    id: 'path-store-context-menu-demo-button',
+    id: 'file-tree-context-menu-demo-button',
     mode: 'button',
     title: 'button',
   },
@@ -104,7 +104,7 @@ function getParentPath(path: string): string {
     : `${normalizedPath.slice(0, lastSlashIndex + 1)}`;
 }
 
-function getUniquePath(model: PathStoreFileTree, basePath: string): string {
+function getUniquePath(model: FileTreeModel, basePath: string): string {
   let suffix = 0;
   let candidate = basePath;
   while (model.getItem(candidate) != null) {
@@ -134,8 +134,8 @@ function ContextMenuContents({
   onDelete,
   onRename,
 }: {
-  context: Pick<PathStoreTreesContextMenuOpenContext, 'close' | 'restoreFocus'>;
-  item: PathStoreTreesContextMenuItem;
+  context: Pick<ContextMenuOpenContext, 'close' | 'restoreFocus'>;
+  item: ContextMenuItem;
   onAddFile: () => void;
   onAddFolder: () => void;
   onDelete: () => void;
@@ -149,7 +149,7 @@ function ContextMenuContents({
 
   return (
     <div
-      data-path-store-context-menu-root="true"
+      data-file-tree-context-menu-root="true"
       role="menu"
       className="bg-popover text-popover-foreground min-w-[230px] overflow-hidden rounded-md border shadow-md"
     >
@@ -204,16 +204,13 @@ function ContextMenuContents({
 }
 
 function useContextMenuSlotRenderer(modelRef: {
-  current: PathStoreFileTree | null;
+  current: FileTreeModel | null;
 }) {
   const slotElementRef = useRef<HTMLDivElement | null>(null);
   const menuRootRef = useRef<ReactDomRoot | null>(null);
 
   return useCallback(
-    (
-      item: PathStoreTreesContextMenuItem,
-      context: PathStoreTreesContextMenuOpenContext
-    ) => {
+    (item: ContextMenuItem, context: ContextMenuOpenContext) => {
       const slotElement =
         slotElementRef.current ?? document.createElement('div');
       slotElementRef.current = slotElement;
@@ -270,7 +267,7 @@ function useContextMenuSlotRenderer(modelRef: {
 }
 
 function useHeaderSlotRenderer(
-  modelRef: { current: PathStoreFileTree | null },
+  modelRef: { current: FileTreeModel | null },
   projectName: string
 ) {
   const slotElementRef = useRef<HTMLDivElement | null>(null);
@@ -303,9 +300,7 @@ function useHeaderSlotRenderer(
   }, [modelRef, projectName]);
 }
 
-function getProjectNameForMode(
-  mode: PathStoreTreesContextMenuTriggerMode
-): string {
+function getProjectNameForMode(mode: ContextMenuTriggerMode): string {
   switch (mode) {
     case 'button':
       return 'Button Trigger Project';
@@ -317,8 +312,8 @@ function getProjectNameForMode(
 }
 
 function useContextMenuComposition(
-  modelRef: { current: PathStoreFileTree | null },
-  triggerMode: PathStoreTreesContextMenuTriggerMode
+  modelRef: { current: FileTreeModel | null },
+  triggerMode: ContextMenuTriggerMode
 ) {
   const contextMenuRenderer = useContextMenuSlotRenderer(modelRef);
   const headerRenderer = useHeaderSlotRenderer(
@@ -344,18 +339,17 @@ function useContextMenuComposition(
 export function DemoContextMenuClient({
   preloadedDataById,
 }: DemoContextMenuClientProps) {
-  const [activeMode, setActiveMode] =
-    useState<PathStoreTreesContextMenuTriggerMode>('both');
+  const [activeMode, setActiveMode] = useState<ContextMenuTriggerMode>('both');
   const modeByName = useMemo(
     () =>
-      new Map<PathStoreTreesContextMenuTriggerMode, TriggerModeDemo>(
+      new Map<ContextMenuTriggerMode, TriggerModeDemo>(
         TRIGGER_MODE_DEMOS.map((modeDemo) => [modeDemo.mode, modeDemo])
       ),
     []
   );
-  const bothModelRef = useRef<PathStoreFileTree | null>(null);
-  const rightClickModelRef = useRef<PathStoreFileTree | null>(null);
-  const buttonModelRef = useRef<PathStoreFileTree | null>(null);
+  const bothModelRef = useRef<FileTreeModel | null>(null);
+  const rightClickModelRef = useRef<FileTreeModel | null>(null);
+  const buttonModelRef = useRef<FileTreeModel | null>(null);
   const bothComposition = useContextMenuComposition(bothModelRef, 'both');
   const rightClickComposition = useContextMenuComposition(
     rightClickModelRef,
@@ -366,7 +360,7 @@ export function DemoContextMenuClient({
   const { model: bothModel } = useFileTree({
     composition: bothComposition,
     flattenEmptyDirectories: true,
-    id: 'path-store-context-menu-demo-both',
+    id: 'file-tree-context-menu-demo-both',
     initialExpandedPaths: CONTEXT_MENU_EXPANDED_PATHS,
     paths: sampleFileList,
     search: false,
@@ -375,7 +369,7 @@ export function DemoContextMenuClient({
   const { model: rightClickModel } = useFileTree({
     composition: rightClickComposition,
     flattenEmptyDirectories: true,
-    id: 'path-store-context-menu-demo-right-click',
+    id: 'file-tree-context-menu-demo-right-click',
     initialExpandedPaths: CONTEXT_MENU_EXPANDED_PATHS,
     paths: sampleFileList,
     search: false,
@@ -384,7 +378,7 @@ export function DemoContextMenuClient({
   const { model: buttonModel } = useFileTree({
     composition: buttonComposition,
     flattenEmptyDirectories: true,
-    id: 'path-store-context-menu-demo-button',
+    id: 'file-tree-context-menu-demo-button',
     initialExpandedPaths: CONTEXT_MENU_EXPANDED_PATHS,
     paths: sampleFileList,
     search: false,
@@ -427,7 +421,7 @@ export function DemoContextMenuClient({
           <ButtonGroup
             value={activeMode}
             onValueChange={(value) =>
-              setActiveMode(value as PathStoreTreesContextMenuTriggerMode)
+              setActiveMode(value as ContextMenuTriggerMode)
             }
           >
             {TRIGGER_MODE_DEMOS.map((modeDemo) => (

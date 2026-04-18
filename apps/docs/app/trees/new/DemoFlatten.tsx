@@ -1,12 +1,12 @@
 'use client';
 
 import { IconFileTreeFill, IconFolders } from '@pierre/icons';
-import type { PathStoreFileTreeOptions } from '@pierre/trees/path-store';
+import type { FileTreeOptions } from '@pierre/trees';
 import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
-} from '@pierre/trees/path-store/react';
+} from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
@@ -33,13 +33,12 @@ const flattenStyle = {
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
 
-const PATH_STORE_BASE_OPTIONS: Omit<PathStoreFileTreeOptions, 'id' | 'paths'> =
-  {
-    initialExpansion: 'closed',
-    search: false,
-  };
+const FILE_TREE_BASE_OPTIONS: Omit<FileTreeOptions, 'id' | 'paths'> = {
+  initialExpansion: 'closed',
+  search: false,
+};
 
-function PathStoreFlattenDemoTree({
+function FlattenDemoTree({
   flattenEmptyDirectories,
   initialExpandedPaths,
   id,
@@ -53,7 +52,7 @@ function PathStoreFlattenDemoTree({
   viewportHeight: number;
 }) {
   const { model } = useFileTree({
-    ...PATH_STORE_BASE_OPTIONS,
+    ...FILE_TREE_BASE_OPTIONS,
     flattenEmptyDirectories,
     id,
     initialExpandedPaths,
@@ -106,10 +105,10 @@ export function DemoFlatten({ preloadedData }: DemoFlattenProps) {
           <TreeExampleHeading icon={<IconFileTreeFill />}>
             Default expanded
           </TreeExampleHeading>
-          <PathStoreFlattenDemoTree
+          <FlattenDemoTree
             flattenEmptyDirectories={false}
             initialExpandedPaths={HIERARCHICAL_MATCHED_EXPANDED_PATHS}
-            id="path-store-flatten-demo-hierarchical"
+            id="file-tree-flatten-demo-hierarchical"
             preloadedData={preloadedData.hierarchical}
             viewportHeight={TREE_NEW_VIEWPORT_HEIGHTS.flattenHierarchical}
           />
@@ -119,10 +118,10 @@ export function DemoFlatten({ preloadedData }: DemoFlattenProps) {
           <TreeExampleHeading icon={<IconFolders />}>
             Flattened directories
           </TreeExampleHeading>
-          <PathStoreFlattenDemoTree
+          <FlattenDemoTree
             flattenEmptyDirectories
             initialExpandedPaths={FLATTENED_MATCHED_EXPANDED_PATHS}
-            id="path-store-flatten-demo-flattened"
+            id="file-tree-flatten-demo-flattened"
             preloadedData={preloadedData.flattened}
             viewportHeight={TREE_NEW_VIEWPORT_HEIGHTS.flattenFlattened}
           />

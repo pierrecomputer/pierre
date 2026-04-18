@@ -4,7 +4,7 @@ import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
-} from '@pierre/trees/path-store/react';
+} from '@pierre/trees/react';
 import type { CSSProperties } from 'react';
 import { useEffect } from 'react';
 
@@ -36,7 +36,7 @@ interface DemoA11yClientProps {
 export function DemoA11yClient({ preloadedData }: DemoA11yClientProps) {
   const { model } = useFileTree({
     flattenEmptyDirectories: true,
-    id: 'path-store-a11y-demo',
+    id: 'file-tree-a11y-demo',
     initialExpandedPaths: ['src', 'src/components'],
     paths: sampleFileList,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.a11y,

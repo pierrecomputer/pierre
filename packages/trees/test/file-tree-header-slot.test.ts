@@ -1,0 +1,232 @@
+import { describe, expect, test } from 'bun:test';
+// @ts-expect-error -- no @types/jsdom; only used in tests
+import { JSDOM } from 'jsdom';
+
+function installDom() {
+  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
+    url: 'http://localhost',
+  });
+  const originalValues = {
+    CSSStyleSheet: Reflect.get(globalThis, 'CSSStyleSheet'),
+    customElements: Reflect.get(globalThis, 'customElements'),
+    document: Reflect.get(globalThis, 'document'),
+    Event: Reflect.get(globalThis, 'Event'),
+    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
+    HTMLButtonElement: Reflect.get(globalThis, 'HTMLButtonElement'),
+    HTMLDivElement: Reflect.get(globalThis, 'HTMLDivElement'),
+    HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
+    HTMLTemplateElement: Reflect.get(globalThis, 'HTMLTemplateElement'),
+    MutationObserver: Reflect.get(globalThis, 'MutationObserver'),
+    navigator: Reflect.get(globalThis, 'navigator'),
+    Node: Reflect.get(globalThis, 'Node'),
+    ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
+    SVGElement: Reflect.get(globalThis, 'SVGElement'),
+    ShadowRoot: Reflect.get(globalThis, 'ShadowRoot'),
+    window: Reflect.get(globalThis, 'window'),
+  };
+
+  class MockStyleSheet {
+    replaceSync(_value: string): void {}
+  }
+
+  class MockResizeObserver {
+    observe(_target: Element): void {}
+    disconnect(): void {}
+  }
+
+  Object.assign(globalThis, {
+    CSSStyleSheet: MockStyleSheet,
+    customElements: dom.window.customElements,
+    document: dom.window.document,
+    Event: dom.window.Event,
+    HTMLElement: dom.window.HTMLElement,
+    HTMLButtonElement: dom.window.HTMLButtonElement,
+    HTMLDivElement: dom.window.HTMLDivElement,
+    HTMLStyleElement: dom.window.HTMLStyleElement,
+    HTMLTemplateElement: dom.window.HTMLTemplateElement,
+    MutationObserver: dom.window.MutationObserver,
+    navigator: dom.window.navigator,
+    Node: dom.window.Node,
+    ResizeObserver: MockResizeObserver,
+    SVGElement: dom.window.SVGElement,
+    ShadowRoot: dom.window.ShadowRoot,
+    window: dom.window,
+  });
+
+  return {
+    cleanup() {
+      for (const [key, value] of Object.entries(originalValues)) {
+        if (value === undefined) {
+          Reflect.deleteProperty(globalThis, key);
+        } else {
+          Object.assign(globalThis, { [key]: value });
+        }
+      }
+      dom.window.close();
+    },
+    dom,
+  };
+}
+
+async function flushDom(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe('file-tree header slot', () => {
+  test('preloadFileTree includes the header slot outlet', async () => {
+    const { preloadFileTree } = await import('../src/render/FileTree');
+
+    const payload = preloadFileTree({
+      composition: {
+        header: {
+          html: '<button data-test-ssr-header>Header action</button>',
+        },
+      },
+      flattenEmptyDirectories: true,
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/index.ts'],
+      viewportHeight: 120,
+    });
+
+    expect(payload.shadowHtml).toContain('slot name="header"');
+    expect(payload.html).toContain('slot="header"');
+    expect(payload.html).toContain('data-test-ssr-header');
+  });
+
+  test('render attaches and cleanup removes host-managed header content', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        composition: {
+          header: {
+            render: (): HTMLElement => {
+              const header = dom.window.document.createElement('button');
+              header.dataset.testHeader = 'true';
+              header.textContent = 'Header action';
+              return header as unknown as HTMLElement;
+            },
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      expect(host?.querySelectorAll('[slot="header"]')).toHaveLength(1);
+      expect(host?.querySelector('[data-test-header="true"]')).not.toBeNull();
+
+      fileTree.cleanUp();
+      expect(host?.querySelector('[slot="header"]')).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('render attaches HTML-only header content without requiring SSR markup', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        composition: {
+          header: {
+            html: '<button data-test-html-header="true">HTML header</button>',
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      expect(host?.querySelectorAll('[slot="header"]')).toHaveLength(1);
+      expect(
+        host?.querySelector('[data-test-html-header="true"]')?.textContent
+      ).toBe('HTML header');
+
+      fileTree.cleanUp();
+      expect(host?.querySelector('[slot="header"]')).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('hydrate keeps header slot content to a single host-managed node', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree, preloadFileTree } =
+        await import('../src/render/FileTree');
+      const payload = preloadFileTree({
+        composition: {
+          header: {
+            html: '<div data-test-ssr-header="true">Hydrated header</div>',
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts'],
+        viewportHeight: 120,
+      });
+
+      const mount = dom.window.document.createElement('div');
+      mount.innerHTML = payload.html;
+      dom.window.document.body.appendChild(mount);
+
+      const host = mount.querySelector('file-tree-container');
+      if (!(host instanceof dom.window.HTMLElement)) {
+        throw new Error('expected SSR host');
+      }
+      expect(host.querySelectorAll('[slot="header"]')).toHaveLength(1);
+
+      const fileTree = new FileTree({
+        composition: {
+          header: {
+            render: (): HTMLElement => {
+              const header = dom.window.document.createElement('div');
+              header.dataset.testHydratedHeader = 'true';
+              header.textContent = 'Hydrated header';
+              return header as unknown as HTMLElement;
+            },
+          },
+        },
+        flattenEmptyDirectories: true,
+        id: payload.id,
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts'],
+        viewportHeight: 120,
+      });
+
+      fileTree.hydrate({ fileTreeContainer: host });
+      await flushDom();
+      fileTree.render({ fileTreeContainer: host });
+      await flushDom();
+
+      expect(host.querySelectorAll('[slot="header"]')).toHaveLength(1);
+      expect(
+        host.querySelector('[data-test-hydrated-header="true"]')
+      ).not.toBeNull();
+      expect(
+        host.querySelectorAll('[data-test-ssr-header="true"]')
+      ).toHaveLength(0);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+});

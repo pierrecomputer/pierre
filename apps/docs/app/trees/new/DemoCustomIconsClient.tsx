@@ -6,7 +6,7 @@ import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
-} from '@pierre/trees/path-store/react';
+} from '@pierre/trees/react';
 import type { CSSProperties, JSX } from 'react';
 
 import { PierreIconsFootnote } from '../../components/PierreIconsFootnote';
@@ -40,21 +40,21 @@ const ICON_DEMO_CONFIGS: readonly IconDemoConfig[] = [
     description: <>Generic file, folder, and image icons with no file types.</>,
     icon: <IconFileTreeFill />,
     icons: 'minimal',
-    id: 'path-store-built-in-icons-minimal',
+    id: 'trees-built-in-icons-minimal',
     title: 'Minimal',
   },
   {
     description: <>Icons for common languages and file types.</>,
     icon: <IconFire />,
     icons: 'standard',
-    id: 'path-store-built-in-icons-standard',
+    id: 'trees-built-in-icons-standard',
     title: 'Standard',
   },
   {
     description: <>Full, colored suite with brands and frameworks.</>,
     icon: <IconBrush />,
     icons: 'complete',
-    id: 'path-store-built-in-icons-complete',
+    id: 'trees-built-in-icons-complete',
     title: 'Complete',
   },
 ] as const;
