@@ -934,6 +934,90 @@ describe('file-tree composition surfaces', () => {
     }
   });
 
+  test('right-click-only mode still anchors keyboard-opened menus to the focused row', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: (): HTMLElement => {
+              const menu = dom.window.document.createElement('div');
+              menu.dataset.testMenu = 'true';
+              return menu as unknown as HTMLElement;
+            },
+            triggerMode: 'right-click',
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      const shadowRoot = host?.shadowRoot;
+      const itemButton = getItemButton(shadowRoot, dom, 'README.md');
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      const anchor = shadowRoot?.querySelector(
+        '[data-type="context-menu-anchor"]'
+      ) as HTMLDivElement | null;
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('expected virtualized scroll element');
+      }
+
+      itemButton.getBoundingClientRect = () =>
+        ({
+          bottom: 68,
+          height: 20,
+          left: 0,
+          right: 120,
+          top: 48,
+          width: 120,
+          x: 0,
+          y: 48,
+        }) as DOMRect;
+      scrollElement.getBoundingClientRect = () =>
+        ({
+          bottom: 200,
+          height: 200,
+          left: 0,
+          right: 240,
+          top: 8,
+          width: 240,
+          x: 0,
+          y: 8,
+        }) as DOMRect;
+
+      itemButton.focus();
+      itemButton.dispatchEvent(
+        new dom.window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          key: 'F10',
+          shiftKey: true,
+        })
+      );
+      await flushDom();
+
+      expect(anchor?.style.top).toBe('40px');
+      expect(host?.querySelector('[slot="context-menu"]')).not.toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('adds aria-haspopup=menu only when context menu is enabled', async () => {
     const { cleanup, dom } = installDom();
     try {

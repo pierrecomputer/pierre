@@ -2525,6 +2525,13 @@ export function FileTreeView({
   const contextMenuAnchorVisible =
     contextMenuEnabled && (triggerButtonVisible || contextMenuState != null);
   const pointerAnchorRect = contextMenuState?.anchorRect;
+  const rowAnchorTop =
+    contextMenuState != null &&
+    pointerAnchorRect == null &&
+    triggerButton != null &&
+    contextMenuAnchorTop != null
+      ? contextMenuAnchorTop
+      : null;
   const contextMenuAnchorStyle =
     pointerAnchorRect != null
       ? {
@@ -2533,9 +2540,9 @@ export function FileTreeView({
           right: 'auto',
           top: `${pointerAnchorRect.top}px`,
         }
-      : triggerButtonVisible && contextMenuAnchorTop != null
+      : rowAnchorTop != null
         ? {
-            top: `${contextMenuAnchorTop}px`,
+            top: `${rowAnchorTop}px`,
           }
         : undefined;
   const contextMenuTriggerStyle = isPointerContextMenuOpen
