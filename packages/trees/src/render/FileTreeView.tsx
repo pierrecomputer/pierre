@@ -321,6 +321,24 @@ function getBuiltInGitStatusDecoration(
   return null;
 }
 
+function getInheritedIgnoredGitStatus(
+  ancestorPaths: readonly string[],
+  ignoredDirectoryPaths: ReadonlySet<string> | undefined
+): GitStatus | null {
+  if (ignoredDirectoryPaths == null || ignoredDirectoryPaths.size === 0) {
+    return null;
+  }
+
+  for (let index = ancestorPaths.length - 1; index >= 0; index -= 1) {
+    const ancestorPath = ancestorPaths[index];
+    if (ignoredDirectoryPaths.has(ancestorPath)) {
+      return 'ignored';
+    }
+  }
+
+  return null;
+}
+
 function isFileTreeDirectoryHandle(
   item: FileTreeItemHandle | null
 ): item is FileTreeDirectoryHandle {
@@ -650,6 +668,7 @@ function renderStyledRow(
   instanceId: string | undefined,
   itemHeight: number,
   directoriesWithGitChanges: ReadonlySet<string> | undefined,
+  ignoredGitDirectories: ReadonlySet<string> | undefined,
   gitStatusByPath: ReadonlyMap<string, GitStatus> | undefined,
   contextMenuEnabled: boolean,
   contextMenuRightClickEnabled: boolean,
@@ -680,12 +699,15 @@ function renderStyledRow(
   const directoryItem = isFileTreeDirectoryHandle(item) ? item : null;
   const { isParked = false, style } = options;
   const ownGitStatus = gitStatusByPath?.get(targetPath) ?? null;
+  const effectiveGitStatus =
+    ownGitStatus ??
+    getInheritedIgnoredGitStatus(row.ancestorPaths, ignoredGitDirectories);
   const containsGitChange =
     row.kind === 'directory' &&
     (directoriesWithGitChanges?.has(targetPath) ?? false);
   const decoration =
     renderDecorationForRow(row, targetPath) ??
-    getBuiltInGitStatusDecoration(ownGitStatus, containsGitChange);
+    getBuiltInGitStatusDecoration(effectiveGitStatus, containsGitChange);
   const renamingPath = renameView.getPath();
   const isRenamingRow = renamingPath === targetPath;
   const renamingValue = isRenamingRow ? renameView.getValue() : '';
@@ -721,7 +743,9 @@ function renderStyledRow(
       ? { 'data-item-dragging': true }
       : {};
   const gitStatusProps = {
-    ...(ownGitStatus != null && { 'data-item-git-status': ownGitStatus }),
+    ...(effectiveGitStatus != null && {
+      'data-item-git-status': effectiveGitStatus,
+    }),
     ...(containsGitChange ? { 'data-item-contains-git-change': 'true' } : {}),
   };
   const domId = row.isFocused
@@ -908,6 +932,7 @@ function renderRangeChildren(
   instanceId: string | undefined,
   itemHeight: number,
   directoriesWithGitChanges: ReadonlySet<string> | undefined,
+  ignoredGitDirectories: ReadonlySet<string> | undefined,
   gitStatusByPath: ReadonlyMap<string, GitStatus> | undefined,
   contextMenuEnabled: boolean,
   contextMenuRightClickEnabled: boolean,
@@ -955,6 +980,7 @@ function renderRangeChildren(
         instanceId,
         itemHeight,
         directoriesWithGitChanges,
+        ignoredGitDirectories,
         gitStatusByPath,
         contextMenuEnabled,
         contextMenuRightClickEnabled,
@@ -973,6 +999,7 @@ export function FileTreeView({
   composition,
   controller,
   directoriesWithGitChanges,
+  ignoredGitDirectories,
   gitStatusByPath,
   icons,
   instanceId,
@@ -2531,6 +2558,7 @@ export function FileTreeView({
               instanceId,
               itemHeight,
               directoriesWithGitChanges,
+              ignoredGitDirectories,
               gitStatusByPath,
               contextMenuEnabled,
               contextMenuRightClickEnabled,
@@ -2567,6 +2595,7 @@ export function FileTreeView({
                   instanceId,
                   itemHeight,
                   directoriesWithGitChanges,
+                  ignoredGitDirectories,
                   gitStatusByPath,
                   contextMenuEnabled,
                   contextMenuRightClickEnabled,
@@ -2619,6 +2648,7 @@ export function FileTreeView({
                   instanceId,
                   itemHeight,
                   directoriesWithGitChanges,
+                  ignoredGitDirectories,
                   gitStatusByPath,
                   contextMenuEnabled,
                   contextMenuRightClickEnabled,

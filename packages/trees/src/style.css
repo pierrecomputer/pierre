@@ -1020,6 +1020,10 @@
 
   [data-item-git-status='ignored'] {
     --trees-item-git-status-color: var(--trees-git-ignored-color);
+
+    & > [data-item-section='icon'] {
+      opacity: 0.5;
+    }
   }
 
   [data-item-git-status='modified'] {

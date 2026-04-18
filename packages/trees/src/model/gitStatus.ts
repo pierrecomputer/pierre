@@ -4,6 +4,7 @@ import { normalizeInputPath } from '../utils/normalizeInputPath';
 
 export interface FileTreeGitStatusState {
   readonly directoriesWithChanges: ReadonlySet<string>;
+  readonly ignoredDirectoryPaths: ReadonlySet<string>;
   readonly signature: string;
   readonly statusByPath: ReadonlyMap<string, GitStatus>;
 }
@@ -43,6 +44,7 @@ export function resolveFileTreeGitStatusState(
 
   const statusByPath = new Map<string, GitStatus>();
   const directoriesWithChanges = new Set<string>();
+  const ignoredDirectoryPaths = new Set<string>();
 
   for (const entry of entries ?? []) {
     const normalizedPath = normalizeInputPath(entry.path);
@@ -55,6 +57,9 @@ export function resolveFileTreeGitStatusState(
       normalizedPath.isDirectory
     );
     statusByPath.set(canonicalPath, entry.status);
+    if (entry.status === 'ignored' && normalizedPath.isDirectory) {
+      ignoredDirectoryPaths.add(canonicalPath);
+    }
 
     for (const ancestorPath of getAncestorDirectoryPaths(normalizedPath.path)) {
       directoriesWithChanges.add(ancestorPath);
@@ -63,6 +68,7 @@ export function resolveFileTreeGitStatusState(
 
   return {
     directoriesWithChanges,
+    ignoredDirectoryPaths,
     signature,
     statusByPath,
   };

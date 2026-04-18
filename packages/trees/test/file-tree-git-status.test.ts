@@ -230,6 +230,55 @@ describe('file-tree git status', () => {
     }
   });
 
+  test('ignored directories tint descendants unless a child has its own status', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { PathStoreFileTree } = await import('../src/path-store');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      const fileTree = new PathStoreFileTree({
+        flattenEmptyDirectories: false,
+        gitStatus: [
+          { path: 'src/', status: 'ignored' },
+          { path: 'src/index.ts', status: 'modified' },
+        ],
+        initialExpansion: 'open',
+        paths: FILES,
+        viewportHeight: 180,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const srcFolder = getItemButton(shadowRoot, dom, 'src/');
+      const cardButton = getItemButton(
+        shadowRoot,
+        dom,
+        'src/components/Card.tsx'
+      );
+      const workerButton = getItemButton(
+        shadowRoot,
+        dom,
+        'src/utils/worker.ts'
+      );
+      const indexButton = getItemButton(shadowRoot, dom, 'src/index.ts');
+
+      expect(srcFolder.getAttribute('data-item-git-status')).toBe('ignored');
+      expect(getStatusLabel(srcFolder)).toBeNull();
+      expect(cardButton.getAttribute('data-item-git-status')).toBe('ignored');
+      expect(getStatusLabel(cardButton)).toBeNull();
+      expect(workerButton.getAttribute('data-item-git-status')).toBe('ignored');
+      expect(getStatusLabel(workerButton)).toBeNull();
+      expect(indexButton.getAttribute('data-item-git-status')).toBe('modified');
+      expect(getStatusLabel(indexButton)).toBe('M');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('unknown leaf paths still mark known ancestor folders as changed', async () => {
     const { cleanup, dom } = installDom();
     try {
