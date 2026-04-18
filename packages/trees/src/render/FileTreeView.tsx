@@ -20,11 +20,6 @@ import {
   FILE_TREE_RENAME_VIEW,
   FileTreeController,
 } from '../model/FileTreeController';
-import {
-  GIT_STATUS_DESCENDANT_TITLE,
-  GIT_STATUS_LABEL,
-  GIT_STATUS_TITLE,
-} from '../utils/gitStatusPresentation';
 import type {
   FileTreeContextMenuItem,
   FileTreeContextMenuOpenContext,
@@ -45,6 +40,11 @@ import {
 } from '../model/virtualization';
 import type { SVGSpriteNames } from '../sprite';
 import type { GitStatus } from '../types';
+import {
+  GIT_STATUS_DESCENDANT_TITLE,
+  GIT_STATUS_LABEL,
+  GIT_STATUS_TITLE,
+} from '../utils/gitStatusPresentation';
 import { createFileTreeIconResolver } from './iconResolver';
 
 function focusElement(element: HTMLElement | null): boolean {
