@@ -15,10 +15,9 @@ import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { sampleFileList } from '../demo-data';
 import { DEFAULT_FILE_TREE_PANEL_CLASS } from '../tree-examples/demo-data';
 import { TreeExampleSection } from '../tree-examples/TreeExampleSection';
+import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { PRODUCTS } from '@/app/product-config';
 
-const HIERARCHICAL_DEMO_VIEWPORT_HEIGHT = 600;
-const FLATTENED_DEMO_VIEWPORT_HEIGHT = 540;
 const HIERARCHICAL_MATCHED_EXPANDED_PATHS = [
   'build',
   'build/assets',
@@ -112,7 +111,7 @@ export function DemoFlatten({ preloadedData }: DemoFlattenProps) {
             initialExpandedPaths={HIERARCHICAL_MATCHED_EXPANDED_PATHS}
             id="path-store-flatten-demo-hierarchical"
             preloadedData={preloadedData.hierarchical}
-            viewportHeight={HIERARCHICAL_DEMO_VIEWPORT_HEIGHT}
+            viewportHeight={TREE_NEW_VIEWPORT_HEIGHTS.flattenHierarchical}
           />
         </div>
 
@@ -125,7 +124,7 @@ export function DemoFlatten({ preloadedData }: DemoFlattenProps) {
             initialExpandedPaths={FLATTENED_MATCHED_EXPANDED_PATHS}
             id="path-store-flatten-demo-flattened"
             preloadedData={preloadedData.flattened}
-            viewportHeight={FLATTENED_DEMO_VIEWPORT_HEIGHT}
+            viewportHeight={TREE_NEW_VIEWPORT_HEIGHTS.flattenFlattened}
           />
         </div>
       </div>

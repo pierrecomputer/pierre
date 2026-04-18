@@ -19,13 +19,12 @@ import {
   GIT_STATUSES_B,
 } from '../tree-examples/demo-data';
 import { TreeExampleSection } from '../tree-examples/TreeExampleSection';
+import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Switch } from '@/components/ui/switch';
 
-const GIT_STATUS_DEMO_VIEWPORT_HEIGHT = 690;
-const GIT_STATUS_FILTERED_VIEWPORT_HEIGHT = 180;
 const GIT_STATUS_EXPANDED_PATHS = ['src', 'src/components'] as const;
 const gitStatusPanelStyle = {
   colorScheme: 'dark',
@@ -40,7 +39,7 @@ const GIT_STATUS_BASE_OPTIONS: Omit<
   initialExpandedPaths: GIT_STATUS_EXPANDED_PATHS,
   paths: sampleFileList,
   search: false,
-  viewportHeight: GIT_STATUS_DEMO_VIEWPORT_HEIGHT,
+  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFull,
 };
 
 interface DemoGitStatusProps {
@@ -81,15 +80,15 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
     ...GIT_STATUS_BASE_OPTIONS,
     gitStatus: GIT_STATUSES_A,
     id: 'path-store-git-status-demo-filtered',
-    viewportHeight: GIT_STATUS_FILTERED_VIEWPORT_HEIGHT,
+    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFiltered,
   });
   const model = showUnmodified ? fullViewportModel : filteredViewportModel;
   const activePreloadedData = showUnmodified
     ? preloadedData.fullViewport
     : preloadedData.filteredViewport;
   const viewportHeight = showUnmodified
-    ? GIT_STATUS_DEMO_VIEWPORT_HEIGHT
-    : GIT_STATUS_FILTERED_VIEWPORT_HEIGHT;
+    ? TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFull
+    : TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFiltered;
 
   useEffect(() => {
     model.resetPaths(visiblePaths, {

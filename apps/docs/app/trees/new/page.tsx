@@ -6,8 +6,16 @@ import { Hero } from '../../Hero';
 import type { ProductId } from '../../product-config';
 import { sampleFileList } from '../demo-data';
 import { GIT_STATUSES_A } from '../tree-examples/demo-data';
+import { DemoA11y } from './DemoA11y';
+import { DemoCustomIcons } from './DemoCustomIcons';
+import { DemoDragDrop } from './DemoDragDrop';
 import { DemoFlatten } from './DemoFlatten';
 import { DemoGitStatus } from './DemoGitStatus';
+import { DemoSearch } from './DemoSearch';
+import { DemoStyling } from './DemoStyling';
+import { DemoTheming } from './DemoTheming';
+import { DemoVirtualization } from './DemoVirtualization';
+import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
@@ -33,7 +41,7 @@ export default function TreesNewPage() {
     ],
     paths: sampleFileList,
     search: false,
-    viewportHeight: 600,
+    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.flattenHierarchical,
   });
   const flattenFlattenedPreloadedData = preloadPathStoreFileTree({
     flattenEmptyDirectories: true,
@@ -42,7 +50,7 @@ export default function TreesNewPage() {
     initialExpandedPaths: ['build', 'build/assets/images/social'],
     paths: sampleFileList,
     search: false,
-    viewportHeight: 540,
+    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.flattenFlattened,
   });
   const gitStatusFullViewportPreloadedData = preloadPathStoreFileTree({
     flattenEmptyDirectories: true,
@@ -51,7 +59,7 @@ export default function TreesNewPage() {
     initialExpandedPaths: ['src', 'src/components'],
     paths: sampleFileList,
     search: false,
-    viewportHeight: 690,
+    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFull,
   });
   const gitStatusFilteredViewportPreloadedData = preloadPathStoreFileTree({
     flattenEmptyDirectories: true,
@@ -60,7 +68,7 @@ export default function TreesNewPage() {
     initialExpandedPaths: ['src', 'src/components'],
     paths: sampleFileList,
     search: false,
-    viewportHeight: 180,
+    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFiltered,
   });
 
   return (
@@ -82,6 +90,13 @@ export default function TreesNewPage() {
             fullViewport: gitStatusFullViewportPreloadedData,
           }}
         />
+        <DemoDragDrop />
+        <DemoSearch />
+        <DemoVirtualization />
+        <DemoA11y />
+        <DemoCustomIcons />
+        <DemoTheming />
+        <DemoStyling />
       </section>
 
       <PierreCompanySection />
