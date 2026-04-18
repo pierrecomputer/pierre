@@ -18,6 +18,7 @@ export type {
   FileTreeAddEvent,
   FileTreeBatchEvent,
   FileTreeCompositionOptions,
+  FileTreeContextMenuButtonVisibility as ContextMenuButtonVisibility,
   FileTreeContextMenuItem as ContextMenuItem,
   FileTreeContextMenuOpenContext as ContextMenuOpenContext,
   FileTreeContextMenuTriggerMode as ContextMenuTriggerMode,

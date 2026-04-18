@@ -151,10 +151,37 @@ including:
 - `GitStatusEntry`
 - `ContextMenuItem`
 - `ContextMenuOpenContext`
+- `ContextMenuTriggerMode`
+- `ContextMenuButtonVisibility`
 
 Header and context-menu composition are configured through the tree options.
 Rows, search state, drag/drop targets, and mutation events all report canonical
 paths.
+
+```ts
+const tree = new FileTree({
+  composition: {
+    contextMenu: {
+      enabled: true,
+      triggerMode: 'both',
+      buttonVisibility: 'always',
+    },
+  },
+  paths,
+});
+```
+
+`triggerMode` keeps the existing `'button' | 'right-click' | 'both'` API.
+Button-capable modes reserve a dedicated right-side action lane, while
+`'right-click'` omits that lane entirely. `buttonVisibility` defaults to
+`'when-needed'`; set it to `'always'` to show decorative per-row affordances
+while the tree still uses one real floating trigger button and one slotted menu
+surface.
+
+`renderRowDecoration` now occupies its own flexible lane. Built-in git status
+rendering stays separate in the next fixed lane, so custom decoration content,
+git status, and the context-menu affordance can appear on the same row without
+overriding each other.
 
 ## Development
 

@@ -317,10 +317,12 @@ export interface FileTreeHeaderCompositionOptions {
 }
 
 export type FileTreeContextMenuTriggerMode = 'both' | 'button' | 'right-click';
+export type FileTreeContextMenuButtonVisibility = 'always' | 'when-needed';
 
 export interface FileTreeContextMenuCompositionOptions {
   enabled?: boolean;
   triggerMode?: FileTreeContextMenuTriggerMode;
+  buttonVisibility?: FileTreeContextMenuButtonVisibility;
   onOpen?: (
     item: FileTreeContextMenuItem,
     context: FileTreeContextMenuOpenContext

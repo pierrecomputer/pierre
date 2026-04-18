@@ -122,11 +122,23 @@ function resolveComposition(
   }
 
   if (hasContextMenu) {
+    const baselineContextMenu = baselineComposition?.contextMenu;
+    const baselineOnClose = baselineContextMenu?.onClose;
+    const baselineOnOpen = baselineContextMenu?.onOpen;
+
     nextComposition.contextMenu = {
+      ...(baselineContextMenu ?? {}),
       enabled: true,
-      onClose,
-      onOpen,
+      onClose: () => {
+        baselineOnClose?.();
+        onClose();
+      },
+      onOpen: (item, context) => {
+        onOpen(item, context);
+        baselineOnOpen?.(item, context);
+      },
     };
+    delete nextComposition.contextMenu.render;
   }
 
   return nextComposition.header != null || nextComposition.contextMenu != null

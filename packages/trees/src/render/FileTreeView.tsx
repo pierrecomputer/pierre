@@ -21,8 +21,10 @@ import {
   FileTreeController,
 } from '../model/FileTreeController';
 import type {
+  FileTreeContextMenuButtonVisibility,
   FileTreeContextMenuItem,
   FileTreeContextMenuOpenContext,
+  FileTreeContextMenuTriggerMode,
   FileTreeDirectoryHandle,
   FileTreeDropTarget,
   FileTreeItemHandle,
@@ -293,8 +295,8 @@ function getDragEdgeScrollDelta(clientY: number, scrollRect: DOMRect): number {
   return 0;
 }
 
-// Built-in git decorations reuse the existing status slot so file-tree rows can
-// inherit the shared git-status CSS contract without a second decoration API.
+// Built-in git decorations now live in their own fixed lane so custom row
+// decorations can coexist without borrowing git styling or precedence.
 function getBuiltInGitStatusDecoration(
   gitStatus: GitStatus | null,
   containsGitChange: boolean
@@ -691,7 +693,11 @@ function renderStyledRow(
   ignoredGitDirectories: ReadonlySet<string> | undefined,
   ignoredInheritanceCache: Map<string, boolean>,
   directoriesWithGitChanges: ReadonlySet<string> | undefined,
+  gitLaneActive: boolean,
   contextMenuEnabled: boolean,
+  contextMenuTriggerMode: FileTreeContextMenuTriggerMode,
+  contextMenuButtonTriggerEnabled: boolean,
+  contextMenuButtonVisibility: FileTreeContextMenuButtonVisibility,
   contextMenuRightClickEnabled: boolean,
   registerRenameInput: (element: HTMLInputElement | null) => void,
   registerButton: (path: string, element: HTMLElement | null) => void,
@@ -730,9 +736,17 @@ function renderStyledRow(
   const containsGitChange =
     row.kind === 'directory' &&
     (directoriesWithGitChanges?.has(targetPath) ?? false);
-  const decoration =
-    renderDecorationForRow(row, targetPath) ??
-    getBuiltInGitStatusDecoration(effectiveGitStatus, containsGitChange);
+  const customDecoration = renderDecorationForRow(row, targetPath);
+  const gitDecoration = getBuiltInGitStatusDecoration(
+    effectiveGitStatus,
+    containsGitChange
+  );
+  const actionLaneEnabled =
+    contextMenuEnabled && contextMenuButtonTriggerEnabled;
+  const decorationLaneEnabled =
+    customDecoration != null || gitLaneActive || actionLaneEnabled;
+  const showDecorativeActionAffordance =
+    actionLaneEnabled && contextMenuButtonVisibility === 'always';
   const renamingPath = renameView.getPath();
   const isRenamingRow = renamingPath === targetPath;
   const renamingValue = isRenamingRow ? renameView.getValue() : '';
@@ -811,9 +825,25 @@ function renderStyledRow(
               </MiddleTruncate>
             ))}
       </div>
-      {decoration != null ? (
-        <div data-item-section="status">
-          {renderRowDecoration(decoration, resolveIcon)}
+      {decorationLaneEnabled ? (
+        <div data-item-section="decoration">
+          {customDecoration != null
+            ? renderRowDecoration(customDecoration, resolveIcon)
+            : null}
+        </div>
+      ) : null}
+      {gitLaneActive ? (
+        <div data-item-section="git">
+          {renderRowDecoration(gitDecoration, resolveIcon)}
+        </div>
+      ) : null}
+      {actionLaneEnabled ? (
+        <div data-item-section="action">
+          {showDecorativeActionAffordance ? (
+            <span aria-hidden="true" data-item-action-affordance="decorative">
+              <Icon {...resolveIcon('file-tree-icon-ellipsis')} />
+            </span>
+          ) : null}
         </div>
       ) : null}
     </Fragment>
@@ -826,6 +856,16 @@ function renderStyledRow(
     'aria-posinset': row.posInSet + 1,
     'aria-selected': row.isSelected ? 'true' : 'false',
     'aria-setsize': row.setSize,
+    'data-item-context-menu-button-visibility': actionLaneEnabled
+      ? contextMenuButtonVisibility
+      : undefined,
+    'data-item-context-menu-trigger-mode': contextMenuEnabled
+      ? contextMenuTriggerMode
+      : undefined,
+    'data-item-has-context-menu-action-lane': actionLaneEnabled
+      ? 'true'
+      : undefined,
+    'data-item-has-git-lane': gitLaneActive ? 'true' : undefined,
     'data-item-parent-path': parentPath.length > 0 ? parentPath : undefined,
     'data-item-parked': isParked ? 'true' : undefined,
     'data-item-path': targetPath,
@@ -960,7 +1000,11 @@ function renderRangeChildren(
   ignoredGitDirectories: ReadonlySet<string> | undefined,
   ignoredInheritanceCache: Map<string, boolean>,
   directoriesWithGitChanges: ReadonlySet<string> | undefined,
+  gitLaneActive: boolean,
   contextMenuEnabled: boolean,
+  contextMenuTriggerMode: FileTreeContextMenuTriggerMode,
+  contextMenuButtonTriggerEnabled: boolean,
+  contextMenuButtonVisibility: FileTreeContextMenuButtonVisibility,
   contextMenuRightClickEnabled: boolean,
   registerRenameInput: (element: HTMLInputElement | null) => void,
   registerButton: (path: string, element: HTMLElement | null) => void,
@@ -1009,7 +1053,11 @@ function renderRangeChildren(
         ignoredGitDirectories,
         ignoredInheritanceCache,
         directoriesWithGitChanges,
+        gitLaneActive,
         contextMenuEnabled,
+        contextMenuTriggerMode,
+        contextMenuButtonTriggerEnabled,
+        contextMenuButtonVisibility,
         contextMenuRightClickEnabled,
         registerRenameInput,
         registerButton,
@@ -1119,9 +1167,15 @@ export function FileTreeView({
     composition?.contextMenu?.triggerMode ?? 'both';
   const contextMenuButtonTriggerEnabled =
     contextMenuTriggerMode === 'both' || contextMenuTriggerMode === 'button';
+  const contextMenuButtonVisibility =
+    composition?.contextMenu?.buttonVisibility ?? 'when-needed';
   const contextMenuRightClickEnabled =
     contextMenuTriggerMode === 'both' ||
     contextMenuTriggerMode === 'right-click';
+  const gitLaneActive =
+    gitStatusByPath != null ||
+    ignoredGitDirectories != null ||
+    directoriesWithGitChanges != null;
   const { resolveIcon } = useMemo(
     () => createFileTreeIconResolver(icons),
     [icons]
@@ -2522,6 +2576,20 @@ export function FileTreeView({
     <div
       ref={rootRef}
       id={treeDomId}
+      data-file-tree-context-menu-button-visibility={
+        contextMenuEnabled && contextMenuButtonTriggerEnabled
+          ? contextMenuButtonVisibility
+          : undefined
+      }
+      data-file-tree-context-menu-trigger-mode={
+        contextMenuEnabled ? contextMenuTriggerMode : undefined
+      }
+      data-file-tree-has-context-menu-action-lane={
+        contextMenuEnabled && contextMenuButtonTriggerEnabled
+          ? 'true'
+          : undefined
+      }
+      data-file-tree-has-git-lane={gitLaneActive ? 'true' : undefined}
       data-file-tree-virtualized-root="true"
       onDragLeave={dragAndDropEnabled ? handleTreeDragLeave : undefined}
       onDragOver={dragAndDropEnabled ? handleTreeDragOver : undefined}
@@ -2599,7 +2667,11 @@ export function FileTreeView({
               ignoredGitDirectories,
               ignoredInheritanceCache,
               directoriesWithGitChanges,
+              gitLaneActive,
               contextMenuEnabled,
+              contextMenuTriggerMode,
+              contextMenuButtonTriggerEnabled,
+              contextMenuButtonVisibility,
               contextMenuRightClickEnabled,
               (element) => {
                 renameInputRef.current = element;
@@ -2637,7 +2709,11 @@ export function FileTreeView({
                   ignoredGitDirectories,
                   ignoredInheritanceCache,
                   directoriesWithGitChanges,
+                  gitLaneActive,
                   contextMenuEnabled,
+                  contextMenuTriggerMode,
+                  contextMenuButtonTriggerEnabled,
+                  contextMenuButtonVisibility,
                   contextMenuRightClickEnabled,
                   (element) => {
                     renameInputRef.current = element;
@@ -2691,7 +2767,11 @@ export function FileTreeView({
                   ignoredGitDirectories,
                   ignoredInheritanceCache,
                   directoriesWithGitChanges,
+                  gitLaneActive,
                   contextMenuEnabled,
+                  contextMenuTriggerMode,
+                  contextMenuButtonTriggerEnabled,
+                  contextMenuButtonVisibility,
                   contextMenuRightClickEnabled,
                   (element) => {
                     renameInputRef.current = element;

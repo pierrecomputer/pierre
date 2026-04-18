@@ -685,6 +685,142 @@ describe('file-tree React lane', () => {
     expect(host.querySelector('[slot="context-menu"]')).toBeNull();
   });
 
+  test('renderContextMenu preserves baseline context-menu trigger settings and handlers', async () => {
+    const baselineEvents: string[] = [];
+    const model = new FileTreeClass({
+      ...BASE_OPTIONS,
+      composition: {
+        contextMenu: {
+          buttonVisibility: 'always',
+          enabled: true,
+          onClose: () => {
+            baselineEvents.push('close');
+          },
+          onOpen: (item) => {
+            baselineEvents.push(`open:${item.path}`);
+          },
+          triggerMode: 'button',
+        },
+      },
+    });
+
+    try {
+      await actAndFlush(() => {
+        root.render(
+          <FileTreeReact
+            model={model}
+            renderContextMenu={(item, context) => (
+              <button
+                data-test-close-menu
+                onClick={() => {
+                  context.close();
+                }}
+                type="button"
+              >
+                {item.path}
+              </button>
+            )}
+          />
+        );
+      });
+
+      const composition = model.getComposition()?.contextMenu;
+      expect(composition?.enabled).toBe(true);
+      expect(composition?.triggerMode).toBe('button');
+      expect(composition?.buttonVisibility).toBe('always');
+      expect(typeof composition?.onOpen).toBe('function');
+      expect(typeof composition?.onClose).toBe('function');
+      expect(composition?.render).toBeUndefined();
+
+      const host = getHost(container);
+      const readmeButton = getItemButton(host, 'README.md');
+      await actAndFlush(() => {
+        dispatchClick(readmeButton);
+      });
+      readmeButton.focus();
+      await actAndFlush(() => {
+        readmeButton.dispatchEvent(
+          new dom.window.KeyboardEvent('keydown', {
+            bubbles: true,
+            cancelable: true,
+            key: 'F10',
+            shiftKey: true,
+          })
+        );
+      });
+
+      expect(baselineEvents).toContain('open:README.md');
+      const closeMenuButtonNode = host.querySelector('[data-test-close-menu]');
+      if (!(closeMenuButtonNode instanceof dom.window.HTMLButtonElement)) {
+        throw new Error('expected close menu button');
+      }
+
+      const closeMenuButton = closeMenuButtonNode;
+      await actAndFlush(() => {
+        dispatchClick(closeMenuButton);
+      });
+
+      expect(baselineEvents).toContain('close');
+    } finally {
+      model.cleanUp();
+    }
+  });
+
+  test('baseline onOpen can close synchronously without leaving a stale React menu', async () => {
+    const baselineEvents: string[] = [];
+    const model = new FileTreeClass({
+      ...BASE_OPTIONS,
+      composition: {
+        contextMenu: {
+          enabled: true,
+          onClose: () => {
+            baselineEvents.push('close');
+          },
+          onOpen: (_item, context) => {
+            baselineEvents.push('open');
+            context.close();
+          },
+          triggerMode: 'button',
+        },
+      },
+    });
+
+    try {
+      await actAndFlush(() => {
+        root.render(
+          <FileTreeReact
+            model={model}
+            renderContextMenu={(item) => (
+              <div data-test-sync-close-menu>{item.path}</div>
+            )}
+          />
+        );
+      });
+
+      const host = getHost(container);
+      const readmeButton = getItemButton(host, 'README.md');
+      await actAndFlush(() => {
+        dispatchClick(readmeButton);
+      });
+      readmeButton.focus();
+      await actAndFlush(() => {
+        readmeButton.dispatchEvent(
+          new dom.window.KeyboardEvent('keydown', {
+            bubbles: true,
+            cancelable: true,
+            key: 'F10',
+            shiftKey: true,
+          })
+        );
+      });
+
+      expect(baselineEvents).toEqual(['open', 'close']);
+      expect(host.querySelector('[slot="context-menu"]')).toBeNull();
+    } finally {
+      model.cleanUp();
+    }
+  });
+
   test('hydrates preloadedData without a client/server mismatch', async () => {
     const preloadedData = preloadFileTree({
       ...BASE_OPTIONS,

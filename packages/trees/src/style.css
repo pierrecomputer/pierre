@@ -499,6 +499,11 @@
     --trees-icon-width: var(--trees-icon-width-override, 16px);
     --trees-icon-nudge: var(--trees-icon-nudge-override, 1px);
     --trees-row-height: var(--trees-row-height-override, 30px);
+    --trees-git-lane-width: var(--trees-git-lane-width-override, 12px);
+    --trees-action-lane-width: var(
+      --trees-action-lane-width-override,
+      calc(var(--trees-icon-width) + (2 * var(--trees-item-padding-x)))
+    );
 
     color-scheme: light dark;
     display: flex;
@@ -865,20 +870,70 @@
   }
 
   [data-item-section='content'] {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     text-align: start;
     min-width: 0;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     /* Breaks middle truncate component to also set this */
     /* white-space: nowrap; */
   }
 
+  [data-item-section='decoration'] {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    justify-content: flex-end;
+    text-align: end;
+    overflow: hidden;
+    color: var(--trees-fg-muted);
+  }
+
+  [data-item-section='decoration'] > span {
+    min-width: 0;
+    max-width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-item-section='git'],
+  [data-item-section='action'] {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  [data-item-section='git'] {
+    width: var(--trees-git-lane-width);
+  }
+
+  [data-item-section='action'] {
+    width: var(--trees-action-lane-width);
+    color: var(--trees-fg-muted);
+    fill: currentColor;
+    pointer-events: none;
+  }
+
+  [data-item-section='git'] > span,
+  [data-item-section='action'] > span {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  [data-item-action-affordance='decorative'] {
+    opacity: 0.85;
+  }
+
   [data-item-rename-input] {
-    --trees-context-menu-width: calc(
-      (2 * var(--trees-item-padding-x)) + var(--trees-icon-width)
-    );
-    width: calc(100% - var(--trees-context-menu-width));
+    width: 100%;
     min-width: 0;
     font-family: inherit;
     font-size: inherit;
@@ -889,21 +944,7 @@
     border: 1px solid var(--trees-border-color);
     /* border-radius: calc(var(--trees-border-radius) - 1px);border-radius */
     padding-inline: 6px;
-    margin-right: 40px;
     outline: none;
-  }
-
-  /* [data-item-flattened-rename-input] {
-    width: auto;
-    min-width: 4ch;
-    max-width: min(26ch, 100%);
-  } */
-
-  [data-item-section='status'] {
-    flex: 0 0 auto;
-    width: 12px;
-    text-align: center;
-    align-items: center;
   }
 
   /* Chevron pointing right */
@@ -965,14 +1006,10 @@
   /* Git status indicator */
 
   /* This is a folder that contains a git change */
-  [data-item-contains-git-change='true'] {
+  [data-item-contains-git-change='true'] > [data-item-section='git'] {
     color: var(--trees-git-modified-color);
-
-    & > [data-item-section='status'] {
-      color: var(--trees-git-modified-color);
-      opacity: 0.5;
-      fill: currentColor;
-    }
+    opacity: 0.5;
+    fill: currentColor;
   }
 
   /* These are files that have a git change */
@@ -985,7 +1022,7 @@
     & > [data-item-section='content'] {
       color: var(--trees-item-git-status-color);
     }
-    & > [data-item-section='status'] {
+    & > [data-item-section='git'] {
       color: var(--trees-item-git-status-color);
       font-weight: var(--trees-font-weight-semibold);
     }
@@ -1079,7 +1116,7 @@
     all: unset;
     align-items: center;
     justify-content: center;
-    padding: 0 var(--trees-item-padding-x);
+    width: var(--trees-action-lane-width);
     color: var(--trees-fg-muted);
     fill: currentColor;
     cursor: pointer;

@@ -110,6 +110,10 @@
         id: 'file-tree-git-status-fixture',
         initialExpansion: 'open',
         paths,
+        renderRowDecoration: ({ item }) =>
+          item.path === 'src/index.ts'
+            ? { text: 'TS', title: 'TypeScript file' }
+            : null,
         viewportHeight: 240,
       });
       tree.render({ containerWrapper: mount });

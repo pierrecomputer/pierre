@@ -101,6 +101,18 @@ function getItemButton(
   return button;
 }
 
+function getTreeRoot(
+  shadowRoot: ShadowRoot | null | undefined,
+  dom: JSDOM
+): HTMLElement {
+  const root = shadowRoot?.querySelector('[role="tree"]');
+  if (!(root instanceof dom.window.HTMLElement)) {
+    throw new Error('missing tree root');
+  }
+
+  return root;
+}
+
 describe('file-tree composition surfaces', () => {
   test('preloadFileTree includes header slot and closed context-menu shell scaffolding', async () => {
     const { preloadFileTree } = await import('../src/render/FileTree');
@@ -766,6 +778,162 @@ describe('file-tree composition surfaces', () => {
     }
   });
 
+  test('button-capable modes reserve the action lane and keep lane attrs stable', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        composition: {
+          contextMenu: {
+            buttonVisibility: 'always',
+            enabled: true,
+            triggerMode: 'button',
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const treeRoot = getTreeRoot(shadowRoot, dom);
+      const itemButton = getItemButton(shadowRoot, dom, 'README.md');
+      const decorationLane = itemButton.querySelector(
+        '[data-item-section="decoration"]'
+      );
+      const actionLane = itemButton.querySelector(
+        '[data-item-section="action"]'
+      );
+      const decorativeAffordance = actionLane?.querySelector(
+        '[data-item-action-affordance="decorative"]'
+      );
+
+      expect(
+        treeRoot.getAttribute('data-file-tree-context-menu-trigger-mode')
+      ).toBe('button');
+      expect(
+        treeRoot.getAttribute('data-file-tree-context-menu-button-visibility')
+      ).toBe('always');
+      expect(
+        treeRoot.getAttribute('data-file-tree-has-context-menu-action-lane')
+      ).toBe('true');
+      expect(
+        itemButton.getAttribute('data-item-context-menu-trigger-mode')
+      ).toBe('button');
+      expect(
+        itemButton.getAttribute('data-item-context-menu-button-visibility')
+      ).toBe('always');
+      expect(
+        itemButton.getAttribute('data-item-has-context-menu-action-lane')
+      ).toBe('true');
+      expect(decorationLane).not.toBeNull();
+      expect(actionLane).not.toBeNull();
+      expect(decorativeAffordance?.getAttribute('aria-hidden')).toBe('true');
+      expect(actionLane?.querySelector('button')).toBeNull();
+      expect(
+        shadowRoot?.querySelectorAll('[data-type="context-menu-trigger"]')
+      ).toHaveLength(1);
+
+      itemButton.dispatchEvent(
+        new dom.window.Event('pointerover', { bubbles: true, composed: true })
+      );
+      await flushDom();
+
+      expect(
+        treeRoot.getAttribute('data-file-tree-context-menu-trigger-mode')
+      ).toBe('button');
+      expect(
+        treeRoot.getAttribute('data-file-tree-context-menu-button-visibility')
+      ).toBe('always');
+      expect(
+        itemButton.getAttribute('data-item-context-menu-button-visibility')
+      ).toBe('always');
+      expect(
+        itemButton.getAttribute('data-item-has-context-menu-action-lane')
+      ).toBe('true');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('right-click-only mode omits the action lane but still opens menus', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      let capturedContext: CapturedContextMenuOpenContext | null = null;
+
+      const fileTree = new FileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: (_item, context): HTMLElement => {
+              capturedContext = context;
+              const menu = dom.window.document.createElement('div');
+              menu.dataset.testMenu = 'true';
+              return menu as unknown as HTMLElement;
+            },
+            triggerMode: 'right-click',
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      const shadowRoot = host?.shadowRoot;
+      const treeRoot = getTreeRoot(shadowRoot, dom);
+      const itemButton = getItemButton(shadowRoot, dom, 'README.md');
+      expect(
+        treeRoot.getAttribute('data-file-tree-context-menu-trigger-mode')
+      ).toBe('right-click');
+      expect(
+        treeRoot.getAttribute('data-file-tree-has-context-menu-action-lane')
+      ).toBeNull();
+      expect(
+        itemButton.getAttribute('data-item-has-context-menu-action-lane')
+      ).toBeNull();
+      expect(
+        itemButton.querySelector('[data-item-section="action"]')
+      ).toBeNull();
+
+      itemButton.dispatchEvent(
+        new dom.window.MouseEvent('contextmenu', {
+          bubbles: true,
+          clientX: 24,
+          clientY: 36,
+        })
+      );
+      await flushDom();
+
+      expect(capturedContext).not.toBeNull();
+      expect(
+        shadowRoot?.querySelector(
+          '[data-type="context-menu-anchor"] slot[name="context-menu"]'
+        )
+      ).not.toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('adds aria-haspopup=menu only when context menu is enabled', async () => {
     const { cleanup, dom } = installDom();
     try {
@@ -954,7 +1122,8 @@ describe('file-tree composition surfaces', () => {
       const iconUse = readmeButton.querySelector('use');
       expect(iconUse?.getAttribute('href')).toBe('#pst-test-readme');
       expect(
-        readmeButton.querySelector('[data-item-section="status"]')?.textContent
+        readmeButton.querySelector('[data-item-section="decoration"]')
+          ?.textContent
       ).toBe('DOC');
       expect(decoratorContextKeys).toEqual(['item', 'row']);
       fileTree.cleanUp();

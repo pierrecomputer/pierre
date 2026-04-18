@@ -85,9 +85,11 @@ const menuItemStyle = {
 function PortaledRadixContextMenu({
   context,
   item,
+  variant,
 }: {
   context: DemoContextMenuContext;
   item: DemoContextMenuItem;
+  variant: string;
 }) {
   return (
     <DropdownMenu.Root
@@ -110,7 +112,7 @@ function PortaledRadixContextMenu({
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           data-test-context-menu="true"
-          data-test-context-menu-variant="radix-portaled"
+          data-test-context-menu-variant={variant}
           data-file-tree-context-menu-root="true"
           align="center"
           side="bottom"
@@ -128,7 +130,7 @@ function PortaledRadixContextMenu({
             style={{ height: '1px', background: '#e4e4e7' }}
           />
           <DropdownMenu.Item
-            data-test-menu-action={`portaled:${item.path}`}
+            data-test-menu-action={`${variant}:${item.path}`}
             style={menuItemStyle}
             onSelect={() => {
               context.close();
@@ -144,6 +146,13 @@ function PortaledRadixContextMenu({
 
 function ReactClientFixture() {
   const { model } = useFileTree({
+    composition: {
+      contextMenu: {
+        buttonVisibility: 'always',
+        enabled: true,
+        triggerMode: 'button',
+      },
+    },
     id: 'ft-react-context-menu-demo',
     initialExpansion: 'open',
     paths: [
@@ -173,49 +182,72 @@ function ReactClientFixture() {
   );
 }
 
+interface PortaledMenuController {
+  clear: () => void;
+  render: (
+    item: DemoContextMenuItem,
+    context: DemoContextMenuContext
+  ) => HTMLDivElement;
+}
+
+function createPortaledMenuController(variant: string): PortaledMenuController {
+  let slotElement: HTMLDivElement | null = null;
+  let menuRoot: ContextMenuRoot = null;
+
+  return {
+    clear() {
+      if (slotElement != null) {
+        slotElement.style.display = 'none';
+      }
+      menuRoot?.render(null);
+    },
+    render(item: DemoContextMenuItem, context: DemoContextMenuContext) {
+      slotElement ??= document.createElement('div');
+      slotElement.style.display = 'block';
+      menuRoot ??= createRoot(slotElement);
+      menuRoot.render(
+        <PortaledRadixContextMenu
+          context={context}
+          item={item}
+          variant={variant}
+        />
+      );
+      return slotElement;
+    },
+  };
+}
+
 const radixMount = document.querySelector(
   '[data-demo-context-menu-mount="radix-portaled"]'
+);
+const rightClickOnlyMount = document.querySelector(
+  '[data-demo-context-menu-mount="right-click-only"]'
 );
 const reactMount = document.querySelector(
   '[data-demo-context-menu-mount="react-client"]'
 );
 if (
   !(radixMount instanceof HTMLDivElement) ||
+  !(rightClickOnlyMount instanceof HTMLDivElement) ||
   !(reactMount instanceof HTMLDivElement)
 ) {
   throw new Error('Missing demo context-menu fixture mounts.');
 }
 
-let slotElement: HTMLDivElement | null = null;
-let menuRoot: ContextMenuRoot = null;
-
-const clearPortaledContextMenu = (): void => {
-  if (slotElement != null) {
-    slotElement.style.display = 'none';
-  }
-  menuRoot?.render(null);
-};
-
-const renderPortaledContextMenu = (
-  item: DemoContextMenuItem,
-  context: DemoContextMenuContext
-): HTMLDivElement => {
-  slotElement ??= document.createElement('div');
-  slotElement.style.display = 'block';
-  menuRoot ??= createRoot(slotElement);
-  menuRoot.render(<PortaledRadixContextMenu context={context} item={item} />);
-  return slotElement;
-};
+const radixPortaledMenu = createPortaledMenuController('radix-portaled');
+const rightClickOnlyMenu = createPortaledMenuController('right-click-only');
 
 const portaledTree = new FileTreeModel({
   composition: {
     contextMenu: {
+      buttonVisibility: 'always',
       enabled: true,
       onClose: () => {
-        clearPortaledContextMenu();
+        radixPortaledMenu.clear();
       },
       render: (item: DemoContextMenuItem, context: DemoContextMenuContext) =>
-        renderPortaledContextMenu(item, context),
+        radixPortaledMenu.render(item, context),
+      triggerMode: 'both',
     },
   },
   id: 'ft-portaled-context-menu-demo',
@@ -224,6 +256,25 @@ const portaledTree = new FileTreeModel({
   viewportHeight: 240,
 });
 portaledTree.render({ containerWrapper: radixMount });
+
+const rightClickOnlyTree = new FileTreeModel({
+  composition: {
+    contextMenu: {
+      enabled: true,
+      onClose: () => {
+        rightClickOnlyMenu.clear();
+      },
+      render: (item: DemoContextMenuItem, context: DemoContextMenuContext) =>
+        rightClickOnlyMenu.render(item, context),
+      triggerMode: 'right-click',
+    },
+  },
+  id: 'ft-right-click-only-context-menu-demo',
+  initialExpansion: 'open',
+  paths: ['README.md', 'src/index.ts', 'src/utils/worker.ts'],
+  viewportHeight: 240,
+});
+rightClickOnlyTree.render({ containerWrapper: rightClickOnlyMount });
 
 createRoot(reactMount).render(<ReactClientFixture />);
 
@@ -246,5 +297,9 @@ const waitForTree = async (mount: HTMLDivElement): Promise<void> => {
   }
 };
 
-await Promise.all([waitForTree(radixMount), waitForTree(reactMount)]);
+await Promise.all([
+  waitForTree(radixMount),
+  waitForTree(rightClickOnlyMount),
+  waitForTree(reactMount),
+]);
 window.__fileTreeDemoContextMenuFixtureReady = true;

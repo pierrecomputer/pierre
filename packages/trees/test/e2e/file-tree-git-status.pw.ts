@@ -30,12 +30,17 @@ async function readGitStatusSnapshot(page: Page) {
       if (button == null) {
         return null;
       }
+      const gitLabel =
+        button
+          .querySelector('[data-item-section="git"] > span')
+          ?.textContent?.trim() ?? null;
       return {
-        gitStatus: button.getAttribute('data-item-git-status'),
-        label:
+        decoration:
           button
-            .querySelector('[data-item-section="status"]')
+            .querySelector('[data-item-section="decoration"] > span')
             ?.textContent?.trim() ?? null,
+        gitLabel,
+        gitStatus: button.getAttribute('data-item-git-status'),
       };
     };
 
@@ -61,15 +66,19 @@ async function readGitStatusSnapshot(page: Page) {
           : {
               contains: srcFolder.getAttribute('data-item-contains-git-change'),
               dotHeight: srcFolder
-                .querySelector('[data-icon-name="file-tree-icon-dot"]')
+                .querySelector(
+                  '[data-item-section="git"] [data-icon-name="file-tree-icon-dot"]'
+                )
                 ?.getAttribute('height'),
               dotWidth: srcFolder
-                .querySelector('[data-icon-name="file-tree-icon-dot"]')
+                .querySelector(
+                  '[data-item-section="git"] [data-icon-name="file-tree-icon-dot"]'
+                )
                 ?.getAttribute('width'),
               hasOwnStatus: srcFolder.hasAttribute('data-item-git-status'),
               hasStatusDot:
                 srcFolder.querySelector(
-                  '[data-icon-name="file-tree-icon-dot"]'
+                  '[data-item-section="git"] [data-icon-name="file-tree-icon-dot"]'
                 ) != null,
             },
       anyStatusCount: shadowRoot.querySelectorAll('[data-item-git-status]')
@@ -93,11 +102,11 @@ test.describe('file-tree git-status proof', () => {
         hostCount: 1,
         wrapperCount: 1,
         state: 'enabled=true set=A',
-        readme: { gitStatus: 'untracked', label: 'U' },
-        packageJson: { gitStatus: 'renamed', label: 'R' },
-        index: { gitStatus: 'modified', label: 'M' },
-        button: { gitStatus: 'added', label: 'A' },
-        deleted: { gitStatus: 'deleted', label: 'D' },
+        readme: { decoration: null, gitLabel: 'U', gitStatus: 'untracked' },
+        packageJson: { decoration: null, gitLabel: 'R', gitStatus: 'renamed' },
+        index: { decoration: 'TS', gitLabel: 'M', gitStatus: 'modified' },
+        button: { decoration: null, gitLabel: 'A', gitStatus: 'added' },
+        deleted: { decoration: null, gitLabel: 'D', gitStatus: 'deleted' },
         srcFolder: {
           contains: 'true',
           dotHeight: '6',
@@ -115,13 +124,13 @@ test.describe('file-tree git-status proof', () => {
         hostCount: 1,
         wrapperCount: 1,
         state: 'enabled=true set=B',
-        readme: { gitStatus: 'modified', label: 'M' },
-        packageJson: { gitStatus: null, label: null },
-        index: { gitStatus: null, label: null },
-        button: { gitStatus: null, label: null },
-        card: { gitStatus: 'ignored', label: null },
-        worker: { gitStatus: 'untracked', label: 'U' },
-        deleted: { gitStatus: null, label: null },
+        readme: { decoration: null, gitLabel: 'M', gitStatus: 'modified' },
+        packageJson: { decoration: null, gitLabel: null, gitStatus: null },
+        index: { decoration: 'TS', gitLabel: null, gitStatus: null },
+        button: { decoration: null, gitLabel: null, gitStatus: null },
+        card: { decoration: null, gitLabel: null, gitStatus: 'ignored' },
+        worker: { decoration: null, gitLabel: 'U', gitStatus: 'untracked' },
+        deleted: { decoration: null, gitLabel: null, gitStatus: null },
         srcFolder: {
           contains: 'true',
           dotHeight: '6',
@@ -141,13 +150,13 @@ test.describe('file-tree git-status proof', () => {
         hostCount: 1,
         wrapperCount: 1,
         state: 'enabled=false set=B',
-        readme: { gitStatus: null, label: null },
-        packageJson: { gitStatus: null, label: null },
-        index: { gitStatus: null, label: null },
-        button: { gitStatus: null, label: null },
-        card: { gitStatus: null, label: null },
-        worker: { gitStatus: null, label: null },
-        deleted: { gitStatus: null, label: null },
+        readme: { decoration: null, gitLabel: null, gitStatus: null },
+        packageJson: { decoration: null, gitLabel: null, gitStatus: null },
+        index: { decoration: 'TS', gitLabel: null, gitStatus: null },
+        button: { decoration: null, gitLabel: null, gitStatus: null },
+        card: { decoration: null, gitLabel: null, gitStatus: null },
+        worker: { decoration: null, gitLabel: null, gitStatus: null },
+        deleted: { decoration: null, gitLabel: null, gitStatus: null },
         anyStatusCount: 0,
         anyFolderChangeCount: 0,
       });

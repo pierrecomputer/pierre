@@ -100,10 +100,19 @@ function getItemButton(
   return button;
 }
 
-function getStatusLabel(button: HTMLButtonElement): string | null {
+function getDecorationLabel(button: HTMLButtonElement): string | null {
   return (
-    button.querySelector('[data-item-section="status"]')?.textContent?.trim() ??
-    null
+    button
+      .querySelector('[data-item-section="decoration"]')
+      ?.textContent?.trim() ?? null
+  );
+}
+
+function getGitLabel(button: HTMLButtonElement): string | null {
+  return (
+    button
+      .querySelector('[data-item-section="git"] > span')
+      ?.textContent?.trim() ?? null
   );
 }
 
@@ -167,30 +176,32 @@ describe('file-tree git status', () => {
       expect(readmeButton.getAttribute('data-item-git-status')).toBe(
         'untracked'
       );
-      expect(getStatusLabel(readmeButton)).toBe('U');
+      expect(getGitLabel(readmeButton)).toBe('U');
       expect(packageButton.getAttribute('data-item-git-status')).toBe(
         'renamed'
       );
-      expect(getStatusLabel(packageButton)).toBe('R');
+      expect(getGitLabel(packageButton)).toBe('R');
       expect(indexButton.getAttribute('data-item-git-status')).toBe('modified');
-      expect(getStatusLabel(indexButton)).toBe('M');
+      expect(getGitLabel(indexButton)).toBe('M');
       expect(addedButton.getAttribute('data-item-git-status')).toBe('added');
-      expect(getStatusLabel(addedButton)).toBe('A');
+      expect(getGitLabel(addedButton)).toBe('A');
       expect(ignoredButton.getAttribute('data-item-git-status')).toBe(
         'ignored'
       );
-      expect(getStatusLabel(ignoredButton)).toBeNull();
+      expect(getGitLabel(ignoredButton)).toBeNull();
       expect(deletedButton.getAttribute('data-item-git-status')).toBe(
         'deleted'
       );
-      expect(getStatusLabel(deletedButton)).toBe('D');
+      expect(getGitLabel(deletedButton)).toBe('D');
 
       expect(srcFolder.getAttribute('data-item-contains-git-change')).toBe(
         'true'
       );
       expect(srcFolder.hasAttribute('data-item-git-status')).toBe(false);
       expect(
-        srcFolder.querySelector('[data-icon-name="file-tree-icon-dot"]')
+        srcFolder.querySelector(
+          '[data-item-section="git"] [data-icon-name="file-tree-icon-dot"]'
+        )
       ).not.toBeNull();
 
       fileTree.cleanUp();
@@ -222,9 +233,11 @@ describe('file-tree git status', () => {
       expect(
         srcFolder.getAttribute('data-item-contains-git-change')
       ).toBeNull();
-      expect(getStatusLabel(srcFolder)).toBeNull();
+      expect(getGitLabel(srcFolder)).toBeNull();
       expect(
-        srcFolder.querySelector('[data-icon-name="file-tree-icon-dot"]')
+        srcFolder.querySelector(
+          '[data-item-section="git"] [data-icon-name="file-tree-icon-dot"]'
+        )
       ).toBeNull();
 
       fileTree.cleanUp();
@@ -268,13 +281,13 @@ describe('file-tree git status', () => {
       const indexButton = getItemButton(shadowRoot, dom, 'src/index.ts');
 
       expect(srcFolder.getAttribute('data-item-git-status')).toBe('ignored');
-      expect(getStatusLabel(srcFolder)).toBeNull();
+      expect(getGitLabel(srcFolder)).toBeNull();
       expect(cardButton.getAttribute('data-item-git-status')).toBe('ignored');
-      expect(getStatusLabel(cardButton)).toBeNull();
+      expect(getGitLabel(cardButton)).toBeNull();
       expect(workerButton.getAttribute('data-item-git-status')).toBe('ignored');
-      expect(getStatusLabel(workerButton)).toBeNull();
+      expect(getGitLabel(workerButton)).toBeNull();
       expect(indexButton.getAttribute('data-item-git-status')).toBe('modified');
-      expect(getStatusLabel(indexButton)).toBe('M');
+      expect(getGitLabel(indexButton)).toBe('M');
 
       fileTree.cleanUp();
     } finally {
@@ -305,7 +318,9 @@ describe('file-tree git status', () => {
         'true'
       );
       expect(
-        srcFolder.querySelector('[data-icon-name="file-tree-icon-dot"]')
+        srcFolder.querySelector(
+          '[data-item-section="git"] [data-icon-name="file-tree-icon-dot"]'
+        )
       ).not.toBeNull();
 
       fileTree.cleanUp();
@@ -339,7 +354,9 @@ describe('file-tree git status', () => {
       ).toBe('true');
       expect(flattenedFolder.hasAttribute('data-item-git-status')).toBe(false);
       expect(
-        flattenedFolder.querySelector('[data-icon-name="file-tree-icon-dot"]')
+        flattenedFolder.querySelector(
+          '[data-item-section="git"] [data-icon-name="file-tree-icon-dot"]'
+        )
       ).not.toBeNull();
 
       fileTree.cleanUp();
@@ -375,7 +392,7 @@ describe('file-tree git status', () => {
       const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
       const srcFolder = getItemButton(shadowRoot, dom, 'src/');
       const dotIcon = srcFolder.querySelector(
-        '[data-item-section="status"] [data-icon-name="file-tree-icon-dot"]'
+        '[data-item-section="git"] [data-icon-name="file-tree-icon-dot"]'
       );
       expect(dotIcon?.getAttribute('width')).toBe('6');
       expect(dotIcon?.getAttribute('height')).toBe('6');
@@ -452,7 +469,7 @@ describe('file-tree git status', () => {
     }
   });
 
-  test('custom row decorations override built-in status-slot content but keep git attrs', async () => {
+  test('custom row decorations and git status render in separate lanes', async () => {
     const { cleanup, dom } = installDom();
     try {
       const { FileTree } = await import('../src/render/FileTree');
@@ -476,7 +493,14 @@ describe('file-tree git status', () => {
       const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
       const indexButton = getItemButton(shadowRoot, dom, 'src/index.ts');
       expect(indexButton.getAttribute('data-item-git-status')).toBe('modified');
-      expect(getStatusLabel(indexButton)).toBe('TS');
+      expect(getDecorationLabel(indexButton)).toBe('TS');
+      expect(getGitLabel(indexButton)).toBe('M');
+      expect(
+        indexButton.querySelector('[data-item-section="decoration"]')
+      ).not.toBeNull();
+      expect(
+        indexButton.querySelector('[data-item-section="git"]')
+      ).not.toBeNull();
 
       fileTree.cleanUp();
     } finally {

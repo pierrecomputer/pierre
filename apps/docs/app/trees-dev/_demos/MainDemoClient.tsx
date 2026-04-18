@@ -489,7 +489,9 @@ export function MainDemoClient({
     () => ({
       composition: {
         contextMenu: {
+          buttonVisibility: 'always',
           enabled: true,
+          triggerMode: 'both',
         },
       },
       dragAndDrop: true,
@@ -610,7 +612,7 @@ export function MainDemoClient({
       composition: {
         ...sharedOptions.composition,
         contextMenu: {
-          enabled: true,
+          ...sharedOptions.composition?.contextMenu,
           onClose: () => {
             if (contextMenuSlotRef.current != null) {
               clearMutationContextMenuSlot({

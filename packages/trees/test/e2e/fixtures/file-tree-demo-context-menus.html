@@ -15,7 +15,7 @@
       [data-demo-context-menu-shell] {
         display: grid;
         gap: 16px;
-        grid-template-columns: repeat(2, minmax(0, 420px));
+        grid-template-columns: repeat(auto-fit, minmax(0, 420px));
       }
 
       [data-demo-context-menu-card] {
@@ -47,6 +47,12 @@
         <h2>Docs-like Radix context menu</h2>
         <div data-demo-context-menu-frame>
           <div data-demo-context-menu-mount="radix-portaled"></div>
+        </div>
+      </section>
+      <section data-demo-context-menu-card="right-click-only">
+        <h2>Right-click-only context menu</h2>
+        <div data-demo-context-menu-frame>
+          <div data-demo-context-menu-mount="right-click-only"></div>
         </div>
       </section>
       <section data-demo-context-menu-card="react-client">
