@@ -2526,10 +2526,10 @@ export function FileTreeView({
     contextMenuEnabled && (triggerButtonVisible || contextMenuState != null);
   const pointerAnchorRect = contextMenuState?.anchorRect;
   const rowAnchorTop =
-    contextMenuState != null &&
     pointerAnchorRect == null &&
     triggerButton != null &&
-    contextMenuAnchorTop != null
+    contextMenuAnchorTop != null &&
+    (contextMenuState != null || triggerButtonVisible)
       ? contextMenuAnchorTop
       : null;
   const contextMenuAnchorStyle =
