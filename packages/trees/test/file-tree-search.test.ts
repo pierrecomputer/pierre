@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-// @ts-expect-error -- no @types/jsdom; only used in tests
 import { JSDOM } from 'jsdom';
 
 const FILES = [

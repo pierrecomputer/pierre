@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-// @ts-expect-error -- no @types/jsdom; only used in tests
 import { JSDOM } from 'jsdom';
 
 interface CapturedContextMenuOpenContext {
@@ -99,7 +98,7 @@ function getItemButton(
     throw new Error(`missing button for ${path}`);
   }
 
-  return button as HTMLButtonElement;
+  return button;
 }
 
 describe('file-tree composition surfaces', () => {
@@ -588,7 +587,7 @@ describe('file-tree composition surfaces', () => {
       if (!(slottedMenuButton instanceof dom.window.HTMLButtonElement)) {
         throw new Error('expected slotted menu button');
       }
-      const menuButton = slottedMenuButton as HTMLButtonElement;
+      const menuButton = slottedMenuButton;
       menuButton.focus();
 
       const escapeEvent = new dom.window.KeyboardEvent('keydown', {
@@ -719,9 +718,9 @@ describe('file-tree composition surfaces', () => {
       ) {
         throw new Error('expected virtualized tree elements');
       }
-      const treeRoot = root as HTMLElement;
-      const scrollViewport = viewport as HTMLElement;
-      const triggerButton = trigger as HTMLButtonElement;
+      const treeRoot = root;
+      const scrollViewport = viewport;
+      const triggerButton = trigger;
 
       firstRow.focus();
       firstRow.dispatchEvent(

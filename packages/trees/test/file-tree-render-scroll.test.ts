@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-// @ts-expect-error -- no @types/jsdom; only used in tests
 import { JSDOM } from 'jsdom';
 
 import {
@@ -83,9 +82,7 @@ function getFocusedTreeElement(
   dom: JSDOM
 ): HTMLElement | null {
   const activeElement = shadowRoot?.activeElement ?? null;
-  return activeElement instanceof dom.window.HTMLElement
-    ? (activeElement as HTMLElement)
-    : null;
+  return activeElement instanceof dom.window.HTMLElement ? activeElement : null;
 }
 
 function getItemButton(
@@ -98,7 +95,7 @@ function getItemButton(
     throw new Error(`missing button for ${path}`);
   }
 
-  return button as HTMLButtonElement;
+  return button;
 }
 
 function getTreeRoot(
@@ -112,7 +109,7 @@ function getTreeRoot(
     throw new Error('missing tree root');
   }
 
-  return root as HTMLDivElement;
+  return root;
 }
 
 function clickItem(
@@ -903,7 +900,7 @@ describe('file-tree render + scroll', () => {
         throw new Error('missing scroll element');
       }
 
-      const viewport = scrollElement as HTMLElement;
+      const viewport = scrollElement;
       viewport.scrollTop = 1500;
       viewport.dispatchEvent(new dom.window.Event('scroll'));
       await flushDom();
@@ -1152,7 +1149,7 @@ describe('file-tree render + scroll', () => {
         throw new Error('missing scroll element');
       }
 
-      const viewport = scrollElement as HTMLElement;
+      const viewport = scrollElement;
       viewport.scrollTop = 1500;
       viewport.dispatchEvent(new dom.window.Event('scroll'));
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1199,8 +1196,8 @@ describe('file-tree render + scroll', () => {
         throw new Error('missing list element');
       }
 
-      const viewport = scrollElement as HTMLElement;
-      const list = listElement as HTMLDivElement;
+      const viewport = scrollElement;
+      const list = listElement;
 
       expect(list.dataset.isScrolling).toBeUndefined();
 
@@ -1546,7 +1543,7 @@ describe('file-tree render + scroll', () => {
         throw new Error('missing scroll element');
       }
 
-      const viewport = scrollElement as HTMLElement;
+      const viewport = scrollElement;
       viewport.scrollTop = 1500;
       viewport.dispatchEvent(new dom.window.Event('scroll'));
       await flushDom();
@@ -2118,7 +2115,7 @@ describe('file-tree render + scroll', () => {
         throw new Error('missing scroll element');
       }
 
-      const viewport = scrollElement as HTMLElement;
+      const viewport = scrollElement;
       viewport.scrollTop = (topFiles.length + 11) * 30;
       viewport.dispatchEvent(new dom.window.Event('scroll'));
       await new Promise((resolve) => setTimeout(resolve, 0));

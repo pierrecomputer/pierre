@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-// @ts-expect-error -- no @types/jsdom; only used in tests
 import { JSDOM } from 'jsdom';
 
 function installDom() {
@@ -82,7 +81,7 @@ function getItemButton(
     throw new Error(`missing button for ${path}`);
   }
 
-  return button as HTMLButtonElement;
+  return button;
 }
 
 describe('file-tree icon config', () => {

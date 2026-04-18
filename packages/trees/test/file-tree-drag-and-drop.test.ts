@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-// @ts-expect-error -- no @types/jsdom; only used in tests
 import { JSDOM } from 'jsdom';
 
 import type {
@@ -151,7 +150,7 @@ function getTreeRoot(
     throw new Error('missing tree root');
   }
 
-  return root as HTMLDivElement;
+  return root;
 }
 
 function getItemButton(
@@ -164,7 +163,7 @@ function getItemButton(
     throw new Error(`missing button for ${path}`);
   }
 
-  return button as HTMLButtonElement;
+  return button;
 }
 
 function getDraggingPaths(shadowRoot: ShadowRoot | null | undefined): string[] {
@@ -637,7 +636,7 @@ describe('file-tree drag and drop', () => {
       if (!(segmentTarget instanceof rendered.dom.window.HTMLElement)) {
         throw new Error('missing flattened segment target for assets/images/');
       }
-      const flattenedSegmentTarget = segmentTarget as HTMLElement;
+      const flattenedSegmentTarget = segmentTarget;
       const dataTransfer = createMockDataTransfer();
       rendered.dom.window.document.elementFromPoint = () =>
         flattenedSegmentTarget;
@@ -685,7 +684,7 @@ describe('file-tree drag and drop', () => {
       if (!(scrollElement instanceof rendered.dom.window.HTMLElement)) {
         throw new Error('missing scroll element');
       }
-      const viewport = scrollElement as HTMLElement;
+      const viewport = scrollElement;
 
       viewport.scrollTop = 1500;
       viewport.dispatchEvent(new rendered.dom.window.Event('scroll'));

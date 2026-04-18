@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-// @ts-expect-error -- no @types/jsdom; only used in tests
 import { JSDOM } from 'jsdom';
 
 function installDom() {
@@ -125,7 +124,7 @@ function getItemButton(
     throw new Error(`Expected item button for ${path}`);
   }
 
-  return button as HTMLButtonElement;
+  return button;
 }
 
 function getRenameInput(
@@ -141,7 +140,7 @@ function getRenameInput(
     throw new Error(`Expected rename input for selector ${selector}`);
   }
 
-  return input as HTMLInputElement;
+  return input;
 }
 
 function getSearchInput(shadowRoot: ShadowRoot, dom: JSDOM): HTMLInputElement {
@@ -150,7 +149,7 @@ function getSearchInput(shadowRoot: ShadowRoot, dom: JSDOM): HTMLInputElement {
     throw new Error('Expected built-in search input');
   }
 
-  return input as HTMLInputElement;
+  return input;
 }
 
 async function loadFileTree(): Promise<typeof import('../src/index').FileTree> {
@@ -396,7 +395,7 @@ describe('file-tree renaming', () => {
         throw new Error('Expected context-menu rename button');
       }
 
-      const confirmedMenuButton = menuButton as HTMLButtonElement;
+      const confirmedMenuButton = menuButton;
       confirmedMenuButton.click();
       await flushDom(4);
 

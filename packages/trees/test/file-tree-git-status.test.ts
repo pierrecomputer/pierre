@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-// @ts-expect-error -- no @types/jsdom; only used in tests
 import { JSDOM } from 'jsdom';
 
 import type { GitStatusEntry } from '../src/types';
@@ -97,7 +96,7 @@ function getItemButton(
     throw new Error(`missing button for ${path}`);
   }
 
-  return button as HTMLButtonElement;
+  return button;
 }
 
 function getStatusLabel(button: HTMLButtonElement): string | null {

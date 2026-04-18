@@ -10,7 +10,6 @@ import {
   spyOn,
   test,
 } from 'bun:test';
-// @ts-expect-error -- no @types/jsdom; only used in tests
 import { JSDOM } from 'jsdom';
 import { act, useState } from 'react';
 import { createRoot, hydrateRoot, type Root } from 'react-dom/client';
@@ -83,8 +82,7 @@ beforeAll(async () => {
     window: dom.window,
   });
 
-  class FileTreeContainerElement extends (dom.window
-    .HTMLElement as typeof HTMLElement) {
+  class FileTreeContainerElement extends dom.window.HTMLElement {
     constructor() {
       super();
       if (this.shadowRoot == null) {
@@ -154,7 +152,7 @@ function getHost(container: HTMLElement): HTMLElement {
     throw new Error('expected rendered file-tree host');
   }
 
-  return host as HTMLElement;
+  return host;
 }
 
 function getItemButton(host: HTMLElement, path: string): HTMLButtonElement {
@@ -163,7 +161,7 @@ function getItemButton(host: HTMLElement, path: string): HTMLButtonElement {
     throw new Error(`expected item button for ${path}`);
   }
 
-  return button as HTMLButtonElement;
+  return button;
 }
 
 const BASE_OPTIONS = {
@@ -225,7 +223,7 @@ describe('file-tree React lane', () => {
       throw new Error('expected add button');
     }
 
-    const addButton = addButtonNode as HTMLButtonElement;
+    const addButton = addButtonNode;
 
     await actAndFlush(() => {
       dispatchClick(addButton);
@@ -428,7 +426,7 @@ describe('file-tree React lane', () => {
       throw new Error('expected header add button');
     }
 
-    const headerButton = headerButtonNode as HTMLButtonElement;
+    const headerButton = headerButtonNode;
 
     await actAndFlush(() => {
       dispatchClick(headerButton);
@@ -496,12 +494,12 @@ describe('file-tree React lane', () => {
       throw new Error('expected hook harness elements');
     }
 
-    const selectedCount = selectedCountNode as HTMLElement;
-    const searchOpen = searchOpenNode as HTMLElement;
-    const searchValue = searchValueNode as HTMLElement;
-    const searchCount = searchCountNode as HTMLElement;
-    const selectButton = selectButtonNode as HTMLButtonElement;
-    const searchButton = searchButtonNode as HTMLButtonElement;
+    const selectedCount = selectedCountNode;
+    const searchOpen = searchOpenNode;
+    const searchValue = searchValueNode;
+    const searchCount = searchCountNode;
+    const selectButton = selectButtonNode;
+    const searchButton = searchButtonNode;
 
     expect(selectedCount.textContent).toBe('0');
     expect(searchOpen.textContent).toBe('false');
@@ -561,8 +559,8 @@ describe('file-tree React lane', () => {
       throw new Error('expected search harness elements');
     }
 
-    const openSearchButton = openSearchButtonNode as HTMLButtonElement;
-    const searchValue = searchValueNode as HTMLElement;
+    const openSearchButton = openSearchButtonNode;
+    const searchValue = searchValueNode;
 
     await actAndFlush(() => {
       dispatchClick(openSearchButton);
@@ -577,7 +575,7 @@ describe('file-tree React lane', () => {
       throw new Error('expected tree search input');
     }
 
-    const searchInput = searchInputNode as HTMLInputElement;
+    const searchInput = searchInputNode;
 
     await actAndFlush(() => {
       searchInput.value = 'readme';
@@ -669,8 +667,8 @@ describe('file-tree React lane', () => {
       throw new Error('expected toggle buttons');
     }
 
-    const toggleHeaderButton = toggleHeaderButtonNode as HTMLButtonElement;
-    const toggleMenuButton = toggleMenuButtonNode as HTMLButtonElement;
+    const toggleHeaderButton = toggleHeaderButtonNode;
+    const toggleMenuButton = toggleMenuButtonNode;
 
     await actAndFlush(() => {
       dispatchClick(toggleHeaderButton);
@@ -813,7 +811,7 @@ describe('file-tree React lane', () => {
         throw new Error('expected hydrated header button');
       }
 
-      const hydratedHeader = hydratedHeaderNode as HTMLButtonElement;
+      const hydratedHeader = hydratedHeaderNode;
 
       await actAndFlush(() => {
         dispatchClick(hydratedHeader);
