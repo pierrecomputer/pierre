@@ -179,6 +179,7 @@ export interface FileTreeViewProps extends FileTreeRenderOptions {
   controller: import('./FileTreeController').FileTreeController;
   directoriesWithGitChanges?: ReadonlySet<FileTreePublicId>;
   gitStatusByPath?: ReadonlyMap<FileTreePublicId, GitStatus>;
+  ignoredGitDirectories?: ReadonlySet<FileTreePublicId>;
   icons?: FileTreeIcons;
   instanceId?: string;
   renamingEnabled?: boolean;

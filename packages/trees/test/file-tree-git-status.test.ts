@@ -237,10 +237,10 @@ describe('file-tree git status', () => {
   test('ignored directories tint descendants unless a child has its own status', async () => {
     const { cleanup, dom } = installDom();
     try {
-      const { PathStoreFileTree } = await import('../src/path-store');
+      const { FileTree } = await import('../src/render/FileTree');
       const mount = dom.window.document.createElement('div');
       dom.window.document.body.appendChild(mount);
-      const fileTree = new PathStoreFileTree({
+      const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         gitStatus: [
           { path: 'src/', status: 'ignored' },
