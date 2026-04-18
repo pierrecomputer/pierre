@@ -2,7 +2,7 @@
 @import 'tw-animate-css';
 
 @custom-variant light (&:is(.light *));
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *, .dark));
 
 @theme {
   --font-geist: var(--font-geist-sans);

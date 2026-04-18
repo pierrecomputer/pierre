@@ -1,5 +1,6 @@
 'use client';
 
+import { IconFilePlus, IconFolderPlus } from '@pierre/icons';
 import type {
   ContextMenuItem,
   ContextMenuOpenContext,
@@ -17,12 +18,20 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { createRoot, type Root as ReactDomRoot } from 'react-dom/client';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
+import { getFloatingContextMenuTriggerStyle } from '../../trees-dev/_lib/getFloatingContextMenuTriggerStyle';
 import { sampleFileList } from '../demo-data';
 import { TreeExampleSection } from '../tree-examples/TreeExampleSection';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const CONTEXT_MENU_EXPANDED_PATHS = ['src', 'src/components'] as const;
 const contextMenuPanelStyle = {
@@ -31,9 +40,6 @@ const contextMenuPanelStyle = {
 } as CSSProperties;
 const IDE_WINDOW_HEIGHT = TREE_NEW_VIEWPORT_HEIGHTS.contextMenu;
 const IDE_EXPLORER_WIDTH_PX = 300;
-const CONTEXT_MENU_ITEM_CLASS_NAME =
-  'hover:bg-accent hover:text-accent-foreground w-full px-3 py-1.5 text-left text-sm rounded-md';
-
 interface TriggerModeDemo {
   id: string;
   mode: ContextMenuTriggerMode;
@@ -44,17 +50,17 @@ const TRIGGER_MODE_DEMOS: readonly TriggerModeDemo[] = [
   {
     id: 'file-tree-context-menu-demo-both',
     mode: 'both',
-    title: 'both',
+    title: 'Both',
   },
   {
     id: 'file-tree-context-menu-demo-right-click',
     mode: 'right-click',
-    title: 'right-click',
+    title: 'Right click',
   },
   {
     id: 'file-tree-context-menu-demo-button',
     mode: 'button',
-    title: 'button',
+    title: 'Button',
   },
 ] as const;
 
@@ -72,26 +78,26 @@ function LocalProjectHeader({
   onAddFolder: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-[#232323] px-2 py-1.5">
-      <div className="min-w-0 truncate text-xs font-semibold text-zinc-200">
-        {projectName}
+    <div className="flex items-center justify-between gap-2 px-3 py-2">
+      <div className="min-w-0 truncate text-sm font-medium text-neutral-200">
+        {projectName}/
       </div>
       <div className="flex items-center gap-1">
         <button
           type="button"
           title="New file"
           onClick={onAddFile}
-          className="h-5 w-5 rounded text-xs text-zinc-300 hover:bg-white/10"
+          className="flex h-5 w-5 items-center justify-center rounded text-neutral-300 hover:bg-white/10"
         >
-          +
+          <IconFilePlus aria-hidden="true" />
         </button>
         <button
           type="button"
           title="New folder"
           onClick={onAddFolder}
-          className="h-5 w-5 rounded text-xs text-zinc-300 hover:bg-white/10"
+          className="flex h-5 w-5 items-center justify-center rounded text-neutral-300 hover:bg-white/10"
         >
-          #
+          <IconFolderPlus aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -130,12 +136,17 @@ function getUniquePath(model: FileTreeModel, basePath: string): string {
 
 function ContextMenuContents({
   context,
+  portalContainer,
   onAddFile,
   onAddFolder,
   onDelete,
   onRename,
 }: {
-  context: Pick<ContextMenuOpenContext, 'close' | 'restoreFocus'>;
+  context: Pick<
+    ContextMenuOpenContext,
+    'anchorRect' | 'close' | 'restoreFocus'
+  >;
+  portalContainer?: HTMLElement | null;
   onAddFile: () => void;
   onAddFolder: () => void;
   onDelete: () => void;
@@ -147,118 +158,81 @@ function ContextMenuContents({
   };
 
   return (
-    <div
-      data-file-tree-context-menu-root="true"
-      role="menu"
-      className="bg-popover text-popover-foreground min-w-[180px] overflow-hidden rounded-lg border border-[rgb(0_0_0_/_0.15)] bg-clip-padding p-1 shadow-md"
+    <DropdownMenu
+      open
+      modal={false}
+      onOpenChange={(open) => !open && context.close()}
     >
-      <button
-        type="button"
-        role="menuitem"
-        className={CONTEXT_MENU_ITEM_CLASS_NAME}
-        onClick={() => {
-          closeAfter(onAddFile);
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-hidden="true"
+          tabIndex={-1}
+          style={getFloatingContextMenuTriggerStyle(context.anchorRect)}
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        container={portalContainer}
+        data-file-tree-context-menu-root="true"
+        align="center"
+        side="bottom"
+        sideOffset={4}
+        className="min-w-[180px]"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          context.restoreFocus();
         }}
       >
-        New file
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        className={CONTEXT_MENU_ITEM_CLASS_NAME}
-        onClick={() => {
-          closeAfter(onAddFolder);
-        }}
-      >
-        New folder
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        className={CONTEXT_MENU_ITEM_CLASS_NAME}
-        onClick={() => {
-          context.close({ restoreFocus: false });
-          onRename();
-        }}
-      >
-        Rename
-      </button>
-      <div className="mx-1.25 my-1 h-px bg-[rgb(0_0_0_/_0.1)]" />
-      <button
-        type="button"
-        role="menuitem"
-        className={`${CONTEXT_MENU_ITEM_CLASS_NAME} text-destructive hover:text-destructive hover:bg-destructive/10`}
-        onClick={() => {
-          closeAfter(onDelete);
-        }}
-      >
-        Delete
-      </button>
-    </div>
+        <DropdownMenuItem
+          onSelect={() => {
+            closeAfter(onAddFile);
+          }}
+        >
+          New file
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
+            closeAfter(onAddFolder);
+          }}
+        >
+          New folder
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
+            context.close({ restoreFocus: false });
+            onRename();
+          }}
+        >
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          variant="danger"
+          onSelect={() => {
+            closeAfter(onDelete);
+          }}
+        >
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-function useContextMenuSlotRenderer(modelRef: {
-  current: FileTreeModel | null;
-}) {
-  const slotElementRef = useRef<HTMLDivElement | null>(null);
-  const menuRootRef = useRef<ReactDomRoot | null>(null);
+function clearContextMenuSlot({
+  menuRootRef,
+  slotElement,
+}: {
+  menuRootRef: { current: ReactDomRoot | null };
+  slotElement: HTMLDivElement;
+}): void {
+  const currentRoot = menuRootRef.current;
+  if (currentRoot == null) {
+    return;
+  }
 
-  return useCallback(
-    (item: ContextMenuItem, context: ContextMenuOpenContext) => {
-      const slotElement =
-        slotElementRef.current ?? document.createElement('div');
-      slotElementRef.current = slotElement;
-      slotElement.style.display = 'block';
-      slotElement.style.colorScheme = 'dark';
-      menuRootRef.current ??= createRoot(slotElement);
-
-      const model = modelRef.current;
-      if (model == null) {
-        return slotElement;
-      }
-
-      const baseDirectoryPath =
-        item.kind === 'directory' ? item.path : getParentPath(item.path);
-
-      const addFile = () => {
-        const nextPath = getUniquePath(
-          model,
-          `${baseDirectoryPath}new-file.ts`
-        );
-        model.add(nextPath);
-      };
-      const addFolder = () => {
-        const nextPath = getUniquePath(
-          model,
-          `${baseDirectoryPath}new-folder/`
-        );
-        model.add(nextPath);
-      };
-      const rename = () => {
-        model.startRenaming(item.path);
-      };
-      const remove = () => {
-        model.remove(
-          item.path,
-          item.kind === 'directory' ? { recursive: true } : undefined
-        );
-      };
-
-      menuRootRef.current.render(
-        <ContextMenuContents
-          context={context}
-          onAddFile={addFile}
-          onAddFolder={addFolder}
-          onDelete={remove}
-          onRename={rename}
-        />
-      );
-
-      return slotElement;
-    },
-    [modelRef]
-  );
+  slotElement.style.display = 'none';
+  currentRoot.render(null);
 }
 
 function useHeaderSlotRenderer(
@@ -310,7 +284,65 @@ function useContextMenuComposition(
   modelRef: { current: FileTreeModel | null },
   triggerMode: ContextMenuTriggerMode
 ) {
-  const contextMenuRenderer = useContextMenuSlotRenderer(modelRef);
+  const contextMenuSlotRef = useRef<HTMLDivElement | null>(null);
+  const contextMenuRootRef = useRef<ReactDomRoot | null>(null);
+  const contextMenuRenderer = useCallback(
+    (item: ContextMenuItem, context: ContextMenuOpenContext) => {
+      contextMenuSlotRef.current ??= document.createElement('div');
+      contextMenuRootRef.current ??= createRoot(contextMenuSlotRef.current);
+
+      const slotElement = contextMenuSlotRef.current;
+      slotElement.style.display = 'block';
+
+      const model = modelRef.current;
+      if (model == null) {
+        return slotElement;
+      }
+
+      const baseDirectoryPath =
+        item.kind === 'directory' ? item.path : getParentPath(item.path);
+
+      const addFile = () => {
+        const nextPath = getUniquePath(
+          model,
+          `${baseDirectoryPath}new-file.ts`
+        );
+        model.add(nextPath);
+      };
+      const addFolder = () => {
+        const nextPath = getUniquePath(
+          model,
+          `${baseDirectoryPath}new-folder/`
+        );
+        model.add(nextPath);
+      };
+      const rename = () => {
+        model.startRenaming(item.path);
+      };
+      const remove = () => {
+        model.remove(
+          item.path,
+          item.kind === 'directory' ? { recursive: true } : undefined
+        );
+      };
+
+      contextMenuRootRef.current.render(
+        <ContextMenuContents
+          context={context}
+          portalContainer={document.getElementById(
+            'dark-mode-portal-container'
+          )}
+          onAddFile={addFile}
+          onAddFolder={addFolder}
+          onDelete={remove}
+          onRename={rename}
+        />
+      );
+
+      return slotElement;
+    },
+    [modelRef]
+  );
   const headerRenderer = useHeaderSlotRenderer(
     modelRef,
     getProjectNameForMode(triggerMode)
@@ -320,6 +352,14 @@ function useContextMenuComposition(
     () => ({
       contextMenu: {
         enabled: true,
+        onClose: () => {
+          if (contextMenuSlotRef.current != null) {
+            clearContextMenuSlot({
+              menuRootRef: contextMenuRootRef,
+              slotElement: contextMenuSlotRef.current,
+            });
+          }
+        },
         render: contextMenuRenderer,
         triggerMode,
       },
@@ -421,7 +461,7 @@ export function DemoContextMenuClient({
           >
             {TRIGGER_MODE_DEMOS.map((modeDemo) => (
               <ButtonGroupItem key={modeDemo.id} value={modeDemo.mode}>
-                <code>{modeDemo.title}</code>
+                {modeDemo.title}
               </ButtonGroupItem>
             ))}
           </ButtonGroup>

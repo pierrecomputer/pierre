@@ -64,7 +64,10 @@ const DropdownMenuContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
     scrollSelectedIntoView?: boolean;
     selectedItemSelector?: string;
-  }
+  } & Pick<
+      React.ComponentProps<typeof DropdownMenuPrimitive.Portal>,
+      'container'
+    >
 >(
   (
     {
@@ -72,6 +75,9 @@ const DropdownMenuContent = React.forwardRef<
       sideOffset = 4,
       scrollSelectedIntoView = false,
       selectedItemSelector = DEFAULT_SELECTED_ITEM_SELECTOR,
+      // Added by us for docs, but not generally available to our
+      // users, so don't document things based on this prop
+      container,
       ...props
     },
     ref
@@ -102,7 +108,7 @@ const DropdownMenuContent = React.forwardRef<
     );
 
     return (
-      <DropdownMenuPrimitive.Portal>
+      <DropdownMenuPrimitive.Portal container={container}>
         <DropdownMenuPrimitive.Content
           ref={setRefs}
           sideOffset={sideOffset}
