@@ -120,7 +120,7 @@ test.describe('file-tree git-status proof', () => {
         index: { gitStatus: null, label: null },
         button: { gitStatus: null, label: null },
         card: { gitStatus: 'ignored', label: null },
-        worker: { gitStatus: 'copied', label: 'C' },
+        worker: { gitStatus: 'untracked', label: 'U' },
         deleted: { gitStatus: null, label: null },
         srcFolder: {
           contains: 'true',

@@ -37,14 +37,12 @@
 
       // Git Status Color Overrides
       --trees-status-added-override
-      --trees-status-copied-override
       --trees-status-ignored-override
       --trees-status-modified-override
       --trees-status-renamed-override
       --trees-status-untracked-override
       --trees-status-deleted-override
       --trees-git-added-color-override
-      --trees-git-copied-color-override
       --trees-git-ignored-color-override
       --trees-git-modified-color-override
       --trees-git-renamed-color-override
@@ -147,8 +145,6 @@
 
     --trees-added-light: #0dbe4e;
     --trees-added-dark: #5ecc71;
-    --trees-copied-light: #17a5af;
-    --trees-copied-dark: #64d1db;
     --trees-ignored-light: #84848a;
     --trees-ignored-dark: #adadb1;
     --trees-modified-light: #009fff;
@@ -230,13 +226,6 @@
         light-dark(var(--trees-added-light), var(--trees-added-dark))
       )
     );
-    --trees-status-copied: var(
-      --trees-status-copied-override,
-      var(
-        --trees-theme-git-copied-fg,
-        light-dark(var(--trees-copied-light), var(--trees-copied-dark))
-      )
-    );
     --trees-status-ignored: var(
       --trees-status-ignored-override,
       var(
@@ -279,10 +268,6 @@
     --trees-git-added-color: var(
       --trees-git-added-color-override,
       var(--trees-status-added)
-    );
-    --trees-git-copied-color: var(
-      --trees-git-copied-color-override,
-      var(--trees-status-copied)
     );
     --trees-git-ignored-color: var(
       --trees-git-ignored-color-override,
@@ -1008,10 +993,6 @@
 
   [data-item-git-status='added'] {
     --trees-item-git-status-color: var(--trees-git-added-color);
-  }
-
-  [data-item-git-status='copied'] {
-    --trees-item-git-status-color: var(--trees-git-copied-color);
   }
 
   [data-item-git-status='deleted'] {

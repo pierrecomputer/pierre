@@ -122,7 +122,6 @@ describe('file-tree git status', () => {
           { path: 'src/index.ts', status: 'modified' },
           { path: 'src/components/Button.tsx', status: 'added' },
           { path: 'src/components/Card.tsx', status: 'ignored' },
-          { path: 'src/utils/worker.ts', status: 'copied' },
           { path: 'test/index.test.ts', status: 'deleted' },
         ],
         initialExpansion: 'open',
@@ -147,11 +146,6 @@ describe('file-tree git status', () => {
         dom,
         'src/components/Card.tsx'
       );
-      const copiedButton = getItemButton(
-        shadowRoot,
-        dom,
-        'src/utils/worker.ts'
-      );
       const deletedButton = getItemButton(
         shadowRoot,
         dom,
@@ -175,8 +169,6 @@ describe('file-tree git status', () => {
         'ignored'
       );
       expect(getStatusLabel(ignoredButton)).toBeNull();
-      expect(copiedButton.getAttribute('data-item-git-status')).toBe('copied');
-      expect(getStatusLabel(copiedButton)).toBe('C');
       expect(deletedButton.getAttribute('data-item-git-status')).toBe(
         'deleted'
       );

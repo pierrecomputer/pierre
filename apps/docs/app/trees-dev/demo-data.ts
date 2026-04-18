@@ -40,7 +40,6 @@ export const GIT_STATUSES_A: GitStatusEntry[] = [
   { path: 'node_modules/', status: 'ignored' },
   { path: 'src/index.ts', status: 'modified' },
   { path: 'src/components/Button.tsx', status: 'added' },
-  { path: 'src/utils/worker.ts', status: 'copied' },
   { path: '.gitignore', status: 'deleted' },
 ];
 
@@ -49,7 +48,7 @@ export const GIT_STATUSES_B: GitStatusEntry[] = [
   { path: 'node_modules/', status: 'ignored' },
   { path: 'src/lib/utils.ts', status: 'renamed' },
   { path: 'src/utils/worker.ts', status: 'untracked' },
-  { path: 'src/utils/stream.ts', status: 'copied' },
+  { path: 'src/components/Header.tsx', status: 'added' },
 ];
 
 // Lucide icons converted to sprite sheet

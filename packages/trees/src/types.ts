@@ -2,7 +2,6 @@ export type FileList = string[];
 
 export type GitStatus =
   | 'added'
-  | 'copied'
   | 'deleted'
   | 'ignored'
   | 'modified'

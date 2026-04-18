@@ -4,7 +4,6 @@ import type { GitStatus } from '../types';
 // each supported git decoration in both tree renderers.
 export const GIT_STATUS_LABEL: Record<GitStatus, string | null> = {
   added: 'A',
-  copied: 'C',
   deleted: 'D',
   ignored: null,
   modified: 'M',
@@ -14,7 +13,6 @@ export const GIT_STATUS_LABEL: Record<GitStatus, string | null> = {
 
 export const GIT_STATUS_TITLE: Record<GitStatus, string> = {
   added: 'Git status: added',
-  copied: 'Git status: copied',
   deleted: 'Git status: deleted',
   ignored: 'Git status: ignored',
   modified: 'Git status: modified',
