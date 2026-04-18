@@ -27,14 +27,6 @@
     "./ssr": {
       "types": "./dist/ssr/index.d.ts",
       "import": "./dist/ssr/index.js"
-    },
-    "./path-store": {
-      "types": "./dist/path-store/index.d.ts",
-      "import": "./dist/path-store/index.js"
-    },
-    "./path-store/react": {
-      "types": "./dist/path-store/react/index.d.ts",
-      "import": "./dist/path-store/react/index.js"
     }
   },
   "publishConfig": {
@@ -42,14 +34,9 @@
   },
   "scripts": {
     "build": "tsdown --clean",
-    "benchmark": "bun run ./scripts/benchmarkFileListToTree.ts",
-    "benchmark:file-list-to-tree": "bun run ./scripts/benchmarkFileListToTree.ts",
-    "benchmark:core": "bun run ./scripts/benchmarkTreeCorePrimitives.ts",
-    "benchmark:path-store-get-item": "bun run ./scripts/benchmarkPathStoreGetItem.ts",
-    "benchmark:render": "bun run ./scripts/benchmarkVirtualizedFileTreeRender.ts",
-    "benchmark:render:client": "bun run ./scripts/benchmarkVirtualizedFileTreeClientMount.ts",
-    "profile:pathstore": "bun run ./scripts/profileTreesPathStore.ts",
-    "profile:virtualization": "bun run ./scripts/profileTreesDevVirtualization.ts",
+    "benchmark": "bun run benchmark:file-tree-get-item",
+    "benchmark:file-tree-get-item": "bun run ./scripts/benchmarkPathStoreGetItem.ts",
+    "profile:file-tree": "bun run ./scripts/profileTreesPathStore.ts",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "test": "bun test",
     "coverage": "bun test --coverage",

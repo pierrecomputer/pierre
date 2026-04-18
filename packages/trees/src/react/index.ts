@@ -1,4 +1,1 @@
-// Type augmentation for the custom element
-import './jsx';
-
-export * from './FileTree';
+export * from '../path-store/react';
