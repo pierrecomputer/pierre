@@ -31,6 +31,8 @@ const contextMenuPanelStyle = {
 } as CSSProperties;
 const IDE_WINDOW_HEIGHT = TREE_NEW_VIEWPORT_HEIGHTS.contextMenu;
 const IDE_EXPLORER_WIDTH_PX = 300;
+const CONTEXT_MENU_ITEM_CLASS_NAME =
+  'hover:bg-accent hover:text-accent-foreground w-full px-3 py-1.5 text-left text-sm rounded-md';
 
 interface TriggerModeDemo {
   id: string;
@@ -128,20 +130,17 @@ function getUniquePath(model: FileTreeModel, basePath: string): string {
 
 function ContextMenuContents({
   context,
-  item,
   onAddFile,
   onAddFolder,
   onDelete,
   onRename,
 }: {
   context: Pick<ContextMenuOpenContext, 'close' | 'restoreFocus'>;
-  item: ContextMenuItem;
   onAddFile: () => void;
   onAddFolder: () => void;
   onDelete: () => void;
   onRename: () => void;
 }) {
-  const itemType = item.kind === 'directory' ? 'Folder' : 'File';
   const closeAfter = (action: () => void) => {
     action();
     context.close();
@@ -151,16 +150,12 @@ function ContextMenuContents({
     <div
       data-file-tree-context-menu-root="true"
       role="menu"
-      className="bg-popover text-popover-foreground min-w-[230px] overflow-hidden rounded-md border shadow-md"
+      className="bg-popover text-popover-foreground min-w-[180px] overflow-hidden rounded-lg border border-[rgb(0_0_0_/_0.15)] bg-clip-padding p-1 shadow-md"
     >
-      <div className="max-w-[300px] truncate px-2 py-1.5 text-sm font-semibold">
-        {itemType}: {item.path}
-      </div>
-      <div className="bg-border h-px" />
       <button
         type="button"
         role="menuitem"
-        className="hover:bg-accent hover:text-accent-foreground w-full px-2 py-1.5 text-left text-sm"
+        className={CONTEXT_MENU_ITEM_CLASS_NAME}
         onClick={() => {
           closeAfter(onAddFile);
         }}
@@ -170,18 +165,17 @@ function ContextMenuContents({
       <button
         type="button"
         role="menuitem"
-        className="hover:bg-accent hover:text-accent-foreground w-full px-2 py-1.5 text-left text-sm"
+        className={CONTEXT_MENU_ITEM_CLASS_NAME}
         onClick={() => {
           closeAfter(onAddFolder);
         }}
       >
         New folder
       </button>
-      <div className="bg-border h-px" />
       <button
         type="button"
         role="menuitem"
-        className="hover:bg-accent hover:text-accent-foreground w-full px-2 py-1.5 text-left text-sm"
+        className={CONTEXT_MENU_ITEM_CLASS_NAME}
         onClick={() => {
           context.close({ restoreFocus: false });
           onRename();
@@ -189,10 +183,11 @@ function ContextMenuContents({
       >
         Rename
       </button>
+      <div className="mx-1.25 my-1 h-px bg-[rgb(0_0_0_/_0.1)]" />
       <button
         type="button"
         role="menuitem"
-        className="text-destructive hover:bg-accent hover:text-destructive w-full px-2 py-1.5 text-left text-sm"
+        className={`${CONTEXT_MENU_ITEM_CLASS_NAME} text-destructive hover:text-destructive hover:bg-destructive/10`}
         onClick={() => {
           closeAfter(onDelete);
         }}
@@ -215,6 +210,7 @@ function useContextMenuSlotRenderer(modelRef: {
         slotElementRef.current ?? document.createElement('div');
       slotElementRef.current = slotElement;
       slotElement.style.display = 'block';
+      slotElement.style.colorScheme = 'dark';
       menuRootRef.current ??= createRoot(slotElement);
 
       const model = modelRef.current;
@@ -252,7 +248,6 @@ function useContextMenuSlotRenderer(modelRef: {
       menuRootRef.current.render(
         <ContextMenuContents
           context={context}
-          item={item}
           onAddFile={addFile}
           onAddFolder={addFolder}
           onDelete={remove}

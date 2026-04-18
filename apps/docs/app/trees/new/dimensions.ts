@@ -2,7 +2,7 @@ export const TREE_NEW_DEFAULT_VIEWPORT_HEIGHT = 690;
 
 export const TREE_NEW_VIEWPORT_HEIGHTS = {
   a11y: TREE_NEW_DEFAULT_VIEWPORT_HEIGHT,
-  contextMenu: 640,
+  contextMenu: 720,
   customIcons: TREE_NEW_DEFAULT_VIEWPORT_HEIGHT,
   dragDrop: 420,
   flattenFlattened: 540,
