@@ -323,17 +323,37 @@ function getBuiltInGitStatusDecoration(
 
 function getInheritedIgnoredGitStatus(
   ancestorPaths: readonly string[],
-  ignoredDirectoryPaths: ReadonlySet<string> | undefined
+  ignoredDirectoryPaths: ReadonlySet<string> | undefined,
+  ignoredInheritanceCache: Map<string, boolean>
 ): GitStatus | null {
   if (ignoredDirectoryPaths == null || ignoredDirectoryPaths.size === 0) {
     return null;
   }
 
+  const visitedAncestors: string[] = [];
   for (let index = ancestorPaths.length - 1; index >= 0; index -= 1) {
     const ancestorPath = ancestorPaths[index];
+    const cached = ignoredInheritanceCache.get(ancestorPath);
+    if (cached != null) {
+      for (const visitedAncestor of visitedAncestors) {
+        ignoredInheritanceCache.set(visitedAncestor, cached);
+      }
+      return cached ? 'ignored' : null;
+    }
+
     if (ignoredDirectoryPaths.has(ancestorPath)) {
+      ignoredInheritanceCache.set(ancestorPath, true);
+      for (const visitedAncestor of visitedAncestors) {
+        ignoredInheritanceCache.set(visitedAncestor, true);
+      }
       return 'ignored';
     }
+
+    visitedAncestors.push(ancestorPath);
+  }
+
+  for (const visitedAncestor of visitedAncestors) {
+    ignoredInheritanceCache.set(visitedAncestor, false);
   }
 
   return null;
@@ -669,6 +689,7 @@ function renderStyledRow(
   itemHeight: number,
   gitStatusByPath: ReadonlyMap<string, GitStatus> | undefined,
   ignoredGitDirectories: ReadonlySet<string> | undefined,
+  ignoredInheritanceCache: Map<string, boolean>,
   directoriesWithGitChanges: ReadonlySet<string> | undefined,
   contextMenuEnabled: boolean,
   contextMenuRightClickEnabled: boolean,
@@ -701,7 +722,11 @@ function renderStyledRow(
   const ownGitStatus = gitStatusByPath?.get(targetPath) ?? null;
   const effectiveGitStatus =
     ownGitStatus ??
-    getInheritedIgnoredGitStatus(row.ancestorPaths, ignoredGitDirectories);
+    getInheritedIgnoredGitStatus(
+      row.ancestorPaths,
+      ignoredGitDirectories,
+      ignoredInheritanceCache
+    );
   const containsGitChange =
     row.kind === 'directory' &&
     (directoriesWithGitChanges?.has(targetPath) ?? false);
@@ -933,6 +958,7 @@ function renderRangeChildren(
   itemHeight: number,
   gitStatusByPath: ReadonlyMap<string, GitStatus> | undefined,
   ignoredGitDirectories: ReadonlySet<string> | undefined,
+  ignoredInheritanceCache: Map<string, boolean>,
   directoriesWithGitChanges: ReadonlySet<string> | undefined,
   contextMenuEnabled: boolean,
   contextMenuRightClickEnabled: boolean,
@@ -981,6 +1007,7 @@ function renderRangeChildren(
         itemHeight,
         gitStatusByPath,
         ignoredGitDirectories,
+        ignoredInheritanceCache,
         directoriesWithGitChanges,
         contextMenuEnabled,
         contextMenuRightClickEnabled,
@@ -1047,6 +1074,10 @@ export function FileTreeView({
   } | null>(null);
   const touchLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
+  );
+  const ignoredInheritanceCache = useMemo(
+    () => new Map<string, boolean>(),
+    [ignoredGitDirectories]
   );
   const [, setControllerRevision] = useState(0);
   const [activeItemPath, setActiveItemPath] = useState<string | null>(null);
@@ -2559,6 +2590,7 @@ export function FileTreeView({
               itemHeight,
               gitStatusByPath,
               ignoredGitDirectories,
+              ignoredInheritanceCache,
               directoriesWithGitChanges,
               contextMenuEnabled,
               contextMenuRightClickEnabled,
@@ -2596,6 +2628,7 @@ export function FileTreeView({
                   itemHeight,
                   gitStatusByPath,
                   ignoredGitDirectories,
+                  ignoredInheritanceCache,
                   directoriesWithGitChanges,
                   contextMenuEnabled,
                   contextMenuRightClickEnabled,
@@ -2649,6 +2682,7 @@ export function FileTreeView({
                   itemHeight,
                   gitStatusByPath,
                   ignoredGitDirectories,
+                  ignoredInheritanceCache,
                   directoriesWithGitChanges,
                   contextMenuEnabled,
                   contextMenuRightClickEnabled,
