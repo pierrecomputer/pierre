@@ -62,11 +62,11 @@ export function GitStatusDemoClient({
       <header className="space-y-2">
         <h1 className="text-2xl font-bold">Git Status</h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
-          Changed files render A, M, D, U, and R markers, ignored rows
-          keep their muted gitignored styling without a badge, folders with
-          changed descendants keep their shared dot indicator, and the controls
-          below call <code>setGitStatus()</code> on the live tree without
-          recreating it.
+          Changed files render A, M, D, U, and R markers, ignored rows keep
+          their muted gitignored styling without a badge, folders with changed
+          descendants keep their shared dot indicator, and the controls below
+          call <code>setGitStatus()</code> on the live tree without recreating
+          it.
         </p>
       </header>
 

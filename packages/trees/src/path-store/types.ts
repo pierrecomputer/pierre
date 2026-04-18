@@ -178,9 +178,9 @@ export interface PathStoreTreesStickyWindowLayout {
 export interface PathStoreTreesViewProps extends PathStoreTreesRenderOptions {
   composition?: PathStoreTreesCompositionOptions;
   controller: import('./controller').PathStoreTreesController;
-  directoriesWithGitChanges?: ReadonlySet<PathStoreTreesPublicId>;
-  ignoredGitDirectories?: ReadonlySet<PathStoreTreesPublicId>;
   gitStatusByPath?: ReadonlyMap<PathStoreTreesPublicId, GitStatus>;
+  ignoredGitDirectories?: ReadonlySet<PathStoreTreesPublicId>;
+  directoriesWithGitChanges?: ReadonlySet<PathStoreTreesPublicId>;
   icons?: FileTreeIcons;
   instanceId?: string;
   renamingEnabled?: boolean;

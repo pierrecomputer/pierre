@@ -59,6 +59,8 @@ export function resolveFileTreeGitStatusState(
     statusByPath.set(canonicalPath, entry.status);
     if (entry.status === 'ignored' && normalizedPath.isDirectory) {
       ignoredDirectoryPaths.add(canonicalPath);
+    } else if (normalizedPath.isDirectory) {
+      ignoredDirectoryPaths.delete(canonicalPath);
     }
 
     for (const ancestorPath of getAncestorDirectoryPaths(normalizedPath.path)) {

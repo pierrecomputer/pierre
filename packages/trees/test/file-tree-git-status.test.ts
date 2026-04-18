@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 // @ts-expect-error -- no @types/jsdom; only used in tests
 import { JSDOM } from 'jsdom';
 
+import { resolveFileTreeGitStatusState } from '../src/model/gitStatus';
 import type { GitStatusEntry } from '../src/types';
 
 const FILES = [
@@ -108,6 +109,17 @@ function getStatusLabel(button: HTMLButtonElement): string | null {
 }
 
 describe('file-tree git status', () => {
+  test('later directory statuses clear stale ignored inheritance', () => {
+    const state = resolveFileTreeGitStatusState([
+      { path: 'src/', status: 'ignored' },
+      { path: 'src/', status: 'modified' },
+    ]);
+
+    expect(state).not.toBeNull();
+    expect(state?.statusByPath.get('src/')).toBe('modified');
+    expect(state?.ignoredDirectoryPaths.has('src/')).toBe(false);
+  });
+
   test('renders markers for all supported file git statuses and folder change attrs', async () => {
     const { cleanup, dom } = installDom();
     try {
