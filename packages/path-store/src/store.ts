@@ -37,6 +37,7 @@ import {
   recordEvent,
   subscribe,
 } from './events';
+import { getFlattenedChildDirectoryId } from './flatten';
 import {
   PATH_STORE_NODE_FLAG_ROOT,
   PATH_STORE_NODE_KIND_DIRECTORY,
@@ -1010,7 +1011,14 @@ export class PathStore {
       const parentId = currentNode.parentId;
       if (parentId !== this.#state.snapshot.rootId) {
         const parentNode = requireNode(this.#state, parentId);
-        if (!isDirectoryExpanded(this.#state, parentId, parentNode)) {
+        const flattenedChildDirectoryId = getFlattenedChildDirectoryId(
+          this.#state,
+          parentId
+        );
+        if (
+          !isDirectoryExpanded(this.#state, parentId, parentNode) &&
+          flattenedChildDirectoryId !== currentNodeId
+        ) {
           return false;
         }
       }

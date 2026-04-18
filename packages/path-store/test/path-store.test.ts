@@ -528,6 +528,55 @@ describe('PathStore', () => {
     ]);
   });
 
+  test('maximally flattens closed single-child directory chains before any explicit expansion', () => {
+    const paths = ['config/project/app.config.json', 'src/index.ts'];
+    const stores = [
+      new PathStore({
+        flattenEmptyDirectories: true,
+        paths,
+      }),
+      new StaticPathStore({
+        flattenEmptyDirectories: true,
+        paths,
+      }),
+    ];
+
+    for (const store of stores) {
+      expect(getVisiblePaths(store, 0, 9)).toEqual(['config/project/', 'src/']);
+      expect(getVisibleRowsSansIds(store, 0, 0)).toEqual([
+        {
+          depth: 0,
+          flattenedSegments: [
+            {
+              isTerminal: false,
+              name: 'config',
+              path: 'config/',
+            },
+            {
+              isTerminal: true,
+              name: 'project',
+              path: 'config/project/',
+            },
+          ],
+          hasChildren: true,
+          isExpanded: false,
+          isFlattened: true,
+          isLoading: false,
+          kind: 'directory',
+          name: 'project',
+          path: 'config/project/',
+        },
+      ]);
+
+      store.expand('config/project/');
+      expect(getVisiblePaths(store, 0, 9)).toEqual([
+        'config/project/',
+        'config/project/app.config.json',
+        'src/',
+      ]);
+    }
+  });
+
   test('reports projected depth for descendants under flattened rows', () => {
     const store = new PathStore({
       flattenEmptyDirectories: true,
@@ -2301,6 +2350,67 @@ describe('PathStore', () => {
     expect(getVisiblePaths(store, 0, 9)).toEqual(['a/b/c/', 'a/b/c/file.ts']);
   });
 
+  test('marks collapsed flattened-chain splits and rejoins as projection changes', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: true,
+      paths: ['config/project/app.config.json', 'src/index.ts'],
+    });
+    const events = collectWildcardEvents(store);
+
+    store.expand('config/project/');
+    events.length = 0;
+
+    store.add('config/peer.ts');
+    expect(events[0]).toEqual({
+      affectedAncestorIds: expect.any(Array),
+      affectedNodeIds: expect.any(Array),
+      canonicalChanged: true,
+      operation: 'add',
+      path: 'config/peer.ts',
+      projectionChanged: true,
+      visibleCountDelta: -1,
+    });
+    expect(getVisiblePaths(store, 0, 9)).toEqual(['config/', 'src/']);
+
+    store.remove('config/peer.ts');
+    expect(events[1]).toEqual({
+      affectedAncestorIds: expect.any(Array),
+      affectedNodeIds: expect.any(Array),
+      canonicalChanged: true,
+      operation: 'remove',
+      path: 'config/peer.ts',
+      projectionChanged: true,
+      recursive: false,
+      visibleCountDelta: 1,
+    });
+    expect(getVisiblePaths(store, 0, 9)).toEqual([
+      'config/project/',
+      'config/project/app.config.json',
+      'src/',
+    ]);
+  });
+
+  test('marks moves into collapsed flattened chains as projection changes', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: true,
+      paths: ['config/project/app.config.json', 'tmp/peer.ts'],
+    });
+    const events = collectWildcardEvents(store);
+
+    store.expand('config/project/');
+    events.length = 0;
+
+    store.move('tmp/peer.ts', 'config/');
+    expect(events).toEqual([
+      expect.objectContaining({
+        from: 'tmp/peer.ts',
+        operation: 'move',
+        projectionChanged: true,
+        to: 'config/peer.ts',
+      }),
+    ]);
+    expect(getVisiblePaths(store, 0, 9)).toEqual(['config/', 'tmp/']);
+  });
   test('supports skip and replace collision strategies for file moves', () => {
     const store = new PathStore({
       paths: ['a.ts', 'b.ts'],

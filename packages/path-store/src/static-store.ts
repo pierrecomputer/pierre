@@ -377,15 +377,19 @@ function recomputeStaticVisibleCountsRecursive(
     visibleChildCount += recomputeStaticVisibleCountsRecursive(state, childId);
   }
 
+  const flattenedChildDirectoryId = getStaticFlattenedChildDirectoryId(
+    state,
+    nodeId
+  );
   let visibleSubtreeCount: number;
   if ((node.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0) {
     visibleSubtreeCount = visibleChildCount;
+  } else if (flattenedChildDirectoryId != null) {
+    visibleSubtreeCount = visibleChildCount;
   } else if (!isStaticDirectoryExpanded(state, nodeId)) {
     visibleSubtreeCount = 1;
-  } else if (getStaticFlattenedChildDirectoryId(state, nodeId) == null) {
-    visibleSubtreeCount = 1 + visibleChildCount;
   } else {
-    visibleSubtreeCount = visibleChildCount;
+    visibleSubtreeCount = 1 + visibleChildCount;
   }
 
   node.visibleSubtreeCount = visibleSubtreeCount;
@@ -409,7 +413,6 @@ function getStaticFlattenedChildDirectoryId(
   if (
     directoryNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY ||
     (directoryNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0 ||
-    !isStaticDirectoryExpanded(state, directoryNodeId) ||
     directoryNode.childCount !== 1
   ) {
     return null;

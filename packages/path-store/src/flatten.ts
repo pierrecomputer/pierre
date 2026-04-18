@@ -1,9 +1,11 @@
 import type { NodeId } from './internal-types';
 import { PATH_STORE_NODE_FLAG_ROOT } from './internal-types';
 import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
-import { isDirectoryExpanded } from './state';
 import type { PathStoreState } from './state';
 
+// Fully known trees flatten single-child directory chains even before callers
+// explicitly expand the intermediate folders. That keeps rows like
+// `config/project/` visible on first render instead of requiring a priming click.
 export function getFlattenedChildDirectoryId(
   state: PathStoreState,
   directoryNodeId: NodeId
@@ -16,8 +18,7 @@ export function getFlattenedChildDirectoryId(
   if (
     directoryNode == null ||
     directoryNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY ||
-    (directoryNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0 ||
-    !isDirectoryExpanded(state, directoryNodeId, directoryNode)
+    (directoryNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0
   ) {
     return null;
   }

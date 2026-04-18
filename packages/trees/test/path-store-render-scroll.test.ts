@@ -352,6 +352,60 @@ describe('path-store render + scroll', () => {
     controller.destroy();
   });
 
+  test('collapsing a parent directory preserves descendant expansion when the parent reopens', async () => {
+    const { PathStoreTreesController } = await import('../src/path-store');
+
+    const controller = new PathStoreTreesController({
+      flattenEmptyDirectories: false,
+      initialExpandedPaths: ['src/components/deep'],
+      paths: [
+        'README.md',
+        'src/index.ts',
+        'src/components/Other.tsx',
+        'src/components/deep/Button.tsx',
+        'src/components/deep/Card.tsx',
+      ],
+    });
+
+    const componentsItem = controller.getItem('src/components');
+    const deepItem = controller.getItem('src/components/deep');
+
+    if (
+      componentsItem == null ||
+      componentsItem.isDirectory() !== true ||
+      !('collapse' in componentsItem) ||
+      !('expand' in componentsItem)
+    ) {
+      throw new Error('expected src/components directory item');
+    }
+    if (
+      deepItem == null ||
+      deepItem.isDirectory() !== true ||
+      !('isExpanded' in deepItem)
+    ) {
+      throw new Error('expected src/components/deep directory item');
+    }
+
+    expect(deepItem.isExpanded()).toBe(true);
+    expect(controller.getVisibleRows(0, 20).map((row) => row.path)).toContain(
+      'src/components/deep/Button.tsx'
+    );
+
+    componentsItem.collapse();
+    expect(deepItem.isExpanded()).toBe(true);
+    expect(
+      controller.getVisibleRows(0, 20).map((row) => row.path)
+    ).not.toContain('src/components/deep/');
+
+    componentsItem.expand();
+    expect(deepItem.isExpanded()).toBe(true);
+    expect(controller.getVisibleRows(0, 20).map((row) => row.path)).toContain(
+      'src/components/deep/Button.tsx'
+    );
+
+    controller.destroy();
+  });
+
   test('directory row collapses on the first click when initialExpandedPaths uses bare directory paths', async () => {
     const { cleanup, dom } = installDom();
     try {
@@ -913,7 +967,7 @@ describe('path-store render + scroll', () => {
     expect(payload.shadowHtml).toContain('README.md');
   });
 
-  test('preloadPathStoreFileTree sorts unsorted top-level directories before files', async () => {
+  test('preloadPathStoreFileTree sorts unsorted top-level entries before files and keeps root chains flattened', async () => {
     const { preloadPathStoreFileTree } = await import('../src/path-store');
 
     const payload = preloadPathStoreFileTree({
@@ -938,7 +992,13 @@ describe('path-store render + scroll', () => {
         payload.shadowHtml.matchAll(/data-item-path="([^"]+)"/g),
         (match) => match[1] ?? ''
       ).filter((path) => path.length > 0)
-    ).toEqual(['assets/', 'docs/', 'src/', 'package.json', 'README.md']);
+    ).toEqual([
+      'assets/images/social/',
+      'docs/guides/',
+      'src/',
+      'package.json',
+      'README.md',
+    ]);
   });
 
   test('hydration keeps row content aligned with row paths for unsorted raw input', async () => {
