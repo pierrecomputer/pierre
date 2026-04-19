@@ -500,6 +500,7 @@ export class FileTreeController
       dragAndDrop,
       fileTreeSearchMode,
       initialSearchQuery,
+      initialSelectedPaths,
       renaming,
       onSearchChange,
       paths,
@@ -519,6 +520,15 @@ export class FileTreeController
     this.#onSearchChange = onSearchChange;
     this.#searchMode = fileTreeSearchMode ?? 'hide-non-matches';
     this.#store = this.#createStore(paths, preparedInput);
+    const resolvedInitialSelectedPaths =
+      initialSelectedPaths
+        ?.map((path) => this.#resolveSelectionPath(path))
+        .filter((resolved): resolved is string => resolved != null) ?? [];
+    if (resolvedInitialSelectedPaths.length > 0) {
+      this.#selectedPaths = new Set(resolvedInitialSelectedPaths);
+      this.#selectionAnchorPath = resolvedInitialSelectedPaths.at(-1) ?? null;
+      this.#selectionVersion = 1;
+    }
     this.#rebuildVisibleProjection(null, false);
     if (initialSearchQuery != null) {
       this.#setSearchState(initialSearchQuery, false);

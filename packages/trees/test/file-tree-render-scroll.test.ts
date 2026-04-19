@@ -986,6 +986,22 @@ describe('file-tree render + scroll', () => {
     expect(payload.shadowHtml).toContain('README.md');
   });
 
+  test('preloadFileTree includes initial selected row attributes', async () => {
+    const preloadFileTree = await loadPreloadFileTree();
+
+    const payload = preloadFileTree({
+      flattenEmptyDirectories: true,
+      initialExpansion: 'open',
+      initialSelectedPaths: ['README.md'],
+      paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
+      viewportHeight: 120,
+    });
+
+    expect(payload.shadowHtml).toMatch(
+      /aria-selected="true"[^>]*data-item-path="README\.md"[^>]*data-item-selected="true"/
+    );
+  });
+
   test('preloadFileTree sorts unsorted top-level entries before files and keeps root chains flattened', async () => {
     const preloadFileTree = await loadPreloadFileTree();
 

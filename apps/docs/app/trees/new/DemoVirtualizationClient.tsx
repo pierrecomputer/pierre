@@ -43,11 +43,11 @@ export function DemoVirtualizationClient({
     <TreeExampleSection>
       <FeatureHeader
         id="virtualization"
-        title="Virtualized rendering"
+        title="Always virtualized"
         description={
           <>
-            Trees with thousands of items render instantly with built-in
-            virtualization. Only visible rows are mounted. See{' '}
+            Trees with thousands of items render instantly with built-in and
+            automatic virtualization. Only visible rows are mounted. See{' '}
             <Link
               href={`${PRODUCTS.trees.docsPath}#core-types-filetreeoptions`}
               className="inline-link"

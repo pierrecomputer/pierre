@@ -24,6 +24,7 @@ export interface FileTreeControllerOptions extends PathStoreConstructorOptions {
   dragAndDrop?: boolean | FileTreeDragAndDropConfig;
   fileTreeSearchMode?: FileTreeSearchMode;
   initialSearchQuery?: string | null;
+  initialSelectedPaths?: readonly string[];
   onSearchChange?: FileTreeSearchChangeListener;
   paths: readonly string[];
   renaming?: boolean | FileTreeRenamingConfig;

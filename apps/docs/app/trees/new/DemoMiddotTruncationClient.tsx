@@ -330,7 +330,7 @@ export function DemoMiddotTruncationClient({
             className="absolute inset-y-0 right-0 flex w-3 cursor-col-resize touch-none items-center justify-center"
           >
             <span
-              className={`h-12 w-px rounded-full ${
+              className={`h-20 w-[2px] rounded-full ${
                 isDragging ? 'bg-white/80' : 'bg-white/40'
               }`}
             />

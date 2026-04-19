@@ -8,7 +8,6 @@ import {
 } from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
-import { useEffect } from 'react';
 
 import { IconFootnote } from '../../components/IconFootnote';
 import { TreeExampleHeading } from '../../components/TreeExampleHeading';
@@ -79,24 +78,22 @@ function StyledTree({
   className,
   id,
   preloadedData,
+  selectedPath,
   style,
 }: {
   className: string;
   id: string;
   preloadedData: FileTreePreloadedData;
+  selectedPath: string;
   style: CSSProperties;
 }) {
   const { model } = useFileTree({
     flattenEmptyDirectories: true,
     id,
+    initialSelectedPaths: [selectedPath],
     paths: sampleFileList,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.styling,
   });
-
-  useEffect(() => {
-    model.focusPath('package.json');
-    model.getItem('package.json')?.select();
-  }, [model]);
 
   return (
     <FileTree
@@ -117,9 +114,17 @@ interface DemoStylingClientProps {
     light: FileTreePreloadedData;
     synthwave: FileTreePreloadedData;
   };
+  selectedPaths: {
+    dark: string;
+    light: string;
+    synthwave: string;
+  };
 }
 
-export function DemoStylingClient({ preloadedData }: DemoStylingClientProps) {
+export function DemoStylingClient({
+  preloadedData,
+  selectedPaths,
+}: DemoStylingClientProps) {
   const lightThemeStyles = lightTheme();
   const darkThemeStyles = darkTheme();
   const synthwaveThemeStyles = synthwaveTheme();
@@ -157,6 +162,7 @@ export function DemoStylingClient({ preloadedData }: DemoStylingClientProps) {
             className="min-h-[320px] rounded-lg border border-neutral-200 bg-neutral-50 p-2"
             id="trees-styling-demo-light"
             preloadedData={preloadedData.light}
+            selectedPath={selectedPaths.light}
             style={lightThemeStyles}
           />
           <TreeCssViewer
@@ -170,6 +176,7 @@ export function DemoStylingClient({ preloadedData }: DemoStylingClientProps) {
             className="min-h-[320px] rounded-lg border border-neutral-700 bg-neutral-900 p-2"
             id="trees-styling-demo-dark"
             preloadedData={preloadedData.dark}
+            selectedPath={selectedPaths.dark}
             style={darkThemeStyles}
           />
           <TreeCssViewer
@@ -183,6 +190,7 @@ export function DemoStylingClient({ preloadedData }: DemoStylingClientProps) {
             className="min-h-[320px] rounded-lg border border-[#f92aad]/40 bg-[#1e1b2b] p-2 shadow-[inset_0_0_60px_rgba(249,42,173,0.08)]"
             id="trees-styling-demo-synthwave"
             preloadedData={preloadedData.synthwave}
+            selectedPath={selectedPaths.synthwave}
             style={synthwaveThemeStyles}
           />
           <TreeCssViewer
