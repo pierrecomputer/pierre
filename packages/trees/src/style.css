@@ -100,6 +100,18 @@
       --trees-file-icon-color-zig
       --trees-file-icon-color-zip
 
+      // Density
+      //
+      // A unitless scale factor that drives padding, gaps, indentation, and
+      // related spacing. Use --trees-row-height-override to customize row
+      // height separately. Individual layout overrides still take precedence.
+      //
+      //   Compact: 0.8
+      //   Default: 1
+      //   Relaxed: 1.2
+      //
+      --trees-density-override
+
       // Available CSS Layout Overrides
       --trees-gap-override
       --trees-border-radius-override
@@ -163,7 +175,11 @@
         light-dark(oklch(0% 0 0 / 0.2), oklch(100% 0 0 / 0.2))
       )
     );
-    --trees-border-radius: var(--trees-border-radius-override, 6px);
+    --trees-density: var(--trees-density-override, 1);
+    --trees-border-radius: var(
+      --trees-border-radius-override,
+      calc(6px * var(--trees-density))
+    );
 
     --trees-font-family: var(--trees-font-family-override, system-ui);
     --trees-font-size: var(--trees-font-size-override, 13px);
@@ -492,12 +508,27 @@
       var(--trees-icon-orange)
     );
 
-    --trees-level-gap: var(--trees-level-gap-override, 8px);
-    --trees-item-padding-x: var(--trees-item-padding-x-override, 8px);
-    --trees-item-margin-x: var(--trees-item-margin-x-override, 2px);
-    --trees-item-row-gap: var(--trees-item-row-gap-override, 6px);
+    --trees-level-gap: var(
+      --trees-level-gap-override,
+      calc(8px * var(--trees-density))
+    );
+    --trees-item-padding-x: var(
+      --trees-item-padding-x-override,
+      calc(8px * var(--trees-density))
+    );
+    --trees-item-margin-x: var(
+      --trees-item-margin-x-override,
+      calc(2px * var(--trees-density))
+    );
+    --trees-item-row-gap: var(
+      --trees-item-row-gap-override,
+      calc(6px * var(--trees-density))
+    );
     --trees-icon-width: var(--trees-icon-width-override, 16px);
-    --trees-icon-nudge: var(--trees-icon-nudge-override, 1px);
+    --trees-icon-nudge: var(
+      --trees-icon-nudge-override,
+      calc(1px * var(--trees-density))
+    );
     --trees-row-height: var(--trees-row-height-override, 30px);
     --trees-git-lane-width: var(--trees-git-lane-width-override, 12px);
     --trees-action-lane-width: var(
@@ -632,7 +663,7 @@
     -webkit-touch-callout: none;
     touch-action: manipulation;
     display: flex;
-    flex: 0 0 var(--ft-internal-row-height);
+    flex: 0 0 var(--trees-row-height);
     align-items: center;
     height: var(--trees-row-height);
     line-height: var(--trees-row-height);

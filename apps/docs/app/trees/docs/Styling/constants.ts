@@ -16,9 +16,10 @@ file-tree-container,
   border-radius: 12px;
   overflow: hidden;
 
+  --trees-density-override: 0.8;
+  --trees-row-height-override: 24px;
   --trees-font-family-override: 'Berkeley Mono', monospace;
   --trees-font-size-override: 13px;
-  --trees-row-height-override: 28px;
   --trees-item-padding-x-override: 10px;
   --trees-border-radius-override: 10px;
 
@@ -50,14 +51,18 @@ export const STYLING_CODE_INLINE: PreloadFileOptions<undefined> = {
 import type { CSSProperties } from 'react';
 
 <FileTree
-  options={{ initialFiles: ['src/index.ts', 'package.json'] }}
+  options={{
+    initialFiles: ['src/index.ts', 'package.json'],
+    itemHeight: 24,
+  }}
   className="rounded-xl border p-2"
   style={{
     maxHeight: 360,
     width: 320,
+    '--trees-density-override': '0.8',
+    '--trees-row-height-override': '24px',
     '--trees-font-family-override': 'Berkeley Mono, monospace',
     '--trees-font-size-override': '13px',
-    '--trees-row-height-override': '28px',
     '--trees-level-gap-override': '6px',
     '--trees-item-row-gap-override': '4px',
     '--trees-icon-width-override': '14px',
@@ -74,6 +79,7 @@ export const STYLING_CODE_VANILLA: PreloadFileOptions<undefined> = {
 
 const fileTree = new FileTree({
   initialFiles: ['src/index.ts', 'src/lib/utils.ts', 'package.json'],
+  itemHeight: 24,
 });
 
 fileTree.render({
@@ -87,7 +93,8 @@ Object.assign(host.style, {
   maxHeight: '420px',
 });
 
-host.style.setProperty('--trees-row-height-override', '30px');
+host.style.setProperty('--trees-density-override', '0.8');
+host.style.setProperty('--trees-row-height-override', '24px');
 host.style.setProperty('--trees-font-size-override', '13px');
 host.style.setProperty('--trees-selected-bg-override', 'oklch(90% 0.05 255)');
 host.style.setProperty('--trees-git-modified-color-override', '#009fff');`,

@@ -18,6 +18,25 @@ variables from global CSS, a wrapper, or the host element directly.
 <DocsCodeExample {...stylingInline} />
 <DocsCodeExample {...stylingVanilla} />
 
+Use `--trees-density-override` when you want one-knob spacing changes across
+padding, gaps, indentation, border radius, and related layout tokens. Density
+does not change row height on its own. Set `--trees-row-height-override`
+separately when you want shorter or taller rows.
+
+If you customize row height, keep `itemHeight` aligned with the same pixel
+value. Virtualization still computes layout from the numeric `itemHeight`
+option, so `itemHeight` and `--trees-row-height-override` should describe the
+same row height whenever you move away from the default `30px`.
+
+A good preset pattern is to pair the two knobs together:
+
+- compact: `itemHeight: 24`, `--trees-row-height-override: 24px`,
+  `--trees-density-override: 0.8`
+- default: `itemHeight: 30`, `--trees-row-height-override: 30px`,
+  `--trees-density-override: 1`
+- relaxed: `itemHeight: 36`, `--trees-row-height-override: 36px`,
+  `--trees-density-override: 1.2`
+
 ### Unsafe CSS escape hatch
 
 If CSS variables are not enough, pass `unsafeCSS` in `FileTreeOptions` to inject

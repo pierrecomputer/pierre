@@ -8,6 +8,7 @@ import { sampleFileList } from './demo-data';
 import { DemoA11y } from './DemoA11y';
 import { DemoContextMenu } from './DemoContextMenu';
 import { DemoCustomIcons } from './DemoCustomIcons';
+import { DemoDensity } from './DemoDensity';
 import { DemoDragDrop } from './DemoDragDrop';
 import { DemoFlatten } from './DemoFlatten';
 import { DemoGitStatus } from './DemoGitStatus';
@@ -104,6 +105,7 @@ export default function TreesPage() {
         <DemoCustomIcons />
         <DemoTheming />
         <DemoStyling />
+        <DemoDensity />
       </section>
 
       <PierreCompanySection />
