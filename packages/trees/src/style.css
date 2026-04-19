@@ -502,7 +502,14 @@
     --trees-git-lane-width: var(--trees-git-lane-width-override, 12px);
     --trees-action-lane-width: var(
       --trees-action-lane-width-override,
-      calc(var(--trees-icon-width) + (2 * var(--trees-item-padding-x)))
+      calc(var(--trees-icon-width) + 2px)
+    );
+    /* Keep the floating trigger centered over the row's decorative action lane.
+       The row icon sits inside trailing item padding, while the real trigger uses
+       a focus-ring margin of its own. */
+    --trees-context-menu-trigger-inline-offset: calc(
+      var(--trees-item-margin-x) + var(--trees-item-padding-x) -
+        var(--trees-focus-ring-width)
     );
 
     color-scheme: light dark;
@@ -1044,6 +1051,12 @@
     }
   }
 
+  [data-item-section='git'] [data-icon-name='file-tree-icon-dot'] {
+    /* this is a nudge to align the dot with the likely lowercase text. it's slightly
+    generalizable, but other fonts are gonna need other nudges i assume */
+    transform: translateY(calc(0.65ex - 50%));
+  }
+
   [data-item-git-status='modified'] {
     --trees-item-git-status-color: var(--trees-git-modified-color);
   }
@@ -1093,7 +1106,7 @@
   [data-type='context-menu-anchor'] {
     position: absolute;
     top: 0;
-    right: var(--trees-item-margin-x);
+    right: var(--trees-context-menu-trigger-inline-offset);
     z-index: 4;
     display: none;
     align-items: center;

@@ -1164,7 +1164,8 @@ export function FileTreeView({
     composition?.contextMenu?.onOpen != null ||
     composition?.contextMenu?.onClose != null;
   const contextMenuTriggerMode =
-    composition?.contextMenu?.triggerMode ?? 'both';
+    composition?.contextMenu?.triggerMode ??
+    (contextMenuEnabled ? 'right-click' : 'both');
   const contextMenuButtonTriggerEnabled =
     contextMenuTriggerMode === 'both' || contextMenuTriggerMode === 'button';
   const contextMenuButtonVisibility =

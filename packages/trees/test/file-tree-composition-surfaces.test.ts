@@ -128,11 +128,13 @@ describe('file-tree composition surfaces', () => {
       paths: ['README.md', 'src/index.ts'],
       viewportHeight: 120,
     });
-
     expect(payload.shadowHtml).toContain('slot name="header"');
     expect(payload.shadowHtml).toContain('data-type="context-menu-anchor"');
     expect(payload.shadowHtml).toContain('data-type="context-menu-trigger"');
     expect(payload.shadowHtml).toContain('aria-haspopup="menu"');
+    expect(payload.shadowHtml).toContain(
+      'data-file-tree-context-menu-trigger-mode="right-click"'
+    );
     expect(payload.shadowHtml).toContain('data-file-tree-virtualized-scroll');
     expect(payload.shadowHtml).toMatch(
       /data-file-tree-virtualized-scroll[\s\S]*data-type="context-menu-anchor"/
@@ -490,6 +492,7 @@ describe('file-tree composition surfaces', () => {
               menu.textContent = 'Menu';
               return menu as unknown as HTMLElement;
             },
+            triggerMode: 'button',
           },
         },
         flattenEmptyDirectories: true,
@@ -700,6 +703,7 @@ describe('file-tree composition surfaces', () => {
         composition: {
           contextMenu: {
             enabled: true,
+            triggerMode: 'button',
           },
         },
         flattenEmptyDirectories: true,
@@ -1058,12 +1062,23 @@ describe('file-tree composition surfaces', () => {
       await flushDom();
 
       const enabledShadowRoot = enabled.getFileTreeContainer()?.shadowRoot;
+      const enabledTreeRoot = getTreeRoot(enabledShadowRoot, dom);
       const enabledItem = getItemButton(enabledShadowRoot, dom, 'README.md');
       expect(enabledItem.getAttribute('aria-haspopup')).toBe('menu');
       expect(
         enabledShadowRoot?.querySelector('[data-type="context-menu-trigger"]')
       ).not.toBeNull();
-
+      expect(
+        enabledTreeRoot.getAttribute('data-file-tree-context-menu-trigger-mode')
+      ).toBe('right-click');
+      expect(
+        enabledTreeRoot.getAttribute(
+          'data-file-tree-has-context-menu-action-lane'
+        )
+      ).toBeNull();
+      expect(
+        enabledItem.getAttribute('data-item-has-context-menu-action-lane')
+      ).toBeNull();
       disabled.cleanUp();
       enabled.cleanUp();
     } finally {

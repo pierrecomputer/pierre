@@ -2,18 +2,20 @@ import type { FileTreeOptions } from '@pierre/trees';
 import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { readSettingsCookies } from '../_components/readSettingsCookies';
-import { GitStatusDemoClient } from '../_demos/GitStatusDemoClient';
+import { ItemCustomizationDemoClient } from '../_demos/ItemCustomizationDemoClient';
 import { createPresortedPreparedInput } from '../_lib/createPresortedPreparedInput';
 import {
+  getItemCustomizationDecorationPreset,
   getTreesDevGitStatusPreset,
+  ITEM_CUSTOMIZATION_DECORATION_ICONS,
   ITEM_CUSTOMIZATION_DEMO_DEFAULTS,
   ITEM_CUSTOMIZATION_DEMO_WORKLOAD_NAME,
 } from '../_lib/itemCustomizationDemoData';
 import { loadWorkloadDataPayload } from '../_lib/workloadLoader';
 
-const GIT_STATUS_VIEWPORT_HEIGHT = 280;
+const ITEM_CUSTOMIZATION_VIEWPORT_HEIGHT = 360;
 
-export default async function TreesDevGitStatusPage() {
+export default async function TreesDevItemCustomizationPage() {
   const { flattenEmptyDirectories } = await readSettingsCookies();
   const workloadData = await loadWorkloadDataPayload(
     ITEM_CUSTOMIZATION_DEMO_WORKLOAD_NAME,
@@ -22,24 +24,43 @@ export default async function TreesDevGitStatusPage() {
   const defaultGitStatusPreset = getTreesDevGitStatusPreset(
     ITEM_CUSTOMIZATION_DEMO_DEFAULTS.gitStatusPresetId
   );
-  const sharedOptions: Omit<FileTreeOptions, 'gitStatus' | 'id'> = {
+  const defaultDecorationPreset = getItemCustomizationDecorationPreset(
+    ITEM_CUSTOMIZATION_DEMO_DEFAULTS.decorationPresetId
+  );
+  const sharedOptions: Omit<
+    FileTreeOptions,
+    | 'composition'
+    | 'gitStatus'
+    | 'id'
+    | 'onSelectionChange'
+    | 'renderRowDecoration'
+  > = {
     flattenEmptyDirectories,
+    icons: ITEM_CUSTOMIZATION_DECORATION_ICONS,
     initialExpandedPaths: workloadData.initialExpandedPaths,
     paths: workloadData.paths,
     preparedInput: workloadData.pathsArePresorted
       ? createPresortedPreparedInput(workloadData.paths)
       : undefined,
-    viewportHeight: GIT_STATUS_VIEWPORT_HEIGHT,
+    viewportHeight: ITEM_CUSTOMIZATION_VIEWPORT_HEIGHT,
   };
 
   const payload = preloadFileTree({
     ...sharedOptions,
+    composition: {
+      contextMenu: {
+        buttonVisibility: ITEM_CUSTOMIZATION_DEMO_DEFAULTS.buttonVisibility,
+        enabled: ITEM_CUSTOMIZATION_DEMO_DEFAULTS.contextMenuEnabled,
+        triggerMode: ITEM_CUSTOMIZATION_DEMO_DEFAULTS.triggerMode,
+      },
+    },
     gitStatus: defaultGitStatusPreset.entries,
-    id: 'trees-git-status',
+    id: 'trees-dev-item-customization',
+    renderRowDecoration: defaultDecorationPreset.renderer ?? undefined,
   });
 
   return (
-    <GitStatusDemoClient
+    <ItemCustomizationDemoClient
       containerHtml={payload.html}
       fileCountLabel={workloadData.selectedWorkload.fileCountLabel}
       sharedOptions={sharedOptions}

@@ -5,19 +5,29 @@ import { useEffect, useMemo, useRef } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
 import { useGitStatusControls } from '../_components/useGitStatusControls';
+import {
+  ITEM_CUSTOMIZATION_DEMO_DEFAULTS,
+  TREES_DEV_GIT_STATUS_PRESETS,
+} from '../_lib/itemCustomizationDemoData';
 
 interface GitStatusDemoClientProps {
   containerHtml: string;
+  fileCountLabel: string;
   sharedOptions: Omit<FileTreeOptions, 'gitStatus' | 'id'>;
 }
 
 export function GitStatusDemoClient({
   containerHtml,
+  fileCountLabel,
   sharedOptions,
 }: GitStatusDemoClientProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<FileTree | null>(null);
-  const { gitStatus, controls } = useGitStatusControls('canonical');
+  const { activePreset, gitStatus, controls } = useGitStatusControls({
+    defaultPresetId: ITEM_CUSTOMIZATION_DEMO_DEFAULTS.gitStatusPresetId,
+    idSuffix: 'canonical',
+    presets: TREES_DEV_GIT_STATUS_PRESETS,
+  });
   const initialGitStatusRef = useRef(gitStatus);
   const options = useMemo<FileTreeOptions>(
     () => ({
@@ -62,18 +72,28 @@ export function GitStatusDemoClient({
       <header className="space-y-2">
         <h1 className="text-2xl font-bold">Git Status</h1>
         <p className="text-muted-foreground max-w-3xl text-sm leading-6">
-          Changed files render A, M, D, U, and R markers, ignored rows keep
-          their muted gitignored styling without a badge, folders with changed
-          descendants keep their shared dot indicator, and the controls below
-          call <code>setGitStatus()</code> on the live tree without recreating
-          it.
+          This route now shares the same demo-small {fileCountLabel} and preset
+          source as Item Customization. The controls below swap between direct
+          file badges, ignored-directory inheritance with overrides, and
+          descendant-dot scenarios while <code>setGitStatus()</code> updates the
+          hydrated tree in place.
         </p>
       </header>
 
       <ExampleCard
         title="Git-status tree"
-        description="Toggle git status off or swap between the two demo sets. The hydrated tree keeps the same instance while the status slot and semantic row attrs update in place."
+        description="Toggle git status off or switch between the shared preset sets. The canonical tree instance stays mounted while the git lane and semantic row attributes update live."
         controls={controls}
+        footer={
+          <div className="text-muted-foreground mt-3 space-y-1 text-xs leading-5">
+            <p>
+              Active preset: <strong>{activePreset.label}</strong>
+            </p>
+            <p data-test-git-status-active-description="true">
+              {activePreset.description}
+            </p>
+          </div>
+        }
       >
         <div
           ref={mountRef}

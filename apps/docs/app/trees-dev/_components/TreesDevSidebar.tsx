@@ -13,6 +13,7 @@ const DEMO_PAGES = [
   { slug: 'react', label: 'React' },
   { slug: 'search', label: 'Search' },
   { slug: 'git-status', label: 'Git Status' },
+  { slug: 'item-customization', label: 'Item Customization' },
   { slug: 'drag-and-drop', label: 'Drag and Drop' },
 ] as const;
 

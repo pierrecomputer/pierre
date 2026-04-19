@@ -302,15 +302,27 @@ test.describe('trees-dev real page context menus', () => {
     }
   });
 
-  test('react client demo trigger-opened menu has a visible surface', async ({
+  test('react client demo defaults to right-click without a visible trigger button', async ({
     page,
   }) => {
     await page.goto('/trees-dev/react');
 
     const tree = page.locator('file-tree-container').nth(1);
-    await openMenuFromTrigger(page, tree, 'src/index.ts');
-
-    await expectReactMenuVisibleInViewport(page);
+    await expect(
+      tree.locator(
+        'button[data-type="context-menu-trigger"][data-visible="true"]'
+      )
+    ).toHaveCount(0);
+    await expect
+      .poll(() =>
+        tree.evaluate((host) => {
+          const treeRoot = host.shadowRoot?.querySelector('[role="tree"]');
+          return treeRoot?.getAttribute(
+            'data-file-tree-context-menu-trigger-mode'
+          );
+        })
+      )
+      .toBe('right-click');
   });
 
   test('react client demo right-click menu has a visible surface', async ({
