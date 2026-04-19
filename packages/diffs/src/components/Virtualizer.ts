@@ -128,7 +128,6 @@ export class Virtualizer {
         scrollTop: this.getScrollTop(),
         height: this.getHeight(),
         scrollHeight: this.getScrollHeight(),
-        fitPerfectly: false,
         overscrollSize: this.config.overscrollSize,
       });
     }
@@ -333,7 +332,6 @@ export class Virtualizer {
         scrollTop: this.getScrollTop(),
         height: this.getHeight(),
         scrollHeight: this.getScrollHeight(),
-        fitPerfectly: false,
         overscrollSize: this.config.overscrollSize,
       });
       if (

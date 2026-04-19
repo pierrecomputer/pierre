@@ -194,8 +194,8 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
             <IconParagraph className="size-4" />
           )}
         </Button>
-        <Button type="submit" disabled={fetching}>
-          {fetching ? 'Fetching…' : 'Render Diff'}
+        <Button type="submit" disabled={fetching} className="w-26">
+          {fetching ? 'Fetching…' : 'Fetch Diff'}
         </Button>
       </form>
     </div>

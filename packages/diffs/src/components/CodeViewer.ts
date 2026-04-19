@@ -12,6 +12,7 @@ import type {
   CodeViewerDiffItem,
   CodeViewerFileItem,
   CodeViewerItem,
+  CodeViewerItemScrollTarget,
   CodeViewerItemVersion,
   CodeViewerLineScrollTarget,
   CodeViewerMetrics,
@@ -345,7 +346,9 @@ export class CodeViewer<LAnnotation = undefined> {
   private renderState = {
     firstIndex: -1,
     lastIndex: -1,
-    height: 0,
+    stickyHeight: 0,
+    stickyTop: -1,
+    stickyBottom: -1,
   };
 
   private root: HTMLElement | undefined;
@@ -428,11 +431,7 @@ export class CodeViewer<LAnnotation = undefined> {
     this.lastRenderedScrollY = -1;
     this.scrollDirty = true;
     this.heightDirty = true;
-    this.renderState = {
-      firstIndex: -1,
-      lastIndex: -1,
-      height: 0,
-    };
+    this.resetRenderState();
     // NOTE(amadeus): Container managed CodeViewer controls when flushing
     // occurs. This is mostly to make imperative vanilla js api easier to work
     // with
@@ -986,9 +985,7 @@ export class CodeViewer<LAnnotation = undefined> {
     this.instanceToItem = nextInstanceToItem;
 
     if (this.renderState.firstIndex >= nextItems.length) {
-      this.renderState.firstIndex = -1;
-      this.renderState.lastIndex = -1;
-      this.renderState.height = 0;
+      this.resetRenderState();
     } else if (this.renderState.lastIndex >= nextItems.length) {
       this.renderState.lastIndex = nextItems.length - 1;
     }
@@ -1033,6 +1030,15 @@ export class CodeViewer<LAnnotation = undefined> {
       throw new Error(`CodeViewer.scrollTo: unknown item id "${target.id}"`);
     }
 
+    if (target.type === 'item') {
+      return this.resolveAlignedScrollTop(
+        item.top,
+        item.height,
+        target.align,
+        target.offset
+      );
+    }
+
     const linePosition = this.getLineScrollPosition(item, target);
     if (linePosition == null) {
       throw new Error(
@@ -1040,26 +1046,40 @@ export class CodeViewer<LAnnotation = undefined> {
       );
     }
 
-    const absoluteTop = item.top + linePosition.top;
-    const viewportHeight = this.getHeight();
-    const offset = target.offset ?? 0;
+    return this.resolveAlignedScrollTop(
+      item.top + linePosition.top,
+      linePosition.height,
+      target.align,
+      target.offset
+    );
+  }
 
-    if (target.align === 'center') {
-      return absoluteTop - (viewportHeight - linePosition.height) / 2 + offset;
+  private resolveAlignedScrollTop(
+    absoluteTop: number,
+    targetHeight: number,
+    align: CodeViewerItemScrollTarget['align'],
+    offset = 0
+  ): number {
+    absoluteTop += this.viewerMetrics.paddingTop;
+    const viewportHeight = this.getHeight();
+
+    // FIXME(amadeus): If element is taller than viewport, we should anchor it
+    // to top
+    if (align === 'center') {
+      return absoluteTop - (viewportHeight - targetHeight) / 2 + offset;
     }
-    if (target.align === 'end') {
-      return absoluteTop - (viewportHeight - linePosition.height) + offset;
+    if (align === 'end') {
+      return absoluteTop - (viewportHeight - targetHeight) + offset;
     }
-    if (target.align === 'nearest') {
+    if (align === 'nearest') {
       const currentTop = this.getScrollTop();
       const currentBottom = currentTop + viewportHeight;
       const startTop = absoluteTop - offset;
-      const endTop =
-        absoluteTop - (viewportHeight - linePosition.height) + offset;
+      const endTop = absoluteTop - (viewportHeight - targetHeight) + offset;
       if (startTop < currentTop) {
         return startTop;
       }
-      if (absoluteTop + linePosition.height + offset > currentBottom) {
+      if (absoluteTop + targetHeight + offset > currentBottom) {
         return endTop;
       }
       return currentTop;
@@ -1091,10 +1111,13 @@ export class CodeViewer<LAnnotation = undefined> {
 
     const scrollTop = this.getScrollTop();
     const scrollHeight = this.getScrollHeight();
-    const fitPerfectly =
+    let fitPerfectly =
       this.lastRenderedScrollY === -1 ||
       Math.abs(scrollTop - this.lastRenderedScrollY) >
         height + this.config.overscrollSize * 2;
+    // FIXME(amadeus): This currently breaks scrollTo, so we need to resolve
+    // that first before attempting to re-enable it
+    fitPerfectly = false;
     this.windowSpecs = createWindowFromScrollPosition({
       scrollTop,
       height,
@@ -1240,10 +1263,6 @@ export class CodeViewer<LAnnotation = undefined> {
 
   private updateStickyPositioning(): void {
     const { firstIndex, lastIndex } = this.renderState;
-    if (firstIndex === -1 || lastIndex === -1) {
-      return;
-    }
-
     const firstStickySpecs =
       this.items[firstIndex]?.instance.getAdvancedStickySpecs();
     const lastStickySpecs =
@@ -1257,7 +1276,18 @@ export class CodeViewer<LAnnotation = undefined> {
     const stickyBottom = lastStickySpecs.topOffset + lastStickySpecs.height;
     const stickyContainerHeight = stickyBottom - stickyTop;
 
-    this.renderState.height = stickyContainerHeight;
+    if (
+      stickyContainerHeight === this.renderState.stickyHeight &&
+      stickyTop === this.renderState.stickyTop &&
+      stickyBottom === this.renderState.stickyBottom
+    ) {
+      return;
+    }
+
+    this.renderState.stickyHeight = stickyContainerHeight;
+    this.renderState.stickyTop = stickyTop;
+    this.renderState.stickyBottom = stickyBottom;
+
     this.stickyOffset.style.height = `${stickyTop}px`;
     // NOTE(amadeus): Wee polish lad -- when dragging the scrollbar up or
     // down quickly, this prevents the laggy scroll view from lining up with
@@ -1266,7 +1296,7 @@ export class CodeViewer<LAnnotation = undefined> {
     const stickyJitter =
       -Math.max(stickyContainerHeight + randomOffset, 0) + height;
     this.stickyContainer.style.top = `${stickyJitter}px`;
-    this.stickyContainer.style.bottom = `${stickyJitter}px`;
+    this.stickyContainer.style.bottom = `${stickyJitter + this.metrics.diffHeaderHeight}px`;
   }
 
   private handleScroll = (): void => {
@@ -1284,7 +1314,7 @@ export class CodeViewer<LAnnotation = undefined> {
       // probably ignore) or if an annotation or line wrap triggers a resize
       if (entry.target === this.stickyContainer) {
         const blockSize = entry.borderBoxSize[0].blockSize;
-        if (blockSize !== this.renderState.height) {
+        if (blockSize !== this.renderState.stickyHeight) {
           // NOTE(amadeus): I don't think this anchoring actually
           // works or is useful?
           const anchor = this.getScrollAnchor();
@@ -1395,7 +1425,9 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private scrollFix(anchor: ScrollAnchor | undefined): void {
-    if (anchor == null) {
+    // We should not attempt to scroll fix if the element is gonzo or there was
+    // no anchor...
+    if (anchor == null || !anchor.fileElement.isConnected) {
       return;
     }
     const scrollContainer = this.getContainerElement();
@@ -1579,6 +1611,14 @@ export class CodeViewer<LAnnotation = undefined> {
       this.scrollDirty = true;
     }
     this.scrollHeight = runningTop;
+  }
+
+  private resetRenderState() {
+    this.renderState.firstIndex = -1;
+    this.renderState.lastIndex = -1;
+    this.renderState.stickyHeight = 0;
+    this.renderState.stickyTop = -1;
+    this.renderState.stickyBottom = -1;
   }
 }
 

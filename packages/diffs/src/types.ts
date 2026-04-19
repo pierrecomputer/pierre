@@ -499,9 +499,18 @@ export interface CodeViewerLineScrollTarget {
   behavior?: ScrollBehavior;
 }
 
+export interface CodeViewerItemScrollTarget {
+  type: 'item';
+  id: string;
+  align?: 'start' | 'center' | 'end' | 'nearest';
+  offset?: number;
+  behavior?: ScrollBehavior;
+}
+
 export type CodeViewerScrollTarget =
   | CodeViewerPositionScrollTarget
-  | CodeViewerLineScrollTarget;
+  | CodeViewerLineScrollTarget
+  | CodeViewerItemScrollTarget;
 
 export type MergeConflictResolution = 'current' | 'incoming' | 'both';
 

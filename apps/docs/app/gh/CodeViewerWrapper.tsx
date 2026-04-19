@@ -8,7 +8,11 @@ import {
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import { CodeViewer, useStableCallback } from '@pierre/diffs/react';
+import {
+  CodeViewer,
+  type CodeViewerHandle,
+  useStableCallback,
+} from '@pierre/diffs/react';
 import {
   type Dispatch,
   memo,
@@ -57,6 +61,7 @@ interface CodeViewerWrapperProps {
   diffStyle: 'split' | 'unified';
   overflow: 'wrap' | 'scroll';
   scrollRef: RefObject<HTMLDivElement | null>;
+  viewerRef: RefObject<CodeViewerHandle<CommentMetadata> | null>;
   items: CodeViewerItem<CommentMetadata>[];
   setItems: Dispatch<SetStateAction<CodeViewerItem<CommentMetadata>[]>>;
 }
@@ -66,6 +71,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
   diffStyle,
   overflow,
   scrollRef,
+  viewerRef,
   items,
   setItems,
 }: CodeViewerWrapperProps) {
@@ -274,6 +280,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
   );
   return (
     <CodeViewer<CommentMetadata>
+      ref={viewerRef}
       containerRef={scrollRef}
       items={items}
       className={cn(

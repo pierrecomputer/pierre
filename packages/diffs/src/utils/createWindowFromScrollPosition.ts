@@ -5,7 +5,7 @@ interface WindowFromScrollPositionProps {
   height: number;
   scrollHeight: number;
   containerOffset?: number;
-  fitPerfectly: boolean;
+  fitPerfectly?: boolean;
   overscrollSize: number;
 }
 
@@ -14,7 +14,7 @@ export function createWindowFromScrollPosition({
   scrollHeight,
   height,
   containerOffset = 0,
-  fitPerfectly,
+  fitPerfectly = false,
   overscrollSize,
 }: WindowFromScrollPositionProps): VirtualWindowSpecs {
   const windowHeight = height + overscrollSize * 2;

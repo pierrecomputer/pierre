@@ -1,7 +1,8 @@
 'use client';
 
 import { type CodeViewerItem } from '@pierre/diffs';
-import { useRef, useState } from 'react';
+import { type CodeViewerHandle } from '@pierre/diffs/react';
+import { useCallback, useRef, useState } from 'react';
 
 import { CodeViewerFileTree } from './CodeViewerFileTree';
 import { CodeViewerHeader } from './CodeViewerHeader';
@@ -15,10 +16,21 @@ export function GHViewer() {
   const [items, setItems] = useState<CodeViewerItem<CommentMetadata>[]>([]);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<CodeViewerHandle<CommentMetadata> | null>(null);
+  const handleSelectTreeItem = useCallback((itemId: string) => {
+    viewerRef.current?.scrollTo({
+      type: 'item',
+      id: itemId,
+      // TODO(amadeus): Test 'nearest' algo
+      align: 'start',
+      offset: 20,
+    });
+  }, []);
+
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] [grid-template-areas:'header_header''tree_viewer']">
+    <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] contain-strict [grid-template-areas:'header_header''tree_viewer']">
       <CodeViewerHeader
-        className="[grid-area:header]"
+        className="contain-layout contain-paint [grid-area:header]"
         diffStyle={diffStyle}
         overflow={overflow}
         setItems={setItems}
@@ -26,13 +38,18 @@ export function GHViewer() {
         setDiffStyle={setDiffStyle}
         setKey={setKey}
       />
-      <CodeViewerFileTree className="[grid-area:tree]" />
+      <CodeViewerFileTree
+        className="contain-strict [grid-area:tree]"
+        items={items}
+        onSelectItem={handleSelectTreeItem}
+      />
       <CodeViewerWrapper
-        className="[grid-area:viewer]"
+        className="contain-strict [grid-area:viewer]"
         key={key}
         diffStyle={diffStyle}
         overflow={overflow}
         scrollRef={scrollRef}
+        viewerRef={viewerRef}
         items={items}
         setItems={setItems}
       />
