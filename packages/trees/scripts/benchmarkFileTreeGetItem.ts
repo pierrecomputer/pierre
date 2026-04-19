@@ -1,14 +1,13 @@
-import { PathStore } from '@pierre/path-store';
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 
+import { preparePresortedFileTreeInput } from '../src/index';
 import { FileTreeController } from '../src/model/FileTreeController';
 
 const workload = getVirtualizationWorkload('linux-5x');
-const preparedInput = PathStore.preparePresortedInput(workload.files);
+const preparedInput = preparePresortedFileTreeInput(workload.files);
 const controller = new FileTreeController({
   flattenEmptyDirectories: true,
   initialExpandedPaths: workload.expandedFolders,
-  paths: workload.files,
   preparedInput,
 });
 

@@ -3,9 +3,12 @@
 ## Purpose
 
 - Teach the server-preload-first hydration flow.
-- Present React and vanilla side by side as two client-consumption paths over
-  the same server-prepared handoff object.
+- Present React and vanilla side by side as two client hydration paths over the
+  same server-preload step.
 - Treat the SSR payload as opaque throughout the guide.
+- Distinguish the client boundary clearly: React receives the payload as
+  `preloadedData`, while vanilla hydrates the server-rendered DOM with a
+  `FileTree` instance.
 
 ## Audience and entry point
 
@@ -18,8 +21,9 @@
 - Lead with `preloadFileTree(...)` from `@pierre/trees/ssr`.
 - Explain the story in three steps:
   1. the server prepares and preloads the tree once
-  2. the client receives one SSR handoff object
-  3. the client hydrates the existing tree instead of rebuilding a parallel
+  2. React receives one opaque SSR handoff object, while vanilla receives the
+     server-rendered tree already in the page
+  3. the client hydrates that existing output instead of rebuilding a parallel
      surface
 - Keep the framing high level: this guide teaches the handoff flow, not the
   payload’s internal field layout.
@@ -55,10 +59,12 @@
   2. the server emits the rendered tree container into the page
   3. the client constructs `new FileTree(...)` with matching options
   4. the client finds the existing container and calls
-     `hydrate({ fileTreeContainer })`
+     `fileTree.hydrate({ fileTreeContainer })`
 - Keep the vanilla framing class-first: `new FileTree(...)` creates the model,
-  and `hydrate(...)` attaches that model to the server-rendered tree already on
-  the page.
+  and the `FileTree` instance method attaches that model to the server-rendered
+  tree already on the page.
+- Do not imply that vanilla consumes the React-style SSR payload object on the
+  client; vanilla reuses the rendered DOM that the server already emitted.
 - If the expected server-rendered container is missing, note the practical
   fallback: render normally instead of hydrating.
 

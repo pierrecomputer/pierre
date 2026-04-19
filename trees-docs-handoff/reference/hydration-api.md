@@ -60,7 +60,9 @@ Does not own:
 - The payload is a handoff object, not a field-by-field integration surface.
 - Docs may name the runtime touchpoints that consume it:
   - React passes it as `preloadedData`.
-  - Vanilla hydrates existing server output with `hydrate(...)`.
+  - Vanilla calls the `FileTree` instance method
+    `fileTree.hydrate({ fileTreeContainer })` against server-rendered markup
+    already in the page.
 - Do not center `html`, `shadowHtml`, or `id` choreography as the docs story.
 
 ## Handoff rules
@@ -99,9 +101,10 @@ Does not own:
 ## Vanilla handoff
 
 - Emit the server-rendered tree into the page first.
-- Create `new FileTree(options)` on the client with matching tree-defining
-  options.
-- Call `hydrate({ fileTreeContainer })` against that existing host.
+- Create `const fileTree = new FileTree(options)` on the client with matching
+  tree-defining options.
+- Call the instance method `fileTree.hydrate({ fileTreeContainer })` against
+  that existing host.
 - Leave constructor, render, and runtime lifecycle detail to
   [Vanilla API](./vanilla-api.md).
 

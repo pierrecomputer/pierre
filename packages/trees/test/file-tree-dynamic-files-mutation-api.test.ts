@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
+import { prepareFileTreeInput } from '../src/index';
 function installDom() {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
     url: 'http://localhost',
@@ -85,20 +86,11 @@ function getItemButton(
 }
 
 async function loadFileTreeController(): Promise<
-  typeof import('../src/index').FileTreeController
+  typeof import('../src/model/FileTreeController').FileTreeController
 > {
-  const module = await import('../src/model/FileTreeController');
-  const controller = Object.values(module).find(
-    (value): value is typeof import('../src/index').FileTreeController =>
-      typeof value === 'function' &&
-      'prototype' in value &&
-      'getVisibleRows' in value.prototype
-  );
-  if (controller == null) {
-    throw new Error('Expected FileTreeController export');
-  }
-
-  return controller;
+  const { FileTreeController } =
+    await import('../src/model/FileTreeController');
+  return FileTreeController;
 }
 
 async function loadFileTree(): Promise<typeof import('../src/index').FileTree> {
@@ -118,7 +110,6 @@ async function loadFileTree(): Promise<typeof import('../src/index').FileTree> {
 
 describe('file-tree dynamic files / mutation API', () => {
   test('controller emits add, move, batch, and reset mutation events', async () => {
-    const { PathStore } = await import('@pierre/path-store');
     const FileTreeController = await loadFileTreeController();
 
     const controller = new FileTreeController({
@@ -141,7 +132,7 @@ describe('file-tree dynamic files / mutation API', () => {
       { path: 'src/lib/theme.ts', type: 'add' },
     ]);
     controller.resetPaths(['README.md'], {
-      preparedInput: PathStore.prepareInput(['README.md']),
+      preparedInput: prepareFileTreeInput(['README.md']),
     });
 
     expect(events.map((event) => event.operation)).toEqual([
@@ -163,6 +154,57 @@ describe('file-tree dynamic files / mutation API', () => {
     });
 
     unsubscribe();
+    controller.destroy();
+  });
+
+  test('file-tree renders from preparedInput without duplicate raw paths', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialExpansion: 'open',
+        preparedInput: prepareFileTreeInput(['README.md', 'src/index.ts']),
+        viewportHeight: 140,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      expect(
+        getItemButton(
+          fileTree.getFileTreeContainer()?.shadowRoot,
+          dom,
+          'README.md'
+        )
+      ).not.toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('resetPaths rejects mismatched preparedInput', async () => {
+    const FileTreeController = await loadFileTreeController();
+
+    const controller = new FileTreeController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/index.ts'],
+    });
+
+    expect(() =>
+      controller.resetPaths(['README.md'], {
+        preparedInput: prepareFileTreeInput(['src/index.ts']),
+      })
+    ).toThrow(
+      'FileTree resetPaths received paths and preparedInput for different path lists'
+    );
+
     controller.destroy();
   });
 
@@ -364,7 +406,6 @@ describe('file-tree dynamic files / mutation API', () => {
   });
 
   test('file-tree delegates the shared mutation handle and rerenders after resetPaths', async () => {
-    const { PathStore } = await import('@pierre/path-store');
     const { cleanup, dom } = installDom();
     try {
       const FileTree = await loadFileTree();
@@ -394,7 +435,7 @@ describe('file-tree dynamic files / mutation API', () => {
       ).not.toBeNull();
 
       fileTree.resetPaths(['README.md'], {
-        preparedInput: PathStore.prepareInput(['README.md']),
+        preparedInput: prepareFileTreeInput(['README.md']),
       });
       await flushDom();
 

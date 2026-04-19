@@ -1,6 +1,6 @@
 import { FILE_TREE_STYLE_ATTRIBUTE, FILE_TREE_TAG_NAME } from '../constants';
-import styles from '../style.css';
-
+import rawStyles from '../style.css';
+import { wrapCoreCSS } from '../utils/cssWrappers';
 let sheet: CSSStyleSheet | undefined;
 
 export function ensureFileTreeStyles(shadowRoot: ShadowRoot): void {
@@ -14,7 +14,7 @@ export function ensureFileTreeStyles(shadowRoot: ShadowRoot): void {
   if (canAdopt) {
     if (sheet == null) {
       sheet = new CSSStyleSheet();
-      sheet.replaceSync(styles);
+      sheet.replaceSync(wrapCoreCSS(rawStyles));
     }
     let adopted = false;
     try {
@@ -38,7 +38,7 @@ export function ensureFileTreeStyles(shadowRoot: ShadowRoot): void {
   if (shadowRoot.querySelector(`style[${FILE_TREE_STYLE_ATTRIBUTE}]`) == null) {
     const styleEl = document.createElement('style');
     styleEl.setAttribute(FILE_TREE_STYLE_ATTRIBUTE, '');
-    styleEl.textContent = styles;
+    styleEl.textContent = wrapCoreCSS(rawStyles);
     shadowRoot.prepend(styleEl);
   }
 }

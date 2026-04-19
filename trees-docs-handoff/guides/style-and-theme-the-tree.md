@@ -5,12 +5,7 @@
 - Teach the recommended appearance path without turning the guide into a
   selector catalog.
 - Lead with host styling, CSS variables, and `themeToTreeStyles(...)`.
-- Keep `unsafeCss` explicit, narrow, and secondary.
-
-## Publishing dependency
-
-- `PD-2 (partial)`: only the `unsafeCss` subsection depends on the pending
-  public `unsafeCss` surface in `@pierre/trees`.
+- Keep `unsafeCSS` explicit, narrow, and secondary.
 
 ## Reader outcome
 
@@ -25,7 +20,7 @@
 - Use `--trees-*` CSS variables for most tree appearance changes.
 - Use `themeToTreeStyles(...)` when the tree should match an existing editor
   palette.
-- Use `unsafeCss` only when the supported host and variable surfaces cannot
+- Use `unsafeCSS` only when the supported host and variable surfaces cannot
   express the needed result.
 
 ## Outline
@@ -39,7 +34,8 @@
   - how the tree sits in a sidebar, inspector, or full-height workspace pane
 - Keep the runtime notes brief:
   - React: pass `className` and `style` to `<FileTree model={...} />`
-  - Vanilla: style the container you pass to `render(...)` or `hydrate(...)`
+  - Vanilla: style the mounted host element, using `getFileTreeContainer()` as
+    the runtime touchpoint after `render(...)` or `hydrate(...)`.
 
 ### Use CSS variables for most visual changes
 
@@ -75,10 +71,12 @@
   - use host styles for layout and outer framing
   - use CSS variables for product-specific appearance changes
   - use `themeToTreeStyles(...)` when the tree should inherit an editor theme
+  - in vanilla, reach the mounted host with `getFileTreeContainer()` when
+    runtime styling needs the actual element
   - layer explicit overrides on top when the imported theme is close but not
     final
 
-### `unsafeCss` is the escape hatch
+### `unsafeCSS` is the escape hatch
 
 - Mark this section as advanced and optional.
 - Explain when it is justified:
@@ -100,7 +98,7 @@
 - Sidebar panel with host border/background plus two CSS variable overrides.
 - Full-height workspace tree using `themeToTreeStyles(...)` and one explicit
   selection-color override.
-- Narrow `unsafeCss` example that changes one hard-to-reach state without
+- Narrow `unsafeCSS` example that changes one hard-to-reach state without
   replacing the general styling system.
 
 ## Cross-links

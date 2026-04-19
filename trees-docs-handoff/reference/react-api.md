@@ -94,7 +94,7 @@ Does not own:
 ### Boundaries
 
 - hydrate rules stay in [Hydration API](./hydration-api.md)
-- host styling, CSS variables, theme helpers, and `unsafeCss` stay in
+- host styling, CSS variables, theme helpers, and `unsafeCSS` stay in
   [Styling and theming](./styling-and-theming.md)
 - icon set and remap detail stays in [Icons](./icons.md)
 
@@ -187,7 +187,7 @@ Does not own:
 
 - React callers style the host through normal host props such as `className` and
   `style`.
-- CSS variables, theme helpers, and `unsafeCss` live in
+- CSS variables, theme helpers, and `unsafeCSS` live in
   [Styling and theming](./styling-and-theming.md).
 - Icon set and remap lookup lives in [Icons](./icons.md).
 

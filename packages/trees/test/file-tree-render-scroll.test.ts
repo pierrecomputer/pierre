@@ -7,7 +7,7 @@ import {
   FILE_TREE_DEFAULT_ITEM_HEIGHT,
   FILE_TREE_DEFAULT_OVERSCAN,
   FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
-} from '../src/index';
+} from '../src/model/virtualization';
 
 function installDom() {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
@@ -112,6 +112,14 @@ function getTreeRoot(
   return root;
 }
 
+function getUnsafeCssStyle(
+  shadowRoot: ShadowRoot | null | undefined,
+  dom: JSDOM
+): HTMLStyleElement | null {
+  const style = shadowRoot?.querySelector('style[data-file-tree-unsafe-css]');
+  return style instanceof dom.window.HTMLStyleElement ? style : null;
+}
+
 function clickItem(
   shadowRoot: ShadowRoot | null | undefined,
   dom: JSDOM,
@@ -168,7 +176,7 @@ function getFocusedItemPath(
 }
 
 async function loadFileTreeController(): Promise<
-  typeof import('../src/index').FileTreeController
+  typeof import('../src/model/FileTreeController').FileTreeController
 > {
   const { FileTreeController } =
     await import('../src/model/FileTreeController');
@@ -1115,6 +1123,96 @@ describe('file-tree render + scroll', () => {
     }
   });
 
+  test('render injects wrapped unsafeCSS into the shadow root', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: true,
+        paths: ['README.md'],
+        unsafeCSS: '[data-item-path="README.md"] { color: rgb(255 0 0); }',
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const unsafeStyle = getUnsafeCssStyle(
+        fileTree.getFileTreeContainer()?.shadowRoot,
+        dom
+      );
+      expect(unsafeStyle).not.toBeNull();
+      expect(unsafeStyle?.textContent).toContain('@layer unsafe');
+      expect(unsafeStyle?.textContent).toContain('color: rgb(255 0 0);');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('preloadFileTree and hydrate keep one wrapped unsafeCSS style element', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const preloadFileTree = await loadPreloadFileTree();
+      const options = {
+        flattenEmptyDirectories: true,
+        id: 'pst-unsafe-css-hydration',
+        paths: ['README.md'],
+        unsafeCSS: 'button[data-type="item"] { color: rgb(255 0 0); }',
+        viewportHeight: 120,
+      } satisfies ConstructorParameters<typeof FileTree>[0];
+      const payload = preloadFileTree(options);
+
+      expect(payload.shadowHtml).toContain('data-file-tree-unsafe-css');
+      expect(payload.shadowHtml).toContain('@layer unsafe');
+
+      const mount = dom.window.document.createElement('div');
+      mount.innerHTML = payload.html;
+      dom.window.document.body.appendChild(mount);
+
+      const host = mount.querySelector('file-tree-container');
+      if (!(host instanceof dom.window.HTMLElement)) {
+        throw new Error('expected SSR host');
+      }
+
+      expect(
+        payload.shadowHtml.match(/data-file-tree-unsafe-css/g)?.length ?? 0
+      ).toBe(1);
+
+      const fileTree = new FileTree(options);
+      fileTree.hydrate({ fileTreeContainer: host });
+      await flushDom();
+
+      expect(
+        host.shadowRoot?.querySelectorAll('style[data-file-tree-unsafe-css]')
+          .length
+      ).toBe(1);
+      const unsafeStyle = getUnsafeCssStyle(host.shadowRoot, dom);
+      expect(unsafeStyle?.textContent).toContain('@layer unsafe');
+      expect(unsafeStyle?.textContent).toContain('color: rgb(255 0 0);');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('preloadFileTree escapes unsafeCSS before embedding SSR styles', async () => {
+    const preloadFileTree = await loadPreloadFileTree();
+    const payload = preloadFileTree({
+      paths: ['README.md'],
+      unsafeCSS:
+        'button[data-type="item"]::after { content: "</style><div data-escape-break></div>"; }',
+      viewportHeight: 120,
+    });
+
+    expect(payload.shadowHtml).toContain('<\\/style><div data-escape-break');
+    expect(payload.shadowHtml).not.toContain('</style><div data-escape-break');
+  });
   test('preloadFileTree sorts unsorted top-level entries before files and keeps root chains flattened', async () => {
     const preloadFileTree = await loadPreloadFileTree();
 

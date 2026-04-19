@@ -115,6 +115,7 @@ Does not own:
 
 - `focusPath(path)`
 - `focusNearestPath(path | null)`
+- `startRenaming(path?)`
 - item-handle methods for focused and selected rows
 
 ### Search control
@@ -175,9 +176,8 @@ Does not own:
 
 - This page only names runtime touchpoints such as `getFileTreeContainer()`,
   `setGitStatus(...)`, and `setIcons(...)`.
-- CSS variables, theme helpers, host styling, and the dependency-tagged
-  `unsafeCss` escape hatch belong in
-  [Styling and theming](./styling-and-theming.md).
+- CSS variables, theme helpers, host styling, and the `unsafeCSS` escape hatch
+  belong in [Styling and theming](./styling-and-theming.md).
 - Icon sets and remapping belong in [Icons](./icons.md).
 
 ## Exclusions and non-goals for this page

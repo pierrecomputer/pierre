@@ -51,8 +51,8 @@ Does not own:
 
 - `set?: 'minimal' | 'standard' | 'complete' | 'none'`
 - `colored?: boolean`
-- `set: 'none'` is the custom-only path when callers do not want built-in file
-  icons at all.
+- `set: 'none'` disables built-in file-type mappings. File rows still fall
+  through to the generic file icon slot unless remaps replace it.
 - `colored` controls whether supported built-in sets render semantic icon
   colors.
 

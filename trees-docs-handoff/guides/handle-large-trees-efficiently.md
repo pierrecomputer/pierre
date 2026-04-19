@@ -1,11 +1,5 @@
 # Handle large trees efficiently
 
-## Publishing dependency
-
-- `PD-1` — the recommended prepared-input examples on this page depend on the
-  pending public re-export of trees-native prepared-input helpers/types from
-  `@pierre/trees`.
-
 ## Purpose
 
 - Give readers a scale guide that stays practical and user-facing.
@@ -60,16 +54,18 @@
 
 - Explain the rendering story after the input story.
 - User-facing points to cover:
-  - the tree virtualizes visible rows by default
+  - the tree renders a window of rows by default, including a small overscan
+    around the visible viewport
   - most users do not need custom virtualization primitives
   - viewport sizing matters because virtualization needs a real visible window
 - Focus on options users actually reason about:
   - `viewportHeight`
   - row density or item height only when the visual design truly changes it
-  - expansion and search choices because they affect how many rows are visible
-    at once
-- Keep the language on outcomes: only visible rows mount, large expanded trees
-  stay usable, and the guide should not teach internal range/window helpers.
+  - expansion and search choices because they affect how many rows stay in the
+    rendered window at once
+- Keep the language on outcomes: the tree mounts the visible slice plus
+  overscan, large expanded trees stay usable, and the guide should not teach
+  internal range/window helpers.
 
 ## SSR and hydration at scale
 

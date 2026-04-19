@@ -3,13 +3,6 @@
 Intent: lookup-oriented reference for styling APIs, CSS variables, host styling
 patterns, and theme helper usage.
 
-## Publishing dependency
-
-- `PD-2 (partial)`: publish the `unsafeCss` subsection only after
-  `@pierre/trees` exposes the planned public `unsafeCss` escape hatch described
-  in `../notes/CODE-CHANGES.md`.
-- The rest of the page is publishable independently.
-
 ## Ownership boundary
 
 Owns:
@@ -18,7 +11,7 @@ Owns:
 - CSS custom property families and fallback precedence
 - theme helper APIs such as `themeToTreeStyles(...)`
 - styling-specific lookup notes for runtime consumers
-- `unsafeCss` as an explicit secondary escape hatch, once shipped
+- `unsafeCSS` as an explicit secondary escape hatch
 
 Does not own:
 
@@ -125,14 +118,13 @@ Does not own:
 - Apply styles through the host or container you already own.
 - `getFileTreeContainer()` is the handoff back to application styling code.
 
-## `unsafeCss` escape hatch
+## `unsafeCSS` escape hatch
 
 - Secondary path. Do not present it before host styling, CSS variables, and
   `themeToTreeStyles(...)`.
-- Publishing dependency: `PD-2`.
 - Use only when the supported host and variable surfaces cannot express the
   needed customization.
-- Reference topics, once the API ships:
+- Reference topics:
   - option name and public package surface
   - high-level shadow-root injection behavior
   - warning that this is an exception path, not the default styling story

@@ -7,19 +7,11 @@
 - Keep the scaling story honest: small trees can start with `paths`, but real
   app trees should move to prepared input produced outside the client.
 
-## Publishing dependency
-
-- `PD-1` — the recommended scalable example on this page depends on the
-  trees-native prepared-input helpers and types planned in
-  `../notes/CODE-CHANGES.md`.
-- If that API is not published yet, keep the outline and publish the small-tree
-  `paths` example instead of a fake prepared-input example.
-
 ## Reader outcome
 
 - Install the package with a short Bun-first command.
-- Create the tree model with `useFileTree(...)`.
-- Render it with `<FileTree model={model} />`.
+- Create the tree model with `useFileTree(...)` from `@pierre/trees/react`.
+- Render it with `<FileTree model={model} />` from `@pierre/trees/react`.
 - Understand that the model is the primary state surface; the component renders
   it.
 - Know when to stay with simple `paths` and when to move to prepared input.
@@ -47,9 +39,10 @@
 
 - Lead with this section.
 - Explain:
-  - the hook creates a stable imperative tree model for the component lifetime
-  - the recommended scalable path is to pass `paths` plus `preparedInput`
-    produced outside the client
+  - `useFileTree(...)` from `@pierre/trees/react` creates a stable imperative
+    tree model for the component lifetime
+  - the recommended scalable path is to pass `preparedInput` produced outside
+    the client
   - the same hook can still consume simple `paths` for genuinely small trees
 - Reinforce path-first identity: app-facing item references remain canonical
   path strings.
@@ -59,8 +52,9 @@
 
 - Show the minimum render step immediately after model creation.
 - Clarify the boundary:
-  - `useFileTree(...)` creates and owns the model
-  - `<FileTree />` mounts that model into the host element
+  - `<FileTree />` from `@pierre/trees/react` mounts the model into the host
+    element
+  - `useFileTree(...)` creates and owns that model
   - ongoing tree changes happen through model methods and selector hooks, not a
     large controlled-prop surface
 - Cross-link: [React API](../reference/react-api.md).
@@ -96,7 +90,7 @@
 - Explain the recommended handoff:
   - load canonical paths on the server or another non-UI boundary
   - prepare the tree input once
-  - pass `paths` plus `preparedInput` into `useFileTree(...)`
+  - pass `preparedInput` into `useFileTree(...)`
 - Keep presorted input as the highest-performance prepared-input variant when
   the server already knows the final order.
 - Cross-link:
@@ -114,10 +108,8 @@
 ## Example notes
 
 - Primary example should be a small TSX component with this shape:
-  - `const { model } = useFileTree({ paths, preparedInput, ... })`
+  - `const { model } = useFileTree({ preparedInput, ... })`
   - `<FileTree model={model} />`
-- If `PD-1` is still pending, publish the same example shape with `paths` only
-  and label it as the small-tree path.
 - Keep styling, icons, and row annotations out of the quickstart body.
 
 ## Cross-links

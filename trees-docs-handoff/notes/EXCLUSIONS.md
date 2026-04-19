@@ -7,39 +7,6 @@ exists.
 
 ## Intentionally undocumented current surfaces
 
-### `FileTreeController`
-
-- Out because the docs story centers the shipped runtime surface: `FileTree`,
-  `@pierre/trees/react`, and hydration.
-- The controller boundary is explicitly described as a Phase 0 draft in
-  `packages/trees/src/model/CONTROLLER_BOUNDARY.md`.
-- Documenting it now would teach headless and custom-renderer usage before we
-  decide to support that as part of the product story.
-- Follow-up: keep it in code-change notes as a de-export candidate.
-
-### Low-level virtualization helpers and constants
-
-- Includes `computeVisibleRange`, `computeWindowRange`,
-  `computeStickyWindowLayout`, `FILE_TREE_DEFAULT_ITEM_HEIGHT`,
-  `FILE_TREE_DEFAULT_OVERSCAN`, and `FILE_TREE_DEFAULT_VIEWPORT_HEIGHT` from
-  `@pierre/trees`.
-- Out because the performance docs are user-facing guidance about scale behavior
-  and recommended inputs, not renderer-internals documentation.
-- Documenting these would pull the docs toward custom rendering and performance
-  primitives instead of the supported tree usage path.
-- Follow-up: keep them in code-change notes as de-export candidates.
-
-### Raw `fileTreeStyles`
-
-- Out because the intended styling story is higher-level: host styling, CSS
-  variables, `themeToTreeStyles`, and an explicit `unsafeCss` escape hatch if
-  that API lands.
-- The current observed use is internal SSR and style assembly, not a first-pass
-  user workflow.
-- Documenting the raw stylesheet export would encourage low-level integration
-  patterns the docs are not endorsing.
-- Follow-up: keep it in code-change notes as a de-export candidate.
-
 ### `@pierre/trees/web-components` as a primary integration path
 
 - The side-effect entrypoint exists and registers `<file-tree-container>`, but
@@ -61,12 +28,10 @@ exists.
 
 ### `@pierre/path-store` as the docs-facing prepared-input package
 
-- Out because prepared input is a first-class trees concept, but
-  `@pierre/path-store` is not the package users should be sent to from the trees
-  docs.
-- Until trees-native helper exports exist, the docs can describe the dependency
-  in notes, but should not bless `@pierre/path-store` as the public integration
-  surface.
+- Out because prepared input is a first-class trees concept, but the docs-facing
+  helpers live in `@pierre/trees`, not `@pierre/path-store`.
+- The trees docs can mention path-store only as an implementation detail when a
+  reader truly needs that lower-level context.
 
 ## Future or use-case ideas that are explicitly not ready yet
 

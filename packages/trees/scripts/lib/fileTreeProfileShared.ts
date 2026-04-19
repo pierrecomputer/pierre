@@ -1,7 +1,7 @@
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 import type { VirtualizationWorkload } from '@pierre/tree-test-data';
 
-import type { FileTreeOptions } from '../../src/index';
+import { preparePresortedFileTreeInput } from '../../src/index';
 
 export const FILE_TREE_PROFILE_WORKLOAD_NAMES = [
   'linux-5x',
@@ -15,8 +15,6 @@ export type FileTreeProfileWorkloadName =
 
 export const DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME = 'linux-5x';
 export const FILE_TREE_PROFILE_VIEWPORT_HEIGHT = 500;
-
-type FileTreePreparedInput = NonNullable<FileTreeOptions['preparedInput']>;
 
 export interface FileTreeProfileWorkloadSummary {
   expandedFolderCount: number;
@@ -75,24 +73,13 @@ export function getFileTreeProfileWorkload(
   return getVirtualizationWorkload(workloadName);
 }
 
-export function createFileTreePresortedPreparedInput(
-  paths: readonly string[]
-): FileTreePreparedInput {
-  return {
-    paths,
-    presortedPaths: paths,
-    presortedPathsContainDirectories: false,
-  } as FileTreePreparedInput;
-}
-
 export function createFileTreeProfileFixtureOptions(
   workload: VirtualizationWorkload
-): Omit<FileTreeOptions, 'id' | 'onSelectionChange'> {
+) {
   return {
     flattenEmptyDirectories: true,
     initialExpandedPaths: workload.expandedFolders,
-    paths: workload.files,
-    preparedInput: createFileTreePresortedPreparedInput(workload.files),
+    preparedInput: preparePresortedFileTreeInput(workload.files),
     viewportHeight: FILE_TREE_PROFILE_VIEWPORT_HEIGHT,
   };
 }

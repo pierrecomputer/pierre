@@ -8,14 +8,6 @@
 - Explain how simple `paths`, prepared input, and presorted input relate without
   collapsing them into one idea.
 
-## Publishing dependency
-
-- `PD-1` — this guide depends on the trees-native prepared-input helpers and
-  types planned in `../notes/CODE-CHANGES.md`: `FileTreePreparedInput`,
-  `prepareFileTreeInput`, and `preparePresortedFileTreeInput`.
-- If that API is not published yet, keep the conceptual guidance but do not
-  publish fake helper names or package-detour instructions.
-
 ## Reader outcome
 
 - Prefer prepared input for real application trees.
@@ -47,7 +39,7 @@
     step moves earlier
 - Cross-link: [Shared concepts](../reference/shared-concepts.md).
 
-### Pass `paths` with `preparedInput` into the runtime
+### Pass `preparedInput` into the runtime
 
 - Keep the runtime story simple and shared.
 - Explain that both quickstarts consume the same prepared payload shape:
@@ -86,7 +78,7 @@
 - Show the preferred split:
   - server loads canonical paths
   - server prepares tree input once
-  - client runtime consumes `paths` plus `preparedInput`
+  - client runtime consumes `preparedInput`
 - Explain why this is the default scalable path:
   - less client CPU work
   - more predictable startup cost

@@ -46,6 +46,26 @@ Useful model methods:
 - `tree.getItem(path)` / `tree.getSelectedPaths()` / `tree.getFocusedPath()`
 - `tree.cleanUp()`
 
+## Prepared input
+
+For large or frequently reloaded trees, prepare the input once outside the UI
+and pass the prepared result into `FileTree`.
+
+```ts
+import { FileTree, preparePresortedFileTreeInput } from '@pierre/trees';
+
+const paths = ['src/', 'src/index.ts', 'README.md'];
+const preparedInput = preparePresortedFileTreeInput(paths);
+
+const tree = new FileTree({
+  preparedInput,
+  viewportHeight: 320,
+});
+```
+
+Use `prepareFileTreeInput(paths)` when you start with raw input. Use
+`preparePresortedFileTreeInput(paths)` when the final order is already known.
+
 ## React usage
 
 ```tsx
@@ -134,6 +154,23 @@ import { themeToTreeStyles } from '@pierre/trees';
 
 const styles = themeToTreeStyles(theme);
 ```
+
+If CSS variables are not enough, `unsafeCSS` injects raw CSS into the tree
+shadow root:
+
+```ts
+const tree = new FileTree({
+  paths,
+  unsafeCSS: `
+    button[data-type='item'][data-item-selected] {
+      border-radius: 999px;
+    }
+  `,
+});
+```
+
+Treat `unsafeCSS` as an escape hatch. Start with host styles, CSS variables, and
+`themeToTreeStyles()` first.
 
 If you need the custom element registration side effect directly, import:
 

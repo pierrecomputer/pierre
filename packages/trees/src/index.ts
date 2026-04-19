@@ -1,5 +1,4 @@
 export * from './constants';
-export { default as fileTreeStyles } from './style.css';
 export type { GitStatus, GitStatusEntry, ContextMenuAnchorRect } from './types';
 export type {
   FileTreeBuiltInIconSet,
@@ -12,8 +11,12 @@ export type {
   TreeThemeStyles,
 } from './utils/themeToTreeStyles';
 export { themeToTreeStyles } from './utils/themeToTreeStyles';
+export type { FileTreePreparedInput } from './preparedInput';
+export {
+  prepareFileTreeInput,
+  preparePresortedFileTreeInput,
+} from './preparedInput';
 export { FileTree, preloadFileTree } from './render/FileTree';
-export { FileTreeController } from './model/FileTreeController';
 export type {
   FileTreeAddEvent,
   FileTreeBatchEvent,
@@ -22,8 +25,6 @@ export type {
   FileTreeContextMenuItem as ContextMenuItem,
   FileTreeContextMenuOpenContext as ContextMenuOpenContext,
   FileTreeContextMenuTriggerMode as ContextMenuTriggerMode,
-  FileTreeControllerListener,
-  FileTreeControllerOptions,
   FileTreeDirectoryHandle,
   FileTreeDragAndDropConfig,
   FileTreeDropContext,
@@ -51,7 +52,6 @@ export type {
   FileTreeRowDecoration,
   FileTreeRowDecorationContext,
   FileTreeRowDecorationRenderer,
-  FileTreeRange,
   FileTreeResetEvent,
   FileTreeResetOptions,
   FileTreeSearchChangeListener,
@@ -59,15 +59,6 @@ export type {
   FileTreeSearchSessionHandle,
   FileTreeSelectionChangeListener,
   FileTreeSlotHost,
-  FileTreeStickyWindowLayout,
   FileTreeRenderProps,
   FileTreeVisibleRow,
 } from './model/types';
-export {
-  computeStickyWindowLayout,
-  computeVisibleRange,
-  computeWindowRange,
-  FILE_TREE_DEFAULT_ITEM_HEIGHT,
-  FILE_TREE_DEFAULT_OVERSCAN,
-  FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
-} from './model/virtualization';

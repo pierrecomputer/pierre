@@ -8,14 +8,6 @@
 - Keep the scaling story honest: small trees can start with `paths`, but real
   app trees should move to prepared input produced outside the client.
 
-## Publishing dependency
-
-- `PD-1` — the recommended scalable example on this page depends on the
-  trees-native prepared-input helpers and types planned in
-  `../notes/CODE-CHANGES.md`.
-- If that API is not published yet, keep the outline and publish the small-tree
-  `paths` example instead of a fake prepared-input example.
-
 ## Reader outcome
 
 - Install `@pierre/trees` with a short Bun-first command.
@@ -49,8 +41,8 @@
 - Explain:
   - the class instance is both the runtime entry point and the imperative model
     surface
-  - the recommended scalable path is to pass `paths` plus `preparedInput`
-    produced outside the client
+  - the recommended scalable path is to pass `preparedInput` produced outside
+    the client
   - the same constructor can still consume simple `paths` for genuinely small
     trees
 - Reinforce path-first identity: app-facing item references remain canonical
@@ -96,7 +88,7 @@
 - Explain the recommended handoff:
   - load canonical paths on the server or another non-UI boundary
   - prepare the tree input once
-  - construct `new FileTree({ paths, preparedInput, ... })`
+  - construct `new FileTree({ preparedInput, ... })`
 - Keep presorted input as the highest-performance prepared-input variant when
   the server already knows the final order.
 - Cross-link:
@@ -123,10 +115,8 @@
 ## Example notes
 
 - Primary example should be a TypeScript DOM snippet with this shape:
-  - `const tree = new FileTree({ paths, preparedInput, ... })`
+  - `const tree = new FileTree({ preparedInput, ... })`
   - `tree.render({ fileTreeContainer: container })`
-- If `PD-1` is still pending, publish the same example shape with `paths` only
-  and label it as the small-tree path.
 - Keep styling, icons, and row annotations out of the quickstart body.
 
 ## Cross-links

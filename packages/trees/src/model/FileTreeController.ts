@@ -4,11 +4,14 @@ import type {
   PathStoreMoveOptions,
   PathStoreOperation,
   PathStorePathInfo,
-  PathStorePreparedInput,
   PathStoreRemoveOptions,
   PathStoreVisibleTreeProjectionData,
 } from '@pierre/path-store';
 
+import {
+  type FileTreePreparedInput,
+  toPathStorePreparedInput,
+} from '../preparedInput';
 import { renameFileTreePaths } from '../utils/renameFileTreePaths';
 import {
   buildDropOperations,
@@ -301,6 +304,62 @@ function createMutationInvalidation(event: PathStoreEvent): {
   };
 }
 
+function haveMatchingPaths(
+  currentPaths: readonly string[],
+  preparedPaths: readonly string[]
+): boolean {
+  if (currentPaths.length !== preparedPaths.length) {
+    return false;
+  }
+
+  for (let index = 0; index < currentPaths.length; index += 1) {
+    if (currentPaths[index] !== preparedPaths[index]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// Keeps raw path lists and prepared input aligned so callers cannot silently
+// reuse stale prepared data after the tree source changes.
+function resolveFileTreeInput(
+  options: Pick<FileTreeControllerOptions, 'paths' | 'preparedInput'>,
+  context: 'constructor' | 'resetPaths',
+  sort: FileTreeControllerOptions['sort']
+ ): {
+  paths: readonly string[];
+  preparedInput: FileTreePreparedInput | undefined;
+} {
+  const { paths, preparedInput } = options;
+  if (preparedInput == null) {
+    if (paths == null) {
+      throw new Error('FileTree requires paths or preparedInput');
+    }
+
+    return {
+      paths,
+      preparedInput: undefined,
+    };
+  }
+
+  const preparedPaths = preparedInput.paths;
+  const comparablePaths =
+    paths == null
+      ? preparedPaths
+      : PathStore.preparePaths(paths, sort == null ? {} : { sort });
+  if (!haveMatchingPaths(comparablePaths, preparedPaths)) {
+    throw new Error(
+      `FileTree ${context} received paths and preparedInput for different path lists`
+    );
+  }
+
+  return {
+    paths: preparedPaths,
+    preparedInput,
+  };
+}
+
 function toTreesMutationSemanticEvent(
   event: Extract<PathStoreEvent, { operation: 'add' | 'remove' | 'move' }>
 ): FileTreeMutationSemanticEvent {
@@ -507,6 +566,11 @@ export class FileTreeController
       preparedInput,
       ...baseOptions
     } = options;
+    const resolvedInput = resolveFileTreeInput(
+      { paths, preparedInput },
+      'constructor',
+      baseOptions.sort
+    );
     this.#baseOptions = baseOptions;
     if (dragAndDrop != null && dragAndDrop !== false) {
       this.#dragAndDropConfig = dragAndDrop === true ? {} : dragAndDrop;
@@ -519,7 +583,10 @@ export class FileTreeController
     }
     this.#onSearchChange = onSearchChange;
     this.#searchMode = fileTreeSearchMode ?? 'hide-non-matches';
-    this.#store = this.#createStore(paths, preparedInput);
+    this.#store = this.#createStore(
+      resolvedInput.paths,
+      resolvedInput.preparedInput
+    );
     const resolvedInitialSelectedPaths =
       initialSelectedPaths
         ?.map((path) => this.#resolveSelectionPath(path))
@@ -1335,9 +1402,14 @@ export class FileTreeController
   ): void {
     const previousPathCount = this.#store.list().length;
     const previousVisibleCount = this.#visibleCount;
+    const resolvedInput = resolveFileTreeInput(
+      { paths, preparedInput: options.preparedInput },
+      'resetPaths',
+      this.#baseOptions.sort
+    );
     const nextStore = this.#createStore(
-      paths,
-      options.preparedInput,
+      resolvedInput.paths,
+      resolvedInput.preparedInput,
       options.initialExpandedPaths
     );
     const previousFocusedPath = this.#focusedPath;
@@ -1382,7 +1454,7 @@ export class FileTreeController
     this.#emitMutation({
       canonicalChanged: true,
       operation: 'reset',
-      pathCountAfter: paths.length,
+      pathCountAfter: resolvedInput.paths.length,
       pathCountBefore: previousPathCount,
       projectionChanged: true,
       usedPreparedInput: options.preparedInput != null,
@@ -1574,13 +1646,16 @@ export class FileTreeController
 
   #createStore(
     paths: readonly string[],
-    preparedInput?: PathStorePreparedInput,
+    preparedInput?: FileTreePreparedInput,
     initialExpandedPathsOverride?: readonly string[]
   ): PathStore {
     return new PathStore({
       ...this.#baseOptions,
       paths,
-      preparedInput,
+      preparedInput:
+        preparedInput == null
+          ? undefined
+          : toPathStorePreparedInput(preparedInput),
       ...(initialExpandedPathsOverride !== undefined
         ? { initialExpandedPaths: initialExpandedPathsOverride }
         : {}),

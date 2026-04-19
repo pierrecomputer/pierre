@@ -15,8 +15,8 @@
 
 ## Recommended path / defaults
 
-- Start with `gitStatus` when the signal is genuinely added, modified, or
-  deleted state.
+- Start with `gitStatus` when the signal matches the built-in Git lane: `added`,
+  `modified`, `deleted`, `ignored`, `renamed`, or `untracked`.
 - Update the current status set as surrounding app state changes.
 - Use `renderRowDecoration` when the row needs metadata that is not Git-like.
 - Use both together only when the row needs Git state plus one additional
@@ -41,7 +41,8 @@
 ### Know when `gitStatus` is enough
 
 - Include a short decision section:
-  - use `gitStatus` for repo-style added, modified, and deleted state
+  - use `gitStatus` for built-in Git-style `added`, `modified`, `deleted`,
+    `ignored`, `renamed`, and `untracked` state
   - prefer it over custom row rendering when the semantics already match
   - let styling and theming control colors instead of rebuilding the lane
     yourself

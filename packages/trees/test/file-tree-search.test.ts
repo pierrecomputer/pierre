@@ -126,7 +126,7 @@ function setInputValue(
 }
 
 function getVisiblePaths(
-  controller: import('../src/index').FileTreeController
+  controller: import('../src/model/FileTreeController').FileTreeController
 ): string[] {
   return controller
     .getVisibleRows(0, controller.getVisibleCount())
@@ -134,20 +134,11 @@ function getVisiblePaths(
 }
 
 async function loadFileTreeController(): Promise<
-  typeof import('../src/index').FileTreeController
+  typeof import('../src/model/FileTreeController').FileTreeController
 > {
-  const module = await import('../src/model/FileTreeController');
-  const controller = Object.values(module).find(
-    (value): value is typeof import('../src/index').FileTreeController =>
-      typeof value === 'function' &&
-      'prototype' in value &&
-      'getVisibleRows' in value.prototype
-  );
-  if (controller == null) {
-    throw new Error('Expected FileTreeController export');
-  }
-
-  return controller;
+  const { FileTreeController } =
+    await import('../src/model/FileTreeController');
+  return FileTreeController;
 }
 
 async function loadFileTree(): Promise<typeof import('../src/index').FileTree> {

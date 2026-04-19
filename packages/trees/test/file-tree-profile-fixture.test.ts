@@ -10,6 +10,7 @@ import {
   FILE_TREE_PROFILE_WORKLOAD_NAMES,
   getFileTreeProfileWorkload,
 } from '../scripts/lib/fileTreeProfileShared';
+import { preparePresortedFileTreeInput } from '../src/index';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -29,14 +30,11 @@ test('file-tree profile fixture options mirror the Phase 4 docs tree behavior', 
 
   expect(options.flattenEmptyDirectories).toBe(true);
   expect(options.initialExpandedPaths).toEqual(workload.expandedFolders);
-  expect(options.paths).toEqual(workload.files);
+  expect('paths' in options).toBe(false);
   expect(options.viewportHeight).toBe(FILE_TREE_PROFILE_VIEWPORT_HEIGHT);
-  const preparedInput = options.preparedInput as {
-    paths: readonly string[];
-    presortedPaths: readonly string[];
-  };
-  expect(preparedInput.paths).toEqual(workload.files);
-  expect(preparedInput.presortedPaths).toEqual(workload.files);
+  expect(options.preparedInput).toEqual(
+    preparePresortedFileTreeInput(workload.files)
+  );
 });
 
 test('file-tree profile fixture HTML stays minimal and idle-on-load', () => {

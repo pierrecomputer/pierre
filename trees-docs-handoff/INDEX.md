@@ -3,30 +3,15 @@
 This folder is the canonical first-phase handoff for the new `@pierre/trees`
 docs set.
 
-It is intentionally guide-first, with curated reference underneath. It describes
-the intended documented surface, not every export the package happens to expose
-today.
-
-When a page depends on a pending package or API change, the manifest tags it
-here and the page repeats that dependency in its own `## Publishing dependency`
-section.
-
-## Dependency tags
-
-- `PD-1` — needs the trees-native prepared-input surface
-  (`FileTreePreparedInput`, `prepareFileTreeInput`,
-  `preparePresortedFileTreeInput`)
-- `PD-2` — needs the public `unsafeCss` escape hatch in `@pierre/trees`
-- `PD-2 (partial)` — the page is publishable overall, but one planned subsection
-  depends on `unsafeCss`
+It is guide-first, with curated reference underneath. It describes the shipped
+documented surface, not every internal detail in the repo.
 
 ## Directory map
 
 - `guides/` — task and workflow outlines for the primary reader journey
 - `reference/` — lookup-oriented outlines for shared concepts and endorsed API
   surfaces
-- `notes/` — supporting notes for pending code changes and intentional
-  exclusions
+- `notes/` — supporting notes for intentional exclusions
 
 ## Recommended guide-first reading sequence
 
@@ -62,7 +47,7 @@ section.
 3. [Hydration API](./reference/hydration-api.md) — preload and hydration lookup,
    with the SSR payload treated as opaque.
 4. [Styling and theming](./reference/styling-and-theming.md) — host styling, CSS
-   variables, theme helpers, and the `unsafeCss` escape hatch.
+   variables, theme helpers, and the `unsafeCSS` escape hatch.
 5. [Icons](./reference/icons.md) — icon sets, icon config, remapping, and
    resolution order.
 
@@ -70,43 +55,39 @@ section.
 
 ### Guides
 
-| File                                            | Title                                  | Role                         | Dependency       |
-| ----------------------------------------------- | -------------------------------------- | ---------------------------- | ---------------- |
-| `guides/choose-your-integration.md`             | Choose your integration                | chooser and orientation page | —                |
-| `guides/get-started-with-react.md`              | Get started with React                 | React quickstart             | `PD-1`           |
-| `guides/get-started-with-vanilla.md`            | Get started with vanilla               | vanilla quickstart           | `PD-1`           |
-| `guides/shape-tree-data-for-fast-rendering.md`  | Shape tree data for fast rendering     | tree-shape and input guide   | `PD-1`           |
-| `guides/navigate-selection-focus-and-search.md` | Navigate selection, focus, and search  | navigation and state guide   | —                |
-| `guides/rename-drag-and-item-actions.md`        | Rename, drag, and trigger item actions | item-actions guide           | —                |
-| `guides/style-and-theme-the-tree.md`            | Style and theme the tree               | styling and theming guide    | `PD-2 (partial)` |
-| `guides/customize-icons.md`                     | Customize icons                        | icons guide                  | —                |
-| `guides/show-git-status-and-row-annotations.md` | Show Git status and row annotations    | row-annotations guide        | —                |
-| `guides/handle-large-trees-efficiently.md`      | Handle large trees efficiently         | performance-at-scale guide   | `PD-1`           |
-| `guides/hydrate-a-server-rendered-tree.md`      | Hydrate a server-rendered tree         | hydration guide              | —                |
+| File                                            | Title                                  | Role                         |
+| ----------------------------------------------- | -------------------------------------- | ---------------------------- |
+| `guides/choose-your-integration.md`             | Choose your integration                | chooser and orientation page |
+| `guides/get-started-with-react.md`              | Get started with React                 | React quickstart             |
+| `guides/get-started-with-vanilla.md`            | Get started with vanilla               | vanilla quickstart           |
+| `guides/shape-tree-data-for-fast-rendering.md`  | Shape tree data for fast rendering     | tree-shape and input guide   |
+| `guides/navigate-selection-focus-and-search.md` | Navigate selection, focus, and search  | navigation and state guide   |
+| `guides/rename-drag-and-item-actions.md`        | Rename, drag, and trigger item actions | item-actions guide           |
+| `guides/style-and-theme-the-tree.md`            | Style and theme the tree               | styling and theming guide    |
+| `guides/customize-icons.md`                     | Customize icons                        | icons guide                  |
+| `guides/show-git-status-and-row-annotations.md` | Show Git status and row annotations    | row-annotations guide        |
+| `guides/handle-large-trees-efficiently.md`      | Handle large trees efficiently         | performance-at-scale guide   |
+| `guides/hydrate-a-server-rendered-tree.md`      | Hydrate a server-rendered tree         | hydration guide              |
 
 ### Reference
 
-| File                               | Title               | Role                                               | Dependency       |
-| ---------------------------------- | ------------------- | -------------------------------------------------- | ---------------- |
-| `reference/shared-concepts.md`     | Shared concepts     | cross-cutting concepts and shared option semantics | `PD-1`           |
-| `reference/react-api.md`           | React API           | React runtime reference                            | —                |
-| `reference/vanilla-api.md`         | Vanilla API         | vanilla runtime reference                          | —                |
-| `reference/hydration-api.md`       | Hydration API       | preload and hydration reference                    | —                |
-| `reference/styling-and-theming.md` | Styling and theming | styling and theme lookup reference                 | `PD-2 (partial)` |
-| `reference/icons.md`               | Icons               | icon lookup reference                              | —                |
+| File                               | Title               | Role                                               |
+| ---------------------------------- | ------------------- | -------------------------------------------------- |
+| `reference/shared-concepts.md`     | Shared concepts     | cross-cutting concepts and shared option semantics |
+| `reference/react-api.md`           | React API           | React runtime reference                            |
+| `reference/vanilla-api.md`         | Vanilla API         | vanilla runtime reference                          |
+| `reference/hydration-api.md`       | Hydration API       | preload and hydration reference                    |
+| `reference/styling-and-theming.md` | Styling and theming | styling and theme lookup reference                 |
+| `reference/icons.md`               | Icons               | icon lookup reference                              |
 
 ### Notes
 
-| File                    | Title                 | Role                                                                           |
-| ----------------------- | --------------------- | ------------------------------------------------------------------------------ |
-| `notes/CODE-CHANGES.md` | Trees code changes    | pending package and API changes the handoff depends on                         |
-| `notes/EXCLUSIONS.md`   | Trees docs exclusions | intentionally omitted current surfaces and future ideas that are not ready yet |
+| File                  | Title                 | Role                                                                           |
+| --------------------- | --------------------- | ------------------------------------------------------------------------------ |
+| `notes/EXCLUSIONS.md` | Trees docs exclusions | intentionally omitted current surfaces and future ideas that are not ready yet |
 
 ## Publication rule
 
-- If a page has a dependency tag, the handoff describes the intended target API,
-  not just the currently shipped surface.
-- Before publishing that page as-is, check the matching item in
-  [notes/CODE-CHANGES.md](./notes/CODE-CHANGES.md).
-- If the code change has not landed yet, either publish only the dependency-free
-  portion or hold the page until the target API exists.
+- Publish these pages only while the package surface matches the documented
+  surface.
+- Update this handoff in the same change as any public API shift.

@@ -2,11 +2,11 @@ import type {
   PathStoreConstructorOptions,
   PathStoreMoveOptions,
   PathStoreOperation,
-  PathStorePreparedInput,
   PathStoreRemoveOptions,
 } from '@pierre/path-store';
 
 import type { FileTreeIcons, RemappedIcon } from '../iconConfig';
+import type { FileTreePreparedInput } from '../preparedInput';
 import type {
   ContextMenuAnchorRect,
   GitStatus,
@@ -19,16 +19,32 @@ import type {
  * IDs.
  */
 export type FileTreePublicId = string;
+type FileTreeStoreOptions = Omit<
+  PathStoreConstructorOptions,
+  'paths' | 'preparedInput'
+>;
 
-export interface FileTreeControllerOptions extends PathStoreConstructorOptions {
+type FileTreeInputOptions =
+  | {
+      paths: readonly string[];
+      preparedInput?: undefined;
+    }
+  | {
+      paths?: undefined;
+      preparedInput: FileTreePreparedInput;
+    };
+
+type FileTreeControllerBehaviorOptions = FileTreeStoreOptions & {
   dragAndDrop?: boolean | FileTreeDragAndDropConfig;
   fileTreeSearchMode?: FileTreeSearchMode;
   initialSearchQuery?: string | null;
   initialSelectedPaths?: readonly string[];
   onSearchChange?: FileTreeSearchChangeListener;
-  paths: readonly string[];
   renaming?: boolean | FileTreeRenamingConfig;
-}
+};
+
+export type FileTreeControllerOptions = FileTreeControllerBehaviorOptions &
+  FileTreeInputOptions;
 
 export interface FileTreeVisibleSegment {
   isTerminal: boolean;
@@ -144,8 +160,7 @@ export interface FileTreeRenamingConfig {
   onRename?: (event: FileTreeRenameEvent) => void;
 }
 
-export interface FileTreeOptions
-  extends FileTreeControllerOptions, FileTreeRenderOptions {
+type FileTreeOptionSurface = FileTreeRenderOptions & {
   composition?: FileTreeCompositionOptions;
   gitStatus?: readonly GitStatusEntry[];
   id?: string;
@@ -153,7 +168,10 @@ export interface FileTreeOptions
   onSelectionChange?: FileTreeSelectionChangeListener;
   renderRowDecoration?: FileTreeRowDecorationRenderer;
   search?: boolean;
-}
+  unsafeCSS?: string;
+};
+
+export type FileTreeOptions = FileTreeControllerOptions & FileTreeOptionSurface;
 
 export interface FileTreeViewportMetrics {
   itemCount: number;
@@ -263,7 +281,8 @@ export interface FileTreeResetOptions {
   // list (e.g. upgrading from an SSR preview to a full dataset) and wants the
   // fresh store to start with expansion state that reflects the new paths.
   initialExpandedPaths?: readonly string[];
-  preparedInput?: PathStorePreparedInput;
+  // Must describe the same path list passed to resetPaths(paths, ...).
+  preparedInput?: FileTreePreparedInput;
 }
 
 export interface FileTreeMutationHandle {

@@ -18,6 +18,7 @@ import {
 import {
   FILE_TREE_STYLE_ATTRIBUTE,
   FILE_TREE_TAG_NAME,
+  FILE_TREE_UNSAFE_CSS_ATTRIBUTE,
   HEADER_SLOT_NAME,
 } from '../constants';
 import { normalizeFileTreeIcons } from '../iconConfig';
@@ -45,6 +46,11 @@ import type {
 } from '../model/types';
 import { FILE_TREE_DEFAULT_VIEWPORT_HEIGHT } from '../model/virtualization';
 import fileTreeStyles from '../style.css';
+import {
+  escapeStyleTextForHtml,
+  wrapCoreCSS,
+  wrapUnsafeCSS,
+} from '../utils/cssWrappers';
 import { FileTreeView } from './FileTreeView';
 import {
   hydrateFileTreeRoot,
@@ -132,6 +138,9 @@ export class FileTree
   #fileTreeContainer: HTMLElement | undefined;
   #gitStatusState: FileTreeGitStatusState | null;
   #icons: FileTreeOptions['icons'];
+  readonly #unsafeCSS: string | undefined;
+  #unsafeCSSStyle: HTMLStyleElement | undefined;
+  #appliedUnsafeCSS: string | undefined;
   #selectionVersion: number;
   #selectionSubscription: (() => void) | null = null;
   #wrapper: HTMLDivElement | undefined;
@@ -151,6 +160,7 @@ export class FileTree
       renderRowDecoration,
       renaming,
       search,
+      unsafeCSS,
       viewportHeight,
       ...controllerOptions
     } = options;
@@ -158,6 +168,7 @@ export class FileTree
     this.#id = createClientId(id);
     this.#gitStatusState = resolveFileTreeGitStatusState(gitStatus);
     this.#icons = icons;
+    this.#unsafeCSS = unsafeCSS;
     this.#onSelectionChange = onSelectionChange;
     this.#renderRowDecoration = renderRowDecoration;
     this.#renamingEnabled = renaming != null && renaming !== false;
@@ -556,6 +567,40 @@ export class FileTree
     }
   }
 
+  #syncUnsafeCSS(shadowRoot: ShadowRoot): void {
+    const existingUnsafeStyle = shadowRoot.querySelector(
+      `style[${FILE_TREE_UNSAFE_CSS_ATTRIBUTE}]`
+    );
+    if (
+      this.#unsafeCSSStyle == null &&
+      existingUnsafeStyle instanceof HTMLStyleElement
+    ) {
+      this.#unsafeCSSStyle = existingUnsafeStyle;
+    }
+
+    if (this.#unsafeCSS == null || this.#unsafeCSS === '') {
+      this.#unsafeCSSStyle?.remove();
+      this.#unsafeCSSStyle = undefined;
+      this.#appliedUnsafeCSS = undefined;
+      return;
+    }
+
+    if (
+      this.#unsafeCSSStyle?.parentNode === shadowRoot &&
+      this.#appliedUnsafeCSS === this.#unsafeCSS
+    ) {
+      return;
+    }
+
+    this.#unsafeCSSStyle ??= document.createElement('style');
+    this.#unsafeCSSStyle.setAttribute(FILE_TREE_UNSAFE_CSS_ATTRIBUTE, '');
+    if (this.#unsafeCSSStyle.parentNode !== shadowRoot) {
+      shadowRoot.appendChild(this.#unsafeCSSStyle);
+    }
+    this.#unsafeCSSStyle.textContent = wrapUnsafeCSS(this.#unsafeCSS);
+    this.#appliedUnsafeCSS = this.#unsafeCSS;
+  }
+
   #getOrCreateWrapper(host: HTMLElement): HTMLDivElement {
     if (this.#wrapper != null) {
       return this.#wrapper;
@@ -606,6 +651,7 @@ export class FileTree
     const shadowRoot = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
     adoptDeclarativeShadowDom(host, shadowRoot);
     ensureFileTreeStyles(shadowRoot);
+    this.#syncUnsafeCSS(shadowRoot);
     host.dataset.fileTreeVirtualized = 'true';
     host.style.display = 'flex';
     this.#slotHost.setHost(host);
@@ -629,6 +675,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     renderRowDecoration,
     renaming,
     search,
+    unsafeCSS,
     viewportHeight,
     ...controllerOptions
   } = options;
@@ -648,6 +695,13 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     normalizedIcons.colored && isColoredBuiltInIconSet(normalizedIcons.set)
       ? ' data-file-tree-colored-icons="true"'
       : '';
+  const wrappedCoreCss = escapeStyleTextForHtml(wrapCoreCSS(fileTreeStyles));
+  const unsafeCssStyle =
+    unsafeCSS == null || unsafeCSS === ''
+      ? ''
+      : `<style ${FILE_TREE_UNSAFE_CSS_ATTRIBUTE}>${escapeStyleTextForHtml(
+          wrapUnsafeCSS(unsafeCSS)
+        )}</style>`;
 
   const bodyHtml = renderToString(
     h(FileTreeView, {
@@ -668,7 +722,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
   );
   controller.destroy();
 
-  const shadowHtml = `${getBuiltInSpriteSheet(normalizedIcons.set)}${customSpriteSheet}<style ${FILE_TREE_STYLE_ATTRIBUTE}>${fileTreeStyles}</style><div data-file-tree-id="${resolvedId}" data-file-tree-virtualized-wrapper="true"${coloredIconsAttr}>${bodyHtml}</div>`;
+  const shadowHtml = `${getBuiltInSpriteSheet(normalizedIcons.set)}${customSpriteSheet}<style ${FILE_TREE_STYLE_ATTRIBUTE}>${wrappedCoreCss}</style>${unsafeCssStyle}<div data-file-tree-id="${resolvedId}" data-file-tree-virtualized-wrapper="true"${coloredIconsAttr}>${bodyHtml}</div>`;
   const headerSlotHtml = getHeaderSlotHtml(composition);
   const html = `<file-tree-container id="${resolvedId}" data-file-tree-virtualized="true"><template shadowrootmode="open">${shadowHtml}</template>${headerSlotHtml}</file-tree-container>`;
   return {

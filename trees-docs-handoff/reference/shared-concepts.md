@@ -3,15 +3,6 @@
 Intent: lookup page for trees concepts that span React, vanilla, and hydration
 docs.
 
-## Publishing dependency
-
-- `PD-1` — publish after `@pierre/trees` exposes the trees-native prepared-input
-  surface called out in `../notes/CODE-CHANGES.md`.
-- Needed public names: `FileTreePreparedInput`, `prepareFileTreeInput`,
-  `preparePresortedFileTreeInput`.
-- Until then, guides can describe prepared input conceptually, but they cannot
-  honestly recommend the final docs-facing helper path.
-
 ## Ownership boundary
 
 Owns:
@@ -30,7 +21,7 @@ Does not own:
 - vanilla class construction, mounting, or lifecycle
   ([Vanilla API](./vanilla-api.md))
 - preload and hydration handoff mechanics ([Hydration API](./hydration-api.md))
-- styling, theme tokens, CSS variables, or `unsafeCss`
+- styling, theme tokens, CSS variables, or `unsafeCSS`
   ([Styling and theming](./styling-and-theming.md))
 - icon sets, remapping, or icon config details ([Icons](./icons.md))
 
@@ -71,11 +62,11 @@ Does not own:
 
 ### Prepared input
 
-- Recommended scalable path: pass `paths` together with `preparedInput`.
+- Recommended scalable path: pass `preparedInput`.
 - Preparation is reusable structural work done ahead of render, often on the
   server.
-- Keep this page conceptual. The helper names above are the intended
-  trees-native surface, not a `@pierre/path-store` docs detour.
+- The docs-facing helper surface lives in `@pierre/trees`:
+  `prepareFileTreeInput(...)` and `preparePresortedFileTreeInput(...)`.
 - Runtime pages should say only that they accept the same shared input shapes.
 
 ### Presorted input
@@ -111,6 +102,7 @@ Does not own:
 
 ### Tree-shape options
 
+- `initialExpansion`
 - `initialExpandedPaths`
 - `flattenEmptyDirectories`
 - `sort`
