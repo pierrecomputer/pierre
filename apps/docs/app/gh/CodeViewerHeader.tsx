@@ -6,6 +6,7 @@ import {
   IconParagraph,
   IconWordWrap,
 } from '@pierre/icons';
+import type { GitStatusEntry } from '@pierre/trees';
 import {
   type Dispatch,
   memo,
@@ -16,8 +17,12 @@ import {
 } from 'react';
 
 import { DEFAULT_PR_URL } from './constants';
-import type { CommentMetadata } from './types';
-import { getPullRequestPath } from './utils';
+import type { CodeViewerFileTreeSource, CommentMetadata } from './types';
+import {
+  createCodeViewerFileTreeSource,
+  getPullRequestPath,
+  mapChangeTypeToGitStatus,
+} from './utils';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +31,7 @@ interface HeaderProps {
   diffStyle: 'split' | 'unified';
   setDiffStyle: Dispatch<SetStateAction<'split' | 'unified'>>;
   setItems: Dispatch<SetStateAction<CodeViewerItem<CommentMetadata>[]>>;
+  setTreeSource: Dispatch<SetStateAction<CodeViewerFileTreeSource | null>>;
   overflow: 'wrap' | 'scroll';
   setOverflow: Dispatch<SetStateAction<'wrap' | 'scroll'>>;
   setKey: Dispatch<SetStateAction<number>>;
@@ -39,6 +45,7 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
   setOverflow,
   setDiffStyle,
   setKey,
+  setTreeSource,
 }: HeaderProps) {
   const hasFetched = useRef(false);
   const [fetching, setFetching] = useState(false);
@@ -83,17 +90,32 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
       console.time('-- computing layout');
       let fileIndex = 0;
       const items: CodeViewerItem<CommentMetadata>[] = [];
+      // Build the tree's path list, id map, and git-status entries in the
+      // same pass that constructs items so large patches (thousands of files)
+      // do not pay for a second walk when we finalize the tree source below.
+      const paths: string[] = [];
+      const pathToItemId = new Map<string, string>();
+      const gitStatus: GitStatusEntry[] = [];
       for (const patch of parsedPatches) {
         for (const fileDiff of patch.files) {
           const id = `${fileIndex++}`;
 
-          // Add fake annotations to the first 3 files, using actual
-          // line numbers from the first hunk so they land on visible lines
           items.push({
             id,
             type: 'diff',
             fileDiff,
             version: 0,
+          });
+
+          const path = fileDiff.name;
+          if (path.length === 0 || pathToItemId.has(path)) {
+            continue;
+          }
+          paths.push(path);
+          pathToItemId.set(path, id);
+          gitStatus.push({
+            path,
+            status: mapChangeTypeToGitStatus(fileDiff.type),
           });
         }
       }
@@ -103,6 +125,11 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
       } else {
         hasFetched.current = true;
       }
+      // Pre-compute the stable tree source here so later annotation-driven
+      // items updates never feed back into the file tree component.
+      setTreeSource(
+        createCodeViewerFileTreeSource(paths, pathToItemId, gitStatus)
+      );
       setItems(items);
       console.timeEnd('-- computing layout');
       // DEBUG AREA
