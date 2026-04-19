@@ -11,6 +11,7 @@ const preloadedData = preloadFileTree({
   gitStatus: GIT_STATUSES_A,
   id: 'trees-shiki-themes-tree',
   initialExpandedPaths: ['src', 'src/components'],
+  initialSelectedPaths: ['package.json'],
   paths: sampleFileList,
   viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.theming,
 });

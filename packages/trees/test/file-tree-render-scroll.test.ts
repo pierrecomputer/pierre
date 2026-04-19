@@ -155,6 +155,18 @@ function getSelectedItemPaths(
     .filter((path): path is string => path != null);
 }
 
+function getFocusedItemPath(
+  shadowRoot: ShadowRoot | null | undefined,
+  dom: JSDOM
+): string | null {
+  const button = shadowRoot?.querySelector(
+    'button[data-type="item"][tabindex="0"]'
+  );
+  return button instanceof dom.window.HTMLButtonElement
+    ? (button.dataset.itemPath ?? null)
+    : null;
+}
+
 async function loadFileTreeController(): Promise<
   typeof import('../src/index').FileTreeController
 > {
@@ -240,6 +252,55 @@ describe('file-tree render + scroll', () => {
     fileItem?.deselect();
     expect(controller.getSelectedPaths()).toEqual([]);
     expect(controller.getItem('missing.ts')).toBeNull();
+
+    controller.destroy();
+  });
+
+  test('controller initialSelectedPaths drops missing entries, canonicalizes directories, and focuses the last resolved path', async () => {
+    const FileTreeController = await loadFileTreeController();
+
+    const controller = new FileTreeController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      initialSelectedPaths: ['missing.ts', 'src/foo'],
+      paths: ['README.md', 'src/foo/bar.ts'],
+    });
+
+    expect(controller.getSelectedPaths()).toEqual(['src/foo/']);
+    expect(controller.getFocusedPath()).toBe('src/foo/');
+    expect(controller.getFocusedItem()?.getPath()).toBe('src/foo/');
+    expect(controller.getItem('src/foo')?.isSelected()).toBe(true);
+    expect(controller.getItem('src/foo')?.isFocused()).toBe(true);
+
+    controller.destroy();
+
+    const invalidOnlyController = new FileTreeController({
+      flattenEmptyDirectories: false,
+      initialSelectedPaths: ['missing.ts'],
+      paths: ['a.ts', 'b.ts'],
+    });
+
+    expect(invalidOnlyController.getSelectedPaths()).toEqual([]);
+    expect(invalidOnlyController.getFocusedPath()).toBe('a.ts');
+
+    invalidOnlyController.destroy();
+  });
+
+  test('controller initialSelectedPaths uses the last resolved path as the focus target and range anchor', async () => {
+    const FileTreeController = await loadFileTreeController();
+
+    const controller = new FileTreeController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      initialSelectedPaths: ['a.ts', 'c.ts'],
+      paths: ['a.ts', 'b.ts', 'c.ts'],
+    });
+
+    expect(controller.getSelectedPaths()).toEqual(['a.ts', 'c.ts']);
+    expect(controller.getFocusedPath()).toBe('c.ts');
+
+    controller.selectPathRange('b.ts', false);
+    expect(controller.getSelectedPaths()).toEqual(['b.ts', 'c.ts']);
 
     controller.destroy();
   });
@@ -1000,6 +1061,58 @@ describe('file-tree render + scroll', () => {
     expect(payload.shadowHtml).toMatch(
       /aria-selected="true"[^>]*data-item-path="README\.md"[^>]*data-item-selected="true"/
     );
+  });
+
+  test('initialSelectedPaths preserve selected and focused state through preload and hydrate', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const preloadFileTree = await loadPreloadFileTree();
+      const FileTree = await loadFileTree();
+      const options = {
+        flattenEmptyDirectories: false,
+        id: 'pst-hydrate-initial-selection',
+        initialExpansion: 'open',
+        initialSelectedPaths: ['a.ts', 'c.ts'],
+        paths: ['a.ts', 'b.ts', 'c.ts'],
+        viewportHeight: 120,
+      } satisfies ConstructorParameters<typeof FileTree>[0];
+      const payload = preloadFileTree(options);
+
+      expect(payload.shadowHtml).toMatch(
+        /aria-selected="true"[^>]*data-item-path="a\.ts"[^>]*data-item-selected="true"/
+      );
+      expect(payload.shadowHtml).toMatch(
+        /aria-selected="true"[^>]*data-item-path="c\.ts"[^>]*data-item-selected="true"/
+      );
+      expect(payload.shadowHtml).toMatch(
+        /data-item-path="c\.ts"[^>]*tabindex="0"/
+      );
+
+      const mount = dom.window.document.createElement('div');
+      mount.innerHTML = payload.html;
+      dom.window.document.body.appendChild(mount);
+
+      const host = mount.querySelector('file-tree-container');
+      if (!(host instanceof dom.window.HTMLElement)) {
+        throw new Error('expected SSR host');
+      }
+
+      const fileTree = new FileTree(options);
+      fileTree.hydrate({ fileTreeContainer: host });
+      await flushDom();
+
+      expect(fileTree.getSelectedPaths()).toEqual(['a.ts', 'c.ts']);
+      expect(fileTree.getFocusedPath()).toBe('c.ts');
+      expect(getSelectedItemPaths(host.shadowRoot, dom)).toEqual([
+        'a.ts',
+        'c.ts',
+      ]);
+      expect(getFocusedItemPath(host.shadowRoot, dom)).toBe('c.ts');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
   });
 
   test('preloadFileTree sorts unsorted top-level entries before files and keeps root chains flattened', async () => {

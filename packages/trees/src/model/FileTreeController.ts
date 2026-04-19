@@ -524,12 +524,13 @@ export class FileTreeController
       initialSelectedPaths
         ?.map((path) => this.#resolveSelectionPath(path))
         .filter((resolved): resolved is string => resolved != null) ?? [];
+    const initialFocusedPath = resolvedInitialSelectedPaths.at(-1) ?? null;
     if (resolvedInitialSelectedPaths.length > 0) {
       this.#selectedPaths = new Set(resolvedInitialSelectedPaths);
-      this.#selectionAnchorPath = resolvedInitialSelectedPaths.at(-1) ?? null;
+      this.#selectionAnchorPath = initialFocusedPath;
       this.#selectionVersion = 1;
     }
-    this.#rebuildVisibleProjection(null, false);
+    this.#rebuildVisibleProjection(initialFocusedPath, false);
     if (initialSearchQuery != null) {
       this.#setSearchState(initialSearchQuery, false);
     }

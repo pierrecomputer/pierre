@@ -9,7 +9,6 @@ import {
 } from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties, ReactNode } from 'react';
-import { useEffect } from 'react';
 
 import { TreeExampleHeading } from '../../components/TreeExampleHeading';
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
@@ -74,15 +73,11 @@ function SearchModeTree({
     flattenEmptyDirectories: true,
     id: modeDemo.id,
     initialSearchQuery: PREPOPULATED_SEARCH,
+    initialSelectedPaths: [PRESELECTED_FILE],
     paths: sampleFileList,
     search: true,
     viewportHeight: modeDemo.viewportHeight,
   });
-
-  useEffect(() => {
-    model.openSearch(PREPOPULATED_SEARCH);
-    model.getItem(PRESELECTED_FILE)?.select();
-  }, [model]);
 
   return (
     <div>

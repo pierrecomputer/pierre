@@ -6,7 +6,6 @@ import {
   useFileTree,
 } from '@pierre/trees/react';
 import type { CSSProperties } from 'react';
-import { useEffect } from 'react';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { sampleFileList } from '../demo-data';
@@ -18,6 +17,7 @@ const a11yStyle: CSSProperties = {
   colorScheme: 'dark',
   height: TREE_NEW_VIEWPORT_HEIGHTS.a11y,
 };
+const PRESELECTED_PATH = 'package.json';
 
 const KEYBOARD_SHORTCUTS: readonly { description: string; key: string }[] = [
   { key: '↑ ↓', description: 'Move focus between items' },
@@ -38,14 +38,10 @@ export function DemoA11yClient({ preloadedData }: DemoA11yClientProps) {
     flattenEmptyDirectories: true,
     id: 'file-tree-a11y-demo',
     initialExpandedPaths: ['src', 'src/components'],
+    initialSelectedPaths: [PRESELECTED_PATH],
     paths: sampleFileList,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.a11y,
   });
-
-  useEffect(() => {
-    model.focusPath('package.json');
-    model.getItem('package.json')?.select();
-  }, [model]);
 
   return (
     <TreeExampleSection>

@@ -136,6 +136,7 @@ export function DemoThemingClient({
     gitStatus: GIT_STATUSES_A,
     id: 'trees-shiki-themes-tree',
     initialExpandedPaths: ['src', 'src/components'],
+    initialSelectedPaths: ['package.json'],
     paths: sampleFileList,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.theming,
   });
@@ -152,11 +153,6 @@ export function DemoThemingClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prefersDark, setPrefersDark] = useState(false);
-
-  useEffect(() => {
-    model.focusPath('package.json');
-    model.getItem('package.json')?.select();
-  }, [model]);
 
   useEffect(() => {
     const mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
