@@ -5,7 +5,6 @@ import { HeadingAnchors } from '../../docs/HeadingAnchors';
 import { Hero } from '../../Hero';
 import type { ProductId } from '../../product-config';
 import { sampleFileList } from '../demo-data';
-import { GIT_STATUSES_A } from '../tree-examples/demo-data';
 import { DemoA11y } from './DemoA11y';
 import { DemoContextMenu } from './DemoContextMenu';
 import { DemoCustomIcons } from './DemoCustomIcons';
@@ -18,6 +17,10 @@ import { DemoStyling } from './DemoStyling';
 import { DemoTheming } from './DemoTheming';
 import { DemoVirtualization } from './DemoVirtualization';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
+import {
+  TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
+  TREE_NEW_GIT_STATUSES_A,
+} from './gitStatusDemoData';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
@@ -56,18 +59,18 @@ export default function TreesNewPage() {
   });
   const gitStatusFullViewportPreloadedData = preloadFileTree({
     flattenEmptyDirectories: true,
-    gitStatus: GIT_STATUSES_A,
+    gitStatus: TREE_NEW_GIT_STATUSES_A,
     id: 'file-tree-git-status-demo-full',
-    initialExpandedPaths: ['src', 'src/components'],
+    initialExpandedPaths: TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
     paths: sampleFileList,
     search: false,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFull,
   });
   const gitStatusFilteredViewportPreloadedData = preloadFileTree({
     flattenEmptyDirectories: true,
-    gitStatus: GIT_STATUSES_A,
+    gitStatus: TREE_NEW_GIT_STATUSES_A,
     id: 'file-tree-git-status-demo-filtered',
-    initialExpandedPaths: ['src', 'src/components'],
+    initialExpandedPaths: TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
     paths: sampleFileList,
     search: false,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFiltered,

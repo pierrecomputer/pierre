@@ -13,26 +13,61 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { FeatureHeader } from '../../diff-examples/FeatureHeader';
 import { sampleFileList } from '../demo-data';
-import {
-  DEFAULT_FILE_TREE_PANEL_CLASS,
-  GIT_STATUSES_A,
-  GIT_STATUSES_B,
-} from '../tree-examples/demo-data';
+import { DEFAULT_FILE_TREE_PANEL_CLASS } from '../tree-examples/demo-data';
 import { TreeExampleSection } from '../tree-examples/TreeExampleSection';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
+import {
+  TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
+  TREE_NEW_GIT_STATUSES_A,
+  TREE_NEW_GIT_STATUSES_B,
+} from './gitStatusDemoData';
 import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Switch } from '@/components/ui/switch';
+import type { GitStatusEntry } from '@/lib/treesCompat';
 
-const GIT_STATUS_EXPANDED_PATHS = ['src', 'src/components'] as const;
+function escapePathForRegex(path: string): string {
+  return path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Keep ignored descendants visible when the demo hides unmodified files so the
+// inherited ignored styling still has real rows to act on.
+function getVisibleGitStatusPaths(
+  paths: readonly string[],
+  entries: readonly GitStatusEntry[]
+): string[] {
+  const directPaths = new Set<string>();
+  const ignoredDirectoryPaths: string[] = [];
+
+  for (const entry of entries) {
+    if (entry.status === 'ignored' && entry.path.endsWith('/')) {
+      ignoredDirectoryPaths.push(entry.path);
+      continue;
+    }
+
+    directPaths.add(entry.path);
+  }
+
+  if (ignoredDirectoryPaths.length === 0) {
+    return paths.filter((path) => directPaths.has(path));
+  }
+
+  const ignoredDirectoryPattern = new RegExp(
+    `^(?:${ignoredDirectoryPaths.map(escapePathForRegex).join('|')})`
+  );
+
+  return paths.filter(
+    (path) => directPaths.has(path) || ignoredDirectoryPattern.test(path)
+  );
+}
 
 const FILE_TREE_GIT_STATUS_BASE_OPTIONS: Omit<
   FileTreeOptions,
   'gitStatus' | 'id'
 > = {
   flattenEmptyDirectories: true,
-  initialExpandedPaths: GIT_STATUS_EXPANDED_PATHS,
+  initialExpandedPaths: TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
   paths: sampleFileList,
   search: false,
   viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFull,
@@ -51,7 +86,7 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('dark');
 
   const activeGitStatus = useMemo(
-    () => (useSetB ? GIT_STATUSES_B : GIT_STATUSES_A),
+    () => (useSetB ? TREE_NEW_GIT_STATUSES_B : TREE_NEW_GIT_STATUSES_A),
     [useSetB]
   );
   const isDark = colorMode === 'dark';
@@ -68,18 +103,17 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
       return sampleFileList;
     }
 
-    const changedPathSet = new Set(activeGitStatus.map((entry) => entry.path));
-    return sampleFileList.filter((path) => changedPathSet.has(path));
+    return getVisibleGitStatusPaths(sampleFileList, activeGitStatus);
   }, [activeGitStatus, showUnmodified]);
 
   const { model: fullViewportModel } = useFileTree({
     ...FILE_TREE_GIT_STATUS_BASE_OPTIONS,
-    gitStatus: GIT_STATUSES_A,
+    gitStatus: TREE_NEW_GIT_STATUSES_A,
     id: 'file-tree-git-status-demo-full',
   });
   const { model: filteredViewportModel } = useFileTree({
     ...FILE_TREE_GIT_STATUS_BASE_OPTIONS,
-    gitStatus: GIT_STATUSES_A,
+    gitStatus: TREE_NEW_GIT_STATUSES_A,
     id: 'file-tree-git-status-demo-filtered',
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFiltered,
   });
@@ -93,7 +127,7 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
 
   useEffect(() => {
     model.resetPaths(visiblePaths, {
-      initialExpandedPaths: GIT_STATUS_EXPANDED_PATHS,
+      initialExpandedPaths: TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
     });
     model.setGitStatus(activeGitStatus);
   }, [activeGitStatus, model, visiblePaths]);
@@ -112,10 +146,12 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
             >
               <code>gitStatus</code>
             </Link>{' '}
-            option with the file tree model to show indicators for added,
-            modified, and deleted files. Folder rows derive a changed-descendant
-            hint automatically. Toggle between two status datasets and
-            optionally hide unmodified files.
+            option with the file tree model to show `A`, `M`, `D`, `R`, and `U`
+            badges alongside ignored rows and folders. Ignored items inherit
+            their styling without rendering a letter, while folders with changed
+            descendants get a dot automatically. Toggle between two status mixes
+            across the same tree, one of which also includes ignored content,
+            then optionally hide unmodified files.
           </>
         }
       />

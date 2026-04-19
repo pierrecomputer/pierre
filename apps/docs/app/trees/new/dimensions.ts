@@ -7,7 +7,7 @@ export const TREE_NEW_VIEWPORT_HEIGHTS = {
   dragDrop: 420,
   flattenFlattened: 540,
   flattenHierarchical: 600,
-  gitStatusFiltered: 180,
+  gitStatusFiltered: 270,
   gitStatusFull: 690,
   middotTruncation: 690,
   searchCollapseNonMatches: 760,
