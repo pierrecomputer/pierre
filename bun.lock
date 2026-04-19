@@ -256,7 +256,7 @@
     "@octokit/auth-app": "8.1.1",
     "@octokit/openapi-types": "26.0.0",
     "@octokit/rest": "22.0.0",
-    "@pierre/icons": "0.3.0",
+    "@pierre/icons": "0.3.2",
     "@pierre/storage": "0.0.10",
     "@pierre/theme": "0.0.28",
     "@pierre/vscode-icons": "0.0.7",
@@ -2056,8 +2056,6 @@
     "@mdx-js/mdx/unist-util-visit": ["unist-util-visit@5.1.0", "", { "dependencies": { "@types/unist": "^3.0.0", "unist-util-is": "^6.0.0", "unist-util-visit-parents": "^6.0.0" } }, "sha512-m+vIdyeCOpdr/QeQCu2EzxX/ohgS8KbnPDgFni4dQsfSCtpz8UqDyY5GjRru8PDKuYn7Fq19j1CQ+nJSsGKOzg=="],
 
     "@modelcontextprotocol/sdk/jose": ["jose@6.1.3", "", {}, "sha512-0TpaTfihd4QMNwrz/ob2Bp7X04yuxJkjRGi4aKmOqwhov54i6u79oCv7T+C7lo70MKH6BesI3vscD1yb/yzKXQ=="],
-
-    "@pierre/docs/@pierre/icons": ["@pierre/icons@0.3.0", "", { "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-BCJLHsvckEsKM8kKXSMAd9oMIP9gPRS6YgVq3FIqrPjWrFleFLNpxDBNzNXPJVKQ9xUqFJlag9m9ojZZRP7LWQ=="],
 
     "@tailwindcss/node/lightningcss": ["lightningcss@1.30.1", "", { "dependencies": { "detect-libc": "^2.0.3" }, "optionalDependencies": { "lightningcss-darwin-arm64": "1.30.1", "lightningcss-darwin-x64": "1.30.1", "lightningcss-freebsd-x64": "1.30.1", "lightningcss-linux-arm-gnueabihf": "1.30.1", "lightningcss-linux-arm64-gnu": "1.30.1", "lightningcss-linux-arm64-musl": "1.30.1", "lightningcss-linux-x64-gnu": "1.30.1", "lightningcss-linux-x64-musl": "1.30.1", "lightningcss-win32-arm64-msvc": "1.30.1", "lightningcss-win32-x64-msvc": "1.30.1" } }, "sha512-xi6IyHML+c9+Q3W0S4fCQJOym42pyurFiJUHEcEyHS0CeKzia4yZDEsLlqOFykxOdHpNy0NmvVO31vcSqAxJCg=="],
 
