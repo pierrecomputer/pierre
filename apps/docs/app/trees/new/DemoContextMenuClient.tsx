@@ -82,12 +82,12 @@ function LocalProjectHeader({
       <div className="min-w-0 truncate text-sm font-medium text-neutral-200">
         {projectName}/
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-3">
         <button
           type="button"
           title="New file"
           onClick={onAddFile}
-          className="flex h-5 w-5 items-center justify-center rounded text-neutral-300 hover:bg-white/10"
+          className="h-4 w-4 text-neutral-400 hover:text-neutral-100"
         >
           <IconFilePlus aria-hidden="true" />
         </button>
@@ -95,7 +95,7 @@ function LocalProjectHeader({
           type="button"
           title="New folder"
           onClick={onAddFolder}
-          className="flex h-5 w-5 items-center justify-center rounded text-neutral-300 hover:bg-white/10"
+          className="h-4 w-4 text-neutral-400 hover:text-neutral-100"
         >
           <IconFolderPlus aria-hidden="true" />
         </button>
