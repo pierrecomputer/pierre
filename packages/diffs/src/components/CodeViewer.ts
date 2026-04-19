@@ -36,6 +36,21 @@ interface ScrollAnchor {
   lineOffset: number | undefined;
 }
 
+/**
+ * Targets whose absolute scroll-top depends on live layout (item.top,
+ * item.height, getLinePosition) and therefore needs to be re-resolved per
+ * render frame until the scroll has settled at the right destination.
+ *
+ * Used as the parameter type for realignPendingScroll. The field that tracks
+ * an in-flight programmatic scroll holds the full CodeViewerScrollTarget
+ * union, because a 'position' target also needs the anchor/scrollFix pass
+ * suppressed while the scroll is resolving — it just doesn't need
+ * re-resolution, so it consumes its pending slot after a single frame.
+ */
+type PendingScrollTarget =
+  | CodeViewerItemScrollTarget
+  | CodeViewerLineScrollTarget;
+
 interface LineScrollPosition {
   top: number;
   height: number;
@@ -350,6 +365,17 @@ export class CodeViewer<LAnnotation = undefined> {
     stickyTop: -1,
     stickyBottom: -1,
   };
+  // Programmatic scroll still converging on its destination. While set, each
+  // render frame and the sticky-container resize path both skip the normal
+  // getScrollAnchor / scrollFix pair so anchor correction cannot claw the
+  // programmatic scroll back.
+  //
+  // - 'item' / 'line' targets stay here until realignPendingScroll settles:
+  //   their destination top is re-derived from live layout every frame.
+  // - 'position' targets land at a fixed number with nothing to chase; the
+  //   render frame simply consumes the pending slot and normal anchoring
+  //   resumes on the next frame.
+  private pendingScrollTarget: CodeViewerScrollTarget | undefined;
 
   private root: HTMLElement | undefined;
   private resizeObserver: ResizeObserver | undefined;
@@ -393,6 +419,22 @@ export class CodeViewer<LAnnotation = undefined> {
     this.resizeObserver = new ResizeObserver(this.handleResize);
     this.resizeObserver.observe(this.stickyContainer);
     this.root.addEventListener('scroll', this.handleScroll, {
+      passive: true,
+    });
+    // Any user-driven scroll intent cancels an in-flight programmatic scroll.
+    // pointerdown catches scrollbar drag (the scrollbar belongs to root);
+    // wheel / touchstart cover trackpad + touch scroll; keydown covers arrow
+    // keys, PgUp/PgDn, Home/End on a focused scroll container.
+    this.root.addEventListener('wheel', this.clearPendingScroll, {
+      passive: true,
+    });
+    this.root.addEventListener('touchstart', this.clearPendingScroll, {
+      passive: true,
+    });
+    this.root.addEventListener('pointerdown', this.clearPendingScroll, {
+      passive: true,
+    });
+    this.root.addEventListener('keydown', this.clearPendingScroll, {
       passive: true,
     });
     this.resizeObserver.observe(this.root);
@@ -445,6 +487,10 @@ export class CodeViewer<LAnnotation = undefined> {
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
     this.root?.removeEventListener('scroll', this.handleScroll);
+    this.root?.removeEventListener('wheel', this.clearPendingScroll);
+    this.root?.removeEventListener('touchstart', this.clearPendingScroll);
+    this.root?.removeEventListener('pointerdown', this.clearPendingScroll);
+    this.root?.removeEventListener('keydown', this.clearPendingScroll);
     this.container?.remove();
     this.stickyOffset.remove();
     this.stickyContainer.remove();
@@ -476,14 +522,29 @@ export class CodeViewer<LAnnotation = undefined> {
     if (this.root == null) {
       return;
     }
+
     const top = this.resolveScrollTargetTop(target);
-    const clampedTop = Math.max(
-      0,
-      Math.min(top, Math.max(this.getScrollHeight() - this.getHeight(), 0))
+    // Target cannot currently be resolved (unknown id, racy line lookup).
+    // resolveScrollTargetTop already logged; silently no-op.
+    if (top == null) {
+      return;
+    }
+
+    // Clamp to the valid scroll range then re-snap to device pixels — the
+    // clamp itself can nudge us back off the grid when the max is fractional.
+    const maxScroll = Math.max(this.getScrollHeight() - this.getHeight(), 0);
+    const clampedTop = this.roundToDevicePixel(
+      Math.max(0, Math.min(top, maxScroll))
     );
-    // NOTE(amadeus): We'll probably need to figure out how to make the smooth
-    // variation of this properly work in a way that can adjust scroll position
-    // target as we go - i.e. a spring based lad...
+
+    // Stash the public target regardless of variant. The render-frame and
+    // resize-path dispatches below read its .type to decide whether to
+    // re-derive (item/line) or simply consume the pending slot (position).
+    this.pendingScrollTarget = target;
+
+    // NOTE(amadeus): behavior: 'smooth' still passes through to the browser
+    // here; Phase 2 will own a custom RAF-driven engine that cooperates with
+    // pendingScrollTarget for overshoot-free smooth scrolls.
     this.scrollDirty = true;
     this.root.scrollTo({ top: clampedTop, behavior: target.behavior });
   }
@@ -1020,37 +1081,67 @@ export class CodeViewer<LAnnotation = undefined> {
     return true;
   }
 
-  private resolveScrollTargetTop(target: CodeViewerScrollTarget): number {
+  /**
+   * Snap a CSS-pixel value to the nearest device-pixel boundary. Browsers
+   * store scrollTop on the device-pixel grid on fractional-DPR displays
+   * (1.25x, 1.5x, etc.), so rounding computed targets here keeps delta math
+   * settling cleanly instead of hovering around fractional residuals.
+   */
+  private roundToDevicePixel(value: number): number {
+    const dpr = window.devicePixelRatio ?? 1;
+    return Math.round(value * dpr) / dpr;
+  }
+
+  /**
+   * Resolve a public scroll target into an absolute scroll-space top.
+   *
+   * Returns `undefined` when the target cannot currently be resolved - an
+   * unknown item id or a line whose position the underlying instance cannot
+   * compute yet. Callers race against `setItems`, async loads, and annotation
+   * churn, so undefined is treated as a no-op rather than a crash.
+   *
+   * All successful returns are snapped to the device-pixel grid so downstream
+   * delta comparisons are deterministic across DPR.
+   */
+  private resolveScrollTargetTop(
+    target: CodeViewerScrollTarget
+  ): number | undefined {
     if (target.type === 'position') {
-      return target.position;
+      return this.roundToDevicePixel(target.position);
     }
 
     const item = this.idToItem.get(target.id);
     if (item == null) {
-      throw new Error(`CodeViewer.scrollTo: unknown item id "${target.id}"`);
+      console.warn(`CodeViewer.scrollTo: unknown item id "${target.id}"`);
+      return undefined;
     }
 
     if (target.type === 'item') {
-      return this.resolveAlignedScrollTop(
-        item.top,
-        item.height,
-        target.align,
-        target.offset
+      return this.roundToDevicePixel(
+        this.resolveAlignedScrollTop(
+          item.top,
+          item.height,
+          target.align,
+          target.offset
+        )
       );
     }
 
     const linePosition = this.getLineScrollPosition(item, target);
     if (linePosition == null) {
-      throw new Error(
+      console.warn(
         `CodeViewer.scrollTo: unable to resolve line ${target.lineNumber} for item "${target.id}"`
       );
+      return undefined;
     }
 
-    return this.resolveAlignedScrollTop(
-      item.top + linePosition.top,
-      linePosition.height,
-      target.align,
-      target.offset
+    return this.roundToDevicePixel(
+      this.resolveAlignedScrollTop(
+        item.top + linePosition.top,
+        linePosition.height,
+        target.align,
+        target.offset
+      )
     );
   }
 
@@ -1111,24 +1202,32 @@ export class CodeViewer<LAnnotation = undefined> {
 
     const scrollTop = this.getScrollTop();
     const scrollHeight = this.getScrollHeight();
-    let fitPerfectly =
+    // When performing very large scroll jumps, we should attempt to render the
+    // bare minimum to ensure we can paint quickly. We'll queue up a another
+    // render at the end to fill things out on the next tick (or if the user is
+    // actively scrolling we'll just perform another fitPerfectly render)
+    const fitPerfectly =
       this.lastRenderedScrollY === -1 ||
       Math.abs(scrollTop - this.lastRenderedScrollY) >
         height + this.config.overscrollSize * 2;
-    // FIXME(amadeus): This currently breaks scrollTo, so we need to resolve
-    // that first before attempting to re-enable it
-    fitPerfectly = false;
     this.windowSpecs = createWindowFromScrollPosition({
       scrollTop,
       height,
       scrollHeight,
       fitPerfectly,
+      fitPerfectlyOverscroll: this.getFitPerfectlyOverscroll(),
       overscrollSize: this.config.overscrollSize,
     });
 
     const { top, bottom } = this.windowSpecs;
+    // Any in-flight programmatic scroll (item/line chase or one-shot
+    // position) skips anchor capture — the end-of-frame dispatch decides
+    // between realign (item/line) and simple consume (position).
+    const anchor =
+      this.lastRenderedScrollY === -1 || this.pendingScrollTarget != null
+        ? undefined
+        : this.getScrollAnchor();
     this.lastRenderedScrollY = scrollTop;
-    const anchor = this.getScrollAnchor();
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex >= 0) {
       for (let index = firstIndex; index <= lastIndex; index++) {
@@ -1190,7 +1289,16 @@ export class CodeViewer<LAnnotation = undefined> {
     this.flushSlotCoordinator();
     this.reconcileRenderedItems(updatedItems);
     this.updateStickyPositioning();
-    this.scrollFix(anchor);
+    if (this.pendingScrollTarget == null) {
+      this.scrollFix(anchor);
+    } else if (this.pendingScrollTarget.type === 'position') {
+      // 'position' has no layout-dependent target to chase; the browser has
+      // already placed us at the requested scrollTop. Consume the pending
+      // slot so the next frame resumes normal anchor/scrollFix handling.
+      this.pendingScrollTarget = undefined;
+    } else {
+      this.realignPendingScroll(this.pendingScrollTarget);
+    }
 
     const totalScrollHeight = this.getScrollHeight();
     if (this.lastContainerHeight !== totalScrollHeight) {
@@ -1308,6 +1416,13 @@ export class CodeViewer<LAnnotation = undefined> {
     this.render();
   };
 
+  // Abort any in-flight programmatic scroll when the user takes over.
+  // Attached to root as a passive listener for wheel / touchstart /
+  // pointerdown / keydown; we never mutate the event, just drop our state.
+  private clearPendingScroll = (): void => {
+    this.pendingScrollTarget = undefined;
+  };
+
   private handleResize = (entries: ResizeObserverEntry[]) => {
     for (const entry of entries) {
       // If the sticky container resizes (could be from a render, which it will
@@ -1315,12 +1430,26 @@ export class CodeViewer<LAnnotation = undefined> {
       if (entry.target === this.stickyContainer) {
         const blockSize = entry.borderBoxSize[0].blockSize;
         if (blockSize !== this.renderState.stickyHeight) {
-          // NOTE(amadeus): I don't think this anchoring actually
-          // works or is useful?
-          const anchor = this.getScrollAnchor();
+          const anchor =
+            this.pendingScrollTarget == null
+              ? this.getScrollAnchor()
+              : undefined;
+
           this.reconcileRenderedItems();
           this.updateStickyPositioning();
-          this.scrollFix(anchor);
+
+          if (anchor != null) {
+            this.scrollFix(anchor);
+          } else if (
+            this.pendingScrollTarget != null &&
+            this.pendingScrollTarget.type !== 'position'
+          ) {
+            // Async measurement landed (annotations / line wrap) while a
+            // programmatic scroll was still converging. Reconcile layout and
+            // then let the pending target drive the scroll correction so we
+            // don't anchor against the old position.
+            this.realignPendingScroll(this.pendingScrollTarget);
+          }
         }
       }
       // Root element resize (element-mode only)
@@ -1339,6 +1468,20 @@ export class CodeViewer<LAnnotation = undefined> {
     }
 
     const viewportHeight = this.getHeight();
+    const scrollTop = this.getScrollTop();
+    const { stickyTop, stickyBottom } = this.renderState;
+    // If we've not rendered anything yet or attempting to view outside the
+    // bounds of the sticky container, then we should not attempt to scroll fix
+    // because the measurements will be wrong and cuase unexpected behavior
+    if (
+      stickyTop === -1 ||
+      stickyBottom === -1 ||
+      scrollTop + viewportHeight < stickyTop ||
+      scrollTop > stickyBottom
+    ) {
+      return undefined;
+    }
+
     const scrollContainer = this.getContainerElement();
     let bestAnchor: ScrollAnchor | undefined;
 
@@ -1422,6 +1565,41 @@ export class CodeViewer<LAnnotation = undefined> {
     }
 
     return bestAnchor;
+  }
+
+  /**
+   * Move scroll one step closer to a pending programmatic target.
+   *
+   * Re-resolves the public target each frame so it tracks layout as
+   * measurements land, applies an instant scrollFix when there is still a
+   * non-trivial delta to close, and clears the pending state once the target
+   * item is mounted and we are on the destination pixel. If the target can
+   * no longer be resolved (e.g. the item was removed mid-flight), pending
+   * state is cleared so the viewer falls back to normal scroll handling.
+   */
+  private realignPendingScroll(pendingTarget: PendingScrollTarget): void {
+    const desiredTop = this.resolveScrollTargetTop(pendingTarget);
+    if (desiredTop == null) {
+      this.pendingScrollTarget = undefined;
+      return;
+    }
+
+    const maxScroll = Math.max(this.getScrollHeight() - this.getHeight(), 0);
+    const clampedDesiredTop = this.roundToDevicePixel(
+      Math.max(0, Math.min(desiredTop, maxScroll))
+    );
+    const delta = clampedDesiredTop - this.getScrollTop();
+
+    // `<= 0.01` is effectively strict-equal after device-pixel rounding; the
+    // tolerance only absorbs float-representation noise from the subtract.
+    if (Math.abs(delta) > 0.01) {
+      this.applyScrollFix(delta);
+    }
+
+    const targetMounted = this.idToItem.get(pendingTarget.id)?.element != null;
+    if (targetMounted && Math.abs(delta) <= 0.01) {
+      this.pendingScrollTarget = undefined;
+    }
   }
 
   private scrollFix(anchor: ScrollAnchor | undefined): void {
@@ -1619,6 +1797,17 @@ export class CodeViewer<LAnnotation = undefined> {
     this.renderState.stickyHeight = 0;
     this.renderState.stickyTop = -1;
     this.renderState.stickyBottom = -1;
+  }
+
+  // We actually need a bit of overscroll even when attempting to fit perfectly
+  // because we rounde to the nearest container and we may need to render the
+  // gaps before and after a perfectly fit element to include the spacing
+  // between.  We do this by adding the the gap and header height above and
+  // below the viewport
+  private getFitPerfectlyOverscroll() {
+    const { diffHeaderHeight } = this.metrics;
+    const { gap } = this.viewerMetrics;
+    return gap + diffHeaderHeight;
   }
 }
 
