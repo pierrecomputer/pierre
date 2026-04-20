@@ -327,7 +327,7 @@ function resolveFileTreeInput(
   options: Pick<FileTreeControllerOptions, 'paths' | 'preparedInput'>,
   context: 'constructor' | 'resetPaths',
   sort: FileTreeControllerOptions['sort']
- ): {
+): {
   paths: readonly string[];
   preparedInput: FileTreePreparedInput | undefined;
 } {
