@@ -40,6 +40,7 @@ function lightTheme(): CSSProperties {
 function darkTheme(): CSSProperties {
   return {
     colorScheme: 'dark',
+    ['--trees-bg-override' as string]: 'oklch(20.5% 0 0)',
     ['--trees-fg-override' as string]: 'oklch(98.5% 0 0)',
     ['--trees-fg-muted-override' as string]: 'oklch(75% 0 0)',
     ['--trees-bg-muted-override' as string]: 'oklch(26.9% 0 0)',
@@ -58,6 +59,7 @@ function darkTheme(): CSSProperties {
 function synthwaveTheme(): CSSProperties {
   return {
     colorScheme: 'dark',
+    ['--trees-bg-override' as string]: 'transparent',
     ['--trees-fg-override' as string]: 'oklch(91.2% 0.016 294)',
     ['--trees-fg-muted-override' as string]: 'oklch(75.6% 0.04 310)',
     ['--trees-bg-muted-override' as string]: 'oklch(76.9% 0.19 339 / 0.12)',
