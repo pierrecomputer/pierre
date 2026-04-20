@@ -9,16 +9,16 @@ import {
 } from '@pierre/trees/react';
 import type { CSSProperties, JSX } from 'react';
 
-import { PierreIconsFootnote } from '../../components/PierreIconsFootnote';
-import { TreeExampleHeading } from '../../components/TreeExampleHeading';
-import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { sampleFileList } from '../demo-data';
+import { PierreIconsFootnote } from '../components/PierreIconsFootnote';
+import { TreeExampleHeading } from '../components/TreeExampleHeading';
+import { FeatureHeader } from '../diff-examples/FeatureHeader';
+import { sampleFileList } from './demo-data';
+import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import {
   DEFAULT_FILE_TREE_PANEL_CLASS,
   DEFAULT_FILE_TREE_PANEL_STYLE,
-} from '../tree-examples/demo-data';
-import { TreeExampleSection } from '../tree-examples/TreeExampleSection';
-import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
+} from './tree-examples/demo-data';
+import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 
 const panelStyle = {

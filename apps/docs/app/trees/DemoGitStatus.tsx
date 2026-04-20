@@ -10,16 +10,16 @@ import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { sampleFileList } from '../demo-data';
-import { DEFAULT_FILE_TREE_PANEL_CLASS } from '../tree-examples/demo-data';
-import { TreeExampleSection } from '../tree-examples/TreeExampleSection';
+import { FeatureHeader } from '../diff-examples/FeatureHeader';
+import { sampleFileList } from './demo-data';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import {
   TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
   TREE_NEW_GIT_STATUSES_A,
   TREE_NEW_GIT_STATUSES_B,
 } from './gitStatusDemoData';
+import { DEFAULT_FILE_TREE_PANEL_CLASS } from './tree-examples/demo-data';
+import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';

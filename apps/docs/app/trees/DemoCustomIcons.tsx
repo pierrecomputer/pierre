@@ -1,7 +1,7 @@
 import type { FileTreeIcons } from '@pierre/trees';
 import { preloadFileTree } from '@pierre/trees/ssr';
 
-import { sampleFileList } from '../demo-data';
+import { sampleFileList } from './demo-data';
 import { DemoCustomIconsClient } from './DemoCustomIconsClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 

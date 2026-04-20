@@ -1,10 +1,10 @@
 import type { TreeThemeStyles } from '@pierre/trees';
 import { preloadFileTree } from '@pierre/trees/ssr';
 
-import { sampleFileList } from '../demo-data';
-import { GIT_STATUSES_A } from '../tree-examples/demo-data';
+import { sampleFileList } from './demo-data';
 import { DemoThemingClient } from './DemoThemingClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
+import { GIT_STATUSES_A } from './tree-examples/demo-data';
 
 const preloadedData = preloadFileTree({
   flattenEmptyDirectories: true,

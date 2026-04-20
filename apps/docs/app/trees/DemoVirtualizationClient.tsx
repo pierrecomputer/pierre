@@ -8,10 +8,10 @@ import {
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
-import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { DEFAULT_FILE_TREE_PANEL_CLASS } from '../tree-examples/demo-data';
-import { TreeExampleSection } from '../tree-examples/TreeExampleSection';
+import { FeatureHeader } from '../diff-examples/FeatureHeader';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
+import { DEFAULT_FILE_TREE_PANEL_CLASS } from './tree-examples/demo-data';
+import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 
 const FILE_COUNT_FORMATTER = new Intl.NumberFormat('en-US');

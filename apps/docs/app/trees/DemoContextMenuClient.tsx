@@ -17,11 +17,11 @@ import type { CSSProperties } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { createRoot, type Root as ReactDomRoot } from 'react-dom/client';
 
-import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { getFloatingContextMenuTriggerStyle } from '../../trees-dev/_lib/getFloatingContextMenuTriggerStyle';
-import { sampleFileList } from '../demo-data';
-import { TreeExampleSection } from '../tree-examples/TreeExampleSection';
+import { FeatureHeader } from '../diff-examples/FeatureHeader';
+import { getFloatingContextMenuTriggerStyle } from '../trees-dev/_lib/getFloatingContextMenuTriggerStyle';
+import { sampleFileList } from './demo-data';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
+import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';

@@ -14,7 +14,7 @@ const TRUNCATION_DEMO_PATHS = [
   'apps/docs/app/examples/truncation/middle-truncation-playground.test.tsx',
   'apps/docs/app/examples/truncation/without-file-extension/README',
   'apps/docs/app/examples/truncation/without-file-extension/README.local',
-  'apps/docs/app/trees/new/page.tsx',
+  'apps/docs/app/trees/page.tsx',
   'apps/docs/components/ui/button.tsx',
   'apps/docs/components/ui/button-group.tsx',
   'apps/docs/components/ui/dropdown-menu.tsx',

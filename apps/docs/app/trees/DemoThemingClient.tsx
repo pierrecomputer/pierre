@@ -8,17 +8,24 @@ import {
   IconColorDark,
   IconColorLight,
 } from '@pierre/icons';
+import { themeToTreeStyles, type TreeThemeStyles } from '@pierre/trees';
+import {
+  FileTree,
+  type FileTreePreloadedData,
+  useFileTree,
+} from '@pierre/trees/react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
-import { PierreThemeFootnote } from '../../components/PierreThemeFootnote';
-import { FeatureHeader } from '../../diff-examples/FeatureHeader';
+import { PierreThemeFootnote } from '../components/PierreThemeFootnote';
+import { FeatureHeader } from '../diff-examples/FeatureHeader';
+import { sampleFileList } from './demo-data';
+import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import {
-  baseTreeOptions,
   DEFAULT_FILE_TREE_PANEL_CLASS,
   GIT_STATUSES_A,
-} from './demo-data';
-import { TreeExampleSection } from './TreeExampleSection';
+} from './tree-examples/demo-data';
+import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -28,11 +35,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  FileTree,
-  themeToTreeStyles,
-  type TreeThemeStyles,
-} from '@/lib/treesCompatClient';
 
 const DEFAULT_LIGHT = 'default-light' as const;
 const DEFAULT_DARK = 'default-dark' as const;
@@ -120,13 +122,24 @@ function isDefaultTheme(theme: string): boolean {
   return theme === DEFAULT_LIGHT || theme === DEFAULT_DARK;
 }
 
-export function ThemingSectionClient({
-  prerenderedHTML,
-  initialThemeStyles,
-}: {
-  prerenderedHTML: string;
+interface DemoThemingClientProps {
   initialThemeStyles: TreeThemeStyles;
-}) {
+  preloadedData: FileTreePreloadedData;
+}
+
+export function DemoThemingClient({
+  initialThemeStyles,
+  preloadedData,
+}: DemoThemingClientProps) {
+  const { model } = useFileTree({
+    flattenEmptyDirectories: true,
+    gitStatus: GIT_STATUSES_A,
+    id: 'trees-shiki-themes-tree',
+    initialExpandedPaths: ['src', 'src/components'],
+    initialSelectedPaths: ['package.json'],
+    paths: sampleFileList,
+    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.theming,
+  });
   const [selectedLightTheme, setSelectedLightTheme] =
     useState<LightTheme>('pierre-light');
   const [selectedDarkTheme, setSelectedDarkTheme] =
@@ -139,14 +152,14 @@ export function ThemingSectionClient({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const [prefersDark, setPrefersDark] = useState(false);
+
   useEffect(() => {
-    const m = window.matchMedia('(prefers-color-scheme: dark)');
-    setPrefersDark(m.matches);
-    const listener = () => setPrefersDark(m.matches);
-    m.addEventListener('change', listener);
-    return () => m.removeEventListener('change', listener);
+    const mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
+    setPrefersDark(mediaQueryList.matches);
+    const listener = () => setPrefersDark(mediaQueryList.matches);
+    mediaQueryList.addEventListener('change', listener);
+    return () => mediaQueryList.removeEventListener('change', listener);
   }, []);
 
   const effectiveTheme =
@@ -167,13 +180,17 @@ export function ThemingSectionClient({
       setLoading(false);
       return;
     }
+
+    setLoading(true);
     try {
       const theme = await resolveTheme(
         themeName as Parameters<typeof resolveTheme>[0]
       );
       setThemeStyles(themeToTreeStyles(theme));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+    } catch (themeError) {
+      setError(
+        themeError instanceof Error ? themeError.message : String(themeError)
+      );
     } finally {
       setLoading(false);
     }
@@ -229,9 +246,9 @@ export function ThemingSectionClient({
                   selected={selectedLightTheme === theme}
                 >
                   {themeDisplayName(theme)}
-                  {selectedLightTheme === theme && (
+                  {selectedLightTheme === theme ? (
                     <IconCheck className="ml-auto" />
-                  )}
+                  ) : null}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -294,24 +311,23 @@ export function ThemingSectionClient({
       </div>
 
       <div>
-        {loading && themeStyles == null && (
+        {loading && themeStyles == null ? (
           <p className="text-muted-foreground py-4 text-sm">Loading theme…</p>
-        )}
-        {error && <p className="text-destructive py-4 text-sm">{error}</p>}
-        {themeStyles != null && (
+        ) : null}
+        {error != null ? (
+          <p className="text-destructive py-4 text-sm">{error}</p>
+        ) : null}
+        {themeStyles != null ? (
           <FileTree
             className={`${DEFAULT_FILE_TREE_PANEL_CLASS} min-h-[320px]`}
-            prerenderedHTML={prerenderedHTML}
-            options={{
-              ...baseTreeOptions,
-              id: 'shiki-themes-tree',
+            model={model}
+            preloadedData={preloadedData}
+            style={{
+              ...themeStyles,
+              height: `${String(TREE_NEW_VIEWPORT_HEIGHTS.theming)}px`,
             }}
-            gitStatus={GIT_STATUSES_A}
-            initialExpandedItems={['src', 'src/components']}
-            initialSelectedItems={['package.json']}
-            style={themeStyles}
           />
-        )}
+        ) : null}
       </div>
       <PierreThemeFootnote />
     </TreeExampleSection>

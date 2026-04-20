@@ -1,7 +1,7 @@
 import { type ContextMenuTriggerMode } from '@pierre/trees';
 import { preloadFileTree } from '@pierre/trees/ssr';
 
-import { sampleFileList } from '../demo-data';
+import { sampleFileList } from './demo-data';
 import { DemoContextMenuClient } from './DemoContextMenuClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 

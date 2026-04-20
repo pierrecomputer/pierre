@@ -1,6 +1,6 @@
 import { preloadFileTree } from '@pierre/trees/ssr';
 
-import { sampleFileList } from '../demo-data';
+import { sampleFileList } from './demo-data';
 import { DemoA11yClient } from './DemoA11yClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 

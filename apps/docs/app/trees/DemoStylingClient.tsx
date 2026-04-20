@@ -9,14 +9,14 @@ import {
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
-import { IconFootnote } from '../../components/IconFootnote';
-import { TreeExampleHeading } from '../../components/TreeExampleHeading';
-import { FeatureHeader } from '../../diff-examples/FeatureHeader';
-import { sampleFileList } from '../demo-data';
-import { styleObjectToCss } from '../tree-examples/styleToCss';
-import { TreeCssViewer } from '../tree-examples/TreeCssViewer';
-import { TreeExampleSection } from '../tree-examples/TreeExampleSection';
+import { IconFootnote } from '../components/IconFootnote';
+import { TreeExampleHeading } from '../components/TreeExampleHeading';
+import { FeatureHeader } from '../diff-examples/FeatureHeader';
+import { sampleFileList } from './demo-data';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
+import { styleObjectToCss } from './tree-examples/styleToCss';
+import { TreeCssViewer } from './tree-examples/TreeCssViewer';
+import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 
 function lightTheme(): CSSProperties {
