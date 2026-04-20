@@ -1,10 +1,3 @@
-import type {
-  PathStoreConstructorOptions,
-  PathStoreMoveOptions,
-  PathStoreOperation,
-  PathStoreRemoveOptions,
-} from '@pierre/path-store';
-
 import type { FileTreeIcons, RemappedIcon } from '../iconConfig';
 import type { FileTreePreparedInput } from '../preparedInput';
 import type {
@@ -19,18 +12,74 @@ import type {
  * IDs.
  */
 export type FileTreePublicId = string;
-type FileTreeStoreOptions = Omit<
-  PathStoreConstructorOptions,
-  'paths' | 'preparedInput'
->;
+
+// The types below intentionally duplicate shapes from `@pierre/path-store`
+// (PathStoreCompareEntry, PathStorePathComparator, PathStoreInitialExpansion,
+// PathStoreRemoveOptions, PathStoreCollisionStrategy, PathStoreMoveOptions,
+// PathStoreOperation, and the relevant PathStoreConstructorOptions fields).
+//
+// They are NOT re-exports. Keeping a parallel set of `FileTree*` types lets
+// `@pierre/trees` present a self-contained public API: consumers never need to
+// import from `@pierre/path-store` to call `controller.batch(...)`,
+// `controller.move(...)`, etc. Path-store remains a runtime dependency but is
+// not part of the documented surface.
+//
+// Trade-off: there is no compile-time link between the two. If `path-store`
+// changes one of these shapes, update the matching `FileTree*` type here by
+// hand. The structural equivalence is exercised in tests via the values that
+// flow between the two layers.
+
+export interface FileTreeSortEntry {
+  basename: string;
+  depth: number;
+  isDirectory: boolean;
+  path: FileTreePublicId;
+  segments: readonly string[];
+}
+
+export type FileTreeSortComparator = (
+  left: FileTreeSortEntry,
+  right: FileTreeSortEntry
+) => number;
+
+export type FileTreeInitialExpansion = 'closed' | 'open' | number;
+
+export interface FileTreeRemoveOptions {
+  recursive?: boolean;
+}
+
+export type FileTreeCollisionStrategy = 'error' | 'replace' | 'skip';
+
+export interface FileTreeMoveOptions {
+  collision?: FileTreeCollisionStrategy;
+}
+
+export type FileTreeBatchOperation =
+  | { path: FileTreePublicId; type: 'add' }
+  | ({ path: FileTreePublicId; type: 'remove' } & FileTreeRemoveOptions)
+  | ({
+      from: FileTreePublicId;
+      to: FileTreePublicId;
+      type: 'move';
+    } & FileTreeMoveOptions);
+
+// Mirrors the subset of PathStoreConstructorOptions that trees forwards to its
+// underlying store. See the duplication note above the FileTree* type cluster.
+interface FileTreeStoreOptions {
+  flattenEmptyDirectories?: boolean;
+  initialExpansion?: FileTreeInitialExpansion;
+  initialExpandedPaths?: readonly FileTreePublicId[];
+  presorted?: boolean;
+  sort?: 'default' | FileTreeSortComparator;
+}
 
 type FileTreeInputOptions =
   | {
-      paths: readonly string[];
+      paths: readonly FileTreePublicId[];
       preparedInput?: FileTreePreparedInput;
     }
   | {
-      paths?: readonly string[];
+      paths?: readonly FileTreePublicId[];
       preparedInput: FileTreePreparedInput;
     };
 
@@ -38,7 +87,7 @@ type FileTreeControllerBehaviorOptions = FileTreeStoreOptions & {
   dragAndDrop?: boolean | FileTreeDragAndDropConfig;
   fileTreeSearchMode?: FileTreeSearchMode;
   initialSearchQuery?: string | null;
-  initialSelectedPaths?: readonly string[];
+  initialSelectedPaths?: readonly FileTreePublicId[];
   onSearchChange?: FileTreeSearchChangeListener;
   renaming?: boolean | FileTreeRenamingConfig;
 };
@@ -314,24 +363,24 @@ export interface FileTreeResetOptions {
   // time. Useful when the caller is swapping in a dramatically different path
   // list (e.g. upgrading from an SSR preview to a full dataset) and wants the
   // fresh store to start with expansion state that reflects the new paths.
-  initialExpandedPaths?: readonly string[];
+  initialExpandedPaths?: readonly FileTreePublicId[];
   // Must describe the same path list passed to resetPaths(paths, ...).
   preparedInput?: FileTreePreparedInput;
 }
 
 export interface FileTreeMutationHandle {
   add(path: FileTreePublicId): void;
-  batch(operations: readonly PathStoreOperation[]): void;
+  batch(operations: readonly FileTreeBatchOperation[]): void;
   move(
     fromPath: FileTreePublicId,
     toPath: FileTreePublicId,
-    options?: PathStoreMoveOptions
+    options?: FileTreeMoveOptions
   ): void;
   onMutation<TType extends FileTreeMutationEventType | '*'>(
     type: TType,
     handler: (event: FileTreeMutationEventForType<TType>) => void
   ): () => void;
-  remove(path: FileTreePublicId, options?: PathStoreRemoveOptions): void;
+  remove(path: FileTreePublicId, options?: FileTreeRemoveOptions): void;
   resetPaths(
     paths: readonly FileTreePublicId[],
     options?: FileTreeResetOptions

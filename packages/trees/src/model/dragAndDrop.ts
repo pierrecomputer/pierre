@@ -1,6 +1,5 @@
-import type { PathStoreOperation } from '@pierre/path-store';
-
 import type {
+  FileTreeBatchOperation,
   FileTreeDropContext,
   FileTreeDropResult,
   FileTreeDropTarget,
@@ -149,7 +148,7 @@ export function buildDropOperations(
   draggedPaths: readonly FileTreePublicId[],
   target: FileTreeDropTarget
 ): {
-  operations: readonly PathStoreOperation[];
+  operations: readonly FileTreeBatchOperation[];
   result: FileTreeDropResult;
 } | null {
   const operations = draggedPaths
@@ -167,12 +166,12 @@ export function buildDropOperations(
         from: draggedPath,
         to: destinationPath,
         type: 'move',
-      } satisfies PathStoreOperation;
+      } satisfies FileTreeBatchOperation;
     })
     .filter(
       (
         operation
-      ): operation is Extract<PathStoreOperation, { type: 'move' }> => {
+      ): operation is Extract<FileTreeBatchOperation, { type: 'move' }> => {
         return operation != null;
       }
     );

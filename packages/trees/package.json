@@ -5,12 +5,29 @@
   "files": [
     "dist",
     "LICENSE.md",
+    "NOTICE.md",
     "README.md"
   ],
   "type": "module",
   "sideEffects": [
     "./dist/components/web-components.js"
   ],
+  "typesVersions": {
+    "*": {
+      "*": [
+        "dist/*"
+      ],
+      "react": [
+        "dist/react/index.d.ts"
+      ],
+      "ssr": [
+        "dist/ssr/index.d.ts"
+      ],
+      "web-components": [
+        "dist/web-components.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -73,7 +90,7 @@
     "vite": "catalog:"
   },
   "peerDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "^18.3.1 || ^19.0.0",
+    "react-dom": "^18.3.1 || ^19.0.0"
   }
 }

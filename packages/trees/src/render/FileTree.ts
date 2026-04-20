@@ -1,8 +1,3 @@
-import type {
-  PathStoreMoveOptions,
-  PathStoreOperation,
-  PathStoreRemoveOptions,
-} from '@pierre/path-store';
 import { h } from 'preact';
 import { renderToString } from 'preact-render-to-string';
 
@@ -27,14 +22,17 @@ import {
   resolveFileTreeGitStatusState,
 } from '../model/gitStatus';
 import type {
+  FileTreeBatchOperation,
   FileTreeCompositionOptions,
   FileTreeHydrationProps,
   FileTreeItemHandle,
   FileTreeListener,
+  FileTreeMoveOptions,
   FileTreeMutationEventForType,
   FileTreeMutationEventType,
   FileTreeMutationHandle,
   FileTreeOptions,
+  FileTreeRemoveOptions,
   FileTreeRenderProps,
   FileTreeResetOptions,
   FileTreeRowDecorationRenderer,
@@ -317,14 +315,14 @@ export class FileTree
     this.#controller.add(path);
   }
 
-  public batch(operations: readonly PathStoreOperation[]): void {
+  public batch(operations: readonly FileTreeBatchOperation[]): void {
     this.#controller.batch(operations);
   }
 
   public move(
     fromPath: string,
     toPath: string,
-    options?: PathStoreMoveOptions
+    options?: FileTreeMoveOptions
   ): void {
     this.#controller.move(fromPath, toPath, options);
   }
@@ -375,7 +373,7 @@ export class FileTree
     return this.#controller.startRenaming(path, options);
   }
 
-  public remove(path: string, options?: PathStoreRemoveOptions): void {
+  public remove(path: string, options?: FileTreeRemoveOptions): void {
     this.#controller.remove(path, options);
   }
 
