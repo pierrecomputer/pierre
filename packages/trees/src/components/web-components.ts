@@ -1,6 +1,8 @@
 import { FILE_TREE_STYLE_ATTRIBUTE, FILE_TREE_TAG_NAME } from '../constants';
 import rawStyles from '../style.css';
 import { wrapCoreCSS } from '../utils/cssWrappers';
+import { ensureMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
+
 let sheet: CSSStyleSheet | undefined;
 
 export function ensureFileTreeStyles(shadowRoot: ShadowRoot): void {
@@ -43,6 +45,17 @@ export function ensureFileTreeStyles(shadowRoot: ShadowRoot): void {
   }
 }
 
+// Keeps every tree host on the same setup path so runtime mounting, hydration,
+// and autonomous custom-element upgrades share one shadow-root preparation step.
+export function prepareFileTreeShadowRoot(
+  host: HTMLElement,
+  shadowRoot: ShadowRoot
+): void {
+  adoptDeclarativeShadowDom(host, shadowRoot);
+  ensureFileTreeStyles(shadowRoot);
+  ensureMeasuredScrollbarGutter(host, shadowRoot);
+}
+
 export function adoptDeclarativeShadowDom(
   host: HTMLElement,
   shadowRoot: ShadowRoot
@@ -80,8 +93,7 @@ if (
 
     connectedCallback() {
       const shadowRoot = this.shadowRoot ?? this.attachShadow({ mode: 'open' });
-      adoptDeclarativeShadowDom(this, shadowRoot);
-      ensureFileTreeStyles(shadowRoot);
+      prepareFileTreeShadowRoot(this, shadowRoot);
     }
   }
 
@@ -98,8 +110,7 @@ if (
     )) {
       if (!(el instanceof HTMLElement)) continue;
       const shadowRoot = el.shadowRoot ?? el.attachShadow({ mode: 'open' });
-      adoptDeclarativeShadowDom(el, shadowRoot);
-      ensureFileTreeStyles(shadowRoot);
+      prepareFileTreeShadowRoot(el, shadowRoot);
     }
   }
 }

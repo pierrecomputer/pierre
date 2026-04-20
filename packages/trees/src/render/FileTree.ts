@@ -11,9 +11,8 @@ import {
   isColoredBuiltInIconSet,
 } from '../builtInIcons';
 import {
-  adoptDeclarativeShadowDom,
-  ensureFileTreeStyles,
   FileTreeContainerLoaded,
+  prepareFileTreeShadowRoot,
 } from '../components/web-components';
 import {
   FILE_TREE_STYLE_ATTRIBUTE,
@@ -675,8 +674,7 @@ export class FileTree
     }
 
     const shadowRoot = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
-    adoptDeclarativeShadowDom(host, shadowRoot);
-    ensureFileTreeStyles(shadowRoot);
+    prepareFileTreeShadowRoot(host, shadowRoot);
     this.#syncUnsafeCSS(shadowRoot);
     host.dataset.fileTreeVirtualized = 'true';
     host.style.display = 'flex';

@@ -114,6 +114,8 @@
       --trees-item-row-gap-override
       --trees-icon-width-override
       --trees-icon-nudge-override
+      --trees-scrollbar-gutter-override
+      --trees-padding-inline-override
     */
 
     --trees-fg: var(
@@ -512,6 +514,9 @@
         var(--trees-focus-ring-width)
     );
 
+    --trees-scrollbar-gutter: var(--trees-scrollbar-gutter-override, 6px);
+    --trees-padding-inline: var(--trees-padding-inline-override, 16px);
+
     color-scheme: light dark;
     display: flex;
     flex-direction: column;
@@ -542,11 +547,104 @@
     overflow: hidden;
   }
 
+  [data-file-tree-virtualized-scroll='true'],
+  [data-file-tree-scrollbar-measure='true'] {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+
+    &::-webkit-scrollbar {
+      width: var(--trees-scrollbar-gutter);
+      height: var(--trees-scrollbar-gutter);
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background-color: transparent;
+      border: 1px solid transparent;
+      background-clip: content-box;
+      border-radius: calc(var(--trees-scrollbar-gutter) / 2);
+    }
+
+    &::-webkit-scrollbar-corner {
+      background-color: transparent;
+    }
+
+    &:hover::-webkit-scrollbar-thumb {
+      background-color: var(--trees-bg-muted);
+    }
+  }
+
+  /* These are styles for a temporarily generated element to measure the size
+   * of the scrollbar.  It's intended to be somewhat similar in scrollbar style
+   * scope to the scrollable tree so `--trees-scrollbar-gutter-measured` is an
+   * accurate reflection of the size the scrollbar gutter takes up. */
+  [data-file-tree-scrollbar-measure='true'] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    visibility: hidden;
+    pointer-events: none;
+    width: 100px;
+    height: 100px;
+  }
+
+  @supports (-moz-appearance: none) {
+    [data-file-tree-virtualized-scroll='true'],
+    [data-file-tree-scrollbar-measure='true'] {
+      scrollbar-width: thin;
+      scrollbar-color: var(--trees-bg-muted) transparent;
+    }
+  }
+
   [data-file-tree-virtualized-scroll='true'] {
     position: relative;
-    overflow-y: auto;
+    overscroll-behavior: none;
     flex: 1 1 0;
     min-height: 0;
+    padding-inline: max(
+        calc(var(--trees-padding-inline) - var(--trees-item-margin-x)),
+        0px
+      )
+      /* NOTE(amadeus): We can assume that all Webkit based browser gutters
+       * will align to the value of '--trees-scrollbar-gutter', however if not, then
+       * `--trees-scrollbar-gutter-measured` should correct it. Mostly we are
+       * hoping to avoid SSR alignment jumps if possible. In non-SSR'd environments
+       * `--trees-scrollbar-gutter-measured` should always be immediately available.
+       */
+      max(
+        calc(
+          var(--trees-padding-inline) - var(--trees-item-margin-x) -
+            var(
+              --trees-scrollbar-gutter-measured,
+              var(--trees-scrollbar-gutter)
+            )
+        ),
+        0px
+      );
+  }
+
+  @supports (-moz-appearance: none) {
+    [data-file-tree-virtualized-scroll='true'] {
+      padding-inline: max(
+          calc(var(--trees-padding-inline) - var(--trees-item-margin-x)),
+          0px
+        )
+        /* NOTE(amadeus): However on Firefox it can vary a little bit, but most
+         * likely the majority of cases will default to a 0px width scrollbar lets
+         * inherit that first to avoid SSR jumps. In non-SSR'd environments
+         * `--trees-scrollbar-gutter-measured` should always be immediately available.
+         */
+        max(
+          calc(
+            var(--trees-padding-inline) - var(--trees-item-margin-x) -
+              var(--trees-scrollbar-gutter-measured, 0px)
+          ),
+          0px
+        );
+    }
   }
 
   [data-file-tree-virtualized-list='true'] {
@@ -575,7 +673,8 @@
   [data-file-tree-search-container] {
     display: flex;
     padding: 0;
-    margin: 0 var(--trees-item-margin-x) var(--trees-item-row-gap);
+    padding-inline: var(--trees-padding-inline);
+    margin-bottom: var(--trees-item-row-gap);
   }
 
   [data-file-tree-search-input] {
