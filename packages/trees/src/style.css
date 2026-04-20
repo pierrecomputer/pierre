@@ -601,7 +601,7 @@
 
   [data-file-tree-virtualized-scroll='true'] {
     position: relative;
-    overscroll-behavior: none;
+    overflow-y: auto;
     flex: 1 1 0;
     min-height: 0;
     padding-inline: max(
