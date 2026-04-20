@@ -262,8 +262,7 @@ const GIT_STATUS_LEGEND: ReadonlyArray<{
     light: '#1ca1c7',
     dark: '#08c0ef',
     badgeOpacity: 0.5,
-    description:
-      'Folder contains changed descendants even when folder itself has no direct status',
+    description: 'Folder contains changed descendants',
   },
 ];
 
