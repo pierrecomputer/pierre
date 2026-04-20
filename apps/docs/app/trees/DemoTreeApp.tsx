@@ -9,6 +9,7 @@ import {
   TREE_APP_DEMO_INITIAL_ACTIVE_PATH,
   TREE_APP_DEMO_INITIAL_EXPANDED_PATHS,
   TREE_APP_DEMO_PATHS,
+  TREE_APP_DEMO_UNSAFE_CSS,
 } from './treeAppDemoData';
 
 const TREE_APP_DEMO_TREE_ID = 'tree-app-hero-demo';
@@ -32,6 +33,7 @@ export async function DemoTreeApp() {
     itemHeight: TREE_APP_DEMO_ITEM_HEIGHT,
     paths: TREE_APP_DEMO_PATHS,
     search: true,
+    unsafeCSS: TREE_APP_DEMO_UNSAFE_CSS,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.treeApp,
   });
 

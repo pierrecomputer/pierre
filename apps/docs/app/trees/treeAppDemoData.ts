@@ -224,6 +224,15 @@ export const TREE_APP_DEMO_INITIAL_EXPANDED_PATHS: readonly string[] = [
 
 export const TREE_APP_DEMO_INITIAL_ACTIVE_PATH = 'src/components/Button.tsx';
 
+export const TREE_APP_DEMO_UNSAFE_CSS = `
+  /* Hide the search field until the controller flips data-open="true". This
+     lets callers always preload with search: true (so SSR markup matches the
+     hydrated tree) without showing an empty search field on first paint. */
+  [data-file-tree-search-container][data-open='false'] {
+    display: none;
+  }
+`;
+
 export const TREE_APP_DEMO_GIT_STATUSES: readonly GitStatusEntry[] = [
   { path: '.gitignore', status: 'added' },
   { path: '.env', status: 'ignored' },

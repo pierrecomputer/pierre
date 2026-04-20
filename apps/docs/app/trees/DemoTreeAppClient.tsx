@@ -7,7 +7,10 @@ import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
-import { TREE_APP_DEMO_GIT_STATUSES } from './treeAppDemoData';
+import {
+  TREE_APP_DEMO_GIT_STATUSES,
+  TREE_APP_DEMO_UNSAFE_CSS,
+} from './treeAppDemoData';
 import { TreeApp } from '@/components/TreeApp';
 import type { GitStatusEntry } from '@/lib/treesCompat';
 
@@ -189,6 +192,7 @@ export function DemoTreeAppClient({
       paths,
       renaming: true as const,
       search: true as const,
+      unsafeCSS: TREE_APP_DEMO_UNSAFE_CSS,
       viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.treeApp,
     }),
     [initialActivePath, initialExpandedPaths, paths, treeId]
