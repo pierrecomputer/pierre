@@ -209,6 +209,7 @@ export function DemoContextMenuClient({
           model={activeModel}
           preloadedTreeData={preloadedDataById[activeModeDemo.id]}
           projectName={getProjectNameForMode(activeMode)}
+          showTabs={false}
           treeClassName="dark h-full min-h-0 overflow-auto p-2"
           treeStyle={contextMenuPanelStyle}
           renderEmpty={() => (

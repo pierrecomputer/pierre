@@ -144,6 +144,7 @@ export interface TreeAppProps<LAnnotation = unknown> {
   // Other extension slots.
   renderWindowChrome?: () => ReactNode;
   renderTab?: (context: TreeAppTabRenderContext) => ReactNode;
+  showTabs?: boolean;
   renderEditor?: (context: TreeAppEditorRenderContext) => ReactNode;
   renderEmpty?: () => ReactNode;
   tabIcons?: FileTreeIcons;
@@ -866,6 +867,7 @@ export function TreeApp<LAnnotation = unknown>({
   renderTab,
   renderWindowChrome,
   searchEnabled = false,
+  showTabs = true,
   style,
   tabIcons,
   treeClassName,
@@ -1104,7 +1106,7 @@ export function TreeApp<LAnnotation = unknown>({
           className="relative w-px shrink-0 cursor-col-resize bg-white/0 after:absolute after:inset-y-0 after:-left-1 after:w-2 after:content-['']"
         />
         <section className="flex min-w-0 flex-1 flex-col">
-          {openPaths.length > 0 ? (
+          {showTabs && openPaths.length > 0 ? (
             <div
               className="group/tabbar flex h-10 items-center gap-1 overflow-x-auto px-2"
               style={{ backgroundColor: 'light-dark(#fff, #070707)' }}
