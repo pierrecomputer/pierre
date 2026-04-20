@@ -932,13 +932,17 @@ export function TreeApp<LAnnotation = unknown>({
   );
 
   const sidebarStyle = useMemo<CSSProperties>(
-    () => ({ width: `${String(explorer.width)}px` }),
+    () =>
+      ({
+        '--tree-app-explorer-width': `${String(explorer.width)}px`,
+      }) as CSSProperties,
     [explorer.width]
   );
 
   const treeHostStyle = useMemo<CSSProperties>(
     () => ({
       ...treeStyle,
+      width: '100%',
       height: '100%',
       borderRadius: '8px',
       border: '1px solid rgb(255 255 255 / 0.05)',
@@ -1081,9 +1085,9 @@ export function TreeApp<LAnnotation = unknown>({
       {windowChromeNode != null ? (
         <div className="shrink-0">{windowChromeNode}</div>
       ) : null}
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <aside
-          className="group/tree-app-explorer flex min-h-0 shrink-0 flex-col"
+          className="group/tree-app-explorer flex min-h-[260px] w-full shrink-0 flex-col md:min-h-0 md:w-[var(--tree-app-explorer-width)]"
           style={sidebarStyle}
         >
           <FileTree
@@ -1103,7 +1107,7 @@ export function TreeApp<LAnnotation = unknown>({
           onPointerMove={explorer.onPointerMove}
           onPointerUp={explorer.onPointerUp}
           onPointerCancel={explorer.onPointerUp}
-          className="relative w-px shrink-0 cursor-col-resize bg-white/0 after:absolute after:inset-y-0 after:-left-1 after:w-2 after:content-['']"
+          className="relative hidden w-px shrink-0 cursor-col-resize bg-white/0 after:absolute after:inset-y-0 after:-left-1 after:w-2 after:content-[''] md:block"
         />
         <section className="flex min-w-0 flex-1 flex-col">
           {showTabs && openPaths.length > 0 ? (
