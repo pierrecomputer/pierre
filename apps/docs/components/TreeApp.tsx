@@ -456,27 +456,59 @@ function useOpenTabs({
     }
   }, [model, selectedPaths]);
 
-  const closeTab = useCallback((path: string) => {
-    setOpenPaths((current) => {
-      const nextOpen = current.filter((entry) => entry !== path);
-      setActivePath((currentActive) => {
-        if (currentActive !== path) {
-          return currentActive;
+  const closeTab = useCallback(
+    (path: string) => {
+      if (activePath === path) {
+        const item = model.getItem(path);
+        if (item?.isSelected() === true) {
+          item.deselect();
         }
-        if (nextOpen.length === 0) {
-          return null;
-        }
-        const closedIndex = current.indexOf(path);
-        const fallbackIndex = Math.min(closedIndex, nextOpen.length - 1);
-        return nextOpen[fallbackIndex] ?? null;
+      }
+
+      setOpenPaths((current) => {
+        const nextOpen = current.filter((entry) => entry !== path);
+        setActivePath((currentActive) => {
+          if (currentActive !== path) {
+            return currentActive;
+          }
+          if (nextOpen.length === 0) {
+            return null;
+          }
+          const closedIndex = current.indexOf(path);
+          const fallbackIndex = Math.min(closedIndex, nextOpen.length - 1);
+          return nextOpen[fallbackIndex] ?? null;
+        });
+        return nextOpen;
       });
-      return nextOpen;
-    });
-  }, []);
+    },
+    [activePath, model]
+  );
 
   const activateTab = useCallback((path: string) => {
     setActivePath(path);
   }, []);
+
+  useEffect(() => {
+    if (activePath == null) {
+      return;
+    }
+
+    const activeItem = model.getItem(activePath);
+    if (activeItem == null) {
+      return;
+    }
+
+    for (const selectedPath of model.getSelectedPaths()) {
+      if (selectedPath === activePath) {
+        continue;
+      }
+      model.getItem(selectedPath)?.deselect();
+    }
+
+    if (!activeItem.isSelected()) {
+      activeItem.select();
+    }
+  }, [activePath, model]);
 
   useEffect(
     () =>
