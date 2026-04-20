@@ -1586,26 +1586,38 @@ export function FileTreeView({
         return false;
       }
 
+      // A sticky interaction can mutate the tree before we reveal the canonical
+      // row, so derive the target offset from the controller's live post-action
+      // layout instead of the previous render snapshot. The full recompute is
+      // intentional here because this callback only runs on discrete interactions,
+      // not on scroll.
+      const liveViewportHeight = getMeasuredViewportHeight(
+        scrollElement,
+        resolvedViewportHeight
+      );
+      const liveLayout = computeFileTreeViewLayoutState({
+        controller,
+        itemHeight,
+        overscan,
+        scrollTop: scrollElement.scrollTop,
+        stickyFolders,
+        viewportHeight: liveViewportHeight,
+      });
+
       domFocusOwnerRef.current = true;
       scrollFocusedRowToViewportOffset(
         scrollElement,
         visibleIndex,
         itemHeight,
-        resolvedViewportHeight,
-        totalScrollableHeight,
-        stickyOverlayHeight
+        liveViewportHeight,
+        liveLayout.snapshot.physical.totalHeight,
+        liveLayout.snapshot.sticky.height
       );
       updateViewportRef.current();
       pendingStickyFocusPathRef.current = restoreTreeFocus ? path : null;
       return true;
     },
-    [
-      controller,
-      itemHeight,
-      resolvedViewportHeight,
-      stickyOverlayHeight,
-      totalScrollableHeight,
-    ]
+    [controller, itemHeight, overscan, resolvedViewportHeight, stickyFolders]
   );
 
   const shouldSuppressContextMenu = (): boolean => {

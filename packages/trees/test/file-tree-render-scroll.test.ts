@@ -1476,6 +1476,160 @@ describe('file-tree render + scroll', () => {
     }
   });
 
+  test('collapsing a sticky row keeps it as the first in-flow row below its sticky parents', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: [
+          'arch/',
+          'arch/alpha/',
+          'arch/alpha/boot/',
+          'arch/alpha/configs/',
+          'arch/alpha/include/',
+          'arch/alpha/include/asm/',
+        ],
+        paths: [
+          'arch/alpha/boot/boot.h',
+          'arch/alpha/configs/config.h',
+          'arch/alpha/include/asm/bitops.h',
+          'arch/alpha/include/linux.h',
+          'arch/alpha/include/zeta.h',
+        ],
+        stickyFolders: true,
+        initialVisibleRowCount: 180 / 30,
+      });
+
+      fileTree.render({ containerWrapper });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      scrollElement.scrollTop = 120;
+      scrollElement.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+
+      expect(getStickyRowPaths(shadowRoot, dom)).toEqual([
+        'arch/',
+        'arch/alpha/',
+        'arch/alpha/include/',
+        'arch/alpha/include/asm/',
+      ]);
+      expect(getMountedItemPaths(shadowRoot, dom)[0]).toBe(
+        'arch/alpha/include/asm/bitops.h'
+      );
+
+      clickStickyRow(shadowRoot, dom, 'arch/alpha/include/asm/');
+      await flushDom();
+      await flushDom();
+
+      expect(scrollElement.scrollTop).toBe(120);
+      expect(getStickyRowPaths(shadowRoot, dom)).toEqual([
+        'arch/',
+        'arch/alpha/',
+        'arch/alpha/include/',
+      ]);
+      expect(getMountedItemPaths(shadowRoot, dom)[0]).toBe(
+        'arch/alpha/include/asm/'
+      );
+
+      const asmDirectory = fileTree.getItem('arch/alpha/include/asm/');
+      if (
+        asmDirectory == null ||
+        asmDirectory.isDirectory() !== true ||
+        !('isExpanded' in asmDirectory)
+      ) {
+        throw new Error('expected arch/alpha/include/asm directory item');
+      }
+      expect(asmDirectory.isExpanded()).toBe(false);
+      expect(getFocusedItemPath(shadowRoot, dom)).toBe(
+        'arch/alpha/include/asm/'
+      );
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+  test('collapsing a sticky row keeps it below its only sticky parent', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['src/', 'src/lib/'],
+        paths: [
+          'docs/readme.md',
+          'src/lib/util.ts',
+          'src/lib/zeta.ts',
+          'zzz.ts',
+          'zzzz.ts',
+        ],
+        stickyFolders: true,
+        initialVisibleRowCount: 90 / 30,
+      });
+
+      fileTree.render({ containerWrapper });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      scrollElement.scrollTop = 30;
+      scrollElement.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+
+      expect(getStickyRowPaths(shadowRoot, dom)).toEqual(['src/', 'src/lib/']);
+      expect(() => getItemButton(shadowRoot, dom, 'src/lib/')).toThrow();
+      expect(
+        getItemButton(shadowRoot, dom, 'src/lib/util.ts').dataset.itemPath
+      ).toBe('src/lib/util.ts');
+
+      clickStickyRow(shadowRoot, dom, 'src/lib/');
+      await flushDom();
+      await flushDom();
+
+      expect(scrollElement.scrollTop).toBe(30);
+      expect(getStickyRowPaths(shadowRoot, dom)).toEqual(['src/']);
+      expect(getItemButton(shadowRoot, dom, 'src/lib/').dataset.itemPath).toBe(
+        'src/lib/'
+      );
+
+      const libDirectory = fileTree.getItem('src/lib/');
+      if (
+        libDirectory == null ||
+        libDirectory.isDirectory() !== true ||
+        !('isExpanded' in libDirectory)
+      ) {
+        throw new Error('expected src/lib directory item');
+      }
+      expect(libDirectory.isExpanded()).toBe(false);
+      expect(getFocusedItemPath(shadowRoot, dom)).toBe('src/lib/');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('flattened sticky row clicks target the flattened row only', async () => {
     const { cleanup, dom } = installDom();
     try {

@@ -492,7 +492,7 @@ describe('file-tree renaming', () => {
 
       expect(fileTree.startRenaming('src/lib/')).toBe(true);
       await flushDom(4);
-      expect(scrollElement.scrollTop).toBeLessThan(149);
+      expect(scrollElement.scrollTop).toBe(90);
       const renameInput = getRenameInput(shadowRoot, dom);
       const renameRow = getItemRow(shadowRoot, dom, 'src/lib/');
       expect(renameInput.value).toBe('lib');
