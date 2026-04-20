@@ -110,6 +110,16 @@ export type FileTreeSearchMode =
   | 'collapse-non-matches'
   | 'hide-non-matches';
 
+// Controls what happens to the search session when the search input loses
+// focus. `'close'` (the default, and the legacy behavior) clears the query and
+// closes the search session as soon as the input is blurred. `'retain'` keeps
+// the current query and leaves the session open, so the filter stays applied
+// until the caller explicitly closes it (via Escape, Enter, or a programmatic
+// `closeSearch()`). `'retain'` is useful for trees mounted with an
+// `initialSearchQuery` that should survive concurrent siblings stealing focus
+// during mount.
+export type FileTreeSearchBlurBehavior = 'close' | 'retain';
+
 export type FileTreeSearchChangeListener = (value: string | null) => void;
 
 export interface FileTreeSearchSessionHandle {
@@ -172,6 +182,14 @@ type FileTreeOptionSurface = FileTreeRenderOptions & {
   onSelectionChange?: FileTreeSelectionChangeListener;
   renderRowDecoration?: FileTreeRowDecorationRenderer;
   search?: boolean;
+  // When `true`, renders the search input with a synthetic focus ring so the
+  // input looks focused even though no browser focus is attached. The ring is
+  // dismissed automatically on the first real interaction with the input
+  // (focus, pointer down, or input). Intended for demos and marketing pages
+  // that pre-populate an `initialSearchQuery` and want the visual to match a
+  // focused state without stealing real focus from siblings.
+  searchFakeFocus?: boolean;
+  searchBlurBehavior?: FileTreeSearchBlurBehavior;
   unsafeCSS?: string;
 };
 
@@ -215,7 +233,9 @@ export interface FileTreeViewProps extends Omit<
   instanceId?: string;
   renamingEnabled?: boolean;
   renderRowDecoration?: FileTreeRowDecorationRenderer;
+  searchBlurBehavior?: FileTreeSearchBlurBehavior;
   searchEnabled?: boolean;
+  searchFakeFocus?: boolean;
   slotHost?: FileTreeSlotHost;
 }
 

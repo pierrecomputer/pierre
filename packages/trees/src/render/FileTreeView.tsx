@@ -1334,7 +1334,9 @@ export function FileTreeView({
   overscan = FILE_TREE_DEFAULT_OVERSCAN,
   renamingEnabled = false,
   renderRowDecoration,
+  searchBlurBehavior = 'close',
   searchEnabled = false,
+  searchFakeFocus = false,
   slotHost,
   stickyFolders = false,
   initialViewportHeight = FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
@@ -1399,6 +1401,40 @@ export function FileTreeView({
   const pendingStickyFocusPathRef = useRef<string | null>(null);
   const debugContextMenuTriggerPathRef = useRef<string | null>(null);
   const debugDisableScrollSuppressionRef = useRef(false);
+
+  // Trees that mount with an already-open search session (because a caller
+  // passed `initialSearchQuery`) should not steal focus from sibling trees
+  // during mount when the consumer opted into `'retain'` blur behavior. The
+  // legacy `'close'` behavior still auto-focuses so that existing keybind-driven
+  // search sessions continue to work.
+  const skipInitialSearchAutoFocusRef = useRef(
+    searchBlurBehavior === 'retain' && controller.isSearchOpen()
+  );
+
+  // When `searchFakeFocus` is enabled, render a synthetic focus ring on the
+  // search input until the user actually interacts with it. The flag flips off
+  // on the first real focus, pointer-down, or input event so normal focus
+  // behavior takes over once the user engages.
+  const [fakeSearchFocusActive, setFakeSearchFocusActive] =
+    useState<boolean>(searchFakeFocus);
+  useEffect(() => {
+    if (!searchFakeFocus) {
+      setFakeSearchFocusActive(false);
+    }
+  }, [searchFakeFocus]);
+
+  // Tracks whether the user has ever interacted with the search input. With
+  // `searchBlurBehavior: 'retain'` we protect the initial query from being
+  // cleared by mount-time focus churn (e.g. sibling trees stealing focus), but
+  // once the user actually clicks or types, the normal blur-to-close behavior
+  // should resume so they can dismiss the filter with a blur like any other
+  // tree.
+  const searchInputUserInteractedRef = useRef(false);
+
+  const markSearchInputInteracted = useCallback(() => {
+    searchInputUserInteractedRef.current = true;
+    setFakeSearchFocusActive((previous) => (previous ? false : previous));
+  }, []);
 
   const [layoutState, setLayoutState] = useState<FileTreeViewLayoutState>(() =>
     computeFileTreeViewLayoutState({
@@ -2246,6 +2282,11 @@ export function FileTreeView({
 
   useLayoutEffect(() => {
     if (!searchEnabled || !isSearchOpen) {
+      return;
+    }
+
+    if (skipInitialSearchAutoFocusRef.current) {
+      skipInitialSearchAutoFocusRef.current = false;
       return;
     }
 
@@ -3178,11 +3219,28 @@ export function FileTreeView({
             aria-controls={treeDomId}
             placeholder="Search…"
             data-file-tree-search-input
+            data-file-tree-search-input-fake-focus={
+              fakeSearchFocusActive ? 'true' : undefined
+            }
             value={searchValue}
             onBlur={() => {
+              // With `retain`, only protect against blurs that happen before
+              // the user has engaged with the input (typically the mount-time
+              // focus cascade when multiple trees initialize). Once the user
+              // has focused or typed, the normal close-on-blur behavior
+              // resumes.
+              if (
+                searchBlurBehavior === 'retain' &&
+                !searchInputUserInteractedRef.current
+              ) {
+                return;
+              }
               controller.closeSearch();
             }}
+            onFocus={markSearchInputInteracted}
+            onPointerDown={markSearchInputInteracted}
             onInput={(event) => {
+              markSearchInputInteracted();
               const target = event.currentTarget;
               controller.setSearch(target.value);
             }}

@@ -19,6 +19,11 @@ function createSearchPreloadedData(
     initialSearchQuery: PREPOPULATED_SEARCH,
     paths: sampleFileList,
     search: true,
+    // Keep the preloaded search query visible across remounts and concurrent
+    // sibling trees stealing focus during mount. The demos want the filter to
+    // stay applied until a user interacts explicitly.
+    searchBlurBehavior: 'retain',
+    searchFakeFocus: true,
     initialVisibleRowCount: viewportHeight / 30,
   });
 }

@@ -23,8 +23,11 @@ const KEYBOARD_SHORTCUTS: readonly { description: string; key: string }[] = [
   { key: '↑ ↓', description: 'Move focus between items' },
   { key: '→', description: 'Expand folder or move to first child' },
   { key: '←', description: 'Collapse folder or move to parent' },
-  { key: 'Enter', description: 'Open file or toggle folder' },
-  { key: 'Space', description: 'Select the focused item' },
+  { key: 'Enter / Space', description: 'Select focused item; toggle folder' },
+  {
+    key: '⌘/Ctrl + Space',
+    description: 'Add or remove focused item from selection',
+  },
   { key: 'a–z', description: 'Type-ahead to jump by name' },
   { key: 'Tab', description: 'Focus in/out of tree, between search and tree' },
 ];
@@ -40,6 +43,7 @@ export function DemoA11yClient({ preloadedData }: DemoA11yClientProps) {
     initialExpandedPaths: ['src', 'src/components'],
     initialSelectedPaths: [PRESELECTED_PATH],
     paths: sampleFileList,
+    search: true,
     initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.a11y / 30,
   });
 

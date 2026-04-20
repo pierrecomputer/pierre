@@ -61,6 +61,7 @@ export type {
   FileTreeRowDecorationRenderer,
   FileTreeResetEvent,
   FileTreeResetOptions,
+  FileTreeSearchBlurBehavior,
   FileTreeSearchChangeListener,
   FileTreeSearchMode,
   FileTreeSearchSessionHandle,

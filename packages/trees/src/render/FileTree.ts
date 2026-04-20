@@ -170,7 +170,9 @@ export class FileTree
   readonly #onSelectionChange: FileTreeSelectionChangeListener | undefined;
   readonly #renderRowDecoration: FileTreeRowDecorationRenderer | undefined;
   readonly #renamingEnabled: boolean;
+  readonly #searchBlurBehavior: FileTreeOptions['searchBlurBehavior'];
   readonly #searchEnabled: boolean;
+  readonly #searchFakeFocus: boolean;
   readonly #slotHost = new FileTreeManagedSlotHost();
   readonly #viewOptions: Pick<
     FileTreeOptions,
@@ -201,6 +203,8 @@ export class FileTree
       renderRowDecoration,
       renaming,
       search,
+      searchBlurBehavior,
+      searchFakeFocus,
       stickyFolders,
       unsafeCSS,
       initialVisibleRowCount,
@@ -214,7 +218,9 @@ export class FileTree
     this.#onSelectionChange = onSelectionChange;
     this.#renderRowDecoration = renderRowDecoration;
     this.#renamingEnabled = renaming != null && renaming !== false;
+    this.#searchBlurBehavior = searchBlurBehavior;
     this.#searchEnabled = search === true;
+    this.#searchFakeFocus = searchFakeFocus === true;
     this.#viewOptions = {
       itemHeight,
       overscan,
@@ -469,7 +475,9 @@ export class FileTree
       instanceId: this.#id,
       renamingEnabled: this.#renamingEnabled,
       renderRowDecoration: this.#renderRowDecoration,
+      searchBlurBehavior: this.#searchBlurBehavior,
       searchEnabled: this.#searchEnabled,
+      searchFakeFocus: this.#searchFakeFocus,
       slotHost: this.#slotHost,
       ...this.#getInitialViewOptions(),
     };
@@ -711,6 +719,8 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     renderRowDecoration,
     renaming,
     search,
+    searchBlurBehavior,
+    searchFakeFocus,
     stickyFolders,
     unsafeCSS,
     initialVisibleRowCount,
@@ -755,7 +765,9 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
       overscan,
       renamingEnabled: renaming != null && renaming !== false,
       renderRowDecoration,
+      searchBlurBehavior,
       searchEnabled: search === true,
+      searchFakeFocus: searchFakeFocus === true,
       stickyFolders,
       initialViewportHeight,
     })

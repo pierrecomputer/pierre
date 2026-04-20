@@ -5,14 +5,12 @@ import {
   type FileTreePreloadedData,
   useFileTree,
 } from '@pierre/trees/react';
-import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
 import { FeatureHeader } from '../diff-examples/FeatureHeader';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { DEFAULT_FILE_TREE_PANEL_CLASS } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
-import { PRODUCTS } from '@/app/product-config';
 
 const FILE_COUNT_FORMATTER = new Intl.NumberFormat('en-US');
 const panelStyle: CSSProperties = {
@@ -46,15 +44,9 @@ export function DemoVirtualizationClient({
         title="Always virtualized"
         description={
           <>
-            Trees with thousands of items render instantly with built-in and
-            automatic virtualization. Only visible rows are mounted. See the{' '}
-            <Link
-              href={`${PRODUCTS.trees.docsPath}#shared-concepts-scale-and-rendering-settings`}
-              className="inline-link"
-            >
-              scale settings reference
-            </Link>{' '}
-            for configuration details. As a demo, the tree below contains{' '}
+            Trees with tens of thousands of items render instantly with built-in
+            and automatic virtualization. Only visible rows are mounted. The
+            tree below contains{' '}
             <strong>{FILE_COUNT_FORMATTER.format(paths.length)} files</strong>{' '}
             with every folder expanded.
           </>

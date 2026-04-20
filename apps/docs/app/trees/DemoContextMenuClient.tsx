@@ -158,16 +158,18 @@ export function DemoContextMenuClient({
         title="Context menu composition"
         description={
           <>
-            Render a custom context menu with{' '}
+            Render your own custom context menu with{' '}
             <Link
               href={`${PRODUCTS.trees.docsPath}#rename-drag-and-trigger-item-actions-add-a-context-menu-as-an-optional-command-surface`}
               className="inline-link"
             >
               <code>composition.contextMenu</code>
             </Link>{' '}
-            and the React <code>renderContextMenu</code> prop. . This demo
-            exposes trigger modes for right-click, trigger button, or both, and
-            menu actions for new files, new folders, rename, and delete.
+            and the React <code>renderContextMenu</code> prop. This demo exposes
+            trigger modes for right-click, trigger button, or both, and menu
+            actions for new files, new folders, rename, and delete. This demo
+            uses Shadcn UI components for the context menu as an example. Your
+            app can use the menus that you already have.
           </>
         }
       />

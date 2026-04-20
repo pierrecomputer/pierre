@@ -778,6 +778,9 @@
     font-size: var(--trees-font-size);
     flex: 1;
     height: var(--trees-row-height);
+    /* 1px breathing room so the focus-visible outline isn't clipped when the
+     * input sits flush against the top of the scroll container. */
+    margin-block: 1px;
     padding-inline: var(--trees-item-padding-x);
     line-height: var(--trees-row-height);
     color: var(--trees-search-fg);
@@ -794,7 +797,8 @@
       );
     }
 
-    &:focus-visible {
+    &:focus-visible,
+    &[data-file-tree-search-input-fake-focus='true'] {
       outline: var(--trees-focus-ring-width) solid var(--trees-focus-ring-color);
       outline-offset: var(--trees-focus-ring-offset);
     }

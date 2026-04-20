@@ -764,4 +764,113 @@ describe('file-tree search', () => {
       cleanup();
     }
   });
+
+  test('searchBlurBehavior retain keeps the initial query when the input blurs pre-interaction', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        fileTreeSearchMode: 'hide-non-matches',
+        flattenEmptyDirectories: false,
+        id: 'pst-search-retain-test',
+        initialExpansion: 'open',
+        initialSearchQuery: 'worker',
+        paths: FILES,
+        search: true,
+        searchBlurBehavior: 'retain',
+        initialVisibleRowCount: 220 / 30,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const searchInput = shadowRoot?.querySelector<HTMLInputElement>(
+        'input[data-file-tree-search-input]'
+      );
+      expect(searchInput).not.toBeNull();
+      expect(searchInput?.value).toBe('worker');
+      expect(fileTree.isSearchOpen()).toBe(true);
+
+      // Simulate a blur that happens before any user interaction (e.g. the
+      // sibling tree mount cascade stealing focus). The query must survive.
+      searchInput?.dispatchEvent(
+        new dom.window.FocusEvent('blur', { bubbles: true })
+      );
+      await flushDom();
+
+      expect(fileTree.isSearchOpen()).toBe(true);
+      expect(fileTree.getSearchValue()).toBe('worker');
+
+      // Once the user interacts (focus), a subsequent blur should close the
+      // search the same way the default behavior does.
+      searchInput?.dispatchEvent(
+        new dom.window.FocusEvent('focus', { bubbles: true })
+      );
+      await flushDom();
+      searchInput?.dispatchEvent(
+        new dom.window.FocusEvent('blur', { bubbles: true })
+      );
+      await flushDom();
+
+      expect(fileTree.isSearchOpen()).toBe(false);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('searchFakeFocus renders a synthetic focus attribute that dismisses on interaction', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        fileTreeSearchMode: 'hide-non-matches',
+        flattenEmptyDirectories: false,
+        id: 'pst-search-fake-focus-test',
+        initialExpansion: 'open',
+        initialSearchQuery: 'worker',
+        paths: FILES,
+        search: true,
+        searchBlurBehavior: 'retain',
+        searchFakeFocus: true,
+        initialVisibleRowCount: 220 / 30,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const searchInput = shadowRoot?.querySelector<HTMLInputElement>(
+        'input[data-file-tree-search-input]'
+      );
+      expect(searchInput).not.toBeNull();
+      expect(
+        searchInput?.getAttribute('data-file-tree-search-input-fake-focus')
+      ).toBe('true');
+
+      // Pointer-down on the input dismisses the synthetic ring. JSDOM doesn't
+      // ship a PointerEvent constructor, so dispatch a generic bubbling event
+      // with the right type — Preact's synthetic handler binds by event name.
+      searchInput?.dispatchEvent(
+        new dom.window.Event('pointerdown', { bubbles: true })
+      );
+      await flushDom();
+
+      expect(
+        searchInput?.getAttribute('data-file-tree-search-input-fake-focus')
+      ).toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
 });

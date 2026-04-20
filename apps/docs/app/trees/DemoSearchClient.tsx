@@ -74,6 +74,12 @@ function SearchModeTree({
     initialSearchQuery: PREPOPULATED_SEARCH,
     paths: sampleFileList,
     search: true,
+    // Mirror the SSR preload so the filter survives React's per-tree mount
+    // cascade (each tree's input briefly receives focus and then blurs as the
+    // next sibling initializes). A real user blur-close still works once they
+    // interact: the fake focus ring is dismissed on first pointer/focus/input.
+    searchBlurBehavior: 'retain',
+    searchFakeFocus: true,
     initialVisibleRowCount: modeDemo.viewportHeight / 30,
   });
 

@@ -12,6 +12,7 @@ const preloadedData = preloadFileTree({
   initialExpandedPaths: ['src', 'src/components'],
   initialSelectedPaths: [PRESELECTED_PATH],
   paths: sampleFileList,
+  search: true,
   initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.a11y / 30,
 });
 
