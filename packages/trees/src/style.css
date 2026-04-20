@@ -626,7 +626,7 @@
     [data-file-tree-virtualized-scroll='true'],
     [data-file-tree-scrollbar-measure='true'] {
       scrollbar-width: thin;
-      scrollbar-color: var(--trees-bg-muted) transparent;
+      scrollbar-color: var(--trees-scrollbar-thumb) transparent;
     }
   }
 
