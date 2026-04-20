@@ -823,19 +823,14 @@ function DefaultTab({
       </button>
       <div
         aria-hidden="true"
-        className={[
-          'pointer-events-none absolute top-0 right-0 bottom-0 z-10 w-12 opacity-0 transition-opacity group-hover:opacity-100',
-          isActive
-            ? 'bg-gradient-to-l from-neutral-900 via-neutral-900 to-transparent'
-            : 'bg-gradient-to-l from-neutral-900 via-neutral-900 to-transparent',
-        ].join(' ')}
+        className="pointer-events-none absolute top-0 right-0 bottom-0 z-10 w-12 bg-gradient-to-l from-neutral-900 via-neutral-900 to-transparent opacity-0 transition-opacity group-hover:opacity-100"
       />
       <button
         type="button"
         onClick={close}
         title="Close tab"
         aria-label={`Close ${label}`}
-        className="absolute top-1/2 right-1 z-20 flex h-5 w-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-100 focus:opacity-100"
+        className="absolute top-1/2 right-1 z-20 flex h-5 w-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded bg-neutral-800 text-neutral-500 opacity-0 transition-opacity group-hover:opacity-100 hover:text-zinc-100 focus:opacity-100"
       >
         <IconX aria-hidden="true" className="h-3 w-3" />
       </button>
