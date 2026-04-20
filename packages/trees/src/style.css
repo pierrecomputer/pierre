@@ -132,39 +132,39 @@
       --trees-fg-override,
       var(
         --trees-theme-sidebar-fg,
-        light-dark(oklch(14.5% 0 0), oklch(98.5% 0 0))
+        light-dark(#6c6c71, #adadb1)
       )
     );
     --trees-fg-muted: var(
       --trees-fg-muted-override,
       var(
         --trees-theme-sidebar-header-fg,
-        light-dark(oklch(45% 0 0), oklch(75% 0 0))
+        light-dark(#84848a, #84848a)
       )
     );
     --trees-bg: var(
       --trees-bg-override,
-      var(--trees-theme-sidebar-bg, light-dark(oklch(100% 0 0), oklch(0% 0 0)))
+      var(--trees-theme-sidebar-bg, light-dark(#f8f8f8, #141415))
     );
     --trees-bg-muted: var(
       --trees-bg-muted-override,
       var(
         --trees-theme-list-hover-bg,
-        light-dark(oklch(97% 0 0), oklch(26.9% 0 0))
+        light-dark(#dfebff59, #19283c59)
       )
     );
     --trees-accent: var(--trees-accent-override, #009fff);
 
-    --trees-added-light: #0dbe4e;
-    --trees-added-dark: #5ecc71;
+    --trees-added-light: #16a994;
+    --trees-added-dark: #00cab1;
     --trees-ignored-light: #84848a;
     --trees-ignored-dark: #adadb1;
-    --trees-modified-light: #009fff;
-    --trees-modified-dark: #69b1ff;
-    --trees-renamed-light: #d47628;
-    --trees-renamed-dark: #ffa359;
-    --trees-untracked-light: #0dbe4e;
-    --trees-untracked-dark: #5ecc71;
+    --trees-modified-light: #1ca1c7;
+    --trees-modified-dark: #08c0ef;
+    --trees-renamed-light: #d5a910;
+    --trees-renamed-dark: #ffd452;
+    --trees-untracked-light: #16a994;
+    --trees-untracked-dark: #00cab1;
     --trees-deleted-light: #ff2e3f;
     --trees-deleted-dark: #ff6762;
 
@@ -172,7 +172,7 @@
       --trees-border-color-override,
       var(
         --trees-theme-sidebar-border,
-        light-dark(oklch(0% 0 0 / 0.2), oklch(100% 0 0 / 0.2))
+        light-dark(#eeeeef, #070707)
       )
     );
     --trees-density: var(--trees-density-override, 1);
@@ -191,10 +191,7 @@
 
     --trees-focus-ring-color: var(
       --trees-focus-ring-color-override,
-      var(
-        --trees-theme-focus-ring,
-        color-mix(in lab, var(--trees-accent) 65%, var(--trees-bg))
-      )
+      var(--trees-theme-focus-ring, var(--trees-accent))
     );
     --trees-focus-ring-width: var(--trees-focus-ring-width-override, 1px);
     --trees-focus-ring-offset: var(--trees-focus-ring-offset-override, -1px);
@@ -225,13 +222,7 @@
     );
     --trees-selected-focused-border-color: var(
       --trees-selected-focused-border-color-override,
-      var(
-        --trees-theme-focus-ring,
-        light-dark(
-          color-mix(in lab, var(--trees-accent) 40%, var(--trees-bg)),
-          color-mix(in lab, var(--trees-accent) 60%, var(--trees-bg))
-        )
-      )
+      var(--trees-theme-focus-ring, var(--trees-accent))
     );
 
     /* Git status (e.g. from Shiki theme gitDecoration.*) */
