@@ -209,9 +209,6 @@ export const TREE_APP_DEMO_PATHS: readonly string[] =
   Object.keys(TREE_APP_DEMO_FILES);
 
 export const TREE_APP_DEMO_INITIAL_EXPANDED_PATHS: readonly string[] = [
-  'node_modules',
-  'node_modules/cool',
-  'node_modules/storage',
   'src',
   'src/components',
   'src/utils',
