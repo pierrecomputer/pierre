@@ -9,7 +9,7 @@ import type { CSSProperties } from 'react';
 
 import { FeatureHeader } from '../diff-examples/FeatureHeader';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
-import { DEFAULT_FILE_TREE_PANEL_CLASS } from './tree-examples/demo-data';
+import { getDefaultFileTreePanelClass } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 
 const FILE_COUNT_FORMATTER = new Intl.NumberFormat('en-US');
@@ -54,7 +54,7 @@ export function DemoVirtualizationClient({
       />
 
       <FileTree
-        className={DEFAULT_FILE_TREE_PANEL_CLASS}
+        className={getDefaultFileTreePanelClass()}
         model={model}
         preloadedData={preloadedData}
         style={panelStyle}

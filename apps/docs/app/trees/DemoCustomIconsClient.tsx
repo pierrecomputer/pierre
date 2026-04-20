@@ -15,8 +15,8 @@ import { FeatureHeader } from '../diff-examples/FeatureHeader';
 import { sampleFileList } from './demo-data';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import {
-  DEFAULT_FILE_TREE_PANEL_CLASS,
   DEFAULT_FILE_TREE_PANEL_STYLE,
+  getDefaultFileTreePanelClass,
 } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
@@ -85,7 +85,7 @@ function IconDemoTree({
         {config.title}
       </TreeExampleHeading>
       <FileTree
-        className={DEFAULT_FILE_TREE_PANEL_CLASS}
+        className={getDefaultFileTreePanelClass()}
         model={model}
         preloadedData={preloadedData}
         style={panelStyle}

@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 import { FeatureHeader } from '../diff-examples/FeatureHeader';
 import { sampleFileList } from './demo-data';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
-import { DEFAULT_FILE_TREE_PANEL_CLASS } from './tree-examples/demo-data';
+import { getDefaultFileTreePanelClass } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
@@ -136,7 +136,7 @@ export function DemoDragDropClient({ preloadedData }: DemoDragDropClientProps) {
         </div>
 
         <FileTree
-          className={DEFAULT_FILE_TREE_PANEL_CLASS}
+          className={getDefaultFileTreePanelClass()}
           model={activeModel}
           preloadedData={activePreloadedData}
           style={{

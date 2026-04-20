@@ -22,7 +22,7 @@ import { FeatureHeader } from '../diff-examples/FeatureHeader';
 import { sampleFileList } from './demo-data';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import {
-  DEFAULT_FILE_TREE_PANEL_CLASS,
+  getDefaultFileTreePanelClass,
   GIT_STATUSES_A,
 } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
@@ -319,7 +319,7 @@ export function DemoThemingClient({
         ) : null}
         {themeStyles != null ? (
           <FileTree
-            className={`${DEFAULT_FILE_TREE_PANEL_CLASS} min-h-[320px]`}
+            className={`${getDefaultFileTreePanelClass()} min-h-[320px]`}
             model={model}
             preloadedData={preloadedData}
             style={{

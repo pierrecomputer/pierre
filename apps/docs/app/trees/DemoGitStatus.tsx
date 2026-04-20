@@ -17,7 +17,7 @@ import {
   TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
   TREE_NEW_GIT_STATUSES,
 } from './gitStatusDemoData';
-import { DEFAULT_FILE_TREE_PANEL_CLASS } from './tree-examples/demo-data';
+import { getDefaultFileTreePanelClass } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
@@ -184,7 +184,7 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
         </div>
 
         <FileTree
-          className={DEFAULT_FILE_TREE_PANEL_CLASS}
+          className={getDefaultFileTreePanelClass(colorMode)}
           model={model}
           preloadedData={activePreloadedData}
           style={{

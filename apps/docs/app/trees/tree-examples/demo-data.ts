@@ -3,8 +3,13 @@ import type { CSSProperties } from 'react';
 import type { GitStatusEntry } from '@/lib/treesCompat';
 
 /** Default panel look for FileTree in docs examples. Apply via className + style on FileTree. */
-export const DEFAULT_FILE_TREE_PANEL_CLASS =
-  'dark min-h-0 flex-1 overflow-auto rounded-lg py-3 border border-neutral-200 dark:border-neutral-800';
+export function getDefaultFileTreePanelClass(
+  colorMode: 'light' | 'dark' = 'dark'
+): string {
+  const base =
+    'min-h-0 flex-1 overflow-auto rounded-lg py-3 border border-neutral-200 dark:border-neutral-800';
+  return colorMode === 'dark' ? `dark ${base}` : base;
+}
 
 export const DEFAULT_FILE_TREE_PANEL_STYLE: CSSProperties = {
   colorScheme: 'dark',
