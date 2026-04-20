@@ -22,6 +22,7 @@ import { PRODUCTS } from '@/app/product-config';
 function lightTheme(): CSSProperties {
   return {
     colorScheme: 'light',
+    ['--trees-bg-override' as string]: 'oklch(98.5% 0 0)',
     ['--trees-fg-override' as string]: 'oklch(14.5% 0 0)',
     ['--trees-fg-muted-override' as string]: 'oklch(45% 0 0)',
     ['--trees-bg-muted-override' as string]: 'oklch(96% 0 0)',
