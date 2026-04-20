@@ -165,6 +165,10 @@
       --trees-border-color-override,
       var(--trees-theme-sidebar-border, light-dark(#eeeeef, #070707))
     );
+    --trees-indent-guide-bg: var(
+      --trees-indent-guide-bg-override,
+      color-mix(in lab, var(--trees-fg-muted) 25%, transparent)
+    );
     --trees-density: var(--trees-density-override, 1);
     --trees-border-radius: var(
       --trees-border-radius-override,
@@ -1102,7 +1106,7 @@
   [data-item-section='spacing-item'] {
     transform: translateX(-0.25px);
     display: inline-block;
-    border-left: 1px solid var(--trees-border-color);
+    border-left: 1px solid var(--trees-indent-guide-bg);
     height: 100%;
     margin-right: calc(var(--trees-level-gap) - 1px);
     opacity: 0;
