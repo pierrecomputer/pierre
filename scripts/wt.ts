@@ -471,9 +471,13 @@ function killPorts(ports: number[]): void {
   }
 }
 
+// The main clone has no `.env.worktree` and therefore no offset, but it still
+// owns the default ports (offset 0). Treat it as offset 0 so `wt clean` on the
+// main clone terminates stale servers on 3690/3691/4173/4174/4176/9222.
 function killWorktreePorts(wt: Worktree): void {
-  if (wt.offset === null) return;
-  killPorts(Object.values(resolvePortMap(wt.offset)));
+  const offset = wt.offset ?? (wt.isMain ? 0 : null);
+  if (offset === null) return;
+  killPorts(Object.values(resolvePortMap(offset)));
 }
 
 function pidsOnPort(port: number): number[] {
