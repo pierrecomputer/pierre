@@ -808,7 +808,7 @@ function DefaultTab({
       className={[
         'group relative isolate flex h-7 max-w-[200px] items-center overflow-hidden rounded-sm text-xs font-medium transition-colors',
         isActive
-          ? 'bg-transparent text-zinc-100 group-hover/tabbar:bg-neutral-900'
+          ? 'bg-neutral-900 text-zinc-100'
           : 'bg-transparent text-zinc-400 group-hover/tabbar:bg-neutral-900/30 group-hover/tabbar:hover:bg-neutral-800/60 group-hover/tabbar:hover:text-zinc-200',
       ].join(' ')}
     >
