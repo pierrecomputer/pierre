@@ -18,5 +18,6 @@ export const TREE_NEW_VIEWPORT_HEIGHTS = {
   searchHideNonMatches: 360,
   styling: 410,
   theming: TREE_NEW_DEFAULT_VIEWPORT_HEIGHT,
+  treeApp: 600,
   virtualization: TREE_NEW_DEFAULT_VIEWPORT_HEIGHT,
 } as const;

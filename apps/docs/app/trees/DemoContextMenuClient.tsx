@@ -7,11 +7,7 @@ import type {
   ContextMenuTriggerMode,
   FileTree as FileTreeModel,
 } from '@pierre/trees';
-import {
-  FileTree,
-  type FileTreePreloadedData,
-  useFileTree,
-} from '@pierre/trees/react';
+import { type FileTreePreloadedData, useFileTree } from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -23,6 +19,7 @@ import { sampleFileList } from './demo-data';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
+import { TreeApp } from '@/components/TreeApp';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -39,7 +36,6 @@ const contextMenuPanelStyle = {
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
 const IDE_WINDOW_HEIGHT = TREE_NEW_VIEWPORT_HEIGHTS.contextMenu;
-const IDE_EXPLORER_WIDTH_PX = 300;
 interface TriggerModeDemo {
   id: string;
   mode: ContextMenuTriggerMode;
@@ -482,41 +478,19 @@ export function DemoContextMenuClient({
             Reset demo tree
           </Button>
         </div>
-        <div
-          className="overflow-hidden rounded-lg border bg-neutral-900 text-zinc-200"
-          style={{ height: `${String(IDE_WINDOW_HEIGHT)}px` }}
-        >
-          <div className="flex h-8 items-center justify-between border-b border-white/10 px-3">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f56]" />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#27c93f]" />
+        <TreeApp
+          key={activeModeDemo.id}
+          height={IDE_WINDOW_HEIGHT}
+          model={activeModel}
+          preloadedTreeData={preloadedDataById[activeModeDemo.id]}
+          treeClassName="dark h-full min-h-0 overflow-auto p-2"
+          treeStyle={contextMenuPanelStyle}
+          renderEmpty={() => (
+            <div className="flex flex-1 items-center justify-center px-6 text-sm text-zinc-500">
+              Editor canvas intentionally empty.
             </div>
-          </div>
-          <div className="flex h-[calc(100%-2rem)] min-h-0">
-            <aside
-              className="flex min-h-0 flex-col border-r border-white/10"
-              style={{ width: `${String(IDE_EXPLORER_WIDTH_PX)}px` }}
-            >
-              <FileTree
-                key={activeModeDemo.id}
-                className="dark h-full min-h-0 overflow-auto p-2"
-                model={activeModel}
-                preloadedData={preloadedDataById[activeModeDemo.id]}
-                style={{
-                  ...contextMenuPanelStyle,
-                  height: '100%',
-                }}
-              />
-            </aside>
-            <section className="flex min-w-0 flex-1 flex-col">
-              <div className="flex flex-1 items-center justify-center px-6 text-sm text-zinc-500">
-                Editor canvas intentionally empty. Next step: make the explorer
-                sidebar resizable.
-              </div>
-            </section>
-          </div>
-        </div>
+          )}
+        />
       </div>
     </TreeExampleSection>
   );
