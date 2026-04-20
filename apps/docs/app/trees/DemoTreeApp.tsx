@@ -34,7 +34,8 @@ export async function DemoTreeApp() {
     paths: TREE_APP_DEMO_PATHS,
     search: true,
     unsafeCSS: TREE_APP_DEMO_UNSAFE_CSS,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.treeApp,
+    initialVisibleRowCount:
+      TREE_NEW_VIEWPORT_HEIGHTS.treeApp / TREE_APP_DEMO_ITEM_HEIGHT,
   });
 
   // Preload syntax-highlighted HTML for every demo file in parallel so the

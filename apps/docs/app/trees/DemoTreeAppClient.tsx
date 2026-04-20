@@ -193,7 +193,8 @@ export function DemoTreeAppClient({
       renaming: true as const,
       search: true as const,
       unsafeCSS: TREE_APP_DEMO_UNSAFE_CSS,
-      viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.treeApp,
+      initialVisibleRowCount:
+        TREE_NEW_VIEWPORT_HEIGHTS.treeApp / COMPACT_ITEM_HEIGHT,
     }),
     [initialActivePath, initialExpandedPaths, paths, treeId]
   );
