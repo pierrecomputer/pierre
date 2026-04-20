@@ -215,11 +215,22 @@ function remapMovedPaths(
 
 // Walks an integer suffix until we find a path that does not collide with an
 // existing entry. Preserves a file extension when present so suffix lands as
-// `name-1.ext` instead of `name.ext-1`.
+// `name-1.ext` instead of `name.ext-1`. Collisions are checked against both
+// the file (no trailing slash) and folder (trailing slash) forms so creating a
+// folder named `untitled` does not silently overwrite an existing file of the
+// same name (and vice versa).
 function getUniquePath(model: FileTreeModel, basePath: string): string {
+  const hasCollision = (candidate: string): boolean => {
+    if (model.getItem(candidate) != null) return true;
+    const alternate = candidate.endsWith('/')
+      ? candidate.slice(0, -1)
+      : `${candidate}/`;
+    return model.getItem(alternate) != null;
+  };
+
   let suffix = 0;
   let candidate = basePath;
-  while (model.getItem(candidate) != null) {
+  while (hasCollision(candidate)) {
     suffix += 1;
     if (basePath.endsWith('/')) {
       candidate = `${basePath.slice(0, -1)}-${String(suffix)}/`;
