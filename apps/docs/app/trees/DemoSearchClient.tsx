@@ -19,6 +19,10 @@ import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 
 const PREPOPULATED_SEARCH = 'tsx';
+// Pre-expand a couple of folders that contain no `.tsx` matches so the
+// difference between `collapse-non-matches` (snaps them shut) and
+// `expand-matches` (preserves prior expansion) is visible at a glance.
+const PREPOPULATED_EXPANDED_PATHS = ['public/', 'node_modules/react/'];
 const searchModeStyle = {
   colorScheme: 'dark',
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
@@ -71,6 +75,7 @@ function SearchModeTree({
     fileTreeSearchMode: modeDemo.mode,
     flattenEmptyDirectories: true,
     id: modeDemo.id,
+    initialExpandedPaths: PREPOPULATED_EXPANDED_PATHS,
     initialSearchQuery: PREPOPULATED_SEARCH,
     paths: sampleFileList,
     search: true,

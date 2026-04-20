@@ -6,6 +6,10 @@ import { DemoSearchClient } from './DemoSearchClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 
 const PREPOPULATED_SEARCH = 'tsx';
+// Mirror the client `PREPOPULATED_EXPANDED_PATHS` so the SSR snapshot already
+// has these non-matching folders expanded. That makes the difference between
+// `collapse-non-matches` and `expand-matches` visible in the very first paint.
+const PREPOPULATED_EXPANDED_PATHS = ['public/', 'node_modules/react/'];
 
 function createSearchPreloadedData(
   mode: FileTreeSearchMode,
@@ -16,6 +20,7 @@ function createSearchPreloadedData(
     fileTreeSearchMode: mode,
     flattenEmptyDirectories: true,
     id,
+    initialExpandedPaths: PREPOPULATED_EXPANDED_PATHS,
     initialSearchQuery: PREPOPULATED_SEARCH,
     paths: sampleFileList,
     search: true,

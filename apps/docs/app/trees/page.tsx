@@ -29,7 +29,7 @@ import { PierreCompanySection } from '@/components/PierreCompanySection';
 const PRODUCT_ID: ProductId = 'trees';
 
 export const metadata: Metadata = {
-  title: 'Trees, by Pierre',
+  title: 'Trees, from Pierre',
   description:
     "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.",
 };

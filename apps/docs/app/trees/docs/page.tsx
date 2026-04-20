@@ -100,7 +100,7 @@ const REFERENCE_SECTIONS: readonly DocsSection[] = [
 ];
 
 export const metadata: Metadata = {
-  title: 'Trees, by Pierre',
+  title: 'Trees, from Pierre',
   description:
     'Guide-first documentation for @pierre/trees, covering React, vanilla, prepared input, styling, icons, Git status, large trees, and SSR hydration.',
 };
