@@ -63,7 +63,7 @@ const TOKEN_DEFS: Record<string, TokenDef> = {
   biome: { icon: 'biome', tier: 'complete' },
   bootstrap: { icon: 'bootstrap-duo', tier: 'complete' },
   browserslist: { icon: 'browserslist-duo', tier: 'complete' },
-  bun: { icon: 'bun-duo', tier: 'complete' },
+  bun: { icon: 'bun', tier: 'complete' },
   claude: { icon: 'claude', tier: 'complete' },
   docker: { icon: 'docker', tier: 'complete' },
   eslint: { icon: 'eslint', tier: 'complete' },
@@ -99,6 +99,8 @@ for (const [token, def] of Object.entries(TOKEN_DEFS)) {
 }
 // Theme uses file-zip-duo for extensions, but we render with folder-zip-duo
 ICON_TO_TOKEN['file-zip-duo'] = 'zip';
+// Theme uses bun-duo for filenames, but we render with the plain bun icon
+ICON_TO_TOKEN['bun-duo'] = 'bun';
 
 // Manual additions not covered by the theme data
 const MANUAL_EXTENSION_TOKENS: Record<string, string> = {

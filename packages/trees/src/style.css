@@ -295,6 +295,7 @@
     --trees-icon-indigo: light-dark(#693acf, #9d6afb);
     --trees-icon-purple: light-dark(#a631be, #d568ea);
     --trees-icon-pink: light-dark(#d32a61, #ff678d);
+    --trees-icon-mauve: light-dark(#594c5b, #79697b);
 
     --trees-file-icon-color-default: var(
       --trees-file-icon-color,
@@ -326,7 +327,7 @@
     );
     --trees-file-icon-color-bun: var(
       --trees-file-icon-color,
-      var(--trees-icon-pink)
+      var(--trees-icon-mauve)
     );
     --trees-file-icon-color-claude: var(
       --trees-file-icon-color,
