@@ -110,6 +110,7 @@ export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
     opaqueOrUndefined(c['focusBorder']);
   const inputBg = c['input.background'] ?? sideBarBg;
   const inputBorder = c['input.border'];
+  const scrollbarBg = c['scrollbarSlider.background'];
   const sectionHeaderFg = c['sideBarSectionHeader.foreground'] ?? sideBarFg;
   // gitDecoration.* → terminal.ansi* → editorGutter.* (e.g. vesper only has gutter colors)
   const gitAdded =
@@ -151,6 +152,9 @@ export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
   }
   if (inputBorder != null && inputBorder !== '') {
     result['--trees-theme-input-border'] = inputBorder;
+  }
+  if (scrollbarBg != null && scrollbarBg !== '') {
+    result['--trees-theme-scrollbar-bg'] = scrollbarBg;
   }
 
   if (gitAdded != null && gitAdded !== '') {
