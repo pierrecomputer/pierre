@@ -177,25 +177,13 @@ type FileTreeViewLayoutState = {
   visibleRows: readonly FileTreeVisibleRow[];
 };
 
-// Sticky opt-out should only disable sticky membership; it must not change the
-// controller's visible projection or the list geometry derived from that order.
-function getLayoutInputRows(
-  rows: readonly FileTreeVisibleRow[],
-  stickyFolders: boolean
-): readonly FileTreeVisibleRow[] {
-  if (stickyFolders) {
-    return rows;
-  }
-
-  return rows.map((row) =>
-    row.kind === 'directory' && row.isExpanded
-      ? { ...row, isExpanded: false }
-      : row
-  );
-}
-
 // Builds one visible-row snapshot so the layout engine and renderer consume the
 // same projection, sticky chain, occlusion window, and mounted list slice.
+//
+// When sticky folders are disabled we skip materializing the full visible-row
+// array — the layout engine only needs the total row count for geometry in
+// that case, and the renderer can range-fetch the window slice directly from
+// the controller. That keeps scroll work O(window) instead of O(total rows).
 function computeFileTreeViewLayoutState({
   controller,
   itemHeight,
@@ -213,16 +201,16 @@ function computeFileTreeViewLayoutState({
 }): FileTreeViewLayoutState {
   const visibleCount = controller.getVisibleCount();
   const visibleRows =
-    visibleCount <= 0 ? [] : controller.getVisibleRows(0, visibleCount - 1);
-  const snapshot = computeFileTreeLayout(
-    getLayoutInputRows(visibleRows, stickyFolders),
-    {
-      itemHeight,
-      overscan,
-      scrollTop,
-      viewportHeight,
-    }
-  );
+    stickyFolders && visibleCount > 0
+      ? controller.getVisibleRows(0, visibleCount - 1)
+      : [];
+  const snapshot = computeFileTreeLayout(visibleRows, {
+    itemHeight,
+    overscan,
+    scrollTop,
+    totalRowCount: visibleCount,
+    viewportHeight,
+  });
 
   return {
     snapshot,
@@ -1201,7 +1189,6 @@ function renderStickyRow(
 function renderRangeChildren(
   controller: FileTreeController,
   renameView: ReturnType<FileTreeController[typeof FILE_TREE_RENAME_VIEW]>,
-  visibleRows: readonly FileTreeVisibleRow[],
   range: { start: number; end: number },
   hiddenRowPaths: ReadonlySet<string>,
   activeItemPath: string | null,
@@ -1258,8 +1245,10 @@ function renderRangeChildren(
   // overscanned window does not make still-visible rows jump to a new slot.
   // That keeps sticky virtualization Safari-friendly while avoiding large
   // layout shifts during scroll in browsers that track CLS inside scrollers.
-  return visibleRows
-    .slice(range.start, range.end + 1)
+  // Range-fetch the window slice directly so we stay O(window) per scroll
+  // even when the layout state is not carrying the full visible-row array.
+  return controller
+    .getVisibleRows(range.start, range.end)
     .filter((row) => !hiddenRowPaths.has(getFileTreeRowPath(row)))
     .map((row, slotIndex) =>
       renderStyledRow(
@@ -2803,7 +2792,9 @@ export function FileTreeView({
     shouldRenderParkedFocusedRow &&
     !focusedRowIsMounted &&
     focusedIndex >= 0
-      ? (visibleRows[focusedIndex] ?? null)
+      ? (visibleRows[focusedIndex] ??
+        controller.getVisibleRows(focusedIndex, focusedIndex)[0] ??
+        null)
       : null;
   const parkedFocusedRowOffset =
     parkedFocusedRow == null
@@ -2839,7 +2830,11 @@ export function FileTreeView({
           windowHeight
         );
   const focusedVisibleRow =
-    focusedIndex >= 0 ? (visibleRows[focusedIndex] ?? null) : null;
+    focusedIndex >= 0
+      ? (visibleRows[focusedIndex] ??
+        controller.getVisibleRows(focusedIndex, focusedIndex)[0] ??
+        null)
+      : null;
   const guideStyleText = getFileTreeGuideStyleText(
     focusedVisibleRow?.ancestorPaths.at(-1) ?? null
   );
@@ -2898,9 +2893,13 @@ export function FileTreeView({
         return;
       }
 
-      const visibleIndex = visibleRows.findIndex(
-        (row) => getFileTreeRowPath(row) === path
-      );
+      // `controller.focusPath` relocates focus to `path` and returns the new
+      // visible index, so we can look up the position without scanning the
+      // visible-row array — sticky rows only render when `stickyFolders` is
+      // on, but this stays O(1) regardless and avoids closing over the
+      // visible-row snapshot in the callback dependency list.
+      controller.focusPath(path);
+      const visibleIndex = controller.getFocusedIndex();
       if (visibleIndex < 0) {
         return;
       }
@@ -2916,7 +2915,6 @@ export function FileTreeView({
       );
       updateViewportRef.current();
       pendingStickyFocusPathRef.current = path;
-      controller.focusPath(path);
     },
     [
       controller,
@@ -2924,7 +2922,6 @@ export function FileTreeView({
       resolvedViewportHeight,
       stickyOverlayHeight,
       totalScrollableHeight,
-      visibleRows,
     ]
   );
 
@@ -3062,7 +3059,6 @@ export function FileTreeView({
             {renderRangeChildren(
               controller,
               renameView,
-              visibleRows,
               range,
               stickyRowPathSet,
               visualFocusPath,

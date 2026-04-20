@@ -10,6 +10,10 @@ export type FileTreeLayoutMetrics = {
   overscan: number;
   scrollTop: number;
   viewportHeight: number;
+  // Optional external row count. Callers can skip materializing the full row
+  // array (O(n) per scroll) when sticky-row computation is not needed — pass
+  // an empty `rows` array plus the real count here so geometry still resolves.
+  totalRowCount?: number;
 };
 
 export type FileTreeLayoutRange = {
@@ -320,7 +324,7 @@ export function computeFileTreeLayout<Row extends FileTreeLayoutRow>(
   rows: readonly Row[],
   metrics: FileTreeLayoutMetrics
 ): FileTreeLayoutSnapshot<Row> {
-  const totalRowCount = rows.length;
+  const totalRowCount = metrics.totalRowCount ?? rows.length;
   const totalHeight = totalRowCount * metrics.itemHeight;
   const viewportHeight = Math.max(0, metrics.viewportHeight);
   const overscan = Math.max(0, Math.floor(metrics.overscan));
