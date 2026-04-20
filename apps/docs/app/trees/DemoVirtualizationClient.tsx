@@ -35,6 +35,7 @@ export function DemoVirtualizationClient({
     initialExpandedPaths: expandedPaths,
     paths,
     initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.virtualization / 30,
+    stickyFolders: true,
   });
 
   return (
@@ -48,7 +49,8 @@ export function DemoVirtualizationClient({
             and automatic virtualization. Only visible rows are mounted. The
             tree below contains{' '}
             <strong>{FILE_COUNT_FORMATTER.format(paths.length)} files</strong>{' '}
-            with every folder expanded.
+            with every folder expanded. Shown with <code>stickyFolders</code>{' '}
+            enabled.
           </>
         }
       />
