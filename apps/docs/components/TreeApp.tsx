@@ -6,7 +6,13 @@ import { IconFilePlus, IconFolderPlus, IconX } from '@pierre/icons';
 import type {
   ContextMenuItem,
   ContextMenuOpenContext,
+  FileTreeIcons,
   FileTree as FileTreeModel,
+} from '@pierre/trees';
+import {
+  createFileTreeIconResolver,
+  getBuiltInFileIconColor,
+  getBuiltInSpriteSheet,
 } from '@pierre/trees';
 import {
   FileTree,
@@ -127,6 +133,15 @@ export interface TreeAppProps<LAnnotation = unknown> {
   renderTab?: (context: TreeAppTabRenderContext) => ReactNode;
   renderEditor?: (context: TreeAppEditorRenderContext) => ReactNode;
   renderEmpty?: () => ReactNode;
+  tabIcons?: FileTreeIcons;
+}
+
+interface TreeAppResolvedTabIcon {
+  height?: number;
+  name: string;
+  token?: string;
+  viewBox?: string;
+  width?: number;
 }
 
 // Returns the trailing path segment used as a tab label. Strips a trailing
@@ -192,6 +207,44 @@ function getFloatingContextMenuTriggerStyle(
     transform: 'translateX(-50%)',
     width: 1,
   };
+}
+
+function hasCustomIconOverrides(icons: FileTreeIcons): boolean {
+  return (
+    typeof icons !== 'string' &&
+    (icons.spriteSheet != null ||
+      icons.remap != null ||
+      icons.byFileName != null ||
+      icons.byFileExtension != null ||
+      icons.byFileNameContains != null)
+  );
+}
+
+// Builds the icon sprite markup the tab strip needs outside the tree shadow
+// DOM. When callers pass custom tab icon rules, we include both the built-in
+// sprite set (when enabled) and the caller's custom sprite symbols.
+function getTabIconSpriteMarkup(icons?: FileTreeIcons): string {
+  if (icons == null) {
+    return getBuiltInSpriteSheet('complete');
+  }
+
+  if (typeof icons === 'string') {
+    return getBuiltInSpriteSheet(icons);
+  }
+
+  const set =
+    icons.set ?? (hasCustomIconOverrides(icons) ? 'none' : 'complete');
+  const builtInSpriteSheet = set === 'none' ? '' : getBuiltInSpriteSheet(set);
+  const customSpriteSheet = icons.spriteSheet?.trim() ?? '';
+  return `${builtInSpriteSheet}${customSpriteSheet}`;
+}
+
+function areColoredTabIconsEnabled(icons?: FileTreeIcons): boolean {
+  if (icons == null || typeof icons === 'string') {
+    return true;
+  }
+
+  return icons.colored ?? true;
 }
 
 // Builds the new file/folder mutations TreeApp uses for both the project
@@ -389,14 +442,12 @@ function useOpenTabs({
   return { activePath, activateTab, closeTab, openPaths };
 }
 
-function DefaultWindowChrome(): React.JSX.Element {
+function WindowControls(): React.JSX.Element {
   return (
-    <div className="flex h-8 items-center justify-between border-b border-white/10 px-3">
-      <div className="flex items-center gap-1.5">
-        <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f56]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#27c93f]" />
-      </div>
+    <div className="flex items-center gap-1.5">
+      <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f56]" />
+      <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
+      <span className="h-2.5 w-2.5 rounded-full bg-[#27c93f]" />
     </div>
   );
 }
@@ -415,8 +466,11 @@ function DefaultProjectHeader({
 }: TreeAppProjectHeaderRenderContext): React.JSX.Element {
   return (
     <div className="flex items-center justify-between gap-2 px-3 py-2">
-      <div className="min-w-0 truncate text-sm font-medium text-neutral-200">
-        {projectName}/
+      <div className="flex min-w-0 items-center gap-2.5">
+        <WindowControls />
+        <div className="min-w-0 truncate text-xs font-medium text-neutral-200">
+          {projectName}
+        </div>
       </div>
       {/* Buttons live inside the explorer hover group (set on the <aside> in
           TreeApp) so they only appear when the user is interacting with the
@@ -529,36 +583,89 @@ function DefaultContextMenu({
 
 interface DefaultTabProps extends TreeAppTabRenderContext {}
 
+function TreeAppTabIcon({
+  colored,
+  icon,
+}: {
+  colored: boolean;
+  icon: TreeAppResolvedTabIcon;
+}): React.JSX.Element {
+  const href = `#${icon.name.replace(/^#/, '')}`;
+  const viewBox =
+    icon.viewBox ??
+    `0 0 ${String(icon.width ?? 16)} ${String(icon.height ?? 16)}`;
+  const builtInColor =
+    icon.token != null ? getBuiltInFileIconColor(icon.token) : undefined;
+  const colorStyle =
+    colored && icon.token != null
+      ? {
+          color:
+            builtInColor ??
+            'var(--trees-fg-muted, light-dark(#84848a, #adadb1))',
+        }
+      : undefined;
+
+  return (
+    <svg
+      aria-hidden="true"
+      data-icon-name={icon.name}
+      data-icon-token={icon.token}
+      viewBox={viewBox}
+      width={icon.width ?? 16}
+      height={icon.height ?? 16}
+      className="h-4 w-4 shrink-0"
+      style={colorStyle}
+    >
+      <use href={href} />
+    </svg>
+  );
+}
+
 function DefaultTab({
   activate,
   close,
+  icon,
+  iconsColored,
   isActive,
   path,
-}: DefaultTabProps): React.JSX.Element {
+}: DefaultTabProps & {
+  icon: TreeAppResolvedTabIcon;
+  iconsColored: boolean;
+}): React.JSX.Element {
   const label = basename(path);
   return (
     <div
       className={[
-        'group flex h-8 max-w-[200px] items-center gap-1.5 border-r border-white/10 pr-1 pl-3 text-xs',
+        'group relative isolate flex h-6 max-w-[200px] items-center overflow-hidden rounded-sm text-xs',
         isActive
-          ? 'bg-neutral-900 text-zinc-100'
-          : 'bg-neutral-800/60 text-zinc-400 hover:text-zinc-200',
+          ? 'bg-neutral-800 text-zinc-100'
+          : 'bg-neutral-900/30 text-zinc-400 hover:bg-neutral-800/60 hover:text-zinc-200',
       ].join(' ')}
     >
       <button
         type="button"
         onClick={activate}
         title={path}
-        className="min-w-0 flex-1 truncate text-left"
+        className="relative z-0 flex h-full min-w-0 flex-1 items-center gap-2 rounded-sm px-2.5 text-left"
       >
-        {label}
+        <TreeAppTabIcon colored={iconsColored} icon={icon} />
+        <span className="block truncate">{label}</span>
       </button>
+      <div
+        aria-hidden="true"
+        className={[
+          'pointer-events-none absolute top-0 right-0 bottom-0 z-10 w-12 opacity-0 transition-opacity group-hover:opacity-100',
+          isActive
+            ? 'bg-gradient-to-l from-neutral-800 via-neutral-800 to-transparent'
+            : 'bg-gradient-to-l from-neutral-800/60 via-neutral-800/60 to-transparent',
+        ].join(' ')}
+      />
       <button
         type="button"
         onClick={close}
         title="Close tab"
         aria-label={`Close ${label}`}
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-100 focus:opacity-100"
+        className="absolute top-1/2 right-1 z-20 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-100 focus:opacity-100"
       >
         <IconX aria-hidden="true" className="h-3 w-3" />
       </button>
@@ -590,9 +697,13 @@ export function TreeApp<LAnnotation = unknown>({
   renderTab,
   renderWindowChrome,
   style,
+  tabIcons,
   treeClassName,
   treeStyle,
 }: TreeAppProps<LAnnotation>): React.JSX.Element {
+  const treeStyleRecord = treeStyle as
+    | Record<string, string | number>
+    | undefined;
   const explorer = useExplorerWidth(
     initialExplorerWidth,
     minExplorerWidth,
@@ -609,9 +720,35 @@ export function TreeApp<LAnnotation = unknown>({
     newFolderTemplateName,
   });
 
+  const treeSurfaceColor = useMemo(() => {
+    const explicitTreeBackground =
+      treeStyleRecord?.['--trees-bg-override'] ??
+      treeStyleRecord?.['--trees-theme-sidebar-bg'];
+    return typeof explicitTreeBackground === 'string'
+      ? explicitTreeBackground
+      : '#141415';
+  }, [treeStyleRecord]);
+
+  const treeCssVariables = useMemo<CSSProperties>(() => {
+    if (treeStyleRecord == null) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(treeStyleRecord).filter(([key]) =>
+        key.startsWith('--trees-')
+      )
+    ) as CSSProperties;
+  }, [treeStyleRecord]);
+
   const containerStyle = useMemo<CSSProperties>(
-    () => ({ height, ...style }),
-    [height, style]
+    () => ({
+      ...treeCssVariables,
+      '--tree-app-tree-surface': treeSurfaceColor,
+      height,
+      ...style,
+    }),
+    [height, style, treeCssVariables, treeSurfaceColor]
   );
 
   const sidebarStyle = useMemo<CSSProperties>(
@@ -622,6 +759,20 @@ export function TreeApp<LAnnotation = unknown>({
   const treeHostStyle = useMemo<CSSProperties>(
     () => ({ ...treeStyle, height: '100%' }),
     [treeStyle]
+  );
+  const windowChromeNode = renderWindowChrome?.();
+  const effectiveTabIcons = tabIcons ?? 'complete';
+  const tabIconSpriteMarkup = useMemo(
+    () => getTabIconSpriteMarkup(effectiveTabIcons),
+    [effectiveTabIcons]
+  );
+  const resolveTabIcon = useMemo(
+    () => createFileTreeIconResolver(effectiveTabIcons).resolveIcon,
+    [effectiveTabIcons]
+  );
+  const tabIconsColored = useMemo(
+    () => areColoredTabIconsEnabled(effectiveTabIcons),
+    [effectiveTabIcons]
   );
 
   const headerNode = useMemo<ReactNode>(() => {
@@ -720,19 +871,22 @@ export function TreeApp<LAnnotation = unknown>({
   return (
     <div
       className={[
-        'overflow-hidden rounded-lg border bg-neutral-900 text-zinc-200',
+        'flex flex-col overflow-hidden rounded-lg border bg-neutral-900 text-zinc-200',
         className,
       ]
         .filter(Boolean)
         .join(' ')}
       style={containerStyle}
     >
-      {renderWindowChrome != null ? (
-        renderWindowChrome()
-      ) : (
-        <DefaultWindowChrome />
-      )}
-      <div className="flex h-[calc(100%-2rem)] min-h-0">
+      <div
+        aria-hidden="true"
+        className="absolute h-0 w-0 overflow-hidden"
+        dangerouslySetInnerHTML={{ __html: tabIconSpriteMarkup }}
+      />
+      {windowChromeNode != null ? (
+        <div className="shrink-0">{windowChromeNode}</div>
+      ) : null}
+      <div className="flex min-h-0 flex-1">
         <aside
           className="group/tree-app-explorer flex min-h-0 shrink-0 flex-col"
           style={sidebarStyle}
@@ -758,7 +912,10 @@ export function TreeApp<LAnnotation = unknown>({
         />
         <section className="flex min-w-0 flex-1 flex-col">
           {openPaths.length > 0 ? (
-            <div className="flex h-8 min-h-8 items-stretch overflow-x-auto border-b border-white/10 bg-neutral-950/40">
+            <div
+              className="flex h-9 min-h-9 items-center gap-1 overflow-x-auto border-b border-white/10 px-2"
+              style={{ backgroundColor: 'var(--tree-app-tree-surface)' }}
+            >
               {openPaths.map((path) => {
                 const tabContext: TreeAppTabRenderContext = {
                   activate: () => {
@@ -770,12 +927,20 @@ export function TreeApp<LAnnotation = unknown>({
                   isActive: path === activePath,
                   path,
                 };
+                const tabIcon = resolveTabIcon(
+                  'file-tree-icon-file',
+                  path
+                ) as TreeAppResolvedTabIcon;
                 return (
                   <div key={path} className="flex">
                     {renderTab != null ? (
                       renderTab(tabContext)
                     ) : (
-                      <DefaultTab {...tabContext} />
+                      <DefaultTab
+                        {...tabContext}
+                        icon={tabIcon}
+                        iconsColored={tabIconsColored}
+                      />
                     )}
                   </div>
                 );

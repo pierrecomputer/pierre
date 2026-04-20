@@ -6,6 +6,8 @@ export type {
   FileTreeIcons,
   RemappedIcon,
 } from './iconConfig';
+export { getBuiltInFileIconColor, getBuiltInSpriteSheet } from './builtInIcons';
+export { createFileTreeIconResolver } from './render/iconResolver';
 export type {
   TreeThemeInput,
   TreeThemeStyles,
