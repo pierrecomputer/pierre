@@ -6,6 +6,13 @@ export const TREE_APP_DEMO_FILES: Readonly<Record<string, FileContents>> = {
   '.gitignore': {
     name: '.gitignore',
     contents: `node_modules
+.env
+`,
+  },
+  '.env': {
+    name: '.env',
+    contents: `CODE_STORAGE_API_KEY=your-api-key
+CODE_STORAGE_BASE_URL=https://api.code.storage
 `,
   },
   'README.md': {
@@ -219,6 +226,7 @@ export const TREE_APP_DEMO_INITIAL_ACTIVE_PATH = 'src/components/Button.tsx';
 
 export const TREE_APP_DEMO_GIT_STATUSES: readonly GitStatusEntry[] = [
   { path: '.gitignore', status: 'added' },
+  { path: '.env', status: 'ignored' },
   { path: 'README.md', status: 'modified' },
   { path: 'package.json', status: 'modified' },
   { path: 'node_modules/', status: 'ignored' },
