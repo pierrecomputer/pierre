@@ -12,7 +12,6 @@ import { DemoDensity } from './DemoDensity';
 import { DemoDragDrop } from './DemoDragDrop';
 import { DemoFlatten } from './DemoFlatten';
 import { DemoGitStatus } from './DemoGitStatus';
-import { DemoMiddotTruncation } from './DemoMiddotTruncation';
 import { DemoSearch } from './DemoSearch';
 import { DemoStyling } from './DemoStyling';
 import { DemoTheming } from './DemoTheming';
@@ -99,7 +98,6 @@ export default function TreesPage() {
         <DemoContextMenu />
         <DemoDragDrop />
         <DemoSearch />
-        <DemoMiddotTruncation />
         <DemoVirtualization />
         <DemoA11y />
         <DemoCustomIcons />
