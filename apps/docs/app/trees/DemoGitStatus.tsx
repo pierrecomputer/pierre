@@ -170,7 +170,6 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
           <ButtonGroup
             value={colorMode}
             onValueChange={(value) => setColorMode(value as 'light' | 'dark')}
-            className="md:ml-auto"
           >
             <ButtonGroupItem value="light">
               <IconColorLight className="size-4" />
@@ -183,16 +182,148 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
           </ButtonGroup>
         </div>
 
-        <FileTree
-          className={getDefaultFileTreePanelClass(colorMode)}
-          model={model}
-          preloadedData={activePreloadedData}
-          style={{
-            ...panelStyle,
-            height: `${String(viewportHeight)}px`,
-          }}
-        />
+        <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
+          <FileTree
+            className={getDefaultFileTreePanelClass(colorMode)}
+            model={model}
+            preloadedData={activePreloadedData}
+            style={{
+              ...panelStyle,
+              height: `${String(viewportHeight)}px`,
+            }}
+          />
+          <GitStatusLegend colorMode={colorMode} />
+        </div>
       </div>
     </TreeExampleSection>
+  );
+}
+
+const GIT_STATUS_LEGEND: ReadonlyArray<{
+  status:
+    | 'modified'
+    | 'added'
+    | 'deleted'
+    | 'renamed'
+    | 'untracked'
+    | 'ignored'
+    | 'descendant';
+  badge: string | null;
+  light: string;
+  dark: string;
+  badgeOpacity?: number;
+  description: string;
+}> = [
+  {
+    status: 'modified',
+    badge: 'M',
+    light: '#1ca1c7',
+    dark: '#08c0ef',
+    description: 'Tracked file with uncommitted changes',
+  },
+  {
+    status: 'added',
+    badge: 'A',
+    light: '#16a994',
+    dark: '#00cab1',
+    description: 'New file staged in the working tree',
+  },
+  {
+    status: 'deleted',
+    badge: 'D',
+    light: '#ff2e3f',
+    dark: '#ff6762',
+    description: 'Tracked file removed from the working tree',
+  },
+  {
+    status: 'renamed',
+    badge: 'R',
+    light: '#d5a910',
+    dark: '#ffd452',
+    description: 'Tracked file moved or renamed',
+  },
+  {
+    status: 'untracked',
+    badge: 'U',
+    light: '#16a994',
+    dark: '#00cab1',
+    description: 'New file not yet tracked by Git',
+  },
+  {
+    status: 'ignored',
+    badge: null,
+    light: '#adadb1',
+    dark: '#4a4a4e',
+    description: 'Path excluded by gitignore; inherits muted styling',
+  },
+  {
+    status: 'descendant',
+    badge: '●',
+    light: '#1ca1c7',
+    dark: '#08c0ef',
+    badgeOpacity: 0.5,
+    description:
+      'Folder contains changed descendants even when folder itself has no direct status',
+  },
+];
+
+function GitStatusLegend({ colorMode }: { colorMode: 'light' | 'dark' }) {
+  const isDark = colorMode === 'dark';
+  const containerClass = [
+    'bg-background text-foreground w-full overflow-hidden rounded-lg border border-[var(--color-border)] md:flex-none dark:bg-[#141415] order-first md:order-last',
+    isDark ? 'dark' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return (
+    <div className={containerClass} style={{ colorScheme: colorMode }}>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-muted/50 border-b border-[var(--color-border)] dark:bg-[#070707] dark:text-neutral-400">
+            <th className="w-14 px-4 py-2.5 text-left font-medium">
+              Indicator
+            </th>
+            <th className="w-14 px-4 py-2.5 text-left font-medium">State</th>
+            <th className="px-4 py-2.5 text-left font-medium">Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {GIT_STATUS_LEGEND.map((entry) => {
+            const statusColor = isDark ? entry.dark : entry.light;
+            return (
+              <tr
+                key={entry.status}
+                className="border-b border-[var(--color-border)] last:border-b-0"
+              >
+                <td className="px-4 py-2">
+                  {entry.badge == null ? (
+                    <div className="text-muted-foreground w-6 text-center text-xs">
+                      None
+                    </div>
+                  ) : (
+                    <span
+                      aria-label={entry.status}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-xs font-semibold tabular-nums shadow-[inset_0_0_0_1px_rgb(0_0_0_/_0.05)]"
+                      style={{
+                        color: statusColor,
+                        opacity: entry.badgeOpacity,
+                      }}
+                    >
+                      {entry.badge}
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-2">
+                  <code className="dark:text-neutral-300">{entry.status}</code>
+                </td>
+                <td className="text-muted-foreground px-4 py-2 dark:text-neutral-400">
+                  {entry.description}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
