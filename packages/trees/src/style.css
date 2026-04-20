@@ -199,7 +199,10 @@
       var(--trees-theme-input-fg, var(--trees-fg))
     );
     --trees-search-font-weight: var(--trees-search-font-weight-override, 600);
-    --trees-search-bg: var(--trees-search-bg-override, var(--trees-input-bg));
+    --trees-search-bg: var(
+      --trees-search-bg-override,
+      var(--trees-theme-input-bg, var(--trees-input-bg))
+    );
 
     --trees-selected-fg: var(
       --trees-selected-fg-override,
