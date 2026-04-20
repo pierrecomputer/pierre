@@ -524,11 +524,15 @@
       --trees-action-lane-width-override,
       calc(var(--trees-icon-width) + 2px)
     );
-    /* Keep the floating trigger centered over the row's decorative action lane.
-       The row icon sits inside trailing item padding, while the real trigger uses
-       a focus-ring margin of its own. */
+    /* Keep the floating trigger aligned with the row's action lane. Going in
+       from the root's right edge: the scroll container reserves
+       `--trees-padding-inline` of effective inset on each side (its asymmetric
+       padding formula cancels the scrollbar gutter on the right), the row
+       sits inside that inset, and its trailing `--trees-item-padding-x` is the
+       action lane itself. The trigger's own focus-ring margin then trims one
+       pixel back so the button's visible right edge lines up with the lane. */
     --trees-context-menu-trigger-inline-offset: calc(
-      var(--trees-item-margin-x) + var(--trees-item-padding-x) -
+      var(--trees-padding-inline) + var(--trees-item-padding-x) -
         var(--trees-focus-ring-width)
     );
 
