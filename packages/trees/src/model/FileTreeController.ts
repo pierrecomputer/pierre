@@ -1309,6 +1309,16 @@ export class FileTreeController
       return false;
     }
 
+    // Expand any collapsed ancestors so the renaming row can actually mount.
+    // If the row stays hidden under a collapsed directory, the React
+    // rename-handoff effect keeps asking the view to reveal a row that can
+    // never render, spinning the component forever.
+    for (const ancestorPath of getAncestorDirectoryPaths(canonicalPath)) {
+      if (!this.#store.isExpanded(ancestorPath)) {
+        this.#store.expand(ancestorPath);
+      }
+    }
+
     this.#applySelection([canonicalPath], canonicalPath, false);
     if (this.#searchValue != null) {
       this.#setSearchState(null, false);

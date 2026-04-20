@@ -510,6 +510,57 @@ describe('file-tree renaming', () => {
     }
   });
 
+  test('starting rename on a path under a collapsed ancestor expands the chain so the input can mount', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['src/'],
+        paths: ['src/components/Button.tsx', 'src/index.ts'],
+        initialVisibleRowCount: 240 / 30,
+        renaming: true,
+      });
+
+      const componentsItem = fileTree.getItem('src/components/');
+      if (
+        componentsItem == null ||
+        componentsItem.isDirectory() !== true ||
+        !('isExpanded' in componentsItem)
+      ) {
+        throw new Error('expected src/components directory item');
+      }
+
+      expect(componentsItem.isExpanded()).toBe(false);
+
+      const containerWrapper = document.createElement('div');
+      fileTree.render({ containerWrapper });
+      await flushDom();
+
+      fileTree.add('src/components/new.ts');
+      expect(fileTree.startRenaming('src/components/new.ts')).toBe(true);
+      await flushDom(4);
+
+      // The ancestor directory must be expanded for the new row to render
+      // its rename input. Without this, the rename handoff effect would spin
+      // trying to reveal a row that can never mount inside a collapsed
+      // branch.
+      expect(componentsItem.isExpanded()).toBe(true);
+
+      const shadowRoot = getShadowRoot(fileTree);
+      const renameInput = getRenameInput(shadowRoot, dom);
+      expect(renameInput.value).toBe('new.ts');
+      const renameRow = getItemRow(shadowRoot, dom, 'src/components/new.ts');
+      expect(renameRow.querySelector('[data-item-rename-input]')).toBe(
+        renameInput
+      );
+      expect(fileTree.getFocusedPath()).toBe('src/components/new.ts');
+      expect(fileTree.getSelectedPaths()).toEqual(['src/components/new.ts']);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('flattened leaf rename renders input only on the terminal segment and commits a folder rename', async () => {
     const { cleanup, dom } = installDom();
     try {
