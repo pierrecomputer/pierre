@@ -86,6 +86,7 @@ export function DemoContextMenuClient({
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(
     null
   );
+  const [hasMutated, setHasMutated] = useState(false);
 
   useEffect(() => {
     setPortalContainer(document.getElementById('dark-mode-portal-container'));
@@ -151,6 +152,25 @@ export function DemoContextMenuClient({
         ? buttonModel
         : bothModel;
 
+  useEffect(() => {
+    const markMutated = (event: { operation: string }) => {
+      if (event.operation === 'reset') {
+        return;
+      }
+      setHasMutated(true);
+    };
+    const unsubscribes = [
+      bothModel.onMutation('*', markMutated),
+      rightClickModel.onMutation('*', markMutated),
+      buttonModel.onMutation('*', markMutated),
+    ];
+    return () => {
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe();
+      }
+    };
+  }, [bothModel, rightClickModel, buttonModel]);
+
   return (
     <TreeExampleSection>
       <FeatureHeader
@@ -189,6 +209,7 @@ export function DemoContextMenuClient({
           </ButtonGroup>
           <Button
             variant="outline"
+            disabled={!hasMutated}
             onClick={() => {
               bothModel.resetPaths(sampleFileList, {
                 initialExpandedPaths: CONTEXT_MENU_EXPANDED_PATHS,
@@ -199,9 +220,10 @@ export function DemoContextMenuClient({
               buttonModel.resetPaths(sampleFileList, {
                 initialExpandedPaths: CONTEXT_MENU_EXPANDED_PATHS,
               });
+              setHasMutated(false);
             }}
           >
-            Reset demo tree
+            Reset
           </Button>
         </div>
         <TreeApp
