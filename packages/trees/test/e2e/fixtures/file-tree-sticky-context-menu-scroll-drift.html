@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>file-tree sticky context-menu drift fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+        background: #f7f7f8;
+      }
+
+      [data-sticky-drift-shell] {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: minmax(0, 440px) minmax(320px, 1fr);
+        align-items: start;
+      }
+
+      [data-sticky-drift-frame] {
+        overflow: hidden;
+        border: 1px solid #d4d4d8;
+        border-radius: 12px;
+        background: white;
+        padding: 12px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+      }
+
+      [data-sticky-drift-mount] {
+        width: 420px;
+        height: 700px;
+      }
+
+      [data-sticky-drift-report] {
+        margin: 0;
+        min-height: 700px;
+        overflow: auto;
+        border: 1px solid #d4d4d8;
+        border-radius: 12px;
+        background: #111827;
+        color: #e5e7eb;
+        padding: 12px;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-sticky-drift-shell>
+      <div data-sticky-drift-frame>
+        <div data-sticky-drift-mount></div>
+      </div>
+      <pre data-sticky-drift-report>Waiting for fixture…</pre>
+    </div>
+    <script
+      type="module"
+      src="./file-tree-sticky-context-menu-scroll-drift.ts"
+    ></script>
+  </body>
+</html>

@@ -38,7 +38,6 @@ export default async function TreesDevIndexPage({
   const sharedOptions: Omit<FileTreePathOptions, 'id' | 'preparedInput'> = {
     composition: {
       contextMenu: {
-        buttonVisibility: 'always',
         enabled: true,
         triggerMode: 'both',
       },
@@ -52,6 +51,7 @@ export default async function TreesDevIndexPage({
     initialExpandedPaths: workloadData.initialExpandedPaths,
     paths: workloadData.paths,
     search: true,
+    stickyFolders: true,
     viewportHeight: FILE_TREE_PROOF_VIEWPORT_HEIGHT,
   };
   const payload = preloadFileTree({

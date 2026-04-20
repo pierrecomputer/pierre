@@ -242,10 +242,12 @@ describe('file-tree composition surfaces', () => {
       const scrollElement = shadowRoot?.querySelector(
         '[data-file-tree-virtualized-scroll="true"]'
       );
+      const treeRoot = getTreeRoot(shadowRoot, dom);
       const anchorElement = shadowRoot?.querySelector(
         '[data-type="context-menu-anchor"]'
       );
-      expect(scrollElement?.contains(anchorElement ?? null)).toBe(true);
+      expect(scrollElement?.contains(anchorElement ?? null)).toBe(false);
+      expect(treeRoot.contains(anchorElement ?? null)).toBe(true);
       expect(anchorElement?.getAttribute('data-visible')).toBe('false');
       expect(
         shadowRoot
@@ -871,6 +873,60 @@ describe('file-tree composition surfaces', () => {
     }
   });
 
+  test('button mode defaults to when-needed visibility', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            triggerMode: 'button',
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md'],
+        viewportHeight: 120,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const treeRoot = getTreeRoot(shadowRoot, dom);
+      const itemButton = getItemButton(shadowRoot, dom, 'README.md');
+      const actionLane = itemButton.querySelector(
+        '[data-item-section="action"]'
+      );
+      const decorativeAffordance = actionLane?.querySelector(
+        '[data-item-action-affordance="decorative"]'
+      );
+
+      expect(
+        treeRoot.getAttribute('data-file-tree-context-menu-trigger-mode')
+      ).toBe('button');
+      expect(
+        treeRoot.getAttribute('data-file-tree-context-menu-button-visibility')
+      ).toBe('when-needed');
+      expect(
+        itemButton.getAttribute('data-item-context-menu-button-visibility')
+      ).toBe('when-needed');
+      expect(
+        itemButton.getAttribute('data-item-has-context-menu-action-lane')
+      ).toBe('true');
+      expect(actionLane).not.toBeNull();
+      expect(decorativeAffordance).toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('right-click-only mode omits the action lane but still opens menus', async () => {
     const { cleanup, dom } = installDom();
     try {
@@ -1015,7 +1071,7 @@ describe('file-tree composition surfaces', () => {
       );
       await flushDom();
 
-      expect(anchor?.style.top).toBe('40px');
+      expect(anchor?.style.top).toBe('48px');
       expect(host?.querySelector('[slot="context-menu"]')).not.toBeNull();
 
       fileTree.cleanUp();

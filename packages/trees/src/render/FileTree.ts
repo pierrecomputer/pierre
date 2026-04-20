@@ -158,7 +158,7 @@ export class FileTree
   readonly #slotHost = new FileTreeManagedSlotHost();
   readonly #viewOptions: Pick<
     FileTreeOptions,
-    'itemHeight' | 'overscan' | 'viewportHeight'
+    'itemHeight' | 'overscan' | 'stickyFolders' | 'viewportHeight'
   >;
   #fileTreeContainer: HTMLElement | undefined;
   #gitStatusState: FileTreeGitStatusState | null;
@@ -185,6 +185,7 @@ export class FileTree
       renderRowDecoration,
       renaming,
       search,
+      stickyFolders,
       unsafeCSS,
       viewportHeight,
       ...controllerOptions
@@ -201,6 +202,7 @@ export class FileTree
     this.#viewOptions = {
       itemHeight,
       overscan,
+      stickyFolders,
       viewportHeight,
     };
     this.#controller = new FileTreeController({
@@ -432,6 +434,7 @@ export class FileTree
   #getResolvedViewOptions(host: HTMLElement): {
     itemHeight?: number;
     overscan?: number;
+    stickyFolders?: boolean;
     viewportHeight: number;
   } {
     const viewportHeight =
@@ -442,6 +445,7 @@ export class FileTree
     return {
       itemHeight: this.#viewOptions.itemHeight,
       overscan: this.#viewOptions.overscan,
+      stickyFolders: this.#viewOptions.stickyFolders,
       viewportHeight,
     };
   }
@@ -699,6 +703,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     renderRowDecoration,
     renaming,
     search,
+    stickyFolders,
     unsafeCSS,
     viewportHeight,
     ...controllerOptions
@@ -741,6 +746,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
       renamingEnabled: renaming != null && renaming !== false,
       renderRowDecoration,
       searchEnabled: search === true,
+      stickyFolders,
       viewportHeight: resolvedViewportHeight,
     })
   );

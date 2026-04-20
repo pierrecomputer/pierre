@@ -491,7 +491,6 @@ export function MainDemoClient({
     () => ({
       composition: {
         contextMenu: {
-          buttonVisibility: 'always',
           enabled: true,
           triggerMode: 'both',
         },
@@ -502,6 +501,7 @@ export function MainDemoClient({
       initialExpandedPaths: workloadData.initialExpandedPaths,
       paths: workloadData.paths,
       search: true,
+      stickyFolders: true,
       viewportHeight: FILE_TREE_PROOF_VIEWPORT_HEIGHT,
     }),
     [workloadData]
