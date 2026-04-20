@@ -114,17 +114,61 @@ function getShadowRoot(fileTree: import('../src/index').FileTree): ShadowRoot {
   return shadowRoot;
 }
 
+const CANONICAL_ITEM_SELECTOR =
+  '[data-type="item"]:not([data-file-tree-sticky-row="true"])';
+
+function getItemRow(
+  shadowRoot: ShadowRoot,
+  dom: JSDOM,
+  path: string
+): HTMLElement {
+  const row = shadowRoot.querySelector(
+    `${CANONICAL_ITEM_SELECTOR}[data-item-path="${path}"]`
+  );
+  if (!(row instanceof dom.window.HTMLElement)) {
+    throw new Error(`Expected canonical item row for ${path}`);
+  }
+
+  return row;
+}
+
 function getItemButton(
   shadowRoot: ShadowRoot,
   dom: JSDOM,
   path: string
 ): HTMLButtonElement {
-  const button = shadowRoot.querySelector(`[data-item-path="${path}"]`);
+  const button = getItemRow(shadowRoot, dom, path);
   if (!(button instanceof dom.window.HTMLButtonElement)) {
     throw new Error(`Expected item button for ${path}`);
   }
 
   return button;
+}
+
+function getStickyRowButton(
+  shadowRoot: ShadowRoot,
+  dom: JSDOM,
+  path: string
+): HTMLButtonElement {
+  const button = shadowRoot.querySelector(
+    `[data-file-tree-sticky-path="${path}"]`
+  );
+  if (!(button instanceof dom.window.HTMLButtonElement)) {
+    throw new Error(`Expected sticky row for ${path}`);
+  }
+
+  return button;
+}
+
+function getScrollElement(shadowRoot: ShadowRoot, dom: JSDOM): HTMLElement {
+  const scrollElement = shadowRoot.querySelector(
+    '[data-file-tree-virtualized-scroll="true"]'
+  );
+  if (!(scrollElement instanceof dom.window.HTMLElement)) {
+    throw new Error('Expected virtualized scroll element');
+  }
+
+  return scrollElement;
 }
 
 function getRenameInput(
@@ -407,6 +451,60 @@ describe('file-tree renaming', () => {
       ).toBeNull();
       const renameInput = getRenameInput(shadowRoot, dom);
       expect(renameInput.value).toBe('index.ts');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('sticky-row rename handoff reveals the canonical row input and focuses it', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['aaa/', 'bbb/', 'src/lib/'],
+        paths: ['aaa/one.ts', 'bbb/two.ts', 'src/index.ts', 'src/lib/util.ts'],
+        stickyFolders: true,
+        initialVisibleRowCount: 60 / 30,
+        renaming: true,
+      });
+      const containerWrapper = document.createElement('div');
+      document.body.append(containerWrapper);
+      fileTree.render({ containerWrapper });
+      await flushDom();
+
+      const shadowRoot = getShadowRoot(fileTree);
+      const scrollElement = getScrollElement(shadowRoot, dom);
+
+      const utilButton = getItemButton(shadowRoot, dom, 'src/lib/util.ts');
+      utilButton.click();
+      utilButton.focus();
+      await flushDom();
+      expect(fileTree.getSelectedPaths()).toEqual(['src/lib/util.ts']);
+
+      scrollElement.scrollTop = 149;
+      scrollElement.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+
+      const stickyButton = getStickyRowButton(shadowRoot, dom, 'src/lib/');
+      expect(stickyButton.dataset.fileTreeStickyPath).toBe('src/lib/');
+      expect(() => getItemButton(shadowRoot, dom, 'src/lib/')).toThrow();
+
+      expect(fileTree.startRenaming('src/lib/')).toBe(true);
+      await flushDom(4);
+      expect(scrollElement.scrollTop).toBeLessThan(149);
+      const renameInput = getRenameInput(shadowRoot, dom);
+      const renameRow = getItemRow(shadowRoot, dom, 'src/lib/');
+      expect(renameInput.value).toBe('lib');
+      expect(renameRow.querySelector('[data-item-rename-input]')).toBe(
+        renameInput
+      );
+      expect(renameRow.getAttribute('data-file-tree-sticky-row')).toBeNull();
+      expect(shadowRoot.activeElement).toBe(renameInput);
+      expect(renameInput.selectionStart).toBe(0);
+      expect(renameInput.selectionEnd).toBe('lib'.length);
+      expect(fileTree.getFocusedPath()).toBe('src/lib/');
+      expect(fileTree.getSelectedPaths()).toEqual(['src/lib/']);
     } finally {
       cleanup();
     }

@@ -705,36 +705,6 @@
     pointer-events: none;
   }
 
-  [data-file-tree-sticky-row='true'] {
-    color: inherit;
-    font-family: var(--trees-font-family);
-    font-size: var(--trees-font-size);
-    text-align: start;
-    background-color: var(--trees-bg);
-    border: none;
-    outline: none;
-    position: relative;
-    padding: 0 var(--trees-item-padding-x);
-    margin: 0 var(--trees-item-margin-x);
-    cursor: pointer;
-    user-select: none;
-    -webkit-touch-callout: none;
-    touch-action: manipulation;
-    display: flex;
-    flex: 0 0 var(--ft-internal-row-height);
-    align-items: center;
-    height: var(--trees-row-height);
-    line-height: var(--trees-row-height);
-    gap: var(--trees-item-row-gap);
-    border-radius: var(--trees-border-radius);
-    pointer-events: auto;
-
-    &:hover {
-      background-color: var(--trees-bg-muted);
-      --truncate-marker-background-color: var(--trees-bg-muted);
-    }
-  }
-
   [data-file-tree-virtualized-list='true'] {
     background-color: var(--trees-bg);
     position: relative;
@@ -815,7 +785,7 @@
     font-size: var(--trees-font-size);
     text-align: start;
     outline: none;
-    background: transparent;
+    background-color: var(--trees-bg);
     border: none;
     position: relative;
 
@@ -874,6 +844,10 @@
     &[data-item-search-match='true'] {
       font-weight: var(--trees-search-font-weight);
     }
+  }
+
+  [data-type='item'][data-file-tree-sticky-row='true'] {
+    pointer-events: auto;
   }
 
   [data-item-selected='true']:has(+ [data-item-selected='true']) {

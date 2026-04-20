@@ -868,6 +868,10 @@ function renderFileTreeRowContent(
   );
 }
 
+type FileTreeRenderedRowMode = 'flow' | 'sticky';
+
+// Render the same row contract in the flow list and sticky overlay so pointer
+// behavior, row metadata, and lane structure stay in sync.
 function renderStyledRow(
   controller: FileTreeController,
   renameView: ReturnType<FileTreeController[typeof FILE_TREE_RENAME_VIEW]>,
@@ -916,17 +920,24 @@ function renderStyledRow(
       source?: 'button' | 'keyboard' | 'right-click';
     }
   ) => void,
+  onRowClick: (
+    event: MouseEvent,
+    row: FileTreeVisibleRow,
+    targetPath: string,
+    mode: FileTreeRenderedRowMode
+  ) => void,
   onKeyDown: (event: KeyboardEvent) => void,
   key: string | number,
   options: {
     isParked?: boolean;
+    mode?: FileTreeRenderedRowMode;
     style?: Record<string, string | undefined>;
   } = {}
 ): JSX.Element {
   const targetPath = getFileTreeRowPath(row);
   const item = controller.getItem(targetPath);
-  const directoryItem = isFileTreeDirectoryHandle(item) ? item : null;
-  const { isParked = false, style } = options;
+  const { isParked = false, mode = 'flow', style } = options;
+  const isSticky = mode === 'sticky';
   const ownGitStatus = gitStatusByPath?.get(targetPath) ?? null;
   const effectiveGitStatus =
     ownGitStatus ??
@@ -952,20 +963,21 @@ function renderStyledRow(
   const renamingPath = renameView.getPath();
   const isRenamingRow = renamingPath === targetPath;
   const renamingValue = isRenamingRow ? renameView.getValue() : '';
-  const renameInput = !isRenamingRow ? null : (
-    <RenameInput
-      ref={registerRenameInput}
-      ariaLabel={`Rename ${getFileTreeRowAriaLabel(row)}`}
-      isFlattened={row.isFlattened}
-      value={renamingValue}
-      onBlur={() => {
-        renameView.commit();
-      }}
-      onInput={(event) => {
-        renameView.setValue((event.currentTarget as HTMLInputElement).value);
-      }}
-    />
-  );
+  const renameInput =
+    isSticky || !isRenamingRow ? null : (
+      <RenameInput
+        ref={registerRenameInput}
+        ariaLabel={`Rename ${getFileTreeRowAriaLabel(row)}`}
+        isFlattened={row.isFlattened}
+        value={renamingValue}
+        onBlur={() => {
+          renameView.commit();
+        }}
+        onInput={(event) => {
+          renameView.setValue((event.currentTarget as HTMLInputElement).value);
+        }}
+      />
+    );
   const focusedProps =
     row.isFocused && visualFocusPath === targetPath
       ? { 'data-item-focused': true }
@@ -1005,13 +1017,20 @@ function renderStyledRow(
     showDecorativeActionAffordance,
   });
   const commonProps = {
-    'aria-expanded': row.kind === 'directory' ? row.isExpanded : undefined,
     'aria-haspopup': contextMenuEnabled ? 'menu' : undefined,
     'aria-label': getFileTreeRowAriaLabel(row),
-    'aria-level': row.level + 1,
-    'aria-posinset': row.posInSet + 1,
-    'aria-selected': row.isSelected ? 'true' : 'false',
-    'aria-setsize': row.setSize,
+    'aria-expanded':
+      !isSticky && row.kind === 'directory' ? row.isExpanded : undefined,
+    'aria-level': !isSticky ? row.level + 1 : undefined,
+    'aria-posinset': !isSticky ? row.posInSet + 1 : undefined,
+    'aria-selected': !isSticky
+      ? row.isSelected
+        ? 'true'
+        : 'false'
+      : undefined,
+    'aria-setsize': !isSticky ? row.setSize : undefined,
+    'data-file-tree-sticky-path': isSticky ? targetPath : undefined,
+    'data-file-tree-sticky-row': isSticky ? 'true' : undefined,
     'data-item-context-menu-button-visibility': actionLaneEnabled
       ? contextMenuButtonVisibility
       : undefined,
@@ -1027,7 +1046,7 @@ function renderStyledRow(
     'data-item-path': targetPath,
     'data-item-type': row.kind === 'directory' ? 'folder' : 'file',
     'data-type': 'item',
-    id: domId,
+    id: !isSticky ? domId : undefined,
     key,
     onContextMenu:
       contextMenuEnabled || dragAndDropEnabled
@@ -1055,16 +1074,18 @@ function renderStyledRow(
             });
           }
         : undefined,
-    onFocus: () => {
-      item?.focus();
-    },
-    onKeyDown,
+    onFocus: !isSticky
+      ? () => {
+          item?.focus();
+        }
+      : undefined,
+    onKeyDown: !isSticky ? onKeyDown : undefined,
     ref: (element: HTMLElement | null) => {
       registerButton(targetPath, element);
     },
-    role: 'treeitem',
+    role: !isSticky ? 'treeitem' : undefined,
     style: { minHeight: `${itemHeight}px`, ...style },
-    tabIndex: row.isFocused ? 0 : -1,
+    tabIndex: !isSticky && row.isFocused ? 0 : -1,
     ...focusedProps,
     ...selectedProps,
     ...contextHoverProps,
@@ -1072,8 +1093,9 @@ function renderStyledRow(
     ...draggingProps,
     ...gitStatusProps,
   } as const;
+  const rendersAsStaticContainer = !isSticky && isRenamingRow;
 
-  if (isRenamingRow) {
+  if (rendersAsStaticContainer) {
     return <div {...commonProps}>{rowContent}</div>;
   }
 
@@ -1091,6 +1113,11 @@ function renderStyledRow(
           : undefined
       }
       onMouseDown={(event) => {
+        if (isSticky) {
+          event.preventDefault();
+          return;
+        }
+
         if (controller.isSearchOpen()) {
           event.preventDefault();
         }
@@ -1103,120 +1130,10 @@ function renderStyledRow(
           : undefined
       }
       onClick={(event) => {
-        const shouldCloseSearch = controller.isSearchOpen();
-        if (event.shiftKey) {
-          controller.selectPathRange(
-            targetPath,
-            event.ctrlKey || event.metaKey
-          );
-        } else if (event.ctrlKey || event.metaKey) {
-          controller.togglePathSelectionFromInput(targetPath);
-        } else {
-          controller.selectOnlyPath(targetPath);
-        }
-
-        item?.focus();
-        if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
-          directoryItem?.toggle();
-        }
-        if (shouldCloseSearch) {
-          controller.closeSearch();
-        }
+        onRowClick(event, row, targetPath, mode);
       }}
     >
       {rowContent}
-    </button>
-  );
-}
-
-// Sticky overlay rows rely on the floating trigger for context menus, so they
-// intentionally omit the inline action lane that normal rows reserve.
-
-function renderStickyRow(
-  row: FileTreeVisibleRow,
-  resolveIcon: ReturnType<typeof createFileTreeIconResolver>['resolveIcon'],
-  itemHeight: number,
-  top: number,
-  zIndex: number,
-  {
-    contextMenuEnabled,
-    contextMenuRightClickEnabled,
-    onClick,
-    openContextMenuForRow,
-    registerButton,
-    shouldSuppressContextMenu,
-  }: {
-    contextMenuEnabled: boolean;
-    contextMenuRightClickEnabled: boolean;
-    onClick: (path: string) => void;
-    openContextMenuForRow: (
-      row: FileTreeVisibleRow,
-      targetPath: string,
-      options?: {
-        anchorRect?: FileTreeContextMenuOpenContext['anchorRect'];
-        source?: 'button' | 'keyboard' | 'right-click';
-      }
-    ) => void;
-    registerButton: (path: string, element: HTMLElement | null) => void;
-    shouldSuppressContextMenu: () => boolean;
-  },
-  key: string | number
-): JSX.Element {
-  const targetPath = getFileTreeRowPath(row);
-
-  return (
-    <button
-      key={key}
-      type="button"
-      aria-expanded={row.kind === 'directory' ? row.isExpanded : undefined}
-      aria-haspopup={contextMenuEnabled ? 'menu' : undefined}
-      aria-label={getFileTreeRowAriaLabel(row)}
-      data-file-tree-sticky-path={targetPath}
-      data-file-tree-sticky-row="true"
-      data-item-type={row.kind === 'directory' ? 'folder' : 'file'}
-      onClick={() => {
-        onClick(targetPath);
-      }}
-      onContextMenu={
-        contextMenuEnabled
-          ? (event: MouseEvent) => {
-              if (shouldSuppressContextMenu()) {
-                event.preventDefault();
-                return;
-              }
-
-              event.preventDefault();
-              if (!contextMenuRightClickEnabled) {
-                return;
-              }
-
-              openContextMenuForRow(row, targetPath, {
-                anchorRect: createAnchorRectFromPoint(
-                  event.clientX,
-                  event.clientY
-                ),
-                source: 'right-click',
-              });
-            }
-          : undefined
-      }
-      onMouseDown={(event) => {
-        event.preventDefault();
-      }}
-      ref={(element) => {
-        registerButton(targetPath, element);
-      }}
-      style={{
-        left: '0',
-        minHeight: `${itemHeight}px`,
-        position: 'absolute',
-        right: '0',
-        top: `${top}px`,
-        zIndex: `${zIndex}`,
-      }}
-      tabIndex={-1}
-    >
-      {renderFileTreeRowContent(row, resolveIcon)}
     </button>
   );
 }
@@ -1270,6 +1187,12 @@ function renderRangeChildren(
       source?: 'button' | 'keyboard' | 'right-click';
     }
   ) => void,
+  onRowClick: (
+    event: MouseEvent,
+    row: FileTreeVisibleRow,
+    targetPath: string,
+    mode: FileTreeRenderedRowMode
+  ) => void,
   onKeyDown: (event: KeyboardEvent) => void
 ): JSX.Element[] {
   if (range.end < range.start) {
@@ -1316,6 +1239,7 @@ function renderRangeChildren(
         resolveIcon,
         renderDecorationForRow,
         openContextMenuForRow,
+        onRowClick,
         onKeyDown,
         range.start + slotIndex
       )
@@ -1488,6 +1412,12 @@ export function FileTreeView({
     },
     []
   );
+  const registerRenameInput = useCallback(
+    (element: HTMLInputElement | null): void => {
+      renameInputRef.current = element;
+    },
+    []
+  );
   const getTriggerAnchorButton = useCallback(
     (path: string | null): HTMLElement | null => {
       return getContextMenuAnchorButton(
@@ -1544,6 +1474,14 @@ export function FileTreeView({
   // slots where the real rows belong.
   const stickyRows = overlayRows;
   const occludedStickyRows = layoutSnapshot.sticky.rows;
+  const totalScrollableHeight = layoutSnapshot.physical.totalHeight;
+  const stickyOverlayHeight = layoutSnapshot.sticky.height;
+  const stickyRowPathSet = useMemo(
+    () =>
+      new Set(occludedStickyRows.map((entry) => getFileTreeRowPath(entry.row))),
+    [occludedStickyRows]
+  );
+
   const focusedRowIsMounted =
     focusedIndex >= 0 &&
     focusedIndex >= range.start &&
@@ -1680,6 +1618,46 @@ export function FileTreeView({
       itemHeight,
       renamingEnabled,
       resolvedViewportHeight,
+    ]
+  );
+
+  // Sticky overlay clicks should land on the canonical row so rename inputs and
+  // roving focus stay owned by the in-flow treeitem, not the aria-hidden mirror.
+  const revealCanonicalRowAtStickyOffset = useCallback(
+    (
+      path: string,
+      { restoreTreeFocus = true }: { restoreTreeFocus?: boolean } = {}
+    ): boolean => {
+      const scrollElement = scrollRef.current;
+      if (scrollElement == null) {
+        return false;
+      }
+
+      controller.focusPath(path);
+      const visibleIndex = controller.getFocusedIndex();
+      if (visibleIndex < 0) {
+        return false;
+      }
+
+      domFocusOwnerRef.current = true;
+      scrollFocusedRowToViewportOffset(
+        scrollElement,
+        visibleIndex,
+        itemHeight,
+        resolvedViewportHeight,
+        totalScrollableHeight,
+        stickyOverlayHeight
+      );
+      updateViewportRef.current();
+      pendingStickyFocusPathRef.current = restoreTreeFocus ? path : null;
+      return true;
+    },
+    [
+      controller,
+      itemHeight,
+      resolvedViewportHeight,
+      stickyOverlayHeight,
+      totalScrollableHeight,
     ]
   );
 
@@ -2258,19 +2236,29 @@ export function FileTreeView({
       return;
     }
 
+    const input = renameInputRef.current;
+    if (input == null) {
+      revealCanonicalRowAtStickyOffset(renamingPath, {
+        restoreTreeFocus: false,
+      });
+      return;
+    }
+
     if (previousRenamingPathRef.current === renamingPath) {
       return;
     }
 
+    pendingStickyFocusPathRef.current = null;
     previousRenamingPathRef.current = renamingPath;
-    const input = renameInputRef.current;
-    if (input == null) {
-      return;
-    }
-
     focusElement(input);
     input.select();
-  }, [renamingPath]);
+  }, [
+    range.end,
+    range.start,
+    renamingPath,
+    revealCanonicalRowAtStickyOffset,
+    stickyRowPathSet,
+  ]);
 
   useLayoutEffect(() => {
     const rootElement = rootRef.current;
@@ -2655,15 +2643,6 @@ export function FileTreeView({
       document.removeEventListener('keydown', onKeyDown, true);
     };
   }, [closeContextMenu, contextMenuState]);
-
-  const totalScrollableHeight = layoutSnapshot.physical.totalHeight;
-
-  const stickyOverlayHeight = layoutSnapshot.sticky.height;
-  const stickyRowPathSet = useMemo(
-    () =>
-      new Set(occludedStickyRows.map((entry) => getFileTreeRowPath(entry.row))),
-    [occludedStickyRows]
-  );
 
   useLayoutEffect(() => {
     const scrollElement = scrollRef.current;
@@ -3063,43 +3042,40 @@ export function FileTreeView({
       }
     : undefined;
 
-  const handleStickyRowClick = useCallback(
-    (path: string): void => {
-      const scrollElement = scrollRef.current;
-      if (scrollElement == null) {
-        return;
+  const handleRowClick = useCallback(
+    (
+      event: MouseEvent,
+      row: FileTreeVisibleRow,
+      targetPath: string,
+      mode: FileTreeRenderedRowMode
+    ): void => {
+      const shouldCloseSearch = controller.isSearchOpen();
+      const item = controller.getItem(targetPath);
+      const directoryItem =
+        row.kind === 'directory' && isFileTreeDirectoryHandle(item)
+          ? item
+          : null;
+
+      if (event.shiftKey) {
+        controller.selectPathRange(targetPath, event.ctrlKey || event.metaKey);
+      } else if (event.ctrlKey || event.metaKey) {
+        controller.togglePathSelectionFromInput(targetPath);
+      } else {
+        controller.selectOnlyPath(targetPath);
       }
 
-      // `controller.focusPath` relocates focus to `path` and returns the new
-      // visible index, so we can look up the position without scanning the
-      // visible-row array — sticky rows only render when `stickyFolders` is
-      // on, but this stays O(1) regardless and avoids closing over the
-      // visible-row snapshot in the callback dependency list.
-      controller.focusPath(path);
-      const visibleIndex = controller.getFocusedIndex();
-      if (visibleIndex < 0) {
-        return;
+      item?.focus();
+      if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        directoryItem?.toggle();
       }
-
-      domFocusOwnerRef.current = true;
-      scrollFocusedRowToViewportOffset(
-        scrollElement,
-        visibleIndex,
-        itemHeight,
-        resolvedViewportHeight,
-        totalScrollableHeight,
-        stickyOverlayHeight
-      );
-      updateViewportRef.current();
-      pendingStickyFocusPathRef.current = path;
+      if (shouldCloseSearch) {
+        controller.closeSearch();
+      }
+      if (mode === 'sticky') {
+        revealCanonicalRowAtStickyOffset(targetPath);
+      }
     },
-    [
-      controller,
-      itemHeight,
-      resolvedViewportHeight,
-      stickyOverlayHeight,
-      totalScrollableHeight,
-    ]
+    [controller, revealCanonicalRowAtStickyOffset]
   );
 
   const openMenuFromTrigger = (): void => {
@@ -3197,21 +3173,49 @@ export function FileTreeView({
               style={{ height: `${overlayRowsHeight}px` }}
             >
               {stickyRows.map((entry, index) =>
-                renderStickyRow(
+                renderStyledRow(
+                  controller,
+                  renameView,
                   entry.row,
-                  resolveIcon,
+                  visualFocusPath,
+                  visualContextHoverPath,
+                  draggedPathSet,
+                  dragTarget,
+                  dragAndDropEnabled,
+                  shouldSuppressContextMenu,
+                  handleRowDragStart,
+                  handleRowDragEnd,
+                  handleRowTouchStart,
+                  instanceId,
                   itemHeight,
-                  entry.top,
-                  stickyRows.length - index,
+                  gitStatusByPath,
+                  ignoredGitDirectories,
+                  ignoredInheritanceCache,
+                  directoriesWithGitChanges,
+                  gitLaneActive,
+                  contextMenuEnabled,
+                  contextMenuTriggerMode,
+                  contextMenuButtonTriggerEnabled,
+                  contextMenuButtonVisibility,
+                  contextMenuRightClickEnabled,
+                  registerRenameInput,
+                  registerStickyRowButton,
+                  resolveIcon,
+                  renderDecorationForRow,
+                  openContextMenuForRow,
+                  handleRowClick,
+                  handleTreeKeyDown,
+                  `sticky:${getFileTreeRowPath(entry.row)}`,
                   {
-                    contextMenuEnabled,
-                    contextMenuRightClickEnabled,
-                    onClick: handleStickyRowClick,
-                    openContextMenuForRow,
-                    registerButton: registerStickyRowButton,
-                    shouldSuppressContextMenu,
-                  },
-                  `sticky:${getFileTreeRowPath(entry.row)}`
+                    mode: 'sticky',
+                    style: {
+                      left: '0',
+                      position: 'absolute',
+                      right: '0',
+                      top: `${entry.top}px`,
+                      zIndex: `${stickyRows.length - index}`,
+                    },
+                  }
                 )
               )}
             </div>
@@ -3261,13 +3265,12 @@ export function FileTreeView({
               contextMenuButtonTriggerEnabled,
               contextMenuButtonVisibility,
               contextMenuRightClickEnabled,
-              (element) => {
-                renameInputRef.current = element;
-              },
+              registerRenameInput,
               registerRowButton,
               resolveIcon,
               renderDecorationForRow,
               openContextMenuForRow,
+              handleRowClick,
               handleTreeKeyDown
             )}
             {parkedFocusedRow != null && parkedFocusedRowOffset != null
@@ -3296,13 +3299,12 @@ export function FileTreeView({
                   contextMenuButtonTriggerEnabled,
                   contextMenuButtonVisibility,
                   contextMenuRightClickEnabled,
-                  (element) => {
-                    renameInputRef.current = element;
-                  },
+                  registerRenameInput,
                   registerRowButton,
                   resolveIcon,
                   renderDecorationForRow,
                   openContextMenuForRow,
+                  handleRowClick,
                   handleTreeKeyDown,
                   `parked:${parkedFocusedRow.path}`,
                   {
@@ -3347,13 +3349,12 @@ export function FileTreeView({
                   contextMenuButtonTriggerEnabled,
                   contextMenuButtonVisibility,
                   contextMenuRightClickEnabled,
-                  (element) => {
-                    renameInputRef.current = element;
-                  },
+                  registerRenameInput,
                   registerRowButton,
                   resolveIcon,
                   renderDecorationForRow,
                   openContextMenuForRow,
+                  handleRowClick,
                   handleTreeKeyDown,
                   `parked-drag:${parkedDraggedRow.path}`,
                   {

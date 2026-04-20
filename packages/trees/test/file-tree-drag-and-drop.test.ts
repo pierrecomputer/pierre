@@ -158,7 +158,9 @@ function getItemButton(
   dom: JSDOM,
   path: string
 ): HTMLButtonElement {
-  const button = shadowRoot?.querySelector(`[data-item-path="${path}"]`);
+  const button = shadowRoot?.querySelector(
+    `[data-item-path="${path}"]:not([data-file-tree-sticky-row="true"])`
+  );
   if (!(button instanceof dom.window.HTMLButtonElement)) {
     throw new Error(`missing button for ${path}`);
   }
@@ -166,25 +168,63 @@ function getItemButton(
   return button;
 }
 
-function getDraggingPaths(shadowRoot: ShadowRoot | null | undefined): string[] {
+function getStickyRowButton(
+  shadowRoot: ShadowRoot | null | undefined,
+  dom: JSDOM,
+  path: string
+): HTMLButtonElement {
+  const button = shadowRoot?.querySelector(
+    `[data-file-tree-sticky-path="${path}"]`
+  );
+  if (!(button instanceof dom.window.HTMLButtonElement)) {
+    throw new Error(`missing sticky row for ${path}`);
+  }
+
+  return button;
+}
+
+function getUniqueItemPaths(elements: Iterable<HTMLElement>): string[] {
   return Array.from(
+    new Set(
+      Array.from(elements)
+        .map(
+          (element) =>
+            element.dataset.fileTreeStickyPath ?? element.dataset.itemPath
+        )
+        .filter((path): path is string => path != null)
+    )
+  );
+}
+
+function getDraggingPaths(shadowRoot: ShadowRoot | null | undefined): string[] {
+  return getUniqueItemPaths(
     shadowRoot?.querySelectorAll<HTMLElement>('[data-item-dragging="true"]') ??
       []
-  )
-    .map((element) => element.dataset.itemPath)
-    .filter((path): path is string => path != null);
+  );
 }
 
 function getDragTargetPaths(
   shadowRoot: ShadowRoot | null | undefined
 ): string[] {
-  return Array.from(
+  return getUniqueItemPaths(
     shadowRoot?.querySelectorAll<HTMLElement>(
       '[data-item-drag-target="true"]'
     ) ?? []
-  )
-    .map((element) => element.dataset.itemPath)
-    .filter((path): path is string => path != null);
+  );
+}
+
+function getScrollElement(
+  shadowRoot: ShadowRoot | null | undefined,
+  dom: JSDOM
+): HTMLElement {
+  const scrollElement = shadowRoot?.querySelector(
+    '[data-file-tree-virtualized-scroll="true"]'
+  );
+  if (!(scrollElement instanceof dom.window.HTMLElement)) {
+    throw new Error('missing scroll element');
+  }
+
+  return scrollElement;
 }
 
 function getParkedDraggingButton(
@@ -417,6 +457,162 @@ describe('file-tree drag and drop', () => {
             flattenedSegmentPath: null,
             hoveredPath: 'README.md',
             kind: 'root',
+          },
+        },
+      ]);
+      expect(getDraggingPaths(rendered.shadowRoot)).toEqual([]);
+      expect(getDragTargetPaths(rendered.shadowRoot)).toEqual([]);
+    } finally {
+      rendered.cleanup();
+    }
+  });
+
+  test('sticky directory hover resolves the same drop target as the canonical folder row', async () => {
+    const completed: FileTreeDropResult[] = [];
+    const rendered = await renderFileTree({
+      dragAndDrop: {
+        onDropComplete: (event: FileTreeDropResult) => {
+          completed.push(event);
+        },
+      },
+      flattenEmptyDirectories: true,
+      initialExpandedPaths: ['src/'],
+      paths: ['src/index.ts', 'src/utils.ts', 'z.ts'],
+      stickyFolders: true,
+      initialVisibleRowCount: 180 / 30,
+    });
+
+    try {
+      const scrollElement = getScrollElement(rendered.shadowRoot, rendered.dom);
+      scrollElement.scrollTop = 1;
+      scrollElement.dispatchEvent(new rendered.dom.window.Event('scroll'));
+      await flushDom();
+
+      const sourceButton = getItemButton(
+        rendered.shadowRoot,
+        rendered.dom,
+        'z.ts'
+      );
+      const canonicalTarget = getItemButton(
+        rendered.shadowRoot,
+        rendered.dom,
+        'src/'
+      );
+      const stickyTarget = getStickyRowButton(
+        rendered.shadowRoot,
+        rendered.dom,
+        'src/'
+      );
+      const dataTransfer = createMockDataTransfer();
+
+      dispatchDragEvent(sourceButton, rendered.dom, 'dragstart', {
+        dataTransfer,
+      });
+      await flushDom();
+
+      rendered.dom.window.document.elementFromPoint = () => canonicalTarget;
+      dispatchDragEvent(canonicalTarget, rendered.dom, 'dragover', {
+        dataTransfer,
+      });
+      await flushDom();
+      expect(getDragTargetPaths(rendered.shadowRoot)).toEqual(['src/']);
+
+      rendered.dom.window.document.elementFromPoint = () => stickyTarget;
+      dispatchDragEvent(stickyTarget, rendered.dom, 'dragover', {
+        dataTransfer,
+      });
+      await flushDom();
+      expect(getDragTargetPaths(rendered.shadowRoot)).toEqual(['src/']);
+
+      dispatchDragEvent(rendered.treeRoot, rendered.dom, 'drop', {
+        dataTransfer,
+      });
+      await flushDom();
+
+      expect(rendered.fileTree.getItem('src/z.ts')).not.toBeNull();
+      expect(rendered.fileTree.getItem('z.ts')).toBeNull();
+      expect(completed).toEqual([
+        {
+          draggedPaths: ['z.ts'],
+          operation: 'move',
+          target: {
+            directoryPath: 'src/',
+            flattenedSegmentPath: null,
+            hoveredPath: 'src/',
+            kind: 'directory',
+          },
+        },
+      ]);
+      expect(getDraggingPaths(rendered.shadowRoot)).toEqual([]);
+      expect(getDragTargetPaths(rendered.shadowRoot)).toEqual([]);
+    } finally {
+      rendered.cleanup();
+    }
+  });
+
+  test('sticky rows can act as drag sources for directory moves', async () => {
+    const completed: FileTreeDropResult[] = [];
+    const rendered = await renderFileTree({
+      dragAndDrop: {
+        onDropComplete: (event: FileTreeDropResult) => {
+          completed.push(event);
+        },
+      },
+      flattenEmptyDirectories: true,
+      initialExpandedPaths: ['src/', 'target/'],
+      paths: ['src/index.ts', 'src/utils.ts', 'target/existing.ts'],
+      stickyFolders: true,
+      initialVisibleRowCount: 180 / 30,
+    });
+
+    try {
+      const scrollElement = getScrollElement(rendered.shadowRoot, rendered.dom);
+      scrollElement.scrollTop = 1;
+      scrollElement.dispatchEvent(new rendered.dom.window.Event('scroll'));
+      await flushDom();
+
+      const stickySource = getStickyRowButton(
+        rendered.shadowRoot,
+        rendered.dom,
+        'src/'
+      );
+      const targetButton = getItemButton(
+        rendered.shadowRoot,
+        rendered.dom,
+        'target/'
+      );
+      const dataTransfer = createMockDataTransfer();
+      rendered.dom.window.document.elementFromPoint = () => targetButton;
+
+      dispatchDragEvent(stickySource, rendered.dom, 'dragstart', {
+        dataTransfer,
+      });
+      await flushDom();
+      expect(getDraggingPaths(rendered.shadowRoot)).toEqual(['src/']);
+
+      dispatchDragEvent(targetButton, rendered.dom, 'dragover', {
+        dataTransfer,
+      });
+      await flushDom();
+      expect(getDragTargetPaths(rendered.shadowRoot)).toEqual(['target/']);
+
+      dispatchDragEvent(rendered.treeRoot, rendered.dom, 'drop', {
+        dataTransfer,
+      });
+      await flushDom();
+
+      expect(rendered.fileTree.getItem('target/src/')).not.toBeNull();
+      expect(rendered.fileTree.getItem('target/src/index.ts')).not.toBeNull();
+      expect(rendered.fileTree.getItem('src/')).toBeNull();
+      expect(completed).toEqual([
+        {
+          draggedPaths: ['src/'],
+          operation: 'move',
+          target: {
+            directoryPath: 'target/',
+            flattenedSegmentPath: null,
+            hoveredPath: 'target/',
+            kind: 'directory',
           },
         },
       ]);

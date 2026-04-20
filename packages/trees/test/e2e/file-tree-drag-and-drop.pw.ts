@@ -9,6 +9,8 @@ declare global {
     };
     __hasPath?: (path: string) => boolean;
     __getVisiblePaths?: () => string[];
+    __getStickyPaths?: () => string[];
+    __setScrollTop?: (scrollTop: number) => Promise<void>;
     __getFlattenedSegments?: () => string[];
     __lastDropError?: {
       error: string;
@@ -37,6 +39,32 @@ async function expectDragStateCleared(page: Page) {
       state != null && state.dragging.length === 0 && state.targets.length === 0
     );
   });
+}
+
+async function scrollUntilStickyTargetVisible(
+  page: Page,
+  stickyPath: string,
+  sourcePath: string
+): Promise<number> {
+  for (let scrollTop = 8; scrollTop <= 480; scrollTop += 8) {
+    await page.evaluate(async (nextScrollTop) => {
+      await window.__setScrollTop?.(nextScrollTop);
+    }, scrollTop);
+    const state = await page.evaluate(() => ({
+      stickyPaths: window.__getStickyPaths?.() ?? [],
+      visiblePaths: window.__getVisiblePaths?.() ?? [],
+    }));
+    if (
+      state.stickyPaths.includes(stickyPath) &&
+      state.visiblePaths.includes(sourcePath)
+    ) {
+      return scrollTop;
+    }
+  }
+
+  throw new Error(
+    `Could not make ${stickyPath} sticky while keeping ${sourcePath} visible.`
+  );
 }
 
 class TouchSession {
@@ -113,6 +141,55 @@ test.describe('file-tree drag-and-drop proof', () => {
       page.locator(
         'file-tree-container button[data-item-path="src/lib/README.md"]'
       )
+    ).toBeVisible();
+    await expectDragStateCleared(page);
+  });
+
+  test('mouse drag moves a visible row into a sticky folder row', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    const sourcePath = 'src/lib/theme.ts';
+    const targetPath = 'src/';
+    await scrollUntilStickyTargetVisible(page, targetPath, sourcePath);
+
+    const source = page.locator(
+      `file-tree-container button[data-item-path="${sourcePath}"]`
+    );
+    const stickyTarget = page.locator(
+      `file-tree-container button[data-file-tree-sticky-row="true"][data-file-tree-sticky-path="${targetPath}"]`
+    );
+    await expect(source).toBeVisible();
+    await expect(stickyTarget).toBeVisible();
+
+    const sourceBox = await source.boundingBox();
+    const targetBox = await stickyTarget.boundingBox();
+    expect(sourceBox).not.toBeNull();
+    expect(targetBox).not.toBeNull();
+
+    const sourceX = sourceBox!.x + sourceBox!.width / 2;
+    const sourceY = sourceBox!.y + sourceBox!.height / 2;
+    const targetX = targetBox!.x + targetBox!.width / 2;
+    const targetY = targetBox!.y + targetBox!.height / 2;
+
+    await page.mouse.move(sourceX, sourceY);
+    await page.mouse.down();
+    await page.mouse.move(sourceX + 16, sourceY, { steps: 4 });
+    await page.mouse.move(targetX, targetY, { steps: 12 });
+    await page.waitForFunction((path) => {
+      const state = window.__getDragState?.();
+      return state != null && state.targets.includes(path);
+    }, targetPath);
+    await page.mouse.up();
+
+    await page.waitForFunction(
+      () =>
+        window.__hasPath?.('src/theme.ts') === true &&
+        window.__hasPath?.('src/lib/theme.ts') === false
+    );
+    await expect(
+      page.locator('file-tree-container button[data-item-path="src/theme.ts"]')
     ).toBeVisible();
     await expectDragStateCleared(page);
   });

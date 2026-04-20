@@ -124,10 +124,18 @@
         onSearchChange: (value) => appendLog(`search:${value ?? '<closed>'}`),
         paths: [
           'README.md',
-          'src/index.ts',
-          'src/utils/worker.ts',
-          'src/utils/stream.ts',
+          'aaa/one.ts',
+          'bbb/two.ts',
           'docs/guide.md',
+          'docs/reference/api.md',
+          'docs/reference/cli.md',
+          'src/index.ts',
+          'src/lib/parser.ts',
+          'src/lib/service.ts',
+          'src/lib/util.ts',
+          'src/lib/queue.ts',
+          'src/utils/stream.ts',
+          'src/utils/worker.ts',
         ],
         renaming: {
           onError: (error) => appendLog(`rename:error ${error}`),
@@ -137,6 +145,7 @@
             ),
         },
         search: true,
+        stickyFolders: true,
       });
       mainTree.render({ containerWrapper: mainMount });
 

@@ -100,6 +100,7 @@
         ],
         paths,
         search: true,
+        stickyFolders: true,
         sort: preserveInputOrder,
       });
 
@@ -133,6 +134,12 @@
 
       const host = await waitForTree();
       const getShadow = () => host.shadowRoot;
+      const getScrollElement = () =>
+        getShadow()?.querySelector(
+          '[data-file-tree-virtualized-scroll="true"]'
+        ) ?? null;
+      const nextFrame = () =>
+        new Promise((resolve) => requestAnimationFrame(() => resolve()));
       window.__hasPath = (path) => fileTree.getItem(path) != null;
       window.__getVisiblePaths = () =>
         Array.from(
@@ -143,6 +150,21 @@
           )
           .map((button) => button.getAttribute('data-item-path'))
           .filter((path) => path != null);
+      window.__getStickyPaths = () =>
+        Array.from(
+          getShadow()?.querySelectorAll('[data-file-tree-sticky-path]') ?? []
+        )
+          .map((element) => element.getAttribute('data-file-tree-sticky-path'))
+          .filter((path) => path != null);
+      window.__setScrollTop = async (scrollTop) => {
+        const scrollElement = getScrollElement();
+        if (!(scrollElement instanceof HTMLElement)) {
+          throw new Error('Missing drag-and-drop fixture scroll element.');
+        }
+        scrollElement.scrollTop = scrollTop;
+        await nextFrame();
+        await nextFrame();
+      };
       window.__getFlattenedSegments = () =>
         Array.from(
           getShadow()?.querySelectorAll('[data-item-flattened-subitem]') ?? []

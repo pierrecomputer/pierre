@@ -93,7 +93,9 @@ function getItemButton(
   dom: JSDOM,
   path: string
 ): HTMLButtonElement {
-  const button = shadowRoot?.querySelector(`[data-item-path="${path}"]`);
+  const button = shadowRoot?.querySelector(
+    `[data-item-path="${path}"]:not([data-file-tree-sticky-row="true"])`
+  );
   if (!(button instanceof dom.window.HTMLButtonElement)) {
     throw new Error(`missing button for ${path}`);
   }
@@ -211,7 +213,9 @@ function getSelectedItemPaths(
   dom: JSDOM
 ): string[] {
   return Array.from(
-    shadowRoot?.querySelectorAll('[data-item-selected="true"]') ?? []
+    shadowRoot?.querySelectorAll(
+      '[data-item-selected="true"]:not([data-file-tree-sticky-row="true"])'
+    ) ?? []
   )
     .filter(
       (element): element is HTMLButtonElement =>
@@ -227,11 +231,17 @@ function getFocusedItemPath(
   dom: JSDOM
 ): string | null {
   const button = shadowRoot?.querySelector(
-    'button[data-type="item"][tabindex="0"]'
+    'button[data-type="item"][tabindex="0"]:not([data-file-tree-sticky-row="true"])'
   );
   return button instanceof dom.window.HTMLButtonElement
     ? (button.dataset.itemPath ?? null)
     : null;
+}
+
+function getRowSectionOrder(button: HTMLButtonElement): string[] {
+  return Array.from(button.children)
+    .map((child) => child.getAttribute('data-item-section'))
+    .filter((section): section is string => section != null);
 }
 
 function getNormalizedText(element: Element | null | undefined): string {
@@ -296,7 +306,11 @@ function getMountedItemPaths(
   shadowRoot: ShadowRoot | null | undefined,
   dom: JSDOM
 ): string[] {
-  return Array.from(shadowRoot?.querySelectorAll('[data-type="item"]') ?? [])
+  return Array.from(
+    shadowRoot?.querySelectorAll(
+      '[data-type="item"]:not([data-file-tree-sticky-row="true"])'
+    ) ?? []
+  )
     .filter(
       (element): element is HTMLButtonElement =>
         element instanceof dom.window.HTMLButtonElement
@@ -1389,28 +1403,20 @@ describe('file-tree render + scroll', () => {
     }
   });
 
-  test('sticky row clicks scroll the real row into view, focus it, and preserve selection', async () => {
+  test('sticky row clicks match canonical folder row selection, focus, and toggle semantics', async () => {
     const { cleanup, dom } = installDom();
     try {
       const FileTree = await loadFileTree();
-      const FileTreeController = await loadFileTreeController();
-      const clickOptions = {
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         initialExpandedPaths: ['aaa/', 'bbb/', 'src/lib/'],
         paths: ['aaa/one.ts', 'bbb/two.ts', 'src/index.ts', 'src/lib/util.ts'],
         stickyFolders: true,
         initialVisibleRowCount: 60 / 30,
-      } as const;
-      const expectedController = new FileTreeController(clickOptions);
-      expect(
-        getVisibleIndexForPath(expectedController, 'src/lib/')
-      ).toBeGreaterThanOrEqual(0);
-      expectedController.destroy();
-
-      const containerWrapper = dom.window.document.createElement('div');
-      dom.window.document.body.appendChild(containerWrapper);
-
-      const fileTree = new FileTree(clickOptions);
+      });
 
       fileTree.render({ containerWrapper });
       await flushDom();
@@ -1425,21 +1431,44 @@ describe('file-tree render + scroll', () => {
 
       clickItem(shadowRoot, dom, 'src/lib/util.ts');
       await flushDom();
-      expect(fileTree.getSelectedPaths()).toEqual(['src/lib/util.ts']);
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual([
+        'src/lib/util.ts',
+      ]);
 
       scrollElement.scrollTop = 149;
       scrollElement.dispatchEvent(new dom.window.Event('scroll'));
       await flushDom();
 
+      const stickyButton = getStickyRowButton(shadowRoot, dom, 'src/lib/');
       expect(getStickyRowPaths(shadowRoot, dom)).toEqual(['src/', 'src/lib/']);
+      expect(fileTree.getSelectedPaths()).toEqual(['src/lib/util.ts']);
 
       clickStickyRow(shadowRoot, dom, 'src/lib/');
       await flushDom();
       await flushDom();
 
       expect(scrollElement.scrollTop).toBeLessThan(149);
-      expect(fileTree.getItem('src/lib/')?.isFocused()).toBe(true);
-      expect(fileTree.getSelectedPaths()).toEqual(['src/lib/util.ts']);
+      const libDirectory = fileTree.getItem('src/lib/');
+      if (
+        libDirectory == null ||
+        libDirectory.isDirectory() !== true ||
+        !('isExpanded' in libDirectory)
+      ) {
+        throw new Error('expected src/lib directory item');
+      }
+      expect(libDirectory.isExpanded()).toBe(false);
+      expect(getSelectedItemPaths(shadowRoot, dom)).toEqual(['src/lib/']);
+      expect(getFocusedItemPath(shadowRoot, dom)).toBe('src/lib/');
+      expect(getFocusedTreeElement(shadowRoot, dom)?.dataset.itemPath).toBe(
+        'src/lib/'
+      );
+      expect(
+        getItemButton(shadowRoot, dom, 'src/lib/').dataset.itemSelected
+      ).toBe('true');
+      expect(
+        getItemButton(shadowRoot, dom, 'src/lib/').dataset.itemFocused
+      ).toBe('true');
+      expect(stickyButton.getAttribute('aria-selected')).toBeNull();
 
       fileTree.cleanUp();
     } finally {
@@ -1499,10 +1528,20 @@ describe('file-tree render + scroll', () => {
       await flushDom();
 
       expect(scrollElement.scrollTop).toBe(expectedScrollTop);
+      expect(getFocusedItemPath(shadowRoot, dom)).toBe('src/lib/');
       expect(getFocusedTreeElement(shadowRoot, dom)?.dataset.itemPath).toBe(
         'src/lib/'
       );
-      expect(fileTree.getSelectedPaths()).toEqual(['src/lib/util.ts']);
+      const libDirectory = fileTree.getItem('src/lib/');
+      if (
+        libDirectory == null ||
+        libDirectory.isDirectory() !== true ||
+        !('isExpanded' in libDirectory)
+      ) {
+        throw new Error('expected src/lib directory item');
+      }
+      expect(libDirectory.isExpanded()).toBe(false);
+      expect(fileTree.getSelectedPaths()).toEqual(['src/lib/']);
 
       fileTree.cleanUp();
     } finally {
@@ -1558,7 +1597,7 @@ describe('file-tree render + scroll', () => {
     }
   });
 
-  test('sticky overlay rows omit the inline context-menu action lane', async () => {
+  test('sticky overlay rows mirror the canonical row lane structure, including action-lane reservation', async () => {
     const { cleanup, dom } = installDom();
     try {
       const FileTree = await loadFileTree();
@@ -1590,20 +1629,24 @@ describe('file-tree render + scroll', () => {
         throw new Error('missing scroll element');
       }
 
+      const canonicalButton = getItemButton(shadowRoot, dom, 'src/lib/');
+      const expectedSectionOrder = getRowSectionOrder(canonicalButton);
+
       scrollElement.scrollTop = 30;
       scrollElement.dispatchEvent(new dom.window.Event('scroll'));
       await flushDom();
 
       const stickyButton = getStickyRowButton(shadowRoot, dom, 'src/lib/');
-      const visibleButton = getItemButton(shadowRoot, dom, 'src/lib/util.ts');
 
       expect(getStickyRowPaths(shadowRoot, dom)).toEqual(['src/lib/']);
+      expect(getMountedItemPaths(shadowRoot, dom)).not.toContain('src/lib/');
+      expect(getRowSectionOrder(stickyButton)).toEqual(expectedSectionOrder);
       expect(
         stickyButton.querySelector('[data-item-section="action"]')
-      ).toBeNull();
-      expect(
-        visibleButton.querySelector('[data-item-section="action"]')
       ).not.toBeNull();
+      expect(stickyButton.dataset.itemHasContextMenuActionLane).toBe('true');
+      expect(stickyButton.getAttribute('aria-selected')).toBeNull();
+      expect(stickyButton.getAttribute('role')).toBeNull();
 
       fileTree.cleanUp();
     } finally {
@@ -3102,21 +3145,17 @@ describe('file-tree render + scroll', () => {
         'src/lib/index.ts'
       );
       const rootFileButton = getItemButton(shadowRoot, dom, 'README.md');
-      const getSectionOrder = (button: HTMLButtonElement): string[] =>
-        Array.from(button.children)
-          .map((child) => child.getAttribute('data-item-section'))
-          .filter((section): section is string => section != null);
 
-      expect(getSectionOrder(flattenedFolderButton)).toEqual([
+      expect(getRowSectionOrder(flattenedFolderButton)).toEqual([
         'icon',
         'content',
       ]);
-      expect(getSectionOrder(nestedFileButton)).toEqual([
+      expect(getRowSectionOrder(nestedFileButton)).toEqual([
         'spacing',
         'icon',
         'content',
       ]);
-      expect(getSectionOrder(rootFileButton)).toEqual(['icon', 'content']);
+      expect(getRowSectionOrder(rootFileButton)).toEqual(['icon', 'content']);
 
       expect(
         flattenedFolderButton.querySelector(
