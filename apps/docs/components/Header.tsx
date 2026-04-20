@@ -111,19 +111,25 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
         className
       )}
     >
-      <Link
-        href={homeHref}
-        className="text-foreground hover:text-foreground/80 flex items-center gap-2 transition-colors"
-      >
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-lg leading-[20px] font-semibold">
-            {product.name}
-          </span>
-          <small className="text-muted-foreground hidden text-sm leading-[20px] md:inline">
-            by The Pierre Computer Co.
-          </small>
-        </div>
-      </Link>
+      <div className="flex items-baseline gap-1.5">
+        <Link
+          href={homeHref}
+          className="text-foreground hover:text-foreground/80 text-lg leading-[20px] font-semibold transition-colors"
+        >
+          {product.name}
+        </Link>
+        <span className="text-muted-foreground hidden text-sm leading-[20px] md:inline">
+          by{' '}
+          <Link
+            href="https://pierre.computer"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted-foreground hover:text-foreground/80 hidden text-sm leading-[20px] transition-colors md:inline"
+          >
+            The Pierre Computer Co.
+          </Link>
+        </span>
+      </div>
 
       {showMobileMenu && (
         <div className="mr-auto flex items-center gap-1 md:hidden">
