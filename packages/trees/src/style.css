@@ -729,6 +729,11 @@
     display: flex;
     flex-direction: column;
     isolation: isolate;
+    /* Promote to its own compositor layer so text inside the window is
+     * rasterized once and GPU-translated during scroll. Without this, the
+     * browser re-paints the window (and its text) at every scroll frame,
+     * which produces visible 1px shake / character tearing. */
+    will-change: transform;
   }
 
   [data-file-tree-search-container] {

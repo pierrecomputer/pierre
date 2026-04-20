@@ -1500,7 +1500,6 @@ export function FileTreeView({
   const draggedPrimaryPath = dragSession?.primaryPath ?? null;
   const treeDomId = getFileTreeRootDomId(instanceId);
   const { snapshot: layoutSnapshot, visibleRows } = layoutState;
-  const resolvedScrollTop = layoutSnapshot.physical.scrollTop;
   const resolvedViewportHeight = layoutSnapshot.physical.viewportHeight;
   const range = useMemo(
     () => ({
@@ -2779,7 +2778,23 @@ export function FileTreeView({
 
   const windowHeight = layoutSnapshot.window.height;
   const windowOffsetTop = layoutSnapshot.window.offsetTop;
-  const windowTranslateY = windowOffsetTop - resolvedScrollTop;
+  // The virtualized window is usually taller than the viewport once overscan
+  // is included, so a negative sticky inset lets the overscanned slice hang
+  // above and below the scroll container without pinning the element during
+  // normal scrolling. Both edges together catch the window when React falls
+  // behind a fast scroll in either direction, which is what keeps the list
+  // from blanking mid-flick.
+  //
+  // The `stickyOverlayHeight` subtraction matters when sticky folders are
+  // enabled: the layout bumps `windowStart` past the rows that sit behind
+  // the overlay, so `windowOffsetTop` can exceed `scrollTop` by up to the
+  // overlay's height. Without accounting for that gap, the bottom constraint
+  // would activate every frame and lock the element in place, stalling the
+  // per-pixel scroll.
+  const windowStickyInset = Math.min(
+    0,
+    resolvedViewportHeight - windowHeight - stickyOverlayHeight
+  );
   const shouldRenderParkedFocusedRow =
     activeItemPath === focusedPath ||
     restoreTreeFocusAfterSearchCloseRef.current;
@@ -3034,13 +3049,14 @@ export function FileTreeView({
           <div
             data-file-tree-virtualized-sticky-offset="true"
             aria-hidden="true"
-            style={{ height: '0px' }}
+            style={{ height: `${windowOffsetTop}px` }}
           />
           <div
             data-file-tree-virtualized-sticky="true"
             style={{
               height: `${windowHeight}px`,
-              transform: `translateY(${windowTranslateY}px)`,
+              top: `${windowStickyInset}px`,
+              bottom: `${windowStickyInset}px`,
             }}
           >
             {renderRangeChildren(

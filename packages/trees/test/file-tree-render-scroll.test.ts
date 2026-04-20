@@ -1278,10 +1278,10 @@ describe('file-tree render + scroll', () => {
       ).toBe(expectedAtSixty.layout.physical.totalHeight);
       expect(
         getPixelStyleValue(getVirtualStickyOffset(shadowRoot, dom), 'height')
-      ).toBe(0);
+      ).toBe(expectedAtSixty.layout.window.offsetTop);
       expect(
         getTranslateYStyleValue(getVirtualStickyWindow(shadowRoot, dom))
-      ).toBe(expectedAtSixty.layout.window.offsetTop - scrollElement.scrollTop);
+      ).toBe(0);
       expect(getMountedItemPaths(shadowRoot, dom)).toEqual(
         expectedAtSixty.mountedPaths
       );
@@ -1302,10 +1302,11 @@ describe('file-tree render + scroll', () => {
         )
       );
       expect(
+        getPixelStyleValue(getVirtualStickyOffset(shadowRoot, dom), 'height')
+      ).toBe(expectedAtThirty.layout.window.offsetTop);
+      expect(
         getTranslateYStyleValue(getVirtualStickyWindow(shadowRoot, dom))
-      ).toBe(
-        expectedAtThirty.layout.window.offsetTop - scrollElement.scrollTop
-      );
+      ).toBe(0);
       expect(getMountedItemPaths(shadowRoot, dom)).toEqual(
         expectedAtThirty.mountedPaths
       );
