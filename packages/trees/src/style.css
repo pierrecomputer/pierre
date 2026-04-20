@@ -743,7 +743,6 @@
   }
 
   [data-file-tree-search-input] {
-    --trees-focus-ring-width: 2px;
     font-family: var(--trees-font-family);
     font-size: var(--trees-font-size);
     flex: 1;
