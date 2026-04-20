@@ -9,9 +9,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { TreeApp } from '@/components/TreeApp';
 
+const COMPACT_ITEM_HEIGHT = 24;
+const COMPACT_DENSITY = 0.8;
+
 const treePanelStyle = {
   colorScheme: 'dark',
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
+  '--trees-density-override': COMPACT_DENSITY,
+  '--trees-row-height-override': `${String(COMPACT_ITEM_HEIGHT)}px`,
 } as CSSProperties;
 
 const fileOptions = {
@@ -61,6 +66,7 @@ export function DemoTreeAppClient({
       id: treeId,
       initialExpandedPaths,
       initialSelectedPaths: [initialActivePath],
+      itemHeight: COMPACT_ITEM_HEIGHT,
       paths,
       renaming: true as const,
       search: false as const,
@@ -82,7 +88,7 @@ export function DemoTreeAppClient({
       preloadedTreeData={treePreloadedData}
       prerenderedHTMLByPath={prerenderedHTMLByPath}
       projectName="acme-components"
-      treeClassName="dark h-full min-h-0 overflow-auto p-2"
+      treeClassName="dark h-full min-h-0 overflow-auto"
       treeStyle={treePanelStyle}
     />
   );

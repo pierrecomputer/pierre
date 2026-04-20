@@ -11,6 +11,7 @@ import {
 } from './treeAppDemoData';
 
 const TREE_APP_DEMO_TREE_ID = 'tree-app-hero-demo';
+const TREE_APP_DEMO_ITEM_HEIGHT = 24;
 
 const TREE_APP_FILE_OPTIONS = {
   disableFileHeader: true,
@@ -24,6 +25,7 @@ export async function DemoTreeApp() {
     id: TREE_APP_DEMO_TREE_ID,
     initialExpandedPaths: TREE_APP_DEMO_INITIAL_EXPANDED_PATHS,
     initialSelectedPaths: [TREE_APP_DEMO_INITIAL_ACTIVE_PATH],
+    itemHeight: TREE_APP_DEMO_ITEM_HEIGHT,
     paths: TREE_APP_DEMO_PATHS,
     search: false,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.treeApp,
