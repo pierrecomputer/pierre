@@ -346,8 +346,11 @@ export class FileTree
     this.#controller.focusPreviousSearchMatch();
   }
 
-  public startRenaming(path?: string): boolean {
-    return this.#controller.startRenaming(path);
+  public startRenaming(
+    path?: string,
+    options?: { removeIfCanceled?: boolean }
+  ): boolean {
+    return this.#controller.startRenaming(path, options);
   }
 
   public remove(path: string, options?: PathStoreRemoveOptions): void {

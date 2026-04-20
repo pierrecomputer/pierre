@@ -163,6 +163,43 @@ function getParentPath(path: string): string {
     : `${normalizedPath.slice(0, lastSlashIndex + 1)}`;
 }
 
+// Remaps one path after a tree move so open tabs and editor state keep
+// following the same file or directory even when its parent folder changes.
+function remapMovedPath(
+  path: string,
+  fromPath: string,
+  toPath: string
+): string {
+  if (path === fromPath) {
+    return toPath;
+  }
+
+  const descendantPrefix = `${fromPath}/`;
+  if (!path.startsWith(descendantPrefix)) {
+    return path;
+  }
+
+  return `${toPath}${path.slice(fromPath.length)}`;
+}
+
+function remapMovedPaths(
+  paths: readonly string[],
+  fromPath: string,
+  toPath: string
+): readonly string[] {
+  const seen = new Set<string>();
+  const remapped: string[] = [];
+  for (const path of paths) {
+    const nextPath = remapMovedPath(path, fromPath, toPath);
+    if (seen.has(nextPath)) {
+      continue;
+    }
+    seen.add(nextPath);
+    remapped.push(nextPath);
+  }
+  return remapped;
+}
+
 // Walks an integer suffix until we find a path that does not collide with an
 // existing entry. Preserves a file extension when present so suffix lands as
 // `name-1.ext` instead of `name.ext-1`.
@@ -281,7 +318,9 @@ function useTreeMutations({
         // Drop straight into rename mode so the user types the real name.
         // startRenaming returns false when the model was constructed without
         // `renaming: true`; in that case we still leave the placeholder in.
-        model.startRenaming(nextPath);
+        model.startRenaming(nextPath, {
+          removeIfCanceled: true,
+        });
       },
       remove(item) {
         model.remove(
@@ -438,6 +477,45 @@ function useOpenTabs({
   const activateTab = useCallback((path: string) => {
     setActivePath(path);
   }, []);
+
+  useEffect(
+    () =>
+      model.onMutation('*', (event) => {
+        const moveEvents =
+          event.operation === 'move'
+            ? [event]
+            : event.operation === 'batch'
+              ? event.events.filter((entry) => entry.operation === 'move')
+              : [];
+        if (moveEvents.length === 0) {
+          return;
+        }
+
+        setOpenPaths((current) => {
+          let nextPaths = current;
+          for (const moveEvent of moveEvents) {
+            nextPaths = remapMovedPaths(
+              nextPaths,
+              moveEvent.from,
+              moveEvent.to
+            );
+          }
+          return nextPaths;
+        });
+        setActivePath((current) => {
+          if (current == null) {
+            return current;
+          }
+
+          let nextPath = current;
+          for (const moveEvent of moveEvents) {
+            nextPath = remapMovedPath(nextPath, moveEvent.from, moveEvent.to);
+          }
+          return nextPath;
+        });
+      }),
+    [model]
+  );
 
   return { activePath, activateTab, closeTab, openPaths };
 }

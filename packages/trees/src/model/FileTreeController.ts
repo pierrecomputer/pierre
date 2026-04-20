@@ -70,6 +70,10 @@ interface FileTreeRenameViewState {
   setValue(value: string): void;
 }
 
+interface FileTreeStartRenamingOptions {
+  removeIfCanceled?: boolean;
+}
+
 export const FILE_TREE_RENAME_VIEW = Symbol('FILE_TREE_RENAME_VIEW');
 
 function isPathMutationEvent(
@@ -534,6 +538,7 @@ export class FileTreeController
   #renameEnabled = false;
   #renamingPath: string | null = null;
   #renamingValue = '';
+  #removeRenamingPathIfCanceled = false;
   #searchMatchPathSet = new Set<string>();
   #searchMatchingPaths: readonly string[] = [];
   #searchMode: FileTreeSearchMode;
@@ -1279,7 +1284,10 @@ export class FileTreeController
     this.#focusRelativeSearchMatch(-1);
   }
 
-  public startRenaming(path: string = this.#focusedPath ?? ''): boolean {
+  public startRenaming(
+    path: string = this.#focusedPath ?? '',
+    options: FileTreeStartRenamingOptions = {}
+  ): boolean {
     if (!this.#renameEnabled) {
       return false;
     }
@@ -1309,6 +1317,7 @@ export class FileTreeController
     this.#focusPathWithoutEmit(canonicalPath);
     this.#renamingPath = canonicalPath;
     this.#renamingValue = getRenameLeafName(canonicalPath);
+    this.#removeRenamingPathIfCanceled = options.removeIfCanceled ?? false;
     this.#emit();
     return true;
   }
@@ -1336,8 +1345,17 @@ export class FileTreeController
     }
 
     const renamingPath = this.#renamingPath;
+    const removePlaceholderEntry = this.#removeRenamingPathIfCanceled;
     this.#renamingPath = null;
     this.#renamingValue = '';
+    this.#removeRenamingPathIfCanceled = false;
+    if (removePlaceholderEntry) {
+      this.remove(
+        renamingPath,
+        isCanonicalDirectoryPath(renamingPath) ? { recursive: true } : undefined
+      );
+      return;
+    }
     this.#focusPathWithoutEmit(renamingPath);
     this.#emit();
   }
@@ -1345,6 +1363,20 @@ export class FileTreeController
   #completeRenaming(): void {
     const renamingPath = this.#renamingPath;
     if (renamingPath == null) {
+      return;
+    }
+
+    if (
+      this.#removeRenamingPathIfCanceled &&
+      this.#renamingValue.trim().length === 0
+    ) {
+      this.#renamingPath = null;
+      this.#renamingValue = '';
+      this.#removeRenamingPathIfCanceled = false;
+      this.remove(
+        renamingPath,
+        isCanonicalDirectoryPath(renamingPath) ? { recursive: true } : undefined
+      );
       return;
     }
 
@@ -1358,6 +1390,7 @@ export class FileTreeController
 
     this.#renamingPath = null;
     this.#renamingValue = '';
+    this.#removeRenamingPathIfCanceled = false;
 
     if ('error' in result) {
       this.#focusPathWithoutEmit(renamingPath);
@@ -1442,6 +1475,7 @@ export class FileTreeController
         : (nextStore.getPathInfo(previousRenamingPath)?.path ?? null);
     if (this.#renamingPath == null) {
       this.#renamingValue = '';
+      this.#removeRenamingPathIfCanceled = false;
     }
     this.#rebuildVisibleProjection(
       previousFocusedPath,

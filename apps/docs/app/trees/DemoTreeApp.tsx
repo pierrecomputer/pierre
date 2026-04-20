@@ -5,6 +5,7 @@ import { DemoTreeAppClient } from './DemoTreeAppClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import {
   TREE_APP_DEMO_FILES,
+  TREE_APP_DEMO_GIT_STATUSES,
   TREE_APP_DEMO_INITIAL_ACTIVE_PATH,
   TREE_APP_DEMO_INITIAL_EXPANDED_PATHS,
   TREE_APP_DEMO_PATHS,
@@ -21,7 +22,9 @@ const TREE_APP_FILE_OPTIONS = {
 
 export async function DemoTreeApp() {
   const treePreloadedData = preloadFileTree({
+    dragAndDrop: true,
     flattenEmptyDirectories: true,
+    gitStatus: TREE_APP_DEMO_GIT_STATUSES,
     id: TREE_APP_DEMO_TREE_ID,
     initialExpandedPaths: TREE_APP_DEMO_INITIAL_EXPANDED_PATHS,
     initialSelectedPaths: [TREE_APP_DEMO_INITIAL_ACTIVE_PATH],

@@ -1141,9 +1141,8 @@
     line-height: calc(var(--trees-row-height) - 8px);
     height: calc(var(--trees-row-height) - 8px);
     color: inherit;
-    background-color: var(--trees-search-bg);
-    border: 1px solid var(--trees-border-color);
-    /* border-radius: calc(var(--trees-border-radius) - 1px);border-radius */
+    background-color: transparent;
+    border: 0;
     padding-inline: 6px;
     outline: none;
   }

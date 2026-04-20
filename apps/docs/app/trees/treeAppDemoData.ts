@@ -1,6 +1,13 @@
 import type { FileContents } from '@pierre/diffs';
 
+import type { GitStatusEntry } from '@/lib/treesCompat';
+
 export const TREE_APP_DEMO_FILES: Readonly<Record<string, FileContents>> = {
+  '.gitignore': {
+    name: '.gitignore',
+    contents: `node_modules
+`,
+  },
   'README.md': {
     name: 'README.md',
     contents: `# Acme Components
@@ -29,6 +36,49 @@ A small UI kit used to demo the **TreeApp** component from \`@pierre/docs\`.
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
+  }
+}
+`,
+  },
+  'node_modules/cool/cool.ts': {
+    name: 'cool.ts',
+    contents: `console.log('cool')`,
+  },
+  'node_modules/storage/index.ts': {
+    name: 'index.ts',
+    contents: `export interface CodeStorageClientOptions {
+  apiKey: string;
+  baseUrl?: string;
+}
+
+export interface PutObjectOptions {
+  path: string;
+  contents: string;
+  contentType?: string;
+}
+
+export class CodeStorageClient {
+  constructor(private readonly options: CodeStorageClientOptions) {}
+
+  async putObject(input: PutObjectOptions) {
+    console.log('Uploading to code.storage', {
+      baseUrl: this.options.baseUrl ?? 'https://api.code.storage',
+      path: input.path,
+      contentType: input.contentType ?? 'text/plain',
+    });
+
+    return {
+      ok: true,
+      url: \`code.storage://\${input.path}\`,
+    };
+  }
+
+  async list(prefix: string) {
+    return [
+      \`\${prefix}/README.md\`,
+      \`\${prefix}/sdk.ts\`,
+      \`\${prefix}/config.json\`,
+    ];
   }
 }
 `,
@@ -159,6 +209,9 @@ export const TREE_APP_DEMO_PATHS: readonly string[] =
   Object.keys(TREE_APP_DEMO_FILES);
 
 export const TREE_APP_DEMO_INITIAL_EXPANDED_PATHS: readonly string[] = [
+  'node_modules',
+  'node_modules/cool',
+  'node_modules/storage',
   'src',
   'src/components',
   'src/utils',
@@ -166,3 +219,7 @@ export const TREE_APP_DEMO_INITIAL_EXPANDED_PATHS: readonly string[] = [
 ];
 
 export const TREE_APP_DEMO_INITIAL_ACTIVE_PATH = 'src/components/Button.tsx';
+
+export const TREE_APP_DEMO_GIT_STATUSES: readonly GitStatusEntry[] = [
+  { path: 'node_modules/', status: 'ignored' },
+];

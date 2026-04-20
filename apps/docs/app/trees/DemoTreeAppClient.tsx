@@ -7,6 +7,7 @@ import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
+import { TREE_APP_DEMO_GIT_STATUSES } from './treeAppDemoData';
 import { TreeApp } from '@/components/TreeApp';
 
 const COMPACT_ITEM_HEIGHT = 24;
@@ -14,7 +15,7 @@ const COMPACT_DENSITY = 0.8;
 
 const treePanelStyle = {
   colorScheme: 'dark',
-  '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
+  '--trees-search-bg-override': '#1f2631',
   '--trees-density-override': COMPACT_DENSITY,
   '--trees-row-height-override': `${String(COMPACT_ITEM_HEIGHT)}px`,
 } as CSSProperties;
@@ -28,7 +29,7 @@ const fileOptions = {
 const composition = {
   contextMenu: {
     enabled: true,
-    triggerMode: 'both',
+    triggerMode: 'right-click',
   },
 } as const;
 
@@ -40,6 +41,59 @@ interface DemoTreeAppClientProps {
   prerenderedHTMLByPath: Readonly<Record<string, string>>;
   treeId: string;
   treePreloadedData: FileTreePreloadedData;
+}
+
+// Remaps one path after a tree move so the demo's file-content maps continue
+// to line up with the same files after drag-and-drop or inline rename.
+function remapMovedPath(
+  path: string,
+  fromPath: string,
+  toPath: string
+): string {
+  if (path === fromPath) {
+    return toPath;
+  }
+
+  const descendantPrefix = `${fromPath}/`;
+  if (!path.startsWith(descendantPrefix)) {
+    return path;
+  }
+
+  return `${toPath}${path.slice(fromPath.length)}`;
+}
+
+function basename(path: string): string {
+  const lastSlashIndex = path.lastIndexOf('/');
+  return lastSlashIndex < 0 ? path : path.slice(lastSlashIndex + 1);
+}
+
+function remapFileMap(
+  filesByPath: Readonly<Record<string, FileContents>>,
+  fromPath: string,
+  toPath: string
+): Readonly<Record<string, FileContents>> {
+  return Object.fromEntries(
+    Object.entries(filesByPath).map(([path, file]) => {
+      const nextPath = remapMovedPath(path, fromPath, toPath);
+      return [
+        nextPath,
+        nextPath === path ? file : { ...file, name: basename(nextPath) },
+      ] as const;
+    })
+  );
+}
+
+function remapHtmlMap(
+  htmlByPath: Readonly<Record<string, string>>,
+  fromPath: string,
+  toPath: string
+): Readonly<Record<string, string>> {
+  return Object.fromEntries(
+    Object.entries(htmlByPath).map(([path, html]) => [
+      remapMovedPath(path, fromPath, toPath),
+      html,
+    ])
+  );
 }
 
 export function DemoTreeAppClient({
@@ -54,15 +108,29 @@ export function DemoTreeAppClient({
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(
     null
   );
+  const [filesByPath, setFilesByPath] = useState(files);
+  const [prerenderedHtmlByPathState, setPrerenderedHtmlByPathState] = useState(
+    prerenderedHTMLByPath
+  );
 
   useEffect(() => {
     setPortalContainer(document.getElementById('dark-mode-portal-container'));
   }, []);
 
+  useEffect(() => {
+    setFilesByPath(files);
+  }, [files]);
+
+  useEffect(() => {
+    setPrerenderedHtmlByPathState(prerenderedHTMLByPath);
+  }, [prerenderedHTMLByPath]);
+
   const treeOptions = useMemo(
     () => ({
       composition,
+      dragAndDrop: true as const,
       flattenEmptyDirectories: true,
+      gitStatus: TREE_APP_DEMO_GIT_STATUSES,
       id: treeId,
       initialExpandedPaths,
       initialSelectedPaths: [initialActivePath],
@@ -77,16 +145,47 @@ export function DemoTreeAppClient({
 
   const { model } = useFileTree(treeOptions);
 
+  useEffect(
+    () =>
+      model.onMutation('*', (event) => {
+        const moveEvents =
+          event.operation === 'move'
+            ? [event]
+            : event.operation === 'batch'
+              ? event.events.filter((entry) => entry.operation === 'move')
+              : [];
+        if (moveEvents.length === 0) {
+          return;
+        }
+
+        setFilesByPath((current) => {
+          let nextFiles = current;
+          for (const moveEvent of moveEvents) {
+            nextFiles = remapFileMap(nextFiles, moveEvent.from, moveEvent.to);
+          }
+          return nextFiles;
+        });
+        setPrerenderedHtmlByPathState((current) => {
+          let nextHtml = current;
+          for (const moveEvent of moveEvents) {
+            nextHtml = remapHtmlMap(nextHtml, moveEvent.from, moveEvent.to);
+          }
+          return nextHtml;
+        });
+      }),
+    [model]
+  );
+
   return (
     <TreeApp
       contextMenuPortalContainer={portalContainer}
       fileOptions={fileOptions}
-      files={files}
+      files={filesByPath}
       height={TREE_NEW_VIEWPORT_HEIGHTS.treeApp}
       initialActivePath={initialActivePath}
       model={model}
       preloadedTreeData={treePreloadedData}
-      prerenderedHTMLByPath={prerenderedHTMLByPath}
+      prerenderedHTMLByPath={prerenderedHtmlByPathState}
       projectName="acme-components"
       treeClassName="dark h-full min-h-0 overflow-auto"
       treeStyle={treePanelStyle}
