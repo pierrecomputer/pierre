@@ -921,15 +921,16 @@ export function TreeApp<LAnnotation = unknown>({
     ) as CSSProperties;
   }, [treeStyleRecord]);
 
-  const containerStyle = useMemo<CSSProperties>(
-    () => ({
+  const containerStyle = useMemo<CSSProperties>(() => {
+    const normalizedHeight =
+      typeof height === 'number' ? `${String(height)}px` : height;
+    return {
       ...treeCssVariables,
       '--tree-app-tree-surface': treeSurfaceColor,
-      height,
+      '--tree-app-height': normalizedHeight,
       ...style,
-    }),
-    [height, style, treeCssVariables, treeSurfaceColor]
-  );
+    } as CSSProperties;
+  }, [height, style, treeCssVariables, treeSurfaceColor]);
 
   const sidebarStyle = useMemo<CSSProperties>(
     () =>
@@ -944,7 +945,8 @@ export function TreeApp<LAnnotation = unknown>({
       ...treeStyle,
       width: '100%',
       height: '100%',
-      borderRadius: '8px',
+      paddingBottom: 10,
+      borderRadius: 8,
       border: '1px solid rgb(255 255 255 / 0.05)',
     }),
     [treeStyle]
@@ -1055,7 +1057,7 @@ export function TreeApp<LAnnotation = unknown>({
         file={file}
         options={fileOptions}
         prerenderedHTML={prerenderedHTML}
-        className="h-full min-h-0 overflow-auto"
+        className="min-h-0 flex-1 overflow-auto"
       />
     );
   }, [
@@ -1070,7 +1072,7 @@ export function TreeApp<LAnnotation = unknown>({
   return (
     <div
       className={[
-        'flex flex-col overflow-hidden rounded-xl border bg-[#070707] text-zinc-200 shadow-lg p-1.5',
+        'flex flex-col overflow-hidden rounded-xl border bg-[#070707] text-zinc-200 shadow-lg p-1.5 h-[calc(var(--tree-app-height)+170px)] md:h-[var(--tree-app-height)]',
         className,
       ]
         .filter(Boolean)
@@ -1112,7 +1114,7 @@ export function TreeApp<LAnnotation = unknown>({
         <section className="flex min-w-0 flex-1 flex-col">
           {showTabs && openPaths.length > 0 ? (
             <div
-              className="group/tabbar flex h-10 items-center gap-1 overflow-x-auto px-2"
+              className="group/tabbar flex h-10 items-center gap-1 overflow-x-auto px-2 pt-2 md:pt-0"
               style={{ backgroundColor: '#070707' }}
             >
               {openPaths.map((path) => {
@@ -1147,7 +1149,7 @@ export function TreeApp<LAnnotation = unknown>({
             </div>
           ) : null}
           <div
-            className="flex min-h-0 flex-1 flex-col"
+            className="flex min-h-0 flex-1"
             style={{ backgroundColor: '#070707' }}
           >
             {editor}
