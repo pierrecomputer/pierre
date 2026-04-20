@@ -27,9 +27,9 @@ export function GHViewer() {
     viewerRef.current?.scrollTo({
       type: 'item',
       id: itemId,
-      // TODO(amadeus): Test 'nearest' algo
       align: 'start',
       offset: 20,
+      behavior: 'smooth',
     });
   }, []);
 

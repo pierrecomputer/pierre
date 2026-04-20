@@ -759,6 +759,27 @@ export interface CodeViewerMetrics {
   gap: number;
 }
 
+export interface SmoothScrollSettings {
+  /**
+   * Natural frequency of the critically-damped spring, in rad/ms. 99% settle
+   * takes roughly `6.6 / omega`; 0.015 gives ~440ms. Raise for a snappier
+   * animation; lower for a longer glide.
+   */
+  omega: number;
+  /**
+   * Distance from destination (in CSS pixels) below which the spring is
+   * considered settled. Must also clear `velocityEpsilon` before the
+   * animation actually stops and snaps to destination.
+   */
+  positionEpsilon: number;
+  /**
+   * Velocity magnitude (in CSS pixels per millisecond) below which the
+   * spring is considered effectively stationary. Pairs with
+   * `positionEpsilon` to gate the settle transition.
+   */
+  velocityEpsilon: number;
+}
+
 export interface SelectionPoint {
   lineNumber: number;
   side: SelectionSide | undefined;

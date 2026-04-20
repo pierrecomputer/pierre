@@ -1,6 +1,7 @@
 import {
   DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS,
   DEFAULT_CODE_VIEWER_METRICS,
+  DEFAULT_SMOOTH_SCROLL_SETTINGS,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
 } from '../constants';
@@ -18,6 +19,7 @@ import type {
   CodeViewerMetrics,
   CodeViewerScrollTarget,
   HunkSeparators,
+  SmoothScrollSettings,
   VirtualFileMetrics,
   VirtualWindowSpecs,
 } from '../types';
@@ -311,6 +313,12 @@ export interface CodeViewerOptions<LAnnotation>
   hunkSeparators?: Exclude<HunkSeparators, 'custom'>;
 }
 
+interface ScrollToAnimation {
+  position: number;
+  velocity: number;
+  lastTimestamp: number;
+}
+
 export class CodeViewer<LAnnotation = undefined> {
   static __STOP = false;
   static __lastScrollPosition = 0;
@@ -335,16 +343,14 @@ export class CodeViewer<LAnnotation = undefined> {
   private scrollListeners: Set<CodeViewerScrollListener<LAnnotation>> =
     new Set();
   private scrollHeight = 0;
-
   private lastContainerHeight = -1;
-
-  private lastRenderedScrollY = -1;
   private scrollTop: number = 0;
   private scrollDirty = true;
   private height: number = 0;
   private heightDirty = true;
   private windowSpecs: VirtualWindowSpecs = { top: 0, bottom: 0 };
   private renderState = {
+    scrollTop: -1,
     firstIndex: -1,
     lastIndex: -1,
     stickyHeight: 0,
@@ -365,6 +371,19 @@ export class CodeViewer<LAnnotation = undefined> {
   //   scrollTop — they have no layout-dependent destination to chase.
   private pendingScrollTarget: CodeViewerScrollTarget | undefined;
 
+  // Active smooth-scroll animation state. Only populated while a scrollTo
+  // with `behavior: 'smooth'` is in flight; cleared on settle (position +
+  // velocity within epsilon of the destination) or on user-input abort.
+  //
+  // - position: current interpolated scrollTop, in CSS pixels.
+  // - velocity: rate of change, in CSS pixels per millisecond.
+  // - lastTimestamp: High Resolution Time (same clock as RAF timestamps)
+  //   of the previous integration step. Seeded from performance.now() when
+  //   the animation is created, so the first RAF tick's dt is the real
+  //   wall-clock interval between the scrollTo call and that first frame
+  //   — no bootstrap frame, no hardcoded 60Hz fudge.
+  private scrollAnimation: ScrollToAnimation | undefined;
+
   private root: HTMLElement | undefined;
   private resizeObserver: ResizeObserver | undefined;
 
@@ -376,6 +395,7 @@ export class CodeViewer<LAnnotation = undefined> {
     private viewerMetrics: CodeViewerMetrics = DEFAULT_CODE_VIEWER_METRICS,
     private options: CodeViewerOptions<LAnnotation> = { theme: DEFAULT_THEMES },
     private metrics: VirtualFileMetrics = DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS,
+    private smoothScrollSettings: SmoothScrollSettings = DEFAULT_SMOOTH_SCROLL_SETTINGS,
     private workerManager?: WorkerPoolManager | undefined,
     private isContainerManaged = false
   ) {
@@ -403,7 +423,6 @@ export class CodeViewer<LAnnotation = undefined> {
     this.root.appendChild(this.container);
     this.scrollDirty = true;
     this.heightDirty = true;
-    this.lastRenderedScrollY = -1;
     this.resizeObserver = new ResizeObserver(this.handleResize);
     this.resizeObserver.observe(this.stickyContainer);
     this.root.addEventListener('scroll', this.handleScroll, {
@@ -458,7 +477,6 @@ export class CodeViewer<LAnnotation = undefined> {
     this.height = 0;
     this.scrollTop = 0;
     this.scrollHeight = 0;
-    this.lastRenderedScrollY = -1;
     this.scrollDirty = true;
     this.heightDirty = true;
     this.resetRenderState();
@@ -515,12 +533,22 @@ export class CodeViewer<LAnnotation = undefined> {
       return;
     }
 
-    // Stash the public target and enqueue a render. The render frame owns
-    // the actual DOM scroll mutation: computeFrameScrollTop re-resolves the
-    // destination each frame and applyScrollTop lands it at the end of the
-    // tick. This unified pipeline is the foundation for Phase 2B's custom
-    // smooth-scroll engine, which replaces "jump to destination" with
-    // "spring-interpolate toward destination" in the same seam.
+    if (target.behavior === 'smooth') {
+      // Use ??= so if we have an animation in progress it will be smoothly
+      // transitioned into the new target
+      this.scrollAnimation ??= {
+        position: this.getScrollTop(),
+        velocity: 0,
+        // Since we kick off a render to requestAnimationFrame, by initializing
+        // lastTimestamp as performance.now() it means we can begin animating
+        // on the next render call and not wait a frame to get frame time
+        lastTimestamp: performance.now(),
+      };
+    } else {
+      this.scrollAnimation = undefined;
+    }
+
+    // We'll attempt to scroll to this new target on the next render frame
     this.pendingScrollTarget = target;
     this.scrollDirty = true;
     this.render();
@@ -1183,32 +1211,83 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   /**
-   * Resolve the scroll position this render frame is rendering toward.
+   * If there's no scrollTo target/animation, we simply return the current
+   * scrollTop. Otherwise we try to calculate a scroll position to target.
    *
-   * Falls back to the live scrollTop when there is no pending programmatic
-   * scroll. Otherwise re-resolves the pending target against current layout
-   * (so async measurement churn — annotations, line wrap — naturally tracks
-   * onto the correct destination as it lands). The clamp-and-round invariant
-   * is owned by resolveScrollTargetTop itself, so the return value is already
-   * safe for direct comparison against getScrollTop.
+   * behavior: 'instant' - we'll just return the target scroll position
    *
-   * If the pending target can no longer be resolved (item removed
-   * mid-flight), clears pending and falls back to currentScrollTop so the
-   * viewer resumes normal anchor handling.
+   * behavior: 'smooth' - get the final target position (which could have
+   * updated while we are scrolling) and calculate how far we should jump for
+   * the current frame
    */
-  private computeFrameScrollTop(currentScrollTop: number): number {
+  private computeFrameScrollTop(
+    currentScrollTop: number,
+    currentTimestamp: number
+  ): number {
     if (this.pendingScrollTarget == null) {
       return currentScrollTop;
     }
-    const resolvedTop = this.resolveScrollTargetTop(this.pendingScrollTarget);
-    if (resolvedTop == null) {
+    const destination = this.resolveScrollTargetTop(this.pendingScrollTarget);
+    // in scrollTo, we'll only queue a pending target if it exists, however
+    // during a scroll animation it's possible the target gets removed, and
+    // therefore we need to cancel the animation, and we should silently kill
+    // the pending animation/scroll jump and revert back to currentScrollTop
+    if (destination == null) {
       this.pendingScrollTarget = undefined;
+      this.scrollAnimation = undefined;
       return currentScrollTop;
     }
-    return resolvedTop;
+
+    const { scrollAnimation } = this;
+    if (scrollAnimation == null) {
+      return destination;
+    }
+
+    const delta = Math.max(0, currentTimestamp - scrollAnimation.lastTimestamp);
+    scrollAnimation.lastTimestamp = currentTimestamp;
+
+    // Closed-form step of the critical-damping ODE y'' + 2ω·y' + ω²·y = 0
+    // where y = position - destination. For ζ = 1 (double root at r = -ω)
+    // the solution is
+    //   y(t)  = (A + B·t) · e^(-ω·t)
+    //   y'(t) = (B·(1 - ω·t) - ω·A) · e^(-ω·t)
+    // with A = y(0), B = y'(0) + ω·A. Advancing by dt, then translating
+    // y back to absolute scrollTop by adding `destination`.
+    //
+    // Stable at any dt (Euler would blow up once ω·dt ≳ 1), so spring
+    // behavior survives big RAF gaps (tab-wake, offscreen frames) and
+    // the resize-driven ticks that fire outside the normal RAF cadence.
+    const { omega, positionEpsilon, velocityEpsilon } =
+      this.smoothScrollSettings;
+    const decay = Math.exp(-omega * delta);
+    const displacement = scrollAnimation.position - destination;
+    const springCoeff = scrollAnimation.velocity + omega * displacement;
+
+    scrollAnimation.position =
+      destination + (displacement + springCoeff * delta) * decay;
+    scrollAnimation.velocity =
+      (springCoeff * (1 - omega * delta) - omega * displacement) * decay;
+
+    // Settle: within positionEpsilon of the destination and effectively
+    // stationary (|velocity| ≤ velocityEpsilon). Snap to destination to
+    // avoid asymptotic jitter, clear the animation, and let the next
+    // frame's pending-settle check drop pendingScrollTarget.
+    if (
+      Math.abs(destination - scrollAnimation.position) <= positionEpsilon &&
+      Math.abs(scrollAnimation.velocity) <= velocityEpsilon
+    ) {
+      scrollAnimation.position = destination;
+      scrollAnimation.velocity = 0;
+      this.scrollAnimation = undefined;
+      return destination;
+    }
+
+    return roundToDevicePixel(scrollAnimation.position);
   }
 
-  private computeRenderRangeAndEmit = (): void => {
+  private computeRenderRangeAndEmit = (
+    timestamp: number = performance.now()
+  ): void => {
     if (CodeViewer.__STOP || this.container == null) {
       return;
     }
@@ -1220,19 +1299,22 @@ export class CodeViewer<LAnnotation = undefined> {
 
     const currentScrollTop = this.getScrollTop();
     // `frameScrollTop` is the scroll position this render frame is rendering
-    // toward — either the live scrollTop (idle / user-driven scroll) or the
-    // re-resolved pending target (programmatic scroll). Window sizing, the
-    // big-jump heuristic, and the end-of-frame apply all use this value so
-    // items mount in the right place on the first pass.
-    const frameScrollTop = this.computeFrameScrollTop(currentScrollTop);
+    // toward — either the live scrollTop (idle / user-driven scroll), the
+    // re-resolved pending target (instant programmatic scroll), or the
+    // spring-interpolated position while a smooth scroll is animating.
+    // Window sizing, the big-jump heuristic, and the end-of-frame apply all
+    // use this value so items mount in the right place on the first pass.
+    const frameScrollTop = this.computeFrameScrollTop(
+      currentScrollTop,
+      timestamp
+    );
     const scrollHeight = this.getScrollHeight();
     // When performing very large scroll jumps, we should attempt to render the
     // bare minimum to ensure we can paint quickly. We'll queue up a another
-    // render at the end to fill things out on the next tick (or if the user is
-    // actively scrolling we'll just perform another fitPerfectly render)
+    // render at the end to fill things out on the next tick.
     const fitPerfectly =
-      this.lastRenderedScrollY === -1 ||
-      Math.abs(frameScrollTop - this.lastRenderedScrollY) >
+      this.renderState.scrollTop === -1 ||
+      Math.abs(frameScrollTop - this.renderState.scrollTop) >
         height + this.config.overscrollSize * 2;
     this.windowSpecs = createWindowFromScrollPosition({
       scrollTop: frameScrollTop,
@@ -1248,14 +1330,10 @@ export class CodeViewer<LAnnotation = undefined> {
     // end-of-frame dispatch lands the frameScrollTop directly and clears
     // pending once the destination item is mounted.
     const anchor =
-      this.lastRenderedScrollY === -1 || this.pendingScrollTarget != null
+      this.renderState.scrollTop === -1 || this.pendingScrollTarget != null
         ? undefined
         : this.getScrollAnchor();
-    // Track what we rendered for, not what the DOM currently shows. During
-    // Phase 2B's smooth scrolling, frameScrollTop will lead currentScrollTop
-    // by one frame (we render for the interpolated position, then apply it);
-    // this assignment keeps the big-jump heuristic honest in that world.
-    this.lastRenderedScrollY = frameScrollTop;
+    this.renderState.scrollTop = frameScrollTop;
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex >= 0) {
       for (let index = firstIndex; index <= lastIndex; index++) {
@@ -1350,7 +1428,10 @@ export class CodeViewer<LAnnotation = undefined> {
     }
     this.flushManagers(updatedItems);
 
-    if (fitPerfectly) {
+    // If we are hitting a fitPerfectly heuristic, we should queue up another
+    // render to fill out content.  If we are performing a scroll animation
+    // we'll need another render to continue
+    if (fitPerfectly || this.scrollAnimation != null) {
       this.render();
     }
   };
@@ -1464,6 +1545,7 @@ export class CodeViewer<LAnnotation = undefined> {
   // pointerdown / keydown; we never mutate the event, just drop our state.
   private clearPendingScroll = (): void => {
     this.pendingScrollTarget = undefined;
+    this.scrollAnimation = undefined;
   };
 
   private handleResize = (entries: ResizeObserverEntry[]) => {
@@ -1481,17 +1563,30 @@ export class CodeViewer<LAnnotation = undefined> {
           this.reconcileRenderedItems();
           this.updateStickyPositioning();
 
+          // FIXME(amadeus): It's unclear if this is the right thing to do
+          // here... it might actually be good to trigger a scrollFix
+          // regardless of what is happening with an animation..
+          //
+          // The best way to test this bug - create a comment in a small file,
+          // then scroll way past it, change diffStyle to reset metrics, then
+          // click the file after it in the list and there should be an
+          // annotation pop-in it has to contend with...
+          //
+          // It's also possible that we have to deal with this at the render
+          // level though too...
           if (anchor != null) {
             this.scrollFix(anchor);
           } else if (this.pendingScrollTarget != null) {
-            // Async measurement landed (annotations / line wrap) while a
-            // programmatic scroll was still converging. Mirror the render
-            // frame's dispatch: re-resolve the destination via
-            // computeFrameScrollTop, apply if it differs from the DOM, then
-            // settle once both the DOM has landed at frameScrollTop and
-            // the target item is mounted.
+            // ResizeObserver fires outside the RAF loop, so we pass
+            // performance.now() as the spring's integration timestamp.
+            // dt relative to the last real RAF tick will be small (resize
+            // callbacks fire sub-frame) and the next scheduled RAF will
+            // pick up with a natural dt from this moment.
             const currentScrollTop = this.getScrollTop();
-            const frameScrollTop = this.computeFrameScrollTop(currentScrollTop);
+            const frameScrollTop = this.computeFrameScrollTop(
+              currentScrollTop,
+              performance.now()
+            );
             if (frameScrollTop !== currentScrollTop) {
               this.applyScrollTop(frameScrollTop);
             }
@@ -1851,6 +1946,7 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private resetRenderState() {
+    this.renderState.scrollTop = -1;
     this.renderState.firstIndex = -1;
     this.renderState.lastIndex = -1;
     this.renderState.stickyHeight = 0;

@@ -29,6 +29,7 @@ import {
   type DiffLineAnnotation,
   type GetHoveredLineResult,
   type LineAnnotation,
+  type SmoothScrollSettings,
   type VirtualFileMetrics,
   type VirtualWindowSpecs,
 } from '../index';
@@ -49,6 +50,7 @@ interface CodeViewerBaseProps<LAnnotation> {
   options?: CodeViewerOptions<LAnnotation>;
   viewerMetrics?: CodeViewerMetrics;
   metrics?: VirtualFileMetrics;
+  smoothScrollSettings?: SmoothScrollSettings;
   className?: string;
   style?: CSSProperties;
   containerRef?: Ref<HTMLDivElement>;
@@ -140,6 +142,7 @@ function CodeViewerInner<LAnnotation = undefined>(
     renderGutterUtility,
     renderHeaderMetadata,
     renderHeaderPrefix,
+    smoothScrollSettings,
     style,
     viewerMetrics,
   }: CodeViewerProps<LAnnotation>,
@@ -200,6 +203,7 @@ function CodeViewerInner<LAnnotation = undefined>(
         viewerMetrics,
         managedOptions,
         metrics,
+        smoothScrollSettings,
         !disableWorkerPool ? poolManager : undefined,
         true
       );

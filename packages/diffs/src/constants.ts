@@ -2,6 +2,7 @@ import type {
   CodeViewerMetrics,
   HunkExpansionRegion,
   RenderRange,
+  SmoothScrollSettings,
   ThemesType,
   VirtualFileMetrics,
 } from './types';
@@ -60,6 +61,12 @@ export const DEFAULT_CODE_VIEWER_METRICS: CodeViewerMetrics = {
   paddingTop: 8,
   paddingBottom: 8,
   gap: 8,
+};
+
+export const DEFAULT_SMOOTH_SCROLL_SETTINGS: SmoothScrollSettings = {
+  omega: 0.015,
+  positionEpsilon: 0.5,
+  velocityEpsilon: 0.05,
 };
 
 export const DEFAULT_EXPANDED_REGION: HunkExpansionRegion = Object.freeze({
