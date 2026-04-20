@@ -1109,7 +1109,7 @@ export function TreeApp<LAnnotation = unknown>({
           {showTabs && openPaths.length > 0 ? (
             <div
               className="group/tabbar flex h-10 items-center gap-1 overflow-x-auto px-2"
-              style={{ backgroundColor: 'light-dark(#fff, #070707)' }}
+              style={{ backgroundColor: '#070707' }}
             >
               {openPaths.map((path) => {
                 const tabContext: TreeAppTabRenderContext = {
