@@ -22,9 +22,10 @@ import { FeatureHeader } from '../diff-examples/FeatureHeader';
 import { sampleFileList } from './demo-data';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import {
-  getDefaultFileTreePanelClass,
-  GIT_STATUSES_A,
-} from './tree-examples/demo-data';
+  TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
+  TREE_NEW_GIT_STATUSES,
+} from './gitStatusDemoData';
+import { getDefaultFileTreePanelClass } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
@@ -118,9 +119,9 @@ export function DemoThemingClient({
 }: DemoThemingClientProps) {
   const { model } = useFileTree({
     flattenEmptyDirectories: true,
-    gitStatus: GIT_STATUSES_A,
+    gitStatus: TREE_NEW_GIT_STATUSES,
     id: 'trees-shiki-themes-tree',
-    initialExpandedPaths: ['src', 'src/components'],
+    initialExpandedPaths: TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
     initialSelectedPaths: ['package.json'],
     paths: sampleFileList,
     initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.theming / 30,
