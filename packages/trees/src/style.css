@@ -678,6 +678,22 @@
     pointer-events: none;
   }
 
+  /* The overlay DOM is kept populated even at scrollTop=0 so the browser has
+   * the rendered rows on hand the moment scrolling begins — otherwise the
+   * compositor paints a scrolled frame before React can mount the overlay,
+   * and the topmost sticky folder jumps up by a couple of pixels before it
+   * "snaps" into its pinned position. We hide it via CSS whenever the scroll
+   * is at the top and no scroll is in progress, so the preview doesn't leak
+   * through at rest; the `data-is-scrolling` flag is stamped on the root
+   * synchronously by the wheel/touchmove/keydown handlers, so the overlay
+   * becomes visible in the same frame the scroll starts. */
+  [data-file-tree-virtualized-root='true'][data-scroll-at-top='true']:not(
+      [data-is-scrolling]
+    )
+    [data-file-tree-sticky-overlay='true'] {
+    visibility: hidden;
+  }
+
   [data-file-tree-sticky-overlay-content='true'] {
     background-color: var(--trees-bg);
     position: relative;

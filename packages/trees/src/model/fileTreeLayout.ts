@@ -248,7 +248,10 @@ function computeExpandedSubtreeEndIndices<Row extends FileTreeLayoutRow>(
 // Each sticky slot keeps the latest expanded directory whose real row has
 // scrolled past that slot. The first row outside that directory's subtree then
 // pushes it upward until it fully leaves the overlay.
-function computeStickyRows<Row extends FileTreeLayoutRow>(
+// Exported so the view layer can compute a preview sticky slice at scrollTop=0
+// without distorting the main snapshot's `paneHeight`/`paneTop` math, which
+// both depend on the live stickyHeight.
+export function computeStickyRows<Row extends FileTreeLayoutRow>(
   rows: readonly Row[],
   scrollTop: number,
   itemHeight: number

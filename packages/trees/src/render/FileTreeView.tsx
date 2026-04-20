@@ -23,7 +23,9 @@ import {
 } from '../model/FileTreeController';
 import {
   computeFileTreeLayout,
+  computeStickyRows,
   type FileTreeLayoutSnapshot,
+  type FileTreeLayoutStickyRow,
 } from '../model/fileTreeLayout';
 import type {
   FileTreeContextMenuButtonVisibility,
@@ -174,6 +176,16 @@ function getFileTreeRowAriaLabel(row: FileTreeVisibleRow): string {
 
 type FileTreeViewLayoutState = {
   snapshot: FileTreeLayoutSnapshot<FileTreeVisibleRow>;
+  // Rows rendered inside the sticky overlay. Usually equal to
+  // `snapshot.sticky.rows`, but at scrollTop=0 we keep this populated with
+  // what the overlay would contain at scrollTop=1 so the DOM is ready before
+  // the first scroll lands (CSS hides the overlay until the user scrolls, so
+  // there's no visual impact at rest). Without this, the overlay has to be
+  // created in the same frame that the first scroll happens, and the compositor
+  // paints the scrolled rows one frame before React can mount it — showing up
+  // as a brief upward jump of the first sticky folder.
+  overlayRows: readonly FileTreeLayoutStickyRow<FileTreeVisibleRow>[];
+  overlayHeight: number;
   visibleRows: readonly FileTreeVisibleRow[];
 };
 
@@ -212,7 +224,18 @@ function computeFileTreeViewLayoutState({
     viewportHeight,
   });
 
+  const overlayRows =
+    stickyFolders && scrollTop <= 0 && visibleRows.length > 0
+      ? computeStickyRows(visibleRows, 1, itemHeight)
+      : snapshot.sticky.rows;
+  const overlayHeight = overlayRows.reduce(
+    (maxBottom, entry) => Math.max(maxBottom, entry.top + itemHeight),
+    0
+  );
+
   return {
+    overlayHeight,
+    overlayRows,
     snapshot,
     visibleRows,
   };
@@ -1488,7 +1511,12 @@ export function FileTreeView({
   const dragTarget = dragSession?.target ?? null;
   const draggedPrimaryPath = dragSession?.primaryPath ?? null;
   const treeDomId = getFileTreeRootDomId(instanceId);
-  const { snapshot: layoutSnapshot, visibleRows } = layoutState;
+  const {
+    overlayHeight: overlayRowsHeight,
+    overlayRows,
+    snapshot: layoutSnapshot,
+    visibleRows,
+  } = layoutState;
   const resolvedViewportHeight = layoutSnapshot.physical.viewportHeight;
   const range = useMemo(
     () => ({
@@ -1497,7 +1525,13 @@ export function FileTreeView({
     }),
     [layoutSnapshot.window.endIndex, layoutSnapshot.window.startIndex]
   );
-  const stickyRows = layoutSnapshot.sticky.rows;
+  // The overlay DOM mirrors `overlayRows` (which includes the scrollTop=0
+  // preview). The virtualized scroll content, on the other hand, must only
+  // hide rows that the overlay is *actually* sticky-covering — at rest the
+  // overlay is CSS-hidden, so filtering out preview rows would leave empty
+  // slots where the real rows belong.
+  const stickyRows = overlayRows;
+  const occludedStickyRows = layoutSnapshot.sticky.rows;
   const focusedRowIsMounted =
     focusedIndex >= 0 &&
     focusedIndex >= range.start &&
@@ -2269,6 +2303,24 @@ export function FileTreeView({
     };
   }, []);
 
+  // Mirror `scrollTop <= 0` onto the root element as a data attribute so CSS
+  // can hide the pre-populated sticky overlay when the list is at rest at the
+  // top. We drive this from the layout snapshot (synced on every scroll +
+  // layout update) rather than only the scroll event, because programmatic
+  // scrolling via keyboard navigation doesn't always fire a `scroll` event
+  // across environments, and we want the attribute to track state reliably.
+  useLayoutEffect(() => {
+    const rootElement = rootRef.current;
+    if (rootElement == null) {
+      return;
+    }
+    if (layoutSnapshot.physical.scrollTop <= 0) {
+      rootElement.dataset.scrollAtTop = 'true';
+    } else {
+      delete rootElement.dataset.scrollAtTop;
+    }
+  }, [layoutSnapshot.physical.scrollTop]);
+
   useLayoutEffect(() => {
     let scrollTimer: ReturnType<typeof setTimeout> | null = null;
     const scrollElement = scrollRef.current;
@@ -2393,6 +2445,7 @@ export function FileTreeView({
       }
       if (rootElement != null) {
         delete rootElement.dataset.isScrolling;
+        delete rootElement.dataset.scrollAtTop;
       }
       isScrollingRef.current = false;
       resizeObserver?.disconnect();
@@ -2517,8 +2570,9 @@ export function FileTreeView({
 
   const stickyOverlayHeight = layoutSnapshot.sticky.height;
   const stickyRowPathSet = useMemo(
-    () => new Set(stickyRows.map((entry) => getFileTreeRowPath(entry.row))),
-    [stickyRows]
+    () =>
+      new Set(occludedStickyRows.map((entry) => getFileTreeRowPath(entry.row))),
+    [occludedStickyRows]
   );
 
   useLayoutEffect(() => {
@@ -3047,7 +3101,7 @@ export function FileTreeView({
           <div aria-hidden="true" data-file-tree-sticky-overlay="true">
             <div
               data-file-tree-sticky-overlay-content="true"
-              style={{ height: `${stickyOverlayHeight}px` }}
+              style={{ height: `${overlayRowsHeight}px` }}
             >
               {stickyRows.map((entry, index) =>
                 renderStickyRow(
