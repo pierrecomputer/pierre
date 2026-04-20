@@ -4,6 +4,8 @@ export const FILE_TREE_UNSAFE_CSS_ATTRIBUTE =
   'data-file-tree-unsafe-css' as const;
 export const FILE_TREE_SCROLLBAR_MEASURE_ATTRIBUTE =
   'data-file-tree-scrollbar-measure' as const;
+export const FILE_TREE_SCROLLBAR_GUTTER_STYLE_ATTRIBUTE =
+  'data-file-tree-scrollbar-gutter-measured' as const;
 
 export const FILE_TREE_SCROLLBAR_GUTTER_MEASURED_PROPERTY =
   '--trees-scrollbar-gutter-measured';

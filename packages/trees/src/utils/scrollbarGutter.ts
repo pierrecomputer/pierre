@@ -1,5 +1,6 @@
 import {
   FILE_TREE_SCROLLBAR_GUTTER_MEASURED_PROPERTY,
+  FILE_TREE_SCROLLBAR_GUTTER_STYLE_ATTRIBUTE,
   FILE_TREE_SCROLLBAR_MEASURE_ATTRIBUTE,
 } from '../constants';
 
@@ -28,6 +29,12 @@ function measureScrollbarGutter(shadowRoot: ShadowRoot): number | undefined {
   return measuredGutter;
 }
 
+// Publishes the measured value as a custom property on the host via a
+// shadow-root <style> rule targeting `:host`, rather than writing to the
+// host's inline `style` attribute. React hydrates against the host element's
+// attributes, so mutating `host.style` before hydration produces a mismatch;
+// shadow-root contents are outside React's hydration diff, so updating the
+// variable there is safe to do synchronously from connectedCallback.
 export function ensureMeasuredScrollbarGutter(
   host: HTMLElement,
   shadowRoot: ShadowRoot
@@ -41,8 +48,16 @@ export function ensureMeasuredScrollbarGutter(
     return;
   }
 
-  host.style.setProperty(
-    FILE_TREE_SCROLLBAR_GUTTER_MEASURED_PROPERTY,
-    `${measuredScrollbarGutter}px`
+  const existing = shadowRoot.querySelector(
+    `style[${FILE_TREE_SCROLLBAR_GUTTER_STYLE_ATTRIBUTE}]`
   );
+  const styleEl =
+    existing instanceof HTMLStyleElement
+      ? existing
+      : document.createElement('style');
+  if (!(existing instanceof HTMLStyleElement)) {
+    styleEl.setAttribute(FILE_TREE_SCROLLBAR_GUTTER_STYLE_ATTRIBUTE, '');
+    shadowRoot.appendChild(styleEl);
+  }
+  styleEl.textContent = `:host { ${FILE_TREE_SCROLLBAR_GUTTER_MEASURED_PROPERTY}: ${measuredScrollbarGutter}px; }`;
 }
