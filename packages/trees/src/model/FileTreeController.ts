@@ -1906,6 +1906,7 @@ export class FileTreeController
     const listedPaths = this.#getListedPaths();
     const listedPathsLowerCase = this.#getListedPathsLowerCase();
     const matchingPaths: string[] = [];
+    const matchingPathSet = new Set<string>();
     let focusCandidate: string | null = null;
 
     for (let index = 0; index < listedPaths.length; index += 1) {
@@ -1916,10 +1917,10 @@ export class FileTreeController
 
       const path = listedPaths[index];
       matchingPaths.push(path);
+      matchingPathSet.add(path);
       focusCandidate ??= path;
     }
 
-    const matchingPathSet = new Set(matchingPaths);
     const knownDirectoryPaths = this.#getAllKnownDirectoryPaths();
     const knownDirectoryPathsLowerCase =
       this.#getAllKnownDirectoryPathsLowerCase();
