@@ -2273,6 +2273,7 @@ export function FileTreeView({
     let scrollTimer: ReturnType<typeof setTimeout> | null = null;
     const scrollElement = scrollRef.current;
     const listElement = listRef.current;
+    const rootElement = rootRef.current;
     if (scrollElement == null) {
       return;
     }
@@ -2310,39 +2311,64 @@ export function FileTreeView({
       setControllerRevision((revision) => revision + 1);
       update();
     });
+    // Flip a plain DOM attribute on the root (not React state) so the anchor
+    // can be hidden via CSS before the compositor paints a scrolled frame.
+    // Using state here would require a re-render to land, which is one frame
+    // too late — the user would see the floating trigger sit at its old row
+    // position for a frame while the rows themselves have already scrolled.
+    const markScrolling = (): void => {
+      if (debugDisableScrollSuppressionRef.current === true) {
+        return;
+      }
+      if (listElement != null) {
+        listElement.dataset.isScrolling ??= '';
+      }
+      if (rootElement != null) {
+        rootElement.dataset.isScrolling ??= '';
+      }
+      isScrollingRef.current = true;
+      if (scrollTimer != null) {
+        clearTimeout(scrollTimer);
+      }
+      scrollTimer = setTimeout(() => {
+        if (listElement != null) {
+          delete listElement.dataset.isScrolling;
+        }
+        if (rootElement != null) {
+          delete rootElement.dataset.isScrolling;
+        }
+        isScrollingRef.current = false;
+        scrollTimer = null;
+      }, 50);
+    };
+
     const onScroll = (): void => {
       update();
       if (contextMenuStateRef.current != null) {
         closeContextMenuRef.current();
       }
-      const disableScrollSuppression =
-        debugDisableScrollSuppressionRef.current === true;
-      isScrollingRef.current = disableScrollSuppression ? false : true;
-      if (!disableScrollSuppression) {
-        setContextHoverPath((previousPath) =>
-          previousPath == null ? previousPath : null
-        );
-
-        // Mark the list as scrolling to suppress hover styles on items.
-        // Applied to the list (inside the scroll container) so the container
-        // itself still receives scroll events.
-        if (listElement != null) {
-          listElement.dataset.isScrolling ??= '';
-        }
-        if (scrollTimer != null) {
-          clearTimeout(scrollTimer);
-        }
-        scrollTimer = setTimeout(() => {
-          if (listElement != null) {
-            delete listElement.dataset.isScrolling;
-          }
-          isScrollingRef.current = false;
-          scrollTimer = null;
-        }, 50);
+      if (debugDisableScrollSuppressionRef.current === true) {
+        isScrollingRef.current = false;
+        return;
       }
+      setContextHoverPath((previousPath) =>
+        previousPath == null ? previousPath : null
+      );
+      markScrolling();
+    };
+
+    // `wheel` fires on the main thread before the compositor commits the
+    // scroll, so setting the attribute here hides the anchor in the same
+    // frame the user sees the content move — no one-frame drift of the
+    // floating trigger sitting over the wrong row.
+    const onPreScroll = (): void => {
+      markScrolling();
     };
 
     scrollElement.addEventListener('scroll', onScroll, { passive: true });
+    scrollElement.addEventListener('wheel', onPreScroll, { passive: true });
+    scrollElement.addEventListener('touchmove', onPreScroll, { passive: true });
+    scrollElement.addEventListener('keydown', onPreScroll);
     const resizeObserver =
       typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => {
@@ -2356,11 +2382,17 @@ export function FileTreeView({
       updateViewportRef.current = () => {};
       unsubscribe();
       scrollElement.removeEventListener('scroll', onScroll);
+      scrollElement.removeEventListener('wheel', onPreScroll);
+      scrollElement.removeEventListener('touchmove', onPreScroll);
+      scrollElement.removeEventListener('keydown', onPreScroll);
       if (scrollTimer != null) {
         clearTimeout(scrollTimer);
       }
       if (listElement != null) {
         delete listElement.dataset.isScrolling;
+      }
+      if (rootElement != null) {
+        delete rootElement.dataset.isScrolling;
       }
       isScrollingRef.current = false;
       resizeObserver?.disconnect();

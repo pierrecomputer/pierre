@@ -1289,6 +1289,19 @@
     }
   }
 
+  /* Hide the floating trigger while the scroll container is actively moving.
+   * The anchor is positioned against the root, not the scroll content, so its
+   * `top` follows the row via a React state update — one frame behind the
+   * compositor. That delay is visible as the trigger hovering over the wrong
+   * row during the first frame of a scroll. The `data-is-scrolling` flag on
+   * the root is flipped synchronously on `wheel`/`touchmove`/`keydown` before
+   * the compositor commits the next paint, so this selector hides the anchor
+   * in the same frame the scroll begins. */
+  [data-file-tree-virtualized-root='true'][data-is-scrolling]
+    [data-type='context-menu-anchor'] {
+    display: none;
+  }
+
   [data-type='context-menu-anchor'] > slot[name='context-menu'] {
     display: block;
     width: 0;
