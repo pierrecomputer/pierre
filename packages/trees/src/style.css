@@ -684,11 +684,15 @@
    * and the topmost sticky folder jumps up by a couple of pixels before it
    * "snaps" into its pinned position. We hide it via CSS whenever the scroll
    * is at the top and no scroll is in progress, so the preview doesn't leak
-   * through at rest; the `data-is-scrolling` flag is stamped on the root
-   * synchronously by the wheel/touchmove/keydown handlers, so the overlay
-   * becomes visible in the same frame the scroll starts. */
+   * through at rest. `data-overlay-reveal` is stamped on the root only when
+   * the user initiates a scroll while already at the top — exactly the case
+   * where we need the pre-mounted overlay to be visible through the first
+   * compositor frame. It is deliberately distinct from the general
+   * `data-is-scrolling` flag so a scroll that ends at the top (e.g. ArrowUp
+   * navigation) re-hides the overlay the instant the scroll lands, rather
+   * than waiting for the hover-suppression timer to elapse. */
   [data-file-tree-virtualized-root='true'][data-scroll-at-top='true']:not(
-      [data-is-scrolling]
+      [data-overlay-reveal]
     )
     [data-file-tree-sticky-overlay='true'] {
     visibility: hidden;

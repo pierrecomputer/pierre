@@ -2394,8 +2394,53 @@ export function FileTreeView({
       }, 50);
     };
 
+    // A distinct signal from `is-scrolling`: set *only* when the user initiates
+    // a scroll while already at the top. It overrides the "hide overlay at
+    // rest" CSS rule for long enough that the overlay is on screen by the time
+    // the compositor paints the first scrolled frame. Unlike `is-scrolling`,
+    // it is not set during a scroll *to* the top, so the overlay re-hides the
+    // instant the user returns there.
+    let overlayRevealTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearOverlayReveal = (): void => {
+      if (rootElement != null) {
+        delete rootElement.dataset.overlayReveal;
+      }
+      if (overlayRevealTimer != null) {
+        clearTimeout(overlayRevealTimer);
+        overlayRevealTimer = null;
+      }
+    };
+    const markOverlayReveal = (): void => {
+      if (
+        rootElement == null ||
+        debugDisableScrollSuppressionRef.current === true
+      ) {
+        return;
+      }
+      if (scrollElement.scrollTop > 0) {
+        // Already past the top; overlay is already visible via scroll-at-top
+        // being absent, and we don't want to arm the reveal for the next time
+        // the scroll returns to 0.
+        return;
+      }
+      rootElement.dataset.overlayReveal = 'true';
+      if (overlayRevealTimer != null) {
+        clearTimeout(overlayRevealTimer);
+      }
+      // Fallback cleanup if no scroll event follows (e.g. the user wheeled
+      // while already pinned at the top). Long enough for the compositor to
+      // commit a frame, short enough that a leftover reveal can't outlive an
+      // intended "at rest" state.
+      overlayRevealTimer = setTimeout(() => {
+        clearOverlayReveal();
+      }, 200);
+    };
+
     const onScroll = (): void => {
       update();
+      if (scrollElement.scrollTop > 0) {
+        clearOverlayReveal();
+      }
       if (contextMenuStateRef.current != null) {
         closeContextMenuRef.current();
       }
@@ -2409,18 +2454,44 @@ export function FileTreeView({
       markScrolling();
     };
 
-    // `wheel` fires on the main thread before the compositor commits the
-    // scroll, so setting the attribute here hides the anchor in the same
-    // frame the user sees the content move — no one-frame drift of the
-    // floating trigger sitting over the wrong row.
+    // `wheel` / `touchmove` fire on the main thread before the compositor
+    // commits the scroll, so setting the scrolling flag here hides the
+    // context-menu anchor in the same frame the user sees the content move —
+    // no one-frame drift of the floating trigger over the wrong row. When the
+    // scroll starts from the very top we also arm the overlay-reveal flag so
+    // the pre-mounted sticky overlay is visible through that first frame.
     const onPreScroll = (): void => {
       markScrolling();
+      markOverlayReveal();
+    };
+
+    // Only the keys that actually move the scroll position should mark the
+    // tree as scrolling — otherwise Shift+F10 / ContextMenu / Enter / letter
+    // keys all trip the 50ms suppression and, for the ContextMenu case, hide
+    // the keyboard-opened menu that was the whole point of the keypress.
+    const SCROLL_KEYS = new Set([
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight',
+      'PageUp',
+      'PageDown',
+      'Home',
+      'End',
+      ' ',
+      'Spacebar',
+    ]);
+    const onKeyDownPreScroll = (event: KeyboardEvent): void => {
+      if (!SCROLL_KEYS.has(event.key)) {
+        return;
+      }
+      onPreScroll();
     };
 
     scrollElement.addEventListener('scroll', onScroll, { passive: true });
     scrollElement.addEventListener('wheel', onPreScroll, { passive: true });
     scrollElement.addEventListener('touchmove', onPreScroll, { passive: true });
-    scrollElement.addEventListener('keydown', onPreScroll);
+    scrollElement.addEventListener('keydown', onKeyDownPreScroll);
     const resizeObserver =
       typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => {
@@ -2436,17 +2507,24 @@ export function FileTreeView({
       scrollElement.removeEventListener('scroll', onScroll);
       scrollElement.removeEventListener('wheel', onPreScroll);
       scrollElement.removeEventListener('touchmove', onPreScroll);
-      scrollElement.removeEventListener('keydown', onPreScroll);
+      scrollElement.removeEventListener('keydown', onKeyDownPreScroll);
       if (scrollTimer != null) {
         clearTimeout(scrollTimer);
+      }
+      if (overlayRevealTimer != null) {
+        clearTimeout(overlayRevealTimer);
       }
       if (listElement != null) {
         delete listElement.dataset.isScrolling;
       }
       if (rootElement != null) {
         delete rootElement.dataset.isScrolling;
-        delete rootElement.dataset.scrollAtTop;
+        delete rootElement.dataset.overlayReveal;
       }
+      // `data-scroll-at-top` is owned by the separate sync layout effect —
+      // deleting it here would strand the attribute off if this effect
+      // rebinds (e.g. viewportHeight changes) while scrollTop is still 0,
+      // because the sync effect only fires when scrollTop itself changes.
       isScrollingRef.current = false;
       resizeObserver?.disconnect();
     };
