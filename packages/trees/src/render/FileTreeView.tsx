@@ -1109,15 +1109,7 @@ function renderStyledRow(
           : undefined
       }
       onMouseDown={(event) => {
-        // Per the HTML5 drag-and-drop spec, cancelling mousedown aborts the
-        // user agent's drag initiation handshake. Sticky rows with drag-and-
-        // drop enabled therefore cannot preventDefault here — doing so would
-        // break dragging a sticky source entirely in real browsers. (JSDOM
-        // dispatches `dragstart` directly and bypasses this handshake, which
-        // is why the unit-level coverage never catches it.) When drag is off,
-        // we still suppress default so focus stays off the aria-hidden
-        // mirror.
-        if (isSticky && !dragAndDropEnabled) {
+        if (isSticky) {
           event.preventDefault();
           return;
         }
@@ -2373,7 +2365,12 @@ export function FileTreeView({
       if (scrollElement.scrollTop > 0) {
         clearOverlayReveal();
       }
-      if (contextMenuStateRef.current != null) {
+      // Only dismiss the context menu when the user drove the scroll
+      // (wheel/touch/keyboard). A programmatic scroll — browser-initiated to
+      // bring a newly-focused menu item into view, Playwright's scroll-into-
+      // view before a click, or React DOM updates adjusting scrollTop — must
+      // not close the menu the user is actively interacting with.
+      if (contextMenuStateRef.current != null && isScrollingRef.current) {
         closeContextMenuRef.current();
       }
       if (debugDisableScrollSuppressionRef.current === true) {
@@ -2470,9 +2467,31 @@ export function FileTreeView({
     closeContextMenu(false);
   }, [closeContextMenu, contextMenuEnabled, contextMenuState]);
 
+  // Invoking the consumer's `render()` more than once per logical open swaps
+  // the returned DOM element, which detaches anything a parent page was about
+  // to interact with (Playwright clicks, inline rename input). The previous
+  // version keyed this effect on the whole `contextMenuState` object, which is
+  // a fresh reference on every `setState` call even when the path + source are
+  // unchanged — triggering a React cleanup → re-run cycle that clears and
+  // remounts the slot. Keying on a derived string makes the effect idempotent
+  // across incidental re-renders and only re-fires when the menu's logical
+  // identity actually changes.
+  const activeContextMenuKey = useMemo(
+    () =>
+      contextMenuState == null
+        ? null
+        : `${contextMenuState.path}::${contextMenuState.source}`,
+    [contextMenuState]
+  );
+
   useLayoutEffect(() => {
-    if (contextMenuState == null) {
+    if (activeContextMenuKey == null) {
       slotHost?.clearSlotContent(CONTEXT_MENU_SLOT_NAME);
+      return;
+    }
+
+    const currentState = contextMenuStateRef.current;
+    if (currentState == null) {
       return;
     }
 
@@ -2485,7 +2504,7 @@ export function FileTreeView({
     const context: FileTreeContextMenuOpenContext = {
       anchorElement,
       anchorRect:
-        contextMenuState.anchorRect ??
+        currentState.anchorRect ??
         serializeAnchorRect(anchorElement.getBoundingClientRect()),
       close: (options) => {
         closeContextMenuRef.current(options?.restoreFocus ?? true);
@@ -2500,11 +2519,9 @@ export function FileTreeView({
       },
     };
     const menuContent =
-      composition?.contextMenu?.render?.(contextMenuState.item, context) ??
-      null;
-
+      composition?.contextMenu?.render?.(currentState.item, context) ?? null;
     slotHost?.setSlotContent(CONTEXT_MENU_SLOT_NAME, menuContent);
-    composition?.contextMenu?.onOpen?.(contextMenuState.item, context);
+    composition?.contextMenu?.onOpen?.(currentState.item, context);
     focusFirstMenuElement(menuContent);
     queueMicrotask(() => {
       if (menuContent == null || !menuContent.isConnected) {
@@ -2521,7 +2538,7 @@ export function FileTreeView({
     return () => {
       slotHost?.clearSlotContent(CONTEXT_MENU_SLOT_NAME);
     };
-  }, [composition?.contextMenu, contextMenuState, slotHost]);
+  }, [activeContextMenuKey, composition?.contextMenu, slotHost]);
 
   useLayoutEffect(() => {
     if (

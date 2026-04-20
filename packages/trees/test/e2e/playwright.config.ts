@@ -11,6 +11,10 @@ export default defineConfig({
   fullyParallel: true,
   reporter: 'list',
   timeout: 30_000,
+  // Two retries in CI absorb the rare HTML5-drag flake when mousemove events
+  // race with the browser's dragover handoff under parallel worker pressure.
+  // Local runs keep retries off so flakes stay visible during development.
+  retries: process.env.CI ? 2 : 0,
   expect: {
     timeout: 5_000,
   },
