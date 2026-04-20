@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  IconArrowUpRight,
   IconBrandDiscord,
   IconBrandGithub,
   IconChevronFlat,
@@ -43,7 +44,7 @@ function NavLink({ href, basePath, children }: NavLinkProps) {
       size="sm"
       asChild
       className={cn(
-        'text-muted-foreground font-normal px-2',
+        'text-muted-foreground font-normal px-2 gap-0.5',
         isActive() && 'text-foreground pointer-events-none font-medium'
       )}
     >
@@ -140,10 +141,38 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
         <NavLink href="/docs" basePath={product.basePath}>
           Docs
         </NavLink>
-        {product.basePath === '' && (
-          <NavLink href="/theme" basePath={product.basePath}>
-            Theme
-          </NavLink>
+        {product.id === 'diffs' ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="text-muted-foreground gap-0.5 px-2 font-normal"
+          >
+            <Link
+              href="https://trees.software"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Trees
+              <IconArrowUpRight />
+            </Link>
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="text-muted-foreground gap-0.5 px-2 font-normal"
+          >
+            <Link
+              href="https://diffs.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Diffs
+              <IconArrowUpRight />
+            </Link>
+          </Button>
         )}
 
         <div className="border-border mx-2 h-5 w-px border-l" />
