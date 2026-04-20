@@ -25,7 +25,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
 const WORKTREES_HOME = join(homedir(), 'pierre', 'pierre-worktrees');
 
@@ -164,18 +164,6 @@ async function cmdNew(rest: string[]): Promise<number> {
     `PIERRE_WORKTREE_SLUG=${slug}\nPIERRE_PORT_OFFSET=${offset}\n`,
     'utf8'
   );
-
-  // Belt-and-suspenders for direct `cd apps/docs && bun run trees:dev` runs:
-  // Next auto-loads .env.local so the title tag still picks up the slug even
-  // when ws.ts isn't in the call chain.
-  const appsDocsEnvLocal = join(worktreePath, 'apps', 'docs', '.env.local');
-  if (existsSync(dirname(appsDocsEnvLocal))) {
-    writeFileSync(
-      appsDocsEnvLocal,
-      `NEXT_PUBLIC_WORKTREE_SLUG=${slug}\n`,
-      'utf8'
-    );
-  }
 
   console.log(`\nInstalling dependencies in ${worktreePath}...`);
   const bunInstall = spawnSync('bun', ['install'], {

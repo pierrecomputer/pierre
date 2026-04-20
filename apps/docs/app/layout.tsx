@@ -58,9 +58,11 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-// When running in a worktree (NEXT_PUBLIC_WORKTREE_SLUG set by wt), prefix the
-// title with a stable emoji + slug so browser tabs for different worktrees are
-// distinguishable at a glance. No-op in the main clone.
+// When running in a worktree, prefix the title with a stable emoji + slug so
+// browser tabs for different worktrees are distinguishable at a glance. The
+// slug reaches this file via `next.config.mjs`, which loads `.env.worktree`
+// and bridges `PIERRE_WORKTREE_SLUG` into `NEXT_PUBLIC_WORKTREE_SLUG`. No-op
+// in the main clone.
 const WORKTREE_EMOJI_PALETTE = [
   '🟢',
   '🔵',

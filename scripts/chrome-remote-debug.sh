@@ -18,6 +18,52 @@
 
 set -euo pipefail
 
+# Neither bash nor `bun run` auto-load `.env.worktree`, so when this script is
+# launched outside of a `bun ws` chain (e.g. `bun run chrome` from the worktree
+# root) the `PIERRE_*` vars would otherwise be missing and chrome would open on
+# the main clone's debug port. Walk up from $PWD until we find `.env.worktree`
+# or hit a `.git` entry (worktree root marker) and source the file so its keys
+# are exported for the remainder of this script. Pre-existing env vars win.
+load_worktree_env() {
+  local dir="$PWD"
+  local env_file=""
+  while [[ "$dir" != "/" ]]; do
+    if [[ -f "$dir/.env.worktree" ]]; then
+      env_file="$dir/.env.worktree"
+      break
+    fi
+    if [[ -e "$dir/.git" ]]; then
+      return
+    fi
+    dir="$(dirname "$dir")"
+  done
+  [[ -z "$env_file" ]] && return
+
+  local line key value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    # Trim leading/trailing whitespace and skip blanks / comments.
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -z "$line" || "${line:0:1}" == "#" ]] && continue
+    [[ "$line" != *"="* ]] && continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    # Strip matching surrounding single or double quotes if present.
+    if [[ ${#value} -ge 2 ]]; then
+      local first="${value:0:1}"
+      local last="${value: -1}"
+      if { [[ "$first" == '"' && "$last" == '"' ]] || [[ "$first" == "'" && "$last" == "'" ]]; }; then
+        value="${value:1:-1}"
+      fi
+    fi
+    # Preserve anything already set by the caller / ws.
+    if [[ -z "${!key+x}" ]]; then
+      export "$key=$value"
+    fi
+  done < "$env_file"
+}
+load_worktree_env
+
 OFFSET="${PIERRE_PORT_OFFSET:-0}"
 SLUG="${PIERRE_WORKTREE_SLUG:-codex}"
 PORT=$((9222 + OFFSET))

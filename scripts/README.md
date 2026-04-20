@@ -115,8 +115,12 @@ By default:
 - A port offset is picked (see "Ports" below), deterministic from the slug but
   bumped if it collides with an existing worktree.
 - `.env.worktree` is written at the worktree root with the offset and slug.
-- `apps/docs/.env.local` gets `NEXT_PUBLIC_WORKTREE_SLUG=<slug>` so the browser
-  tab title prefixes with an emoji + slug.
+  Configs that need those keys outside of a `bun ws` chain (Next's
+  `next.config.mjs`, each Playwright config, `chrome-remote-debug.sh`) load the
+  file themselves via `scripts/load-worktree-env.mjs` / the inlined bash
+  walk-up. The browser tab title prefix reads `NEXT_PUBLIC_WORKTREE_SLUG`, which
+  `next.config.mjs` bridges from `PIERRE_WORKTREE_SLUG` so `.env.worktree` stays
+  the single source of truth.
 - `bun install` runs automatically so husky hooks regenerate and the worktree's
   `node_modules` is ready.
 - A summary of the worktree's URLs and the `cd` command is printed.
@@ -345,11 +349,13 @@ bun install
   stray copy there would shift your main-clone ports.
 - **Direct invocations bypass `ws`.** If you `cd apps/docs && bun run trees:dev`
   (without going through `bun ws`), `ws` is not in the call chain and won't
-  inject `PIERRE_PORT_OFFSET`. The belt-and-suspenders `apps/docs/.env.local`
-  that `wt new` writes covers `NEXT_PUBLIC_*` vars that Next loads
-  automatically, but `PORT` resolution still needs the offset to be in the env —
-  so always prefer `bun ws …` from the worktree root (this is already the
-  convention in `AGENTS.md`).
+  inject `PIERRE_PORT_OFFSET` into the shell that computes `PORT`. The
+  package.json script still resolves `${PIERRE_PORT_OFFSET:-0}` to `0` and the
+  dev server binds the main clone's port. Configs that run _after_ the shell
+  (Next's `next.config.mjs`, Playwright configs) will still pick up
+  `.env.worktree` on their own — but `PORT` arithmetic in a package.json script
+  is resolved by the shell, so always prefer `bun ws …` from the worktree root
+  (this is already the convention in `AGENTS.md`).
 - **Port offsets can't be manually re-used between worktrees.** If you want two
   worktrees on deterministic sibling ports, just let `wt new` pick — the hash is
   stable per slug.

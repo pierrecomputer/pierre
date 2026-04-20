@@ -1,3 +1,23 @@
+import { loadWorktreeEnv } from '../../scripts/load-worktree-env.mjs';
+
+// `next dev` runs under Node, which (like Bun) only auto-loads the standard
+// `.env*` names. Our worktree helper writes `PIERRE_WORKTREE_SLUG` /
+// `PIERRE_PORT_OFFSET` into `.env.worktree` at the worktree root, so pull those
+// in manually before Next inspects `process.env`. When `ws.ts` is in the call
+// chain it has already injected the same keys; the loader preserves those.
+loadWorktreeEnv();
+
+// The browser title prefix (see `app/layout.tsx`) reads
+// `NEXT_PUBLIC_WORKTREE_SLUG` so the value survives into the client bundle.
+// Bridge it from the non-prefixed worktree slug so `.env.worktree` stays the
+// single source of truth.
+if (
+  process.env.PIERRE_WORKTREE_SLUG &&
+  !process.env.NEXT_PUBLIC_WORKTREE_SLUG
+) {
+  process.env.NEXT_PUBLIC_WORKTREE_SLUG = process.env.PIERRE_WORKTREE_SLUG;
+}
+
 const site = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
 const isTrees = site === 'trees';
 
