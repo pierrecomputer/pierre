@@ -1,11 +1,62 @@
 #!/usr/bin/env bun
 
 import { spawn, type ChildProcess, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { delimiter, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { delimiter, dirname, resolve } from 'node:path';
 
 const args = process.argv.slice(2);
 const cwd = process.cwd();
+
+// Walk up from `startDir` looking for a `.env.worktree` file. Worktrees created
+// by `scripts/wt.ts` write one at their root with `PIERRE_PORT_OFFSET` etc.
+// The main clone has no such file, so this returns {} there and nothing changes.
+//
+// We stop at the git worktree root (the first ancestor containing a `.git`
+// entry — dir in the main clone, file in a linked worktree). That cap prevents
+// a stray `.env.worktree` in an ancestor directory (e.g. `$HOME`) from being
+// silently picked up by anyone invoking `bun ws`.
+function loadWorktreeEnv(startDir: string): Record<string, string> {
+  let dir = resolve(startDir);
+  while (true) {
+    const candidate = resolve(dir, '.env.worktree');
+    if (existsSync(candidate)) {
+      return parseEnvFile(candidate);
+    }
+    if (existsSync(resolve(dir, '.git'))) {
+      return {};
+    }
+    const parent = dirname(dir);
+    if (parent === dir) {
+      return {};
+    }
+    dir = parent;
+  }
+}
+
+function parseEnvFile(path: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const text = readFileSync(path, 'utf8');
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    // Strip matching surrounding quotes if present.
+    if (
+      value.length >= 2 &&
+      ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'")))
+    ) {
+      value = value.slice(1, -1);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+const worktreeEnv = loadWorktreeEnv(cwd);
 
 const SIGNAL_EXIT_CODES: Partial<Record<NodeJS.Signals, number>> = {
   SIGHUP: 129,
@@ -93,6 +144,7 @@ function createScriptEnv(pkgDir: string) {
   ];
   return {
     ...process.env,
+    ...worktreeEnv,
     FORCE_COLOR: '1',
     PATH: pathParts.join(delimiter),
   };

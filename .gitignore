@@ -30,6 +30,7 @@ tsconfig.tsbuildinfo
 .claude/*
 .codemogger/*
 .omx/
+.env.worktree
 
 #tmp
 packages/trees/PLAN.md

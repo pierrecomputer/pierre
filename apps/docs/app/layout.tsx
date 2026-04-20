@@ -58,8 +58,37 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+// When running in a worktree (NEXT_PUBLIC_WORKTREE_SLUG set by wt), prefix the
+// title with a stable emoji + slug so browser tabs for different worktrees are
+// distinguishable at a glance. No-op in the main clone.
+const WORKTREE_EMOJI_PALETTE = [
+  '🟢',
+  '🔵',
+  '🟡',
+  '🟠',
+  '🟣',
+  '🔴',
+  '🟤',
+  '⚪',
+] as const;
+
+function worktreeTitlePrefix(): string {
+  const slug = process.env.NEXT_PUBLIC_WORKTREE_SLUG;
+  if (!slug) return '';
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) {
+    hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
+  }
+  const emoji = WORKTREE_EMOJI_PALETTE[hash % WORKTREE_EMOJI_PALETTE.length];
+  return `${emoji} [${slug}] `;
+}
+
+const WORKTREE_PREFIX = worktreeTitlePrefix();
+const baseTitle = 'Diffs, from Pierre';
+const taggedTitle = `${WORKTREE_PREFIX}${baseTitle}`;
+
 export const metadata: Metadata = {
-  title: 'Diffs, from Pierre',
+  title: taggedTitle,
   description:
     'An open source diff and file rendering library by The Pierre Computer Company.',
   icons: {
@@ -71,13 +100,13 @@ export const metadata: Metadata = {
     shortcut: '/favicon.ico',
   },
   openGraph: {
-    title: 'Diffs, from Pierre',
+    title: taggedTitle,
     description:
       'An open source diff and file rendering library by The Pierre Computer Company.',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Diffs, from Pierre',
+    title: taggedTitle,
     description:
       'An open source diff and file rendering library by The Pierre Computer Company.',
   },

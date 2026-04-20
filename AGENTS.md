@@ -35,6 +35,38 @@ export AGENT=1
   the root scripts should not do something different than the package-level
   script, it's simply a shortcut to calling it from the root.
 
+## Worktrees
+
+We use `git worktree` to parallelize work. Each worktree lives at
+`~/pierre/pierre-worktrees/<slug>/` and owns a **port offset** so dev servers,
+E2E fixtures, and the Chrome remote-debug instance don't collide across
+worktrees. The main clone keeps the historical default ports; only worktrees
+shift.
+
+The `bun run wt` command suite (defined in `scripts/wt.ts`) manages worktrees:
+
+```bash
+bun run wt new <slug>    # create a worktree, allocate offset, bun install
+bun run wt rm <slug>     # kill its processes, remove the worktree
+bun run wt clean         # kill zombie servers on all worktrees' ports
+bun run wt ps            # show per-worktree port status (LISTEN / —)
+bun run wt list          # summary of all worktrees (managed + external)
+```
+
+Dev scripts inside a worktree automatically pick up the offset through
+`scripts/ws.ts`, which reads `<worktree>/.env.worktree` when invoked. Before
+starting, they run `scripts/run-dev.sh` to kill any stale process bound to the
+target port (zombies survive uncleanly-closed terminals, which is common under
+AI agents).
+
+**Cleanup contract for agents.** If you spin up dev servers, Playwright
+fixtures, or Chrome debug instances inside a worktree, **you must run
+`bun run wt clean` (or `bun run wt rm <slug>` if the worktree itself is being
+torn down) before completing your turn.** This releases ports and kills spawned
+processes so they don't accumulate across runs. Running `wt clean` with no
+arguments cleans every managed worktree; prefer the targeted `wt clean <slug>`
+when you know which worktree you were working in.
+
 ## Linting
 
 We use `oxlint` at the root of the monorepo rather than per-package lint setups.

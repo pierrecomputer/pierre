@@ -1,8 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const e2ePort = 4174;
+const portOffset = Number(process.env.PIERRE_PORT_OFFSET ?? 0);
+const e2ePort = 4174 + portOffset;
 const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
-const e2eOutputDir = '/tmp/pierre-docs-playwright-results';
+const e2eOutputDir = `/tmp/pierre-docs-playwright-results${portOffset > 0 ? `-${portOffset}` : ''}`;
 
 export default defineConfig({
   testDir: '.',
