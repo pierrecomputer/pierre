@@ -59,7 +59,7 @@ export function DemoA11yClient({ preloadedData }: DemoA11yClientProps) {
       <FeatureHeader
         id="a11y"
         title="Accessible from the jump"
-        description="With built-in keyboard navigation, focus management, and ARIA roles (tree, treeitem, group), Trees are immediately accessible to all users. We've designed Trees to meet WCAG 2.1 expectations."
+        description="With built-in keyboard navigation, focus management, and ARIA roles (tree, treeitem) plus aria-level, aria-posinset, and aria-setsize attributes, Trees are immediately accessible to all users. We've designed Trees to align with WCAG 2.1 guidance."
       />
       <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
         <FileTree
