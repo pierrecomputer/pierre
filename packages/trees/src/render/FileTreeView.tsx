@@ -947,7 +947,9 @@ function renderStyledRow(
       isFlattened={row.isFlattened}
       value={renamingValue}
       onBlur={() => {
-        renameView.cancel();
+        // DEBUG: temporarily disabled so the rename input stays visible while
+        // tweaking styles. Restore `renameView.cancel()` before committing.
+        // renameView.cancel();
       }}
       onInput={(event) => {
         renameView.setValue((event.currentTarget as HTMLInputElement).value);
@@ -2073,19 +2075,22 @@ export function FileTreeView({
     }
 
     if (renameView.isActive()) {
-      if (event.key === 'Escape') {
-        renameView.cancel();
-      } else if (event.key === 'Enter') {
-        renameView.commit();
-      } else {
-        return;
-      }
-
-      setLastContextMenuInteraction('focus');
-      setControllerRevision((revision) => revision + 1);
-      event.preventDefault();
-      event.stopPropagation();
+      // DEBUG: keep the rename input sticky while tweaking styles. Restore the
+      // Escape/Enter handling block below before committing.
       return;
+      // if (event.key === 'Escape') {
+      //   renameView.cancel();
+      // } else if (event.key === 'Enter') {
+      //   renameView.commit();
+      // } else {
+      //   return;
+      // }
+      //
+      // setLastContextMenuInteraction('focus');
+      // setControllerRevision((revision) => revision + 1);
+      // event.preventDefault();
+      // event.stopPropagation();
+      // return;
     }
 
     if (renamingEnabled && event.key === 'F2') {
@@ -3018,6 +3023,7 @@ export function FileTreeView({
     contextMenuEnabled &&
     contextMenuButtonTriggerEnabled &&
     !isPointerContextMenuOpen &&
+    !isRenaming &&
     triggerButton != null &&
     contextMenuAnchorTop != null &&
     triggerPath != null;
@@ -3156,7 +3162,10 @@ export function FileTreeView({
       />
       <slot name={HEADER_SLOT_NAME} data-type="header-slot" />
       {searchEnabled ? (
-        <div data-file-tree-search-container>
+        <div
+          data-file-tree-search-container
+          data-open={isSearchOpen ? 'true' : 'false'}
+        >
           <input
             ref={searchInputRef}
             aria-activedescendant={activeDescendantId}

@@ -772,6 +772,13 @@
     margin-bottom: var(--trees-item-row-gap);
   }
 
+  /* Hide the search field until the controller flips data-open="true". This
+     lets callers always preload with search: true (so SSR markup matches the
+     hydrated tree) without showing an empty search field on first paint. */
+  [data-file-tree-search-container][data-open='false'] {
+    display: none;
+  }
+
   [data-file-tree-search-input] {
     --trees-focus-ring-width: 2px;
     font-family: var(--trees-font-family);
@@ -1134,17 +1141,26 @@
   }
 
   [data-item-rename-input] {
+    appearance: none;
     width: 100%;
     min-width: 0;
+    height: calc(var(--trees-row-height) - 4px);
     font-family: inherit;
     font-size: inherit;
-    line-height: calc(var(--trees-row-height) - 8px);
-    height: calc(var(--trees-row-height) - 8px);
+    /* line-height: calc(var(--trees-row-height) - 8px); */
     color: inherit;
     background-color: transparent;
     border: 0;
     padding-inline: 6px;
     outline: none;
+    box-sizing: border-box;
+  }
+
+  [data-item-section='content']:has([data-item-rename-input])
+    ~ [data-item-section='action'],
+  [data-item-section='content']:has([data-item-rename-input])
+    ~ [data-item-section='decoration'] {
+    display: none;
   }
 
   /* Chevron pointing right */

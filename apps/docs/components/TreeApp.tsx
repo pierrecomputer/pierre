@@ -2,7 +2,7 @@
 
 import type { FileContents } from '@pierre/diffs';
 import { File, type FileOptions } from '@pierre/diffs/react';
-import { IconFilePlus, IconFolderPlus, IconX } from '@pierre/icons';
+import { IconFilePlus, IconFolderPlus, IconSearch, IconX } from '@pierre/icons';
 import type {
   ContextMenuItem,
   ContextMenuOpenContext,
@@ -17,6 +17,7 @@ import {
 import {
   FileTree,
   type FileTreePreloadedData,
+  useFileTreeSearch,
   useFileTreeSelection,
 } from '@pierre/trees/react';
 import type {
@@ -69,11 +70,19 @@ export interface TreeAppContextMenuRenderContext {
 export interface TreeAppProjectHeaderActions {
   addFile: () => void;
   addFolder: () => void;
+  toggleSearch: () => void;
 }
 
 export interface TreeAppProjectHeaderRenderContext {
   actions: TreeAppProjectHeaderActions;
   projectName: string;
+  // True when the caller opted into the tree's built-in search (search: true on
+  // the model) AND passed `searchEnabled` on TreeApp. Custom project headers
+  // use this to decide whether to render a search toggle at all.
+  isSearchEnabled: boolean;
+  // Reactive open/closed state for the built-in search input. Used to render
+  // an "active" visual on the toggle button.
+  isSearchOpen: boolean;
 }
 
 export interface TreeAppProps<LAnnotation = unknown> {
@@ -113,6 +122,10 @@ export interface TreeAppProps<LAnnotation = unknown> {
   renderProjectHeader?: (
     context: TreeAppProjectHeaderRenderContext
   ) => ReactNode;
+  // Set to true when the underlying FileTree model was constructed with
+  // `search: true`. Enables the search toggle in the default project header
+  // and lets custom headers know they can show a toggle of their own.
+  searchEnabled?: boolean;
 
   // Context menu rendered through the tree's context menu slot. The model must
   // have `composition.contextMenu.enabled = true` (or pass a custom triggerMode)
@@ -555,9 +568,9 @@ function useOpenTabs({
 function WindowControls(): React.JSX.Element {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f56]" />
-      <span className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e]" />
-      <span className="h-2.5 w-2.5 rounded-full bg-[#27c93f]" />
+      <span className="h-3 w-3 rounded-full bg-[#ff5f56]" />
+      <span className="h-3 w-3 rounded-full bg-[#ffbd2e]" />
+      <span className="h-3 w-3 rounded-full bg-[#27c93f]" />
     </div>
   );
 }
@@ -572,36 +585,71 @@ function DefaultEmpty(): React.JSX.Element {
 
 function DefaultProjectHeader({
   actions,
+  isSearchEnabled,
+  isSearchOpen,
   projectName,
 }: TreeAppProjectHeaderRenderContext): React.JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-2 px-3 py-2">
+    <div className="mb-2 flex h-10 items-center justify-between gap-2 px-3 py-3">
       <div className="flex min-w-0 items-center gap-2.5">
         <WindowControls />
         <div className="min-w-0 truncate text-xs font-medium text-neutral-200">
           {projectName}
         </div>
       </div>
-      {/* Buttons live inside the explorer hover group (set on the <aside> in
-          TreeApp) so they only appear when the user is interacting with the
-          tree. focus-within keeps them visible for keyboard navigation. */}
-      <div className="flex items-center gap-3 opacity-0 transition-opacity duration-150 group-hover/tree-app-explorer:opacity-100 focus-within:opacity-100">
-        <button
-          type="button"
-          title="New file"
-          onClick={actions.addFile}
-          className="h-4 w-4 text-neutral-400 hover:text-neutral-100"
-        >
-          <IconFilePlus aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          title="New folder"
-          onClick={actions.addFolder}
-          className="h-4 w-4 text-neutral-400 hover:text-neutral-100"
-        >
-          <IconFolderPlus aria-hidden="true" />
-        </button>
+      <div className="flex items-center gap-2">
+        {isSearchEnabled ? (
+          // Search button sits outside the hover-only opacity group so that
+          // when search is active the user always sees the toggle that closes
+          // it. When search is closed we still only reveal it on hover, to
+          // match the new-file/new-folder affordance.
+          <button
+            type="button"
+            title={isSearchOpen ? 'Clear and close search' : 'Search files'}
+            aria-pressed={isSearchOpen}
+            // preventDefault on mousedown keeps focus on the search input so
+            // its onBlur handler doesn't race our click and auto-close+reopen
+            // the search. Without this, clicking the toggle while the input
+            // is focused would blur -> closeSearch() -> click sees isOpen=
+            // false -> reopen.
+            onMouseDown={(event) => {
+              if (isSearchOpen) {
+                event.preventDefault();
+              }
+            }}
+            onClick={actions.toggleSearch}
+            className={[
+              'h-4 w-4 transition-opacity duration-150 cursor-pointer',
+              isSearchOpen
+                ? 'text-neutral-100 opacity-100'
+                : 'text-neutral-400 opacity-25 group-hover/tree-app-explorer:opacity-100 focus-visible:opacity-100 hover:text-neutral-100',
+            ].join(' ')}
+          >
+            <IconSearch aria-hidden="true" className="h-[14px] w-[14px]" />
+          </button>
+        ) : null}
+        {/* New file/folder buttons live inside the explorer hover group (set on
+            the <aside> in TreeApp) so they only appear when the user is
+            interacting with the tree. focus-within keeps them visible for
+            keyboard navigation. */}
+        <div className="flex items-center gap-2 opacity-25 transition-opacity duration-150 group-hover/tree-app-explorer:opacity-100 focus-within:opacity-100">
+          <button
+            type="button"
+            title="New file"
+            onClick={actions.addFile}
+            className="h-4 w-4 cursor-pointer text-neutral-400 hover:text-neutral-100"
+          >
+            <IconFilePlus aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            title="New folder"
+            onClick={actions.addFolder}
+            className="h-4 w-4 cursor-pointer text-neutral-400 hover:text-neutral-100"
+          >
+            <IconFolderPlus aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -746,17 +794,17 @@ function DefaultTab({
   return (
     <div
       className={[
-        'group relative isolate flex h-6 max-w-[200px] items-center overflow-hidden rounded-sm text-xs',
+        'group relative isolate flex h-7 max-w-[200px] items-center overflow-hidden rounded-sm text-xs font-medium transition-colors',
         isActive
-          ? 'bg-neutral-800 text-zinc-100'
-          : 'bg-neutral-900/30 text-zinc-400 hover:bg-neutral-800/60 hover:text-zinc-200',
+          ? 'bg-transparent text-zinc-100 group-hover/tabbar:bg-neutral-900'
+          : 'bg-transparent text-zinc-400 group-hover/tabbar:bg-neutral-900/30 group-hover/tabbar:hover:bg-neutral-800/60 group-hover/tabbar:hover:text-zinc-200',
       ].join(' ')}
     >
       <button
         type="button"
         onClick={activate}
         title={path}
-        className="relative z-0 flex h-full min-w-0 flex-1 items-center gap-2 rounded-sm px-2.5 text-left"
+        className="relative z-0 flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md pr-3 pl-2 text-left"
       >
         <TreeAppTabIcon colored={iconsColored} icon={icon} />
         <span className="block truncate">{label}</span>
@@ -766,8 +814,8 @@ function DefaultTab({
         className={[
           'pointer-events-none absolute top-0 right-0 bottom-0 z-10 w-12 opacity-0 transition-opacity group-hover:opacity-100',
           isActive
-            ? 'bg-gradient-to-l from-neutral-800 via-neutral-800 to-transparent'
-            : 'bg-gradient-to-l from-neutral-800/60 via-neutral-800/60 to-transparent',
+            ? 'bg-gradient-to-l from-neutral-900 via-neutral-900 to-transparent'
+            : 'bg-gradient-to-l from-neutral-900 via-neutral-900 to-transparent',
         ].join(' ')}
       />
       <button
@@ -775,7 +823,7 @@ function DefaultTab({
         onClick={close}
         title="Close tab"
         aria-label={`Close ${label}`}
-        className="absolute top-1/2 right-1 z-20 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-100 focus:opacity-100"
+        className="absolute top-1/2 right-1 z-20 flex h-5 w-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-100 focus:opacity-100"
       >
         <IconX aria-hidden="true" className="h-3 w-3" />
       </button>
@@ -806,6 +854,7 @@ export function TreeApp<LAnnotation = unknown>({
   renderProjectHeader,
   renderTab,
   renderWindowChrome,
+  searchEnabled = false,
   style,
   tabIcons,
   treeClassName,
@@ -829,6 +878,14 @@ export function TreeApp<LAnnotation = unknown>({
     newFileTemplateName,
     newFolderTemplateName,
   });
+  const search = useFileTreeSearch(model);
+  const toggleSearch = useCallback(() => {
+    if (search.isOpen) {
+      search.close();
+      return;
+    }
+    search.open();
+  }, [search]);
 
   const treeSurfaceColor = useMemo(() => {
     const explicitTreeBackground =
@@ -867,7 +924,12 @@ export function TreeApp<LAnnotation = unknown>({
   );
 
   const treeHostStyle = useMemo<CSSProperties>(
-    () => ({ ...treeStyle, height: '100%' }),
+    () => ({
+      ...treeStyle,
+      height: '100%',
+      borderRadius: '8px',
+      border: '1px solid rgb(255 255 255 / 0.05)',
+    }),
     [treeStyle]
   );
   const windowChromeNode = renderWindowChrome?.();
@@ -897,14 +959,24 @@ export function TreeApp<LAnnotation = unknown>({
         addFolder: () => {
           mutations.addEntry('', 'folder');
         },
+        toggleSearch,
       },
+      isSearchEnabled: searchEnabled,
+      isSearchOpen: search.isOpen,
       projectName: projectName ?? '',
     };
     if (renderProjectHeader != null) {
       return renderProjectHeader(headerContext);
     }
     return <DefaultProjectHeader {...headerContext} />;
-  }, [mutations, projectName, renderProjectHeader]);
+  }, [
+    mutations,
+    projectName,
+    renderProjectHeader,
+    search.isOpen,
+    searchEnabled,
+    toggleSearch,
+  ]);
 
   // Builds the per-row context menu actions from a clicked item. Adding new
   // entries lands inside the directory itself when the click target is a
@@ -981,7 +1053,7 @@ export function TreeApp<LAnnotation = unknown>({
   return (
     <div
       className={[
-        'flex flex-col overflow-hidden rounded-lg border bg-neutral-900 text-zinc-200',
+        'flex flex-col overflow-hidden rounded-xl border bg-[#070707] text-zinc-200 shadow-lg p-1.5',
         className,
       ]
         .filter(Boolean)
@@ -1018,13 +1090,13 @@ export function TreeApp<LAnnotation = unknown>({
           onPointerMove={explorer.onPointerMove}
           onPointerUp={explorer.onPointerUp}
           onPointerCancel={explorer.onPointerUp}
-          className="relative w-px shrink-0 cursor-col-resize bg-white/10 after:absolute after:inset-y-0 after:-left-1 after:w-2 after:content-['']"
+          className="relative w-px shrink-0 cursor-col-resize bg-white/0 after:absolute after:inset-y-0 after:-left-1 after:w-2 after:content-['']"
         />
         <section className="flex min-w-0 flex-1 flex-col">
           {openPaths.length > 0 ? (
             <div
-              className="flex h-9 min-h-9 items-center gap-1 overflow-x-auto border-b border-white/10 px-2"
-              style={{ backgroundColor: 'var(--tree-app-tree-surface)' }}
+              className="group/tabbar flex h-10 items-center gap-1 overflow-x-auto px-2"
+              style={{ backgroundColor: 'light-dark(#fff, #070707)' }}
             >
               {openPaths.map((path) => {
                 const tabContext: TreeAppTabRenderContext = {

@@ -179,6 +179,7 @@ export function DemoTreeAppClient({
     () => ({
       composition,
       dragAndDrop: true as const,
+      fileTreeSearchMode: 'hide-non-matches' as const,
       flattenEmptyDirectories: true,
       gitStatus: TREE_APP_DEMO_GIT_STATUSES,
       id: treeId,
@@ -187,7 +188,7 @@ export function DemoTreeAppClient({
       itemHeight: COMPACT_ITEM_HEIGHT,
       paths,
       renaming: true as const,
-      search: false as const,
+      search: true as const,
       viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.treeApp,
     }),
     [initialActivePath, initialExpandedPaths, paths, treeId]
@@ -252,6 +253,7 @@ export function DemoTreeAppClient({
       preloadedTreeData={treePreloadedData}
       prerenderedHTMLByPath={prerenderedHtmlByPathState}
       projectName="acme-components"
+      searchEnabled
       treeClassName="dark h-full min-h-0 overflow-auto"
       treeStyle={treePanelStyle}
     />

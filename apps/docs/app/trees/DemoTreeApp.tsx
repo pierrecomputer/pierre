@@ -23,6 +23,7 @@ const TREE_APP_FILE_OPTIONS = {
 export async function DemoTreeApp() {
   const treePreloadedData = preloadFileTree({
     dragAndDrop: true,
+    fileTreeSearchMode: 'hide-non-matches',
     flattenEmptyDirectories: true,
     gitStatus: TREE_APP_DEMO_GIT_STATUSES,
     id: TREE_APP_DEMO_TREE_ID,
@@ -30,7 +31,7 @@ export async function DemoTreeApp() {
     initialSelectedPaths: [TREE_APP_DEMO_INITIAL_ACTIVE_PATH],
     itemHeight: TREE_APP_DEMO_ITEM_HEIGHT,
     paths: TREE_APP_DEMO_PATHS,
-    search: false,
+    search: true,
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.treeApp,
   });
 
