@@ -223,7 +223,38 @@ describe('file-tree search', () => {
     controller.destroy();
   });
 
-  test('built-in matcher keeps fuzzy subsequence matching', async () => {
+  test('built-in matcher uses case-insensitive full-path substring matching', async () => {
+    const FileTreeController = await loadFileTreeController();
+
+    const controller = new FileTreeController({
+      fileTreeSearchMode: 'hide-non-matches',
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: FILES,
+    });
+
+    controller.setSearch('SRC');
+    const matchingPaths = controller.getSearchMatchingPaths();
+
+    expect(matchingPaths).toEqual(
+      expect.arrayContaining([
+        'src/',
+        'src/components/',
+        'src/components/Button.tsx',
+        'src/components/Card.tsx',
+        'src/index.ts',
+        'src/utils/',
+        'src/utils/stream.ts',
+        'src/utils/worker.ts',
+      ])
+    );
+    expect(matchingPaths).not.toContain('README.md');
+    expect(matchingPaths).not.toContain('test/index.test.ts');
+
+    controller.destroy();
+  });
+
+  test('built-in matcher no longer treats subsequences as matches', async () => {
     const FileTreeController = await loadFileTreeController();
 
     const controller = new FileTreeController({
@@ -235,9 +266,7 @@ describe('file-tree search', () => {
 
     controller.setSearch('srwk');
 
-    expect(getVisiblePaths(controller)).toEqual(
-      expect.arrayContaining(['src/', 'src/utils/', 'src/utils/worker.ts'])
-    );
+    expect(controller.getSearchMatchingPaths()).toEqual([]);
 
     controller.destroy();
   });

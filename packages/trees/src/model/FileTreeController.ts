@@ -157,39 +157,19 @@ function getSiblingComparisonKey(
   return path.startsWith(parentPath) ? path.slice(parentPath.length) : path;
 }
 
-const normalizeSearchText = (value: string): string =>
-  value.trim().toLowerCase().replaceAll('\\', '/');
-
-function isFuzzySubsequenceMatch(search: string, target: string): boolean {
-  let searchIndex = 0;
-  let targetIndex = 0;
-
-  while (searchIndex < search.length && targetIndex < target.length) {
-    if (search[searchIndex] === target[targetIndex]) {
-      searchIndex += 1;
-    }
-    targetIndex += 1;
+const normalizeSearchQuery = (value: string): string => {
+  const trimmedValue = value.trim();
+  if (trimmedValue.length === 0) {
+    return '';
   }
 
-  return searchIndex === search.length;
-}
+  const normalizedSeparators = trimmedValue.includes('\\')
+    ? trimmedValue.replaceAll('\\', '/')
+    : trimmedValue;
+  return normalizedSeparators.toLowerCase();
+};
 
-function defaultFileTreeSearchMatcher(search: string, path: string): boolean {
-  if (search.length === 0) {
-    return false;
-  }
-
-  const normalizedSearch = normalizeSearchText(search);
-  if (normalizedSearch.length === 0) {
-    return false;
-  }
-
-  const normalizedPath = normalizeSearchText(path);
-  return (
-    normalizedPath.includes(normalizedSearch) ||
-    isFuzzySubsequenceMatch(normalizedSearch, normalizedPath)
-  );
-}
+const toLowerCaseSearchPath = (path: string): string => path.toLowerCase();
 
 function isCanonicalDirectoryPath(path: string): boolean {
   return path.endsWith('/');
@@ -527,7 +507,10 @@ export class FileTreeController
   #getParentIndexForVisibleRow = (_index: number): number => -1;
   #itemHandles = new Map<string, FileTreeItemHandle>();
   #knownDirectoryPaths: readonly string[] | null = null;
+  #knownDirectoryPathsLowerCase: readonly string[] | null = null;
   #knownPaths: readonly string[] | null = null;
+  #listedPaths: readonly string[] | null = null;
+  #listedPathsLowerCase: readonly string[] | null = null;
   #onRename: ((event: FileTreeRenameEvent) => void) | undefined;
   #onRenameError: ((error: string) => void) | undefined;
   #onSearchChange: ((value: string | null) => void) | undefined;
@@ -1696,13 +1679,22 @@ export class FileTreeController
     });
   }
 
+  #getListedPaths(): readonly string[] {
+    if (this.#listedPaths != null) {
+      return this.#listedPaths;
+    }
+
+    this.#listedPaths = this.#store.list();
+    return this.#listedPaths;
+  }
+
   #getAllKnownPaths(): readonly string[] {
     if (this.#knownPaths != null) {
       return this.#knownPaths;
     }
 
     const knownPaths = new Set<string>();
-    for (const path of this.#store.list()) {
+    for (const path of this.#getListedPaths()) {
       knownPaths.add(path);
       for (const ancestorPath of getAncestorDirectoryPaths(path)) {
         knownPaths.add(ancestorPath);
@@ -1711,6 +1703,19 @@ export class FileTreeController
 
     this.#knownPaths = [...knownPaths].sort();
     return this.#knownPaths;
+  }
+
+  // Cache lowercased path keys once so incremental search does not re-normalize
+  // every file and directory path on each keystroke.
+  #getListedPathsLowerCase(): readonly string[] {
+    if (this.#listedPathsLowerCase != null) {
+      return this.#listedPathsLowerCase;
+    }
+
+    this.#listedPathsLowerCase = this.#getListedPaths().map(
+      toLowerCaseSearchPath
+    );
+    return this.#listedPathsLowerCase;
   }
 
   #getAllKnownDirectoryPaths(): readonly string[] {
@@ -1724,9 +1729,23 @@ export class FileTreeController
     return this.#knownDirectoryPaths;
   }
 
+  #getAllKnownDirectoryPathsLowerCase(): readonly string[] {
+    if (this.#knownDirectoryPathsLowerCase != null) {
+      return this.#knownDirectoryPathsLowerCase;
+    }
+
+    this.#knownDirectoryPathsLowerCase = this.#getAllKnownDirectoryPaths().map(
+      toLowerCaseSearchPath
+    );
+    return this.#knownDirectoryPathsLowerCase;
+  }
+
   #invalidateKnownPathCaches(): void {
     this.#knownDirectoryPaths = null;
+    this.#knownDirectoryPathsLowerCase = null;
     this.#knownPaths = null;
+    this.#listedPaths = null;
+    this.#listedPathsLowerCase = null;
   }
 
   #getExpandedDirectoryPaths(): readonly string[] {
@@ -1843,7 +1862,7 @@ export class FileTreeController
   }
 
   #setSearchState(value: string | null, emitChange: boolean): void {
-    const normalizedValue = value == null ? null : normalizeSearchText(value);
+    const normalizedValue = value == null ? null : normalizeSearchQuery(value);
     const previousSearch = this.#searchValue;
     if (previousSearch === normalizedValue) {
       return;
@@ -1883,46 +1902,71 @@ export class FileTreeController
       return this.#focusedPath;
     }
 
-    const knownPaths = this.#getAllKnownPaths();
-    const matchingPaths = this.#store
-      .list()
-      .filter((path) =>
-        defaultFileTreeSearchMatcher(this.#searchValue ?? '', path)
-      );
-    const matchingPathSet = new Set(matchingPaths);
-    for (const path of knownPaths) {
-      if (
-        path.endsWith('/') &&
-        defaultFileTreeSearchMatcher(this.#searchValue ?? '', path) &&
-        !matchingPathSet.has(path)
-      ) {
-        matchingPaths.push(path);
-        matchingPathSet.add(path);
+    const searchValue = this.#searchValue;
+    const listedPaths = this.#getListedPaths();
+    const listedPathsLowerCase = this.#getListedPathsLowerCase();
+    const matchingPaths: string[] = [];
+    let focusCandidate: string | null = null;
+
+    for (let index = 0; index < listedPaths.length; index += 1) {
+      const lowerPath = listedPathsLowerCase[index];
+      if (!lowerPath.includes(searchValue)) {
+        continue;
       }
+
+      const path = listedPaths[index];
+      matchingPaths.push(path);
+      focusCandidate ??= path;
     }
-    this.#searchMatchPathSet = new Set(matchingPaths);
-    this.#searchVisiblePathSet =
+
+    const matchingPathSet = new Set(matchingPaths);
+    const knownDirectoryPaths = this.#getAllKnownDirectoryPaths();
+    const knownDirectoryPathsLowerCase =
+      this.#getAllKnownDirectoryPathsLowerCase();
+    for (let index = 0; index < knownDirectoryPaths.length; index += 1) {
+      const lowerPath = knownDirectoryPathsLowerCase[index];
+      if (!lowerPath.includes(searchValue)) {
+        continue;
+      }
+
+      const path = knownDirectoryPaths[index];
+      if (matchingPathSet.has(path)) {
+        continue;
+      }
+
+      matchingPaths.push(path);
+      matchingPathSet.add(path);
+      focusCandidate ??= path;
+    }
+
+    this.#searchMatchPathSet = matchingPathSet;
+    const searchVisiblePathSet =
       this.#searchMode === 'hide-non-matches' && matchingPaths.length > 0
         ? new Set<string>()
         : null;
+    this.#searchVisiblePathSet = searchVisiblePathSet;
     const expandedPaths =
       this.#searchMode === 'expand-matches'
         ? new Set(this.#searchPreviousExpandedPaths ?? [])
         : new Set<string>();
 
     for (const matchingPath of matchingPaths) {
-      this.#searchVisiblePathSet?.add(matchingPath);
+      if (searchVisiblePathSet != null) {
+        searchVisiblePathSet.add(matchingPath);
+      }
       if (matchingPath.endsWith('/')) {
         expandedPaths.add(matchingPath);
       }
       for (const ancestorPath of getAncestorDirectoryPaths(matchingPath)) {
         expandedPaths.add(ancestorPath);
-        this.#searchVisiblePathSet?.add(ancestorPath);
+        if (searchVisiblePathSet != null) {
+          searchVisiblePathSet.add(ancestorPath);
+        }
       }
     }
 
     this.#setExpandedPaths(expandedPaths);
-    return matchingPaths[0] ?? this.#focusedPath;
+    return focusCandidate ?? this.#focusedPath;
   }
 
   #emit(): void {
