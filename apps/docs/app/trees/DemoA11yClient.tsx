@@ -89,7 +89,7 @@ export function DemoA11yClient({ preloadedData }: DemoA11yClientProps) {
                         {shortcutKeys.map((k) => (
                           <kbd
                             key={k}
-                            className="bg-muted rounded-sm border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-xs"
+                            className="bg-muted rounded-sm border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-xs shadow-[0_1px_0_var(--color-border)]"
                           >
                             {k}
                           </kbd>
