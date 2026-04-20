@@ -1,4 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Locator, test } from '@playwright/test';
+
+import { scrollUntilLocatorPresent } from './helpers/stickyScroll';
 
 declare global {
   interface Window {
@@ -16,46 +18,16 @@ test.describe('file-tree rename proof', () => {
       return focusedItem?.dataset.itemPath ?? null;
     });
 
-  const scrollUntilStickyRow = async (
-    tree: import('@playwright/test').Locator,
+  const scrollUntilStickyRow = (
+    tree: Locator,
     path: string
-  ) => {
-    const scrollViewport = tree.locator(
-      '[data-file-tree-virtualized-scroll="true"]'
+  ): Promise<Locator> =>
+    scrollUntilLocatorPresent(
+      tree,
+      tree.locator(
+        `button[data-type="item"][data-file-tree-sticky-row="true"][data-item-path="${path}"]`
+      )
     );
-    const stickyRow = tree.locator(
-      `button[data-type="item"][data-file-tree-sticky-row="true"][data-item-path="${path}"]`
-    );
-
-    await expect
-      .poll(async () => {
-        if ((await stickyRow.count()) > 0) {
-          return true;
-        }
-
-        return scrollViewport.evaluate(async (element) => {
-          const nextScrollTop = Math.min(
-            element.scrollTop + Math.max(element.clientHeight / 2, 30),
-            element.scrollHeight - element.clientHeight
-          );
-          if (nextScrollTop <= element.scrollTop) {
-            return false;
-          }
-          element.scrollTop = nextScrollTop;
-          element.dispatchEvent(new Event('scroll'));
-          await new Promise<void>((resolve) =>
-            requestAnimationFrame(() => resolve())
-          );
-          await new Promise<void>((resolve) =>
-            requestAnimationFrame(() => resolve())
-          );
-          return false;
-        });
-      })
-      .toBe(true);
-
-    return stickyRow;
-  };
 
   test('F2 starts inline rename and Enter commits the renamed path', async ({
     page,

@@ -1646,7 +1646,12 @@ describe('file-tree render + scroll', () => {
       ).not.toBeNull();
       expect(stickyButton.dataset.itemHasContextMenuActionLane).toBe('true');
       expect(stickyButton.getAttribute('aria-selected')).toBeNull();
+      expect(stickyButton.getAttribute('aria-level')).toBeNull();
+      expect(stickyButton.getAttribute('aria-posinset')).toBeNull();
+      expect(stickyButton.getAttribute('aria-setsize')).toBeNull();
       expect(stickyButton.getAttribute('role')).toBeNull();
+      expect(stickyButton.getAttribute('id')).toBeNull();
+      expect(stickyButton.tabIndex).toBe(-1);
 
       fileTree.cleanUp();
     } finally {

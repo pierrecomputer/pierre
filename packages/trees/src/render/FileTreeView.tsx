@@ -51,6 +51,16 @@ import {
   GIT_STATUS_LABEL,
   GIT_STATUS_TITLE,
 } from '../utils/gitStatusPresentation';
+import { classifyFileTreeRenameHandoff } from './fileTreeRenameHandoff';
+import { computeFileTreeRowElementAttributes } from './fileTreeRowAttributes';
+import {
+  computeFileTreeRowClickPlan,
+  type FileTreeRowClickMode,
+} from './fileTreeRowClickPlan';
+import {
+  computeFocusedRowScrollIntoView,
+  computeViewportOffsetScrollTop,
+} from './fileTreeScrollTarget';
 import { createFileTreeIconResolver } from './iconResolver';
 
 function focusElement(element: HTMLElement | null): boolean {
@@ -466,10 +476,9 @@ function getMeasuredViewportHeight(
     : fallbackViewportHeight;
 }
 
-// Focus changes should keep the logical focused row visible without relying on
-// browser scrollIntoView heuristics inside the virtualized shadow root.
-// Keeps a newly focused row inside the viewport without relying on
-// element.scrollIntoView(), which does not understand our virtual rows.
+// Thin imperative wrapper around `computeFocusedRowScrollIntoView`. The numeric
+// contract lives in the pure helper; this function just applies the returned
+// scrollTop, if any, and reports whether a write happened.
 function scrollFocusedRowIntoView(
   scrollElement: HTMLElement,
   focusedIndex: number,
@@ -477,27 +486,17 @@ function scrollFocusedRowIntoView(
   fallbackViewportHeight: number,
   topInset: number = 0
 ): boolean {
-  if (focusedIndex < 0) {
-    return false;
-  }
-
-  const viewportHeight = getMeasuredViewportHeight(
-    scrollElement,
-    fallbackViewportHeight
-  );
-  const itemTop = focusedIndex * itemHeight;
-  const itemBottom = itemTop + itemHeight;
-  const currentScrollTop = scrollElement.scrollTop;
-  const currentViewportTop = currentScrollTop + Math.max(0, topInset);
-  let nextScrollTop = currentScrollTop;
-
-  if (itemTop < currentViewportTop) {
-    nextScrollTop = Math.max(0, itemTop - Math.max(0, topInset));
-  } else if (itemBottom > currentScrollTop + viewportHeight) {
-    nextScrollTop = itemBottom - viewportHeight;
-  }
-
-  if (nextScrollTop === currentScrollTop) {
+  const nextScrollTop = computeFocusedRowScrollIntoView({
+    currentScrollTop: scrollElement.scrollTop,
+    focusedIndex,
+    itemHeight,
+    topInset,
+    viewportHeight: getMeasuredViewportHeight(
+      scrollElement,
+      fallbackViewportHeight
+    ),
+  });
+  if (nextScrollTop == null) {
     return false;
   }
 
@@ -505,9 +504,9 @@ function scrollFocusedRowIntoView(
   return true;
 }
 
-// Closing search can reintroduce many rows above the focused item, so this
-// helper preserves the row's previous viewport offset when search closes and
-// the unfiltered list pushes the selected row outside the viewport.
+// Thin imperative wrapper around `computeViewportOffsetScrollTop`. Used when a
+// logical state change (search closing, sticky-row click) should restore the
+// focused row to a specific vertical offset inside the viewport.
 function scrollFocusedRowToViewportOffset(
   scrollElement: HTMLElement,
   focusedIndex: number,
@@ -516,36 +515,22 @@ function scrollFocusedRowToViewportOffset(
   totalHeight: number,
   targetViewportOffset: number
 ): boolean {
-  if (focusedIndex < 0) {
+  const nextScrollTop = computeViewportOffsetScrollTop({
+    currentScrollTop: scrollElement.scrollTop,
+    focusedIndex,
+    itemHeight,
+    targetViewportOffset,
+    totalHeight,
+    viewportHeight: getMeasuredViewportHeight(
+      scrollElement,
+      fallbackViewportHeight
+    ),
+  });
+  if (nextScrollTop == null) {
     return false;
   }
 
-  const viewportHeight = getMeasuredViewportHeight(
-    scrollElement,
-    fallbackViewportHeight
-  );
-  const itemTop = focusedIndex * itemHeight;
-  const itemBottom = itemTop + itemHeight;
-  const currentScrollTop = scrollElement.scrollTop;
-  const currentViewportTop =
-    currentScrollTop + Math.max(0, targetViewportOffset);
-  const currentViewportBottom = currentScrollTop + viewportHeight;
-  if (itemTop >= currentViewportTop && itemBottom <= currentViewportBottom) {
-    return false;
-  }
-
-  const preservedScrollTop = Math.max(
-    0,
-    Math.min(
-      itemTop - Math.max(0, targetViewportOffset),
-      Math.max(0, totalHeight - viewportHeight)
-    )
-  );
-  if (preservedScrollTop === currentScrollTop) {
-    return false;
-  }
-
-  scrollElement.scrollTop = preservedScrollTop;
+  scrollElement.scrollTop = nextScrollTop;
   return true;
 }
 
@@ -868,50 +853,53 @@ function renderFileTreeRowContent(
   );
 }
 
-type FileTreeRenderedRowMode = 'flow' | 'sticky';
+type FileTreeRenderedRowMode = FileTreeRowClickMode;
 
-// Render the same row contract in the flow list and sticky overlay so pointer
-// behavior, row metadata, and lane structure stay in sync.
-function renderStyledRow(
-  controller: FileTreeController,
-  renameView: ReturnType<FileTreeController[typeof FILE_TREE_RENAME_VIEW]>,
-  row: FileTreeVisibleRow,
-  visualFocusPath: string | null,
-  contextHoverPath: string | null,
-  draggedPathSet: ReadonlySet<string> | null,
-  dragTarget: FileTreeDropTarget | null,
-  dragAndDropEnabled: boolean,
-  shouldSuppressContextMenu: () => boolean,
+// A frame captures everything that is constant across all rows in a single
+// render pass: the controller, feature flags, handlers, and ref registrars.
+// Only the `row`, `key`, and per-row `options` vary between call sites. This
+// keeps `renderStyledRow`'s signature readable and ensures the sticky and
+// flow paths can share the same logical invariants by passing in a frame
+// with a different `registerButton` target.
+type FileTreeRenderRowFrame = {
+  controller: FileTreeController;
+  renameView: ReturnType<FileTreeController[typeof FILE_TREE_RENAME_VIEW]>;
+  visualFocusPath: string | null;
+  contextHoverPath: string | null;
+  draggedPathSet: ReadonlySet<string> | null;
+  dragTarget: FileTreeDropTarget | null;
+  dragAndDropEnabled: boolean;
+  shouldSuppressContextMenu: () => boolean;
   handleRowDragStart: (
     event: DragEvent,
     row: FileTreeVisibleRow,
     targetPath: string
-  ) => void,
-  handleRowDragEnd: () => void,
+  ) => void;
+  handleRowDragEnd: () => void;
   handleRowTouchStart: (
     event: TouchEvent,
     row: FileTreeVisibleRow,
     targetPath: string
-  ) => void,
-  instanceId: string | undefined,
-  itemHeight: number,
-  gitStatusByPath: ReadonlyMap<string, GitStatus> | undefined,
-  ignoredGitDirectories: ReadonlySet<string> | undefined,
-  ignoredInheritanceCache: Map<string, boolean>,
-  directoriesWithGitChanges: ReadonlySet<string> | undefined,
-  gitLaneActive: boolean,
-  contextMenuEnabled: boolean,
-  contextMenuTriggerMode: FileTreeContextMenuTriggerMode,
-  contextMenuButtonTriggerEnabled: boolean,
-  contextMenuButtonVisibility: FileTreeContextMenuButtonVisibility,
-  contextMenuRightClickEnabled: boolean,
-  registerRenameInput: (element: HTMLInputElement | null) => void,
-  registerButton: (path: string, element: HTMLElement | null) => void,
-  resolveIcon: ReturnType<typeof createFileTreeIconResolver>['resolveIcon'],
+  ) => void;
+  instanceId: string | undefined;
+  itemHeight: number;
+  gitStatusByPath: ReadonlyMap<string, GitStatus> | undefined;
+  ignoredGitDirectories: ReadonlySet<string> | undefined;
+  ignoredInheritanceCache: Map<string, boolean>;
+  directoriesWithGitChanges: ReadonlySet<string> | undefined;
+  gitLaneActive: boolean;
+  contextMenuEnabled: boolean;
+  contextMenuTriggerMode: FileTreeContextMenuTriggerMode;
+  contextMenuButtonTriggerEnabled: boolean;
+  contextMenuButtonVisibility: FileTreeContextMenuButtonVisibility;
+  contextMenuRightClickEnabled: boolean;
+  registerRenameInput: (element: HTMLInputElement | null) => void;
+  registerButton: (path: string, element: HTMLElement | null) => void;
+  resolveIcon: ReturnType<typeof createFileTreeIconResolver>['resolveIcon'];
   renderDecorationForRow: (
     row: FileTreeVisibleRow,
     targetPath: string
-  ) => FileTreeRowDecoration | null,
+  ) => FileTreeRowDecoration | null;
   openContextMenuForRow: (
     row: FileTreeVisibleRow,
     targetPath: string,
@@ -919,21 +907,62 @@ function renderStyledRow(
       anchorRect?: FileTreeContextMenuOpenContext['anchorRect'];
       source?: 'button' | 'keyboard' | 'right-click';
     }
-  ) => void,
+  ) => void;
   onRowClick: (
     event: MouseEvent,
     row: FileTreeVisibleRow,
     targetPath: string,
     mode: FileTreeRenderedRowMode
-  ) => void,
-  onKeyDown: (event: KeyboardEvent) => void,
+  ) => void;
+  onKeyDown: (event: KeyboardEvent) => void;
+};
+
+type FileTreeRenderRowOptions = {
+  isParked?: boolean;
+  mode?: FileTreeRenderedRowMode;
+  style?: Record<string, string | undefined>;
+};
+
+// Render the same row contract in the flow list and sticky overlay so pointer
+// behavior, row metadata, and lane structure stay in sync.
+function renderStyledRow(
+  frame: FileTreeRenderRowFrame,
+  row: FileTreeVisibleRow,
   key: string | number,
-  options: {
-    isParked?: boolean;
-    mode?: FileTreeRenderedRowMode;
-    style?: Record<string, string | undefined>;
-  } = {}
+  options: FileTreeRenderRowOptions = {}
 ): JSX.Element {
+  const {
+    controller,
+    renameView,
+    visualFocusPath,
+    contextHoverPath,
+    draggedPathSet,
+    dragTarget,
+    dragAndDropEnabled,
+    shouldSuppressContextMenu,
+    handleRowDragStart,
+    handleRowDragEnd,
+    handleRowTouchStart,
+    instanceId,
+    itemHeight,
+    gitStatusByPath,
+    ignoredGitDirectories,
+    ignoredInheritanceCache,
+    directoriesWithGitChanges,
+    gitLaneActive,
+    contextMenuEnabled,
+    contextMenuTriggerMode,
+    contextMenuButtonTriggerEnabled,
+    contextMenuButtonVisibility,
+    contextMenuRightClickEnabled,
+    registerRenameInput,
+    registerButton,
+    resolveIcon,
+    renderDecorationForRow,
+    openContextMenuForRow,
+    onRowClick,
+    onKeyDown,
+  } = frame;
   const targetPath = getFileTreeRowPath(row);
   const item = controller.getItem(targetPath);
   const { isParked = false, mode = 'flow', style } = options;
@@ -978,34 +1007,6 @@ function renderStyledRow(
         }}
       />
     );
-  const focusedProps =
-    row.isFocused && visualFocusPath === targetPath
-      ? { 'data-item-focused': true }
-      : {};
-  const selectedProps = row.isSelected ? { 'data-item-selected': true } : {};
-  const contextHoverProps =
-    contextHoverPath === targetPath
-      ? { 'data-item-context-hover': 'true' }
-      : {};
-  const dragTargetProps =
-    dragTarget?.kind === 'directory' && dragTarget.directoryPath === targetPath
-      ? { 'data-item-drag-target': true }
-      : {};
-  const draggingProps =
-    draggedPathSet?.has(targetPath) === true
-      ? { 'data-item-dragging': true }
-      : {};
-  const gitStatusProps = {
-    ...(effectiveGitStatus != null && {
-      'data-item-git-status': effectiveGitStatus,
-    }),
-    ...(containsGitChange ? { 'data-item-contains-git-change': 'true' } : {}),
-  };
-  const domId = row.isFocused
-    ? getFileTreeFocusedRowDomId(instanceId, targetPath, isParked)
-    : undefined;
-  const parentPath = row.ancestorPaths.at(-1) ?? '';
-
   const rowContent = renderFileTreeRowContent(row, resolveIcon, {
     actionLaneEnabled,
     customDecoration,
@@ -1016,37 +1017,41 @@ function renderStyledRow(
     renameInput,
     showDecorativeActionAffordance,
   });
+  const attributeProps = computeFileTreeRowElementAttributes({
+    ariaLabel: getFileTreeRowAriaLabel(row),
+    domId: row.isFocused
+      ? getFileTreeFocusedRowDomId(instanceId, targetPath, isParked)
+      : undefined,
+    extraStyle: style,
+    features: {
+      actionLaneEnabled,
+      contextMenuButtonVisibility: actionLaneEnabled
+        ? contextMenuButtonVisibility
+        : null,
+      contextMenuEnabled,
+      contextMenuTriggerMode: contextMenuEnabled
+        ? contextMenuTriggerMode
+        : null,
+      gitLaneActive,
+    },
+    isParked,
+    itemHeight,
+    mode,
+    row,
+    state: {
+      containsGitChange,
+      effectiveGitStatus,
+      isContextHovered: contextHoverPath === targetPath,
+      isDragTarget:
+        dragTarget?.kind === 'directory' &&
+        dragTarget.directoryPath === targetPath,
+      isDragging: draggedPathSet?.has(targetPath) === true,
+      isFocusRinged: row.isFocused && visualFocusPath === targetPath,
+    },
+    targetPath,
+  });
   const commonProps = {
-    'aria-haspopup': contextMenuEnabled ? 'menu' : undefined,
-    'aria-label': getFileTreeRowAriaLabel(row),
-    'aria-expanded':
-      !isSticky && row.kind === 'directory' ? row.isExpanded : undefined,
-    'aria-level': !isSticky ? row.level + 1 : undefined,
-    'aria-posinset': !isSticky ? row.posInSet + 1 : undefined,
-    'aria-selected': !isSticky
-      ? row.isSelected
-        ? 'true'
-        : 'false'
-      : undefined,
-    'aria-setsize': !isSticky ? row.setSize : undefined,
-    'data-file-tree-sticky-path': isSticky ? targetPath : undefined,
-    'data-file-tree-sticky-row': isSticky ? 'true' : undefined,
-    'data-item-context-menu-button-visibility': actionLaneEnabled
-      ? contextMenuButtonVisibility
-      : undefined,
-    'data-item-context-menu-trigger-mode': contextMenuEnabled
-      ? contextMenuTriggerMode
-      : undefined,
-    'data-item-has-context-menu-action-lane': actionLaneEnabled
-      ? 'true'
-      : undefined,
-    'data-item-has-git-lane': gitLaneActive ? 'true' : undefined,
-    'data-item-parent-path': parentPath.length > 0 ? parentPath : undefined,
-    'data-item-parked': isParked ? 'true' : undefined,
-    'data-item-path': targetPath,
-    'data-item-type': row.kind === 'directory' ? 'folder' : 'file',
-    'data-type': 'item',
-    id: !isSticky ? domId : undefined,
+    ...attributeProps,
     key,
     onContextMenu:
       contextMenuEnabled || dragAndDropEnabled
@@ -1083,15 +1088,6 @@ function renderStyledRow(
     ref: (element: HTMLElement | null) => {
       registerButton(targetPath, element);
     },
-    role: !isSticky ? 'treeitem' : undefined,
-    style: { minHeight: `${itemHeight}px`, ...style },
-    tabIndex: !isSticky && row.isFocused ? 0 : -1,
-    ...focusedProps,
-    ...selectedProps,
-    ...contextHoverProps,
-    ...dragTargetProps,
-    ...draggingProps,
-    ...gitStatusProps,
   } as const;
   const rendersAsStaticContainer = !isSticky && isRenamingRow;
 
@@ -1113,7 +1109,15 @@ function renderStyledRow(
           : undefined
       }
       onMouseDown={(event) => {
-        if (isSticky) {
+        // Per the HTML5 drag-and-drop spec, cancelling mousedown aborts the
+        // user agent's drag initiation handshake. Sticky rows with drag-and-
+        // drop enabled therefore cannot preventDefault here — doing so would
+        // break dragging a sticky source entirely in real browsers. (JSDOM
+        // dispatches `dragstart` directly and bypasses this handshake, which
+        // is why the unit-level coverage never catches it.) When drag is off,
+        // we still suppress default so focus stays off the aria-hidden
+        // mirror.
+        if (isSticky && !dragAndDropEnabled) {
           event.preventDefault();
           return;
         }
@@ -1139,61 +1143,9 @@ function renderStyledRow(
 }
 
 function renderRangeChildren(
-  controller: FileTreeController,
-  renameView: ReturnType<FileTreeController[typeof FILE_TREE_RENAME_VIEW]>,
+  frame: FileTreeRenderRowFrame,
   range: { start: number; end: number },
-  hiddenRowPaths: ReadonlySet<string>,
-  activeItemPath: string | null,
-  contextHoverPath: string | null,
-  draggedPathSet: ReadonlySet<string> | null,
-  dragTarget: FileTreeDropTarget | null,
-  dragAndDropEnabled: boolean,
-  shouldSuppressContextMenu: () => boolean,
-  handleRowDragStart: (
-    event: DragEvent,
-    row: FileTreeVisibleRow,
-    targetPath: string
-  ) => void,
-  handleRowDragEnd: () => void,
-  handleRowTouchStart: (
-    event: TouchEvent,
-    row: FileTreeVisibleRow,
-    targetPath: string
-  ) => void,
-  instanceId: string | undefined,
-  itemHeight: number,
-  gitStatusByPath: ReadonlyMap<string, GitStatus> | undefined,
-  ignoredGitDirectories: ReadonlySet<string> | undefined,
-  ignoredInheritanceCache: Map<string, boolean>,
-  directoriesWithGitChanges: ReadonlySet<string> | undefined,
-  gitLaneActive: boolean,
-  contextMenuEnabled: boolean,
-  contextMenuTriggerMode: FileTreeContextMenuTriggerMode,
-  contextMenuButtonTriggerEnabled: boolean,
-  contextMenuButtonVisibility: FileTreeContextMenuButtonVisibility,
-  contextMenuRightClickEnabled: boolean,
-  registerRenameInput: (element: HTMLInputElement | null) => void,
-  registerButton: (path: string, element: HTMLElement | null) => void,
-  resolveIcon: ReturnType<typeof createFileTreeIconResolver>['resolveIcon'],
-  renderDecorationForRow: (
-    row: FileTreeVisibleRow,
-    targetPath: string
-  ) => FileTreeRowDecoration | null,
-  openContextMenuForRow: (
-    row: FileTreeVisibleRow,
-    targetPath: string,
-    options?: {
-      anchorRect?: FileTreeContextMenuOpenContext['anchorRect'];
-      source?: 'button' | 'keyboard' | 'right-click';
-    }
-  ) => void,
-  onRowClick: (
-    event: MouseEvent,
-    row: FileTreeVisibleRow,
-    targetPath: string,
-    mode: FileTreeRenderedRowMode
-  ) => void,
-  onKeyDown: (event: KeyboardEvent) => void
+  hiddenRowPaths: ReadonlySet<string>
 ): JSX.Element[] {
   if (range.end < range.start) {
     return [];
@@ -1205,44 +1157,11 @@ function renderRangeChildren(
   // layout shifts during scroll in browsers that track CLS inside scrollers.
   // Range-fetch the window slice directly so we stay O(window) per scroll
   // even when the layout state is not carrying the full visible-row array.
-  return controller
+  return frame.controller
     .getVisibleRows(range.start, range.end)
     .filter((row) => !hiddenRowPaths.has(getFileTreeRowPath(row)))
     .map((row, slotIndex) =>
-      renderStyledRow(
-        controller,
-        renameView,
-        row,
-        activeItemPath,
-        contextHoverPath,
-        draggedPathSet,
-        dragTarget,
-        dragAndDropEnabled,
-        shouldSuppressContextMenu,
-        handleRowDragStart,
-        handleRowDragEnd,
-        handleRowTouchStart,
-        instanceId,
-        itemHeight,
-        gitStatusByPath,
-        ignoredGitDirectories,
-        ignoredInheritanceCache,
-        directoriesWithGitChanges,
-        gitLaneActive,
-        contextMenuEnabled,
-        contextMenuTriggerMode,
-        contextMenuButtonTriggerEnabled,
-        contextMenuButtonVisibility,
-        contextMenuRightClickEnabled,
-        registerRenameInput,
-        registerButton,
-        resolveIcon,
-        renderDecorationForRow,
-        openContextMenuForRow,
-        onRowClick,
-        onKeyDown,
-        range.start + slotIndex
-      )
+      renderStyledRow(frame, row, range.start + slotIndex)
     );
 }
 
@@ -2230,28 +2149,41 @@ export function FileTreeView({
     focusElement(searchInputRef.current);
   }, [isSearchOpen, searchEnabled]);
 
+  // Re-triggers on range / stickyRowPathSet changes so that once a sticky reveal
+  // lands the canonical row inside the window, the follow-up render finds the
+  // rendered input and grabs focus. The classifier here turns the ref state +
+  // rendered-input presence into a single action so the transitions are
+  // explicit instead of buried in early-return logic.
   useLayoutEffect(() => {
-    if (renamingPath == null) {
-      previousRenamingPathRef.current = null;
-      return;
-    }
-
     const input = renameInputRef.current;
-    if (input == null) {
-      revealCanonicalRowAtStickyOffset(renamingPath, {
-        restoreTreeFocus: false,
-      });
-      return;
-    }
+    const action = classifyFileTreeRenameHandoff({
+      hasRenderedInput: input != null,
+      previousRenamingPath: previousRenamingPathRef.current,
+      renamingPath,
+    });
 
-    if (previousRenamingPathRef.current === renamingPath) {
-      return;
+    switch (action) {
+      case 'reset':
+        previousRenamingPathRef.current = null;
+        return;
+      case 'reveal-canonical':
+        if (renamingPath != null) {
+          revealCanonicalRowAtStickyOffset(renamingPath, {
+            restoreTreeFocus: false,
+          });
+        }
+        return;
+      case 'ignore':
+        return;
+      case 'focus-input':
+        if (input != null) {
+          pendingStickyFocusPathRef.current = null;
+          previousRenamingPathRef.current = renamingPath;
+          focusElement(input);
+          input.select();
+        }
+        return;
     }
-
-    pendingStickyFocusPathRef.current = null;
-    previousRenamingPathRef.current = renamingPath;
-    focusElement(input);
-    input.select();
   }, [
     range.end,
     range.start,
@@ -3049,29 +2981,38 @@ export function FileTreeView({
       targetPath: string,
       mode: FileTreeRenderedRowMode
     ): void => {
-      const shouldCloseSearch = controller.isSearchOpen();
       const item = controller.getItem(targetPath);
-      const directoryItem =
-        row.kind === 'directory' && isFileTreeDirectoryHandle(item)
-          ? item
-          : null;
+      const plan = computeFileTreeRowClickPlan({
+        event: {
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey,
+        },
+        isDirectory: row.kind === 'directory',
+        isSearchOpen: controller.isSearchOpen(),
+        mode,
+      });
 
-      if (event.shiftKey) {
-        controller.selectPathRange(targetPath, event.ctrlKey || event.metaKey);
-      } else if (event.ctrlKey || event.metaKey) {
-        controller.togglePathSelectionFromInput(targetPath);
-      } else {
-        controller.selectOnlyPath(targetPath);
+      switch (plan.selection.kind) {
+        case 'range':
+          controller.selectPathRange(targetPath, plan.selection.additive);
+          break;
+        case 'toggle':
+          controller.togglePathSelectionFromInput(targetPath);
+          break;
+        case 'single':
+          controller.selectOnlyPath(targetPath);
+          break;
       }
 
       item?.focus();
-      if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
-        directoryItem?.toggle();
+      if (plan.toggleDirectory && isFileTreeDirectoryHandle(item)) {
+        item.toggle();
       }
-      if (shouldCloseSearch) {
+      if (plan.closeSearch) {
         controller.closeSearch();
       }
-      if (mode === 'sticky') {
+      if (plan.revealCanonical) {
         revealCanonicalRowAtStickyOffset(targetPath);
       }
     },
@@ -3104,6 +3045,47 @@ export function FileTreeView({
       path: triggerItem.getPath(),
       source: 'button',
     });
+  };
+
+  // Everything renderStyledRow needs that does not vary per row. Splitting
+  // sticky vs flow here means the two paths share an identical contract except
+  // for where each ref is registered, which is the invariant sticky reuse
+  // depends on.
+  const flowRowFrame: FileTreeRenderRowFrame = {
+    contextHoverPath: visualContextHoverPath,
+    contextMenuButtonTriggerEnabled,
+    contextMenuButtonVisibility,
+    contextMenuEnabled,
+    contextMenuRightClickEnabled,
+    contextMenuTriggerMode,
+    controller,
+    directoriesWithGitChanges,
+    dragAndDropEnabled,
+    draggedPathSet,
+    dragTarget,
+    gitLaneActive,
+    gitStatusByPath,
+    handleRowDragEnd,
+    handleRowDragStart,
+    handleRowTouchStart,
+    ignoredGitDirectories,
+    ignoredInheritanceCache,
+    instanceId,
+    itemHeight,
+    onKeyDown: handleTreeKeyDown,
+    onRowClick: handleRowClick,
+    openContextMenuForRow,
+    registerButton: registerRowButton,
+    registerRenameInput,
+    renameView,
+    renderDecorationForRow,
+    resolveIcon,
+    shouldSuppressContextMenu,
+    visualFocusPath,
+  };
+  const stickyRowFrame: FileTreeRenderRowFrame = {
+    ...flowRowFrame,
+    registerButton: registerStickyRowButton,
   };
 
   return (
@@ -3174,37 +3156,8 @@ export function FileTreeView({
             >
               {stickyRows.map((entry, index) =>
                 renderStyledRow(
-                  controller,
-                  renameView,
+                  stickyRowFrame,
                   entry.row,
-                  visualFocusPath,
-                  visualContextHoverPath,
-                  draggedPathSet,
-                  dragTarget,
-                  dragAndDropEnabled,
-                  shouldSuppressContextMenu,
-                  handleRowDragStart,
-                  handleRowDragEnd,
-                  handleRowTouchStart,
-                  instanceId,
-                  itemHeight,
-                  gitStatusByPath,
-                  ignoredGitDirectories,
-                  ignoredInheritanceCache,
-                  directoriesWithGitChanges,
-                  gitLaneActive,
-                  contextMenuEnabled,
-                  contextMenuTriggerMode,
-                  contextMenuButtonTriggerEnabled,
-                  contextMenuButtonVisibility,
-                  contextMenuRightClickEnabled,
-                  registerRenameInput,
-                  registerStickyRowButton,
-                  resolveIcon,
-                  renderDecorationForRow,
-                  openContextMenuForRow,
-                  handleRowClick,
-                  handleTreeKeyDown,
                   `sticky:${getFileTreeRowPath(entry.row)}`,
                   {
                     mode: 'sticky',
@@ -3239,73 +3192,11 @@ export function FileTreeView({
               bottom: `${windowStickyInset}px`,
             }}
           >
-            {renderRangeChildren(
-              controller,
-              renameView,
-              range,
-              stickyRowPathSet,
-              visualFocusPath,
-              visualContextHoverPath,
-              draggedPathSet,
-              dragTarget,
-              dragAndDropEnabled,
-              shouldSuppressContextMenu,
-              handleRowDragStart,
-              handleRowDragEnd,
-              handleRowTouchStart,
-              instanceId,
-              itemHeight,
-              gitStatusByPath,
-              ignoredGitDirectories,
-              ignoredInheritanceCache,
-              directoriesWithGitChanges,
-              gitLaneActive,
-              contextMenuEnabled,
-              contextMenuTriggerMode,
-              contextMenuButtonTriggerEnabled,
-              contextMenuButtonVisibility,
-              contextMenuRightClickEnabled,
-              registerRenameInput,
-              registerRowButton,
-              resolveIcon,
-              renderDecorationForRow,
-              openContextMenuForRow,
-              handleRowClick,
-              handleTreeKeyDown
-            )}
+            {renderRangeChildren(flowRowFrame, range, stickyRowPathSet)}
             {parkedFocusedRow != null && parkedFocusedRowOffset != null
               ? renderStyledRow(
-                  controller,
-                  renameView,
+                  flowRowFrame,
                   parkedFocusedRow,
-                  visualFocusPath,
-                  visualContextHoverPath,
-                  draggedPathSet,
-                  dragTarget,
-                  dragAndDropEnabled,
-                  shouldSuppressContextMenu,
-                  handleRowDragStart,
-                  handleRowDragEnd,
-                  handleRowTouchStart,
-                  instanceId,
-                  itemHeight,
-                  gitStatusByPath,
-                  ignoredGitDirectories,
-                  ignoredInheritanceCache,
-                  directoriesWithGitChanges,
-                  gitLaneActive,
-                  contextMenuEnabled,
-                  contextMenuTriggerMode,
-                  contextMenuButtonTriggerEnabled,
-                  contextMenuButtonVisibility,
-                  contextMenuRightClickEnabled,
-                  registerRenameInput,
-                  registerRowButton,
-                  resolveIcon,
-                  renderDecorationForRow,
-                  openContextMenuForRow,
-                  handleRowClick,
-                  handleTreeKeyDown,
                   `parked:${parkedFocusedRow.path}`,
                   {
                     isParked: true,
@@ -3325,37 +3216,8 @@ export function FileTreeView({
               : null}
             {parkedDraggedRow != null && parkedDraggedRowOffset != null
               ? renderStyledRow(
-                  controller,
-                  renameView,
+                  flowRowFrame,
                   parkedDraggedRow,
-                  visualFocusPath,
-                  visualContextHoverPath,
-                  draggedPathSet,
-                  dragTarget,
-                  dragAndDropEnabled,
-                  shouldSuppressContextMenu,
-                  handleRowDragStart,
-                  handleRowDragEnd,
-                  handleRowTouchStart,
-                  instanceId,
-                  itemHeight,
-                  gitStatusByPath,
-                  ignoredGitDirectories,
-                  ignoredInheritanceCache,
-                  directoriesWithGitChanges,
-                  gitLaneActive,
-                  contextMenuEnabled,
-                  contextMenuTriggerMode,
-                  contextMenuButtonTriggerEnabled,
-                  contextMenuButtonVisibility,
-                  contextMenuRightClickEnabled,
-                  registerRenameInput,
-                  registerRowButton,
-                  resolveIcon,
-                  renderDecorationForRow,
-                  openContextMenuForRow,
-                  handleRowClick,
-                  handleTreeKeyDown,
                   `parked-drag:${parkedDraggedRow.path}`,
                   {
                     isParked: true,
