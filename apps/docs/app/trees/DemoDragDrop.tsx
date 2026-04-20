@@ -9,6 +9,10 @@ const lockedPreloadedData = preloadFileTree({
   flattenEmptyDirectories: true,
   id: 'file-tree-drag-drop-demo-locked',
   paths: sampleFileList,
+  renderRowDecoration: ({ item }) =>
+    item.path === 'package.json'
+      ? { icon: 'file-tree-icon-lock', title: 'Locked file' }
+      : null,
   search: false,
   viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.dragDrop,
 });

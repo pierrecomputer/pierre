@@ -53,6 +53,10 @@ export function DemoDragDropClient({ preloadedData }: DemoDragDropClientProps) {
     },
     id: 'file-tree-drag-drop-demo-locked',
     paths: sampleFileList,
+    renderRowDecoration: ({ item }) =>
+      item.path === 'package.json'
+        ? { icon: 'file-tree-icon-lock', title: 'Locked file' }
+        : null,
   });
   const { model: unlockedModel } = useFileTree({
     ...DRAG_DROP_BASE_OPTIONS,
