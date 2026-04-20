@@ -19,7 +19,6 @@ import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
 
 const PREPOPULATED_SEARCH = 'tsx';
-const PRESELECTED_FILE = 'src/components/Button.tsx';
 const searchModeStyle = {
   colorScheme: 'dark',
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
@@ -73,7 +72,6 @@ function SearchModeTree({
     flattenEmptyDirectories: true,
     id: modeDemo.id,
     initialSearchQuery: PREPOPULATED_SEARCH,
-    initialSelectedPaths: [PRESELECTED_FILE],
     paths: sampleFileList,
     search: true,
     viewportHeight: modeDemo.viewportHeight,

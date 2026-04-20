@@ -6,7 +6,6 @@ import { DemoSearchClient } from './DemoSearchClient';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 
 const PREPOPULATED_SEARCH = 'tsx';
-const PRESELECTED_FILE = 'src/components/Button.tsx';
 
 function createSearchPreloadedData(
   mode: FileTreeSearchMode,
@@ -18,7 +17,6 @@ function createSearchPreloadedData(
     flattenEmptyDirectories: true,
     id,
     initialSearchQuery: PREPOPULATED_SEARCH,
-    initialSelectedPaths: [PRESELECTED_FILE],
     paths: sampleFileList,
     search: true,
     viewportHeight,
