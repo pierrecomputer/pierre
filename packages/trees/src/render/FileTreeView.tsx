@@ -1573,7 +1573,13 @@ export function FileTreeView({
   const revealCanonicalRowAtStickyOffset = useCallback(
     (
       path: string,
-      { restoreTreeFocus = true }: { restoreTreeFocus?: boolean } = {}
+      {
+        restoreTreeFocus = true,
+        targetOffset = 'live-overlay',
+      }: {
+        restoreTreeFocus?: boolean;
+        targetOffset?: 'live-overlay' | 'sticky-parents';
+      } = {}
     ): boolean => {
       const scrollElement = scrollRef.current;
       if (scrollElement == null) {
@@ -1586,32 +1592,40 @@ export function FileTreeView({
         return false;
       }
 
-      // A sticky interaction can mutate the tree before we reveal the canonical
-      // row, so derive the target offset from the controller's live post-action
-      // layout instead of the previous render snapshot. The full recompute is
-      // intentional here because this callback only runs on discrete interactions,
-      // not on scroll.
+      const focusedRow =
+        controller.getVisibleRows(visibleIndex, visibleIndex)[0] ?? null;
+      if (focusedRow == null) {
+        return false;
+      }
+
       const liveViewportHeight = getMeasuredViewportHeight(
         scrollElement,
         resolvedViewportHeight
       );
-      const liveLayout = computeFileTreeViewLayoutState({
-        controller,
-        itemHeight,
-        overscan,
-        scrollTop: scrollElement.scrollTop,
-        stickyFolders,
-        viewportHeight: liveViewportHeight,
-      });
+      const liveTotalHeight = controller.getVisibleCount() * itemHeight;
+      const targetViewportOffset =
+        targetOffset === 'sticky-parents'
+          ? focusedRow.ancestorPaths.length * itemHeight
+          : computeFileTreeViewLayoutState({
+              controller,
+              itemHeight,
+              overscan,
+              scrollTop: scrollElement.scrollTop,
+              stickyFolders,
+              viewportHeight: liveViewportHeight,
+            }).snapshot.sticky.height;
 
+      // A sticky interaction can mutate the tree before we reveal the canonical
+      // row. Collapsing the interacted sticky row should leave only its parents
+      // pinned, while rename handoff keeps using the live overlay geometry.
       domFocusOwnerRef.current = true;
       scrollFocusedRowToViewportOffset(
         scrollElement,
         visibleIndex,
         itemHeight,
         liveViewportHeight,
-        liveLayout.snapshot.physical.totalHeight,
-        liveLayout.snapshot.sticky.height
+        liveTotalHeight,
+        targetViewportOffset
       );
       updateViewportRef.current();
       pendingStickyFocusPathRef.current = restoreTreeFocus ? path : null;
@@ -2215,6 +2229,7 @@ export function FileTreeView({
         if (renamingPath != null) {
           revealCanonicalRowAtStickyOffset(renamingPath, {
             restoreTreeFocus: false,
+            targetOffset: 'live-overlay',
           });
         }
         return;
@@ -3083,7 +3098,9 @@ export function FileTreeView({
         controller.closeSearch();
       }
       if (plan.revealCanonical) {
-        revealCanonicalRowAtStickyOffset(targetPath);
+        revealCanonicalRowAtStickyOffset(targetPath, {
+          targetOffset: 'sticky-parents',
+        });
       }
     },
     [controller, revealCanonicalRowAtStickyOffset]

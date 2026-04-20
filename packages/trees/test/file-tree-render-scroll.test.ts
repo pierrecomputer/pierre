@@ -1,7 +1,11 @@
+import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
-import type { FileTreeVisibleRow } from '../src/index';
+import {
+  type FileTreeVisibleRow,
+  preparePresortedFileTreeInput,
+} from '../src/index';
 import { computeFileTreeLayout } from '../src/model/fileTreeLayout';
 import {
   computeStickyWindowLayout,
@@ -1623,6 +1627,73 @@ describe('file-tree render + scroll', () => {
       }
       expect(libDirectory.isExpanded()).toBe(false);
       expect(getFocusedItemPath(shadowRoot, dom)).toBe('src/lib/');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+  test('collapsing linux-1x sticky asm keeps include sticky and leaves asm in place', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const workload = getVirtualizationWorkload('linux-1x');
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new FileTree({
+        fileTreeSearchMode: 'hide-non-matches',
+        flattenEmptyDirectories: true,
+        initialExpandedPaths: workload.expandedFolders,
+        preparedInput: preparePresortedFileTreeInput(workload.presortedFiles),
+        search: true,
+        stickyFolders: true,
+        initialVisibleRowCount: 700 / 30,
+      });
+
+      fileTree.render({ containerWrapper });
+      await flushDom();
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      scrollElement.scrollTop = 540;
+      scrollElement.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+      await flushDom();
+
+      expect(getStickyRowPaths(shadowRoot, dom)).toEqual([
+        'arch/',
+        'arch/alpha/',
+        'arch/alpha/include/',
+        'arch/alpha/include/asm/',
+      ]);
+      expect(getMountedItemPaths(shadowRoot, dom)[0]).toBe(
+        'arch/alpha/include/asm/bitops.h'
+      );
+
+      clickStickyRow(shadowRoot, dom, 'arch/alpha/include/asm/');
+      await flushDom();
+      await flushDom();
+
+      expect(scrollElement.scrollTop).toBe(420);
+      expect(getStickyRowPaths(shadowRoot, dom)).toEqual([
+        'arch/',
+        'arch/alpha/',
+        'arch/alpha/include/',
+      ]);
+      expect(getMountedItemPaths(shadowRoot, dom)[0]).toBe(
+        'arch/alpha/include/asm/'
+      );
+      expect(getFocusedItemPath(shadowRoot, dom)).toBe(
+        'arch/alpha/include/asm/'
+      );
 
       fileTree.cleanUp();
     } finally {
