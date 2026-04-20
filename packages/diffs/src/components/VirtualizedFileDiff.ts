@@ -2,6 +2,7 @@ import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   ExpansionDirections,
   FileDiffMetadata,
+  NumericScrollLineAnchor,
   RenderRange,
   RenderWindow,
   SelectionSide,
@@ -311,6 +312,111 @@ export class VirtualizedFileDiff<
     });
 
     return position;
+  }
+
+  public getNumericScrollAnchor(
+    localViewportTop: number
+  ): NumericScrollLineAnchor | undefined {
+    if (this.fileDiff == null) {
+      return undefined;
+    }
+
+    const {
+      disableFileHeader = false,
+      expandUnchanged = false,
+      collapsed = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+      hunkSeparators = 'line-info',
+    } = this.options;
+    if (collapsed) {
+      return undefined;
+    }
+
+    const { diffHeaderHeight, hunkSeparatorHeight, spacing } = this.metrics;
+    const diffStyle = this.getDiffStyle();
+    const separatorGap =
+      hunkSeparators !== 'simple' &&
+      hunkSeparators !== 'metadata' &&
+      hunkSeparators !== 'line-info-basic'
+        ? spacing
+        : 0;
+
+    let top = disableFileHeader ? spacing : diffHeaderHeight;
+    let anchor: NumericScrollLineAnchor | undefined;
+
+    // This may end up being quite expensive on extremely large files, we may
+    // need to figure out how to anchor on different regions, or utilize
+    // renderRange to shortcut this for us somehow
+    iterateOverDiff({
+      diff: this.fileDiff,
+      diffStyle,
+      expandedHunks: expandUnchanged
+        ? true
+        : this.hunksRenderer.getExpandedHunksMap(),
+      collapsedContextThreshold,
+      callback: ({
+        hunkIndex,
+        collapsedBefore,
+        collapsedAfter,
+        deletionLine,
+        additionLine,
+      }) => {
+        const lineIndex =
+          diffStyle === 'split'
+            ? (additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex)
+            : (additionLine?.unifiedLineIndex ??
+              deletionLine?.unifiedLineIndex);
+        if (lineIndex == null) {
+          throw new Error(
+            'VirtualizedFileDiff.getNumericScrollAnchor: missing line index data'
+          );
+        }
+
+        if (collapsedBefore > 0) {
+          if (hunkIndex > 0) {
+            top += separatorGap;
+          }
+          top += hunkSeparatorHeight + separatorGap;
+        }
+
+        // First rendered line whose top crosses the viewport top becomes the
+        // anchor. We deliberately choose the addition side when available so
+        // the semantic (lineNumber, side) pair round-trips back through
+        // getLinePosition without ambiguity.
+        if (top >= localViewportTop) {
+          if (additionLine != null) {
+            anchor = {
+              lineNumber: additionLine.lineNumber,
+              side: 'additions',
+              top,
+            };
+          } else if (deletionLine != null) {
+            anchor = {
+              lineNumber: deletionLine.lineNumber,
+              side: 'deletions',
+              top,
+            };
+          }
+          if (anchor != null) {
+            return true;
+          }
+        }
+
+        const lineHeight = this.getLineHeight(
+          lineIndex,
+          (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false)
+        );
+        top += lineHeight;
+
+        if (collapsedAfter > 0 && hunkSeparators !== 'simple') {
+          top += separatorGap + hunkSeparatorHeight;
+        }
+
+        return false;
+      },
+    });
+
+    return anchor;
   }
 
   public getVirtualizedHeight(): number {

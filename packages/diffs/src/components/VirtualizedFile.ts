@@ -1,6 +1,7 @@
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
 import type {
   FileContents,
+  NumericScrollLineAnchor,
   RenderRange,
   RenderWindow,
   StickySpecs,
@@ -211,6 +212,82 @@ export class VirtualizedFile<
       top,
       height: this.getLineHeight(clampedLineIndex, false),
     };
+  }
+
+  public getNumericScrollAnchor(
+    localViewportTop: number
+  ): NumericScrollLineAnchor | undefined {
+    if (this.file == null || this.renderRange == null) {
+      return undefined;
+    }
+
+    const {
+      disableFileHeader = false,
+      collapsed = false,
+      overflow = 'scroll',
+    } = this.options;
+    if (collapsed || this.renderRange.totalLines <= 0) {
+      return undefined;
+    }
+
+    const lines = this.getOrCreateLineCache(this.file);
+    const lastLineIndex = getLastVisibleLineIndex(lines);
+    if (lastLineIndex < 0) {
+      return undefined;
+    }
+
+    const headerRegion = disableFileHeader
+      ? this.metrics.spacing
+      : this.metrics.diffHeaderHeight;
+    const firstRenderedLineIndex = Math.min(
+      this.renderRange.startingLine,
+      lastLineIndex
+    );
+    const lastRenderedLineIndex = Math.min(
+      firstRenderedLineIndex + this.renderRange.totalLines - 1,
+      lastLineIndex
+    );
+    if (lastRenderedLineIndex < firstRenderedLineIndex) {
+      return undefined;
+    }
+
+    // If we don't allow line wrapping and have no annotations, we can just
+    // multiply our way to the the correct value
+    if (overflow === 'scroll' && this.lineAnnotations.length === 0) {
+      const { lineHeight } = this.metrics;
+      const firstRenderedLineTop = headerRegion + this.renderRange.bufferBefore;
+      const deltaLineCount = Math.max(
+        Math.ceil((localViewportTop - firstRenderedLineTop) / lineHeight),
+        0
+      );
+      const lineIndex = firstRenderedLineIndex + deltaLineCount;
+      if (lineIndex > lastRenderedLineIndex) {
+        return undefined;
+      }
+
+      return {
+        lineNumber: lineIndex + 1,
+        top: headerRegion + lineIndex * lineHeight,
+      };
+    }
+
+    // Otherwise we gotta iterate through the range
+    let top = headerRegion + this.renderRange.bufferBefore;
+    for (
+      let lineIndex = firstRenderedLineIndex;
+      lineIndex <= lastRenderedLineIndex;
+      lineIndex++
+    ) {
+      if (top >= localViewportTop) {
+        return {
+          lineNumber: lineIndex + 1,
+          top,
+        };
+      }
+      top += this.getLineHeight(lineIndex);
+    }
+
+    return undefined;
   }
 
   public getVirtualizedHeight(): number {

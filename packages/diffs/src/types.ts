@@ -499,6 +499,12 @@ export interface CodeViewerLineScrollTarget {
   behavior?: ScrollBehavior;
 }
 
+export interface NumericScrollLineAnchor {
+  lineNumber: number;
+  top: number;
+  side?: SelectionSide;
+}
+
 export interface CodeViewerItemScrollTarget {
   type: 'item';
   id: string;
