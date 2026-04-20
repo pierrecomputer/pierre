@@ -19,13 +19,20 @@ const a11yStyle: CSSProperties = {
 };
 const PRESELECTED_PATH = 'package.json';
 
-const KEYBOARD_SHORTCUTS: readonly { description: string; key: string }[] = [
-  { key: '↑ ↓', description: 'Move focus between items' },
+type KeyboardShortcut = {
+  description: string;
+} & ({ key: string; keys?: never } | { key?: never; keys: readonly string[] });
+
+const KEYBOARD_SHORTCUTS: readonly KeyboardShortcut[] = [
+  { keys: ['↑', '↓'], description: 'Move focus between items' },
   { key: '→', description: 'Expand folder or move to first child' },
   { key: '←', description: 'Collapse folder or move to parent' },
-  { key: 'Enter / Space', description: 'Select focused item; toggle folder' },
   {
-    key: '⌘/Ctrl + Space',
+    keys: ['Enter', 'Space'],
+    description: 'Select focused item; toggle folder',
+  },
+  {
+    keys: ['⌘/Ctrl', 'Space'],
     description: 'Add or remove focused item from selection',
   },
   { key: 'a–z', description: 'Type-ahead to jump by name' },
@@ -70,21 +77,31 @@ export function DemoA11yClient({ preloadedData }: DemoA11yClientProps) {
               </tr>
             </thead>
             <tbody>
-              {KEYBOARD_SHORTCUTS.map(({ key, description }) => (
-                <tr
-                  key={key}
-                  className="border-b border-[var(--color-border)] last:border-b-0"
-                >
-                  <td className="px-4 py-2">
-                    <kbd className="bg-muted rounded-sm border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-xs">
-                      {key}
-                    </kbd>
-                  </td>
-                  <td className="text-muted-foreground px-4 py-2">
-                    {description}
-                  </td>
-                </tr>
-              ))}
+              {KEYBOARD_SHORTCUTS.map(({ key, keys, description }) => {
+                const shortcutKeys = keys ?? [key];
+                return (
+                  <tr
+                    key={shortcutKeys.join('+')}
+                    className="border-b border-[var(--color-border)] last:border-b-0"
+                  >
+                    <td className="px-4 py-2">
+                      <span className="inline-flex flex-wrap gap-1">
+                        {shortcutKeys.map((k) => (
+                          <kbd
+                            key={k}
+                            className="bg-muted rounded-sm border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-xs"
+                          >
+                            {k}
+                          </kbd>
+                        ))}
+                      </span>
+                    </td>
+                    <td className="text-muted-foreground px-4 py-2">
+                      {description}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
