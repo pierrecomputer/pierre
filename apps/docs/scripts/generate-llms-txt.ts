@@ -52,16 +52,23 @@ const DIFFS_SECTIONS = [
 ] as const;
 
 const TREES_SECTIONS = [
-  'Overview',
-  'Installation',
-  'CoreTypes',
-  'ReactAPI',
-  'VanillaAPI',
-  'GitStatus',
-  'Icons',
-  'Utilities',
-  'Styling',
-  'SSR',
+  'Guides/ChooseYourIntegration',
+  'Guides/GetStartedWithReact',
+  'Guides/GetStartedWithVanilla',
+  'Guides/ShapeTreeDataForFastRendering',
+  'Guides/NavigateSelectionFocusAndSearch',
+  'Guides/RenameDragAndTriggerItemActions',
+  'Guides/StyleAndThemeTheTree',
+  'Guides/CustomizeIcons',
+  'Guides/ShowGitStatusAndRowAnnotations',
+  'Guides/HandleLargeTreesEfficiently',
+  'Guides/SSR',
+  'Reference/SharedConcepts',
+  'Reference/ReactAPI',
+  'Reference/VanillaAPI',
+  'Reference/SSRAPI',
+  'Reference/StylingAndTheming',
+  'Reference/Icons',
 ] as const;
 
 const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
@@ -87,18 +94,40 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     SSR: 'Server-side rendering with preload functions for instant first paint',
   },
   trees: {
-    Overview: 'What file tree is, architecture, and getting started',
-    Installation: 'Package installation and entry points',
-    CoreTypes:
-      'FileTreeOptions, FileTreeSelectionItem, FileTreeSearchMode, and configuration',
-    ReactAPI: 'FileTree React component and props',
-    VanillaAPI:
-      'FileTree class, constructor options, instance methods, and FileTreeStateConfig',
-    GitStatus: 'Git-style file status indicators',
-    Icons: 'Custom SVG sprite sheets and icon remapping',
-    Utilities: 'sortChildren, generateSyncDataLoader, generateLazyDataLoader',
-    Styling: 'CSS variables and inline style overrides',
-    SSR: 'preloadFileTree for server-side rendering and vanilla hydration',
+    'Guides/ChooseYourIntegration':
+      'Choosing between React and vanilla, with the shared path-first model',
+    'Guides/GetStartedWithReact':
+      'React quickstart with useFileTree, FileTree, selectors, and prepared input',
+    'Guides/GetStartedWithVanilla':
+      'Vanilla quickstart with new FileTree, render, model methods, and prepared input',
+    'Guides/ShapeTreeDataForFastRendering':
+      'When to use paths, prepared input, and presorted prepared input',
+    'Guides/NavigateSelectionFocusAndSearch':
+      'Selection, focus, keyboard movement, and fileTreeSearchMode guidance',
+    'Guides/RenameDragAndTriggerItemActions':
+      'Renaming, drag and drop, and optional context menu workflows',
+    'Guides/StyleAndThemeTheTree':
+      'Host styling, CSS variables, themeToTreeStyles, and unsafeCSS guidance',
+    'Guides/CustomizeIcons':
+      'Built-in icon sets, remaps, color mode, and sprite-sheet extension',
+    'Guides/ShowGitStatusAndRowAnnotations':
+      'Built-in gitStatus signals and custom row decorations',
+    'Guides/HandleLargeTreesEfficiently':
+      'Prepared input, virtualization settings, and SSR guidance for large trees',
+    'Guides/SSR':
+      'Server preload, React and vanilla hydration, and opaque SSR handoff guidance',
+    'Reference/SharedConcepts':
+      'Path-first identity, shared options, search modes, mutation vocabulary, and SSR framing',
+    'Reference/ReactAPI':
+      'useFileTree, FileTree, selector hooks, and React-specific composition lookup',
+    'Reference/VanillaAPI':
+      'FileTree construction, lifecycle, imperative methods, and subscriptions',
+    'Reference/SSRAPI':
+      'preloadFileTree, serializeFileTreeSsrPayload, and hydration handoff rules',
+    'Reference/StylingAndTheming':
+      'Host styling, CSS variable families, fallback precedence, and theme helpers',
+    'Reference/Icons':
+      'Icon sets, FileTreeIconConfig, remap precedence, and runtime touchpoints',
   },
 };
 
@@ -270,10 +299,12 @@ function processMdx(raw: string): string {
   return cleanMarkdown(stripped);
 }
 
-function extractAnchor(mdxContent: string): string {
-  const match = mdxContent.match(/^##\s+(.+)/m);
-  if (match === null) return '';
-  return match[1]
+function extractFirstHeading(mdxContent: string): string | null {
+  return mdxContent.match(/^#{2,6}\s+(.+)/m)?.[1]?.trim() ?? null;
+}
+
+function headingToAnchor(heading: string): string {
+  return heading
     .trim()
     .toLowerCase()
     .replace(/[^\w\s-]/g, '')
@@ -398,9 +429,9 @@ async function buildSection(
 
   const rawMdx = readFileSync(join(ROOT, 'app', mdxPath), 'utf-8');
   const prose = processMdx(rawMdx);
-  const anchor = extractAnchor(prose);
-
-  const heading = prose.match(/^##\s+(.+)/m)?.[1]?.trim() ?? dirName;
+  const heading =
+    extractFirstHeading(prose) ?? dirName.split('/').at(-1) ?? dirName;
+  const anchor = headingToAnchor(heading);
 
   const constantsPath = join(ROOT, 'app', docsPrefix, dirName, 'constants.ts');
   const codeExamples = await discoverCodeExamples(constantsPath);
@@ -472,6 +503,11 @@ const DOCS_PREFIX: Record<ProductId, string> = {
   trees: 'trees/docs',
 };
 
+const LLMS_DOCS_URL: Record<ProductId, string> = {
+  diffs: 'https://diffs.com/docs',
+  trees: 'https://diffs.com/trees/docs',
+};
+
 async function main() {
   for (const productId of ['diffs', 'trees'] as const) {
     const config = PRODUCTS[productId];
@@ -482,7 +518,7 @@ async function main() {
       sectionDirs.map((dir) => buildSection(productId, docsPrefix, dir))
     );
 
-    const docsUrl = `https://diffs.com${config.docsPath}`;
+    const docsUrl = LLMS_DOCS_URL[productId];
     const llmsTxtPath =
       productId === 'diffs'
         ? join(ROOT, 'public', 'llms.txt')
