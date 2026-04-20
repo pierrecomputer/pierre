@@ -33,7 +33,7 @@ const REFERENCE_SECTION_FILES = [
 ] as const;
 
 export const metadata: Metadata = {
-  title: 'Pierre Trees Docs — Guides and reference.',
+  title: 'Trees, by Pierre',
   description:
     'Guide-first documentation for @pierre/trees, covering React, vanilla, prepared input, styling, icons, Git status, large trees, and SSR hydration.',
 };
