@@ -1,20 +1,8 @@
-import type { PreloadFileOptions } from '@pierre/diffs/ssr';
+import { docsCodeSnippet } from '@/lib/docsCodeSnippet';
 
-import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
+export const STYLING_THEMING_REFERENCE_EXAMPLE = docsCodeSnippet(
+  'theme-to-tree-styles.ts',
+  `import { themeToTreeStyles } from '@pierre/trees';
 
-const options = {
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  disableFileHeader: true,
-  unsafeCSS: CustomScrollbarCSS,
-} as const;
-
-export const STYLING_THEMING_REFERENCE_EXAMPLE: PreloadFileOptions<undefined> =
-  {
-    file: {
-      name: 'theme-to-tree-styles.ts',
-      contents: `import { themeToTreeStyles } from '@pierre/trees';
-
-const treeStyles = themeToTreeStyles(theme);`,
-    },
-    options,
-  };
+const treeStyles = themeToTreeStyles(theme);`
+);

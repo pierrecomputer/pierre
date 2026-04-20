@@ -1,28 +1,15 @@
-import type { PreloadFileOptions } from '@pierre/diffs/ssr';
+import { docsCodeSnippet } from '@/lib/docsCodeSnippet';
 
-import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
-
-const options = {
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  disableFileHeader: true,
-  unsafeCSS: CustomScrollbarCSS,
-} as const;
-
-export const VANILLA_QUICKSTART_INSTALL: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'install.sh',
-    contents: `bun add @pierre/trees
+export const VANILLA_QUICKSTART_INSTALL = docsCodeSnippet(
+  'install.sh',
+  `bun add @pierre/trees
 # npm: npm install @pierre/trees
-# pnpm: pnpm add @pierre/trees`,
-  },
-  options,
-};
+# pnpm: pnpm add @pierre/trees`
+);
 
-export const VANILLA_QUICKSTART_MOUNT_PROJECT_TREE: PreloadFileOptions<undefined> =
-  {
-    file: {
-      name: 'mount-project-tree.ts',
-      contents: `import { FileTree, type FileTreePreparedInput } from '@pierre/trees';
+export const VANILLA_QUICKSTART_MOUNT_PROJECT_TREE = docsCodeSnippet(
+  'mount-project-tree.ts',
+  `import { FileTree, type FileTreePreparedInput } from '@pierre/trees';
 
 export function mountProjectTree(
   container: HTMLElement,
@@ -37,16 +24,12 @@ export function mountProjectTree(
 
   fileTree.render({ fileTreeContainer: container });
   return fileTree;
-}`,
-    },
-    options,
-  };
+}`
+);
 
-export const VANILLA_QUICKSTART_IMPERATIVE_USAGE: PreloadFileOptions<undefined> =
-  {
-    file: {
-      name: 'imperative-usage.ts',
-      contents: `const fileTree = new FileTree({
+export const VANILLA_QUICKSTART_IMPERATIVE_USAGE = docsCodeSnippet(
+  'imperative-usage.ts',
+  `const fileTree = new FileTree({
   paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
   search: true,
 });
@@ -59,7 +42,5 @@ const selectedPaths = fileTree.getSelectedPaths();
 const matchingPaths = fileTree.getSearchMatchingPaths();
 const focusedPath = fileTree.getFocusedPath();
 const buttonItem = fileTree.getItem('src/components/Button.tsx');
-buttonItem?.select();`,
-    },
-    options,
-  };
+buttonItem?.select();`
+);

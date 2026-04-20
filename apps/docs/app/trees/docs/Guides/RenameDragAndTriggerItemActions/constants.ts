@@ -1,17 +1,8 @@
-import type { PreloadFileOptions } from '@pierre/diffs/ssr';
+import { docsCodeSnippet } from '@/lib/docsCodeSnippet';
 
-import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
-
-const options = {
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  disableFileHeader: true,
-  unsafeCSS: CustomScrollbarCSS,
-} as const;
-
-export const RENAME_DRAG_RENAME: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'rename.tsx',
-    contents: `const { model } = useFileTree({
+export const RENAME_DRAG_RENAME = docsCodeSnippet(
+  'rename.tsx',
+  `const { model } = useFileTree({
   paths,
   renaming: {
     canRename: (item) => item.path !== 'package.json',
@@ -24,15 +15,12 @@ export const RENAME_DRAG_RENAME: PreloadFileOptions<undefined> = {
   },
 });
 
-model.startRenaming('src/index.ts');`,
-  },
-  options,
-};
+model.startRenaming('src/index.ts');`
+);
 
-export const RENAME_DRAG_DRAG_AND_DROP: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'drag-and-drop.ts',
-    contents: `const fileTree = new FileTree({
+export const RENAME_DRAG_DRAG_AND_DROP = docsCodeSnippet(
+  'drag-and-drop.ts',
+  `const fileTree = new FileTree({
   paths,
   dragAndDrop: {
     canDrag: (draggedPaths) => draggedPaths.includes('package.json') === false,
@@ -49,15 +37,12 @@ export const RENAME_DRAG_DRAG_AND_DROP: PreloadFileOptions<undefined> = {
       console.error(message);
     },
   },
-});`,
-  },
-  options,
-};
+});`
+);
 
-export const RENAME_DRAG_CONTEXT_MENU: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'context-menu.tsx',
-    contents: `const { model } = useFileTree({
+export const RENAME_DRAG_CONTEXT_MENU = docsCodeSnippet(
+  'context-menu.tsx',
+  `const { model } = useFileTree({
   paths,
   composition: {
     contextMenu: {
@@ -84,7 +69,5 @@ export const RENAME_DRAG_CONTEXT_MENU: PreloadFileOptions<undefined> = {
       </button>
     </div>
   )}
-/>;`,
-  },
-  options,
-};
+/>;`
+);

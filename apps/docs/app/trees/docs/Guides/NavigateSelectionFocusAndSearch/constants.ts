@@ -1,17 +1,8 @@
-import type { PreloadFileOptions } from '@pierre/diffs/ssr';
+import { docsCodeSnippet } from '@/lib/docsCodeSnippet';
 
-import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
-
-const options = {
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  disableFileHeader: true,
-  unsafeCSS: CustomScrollbarCSS,
-} as const;
-
-export const NAVIGATE_REACT_SEARCH: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'search-panel.tsx',
-    contents: `import {
+export const NAVIGATE_REACT_SEARCH = docsCodeSnippet(
+  'search-panel.tsx',
+  `import {
   FileTree,
   useFileTree,
   useFileTreeSearch,
@@ -40,15 +31,12 @@ export function SearchPanel({ paths }: { paths: readonly string[] }) {
       <FileTree model={model} className="rounded-lg border" />
     </div>
   );
-}`,
-  },
-  options,
-};
+}`
+);
 
-export const NAVIGATE_VANILLA_SEARCH: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'vanilla-search.ts',
-    contents: `const fileTree = new FileTree({
+export const NAVIGATE_VANILLA_SEARCH = docsCodeSnippet(
+  'vanilla-search.ts',
+  `const fileTree = new FileTree({
   paths,
   search: true,
   fileTreeSearchMode: 'hide-non-matches',
@@ -61,7 +49,5 @@ searchInput.addEventListener('input', () => {
 
 const selectedPaths = fileTree.getSelectedPaths();
 const focusedPath = fileTree.getFocusedPath();
-const matchingPaths = fileTree.getSearchMatchingPaths();`,
-  },
-  options,
-};
+const matchingPaths = fileTree.getSearchMatchingPaths();`
+);

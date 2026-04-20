@@ -1,17 +1,8 @@
-import type { PreloadFileOptions } from '@pierre/diffs/ssr';
+import { docsCodeSnippet } from '@/lib/docsCodeSnippet';
 
-import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
-
-const options = {
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  disableFileHeader: true,
-  unsafeCSS: CustomScrollbarCSS,
-} as const;
-
-export const GIT_STATUS_BASIC: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'git-status.ts',
-    contents: `const fileTree = new FileTree({
+export const GIT_STATUS_BASIC = docsCodeSnippet(
+  'git-status.ts',
+  `const fileTree = new FileTree({
   paths,
   gitStatus: [
     { path: 'README.md', status: 'untracked' },
@@ -19,24 +10,18 @@ export const GIT_STATUS_BASIC: PreloadFileOptions<undefined> = {
     { path: 'src/index.ts', status: 'modified' },
     { path: 'src/components/Button.tsx', status: 'added' },
   ],
-});`,
-  },
-  options,
-};
+});`
+);
 
-export const GIT_STATUS_SET: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'set-git-status.ts',
-    contents: `fileTree.setGitStatus(nextStatuses);
-fileTree.setGitStatus(undefined);`,
-  },
-  options,
-};
+export const GIT_STATUS_SET = docsCodeSnippet(
+  'set-git-status.ts',
+  `fileTree.setGitStatus(nextStatuses);
+fileTree.setGitStatus(undefined);`
+);
 
-export const GIT_STATUS_ROW_DECORATION: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'render-row-decoration.ts',
-    contents: `const fileTree = new FileTree({
+export const GIT_STATUS_ROW_DECORATION = docsCodeSnippet(
+  'render-row-decoration.ts',
+  `const fileTree = new FileTree({
   paths,
   renderRowDecoration: ({ item }) => {
     if (item.path.endsWith('.generated.ts')) {
@@ -49,7 +34,5 @@ export const GIT_STATUS_ROW_DECORATION: PreloadFileOptions<undefined> = {
 
     return null;
   },
-});`,
-  },
-  options,
-};
+});`
+);

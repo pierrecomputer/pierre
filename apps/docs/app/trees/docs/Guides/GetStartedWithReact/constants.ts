@@ -1,27 +1,15 @@
-import type { PreloadFileOptions } from '@pierre/diffs/ssr';
+import { docsCodeSnippet } from '@/lib/docsCodeSnippet';
 
-import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
-
-const options = {
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-  disableFileHeader: true,
-  unsafeCSS: CustomScrollbarCSS,
-} as const;
-
-export const REACT_QUICKSTART_INSTALL: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'install.sh',
-    contents: `bun add @pierre/trees
+export const REACT_QUICKSTART_INSTALL = docsCodeSnippet(
+  'install.sh',
+  `bun add @pierre/trees
 # npm: npm install @pierre/trees
-# pnpm: pnpm add @pierre/trees`,
-  },
-  options,
-};
+# pnpm: pnpm add @pierre/trees`
+);
 
-export const REACT_QUICKSTART_PROJECT_TREE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'project-tree.tsx',
-    contents: `import { FileTree, useFileTree } from '@pierre/trees/react';
+export const REACT_QUICKSTART_PROJECT_TREE = docsCodeSnippet(
+  'project-tree.tsx',
+  `import { FileTree, useFileTree } from '@pierre/trees/react';
 import type { FileTreePreparedInput } from '@pierre/trees';
 
 interface ProjectTreeProps {
@@ -37,15 +25,12 @@ export function ProjectTree({ preparedInput }: ProjectTreeProps) {
   });
 
   return <FileTree model={model} className="rounded-lg border" />;
-}`,
-  },
-  options,
-};
+}`
+);
 
-export const REACT_QUICKSTART_SEARCHABLE_TREE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'searchable-tree.tsx',
-    contents: `import {
+export const REACT_QUICKSTART_SEARCHABLE_TREE = docsCodeSnippet(
+  'searchable-tree.tsx',
+  `import {
   FileTree,
   useFileTree,
   useFileTreeSearch,
@@ -72,7 +57,5 @@ export function SearchableTree({ paths }: { paths: readonly string[] }) {
       <FileTree model={model} className="rounded-lg border" />
     </div>
   );
-}`,
-  },
-  options,
-};
+}`
+);
