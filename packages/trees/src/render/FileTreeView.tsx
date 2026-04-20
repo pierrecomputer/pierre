@@ -947,9 +947,7 @@ function renderStyledRow(
       isFlattened={row.isFlattened}
       value={renamingValue}
       onBlur={() => {
-        // DEBUG: temporarily disabled so the rename input stays visible while
-        // tweaking styles. Restore `renameView.cancel()` before committing.
-        // renameView.cancel();
+        renameView.commit();
       }}
       onInput={(event) => {
         renameView.setValue((event.currentTarget as HTMLInputElement).value);
@@ -2075,22 +2073,19 @@ export function FileTreeView({
     }
 
     if (renameView.isActive()) {
-      // DEBUG: keep the rename input sticky while tweaking styles. Restore the
-      // Escape/Enter handling block below before committing.
+      if (event.key === 'Escape') {
+        renameView.cancel();
+      } else if (event.key === 'Enter') {
+        renameView.commit();
+      } else {
+        return;
+      }
+
+      setLastContextMenuInteraction('focus');
+      setControllerRevision((revision) => revision + 1);
+      event.preventDefault();
+      event.stopPropagation();
       return;
-      // if (event.key === 'Escape') {
-      //   renameView.cancel();
-      // } else if (event.key === 'Enter') {
-      //   renameView.commit();
-      // } else {
-      //   return;
-      // }
-      //
-      // setLastContextMenuInteraction('focus');
-      // setControllerRevision((revision) => revision + 1);
-      // event.preventDefault();
-      // event.stopPropagation();
-      // return;
     }
 
     if (renamingEnabled && event.key === 'F2') {

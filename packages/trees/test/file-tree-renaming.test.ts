@@ -224,7 +224,7 @@ describe('file-tree renaming', () => {
     }
   });
 
-  test('Escape and blur cancel inline rename without emitting a rename event', async () => {
+  test('Escape cancels inline rename and blur commits it', async () => {
     const { cleanup, dom } = installDom();
     try {
       const renameEvents: Array<string> = [];
@@ -266,12 +266,13 @@ describe('file-tree renaming', () => {
       pressKey(readmeButtonAfterEscape, dom, 'F2');
       await flushDom();
       const blurInput = getRenameInput(shadowRoot, dom);
+      setInputValue(blurInput, dom, 'README-BLUR.md');
       blurInput.dispatchEvent(new dom.window.FocusEvent('blur'));
       await flushDom();
 
       expect(shadowRoot.querySelector('[data-item-rename-input]')).toBeNull();
-      expect(renameEvents).toEqual([]);
-      expect(fileTree.getItem('README.md')).not.toBeNull();
+      expect(renameEvents).toEqual(['README.md->README-BLUR.md']);
+      expect(fileTree.getItem('README-BLUR.md')).not.toBeNull();
     } finally {
       cleanup();
     }
