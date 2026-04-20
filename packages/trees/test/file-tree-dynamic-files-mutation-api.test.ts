@@ -208,6 +208,29 @@ describe('file-tree dynamic files / mutation API', () => {
     controller.destroy();
   });
 
+  test('resetPaths accepts preparedInput generated from the same unsorted raw path list', async () => {
+    const FileTreeController = await loadFileTreeController();
+
+    const rawPaths = ['src/index.ts', 'README.md'] as const;
+    const controller = new FileTreeController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md'],
+    });
+
+    controller.resetPaths([...rawPaths], {
+      preparedInput: prepareFileTreeInput(rawPaths),
+    });
+
+    expect(controller.getVisibleRows(0, 3).map((row) => row.path)).toEqual([
+      'src/',
+      'src/index.ts',
+      'README.md',
+    ]);
+
+    controller.destroy();
+  });
+
   test('typed onMutation listeners stay filtered while subscribe still tracks non-mutation rerenders', async () => {
     const FileTreeController = await loadFileTreeController();
 
