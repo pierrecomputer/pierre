@@ -120,6 +120,19 @@ describe('computeFileTreeRowClickPlan', () => {
     expect(plan.selection).toEqual({ kind: 'single' });
   });
 
+  test('sticky modifier clicks still request canonical reveal but do not toggle', () => {
+    const plan = computeFileTreeRowClickPlan({
+      ...baseInput,
+      event: { ctrlKey: true, metaKey: false, shiftKey: false },
+      isDirectory: true,
+      mode: 'sticky',
+    });
+
+    expect(plan.revealCanonical).toBe(true);
+    expect(plan.toggleDirectory).toBe(false);
+    expect(plan.selection).toEqual({ kind: 'toggle' });
+  });
+
   test('flow mode clicks never request a sticky reveal', () => {
     expect(
       computeFileTreeRowClickPlan({ ...baseInput, mode: 'flow' })

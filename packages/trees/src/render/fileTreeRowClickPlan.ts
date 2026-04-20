@@ -38,6 +38,8 @@ export function computeFileTreeRowClickPlan(
       ? { kind: 'toggle' }
       : { kind: 'single' };
 
+  // Sticky rows are aria-hidden mirrors of in-flow rows, so every sticky click
+  // must hand off to the canonical row even when modifiers suppress toggling.
   return {
     closeSearch: isSearchOpen,
     revealCanonical: mode === 'sticky',

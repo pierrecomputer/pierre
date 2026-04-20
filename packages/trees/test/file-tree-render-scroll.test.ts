@@ -386,7 +386,8 @@ function computeExpectedRenderedWindow(
 function clickStickyRow(
   shadowRoot: ShadowRoot | null | undefined,
   dom: JSDOM,
-  path: string
+  path: string,
+  init: MouseEventInit = {}
 ): void {
   const button = shadowRoot?.querySelector(
     `[data-file-tree-sticky-path="${path}"]`
@@ -395,7 +396,9 @@ function clickStickyRow(
     throw new Error(`missing sticky row for ${path}`);
   }
 
-  button.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+  button.dispatchEvent(
+    new dom.window.MouseEvent('click', { bubbles: true, ...init })
+  );
 }
 async function loadFileTreeController(): Promise<
   typeof import('../src/model/FileTreeController').FileTreeController
@@ -1480,6 +1483,66 @@ describe('file-tree render + scroll', () => {
     }
   });
 
+  test('modifier-click on a sticky row adds selection without collapsing it', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['aaa/', 'bbb/', 'src/lib/'],
+        paths: ['aaa/one.ts', 'bbb/two.ts', 'src/index.ts', 'src/lib/util.ts'],
+        stickyFolders: true,
+        initialVisibleRowCount: 60 / 30,
+      });
+
+      fileTree.render({ containerWrapper });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      clickItem(shadowRoot, dom, 'src/lib/util.ts');
+      await flushDom();
+      scrollElement.scrollTop = 149;
+      scrollElement.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+
+      clickStickyRow(shadowRoot, dom, 'src/lib/', { ctrlKey: true });
+      await flushDom();
+      await flushDom();
+
+      expect(scrollElement.scrollTop).toBe(120);
+      expect(getStickyRowPaths(shadowRoot, dom)).toEqual(['src/', 'src/lib/']);
+      expect(getFocusedItemPath(shadowRoot, dom)).toBe('src/lib/');
+      expect([...fileTree.getSelectedPaths()].sort()).toEqual([
+        'src/lib/',
+        'src/lib/util.ts',
+      ]);
+
+      const libDirectory = fileTree.getItem('src/lib/');
+      if (
+        libDirectory == null ||
+        libDirectory.isDirectory() !== true ||
+        !('isExpanded' in libDirectory)
+      ) {
+        throw new Error('expected src/lib directory item');
+      }
+      expect(libDirectory.isExpanded()).toBe(true);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('collapsing a sticky row keeps it as the first in-flow row below its sticky parents', async () => {
     const { cleanup, dom } = installDom();
     try {
@@ -1633,6 +1696,64 @@ describe('file-tree render + scroll', () => {
       cleanup();
     }
   });
+  test('collapsing a top-level sticky row removes the overlay and keeps it in place', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['src/', 'src/lib/'],
+        paths: ['src/lib/util.ts', 'src/lib/zeta.ts', 'zzz.ts', 'zzzz.ts'],
+        stickyFolders: true,
+        initialVisibleRowCount: 90 / 30,
+      });
+
+      fileTree.render({ containerWrapper });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      scrollElement.scrollTop = 30;
+      scrollElement.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+
+      expect(getStickyRowPaths(shadowRoot, dom)).toEqual(['src/', 'src/lib/']);
+      expect(getMountedItemPaths(shadowRoot, dom)[0]).toBe('src/lib/zeta.ts');
+
+      clickStickyRow(shadowRoot, dom, 'src/');
+      await flushDom();
+      await flushDom();
+
+      expect(scrollElement.scrollTop).toBe(0);
+      expect(getStickyRowPaths(shadowRoot, dom)).toEqual([]);
+      expect(getMountedItemPaths(shadowRoot, dom)[0]).toBe('src/');
+      expect(getFocusedItemPath(shadowRoot, dom)).toBe('src/');
+
+      const srcDirectory = fileTree.getItem('src/');
+      if (
+        srcDirectory == null ||
+        srcDirectory.isDirectory() !== true ||
+        !('isExpanded' in srcDirectory)
+      ) {
+        throw new Error('expected src directory item');
+      }
+      expect(srcDirectory.isExpanded()).toBe(false);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('collapsing linux-1x sticky asm keeps include sticky and leaves asm in place', async () => {
     const { cleanup, dom } = installDom();
     try {
