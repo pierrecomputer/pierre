@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
+import { serializeFileTreeSsrPayload } from '../src/ssr';
+
 function installDom() {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
     url: 'http://localhost',
@@ -245,7 +247,7 @@ describe('file-tree icon config', () => {
       });
 
       const mount = dom.window.document.createElement('div');
-      mount.innerHTML = payload.html;
+      mount.innerHTML = serializeFileTreeSsrPayload(payload, 'dom');
       dom.window.document.body.appendChild(mount);
 
       const host = mount.querySelector('file-tree-container');

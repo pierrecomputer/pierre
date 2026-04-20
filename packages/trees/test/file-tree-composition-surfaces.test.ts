@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
+import { serializeFileTreeSsrPayload } from '../src/ssr';
+
 interface CapturedContextMenuOpenContext {
   anchorElement: HTMLElement;
   anchorRect: {
@@ -1105,7 +1107,7 @@ describe('file-tree composition surfaces', () => {
       });
 
       const mount = dom.window.document.createElement('div');
-      mount.innerHTML = payload.html;
+      mount.innerHTML = serializeFileTreeSsrPayload(payload, 'dom');
       dom.window.document.body.appendChild(mount);
 
       const host = mount.querySelector('file-tree-container');

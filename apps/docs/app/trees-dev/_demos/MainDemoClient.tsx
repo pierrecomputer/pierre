@@ -6,7 +6,6 @@ import {
   FileTree,
   type FileTreeDropResult,
   type FileTreeMutationEvent,
-  type FileTreeOptions,
 } from '@pierre/trees';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -48,6 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
 interface MainDemoClientProps {
   children: ReactNode;
@@ -420,7 +420,7 @@ const HydratedMainDemoController = memo(function HydratedMainDemoController({
   treeMountId,
 }: {
   onTreeReady: (fileTree: FileTree | null) => void;
-  options: Omit<FileTreeOptions, 'icons'>;
+  options: Omit<FileTreePathOptions, 'icons'>;
   treeMountId: string;
 }) {
   useEffect(() => {
@@ -485,7 +485,9 @@ export function MainDemoClient({
         : undefined,
     [workloadData]
   );
-  const sharedOptions = useMemo<Omit<FileTreeOptions, 'id' | 'preparedInput'>>(
+  const sharedOptions = useMemo<
+    Omit<FileTreePathOptions, 'id' | 'preparedInput'>
+  >(
     () => ({
       composition: {
         contextMenu: {
@@ -504,13 +506,14 @@ export function MainDemoClient({
     }),
     [workloadData]
   );
+  const currentPaths = sharedOptions.paths ?? workloadData.paths;
   const demoTargets = useMemo(
     () =>
       createMutationDemoTargets(
-        sharedOptions.paths,
+        currentPaths,
         sharedOptions.initialExpandedPaths
       ),
-    [sharedOptions]
+    [currentPaths, sharedOptions]
   );
   const activeWorkloadSummary = workloadData.selectedWorkload;
 
@@ -606,7 +609,7 @@ export function MainDemoClient({
     [addLog]
   );
 
-  const options = useMemo<Omit<FileTreeOptions, 'icons'>>(() => {
+  const options = useMemo<Omit<FileTreePathOptions, 'icons'>>(() => {
     return {
       ...sharedOptions,
       composition: {
@@ -889,7 +892,7 @@ export function MainDemoClient({
     }
 
     runMutation('reset demo tree', (tree) => {
-      tree.resetPaths(sharedOptions.paths, { preparedInput });
+      tree.resetPaths(currentPaths, { preparedInput });
     });
   }, [
     addLog,

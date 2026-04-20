@@ -1,18 +1,19 @@
 'use client';
 
-import { FileTree, type FileTreeOptions } from '@pierre/trees';
+import { FileTree } from '@pierre/trees';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo, useRef } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
 import { StateLog, useStateLog } from '../_components/StateLog';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
 interface SearchExampleProps {
   containerHtml: string;
   controls?: ReactNode;
   description: string;
   onTreeReady?: (tree: FileTree | null) => void;
-  options: FileTreeOptions;
+  options: FileTreePathOptions;
   title: string;
 }
 
@@ -79,7 +80,7 @@ export function SearchDemoClient({
   hideHtml: string;
   hiddenHtml: string;
   sharedOptions: Omit<
-    FileTreeOptions,
+    FileTreePathOptions,
     | 'fileTreeSearchMode'
     | 'id'
     | 'initialSearchQuery'

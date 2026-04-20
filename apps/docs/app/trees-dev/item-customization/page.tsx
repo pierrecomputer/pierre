@@ -1,5 +1,7 @@
-import type { FileTreeOptions } from '@pierre/trees';
-import { preloadFileTree } from '@pierre/trees/ssr';
+import {
+  preloadFileTree,
+  serializeFileTreeSsrPayload,
+} from '@pierre/trees/ssr';
 
 import { readSettingsCookies } from '../_components/readSettingsCookies';
 import { ItemCustomizationDemoClient } from '../_demos/ItemCustomizationDemoClient';
@@ -12,6 +14,7 @@ import {
   ITEM_CUSTOMIZATION_DEMO_WORKLOAD_NAME,
 } from '../_lib/itemCustomizationDemoData';
 import { loadWorkloadDataPayload } from '../_lib/workloadLoader';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
 const ITEM_CUSTOMIZATION_VIEWPORT_HEIGHT = 360;
 
@@ -28,7 +31,7 @@ export default async function TreesDevItemCustomizationPage() {
     ITEM_CUSTOMIZATION_DEMO_DEFAULTS.decorationPresetId
   );
   const sharedOptions: Omit<
-    FileTreeOptions,
+    FileTreePathOptions,
     | 'composition'
     | 'gitStatus'
     | 'id'
@@ -61,7 +64,7 @@ export default async function TreesDevItemCustomizationPage() {
 
   return (
     <ItemCustomizationDemoClient
-      containerHtml={payload.html}
+      containerHtml={serializeFileTreeSsrPayload(payload, 'dom')}
       fileCountLabel={workloadData.selectedWorkload.fileCountLabel}
       sharedOptions={sharedOptions}
     />

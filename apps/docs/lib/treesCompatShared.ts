@@ -37,8 +37,10 @@ export interface FileTreeStateConfig {
 }
 
 export interface FileTreeSsrPayload {
-  html: string;
+  domOuterStart: string;
   id: string;
+  outerEnd: string;
+  outerStart: string;
   shadowHtml: string;
 }
 

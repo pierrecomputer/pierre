@@ -1,7 +1,6 @@
 'use client';
 
 import { IconColorDark, IconColorLight } from '@pierre/icons';
-import type { FileTreeOptions } from '@pierre/trees';
 import {
   FileTree,
   type FileTreePreloadedData,
@@ -25,6 +24,7 @@ import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Switch } from '@/components/ui/switch';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 import type { GitStatusEntry } from '@/lib/treesCompat';
 
 function escapePathForRegex(path: string): string {
@@ -63,7 +63,7 @@ function getVisibleGitStatusPaths(
 }
 
 const FILE_TREE_GIT_STATUS_BASE_OPTIONS: Omit<
-  FileTreeOptions,
+  FileTreePathOptions,
   'gitStatus' | 'id'
 > = {
   flattenEmptyDirectories: true,

@@ -27,10 +27,10 @@ type FileTreeStoreOptions = Omit<
 type FileTreeInputOptions =
   | {
       paths: readonly string[];
-      preparedInput?: undefined;
+      preparedInput?: FileTreePreparedInput;
     }
   | {
-      paths?: undefined;
+      paths?: readonly string[];
       preparedInput: FileTreePreparedInput;
     };
 
@@ -217,8 +217,10 @@ export interface FileTreeHydrationProps {
 }
 
 export interface FileTreeSsrPayload {
-  html: string;
+  domOuterStart: string;
   id: string;
+  outerEnd: string;
+  outerStart: string;
   shadowHtml: string;
 }
 

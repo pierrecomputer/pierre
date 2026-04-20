@@ -129,13 +129,19 @@ export function HydratedTree() {
 ```ts
 {
   id: string;
+  outerStart: string;
+  domOuterStart: string;
   shadowHtml: string;
-  html: string;
+  outerEnd: string;
 }
 ```
 
-Use `payload.html` when you want a full `<file-tree-container>` string, or pass
-`{ id, shadowHtml }` to the React component as `preloadedData`.
+Use `${payload.outerStart}${payload.shadowHtml}${payload.outerEnd}` when the
+HTML parser will see the markup directly, such as a full server-rendered HTML
+response. Use `${payload.domOuterStart}${payload.shadowHtml}${payload.outerEnd}`
+when you need to insert the full container string through DOM APIs like
+`innerHTML` or `dangerouslySetInnerHTML`. Pass `{ id, shadowHtml }` to the React
+component as `preloadedData`.
 
 ## Styling
 

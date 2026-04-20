@@ -1,14 +1,14 @@
-import type { FileTreeOptions } from '@pierre/trees';
-import { preloadFileTree } from '@pierre/trees/ssr';
+import {
+  preloadFileTree,
+  serializeFileTreeSsrPayload,
+} from '@pierre/trees/ssr';
 
 import { readSettingsCookies } from '../_components/readSettingsCookies';
 import { SearchDemoClient } from '../_demos/SearchDemoClient';
-import {
-  sharedDemoFileTreeOptions,
-  sharedInitialExpandedPaths,
-} from '../demo-data';
+import { sharedDemoPaths, sharedInitialExpandedPaths } from '../demo-data';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
-function getPayload(options: Omit<FileTreeOptions, 'id'>, id: string) {
+function getPayload(options: Omit<FileTreePathOptions, 'id'>, id: string) {
   return preloadFileTree({
     ...options,
     id,
@@ -18,12 +18,12 @@ function getPayload(options: Omit<FileTreeOptions, 'id'>, id: string) {
 export default async function TreesDevSearchPage() {
   const { flattenEmptyDirectories } = await readSettingsCookies();
   const sharedOptions: Omit<
-    FileTreeOptions,
+    FileTreePathOptions,
     'fileTreeSearchMode' | 'id' | 'initialSearchQuery' | 'search'
   > = {
     flattenEmptyDirectories,
     initialExpandedPaths: sharedInitialExpandedPaths,
-    paths: sharedDemoFileTreeOptions.paths,
+    paths: sharedDemoPaths,
     viewportHeight: 260,
   };
 
@@ -62,10 +62,10 @@ export default async function TreesDevSearchPage() {
 
   return (
     <SearchDemoClient
-      collapseHtml={collapsePayload.html}
-      expandHtml={expandPayload.html}
-      hideHtml={hidePayload.html}
-      hiddenHtml={hiddenPayload.html}
+      collapseHtml={serializeFileTreeSsrPayload(collapsePayload, 'dom')}
+      expandHtml={serializeFileTreeSsrPayload(expandPayload, 'dom')}
+      hideHtml={serializeFileTreeSsrPayload(hidePayload, 'dom')}
+      hiddenHtml={serializeFileTreeSsrPayload(hiddenPayload, 'dom')}
       sharedOptions={sharedOptions}
     />
   );

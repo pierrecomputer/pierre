@@ -8,6 +8,7 @@ import {
   FILE_TREE_DEFAULT_OVERSCAN,
   FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
 } from '../src/model/virtualization';
+import { serializeFileTreeSsrPayload } from '../src/ssr';
 
 function installDom() {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
@@ -1048,7 +1049,12 @@ describe('file-tree render + scroll', () => {
       viewportHeight: 120,
     });
 
-    expect(payload.html).toContain('<file-tree-container');
+    const parserHtml = serializeFileTreeSsrPayload(payload);
+    const domHtml = serializeFileTreeSsrPayload(payload, 'dom');
+    expect(parserHtml).toContain('<file-tree-container');
+    expect(parserHtml).toContain('template shadowrootmode="open"');
+    expect(domHtml).toContain('data-file-tree-shadowrootmode="open"');
+    expect(domHtml).not.toContain('template shadowrootmode="open"');
     expect(payload.shadowHtml).toContain(
       'data-file-tree-virtualized-root="true"'
     );
@@ -1171,7 +1177,7 @@ describe('file-tree render + scroll', () => {
       expect(payload.shadowHtml).toContain('@layer unsafe');
 
       const mount = dom.window.document.createElement('div');
-      mount.innerHTML = payload.html;
+      mount.innerHTML = serializeFileTreeSsrPayload(payload, 'dom');
       dom.window.document.body.appendChild(mount);
 
       const host = mount.querySelector('file-tree-container');
@@ -1281,7 +1287,7 @@ describe('file-tree render + scroll', () => {
       const payload = preloadFileTree(options);
 
       const mount = dom.window.document.createElement('div');
-      mount.innerHTML = payload.html;
+      mount.innerHTML = serializeFileTreeSsrPayload(payload, 'dom');
       dom.window.document.body.appendChild(mount);
 
       const host = mount.querySelector('file-tree-container');

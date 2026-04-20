@@ -1,9 +1,12 @@
-import type { FileTreeOptions } from '@pierre/trees';
-import { preloadFileTree } from '@pierre/trees/ssr';
+import {
+  preloadFileTree,
+  serializeFileTreeSsrPayload,
+} from '@pierre/trees/ssr';
 
 import { readSettingsCookies } from '../_components/readSettingsCookies';
 import { DragAndDropDemoClient } from '../_demos/DragAndDropDemoClient';
 import { createPresortedPreparedInput } from '../_lib/createPresortedPreparedInput';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
 const DRAG_AND_DROP_DEMO_PATHS = [
   'assets/images/social/banner.png',
@@ -30,7 +33,7 @@ const TREE_HEADER_HTML =
 
 export default async function TreesDevDragAndDropPage() {
   const { flattenEmptyDirectories } = await readSettingsCookies();
-  const sharedOptions: Omit<FileTreeOptions, 'dragAndDrop' | 'id'> = {
+  const sharedOptions: Omit<FileTreePathOptions, 'dragAndDrop' | 'id'> = {
     composition: {
       header: {
         html: TREE_HEADER_HTML,
@@ -59,7 +62,7 @@ export default async function TreesDevDragAndDropPage() {
 
   return (
     <DragAndDropDemoClient
-      containerHtml={payload.html}
+      containerHtml={serializeFileTreeSsrPayload(payload, 'dom')}
       sharedOptions={sharedOptions}
     />
   );

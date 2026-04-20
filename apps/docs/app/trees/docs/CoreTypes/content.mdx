@@ -12,8 +12,10 @@ flattening behavior, search mode, and other structural behavior.
 
 **Tip:** To pre-render the tree on the server, use
 [`preloadFileTree`](#ssr-preloadfiletree) from `@pierre/trees/ssr` and pass
-`payload.html` as the `prerenderedHTML` prop (React) or hydrate the same
-container in vanilla. See [SSR](#ssr) for usage.
+`{ id, shadowHtml }` as `preloadedData` (React), or concatenate
+`${payload.domOuterStart}${payload.shadowHtml}${payload.outerEnd}` when you need
+to insert the full server-rendered container through DOM APIs. See [SSR](#ssr)
+for usage.
 
 <DocsCodeExample {...fileTreeOptionsType} />
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { FileTree, type FileTreeOptions } from '@pierre/trees';
+import { FileTree } from '@pierre/trees';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
@@ -9,11 +9,12 @@ import {
   ITEM_CUSTOMIZATION_DEMO_DEFAULTS,
   TREES_DEV_GIT_STATUS_PRESETS,
 } from '../_lib/itemCustomizationDemoData';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
 interface GitStatusDemoClientProps {
   containerHtml: string;
   fileCountLabel: string;
-  sharedOptions: Omit<FileTreeOptions, 'gitStatus' | 'id'>;
+  sharedOptions: Omit<FileTreePathOptions, 'gitStatus' | 'id'>;
 }
 
 export function GitStatusDemoClient({
@@ -29,7 +30,7 @@ export function GitStatusDemoClient({
     presets: TREES_DEV_GIT_STATUS_PRESETS,
   });
   const initialGitStatusRef = useRef(gitStatus);
-  const options = useMemo<FileTreeOptions>(
+  const options = useMemo<FileTreePathOptions>(
     () => ({
       ...sharedOptions,
       id: 'trees-git-status',

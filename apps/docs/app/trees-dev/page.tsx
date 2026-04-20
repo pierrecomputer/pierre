@@ -1,5 +1,7 @@
-import type { FileTreeOptions } from '@pierre/trees';
-import { preloadFileTree } from '@pierre/trees/ssr';
+import {
+  preloadFileTree,
+  serializeFileTreeSsrPayload,
+} from '@pierre/trees/ssr';
 
 import { ExampleCard } from './_components/ExampleCard';
 import { readSettingsCookies } from './_components/readSettingsCookies';
@@ -14,6 +16,7 @@ import {
   TREES_WORKLOAD_OPTIONS,
   type TreesPageSearchParams,
 } from './_lib/workloadMeta';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
 const TREE_HEADER_HTML =
   '<div data-tree-demo-header style="align-items:center;display:flex;gap:12px;padding:8px 12px"><strong>Trees demo header</strong><button type="button">Log header action</button></div>';
@@ -32,7 +35,7 @@ export default async function TreesDevIndexPage({
     selectedWorkloadName,
     expansionMode
   );
-  const sharedOptions: Omit<FileTreeOptions, 'id' | 'preparedInput'> = {
+  const sharedOptions: Omit<FileTreePathOptions, 'id' | 'preparedInput'> = {
     composition: {
       contextMenu: {
         buttonVisibility: 'always',
@@ -77,7 +80,9 @@ export default async function TreesDevIndexPage({
         <div
           id={treeMountId}
           style={{ height: `${String(FILE_TREE_PROOF_VIEWPORT_HEIGHT)}px` }}
-          dangerouslySetInnerHTML={{ __html: payload.html }}
+          dangerouslySetInnerHTML={{
+            __html: serializeFileTreeSsrPayload(payload, 'dom'),
+          }}
           suppressHydrationWarning
         />
       </ExampleCard>

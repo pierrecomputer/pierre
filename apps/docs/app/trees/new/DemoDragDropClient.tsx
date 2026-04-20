@@ -1,7 +1,6 @@
 'use client';
 
 import { IconLock, IconRefresh } from '@pierre/icons';
-import type { FileTreeOptions } from '@pierre/trees';
 import {
   FileTree,
   type FileTreePreloadedData,
@@ -19,13 +18,14 @@ import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { PRODUCTS } from '@/app/product-config';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
 const dragDropStyle = {
   colorScheme: 'dark',
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
 
-const DRAG_DROP_BASE_OPTIONS: Omit<FileTreeOptions, 'id' | 'paths'> = {
+const DRAG_DROP_BASE_OPTIONS: Omit<FileTreePathOptions, 'id' | 'paths'> = {
   dragAndDrop: true,
   flattenEmptyDirectories: true,
   search: false,

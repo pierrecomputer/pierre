@@ -4,12 +4,12 @@ import {
   FileTree,
   type FileTreeDropResult,
   type FileTreeMutationEvent,
-  type FileTreeOptions,
 } from '@pierre/trees';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
 import { StateLog, useStateLog } from '../_components/StateLog';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
 function formatMutationEvent(event: FileTreeMutationEvent): string {
   switch (event.operation) {
@@ -40,7 +40,7 @@ function formatDropResult(event: FileTreeDropResult): string {
 
 interface DragAndDropDemoClientProps {
   containerHtml: string;
-  sharedOptions: Omit<FileTreeOptions, 'dragAndDrop' | 'id'>;
+  sharedOptions: Omit<FileTreePathOptions, 'dragAndDrop' | 'id'>;
 }
 
 export function DragAndDropDemoClient({
@@ -52,7 +52,7 @@ export function DragAndDropDemoClient({
   const [blockReadmeDrag, setBlockReadmeDrag] = useState(false);
   const [blockSrcLibDrop, setBlockSrcLibDrop] = useState(false);
 
-  const options = useMemo<FileTreeOptions>(
+  const options = useMemo<FileTreePathOptions>(
     () => ({
       ...sharedOptions,
       dragAndDrop: {

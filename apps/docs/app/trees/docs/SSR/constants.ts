@@ -33,15 +33,18 @@ export default async function Page() {
 
   return (
     <div
-      dangerouslySetInnerHTML={{ __html: payload.html }}
+      dangerouslySetInnerHTML={{
+        __html: payload.domOuterStart + payload.shadowHtml + payload.outerEnd,
+      }}
       data-file-tree-props={JSON.stringify(fileTreeOptions)}
     />
   );
 }
 
-// Client: use the React component with prerenderedHTML to hydrate,
-// or use vanilla FileTree and pass the same options + container that
-// holds the prerendered markup.`,
+// Client: pass { id, shadowHtml } as preloadedData in React, or use vanilla
+// FileTree with the same options + container that holds the prerendered
+// markup.
+`,
   },
   options,
 };

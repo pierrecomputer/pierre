@@ -1,7 +1,6 @@
 'use client';
 
 import { IconFileTreeFill, IconFolders } from '@pierre/icons';
-import type { FileTreeOptions } from '@pierre/trees';
 import {
   FileTree,
   type FileTreePreloadedData,
@@ -17,6 +16,7 @@ import { DEFAULT_FILE_TREE_PANEL_CLASS } from '../tree-examples/demo-data';
 import { TreeExampleSection } from '../tree-examples/TreeExampleSection';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { PRODUCTS } from '@/app/product-config';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
 const HIERARCHICAL_MATCHED_EXPANDED_PATHS = [
   'build',
@@ -33,7 +33,7 @@ const flattenStyle = {
   '--trees-search-bg-override': 'light-dark(#fff, oklch(14.5% 0 0))',
 } as CSSProperties;
 
-const FILE_TREE_BASE_OPTIONS: Omit<FileTreeOptions, 'id' | 'paths'> = {
+const FILE_TREE_BASE_OPTIONS: Omit<FileTreePathOptions, 'id' | 'paths'> = {
   initialExpansion: 'closed',
   search: false,
 };

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
+import { serializeFileTreeSsrPayload } from '../src/ssr';
+
 function installDom() {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
     url: 'http://localhost',
@@ -88,8 +90,8 @@ describe('file-tree header slot', () => {
     });
 
     expect(payload.shadowHtml).toContain('slot name="header"');
-    expect(payload.html).toContain('slot="header"');
-    expect(payload.html).toContain('data-test-ssr-header');
+    expect(payload.outerEnd).toContain('slot="header"');
+    expect(payload.outerEnd).toContain('data-test-ssr-header');
   });
 
   test('render attaches and cleanup removes host-managed header content', async () => {
@@ -183,7 +185,7 @@ describe('file-tree header slot', () => {
       });
 
       const mount = dom.window.document.createElement('div');
-      mount.innerHTML = payload.html;
+      mount.innerHTML = serializeFileTreeSsrPayload(payload, 'dom');
       dom.window.document.body.appendChild(mount);
 
       const host = mount.querySelector('file-tree-container');

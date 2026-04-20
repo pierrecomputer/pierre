@@ -102,6 +102,32 @@ function getHeaderSlotHtml(
   return `<div slot="${HEADER_SLOT_NAME}" data-file-tree-managed-slot="${HEADER_SLOT_NAME}">${headerHtml}</div>`;
 }
 
+function getFileTreeOuterStart(
+  id: string,
+  mode: 'declarative' | 'dom'
+): string {
+  const templateAttr =
+    mode === 'declarative'
+      ? 'shadowrootmode="open"'
+      : 'data-file-tree-shadowrootmode="open"';
+  return `<file-tree-container id="${id}" data-file-tree-virtualized="true"><template ${templateAttr}>`;
+}
+
+function getFileTreeOuterEnd(headerSlotHtml: string): string {
+  return `</template>${headerSlotHtml}</file-tree-container>`;
+}
+
+// Reassembles the serializable SSR payload into the full host markup. Use
+// `mode: 'dom'` when the string will be inserted via DOM APIs such as
+// `innerHTML` or `dangerouslySetInnerHTML`; otherwise the default declarative
+// form preserves native declarative shadow DOM parsing.
+export function serializeFileTreeSsrPayload(
+  payload: FileTreeSsrPayload,
+  mode: 'declarative' | 'dom' = 'declarative'
+): string {
+  return `${mode === 'declarative' ? payload.outerStart : payload.domOuterStart}${payload.shadowHtml}${payload.outerEnd}`;
+}
+
 function isBuiltInSpriteSheet(spriteSheet: SVGElement): boolean {
   return (
     spriteSheet.querySelector('#file-tree-icon-chevron') instanceof
@@ -724,10 +750,14 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
 
   const shadowHtml = `${getBuiltInSpriteSheet(normalizedIcons.set)}${customSpriteSheet}<style ${FILE_TREE_STYLE_ATTRIBUTE}>${wrappedCoreCss}</style>${unsafeCssStyle}<div data-file-tree-id="${resolvedId}" data-file-tree-virtualized-wrapper="true"${coloredIconsAttr}>${bodyHtml}</div>`;
   const headerSlotHtml = getHeaderSlotHtml(composition);
-  const html = `<file-tree-container id="${resolvedId}" data-file-tree-virtualized="true"><template shadowrootmode="open">${shadowHtml}</template>${headerSlotHtml}</file-tree-container>`;
+  const outerStart = getFileTreeOuterStart(resolvedId, 'declarative');
+  const domOuterStart = getFileTreeOuterStart(resolvedId, 'dom');
+  const outerEnd = getFileTreeOuterEnd(headerSlotHtml);
   return {
-    html,
+    domOuterStart,
     id: resolvedId,
+    outerEnd,
+    outerStart,
     shadowHtml,
   };
 }

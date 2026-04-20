@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
 import { resolveFileTreeGitStatusState } from '../src/model/gitStatus';
+import { serializeFileTreeSsrPayload } from '../src/ssr';
 import type { GitStatusEntry } from '../src/types';
 
 const FILES = [
@@ -529,7 +530,7 @@ describe('file-tree git status', () => {
       );
 
       const mount = dom.window.document.createElement('div');
-      mount.innerHTML = payload.html;
+      mount.innerHTML = serializeFileTreeSsrPayload(payload, 'dom');
       dom.window.document.body.appendChild(mount);
 
       const host = mount.querySelector('file-tree-container');

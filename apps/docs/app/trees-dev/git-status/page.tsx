@@ -1,5 +1,7 @@
-import type { FileTreeOptions } from '@pierre/trees';
-import { preloadFileTree } from '@pierre/trees/ssr';
+import {
+  preloadFileTree,
+  serializeFileTreeSsrPayload,
+} from '@pierre/trees/ssr';
 
 import { readSettingsCookies } from '../_components/readSettingsCookies';
 import { GitStatusDemoClient } from '../_demos/GitStatusDemoClient';
@@ -10,6 +12,7 @@ import {
   ITEM_CUSTOMIZATION_DEMO_WORKLOAD_NAME,
 } from '../_lib/itemCustomizationDemoData';
 import { loadWorkloadDataPayload } from '../_lib/workloadLoader';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
 const GIT_STATUS_VIEWPORT_HEIGHT = 280;
 
@@ -22,7 +25,7 @@ export default async function TreesDevGitStatusPage() {
   const defaultGitStatusPreset = getTreesDevGitStatusPreset(
     ITEM_CUSTOMIZATION_DEMO_DEFAULTS.gitStatusPresetId
   );
-  const sharedOptions: Omit<FileTreeOptions, 'gitStatus' | 'id'> = {
+  const sharedOptions: Omit<FileTreePathOptions, 'gitStatus' | 'id'> = {
     flattenEmptyDirectories,
     initialExpandedPaths: workloadData.initialExpandedPaths,
     paths: workloadData.paths,
@@ -40,7 +43,7 @@ export default async function TreesDevGitStatusPage() {
 
   return (
     <GitStatusDemoClient
-      containerHtml={payload.html}
+      containerHtml={serializeFileTreeSsrPayload(payload, 'dom')}
       fileCountLabel={workloadData.selectedWorkload.fileCountLabel}
       sharedOptions={sharedOptions}
     />

@@ -16,7 +16,11 @@ export {
   prepareFileTreeInput,
   preparePresortedFileTreeInput,
 } from './preparedInput';
-export { FileTree, preloadFileTree } from './render/FileTree';
+export {
+  FileTree,
+  preloadFileTree,
+  serializeFileTreeSsrPayload,
+} from './render/FileTree';
 export type {
   FileTreeAddEvent,
   FileTreeBatchEvent,

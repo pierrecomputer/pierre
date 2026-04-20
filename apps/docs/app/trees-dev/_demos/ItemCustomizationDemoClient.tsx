@@ -4,7 +4,6 @@ import {
   type ContextMenuItem,
   type ContextMenuOpenContext,
   FileTree,
-  type FileTreeOptions,
 } from '@pierre/trees';
 import {
   type ChangeEvent,
@@ -35,12 +34,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
 interface ItemCustomizationDemoClientProps {
   containerHtml: string;
   fileCountLabel: string;
   sharedOptions: Omit<
-    FileTreeOptions,
+    FileTreePathOptions,
     | 'composition'
     | 'gitStatus'
     | 'id'
@@ -221,10 +221,10 @@ function HydratedItemCustomizationTree({
   contextMenuRootRef: { current: ReactDomRoot | null };
   contextMenuSlotRef: { current: HTMLDivElement | null };
   desiredSelectedPaths: readonly string[];
-  gitStatus: FileTreeOptions['gitStatus'];
+  gitStatus: FileTreePathOptions['gitStatus'];
   hasHydratedTreeRef: { current: boolean };
   isRestoringSelectionRef: { current: boolean };
-  options: FileTreeOptions;
+  options: FileTreePathOptions;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
@@ -365,7 +365,7 @@ export function ItemCustomizationDemoClient({
     setLastMenuInteraction(label);
   }, []);
 
-  const structuralOptions = useMemo<FileTreeOptions>(() => {
+  const structuralOptions = useMemo<FileTreePathOptions>(() => {
     return {
       ...sharedOptions,
       composition: {
