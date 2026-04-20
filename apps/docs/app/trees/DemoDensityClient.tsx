@@ -12,9 +12,9 @@ import { useEffect } from 'react';
 import { TreeExampleHeading } from '../components/TreeExampleHeading';
 import { FeatureHeader } from '../diff-examples/FeatureHeader';
 import { sampleFileList } from './demo-data';
+import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { DEFAULT_FILE_TREE_PANEL_CLASS } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
-import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { PRODUCTS } from '@/app/product-config';
 
 const PRESELECTED_FILE = 'src/components/Button.tsx';
