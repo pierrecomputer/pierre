@@ -86,13 +86,8 @@ export function Hero({ productId }: HeroProps) {
           </Link>
         </Button>
       </div>
-      <p className="text-muted-foreground mt-2 flex items-center justify-center gap-2 text-sm md:justify-start">
-        <span>Currently v{packageJson.version}</span>
-        {productId === 'trees' && (
-          <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] leading-[1.4] font-medium tracking-wide text-amber-900 uppercase dark:bg-amber-400/15 dark:text-amber-200">
-            Preview
-          </span>
-        )}
+      <p className="text-muted-foreground mt-2 text-sm">
+        Currently v{packageJson.version}
       </p>
     </section>
   );
