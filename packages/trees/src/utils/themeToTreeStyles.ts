@@ -154,7 +154,7 @@ export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
     result['--trees-theme-input-border'] = inputBorder;
   }
   if (scrollbarBg != null && scrollbarBg !== '') {
-    result['--trees-theme-scrollbar-bg'] = scrollbarBg;
+    result['--trees-theme-scrollbar-thumb'] = scrollbarBg;
   }
 
   if (gitAdded != null && gitAdded !== '') {

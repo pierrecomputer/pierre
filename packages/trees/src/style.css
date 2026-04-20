@@ -204,10 +204,10 @@
       var(--trees-theme-input-bg, var(--trees-input-bg))
     );
 
-    --trees-scrollbar-bg: var(
-      --trees-scrollbar-bg-override,
+    --trees-scrollbar-thumb: var(
+      --trees-scrollbar-thumb-override,
       var(
-        --trees-theme-scrollbar-bg,
+        --trees-theme-scrollbar-thumb,
         color-mix(in lab, var(--trees-fg) 25%, var(--trees-bg))
       )
     );
@@ -604,7 +604,7 @@
     }
 
     &:hover::-webkit-scrollbar-thumb {
-      background-color: var(--trees-scrollbar-bg);
+      background-color: var(--trees-scrollbar-thumb);
     }
   }
 
