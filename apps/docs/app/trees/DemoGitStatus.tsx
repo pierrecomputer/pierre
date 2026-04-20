@@ -141,7 +141,7 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
           <>
             Use the{' '}
             <Link
-              href={`${PRODUCTS.trees.docsPath}#git-status`}
+              href={`${PRODUCTS.trees.docsPath}#show-git-status-and-row-annotations`}
               className="inline-link"
             >
               <code>gitStatus</code>

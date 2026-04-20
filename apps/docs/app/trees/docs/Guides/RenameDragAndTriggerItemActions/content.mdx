@@ -1,0 +1,149 @@
+### Rename, drag, and trigger item actions
+
+This guide covers the main row-level editing workflows: rename first, drag and
+drop second, and optional command surfaces such as context menus after that.
+Every callback stays path-first.
+
+#### Start with direct row actions
+
+The core row workflows are:
+
+1. rename in place
+2. drag and drop
+3. optional context-menu commands
+
+Teach those flows before you reach for a generic mutation inventory. Users care
+about which path moved, which path was renamed, and which row stays focused
+next.
+
+#### Rename items in place
+
+Enable `renaming` when users should be able to rename rows inline. The common
+policy hooks are:
+
+- `canRename(item)` to block protected files or folders
+- `onRename(event)` to react to the final path change
+- `onError(error)` to surface invalid rename attempts
+
+The rename event reports the source path, the destination path, and whether the
+renamed item was a folder.
+
+```tsx
+const { model } = useFileTree({
+  paths,
+  renaming: {
+    canRename: (item) => item.path !== 'package.json',
+    onRename: ({ sourcePath, destinationPath }) => {
+      console.log(`Renamed ${sourcePath} -> ${destinationPath}`);
+    },
+    onError: (message) => {
+      console.error(message);
+    },
+  },
+});
+
+model.startRenaming('src/index.ts');
+```
+
+#### Move items with drag and drop
+
+Enable `dragAndDrop` when users should move files or folders directly in the
+tree. The practical hooks are:
+
+- `canDrag(paths)` to lock specific paths
+- `canDrop(event)` to reject invalid destinations
+- `onDropComplete(event)` for persistence or adjacent UI updates
+- `onDropError(error, event)` for visible failures
+
+```ts
+const fileTree = new FileTree({
+  paths,
+  dragAndDrop: {
+    canDrag: (draggedPaths) => draggedPaths.includes('package.json') === false,
+    canDrop: ({ target }) => target.directoryPath !== 'dist/',
+    onDropComplete: ({ draggedPaths, target }) => {
+      console.log(
+        'Moved',
+        draggedPaths,
+        'to',
+        target.directoryPath ?? '(root)'
+      );
+    },
+    onDropError: (message) => {
+      console.error(message);
+    },
+  },
+});
+```
+
+Drop callbacks report dragged paths plus the resolved target shape. They do not
+ask you to reverse-engineer DOM rows.
+
+#### Combine rename and drag safely
+
+A common editable project tree enables both `renaming` and `dragAndDrop`, then
+adds policy guards for protected paths.
+
+Typical rules include:
+
+- block rename for root config files such as `package.json`
+- reject drops into generated directories such as `dist/`
+- surface rename and drop failures outside the tree instead of failing silently
+
+#### Add a context menu as an optional command surface
+
+Context menus are secondary command surfaces over the same model. Keep rename
+and drag available without requiring the menu.
+
+In React, the wrapper can render menu content for you:
+
+```tsx
+const { model } = useFileTree({
+  paths,
+  composition: {
+    contextMenu: {
+      enabled: true,
+      triggerMode: 'both',
+      buttonVisibility: 'when-needed',
+    },
+  },
+  renaming: true,
+});
+
+<FileTree
+  model={model}
+  renderContextMenu={(item, context) => (
+    <div className="rounded-md border bg-background p-2 shadow">
+      <button
+        onClick={() => {
+          context.close({ restoreFocus: false });
+          model.startRenaming(item.path);
+        }}
+        type="button"
+      >
+        Rename
+      </button>
+    </div>
+  )}
+/>;
+```
+
+In vanilla, use `composition.contextMenu.render` when you want to provide the
+menu element directly from the runtime config.
+
+#### Keep keyboard and focus behavior predictable
+
+The focused row is the anchor for rename and keyboard-invoked commands. Opening
+and closing a menu should restore focus predictably, and keyboard users should
+still be able to reach the main actions without relying on pointer-only
+gestures.
+
+#### The tree owns the interaction surface. Your app owns persistence.
+
+Trees emits path-based rename and drop events. Your app decides whether to
+persist those changes to a server, local state, or another boundary. Keep that
+separation clear.
+
+If you need the shared vocabulary behind those events, read
+[Shared concepts](#shared-concepts-mutation-vocabulary). For runtime lookup,
+jump to [React API](#react-api) or [Vanilla API](#vanilla-api).

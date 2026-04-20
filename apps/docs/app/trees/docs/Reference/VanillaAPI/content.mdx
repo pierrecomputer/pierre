@@ -1,0 +1,156 @@
+### Vanilla API
+
+The vanilla runtime lives at the package root, `@pierre/trees`.
+`new FileTree(...)` is both the runtime entry point and the imperative model
+surface.
+
+#### Class-first story
+
+Start with `new FileTree(options)`, then mount the instance.
+
+```ts
+import { FileTree } from '@pierre/trees';
+
+const fileTree = new FileTree({
+  paths: ['README.md', 'src/index.ts'],
+  search: true,
+});
+
+fileTree.render({ fileTreeContainer: container });
+```
+
+For shared option meanings, read
+[Shared concepts](#shared-concepts-shared-option-groups).
+
+#### Constructor surface
+
+`new FileTree(options)`:
+
+- accepts the shared options surface
+- establishes the model once
+- expects later updates through model methods instead of rebuilding option
+  objects for every render
+
+#### Mounting and lifecycle
+
+`render(...)`
+
+- accepts `{ fileTreeContainer }` when you already own the host element
+- accepts `{ containerWrapper }` when the runtime should create and append the
+  host for you
+
+`hydrate({ fileTreeContainer })`
+
+- attaches the model to server-rendered tree markup already in the page
+
+`unmount()`
+
+- removes the mounted runtime while keeping the model available
+
+`cleanUp()`
+
+- final teardown: unmount plus subscription cleanup and model destruction
+
+`getFileTreeContainer()`
+
+- returns the mounted host element after render or hydrate
+
+#### Read APIs
+
+Common read methods are:
+
+- `getItem(path)`
+- `getFocusedItem()`
+- `getFocusedPath()`
+- `getSelectedPaths()`
+- `getComposition()`
+- `isSearchOpen()`
+- `getSearchValue()`
+- `getSearchMatchingPaths()`
+
+These reads stay path- and model-oriented. They do not ask you to infer tree
+state from DOM order.
+
+#### Item handles
+
+`getItem(path)` returns either a file handle, a directory handle, or `null`.
+
+Shared handle actions:
+
+- `getPath()`
+- `focus()`
+- `select()`
+- `toggleSelect()`
+- `deselect()`
+
+Directory-only actions:
+
+- `expand()`
+- `collapse()`
+- `toggle()`
+
+#### Write and control APIs
+
+Focus and selection control:
+
+- `focusPath(path)`
+- `focusNearestPath(path | null)`
+- `startRenaming(path?)`
+- item-handle selection and focus methods
+
+Search control:
+
+- `setSearch(value)`
+- `openSearch(initialValue?)`
+- `closeSearch()`
+- `focusNextSearchMatch()`
+- `focusPreviousSearchMatch()`
+
+Data and mutation control:
+
+- `add(path)`
+- `remove(path, options?)`
+- `move(fromPath, toPath, options?)`
+- `batch(operations)`
+- `resetPaths(paths, options?)`
+- `onMutation(type, handler)`
+
+Runtime reconfiguration helpers:
+
+- `setComposition(composition?)`
+- `setGitStatus(gitStatus?)`
+- `setIcons(icons?)`
+
+#### Subscriptions and external systems
+
+Use `subscribe(listener)` when any tree change should refresh a derived
+snapshot. Use `onMutation(...)` when add, remove, move, reset, or batch intent
+matters.
+
+That separation keeps model subscriptions for state reads and mutation events
+for semantic side effects.
+
+#### Composition surface
+
+The composition surface covers:
+
+- header composition
+- context-menu composition
+- runtime updates through `setComposition(...)`
+
+Use
+[Rename, drag, and trigger item actions](#rename-drag-and-trigger-item-actions)
+for workflow-level guidance.
+
+#### Hydration boundary
+
+This page only names the vanilla hydration entry point:
+`hydrate({ fileTreeContainer })`. The full server-preload-first contract lives
+in [SSR API](#ssr-api).
+
+#### Appearance boundary
+
+This page names the runtime touchpoints such as `getFileTreeContainer()`,
+`setGitStatus(...)`, and `setIcons(...)`. For styling variables, theme helpers,
+and `unsafeCSS`, read [Styling and theming](#styling-and-theming). For icon
+remaps and icon-set lookup, read [Icons](#icons).

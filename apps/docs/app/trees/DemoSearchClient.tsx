@@ -115,7 +115,7 @@ export function DemoSearchClient({ preloadedDataById }: DemoSearchClientProps) {
             Filter the tree by typing in the search field. Search across file
             paths and names. Trees includes three{' '}
             <Link
-              href={`${PRODUCTS.trees.docsPath}#core-types-filetreesearchmode`}
+              href={`${PRODUCTS.trees.docsPath}#shared-concepts-search-mode-semantics`}
               className="inline-link"
             >
               <code>fileTreeSearchMode</code>

@@ -1,0 +1,128 @@
+### Get started with React
+
+Use the React entry point when your surrounding UI already lives in React. The
+hook creates one stable tree model, and the component mounts that model into the
+host element.
+
+#### Install `@pierre/trees`
+
+Use the package root for the vanilla runtime, and the `/react` entry point for
+the React wrapper.
+
+```bash
+bun add @pierre/trees
+# npm: npm install @pierre/trees
+# pnpm: pnpm add @pierre/trees
+```
+
+#### Create the model with `useFileTree(...)`
+
+`useFileTree(...)` from `@pierre/trees/react` creates the model exactly once for
+the component lifetime. Later option changes are not a controlled update path.
+If the tree data or runtime behavior changes after mount, update the model
+through methods such as `resetPaths(...)`, `setComposition(...)`,
+`setGitStatus(...)`, or `setIcons(...)`.
+
+For small trees, you can pass raw `paths`. For scalable trees, prefer
+`preparedInput` produced on the server or another non-UI boundary.
+
+```tsx
+import { FileTree, useFileTree } from '@pierre/trees/react';
+import type { FileTreePreparedInput } from '@pierre/trees';
+
+interface ProjectTreeProps {
+  preparedInput: FileTreePreparedInput;
+}
+
+export function ProjectTree({ preparedInput }: ProjectTreeProps) {
+  const { model } = useFileTree({
+    preparedInput,
+    search: true,
+    initialExpandedPaths: ['src', 'src/components'],
+    viewportHeight: 320,
+  });
+
+  return <FileTree model={model} className="rounded-lg border" />;
+}
+```
+
+If you are still deciding how to shape that input, read
+[Shape tree data for fast rendering](#shape-tree-data-for-fast-rendering) after
+this quickstart.
+
+#### Render with `<FileTree model={model} />`
+
+`<FileTree />` is a thin React wrapper over the model. It mounts the tree into
+the host element, forwards normal host props such as `className` and `style`,
+and hydrates existing server output when you pass `preloadedData` later.
+
+Keep the mental model simple: the model owns the tree state, and the React
+component renders it.
+
+#### Read and update tree state through the model
+
+React code reads snapshots from the model through selector hooks, and writes
+back through model methods.
+
+```tsx
+import {
+  FileTree,
+  useFileTree,
+  useFileTreeSearch,
+  useFileTreeSelection,
+} from '@pierre/trees/react';
+
+export function SearchableTree({ paths }: { paths: readonly string[] }) {
+  const { model } = useFileTree({
+    paths,
+    fileTreeSearchMode: 'hide-non-matches',
+    search: true,
+  });
+  const selectedPaths = useFileTreeSelection(model);
+  const search = useFileTreeSearch(model);
+
+  return (
+    <div className="space-y-3">
+      <input
+        value={search.value}
+        onChange={(event) => search.setValue(event.target.value)}
+        placeholder="Search files"
+      />
+      <p>{selectedPaths.length} item(s) selected.</p>
+      <FileTree model={model} className="rounded-lg border" />
+    </div>
+  );
+}
+```
+
+Use `useFileTreeSelector(model, selector, equality?)` when sibling UI needs a
+custom derived snapshot without rerendering on unrelated tree changes. For the
+shared interaction vocabulary, read
+[Navigate selection, focus, and search](#navigate-selection-focus-and-search)
+and [React API](#react-api).
+
+#### Use simple `paths` input only when the tree is small
+
+Raw `paths` is the low-ceremony path for demos, tests, and very small static
+trees. It is not the scalable default. Once the tree becomes expensive to shape
+or sort on the client, move that work out of the UI.
+
+#### Move to prepared input before the tree gets expensive
+
+The recommended scale path is:
+
+1. Load canonical paths on the server or another non-UI boundary.
+2. Prepare the tree input once.
+3. Pass `preparedInput` into `useFileTree(...)`.
+
+If the server already knows the final order,
+`preparePresortedFileTreeInput(...)` is the highest-performance prepared-input
+variant because the client can skip both shaping and extra sorting work.
+
+#### Add SSR later when first paint matters
+
+Hydration layers on top of the same model-first React story. The client still
+calls `useFileTree(...)`, and the React wrapper still renders the same model.
+The only difference is that the tree starts from preloaded server output.
+
+When you need that flow, continue with [SSR](#ssr) and [SSR API](#ssr-api).

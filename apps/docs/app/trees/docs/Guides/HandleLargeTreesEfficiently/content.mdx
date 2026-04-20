@@ -1,0 +1,94 @@
+### Handle large trees efficiently
+
+Large-tree performance starts by reducing unnecessary client work. Shape and
+order the data before it reaches the UI, then tune rendering only where the
+visible window actually needs help.
+
+#### Start with the main recommendation
+
+Use:
+
+- raw `paths` for small demos and low-ceremony cases
+- `preparedInput` for larger trees
+- `preparePresortedFileTreeInput(...)` when the server already owns the final
+  order
+
+That order matters. Do not jump straight to rendering knobs if the client is
+still doing avoidable shaping or sorting work.
+
+#### Prepare input before it reaches the client
+
+For larger trees, move shaping work out of the UI. Prepared input is the
+scale-oriented public path.
+
+```ts
+import { preparePresortedFileTreeInput } from '@pierre/trees';
+
+export async function loadWorkspaceTree() {
+  const sortedPaths = await fetchSortedWorkspacePaths();
+  return preparePresortedFileTreeInput(sortedPaths);
+}
+```
+
+If you only have an unsorted path list, use `prepareFileTreeInput(...)` instead.
+Either way, pass the prepared result into React, vanilla, or SSR hydration.
+
+#### Keep rendering work small
+
+Trees already virtualizes the visible row window. Most apps do not need custom
+virtualization primitives.
+
+The main rendering knobs are:
+
+- `viewportHeight`, because virtualization needs a real visible window
+- `itemHeight`, when your design changes row density enough to matter
+- `overscan`, when you need to trade a little extra work for smoother scrolling
+
+```tsx
+const { model } = useFileTree({
+  preparedInput,
+  viewportHeight: 420,
+  itemHeight: 30,
+  overscan: 8,
+});
+```
+
+Keep the language outcome-focused: the tree mounts the visible slice plus a
+small buffer around it.
+
+#### Expansion and search still affect scale
+
+Prepared input lowers the cost of shaping the data, but expansion and search
+still change how many rows stay visible at once. Large expanded trees and broad
+search results can widen the mounted window.
+
+That is another reason to start with the input story first. If the visible tree
+changes often, avoid recomputing the underlying shape in the client at the same
+time.
+
+#### SSR and hydration pair naturally with prepared input
+
+Large trees often benefit from server preload. The same scale rule still
+applies: prepare or presort the input on the server once, preload the tree once,
+and let the client hydrate that work instead of recomputing it.
+
+Read [SSR](#ssr) when first paint matters, and [SSR API](#ssr-api) when you need
+the handoff contract.
+
+#### Common pitfalls
+
+Avoid these patterns when the tree grows:
+
+- sending only raw `paths` for huge server-known datasets
+- re-sorting on the client after the server already chose the order
+- treating low-level virtualization ideas as the first fix
+- rebuilding the model when `resetPaths(...)` with matching prepared input would
+  do the job
+
+#### What to read next
+
+- [Shape tree data for fast rendering](#shape-tree-data-for-fast-rendering) for
+  the shared input story
+- [Shared concepts](#shared-concepts-scale-and-rendering-settings) for the
+  cross-runtime rendering knobs
+- [SSR](#ssr) for server-preload-first rendering

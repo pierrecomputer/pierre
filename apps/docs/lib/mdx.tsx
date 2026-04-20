@@ -27,7 +27,6 @@ import {
   VanillaComponentTabs,
   VanillaPropTabs,
 } from '../app/docs/VanillaAPI/ComponentTabs';
-import { TreesCodeToggle } from '../app/trees/docs/Overview/TreesCodeToggle';
 import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
 import remarkTocIgnore from './remark-toc-ignore';
 import { Button } from '@/components/ui/button';
@@ -65,7 +64,6 @@ const defaultComponents = {
   // Interactive tab components
   PackageManagerTabs,
   CodeToggle,
-  TreesCodeToggle,
   ComponentTabs,
   SharedPropTabs,
   TokenHookTabs,

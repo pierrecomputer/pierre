@@ -1,0 +1,170 @@
+### Shared concepts
+
+This page owns the cross-runtime language for Trees. React, vanilla, and SSR all
+use the same path-first identity model, the same tree-defining inputs, and the
+same mutation vocabulary.
+
+#### Path-first identity
+
+Canonical path strings are the public identity for tree items. Use paths
+everywhere:
+
+- selection values
+- focused-item lookups
+- search matches
+- rename and drag-and-drop events
+- Git status attachment
+- row annotations
+
+Files and directories share the same identity space. APIs distinguish the item
+kind when that difference matters.
+
+#### Input shapes
+
+Trees accepts three related input shapes:
+
+- `paths`: the low-ceremony path for demos, tests, and small static trees
+- `preparedInput`: the recommended scale-oriented input shape
+- presorted prepared input: the highest-performance prepared-input path when the
+  server already knows the final order
+
+Use `prepareFileTreeInput(...)` and `preparePresortedFileTreeInput(...)` from
+`@pierre/trees` to create the prepared forms. Treat prepared input as an opaque
+tree-input object, not as a hand-rolled shape.
+
+#### Shared option groups
+
+This table covers the shared meaning of the public options surface across
+runtimes.
+
+| Option                    | Meaning                                                           | Typical use                                                                  |
+| ------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `paths`                   | Raw canonical path list.                                          | Small demos, tests, very small static trees.                                 |
+| `preparedInput`           | Pre-shaped tree input created ahead of render.                    | Recommended input for larger trees.                                          |
+| `id`                      | Stable host identity for the tree.                                | Coordinate server preload and client hydration, or set a predictable DOM id. |
+| `initialExpansion`        | Baseline expansion policy for the first render.                   | Start broadly open, broadly closed, or at a specific depth.                  |
+| `initialExpandedPaths`    | Specific paths that should begin expanded.                        | Keep key folders open on first render.                                       |
+| `initialSelectedPaths`    | Paths selected on first render.                                   | Seed selection for previews or restored state.                               |
+| `flattenEmptyDirectories` | Flattens chains of single-child directories into one visible row. | Compact repo-style trees.                                                    |
+| `sort`                    | Client-side ordering for non-presorted input.                     | Secondary path when order must be chosen in the client.                      |
+| `search`                  | Enables the built-in search surface and model search methods.     | Searchable trees.                                                            |
+| `initialSearchQuery`      | Starting search value.                                            | Preloaded filtered views or restored search state.                           |
+| `fileTreeSearchMode`      | Controls how matches change the visible tree.                     | Choose between filtering, collapsing, or expanding around matches.           |
+| `onSearchChange`          | Callback for search-value changes.                                | Sync surrounding controls or analytics.                                      |
+| `onSelectionChange`       | Callback for selection changes.                                   | Update sibling UI that tracks current selection.                             |
+| `dragAndDrop`             | Enables drag and drop plus its policy hooks.                      | Editable trees.                                                              |
+| `renaming`                | Enables inline rename plus policy hooks.                          | Rename-in-place workflows.                                                   |
+| `composition`             | Header and context-menu composition surface.                      | Add a header row or contextual commands.                                     |
+| `gitStatus`               | Built-in Git-style row signals.                                   | Added, modified, deleted, ignored, renamed, and untracked states.            |
+| `icons`                   | Built-in icon set or icon configuration object.                   | Set selection, color mode, remaps, or sprite-sheet extension.                |
+| `renderRowDecoration`     | Custom non-Git row signal renderer.                               | Generated-file badges, remote markers, validation hints.                     |
+| `itemHeight`              | Row-height hint for the virtualized view.                         | Custom density.                                                              |
+| `overscan`                | Extra rows rendered outside the visible window.                   | Smooth scrolling tradeoffs.                                                  |
+| `viewportHeight`          | Visible window height for virtualization.                         | Fixed-height trees and predictable rendering.                                |
+| `unsafeCSS`               | Advanced CSS injection into the tree shadow root.                 | Narrow escape hatch when supported styling surfaces are not enough.          |
+
+#### Tree-shape options
+
+The tree-shape options are `paths`, `preparedInput`, `initialExpansion`,
+`initialExpandedPaths`, `flattenEmptyDirectories`, and `sort`.
+
+Use them to answer three questions:
+
+1. where the tree data comes from
+2. what the initial visible shape should be
+3. whether the client still needs to shape or sort the data
+
+For the recommended setup, read
+[Shape tree data for fast rendering](#shape-tree-data-for-fast-rendering).
+
+#### Search mode semantics
+
+Trees supports three search modes:
+
+- `hide-non-matches`: filters visible rows down to matches plus the ancestor
+  chain needed to keep them navigable. This is the guide default.
+- `collapse-non-matches`: keeps matching paths and their ancestor chain visible,
+  but collapses unrelated branches out of the way.
+- `expand-matches`: expands matching branches into surrounding tree context and
+  keeps non-matching rows visible.
+
+React and vanilla use the same search modes. Runtime pages should not redefine
+them.
+
+#### Selection, focus, and item handles
+
+Selection is path-based. Focus is path-based. Item handles are path-oriented
+helpers for a known item.
+
+Common lookup topics are:
+
+- get an item by path
+- read focused and selected state
+- focus, select, toggle, or deselect through the model or item handle
+- expand, collapse, or toggle directories through a directory handle
+
+Use
+[Navigate selection, focus, and search](#navigate-selection-focus-and-search)
+for workflows, [React API](#react-api) for selector hooks, and
+[Vanilla API](#vanilla-api) for direct class methods.
+
+#### Interaction and editing options
+
+`dragAndDrop`, `renaming`, and `composition` are the runtime-agnostic editing
+surfaces. They share the same path-first event model even though the React and
+vanilla integration points differ.
+
+Use
+[Rename, drag, and trigger item actions](#rename-drag-and-trigger-item-actions)
+for the user-facing workflows built on top of those options.
+
+#### Appearance and annotation options
+
+`gitStatus`, `icons`, `renderRowDecoration`, and `unsafeCSS` all affect how rows
+look, but they do different jobs:
+
+- `gitStatus` is the built-in Git-style signal lane
+- `icons` controls icon sets, remaps, and sprite-sheet extension
+- `renderRowDecoration` adds non-Git row metadata
+- `unsafeCSS` is the narrow fallback when public styling surfaces are not enough
+
+For deeper lookup, jump to [Styling and theming](#styling-and-theming) and
+[Icons](#icons).
+
+#### Scale and rendering settings
+
+`viewportHeight`, `itemHeight`, and `overscan` are rendering knobs, not
+onboarding concepts. They tune the built-in virtualized row window after you
+have already picked the right data-shaping path.
+
+Use [Handle large trees efficiently](#handle-large-trees-efficiently) when scale
+becomes the real problem.
+
+#### Mutation vocabulary
+
+Trees exposes semantic tree mutations rather than DOM events. The shared
+mutation terms are:
+
+- `add`
+- `remove`
+- `move`
+- `batch`
+- `resetPaths`
+- `onMutation`
+
+Mutation payloads stay path-first. Reset events also tell you whether prepared
+input was involved, and invalidation metadata tells you whether canonical state
+or projected visible state changed.
+
+Use these events to sync adjacent UI, analytics, or persistence layers. Do not
+turn them into a filesystem-sync tutorial.
+
+#### Opaque SSR payload framing
+
+Server preload returns one handoff object. Pass it forward unchanged.
+
+React consumes that handoff as `preloadedData`. Vanilla hydrates existing server
+markup through `hydrate({ fileTreeContainer })`. Neither runtime should teach
+field-by-field payload choreography as the main story.
+
+For the preload and hydration contract, read [SSR API](#ssr-api).

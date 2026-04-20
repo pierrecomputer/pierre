@@ -92,10 +92,10 @@ export function DemoFlatten({ preloadedData }: DemoFlattenProps) {
             tree options to collapse single-child folder chains into one row for
             a more compact tree.{' '}
             <Link
-              href={`${PRODUCTS.trees.docsPath}#core-types-filetreeoptions`}
+              href={`${PRODUCTS.trees.docsPath}#shared-concepts-tree-shape-options`}
               className="inline-link"
             >
-              More about tree options…
+              Tree-shape options…
             </Link>
           </>
         }

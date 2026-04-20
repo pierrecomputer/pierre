@@ -262,12 +262,13 @@ export function DemoMiddotTruncationClient({
             Tree rows use middle truncation to keep extensions and leaf names
             readable under tight widths. This includes extension-aware clipping
             and flattened directory segments. Drag the right edge to compare
-            narrow and roomy layouts, then toggle a few high-signal options from{' '}
+            narrow and roomy layouts, then toggle a few high-signal options from
+            the{' '}
             <Link
-              href={`${PRODUCTS.trees.docsPath}#core-types-filetreeoptions`}
+              href={`${PRODUCTS.trees.docsPath}#shared-concepts-shared-option-groups`}
               className="inline-link"
             >
-              <code>FileTreeOptions</code>
+              shared options reference
             </Link>
             .
           </>

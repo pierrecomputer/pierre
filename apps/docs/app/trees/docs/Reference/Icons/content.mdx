@@ -1,0 +1,93 @@
+### Icons
+
+This page is the lookup reference for icon sets, icon remaps, sprite-sheet
+extension, and icon-specific configuration rules.
+
+#### Entry points
+
+Built-in set selection:
+
+- `icons: 'minimal' | 'standard' | 'complete'`
+- `minimal` keeps the visual noise low
+- `standard` adds common language and file-type icons
+- `complete` has the broadest built-in coverage
+
+Object configuration:
+
+- use `FileTreeIconConfig` when a string set is not enough
+- combine a base set with color toggles, slot remaps, or file-specific remaps
+
+#### Configuration shape
+
+Base set and color mode:
+
+- `set?: 'minimal' | 'standard' | 'complete' | 'none'`
+- `colored?: boolean`
+
+`set: 'none'` disables built-in file-type mappings. File rows still fall back to
+the generic file icon unless remaps replace it.
+
+Sprite-sheet extension:
+
+- `spriteSheet?: string`
+- supply an SVG string with `<symbol>` definitions that remaps can target
+
+Built-in slot remapping:
+
+- `remap?: Record<string, RemappedIcon>`
+- common slots: chevron, generic file icon, modified-state dot, locked-path icon
+
+File-specific remapping:
+
+- `byFileName` for exact basename matches such as `package.json`
+- `byFileNameContains` for basename substring rules such as `dockerfile`
+- `byFileExtension` for extension rules without a leading dot, including
+  multi-part suffixes such as `spec.ts`
+
+#### Resolution order
+
+File icon lookup resolves in this order:
+
+1. exact basename match from `byFileName`
+2. basename-contains match from `byFileNameContains`
+3. extension match from `byFileExtension`, with more specific suffixes winning
+4. built-in set mapping
+5. generic file-slot remap or fallback
+
+That means `spec.ts` should beat `ts` when both rules exist.
+
+#### `RemappedIcon` shape
+
+`RemappedIcon` supports two forms:
+
+- a string symbol id
+- an object with `name`, plus optional `width`, `height`, and `viewBox`
+
+Use the object form when the replacement symbol needs non-default geometry
+metadata.
+
+#### Runtime touchpoints
+
+React:
+
+- pass icon configuration through the model options used by `useFileTree(...)`
+
+Vanilla:
+
+- pass icon configuration at construction time
+- update it later with `setIcons(...)`
+
+For the runtime-specific lookup around those touchpoints, read
+[React API](#react-api) and [Vanilla API](#vanilla-api).
+
+#### Icon color interplay
+
+Built-in colored icons can be disabled with `colored: false`. The actual token
+lookup and fallback precedence for icon colors live in
+[Styling and theming](#styling-and-theming).
+
+#### Related pages
+
+- [Customize icons](#customize-icons) for the walkthrough
+- [Style and theme the tree](#style-and-theme-the-tree) for broader appearance
+  changes

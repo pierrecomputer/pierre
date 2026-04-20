@@ -1,0 +1,104 @@
+### SSR API
+
+The SSR entry point lives in `@pierre/trees/ssr`. It owns server preload and the
+server-to-client handoff contract.
+
+#### Server-preload-first contract
+
+Start with the server step, not the client step. Call `preloadFileTree(options)`
+on the server, then pass the returned value forward as one opaque handoff
+object.
+
+```ts
+import { preloadFileTree } from '@pierre/trees/ssr';
+
+const payload = preloadFileTree({
+  preparedInput,
+  id: 'project-tree',
+  initialExpandedPaths: ['src'],
+  viewportHeight: 320,
+});
+```
+
+Hydration reuses that server work. It is not a separate rendering strategy with
+a different public data model.
+
+#### `preloadFileTree(...)`
+
+`preloadFileTree(...)`:
+
+- accepts the shared `FileTreeOptions` surface
+- pre-renders the tree for first paint
+- returns an opaque SSR payload
+
+The current exported payload type name is `FileTreeSsrPayload`, but the
+docs-facing rule stays the same: pass it through unchanged.
+
+#### `serializeFileTreeSsrPayload(...)`
+
+`serializeFileTreeSsrPayload(payload, mode?)` turns the preloaded payload back
+into a full host-markup string.
+
+Use it when your server integration needs a serialized HTML string instead of
+passing the payload through a framework-specific render boundary. The payload
+still stays opaque at the docs level.
+
+#### Opaque payload framing
+
+Treat the preload result as a handoff object, not as a field-by-field
+integration surface.
+
+Docs can name the runtime touchpoints that consume it:
+
+- React passes the payload as `preloadedData`
+- Vanilla hydrates the server-rendered tree already in the page with
+  `hydrate({ fileTreeContainer })`
+
+Do not center raw payload fields as the public story.
+
+#### Handoff rules
+
+Server and client must agree on the same tree-defining options.
+
+Match:
+
+- the same path source (`paths`, prepared input, or presorted prepared input)
+- the same `id` discipline
+- the same expansion and search-affecting options when they change the initial
+  rendered tree
+- the same appearance-affecting options when they change initial markup or icon
+  output
+
+Mismatches are not a supported partial merge. They produce hydration mismatch or
+incorrect first state.
+
+#### Prepared input and hydration
+
+Hydration works with raw `paths` or prepared input, but the recommended scale
+path is server-prepared input with matching client consumption.
+
+For the shared input model behind that rule, read
+[Shared concepts](#shared-concepts-input-shapes).
+
+#### React handoff
+
+React still creates the model with `useFileTree(...)`, then passes the payload
+to `<FileTree model={model} preloadedData={payload} />`.
+
+For the full runtime surface, read [React API](#react-api). For the workflow
+guide, read [SSR](#ssr).
+
+#### Vanilla handoff
+
+Vanilla emits the server-rendered tree into the page first, creates
+`new FileTree(options)` on the client, then calls
+`fileTree.hydrate({ fileTreeContainer })` against the existing host.
+
+For the full runtime surface, read [Vanilla API](#vanilla-api). For the workflow
+guide, read [SSR](#ssr).
+
+#### Advanced note boundary
+
+If you mention declarative shadow DOM or hydration warnings, keep that note
+short and secondary. This page owns the public handoff contract, not DOM
+internals.

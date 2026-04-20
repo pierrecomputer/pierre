@@ -1,0 +1,114 @@
+### Shape tree data for fast rendering
+
+Shape the tree before it reaches the UI when the dataset is large enough for
+client-side preparation to matter. Trees treats prepared input as a first-class
+public concept, not as an internal optimization trick.
+
+#### Start with server-prepared input for scalable trees
+
+`prepareFileTreeInput(...)` lets the client skip repeated tree-shaping work. The
+best place to do that preparation is usually the server, a loader, or another
+non-UI boundary that already has the full path list.
+
+```ts
+import { prepareFileTreeInput } from '@pierre/trees';
+
+export async function loadProjectTreeInput(projectId: string) {
+  const paths = await fetchProjectPaths(projectId);
+
+  return prepareFileTreeInput(paths, {
+    flattenEmptyDirectories: true,
+  });
+}
+```
+
+The client still works with the same path-first model. Only the expensive
+preparation step moves earlier.
+
+#### Pass `preparedInput` into the runtime
+
+Both primary runtimes consume the same prepared payload shape.
+
+```tsx
+import { FileTree, useFileTree } from '@pierre/trees/react';
+import type { FileTreePreparedInput } from '@pierre/trees';
+
+export function ReactTree({
+  preparedInput,
+}: {
+  preparedInput: FileTreePreparedInput;
+}) {
+  const { model } = useFileTree({ preparedInput, viewportHeight: 320 });
+  return <FileTree model={model} />;
+}
+```
+
+```ts
+import { FileTree, type FileTreePreparedInput } from '@pierre/trees';
+
+export function mountVanillaTree(
+  container: HTMLElement,
+  preparedInput: FileTreePreparedInput
+) {
+  const fileTree = new FileTree({ preparedInput, viewportHeight: 320 });
+  fileTree.render({ fileTreeContainer: container });
+  return fileTree;
+}
+```
+
+#### Use simple `paths` input only for small trees
+
+Raw `paths` is still the right call for small demos, tests, and very small
+static trees.
+
+```ts
+const fileTree = new FileTree({
+  paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
+});
+```
+
+That is the easy starting path, not the scale-oriented default. When the tree
+grows, move the preparation work out of the client.
+
+#### Presorted input is the highest-performance prepared-input path
+
+If your server or indexer already knows the final order, use
+`preparePresortedFileTreeInput(...)`. That skips both the tree-shaping work and
+the extra ordering work a normal prepared input pass would still apply.
+
+```ts
+import { preparePresortedFileTreeInput } from '@pierre/trees';
+
+const preparedInput = preparePresortedFileTreeInput([
+  'README.md',
+  'src/index.ts',
+  'src/components/Button.tsx',
+]);
+```
+
+Use this when the backend, build step, or cached index already owns the sort
+order. Do not reimplement default ordering manually in the client just to reach
+the presorted path.
+
+#### Prepare on the server, render on the client
+
+The recommended split is simple:
+
+1. Load canonical paths outside the UI.
+2. Prepare the input once.
+3. Pass `preparedInput` into React, vanilla, or SSR hydration.
+
+That reduces client CPU work, makes startup cost more predictable, and lets the
+same prepared payload feed every runtime.
+
+#### Keep client-side sorting and preparation secondary
+
+Sometimes data only exists in the browser, or custom ordering must run there.
+Trees supports that, but it is the exception path. Start with prepared input
+when the app can move work out of the UI, and treat client-side shaping as a
+fallback.
+
+For the shared contract behind these inputs, see
+[Shared concepts](#shared-concepts). For the scale-oriented version of the same
+guidance, continue with
+[Handle large trees efficiently](#handle-large-trees-efficiently).

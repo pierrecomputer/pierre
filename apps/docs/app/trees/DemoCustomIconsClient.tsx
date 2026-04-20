@@ -114,10 +114,10 @@ export function DemoCustomIconsClient({
             like <code>--trees-file-icon-color-javascript</code>, or fall back
             to a fully custom sprite. See the{' '}
             <a
-              href={`${PRODUCTS.trees.docsPath}#custom-icons`}
+              href={`${PRODUCTS.trees.docsPath}#icons-configuration-shape`}
               className="inline-link"
             >
-              FileTreeIconConfig docs
+              <code>FileTreeIconConfig</code> reference
             </a>{' '}
             for the full API.
           </>

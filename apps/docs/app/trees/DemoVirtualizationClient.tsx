@@ -47,12 +47,12 @@ export function DemoVirtualizationClient({
         description={
           <>
             Trees with thousands of items render instantly with built-in and
-            automatic virtualization. Only visible rows are mounted. See{' '}
+            automatic virtualization. Only visible rows are mounted. See the{' '}
             <Link
-              href={`${PRODUCTS.trees.docsPath}#core-types-filetreeoptions`}
+              href={`${PRODUCTS.trees.docsPath}#shared-concepts-scale-and-rendering-settings`}
               className="inline-link"
             >
-              <code>FileTreeOptions</code>
+              scale settings reference
             </Link>{' '}
             for configuration details. As a demo, the tree below contains{' '}
             <strong>{FILE_COUNT_FORMATTER.format(paths.length)} files</strong>{' '}

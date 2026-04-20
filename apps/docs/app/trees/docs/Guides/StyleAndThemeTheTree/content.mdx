@@ -1,0 +1,117 @@
+### Style and theme the tree
+
+Start with the host element, then move inward. Host styles control the outer
+panel. CSS variables control most tree-internal appearance.
+`themeToTreeStyles(...)` maps an editor-like theme into the same variable
+system. `unsafeCSS` is the escape hatch when the supported surfaces do not reach
+a narrow case.
+
+#### Start with host styling
+
+The host element is the outer panel boundary. Use it for width, height, borders,
+radius, background, and layout placement.
+
+In React, pass normal host props to `<FileTree model={...} />`.
+
+```tsx
+<FileTree
+  model={model}
+  className="h-96 rounded-xl border"
+  style={{
+    backgroundColor: 'var(--panel)',
+    borderColor: 'var(--border)',
+  }}
+/>
+```
+
+In vanilla, style the mounted host element you already own. After mount,
+`getFileTreeContainer()` gives you that element back when runtime code needs to
+update it.
+
+#### Use CSS variables for most visual changes
+
+CSS variables are the main public styling surface inside the shadow root. Reach
+for them before custom CSS injection.
+
+```tsx
+<FileTree
+  model={model}
+  style={
+    {
+      '--trees-theme-list-active-selection-bg':
+        'color-mix(in oklab, var(--accent) 24%, transparent)',
+      '--trees-theme-list-hover-bg':
+        'color-mix(in oklab, var(--accent) 12%, transparent)',
+      '--trees-theme-focus-ring': 'var(--accent)',
+    } as React.CSSProperties
+  }
+/>
+```
+
+That approach keeps the normal fallback chain intact:
+
+1. explicit override variables
+2. `--trees-theme-*` variables from theme helpers
+3. library defaults
+
+For the token families behind those variables, see
+[Styling and theming](#styling-and-theming).
+
+#### Match an editor palette with `themeToTreeStyles(...)`
+
+Use `themeToTreeStyles(...)` when your app already has a VS Code or Shiki-style
+theme object. It maps that theme to host styles plus the `--trees-theme-*`
+variables the tree already understands.
+
+```tsx
+import { themeToTreeStyles } from '@pierre/trees';
+
+const treeStyles = themeToTreeStyles(theme);
+
+<FileTree
+  model={model}
+  style={
+    {
+      ...treeStyles,
+      '--trees-theme-list-active-selection-bg':
+        'color-mix(in oklab, var(--accent) 28%, transparent)',
+    } as React.CSSProperties
+  }
+/>;
+```
+
+That gives you matching panel colors, selection colors, search-field colors, and
+Git-status colors without rebuilding the theme system by hand.
+
+#### Choose the right styling layer
+
+Use:
+
+- host styles for layout and panel framing
+- CSS variables for product-specific appearance changes inside the tree
+- `themeToTreeStyles(...)` when the tree should inherit an editor palette
+- `getFileTreeContainer()` in vanilla when runtime code needs the mounted host
+  element
+
+Layer explicit overrides on top when the imported theme is close but not final.
+
+#### `unsafeCSS` is the escape hatch
+
+`unsafeCSS` is for the cases the supported host and variable surfaces cannot
+express. Keep it small, local, and secondary.
+
+```ts
+const fileTree = new FileTree({
+  paths,
+  unsafeCSS: `
+    [data-item-button][data-item-focused="true"] {
+      text-decoration: underline;
+    }
+  `,
+});
+```
+
+Do not start here, and do not rebuild the whole visual system from raw
+selectors. If you need a broad lookup of the supported styling surfaces, read
+[Styling and theming](#styling-and-theming). For icon-specific appearance
+changes, continue with [Customize icons](#customize-icons).

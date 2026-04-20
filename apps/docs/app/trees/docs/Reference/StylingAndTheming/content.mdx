@@ -1,0 +1,95 @@
+### Styling and theming
+
+This page is the lookup reference for host styling, CSS-variable families,
+`themeToTreeStyles(...)`, and the `unsafeCSS` escape hatch.
+
+#### Styling entry points
+
+Host styling comes first.
+
+- React: use normal host `className` and `style` props on
+  `<FileTree model={...} />`
+- Vanilla: style the mounted host returned by `getFileTreeContainer()`
+
+Host styles own width, height, borders, background, and panel placement. CSS
+variables control the UI rendered inside that host.
+
+#### CSS custom property families
+
+The tree styling surface is organized around variable families rather than one
+flat list.
+
+Core families include:
+
+- panel, background, and foreground tokens
+- hover, selection, and focus tokens
+- input and search tokens
+- Git-status color tokens
+- icon color tokens for supported built-in icon sets
+
+#### Fallback precedence
+
+Trees resolves styling in this order:
+
+1. explicit override variables such as `--trees-*-override`
+2. `--trees-theme-*` variables supplied by theme helpers
+3. library defaults
+
+That means `themeToTreeStyles(...)` fills the middle layer, and direct overrides
+still win.
+
+#### `themeToTreeStyles(...)`
+
+`themeToTreeStyles(theme)` maps a VS Code or Shiki-style theme object into host
+styles plus the `--trees-theme-*` variables the tree already understands.
+
+Input shape:
+
+- `TreeThemeInput`
+- key fields: `type`, `bg`, `fg`, `colors`
+
+Output shape:
+
+- `TreeThemeStyles`
+- compatible with React inline styles and vanilla host-style assignment
+
+```ts
+import { themeToTreeStyles } from '@pierre/trees';
+
+const treeStyles = themeToTreeStyles(theme);
+```
+
+The helper covers panel colors, selection colors, focus rings, input colors, and
+Git-status colors. Explicit overrides can still replace any derived token later.
+
+#### Runtime touchpoints
+
+React:
+
+- styling stays on the host element through normal `className` and `style` props
+- there is no separate React-only styling API beyond shared tree options
+
+Vanilla:
+
+- apply styles through the host or container you already own
+- `getFileTreeContainer()` is the handoff back to application styling code
+
+#### `unsafeCSS` escape hatch
+
+`unsafeCSS` is the secondary path. Use it only when the supported host and
+variable surfaces cannot express the needed customization.
+
+Reference topics:
+
+- option name and public package surface
+- shadow-root CSS injection at a high level
+- warning that this is the exception path, not the default styling story
+
+Keep it narrow. Do not turn it into a raw stylesheet-asset strategy.
+
+#### Related pages
+
+- [Style and theme the tree](#style-and-theme-the-tree) for the walkthrough
+- [Icons](#icons) for icon-specific configuration
+- [Show Git status and row annotations](#show-git-status-and-row-annotations)
+  for signal meaning

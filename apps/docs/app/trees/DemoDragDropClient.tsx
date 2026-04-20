@@ -89,10 +89,10 @@ export function DemoDragDropClient({ preloadedData }: DemoDragDropClientProps) {
             <code>lockedPaths</code> to prevent specific paths from being
             dragged. Learn more in the{' '}
             <Link
-              href={`${PRODUCTS.trees.docsPath}#drag-and-drop`}
+              href={`${PRODUCTS.trees.docsPath}#rename-drag-and-trigger-item-actions-move-items-with-drag-and-drop`}
               className="inline-link"
             >
-              FileTreeOptions docs
+              item actions guide
             </Link>
             .
           </>

@@ -121,10 +121,10 @@ export function DemoDensityClient({ preloadedData }: DemoDensityClientProps) {
             Density now scales spacing around the rows rather than height
             itself. See the{' '}
             <Link
-              href={`${PRODUCTS.trees.docsPath}#styling`}
+              href={`${PRODUCTS.trees.docsPath}#styling-and-theming`}
               className="inline-link"
             >
-              Styling docs
+              styling and theming reference
             </Link>{' '}
             for more info.
           </>

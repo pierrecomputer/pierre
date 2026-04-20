@@ -1,0 +1,115 @@
+### Customize icons
+
+Start with the built-in icon sets, then add targeted remaps only where your
+product needs them. Most apps do not need to replace the whole icon system.
+
+#### Start with the built-in icon sets
+
+Trees ships three built-in sets:
+
+- `minimal` for low-noise file and folder visuals
+- `standard` for common language and file-type recognition
+- `complete` for the broadest built-in coverage
+
+If you only need a different baseline, pass the set name directly.
+
+```ts
+const fileTree = new FileTree({
+  paths,
+  icons: 'standard',
+});
+```
+
+#### Adjust color mode before you remap icons
+
+Built-in sets default to semantic icon colors. Turn that off before you reach
+for a sprite sheet if the product wants a quieter or monochrome look.
+
+```ts
+const fileTree = new FileTree({
+  paths,
+  icons: {
+    set: 'complete',
+    colored: false,
+  },
+});
+```
+
+For broader appearance control, use the styling system instead of treating icons
+as a parallel theme surface. See
+[Style and theme the tree](#style-and-theme-the-tree).
+
+#### Use the object form for targeted remaps
+
+Switch to `FileTreeIconConfig` when a plain set name is not enough. The
+practical remap surfaces are:
+
+- `remap` for built-in slots such as the generic file icon, chevron, dot, or
+  lock
+- `byFileName` for exact basenames such as `package.json`
+- `byFileExtension` for suffixes such as `ts` or `spec.ts`
+- `byFileNameContains` for broader patterns such as `dockerfile`
+
+```ts
+const fileTree = new FileTree({
+  paths,
+  icons: {
+    set: 'standard',
+    byFileName: {
+      'package.json': 'icon-package-json',
+    },
+    byFileExtension: {
+      'spec.ts': 'icon-test-file',
+    },
+    byFileNameContains: {
+      dockerfile: 'icon-dockerfile',
+    },
+    remap: {
+      'file-tree-icon-lock': 'icon-locked',
+    },
+  },
+});
+```
+
+That keeps the built-in mapping for everything you did not customize.
+
+#### Rule precedence matters
+
+File-specific rules beat broader ones. In practice, Trees resolves icons in this
+order:
+
+1. exact basename matches
+2. basename-contains matches
+3. extension matches, with more specific suffixes winning
+4. the chosen built-in set
+5. the generic file-slot remap or fallback
+
+If you want the full lookup contract, read [Icons](#icons-resolution-order).
+
+#### Use a sprite sheet only for advanced cases
+
+`spriteSheet` is the path when you already have branded SVG symbols or need a
+few custom symbols that should coexist with the built-in set.
+
+```ts
+const fileTree = new FileTree({
+  paths,
+  icons: {
+    set: 'standard',
+    spriteSheet: `
+      <svg aria-hidden="true" width="0" height="0">
+        <symbol id="icon-package-json" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="7" fill="currentColor" />
+        </symbol>
+      </svg>
+    `,
+    byFileName: {
+      'package.json': 'icon-package-json',
+    },
+  },
+});
+```
+
+Keep the contract simple: provide `<symbol>` definitions, then reference those
+symbols through remap rules. Do not turn sprite sheets into the default docs
+path.

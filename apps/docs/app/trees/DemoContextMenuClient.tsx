@@ -438,16 +438,16 @@ export function DemoContextMenuClient({
         title="Context menu composition"
         description={
           <>
-            Render a custom context menu via{' '}
+            Render a custom context menu with{' '}
             <Link
-              href={`${PRODUCTS.trees.docsPath}#composition`}
+              href={`${PRODUCTS.trees.docsPath}#rename-drag-and-trigger-item-actions-add-a-context-menu-as-an-optional-command-surface`}
               className="inline-link"
             >
               <code>composition.contextMenu</code>
-            </Link>
-            . This demo exposes trigger modes for right-click, trigger button,
-            or both, and menu actions for new files, new folders, rename, and
-            delete.
+            </Link>{' '}
+            and the React <code>renderContextMenu</code> prop. . This demo
+            exposes trigger modes for right-click, trigger button, or both, and
+            menu actions for new files, new folders, rename, and delete.
           </>
         }
       />

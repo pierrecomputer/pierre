@@ -216,10 +216,10 @@ export function DemoThemingClient({
             light/dark to see the tree update live. Compare against our default
             themes in light and dark mode, too. See the{' '}
             <Link
-              href={`${PRODUCTS.trees.docsPath}#themes`}
+              href={`${PRODUCTS.trees.docsPath}#styling-and-theming`}
               className="inline-link"
             >
-              Theming docs
+              styling and theming reference
             </Link>{' '}
             for more.
           </>

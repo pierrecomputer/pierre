@@ -1,0 +1,112 @@
+### Get started with vanilla
+
+Use the vanilla runtime when your app is not React-based, or when another
+framework will own lifecycle around an imperative tree model.
+`new FileTree(...)` creates the model, and `render(...)` or `hydrate(...)`
+attaches it to the DOM.
+
+#### Install `@pierre/trees`
+
+```bash
+bun add @pierre/trees
+# npm: npm install @pierre/trees
+# pnpm: pnpm add @pierre/trees
+```
+
+#### Create the model with `new FileTree(...)`
+
+The class instance is both the runtime entry point and the state surface. For
+small trees, you can pass raw `paths`. For scalable trees, prefer
+`preparedInput` produced outside the UI.
+
+```ts
+import { FileTree, type FileTreePreparedInput } from '@pierre/trees';
+
+export function mountProjectTree(
+  container: HTMLElement,
+  preparedInput: FileTreePreparedInput
+) {
+  const fileTree = new FileTree({
+    preparedInput,
+    search: true,
+    initialExpandedPaths: ['src', 'src/components'],
+    viewportHeight: 320,
+  });
+
+  fileTree.render({ fileTreeContainer: container });
+  return fileTree;
+}
+```
+
+#### Render into a host element
+
+`render({ fileTreeContainer })` mounts the model into an existing host element.
+If you want the runtime to create the host for you, use
+`render({ containerWrapper })` instead.
+
+Keep the boundary clear: the model owns tree state, and the mounted host only
+renders that state. Do not scrape the DOM to find the selected item or current
+focus. Read and update those values through the model.
+
+#### Read and update tree state through the model
+
+The instance gives you direct read methods, item handles, and imperative
+controls.
+
+```ts
+const fileTree = new FileTree({
+  paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
+  search: true,
+});
+
+fileTree.render({ fileTreeContainer: container });
+fileTree.focusPath('src/index.ts');
+fileTree.openSearch('button');
+
+const selectedPaths = fileTree.getSelectedPaths();
+const matchingPaths = fileTree.getSearchMatchingPaths();
+const focusedPath = fileTree.getFocusedPath();
+const buttonItem = fileTree.getItem('src/components/Button.tsx');
+buttonItem?.select();
+```
+
+When surrounding data changes, call explicit model methods such as
+`resetPaths(...)`, `setComposition(...)`, `setGitStatus(...)`, or
+`setIcons(...)` instead of reconstructing the model in place.
+
+#### Use simple `paths` input only when the tree is small
+
+Raw `paths` is the low-ceremony path for demos, tests, and small static trees.
+It is not the recommended setup for repo-scale or workspace-scale trees.
+
+#### Move to prepared input before the tree gets expensive
+
+The recommended scale path is:
+
+1. Load canonical paths outside the UI.
+2. Prepare the tree input once.
+3. Construct `new FileTree({ preparedInput, ... })`.
+
+If the server or indexer already knows the final order,
+`preparePresortedFileTreeInput(...)` is the better fit because the client can
+skip extra sorting work.
+
+#### Add SSR later when server rendering matters
+
+Hydration layers on top of the same class-first runtime. The client still
+creates `new FileTree(...)`, but instead of rendering fresh markup it attaches
+that model to server-rendered tree output with `hydrate({ fileTreeContainer })`.
+
+When you need that flow, continue with [SSR](#ssr) and [SSR API](#ssr-api).
+
+#### Advanced note: wrapping the vanilla model in another framework
+
+If you wrap the vanilla model in another framework, keep the ownership boundary
+the same:
+
+- create and own the `FileTree` instance from that framework's lifecycle
+- mount or unmount around the instance
+- keep all tree reads and writes on the model itself
+
+That keeps React as the only first-class wrapper surface without changing how
+the underlying model works.

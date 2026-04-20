@@ -146,10 +146,10 @@ export function DemoStylingClient({
               '—that override our default values and the CSS we use to style the tree. See the '
             }
             <Link
-              href={`${PRODUCTS.trees.docsPath}#styling`}
+              href={`${PRODUCTS.trees.docsPath}#styling-and-theming`}
               className="inline-link"
             >
-              Styling docs
+              styling and theming reference
             </Link>{' '}
             {'for more info.'}
           </>
