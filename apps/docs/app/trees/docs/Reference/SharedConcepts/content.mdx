@@ -37,31 +37,31 @@ tree-input object, not as a hand-rolled shape.
 This table covers the shared meaning of the public options surface across
 runtimes.
 
-| Option                    | Meaning                                                           | Typical use                                                                  |
-| ------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `paths`                   | Raw canonical path list.                                          | Small demos, tests, very small static trees.                                 |
-| `preparedInput`           | Pre-shaped tree input created ahead of render.                    | Recommended input for larger trees.                                          |
-| `id`                      | Stable host identity for the tree.                                | Coordinate server preload and client hydration, or set a predictable DOM id. |
-| `initialExpansion`        | Baseline expansion policy for the first render.                   | Start broadly open, broadly closed, or at a specific depth.                  |
-| `initialExpandedPaths`    | Specific paths that should begin expanded.                        | Keep key folders open on first render.                                       |
-| `initialSelectedPaths`    | Paths selected on first render.                                   | Seed selection for previews or restored state.                               |
-| `flattenEmptyDirectories` | Flattens chains of single-child directories into one visible row. | Compact repo-style trees.                                                    |
-| `sort`                    | Client-side ordering for non-presorted input.                     | Secondary path when order must be chosen in the client.                      |
-| `search`                  | Enables the built-in search surface and model search methods.     | Searchable trees.                                                            |
-| `initialSearchQuery`      | Starting search value.                                            | Preloaded filtered views or restored search state.                           |
-| `fileTreeSearchMode`      | Controls how matches change the visible tree.                     | Choose between filtering, collapsing, or expanding around matches.           |
-| `onSearchChange`          | Callback for search-value changes.                                | Sync surrounding controls or analytics.                                      |
-| `onSelectionChange`       | Callback for selection changes.                                   | Update sibling UI that tracks current selection.                             |
-| `dragAndDrop`             | Enables drag and drop plus its policy hooks.                      | Editable trees.                                                              |
-| `renaming`                | Enables inline rename plus policy hooks.                          | Rename-in-place workflows.                                                   |
-| `composition`             | Header and context-menu composition surface.                      | Add a header row or contextual commands.                                     |
-| `gitStatus`               | Built-in Git-style row signals.                                   | Added, modified, deleted, ignored, renamed, and untracked states.            |
-| `icons`                   | Built-in icon set or icon configuration object.                   | Set selection, color mode, remaps, or sprite-sheet extension.                |
-| `renderRowDecoration`     | Custom non-Git row signal renderer.                               | Generated-file badges, remote markers, validation hints.                     |
-| `itemHeight`              | Row-height hint for the virtualized view.                         | Custom density.                                                              |
-| `overscan`                | Extra rows rendered outside the visible window.                   | Smooth scrolling tradeoffs.                                                  |
-| `viewportHeight`          | Visible window height for virtualization.                         | Fixed-height trees and predictable rendering.                                |
-| `unsafeCSS`               | Advanced CSS injection into the tree shadow root.                 | Narrow escape hatch when supported styling surfaces are not enough.          |
+| Option                    | Meaning                                                              | Typical use                                                                  |
+| ------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `paths`                   | Raw canonical path list.                                             | Small demos, tests, very small static trees.                                 |
+| `preparedInput`           | Pre-shaped tree input created ahead of render.                       | Recommended input for larger trees.                                          |
+| `id`                      | Stable host identity for the tree.                                   | Coordinate server preload and client hydration, or set a predictable DOM id. |
+| `initialExpansion`        | Baseline expansion policy for the first render.                      | Start broadly open, broadly closed, or at a specific depth.                  |
+| `initialExpandedPaths`    | Specific paths that should begin expanded.                           | Keep key folders open on first render.                                       |
+| `initialSelectedPaths`    | Paths selected on first render.                                      | Seed selection for previews or restored state.                               |
+| `flattenEmptyDirectories` | Flattens chains of single-child directories into one visible row.    | Compact repo-style trees.                                                    |
+| `sort`                    | Client-side ordering for non-presorted input.                        | Secondary path when order must be chosen in the client.                      |
+| `search`                  | Enables the built-in search surface and model search methods.        | Searchable trees.                                                            |
+| `initialSearchQuery`      | Starting search value.                                               | Preloaded filtered views or restored search state.                           |
+| `fileTreeSearchMode`      | Controls how matches change the visible tree.                        | Choose between filtering, collapsing, or expanding around matches.           |
+| `onSearchChange`          | Callback for search-value changes.                                   | Sync surrounding controls or analytics.                                      |
+| `onSelectionChange`       | Callback for selection changes.                                      | Update sibling UI that tracks current selection.                             |
+| `dragAndDrop`             | Enables drag and drop plus its policy hooks.                         | Editable trees.                                                              |
+| `renaming`                | Enables inline rename plus policy hooks.                             | Rename-in-place workflows.                                                   |
+| `composition`             | Header and context-menu composition surface.                         | Add a header row or contextual commands.                                     |
+| `gitStatus`               | Built-in Git-style row signals.                                      | Added, modified, deleted, ignored, renamed, and untracked states.            |
+| `icons`                   | Built-in icon set or icon configuration object.                      | Set selection, color mode, remaps, or sprite-sheet extension.                |
+| `renderRowDecoration`     | Custom non-Git row signal renderer.                                  | Generated-file badges, remote markers, validation hints.                     |
+| `itemHeight`              | Row-height hint for the virtualized view.                            | Custom density.                                                              |
+| `overscan`                | Extra rows rendered outside the visible window.                      | Smooth scrolling tradeoffs.                                                  |
+| `initialVisibleRowCount`  | Optional first-render row budget before the browser measures height. | Tune SSR and hydration work without pinning steady-state size.               |
+| `unsafeCSS`               | Advanced CSS injection into the tree shadow root.                    | Narrow escape hatch when supported styling surfaces are not enough.          |
 
 #### Tree-shape options
 
@@ -133,9 +133,9 @@ For deeper lookup, jump to [Styling and theming](#styling-and-theming) and
 
 #### Scale and rendering settings
 
-`viewportHeight`, `itemHeight`, and `overscan` are rendering knobs, not
-onboarding concepts. They tune the built-in virtualized row window after you
-have already picked the right data-shaping path.
+`initialVisibleRowCount`, `itemHeight`, and `overscan` are rendering knobs, not
+onboarding concepts. The rendered container sets steady-state height; these
+options only tune the first-render budget and the virtualized row window.
 
 Use [Handle large trees efficiently](#handle-large-trees-efficiently) when scale
 becomes the real problem.

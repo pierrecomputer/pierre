@@ -159,7 +159,7 @@ export function DragAndDropDemoClient({
       >
         <div
           ref={mountRef}
-          style={{ height: `${String(options.viewportHeight ?? 460)}px` }}
+          style={{ height: '460px' }}
           dangerouslySetInnerHTML={{ __html: containerHtml }}
           suppressHydrationWarning
         />

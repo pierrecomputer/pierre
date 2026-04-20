@@ -47,7 +47,7 @@ export default function TreesPage() {
     ],
     paths: sampleFileList,
     search: false,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.flattenHierarchical,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.flattenHierarchical / 30,
   });
   const flattenFlattenedPreloadedData = preloadFileTree({
     flattenEmptyDirectories: true,
@@ -56,7 +56,7 @@ export default function TreesPage() {
     initialExpandedPaths: ['build', 'build/assets/images/social'],
     paths: sampleFileList,
     search: false,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.flattenFlattened,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.flattenFlattened / 30,
   });
   const gitStatusFullViewportPreloadedData = preloadFileTree({
     flattenEmptyDirectories: true,
@@ -65,7 +65,7 @@ export default function TreesPage() {
     initialExpandedPaths: TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
     paths: sampleFileList,
     search: false,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFull,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFull / 30,
   });
   const gitStatusFilteredViewportPreloadedData = preloadFileTree({
     flattenEmptyDirectories: true,
@@ -74,7 +74,7 @@ export default function TreesPage() {
     initialExpandedPaths: TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
     paths: sampleFileList,
     search: false,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFiltered,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFiltered / 30,
   });
 
   return (

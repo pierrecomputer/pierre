@@ -86,7 +86,7 @@ describe('file-tree header slot', () => {
       flattenEmptyDirectories: true,
       initialExpansion: 'open',
       paths: ['README.md', 'src/index.ts'],
-      viewportHeight: 120,
+      initialVisibleRowCount: 120 / 30,
     });
 
     expect(payload.shadowHtml).toContain('slot name="header"');
@@ -115,7 +115,7 @@ describe('file-tree header slot', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -148,7 +148,7 @@ describe('file-tree header slot', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -181,7 +181,7 @@ describe('file-tree header slot', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       const mount = dom.window.document.createElement('div');
@@ -209,7 +209,7 @@ describe('file-tree header slot', () => {
         id: payload.id,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.hydrate({ fileTreeContainer: host });

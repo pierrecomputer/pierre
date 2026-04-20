@@ -19,7 +19,7 @@ export default async function TreesDevReactPage() {
     initialExpansion: 'open',
     paths: DEMO_PATHS,
     search: true,
-    viewportHeight: VIEWPORT_HEIGHT,
+    initialVisibleRowCount: VIEWPORT_HEIGHT / 30,
   });
 
   return (

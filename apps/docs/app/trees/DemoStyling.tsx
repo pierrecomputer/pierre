@@ -15,21 +15,21 @@ const lightPreloadedData = preloadFileTree({
   id: 'trees-styling-demo-light',
   initialSelectedPaths: [selectedPaths.light],
   paths: sampleFileList,
-  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.styling,
+  initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.styling / 30,
 });
 const darkPreloadedData = preloadFileTree({
   flattenEmptyDirectories: true,
   id: 'trees-styling-demo-dark',
   initialSelectedPaths: [selectedPaths.dark],
   paths: sampleFileList,
-  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.styling,
+  initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.styling / 30,
 });
 const synthwavePreloadedData = preloadFileTree({
   flattenEmptyDirectories: true,
   id: 'trees-styling-demo-synthwave',
   initialSelectedPaths: [selectedPaths.synthwave],
   paths: sampleFileList,
-  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.styling,
+  initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.styling / 30,
 });
 
 export function DemoStyling() {

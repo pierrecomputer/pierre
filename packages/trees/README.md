@@ -23,15 +23,17 @@ bun add @pierre/trees
 ```ts
 import { FileTree } from '@pierre/trees';
 
+const mount = document.getElementById('mount')!;
+mount.style.height = '320px';
+
 const tree = new FileTree({
   flattenEmptyDirectories: true,
   initialExpansion: 'open',
   paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
   search: true,
-  viewportHeight: 320,
 });
 
-tree.render({ containerWrapper: document.getElementById('mount')! });
+tree.render({ containerWrapper: mount });
 ```
 
 Useful model methods:
@@ -57,10 +59,7 @@ import { FileTree, preparePresortedFileTreeInput } from '@pierre/trees';
 const paths = ['src/', 'src/index.ts', 'README.md'];
 const preparedInput = preparePresortedFileTreeInput(paths);
 
-const tree = new FileTree({
-  preparedInput,
-  viewportHeight: 320,
-});
+const tree = new FileTree({ preparedInput });
 ```
 
 Use `prepareFileTreeInput(paths)` when you start with raw input. Use
@@ -78,7 +77,6 @@ export function Example({ paths }: { paths: string[] }) {
     initialExpansion: 'open',
     paths,
     search: true,
-    viewportHeight: 320,
   });
 
   return (
@@ -109,7 +107,7 @@ const preloadedData = preloadFileTree({
   id: 'docs-tree',
   initialExpansion: 'open',
   paths: ['README.md', 'src/index.ts'],
-  viewportHeight: 240,
+  initialVisibleRowCount: 8,
 });
 
 export function HydratedTree() {
@@ -117,10 +115,16 @@ export function HydratedTree() {
     id: 'docs-tree',
     initialExpansion: 'open',
     paths: ['README.md', 'src/index.ts'],
-    viewportHeight: 240,
+    initialVisibleRowCount: 8,
   });
 
-  return <FileTree model={model} preloadedData={preloadedData} />;
+  return (
+    <FileTree
+      model={model}
+      preloadedData={preloadedData}
+      style={{ height: '240px' }}
+    />
+  );
 }
 ```
 

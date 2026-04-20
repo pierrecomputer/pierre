@@ -96,10 +96,13 @@ export interface FileTreeFileHandle extends FileTreeItemHandleBase {
 export type FileTreeItemHandle = FileTreeDirectoryHandle | FileTreeFileHandle;
 
 export interface FileTreeRenderOptions {
+  // Hint how many rows should fit in the first render before the browser can
+  // measure the real scroll viewport. Fractional values are allowed when the
+  // desired first-render budget is not an exact multiple of itemHeight.
+  initialVisibleRowCount?: number;
   itemHeight?: number;
   overscan?: number;
   stickyFolders?: boolean;
-  viewportHeight?: number;
 }
 
 export type FileTreeSearchMode =
@@ -194,13 +197,21 @@ export interface FileTreeStickyWindowLayout {
   windowHeight: number;
 }
 
-export interface FileTreeViewProps extends FileTreeRenderOptions {
+export interface FileTreeViewProps extends Omit<
+  FileTreeRenderOptions,
+  'initialVisibleRowCount'
+> {
   composition?: FileTreeCompositionOptions;
   controller: import('./FileTreeController').FileTreeController;
   directoriesWithGitChanges?: ReadonlySet<FileTreePublicId>;
   gitStatusByPath?: ReadonlyMap<FileTreePublicId, GitStatus>;
   ignoredGitDirectories?: ReadonlySet<FileTreePublicId>;
   icons?: FileTreeIcons;
+  // First-render viewport height in CSS pixels, used as the fallback when the
+  // scroll element's clientHeight is still zero. The public option is
+  // `initialVisibleRowCount` (rows); the resolver multiplies it by itemHeight
+  // before passing the pixel value down here.
+  initialViewportHeight?: number;
   instanceId?: string;
   renamingEnabled?: boolean;
   renderRowDecoration?: FileTreeRowDecorationRenderer;

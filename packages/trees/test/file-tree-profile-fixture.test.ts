@@ -31,7 +31,9 @@ test('file-tree profile fixture options mirror the Phase 4 docs tree behavior', 
   expect(options.flattenEmptyDirectories).toBe(true);
   expect(options.initialExpandedPaths).toEqual(workload.expandedFolders);
   expect('paths' in options).toBe(false);
-  expect(options.viewportHeight).toBe(FILE_TREE_PROFILE_VIEWPORT_HEIGHT);
+  expect(options.initialVisibleRowCount).toBe(
+    FILE_TREE_PROFILE_VIEWPORT_HEIGHT / 30
+  );
   expect(options.preparedInput).toEqual(
     preparePresortedFileTreeInput(workload.files)
   );

@@ -94,7 +94,7 @@ function StyledTree({
     id,
     initialSelectedPaths: [selectedPath],
     paths: sampleFileList,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.styling,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.styling / 30,
   });
 
   return (

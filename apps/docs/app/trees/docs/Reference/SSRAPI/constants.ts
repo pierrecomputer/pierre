@@ -8,6 +8,6 @@ const payload = preloadFileTree({
   preparedInput,
   id: 'project-tree',
   initialExpandedPaths: ['src'],
-  viewportHeight: 320,
+  initialVisibleRowCount: 11,
 });`
 );

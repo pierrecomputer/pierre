@@ -502,7 +502,7 @@ export function MainDemoClient({
       paths: workloadData.paths,
       search: true,
       stickyFolders: true,
-      viewportHeight: FILE_TREE_PROOF_VIEWPORT_HEIGHT,
+      initialVisibleRowCount: FILE_TREE_PROOF_VIEWPORT_HEIGHT / 30,
     }),
     [workloadData]
   );

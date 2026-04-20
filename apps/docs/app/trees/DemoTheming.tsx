@@ -13,7 +13,7 @@ const preloadedData = preloadFileTree({
   initialExpandedPaths: ['src', 'src/components'],
   initialSelectedPaths: ['package.json'],
   paths: sampleFileList,
-  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.theming,
+  initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.theming / 30,
 });
 
 const initialThemeStyles: TreeThemeStyles = {

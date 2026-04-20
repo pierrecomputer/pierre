@@ -45,7 +45,7 @@ export default async function TreesDevItemCustomizationPage() {
     preparedInput: workloadData.pathsArePresorted
       ? createPresortedPreparedInput(workloadData.paths)
       : undefined,
-    viewportHeight: ITEM_CUSTOMIZATION_VIEWPORT_HEIGHT,
+    initialVisibleRowCount: ITEM_CUSTOMIZATION_VIEWPORT_HEIGHT / 30,
   };
 
   const payload = preloadFileTree({

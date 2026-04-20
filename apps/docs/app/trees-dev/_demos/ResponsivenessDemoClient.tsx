@@ -269,9 +269,10 @@ export function ResponsivenessDemoClient() {
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Responsiveness</h1>
       <p className="max-w-3xl text-sm text-neutral-600">
-        This proof omits <code>viewportHeight</code> and gives the tree host{' '}
-        <code>height: 100%</code>. Drag the right edge or the bottom edge to see
-        whether the file tree tracks its container like a full explorer pane.
+        This proof gives the tree host <code>height: 100%</code> and does not
+        rely on an initial row-budget hint. Drag the right edge or the bottom
+        edge to see whether the file tree tracks its container like a full
+        explorer pane.
       </p>
 
       <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-600">

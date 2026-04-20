@@ -18,6 +18,7 @@ export {
   prepareFileTreeInput,
   preparePresortedFileTreeInput,
 } from './preparedInput';
+export { FILE_TREE_DEFAULT_ITEM_HEIGHT } from './model/virtualization';
 export {
   FileTree,
   preloadFileTree,

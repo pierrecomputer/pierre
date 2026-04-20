@@ -40,7 +40,7 @@ export function DemoA11yClient({ preloadedData }: DemoA11yClientProps) {
     initialExpandedPaths: ['src', 'src/components'],
     initialSelectedPaths: [PRESELECTED_PATH],
     paths: sampleFileList,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.a11y,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.a11y / 30,
   });
 
   return (

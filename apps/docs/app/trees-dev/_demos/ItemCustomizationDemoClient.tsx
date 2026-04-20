@@ -286,7 +286,7 @@ function HydratedItemCustomizationTree({
     <div
       ref={mountRef}
       data-test-item-customization-tree="true"
-      style={{ height: `${String(options.viewportHeight ?? 360)}px` }}
+      style={{ height: '360px' }}
       dangerouslySetInnerHTML={{ __html: containerHtml }}
       suppressHydrationWarning
     />

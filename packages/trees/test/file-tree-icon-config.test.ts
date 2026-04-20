@@ -100,7 +100,7 @@ describe('file-tree icon config', () => {
       },
       initialExpansion: 'open',
       paths: ['README.md', 'src/index.ts'],
-      viewportHeight: 120,
+      initialVisibleRowCount: 120 / 30,
     });
 
     expect(payload.shadowHtml).toContain('pst-test-readme');
@@ -125,7 +125,7 @@ describe('file-tree icon config', () => {
         },
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -153,7 +153,7 @@ describe('file-tree icon config', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -183,7 +183,7 @@ describe('file-tree icon config', () => {
         icons: 'complete',
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -243,7 +243,7 @@ describe('file-tree icon config', () => {
         id: 'pst-hydrate-icons',
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       const mount = dom.window.document.createElement('div');
@@ -261,7 +261,7 @@ describe('file-tree icon config', () => {
         id: 'pst-hydrate-icons',
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.hydrate({ fileTreeContainer: host });

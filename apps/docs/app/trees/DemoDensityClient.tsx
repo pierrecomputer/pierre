@@ -80,7 +80,7 @@ function DensityTree({
     id,
     itemHeight,
     paths: sampleFileList,
-    viewportHeight,
+    initialVisibleRowCount: viewportHeight / itemHeight,
   });
 
   useEffect(() => {

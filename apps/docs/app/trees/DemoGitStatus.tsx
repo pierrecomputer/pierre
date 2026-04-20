@@ -69,7 +69,7 @@ const FILE_TREE_GIT_STATUS_BASE_OPTIONS: Omit<
   initialExpandedPaths: TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
   paths: sampleFileList,
   search: false,
-  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFull,
+  initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFull / 30,
 };
 
 interface DemoGitStatusProps {
@@ -110,7 +110,7 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
     ...FILE_TREE_GIT_STATUS_BASE_OPTIONS,
     gitStatus: TREE_NEW_GIT_STATUSES,
     id: 'file-tree-git-status-demo-filtered',
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFiltered,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.gitStatusFiltered / 30,
   });
   const model = showUnmodified ? fullViewportModel : filteredViewportModel;
   const activePreloadedData = showUnmodified

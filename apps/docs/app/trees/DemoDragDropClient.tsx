@@ -29,7 +29,7 @@ const DRAG_DROP_BASE_OPTIONS: Omit<FileTreePathOptions, 'id' | 'paths'> = {
   dragAndDrop: true,
   flattenEmptyDirectories: true,
   search: false,
-  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.dragDrop,
+  initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.dragDrop / 30,
 };
 
 interface DemoDragDropClientProps {

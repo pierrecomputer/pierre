@@ -19,9 +19,9 @@ export function mountProjectTree(
     preparedInput,
     search: true,
     initialExpandedPaths: ['src', 'src/components'],
-    viewportHeight: 320,
   });
 
+  container.style.height = '320px';
   fileTree.render({ fileTreeContainer: container });
   return fileTree;
 }`

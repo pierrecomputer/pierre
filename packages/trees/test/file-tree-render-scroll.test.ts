@@ -709,7 +709,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: false,
         initialExpandedPaths: ['src'],
         paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -737,7 +737,7 @@ describe('file-tree render + scroll', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         paths: ['a.ts', 'b.ts', 'c.ts', 'd.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -789,7 +789,7 @@ describe('file-tree render + scroll', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         paths: ['a.ts', 'b.ts', 'c.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -851,7 +851,7 @@ describe('file-tree render + scroll', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         paths: ['a.ts', 'b.ts', 'c.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -882,7 +882,7 @@ describe('file-tree render + scroll', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         paths: ['a.ts', 'b.ts', 'c.ts', 'd.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -920,7 +920,7 @@ describe('file-tree render + scroll', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         paths: ['a.ts', 'b.ts', 'c.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -945,7 +945,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: false,
         initialExpandedPaths: ['src/lib/'],
         paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
-        viewportHeight: 60,
+        initialVisibleRowCount: 60 / 30,
       } as const;
 
       const defaultWrapper = dom.window.document.createElement('div');
@@ -1027,7 +1027,7 @@ describe('file-tree render + scroll', () => {
           ...Array.from({ length: 10 }, (_, index) => `z${index}.ts`),
         ],
         stickyFolders: true,
-        viewportHeight: 180,
+        initialVisibleRowCount: 180 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -1094,7 +1094,7 @@ describe('file-tree render + scroll', () => {
           'arch/alpha/boot/main.c',
         ],
         stickyFolders: true,
-        viewportHeight: 180,
+        initialVisibleRowCount: 180 / 30,
       } as const;
       const expectedController = new FileTreeController(options);
 
@@ -1209,7 +1209,7 @@ describe('file-tree render + scroll', () => {
         initialExpandedPaths: [],
         paths: ['src/lib/util.ts', 'z.ts'],
         stickyFolders: true,
-        viewportHeight: 60,
+        initialVisibleRowCount: 60 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -1251,7 +1251,7 @@ describe('file-tree render + scroll', () => {
         initialExpandedPaths: ['src/lib/'],
         paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
         stickyFolders: true,
-        viewportHeight: 60,
+        initialVisibleRowCount: 60 / 30,
       } as const;
       const expectedController = new FileTreeController(options);
 
@@ -1349,7 +1349,7 @@ describe('file-tree render + scroll', () => {
         initialExpandedPaths: ['src/lib/'],
         paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
         stickyFolders: true,
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -1399,7 +1399,7 @@ describe('file-tree render + scroll', () => {
         initialExpandedPaths: ['aaa/', 'bbb/', 'src/lib/'],
         paths: ['aaa/one.ts', 'bbb/two.ts', 'src/index.ts', 'src/lib/util.ts'],
         stickyFolders: true,
-        viewportHeight: 60,
+        initialVisibleRowCount: 60 / 30,
       } as const;
       const expectedController = new FileTreeController(clickOptions);
       expect(
@@ -1457,7 +1457,7 @@ describe('file-tree render + scroll', () => {
         initialExpandedPaths: ['aaa/', 'src/lib/'],
         paths: ['aaa/one.ts', 'src/lib/util.ts', 'src/lib/helpers.ts'],
         stickyFolders: true,
-        viewportHeight: 60,
+        initialVisibleRowCount: 60 / 30,
       } as const;
       const expectedController = new FileTreeController(clickOptions);
       const expectedScrollTop = Math.max(
@@ -1522,7 +1522,7 @@ describe('file-tree render + scroll', () => {
         initialExpandedPaths: ['src/lib/'],
         paths: ['README.md', 'src/lib/util.ts', 'src/lib/helpers.ts'],
         stickyFolders: true,
-        viewportHeight: 60,
+        initialVisibleRowCount: 60 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -1576,7 +1576,7 @@ describe('file-tree render + scroll', () => {
         initialExpandedPaths: ['src/lib/'],
         paths: ['README.md', 'src/lib/util.ts', 'src/lib/helpers.ts'],
         stickyFolders: true,
-        viewportHeight: 60,
+        initialVisibleRowCount: 60 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -1634,7 +1634,7 @@ describe('file-tree render + scroll', () => {
         initialExpandedPaths: ['a/b/c/d/e/'],
         paths: deepPaths,
         stickyFolders: true,
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -1715,7 +1715,7 @@ describe('file-tree render + scroll', () => {
       flattenEmptyDirectories: true,
       initialExpansion: 'open',
       paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
-      viewportHeight: 120,
+      initialVisibleRowCount: 120 / 30,
     });
 
     const parserHtml = serializeFileTreeSsrPayload(payload);
@@ -1741,7 +1741,7 @@ describe('file-tree render + scroll', () => {
       initialExpansion: 'open',
       initialSelectedPaths: ['README.md'],
       paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
-      viewportHeight: 120,
+      initialVisibleRowCount: 120 / 30,
     });
 
     expect(payload.shadowHtml).toMatch(
@@ -1760,7 +1760,7 @@ describe('file-tree render + scroll', () => {
         initialExpansion: 'open',
         initialSelectedPaths: ['a.ts', 'c.ts'],
         paths: ['a.ts', 'b.ts', 'c.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       } satisfies ConstructorParameters<typeof FileTree>[0];
       const payload = preloadFileTree(options);
 
@@ -1811,7 +1811,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: true,
         paths: ['README.md'],
         unsafeCSS: '[data-item-path="README.md"] { color: rgb(255 0 0); }',
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -1841,7 +1841,7 @@ describe('file-tree render + scroll', () => {
         id: 'pst-unsafe-css-hydration',
         paths: ['README.md'],
         unsafeCSS: 'button[data-type="item"] { color: rgb(255 0 0); }',
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       } satisfies ConstructorParameters<typeof FileTree>[0];
       const payload = preloadFileTree(options);
 
@@ -1885,7 +1885,7 @@ describe('file-tree render + scroll', () => {
       paths: ['README.md'],
       unsafeCSS:
         'button[data-type="item"]::after { content: "</style><div data-escape-break></div>"; }',
-      viewportHeight: 120,
+      initialVisibleRowCount: 120 / 30,
     });
 
     expect(payload.shadowHtml).toContain('<\\/style><div data-escape-break');
@@ -1908,7 +1908,7 @@ describe('file-tree render + scroll', () => {
         'src/lib/theme.ts',
         'src/components/Button.tsx',
       ],
-      viewportHeight: 460,
+      initialVisibleRowCount: 460 / 30,
     });
 
     expect(
@@ -1954,7 +1954,7 @@ describe('file-tree render + scroll', () => {
           'src/lib/',
         ],
         paths: unsortedPaths,
-        viewportHeight: 460,
+        initialVisibleRowCount: 460 / 30,
       } satisfies ConstructorParameters<typeof FileTree>[0];
       const payload = preloadFileTree(options);
 
@@ -2033,7 +2033,7 @@ describe('file-tree render + scroll', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         paths,
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2082,7 +2082,7 @@ describe('file-tree render + scroll', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         paths,
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2132,7 +2132,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: false,
         initialExpansion: 1,
         paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2180,7 +2180,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: false,
         initialExpandedPaths: ['src/lib/'],
         paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2222,7 +2222,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: false,
         initialExpansion: 1,
         paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2278,7 +2278,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: false,
         initialExpandedPaths: ['src/lib/'],
         paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2316,7 +2316,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: false,
         initialExpansion: 0,
         paths: ['a.ts', 'b.ts', 'c.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2350,7 +2350,7 @@ describe('file-tree render + scroll', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         paths: ['a.ts', 'b.ts', 'c.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2390,7 +2390,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: false,
         initialExpandedPaths: ['src/lib/'],
         paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2436,7 +2436,7 @@ describe('file-tree render + scroll', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         paths,
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2501,7 +2501,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: true,
         initialExpandedPaths: ['src/'],
         paths: ['src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2535,7 +2535,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: true,
         initialExpandedPaths: ['src/'],
         paths: ['src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2572,7 +2572,7 @@ describe('file-tree render + scroll', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2615,7 +2615,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: true,
         initialExpandedPaths: ['src/'],
         paths: ['src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2643,7 +2643,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: true,
         initialExpandedPaths: ['src/'],
         paths: ['src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2674,7 +2674,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: true,
         initialExpandedPaths: ['src/'],
         paths: ['README.md', 'src/lib/util.ts', 'src/lib/helpers.ts'],
-        viewportHeight: 200,
+        initialVisibleRowCount: 200 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2719,7 +2719,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: false,
         initialExpansion: 0,
         paths: ['a.ts', 'src/index.ts', 'src/lib/util.ts', 'z.ts'],
-        viewportHeight: 200,
+        initialVisibleRowCount: 200 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2771,7 +2771,7 @@ describe('file-tree render + scroll', () => {
           selectionEvents.push([...items]);
         },
         paths: ['src/index.ts', 'src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2841,7 +2841,7 @@ describe('file-tree render + scroll', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         paths: ['only.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -2885,7 +2885,7 @@ describe('file-tree render + scroll', () => {
       const fileTree = new FileTree({
         flattenEmptyDirectories: false,
         paths: ['a.ts', 'b.ts', 'c.ts', 'd.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });
@@ -3008,7 +3008,7 @@ describe('file-tree render + scroll', () => {
         initialExpandedPaths: ['src/'],
         paths: [...topFiles, ...sourceFiles, ...bottomFiles],
         stickyFolders: true,
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       } as const;
       const expectedController = new FileTreeController(options);
       const fileTree = new FileTree(options);
@@ -3083,7 +3083,7 @@ describe('file-tree render + scroll', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['src/lib/index.ts', 'src/lib/utils.ts', 'README.md'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper });

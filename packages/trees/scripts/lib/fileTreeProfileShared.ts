@@ -80,7 +80,7 @@ export function createFileTreeProfileFixtureOptions(
     flattenEmptyDirectories: true,
     initialExpandedPaths: workload.expandedFolders,
     preparedInput: preparePresortedFileTreeInput(workload.files),
-    viewportHeight: FILE_TREE_PROFILE_VIEWPORT_HEIGHT,
+    initialVisibleRowCount: FILE_TREE_PROFILE_VIEWPORT_HEIGHT / 30,
   };
 }
 

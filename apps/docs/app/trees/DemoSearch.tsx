@@ -19,7 +19,7 @@ function createSearchPreloadedData(
     initialSearchQuery: PREPOPULATED_SEARCH,
     paths: sampleFileList,
     search: true,
-    viewportHeight,
+    initialVisibleRowCount: viewportHeight / 30,
   });
 }
 

@@ -147,7 +147,7 @@ describe('file-tree git status', () => {
         ],
         initialExpansion: 'open',
         paths: FILES,
-        viewportHeight: 180,
+        initialVisibleRowCount: 180 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -222,7 +222,7 @@ describe('file-tree git status', () => {
         gitStatus: [{ path: 'src/', status: 'ignored' }],
         initialExpansion: 'open',
         paths: FILES,
-        viewportHeight: 180,
+        initialVisibleRowCount: 180 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -261,7 +261,7 @@ describe('file-tree git status', () => {
         ],
         initialExpansion: 'open',
         paths: FILES,
-        viewportHeight: 180,
+        initialVisibleRowCount: 180 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -307,7 +307,7 @@ describe('file-tree git status', () => {
         gitStatus: [{ path: 'src/new-file.ts', status: 'added' }],
         initialExpansion: 'open',
         paths: FILES,
-        viewportHeight: 180,
+        initialVisibleRowCount: 180 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -341,7 +341,7 @@ describe('file-tree git status', () => {
         gitStatus: [{ path: 'src/lib/util.ts', status: 'modified' }],
         initialExpandedPaths: ['src/'],
         paths: ['src/lib/util.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -384,7 +384,7 @@ describe('file-tree git status', () => {
         },
         initialExpansion: 'open',
         paths: FILES,
-        viewportHeight: 180,
+        initialVisibleRowCount: 180 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -421,7 +421,7 @@ describe('file-tree git status', () => {
         gitStatus: runtimeStatuses,
         initialExpansion: 'open',
         paths: FILES,
-        viewportHeight: 180,
+        initialVisibleRowCount: 180 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -485,7 +485,7 @@ describe('file-tree git status', () => {
           item.path === 'src/index.ts'
             ? { text: 'TS', title: 'TypeScript file' }
             : null,
-        viewportHeight: 180,
+        initialVisibleRowCount: 180 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -520,7 +520,7 @@ describe('file-tree git status', () => {
         id: 'pst-git-status-ssr',
         initialExpansion: 'open' as const,
         paths: FILES,
-        viewportHeight: 180,
+        initialVisibleRowCount: 180 / 30,
       };
       const payload = preloadFileTree(options);
 

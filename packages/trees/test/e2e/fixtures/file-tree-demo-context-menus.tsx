@@ -162,7 +162,7 @@ function ReactClientFixture() {
       'src/components/Button.test.tsx',
     ],
     search: true,
-    viewportHeight: 240,
+    initialVisibleRowCount: 240 / 30,
   });
 
   return (
@@ -253,7 +253,7 @@ const portaledTree = new FileTreeModel({
   id: 'ft-portaled-context-menu-demo',
   initialExpansion: 'open',
   paths: ['README.md', 'src/index.ts', 'src/utils/worker.ts'],
-  viewportHeight: 240,
+  initialVisibleRowCount: 240 / 30,
 });
 portaledTree.render({ containerWrapper: radixMount });
 
@@ -272,7 +272,7 @@ const rightClickOnlyTree = new FileTreeModel({
   id: 'ft-right-click-only-context-menu-demo',
   initialExpansion: 'open',
   paths: ['README.md', 'src/index.ts', 'src/utils/worker.ts'],
-  viewportHeight: 240,
+  initialVisibleRowCount: 240 / 30,
 });
 rightClickOnlyTree.render({ containerWrapper: rightClickOnlyMount });
 

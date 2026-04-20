@@ -33,11 +33,17 @@ virtualization primitives.
 
 The main rendering knobs are:
 
-- `viewportHeight`, because virtualization needs a real visible window
+- the host element's CSS height, because steady-state viewport size comes from
+  layout
+- `initialVisibleRowCount`, when you want to budget SSR or first-render work
+  before measurement
 - `itemHeight`, when your design changes row density enough to matter
 - `overscan`, when you need to trade a little extra work for smoother scrolling
 
 <DocsCodeExample {...LARGE_TREES_VIRTUALIZATION_KNOBS} />
+
+Give the rendered tree host a real CSS height. The row-count hint only shapes
+the first render before the browser can measure the actual viewport.
 
 Keep the language outcome-focused: the tree mounts the visible slice plus a
 small buffer around it.

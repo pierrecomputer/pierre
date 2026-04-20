@@ -8,6 +8,9 @@
       #some-known-internal-id {
         color: rgb(0, 128, 0) !important;
       }
+      #test-tree-mount {
+        height: 200px;
+      }
     </style>
   </head>
   <body>
@@ -31,7 +34,6 @@
         flattenEmptyDirectories: false,
         initialExpandedPaths: ['src'],
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
       });
       fileTree.render({ containerWrapper: mount });
 

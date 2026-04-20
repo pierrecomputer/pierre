@@ -33,7 +33,7 @@ function createContextMenuPreloadedData(
     initialExpandedPaths: CONTEXT_MENU_EXPANDED_PATHS,
     paths: sampleFileList,
     search: false,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.contextMenu,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.contextMenu / 30,
   });
 }
 

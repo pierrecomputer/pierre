@@ -14,7 +14,7 @@ export const LARGE_TREES_VIRTUALIZATION_KNOBS = docsCodeSnippet(
   'virtualization-knobs.tsx',
   `const { model } = useFileTree({
   preparedInput,
-  viewportHeight: 420,
+  initialVisibleRowCount: 14,
   itemHeight: 30,
   overscan: 8,
 });`

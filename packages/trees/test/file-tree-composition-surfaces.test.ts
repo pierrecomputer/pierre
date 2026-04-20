@@ -128,7 +128,7 @@ describe('file-tree composition surfaces', () => {
       flattenEmptyDirectories: true,
       initialExpansion: 'open',
       paths: ['README.md', 'src/index.ts'],
-      viewportHeight: 120,
+      initialVisibleRowCount: 120 / 30,
     });
     expect(payload.shadowHtml).toContain('slot name="header"');
     expect(payload.shadowHtml).toContain('data-type="context-menu-anchor"');
@@ -150,7 +150,7 @@ describe('file-tree composition surfaces', () => {
       flattenEmptyDirectories: true,
       initialExpansion: 'open',
       paths: ['README.md', 'src/index.ts'],
-      viewportHeight: 120,
+      initialVisibleRowCount: 120 / 30,
     });
 
     expect(payload.shadowHtml).not.toContain(
@@ -181,7 +181,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -229,7 +229,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -320,7 +320,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -385,7 +385,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -445,7 +445,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -502,7 +502,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -583,7 +583,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -647,7 +647,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -713,7 +713,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -804,7 +804,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -890,7 +890,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -951,7 +951,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -1018,7 +1018,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -1091,7 +1091,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
       disabled.render({ containerWrapper: disabledMount });
       await flushDom();
@@ -1114,7 +1114,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
       enabled.render({ containerWrapper: enabledMount });
       await flushDom();
@@ -1159,7 +1159,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       const mount = dom.window.document.createElement('div');
@@ -1189,7 +1189,7 @@ describe('file-tree composition surfaces', () => {
         id: payload.id,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.hydrate({ fileTreeContainer: host });
@@ -1268,7 +1268,7 @@ describe('file-tree composition surfaces', () => {
             ? { text: 'DOC', title: 'Documentation file' }
             : null;
         },
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -1300,7 +1300,7 @@ describe('file-tree composition surfaces', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });

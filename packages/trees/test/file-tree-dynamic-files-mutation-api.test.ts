@@ -168,7 +168,7 @@ describe('file-tree dynamic files / mutation API', () => {
         flattenEmptyDirectories: false,
         initialExpansion: 'open',
         preparedInput: prepareFileTreeInput(['README.md', 'src/index.ts']),
-        viewportHeight: 140,
+        initialVisibleRowCount: 140 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -440,7 +440,7 @@ describe('file-tree dynamic files / mutation API', () => {
         flattenEmptyDirectories: false,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 140,
+        initialVisibleRowCount: 140 / 30,
       });
       const unsubscribe = fileTree.onMutation('*', (event) => {
         events.push(event.operation);
@@ -489,7 +489,7 @@ describe('file-tree dynamic files / mutation API', () => {
         flattenEmptyDirectories: false,
         initialExpansion: 'open',
         paths: ['docs/'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -630,7 +630,7 @@ describe('file-tree dynamic files / mutation API', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 120,
+        initialVisibleRowCount: 120 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });

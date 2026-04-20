@@ -106,7 +106,6 @@
         onSearchChange: (value) => appendLog(`visible:${value ?? '<closed>'}`),
         paths,
         search: true,
-        viewportHeight: 260,
       });
       visibleTree.render({ containerWrapper: visibleMount });
 
@@ -118,7 +117,6 @@
         onSearchChange: (value) => appendLog(`hidden:${value ?? '<closed>'}`),
         paths,
         search: false,
-        viewportHeight: 260,
       });
       hiddenTree.render({ containerWrapper: hiddenMount });
 

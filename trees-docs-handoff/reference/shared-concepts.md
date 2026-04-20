@@ -150,9 +150,10 @@ Does not own:
 ### Scale and rendering settings
 
 - built-in virtualized rendering behavior
+- host element CSS height (steady-state viewport size comes from layout)
 - `itemHeight`
 - `overscan`
-- `viewportHeight`
+- `initialVisibleRowCount` (first-render row budget before layout is measured)
 - Position these as tuning knobs, not as quickstart concepts.
 - Guide owner:
   [Handle large trees efficiently](../guides/handle-large-trees-efficiently.md).

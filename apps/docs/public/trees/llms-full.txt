@@ -53,7 +53,7 @@ guide explains when `paths` is enough, when to switch to
 `prepareFileTreeInput(...)`, and when `preparePresortedFileTreeInput(...)` is
 the better fit.
 
-**Reactexample** (`project-tree.tsx`):
+**Choose Integration React Example** (`project-tree.tsx`):
 
 ```tsx
 import { FileTree, useFileTree } from '@pierre/trees/react';
@@ -65,7 +65,7 @@ export function ProjectTree({ paths }: { paths: readonly string[] }) {
 }
 ```
 
-**Vanillaexample** (`mount-tree.ts`):
+**Choose Integration Vanilla Example** (`mount-tree.ts`):
 
 ```typescript
 import { FileTree } from '@pierre/trees';
@@ -153,7 +153,7 @@ The only difference is that the tree starts from preloaded server output.
 
 When you need that flow, continue with [SSR](#ssr) and [SSR API](#ssr-api).
 
-**Installcommand** (`install.sh`):
+**React Quickstart Install** (`install.sh`):
 
 ```bash
 bun add @pierre/trees
@@ -161,7 +161,7 @@ bun add @pierre/trees
 # pnpm: pnpm add @pierre/trees
 ```
 
-**Projecttreeexample** (`project-tree.tsx`):
+**React Quickstart Project Tree** (`project-tree.tsx`):
 
 ```tsx
 import { FileTree, useFileTree } from '@pierre/trees/react';
@@ -176,14 +176,19 @@ export function ProjectTree({ preparedInput }: ProjectTreeProps) {
     preparedInput,
     search: true,
     initialExpandedPaths: ['src', 'src/components'],
-    viewportHeight: 320,
   });
 
-  return <FileTree model={model} className="rounded-lg border" />;
+  return (
+    <FileTree
+      model={model}
+      className="rounded-lg border"
+      style={{ height: '320px' }}
+    />
+  );
 }
 ```
 
-**Searchabletreeexample** (`searchable-tree.tsx`):
+**React Quickstart Searchable Tree** (`searchable-tree.tsx`):
 
 ```tsx
 import {
@@ -287,7 +292,7 @@ the same:
 That keeps React as the only first-class wrapper surface without changing how
 the underlying model works.
 
-**Imperativeusageexample** (`imperative-usage.ts`):
+**Vanilla Quickstart Imperative Usage** (`imperative-usage.ts`):
 
 ```typescript
 const fileTree = new FileTree({
@@ -306,7 +311,7 @@ const buttonItem = fileTree.getItem('src/components/Button.tsx');
 buttonItem?.select();
 ```
 
-**Installcommand** (`install.sh`):
+**Vanilla Quickstart Install** (`install.sh`):
 
 ```bash
 bun add @pierre/trees
@@ -314,7 +319,7 @@ bun add @pierre/trees
 # pnpm: pnpm add @pierre/trees
 ```
 
-**Mountprojecttreeexample** (`mount-project-tree.ts`):
+**Vanilla Quickstart Mount Project Tree** (`mount-project-tree.ts`):
 
 ```typescript
 import { FileTree, type FileTreePreparedInput } from '@pierre/trees';
@@ -327,9 +332,9 @@ export function mountProjectTree(
     preparedInput,
     search: true,
     initialExpandedPaths: ['src', 'src/components'],
-    viewportHeight: 320,
   });
 
+  container.style.height = '320px';
   fileTree.render({ fileTreeContainer: container });
   return fileTree;
 }
@@ -395,7 +400,7 @@ For the shared contract behind these inputs, see
 guidance, continue with
 [Handle large trees efficiently](#handle-large-trees-efficiently).
 
-**Prepareloaderexample** (`load-project-tree-input.ts`):
+**Shape Tree Data Prepare Loader** (`load-project-tree-input.ts`):
 
 ```typescript
 import { prepareFileTreeInput } from '@pierre/trees';
@@ -409,7 +414,7 @@ export async function loadProjectTreeInput(projectId: string) {
 }
 ```
 
-**Presortedexample** (`presorted.ts`):
+**Shape Tree Data Presorted** (`presorted.ts`):
 
 ```typescript
 import { preparePresortedFileTreeInput } from '@pierre/trees';
@@ -421,7 +426,7 @@ const preparedInput = preparePresortedFileTreeInput([
 ]);
 ```
 
-**Reacttreeexample** (`react-tree.tsx`):
+**Shape Tree Data React Tree** (`react-tree.tsx`):
 
 ```tsx
 import { FileTree, useFileTree } from '@pierre/trees/react';
@@ -432,12 +437,12 @@ export function ReactTree({
 }: {
   preparedInput: FileTreePreparedInput;
 }) {
-  const { model } = useFileTree({ preparedInput, viewportHeight: 320 });
-  return <FileTree model={model} />;
+  const { model } = useFileTree({ preparedInput });
+  return <FileTree model={model} style={{ height: '320px' }} />;
 }
 ```
 
-**Smallpathsexample** (`small-paths.ts`):
+**Shape Tree Data Small Paths** (`small-paths.ts`):
 
 ```typescript
 const fileTree = new FileTree({
@@ -445,7 +450,7 @@ const fileTree = new FileTree({
 });
 ```
 
-**Vanillamountexample** (`mount-vanilla-tree.ts`):
+**Shape Tree Data Vanilla Mount** (`mount-vanilla-tree.ts`):
 
 ```typescript
 import { FileTree, type FileTreePreparedInput } from '@pierre/trees';
@@ -454,7 +459,8 @@ export function mountVanillaTree(
   container: HTMLElement,
   preparedInput: FileTreePreparedInput
 ) {
-  const fileTree = new FileTree({ preparedInput, viewportHeight: 320 });
+  const fileTree = new FileTree({ preparedInput });
+  container.style.height = '320px';
   fileTree.render({ fileTreeContainer: container });
   return fileTree;
 }
@@ -535,7 +541,7 @@ The DOM host is not the source of truth. The model is.
   with
   [Rename, drag, and trigger item actions](#rename-drag-and-trigger-item-actions).
 
-**Reactsearchexample** (`search-panel.tsx`):
+**Navigate React Search** (`search-panel.tsx`):
 
 ```tsx
 import {
@@ -570,7 +576,7 @@ export function SearchPanel({ paths }: { paths: readonly string[] }) {
 }
 ```
 
-**Vanillasearchexample** (`vanilla-search.ts`):
+**Navigate Vanilla Search** (`vanilla-search.ts`):
 
 ```typescript
 const fileTree = new FileTree({
@@ -670,7 +676,7 @@ If you need the shared vocabulary behind those events, read
 [Shared concepts](#shared-concepts-mutation-vocabulary). For runtime lookup,
 jump to [React API](#react-api) or [Vanilla API](#vanilla-api).
 
-**Contextmenuexample** (`context-menu.tsx`):
+**Rename Drag Context Menu** (`context-menu.tsx`):
 
 ```tsx
 const { model } = useFileTree({
@@ -703,7 +709,7 @@ const { model } = useFileTree({
 />;
 ```
 
-**Draganddropexample** (`drag-and-drop.ts`):
+**Rename Drag Drag And Drop** (`drag-and-drop.ts`):
 
 ```typescript
 const fileTree = new FileTree({
@@ -726,7 +732,7 @@ const fileTree = new FileTree({
 });
 ```
 
-**Renameexample** (`rename.tsx`):
+**Rename Drag Rename** (`rename.tsx`):
 
 ```tsx
 const { model } = useFileTree({
@@ -809,7 +815,7 @@ selectors. If you need a broad lookup of the supported styling surfaces, read
 [Styling and theming](#styling-and-theming). For icon-specific appearance
 changes, continue with [Customize icons](#customize-icons).
 
-**Cssvariablesexample** (`css-variables.tsx`):
+**Style Theme CSS Variables** (`css-variables.tsx`):
 
 ```tsx
 <FileTree
@@ -826,7 +832,7 @@ changes, continue with [Customize icons](#customize-icons).
 />
 ```
 
-**Hoststylingexample** (`host-styling.tsx`):
+**Style Theme Host Styling** (`host-styling.tsx`):
 
 ```tsx
 <FileTree
@@ -839,7 +845,7 @@ changes, continue with [Customize icons](#customize-icons).
 />
 ```
 
-**Themetotreestylesexample** (`theme-to-tree-styles.tsx`):
+**Style Theme To Tree Styles** (`theme-to-tree-styles.tsx`):
 
 ```tsx
 import { themeToTreeStyles } from '@pierre/trees';
@@ -858,7 +864,7 @@ const treeStyles = themeToTreeStyles(theme);
 />;
 ```
 
-**Unsafecssexample** (`unsafe-css.ts`):
+**Style Theme Unsafe CSS** (`unsafe-css.ts`):
 
 ```typescript
 const fileTree = new FileTree({
@@ -930,7 +936,7 @@ Keep the contract simple: provide `<symbol>` definitions, then reference those
 symbols through remap rules. Do not turn sprite sheets into the default docs
 path.
 
-**Iconsbasicset** (`icons-basic.ts`):
+**Icons Basic Set** (`icons-basic.ts`):
 
 ```typescript
 const fileTree = new FileTree({
@@ -939,7 +945,7 @@ const fileTree = new FileTree({
 });
 ```
 
-**Iconscoloredoff** (`icons-colored-off.ts`):
+**Icons Colored Off** (`icons-colored-off.ts`):
 
 ```typescript
 const fileTree = new FileTree({
@@ -951,7 +957,7 @@ const fileTree = new FileTree({
 });
 ```
 
-**Iconsremapexample** (`icons-remap.ts`):
+**Icons Remap** (`icons-remap.ts`):
 
 ```typescript
 const fileTree = new FileTree({
@@ -974,7 +980,7 @@ const fileTree = new FileTree({
 });
 ```
 
-**Iconsspritesheetexample** (`icons-sprite-sheet.ts`):
+**Icons Sprite Sheet** (`icons-sprite-sheet.ts`):
 
 ```typescript
 const fileTree = new FileTree({
@@ -1060,7 +1066,7 @@ For that part of the API, see
 [Style and theme the tree](#style-and-theme-the-tree) and
 [Styling and theming](#styling-and-theming).
 
-**Gitstatusexample** (`git-status.ts`):
+**Git Status Basic** (`git-status.ts`):
 
 ```typescript
 const fileTree = new FileTree({
@@ -1074,7 +1080,7 @@ const fileTree = new FileTree({
 });
 ```
 
-**Renderrowdecorationexample** (`render-row-decoration.ts`):
+**Git Status Row Decoration** (`render-row-decoration.ts`):
 
 ```typescript
 const fileTree = new FileTree({
@@ -1093,7 +1099,7 @@ const fileTree = new FileTree({
 });
 ```
 
-**Setgitstatusexample** (`set-git-status.ts`):
+**Git Status Set** (`set-git-status.ts`):
 
 ```typescript
 fileTree.setGitStatus(nextStatuses);
@@ -1133,9 +1139,15 @@ virtualization primitives.
 
 The main rendering knobs are:
 
-- `viewportHeight`, because virtualization needs a real visible window
+- the host element's CSS height, because steady-state viewport size comes from
+  layout
+- `initialVisibleRowCount`, when you want to budget SSR or first-render work
+  before measurement
 - `itemHeight`, when your design changes row density enough to matter
 - `overscan`, when you need to trade a little extra work for smoother scrolling
+
+Give the rendered tree host a real CSS height. The row-count hint only shapes
+the first render before the browser can measure the actual viewport.
 
 Keep the language outcome-focused: the tree mounts the visible slice plus a
 small buffer around it.
@@ -1177,7 +1189,7 @@ Avoid these patterns when the tree grows:
   cross-runtime rendering knobs
 - [SSR](#ssr) for server-preload-first rendering
 
-**Loadworkspacetreeexample** (`load-workspace-tree.ts`):
+**Large Trees Load Workspace Tree** (`load-workspace-tree.ts`):
 
 ```typescript
 import { preparePresortedFileTreeInput } from '@pierre/trees';
@@ -1188,12 +1200,12 @@ export async function loadWorkspaceTree() {
 }
 ```
 
-**Virtualizationknobsexample** (`virtualization-knobs.tsx`):
+**Large Trees Virtualization Knobs** (`virtualization-knobs.tsx`):
 
 ```tsx
 const { model } = useFileTree({
   preparedInput,
-  viewportHeight: 420,
+  initialVisibleRowCount: 14,
   itemHeight: 30,
   overscan: 8,
 });
@@ -1209,6 +1221,10 @@ runtime. It is a preload-and-hydrate layer over the same React or vanilla model.
 
 Import preload helpers from `@pierre/trees/ssr`, call `preloadFileTree(...)` on
 the server, and treat the result as one opaque handoff object.
+
+Steady-state height still comes from the rendered container.
+`initialVisibleRowCount` is only a first-render hint for SSR and hydration
+before the browser can measure the real viewport.
 
 Do not unpack the payload into a field-by-field integration story in application
 code. Pass it forward unchanged.
@@ -1259,7 +1275,7 @@ raw payload plumbing.
 
 For the API-level handoff contract, read [SSR API](#ssr-api).
 
-**Preloadfiletreeexample** (`preload-file-tree.ts`):
+**Guide Preload File Tree** (`preload-file-tree.ts`):
 
 ```typescript
 import { preloadFileTree } from '@pierre/trees/ssr';
@@ -1269,11 +1285,11 @@ const payload = preloadFileTree({
   id: 'project-tree',
   initialExpandedPaths: ['src'],
   search: true,
-  viewportHeight: 320,
+  initialVisibleRowCount: 11,
 });
 ```
 
-**Reacthydrationexample** (`project-tree-client.tsx`):
+**Guide React Hydration** (`project-tree-client.tsx`):
 
 ```tsx
 import { FileTree, useFileTree } from '@pierre/trees/react';
@@ -1292,14 +1308,14 @@ export function ProjectTreeClient({
     id: preloadedData.id,
     initialExpandedPaths: ['src'],
     search: true,
-    viewportHeight: 320,
+    initialVisibleRowCount: 11,
   });
 
   return <FileTree model={model} preloadedData={preloadedData} />;
 }
 ```
 
-**Vanillahydrationexample** (`vanilla-hydrate.ts`):
+**Guide Vanilla Hydration** (`vanilla-hydrate.ts`):
 
 ```typescript
 import { FileTree } from '@pierre/trees';
@@ -1309,7 +1325,7 @@ const fileTree = new FileTree({
   id: 'project-tree',
   initialExpandedPaths: ['src'],
   search: true,
-  viewportHeight: 320,
+  initialVisibleRowCount: 11,
 });
 
 const container = document.getElementById('project-tree');
@@ -1357,31 +1373,31 @@ tree-input object, not as a hand-rolled shape.
 This table covers the shared meaning of the public options surface across
 runtimes.
 
-| Option                    | Meaning                                                           | Typical use                                                                  |
-| ------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `paths`                   | Raw canonical path list.                                          | Small demos, tests, very small static trees.                                 |
-| `preparedInput`           | Pre-shaped tree input created ahead of render.                    | Recommended input for larger trees.                                          |
-| `id`                      | Stable host identity for the tree.                                | Coordinate server preload and client hydration, or set a predictable DOM id. |
-| `initialExpansion`        | Baseline expansion policy for the first render.                   | Start broadly open, broadly closed, or at a specific depth.                  |
-| `initialExpandedPaths`    | Specific paths that should begin expanded.                        | Keep key folders open on first render.                                       |
-| `initialSelectedPaths`    | Paths selected on first render.                                   | Seed selection for previews or restored state.                               |
-| `flattenEmptyDirectories` | Flattens chains of single-child directories into one visible row. | Compact repo-style trees.                                                    |
-| `sort`                    | Client-side ordering for non-presorted input.                     | Secondary path when order must be chosen in the client.                      |
-| `search`                  | Enables the built-in search surface and model search methods.     | Searchable trees.                                                            |
-| `initialSearchQuery`      | Starting search value.                                            | Preloaded filtered views or restored search state.                           |
-| `fileTreeSearchMode`      | Controls how matches change the visible tree.                     | Choose between filtering, collapsing, or expanding around matches.           |
-| `onSearchChange`          | Callback for search-value changes.                                | Sync surrounding controls or analytics.                                      |
-| `onSelectionChange`       | Callback for selection changes.                                   | Update sibling UI that tracks current selection.                             |
-| `dragAndDrop`             | Enables drag and drop plus its policy hooks.                      | Editable trees.                                                              |
-| `renaming`                | Enables inline rename plus policy hooks.                          | Rename-in-place workflows.                                                   |
-| `composition`             | Header and context-menu composition surface.                      | Add a header row or contextual commands.                                     |
-| `gitStatus`               | Built-in Git-style row signals.                                   | Added, modified, deleted, ignored, renamed, and untracked states.            |
-| `icons`                   | Built-in icon set or icon configuration object.                   | Set selection, color mode, remaps, or sprite-sheet extension.                |
-| `renderRowDecoration`     | Custom non-Git row signal renderer.                               | Generated-file badges, remote markers, validation hints.                     |
-| `itemHeight`              | Row-height hint for the virtualized view.                         | Custom density.                                                              |
-| `overscan`                | Extra rows rendered outside the visible window.                   | Smooth scrolling tradeoffs.                                                  |
-| `viewportHeight`          | Visible window height for virtualization.                         | Fixed-height trees and predictable rendering.                                |
-| `unsafeCSS`               | Advanced CSS injection into the tree shadow root.                 | Narrow escape hatch when supported styling surfaces are not enough.          |
+| Option                    | Meaning                                                              | Typical use                                                                  |
+| ------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `paths`                   | Raw canonical path list.                                             | Small demos, tests, very small static trees.                                 |
+| `preparedInput`           | Pre-shaped tree input created ahead of render.                       | Recommended input for larger trees.                                          |
+| `id`                      | Stable host identity for the tree.                                   | Coordinate server preload and client hydration, or set a predictable DOM id. |
+| `initialExpansion`        | Baseline expansion policy for the first render.                      | Start broadly open, broadly closed, or at a specific depth.                  |
+| `initialExpandedPaths`    | Specific paths that should begin expanded.                           | Keep key folders open on first render.                                       |
+| `initialSelectedPaths`    | Paths selected on first render.                                      | Seed selection for previews or restored state.                               |
+| `flattenEmptyDirectories` | Flattens chains of single-child directories into one visible row.    | Compact repo-style trees.                                                    |
+| `sort`                    | Client-side ordering for non-presorted input.                        | Secondary path when order must be chosen in the client.                      |
+| `search`                  | Enables the built-in search surface and model search methods.        | Searchable trees.                                                            |
+| `initialSearchQuery`      | Starting search value.                                               | Preloaded filtered views or restored search state.                           |
+| `fileTreeSearchMode`      | Controls how matches change the visible tree.                        | Choose between filtering, collapsing, or expanding around matches.           |
+| `onSearchChange`          | Callback for search-value changes.                                   | Sync surrounding controls or analytics.                                      |
+| `onSelectionChange`       | Callback for selection changes.                                      | Update sibling UI that tracks current selection.                             |
+| `dragAndDrop`             | Enables drag and drop plus its policy hooks.                         | Editable trees.                                                              |
+| `renaming`                | Enables inline rename plus policy hooks.                             | Rename-in-place workflows.                                                   |
+| `composition`             | Header and context-menu composition surface.                         | Add a header row or contextual commands.                                     |
+| `gitStatus`               | Built-in Git-style row signals.                                      | Added, modified, deleted, ignored, renamed, and untracked states.            |
+| `icons`                   | Built-in icon set or icon configuration object.                      | Set selection, color mode, remaps, or sprite-sheet extension.                |
+| `renderRowDecoration`     | Custom non-Git row signal renderer.                                  | Generated-file badges, remote markers, validation hints.                     |
+| `itemHeight`              | Row-height hint for the virtualized view.                            | Custom density.                                                              |
+| `overscan`                | Extra rows rendered outside the visible window.                      | Smooth scrolling tradeoffs.                                                  |
+| `initialVisibleRowCount`  | Optional first-render row budget before the browser measures height. | Tune SSR and hydration work without pinning steady-state size.               |
+| `unsafeCSS`               | Advanced CSS injection into the tree shadow root.                    | Narrow escape hatch when supported styling surfaces are not enough.          |
 
 #### Tree-shape options
 
@@ -1453,9 +1469,9 @@ For deeper lookup, jump to [Styling and theming](#styling-and-theming) and
 
 #### Scale and rendering settings
 
-`viewportHeight`, `itemHeight`, and `overscan` are rendering knobs, not
-onboarding concepts. They tune the built-in virtualized row window after you
-have already picked the right data-shaping path.
+`initialVisibleRowCount`, `itemHeight`, and `overscan` are rendering knobs, not
+onboarding concepts. The rendered container sets steady-state height; these
+options only tune the first-render budget and the virtualized row window.
 
 Use [Handle large trees efficiently](#handle-large-trees-efficiently) when scale
 becomes the real problem.
@@ -1618,7 +1634,7 @@ Style the React host with normal host props such as `className` and `style`. For
 deeper lookup, use [Styling and theming](#styling-and-theming) and
 [Icons](#icons).
 
-**Reactapiexample** (`project-tree.tsx`):
+**Example** (`project-tree.tsx`):
 
 ```tsx
 import { FileTree, useFileTree } from '@pierre/trees/react';
@@ -1629,7 +1645,7 @@ export function ProjectTree({ paths }: { paths: readonly string[] }) {
 }
 ```
 
-**Selectorhooksexample** (`selector-hooks.tsx`):
+**Selector Hooks** (`selector-hooks.tsx`):
 
 ```tsx
 const { model } = useFileTree({ paths, search: true });
@@ -1786,7 +1802,7 @@ This page names the runtime touchpoints such as `getFileTreeContainer()`,
 and `unsafeCSS`, read [Styling and theming](#styling-and-theming). For icon
 remaps and icon-set lookup, read [Icons](#icons).
 
-**Vanillaapiexample** (`vanilla-api.ts`):
+**Example** (`vanilla-api.ts`):
 
 ```typescript
 import { FileTree } from '@pierre/trees';
@@ -1893,7 +1909,7 @@ If you mention declarative shadow DOM or hydration warnings, keep that note
 short and secondary. This page owns the public handoff contract, not DOM
 internals.
 
-**Ssrapiexample** (`preload-file-tree.ts`):
+**API Example** (`preload-file-tree.ts`):
 
 ```typescript
 import { preloadFileTree } from '@pierre/trees/ssr';
@@ -1902,7 +1918,7 @@ const payload = preloadFileTree({
   preparedInput,
   id: 'project-tree',
   initialExpandedPaths: ['src'],
-  viewportHeight: 320,
+  initialVisibleRowCount: 11,
 });
 ```
 
@@ -1996,7 +2012,7 @@ Keep it narrow. Do not turn it into a raw stylesheet-asset strategy.
 - [Show Git status and row annotations](#show-git-status-and-row-annotations)
   for signal meaning
 
-**Themetotreestylesreferenceexample** (`theme-to-tree-styles.ts`):
+**Styling Theming Reference Example** (`theme-to-tree-styles.ts`):
 
 ```typescript
 import { themeToTreeStyles } from '@pierre/trees';

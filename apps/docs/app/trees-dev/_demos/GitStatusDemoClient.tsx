@@ -98,7 +98,7 @@ export function GitStatusDemoClient({
       >
         <div
           ref={mountRef}
-          style={{ height: `${String(options.viewportHeight ?? 280)}px` }}
+          style={{ height: '280px' }}
           dangerouslySetInnerHTML={{ __html: containerHtml }}
           suppressHydrationWarning
         />

@@ -21,10 +21,15 @@ export function ProjectTree({ preparedInput }: ProjectTreeProps) {
     preparedInput,
     search: true,
     initialExpandedPaths: ['src', 'src/components'],
-    viewportHeight: 320,
   });
 
-  return <FileTree model={model} className="rounded-lg border" />;
+  return (
+    <FileTree
+      model={model}
+      className="rounded-lg border"
+      style={{ height: '320px' }}
+    />
+  );
 }`
 );
 

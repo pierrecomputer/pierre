@@ -328,7 +328,7 @@ describe('file-tree drag and drop', () => {
       flattenEmptyDirectories: true,
       initialExpandedPaths: ['src/'],
       paths: ['README.md', 'src/index.ts'],
-      viewportHeight: 180,
+      initialVisibleRowCount: 180 / 30,
     });
 
     try {
@@ -372,7 +372,7 @@ describe('file-tree drag and drop', () => {
       initialExpandedPaths: ['src/'],
       paths: ['README.md', 'src/index.ts'],
       search: true,
-      viewportHeight: 140,
+      initialVisibleRowCount: 140 / 30,
     });
 
     try {
@@ -433,7 +433,7 @@ describe('file-tree drag and drop', () => {
       flattenEmptyDirectories: true,
       initialExpandedPaths: ['docs/'],
       paths: BASE_PATHS,
-      viewportHeight: 180,
+      initialVisibleRowCount: 180 / 30,
     });
 
     try {
@@ -482,7 +482,7 @@ describe('file-tree drag and drop', () => {
       flattenEmptyDirectories: true,
       initialExpandedPaths: ['docs/', 'src/'],
       paths: BASE_PATHS,
-      viewportHeight: 180,
+      initialVisibleRowCount: 180 / 30,
     });
 
     try {
@@ -532,7 +532,7 @@ describe('file-tree drag and drop', () => {
       flattenEmptyDirectories: true,
       initialExpandedPaths: ['src/', 'src/lib/'],
       paths: ['README.md', 'src/index.ts', 'src/lib/utils.ts'],
-      viewportHeight: 180,
+      initialVisibleRowCount: 180 / 30,
     });
 
     try {
@@ -578,7 +578,7 @@ describe('file-tree drag and drop', () => {
       initialExpandedPaths: ['src/'],
       paths: BASE_PATHS,
       search: true,
-      viewportHeight: 180,
+      initialVisibleRowCount: 180 / 30,
     });
 
     try {
@@ -612,7 +612,7 @@ describe('file-tree drag and drop', () => {
         'assets/images/social/banner.png',
         'src/index.ts',
       ],
-      viewportHeight: 180,
+      initialVisibleRowCount: 180 / 30,
     });
 
     try {
@@ -665,7 +665,7 @@ describe('file-tree drag and drop', () => {
       dragAndDrop: true,
       flattenEmptyDirectories: false,
       paths,
-      viewportHeight: 120,
+      initialVisibleRowCount: 120 / 30,
     });
 
     try {
@@ -717,7 +717,7 @@ describe('file-tree drag and drop', () => {
       flattenEmptyDirectories: true,
       initialExpandedPaths: ['docs/', 'src/'],
       paths: ['README.md', 'docs/guide.md', 'package.json', 'src/index.ts'],
-      viewportHeight: 180,
+      initialVisibleRowCount: 180 / 30,
     });
 
     try {
@@ -808,7 +808,7 @@ describe('file-tree drag and drop', () => {
       flattenEmptyDirectories: true,
       initialExpandedPaths: ['src/'],
       paths: ['README.md', 'package.json', 'src/package.json'],
-      viewportHeight: 180,
+      initialVisibleRowCount: 180 / 30,
     });
 
     try {
@@ -865,7 +865,7 @@ describe('file-tree drag and drop', () => {
       flattenEmptyDirectories: true,
       initialExpandedPaths: ['src/'],
       paths: ['package.json', 'src/package.json'],
-      viewportHeight: 180,
+      initialVisibleRowCount: 180 / 30,
     });
 
     try {

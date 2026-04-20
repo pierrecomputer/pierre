@@ -74,7 +74,7 @@ function SearchModeTree({
     initialSearchQuery: PREPOPULATED_SEARCH,
     paths: sampleFileList,
     search: true,
-    viewportHeight: modeDemo.viewportHeight,
+    initialVisibleRowCount: modeDemo.viewportHeight / 30,
   });
 
   return (

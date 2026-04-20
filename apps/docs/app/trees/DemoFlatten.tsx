@@ -57,7 +57,7 @@ function FlattenDemoTree({
     id,
     initialExpandedPaths,
     paths: sampleFileList,
-    viewportHeight,
+    initialVisibleRowCount: viewportHeight / 30,
   });
 
   return (

@@ -181,7 +181,7 @@ describe('file-tree renaming', () => {
       const fileTree = new FileTree({
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 240,
+        initialVisibleRowCount: 240 / 30,
         renaming: {
           onRename: (event) => {
             renameEvents.push(event);
@@ -233,7 +233,7 @@ describe('file-tree renaming', () => {
       const fileTree = new FileTree({
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 240,
+        initialVisibleRowCount: 240 / 30,
         renaming: {
           onRename: (event) => {
             renameEvents.push(`${event.sourcePath}->${event.destinationPath}`);
@@ -299,7 +299,7 @@ describe('file-tree renaming', () => {
         ],
         renaming: true,
         search: true,
-        viewportHeight: 240,
+        initialVisibleRowCount: 240 / 30,
       });
       const containerWrapper = document.createElement('div');
       fileTree.render({ containerWrapper });
@@ -368,7 +368,7 @@ describe('file-tree renaming', () => {
         },
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts'],
-        viewportHeight: 240,
+        initialVisibleRowCount: 240 / 30,
         renaming: true,
       });
       const containerWrapper = document.createElement('div');
@@ -426,7 +426,7 @@ describe('file-tree renaming', () => {
         flattenEmptyDirectories: true,
         initialExpansion: 'open',
         paths: ['src/utils/deep/index.ts'],
-        viewportHeight: 240,
+        initialVisibleRowCount: 240 / 30,
         renaming: {
           onRename: (event) => {
             renameEvents.push(event);
@@ -505,7 +505,7 @@ describe('file-tree renaming', () => {
       const fileTree = new FileTree({
         initialExpansion: 'open',
         paths: ['README.md', 'src/index.ts', 'src/utils.ts'],
-        viewportHeight: 240,
+        initialVisibleRowCount: 240 / 30,
         renaming: {
           onError: (error) => {
             renameErrors.push(error);

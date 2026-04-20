@@ -23,8 +23,8 @@ export function ReactTree({
 }: {
   preparedInput: FileTreePreparedInput;
 }) {
-  const { model } = useFileTree({ preparedInput, viewportHeight: 320 });
-  return <FileTree model={model} />;
+  const { model } = useFileTree({ preparedInput });
+  return <FileTree model={model} style={{ height: '320px' }} />;
 }`
 );
 
@@ -36,7 +36,8 @@ export function mountVanillaTree(
   container: HTMLElement,
   preparedInput: FileTreePreparedInput
 ) {
-  const fileTree = new FileTree({ preparedInput, viewportHeight: 320 });
+  const fileTree = new FileTree({ preparedInput });
+  container.style.height = '320px';
   fileTree.render({ fileTreeContainer: container });
   return fileTree;
 }`

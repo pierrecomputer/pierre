@@ -51,7 +51,7 @@ export default async function TreesDevDragAndDropPage() {
     paths: DRAG_AND_DROP_PREPARED_INPUT.paths,
     preparedInput: DRAG_AND_DROP_PREPARED_INPUT,
     search: true,
-    viewportHeight: 460,
+    initialVisibleRowCount: 460 / 30,
   };
 
   const payload = preloadFileTree({

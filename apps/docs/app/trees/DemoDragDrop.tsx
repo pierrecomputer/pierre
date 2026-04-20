@@ -14,7 +14,7 @@ const lockedPreloadedData = preloadFileTree({
       ? { icon: 'file-tree-icon-lock', title: 'Locked file' }
       : null,
   search: false,
-  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.dragDrop,
+  initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.dragDrop / 30,
 });
 const unlockedPreloadedData = preloadFileTree({
   dragAndDrop: true,
@@ -22,7 +22,7 @@ const unlockedPreloadedData = preloadFileTree({
   id: 'file-tree-drag-drop-demo-unlocked',
   paths: sampleFileList,
   search: false,
-  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.dragDrop,
+  initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.dragDrop / 30,
 });
 
 export function DemoDragDrop() {

@@ -9,7 +9,7 @@ const compactPreloadedData = preloadFileTree({
   id: 'trees-density-demo-compact',
   itemHeight: 24,
   paths: sampleFileList,
-  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.densityCompact,
+  initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.densityCompact / 24,
 });
 
 const defaultPreloadedData = preloadFileTree({
@@ -17,7 +17,7 @@ const defaultPreloadedData = preloadFileTree({
   id: 'trees-density-demo-default',
   itemHeight: 30,
   paths: sampleFileList,
-  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.densityDefault,
+  initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.densityDefault / 30,
 });
 
 const relaxedPreloadedData = preloadFileTree({
@@ -25,7 +25,7 @@ const relaxedPreloadedData = preloadFileTree({
   id: 'trees-density-demo-relaxed',
   itemHeight: 36,
   paths: sampleFileList,
-  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.densityRelaxed,
+  initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.densityRelaxed / 36,
 });
 
 export function DemoDensity() {

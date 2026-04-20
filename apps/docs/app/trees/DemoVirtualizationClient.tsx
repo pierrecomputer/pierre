@@ -36,7 +36,7 @@ export function DemoVirtualizationClient({
     id: 'trees-virtualization-demo',
     initialExpandedPaths: expandedPaths,
     paths,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.virtualization,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.virtualization / 30,
   });
 
   return (

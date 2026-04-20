@@ -101,7 +101,7 @@ function ClientRenderedExample({
     initialExpansion: 'open',
     paths,
     search: true,
-    viewportHeight,
+    initialVisibleRowCount: viewportHeight / 30,
   });
   const search = useFileTreeSearch(model);
   const selectedPaths = useFileTreeSelection(model);
@@ -201,7 +201,7 @@ function ServerRenderedExample({
     initialExpansion: 'open',
     paths,
     search: true,
-    viewportHeight,
+    initialVisibleRowCount: viewportHeight / 30,
   } satisfies DemoFileTreeOptions);
 
   return (

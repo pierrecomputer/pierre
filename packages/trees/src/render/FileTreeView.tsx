@@ -454,6 +454,18 @@ function isSearchOpenSeedKey(event: KeyboardEvent): boolean {
   );
 }
 
+// Prefers the live scroll element's measured height once layout has run,
+// falling back to the first-render hint while clientHeight is still zero
+// (SSR, initial mount, detached nodes, jsdom).
+function getMeasuredViewportHeight(
+  scrollElement: HTMLElement | null,
+  fallbackViewportHeight: number
+): number {
+  return scrollElement?.clientHeight != null && scrollElement.clientHeight > 0
+    ? scrollElement.clientHeight
+    : fallbackViewportHeight;
+}
+
 // Focus changes should keep the logical focused row visible without relying on
 // browser scrollIntoView heuristics inside the virtualized shadow root.
 // Keeps a newly focused row inside the viewport without relying on
@@ -469,10 +481,10 @@ function scrollFocusedRowIntoView(
     return false;
   }
 
-  const viewportHeight =
-    scrollElement.clientHeight > 0
-      ? scrollElement.clientHeight
-      : fallbackViewportHeight;
+  const viewportHeight = getMeasuredViewportHeight(
+    scrollElement,
+    fallbackViewportHeight
+  );
   const itemTop = focusedIndex * itemHeight;
   const itemBottom = itemTop + itemHeight;
   const currentScrollTop = scrollElement.scrollTop;
@@ -508,10 +520,10 @@ function scrollFocusedRowToViewportOffset(
     return false;
   }
 
-  const viewportHeight =
-    scrollElement.clientHeight > 0
-      ? scrollElement.clientHeight
-      : fallbackViewportHeight;
+  const viewportHeight = getMeasuredViewportHeight(
+    scrollElement,
+    fallbackViewportHeight
+  );
   const itemTop = focusedIndex * itemHeight;
   const itemBottom = itemTop + itemHeight;
   const currentScrollTop = scrollElement.scrollTop;
@@ -1325,7 +1337,7 @@ export function FileTreeView({
   searchEnabled = false,
   slotHost,
   stickyFolders = false,
-  viewportHeight = FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
+  initialViewportHeight = FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
 }: FileTreeViewProps): JSX.Element {
   'use no memo';
   const contextMenuAnchorRef = useRef<HTMLDivElement>(null);
@@ -1395,7 +1407,7 @@ export function FileTreeView({
       overscan,
       scrollTop: 0,
       stickyFolders,
-      viewportHeight,
+      viewportHeight: initialViewportHeight,
     })
   );
   const [hasStickyUiMount, setHasStickyUiMount] = useState(false);
@@ -1638,10 +1650,10 @@ export function FileTreeView({
 
       if (controller.isSearchOpen()) {
         const scrollElement = scrollRef.current;
-        const viewportHeight =
-          scrollElement?.clientHeight != null && scrollElement.clientHeight > 0
-            ? scrollElement.clientHeight
-            : resolvedViewportHeight;
+        const viewportHeight = getMeasuredViewportHeight(
+          scrollElement,
+          resolvedViewportHeight
+        );
         restoreTreeFocusViewportOffsetRef.current =
           focusedIndex < 0 || scrollElement == null
             ? null
@@ -2106,10 +2118,10 @@ export function FileTreeView({
           controller.selectOnlyPath(currentFocusedPath);
         }
         const scrollElement = scrollRef.current;
-        const viewportHeight =
-          scrollElement?.clientHeight != null && scrollElement.clientHeight > 0
-            ? scrollElement.clientHeight
-            : resolvedViewportHeight;
+        const viewportHeight = getMeasuredViewportHeight(
+          scrollElement,
+          resolvedViewportHeight
+        );
         restoreTreeFocusViewportOffsetRef.current =
           focusedIndex < 0 || scrollElement == null
             ? null
@@ -2332,10 +2344,10 @@ export function FileTreeView({
 
     const update = (): void => {
       const nextItemCount = controller.getVisibleCount();
-      const nextViewportHeight =
-        scrollElement.clientHeight > 0
-          ? scrollElement.clientHeight
-          : viewportHeight;
+      const nextViewportHeight = getMeasuredViewportHeight(
+        scrollElement,
+        initialViewportHeight
+      );
       const maxScrollTop = Math.max(
         0,
         nextItemCount * itemHeight - nextViewportHeight
@@ -2528,7 +2540,7 @@ export function FileTreeView({
       isScrollingRef.current = false;
       resizeObserver?.disconnect();
     };
-  }, [controller, itemHeight, overscan, stickyFolders, viewportHeight]);
+  }, [controller, initialViewportHeight, itemHeight, overscan, stickyFolders]);
 
   useLayoutEffect(() => {
     if (contextMenuEnabled || contextMenuState == null) {
@@ -3146,7 +3158,6 @@ export function FileTreeView({
       role="tree"
       tabIndex={-1}
       style={{
-        height: `${viewportHeight}px`,
         outline: 'none',
         position: 'relative',
       }}

@@ -11,6 +11,10 @@ the server, and treat the result as one opaque handoff object.
 
 <DocsCodeExample {...SSR_GUIDE_PRELOAD_FILE_TREE} />
 
+Steady-state height still comes from the rendered container.
+`initialVisibleRowCount` is only a first-render hint for SSR and hydration
+before the browser can measure the real viewport.
+
 Do not unpack the payload into a field-by-field integration story in application
 code. Pass it forward unchanged.
 

@@ -57,9 +57,11 @@
   - the tree renders a window of rows by default, including a small overscan
     around the visible viewport
   - most users do not need custom virtualization primitives
-  - viewport sizing matters because virtualization needs a real visible window
+  - steady-state viewport size comes from the host element's CSS height, so give
+    the rendered container a real height
 - Focus on options users actually reason about:
-  - `viewportHeight`
+  - `initialVisibleRowCount` when you want to budget SSR or first-render work
+    before the browser can measure the real viewport
   - row density or item height only when the visual design truly changes it
   - expansion and search choices because they affect how many rows stay in the
     rendered window at once

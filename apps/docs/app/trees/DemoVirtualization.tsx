@@ -187,7 +187,7 @@ const virtualizationPreloadedData = preloadFileTree({
   id: 'trees-virtualization-demo',
   initialExpandedPaths: virtualizationDemoData.expandedPaths,
   paths: virtualizationDemoData.paths,
-  viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.virtualization,
+  initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.virtualization / 30,
 });
 
 export function DemoVirtualization() {

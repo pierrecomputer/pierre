@@ -399,7 +399,7 @@ describe('file-tree search', () => {
         initialExpansion: 'open',
         paths: FILES,
         search: false,
-        viewportHeight: 180,
+        initialVisibleRowCount: 180 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -439,7 +439,7 @@ describe('file-tree search', () => {
         initialExpansion: 'open',
         paths: SEARCH_NAV_FILES,
         search: false,
-        viewportHeight: 220,
+        initialVisibleRowCount: 220 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -484,7 +484,7 @@ describe('file-tree search', () => {
         initialExpansion: 'open',
         paths: SEARCH_NAV_FILES,
         search: true,
-        viewportHeight: 220,
+        initialVisibleRowCount: 220 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -565,7 +565,7 @@ describe('file-tree search', () => {
         initialExpansion: 'open',
         paths: SEARCH_NAV_FILES,
         search: true,
-        viewportHeight: 220,
+        initialVisibleRowCount: 220 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -641,7 +641,7 @@ describe('file-tree search', () => {
         overscan: 0,
         paths: manyWorkerFiles,
         search: true,
-        viewportHeight: 44,
+        initialVisibleRowCount: 44 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });
@@ -714,7 +714,7 @@ describe('file-tree search', () => {
         overscan: 0,
         paths: offscreenWorkerFiles,
         search: true,
-        viewportHeight: 44,
+        initialVisibleRowCount: 44 / 30,
       });
 
       fileTree.render({ containerWrapper: mount });

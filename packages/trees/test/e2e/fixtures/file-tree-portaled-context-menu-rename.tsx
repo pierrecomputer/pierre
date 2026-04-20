@@ -116,7 +116,7 @@ tree = new FileTree({
   initialExpansion: 'open',
   paths: ['README.md', 'src/index.ts', 'src/utils/worker.ts'],
   renaming: true,
-  viewportHeight: 300,
+  initialVisibleRowCount: 300 / 30,
 });
 tree.render({ containerWrapper: mount });
 

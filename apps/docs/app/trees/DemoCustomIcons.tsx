@@ -13,7 +13,7 @@ function createIconDemoPreloadedData(id: string, icons: FileTreeIcons) {
     id,
     initialExpandedPaths: ['src', 'src/components'],
     paths: sampleFileList,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.customIcons,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.customIcons / 30,
   });
 }
 

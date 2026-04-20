@@ -121,7 +121,7 @@ export function DemoContextMenuClient({
     paths: sampleFileList,
     renaming: true,
     search: false,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.contextMenu,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.contextMenu / 30,
   });
   const { model: rightClickModel } = useFileTree({
     composition: rightClickComposition,
@@ -131,7 +131,7 @@ export function DemoContextMenuClient({
     paths: sampleFileList,
     renaming: true,
     search: false,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.contextMenu,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.contextMenu / 30,
   });
   const { model: buttonModel } = useFileTree({
     composition: buttonComposition,
@@ -141,7 +141,7 @@ export function DemoContextMenuClient({
     paths: sampleFileList,
     renaming: true,
     search: false,
-    viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.contextMenu,
+    initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.contextMenu / 30,
   });
 
   const activeModel =

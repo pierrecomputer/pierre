@@ -24,7 +24,7 @@ export default async function TreesDevSearchPage() {
     flattenEmptyDirectories,
     initialExpandedPaths: sharedInitialExpandedPaths,
     paths: sharedDemoPaths,
-    viewportHeight: 260,
+    initialVisibleRowCount: 260 / 30,
   };
 
   const expandPayload = getPayload(

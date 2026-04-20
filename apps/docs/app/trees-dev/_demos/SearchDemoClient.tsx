@@ -59,7 +59,7 @@ const HydratedSearchExample = memo(function HydratedSearchExample({
     <ExampleCard title={title} description={description} controls={controls}>
       <div
         ref={ref}
-        style={{ height: `${String(options.viewportHeight ?? 320)}px` }}
+        style={{ height: '260px' }}
         dangerouslySetInnerHTML={{ __html: containerHtml }}
         suppressHydrationWarning
       />
@@ -91,7 +91,7 @@ export function SearchDemoClient({
   const baseOptions = useMemo(
     () => ({
       ...sharedOptions,
-      viewportHeight: 260,
+      initialVisibleRowCount: 260 / 30,
     }),
     [sharedOptions]
   );

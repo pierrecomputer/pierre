@@ -175,7 +175,7 @@ const fileTree = new FileTree({
   paths: workload.presortedFiles,
   search: true,
   stickyFolders: true,
-  viewportHeight: 700,
+  initialVisibleRowCount: 700 / 30,
 });
 fileTree.render({ containerWrapper: mount });
 

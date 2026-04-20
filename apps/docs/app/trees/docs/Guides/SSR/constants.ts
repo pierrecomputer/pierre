@@ -9,7 +9,7 @@ const payload = preloadFileTree({
   id: 'project-tree',
   initialExpandedPaths: ['src'],
   search: true,
-  viewportHeight: 320,
+  initialVisibleRowCount: 11,
 });`
 );
 
@@ -31,7 +31,7 @@ export function ProjectTreeClient({
     id: preloadedData.id,
     initialExpandedPaths: ['src'],
     search: true,
-    viewportHeight: 320,
+    initialVisibleRowCount: 11,
   });
 
   return <FileTree model={model} preloadedData={preloadedData} />;
@@ -47,7 +47,7 @@ const fileTree = new FileTree({
   id: 'project-tree',
   initialExpandedPaths: ['src'],
   search: true,
-  viewportHeight: 320,
+  initialVisibleRowCount: 11,
 });
 
 const container = document.getElementById('project-tree');

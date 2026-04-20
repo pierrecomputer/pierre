@@ -32,7 +32,7 @@ export default async function TreesDevGitStatusPage() {
     preparedInput: workloadData.pathsArePresorted
       ? createPresortedPreparedInput(workloadData.paths)
       : undefined,
-    viewportHeight: GIT_STATUS_VIEWPORT_HEIGHT,
+    initialVisibleRowCount: GIT_STATUS_VIEWPORT_HEIGHT / 30,
   };
 
   const payload = preloadFileTree({

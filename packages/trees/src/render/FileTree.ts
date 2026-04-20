@@ -43,7 +43,10 @@ import type {
   FileTreeSsrPayload,
   FileTreeViewProps,
 } from '../model/types';
-import { FILE_TREE_DEFAULT_VIEWPORT_HEIGHT } from '../model/virtualization';
+import {
+  FILE_TREE_DEFAULT_ITEM_HEIGHT,
+  FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
+} from '../model/virtualization';
 import fileTreeStyles from '../style.css';
 import {
   escapeStyleTextForHtml,
@@ -77,6 +80,19 @@ function createServerId(explicitId?: string): string {
 
   serverInstanceId += 1;
   return `pst_srv_${serverInstanceId}`;
+}
+
+// Translates the public row-budget hint into the provisional pixel height shared
+// by SSR and the first client render before the DOM can report a measured
+// scroll viewport.
+function resolveInitialViewportHeight({
+  initialVisibleRowCount,
+  itemHeight,
+}: Pick<FileTreeOptions, 'initialVisibleRowCount' | 'itemHeight'>): number {
+  return initialVisibleRowCount == null
+    ? FILE_TREE_DEFAULT_VIEWPORT_HEIGHT
+    : Math.max(0, initialVisibleRowCount) *
+        (itemHeight ?? FILE_TREE_DEFAULT_ITEM_HEIGHT);
 }
 
 function parseSpriteSheet(spriteSheet: string): SVGElement | undefined {
@@ -158,7 +174,7 @@ export class FileTree
   readonly #slotHost = new FileTreeManagedSlotHost();
   readonly #viewOptions: Pick<
     FileTreeOptions,
-    'itemHeight' | 'overscan' | 'stickyFolders' | 'viewportHeight'
+    'initialVisibleRowCount' | 'itemHeight' | 'overscan' | 'stickyFolders'
   >;
   #fileTreeContainer: HTMLElement | undefined;
   #gitStatusState: FileTreeGitStatusState | null;
@@ -187,7 +203,7 @@ export class FileTree
       search,
       stickyFolders,
       unsafeCSS,
-      viewportHeight,
+      initialVisibleRowCount,
       ...controllerOptions
     } = options;
     this.#composition = composition;
@@ -203,7 +219,7 @@ export class FileTree
       itemHeight,
       overscan,
       stickyFolders,
-      viewportHeight,
+      initialVisibleRowCount,
     };
     this.#controller = new FileTreeController({
       ...controllerOptions,
@@ -376,10 +392,7 @@ export class FileTree
     }
 
     this.#syncHeaderSlotContent();
-    renderFileTreeRoot(
-      mountedTree.wrapper,
-      this.#getViewProps(mountedTree.host)
-    );
+    renderFileTreeRoot(mountedTree.wrapper, this.#getViewProps());
   }
 
   public setGitStatus(gitStatus?: FileTreeOptions['gitStatus']): void {
@@ -393,10 +406,7 @@ export class FileTree
       return;
     }
 
-    renderFileTreeRoot(
-      mountedTree.wrapper,
-      this.#getViewProps(mountedTree.host)
-    );
+    renderFileTreeRoot(mountedTree.wrapper, this.#getViewProps());
   }
 
   public setIcons(icons?: FileTreeOptions['icons']): void {
@@ -408,17 +418,14 @@ export class FileTree
     }
 
     this.#syncIconSurface(mountedTree.host, mountedTree.wrapper);
-    renderFileTreeRoot(
-      mountedTree.wrapper,
-      this.#getViewProps(mountedTree.host)
-    );
+    renderFileTreeRoot(mountedTree.wrapper, this.#getViewProps());
   }
 
   public hydrate({ fileTreeContainer }: FileTreeHydrationProps): void {
     const host = this.#prepareHost(fileTreeContainer);
     const wrapper = this.#getOrCreateWrapper(host);
     this.#syncHeaderSlotContent();
-    hydrateFileTreeRoot(wrapper, this.#getViewProps(host));
+    hydrateFileTreeRoot(wrapper, this.#getViewProps());
   }
 
   public render({
@@ -431,29 +438,27 @@ export class FileTree
     );
     const wrapper = this.#getOrCreateWrapper(host);
     this.#syncHeaderSlotContent();
-    renderFileTreeRoot(wrapper, this.#getViewProps(host));
+    renderFileTreeRoot(wrapper, this.#getViewProps());
   }
 
-  #getResolvedViewOptions(host: HTMLElement): {
+  #getInitialViewOptions(): {
+    initialViewportHeight: number;
     itemHeight?: number;
     overscan?: number;
     stickyFolders?: boolean;
-    viewportHeight: number;
   } {
-    const viewportHeight =
-      this.#viewOptions.viewportHeight ??
-      host.clientHeight ??
-      FILE_TREE_DEFAULT_VIEWPORT_HEIGHT;
-
     return {
+      initialViewportHeight: resolveInitialViewportHeight({
+        initialVisibleRowCount: this.#viewOptions.initialVisibleRowCount,
+        itemHeight: this.#viewOptions.itemHeight,
+      }),
       itemHeight: this.#viewOptions.itemHeight,
       overscan: this.#viewOptions.overscan,
       stickyFolders: this.#viewOptions.stickyFolders,
-      viewportHeight,
     };
   }
 
-  #getViewProps(host: HTMLElement): FileTreeViewProps {
+  #getViewProps(): FileTreeViewProps {
     return {
       composition: this.#composition,
       controller: this.#controller,
@@ -466,7 +471,7 @@ export class FileTree
       renderRowDecoration: this.#renderRowDecoration,
       searchEnabled: this.#searchEnabled,
       slotHost: this.#slotHost,
-      ...this.#getResolvedViewOptions(host),
+      ...this.#getInitialViewOptions(),
     };
   }
 
@@ -708,7 +713,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     search,
     stickyFolders,
     unsafeCSS,
-    viewportHeight,
+    initialVisibleRowCount,
     ...controllerOptions
   } = options;
   const resolvedId = createServerId(id);
@@ -719,8 +724,10 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     renaming,
   });
   const gitStatusState = resolveFileTreeGitStatusState(gitStatus);
-  const resolvedViewportHeight =
-    viewportHeight ?? FILE_TREE_DEFAULT_VIEWPORT_HEIGHT;
+  const initialViewportHeight = resolveInitialViewportHeight({
+    initialVisibleRowCount,
+    itemHeight,
+  });
   const normalizedIcons = normalizeFileTreeIcons(icons);
   const customSpriteSheet = normalizedIcons.spriteSheet?.trim() ?? '';
   const coloredIconsAttr =
@@ -750,7 +757,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
       renderRowDecoration,
       searchEnabled: search === true,
       stickyFolders,
-      viewportHeight: resolvedViewportHeight,
+      initialViewportHeight,
     })
   );
   controller.destroy();

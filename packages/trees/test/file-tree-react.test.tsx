@@ -168,7 +168,7 @@ const BASE_OPTIONS = {
   flattenEmptyDirectories: true,
   initialExpansion: 'open' as const,
   paths: ['README.md', 'src/index.ts'],
-  viewportHeight: 120,
+  initialVisibleRowCount: 120 / 30,
 };
 
 describe('file-tree React lane', () => {
