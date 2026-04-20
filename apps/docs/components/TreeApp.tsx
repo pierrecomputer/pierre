@@ -1057,7 +1057,12 @@ export function TreeApp<LAnnotation = unknown>({
               })}
             </div>
           ) : null}
-          <div className="flex min-h-0 flex-1 flex-col">{editor}</div>
+          <div
+            className="flex min-h-0 flex-1 flex-col"
+            style={{ backgroundColor: '#070707' }}
+          >
+            {editor}
+          </div>
         </section>
       </div>
     </div>

@@ -218,5 +218,9 @@ export const TREE_APP_DEMO_INITIAL_EXPANDED_PATHS: readonly string[] = [
 export const TREE_APP_DEMO_INITIAL_ACTIVE_PATH = 'src/components/Button.tsx';
 
 export const TREE_APP_DEMO_GIT_STATUSES: readonly GitStatusEntry[] = [
+  { path: '.gitignore', status: 'added' },
+  { path: 'README.md', status: 'modified' },
+  { path: 'package.json', status: 'modified' },
   { path: 'node_modules/', status: 'ignored' },
+  { path: 'src/components/Button.tsx', status: 'modified' },
 ];

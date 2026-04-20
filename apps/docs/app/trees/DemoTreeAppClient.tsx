@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { TREE_APP_DEMO_GIT_STATUSES } from './treeAppDemoData';
 import { TreeApp } from '@/components/TreeApp';
+import type { GitStatusEntry } from '@/lib/treesCompat';
 
 const COMPACT_ITEM_HEIGHT = 24;
 const COMPACT_DENSITY = 0.8;
@@ -54,7 +55,7 @@ function remapMovedPath(
     return toPath;
   }
 
-  const descendantPrefix = `${fromPath}/`;
+  const descendantPrefix = fromPath.endsWith('/') ? fromPath : `${fromPath}/`;
   if (!path.startsWith(descendantPrefix)) {
     return path;
   }
@@ -96,6 +97,52 @@ function remapHtmlMap(
   );
 }
 
+function remapGitStatusEntries(
+  entries: readonly GitStatusEntry[],
+  fromPath: string,
+  toPath: string
+): readonly GitStatusEntry[] {
+  const nextEntries = entries.map((entry) => ({
+    ...entry,
+    path: remapMovedPath(entry.path, fromPath, toPath),
+  }));
+
+  const ignoredDirectoryPaths = new Set(
+    nextEntries
+      .filter((entry) => entry.status === 'ignored' && entry.path.endsWith('/'))
+      .map((entry) => entry.path)
+  );
+
+  return nextEntries.filter(
+    (entry) =>
+      (entry.status === 'ignored' && entry.path.endsWith('/')) ||
+      !isPathInsideIgnoredDirectory(entry.path, ignoredDirectoryPaths)
+  );
+}
+
+// Explicit file statuses should not override inherited ignored styling when a
+// move drops that entry underneath an ignored directory like node_modules/.
+function isPathInsideIgnoredDirectory(
+  path: string,
+  ignoredDirectoryPaths: ReadonlySet<string>
+): boolean {
+  const normalizedPath = path.endsWith('/') ? path.slice(0, -1) : path;
+  if (normalizedPath.length === 0) {
+    return false;
+  }
+
+  const segments = normalizedPath.split('/');
+  let ancestorPath = '';
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    ancestorPath = `${ancestorPath}${segments[index]}/`;
+    if (ignoredDirectoryPaths.has(ancestorPath)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function DemoTreeAppClient({
   files,
   initialActivePath,
@@ -109,6 +156,9 @@ export function DemoTreeAppClient({
     null
   );
   const [filesByPath, setFilesByPath] = useState(files);
+  const [gitStatusEntries, setGitStatusEntries] = useState(
+    TREE_APP_DEMO_GIT_STATUSES
+  );
   const [prerenderedHtmlByPathState, setPrerenderedHtmlByPathState] = useState(
     prerenderedHTMLByPath
   );
@@ -145,6 +195,10 @@ export function DemoTreeAppClient({
 
   const { model } = useFileTree(treeOptions);
 
+  useEffect(() => {
+    model.setGitStatus(gitStatusEntries);
+  }, [gitStatusEntries, model]);
+
   useEffect(
     () =>
       model.onMutation('*', (event) => {
@@ -171,6 +225,17 @@ export function DemoTreeAppClient({
             nextHtml = remapHtmlMap(nextHtml, moveEvent.from, moveEvent.to);
           }
           return nextHtml;
+        });
+        setGitStatusEntries((current) => {
+          let nextEntries = current;
+          for (const moveEvent of moveEvents) {
+            nextEntries = remapGitStatusEntries(
+              nextEntries,
+              moveEvent.from,
+              moveEvent.to
+            );
+          }
+          return nextEntries;
         });
       }),
     [model]
