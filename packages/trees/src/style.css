@@ -130,17 +130,11 @@
 
     --trees-fg: var(
       --trees-fg-override,
-      var(
-        --trees-theme-sidebar-fg,
-        light-dark(#6c6c71, #adadb1)
-      )
+      var(--trees-theme-sidebar-fg, light-dark(#6c6c71, #adadb1))
     );
     --trees-fg-muted: var(
       --trees-fg-muted-override,
-      var(
-        --trees-theme-sidebar-header-fg,
-        light-dark(#84848a, #84848a)
-      )
+      var(--trees-theme-sidebar-header-fg, light-dark(#84848a, #84848a))
     );
     --trees-bg: var(
       --trees-bg-override,
@@ -148,10 +142,7 @@
     );
     --trees-bg-muted: var(
       --trees-bg-muted-override,
-      var(
-        --trees-theme-list-hover-bg,
-        light-dark(#dfebff59, #19283c59)
-      )
+      var(--trees-theme-list-hover-bg, light-dark(#dfebff59, #19283c59))
     );
     --trees-accent: var(--trees-accent-override, #009fff);
 
@@ -170,10 +161,7 @@
 
     --trees-border-color: var(
       --trees-border-color-override,
-      var(
-        --trees-theme-sidebar-border,
-        light-dark(#eeeeef, #070707)
-      )
+      var(--trees-theme-sidebar-border, light-dark(#eeeeef, #070707))
     );
     --trees-density: var(--trees-density-override, 1);
     --trees-border-radius: var(
