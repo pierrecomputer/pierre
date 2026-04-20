@@ -32,6 +32,11 @@ export const sampleFileList: string[] = [
   'src/utils/worker/deprecrated/old-worker.ts',
   'src/index.ts',
   '.gitignore',
+  'node_modules/react/package.json',
+  'node_modules/react/index.js',
+  'node_modules/react-dom/package.json',
+  'node_modules/react-dom/index.js',
+  'node_modules/typescript/package.json',
 ];
 
 export const sharedDemoFileTreeOptions: FileTreeOptions = {

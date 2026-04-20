@@ -147,11 +147,15 @@
       var(--trees-theme-list-hover-bg, light-dark(#dfebff59, #19283c59))
     );
     --trees-accent: var(--trees-accent-override, #009fff);
+    --trees-input-bg: var(
+      --trees-input-bg-override,
+      light-dark(#f8f8f8, #070707)
+    );
 
     --trees-added-light: #16a994;
     --trees-added-dark: #00cab1;
-    --trees-ignored-light: #84848a;
-    --trees-ignored-dark: #adadb1;
+    --trees-ignored-light: #adadb1;
+    --trees-ignored-dark: #4a4a4e;
     --trees-modified-light: #1ca1c7;
     --trees-modified-dark: #08c0ef;
     --trees-renamed-light: #d5a910;
@@ -195,10 +199,7 @@
       var(--trees-theme-input-fg, var(--trees-fg))
     );
     --trees-search-font-weight: var(--trees-search-font-weight-override, 600);
-    --trees-search-bg: var(
-      --trees-search-bg-override,
-      var(--trees-theme-input-bg, var(--trees-bg))
-    );
+    --trees-search-bg: var(--trees-search-bg-override, var(--trees-input-bg));
 
     --trees-selected-fg: var(
       --trees-selected-fg-override,

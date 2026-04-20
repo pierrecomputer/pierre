@@ -20,7 +20,7 @@ import { DemoVirtualization } from './DemoVirtualization';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import {
   TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
-  TREE_NEW_GIT_STATUSES_A,
+  TREE_NEW_GIT_STATUSES,
 } from './gitStatusDemoData';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
@@ -60,7 +60,7 @@ export default function TreesPage() {
   });
   const gitStatusFullViewportPreloadedData = preloadFileTree({
     flattenEmptyDirectories: true,
-    gitStatus: TREE_NEW_GIT_STATUSES_A,
+    gitStatus: TREE_NEW_GIT_STATUSES,
     id: 'file-tree-git-status-demo-full',
     initialExpandedPaths: TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
     paths: sampleFileList,
@@ -69,7 +69,7 @@ export default function TreesPage() {
   });
   const gitStatusFilteredViewportPreloadedData = preloadFileTree({
     flattenEmptyDirectories: true,
-    gitStatus: TREE_NEW_GIT_STATUSES_A,
+    gitStatus: TREE_NEW_GIT_STATUSES,
     id: 'file-tree-git-status-demo-filtered',
     initialExpandedPaths: TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
     paths: sampleFileList,
