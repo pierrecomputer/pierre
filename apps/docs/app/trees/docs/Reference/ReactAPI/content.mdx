@@ -10,14 +10,7 @@ hook creates one stable model for the component lifetime. Later option changes
 are not a controlled reconfiguration path. Update the model through model
 methods instead.
 
-```tsx
-import { FileTree, useFileTree } from '@pierre/trees/react';
-
-export function ProjectTree({ paths }: { paths: readonly string[] }) {
-  const { model } = useFileTree({ paths, search: true });
-  return <FileTree model={model} />;
-}
-```
+<DocsCodeExample {...REACT_API_EXAMPLE} />
 
 For the shared option meanings behind that call, read
 [Shared concepts](#shared-concepts-shared-option-groups).
@@ -90,14 +83,7 @@ Common read patterns include:
 - actions: `open(initialValue?)`, `close()`, `setValue(value)`,
   `focusNextMatch()`, `focusPreviousMatch()`
 
-```tsx
-const { model } = useFileTree({ paths, search: true });
-const selectedPaths = useFileTreeSelection(model);
-const search = useFileTreeSearch(model);
-const focusedPath = useFileTreeSelector(model, (currentModel) =>
-  currentModel.getFocusedPath()
-);
-```
+<DocsCodeExample {...REACT_API_SELECTOR_HOOKS} />
 
 #### Writing to the model from React
 

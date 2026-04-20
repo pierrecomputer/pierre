@@ -9,17 +9,7 @@ runtime. It is a preload-and-hydrate layer over the same React or vanilla model.
 Import preload helpers from `@pierre/trees/ssr`, call `preloadFileTree(...)` on
 the server, and treat the result as one opaque handoff object.
 
-```ts
-import { preloadFileTree } from '@pierre/trees/ssr';
-
-const payload = preloadFileTree({
-  preparedInput,
-  id: 'project-tree',
-  initialExpandedPaths: ['src'],
-  search: true,
-  viewportHeight: 320,
-});
-```
+<DocsCodeExample {...SSR_GUIDE_PRELOAD_FILE_TREE} />
 
 Do not unpack the payload into a field-by-field integration story in application
 code. Pass it forward unchanged.
@@ -38,29 +28,7 @@ hydration mismatch is the expected outcome.
 React still creates the model with `useFileTree(...)`. The difference is that
 the wrapper receives the opaque handoff object as `preloadedData`.
 
-```tsx
-import { FileTree, useFileTree } from '@pierre/trees/react';
-import type { FileTreePreparedInput } from '@pierre/trees';
-import type { FileTreeSsrPayload } from '@pierre/trees/ssr';
-
-export function ProjectTreeClient({
-  preparedInput,
-  preloadedData,
-}: {
-  preparedInput: FileTreePreparedInput;
-  preloadedData: FileTreeSsrPayload;
-}) {
-  const { model } = useFileTree({
-    preparedInput,
-    id: preloadedData.id,
-    initialExpandedPaths: ['src'],
-    search: true,
-    viewportHeight: 320,
-  });
-
-  return <FileTree model={model} preloadedData={preloadedData} />;
-}
-```
+<DocsCodeExample {...SSR_GUIDE_REACT_HYDRATION} />
 
 The model stays primary. `preloadedData` only activates hydration.
 
@@ -69,22 +37,7 @@ The model stays primary. `preloadedData` only activates hydration.
 Vanilla uses the same preload step, but the client hydrates the server-rendered
 container that is already in the page.
 
-```ts
-import { FileTree } from '@pierre/trees';
-
-const fileTree = new FileTree({
-  preparedInput,
-  id: 'project-tree',
-  initialExpandedPaths: ['src'],
-  search: true,
-  viewportHeight: 320,
-});
-
-const container = document.getElementById('project-tree');
-if (container instanceof HTMLElement) {
-  fileTree.hydrate({ fileTreeContainer: container });
-}
-```
+<DocsCodeExample {...SSR_GUIDE_VANILLA_HYDRATION} />
 
 If that server-rendered container is missing, render normally instead of
 hydrating.

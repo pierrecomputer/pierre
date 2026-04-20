@@ -21,14 +21,7 @@ still doing avoidable shaping or sorting work.
 For larger trees, move shaping work out of the UI. Prepared input is the
 scale-oriented public path.
 
-```ts
-import { preparePresortedFileTreeInput } from '@pierre/trees';
-
-export async function loadWorkspaceTree() {
-  const sortedPaths = await fetchSortedWorkspacePaths();
-  return preparePresortedFileTreeInput(sortedPaths);
-}
-```
+<DocsCodeExample {...LARGE_TREES_LOAD_WORKSPACE_TREE} />
 
 If you only have an unsorted path list, use `prepareFileTreeInput(...)` instead.
 Either way, pass the prepared result into React, vanilla, or SSR hydration.
@@ -44,14 +37,7 @@ The main rendering knobs are:
 - `itemHeight`, when your design changes row density enough to matter
 - `overscan`, when you need to trade a little extra work for smoother scrolling
 
-```tsx
-const { model } = useFileTree({
-  preparedInput,
-  viewportHeight: 420,
-  itemHeight: 30,
-  overscan: 8,
-});
-```
+<DocsCodeExample {...LARGE_TREES_VIRTUALIZATION_KNOBS} />
 
 Keep the language outcome-focused: the tree mounts the visible slice plus a
 small buffer around it.

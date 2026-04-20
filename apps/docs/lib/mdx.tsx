@@ -1,4 +1,5 @@
 import { MultiFileDiff } from '@pierre/diffs/react';
+import { preloadFile, type PreloadFileOptions } from '@pierre/diffs/ssr';
 import {
   IconArrowRight,
   IconBulbFill,
@@ -103,4 +104,23 @@ export async function renderMDX({ filePath, scope = {} }: RenderMDXOptions) {
   });
 
   return content;
+}
+
+// Preload every file snippet in parallel via `preloadFile` and expose each
+// preloaded result to the MDX scope under its original export key. Authors can
+// then use `<DocsCodeExample {...foo} />` inside MDX, where `foo` is the name
+// of the exported `PreloadFileOptions` constant in a sibling `constants.ts`.
+export async function renderMDXWithPreloadedFiles(
+  filePath: string,
+  files: Readonly<Record<string, PreloadFileOptions<unknown>>>
+) {
+  const entries = Object.entries(files);
+  const results = await Promise.all(
+    entries.map(([, opts]) => preloadFile(opts))
+  );
+  const scope: Record<string, unknown> = {};
+  for (let i = 0; i < entries.length; i++) {
+    scope[entries[i][0]] = results[i];
+  }
+  return renderMDX({ filePath, scope });
 }

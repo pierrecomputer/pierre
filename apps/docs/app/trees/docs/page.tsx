@@ -1,36 +1,103 @@
 import '@/app/prose.css';
+import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 import type { Metadata } from 'next';
 import { Fragment } from 'react';
 
 import { DocsLayout } from '../../docs/DocsLayout';
 import { HeadingAnchors } from '../../docs/HeadingAnchors';
 import { ProseWrapper } from '../../docs/ProseWrapper';
+import * as chooseYourIntegrationConstants from './Guides/ChooseYourIntegration/constants';
+import * as customizeIconsConstants from './Guides/CustomizeIcons/constants';
+import * as getStartedWithReactConstants from './Guides/GetStartedWithReact/constants';
+import * as getStartedWithVanillaConstants from './Guides/GetStartedWithVanilla/constants';
+import * as handleLargeTreesEfficientlyConstants from './Guides/HandleLargeTreesEfficiently/constants';
+import * as navigateSelectionFocusAndSearchConstants from './Guides/NavigateSelectionFocusAndSearch/constants';
+import * as renameDragAndTriggerItemActionsConstants from './Guides/RenameDragAndTriggerItemActions/constants';
+import * as shapeTreeDataForFastRenderingConstants from './Guides/ShapeTreeDataForFastRendering/constants';
+import * as showGitStatusAndRowAnnotationsConstants from './Guides/ShowGitStatusAndRowAnnotations/constants';
+import * as ssrGuideConstants from './Guides/SSR/constants';
+import * as styleAndThemeTheTreeConstants from './Guides/StyleAndThemeTheTree/constants';
+import * as reactApiConstants from './Reference/ReactAPI/constants';
+import * as ssrApiConstants from './Reference/SSRAPI/constants';
+import * as stylingAndThemingConstants from './Reference/StylingAndTheming/constants';
+import * as vanillaApiConstants from './Reference/VanillaAPI/constants';
 import Footer from '@/components/Footer';
 import { Notice } from '@/components/ui/notice';
-import { renderMDX } from '@/lib/mdx';
+import { renderMDX, renderMDXWithPreloadedFiles } from '@/lib/mdx';
 
-const GUIDE_SECTION_FILES = [
-  'trees/docs/Guides/ChooseYourIntegration/content.mdx',
-  'trees/docs/Guides/GetStartedWithReact/content.mdx',
-  'trees/docs/Guides/GetStartedWithVanilla/content.mdx',
-  'trees/docs/Guides/ShapeTreeDataForFastRendering/content.mdx',
-  'trees/docs/Guides/NavigateSelectionFocusAndSearch/content.mdx',
-  'trees/docs/Guides/RenameDragAndTriggerItemActions/content.mdx',
-  'trees/docs/Guides/StyleAndThemeTheTree/content.mdx',
-  'trees/docs/Guides/CustomizeIcons/content.mdx',
-  'trees/docs/Guides/ShowGitStatusAndRowAnnotations/content.mdx',
-  'trees/docs/Guides/HandleLargeTreesEfficiently/content.mdx',
-  'trees/docs/Guides/SSR/content.mdx',
-] as const;
+interface DocsSection {
+  filePath: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  constants?: Readonly<Record<string, PreloadFileOptions<any>>>;
+}
 
-const REFERENCE_SECTION_FILES = [
-  'trees/docs/Reference/SharedConcepts/content.mdx',
-  'trees/docs/Reference/ReactAPI/content.mdx',
-  'trees/docs/Reference/VanillaAPI/content.mdx',
-  'trees/docs/Reference/SSRAPI/content.mdx',
-  'trees/docs/Reference/StylingAndTheming/content.mdx',
-  'trees/docs/Reference/Icons/content.mdx',
-] as const;
+const GUIDE_SECTIONS: readonly DocsSection[] = [
+  {
+    filePath: 'trees/docs/Guides/ChooseYourIntegration/content.mdx',
+    constants: chooseYourIntegrationConstants,
+  },
+  {
+    filePath: 'trees/docs/Guides/GetStartedWithReact/content.mdx',
+    constants: getStartedWithReactConstants,
+  },
+  {
+    filePath: 'trees/docs/Guides/GetStartedWithVanilla/content.mdx',
+    constants: getStartedWithVanillaConstants,
+  },
+  {
+    filePath: 'trees/docs/Guides/ShapeTreeDataForFastRendering/content.mdx',
+    constants: shapeTreeDataForFastRenderingConstants,
+  },
+  {
+    filePath: 'trees/docs/Guides/NavigateSelectionFocusAndSearch/content.mdx',
+    constants: navigateSelectionFocusAndSearchConstants,
+  },
+  {
+    filePath: 'trees/docs/Guides/RenameDragAndTriggerItemActions/content.mdx',
+    constants: renameDragAndTriggerItemActionsConstants,
+  },
+  {
+    filePath: 'trees/docs/Guides/StyleAndThemeTheTree/content.mdx',
+    constants: styleAndThemeTheTreeConstants,
+  },
+  {
+    filePath: 'trees/docs/Guides/CustomizeIcons/content.mdx',
+    constants: customizeIconsConstants,
+  },
+  {
+    filePath: 'trees/docs/Guides/ShowGitStatusAndRowAnnotations/content.mdx',
+    constants: showGitStatusAndRowAnnotationsConstants,
+  },
+  {
+    filePath: 'trees/docs/Guides/HandleLargeTreesEfficiently/content.mdx',
+    constants: handleLargeTreesEfficientlyConstants,
+  },
+  {
+    filePath: 'trees/docs/Guides/SSR/content.mdx',
+    constants: ssrGuideConstants,
+  },
+];
+
+const REFERENCE_SECTIONS: readonly DocsSection[] = [
+  { filePath: 'trees/docs/Reference/SharedConcepts/content.mdx' },
+  {
+    filePath: 'trees/docs/Reference/ReactAPI/content.mdx',
+    constants: reactApiConstants,
+  },
+  {
+    filePath: 'trees/docs/Reference/VanillaAPI/content.mdx',
+    constants: vanillaApiConstants,
+  },
+  {
+    filePath: 'trees/docs/Reference/SSRAPI/content.mdx',
+    constants: ssrApiConstants,
+  },
+  {
+    filePath: 'trees/docs/Reference/StylingAndTheming/content.mdx',
+    constants: stylingAndThemingConstants,
+  },
+  { filePath: 'trees/docs/Reference/Icons/content.mdx' },
+];
 
 export const metadata: Metadata = {
   title: 'Pierre Trees Docs — Guides and reference.',
@@ -48,12 +115,12 @@ export default function TreesDocsPage() {
           <DocsSectionGroup
             id="guides"
             title="Guides"
-            filePaths={GUIDE_SECTION_FILES}
+            sections={GUIDE_SECTIONS}
           />
           <DocsSectionGroup
             id="reference"
             title="Reference"
-            filePaths={REFERENCE_SECTION_FILES}
+            sections={REFERENCE_SECTIONS}
           />
         </div>
       </DocsLayout>
@@ -85,26 +152,33 @@ function IntroSection() {
   );
 }
 
+// Render each section, preloading its code snippets in parallel when the
+// section ships its own `constants.ts` of `PreloadFileOptions` entries. The
+// preloaded results reach MDX as scope bindings so authors can write
+// `<DocsCodeExample {...FOO_EXAMPLE} />` inline.
 async function DocsSectionGroup({
   id,
   title,
-  filePaths,
+  sections,
 }: {
   id: string;
   title: string;
-  filePaths: readonly string[];
+  sections: readonly DocsSection[];
 }) {
-  const sections = await Promise.all(
-    filePaths.map(async (filePath) => ({
+  const rendered = await Promise.all(
+    sections.map(async ({ filePath, constants }) => ({
       filePath,
-      content: await renderMDX({ filePath }),
+      content:
+        constants != null
+          ? await renderMDXWithPreloadedFiles(filePath, constants)
+          : await renderMDX({ filePath }),
     }))
   );
 
   return (
     <ProseWrapper>
       <h2 id={id}>{title}</h2>
-      {sections.map(({ filePath, content }) => (
+      {rendered.map(({ filePath, content }) => (
         <Fragment key={filePath}>{content}</Fragment>
       ))}
     </ProseWrapper>

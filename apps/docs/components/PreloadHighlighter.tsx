@@ -6,7 +6,7 @@ export function PreloadHighlighter() {
   useEffect(() => {
     void preloadHighlighter({
       themes: ['pierre-dark', 'pierre-light'],
-      langs: ['zig', 'rust', 'typescript', 'tsx'],
+      langs: ['zig', 'rust', 'typescript', 'tsx', 'bash'],
       preferredHighlighter: 'shiki-wasm',
     });
   }, []);

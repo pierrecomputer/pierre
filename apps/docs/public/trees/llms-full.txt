@@ -29,16 +29,6 @@ Pick the React entry point when the surrounding UI, data loading, and state
 management already live in React. The hook creates the model once, and the
 component mounts it.
 
-```tsx
-import { FileTree, useFileTree } from '@pierre/trees/react';
-
-export function ProjectTree({ paths }: { paths: readonly string[] }) {
-  const { model } = useFileTree({ paths, search: true });
-
-  return <FileTree model={model} className="h-96 rounded-lg border" />;
-}
-```
-
 Read [Get started with React](#get-started-with-react) next if that is your
 runtime.
 
@@ -47,20 +37,6 @@ runtime.
 Pick the vanilla class when your app is not React-based, or when another
 framework will own lifecycle around an imperative model. The class instance is
 both the entry point and the state surface.
-
-```ts
-import { FileTree } from '@pierre/trees';
-
-const fileTree = new FileTree({
-  paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
-  search: true,
-});
-
-const container = document.getElementById('project-tree');
-if (container instanceof HTMLElement) {
-  fileTree.render({ fileTreeContainer: container });
-}
-```
 
 Read [Get started with vanilla](#get-started-with-vanilla) next if you want the
 class-first runtime.
@@ -77,6 +53,34 @@ guide explains when `paths` is enough, when to switch to
 `prepareFileTreeInput(...)`, and when `preparePresortedFileTreeInput(...)` is
 the better fit.
 
+**Reactexample** (`project-tree.tsx`):
+
+```tsx
+import { FileTree, useFileTree } from '@pierre/trees/react';
+
+export function ProjectTree({ paths }: { paths: readonly string[] }) {
+  const { model } = useFileTree({ paths, search: true });
+
+  return <FileTree model={model} className="h-96 rounded-lg border" />;
+}
+```
+
+**Vanillaexample** (`mount-tree.ts`):
+
+```typescript
+import { FileTree } from '@pierre/trees';
+
+const fileTree = new FileTree({
+  paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
+  search: true,
+});
+
+const container = document.getElementById('project-tree');
+if (container instanceof HTMLElement) {
+  fileTree.render({ fileTreeContainer: container });
+}
+```
+
 ### Get started with React
 
 Use the React entry point when your surrounding UI already lives in React. The
@@ -88,12 +92,6 @@ host element.
 Use the package root for the vanilla runtime, and the `/react` entry point for
 the React wrapper.
 
-```bash
-bun add @pierre/trees
-# npm: npm install @pierre/trees
-# pnpm: pnpm add @pierre/trees
-```
-
 #### Create the model with `useFileTree(...)`
 
 `useFileTree(...)` from `@pierre/trees/react` creates the model exactly once for
@@ -104,26 +102,6 @@ through methods such as `resetPaths(...)`, `setComposition(...)`,
 
 For small trees, you can pass raw `paths`. For scalable trees, prefer
 `preparedInput` produced on the server or another non-UI boundary.
-
-```tsx
-import { FileTree, useFileTree } from '@pierre/trees/react';
-import type { FileTreePreparedInput } from '@pierre/trees';
-
-interface ProjectTreeProps {
-  preparedInput: FileTreePreparedInput;
-}
-
-export function ProjectTree({ preparedInput }: ProjectTreeProps) {
-  const { model } = useFileTree({
-    preparedInput,
-    search: true,
-    initialExpandedPaths: ['src', 'src/components'],
-    viewportHeight: 320,
-  });
-
-  return <FileTree model={model} className="rounded-lg border" />;
-}
-```
 
 If you are still deciding how to shape that input, read
 [Shape tree data for fast rendering](#shape-tree-data-for-fast-rendering) after
@@ -142,36 +120,6 @@ component renders it.
 
 React code reads snapshots from the model through selector hooks, and writes
 back through model methods.
-
-```tsx
-import {
-  FileTree,
-  useFileTree,
-  useFileTreeSearch,
-  useFileTreeSelection,
-} from '@pierre/trees/react';
-
-export function SearchableTree({ paths }: { paths: readonly string[] }) {
-  const { model } = useFileTree({
-    paths,
-    fileTreeSearchMode: 'hide-non-matches',
-    search: true,
-  });
-  const selectedPaths = useFileTreeSelection(model);
-  const search = useFileTreeSearch(model);
-
-  return (
-    <div className="space-y-3">
-      <input
-        value={search.value}
-        onChange={(event) => search.setValue(event.target.value)}
-        placeholder="Search files"
-      />
-      <p>{selectedPaths.length} item(s) selected.</p>
-    </div>
-  );
-}
-```
 
 Use `useFileTreeSelector(model, selector, equality?)` when sibling UI needs a
 custom derived snapshot without rerendering on unrelated tree changes. For the
@@ -205,6 +153,69 @@ The only difference is that the tree starts from preloaded server output.
 
 When you need that flow, continue with [SSR](#ssr) and [SSR API](#ssr-api).
 
+**Installcommand** (`install.sh`):
+
+```bash
+bun add @pierre/trees
+# npm: npm install @pierre/trees
+# pnpm: pnpm add @pierre/trees
+```
+
+**Projecttreeexample** (`project-tree.tsx`):
+
+```tsx
+import { FileTree, useFileTree } from '@pierre/trees/react';
+import type { FileTreePreparedInput } from '@pierre/trees';
+
+interface ProjectTreeProps {
+  preparedInput: FileTreePreparedInput;
+}
+
+export function ProjectTree({ preparedInput }: ProjectTreeProps) {
+  const { model } = useFileTree({
+    preparedInput,
+    search: true,
+    initialExpandedPaths: ['src', 'src/components'],
+    viewportHeight: 320,
+  });
+
+  return <FileTree model={model} className="rounded-lg border" />;
+}
+```
+
+**Searchabletreeexample** (`searchable-tree.tsx`):
+
+```tsx
+import {
+  FileTree,
+  useFileTree,
+  useFileTreeSearch,
+  useFileTreeSelection,
+} from '@pierre/trees/react';
+
+export function SearchableTree({ paths }: { paths: readonly string[] }) {
+  const { model } = useFileTree({
+    paths,
+    fileTreeSearchMode: 'hide-non-matches',
+    search: true,
+  });
+  const selectedPaths = useFileTreeSelection(model);
+  const search = useFileTreeSearch(model);
+
+  return (
+    <div className="space-y-3">
+      <input
+        value={search.value}
+        onChange={(event) => search.setValue(event.target.value)}
+        placeholder="Search files"
+      />
+      <p>{selectedPaths.length} item(s) selected.</p>
+      <FileTree model={model} className="rounded-lg border" />
+    </div>
+  );
+}
+```
+
 ### Get started with vanilla
 
 Use the vanilla runtime when your app is not React-based, or when another
@@ -214,36 +225,11 @@ attaches it to the DOM.
 
 #### Install `@pierre/trees`
 
-```bash
-bun add @pierre/trees
-# npm: npm install @pierre/trees
-# pnpm: pnpm add @pierre/trees
-```
-
 #### Create the model with `new FileTree(...)`
 
 The class instance is both the runtime entry point and the state surface. For
 small trees, you can pass raw `paths`. For scalable trees, prefer
 `preparedInput` produced outside the UI.
-
-```ts
-import { FileTree, type FileTreePreparedInput } from '@pierre/trees';
-
-export function mountProjectTree(
-  container: HTMLElement,
-  preparedInput: FileTreePreparedInput
-) {
-  const fileTree = new FileTree({
-    preparedInput,
-    search: true,
-    initialExpandedPaths: ['src', 'src/components'],
-    viewportHeight: 320,
-  });
-
-  fileTree.render({ fileTreeContainer: container });
-  return fileTree;
-}
-```
 
 #### Render into a host element
 
@@ -259,23 +245,6 @@ focus. Read and update those values through the model.
 
 The instance gives you direct read methods, item handles, and imperative
 controls.
-
-```ts
-const fileTree = new FileTree({
-  paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
-  search: true,
-});
-
-fileTree.render({ fileTreeContainer: container });
-fileTree.focusPath('src/index.ts');
-fileTree.openSearch('button');
-
-const selectedPaths = fileTree.getSelectedPaths();
-const matchingPaths = fileTree.getSearchMatchingPaths();
-const focusedPath = fileTree.getFocusedPath();
-const buttonItem = fileTree.getItem('src/components/Button.tsx');
-buttonItem?.select();
-```
 
 When surrounding data changes, call explicit model methods such as
 `resetPaths(...)`, `setComposition(...)`, `setGitStatus(...)`, or
@@ -318,6 +287,54 @@ the same:
 That keeps React as the only first-class wrapper surface without changing how
 the underlying model works.
 
+**Imperativeusageexample** (`imperative-usage.ts`):
+
+```typescript
+const fileTree = new FileTree({
+  paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
+  search: true,
+});
+
+fileTree.render({ fileTreeContainer: container });
+fileTree.focusPath('src/index.ts');
+fileTree.openSearch('button');
+
+const selectedPaths = fileTree.getSelectedPaths();
+const matchingPaths = fileTree.getSearchMatchingPaths();
+const focusedPath = fileTree.getFocusedPath();
+const buttonItem = fileTree.getItem('src/components/Button.tsx');
+buttonItem?.select();
+```
+
+**Installcommand** (`install.sh`):
+
+```bash
+bun add @pierre/trees
+# npm: npm install @pierre/trees
+# pnpm: pnpm add @pierre/trees
+```
+
+**Mountprojecttreeexample** (`mount-project-tree.ts`):
+
+```typescript
+import { FileTree, type FileTreePreparedInput } from '@pierre/trees';
+
+export function mountProjectTree(
+  container: HTMLElement,
+  preparedInput: FileTreePreparedInput
+) {
+  const fileTree = new FileTree({
+    preparedInput,
+    search: true,
+    initialExpandedPaths: ['src', 'src/components'],
+    viewportHeight: 320,
+  });
+
+  fileTree.render({ fileTreeContainer: container });
+  return fileTree;
+}
+```
+
 ### Shape tree data for fast rendering
 
 Shape the tree before it reaches the UI when the dataset is large enough for
@@ -330,18 +347,6 @@ public concept, not as an internal optimization trick.
 best place to do that preparation is usually the server, a loader, or another
 non-UI boundary that already has the full path list.
 
-```ts
-import { prepareFileTreeInput } from '@pierre/trees';
-
-export async function loadProjectTreeInput(projectId: string) {
-  const paths = await fetchProjectPaths(projectId);
-
-  return prepareFileTreeInput(paths, {
-    flattenEmptyDirectories: true,
-  });
-}
-```
-
 The client still works with the same path-first model. Only the expensive
 preparation step moves earlier.
 
@@ -349,43 +354,10 @@ preparation step moves earlier.
 
 Both primary runtimes consume the same prepared payload shape.
 
-```tsx
-import { FileTree, useFileTree } from '@pierre/trees/react';
-import type { FileTreePreparedInput } from '@pierre/trees';
-
-export function ReactTree({
-  preparedInput,
-}: {
-  preparedInput: FileTreePreparedInput;
-}) {
-  const { model } = useFileTree({ preparedInput, viewportHeight: 320 });
-  return <FileTree model={model} />;
-}
-```
-
-```ts
-import { FileTree, type FileTreePreparedInput } from '@pierre/trees';
-
-export function mountVanillaTree(
-  container: HTMLElement,
-  preparedInput: FileTreePreparedInput
-) {
-  const fileTree = new FileTree({ preparedInput, viewportHeight: 320 });
-  fileTree.render({ fileTreeContainer: container });
-  return fileTree;
-}
-```
-
 #### Use simple `paths` input only for small trees
 
 Raw `paths` is still the right call for small demos, tests, and very small
 static trees.
-
-```ts
-const fileTree = new FileTree({
-  paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
-});
-```
 
 That is the easy starting path, not the scale-oriented default. When the tree
 grows, move the preparation work out of the client.
@@ -395,16 +367,6 @@ grows, move the preparation work out of the client.
 If your server or indexer already knows the final order, use
 `preparePresortedFileTreeInput(...)`. That skips both the tree-shaping work and
 the extra ordering work a normal prepared input pass would still apply.
-
-```ts
-import { preparePresortedFileTreeInput } from '@pierre/trees';
-
-const preparedInput = preparePresortedFileTreeInput([
-  'README.md',
-  'src/index.ts',
-  'src/components/Button.tsx',
-]);
-```
 
 Use this when the backend, build step, or cached index already owns the sort
 order. Do not reimplement default ordering manually in the client just to reach
@@ -432,6 +394,71 @@ For the shared contract behind these inputs, see
 [Shared concepts](#shared-concepts). For the scale-oriented version of the same
 guidance, continue with
 [Handle large trees efficiently](#handle-large-trees-efficiently).
+
+**Prepareloaderexample** (`load-project-tree-input.ts`):
+
+```typescript
+import { prepareFileTreeInput } from '@pierre/trees';
+
+export async function loadProjectTreeInput(projectId: string) {
+  const paths = await fetchProjectPaths(projectId);
+
+  return prepareFileTreeInput(paths, {
+    flattenEmptyDirectories: true,
+  });
+}
+```
+
+**Presortedexample** (`presorted.ts`):
+
+```typescript
+import { preparePresortedFileTreeInput } from '@pierre/trees';
+
+const preparedInput = preparePresortedFileTreeInput([
+  'README.md',
+  'src/index.ts',
+  'src/components/Button.tsx',
+]);
+```
+
+**Reacttreeexample** (`react-tree.tsx`):
+
+```tsx
+import { FileTree, useFileTree } from '@pierre/trees/react';
+import type { FileTreePreparedInput } from '@pierre/trees';
+
+export function ReactTree({
+  preparedInput,
+}: {
+  preparedInput: FileTreePreparedInput;
+}) {
+  const { model } = useFileTree({ preparedInput, viewportHeight: 320 });
+  return <FileTree model={model} />;
+}
+```
+
+**Smallpathsexample** (`small-paths.ts`):
+
+```typescript
+const fileTree = new FileTree({
+  paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
+});
+```
+
+**Vanillamountexample** (`mount-vanilla-tree.ts`):
+
+```typescript
+import { FileTree, type FileTreePreparedInput } from '@pierre/trees';
+
+export function mountVanillaTree(
+  container: HTMLElement,
+  preparedInput: FileTreePreparedInput
+) {
+  const fileTree = new FileTree({ preparedInput, viewportHeight: 320 });
+  fileTree.render({ fileTreeContainer: container });
+  return fileTree;
+}
+```
 
 ### Navigate selection, focus, and search
 
@@ -490,6 +517,26 @@ default mental model. The shared meaning of all three modes lives in
 React reads from the model through selector hooks and writes back through model
 methods.
 
+Use `useFileTreeSelector(...)` when sibling UI needs a custom derived snapshot.
+
+#### Vanilla integration notes
+
+Vanilla code wires the same behavior around the class instance.
+
+The DOM host is not the source of truth. The model is.
+
+#### What to read next
+
+- For runtime-specific lookup, jump to [React API](#react-api) or
+  [Vanilla API](#vanilla-api).
+- For shared search-mode semantics, read
+  [Shared concepts](#shared-concepts-search-mode-semantics).
+- For row-level editing workflows that build on this same focus model, continue
+  with
+  [Rename, drag, and trigger item actions](#rename-drag-and-trigger-item-actions).
+
+**Reactsearchexample** (`search-panel.tsx`):
+
 ```tsx
 import {
   FileTree,
@@ -517,18 +564,15 @@ export function SearchPanel({ paths }: { paths: readonly string[] }) {
         />
       </label>
       <p>{selectedPaths.length} selected</p>
+      <FileTree model={model} className="rounded-lg border" />
     </div>
   );
 }
 ```
 
-Use `useFileTreeSelector(...)` when sibling UI needs a custom derived snapshot.
+**Vanillasearchexample** (`vanilla-search.ts`):
 
-#### Vanilla integration notes
-
-Vanilla code wires the same behavior around the class instance.
-
-```ts
+```typescript
 const fileTree = new FileTree({
   paths,
   search: true,
@@ -544,18 +588,6 @@ const selectedPaths = fileTree.getSelectedPaths();
 const focusedPath = fileTree.getFocusedPath();
 const matchingPaths = fileTree.getSearchMatchingPaths();
 ```
-
-The DOM host is not the source of truth. The model is.
-
-#### What to read next
-
-- For runtime-specific lookup, jump to [React API](#react-api) or
-  [Vanilla API](#vanilla-api).
-- For shared search-mode semantics, read
-  [Shared concepts](#shared-concepts-search-mode-semantics).
-- For row-level editing workflows that build on this same focus model, continue
-  with
-  [Rename, drag, and trigger item actions](#rename-drag-and-trigger-item-actions).
 
 ### Rename, drag, and trigger item actions
 
@@ -587,23 +619,6 @@ policy hooks are:
 The rename event reports the source path, the destination path, and whether the
 renamed item was a folder.
 
-```tsx
-const { model } = useFileTree({
-  paths,
-  renaming: {
-    canRename: (item) => item.path !== 'package.json',
-    onRename: ({ sourcePath, destinationPath }) => {
-      console.log(`Renamed ${sourcePath} -> ${destinationPath}`);
-    },
-    onError: (message) => {
-      console.error(message);
-    },
-  },
-});
-
-model.startRenaming('src/index.ts');
-```
-
 #### Move items with drag and drop
 
 Enable `dragAndDrop` when users should move files or folders directly in the
@@ -613,27 +628,6 @@ tree. The practical hooks are:
 - `canDrop(event)` to reject invalid destinations
 - `onDropComplete(event)` for persistence or adjacent UI updates
 - `onDropError(error, event)` for visible failures
-
-```ts
-const fileTree = new FileTree({
-  paths,
-  dragAndDrop: {
-    canDrag: (draggedPaths) => draggedPaths.includes('package.json') === false,
-    canDrop: ({ target }) => target.directoryPath !== 'dist/',
-    onDropComplete: ({ draggedPaths, target }) => {
-      console.log(
-        'Moved',
-        draggedPaths,
-        'to',
-        target.directoryPath ?? '(root)'
-      );
-    },
-    onDropError: (message) => {
-      console.error(message);
-    },
-  },
-});
-```
 
 Drop callbacks report dragged paths plus the resolved target shape. They do not
 ask you to reverse-engineer DOM rows.
@@ -656,6 +650,28 @@ and drag available without requiring the menu.
 
 In React, the wrapper can render menu content for you:
 
+In vanilla, use `composition.contextMenu.render` when you want to provide the
+menu element directly from the runtime config.
+
+#### Keep keyboard and focus behavior predictable
+
+The focused row is the anchor for rename and keyboard-invoked commands. Opening
+and closing a menu should restore focus predictably, and keyboard users should
+still be able to reach the main actions without relying on pointer-only
+gestures.
+
+#### The tree owns the interaction surface. Your app owns persistence.
+
+Trees emits path-based rename and drop events. Your app decides whether to
+persist those changes to a server, local state, or another boundary. Keep that
+separation clear.
+
+If you need the shared vocabulary behind those events, read
+[Shared concepts](#shared-concepts-mutation-vocabulary). For runtime lookup,
+jump to [React API](#react-api) or [Vanilla API](#vanilla-api).
+
+**Contextmenuexample** (`context-menu.tsx`):
+
 ```tsx
 const { model } = useFileTree({
   paths,
@@ -668,6 +684,66 @@ const { model } = useFileTree({
   },
   renaming: true,
 });
+
+<FileTree
+  model={model}
+  renderContextMenu={(item, context) => (
+    <div className="rounded-md border bg-background p-2 shadow">
+      <button
+        onClick={() => {
+          context.close({ restoreFocus: false });
+          model.startRenaming(item.path);
+        }}
+        type="button"
+      >
+        Rename
+      </button>
+    </div>
+  )}
+/>;
+```
+
+**Draganddropexample** (`drag-and-drop.ts`):
+
+```typescript
+const fileTree = new FileTree({
+  paths,
+  dragAndDrop: {
+    canDrag: (draggedPaths) => draggedPaths.includes('package.json') === false,
+    canDrop: ({ target }) => target.directoryPath !== 'dist/',
+    onDropComplete: ({ draggedPaths, target }) => {
+      console.log(
+        'Moved',
+        draggedPaths,
+        'to',
+        target.directoryPath ?? '(root)'
+      );
+    },
+    onDropError: (message) => {
+      console.error(message);
+    },
+  },
+});
+```
+
+**Renameexample** (`rename.tsx`):
+
+```tsx
+const { model } = useFileTree({
+  paths,
+  renaming: {
+    canRename: (item) => item.path !== 'package.json',
+    onRename: ({ sourcePath, destinationPath }) => {
+      console.log(`Renamed ${sourcePath} -> ${destinationPath}`);
+    },
+    onError: (message) => {
+      console.error(message);
+    },
+  },
+});
+
+model.startRenaming('src/index.ts');
+```
 
 ### Style and theme the tree
 
@@ -684,9 +760,6 @@ radius, background, and layout placement.
 
 In React, pass normal host props to `<FileTree model={...} />`.
 
-```tsx
-```
-
 In vanilla, style the mounted host element you already own. After mount,
 `getFileTreeContainer()` gives you that element back when runtime code needs to
 update it.
@@ -695,9 +768,6 @@ update it.
 
 CSS variables are the main public styling surface inside the shadow root. Reach
 for them before custom CSS injection.
-
-```tsx
-```
 
 That approach keeps the normal fallback chain intact:
 
@@ -714,10 +784,92 @@ Use `themeToTreeStyles(...)` when your app already has a VS Code or Shiki-style
 theme object. It maps that theme to host styles plus the `--trees-theme-*`
 variables the tree already understands.
 
+That gives you matching panel colors, selection colors, search-field colors, and
+Git-status colors without rebuilding the theme system by hand.
+
+#### Choose the right styling layer
+
+Use:
+
+- host styles for layout and panel framing
+- CSS variables for product-specific appearance changes inside the tree
+- `themeToTreeStyles(...)` when the tree should inherit an editor palette
+- `getFileTreeContainer()` in vanilla when runtime code needs the mounted host
+  element
+
+Layer explicit overrides on top when the imported theme is close but not final.
+
+#### `unsafeCSS` is the escape hatch
+
+`unsafeCSS` is for the cases the supported host and variable surfaces cannot
+express. Keep it small, local, and secondary.
+
+Do not start here, and do not rebuild the whole visual system from raw
+selectors. If you need a broad lookup of the supported styling surfaces, read
+[Styling and theming](#styling-and-theming). For icon-specific appearance
+changes, continue with [Customize icons](#customize-icons).
+
+**Cssvariablesexample** (`css-variables.tsx`):
+
+```tsx
+<FileTree
+  model={model}
+  style={
+    {
+      '--trees-theme-list-active-selection-bg':
+        'color-mix(in oklab, var(--accent) 24%, transparent)',
+      '--trees-theme-list-hover-bg':
+        'color-mix(in oklab, var(--accent) 12%, transparent)',
+      '--trees-theme-focus-ring': 'var(--accent)',
+    } as React.CSSProperties
+  }
+/>
+```
+
+**Hoststylingexample** (`host-styling.tsx`):
+
+```tsx
+<FileTree
+  model={model}
+  className="h-96 rounded-xl border"
+  style={{
+    backgroundColor: 'var(--panel)',
+    borderColor: 'var(--border)',
+  }}
+/>
+```
+
+**Themetotreestylesexample** (`theme-to-tree-styles.tsx`):
+
 ```tsx
 import { themeToTreeStyles } from '@pierre/trees';
 
 const treeStyles = themeToTreeStyles(theme);
+
+<FileTree
+  model={model}
+  style={
+    {
+      ...treeStyles,
+      '--trees-theme-list-active-selection-bg':
+        'color-mix(in oklab, var(--accent) 28%, transparent)',
+    } as React.CSSProperties
+  }
+/>;
+```
+
+**Unsafecssexample** (`unsafe-css.ts`):
+
+```typescript
+const fileTree = new FileTree({
+  paths,
+  unsafeCSS: `
+    [data-item-button][data-item-focused="true"] {
+      text-decoration: underline;
+    }
+  `,
+});
+```
 
 ### Customize icons
 
@@ -734,27 +886,10 @@ Trees ships three built-in sets:
 
 If you only need a different baseline, pass the set name directly.
 
-```ts
-const fileTree = new FileTree({
-  paths,
-  icons: 'standard',
-});
-```
-
 #### Adjust color mode before you remap icons
 
 Built-in sets default to semantic icon colors. Turn that off before you reach
 for a sprite sheet if the product wants a quieter or monochrome look.
-
-```ts
-const fileTree = new FileTree({
-  paths,
-  icons: {
-    set: 'complete',
-    colored: false,
-  },
-});
-```
 
 For broader appearance control, use the styling system instead of treating icons
 as a parallel theme surface. See
@@ -770,27 +905,6 @@ practical remap surfaces are:
 - `byFileName` for exact basenames such as `package.json`
 - `byFileExtension` for suffixes such as `ts` or `spec.ts`
 - `byFileNameContains` for broader patterns such as `dockerfile`
-
-```ts
-const fileTree = new FileTree({
-  paths,
-  icons: {
-    set: 'standard',
-    byFileName: {
-      'package.json': 'icon-package-json',
-    },
-    byFileExtension: {
-      'spec.ts': 'icon-test-file',
-    },
-    byFileNameContains: {
-      dockerfile: 'icon-dockerfile',
-    },
-    remap: {
-      'file-tree-icon-lock': 'icon-locked',
-    },
-  },
-});
-```
 
 That keeps the built-in mapping for everything you did not customize.
 
@@ -812,7 +926,57 @@ If you want the full lookup contract, read [Icons](#icons-resolution-order).
 `spriteSheet` is the path when you already have branded SVG symbols or need a
 few custom symbols that should coexist with the built-in set.
 
-```ts
+Keep the contract simple: provide `<symbol>` definitions, then reference those
+symbols through remap rules. Do not turn sprite sheets into the default docs
+path.
+
+**Iconsbasicset** (`icons-basic.ts`):
+
+```typescript
+const fileTree = new FileTree({
+  paths,
+  icons: 'standard',
+});
+```
+
+**Iconscoloredoff** (`icons-colored-off.ts`):
+
+```typescript
+const fileTree = new FileTree({
+  paths,
+  icons: {
+    set: 'complete',
+    colored: false,
+  },
+});
+```
+
+**Iconsremapexample** (`icons-remap.ts`):
+
+```typescript
+const fileTree = new FileTree({
+  paths,
+  icons: {
+    set: 'standard',
+    byFileName: {
+      'package.json': 'icon-package-json',
+    },
+    byFileExtension: {
+      'spec.ts': 'icon-test-file',
+    },
+    byFileNameContains: {
+      dockerfile: 'icon-dockerfile',
+    },
+    remap: {
+      'file-tree-icon-lock': 'icon-locked',
+    },
+  },
+});
+```
+
+**Iconsspritesheetexample** (`icons-sprite-sheet.ts`):
+
+```typescript
 const fileTree = new FileTree({
   paths,
   icons: {
@@ -830,10 +994,6 @@ const fileTree = new FileTree({
   },
 });
 ```
-
-Keep the contract simple: provide `<symbol>` definitions, then reference those
-symbols through remap rules. Do not turn sprite sheets into the default docs
-path.
 
 ### Show Git status and row annotations
 
@@ -855,18 +1015,6 @@ Trees supports these built-in statuses:
 - `renamed`
 - `untracked`
 
-```ts
-const fileTree = new FileTree({
-  paths,
-  gitStatus: [
-    { path: 'README.md', status: 'untracked' },
-    { path: 'package.json', status: 'renamed' },
-    { path: 'src/index.ts', status: 'modified' },
-    { path: 'src/components/Button.tsx', status: 'added' },
-  ],
-});
-```
-
 That is the shortest path when the row signal already matches Git semantics.
 
 #### Know when `gitStatus` is enough
@@ -880,34 +1028,12 @@ let the styling system control how those signals look.
 When the surrounding app changes commits, branches, comparison views, or status
 visibility, replace the current status data explicitly.
 
-```ts
-fileTree.setGitStatus(nextStatuses);
-fileTree.setGitStatus(undefined);
-```
-
 That keeps the runtime truthful without promising a filesystem watcher or a
 repo-sync framework.
 
 #### Add custom row annotations with `renderRowDecoration`
 
 Use `renderRowDecoration` when the row needs metadata that is not Git-like.
-
-```ts
-const fileTree = new FileTree({
-  paths,
-  renderRowDecoration: ({ item }) => {
-    if (item.path.endsWith('.generated.ts')) {
-      return { text: 'GEN', title: 'Generated file' };
-    }
-
-    if (item.path.startsWith('remote/')) {
-      return { icon: 'icon-remote', title: 'Remote source' };
-    }
-
-    return null;
-  },
-});
-```
 
 Good fits include generated-file markers, remote-storage indicators, validation
 markers, or short secondary labels.
@@ -934,6 +1060,46 @@ For that part of the API, see
 [Style and theme the tree](#style-and-theme-the-tree) and
 [Styling and theming](#styling-and-theming).
 
+**Gitstatusexample** (`git-status.ts`):
+
+```typescript
+const fileTree = new FileTree({
+  paths,
+  gitStatus: [
+    { path: 'README.md', status: 'untracked' },
+    { path: 'package.json', status: 'renamed' },
+    { path: 'src/index.ts', status: 'modified' },
+    { path: 'src/components/Button.tsx', status: 'added' },
+  ],
+});
+```
+
+**Renderrowdecorationexample** (`render-row-decoration.ts`):
+
+```typescript
+const fileTree = new FileTree({
+  paths,
+  renderRowDecoration: ({ item }) => {
+    if (item.path.endsWith('.generated.ts')) {
+      return { text: 'GEN', title: 'Generated file' };
+    }
+
+    if (item.path.startsWith('remote/')) {
+      return { icon: 'icon-remote', title: 'Remote source' };
+    }
+
+    return null;
+  },
+});
+```
+
+**Setgitstatusexample** (`set-git-status.ts`):
+
+```typescript
+fileTree.setGitStatus(nextStatuses);
+fileTree.setGitStatus(undefined);
+```
+
 ### Handle large trees efficiently
 
 Large-tree performance starts by reducing unnecessary client work. Shape and
@@ -957,15 +1123,6 @@ still doing avoidable shaping or sorting work.
 For larger trees, move shaping work out of the UI. Prepared input is the
 scale-oriented public path.
 
-```ts
-import { preparePresortedFileTreeInput } from '@pierre/trees';
-
-export async function loadWorkspaceTree() {
-  const sortedPaths = await fetchSortedWorkspacePaths();
-  return preparePresortedFileTreeInput(sortedPaths);
-}
-```
-
 If you only have an unsorted path list, use `prepareFileTreeInput(...)` instead.
 Either way, pass the prepared result into React, vanilla, or SSR hydration.
 
@@ -979,15 +1136,6 @@ The main rendering knobs are:
 - `viewportHeight`, because virtualization needs a real visible window
 - `itemHeight`, when your design changes row density enough to matter
 - `overscan`, when you need to trade a little extra work for smoother scrolling
-
-```tsx
-const { model } = useFileTree({
-  preparedInput,
-  viewportHeight: 420,
-  itemHeight: 30,
-  overscan: 8,
-});
-```
 
 Keep the language outcome-focused: the tree mounts the visible slice plus a
 small buffer around it.
@@ -1029,6 +1177,28 @@ Avoid these patterns when the tree grows:
   cross-runtime rendering knobs
 - [SSR](#ssr) for server-preload-first rendering
 
+**Loadworkspacetreeexample** (`load-workspace-tree.ts`):
+
+```typescript
+import { preparePresortedFileTreeInput } from '@pierre/trees';
+
+export async function loadWorkspaceTree() {
+  const sortedPaths = await fetchSortedWorkspacePaths();
+  return preparePresortedFileTreeInput(sortedPaths);
+}
+```
+
+**Virtualizationknobsexample** (`virtualization-knobs.tsx`):
+
+```tsx
+const { model } = useFileTree({
+  preparedInput,
+  viewportHeight: 420,
+  itemHeight: 30,
+  overscan: 8,
+});
+```
+
 ### SSR
 
 Use SSR when you want the tree to arrive from the server with a fast first
@@ -1039,18 +1209,6 @@ runtime. It is a preload-and-hydrate layer over the same React or vanilla model.
 
 Import preload helpers from `@pierre/trees/ssr`, call `preloadFileTree(...)` on
 the server, and treat the result as one opaque handoff object.
-
-```ts
-import { preloadFileTree } from '@pierre/trees/ssr';
-
-const payload = preloadFileTree({
-  preparedInput,
-  id: 'project-tree',
-  initialExpandedPaths: ['src'],
-  search: true,
-  viewportHeight: 320,
-});
-```
 
 Do not unpack the payload into a field-by-field integration story in application
 code. Pass it forward unchanged.
@@ -1069,53 +1227,12 @@ hydration mismatch is the expected outcome.
 React still creates the model with `useFileTree(...)`. The difference is that
 the wrapper receives the opaque handoff object as `preloadedData`.
 
-```tsx
-import { FileTree, useFileTree } from '@pierre/trees/react';
-import type { FileTreePreparedInput } from '@pierre/trees';
-import type { FileTreeSsrPayload } from '@pierre/trees/ssr';
-
-export function ProjectTreeClient({
-  preparedInput,
-  preloadedData,
-}: {
-  preparedInput: FileTreePreparedInput;
-  preloadedData: FileTreeSsrPayload;
-}) {
-  const { model } = useFileTree({
-    preparedInput,
-    id: preloadedData.id,
-    initialExpandedPaths: ['src'],
-    search: true,
-    viewportHeight: 320,
-  });
-
-  return <FileTree model={model} preloadedData={preloadedData} />;
-}
-```
-
 The model stays primary. `preloadedData` only activates hydration.
 
 #### Vanilla flow
 
 Vanilla uses the same preload step, but the client hydrates the server-rendered
 container that is already in the page.
-
-```ts
-import { FileTree } from '@pierre/trees';
-
-const fileTree = new FileTree({
-  preparedInput,
-  id: 'project-tree',
-  initialExpandedPaths: ['src'],
-  search: true,
-  viewportHeight: 320,
-});
-
-const container = document.getElementById('project-tree');
-if (container instanceof HTMLElement) {
-  fileTree.hydrate({ fileTreeContainer: container });
-}
-```
 
 If that server-rendered container is missing, render normally instead of
 hydrating.
@@ -1141,6 +1258,65 @@ hydration. Use the runtime behavior instead of inventing custom DOM diffing or
 raw payload plumbing.
 
 For the API-level handoff contract, read [SSR API](#ssr-api).
+
+**Preloadfiletreeexample** (`preload-file-tree.ts`):
+
+```typescript
+import { preloadFileTree } from '@pierre/trees/ssr';
+
+const payload = preloadFileTree({
+  preparedInput,
+  id: 'project-tree',
+  initialExpandedPaths: ['src'],
+  search: true,
+  viewportHeight: 320,
+});
+```
+
+**Reacthydrationexample** (`project-tree-client.tsx`):
+
+```tsx
+import { FileTree, useFileTree } from '@pierre/trees/react';
+import type { FileTreePreparedInput } from '@pierre/trees';
+import type { FileTreeSsrPayload } from '@pierre/trees/ssr';
+
+export function ProjectTreeClient({
+  preparedInput,
+  preloadedData,
+}: {
+  preparedInput: FileTreePreparedInput;
+  preloadedData: FileTreeSsrPayload;
+}) {
+  const { model } = useFileTree({
+    preparedInput,
+    id: preloadedData.id,
+    initialExpandedPaths: ['src'],
+    search: true,
+    viewportHeight: 320,
+  });
+
+  return <FileTree model={model} preloadedData={preloadedData} />;
+}
+```
+
+**Vanillahydrationexample** (`vanilla-hydrate.ts`):
+
+```typescript
+import { FileTree } from '@pierre/trees';
+
+const fileTree = new FileTree({
+  preparedInput,
+  id: 'project-tree',
+  initialExpandedPaths: ['src'],
+  search: true,
+  viewportHeight: 320,
+});
+
+const container = document.getElementById('project-tree');
+if (container instanceof HTMLElement) {
+  fileTree.hydrate({ fileTreeContainer: container });
+}
+```
 
 ### Shared concepts
 
@@ -1325,15 +1501,6 @@ hook creates one stable model for the component lifetime. Later option changes
 are not a controlled reconfiguration path. Update the model through model
 methods instead.
 
-```tsx
-import { FileTree, useFileTree } from '@pierre/trees/react';
-
-export function ProjectTree({ paths }: { paths: readonly string[] }) {
-  const { model } = useFileTree({ paths, search: true });
-  return <FileTree model={model} />;
-}
-```
-
 For the shared option meanings behind that call, read
 [Shared concepts](#shared-concepts-shared-option-groups).
 
@@ -1405,15 +1572,6 @@ Common read patterns include:
 - actions: `open(initialValue?)`, `close()`, `setValue(value)`,
   `focusNextMatch()`, `focusPreviousMatch()`
 
-```tsx
-const { model } = useFileTree({ paths, search: true });
-const selectedPaths = useFileTreeSelection(model);
-const search = useFileTreeSearch(model);
-const focusedPath = useFileTreeSelector(model, (currentModel) =>
-  currentModel.getFocusedPath()
-);
-```
-
 #### Writing to the model from React
 
 React writes through the same imperative model methods the vanilla runtime
@@ -1460,6 +1618,28 @@ Style the React host with normal host props such as `className` and `style`. For
 deeper lookup, use [Styling and theming](#styling-and-theming) and
 [Icons](#icons).
 
+**Reactapiexample** (`project-tree.tsx`):
+
+```tsx
+import { FileTree, useFileTree } from '@pierre/trees/react';
+
+export function ProjectTree({ paths }: { paths: readonly string[] }) {
+  const { model } = useFileTree({ paths, search: true });
+  return <FileTree model={model} />;
+}
+```
+
+**Selectorhooksexample** (`selector-hooks.tsx`):
+
+```tsx
+const { model } = useFileTree({ paths, search: true });
+const selectedPaths = useFileTreeSelection(model);
+const search = useFileTreeSearch(model);
+const focusedPath = useFileTreeSelector(model, (currentModel) =>
+  currentModel.getFocusedPath()
+);
+```
+
 ### Vanilla API
 
 The vanilla runtime lives at the package root, `@pierre/trees`.
@@ -1469,17 +1649,6 @@ surface.
 #### Class-first story
 
 Start with `new FileTree(options)`, then mount the instance.
-
-```ts
-import { FileTree } from '@pierre/trees';
-
-const fileTree = new FileTree({
-  paths: ['README.md', 'src/index.ts'],
-  search: true,
-});
-
-fileTree.render({ fileTreeContainer: container });
-```
 
 For shared option meanings, read
 [Shared concepts](#shared-concepts-shared-option-groups).
@@ -1617,6 +1786,19 @@ This page names the runtime touchpoints such as `getFileTreeContainer()`,
 and `unsafeCSS`, read [Styling and theming](#styling-and-theming). For icon
 remaps and icon-set lookup, read [Icons](#icons).
 
+**Vanillaapiexample** (`vanilla-api.ts`):
+
+```typescript
+import { FileTree } from '@pierre/trees';
+
+const fileTree = new FileTree({
+  paths: ['README.md', 'src/index.ts'],
+  search: true,
+});
+
+fileTree.render({ fileTreeContainer: container });
+```
+
 ### SSR API
 
 The SSR entry point lives in `@pierre/trees/ssr`. It owns server preload and the
@@ -1627,17 +1809,6 @@ server-to-client handoff contract.
 Start with the server step, not the client step. Call `preloadFileTree(options)`
 on the server, then pass the returned value forward as one opaque handoff
 object.
-
-```ts
-import { preloadFileTree } from '@pierre/trees/ssr';
-
-const payload = preloadFileTree({
-  preparedInput,
-  id: 'project-tree',
-  initialExpandedPaths: ['src'],
-  viewportHeight: 320,
-});
-```
 
 Hydration reuses that server work. It is not a separate rendering strategy with
 a different public data model.
@@ -1722,6 +1893,19 @@ If you mention declarative shadow DOM or hydration warnings, keep that note
 short and secondary. This page owns the public handoff contract, not DOM
 internals.
 
+**Ssrapiexample** (`preload-file-tree.ts`):
+
+```typescript
+import { preloadFileTree } from '@pierre/trees/ssr';
+
+const payload = preloadFileTree({
+  preparedInput,
+  id: 'project-tree',
+  initialExpandedPaths: ['src'],
+  viewportHeight: 320,
+});
+```
+
 ### Styling and theming
 
 This page is the lookup reference for host styling, CSS-variable families,
@@ -1777,12 +1961,6 @@ Output shape:
 - `TreeThemeStyles`
 - compatible with React inline styles and vanilla host-style assignment
 
-```ts
-import { themeToTreeStyles } from '@pierre/trees';
-
-const treeStyles = themeToTreeStyles(theme);
-```
-
 The helper covers panel colors, selection colors, focus rings, input colors, and
 Git-status colors. Explicit overrides can still replace any derived token later.
 
@@ -1817,6 +1995,14 @@ Keep it narrow. Do not turn it into a raw stylesheet-asset strategy.
 - [Icons](#icons) for icon-specific configuration
 - [Show Git status and row annotations](#show-git-status-and-row-annotations)
   for signal meaning
+
+**Themetotreestylesreferenceexample** (`theme-to-tree-styles.ts`):
+
+```typescript
+import { themeToTreeStyles } from '@pierre/trees';
+
+const treeStyles = themeToTreeStyles(theme);
+```
 
 ### Icons
 

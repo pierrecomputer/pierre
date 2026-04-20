@@ -7,11 +7,7 @@ attaches it to the DOM.
 
 #### Install `@pierre/trees`
 
-```bash
-bun add @pierre/trees
-# npm: npm install @pierre/trees
-# pnpm: pnpm add @pierre/trees
-```
+<DocsCodeExample {...VANILLA_QUICKSTART_INSTALL} />
 
 #### Create the model with `new FileTree(...)`
 
@@ -19,24 +15,7 @@ The class instance is both the runtime entry point and the state surface. For
 small trees, you can pass raw `paths`. For scalable trees, prefer
 `preparedInput` produced outside the UI.
 
-```ts
-import { FileTree, type FileTreePreparedInput } from '@pierre/trees';
-
-export function mountProjectTree(
-  container: HTMLElement,
-  preparedInput: FileTreePreparedInput
-) {
-  const fileTree = new FileTree({
-    preparedInput,
-    search: true,
-    initialExpandedPaths: ['src', 'src/components'],
-    viewportHeight: 320,
-  });
-
-  fileTree.render({ fileTreeContainer: container });
-  return fileTree;
-}
-```
+<DocsCodeExample {...VANILLA_QUICKSTART_MOUNT_PROJECT_TREE} />
 
 #### Render into a host element
 
@@ -53,22 +32,7 @@ focus. Read and update those values through the model.
 The instance gives you direct read methods, item handles, and imperative
 controls.
 
-```ts
-const fileTree = new FileTree({
-  paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
-  search: true,
-});
-
-fileTree.render({ fileTreeContainer: container });
-fileTree.focusPath('src/index.ts');
-fileTree.openSearch('button');
-
-const selectedPaths = fileTree.getSelectedPaths();
-const matchingPaths = fileTree.getSearchMatchingPaths();
-const focusedPath = fileTree.getFocusedPath();
-const buttonItem = fileTree.getItem('src/components/Button.tsx');
-buttonItem?.select();
-```
+<DocsCodeExample {...VANILLA_QUICKSTART_IMPERATIVE_USAGE} />
 
 When surrounding data changes, call explicit model methods such as
 `resetPaths(...)`, `setComposition(...)`, `setGitStatus(...)`, or

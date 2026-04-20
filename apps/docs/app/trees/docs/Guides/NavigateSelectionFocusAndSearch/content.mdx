@@ -55,38 +55,7 @@ default mental model. The shared meaning of all three modes lives in
 React reads from the model through selector hooks and writes back through model
 methods.
 
-```tsx
-import {
-  FileTree,
-  useFileTree,
-  useFileTreeSearch,
-  useFileTreeSelection,
-} from '@pierre/trees/react';
-
-export function SearchPanel({ paths }: { paths: readonly string[] }) {
-  const { model } = useFileTree({
-    paths,
-    search: true,
-    fileTreeSearchMode: 'hide-non-matches',
-  });
-  const selectedPaths = useFileTreeSelection(model);
-  const search = useFileTreeSearch(model);
-
-  return (
-    <div className="space-y-3">
-      <label className="block">
-        <span>Search</span>
-        <input
-          value={search.value}
-          onChange={(event) => search.setValue(event.target.value)}
-        />
-      </label>
-      <p>{selectedPaths.length} selected</p>
-      <FileTree model={model} className="rounded-lg border" />
-    </div>
-  );
-}
-```
+<DocsCodeExample {...NAVIGATE_REACT_SEARCH} />
 
 Use `useFileTreeSelector(...)` when sibling UI needs a custom derived snapshot.
 
@@ -94,22 +63,7 @@ Use `useFileTreeSelector(...)` when sibling UI needs a custom derived snapshot.
 
 Vanilla code wires the same behavior around the class instance.
 
-```ts
-const fileTree = new FileTree({
-  paths,
-  search: true,
-  fileTreeSearchMode: 'hide-non-matches',
-});
-
-fileTree.render({ fileTreeContainer: container });
-searchInput.addEventListener('input', () => {
-  fileTree.setSearch(searchInput.value);
-});
-
-const selectedPaths = fileTree.getSelectedPaths();
-const focusedPath = fileTree.getFocusedPath();
-const matchingPaths = fileTree.getSearchMatchingPaths();
-```
+<DocsCodeExample {...NAVIGATE_VANILLA_SEARCH} />
 
 The DOM host is not the source of truth. The model is.
 

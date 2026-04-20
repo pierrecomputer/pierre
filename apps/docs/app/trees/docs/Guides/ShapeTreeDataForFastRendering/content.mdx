@@ -10,17 +10,7 @@ public concept, not as an internal optimization trick.
 best place to do that preparation is usually the server, a loader, or another
 non-UI boundary that already has the full path list.
 
-```ts
-import { prepareFileTreeInput } from '@pierre/trees';
-
-export async function loadProjectTreeInput(projectId: string) {
-  const paths = await fetchProjectPaths(projectId);
-
-  return prepareFileTreeInput(paths, {
-    flattenEmptyDirectories: true,
-  });
-}
-```
+<DocsCodeExample {...SHAPE_TREE_DATA_PREPARE_LOADER} />
 
 The client still works with the same path-first model. Only the expensive
 preparation step moves earlier.
@@ -29,43 +19,16 @@ preparation step moves earlier.
 
 Both primary runtimes consume the same prepared payload shape.
 
-```tsx
-import { FileTree, useFileTree } from '@pierre/trees/react';
-import type { FileTreePreparedInput } from '@pierre/trees';
+<DocsCodeExample {...SHAPE_TREE_DATA_REACT_TREE} />
 
-export function ReactTree({
-  preparedInput,
-}: {
-  preparedInput: FileTreePreparedInput;
-}) {
-  const { model } = useFileTree({ preparedInput, viewportHeight: 320 });
-  return <FileTree model={model} />;
-}
-```
-
-```ts
-import { FileTree, type FileTreePreparedInput } from '@pierre/trees';
-
-export function mountVanillaTree(
-  container: HTMLElement,
-  preparedInput: FileTreePreparedInput
-) {
-  const fileTree = new FileTree({ preparedInput, viewportHeight: 320 });
-  fileTree.render({ fileTreeContainer: container });
-  return fileTree;
-}
-```
+<DocsCodeExample {...SHAPE_TREE_DATA_VANILLA_MOUNT} />
 
 #### Use simple `paths` input only for small trees
 
 Raw `paths` is still the right call for small demos, tests, and very small
 static trees.
 
-```ts
-const fileTree = new FileTree({
-  paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
-});
-```
+<DocsCodeExample {...SHAPE_TREE_DATA_SMALL_PATHS} />
 
 That is the easy starting path, not the scale-oriented default. When the tree
 grows, move the preparation work out of the client.
@@ -76,15 +39,7 @@ If your server or indexer already knows the final order, use
 `preparePresortedFileTreeInput(...)`. That skips both the tree-shaping work and
 the extra ordering work a normal prepared input pass would still apply.
 
-```ts
-import { preparePresortedFileTreeInput } from '@pierre/trees';
-
-const preparedInput = preparePresortedFileTreeInput([
-  'README.md',
-  'src/index.ts',
-  'src/components/Button.tsx',
-]);
-```
+<DocsCodeExample {...SHAPE_TREE_DATA_PRESORTED} />
 
 Use this when the backend, build step, or cached index already owns the sort
 order. Do not reimplement default ordering manually in the client just to reach

@@ -21,15 +21,7 @@ Pick the React entry point when the surrounding UI, data loading, and state
 management already live in React. The hook creates the model once, and the
 component mounts it.
 
-```tsx
-import { FileTree, useFileTree } from '@pierre/trees/react';
-
-export function ProjectTree({ paths }: { paths: readonly string[] }) {
-  const { model } = useFileTree({ paths, search: true });
-
-  return <FileTree model={model} className="h-96 rounded-lg border" />;
-}
-```
+<DocsCodeExample {...CHOOSE_INTEGRATION_REACT_EXAMPLE} />
 
 Read [Get started with React](#get-started-with-react) next if that is your
 runtime.
@@ -40,19 +32,7 @@ Pick the vanilla class when your app is not React-based, or when another
 framework will own lifecycle around an imperative model. The class instance is
 both the entry point and the state surface.
 
-```ts
-import { FileTree } from '@pierre/trees';
-
-const fileTree = new FileTree({
-  paths: ['README.md', 'src/index.ts', 'src/components/Button.tsx'],
-  search: true,
-});
-
-const container = document.getElementById('project-tree');
-if (container instanceof HTMLElement) {
-  fileTree.render({ fileTreeContainer: container });
-}
-```
+<DocsCodeExample {...CHOOSE_INTEGRATION_VANILLA_EXAMPLE} />
 
 Read [Get started with vanilla](#get-started-with-vanilla) next if you want the
 class-first runtime.

@@ -8,16 +8,7 @@ surface.
 
 Start with `new FileTree(options)`, then mount the instance.
 
-```ts
-import { FileTree } from '@pierre/trees';
-
-const fileTree = new FileTree({
-  paths: ['README.md', 'src/index.ts'],
-  search: true,
-});
-
-fileTree.render({ fileTreeContainer: container });
-```
+<DocsCodeExample {...VANILLA_API_EXAMPLE} />
 
 For shared option meanings, read
 [Shared concepts](#shared-concepts-shared-option-groups).

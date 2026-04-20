@@ -9,16 +9,7 @@ Start with the server step, not the client step. Call `preloadFileTree(options)`
 on the server, then pass the returned value forward as one opaque handoff
 object.
 
-```ts
-import { preloadFileTree } from '@pierre/trees/ssr';
-
-const payload = preloadFileTree({
-  preparedInput,
-  id: 'project-tree',
-  initialExpandedPaths: ['src'],
-  viewportHeight: 320,
-});
-```
+<DocsCodeExample {...SSR_API_EXAMPLE} />
 
 Hydration reuses that server work. It is not a separate rendering strategy with
 a different public data model.

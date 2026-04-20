@@ -18,17 +18,7 @@ Trees supports these built-in statuses:
 - `renamed`
 - `untracked`
 
-```ts
-const fileTree = new FileTree({
-  paths,
-  gitStatus: [
-    { path: 'README.md', status: 'untracked' },
-    { path: 'package.json', status: 'renamed' },
-    { path: 'src/index.ts', status: 'modified' },
-    { path: 'src/components/Button.tsx', status: 'added' },
-  ],
-});
-```
+<DocsCodeExample {...GIT_STATUS_BASIC} />
 
 That is the shortest path when the row signal already matches Git semantics.
 
@@ -43,10 +33,7 @@ let the styling system control how those signals look.
 When the surrounding app changes commits, branches, comparison views, or status
 visibility, replace the current status data explicitly.
 
-```ts
-fileTree.setGitStatus(nextStatuses);
-fileTree.setGitStatus(undefined);
-```
+<DocsCodeExample {...GIT_STATUS_SET} />
 
 That keeps the runtime truthful without promising a filesystem watcher or a
 repo-sync framework.
@@ -55,22 +42,7 @@ repo-sync framework.
 
 Use `renderRowDecoration` when the row needs metadata that is not Git-like.
 
-```ts
-const fileTree = new FileTree({
-  paths,
-  renderRowDecoration: ({ item }) => {
-    if (item.path.endsWith('.generated.ts')) {
-      return { text: 'GEN', title: 'Generated file' };
-    }
-
-    if (item.path.startsWith('remote/')) {
-      return { icon: 'icon-remote', title: 'Remote source' };
-    }
-
-    return null;
-  },
-});
-```
+<DocsCodeExample {...GIT_STATUS_ROW_DECORATION} />
 
 Good fits include generated-file markers, remote-storage indicators, validation
 markers, or short secondary labels.

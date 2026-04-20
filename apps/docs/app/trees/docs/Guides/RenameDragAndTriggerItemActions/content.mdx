@@ -28,22 +28,7 @@ policy hooks are:
 The rename event reports the source path, the destination path, and whether the
 renamed item was a folder.
 
-```tsx
-const { model } = useFileTree({
-  paths,
-  renaming: {
-    canRename: (item) => item.path !== 'package.json',
-    onRename: ({ sourcePath, destinationPath }) => {
-      console.log(`Renamed ${sourcePath} -> ${destinationPath}`);
-    },
-    onError: (message) => {
-      console.error(message);
-    },
-  },
-});
-
-model.startRenaming('src/index.ts');
-```
+<DocsCodeExample {...RENAME_DRAG_RENAME} />
 
 #### Move items with drag and drop
 
@@ -55,26 +40,7 @@ tree. The practical hooks are:
 - `onDropComplete(event)` for persistence or adjacent UI updates
 - `onDropError(error, event)` for visible failures
 
-```ts
-const fileTree = new FileTree({
-  paths,
-  dragAndDrop: {
-    canDrag: (draggedPaths) => draggedPaths.includes('package.json') === false,
-    canDrop: ({ target }) => target.directoryPath !== 'dist/',
-    onDropComplete: ({ draggedPaths, target }) => {
-      console.log(
-        'Moved',
-        draggedPaths,
-        'to',
-        target.directoryPath ?? '(root)'
-      );
-    },
-    onDropError: (message) => {
-      console.error(message);
-    },
-  },
-});
-```
+<DocsCodeExample {...RENAME_DRAG_DRAG_AND_DROP} />
 
 Drop callbacks report dragged paths plus the resolved target shape. They do not
 ask you to reverse-engineer DOM rows.
@@ -97,36 +63,7 @@ and drag available without requiring the menu.
 
 In React, the wrapper can render menu content for you:
 
-```tsx
-const { model } = useFileTree({
-  paths,
-  composition: {
-    contextMenu: {
-      enabled: true,
-      triggerMode: 'both',
-      buttonVisibility: 'when-needed',
-    },
-  },
-  renaming: true,
-});
-
-<FileTree
-  model={model}
-  renderContextMenu={(item, context) => (
-    <div className="rounded-md border bg-background p-2 shadow">
-      <button
-        onClick={() => {
-          context.close({ restoreFocus: false });
-          model.startRenaming(item.path);
-        }}
-        type="button"
-      >
-        Rename
-      </button>
-    </div>
-  )}
-/>;
-```
+<DocsCodeExample {...RENAME_DRAG_CONTEXT_MENU} />
 
 In vanilla, use `composition.contextMenu.render` when you want to provide the
 menu element directly from the runtime config.
