@@ -141,11 +141,10 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
             >
               <code>gitStatus</code>
             </Link>{' '}
-            option with the file tree model to show `A`, `M`, `D`, `R`, and `U`
-            badges alongside ignored rows and folders. Ignored items inherit
-            their styling without rendering a letter, while folders with changed
-            descendants get a dot automatically. Optionally hide unmodified
-            files to focus on the changeset.
+            option to show status badges for added, modified, deleted, renamed,
+            untracked, and ignored files. Ignored items inherit their styling
+            without rendering an indicator while folders with changed
+            descendants get a dot indicator automatically.
           </>
         }
       />
