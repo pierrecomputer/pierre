@@ -17,20 +17,52 @@ import type { GitStatusEntry } from '@/lib/treesCompat';
 const COMPACT_ITEM_HEIGHT = 24;
 const COMPACT_DENSITY = 0.8;
 
-const treePanelStyle = {
+const darkTreePanelStyle = {
   colorScheme: 'dark',
   '--trees-search-bg-override': '#1f2631',
   '--trees-density-override': COMPACT_DENSITY,
   '--trees-row-height-override': `${String(COMPACT_ITEM_HEIGHT)}px`,
 } as CSSProperties;
 
-const fileOptions = {
+// Light variant drops the dark-specific search background override so the
+// trees stylesheet's `light-dark()` defaults can kick in for the rest of the
+// panel. Density/row-height stay the same since they're visual, not chromatic.
+const lightTreePanelStyle = {
+  colorScheme: 'light',
+  '--trees-density-override': COMPACT_DENSITY,
+  '--trees-row-height-override': `${String(COMPACT_ITEM_HEIGHT)}px`,
+} as CSSProperties;
+
+const treeStyleByTheme = {
+  dark: darkTreePanelStyle,
+  light: lightTreePanelStyle,
+};
+
+const treeClassNameByTheme = {
+  dark: 'dark h-full min-h-0 overflow-auto',
+  light: 'h-full min-h-0 overflow-auto',
+};
+
+const darkFileOptions = {
   disableFileHeader: true,
   theme: 'pierre-dark',
   themeType: 'dark',
   overflow: 'wrap' as const,
   enableLineSelection: true as const,
 } as const;
+
+const lightFileOptions = {
+  disableFileHeader: true,
+  theme: 'pierre-light',
+  themeType: 'light',
+  overflow: 'wrap' as const,
+  enableLineSelection: true as const,
+} as const;
+
+const fileOptionsByTheme = {
+  dark: darkFileOptions,
+  light: lightFileOptions,
+};
 
 const composition = {
   contextMenu: {
@@ -44,7 +76,13 @@ interface DemoTreeAppClientProps {
   initialActivePath: string;
   initialExpandedPaths: readonly string[];
   paths: readonly string[];
-  prerenderedHTMLByPath: Readonly<Record<string, string>>;
+  // Both maps are preloaded server-side so the first paint can land on the
+  // correct theme and flipping the toggle doesn't require a new highlighter
+  // pass to settle.
+  prerenderedHTMLByPath: {
+    dark: Readonly<Record<string, string>>;
+    light: Readonly<Record<string, string>>;
+  };
   treeId: string;
   treePreloadedData: FileTreePreloadedData;
 }
@@ -228,11 +266,16 @@ export function DemoTreeAppClient({
           return nextFiles;
         });
         setPrerenderedHtmlByPathState((current) => {
-          let nextHtml = current;
+          let nextDark = current.dark;
+          let nextLight = current.light;
           for (const moveEvent of moveEvents) {
-            nextHtml = remapHtmlMap(nextHtml, moveEvent.from, moveEvent.to);
+            nextDark = remapHtmlMap(nextDark, moveEvent.from, moveEvent.to);
+            nextLight = remapHtmlMap(nextLight, moveEvent.from, moveEvent.to);
           }
-          return nextHtml;
+          if (nextDark === current.dark && nextLight === current.light) {
+            return current;
+          }
+          return { dark: nextDark, light: nextLight };
         });
         setGitStatusEntries((current) => {
           let nextEntries = current;
@@ -252,7 +295,8 @@ export function DemoTreeAppClient({
   return (
     <TreeApp
       contextMenuPortalContainer={portalContainer}
-      fileOptions={fileOptions}
+      defaultTheme="dark"
+      fileOptions={fileOptionsByTheme}
       files={filesByPath}
       height={TREE_NEW_VIEWPORT_HEIGHTS.treeApp}
       initialActivePath={initialActivePath}
@@ -261,8 +305,9 @@ export function DemoTreeAppClient({
       prerenderedHTMLByPath={prerenderedHtmlByPathState}
       projectName="acme-components"
       searchEnabled
-      treeClassName="dark h-full min-h-0 overflow-auto"
-      treeStyle={treePanelStyle}
+      showThemeToggle
+      treeClassName={treeClassNameByTheme}
+      treeStyle={treeStyleByTheme}
     />
   );
 }

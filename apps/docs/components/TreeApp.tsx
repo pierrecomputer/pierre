@@ -2,7 +2,14 @@
 
 import type { FileContents } from '@pierre/diffs';
 import { File, type FileOptions } from '@pierre/diffs/react';
-import { IconFilePlus, IconFolderPlus, IconSearch, IconX } from '@pierre/icons';
+import {
+  IconFilePlus,
+  IconFolderPlus,
+  IconMoon,
+  IconSearch,
+  IconSun,
+  IconX,
+} from '@pierre/icons';
 import type {
   ContextMenuItem,
   ContextMenuOpenContext,
@@ -40,6 +47,96 @@ const DEFAULT_MIN_EXPLORER_WIDTH = 180;
 const DEFAULT_MAX_EXPLORER_WIDTH = 600;
 const DEFAULT_NEW_FILE_NAME = 'untitled';
 const DEFAULT_NEW_FOLDER_NAME = 'untitled';
+
+export type TreeAppTheme = 'light' | 'dark';
+
+// Callers can opt out of light/dark split by passing a single value, or pass
+// a `{ light, dark }` pair to supply distinct payloads for each mode.
+type ThemeScoped<T> = { light: T; dark: T };
+export type TreeAppThemeValue<T> = T | ThemeScoped<T>;
+
+function isThemeScoped<T>(value: unknown): value is ThemeScoped<T> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    'light' in (value as Record<string, unknown>) &&
+    'dark' in (value as Record<string, unknown>)
+  );
+}
+
+function pickByTheme<T>(
+  value: TreeAppThemeValue<T> | undefined,
+  theme: TreeAppTheme
+): T | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (isThemeScoped<T>(value)) {
+    return value[theme];
+  }
+  return value;
+}
+
+// Theme-scoped chrome presets used for TreeApp's own wrapping elements. Tree
+// and File visuals are driven by the caller-supplied per-theme payloads, but
+// the surrounding container, tab bar, and default header/tab/empty slots all
+// come from here so the toggle actually flips every pixel TreeApp owns.
+interface TreeAppChromeStyles {
+  container: string;
+  tabbarBgVar: string;
+  editorBgVar: string;
+  treeSurfaceFallback: string;
+  tabActive: string;
+  tabInactive: string;
+  tabCloseGradientFrom: string;
+  tabCloseButton: string;
+  emptyText: string;
+  headerTitle: string;
+  headerIconButton: string;
+  headerSearchActive: string;
+  headerSearchInactive: string;
+  themeToggleButton: string;
+}
+
+const CHROME_STYLES: Record<TreeAppTheme, TreeAppChromeStyles> = {
+  dark: {
+    container: 'bg-[#070707] text-zinc-200',
+    tabbarBgVar: '#070707',
+    editorBgVar: '#070707',
+    treeSurfaceFallback: '#141415',
+    tabActive: 'bg-neutral-900 text-zinc-100',
+    tabInactive:
+      'bg-transparent text-zinc-400 group-hover/tabbar:bg-neutral-900/30 group-hover/tabbar:hover:bg-neutral-800/60 group-hover/tabbar:hover:text-zinc-200',
+    tabCloseGradientFrom: 'from-neutral-900 via-neutral-900',
+    tabCloseButton: 'bg-neutral-800 text-neutral-500 hover:text-zinc-100',
+    emptyText: 'text-zinc-500',
+    headerTitle: 'text-neutral-200',
+    headerIconButton: 'text-neutral-400 hover:text-neutral-100',
+    headerSearchActive: 'text-neutral-100',
+    headerSearchInactive:
+      'text-neutral-400 hover:text-neutral-100 group-hover/tree-app-explorer:opacity-100',
+    themeToggleButton: 'text-neutral-400 hover:text-neutral-100',
+  },
+  light: {
+    container: 'bg-white text-zinc-900',
+    tabbarBgVar: '#ffffff',
+    editorBgVar: '#ffffff',
+    treeSurfaceFallback: '#f8f8f8',
+    tabActive: 'bg-zinc-100 text-zinc-900',
+    tabInactive:
+      'bg-transparent text-zinc-500 group-hover/tabbar:bg-zinc-100/60 group-hover/tabbar:hover:bg-zinc-200/70 group-hover/tabbar:hover:text-zinc-900',
+    tabCloseGradientFrom: 'from-zinc-100 via-zinc-100',
+    tabCloseButton: 'bg-zinc-200 text-zinc-500 hover:text-zinc-900',
+    emptyText: 'text-zinc-500',
+    headerTitle: 'text-zinc-900',
+    headerIconButton: 'text-zinc-500 hover:text-zinc-900',
+    headerSearchActive: 'text-zinc-900',
+    headerSearchInactive:
+      'text-zinc-500 hover:text-zinc-900 group-hover/tree-app-explorer:opacity-100',
+    themeToggleButton: 'text-zinc-500 hover:text-zinc-900',
+  },
+};
 
 export interface TreeAppTabRenderContext {
   activate: () => void;
@@ -93,14 +190,25 @@ export interface TreeAppProps<LAnnotation = unknown> {
   // opens.
   model: FileTreeModel;
   preloadedTreeData?: FileTreePreloadedData;
-  treeClassName?: string;
-  treeStyle?: CSSProperties;
+  // Pass a `{ light, dark }` pair to vary styling alongside the theme toggle.
+  treeClassName?: TreeAppThemeValue<string>;
+  treeStyle?: TreeAppThemeValue<CSSProperties>;
 
   // Editor side: files keyed by their tree path. Mirrors the
-  // preloadedDataById pattern already used by tree demos.
+  // preloadedDataById pattern already used by tree demos. Both the prerendered
+  // HTML map and the File options may be scoped per theme so the active File
+  // picks up the right syntax-highlight colors when the theme toggles.
   files?: Readonly<Record<string, FileContents>>;
-  prerenderedHTMLByPath?: Readonly<Record<string, string>>;
-  fileOptions?: FileOptions<LAnnotation>;
+  prerenderedHTMLByPath?: TreeAppThemeValue<Readonly<Record<string, string>>>;
+  fileOptions?: TreeAppThemeValue<FileOptions<LAnnotation>>;
+
+  // Light/dark theming. TreeApp owns the state by default; callers can observe
+  // changes via `onThemeChange` or drive it externally by passing `theme`.
+  // When `showThemeToggle` is true, a sun/moon button appears in the tab bar.
+  theme?: TreeAppTheme;
+  defaultTheme?: TreeAppTheme;
+  onThemeChange?: (theme: TreeAppTheme) => void;
+  showThemeToggle?: boolean;
 
   // SSR-friendly initial state. The first paint can land on a real file.
   initialOpenPaths?: readonly string[];
@@ -587,9 +695,15 @@ function WindowControls(): React.JSX.Element {
   );
 }
 
-function DefaultEmpty(): React.JSX.Element {
+function DefaultEmpty({ theme }: { theme: TreeAppTheme }): React.JSX.Element {
+  const chrome = CHROME_STYLES[theme];
   return (
-    <div className="flex flex-1 items-center justify-center px-6 text-sm text-zinc-500">
+    <div
+      className={[
+        'flex flex-1 items-center justify-center px-6 text-sm',
+        chrome.emptyText,
+      ].join(' ')}
+    >
       Select a file from the explorer.
     </div>
   );
@@ -600,12 +714,21 @@ function DefaultProjectHeader({
   isSearchEnabled,
   isSearchOpen,
   projectName,
-}: TreeAppProjectHeaderRenderContext): React.JSX.Element {
+  theme,
+}: TreeAppProjectHeaderRenderContext & {
+  theme: TreeAppTheme;
+}): React.JSX.Element {
+  const chrome = CHROME_STYLES[theme];
   return (
     <div className="mb-2 flex h-10 items-center justify-between gap-2 px-3 py-3">
       <div className="flex min-w-0 items-center gap-2.5">
         <WindowControls />
-        <div className="min-w-0 truncate text-xs font-medium text-neutral-200">
+        <div
+          className={[
+            'min-w-0 truncate text-xs font-medium',
+            chrome.headerTitle,
+          ].join(' ')}
+        >
           {projectName}
         </div>
       </div>
@@ -633,8 +756,8 @@ function DefaultProjectHeader({
             className={[
               'h-4 w-4 transition-opacity duration-150 cursor-pointer',
               isSearchOpen
-                ? 'text-neutral-100 opacity-100'
-                : 'text-neutral-400 opacity-25 group-hover/tree-app-explorer:opacity-100 focus-visible:opacity-100 hover:text-neutral-100',
+                ? `${chrome.headerSearchActive} opacity-100`
+                : `${chrome.headerSearchInactive} opacity-25 focus-visible:opacity-100`,
             ].join(' ')}
           >
             <IconSearch aria-hidden="true" className="h-[14px] w-[14px]" />
@@ -649,7 +772,9 @@ function DefaultProjectHeader({
             type="button"
             title="New file"
             onClick={actions.addFile}
-            className="h-4 w-4 cursor-pointer text-neutral-400 hover:text-neutral-100"
+            className={['h-4 w-4 cursor-pointer', chrome.headerIconButton].join(
+              ' '
+            )}
           >
             <IconFilePlus aria-hidden="true" />
           </button>
@@ -657,13 +782,45 @@ function DefaultProjectHeader({
             type="button"
             title="New folder"
             onClick={actions.addFolder}
-            className="h-4 w-4 cursor-pointer text-neutral-400 hover:text-neutral-100"
+            className={['h-4 w-4 cursor-pointer', chrome.headerIconButton].join(
+              ' '
+            )}
           >
             <IconFolderPlus aria-hidden="true" />
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function ThemeToggleButton({
+  onToggle,
+  theme,
+}: {
+  onToggle: () => void;
+  theme: TreeAppTheme;
+}): React.JSX.Element {
+  const chrome = CHROME_STYLES[theme];
+  const nextLabel =
+    theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={nextLabel}
+      aria-label={nextLabel}
+      className={[
+        'flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm transition-colors',
+        chrome.themeToggleButton,
+      ].join(' ')}
+    >
+      {theme === 'dark' ? (
+        <IconSun aria-hidden="true" className="h-4 w-4" />
+      ) : (
+        <IconMoon aria-hidden="true" className="h-4 w-4" />
+      )}
+    </button>
   );
 }
 
@@ -798,18 +955,19 @@ function DefaultTab({
   iconsColored,
   isActive,
   path,
+  theme,
 }: DefaultTabProps & {
   icon: TreeAppResolvedTabIcon;
   iconsColored: boolean;
+  theme: TreeAppTheme;
 }): React.JSX.Element {
+  const chrome = CHROME_STYLES[theme];
   const label = basename(path);
   return (
     <div
       className={[
         'group relative isolate flex h-7 max-w-[200px] items-center overflow-hidden rounded-sm text-xs font-medium transition-colors',
-        isActive
-          ? 'bg-neutral-900 text-zinc-100'
-          : 'bg-transparent text-zinc-400 group-hover/tabbar:bg-neutral-900/30 group-hover/tabbar:hover:bg-neutral-800/60 group-hover/tabbar:hover:text-zinc-200',
+        isActive ? chrome.tabActive : chrome.tabInactive,
       ].join(' ')}
     >
       <button
@@ -823,14 +981,20 @@ function DefaultTab({
       </button>
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute top-0 right-0 bottom-0 z-10 w-12 bg-gradient-to-l from-neutral-900 via-neutral-900 to-transparent opacity-0 transition-opacity group-hover:opacity-100"
+        className={[
+          'pointer-events-none absolute top-0 right-0 bottom-0 z-10 w-12 bg-gradient-to-l to-transparent opacity-0 transition-opacity group-hover:opacity-100',
+          chrome.tabCloseGradientFrom,
+        ].join(' ')}
       />
       <button
         type="button"
         onClick={close}
         title="Close tab"
         aria-label={`Close ${label}`}
-        className="absolute top-1/2 right-1 z-20 flex h-5 w-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded bg-neutral-800 text-neutral-500 opacity-0 transition-opacity group-hover:opacity-100 hover:text-zinc-100 focus:opacity-100"
+        className={[
+          'absolute top-1/2 right-1 z-20 flex h-5 w-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100',
+          chrome.tabCloseButton,
+        ].join(' ')}
       >
         <IconX aria-hidden="true" className="h-3 w-3" />
       </button>
@@ -841,6 +1005,7 @@ function DefaultTab({
 export function TreeApp<LAnnotation = unknown>({
   className,
   contextMenuPortalContainer,
+  defaultTheme = 'dark',
   files,
   fileOptions,
   height = '100%',
@@ -852,6 +1017,7 @@ export function TreeApp<LAnnotation = unknown>({
   model,
   newFileTemplateName = DEFAULT_NEW_FILE_NAME,
   newFolderTemplateName = DEFAULT_NEW_FOLDER_NAME,
+  onThemeChange,
   preloadedTreeData,
   prerenderedHTMLByPath,
   projectName,
@@ -863,12 +1029,37 @@ export function TreeApp<LAnnotation = unknown>({
   renderWindowChrome,
   searchEnabled = false,
   showTabs = true,
+  showThemeToggle = false,
   style,
   tabIcons,
+  theme: themeProp,
   treeClassName,
   treeStyle,
 }: TreeAppProps<LAnnotation>): React.JSX.Element {
-  const treeStyleRecord = treeStyle as
+  const [internalTheme, setInternalTheme] =
+    useState<TreeAppTheme>(defaultTheme);
+  const theme = themeProp ?? internalTheme;
+  const chrome = CHROME_STYLES[theme];
+
+  const toggleTheme = useCallback(() => {
+    const nextTheme: TreeAppTheme = theme === 'dark' ? 'light' : 'dark';
+    if (themeProp == null) {
+      setInternalTheme(nextTheme);
+    }
+    onThemeChange?.(nextTheme);
+  }, [onThemeChange, theme, themeProp]);
+
+  // Resolve the theme-scoped inputs once. The caller can pass either a plain
+  // value or a `{ light, dark }` pair; `pickByTheme` returns the right one.
+  const resolvedTreeStyle = pickByTheme(treeStyle, theme);
+  const resolvedTreeClassName = pickByTheme(treeClassName, theme);
+  const resolvedFileOptions = pickByTheme(fileOptions, theme);
+  const resolvedPrerenderedHTMLByPath = pickByTheme(
+    prerenderedHTMLByPath,
+    theme
+  );
+
+  const treeStyleRecord = resolvedTreeStyle as
     | Record<string, string | number>
     | undefined;
   const explorer = useExplorerWidth(
@@ -901,10 +1092,10 @@ export function TreeApp<LAnnotation = unknown>({
   const effectiveFileOptions = useMemo<FileOptions<LAnnotation>>(
     () =>
       ({
-        ...fileOptions,
+        ...resolvedFileOptions,
         overflow: 'wrap',
       }) as FileOptions<LAnnotation>,
-    [fileOptions]
+    [resolvedFileOptions]
   );
 
   const treeSurfaceColor = useMemo(() => {
@@ -913,8 +1104,8 @@ export function TreeApp<LAnnotation = unknown>({
       treeStyleRecord?.['--trees-theme-sidebar-bg'];
     return typeof explicitTreeBackground === 'string'
       ? explicitTreeBackground
-      : '#141415';
-  }, [treeStyleRecord]);
+      : chrome.treeSurfaceFallback;
+  }, [chrome.treeSurfaceFallback, treeStyleRecord]);
 
   const treeCssVariables = useMemo<CSSProperties>(() => {
     if (treeStyleRecord == null) {
@@ -934,10 +1125,19 @@ export function TreeApp<LAnnotation = unknown>({
     return {
       ...treeCssVariables,
       '--tree-app-tree-surface': treeSurfaceColor,
+      '--tree-app-chrome-bg': chrome.tabbarBgVar,
+      '--tree-app-editor-bg': chrome.editorBgVar,
       '--tree-app-height': normalizedHeight,
       ...style,
     } as CSSProperties;
-  }, [height, style, treeCssVariables, treeSurfaceColor]);
+  }, [
+    chrome.editorBgVar,
+    chrome.tabbarBgVar,
+    height,
+    style,
+    treeCssVariables,
+    treeSurfaceColor,
+  ]);
 
   const sidebarStyle = useMemo<CSSProperties>(
     () =>
@@ -949,14 +1149,18 @@ export function TreeApp<LAnnotation = unknown>({
 
   const treeHostStyle = useMemo<CSSProperties>(
     () => ({
-      ...treeStyle,
+      ...resolvedTreeStyle,
       width: '100%',
       height: '100%',
       paddingBottom: 10,
       borderRadius: 8,
-      border: '1px solid rgb(255 255 255 / 0.05)',
+      // Subtle border that works on both dark and light surfaces by relying on
+      // the current text color rather than a hardcoded white alpha.
+      border: '1px solid currentColor',
+      borderColor:
+        theme === 'dark' ? 'rgb(255 255 255 / 0.05)' : 'rgb(0 0 0 / 0.08)',
     }),
-    [treeStyle]
+    [resolvedTreeStyle, theme]
   );
   const windowChromeNode = renderWindowChrome?.();
   const effectiveTabIcons = tabIcons ?? 'complete';
@@ -994,13 +1198,14 @@ export function TreeApp<LAnnotation = unknown>({
     if (renderProjectHeader != null) {
       return renderProjectHeader(headerContext);
     }
-    return <DefaultProjectHeader {...headerContext} />;
+    return <DefaultProjectHeader {...headerContext} theme={theme} />;
   }, [
     mutations,
     projectName,
     renderProjectHeader,
     search.isOpen,
     searchEnabled,
+    theme,
     toggleSearch,
   ]);
 
@@ -1048,19 +1253,31 @@ export function TreeApp<LAnnotation = unknown>({
 
   const editor = useMemo(() => {
     if (activePath == null) {
-      return renderEmpty != null ? renderEmpty() : <DefaultEmpty />;
+      return renderEmpty != null ? (
+        renderEmpty()
+      ) : (
+        <DefaultEmpty theme={theme} />
+      );
     }
     const file = files?.[activePath];
-    const prerenderedHTML = prerenderedHTMLByPath?.[activePath];
+    const prerenderedHTML = resolvedPrerenderedHTMLByPath?.[activePath];
     if (renderEditor != null) {
       return renderEditor({ file, path: activePath, prerenderedHTML });
     }
     if (file == null) {
-      return renderEmpty != null ? renderEmpty() : <DefaultEmpty />;
+      return renderEmpty != null ? (
+        renderEmpty()
+      ) : (
+        <DefaultEmpty theme={theme} />
+      );
     }
+    // Keying the File by `theme` forces a remount when the user toggles modes.
+    // Prerendered HTML is theme-specific (different syntax colors) and
+    // re-running the highlighter against a stale cached tree can show the
+    // wrong palette for a frame.
     return (
       <File
-        key={activePath}
+        key={`${activePath}:${theme}`}
         file={file}
         options={effectiveFileOptions}
         prerenderedHTML={prerenderedHTML}
@@ -1071,15 +1288,23 @@ export function TreeApp<LAnnotation = unknown>({
     activePath,
     effectiveFileOptions,
     files,
-    prerenderedHTMLByPath,
     renderEditor,
     renderEmpty,
+    resolvedPrerenderedHTMLByPath,
+    theme,
   ]);
+
+  const hasTabs = showTabs && openPaths.length > 0;
+  // Render the tab bar whenever there's something to put in it: either tabs,
+  // or the theme toggle button. The toggle lives top-right so it stays
+  // reachable even when no files are open.
+  const showTabBar = hasTabs || showThemeToggle;
 
   return (
     <div
       className={[
-        'flex flex-col overflow-hidden rounded-xl border bg-[#070707] text-zinc-200 shadow-lg p-1.5 h-[calc(var(--tree-app-height)+170px)] md:h-[var(--tree-app-height)]',
+        'flex flex-col overflow-hidden rounded-xl border shadow-lg p-1.5 h-[calc(var(--tree-app-height)+170px)] md:h-[var(--tree-app-height)]',
+        chrome.container,
         className,
       ]
         .filter(Boolean)
@@ -1100,7 +1325,7 @@ export function TreeApp<LAnnotation = unknown>({
           style={sidebarStyle}
         >
           <FileTree
-            className={treeClassName}
+            className={resolvedTreeClassName}
             header={headerNode}
             model={model}
             preloadedData={preloadedTreeData}
@@ -1119,45 +1344,53 @@ export function TreeApp<LAnnotation = unknown>({
           className="relative hidden w-px shrink-0 cursor-col-resize bg-white/0 after:absolute after:inset-y-0 after:-left-1 after:w-2 after:content-[''] md:block"
         />
         <section className="flex min-w-0 flex-1 flex-col">
-          {showTabs && openPaths.length > 0 ? (
+          {showTabBar ? (
             <div
-              className="group/tabbar flex h-10 items-center gap-1 overflow-x-auto px-2 pt-2 md:pt-0"
-              style={{ backgroundColor: '#070707' }}
+              className="group/tabbar flex h-10 items-center gap-1 px-2 pt-2 md:pt-0"
+              style={{ backgroundColor: 'var(--tree-app-chrome-bg)' }}
             >
-              {openPaths.map((path) => {
-                const tabContext: TreeAppTabRenderContext = {
-                  activate: () => {
-                    activateTab(path);
-                  },
-                  close: () => {
-                    closeTab(path);
-                  },
-                  isActive: path === activePath,
-                  path,
-                };
-                const tabIcon = resolveTabIcon(
-                  'file-tree-icon-file',
-                  path
-                ) as TreeAppResolvedTabIcon;
-                return (
-                  <div key={path} className="flex">
-                    {renderTab != null ? (
-                      renderTab(tabContext)
-                    ) : (
-                      <DefaultTab
-                        {...tabContext}
-                        icon={tabIcon}
-                        iconsColored={tabIconsColored}
-                      />
-                    )}
-                  </div>
-                );
-              })}
+              <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+                {hasTabs
+                  ? openPaths.map((path) => {
+                      const tabContext: TreeAppTabRenderContext = {
+                        activate: () => {
+                          activateTab(path);
+                        },
+                        close: () => {
+                          closeTab(path);
+                        },
+                        isActive: path === activePath,
+                        path,
+                      };
+                      const tabIcon = resolveTabIcon(
+                        'file-tree-icon-file',
+                        path
+                      ) as TreeAppResolvedTabIcon;
+                      return (
+                        <div key={path} className="flex">
+                          {renderTab != null ? (
+                            renderTab(tabContext)
+                          ) : (
+                            <DefaultTab
+                              {...tabContext}
+                              icon={tabIcon}
+                              iconsColored={tabIconsColored}
+                              theme={theme}
+                            />
+                          )}
+                        </div>
+                      );
+                    })
+                  : null}
+              </div>
+              {showThemeToggle ? (
+                <ThemeToggleButton onToggle={toggleTheme} theme={theme} />
+              ) : null}
             </div>
           ) : null}
           <div
             className="flex min-h-0 flex-1"
-            style={{ backgroundColor: '#070707' }}
+            style={{ backgroundColor: 'var(--tree-app-editor-bg)' }}
           >
             {editor}
           </div>
