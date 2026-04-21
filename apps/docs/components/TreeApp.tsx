@@ -1300,6 +1300,62 @@ export function TreeApp<LAnnotation = unknown>({
   // reachable even when no files are open.
   const showTabBar = hasTabs || showThemeToggle;
 
+  // Scroll the active tab into view when the active path changes or when tabs
+  // are added/removed. `block: 'nearest'` avoids jumping the whole page; the
+  // container itself is the only scroll parent that moves because it's the
+  // only axis-x overflow scroller in the ancestor chain.
+  const tabScrollerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!hasTabs || activePath == null) return;
+    const scroller = tabScrollerRef.current;
+    if (scroller == null) return;
+    const activeTab = scroller.querySelector<HTMLElement>(
+      '[data-tree-app-tab-active="true"]'
+    );
+    if (activeTab == null) return;
+    activeTab.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }, [activePath, hasTabs, openPaths]);
+
+  // Track whether the tab scroller has hidden content on either edge so we
+  // can fade the corresponding side in. The left fade stays hidden on first
+  // paint because scrollLeft is 0, which keeps the first tab fully visible
+  // (the behavior the user cares about).
+  const [tabScrollState, setTabScrollState] = useState({
+    canScrollLeft: false,
+    canScrollRight: false,
+  });
+  useEffect(() => {
+    if (!hasTabs) return;
+    const scroller = tabScrollerRef.current;
+    if (scroller == null) return;
+
+    const update = () => {
+      const { scrollLeft, scrollWidth, clientWidth } = scroller;
+      // 1px slack prevents the fade from flickering on sub-pixel rounding.
+      setTabScrollState({
+        canScrollLeft: scrollLeft > 1,
+        canScrollRight: scrollLeft + clientWidth < scrollWidth - 1,
+      });
+    };
+
+    update();
+    scroller.addEventListener('scroll', update, { passive: true });
+    const resizeObserver = new ResizeObserver(update);
+    resizeObserver.observe(scroller);
+    for (const child of Array.from(scroller.children)) {
+      resizeObserver.observe(child);
+    }
+
+    return () => {
+      scroller.removeEventListener('scroll', update);
+      resizeObserver.disconnect();
+    };
+  }, [hasTabs, openPaths.length]);
+
   return (
     <div
       className={[
@@ -1349,39 +1405,69 @@ export function TreeApp<LAnnotation = unknown>({
               className="group/tabbar flex h-10 items-center gap-1 px-2 pt-2 md:pt-0"
               style={{ backgroundColor: 'var(--tree-app-chrome-bg)' }}
             >
-              <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-                {hasTabs
-                  ? openPaths.map((path) => {
-                      const tabContext: TreeAppTabRenderContext = {
-                        activate: () => {
-                          activateTab(path);
-                        },
-                        close: () => {
-                          closeTab(path);
-                        },
-                        isActive: path === activePath,
-                        path,
-                      };
-                      const tabIcon = resolveTabIcon(
-                        'file-tree-icon-file',
-                        path
-                      ) as TreeAppResolvedTabIcon;
-                      return (
-                        <div key={path} className="flex">
-                          {renderTab != null ? (
-                            renderTab(tabContext)
-                          ) : (
-                            <DefaultTab
-                              {...tabContext}
-                              icon={tabIcon}
-                              iconsColored={tabIconsColored}
-                              theme={theme}
-                            />
-                          )}
-                        </div>
-                      );
-                    })
-                  : null}
+              <div className="relative flex min-w-0 flex-1">
+                <div
+                  ref={tabScrollerRef}
+                  className="no-scrollbar flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+                >
+                  {hasTabs
+                    ? openPaths.map((path) => {
+                        const isActive = path === activePath;
+                        const tabContext: TreeAppTabRenderContext = {
+                          activate: () => {
+                            activateTab(path);
+                          },
+                          close: () => {
+                            closeTab(path);
+                          },
+                          isActive,
+                          path,
+                        };
+                        const tabIcon = resolveTabIcon(
+                          'file-tree-icon-file',
+                          path
+                        ) as TreeAppResolvedTabIcon;
+                        return (
+                          <div
+                            key={path}
+                            className="flex"
+                            data-tree-app-tab-active={
+                              isActive ? 'true' : undefined
+                            }
+                          >
+                            {renderTab != null ? (
+                              renderTab(tabContext)
+                            ) : (
+                              <DefaultTab
+                                {...tabContext}
+                                icon={tabIcon}
+                                iconsColored={tabIconsColored}
+                                theme={theme}
+                              />
+                            )}
+                          </div>
+                        );
+                      })
+                    : null}
+                </div>
+                {/* Edge fades that only appear when the scroller has hidden
+                    content on that side. The left fade intentionally stays
+                    invisible at scrollLeft=0 so the first tab isn't covered
+                    until the user actually starts scrolling. */}
+                <div
+                  aria-hidden="true"
+                  className={[
+                    'pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-[var(--tree-app-chrome-bg)] to-transparent transition-opacity duration-150',
+                    tabScrollState.canScrollLeft ? 'opacity-100' : 'opacity-0',
+                  ].join(' ')}
+                />
+                <div
+                  aria-hidden="true"
+                  className={[
+                    'pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[var(--tree-app-chrome-bg)] to-transparent transition-opacity duration-150',
+                    tabScrollState.canScrollRight ? 'opacity-100' : 'opacity-0',
+                  ].join(' ')}
+                />
               </div>
               {showThemeToggle ? (
                 <ThemeToggleButton onToggle={toggleTheme} theme={theme} />
