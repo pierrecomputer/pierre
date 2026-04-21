@@ -266,7 +266,7 @@ export function DemoThemingClient({
         </div>
 
         <ButtonGroup
-          className="ml-auto md:ml-0"
+          className="min-[500px]:ml-auto md:ml-0"
           value={colorMode}
           onValueChange={(value) =>
             setColorMode(value as 'system' | 'light' | 'dark')
