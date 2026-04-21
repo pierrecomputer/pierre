@@ -14,6 +14,8 @@ import type {
 
 export type { CreatePatchOptionsNonabortable };
 
+export type CodeViewerScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
+
 /**
  * Represents a file's contents for generating diffs via `parseDiffFromFile` or
  * for when rendering a file directly using the File components
@@ -488,7 +490,7 @@ export interface CodeViewerPositionScrollTarget {
   position: number;
   /** Account for sticky headers when using scrollTo */
   stickyHeader?: boolean;
-  behavior?: ScrollBehavior;
+  behavior?: CodeViewerScrollBehavior;
 }
 
 export interface CodeViewerLineScrollTarget {
@@ -500,7 +502,7 @@ export interface CodeViewerLineScrollTarget {
   offset?: number;
   /** Account for sticky headers when using scrollTo */
   stickyHeader?: boolean;
-  behavior?: ScrollBehavior;
+  behavior?: CodeViewerScrollBehavior;
 }
 
 export interface NumericScrollLineAnchor {
@@ -514,7 +516,7 @@ export interface CodeViewerItemScrollTarget {
   id: string;
   align?: 'start' | 'center' | 'end' | 'nearest';
   offset?: number;
-  behavior?: ScrollBehavior;
+  behavior?: CodeViewerScrollBehavior;
 }
 
 export type CodeViewerScrollTarget =

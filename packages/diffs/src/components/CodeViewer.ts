@@ -17,6 +17,7 @@ import type {
   CodeViewerItemVersion,
   CodeViewerLineScrollTarget,
   CodeViewerMetrics,
+  CodeViewerScrollBehavior,
   CodeViewerScrollTarget,
   HunkSeparators,
   SelectionSide,
@@ -540,16 +541,31 @@ export class CodeViewer<LAnnotation = undefined> {
     }
   }
 
+  private resolveEffectiveScrollBehavior(
+    target: CodeViewerScrollTarget,
+    destination: number
+  ): Exclude<CodeViewerScrollBehavior, 'smooth-auto'> {
+    if (target.behavior !== 'smooth-auto') {
+      return target.behavior ?? 'instant';
+    }
+
+    return Math.abs(destination - this.getScrollTop()) <= this.getHeight() * 10
+      ? 'smooth'
+      : 'instant';
+  }
+
   public scrollTo(target: CodeViewerScrollTarget): void {
-    // Best-effort sanity check — early-out silently on unresolvable targets
-    // (unknown id, racy line lookup). resolveScrollTargetTop already logged.
-    // The render frame re-resolves fresh via computeFrameScrollTop, so we
-    // discard the numeric here.
-    if (this.root == null || this.resolveScrollTargetTop(target) == null) {
+    if (this.root == null) {
       return;
     }
 
-    if (target.behavior === 'smooth') {
+    const destination = this.resolveScrollTargetTop(target);
+    if (destination == null) {
+      return;
+    }
+
+    const behavior = this.resolveEffectiveScrollBehavior(target, destination);
+    if (behavior === 'smooth') {
       // Use ??= so if we have an animation in progress it will be smoothly
       // transitioned into the new target
       this.scrollAnimation ??= {
