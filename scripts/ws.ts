@@ -66,26 +66,26 @@ const SIGNAL_EXIT_CODES: Partial<Record<NodeJS.Signals, number>> = {
 
 const FORWARDED_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
 
-let didRestoreTTY = false;
+// Some dev tools ask the terminal for state during shutdown. Their replies can
+// arrive after the child exits, so briefly drain stdin until it has gone quiet.
+const TTY_QUIET_MS = 25;
+const TTY_MAX_DRAIN_MS = 250;
+const TTY_DRAIN_POLL_MS = 5;
+
+let isExiting = false;
 
 process.on('exit', restoreTTY);
 
+// Put the terminal back into normal line-editing mode before returning control
+// to the user's shell, even if a child process left it in a transient state.
 function restoreTTY() {
-  if (didRestoreTTY) {
-    return;
-  }
-
-  didRestoreTTY = true;
-
   if (!process.stdin.isTTY) {
     return;
   }
 
   try {
     process.stdin.setRawMode?.(false);
-  } catch {
-    // Ignore raw mode restoration errors.
-  }
+  } catch {}
 
   try {
     const stdinFd = process.stdin.fd;
@@ -94,15 +94,66 @@ function restoreTTY() {
         stdio: [stdinFd, 'ignore', 'ignore'],
       });
     }
-  } catch {
-    // Ignore stty errors and allow normal exit handling.
-  }
+  } catch {}
 
   try {
     process.stdout.write('\x1b[?2004l\x1b[?2026l');
-  } catch {
-    // Ignore terminal mode restoration write errors.
+  } catch {}
+}
+
+// Consume any delayed terminal replies so they do not appear as typed text at
+// the next shell prompt after Ctrl+C.
+async function drainTTYInput() {
+  if (!process.stdin.isTTY) {
+    return;
   }
+
+  const stdin = process.stdin;
+  const wasRaw = stdin.isRaw;
+  const discard = () => {};
+  const startedAt = Date.now();
+  let lastInputAt = startedAt;
+
+  try {
+    stdin.setRawMode?.(true);
+    stdin.on('data', discard);
+    stdin.resume();
+
+    while (Date.now() - startedAt < TTY_MAX_DRAIN_MS) {
+      let sawInput = false;
+      while (stdin.read() !== null) {
+        sawInput = true;
+      }
+
+      const now = Date.now();
+      if (sawInput) {
+        lastInputAt = now;
+      } else if (now - lastInputAt >= TTY_QUIET_MS) {
+        break;
+      }
+
+      await Bun.sleep(TTY_DRAIN_POLL_MS);
+    }
+  } catch {
+  } finally {
+    stdin.off('data', discard);
+    stdin.pause();
+    try {
+      stdin.setRawMode?.(wasRaw ?? false);
+    } catch {}
+  }
+}
+
+async function exitCleanly(code: number) {
+  if (isExiting) {
+    return;
+  }
+
+  isExiting = true;
+  restoreTTY();
+  await drainTTYInput();
+  restoreTTY();
+  process.exit(code);
 }
 
 function handleChildExit(proc: ChildProcess) {
@@ -110,8 +161,6 @@ function handleChildExit(proc: ChildProcess) {
 
   for (const signal of FORWARDED_SIGNALS) {
     const handler = () => {
-      restoreTTY();
-
       if (proc.exitCode === null && proc.signalCode === null) {
         proc.kill(signal);
       }
@@ -126,13 +175,7 @@ function handleChildExit(proc: ChildProcess) {
       process.off(forwardedSignal, handler);
     }
 
-    restoreTTY();
-
-    if (signal) {
-      process.exit(SIGNAL_EXIT_CODES[signal] ?? 1);
-    }
-
-    process.exit(code ?? 0);
+    void exitCleanly(signal ? (SIGNAL_EXIT_CODES[signal] ?? 1) : (code ?? 0));
   });
 }
 
