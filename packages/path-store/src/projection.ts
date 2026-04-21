@@ -17,7 +17,7 @@ import {
   getFlattenedTerminalDirectoryId,
 } from './flatten';
 import type { DirectoryChildIndex, NodeId } from './internal-types';
-import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
+import { isDirectoryNode } from './internal-types';
 import {
   setBenchmarkCounter,
   withBenchmarkPhase,
@@ -191,7 +191,7 @@ export function expandPath(
   }
 
   const directoryNode = requireNode(state, directoryNodeId);
-  if (directoryNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (!isDirectoryNode(directoryNode)) {
     throw new Error(`Path is not a directory: "${path}"`);
   }
 
@@ -219,7 +219,7 @@ export function collapsePath(
   }
 
   const directoryNode = requireNode(state, directoryNodeId);
-  if (directoryNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (!isDirectoryNode(directoryNode)) {
     throw new Error(`Path is not a directory: "${path}"`);
   }
 
@@ -298,7 +298,7 @@ function selectVisibleRowWithinSubtree(
   visibleDepth: number
 ): VisibleRowCursor {
   const node = requireNode(state, nodeId);
-  if (node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (!isDirectoryNode(node)) {
     if (index === 0) {
       return {
         headNodeId: nodeId,
@@ -317,7 +317,7 @@ function selectVisibleRowWithinSubtree(
 
   const terminalNode = requireNode(state, currentCursor.terminalNodeId);
   if (
-    terminalNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY ||
+    !isDirectoryNode(terminalNode) ||
     !isDirectoryExpanded(state, currentCursor.terminalNodeId, terminalNode)
   ) {
     throw new Error(
@@ -339,7 +339,7 @@ function createVisibleRowCursor(
   visibleDepth: number
 ): VisibleRowCursor {
   const node = requireNode(state, nodeId);
-  if (node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (!isDirectoryNode(node)) {
     return {
       headNodeId: nodeId,
       terminalNodeId: nodeId,
@@ -368,7 +368,7 @@ function createVisibleRowCursor(
 
 function isVisibleRowHeadNode(state: PathStoreState, nodeId: NodeId): boolean {
   const node = requireNode(state, nodeId);
-  if (node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (!isDirectoryNode(node)) {
     return true;
   }
 
@@ -386,7 +386,7 @@ function getNextVisibleRowCursor(
   currentCursor: VisibleRowCursor
 ): VisibleRowCursor | null {
   const terminalNode = requireNode(state, currentCursor.terminalNodeId);
-  if (terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (isDirectoryNode(terminalNode)) {
     const currentIndex = getDirectoryIndex(state, currentCursor.terminalNodeId);
     if (
       isDirectoryExpanded(state, currentCursor.terminalNodeId, terminalNode) &&
@@ -490,6 +490,7 @@ function buildVisibleTreeProjectionDataDFS(
     [directories.get(state.snapshot.rootId)!, 0, -1, ''],
   ];
   const flattenEnabled = state.snapshot.options.flattenEmptyDirectories;
+  const pathCacheByNodeId = state.pathCacheByNodeId;
   const pathCacheVersion = state.pathCacheVersion;
   const segmentValues = segmentTable.valueById;
 
@@ -514,11 +515,11 @@ function buildVisibleTreeProjectionDataDFS(
 
     let path: string;
     let terminalNodeId = childId;
-    if (childNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+    if (!isDirectoryNode(childNode)) {
+      const cachedPathEntry = pathCacheByNodeId.get(childId);
       path =
-        childNode.pathCache != null &&
-        childNode.pathCacheVersion === pathCacheVersion
-          ? childNode.pathCache
+        cachedPathEntry != null && cachedPathEntry.version === pathCacheVersion
+          ? cachedPathEntry.path
           : `${parentPath}${segmentValues[childNode.nameId]}`;
     } else {
       terminalNodeId = flattenEnabled
@@ -544,7 +545,7 @@ function buildVisibleTreeProjectionDataDFS(
     const terminalNode = nodes[terminalNodeId];
     if (
       terminalNode != null &&
-      terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+      isDirectoryNode(terminalNode) &&
       isDirectoryExpanded(state, terminalNodeId, terminalNode)
     ) {
       stack.push([directories.get(terminalNodeId)!, 0, visibleDepth, path]);
@@ -601,6 +602,7 @@ function collectVisibleRowsDFS(
   ];
   const segmentValues = segmentTable.valueById;
   const flattenEnabled = state.snapshot.options.flattenEmptyDirectories;
+  const pathCacheByNodeId = state.pathCacheByNodeId;
   const pathCacheVersion = state.pathCacheVersion;
 
   while (stack.length > 0 && rowCount < maxRows) {
@@ -617,9 +619,10 @@ function collectVisibleRowsDFS(
 
     const visibleDepth = frame[2] + 1;
 
-    if (childNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+    if (!isDirectoryNode(childNode)) {
       // File node — inline materialization avoids cursor allocation and
       // directory-specific checks (load state, flattening, expansion).
+      const cachedPathEntry = pathCacheByNodeId.get(childId);
       rows[rowCount++] = {
         depth: visibleDepth,
         flattenedSegments: undefined,
@@ -632,9 +635,9 @@ function collectVisibleRowsDFS(
         loadState: undefined,
         name: segmentValues[childNode.nameId],
         path:
-          childNode.pathCache != null &&
-          childNode.pathCacheVersion === pathCacheVersion
-            ? childNode.pathCache
+          cachedPathEntry != null &&
+          cachedPathEntry.version === pathCacheVersion
+            ? cachedPathEntry.path
             : materializeNodePath(state, childId),
       };
       continue;
@@ -656,7 +659,7 @@ function collectVisibleRowsDFS(
     const terminalNode = nodes[terminalNodeId];
     if (
       terminalNode != null &&
-      terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+      isDirectoryNode(terminalNode) &&
       isDirectoryExpanded(state, terminalNodeId, terminalNode)
     ) {
       stack.push([directories.get(terminalNodeId)!, 0, visibleDepth]);
@@ -675,17 +678,16 @@ function materializeVisibleRow(
   cursor: VisibleRowCursor
 ): PathStoreVisibleRow {
   const terminalNode = requireNode(state, cursor.terminalNodeId);
-  const loadState =
-    terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY
-      ? getVisibleRowLoadState(state, cursor)
-      : null;
+  const loadState = isDirectoryNode(terminalNode)
+    ? getVisibleRowLoadState(state, cursor)
+    : null;
   const path = materializeNodePath(state, cursor.terminalNodeId);
   const name = getSegmentValue(
     state.snapshot.segmentTable,
     terminalNode.nameId
   );
   const hasChildren =
-    terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+    isDirectoryNode(terminalNode) &&
     getDirectoryIndex(state, cursor.terminalNodeId).childIds.length > 0;
   const isFlattened = cursor.headNodeId !== cursor.terminalNodeId;
   const instrumentation = state.instrumentation;
@@ -729,14 +731,11 @@ function materializeVisibleRow(
     hasChildren,
     id: cursor.terminalNodeId,
     isExpanded:
-      terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+      isDirectoryNode(terminalNode) &&
       isDirectoryExpanded(state, cursor.terminalNodeId, terminalNode),
     isFlattened,
     isLoading: loadState === 'loading',
-    kind:
-      terminalNode.kind === PATH_STORE_NODE_KIND_DIRECTORY
-        ? 'directory'
-        : 'file',
+    kind: isDirectoryNode(terminalNode) ? 'directory' : 'file',
     loadState:
       loadState == null || loadState === 'loaded'
         ? undefined

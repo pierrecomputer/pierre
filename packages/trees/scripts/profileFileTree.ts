@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { loadWorktreeEnv } from '../../../scripts/load-worktree-env.mjs';
 import {
   DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME,
   FILE_TREE_PROFILE_WORKLOAD_NAMES,
@@ -316,10 +317,21 @@ declare global {
   }
 }
 
+// Mirror the Playwright config behavior so direct profiling runs pick up the
+// same worktree port offset as `bun ws` and `bun run chrome`.
+loadWorktreeEnv();
+
+function readWorktreePortOffset(): number {
+  const parsed = Number(process.env.PIERRE_PORT_OFFSET ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+const WORKTREE_PORT_OFFSET = readWorktreePortOffset();
+const DEFAULT_BROWSER_DEBUG_PORT = 9222 + WORKTREE_PORT_OFFSET;
+const DEFAULT_FIXTURE_SERVER_PORT = 9221 + WORKTREE_PORT_OFFSET;
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
-const DEFAULT_BROWSER_URL = 'http://127.0.0.1:9222';
-const DEFAULT_URL =
-  'http://127.0.0.1:9221/test/e2e/fixtures/file-tree-profile.html';
+const DEFAULT_BROWSER_URL = `http://127.0.0.1:${DEFAULT_BROWSER_DEBUG_PORT}`;
+const DEFAULT_URL = `http://127.0.0.1:${DEFAULT_FIXTURE_SERVER_PORT}/test/e2e/fixtures/file-tree-profile.html`;
 const DEFAULT_WORKLOAD_NAME = DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME;
 const KNOWN_WORKLOAD_NAMES = new Set<FileTreeProfileWorkloadName>(
   FILE_TREE_PROFILE_WORKLOAD_NAMES
@@ -3566,7 +3578,7 @@ async function main(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `${message}\n\nRun Chrome with remote debugging first, for example:\n/Applications/Google\\ Chrome\\ Dev.app/Contents/MacOS/Google\\ Chrome\\ Dev --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-devtools-codex`
+      `${message}\n\nRun Chrome with remote debugging first, for example:\n/Applications/Google\\ Chrome\\ Dev.app/Contents/MacOS/Google\\ Chrome\\ Dev --remote-debugging-port=${DEFAULT_BROWSER_DEBUG_PORT} --user-data-dir=/tmp/chrome-devtools-codex`
     );
   } finally {
     serverProcess?.kill();

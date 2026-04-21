@@ -1,3 +1,4 @@
+import { getNodeDepth, hasNodeFlag, isDirectoryNode } from './internal-types';
 import type {
   DirectoryLoadInfo,
   NodeId,
@@ -5,7 +6,6 @@ import type {
   PathStoreSnapshot,
 } from './internal-types';
 import { PATH_STORE_NODE_FLAG_ROOT } from './internal-types';
-import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
 import type { BenchmarkInstrumentation } from './internal/benchmarkInstrumentation';
 import type {
   PathStoreDirectoryLoadState,
@@ -31,10 +31,13 @@ export interface PathStoreState {
   activeNodeCount: number;
   collapsedDirectoryIds: Set<NodeId>;
   defaultExpansion: PathStoreInitialExpansion;
+  directoriesOpenByDefault: boolean;
+  hasCollapsedDirectoryOverrides: boolean;
   directoryLoadInfoById: Map<NodeId, DirectoryLoadInfo>;
   expandedDirectoryIds: Set<NodeId>;
   instrumentation: BenchmarkInstrumentation | null;
   listeners: Map<string, Set<(event: PathStoreEvent) => void>>;
+  pathCacheByNodeId: Map<NodeId, { path: string; version: number }>;
   pathCacheVersion: number;
   snapshot: PathStoreSnapshot;
   transactionStack: TransactionFrame[];
@@ -45,14 +48,20 @@ export function createPathStoreState(
   initialExpansion: PathStoreInitialExpansion = 'closed',
   instrumentation: BenchmarkInstrumentation | null = null
 ): PathStoreState {
+  const defaultExpansion = resolveInitialExpansion(initialExpansion);
   return {
     activeNodeCount: snapshot.nodes.length - 1,
     collapsedDirectoryIds: new Set<NodeId>(),
-    defaultExpansion: resolveInitialExpansion(initialExpansion),
+    defaultExpansion,
+    directoriesOpenByDefault: defaultExpansion === 'open',
+    hasCollapsedDirectoryOverrides: false,
     directoryLoadInfoById: new Map<NodeId, DirectoryLoadInfo>(),
     expandedDirectoryIds: new Set<NodeId>(),
     instrumentation,
     listeners: new Map<string, Set<(event: PathStoreEvent) => void>>(),
+    pathCacheByNodeId: new Map<NodeId, { path: string; version: number }>([
+      [snapshot.rootId, { path: '', version: 0 }],
+    ]),
     pathCacheVersion: 0,
     snapshot,
     transactionStack: [],
@@ -89,7 +98,7 @@ function isDirectoryExpandedByDefault(
   state: PathStoreState,
   node: PathStoreNode
 ): boolean {
-  if ((node.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0) {
+  if (hasNodeFlag(node, PATH_STORE_NODE_FLAG_ROOT)) {
     return true;
   }
 
@@ -101,7 +110,7 @@ function isDirectoryExpandedByDefault(
     return false;
   }
 
-  return node.depth <= state.defaultExpansion;
+  return getNodeDepth(node) <= state.defaultExpansion;
 }
 
 export function isDirectoryExpanded(
@@ -109,8 +118,12 @@ export function isDirectoryExpanded(
   nodeId: NodeId,
   node: PathStoreNode | undefined = state.snapshot.nodes[nodeId]
 ): boolean {
-  if (node == null || node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (node == null || !isDirectoryNode(node)) {
     return false;
+  }
+
+  if (state.directoriesOpenByDefault && !state.hasCollapsedDirectoryOverrides) {
+    return true;
   }
 
   if (state.collapsedDirectoryIds.has(nodeId)) {
@@ -130,7 +143,7 @@ export function setDirectoryExpanded(
   expanded: boolean,
   node: PathStoreNode | undefined = state.snapshot.nodes[nodeId]
 ): void {
-  if (node == null || node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (node == null || !isDirectoryNode(node)) {
     return;
   }
 
@@ -138,6 +151,8 @@ export function setDirectoryExpanded(
   if (expanded) {
     if (expandedByDefault) {
       state.collapsedDirectoryIds.delete(nodeId);
+      state.hasCollapsedDirectoryOverrides =
+        state.collapsedDirectoryIds.size > 0;
       return;
     }
 
@@ -147,6 +162,7 @@ export function setDirectoryExpanded(
 
   if (expandedByDefault) {
     state.collapsedDirectoryIds.add(nodeId);
+    state.hasCollapsedDirectoryOverrides = true;
     return;
   }
 

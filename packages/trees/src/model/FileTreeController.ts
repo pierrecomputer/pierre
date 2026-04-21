@@ -289,6 +289,10 @@ function haveMatchingPaths(
   currentPaths: readonly string[],
   preparedPaths: readonly string[]
 ): boolean {
+  if (currentPaths === preparedPaths) {
+    return true;
+  }
+
   if (currentPaths.length !== preparedPaths.length) {
     return false;
   }
@@ -325,10 +329,17 @@ function resolveFileTreeInput(
   }
 
   const preparedPaths = preparedInput.paths;
-  const comparablePaths =
-    paths == null
-      ? preparedPaths
-      : PathStore.preparePaths(paths, sort == null ? {} : { sort });
+  if (paths == null) {
+    return {
+      paths: preparedPaths,
+      preparedInput,
+    };
+  }
+
+  const comparablePaths = PathStore.preparePaths(
+    paths,
+    sort == null ? {} : { sort }
+  );
   if (!haveMatchingPaths(comparablePaths, preparedPaths)) {
     throw new Error(
       `FileTree ${context} received paths and preparedInput for different path lists`

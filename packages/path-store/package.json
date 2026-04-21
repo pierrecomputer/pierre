@@ -11,8 +11,8 @@
   "scripts": {
     "benchmark": "bun run ./scripts/benchmark.ts",
     "benchmark:visible-tree-projection": "bun run ./scripts/benchmarkVisibleTreeProjection.ts",
-    "build:demo": "bun run vite build demo",
-    "dev:demo": "bun run vite demo --host 127.0.0.1 --port 4175",
+    "build": "bun run vite build demo",
+    "dev:demo": "PORT=$((${PIERRE_PORT_OFFSET:-0} + 4175)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run vite demo --host 127.0.0.1 --port \"$PORT\"",
     "profile:demo": "bun run ./scripts/profileDemo.ts",
     "profile:visible-tree-projection": "bun run ./scripts/profileVisibleTreeProjection.ts",
     "test": "bun test",

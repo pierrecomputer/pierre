@@ -18,28 +18,81 @@ export const PATH_STORE_NODE_FLAG_EXPLICIT: number = 1 << 0;
 export const PATH_STORE_NODE_FLAG_ROOT: number = 1 << 1;
 export const PATH_STORE_NODE_FLAG_REMOVED: number = 1 << 2;
 
+const PATH_STORE_NODE_FLAGS_MASK =
+  PATH_STORE_NODE_FLAG_EXPLICIT |
+  PATH_STORE_NODE_FLAG_ROOT |
+  PATH_STORE_NODE_FLAG_REMOVED;
+const PATH_STORE_NODE_KIND_SHIFT = 3;
+const PATH_STORE_NODE_KIND_MASK = 1 << PATH_STORE_NODE_KIND_SHIFT;
+const PATH_STORE_NODE_DEPTH_SHIFT = 4;
+
 export interface SegmentSortKey {
   lowerValue: string;
   tokens: readonly (number | string)[];
 }
 
 export interface SegmentTable {
-  idByValue: Record<string, SegmentId | undefined>;
+  // Map outperforms plain `Object.create(null)` for the string-keyed lookups
+  // this table does during bulk ingest: ~940K hits + ~50K misses on
+  // linux-10x. Map<string, number> is consistent O(1) and measurably faster
+  // than the dictionary-mode plain object the previous implementation
+  // transitioned into after a few thousand keys.
+  idByValue: Map<string, SegmentId>;
   valueById: string[];
   sortKeyById: Array<SegmentSortKey | undefined>;
 }
 
 export interface PathStoreNode {
-  id: NodeId;
   parentId: NodeId;
   nameId: SegmentId;
-  kind: PathStoreNodeKind;
-  depth: number;
-  flags: number;
+  depthAndFlags: number;
   subtreeNodeCount: number;
   visibleSubtreeCount: number;
-  pathCache: string | null;
-  pathCacheVersion: number;
+}
+
+export function createNodeDepthAndFlags(
+  depth: number,
+  flags: number,
+  kind: PathStoreNodeKind = PATH_STORE_NODE_KIND_FILE
+): number {
+  return (
+    (depth << PATH_STORE_NODE_DEPTH_SHIFT) |
+    (kind << PATH_STORE_NODE_KIND_SHIFT) |
+    flags
+  );
+}
+
+export function getNodeDepth(node: PathStoreNode): number {
+  return node.depthAndFlags >>> PATH_STORE_NODE_DEPTH_SHIFT;
+}
+
+export function getNodeKind(node: PathStoreNode): PathStoreNodeKind {
+  return ((node.depthAndFlags & PATH_STORE_NODE_KIND_MASK) >>
+    PATH_STORE_NODE_KIND_SHIFT) as PathStoreNodeKind;
+}
+
+export function isDirectoryNode(node: PathStoreNode): boolean {
+  return (node.depthAndFlags & PATH_STORE_NODE_KIND_MASK) !== 0;
+}
+
+export function getNodeFlags(node: PathStoreNode): number {
+  return node.depthAndFlags & PATH_STORE_NODE_FLAGS_MASK;
+}
+
+export function hasNodeFlag(node: PathStoreNode, flag: number): boolean {
+  return (getNodeFlags(node) & flag) !== 0;
+}
+
+export function addNodeFlag(node: PathStoreNode, flag: number): void {
+  node.depthAndFlags |= flag;
+}
+
+export function setNodeDepth(node: PathStoreNode, depth: number): void {
+  node.depthAndFlags = createNodeDepthAndFlags(
+    depth,
+    getNodeFlags(node),
+    getNodeKind(node)
+  );
 }
 
 export interface DirectoryLoadInfo {
@@ -53,7 +106,7 @@ export interface DirectoryChildIndex {
   childIds: NodeId[];
   childIdByNameId: Map<SegmentId, NodeId> | null;
   childPositionById: Map<NodeId, number> | null;
-  childVisibleChunkSums: number[] | null;
+  childVisibleChunkSums: Int32Array<ArrayBufferLike> | null;
   totalChildSubtreeNodeCount: number;
   totalChildVisibleSubtreeCount: number;
 }
@@ -87,4 +140,9 @@ export interface PathStoreSnapshot {
   options: ResolvedPathStoreOptions;
   rootId: NodeId;
   segmentTable: SegmentTable;
+  // Set by the presorted file-only ingest path to let initializeOpenVisibleCounts
+  // walk only directories in post-order (via reverse iteration) without
+  // scanning the whole nodes array. Null when the snapshot came from any
+  // non-presorted path; consumers must fall back to iterating `nodes`.
+  presortedDirectoryNodeIds: readonly NodeId[] | null;
 }

@@ -9,7 +9,13 @@ const PATH_STORE_CHILD_INDEX_CHUNK_SHIFT = 5;
 const PATH_STORE_CHILD_INDEX_CHUNK_SIZE =
   1 << PATH_STORE_CHILD_INDEX_CHUNK_SHIFT;
 const PATH_STORE_CHILD_INDEX_CHUNK_THRESHOLD =
-  PATH_STORE_CHILD_INDEX_CHUNK_SIZE * 2;
+  PATH_STORE_CHILD_INDEX_CHUNK_SIZE * 4;
+
+// Exposed so hot callers can avoid the rebuildVisibleChildChunks function
+// call for directories that fall below the chunk threshold (the vast
+// majority on tree-shaped workloads).
+export const PATH_STORE_CHILD_INDEX_CHUNK_THRESHOLD_EXTERNAL =
+  PATH_STORE_CHILD_INDEX_CHUNK_THRESHOLD;
 
 export function createDirectoryChildIndex(): DirectoryChildIndex {
   return {
@@ -153,9 +159,7 @@ export function applyChildAggregateDelta(
   }
 
   const chunkIndex = childPosition >> PATH_STORE_CHILD_INDEX_CHUNK_SHIFT;
-  const nextChunkValue =
-    (index.childVisibleChunkSums[chunkIndex] ?? 0) + visibleSubtreeDelta;
-  index.childVisibleChunkSums[chunkIndex] = nextChunkValue;
+  index.childVisibleChunkSums[chunkIndex] += visibleSubtreeDelta;
 }
 
 // Skips over wide child arrays by using chunked visible-count summaries first
@@ -225,7 +229,7 @@ export function rebuildVisibleChildChunks(
   const chunkCount = Math.ceil(
     index.childIds.length / PATH_STORE_CHILD_INDEX_CHUNK_SIZE
   );
-  const chunkSums = new Array<number>(chunkCount).fill(0);
+  const chunkSums = new Int32Array(chunkCount);
 
   for (let childIndex = 0; childIndex < index.childIds.length; childIndex++) {
     const childId = index.childIds[childIndex];

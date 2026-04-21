@@ -4,10 +4,10 @@ import { createSegmentSortKey } from './sort';
 export const ROOT_SEGMENT_VALUE = '';
 
 export function createSegmentTable(): SegmentTable {
+  const idByValue = new Map<string, SegmentId>();
+  idByValue.set(ROOT_SEGMENT_VALUE, 0);
   return {
-    idByValue: Object.assign(Object.create(null), {
-      [ROOT_SEGMENT_VALUE]: 0,
-    }) as Record<string, SegmentId | undefined>,
+    idByValue,
     valueById: [ROOT_SEGMENT_VALUE],
     sortKeyById: [createSegmentSortKey(ROOT_SEGMENT_VALUE)],
   };
@@ -20,15 +20,14 @@ export function internSegment(
   segmentTable: SegmentTable,
   value: string
 ): SegmentId {
-  const existingId = segmentTable.idByValue[value];
+  const existingId = segmentTable.idByValue.get(value);
   if (existingId !== undefined) {
     return existingId;
   }
 
   const nextId = segmentTable.valueById.length;
-  segmentTable.idByValue[value] = nextId;
+  segmentTable.idByValue.set(value, nextId);
   segmentTable.valueById.push(value);
-  segmentTable.sortKeyById.push(undefined);
   return nextId;
 }
 

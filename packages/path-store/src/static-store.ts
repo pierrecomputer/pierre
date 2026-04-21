@@ -5,6 +5,9 @@ import {
   preparePathEntries,
 } from './builder';
 import {
+  getNodeDepth,
+  getNodeFlags,
+  getNodeKind,
   PATH_STORE_NODE_FLAG_EXPLICIT,
   PATH_STORE_NODE_FLAG_ROOT,
   PATH_STORE_NODE_KIND_DIRECTORY,
@@ -75,13 +78,13 @@ function createStaticSnapshot(
     sourceSnapshot.nodes.length
   ).fill(null);
   const nodes = sourceSnapshot.nodes.map(
-    (node): StaticPathStoreNode => ({
+    (node, nodeId): StaticPathStoreNode => ({
       childCount: 0,
-      depth: node.depth,
+      depth: getNodeDepth(node),
       firstChildIndex: -1,
-      flags: node.flags,
-      id: node.id,
-      kind: node.kind,
+      flags: getNodeFlags(node),
+      id: nodeId,
+      kind: getNodeKind(node),
       nameId: node.nameId,
       parentId: node.parentId,
       subtreeNodeCount: node.subtreeNodeCount,
@@ -89,12 +92,13 @@ function createStaticSnapshot(
     })
   );
 
-  for (const node of nodes) {
-    if (node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  for (let nodeId = 0; nodeId < nodes.length; nodeId += 1) {
+    const node = nodes[nodeId];
+    if (node == null || node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
       continue;
     }
 
-    const directoryIndex = sourceSnapshot.directories.get(node.id);
+    const directoryIndex = sourceSnapshot.directories.get(nodeId);
     if (directoryIndex == null) {
       continue;
     }
@@ -105,7 +109,7 @@ function createStaticSnapshot(
       childPositionByNodeId[childId] = childIds.length;
       childIds.push(childId);
     }
-    childVisibleChunkSumsByDirectory[node.id] =
+    childVisibleChunkSumsByDirectory[nodeId] =
       directoryIndex.childVisibleChunkSums == null
         ? null
         : [...directoryIndex.childVisibleChunkSums];
@@ -119,10 +123,7 @@ function createStaticSnapshot(
     options: sourceSnapshot.options,
     rootId: sourceSnapshot.rootId,
     segmentTable: {
-      idByValue: Object.assign(
-        Object.create(null),
-        sourceSnapshot.segmentTable.idByValue
-      ) as typeof sourceSnapshot.segmentTable.idByValue,
+      idByValue: new Map(sourceSnapshot.segmentTable.idByValue),
       sortKeyById: [...sourceSnapshot.segmentTable.sortKeyById],
       valueById: [...sourceSnapshot.segmentTable.valueById],
     },

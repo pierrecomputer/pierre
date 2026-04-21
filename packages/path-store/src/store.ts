@@ -20,7 +20,10 @@ import {
   removePath,
   requireNode,
 } from './canonical';
-import { rebuildVisibleChildChunks } from './child-index';
+import {
+  PATH_STORE_CHILD_INDEX_CHUNK_THRESHOLD_EXTERNAL,
+  rebuildVisibleChildChunks,
+} from './child-index';
 import {
   cleanupPathStoreState,
   hasActiveCleanupBlockingLoads,
@@ -38,10 +41,8 @@ import {
   subscribe,
 } from './events';
 import { getFlattenedChildDirectoryId } from './flatten';
-import {
-  PATH_STORE_NODE_FLAG_ROOT,
-  PATH_STORE_NODE_KIND_DIRECTORY,
-} from './internal-types';
+import { getNodeDepth, isDirectoryNode } from './internal-types';
+import type { NodeId } from './internal-types';
 import {
   getBenchmarkInstrumentation,
   withBenchmarkPhase,
@@ -96,17 +97,33 @@ import type { PathStoreState } from './state';
 // overrides. This keeps the presorted first-render path from paying for a
 // second full-tree pass after the builder has already finalized subtree counts.
 function initializeOpenVisibleCounts(state: PathStoreState): void {
-  const { directories, nodes, options, rootId } = state.snapshot;
+  const { directories, nodes, options, rootId, presortedDirectoryNodeIds } =
+    state.snapshot;
+  const flattenEmptyDirectories = options.flattenEmptyDirectories === true;
 
-  const computeVisibleCounts = (nodeId: number): number => {
+  // Iterative reverse-order walk processing directories in post-order.
+  // Presorted construction assigns node IDs sequentially, so a directory's
+  // descendants always have higher IDs than the directory itself. This means
+  // reverse iteration finalizes every descendant before its parent.
+  //
+  // When the builder's presorted fast path recorded the directory IDs (the
+  // common case for bulk ingest), we walk just that list in reverse and
+  // skip the ~94% of iterations that would be files. Otherwise we fall back
+  // to scanning the full nodes array and branching on kind per iteration.
+  //
+  // PathStore's constructor passes `skipSubtreeCountPass: true` to
+  // builder.finish(), so subtreeNodeCount arrives un-accumulated (all 1s).
+  // This walk writes both subtreeNodeCount and visibleSubtreeCount for
+  // every directory; the reverse order guarantees children's counts are
+  // already finalized before their parent reads them.
+  // Root (nodeId === rootId === 0) is never passed to walkDirectory: the
+  // fallback loop starts at nodeId >= 1, and appendPresortedFilePaths only
+  // pushes newly-created directories (not the pre-existing root) into
+  // presortedDirectoryNodeIds. No root check needed inside the walker.
+  const walkDirectory = (nodeId: NodeId): void => {
     const currentNode = nodes[nodeId];
-    if (currentNode == null) {
-      throw new Error(`Unknown node ID: ${String(nodeId)}`);
-    }
-
-    if (currentNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
-      currentNode.visibleSubtreeCount = 1;
-      return 1;
+    if (currentNode == null || !isDirectoryNode(currentNode)) {
+      return;
     }
 
     const currentIndex = directories.get(nodeId);
@@ -116,52 +133,89 @@ function initializeOpenVisibleCounts(state: PathStoreState): void {
       );
     }
 
+    const childIds = currentIndex.childIds;
+    const childCount = childIds.length;
     let totalChildSubtreeNodeCount = 0;
     let totalChildVisibleSubtreeCount = 0;
-    const childIds = currentIndex.childIds;
-    for (let ci = 0; ci < childIds.length; ci++) {
+    for (let ci = 0; ci < childCount; ci++) {
       const childId = childIds[ci];
       if (childId == null) {
         continue;
       }
       const childNode = nodes[childId];
       totalChildSubtreeNodeCount += childNode.subtreeNodeCount;
-      // Inline the file-node case to avoid a recursive call for each file.
-      // Files always have visibleSubtreeCount = 1 (already set during
-      // construction), so we can accumulate directly.
-      if (childNode.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
-        totalChildVisibleSubtreeCount += computeVisibleCounts(childId);
-      } else {
-        totalChildVisibleSubtreeCount += 1;
-      }
+      totalChildVisibleSubtreeCount += childNode.visibleSubtreeCount;
     }
 
     currentIndex.totalChildSubtreeNodeCount = totalChildSubtreeNodeCount;
     currentIndex.totalChildVisibleSubtreeCount = totalChildVisibleSubtreeCount;
-    rebuildVisibleChildChunks(nodes, currentIndex);
-
-    if ((currentNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0) {
-      currentNode.visibleSubtreeCount = totalChildVisibleSubtreeCount;
-      return totalChildVisibleSubtreeCount;
+    // Avoid the rebuildVisibleChildChunks function call for directories that
+    // don't need chunk sums. The threshold matches the internal constant;
+    // createPresortedDirectoryChildIndex initializes childVisibleChunkSums
+    // to null already, so directories below the threshold need no write.
+    if (childCount >= PATH_STORE_CHILD_INDEX_CHUNK_THRESHOLD_EXTERNAL) {
+      rebuildVisibleChildChunks(nodes, currentIndex);
     }
 
-    const flattenedChildId =
-      options.flattenEmptyDirectories === true &&
-      currentIndex.childIds.length === 1
-        ? currentIndex.childIds[0]
-        : null;
-    const flattenedChildNode =
-      flattenedChildId == null ? null : nodes[flattenedChildId];
-    const isFlattenedDirectory =
-      flattenedChildNode?.kind === PATH_STORE_NODE_KIND_DIRECTORY;
+    // The builder's backward subtree-count pass is skipped by PathStore, so
+    // we populate subtreeNodeCount inline here. The reverse-order walk
+    // guarantees children's subtreeNodeCount has already been written before
+    // we read them.
+    currentNode.subtreeNodeCount = 1 + totalChildSubtreeNodeCount;
 
-    currentNode.visibleSubtreeCount = isFlattenedDirectory
-      ? totalChildVisibleSubtreeCount
-      : 1 + totalChildVisibleSubtreeCount;
-    return currentNode.visibleSubtreeCount;
+    // Root is at nodeId 0 and is handled after the loop, so the root flag
+    // never fires inside this body.
+    let newVisibleSubtreeCount: number;
+    if (flattenEmptyDirectories && childCount === 1) {
+      // Flattened directories inherit their sole child's visible count
+      // rather than contributing their own header row.
+      const onlyChild = nodes[childIds[0]];
+      newVisibleSubtreeCount =
+        onlyChild != null && isDirectoryNode(onlyChild)
+          ? totalChildVisibleSubtreeCount
+          : 1 + totalChildVisibleSubtreeCount;
+    } else {
+      newVisibleSubtreeCount = 1 + totalChildVisibleSubtreeCount;
+    }
+
+    currentNode.visibleSubtreeCount = newVisibleSubtreeCount;
   };
 
-  computeVisibleCounts(rootId);
+  if (presortedDirectoryNodeIds != null) {
+    for (let i = presortedDirectoryNodeIds.length - 1; i >= 0; i--) {
+      walkDirectory(presortedDirectoryNodeIds[i]);
+    }
+  } else {
+    for (let nodeId = nodes.length - 1; nodeId >= 1; nodeId--) {
+      walkDirectory(nodeId);
+    }
+  }
+
+  // Root is at id 0; the walk above skipped it so its visibleSubtreeCount
+  // does not pick up the wrong "not-root" arithmetic. Process root now.
+
+  const rootNode = nodes[rootId];
+  const rootIndex = directories.get(rootId);
+  if (rootNode == null || rootIndex == null) {
+    return;
+  }
+  const rootChildIds = rootIndex.childIds;
+  let rootTotalChildSubtreeNodeCount = 0;
+  let rootTotalChildVisibleSubtreeCount = 0;
+  for (let ci = 0; ci < rootChildIds.length; ci++) {
+    const childId = rootChildIds[ci];
+    if (childId == null) {
+      continue;
+    }
+    const childNode = nodes[childId];
+    rootTotalChildSubtreeNodeCount += childNode.subtreeNodeCount;
+    rootTotalChildVisibleSubtreeCount += childNode.visibleSubtreeCount;
+  }
+  rootIndex.totalChildSubtreeNodeCount = rootTotalChildSubtreeNodeCount;
+  rootIndex.totalChildVisibleSubtreeCount = rootTotalChildVisibleSubtreeCount;
+  rebuildVisibleChildChunks(nodes, rootIndex);
+  rootNode.subtreeNodeCount = 1 + rootTotalChildSubtreeNodeCount;
+  rootNode.visibleSubtreeCount = rootTotalChildVisibleSubtreeCount;
 }
 
 function canInitializeOpenVisibleCounts(
@@ -218,24 +272,45 @@ export class PathStore {
       }
     }
 
+    const snapshot = withBenchmarkPhase(
+      instrumentation,
+      'store.builder.finish',
+      () =>
+        // Either initializeOpenVisibleCounts or recomputeCountsRecursive runs
+        // below, and both populate subtreeNodeCount + visibleSubtreeCount
+        // from each directory's childIds. Skip the builder's own backward
+        // accumulation pass to avoid doing the same work twice on large
+        // presorted ingests.
+        builder.finish({ skipSubtreeCountPass: true })
+    );
+    const useExplicitOpenExpansionFastPath = withBenchmarkPhase(
+      instrumentation,
+      'store.state.detectAllDirectoriesExpanded',
+      () =>
+        (options.initialExpansion ?? 'closed') === 'closed' &&
+        builder.didMatchAllInitialExpandedPaths()
+    );
     this.#state = withBenchmarkPhase(
       instrumentation,
       'store.state.create',
       () =>
         createPathStoreState(
-          withBenchmarkPhase(instrumentation, 'store.builder.finish', () =>
-            builder.finish()
-          ),
-          options.initialExpansion ?? 'closed',
+          snapshot,
+          useExplicitOpenExpansionFastPath
+            ? 'open'
+            : (options.initialExpansion ?? 'closed'),
           instrumentation
         )
     );
-    const expandedDirectoryCount = withBenchmarkPhase(
-      instrumentation,
-      'store.state.initializeExpandedPaths',
-      () => this.initializeExpandedPaths(options.initialExpandedPaths)
-    );
+    const expandedDirectoryCount = useExplicitOpenExpansionFastPath
+      ? this.#state.snapshot.directories.size - 1
+      : withBenchmarkPhase(
+          instrumentation,
+          'store.state.initializeExpandedPaths',
+          () => this.initializeExpandedPaths(options.initialExpandedPaths)
+        );
     const canUseOpenVisibleCounts =
+      useExplicitOpenExpansionFastPath ||
       canInitializeOpenVisibleCounts(options) ||
       ((options.initialExpansion ?? 'closed') === 'closed' &&
         expandedDirectoryCount === this.#state.snapshot.directories.size - 1) ||
@@ -402,9 +477,8 @@ export class PathStore {
 
         const node = requireNode(this.#state, nodeId);
         return {
-          depth: node.depth,
-          kind:
-            node.kind === PATH_STORE_NODE_KIND_DIRECTORY ? 'directory' : 'file',
+          depth: getNodeDepth(node),
+          kind: isDirectoryNode(node) ? 'directory' : 'file',
           path: materializeNodePath(this.#state, nodeId),
         } satisfies PathStorePathInfo;
       }
@@ -908,7 +982,7 @@ export class PathStore {
         }
 
         const nextNode = requireNode(this.#state, nextNodeId);
-        if (nextNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+        if (!isDirectoryNode(nextNode)) {
           foundDirectory = false;
           break;
         }
@@ -983,7 +1057,7 @@ export class PathStore {
     }
 
     const directoryNode = requireNode(this.#state, directoryNodeId);
-    if (directoryNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+    if (!isDirectoryNode(directoryNode)) {
       throw new Error(`Path is not a directory: "${path}"`);
     }
 
@@ -993,7 +1067,7 @@ export class PathStore {
   private resolveActiveDirectoryNodeId(directoryNodeId: number): number | null {
     try {
       const directoryNode = requireNode(this.#state, directoryNodeId);
-      if (directoryNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+      if (!isDirectoryNode(directoryNode)) {
         throw new Error(`Node is not a directory: ${String(directoryNodeId)}`);
       }
 

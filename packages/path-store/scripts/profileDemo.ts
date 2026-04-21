@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { loadWorktreeEnv } from '../../../scripts/load-worktree-env.mjs';
+
 interface ProfileConfig {
   browserUrl: string;
   instrumentationMode: 'on' | 'off';
@@ -258,9 +260,21 @@ interface ProfileBenchmarkOutput {
   scenarios: ProfileScenarioOutput[];
 }
 
+// Mirror the Playwright config behavior so direct profiling runs pick up the
+// same worktree port offset as `bun ws` and `bun run chrome`.
+loadWorktreeEnv();
+
+function readWorktreePortOffset(): number {
+  const parsed = Number(process.env.PIERRE_PORT_OFFSET ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+const WORKTREE_PORT_OFFSET = readWorktreePortOffset();
+const DEFAULT_BROWSER_DEBUG_PORT = 9222 + WORKTREE_PORT_OFFSET;
+const DEFAULT_DEMO_SERVER_PORT = 4175 + WORKTREE_PORT_OFFSET;
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
-const DEFAULT_BROWSER_URL = 'http://127.0.0.1:9222';
-const DEFAULT_URL = 'http://127.0.0.1:4175/';
+const DEFAULT_BROWSER_URL = `http://127.0.0.1:${DEFAULT_BROWSER_DEBUG_PORT}`;
+const DEFAULT_URL = `http://127.0.0.1:${DEFAULT_DEMO_SERVER_PORT}/`;
 const DEFAULT_WORKLOAD_NAME = 'linux-5x';
 const DEFAULT_ACTION_ID = 'render';
 const DEFAULT_INSTRUMENTATION_MODE = 'on';
@@ -2635,7 +2649,7 @@ async function main(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `${message}\n\nRun Chrome with remote debugging first, for example:\n/Applications/Google\\ Chrome\\ Dev.app/Contents/MacOS/Google\\ Chrome\\ Dev --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-devtools-codex`
+      `${message}\n\nRun Chrome with remote debugging first, for example:\n/Applications/Google\\ Chrome\\ Dev.app/Contents/MacOS/Google\\ Chrome\\ Dev --remote-debugging-port=${DEFAULT_BROWSER_DEBUG_PORT} --user-data-dir=/tmp/chrome-devtools-codex`
     );
   } finally {
     serverProcess?.kill();

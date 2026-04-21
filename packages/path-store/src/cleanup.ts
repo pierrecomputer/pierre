@@ -9,10 +9,11 @@ import {
 import { rebuildDirectoryChildAggregates } from './child-index';
 import {
   type DirectoryLoadInfo,
+  hasNodeFlag,
+  isDirectoryNode,
   type NodeId,
   PATH_STORE_NODE_FLAG_REMOVED,
   PATH_STORE_NODE_FLAG_ROOT,
-  PATH_STORE_NODE_KIND_DIRECTORY,
   type PathStoreNode,
   type SegmentTable,
 } from './internal-types';
@@ -48,7 +49,7 @@ interface PersistedExpansionState {
 }
 
 function isLiveNode(node: PathStoreNode | undefined): node is PathStoreNode {
-  return node != null && (node.flags & PATH_STORE_NODE_FLAG_REMOVED) === 0;
+  return node != null && !hasNodeFlag(node, PATH_STORE_NODE_FLAG_REMOVED);
 }
 
 function isLiveDirectoryNode(
@@ -58,8 +59,8 @@ function isLiveDirectoryNode(
   const node = state.snapshot.nodes[nodeId];
   if (
     !isLiveNode(node) ||
-    node.kind !== PATH_STORE_NODE_KIND_DIRECTORY ||
-    (node.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0
+    !isDirectoryNode(node) ||
+    hasNodeFlag(node, PATH_STORE_NODE_FLAG_ROOT)
   ) {
     return null;
   }
@@ -70,8 +71,12 @@ function isLiveDirectoryNode(
 function countCachedPathEntries(state: PathStoreState): number {
   let cachedPathEntryCount = 0;
 
-  for (const node of state.snapshot.nodes) {
-    if (!isLiveNode(node) || node.pathCache == null) {
+  for (const [nodeId, cachedEntry] of state.pathCacheByNodeId) {
+    if (cachedEntry.version !== state.pathCacheVersion) {
+      continue;
+    }
+
+    if (!isLiveNode(state.snapshot.nodes[nodeId])) {
       continue;
     }
 
@@ -137,14 +142,14 @@ function collectExpansionOverridePaths(
   for (const nodeId of state.collapsedDirectoryIds) {
     const node = isLiveDirectoryNode(state, nodeId);
     if (node != null) {
-      collapsedPaths.push(materializeNodePath(state, node.id));
+      collapsedPaths.push(materializeNodePath(state, nodeId));
     }
   }
 
   for (const nodeId of state.expandedDirectoryIds) {
     const node = isLiveDirectoryNode(state, nodeId);
     if (node != null) {
-      expandedPaths.push(materializeNodePath(state, node.id));
+      expandedPaths.push(materializeNodePath(state, nodeId));
     }
   }
 
@@ -188,6 +193,7 @@ function restoreExpansionOverridePaths(
   persistedExpansionState: PersistedExpansionState
 ): void {
   state.collapsedDirectoryIds.clear();
+  state.hasCollapsedDirectoryOverrides = false;
   state.expandedDirectoryIds.clear();
 
   for (const path of persistedExpansionState.expandedPaths) {
@@ -241,21 +247,11 @@ function restoreDirectoryLoadInfos(
 // memory without changing canonical topology or node IDs.
 function clearPathCaches(state: PathStoreState): void {
   state.pathCacheVersion += 1;
-
-  for (const node of state.snapshot.nodes) {
-    if (!isLiveNode(node)) {
-      continue;
-    }
-
-    if ((node.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0) {
-      node.pathCache = '';
-      node.pathCacheVersion = state.pathCacheVersion;
-      continue;
-    }
-
-    node.pathCache = null;
-    node.pathCacheVersion = -1;
-  }
+  state.pathCacheByNodeId.clear();
+  state.pathCacheByNodeId.set(state.snapshot.rootId, {
+    path: '',
+    version: state.pathCacheVersion,
+  });
 }
 
 // Rebuilds the segment table and remaps live nodes to the compacted segment IDs
@@ -269,7 +265,7 @@ function rebuildSegmentTablePreservingNodeIds(state: PathStoreState): void {
       continue;
     }
 
-    if ((node.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0) {
+    if (hasNodeFlag(node, PATH_STORE_NODE_FLAG_ROOT)) {
       node.nameId = 0;
       continue;
     }
@@ -288,10 +284,7 @@ function rebuildSegmentTablePreservingNodeIds(state: PathStoreState): void {
 function rebuildDirectoryIndexes(state: PathStoreState): void {
   for (const [directoryId, directoryIndex] of state.snapshot.directories) {
     const directoryNode = state.snapshot.nodes[directoryId];
-    if (
-      !isLiveNode(directoryNode) ||
-      directoryNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY
-    ) {
+    if (!isLiveNode(directoryNode) || !isDirectoryNode(directoryNode)) {
       state.snapshot.directories.delete(directoryId);
       continue;
     }
@@ -403,6 +396,9 @@ function runAggressiveCleanup(state: PathStoreState): void {
 
   state.snapshot = rebuiltSnapshot;
   state.activeNodeCount = rebuiltSnapshot.nodes.length - 1;
+  state.pathCacheByNodeId = new Map([
+    [rebuiltSnapshot.rootId, { path: '', version: 0 }],
+  ]);
   state.pathCacheVersion = 0;
 
   withBenchmarkPhase(

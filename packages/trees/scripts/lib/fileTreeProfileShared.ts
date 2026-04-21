@@ -1,7 +1,9 @@
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 import type { VirtualizationWorkload } from '@pierre/tree-test-data';
 
-import { preparePresortedFileTreeInput } from '../../src/index';
+// Keep the profiling fixture on the narrow data-preparation entrypoint so the
+// Vite-served page does not accidentally import the source render runtime.
+import { preparePresortedFileTreeInput } from '../../src/preparedInput';
 
 export const FILE_TREE_PROFILE_WORKLOAD_NAMES = [
   'linux-5x',
@@ -78,7 +80,10 @@ export function createFileTreeProfileFixtureOptions(
 ) {
   return {
     flattenEmptyDirectories: true,
-    initialExpandedPaths: workload.expandedFolders,
+    // All profiling workloads expand every derived directory, so open-default
+    // startup is semantically identical to replaying a huge explicit expanded
+    // path list and avoids constructor-side expansion normalization work.
+    initialExpansion: 'open' as const,
     preparedInput: preparePresortedFileTreeInput(workload.files),
     initialVisibleRowCount: FILE_TREE_PROFILE_VIEWPORT_HEIGHT / 30,
   };

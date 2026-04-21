@@ -34,6 +34,29 @@ test('profile:file-tree CLI help advertises the expected workload/render workflo
   expect(stdout).toContain('file-tree-profile.html');
 });
 
+test('profile:file-tree CLI help reflects worktree-aware default ports', () => {
+  const result = Bun.spawnSync({
+    cmd: ['bun', 'run', './scripts/profileFileTree.ts', '--help'],
+    cwd: packageRoot,
+    env: {
+      ...createCommandEnv(),
+      PIERRE_PORT_OFFSET: '30',
+    },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+
+  const stdout = new TextDecoder().decode(result.stdout);
+  const stderr = new TextDecoder().decode(result.stderr).trim();
+
+  expect(result.exitCode).toBe(0);
+  expect(stderr).toBe('');
+  expect(stdout).toContain('default: http://127.0.0.1:9252');
+  expect(stdout).toContain(
+    'default: http://127.0.0.1:9251/test/e2e/fixtures/file-tree-profile.html'
+  );
+});
+
 test('profile:file-tree CLI rejects unknown workloads before browser setup', () => {
   const result = Bun.spawnSync({
     cmd: [

@@ -10,7 +10,7 @@ import {
   FILE_TREE_PROFILE_WORKLOAD_NAMES,
   getFileTreeProfileWorkload,
 } from '../scripts/lib/fileTreeProfileShared';
-import { preparePresortedFileTreeInput } from '../src/index';
+import { preparePresortedFileTreeInput } from '../src/preparedInput';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -29,7 +29,8 @@ test('file-tree profile fixture options mirror the Phase 4 docs tree behavior', 
   const options = createFileTreeProfileFixtureOptions(workload);
 
   expect(options.flattenEmptyDirectories).toBe(true);
-  expect(options.initialExpandedPaths).toEqual(workload.expandedFolders);
+  expect(options.initialExpansion).toBe('open');
+  expect('initialExpandedPaths' in options).toBe(false);
   expect('paths' in options).toBe(false);
   expect(options.initialVisibleRowCount).toBe(
     FILE_TREE_PROFILE_VIEWPORT_HEIGHT / 30

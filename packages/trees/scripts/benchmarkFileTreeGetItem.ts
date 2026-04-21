@@ -1,7 +1,7 @@
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 
-import { preparePresortedFileTreeInput } from '../src/index';
 import { FileTreeController } from '../src/model/FileTreeController';
+import { preparePresortedFileTreeInput } from '../src/preparedInput';
 
 const workload = getVirtualizationWorkload('linux-5x');
 const preparedInput = preparePresortedFileTreeInput(workload.files);

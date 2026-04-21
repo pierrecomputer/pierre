@@ -13,6 +13,15 @@ import {
   getFlattenedChildDirectoryId,
   getFlattenedTerminalDirectoryId,
 } from './flatten';
+import {
+  addNodeFlag,
+  createNodeDepthAndFlags,
+  getNodeDepth,
+  getNodeKind,
+  hasNodeFlag,
+  isDirectoryNode,
+  setNodeDepth,
+} from './internal-types';
 import type {
   DirectoryChildIndex,
   NodeId,
@@ -22,7 +31,6 @@ import { PATH_STORE_NODE_FLAG_EXPLICIT } from './internal-types';
 import { PATH_STORE_NODE_FLAG_REMOVED } from './internal-types';
 import { PATH_STORE_NODE_FLAG_ROOT } from './internal-types';
 import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
-import { PATH_STORE_NODE_KIND_FILE } from './internal-types';
 import { withBenchmarkPhase } from './internal/benchmarkInstrumentation';
 import { parseInputPath, parseLookupPath } from './path';
 import type {
@@ -70,13 +78,15 @@ export function addPath(
 
   if (preparedPath.isDirectory) {
     const directoryNode = requireNode(state, directoryId);
-    if ((directoryNode.flags & PATH_STORE_NODE_FLAG_EXPLICIT) !== 0) {
+    if (hasNodeFlag(directoryNode, PATH_STORE_NODE_FLAG_EXPLICIT)) {
       throw new Error(`Path already exists: "${path}"`);
     }
 
-    directoryNode.flags |= PATH_STORE_NODE_FLAG_EXPLICIT;
-    directoryNode.pathCache = path;
-    directoryNode.pathCacheVersion = state.pathCacheVersion;
+    addNodeFlag(directoryNode, PATH_STORE_NODE_FLAG_EXPLICIT);
+    state.pathCacheByNodeId.set(directoryId, {
+      path,
+      version: state.pathCacheVersion,
+    });
     affectedNodeIds.add(directoryId);
   } else {
     addedNodeId = createFileNode(state, directoryId, preparedPath.basename);
@@ -110,12 +120,12 @@ export function removePath(
   }
 
   const node = requireNode(state, nodeId);
-  if ((node.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0) {
+  if (hasNodeFlag(node, PATH_STORE_NODE_FLAG_ROOT)) {
     throw new Error('The root node cannot be removed');
   }
 
   if (
-    node.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+    isDirectoryNode(node) &&
     getDirectoryIndex(state, nodeId).childIds.length > 0 &&
     options.recursive !== true
   ) {
@@ -162,7 +172,7 @@ export function movePath(
   }
 
   const sourceNode = requireNode(state, sourceNodeId);
-  if ((sourceNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0) {
+  if (hasNodeFlag(sourceNode, PATH_STORE_NODE_FLAG_ROOT)) {
     throw new Error('The root node cannot be moved');
   }
 
@@ -193,7 +203,7 @@ export function movePath(
   }
 
   if (
-    sourceNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+    isDirectoryNode(sourceNode) &&
     isAncestor(state, sourceNodeId, moveTarget.parentId)
   ) {
     throw new Error('Cannot move a directory into one of its descendants');
@@ -210,7 +220,7 @@ export function movePath(
       state,
       collisionNodeId,
       collision,
-      sourceNode.kind
+      getNodeKind(sourceNode)
     );
     if (resolvedCollision === 'skip') {
       return null;
@@ -228,8 +238,7 @@ export function movePath(
 
   sourceNode.parentId = moveTarget.parentId;
   sourceNode.nameId = targetNameId;
-  sourceNode.pathCache = null;
-  sourceNode.pathCacheVersion = -1;
+  state.pathCacheByNodeId.delete(sourceNodeId);
   recomputeDepths(state, sourceNodeId);
   insertChildReference(state, moveTarget.parentId, sourceNodeId);
   promoteEmptyAncestorsToExplicit(state, previousParentId);
@@ -264,6 +273,28 @@ export function movePath(
   });
 }
 
+function getCachedNodePath(
+  state: PathStoreState,
+  nodeId: NodeId
+): string | null {
+  const cachedEntry = state.pathCacheByNodeId.get(nodeId);
+  return cachedEntry != null && cachedEntry.version === state.pathCacheVersion
+    ? cachedEntry.path
+    : null;
+}
+
+function setCachedNodePath(
+  state: PathStoreState,
+  nodeId: NodeId,
+  path: string
+): string {
+  state.pathCacheByNodeId.set(nodeId, {
+    path,
+    version: state.pathCacheVersion,
+  });
+  return path;
+}
+
 // Materializes canonical paths only for nodes the caller actually touches, so
 // folder moves stay local instead of rewriting descendant strings eagerly.
 export function materializeNodePath(
@@ -271,27 +302,23 @@ export function materializeNodePath(
   nodeId: NodeId
 ): string {
   const node = requireNode(state, nodeId);
-
-  if (
-    node.pathCache != null &&
-    node.pathCacheVersion === state.pathCacheVersion
-  ) {
-    return node.pathCache;
+  const cachedPath = getCachedNodePath(state, nodeId);
+  if (cachedPath != null) {
+    return cachedPath;
   }
 
-  if ((node.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0) {
-    node.pathCache = '';
-    node.pathCacheVersion = state.pathCacheVersion;
-    return node.pathCache;
+  if (hasNodeFlag(node, PATH_STORE_NODE_FLAG_ROOT)) {
+    return setCachedNodePath(state, nodeId, '');
   }
 
   const parentPath = materializeNodePath(state, node.parentId);
   const nodeName = getSegmentValue(state.snapshot.segmentTable, node.nameId);
   const path = parentPath.length === 0 ? nodeName : `${parentPath}${nodeName}`;
-  node.pathCache =
-    node.kind === PATH_STORE_NODE_KIND_DIRECTORY ? `${path}/` : path;
-  node.pathCacheVersion = state.pathCacheVersion;
-  return node.pathCache;
+  return setCachedNodePath(
+    state,
+    nodeId,
+    isDirectoryNode(node) ? `${path}/` : path
+  );
 }
 
 export function recomputeCountsUpwardFrom(
@@ -326,7 +353,7 @@ export function recomputeCountsRecursive(
     const nid = frame[0];
     const node = nodes[nid];
 
-    if (node == null || node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+    if (node == null || !isDirectoryNode(node)) {
       // File or unknown — recompute immediately and pop.
       recomputeNodeCounts(state, nid, node, true);
       stack.pop();
@@ -388,7 +415,7 @@ export function findNodeIdBySegments(
   let currentNodeId = state.snapshot.rootId;
 
   for (const segment of segments) {
-    const segmentId = state.snapshot.segmentTable.idByValue[segment];
+    const segmentId = state.snapshot.segmentTable.idByValue.get(segment);
     if (segmentId === undefined) {
       return null;
     }
@@ -406,7 +433,7 @@ export function findNodeIdBySegments(
   }
 
   const currentNode = requireNode(state, currentNodeId);
-  if (requireDirectory && currentNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (requireDirectory && !isDirectoryNode(currentNode)) {
     return null;
   }
 
@@ -432,7 +459,7 @@ export function requireNode(
   nodeId: NodeId
 ): PathStoreNode {
   const node = state.snapshot.nodes[nodeId];
-  if (node === undefined || (node.flags & PATH_STORE_NODE_FLAG_REMOVED) !== 0) {
+  if (node === undefined || hasNodeFlag(node, PATH_STORE_NODE_FLAG_REMOVED)) {
     throw new Error(`Unknown node ID: ${String(nodeId)}`);
   }
 
@@ -448,18 +475,18 @@ function collectCanonicalEntries(
   const rootNode = state.snapshot.nodes[nodeId];
   if (
     rootNode === undefined ||
-    (rootNode.flags & PATH_STORE_NODE_FLAG_REMOVED) !== 0
+    hasNodeFlag(rootNode, PATH_STORE_NODE_FLAG_REMOVED)
   ) {
     return [];
   }
 
-  if (rootNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (!isDirectoryNode(rootNode)) {
     return [materializeNodePath(state, nodeId)];
   }
 
   if (getDirectoryIndex(state, nodeId).childIds.length === 0) {
-    return (rootNode.flags & PATH_STORE_NODE_FLAG_EXPLICIT) !== 0 &&
-      (rootNode.flags & PATH_STORE_NODE_FLAG_ROOT) === 0
+    return hasNodeFlag(rootNode, PATH_STORE_NODE_FLAG_EXPLICIT) &&
+      !hasNodeFlag(rootNode, PATH_STORE_NODE_FLAG_ROOT)
       ? [materializeNodePath(state, nodeId)]
       : [];
   }
@@ -478,13 +505,13 @@ function collectCanonicalEntries(
     const currentNode = state.snapshot.nodes[frame.nodeId];
     if (
       currentNode === undefined ||
-      (currentNode.flags & PATH_STORE_NODE_FLAG_REMOVED) !== 0
+      hasNodeFlag(currentNode, PATH_STORE_NODE_FLAG_REMOVED)
     ) {
       stack.pop();
       continue;
     }
 
-    if (currentNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+    if (!isDirectoryNode(currentNode)) {
       entries.push(materializeNodePath(state, frame.nodeId));
       stack.pop();
       continue;
@@ -493,8 +520,8 @@ function collectCanonicalEntries(
     const currentIndex = getDirectoryIndex(state, frame.nodeId);
     if (currentIndex.childIds.length === 0) {
       if (
-        (currentNode.flags & PATH_STORE_NODE_FLAG_EXPLICIT) !== 0 &&
-        (currentNode.flags & PATH_STORE_NODE_FLAG_ROOT) === 0
+        hasNodeFlag(currentNode, PATH_STORE_NODE_FLAG_EXPLICIT) &&
+        !hasNodeFlag(currentNode, PATH_STORE_NODE_FLAG_ROOT)
       ) {
         entries.push(materializeNodePath(state, frame.nodeId));
       }
@@ -533,7 +560,7 @@ function ensureDirectoryChain(
 
     if (existingChildId !== undefined) {
       const existingChild = requireNode(state, existingChildId);
-      if (existingChild.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+      if (!isDirectoryNode(existingChild)) {
         throw new Error(
           `Cannot create a directory that collides with an existing file: "${segment}"`
         );
@@ -562,14 +589,13 @@ function createDirectoryNode(
   const parentNode = requireNode(state, parentId);
   const nodeId = state.snapshot.nodes.length;
   state.snapshot.nodes.push({
-    depth: parentNode.depth + 1,
-    flags: 0,
-    id: nodeId,
-    kind: PATH_STORE_NODE_KIND_DIRECTORY,
+    depthAndFlags: createNodeDepthAndFlags(
+      getNodeDepth(parentNode) + 1,
+      0,
+      PATH_STORE_NODE_KIND_DIRECTORY
+    ),
     nameId,
     parentId,
-    pathCache: null,
-    pathCacheVersion: -1,
     subtreeNodeCount: 1,
     visibleSubtreeCount: 1,
   });
@@ -595,14 +621,9 @@ function createFileNode(
   const parentNode = requireNode(state, parentId);
   const nodeId = state.snapshot.nodes.length;
   state.snapshot.nodes.push({
-    depth: parentNode.depth + 1,
-    flags: 0,
-    id: nodeId,
-    kind: PATH_STORE_NODE_KIND_FILE,
+    depthAndFlags: createNodeDepthAndFlags(getNodeDepth(parentNode) + 1, 0),
     nameId,
     parentId,
-    pathCache: null,
-    pathCacheVersion: -1,
     subtreeNodeCount: 1,
     visibleSubtreeCount: 1,
   });
@@ -714,8 +735,10 @@ function compareSiblingNodesDefault(
   const leftNode = requireNode(state, leftId);
   const rightNode = requireNode(state, rightId);
 
-  if (leftNode.kind !== rightNode.kind) {
-    return leftNode.kind === PATH_STORE_NODE_KIND_DIRECTORY ? -1 : 1;
+  const leftIsDirectory = isDirectoryNode(leftNode);
+  const rightIsDirectory = isDirectoryNode(rightNode);
+  if (leftIsDirectory !== rightIsDirectory) {
+    return leftIsDirectory ? -1 : 1;
   }
 
   const leftSortKey = getSegmentSortKey(
@@ -752,13 +775,13 @@ function createCompareEntry(
 ): PathStoreCompareEntry {
   const node = requireNode(state, nodeId);
   const path = materializeNodePath(state, nodeId);
-  const normalizedPath =
-    node.kind === PATH_STORE_NODE_KIND_DIRECTORY ? path.slice(0, -1) : path;
+  const isDirectory = isDirectoryNode(node);
+  const normalizedPath = isDirectory ? path.slice(0, -1) : path;
 
   return {
     basename: getSegmentValue(state.snapshot.segmentTable, node.nameId),
-    depth: node.depth,
-    isDirectory: node.kind === PATH_STORE_NODE_KIND_DIRECTORY,
+    depth: getNodeDepth(node),
+    isDirectory,
     path,
     segments: normalizedPath.length === 0 ? [] : normalizedPath.split('/'),
   };
@@ -773,7 +796,7 @@ function resolveMoveTarget(
   const existingDestinationId = findNodeId(state, toPath);
   if (existingDestinationId != null) {
     const existingDestination = requireNode(state, existingDestinationId);
-    if (existingDestination.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
+    if (isDirectoryNode(existingDestination)) {
       return {
         basename: getSegmentValue(
           state.snapshot.segmentTable,
@@ -828,14 +851,14 @@ function handleMoveCollision(
   }
 
   const collisionNode = requireNode(state, collisionNodeId);
-  if (collisionNode.kind !== sourceKind) {
+  if (getNodeKind(collisionNode) !== sourceKind) {
     throw new Error(
       'replace collision requires the same source and destination kinds'
     );
   }
 
   if (
-    collisionNode.kind === PATH_STORE_NODE_KIND_DIRECTORY &&
+    isDirectoryNode(collisionNode) &&
     getDirectoryIndex(state, collisionNodeId).childIds.length > 0
   ) {
     throw new Error('replace collision does not support non-empty directories');
@@ -868,15 +891,17 @@ function removeSubtree(state: PathStoreState, nodeId: NodeId): NodeId[] {
     }
 
     const node = requireNode(state, frame.nodeId);
-    if (frame.visitedChildren || node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
-      if (node.kind === PATH_STORE_NODE_KIND_DIRECTORY) {
+    if (frame.visitedChildren || !isDirectoryNode(node)) {
+      if (isDirectoryNode(node)) {
         state.snapshot.directories.delete(frame.nodeId);
       }
 
-      node.flags |= PATH_STORE_NODE_FLAG_REMOVED;
-      node.pathCache = null;
-      node.pathCacheVersion = -1;
-      state.collapsedDirectoryIds.delete(frame.nodeId);
+      addNodeFlag(node, PATH_STORE_NODE_FLAG_REMOVED);
+      state.pathCacheByNodeId.delete(frame.nodeId);
+      if (state.collapsedDirectoryIds.delete(frame.nodeId)) {
+        state.hasCollapsedDirectoryOverrides =
+          state.collapsedDirectoryIds.size > 0;
+      }
       state.expandedDirectoryIds.delete(frame.nodeId);
       clearDirectoryLoadInfo(state, frame.nodeId);
       state.activeNodeCount--;
@@ -911,8 +936,8 @@ function promoteEmptyAncestorsToExplicit(
   while (currentDirectoryId != null) {
     const currentNode = requireNode(state, currentDirectoryId);
     if (
-      currentNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY ||
-      (currentNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0
+      !isDirectoryNode(currentNode) ||
+      hasNodeFlag(currentNode, PATH_STORE_NODE_FLAG_ROOT)
     ) {
       return;
     }
@@ -921,7 +946,7 @@ function promoteEmptyAncestorsToExplicit(
       return;
     }
 
-    currentNode.flags |= PATH_STORE_NODE_FLAG_EXPLICIT;
+    addNodeFlag(currentNode, PATH_STORE_NODE_FLAG_EXPLICIT);
     currentDirectoryId =
       currentNode.parentId === currentDirectoryId ? null : currentNode.parentId;
   }
@@ -934,7 +959,7 @@ function findDeepestExistingDirectoryId(
   let currentDirectoryId = state.snapshot.rootId;
 
   for (const segment of segments) {
-    const segmentId = state.snapshot.segmentTable.idByValue[segment];
+    const segmentId = state.snapshot.segmentTable.idByValue.get(segment);
     if (segmentId == null) {
       break;
     }
@@ -948,7 +973,7 @@ function findDeepestExistingDirectoryId(
     }
 
     const nextNode = requireNode(state, nextNodeId);
-    if (nextNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+    if (!isDirectoryNode(nextNode)) {
       break;
     }
 
@@ -987,7 +1012,7 @@ function getCollapsedProjectionSignature(
     hasChildren:
       getDirectoryIndex(state, terminalDirectoryId).childIds.length > 0,
     path: materializeNodePath(state, terminalDirectoryId),
-    terminalKind: terminalNode.kind,
+    terminalKind: getNodeKind(terminalNode),
   });
 }
 
@@ -1029,8 +1054,8 @@ function findNearestCollapsedAncestor(
   while (currentDirectoryId != null) {
     const currentNode = requireNode(state, currentDirectoryId);
     if (
-      currentNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY ||
-      (currentNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0
+      !isDirectoryNode(currentNode) ||
+      hasNodeFlag(currentNode, PATH_STORE_NODE_FLAG_ROOT)
     ) {
       return null;
     }
@@ -1050,10 +1075,10 @@ function recomputeDepths(state: PathStoreState, nodeId: NodeId): void {
   const parentDepth =
     nodeId === state.snapshot.rootId
       ? -1
-      : requireNode(state, node.parentId).depth;
-  node.depth = parentDepth + 1;
+      : getNodeDepth(requireNode(state, node.parentId));
+  setNodeDepth(node, parentDepth + 1);
 
-  if (node.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (!isDirectoryNode(node)) {
     return;
   }
 
@@ -1145,7 +1170,7 @@ function recomputeNodeCountsNow(
   currentNode: PathStoreNode,
   rebuildChildAggregates: boolean
 ): void {
-  if (currentNode.kind === PATH_STORE_NODE_KIND_FILE) {
+  if (!isDirectoryNode(currentNode)) {
     currentNode.subtreeNodeCount = 1;
     currentNode.visibleSubtreeCount = 1;
     return;
@@ -1169,7 +1194,7 @@ function recomputeNodeCountsNow(
   const visibleChildCount = currentIndex.totalChildVisibleSubtreeCount;
 
   currentNode.subtreeNodeCount = subtreeNodeCount;
-  if ((currentNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0) {
+  if (hasNodeFlag(currentNode, PATH_STORE_NODE_FLAG_ROOT)) {
     currentNode.visibleSubtreeCount = visibleChildCount;
     return;
   }

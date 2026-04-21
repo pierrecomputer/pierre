@@ -1,6 +1,6 @@
+import { hasNodeFlag, isDirectoryNode } from './internal-types';
 import type { NodeId } from './internal-types';
 import { PATH_STORE_NODE_FLAG_ROOT } from './internal-types';
-import { PATH_STORE_NODE_KIND_DIRECTORY } from './internal-types';
 import type { PathStoreState } from './state';
 
 // Fully known trees flatten single-child directory chains even before callers
@@ -17,8 +17,8 @@ export function getFlattenedChildDirectoryId(
   const directoryNode = state.snapshot.nodes[directoryNodeId];
   if (
     directoryNode == null ||
-    directoryNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY ||
-    (directoryNode.flags & PATH_STORE_NODE_FLAG_ROOT) !== 0
+    !isDirectoryNode(directoryNode) ||
+    hasNodeFlag(directoryNode, PATH_STORE_NODE_FLAG_ROOT)
   ) {
     return null;
   }
@@ -34,7 +34,7 @@ export function getFlattenedChildDirectoryId(
   }
 
   const childNode = state.snapshot.nodes[childId];
-  if (childNode == null || childNode.kind !== PATH_STORE_NODE_KIND_DIRECTORY) {
+  if (childNode == null || !isDirectoryNode(childNode)) {
     return null;
   }
 

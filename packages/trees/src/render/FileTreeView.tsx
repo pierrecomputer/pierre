@@ -964,7 +964,6 @@ function renderStyledRow(
     onKeyDown,
   } = frame;
   const targetPath = getFileTreeRowPath(row);
-  const item = controller.getItem(targetPath);
   const { isParked = false, mode = 'flow', style } = options;
   const isSticky = mode === 'sticky';
   const ownGitStatus = gitStatusByPath?.get(targetPath) ?? null;
@@ -1069,7 +1068,7 @@ function renderStyledRow(
             if (!contextMenuRightClickEnabled) {
               return;
             }
-            item?.focus();
+            controller.focusPath(targetPath);
             openContextMenuForRow(row, targetPath, {
               anchorRect: createAnchorRectFromPoint(
                 event.clientX,
@@ -1081,7 +1080,7 @@ function renderStyledRow(
         : undefined,
     onFocus: !isSticky
       ? () => {
-          item?.focus();
+          controller.focusPath(targetPath);
         }
       : undefined,
     onKeyDown: !isSticky ? onKeyDown : undefined,
@@ -2351,8 +2350,13 @@ export function FileTreeView({
     };
 
     updateViewportRef.current = update;
+    let hasSeenInitialControllerSnapshot = false;
     const unsubscribe = controller.subscribe(() => {
-      setControllerRevision((revision) => revision + 1);
+      if (hasSeenInitialControllerSnapshot) {
+        setControllerRevision((revision) => revision + 1);
+      } else {
+        hasSeenInitialControllerSnapshot = true;
+      }
       update();
     });
     // Flip a plain DOM attribute on the root (not React state) so the anchor
@@ -2496,7 +2500,6 @@ export function FileTreeView({
           })
         : null;
     resizeObserver?.observe(scrollElement);
-    update();
 
     return () => {
       updateViewportRef.current = () => {};
