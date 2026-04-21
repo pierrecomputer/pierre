@@ -3092,12 +3092,25 @@ export function FileTreeView({
           break;
       }
 
+      const clickedElement =
+        event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+      const clickedRowIsVisible =
+        row.index >= layoutSnapshot.visible.startIndex &&
+        row.index <= layoutSnapshot.visible.endIndex;
+      const shouldExposeFocusedTrigger =
+        mode === 'flow' &&
+        clickedRowIsVisible &&
+        clickedElement != null &&
+        clickedElement.dataset.itemParked !== 'true';
+
       item?.focus();
-      domFocusOwnerRef.current = true;
-      setActiveItemPath((previousPath) =>
-        previousPath === targetPath ? previousPath : targetPath
-      );
-      setLastContextMenuInteraction('focus');
+      if (shouldExposeFocusedTrigger) {
+        domFocusOwnerRef.current = true;
+        setActiveItemPath((previousPath) =>
+          previousPath === targetPath ? previousPath : targetPath
+        );
+        setLastContextMenuInteraction('focus');
+      }
       if (plan.toggleDirectory && isFileTreeDirectoryHandle(item)) {
         item.toggle();
       }
@@ -3110,7 +3123,12 @@ export function FileTreeView({
         });
       }
     },
-    [controller, revealCanonicalRowAtStickyOffset]
+    [
+      controller,
+      layoutSnapshot.visible.endIndex,
+      layoutSnapshot.visible.startIndex,
+      revealCanonicalRowAtStickyOffset,
+    ]
   );
 
   const openMenuFromTrigger = (): void => {
