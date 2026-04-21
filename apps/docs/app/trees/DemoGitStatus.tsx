@@ -1,6 +1,11 @@
 'use client';
 
-import { IconColorDark, IconColorLight } from '@pierre/icons';
+import {
+  IconColorDark,
+  IconColorLight,
+  IconFolders,
+  IconTableRowHeader,
+} from '@pierre/icons';
 import {
   FileTree,
   type FileTreePreloadedData,
@@ -82,6 +87,7 @@ interface DemoGitStatusProps {
 export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
   const [showUnmodified, setShowUnmodified] = useState(true);
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('dark');
+  const [mobileView, setMobileView] = useState<'tree' | 'legend'>('tree');
 
   const activeGitStatus = TREE_NEW_GIT_STATUSES;
   const isDark = colorMode === 'dark';
@@ -173,26 +179,47 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
           >
             <ButtonGroupItem value="light">
               <IconColorLight className="size-4" />
-              Light
+              <span className="hidden md:inline">Light</span>
             </ButtonGroupItem>
             <ButtonGroupItem value="dark">
               <IconColorDark className="size-4" />
-              Dark
+              <span className="hidden md:inline">Dark</span>
+            </ButtonGroupItem>
+          </ButtonGroup>
+
+          <ButtonGroup
+            className="ml-auto md:hidden"
+            value={mobileView}
+            onValueChange={(value) => setMobileView(value as 'tree' | 'legend')}
+          >
+            <ButtonGroupItem value="tree">
+              <IconFolders /> Tree
+            </ButtonGroupItem>
+            <ButtonGroupItem value="legend">
+              <IconTableRowHeader /> Legend
             </ButtonGroupItem>
           </ButtonGroup>
         </div>
 
         <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
-          <FileTree
-            className={getDefaultFileTreePanelClass(colorMode)}
-            model={model}
-            preloadedData={activePreloadedData}
-            style={{
-              ...panelStyle,
-              height: `${String(viewportHeight)}px`,
-            }}
-          />
-          <GitStatusLegend colorMode={colorMode} />
+          <div
+            className={mobileView === 'tree' ? undefined : 'hidden md:block'}
+          >
+            <FileTree
+              className={getDefaultFileTreePanelClass(colorMode)}
+              model={model}
+              preloadedData={activePreloadedData}
+              style={{
+                ...panelStyle,
+                height: `${String(viewportHeight)}px`,
+              }}
+            />
+          </div>
+          <div
+            className={mobileView === 'legend' ? undefined : 'hidden md:block'}
+          >
+            <GitStatusLegend colorMode={colorMode} />
+          </div>
         </div>
       </div>
     </TreeExampleSection>

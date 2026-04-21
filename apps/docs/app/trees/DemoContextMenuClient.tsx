@@ -1,5 +1,6 @@
 'use client';
 
+import { IconRefresh } from '@pierre/icons';
 import type {
   ContextMenuTriggerMode,
   FileTreeCompositionOptions,
@@ -223,6 +224,7 @@ export function DemoContextMenuClient({
               setHasMutated(false);
             }}
           >
+            <IconRefresh />
             Reset
           </Button>
         </div>

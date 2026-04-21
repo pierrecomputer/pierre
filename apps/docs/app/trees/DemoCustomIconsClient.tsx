@@ -7,7 +7,7 @@ import {
   type FileTreePreloadedData,
   useFileTree,
 } from '@pierre/trees/react';
-import type { CSSProperties, JSX } from 'react';
+import { type CSSProperties, type JSX, useState } from 'react';
 
 import { PierreIconsFootnote } from '../components/PierreIconsFootnote';
 import { TreeExampleHeading } from '../components/TreeExampleHeading';
@@ -20,6 +20,7 @@ import {
 } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 const panelStyle = {
   ...DEFAULT_FILE_TREE_PANEL_STYLE,
@@ -61,9 +62,11 @@ const ICON_DEMO_CONFIGS: readonly IconDemoConfig[] = [
 
 function IconDemoTree({
   config,
+  isMobileActive,
   preloadedData,
 }: {
   config: IconDemoConfig;
+  isMobileActive: boolean;
   preloadedData: FileTreePreloadedData;
 }) {
   const { model } = useFileTree({
@@ -80,7 +83,7 @@ function IconDemoTree({
   });
 
   return (
-    <div>
+    <div className={isMobileActive ? undefined : 'hidden md:block'}>
       <TreeExampleHeading icon={config.icon} description={config.description}>
         {config.title}
       </TreeExampleHeading>
@@ -101,6 +104,8 @@ interface DemoCustomIconsClientProps {
 export function DemoCustomIconsClient({
   preloadedDataById,
 }: DemoCustomIconsClientProps) {
+  const [mobileView, setMobileView] = useState<string>(ICON_DEMO_CONFIGS[0].id);
+
   return (
     <TreeExampleSection>
       <FeatureHeader
@@ -123,11 +128,28 @@ export function DemoCustomIconsClient({
           </>
         }
       />
+      <ButtonGroup
+        className="md:hidden"
+        value={mobileView}
+        onValueChange={setMobileView}
+      >
+        {ICON_DEMO_CONFIGS.map((config) => (
+          <ButtonGroupItem
+            key={config.id}
+            value={config.id}
+            aria-label={config.title}
+          >
+            {config.icon}
+            {config.title}
+          </ButtonGroupItem>
+        ))}
+      </ButtonGroup>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         {ICON_DEMO_CONFIGS.map((config) => (
           <IconDemoTree
             key={config.id}
             config={config}
+            isMobileActive={mobileView === config.id}
             preloadedData={preloadedDataById[config.id]}
           />
         ))}

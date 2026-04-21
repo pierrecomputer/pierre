@@ -7,7 +7,7 @@ import {
   useFileTree,
 } from '@pierre/trees/react';
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
+import { type CSSProperties, useState } from 'react';
 
 import { IconFootnote } from '../components/IconFootnote';
 import { TreeExampleHeading } from '../components/TreeExampleHeading';
@@ -18,6 +18,7 @@ import { styleObjectToCss } from './tree-examples/styleToCss';
 import { TreeCssViewer } from './tree-examples/TreeCssViewer';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 function lightTheme(): CSSProperties {
   return {
@@ -124,13 +125,68 @@ interface DemoStylingClientProps {
   };
 }
 
+type StylingMobileView = 'light' | 'dark' | 'synthwave';
+
+// A handful of representative colors per theme, used to build a conic-gradient
+// swatch for each mobile ButtonGroup item. The gradient stops wrap back to the
+// first color so the circle reads as a smooth loop rather than a seam.
+const THEME_SWATCH_COLORS: Record<StylingMobileView, readonly string[]> = {
+  light: [
+    'oklch(98.5% 0 0)',
+    'oklch(92% 0.06 250)',
+    'oklch(65% 0.15 250)',
+    'oklch(20% 0.08 250)',
+  ],
+  dark: [
+    'oklch(20.5% 0 0)',
+    'oklch(35% 0.08 250)',
+    'oklch(65% 0.2 250)',
+    'oklch(97% 0.04 250)',
+  ],
+  synthwave: [
+    'oklch(27.2% 0.05 302)',
+    'oklch(66.3% 0.26 348)',
+    'oklch(76.9% 0.19 339)',
+    'oklch(89.2% 0.14 193)',
+  ],
+};
+
+function ThemeSwatch({
+  isActive,
+  view,
+}: {
+  isActive: boolean;
+  view: StylingMobileView;
+}) {
+  const colors = THEME_SWATCH_COLORS[view];
+  const stops = [...colors, colors[0]].join(', ');
+  return (
+    <span
+      aria-hidden
+      className={[
+        'inline-block size-4 shrink-0 rounded-sm shadow-[inset_0_0_0_1px_rgb(0_0_0_/_0.15)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255_/_0.15)] transition-[filter] duration-150',
+        isActive
+          ? ''
+          : 'grayscale group-hover:grayscale-0 opacity-50 group-hover:opacity-100',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      style={{ background: `conic-gradient(from 210deg, ${stops})` }}
+    />
+  );
+}
+
 export function DemoStylingClient({
   preloadedData,
   selectedPaths,
 }: DemoStylingClientProps) {
+  const [mobileView, setMobileView] = useState<StylingMobileView>('light');
   const lightThemeStyles = lightTheme();
   const darkThemeStyles = darkTheme();
   const synthwaveThemeStyles = synthwaveTheme();
+
+  const hiddenOnMobileUnless = (view: StylingMobileView) =>
+    mobileView === view ? undefined : 'hidden md:block';
 
   return (
     <TreeExampleSection>
@@ -158,8 +214,26 @@ export function DemoStylingClient({
           </>
         }
       />
+      <ButtonGroup
+        className="md:hidden"
+        value={mobileView}
+        onValueChange={(value) => setMobileView(value as StylingMobileView)}
+      >
+        <ButtonGroupItem value="light" className="group">
+          <ThemeSwatch isActive={mobileView === 'light'} view="light" />
+          Light
+        </ButtonGroupItem>
+        <ButtonGroupItem value="dark" className="group">
+          <ThemeSwatch isActive={mobileView === 'dark'} view="dark" />
+          Dark
+        </ButtonGroupItem>
+        <ButtonGroupItem value="synthwave" className="group">
+          <ThemeSwatch isActive={mobileView === 'synthwave'} view="synthwave" />
+          Synthwave
+        </ButtonGroupItem>
+      </ButtonGroup>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <div>
+        <div className={hiddenOnMobileUnless('light')}>
           <TreeExampleHeading>Light mode</TreeExampleHeading>
           <StyledTree
             className="min-h-[320px] rounded-lg border border-neutral-200 bg-neutral-50 py-2"
@@ -173,7 +247,7 @@ export function DemoStylingClient({
             filename="light-theme.css"
           />
         </div>
-        <div>
+        <div className={hiddenOnMobileUnless('dark')}>
           <TreeExampleHeading>Dark mode</TreeExampleHeading>
           <StyledTree
             className="min-h-[320px] rounded-lg border border-neutral-700 bg-neutral-900 py-2"
@@ -187,7 +261,7 @@ export function DemoStylingClient({
             filename="dark-theme.css"
           />
         </div>
-        <div>
+        <div className={hiddenOnMobileUnless('synthwave')}>
           <TreeExampleHeading>Synthwave &apos;84</TreeExampleHeading>
           <StyledTree
             className="min-h-[320px] rounded-lg border border-[#f92aad]/40 bg-[#1e1b2b] py-2 shadow-[inset_0_0_60px_rgba(249,42,173,0.08)]"

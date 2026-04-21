@@ -7,7 +7,7 @@ import {
 } from '@pierre/trees/react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { TreeExampleHeading } from '../components/TreeExampleHeading';
 import { FeatureHeader } from '../diff-examples/FeatureHeader';
@@ -16,6 +16,7 @@ import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { getDefaultFileTreePanelClass } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 const PRESELECTED_FILE = 'src/components/Button.tsx';
 
@@ -107,6 +108,8 @@ interface DemoDensityClientProps {
 }
 
 export function DemoDensityClient({ preloadedData }: DemoDensityClientProps) {
+  const [mobileView, setMobileView] = useState<string>(DENSITY_PRESETS[0].key);
+
   return (
     <TreeExampleSection>
       <FeatureHeader
@@ -130,9 +133,25 @@ export function DemoDensityClient({ preloadedData }: DemoDensityClientProps) {
           </>
         }
       />
+      <ButtonGroup
+        className="md:hidden"
+        value={mobileView}
+        onValueChange={setMobileView}
+      >
+        {DENSITY_PRESETS.map((preset) => (
+          <ButtonGroupItem key={preset.key} value={preset.key}>
+            {preset.label}
+          </ButtonGroupItem>
+        ))}
+      </ButtonGroup>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {DENSITY_PRESETS.map((preset) => (
-          <div key={preset.id}>
+          <div
+            key={preset.id}
+            className={
+              mobileView === preset.key ? undefined : 'hidden md:block'
+            }
+          >
             <TreeExampleHeading description={preset.description}>
               {preset.label}
             </TreeExampleHeading>

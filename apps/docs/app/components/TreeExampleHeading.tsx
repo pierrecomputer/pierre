@@ -12,7 +12,7 @@ export function TreeExampleHeading({
   children,
 }: TreeExampleHeadingProps) {
   return (
-    <div className="mb-3">
+    <div className="mb-3 hidden md:block">
       <h3 className="flex items-center gap-1.5 text-lg font-medium">
         {icon != null ? <span className="shrink-0">{icon}</span> : null}
         {children}

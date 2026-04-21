@@ -203,7 +203,7 @@ export function DemoThemingClient({
         }
       />
       <div className="flex flex-wrap gap-3 md:items-center">
-        <div className="flex w-full gap-3 md:w-auto">
+        <div className="flex gap-3">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="flex-1 justify-start">
@@ -266,7 +266,7 @@ export function DemoThemingClient({
         </div>
 
         <ButtonGroup
-          className="w-full md:w-auto"
+          className="ml-auto md:ml-0"
           value={colorMode}
           onValueChange={(value) =>
             setColorMode(value as 'system' | 'light' | 'dark')
@@ -274,15 +274,15 @@ export function DemoThemingClient({
         >
           <ButtonGroupItem value="system" className="flex-1">
             <IconColorAuto />
-            Auto
+            <span className="hidden md:inline">Auto</span>
           </ButtonGroupItem>
           <ButtonGroupItem value="light" className="flex-1">
             <IconColorLight />
-            Light
+            <span className="hidden md:inline">Light</span>
           </ButtonGroupItem>
           <ButtonGroupItem value="dark" className="flex-1">
             <IconColorDark />
-            Dark
+            <span className="hidden md:inline">Dark</span>
           </ButtonGroupItem>
         </ButtonGroup>
       </div>

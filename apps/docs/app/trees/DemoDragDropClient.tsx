@@ -123,6 +123,7 @@ export function DemoDragDropClient({ preloadedData }: DemoDragDropClientProps) {
             />
           </div>
           <Button
+            className="ml-auto md:ml-0"
             variant="outline"
             disabled={!hasDragged}
             onClick={() => {

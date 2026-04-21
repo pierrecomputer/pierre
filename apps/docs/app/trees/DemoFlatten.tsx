@@ -7,7 +7,7 @@ import {
   useFileTree,
 } from '@pierre/trees/react';
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
+import { type CSSProperties, useState } from 'react';
 
 import { TreeExampleHeading } from '../components/TreeExampleHeading';
 import { FeatureHeader } from '../diff-examples/FeatureHeader';
@@ -16,6 +16,7 @@ import { TREE_NEW_VIEWPORT_HEIGHTS } from './dimensions';
 import { getDefaultFileTreePanelClass } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { PRODUCTS } from '@/app/product-config';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import type { FileTreePathOptions } from '@/lib/fileTreePathOptions';
 
 const HIERARCHICAL_MATCHED_EXPANDED_PATHS = [
@@ -80,7 +81,12 @@ interface DemoFlattenProps {
   };
 }
 
+type FlattenMobileView = 'hierarchical' | 'flattened';
+
 export function DemoFlatten({ preloadedData }: DemoFlattenProps) {
+  const [mobileView, setMobileView] =
+    useState<FlattenMobileView>('hierarchical');
+
   return (
     <TreeExampleSection>
       <FeatureHeader
@@ -100,8 +106,28 @@ export function DemoFlatten({ preloadedData }: DemoFlattenProps) {
           </>
         }
       />
+      <ButtonGroup
+        className="md:hidden"
+        value={mobileView}
+        onValueChange={(value) => setMobileView(value as FlattenMobileView)}
+      >
+        <ButtonGroupItem value="hierarchical">
+          <IconFileTreeFill className="size-4" />
+          Default
+        </ButtonGroupItem>
+        <ButtonGroupItem value="flattened">
+          <IconFolders className="size-4" />
+          Flattened
+        </ButtonGroupItem>
+      </ButtonGroup>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <div className="space-y-2">
+        <div
+          className={
+            mobileView === 'hierarchical'
+              ? 'space-y-2'
+              : 'hidden space-y-2 md:block'
+          }
+        >
           <TreeExampleHeading icon={<IconFileTreeFill />}>
             Default expanded
           </TreeExampleHeading>
@@ -114,7 +140,13 @@ export function DemoFlatten({ preloadedData }: DemoFlattenProps) {
           />
         </div>
 
-        <div className="space-y-2">
+        <div
+          className={
+            mobileView === 'flattened'
+              ? 'space-y-2'
+              : 'hidden space-y-2 md:block'
+          }
+        >
           <TreeExampleHeading icon={<IconFolders />}>
             Flattened directories
           </TreeExampleHeading>
