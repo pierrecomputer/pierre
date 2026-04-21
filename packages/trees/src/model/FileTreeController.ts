@@ -5,10 +5,7 @@ import type {
   PathStoreVisibleTreeProjectionData,
 } from '@pierre/path-store';
 
-import {
-  type FileTreePreparedInput,
-  toPathStorePreparedInput,
-} from '../preparedInput';
+import type { FileTreePreparedInput } from '../preparedInput';
 import { renameFileTreePaths } from '../utils/renameFileTreePaths';
 import {
   buildDropOperations,
@@ -1682,7 +1679,7 @@ export class FileTreeController
       preparedInput:
         preparedInput == null
           ? undefined
-          : toPathStorePreparedInput(preparedInput),
+          : (preparedInput as unknown as { paths: readonly string[] }),
       ...(initialExpandedPathsOverride !== undefined
         ? { initialExpandedPaths: initialExpandedPathsOverride }
         : {}),

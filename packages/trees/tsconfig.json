@@ -26,6 +26,7 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "rootDir": "."
+    "rootDir": ".",
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
   }
 }
