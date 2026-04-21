@@ -1221,9 +1221,6 @@ export function FileTreeView({
   const [contextMenuAnchorTop, setContextMenuAnchorTop] = useState<
     number | null
   >(null);
-  const [lastContextMenuInteraction, setLastContextMenuInteraction] = useState<
-    'focus' | 'pointer' | null
-  >(null);
   const [contextMenuState, setContextMenuState] = useState<{
     anchorRect: FileTreeContextMenuOpenContext['anchorRect'] | null;
     item: FileTreeContextMenuItem;
@@ -1315,7 +1312,6 @@ export function FileTreeView({
       const nextPath = detail?.path ?? null;
       debugContextMenuTriggerPathRef.current = nextPath;
       setContextHoverPath(nextPath);
-      setLastContextMenuInteraction(nextPath == null ? null : 'pointer');
     };
 
     const handleDebugSetScrollSuppression = (event: Event): void => {
@@ -1556,7 +1552,6 @@ export function FileTreeView({
         return;
       }
 
-      setLastContextMenuInteraction('focus');
       setControllerRevision((revision) => revision + 1);
     },
     [
@@ -2044,7 +2039,6 @@ export function FileTreeView({
         return;
       }
 
-      setLastContextMenuInteraction('focus');
       setControllerRevision((revision) => revision + 1);
       event.preventDefault();
       event.stopPropagation();
@@ -2093,7 +2087,6 @@ export function FileTreeView({
         return;
       }
 
-      setLastContextMenuInteraction('focus');
       setControllerRevision((revision) => revision + 1);
       event.preventDefault();
       event.stopPropagation();
@@ -2184,8 +2177,6 @@ export function FileTreeView({
     if (!handled) {
       return;
     }
-
-    setLastContextMenuInteraction('focus');
 
     // Focus-only and selection-only controller updates do not change
     // range/itemCount, so force a render tick before the DOM-focus sync effect
@@ -2790,15 +2781,14 @@ export function FileTreeView({
   ]);
 
   const focusTriggerPath =
-    domFocusOwnerRef.current === true ? (activeItemPath ?? focusedPath) : null;
+    contextMenuButtonTriggerEnabled && domFocusOwnerRef.current === true
+      ? focusedPath
+      : null;
   const triggerPath =
     contextMenuState?.path ??
     debugContextMenuTriggerPathRef.current ??
-    (lastContextMenuInteraction === 'pointer'
-      ? contextHoverPath
-      : lastContextMenuInteraction === 'focus'
-        ? focusTriggerPath
-        : null);
+    contextHoverPath ??
+    focusTriggerPath;
   const isPointerContextMenuOpen = contextMenuState?.source === 'right-click';
 
   useLayoutEffect(() => {
@@ -2844,11 +2834,6 @@ export function FileTreeView({
           ? (rowButton.dataset.itemPath ?? null)
           : null;
 
-    if (nextPath != null) {
-      setLastContextMenuInteraction((previousMode) =>
-        previousMode === 'pointer' ? previousMode : 'pointer'
-      );
-    }
     setContextHoverPath((previousPath) =>
       previousPath === nextPath ? previousPath : nextPath
     );
@@ -3091,6 +3076,10 @@ export function FileTreeView({
       }
 
       item?.focus();
+      domFocusOwnerRef.current = true;
+      setActiveItemPath((previousPath) =>
+        previousPath === targetPath ? previousPath : targetPath
+      );
       if (plan.toggleDirectory && isFileTreeDirectoryHandle(item)) {
         item.toggle();
       }

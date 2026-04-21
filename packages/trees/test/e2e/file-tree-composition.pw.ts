@@ -139,6 +139,63 @@ test.describe('file-tree composition surfaces', () => {
     expect(secondBox?.y).toBeGreaterThan((firstBox?.y ?? 0) + 20);
   });
 
+  test('clicking a focused row reveals the when-needed context-menu trigger without hover', async ({
+    page,
+  }) => {
+    await page.goto('/test/e2e/fixtures/file-tree-composition.html');
+    await page.waitForFunction(
+      () => window.__fileTreeCompositionFixtureReady === true
+    );
+
+    const focusedRow = page.locator(
+      'file-tree-container button[data-item-path="src/index.ts"]'
+    );
+    const trigger = page.locator(
+      'file-tree-container button[data-type="context-menu-trigger"]'
+    );
+
+    await expect(trigger).toHaveAttribute('data-visible', 'false');
+
+    await page.evaluate(() => {
+      const host = document.querySelector('file-tree-container');
+      const row = host?.shadowRoot?.querySelector(
+        'button[data-item-path="src/index.ts"]'
+      );
+      if (!(row instanceof HTMLButtonElement)) {
+        throw new Error('Expected src/index.ts row in file-tree fixture.');
+      }
+
+      row.dispatchEvent(
+        new MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+        })
+      );
+    });
+
+    await expect(focusedRow).toHaveAttribute('data-item-focused', 'true');
+    await expect(focusedRow).toHaveAttribute('data-item-selected', 'true');
+    await expect(focusedRow).not.toHaveAttribute(
+      'data-item-context-hover',
+      'true'
+    );
+    await expect(trigger).toHaveAttribute('data-visible', 'true');
+    await expect(trigger).toBeVisible();
+
+    const [rowBox, triggerBox] = await Promise.all([
+      focusedRow.boundingBox(),
+      trigger.boundingBox(),
+    ]);
+    if (rowBox == null || triggerBox == null) {
+      throw new Error('Expected focused row and context-menu trigger boxes.');
+    }
+
+    const triggerCenterY = triggerBox.y + triggerBox.height / 2;
+    expect(triggerCenterY).toBeGreaterThanOrEqual(rowBox.y);
+    expect(triggerCenterY).toBeLessThanOrEqual(rowBox.y + rowBox.height);
+  });
+
   test('keeps the context-menu shell slotted in light DOM while anchoring from the shadow tree', async ({
     page,
   }) => {

@@ -696,17 +696,23 @@ describe('file-tree composition surfaces', () => {
     }
   });
 
-  test('keeps pointer-driven trigger state from falling back to the focused row after scroll', async () => {
+  test('falls back to the focused row after pointer hover clears during scroll', async () => {
     const { cleanup, dom } = installDom();
     try {
       const { FileTree } = await import('../src/render/FileTree');
       const mount = dom.window.document.createElement('div');
       dom.window.document.body.appendChild(mount);
 
+      const openedPath = { current: null as string | null };
       const fileTree = new FileTree({
         composition: {
           contextMenu: {
             enabled: true,
+            render: (item): HTMLElement => {
+              openedPath.current = item.path;
+              const menu = dom.window.document.createElement('div');
+              return menu as unknown as HTMLElement;
+            },
             triggerMode: 'button',
           },
         },
@@ -738,19 +744,14 @@ describe('file-tree composition surfaces', () => {
       ) {
         throw new Error('expected virtualized tree elements');
       }
-      const treeRoot = root;
       const scrollViewport = viewport;
       const triggerButton = trigger;
 
       firstRow.focus();
-      firstRow.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', {
-          bubbles: true,
-          cancelable: true,
-          key: 'ArrowDown',
-        })
-      );
+      fileTree.focusPath('src/index.ts');
       await flushDom();
+
+      expect(fileTree.getFocusedPath()).toBe('src/index.ts');
       expect(triggerButton.dataset.visible).toBe('true');
 
       thirdRow.dispatchEvent(
@@ -765,20 +766,20 @@ describe('file-tree composition surfaces', () => {
       scrollViewport.dispatchEvent(new dom.window.Event('scroll'));
       await flushDom();
 
-      expect(triggerButton.dataset.visible).toBe('false');
+      expect(triggerButton.dataset.visible).toBe('true');
       expect(thirdRow.dataset.itemContextHover).toBeUndefined();
       expect(secondRow.dataset.itemContextHover).toBeUndefined();
+      expect(fileTree.getFocusedPath()).toBe('src/index.ts');
 
-      treeRoot.dispatchEvent(
-        new dom.window.KeyboardEvent('keydown', {
+      triggerButton.dispatchEvent(
+        new dom.window.MouseEvent('click', {
           bubbles: true,
           cancelable: true,
-          key: 'ArrowDown',
         })
       );
       await flushDom();
 
-      expect(triggerButton.dataset.visible).toBe('true');
+      expect(openedPath.current).toBe('src/index.ts');
 
       fileTree.cleanUp();
     } finally {
@@ -920,6 +921,70 @@ describe('file-tree composition surfaces', () => {
       ).toBe('true');
       expect(actionLane).not.toBeNull();
       expect(decorativeAffordance).toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('focused click reveals the default when-needed context-menu button without hover', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            triggerMode: 'button',
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts'],
+        initialVisibleRowCount: 120 / 30,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const secondRow = getItemButton(shadowRoot, dom, 'src/index.ts');
+      const anchor = shadowRoot?.querySelector(
+        '[data-type="context-menu-anchor"]'
+      );
+      const trigger = shadowRoot?.querySelector(
+        '[data-type="context-menu-trigger"]'
+      );
+
+      if (
+        !(anchor instanceof dom.window.HTMLDivElement) ||
+        !(trigger instanceof dom.window.HTMLButtonElement)
+      ) {
+        throw new Error('expected context-menu anchor and trigger');
+      }
+
+      expect(anchor.dataset.visible).toBe('false');
+      expect(trigger.dataset.visible).toBe('false');
+
+      secondRow.dispatchEvent(
+        new dom.window.MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      await flushDom();
+
+      const selectedSecondRow = getItemButton(shadowRoot, dom, 'src/index.ts');
+      expect(fileTree.getFocusedPath()).toBe('src/index.ts');
+      expect(anchor.dataset.visible).toBe('true');
+      expect(trigger.dataset.visible).toBe('true');
+      expect(selectedSecondRow.dataset.itemSelected).toBe('true');
+      expect(selectedSecondRow.dataset.itemFocused).toBe('true');
+      expect(selectedSecondRow.dataset.itemContextHover).toBeUndefined();
 
       fileTree.cleanUp();
     } finally {
