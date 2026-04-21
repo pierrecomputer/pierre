@@ -188,7 +188,7 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
           </ButtonGroup>
 
           <ButtonGroup
-            className="ml-auto md:hidden"
+            className="min-[500px]:ml-auto md:hidden"
             value={mobileView}
             onValueChange={(value) => setMobileView(value as 'tree' | 'legend')}
           >

@@ -209,6 +209,7 @@ export function DemoContextMenuClient({
             ))}
           </ButtonGroup>
           <Button
+            className="ml-auto min-[500px]:ml-0"
             variant="outline"
             disabled={!hasMutated}
             onClick={() => {

@@ -55,7 +55,7 @@ export function Hero({ productId }: HeroProps) {
         .
       </p>
 
-      <div className="flex flex-col gap-3 min-[460px]:flex-row min-[500px]:items-center">
+      <div className="flex flex-col gap-3 min-[460px]:flex-row min-[460px]:items-center">
         <Tooltip>
           <TooltipTrigger asChild>
             <button

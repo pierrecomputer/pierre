@@ -1423,7 +1423,7 @@ export function TreeApp<LAnnotation = unknown>({
   return (
     <div
       className={[
-        'flex flex-col overflow-hidden rounded-xl border shadow-lg p-1.5 h-[var(--tree-app-height)]',
+        'relative flex flex-col overflow-hidden rounded-xl border shadow-lg p-1.5 h-[var(--tree-app-height)]',
         chrome.container,
         className,
       ]
@@ -1453,16 +1453,18 @@ export function TreeApp<LAnnotation = unknown>({
             style={treeHostStyle}
           />
         </aside>
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize explorer"
-          onPointerDown={explorer.onPointerDown}
-          onPointerMove={explorer.onPointerMove}
-          onPointerUp={explorer.onPointerUp}
-          onPointerCancel={explorer.onPointerUp}
-          className="relative block w-px shrink-0 cursor-col-resize bg-white/0 after:absolute after:inset-y-0 after:-left-1 after:w-2 after:content-['']"
-        />
+        {isMobile ? null : (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize explorer"
+            onPointerDown={explorer.onPointerDown}
+            onPointerMove={explorer.onPointerMove}
+            onPointerUp={explorer.onPointerUp}
+            onPointerCancel={explorer.onPointerUp}
+            className="relative block w-px shrink-0 cursor-col-resize bg-white/0 after:absolute after:inset-y-0 after:-left-1 after:w-2 after:content-['']"
+          />
+        )}
         <section className="flex min-w-0 flex-1 flex-col">
           {showTabBar ? (
             <div
@@ -1548,18 +1550,11 @@ export function TreeApp<LAnnotation = unknown>({
                 visually faded out and mostly clipped off-screen. Passing
                 `undefined` on desktop disables the attribute entirely. */}
             <div
-              className="flex min-h-0 flex-1"
+              className="relative flex min-h-0 flex-1"
               inert={isMobile ? true : undefined}
             >
               {editor}
             </div>
-            {/* Mobile-only overlay: a left-to-right fade from transparent to
-                the editor background, signaling that the content is
-                intentionally cropped off the right edge of the viewport. */}
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-transparent via-[var(--tree-app-editor-bg)]/80 to-[var(--tree-app-editor-bg)] max-md:block"
-            />
           </div>
         </section>
       </div>

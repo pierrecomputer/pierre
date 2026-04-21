@@ -106,7 +106,7 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
     <header
       data-slot="header"
       className={cn(
-        'bg-background sticky top-0 z-40 flex items-center justify-between gap-4 py-3 transition-[border-color,box-shadow] duration-200',
+        'bg-background bg-clip-padding sticky top-0 z-40 flex items-center justify-between gap-4 py-3 transition-[border-color,box-shadow] duration-200 px-5 -mx-5 md:mx-0 md:px-0',
         isStuck ? 'is-stuck' : 'border-b border-transparent',
         className
       )}

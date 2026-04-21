@@ -209,7 +209,7 @@
   @apply border-b border-transparent transition-[border-color] duration-200;
 }
 [data-slot='header'].is-stuck {
-  @apply border-border;
+  @apply border-foreground/10 shadow-[0_2px_6px_rgb(0_0_0_/_0.075)];
 }
 
 /* Docs sidebar */

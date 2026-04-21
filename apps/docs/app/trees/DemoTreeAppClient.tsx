@@ -12,6 +12,7 @@ import {
   TREE_APP_DEMO_UNSAFE_CSS,
 } from './treeAppDemoData';
 import { TreeApp } from '@/components/TreeApp';
+import type { TreeAppTheme } from '@/components/TreeApp';
 import type { GitStatusEntry } from '@/lib/treesCompat';
 
 const COMPACT_ITEM_HEIGHT = 24;
@@ -198,6 +199,10 @@ export function DemoTreeAppClient({
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(
     null
   );
+  // Owned here (rather than inside TreeApp) so the mobile fade overlay
+  // rendered alongside <TreeApp /> below can pick the right gradient color
+  // for the active theme.
+  const [theme, setTheme] = useState<TreeAppTheme>('dark');
   const [filesByPath, setFilesByPath] = useState(files);
   const [gitStatusEntries, setGitStatusEntries] = useState(
     TREE_APP_DEMO_GIT_STATUSES
@@ -293,22 +298,36 @@ export function DemoTreeAppClient({
   );
 
   return (
-    <TreeApp
-      className="max-md:w-[720px] max-md:min-w-[720px]"
-      contextMenuPortalContainer={portalContainer}
-      defaultTheme="dark"
-      fileOptions={fileOptionsByTheme}
-      files={filesByPath}
-      height={TREE_NEW_VIEWPORT_HEIGHTS.treeApp}
-      initialActivePath={initialActivePath}
-      model={model}
-      preloadedTreeData={treePreloadedData}
-      prerenderedHTMLByPath={prerenderedHtmlByPathState}
-      projectName="acme-components"
-      searchEnabled
-      showThemeToggle
-      treeClassName={treeClassNameByTheme}
-      treeStyle={treeStyleByTheme}
-    />
+    <>
+      <TreeApp
+        className="max-md:w-[720px] max-md:min-w-[720px]"
+        contextMenuPortalContainer={portalContainer}
+        fileOptions={fileOptionsByTheme}
+        files={filesByPath}
+        height={TREE_NEW_VIEWPORT_HEIGHTS.treeApp}
+        initialActivePath={initialActivePath}
+        model={model}
+        onThemeChange={setTheme}
+        preloadedTreeData={treePreloadedData}
+        prerenderedHTMLByPath={prerenderedHtmlByPathState}
+        projectName="acme-components"
+        searchEnabled
+        showThemeToggle
+        theme={theme}
+        treeClassName={treeClassNameByTheme}
+        treeStyle={treeStyleByTheme}
+      />
+      {theme === 'dark' ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-[1px] right-0 hidden w-36 bg-gradient-to-r from-transparent via-[#070707]/70 to-[#070707] max-md:block"
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-[1px] right-0 hidden w-36 bg-gradient-to-r from-transparent via-[#ffffff]/70 to-[#ffffff] max-md:block"
+        />
+      )}
+    </>
   );
 }
