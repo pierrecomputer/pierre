@@ -24,7 +24,11 @@ import {
 
 import { DraftAnnotation } from './DraftAnnotation';
 import { ExampleAnnotation } from './ExampleAnnotation';
-import type { CommentMetadata } from './types';
+import type {
+  CodeViewerDeletedCommentEvent,
+  CodeViewerSavedCommentEvent,
+  CommentMetadata,
+} from './types';
 import {
   incrementItemVersion,
   isDiffItem,
@@ -59,6 +63,8 @@ const VIEWER_METRICS = { gap: 12, paddingBottom: 20, paddingTop: 20 };
 interface CodeViewerWrapperProps {
   className?: string;
   diffStyle: 'split' | 'unified';
+  onCommentDeleted?(comment: CodeViewerDeletedCommentEvent): void;
+  onCommentSaved?(comment: CodeViewerSavedCommentEvent): void;
   overflow: 'wrap' | 'scroll';
   scrollRef: RefObject<HTMLDivElement | null>;
   viewerRef: RefObject<CodeViewerHandle<CommentMetadata> | null>;
@@ -69,6 +75,8 @@ interface CodeViewerWrapperProps {
 export const CodeViewerWrapper = memo(function CodeViewerWrapper({
   className,
   diffStyle,
+  onCommentDeleted,
+  onCommentSaved,
   overflow,
   scrollRef,
   viewerRef,
@@ -136,6 +144,14 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
 
   const handleRemoveComment = useStableCallback(
     (itemId: string, key: string) => {
+      const item = items.find(
+        (candidate): candidate is CodeViewerDiffItem<CommentMetadata> =>
+          candidate.id === itemId && isDiffItem(candidate)
+      );
+      const removedAnnotation = item?.annotations?.find(
+        (annotation) => annotation.metadata.key === key
+      );
+
       setItems((prev) => {
         const next = [...prev];
         const item = next.find(
@@ -159,6 +175,10 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
         incrementItemVersion(item);
         return next;
       });
+
+      if (removedAnnotation != null && isSavedAnnotation(removedAnnotation)) {
+        onCommentDeleted?.({ itemId, key });
+      }
     }
   );
 
@@ -166,6 +186,17 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
     (itemId: string, key: string, message: string) => {
       const trimmedMessage = message.trim();
       if (trimmedMessage.length === 0) {
+        return;
+      }
+
+      const item = items.find(
+        (candidate): candidate is CodeViewerDiffItem<CommentMetadata> =>
+          candidate.id === itemId && isDiffItem(candidate)
+      );
+      const draftAnnotation = item?.annotations?.find(
+        (annotation) => annotation.metadata.key === key
+      );
+      if (draftAnnotation == null || !isDraftAnnotation(draftAnnotation)) {
         return;
       }
 
@@ -215,6 +246,15 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
         item.annotations = nextAnnotations;
         incrementItemVersion(item);
         return next;
+      });
+
+      onCommentSaved?.({
+        author: 'you',
+        itemId,
+        key,
+        lineNumber: draftAnnotation.lineNumber,
+        message: trimmedMessage,
+        side: draftAnnotation.side,
       });
     }
   );

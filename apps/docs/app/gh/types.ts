@@ -1,3 +1,4 @@
+import type { AnnotationSide } from '@pierre/diffs';
 import type { FileTreePreparedInput, GitStatusEntry } from '@pierre/trees';
 
 export interface SavedCommentMetadata {
@@ -14,6 +15,46 @@ export interface DraftCommentMetadata {
 }
 
 export type CommentMetadata = SavedCommentMetadata | DraftCommentMetadata;
+
+export interface CodeViewerCommentSidebarFile {
+  fileOrder: number;
+  path: string;
+}
+
+export type CodeViewerCommentFileByItemId = ReadonlyMap<
+  string,
+  CodeViewerCommentSidebarFile
+>;
+
+export interface CodeViewerSavedCommentEvent {
+  author: string;
+  itemId: string;
+  key: string;
+  lineNumber: number;
+  message: string;
+  side: AnnotationSide;
+}
+
+export interface CodeViewerDeletedCommentEvent {
+  itemId: string;
+  key: string;
+}
+
+export interface CodeViewerSavedCommentEntry {
+  author: string;
+  itemId: string;
+  key: string;
+  lineNumber: number;
+  message: string;
+  side: AnnotationSide;
+}
+
+export interface CodeViewerSavedCommentItem {
+  comments: CodeViewerSavedCommentEntry[];
+  fileOrder: number;
+  itemId: string;
+  path: string;
+}
 
 // The fully pre-computed input this tree needs for a given fetch. It is built
 // once at fetch time by createCodeViewerFileTreeSource and stored alongside

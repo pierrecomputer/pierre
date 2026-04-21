@@ -17,7 +17,13 @@ import {
 } from 'react';
 
 import { DEFAULT_PR_URL } from './constants';
-import type { CodeViewerFileTreeSource, CommentMetadata } from './types';
+import type {
+  CodeViewerCommentFileByItemId,
+  CodeViewerCommentSidebarFile,
+  CodeViewerFileTreeSource,
+  CodeViewerSavedCommentItem,
+  CommentMetadata,
+} from './types';
 import {
   createCodeViewerFileTreeSource,
   getPullRequestPath,
@@ -30,6 +36,10 @@ interface HeaderProps {
   className?: string;
   diffStyle: 'split' | 'unified';
   setDiffStyle: Dispatch<SetStateAction<'split' | 'unified'>>;
+  setCommentSections: Dispatch<SetStateAction<CodeViewerSavedCommentItem[]>>;
+  setCommentFileByItemId: Dispatch<
+    SetStateAction<CodeViewerCommentFileByItemId | null>
+  >;
   setItems: Dispatch<SetStateAction<CodeViewerItem<CommentMetadata>[]>>;
   setTreeSource: Dispatch<SetStateAction<CodeViewerFileTreeSource | null>>;
   overflow: 'wrap' | 'scroll';
@@ -41,6 +51,8 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
   className,
   diffStyle,
   overflow,
+  setCommentSections,
+  setCommentFileByItemId,
   setItems,
   setOverflow,
   setDiffStyle,
@@ -95,10 +107,12 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
       // do not pay for a second walk when we finalize the tree source below.
       const paths: string[] = [];
       const pathToItemId = new Map<string, string>();
+      const itemIdToFile = new Map<string, CodeViewerCommentSidebarFile>();
       const gitStatus: GitStatusEntry[] = [];
       for (const patch of parsedPatches) {
         for (const fileDiff of patch.files) {
           const id = `${fileIndex++}`;
+          const fileOrder = items.length;
 
           items.push({
             id,
@@ -108,6 +122,7 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
           });
 
           const path = fileDiff.name;
+          itemIdToFile.set(id, { fileOrder, path });
           if (path.length === 0 || pathToItemId.has(path)) {
             continue;
           }
@@ -130,6 +145,8 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
       setTreeSource(
         createCodeViewerFileTreeSource(paths, pathToItemId, gitStatus)
       );
+      setCommentFileByItemId(itemIdToFile);
+      setCommentSections([]);
       setItems(items);
       console.timeEnd('-- computing layout');
       // DEBUG AREA

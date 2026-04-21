@@ -4,10 +4,22 @@ import { type CodeViewerItem } from '@pierre/diffs';
 import { type CodeViewerHandle } from '@pierre/diffs/react';
 import { useCallback, useRef, useState } from 'react';
 
-import { CodeViewerFileTree } from './CodeViewerFileTree';
 import { CodeViewerHeader } from './CodeViewerHeader';
+import { CodeViewerSidebar } from './CodeViewerSidebar';
 import { CodeViewerWrapper } from './CodeViewerWrapper';
-import type { CodeViewerFileTreeSource, CommentMetadata } from './types';
+import type {
+  CodeViewerCommentFileByItemId,
+  CodeViewerDeletedCommentEvent,
+  CodeViewerFileTreeSource,
+  CodeViewerSavedCommentEntry,
+  CodeViewerSavedCommentEvent,
+  CodeViewerSavedCommentItem,
+  CommentMetadata,
+} from './types';
+import {
+  removeSavedCommentSidebarEntry,
+  upsertSavedCommentSidebarEntry,
+} from './utils';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 
 export function GHViewer() {
@@ -20,6 +32,11 @@ export function GHViewer() {
   const [treeSource, setTreeSource] = useState<CodeViewerFileTreeSource | null>(
     null
   );
+  const [commentFileByItemId, setCommentFileByItemId] =
+    useState<CodeViewerCommentFileByItemId | null>(null);
+  const [commentSections, setCommentSections] = useState<
+    CodeViewerSavedCommentItem[]
+  >([]);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewerHandle<CommentMetadata> | null>(null);
@@ -32,6 +49,36 @@ export function GHViewer() {
       behavior: 'smooth',
     });
   }, []);
+  const handleCommentSaved = useCallback(
+    (comment: CodeViewerSavedCommentEvent) => {
+      setCommentSections((prev) =>
+        upsertSavedCommentSidebarEntry(prev, commentFileByItemId, comment)
+      );
+    },
+    [commentFileByItemId]
+  );
+  const handleCommentDeleted = useCallback(
+    (comment: CodeViewerDeletedCommentEvent) => {
+      setCommentSections((prev) =>
+        removeSavedCommentSidebarEntry(prev, comment)
+      );
+    },
+    []
+  );
+  const handleSelectComment = useCallback(
+    (comment: CodeViewerSavedCommentEntry) => {
+      viewerRef.current?.scrollTo({
+        type: 'line',
+        id: comment.itemId,
+        lineNumber: comment.lineNumber,
+        side: comment.side,
+        align: 'center',
+        stickyHeader: true,
+        behavior: 'smooth',
+      });
+    },
+    []
+  );
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] contain-strict [grid-template-areas:'header_header''tree_viewer']">
@@ -39,14 +86,18 @@ export function GHViewer() {
         className="contain-layout contain-paint [grid-area:header]"
         diffStyle={diffStyle}
         overflow={overflow}
+        setCommentSections={setCommentSections}
+        setCommentFileByItemId={setCommentFileByItemId}
         setItems={setItems}
         setOverflow={setOverflow}
         setDiffStyle={setDiffStyle}
         setKey={setKey}
         setTreeSource={setTreeSource}
       />
-      <CodeViewerFileTree
+      <CodeViewerSidebar
         className="contain-strict [grid-area:tree]"
+        commentSections={commentSections}
+        onSelectComment={handleSelectComment}
         source={treeSource}
         onSelectItem={handleSelectTreeItem}
       />
@@ -58,6 +109,8 @@ export function GHViewer() {
         scrollRef={scrollRef}
         viewerRef={viewerRef}
         items={items}
+        onCommentDeleted={handleCommentDeleted}
+        onCommentSaved={handleCommentSaved}
         setItems={setItems}
       />
       <WorkerPoolStatus scrollRef={scrollRef} />
