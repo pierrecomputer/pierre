@@ -294,6 +294,7 @@ export function DemoTreeAppClient({
 
   return (
     <TreeApp
+      className="max-md:w-[720px] max-md:min-w-[720px]"
       contextMenuPortalContainer={portalContainer}
       defaultTheme="dark"
       fileOptions={fileOptionsByTheme}

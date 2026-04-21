@@ -32,7 +32,14 @@ import type {
   ReactNode,
   PointerEvent as ReactPointerEvent,
 } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
 import {
   DropdownMenu,
@@ -469,6 +476,23 @@ function useTreeMutations({
   );
 }
 
+// Returns true when the viewport currently matches the mobile media query.
+// useSyncExternalStore keeps SSR stable (always false) and flips to true after
+// hydration if the viewport is narrow, avoiding a hydration mismatch.
+function useIsMobile(query = '(max-width: 767px)'): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mql = window.matchMedia(query);
+      mql.addEventListener('change', onChange);
+      return () => {
+        mql.removeEventListener('change', onChange);
+      };
+    },
+    () => window.matchMedia(query).matches,
+    () => false
+  );
+}
+
 // Owns the explorer sidebar width and exposes a pointer-down handler for the
 // drag handle. Uses pointer capture so the drag continues smoothly even if the
 // pointer leaves the handle element.
@@ -524,6 +548,10 @@ function useExplorerWidth(initial: number, min: number, max: number) {
 interface UseOpenTabsOptions {
   initialActivePath?: string | null;
   initialOpenPaths?: readonly string[];
+  // When true, the hook collapses to a single-file view: tree selections
+  // replace `openPaths` instead of appending, and any leftover desktop tabs
+  // are discarded the moment the viewport flips to mobile.
+  isMobile?: boolean;
   model: FileTreeModel;
 }
 
@@ -540,6 +568,7 @@ interface UseOpenTabsResult {
 function useOpenTabs({
   initialActivePath,
   initialOpenPaths,
+  isMobile = false,
   model,
 }: UseOpenTabsOptions): UseOpenTabsResult {
   const [openPaths, setOpenPaths] = useState<readonly string[]>(() => {
@@ -581,13 +610,35 @@ function useOpenTabs({
       if (item == null || item.isDirectory()) {
         continue;
       }
-      setOpenPaths((current) =>
-        current.includes(candidate) ? current : [...current, candidate]
-      );
+      setOpenPaths((current) => {
+        if (isMobile) {
+          return current.length === 1 && current[0] === candidate
+            ? current
+            : [candidate];
+        }
+        return current.includes(candidate) ? current : [...current, candidate];
+      });
       setActivePath(candidate);
       break;
     }
-  }, [model, selectedPaths]);
+  }, [isMobile, model, selectedPaths]);
+
+  // When the viewport flips into mobile, drop any extra tabs from a previous
+  // desktop session so only the active file remains. We never re-expand the
+  // tab list when going back to desktop; the user can reopen what they want.
+  useEffect(() => {
+    if (!isMobile) {
+      return;
+    }
+    setOpenPaths((current) => {
+      if (activePath == null) {
+        return current.length === 0 ? current : [];
+      }
+      return current.length === 1 && current[0] === activePath
+        ? current
+        : [activePath];
+    });
+  }, [activePath, isMobile]);
 
   const closeTab = useCallback(
     (path: string) => {
@@ -954,11 +1005,13 @@ function DefaultTab({
   icon,
   iconsColored,
   isActive,
+  isMobile,
   path,
   theme,
 }: DefaultTabProps & {
   icon: TreeAppResolvedTabIcon;
   iconsColored: boolean;
+  isMobile: boolean;
   theme: TreeAppTheme;
 }): React.JSX.Element {
   const chrome = CHROME_STYLES[theme];
@@ -979,25 +1032,29 @@ function DefaultTab({
         <TreeAppTabIcon colored={iconsColored} icon={icon} />
         <span className="block truncate">{label}</span>
       </button>
-      <div
-        aria-hidden="true"
-        className={[
-          'pointer-events-none absolute top-0 right-0 bottom-0 z-10 w-12 bg-gradient-to-l to-transparent opacity-0 transition-opacity group-hover:opacity-100',
-          chrome.tabCloseGradientFrom,
-        ].join(' ')}
-      />
-      <button
-        type="button"
-        onClick={close}
-        title="Close tab"
-        aria-label={`Close ${label}`}
-        className={[
-          'absolute top-1/2 right-1 z-20 flex h-5 w-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100',
-          chrome.tabCloseButton,
-        ].join(' ')}
-      >
-        <IconX aria-hidden="true" className="h-3 w-3" />
-      </button>
+      {isMobile ? null : (
+        <>
+          <div
+            aria-hidden="true"
+            className={[
+              'pointer-events-none absolute top-0 right-0 bottom-0 z-10 w-12 bg-gradient-to-l to-transparent opacity-0 transition-opacity group-hover:opacity-100',
+              chrome.tabCloseGradientFrom,
+            ].join(' ')}
+          />
+          <button
+            type="button"
+            onClick={close}
+            title="Close tab"
+            aria-label={`Close ${label}`}
+            className={[
+              'absolute top-1/2 right-1 z-20 flex h-5 w-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100',
+              chrome.tabCloseButton,
+            ].join(' ')}
+          >
+            <IconX aria-hidden="true" className="h-3 w-3" />
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -1062,6 +1119,7 @@ export function TreeApp<LAnnotation = unknown>({
   const treeStyleRecord = resolvedTreeStyle as
     | Record<string, string | number>
     | undefined;
+  const isMobile = useIsMobile();
   const explorer = useExplorerWidth(
     initialExplorerWidth,
     minExplorerWidth,
@@ -1070,6 +1128,7 @@ export function TreeApp<LAnnotation = unknown>({
   const { activePath, activateTab, closeTab, openPaths } = useOpenTabs({
     initialActivePath,
     initialOpenPaths,
+    isMobile,
     model,
   });
   const mutations = useTreeMutations({
@@ -1298,6 +1357,11 @@ export function TreeApp<LAnnotation = unknown>({
   // Render the tab bar whenever there's something to put in it: either tabs,
   // or the theme toggle button. The toggle lives top-right so it stays
   // reachable even when no files are open.
+  // The tab bar is always rendered when it has something to show; on mobile
+  // the `useOpenTabs` hook already collapses `openPaths` to just the active
+  // file so the strip naturally shows a single tab. The close button inside
+  // that tab is hidden on mobile (see DefaultTab) so the user can't orphan
+  // themselves into an empty editor state.
   const showTabBar = hasTabs || showThemeToggle;
 
   // Scroll the active tab into view when the active path changes or when tabs
@@ -1359,7 +1423,7 @@ export function TreeApp<LAnnotation = unknown>({
   return (
     <div
       className={[
-        'flex flex-col overflow-hidden rounded-xl border shadow-lg p-1.5 h-[calc(var(--tree-app-height)+170px)] md:h-[var(--tree-app-height)]',
+        'flex flex-col overflow-hidden rounded-xl border shadow-lg p-1.5 h-[var(--tree-app-height)]',
         chrome.container,
         className,
       ]
@@ -1375,9 +1439,9 @@ export function TreeApp<LAnnotation = unknown>({
       {windowChromeNode != null ? (
         <div className="shrink-0">{windowChromeNode}</div>
       ) : null}
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <div className="flex min-h-0 flex-1 flex-row">
         <aside
-          className="group/tree-app-explorer flex min-h-[260px] w-full shrink-0 flex-col md:min-h-0 md:w-[var(--tree-app-explorer-width)]"
+          className="group/tree-app-explorer flex w-[var(--tree-app-explorer-width)] shrink-0 flex-col"
           style={sidebarStyle}
         >
           <FileTree
@@ -1397,12 +1461,12 @@ export function TreeApp<LAnnotation = unknown>({
           onPointerMove={explorer.onPointerMove}
           onPointerUp={explorer.onPointerUp}
           onPointerCancel={explorer.onPointerUp}
-          className="relative hidden w-px shrink-0 cursor-col-resize bg-white/0 after:absolute after:inset-y-0 after:-left-1 after:w-2 after:content-[''] md:block"
+          className="relative block w-px shrink-0 cursor-col-resize bg-white/0 after:absolute after:inset-y-0 after:-left-1 after:w-2 after:content-['']"
         />
         <section className="flex min-w-0 flex-1 flex-col">
           {showTabBar ? (
             <div
-              className="group/tabbar flex h-10 items-center gap-1 px-2 pt-2 md:pt-0"
+              className="group/tabbar flex h-10 items-center gap-1 px-2"
               style={{ backgroundColor: 'var(--tree-app-chrome-bg)' }}
             >
               <div className="relative flex min-w-0 flex-1">
@@ -1442,6 +1506,7 @@ export function TreeApp<LAnnotation = unknown>({
                                 {...tabContext}
                                 icon={tabIcon}
                                 iconsColored={tabIconsColored}
+                                isMobile={isMobile}
                                 theme={theme}
                               />
                             )}
@@ -1475,10 +1540,26 @@ export function TreeApp<LAnnotation = unknown>({
             </div>
           ) : null}
           <div
-            className="flex min-h-0 flex-1"
+            className="relative flex min-h-0 flex-1"
             style={{ backgroundColor: 'var(--tree-app-editor-bg)' }}
           >
-            {editor}
+            {/* `inert` removes the editor contents from the focus order on
+                mobile so keyboard users can't tab into a region that's
+                visually faded out and mostly clipped off-screen. Passing
+                `undefined` on desktop disables the attribute entirely. */}
+            <div
+              className="flex min-h-0 flex-1"
+              inert={isMobile ? true : undefined}
+            >
+              {editor}
+            </div>
+            {/* Mobile-only overlay: a left-to-right fade from transparent to
+                the editor background, signaling that the content is
+                intentionally cropped off the right edge of the viewport. */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-transparent via-[var(--tree-app-editor-bg)]/80 to-[var(--tree-app-editor-bg)] max-md:block"
+            />
           </div>
         </section>
       </div>
