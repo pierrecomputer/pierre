@@ -14,6 +14,7 @@ import { BASE_FILE_TREE_OPTIONS } from './constants';
 import type {
   CodeViewerCommentFileByItemId,
   CodeViewerDeletedCommentEvent,
+  CodeViewerFileTreeSort,
   CodeViewerFileTreeSource,
   CodeViewerSavedCommentEntry,
   CodeViewerSavedCommentEvent,
@@ -22,6 +23,8 @@ import type {
   DraftCommentMetadata,
   SavedCommentMetadata,
 } from './types';
+
+const PATCH_ORDER_FALLBACK_RANK = Number.MAX_SAFE_INTEGER;
 
 export function incrementItemVersion(item: CodeViewerItem<CommentMetadata>) {
   item.version = typeof item.version === 'number' ? item.version + 1 : 1;
@@ -89,6 +92,53 @@ export function mapChangeTypeToGitStatus(type: ChangeTypes): GitStatus {
   }
 }
 
+function createPatchOrderSort(
+  paths: readonly string[]
+): CodeViewerFileTreeSort {
+  const rankByPath = new Map<string, number>();
+  for (let index = 0; index < paths.length; index++) {
+    const path = paths[index];
+    if (path == null || path.length === 0) {
+      continue;
+    }
+
+    if (!rankByPath.has(path)) {
+      rankByPath.set(path, index);
+    }
+
+    let slashIndex = path.lastIndexOf('/');
+    while (slashIndex > 0) {
+      const directory = path.slice(0, slashIndex);
+      if (!rankByPath.has(directory)) {
+        rankByPath.set(directory, index);
+      }
+      slashIndex = directory.lastIndexOf('/');
+    }
+  }
+
+  return (left, right) => {
+    const leftRank = rankByPath.get(left.path) ?? PATCH_ORDER_FALLBACK_RANK;
+    const rightRank = rankByPath.get(right.path) ?? PATCH_ORDER_FALLBACK_RANK;
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+
+    if (left.depth !== right.depth) {
+      return left.depth - right.depth;
+    }
+
+    if (left.isDirectory !== right.isDirectory) {
+      return left.isDirectory ? -1 : 1;
+    }
+
+    if (left.path === right.path) {
+      return 0;
+    }
+
+    return left.path < right.path ? -1 : 1;
+  };
+}
+
 // Finalizes the stable tree input from a fresh fetch. Callers are expected to
 // populate paths, pathToItemId, and gitStatus in the same pass that builds
 // the viewer items so the tree data structure does not require its own walk
@@ -98,12 +148,15 @@ export function createCodeViewerFileTreeSource(
   pathToItemId: ReadonlyMap<string, string>,
   gitStatus: readonly GitStatusEntry[]
 ): CodeViewerFileTreeSource {
+  const sort = createPatchOrderSort(paths);
   return {
     gitStatus,
     pathToItemId,
     preparedInput: prepareFileTreeInput(paths, {
       flattenEmptyDirectories: BASE_FILE_TREE_OPTIONS.flattenEmptyDirectories,
+      sort,
     }),
+    sort,
   };
 }
 
