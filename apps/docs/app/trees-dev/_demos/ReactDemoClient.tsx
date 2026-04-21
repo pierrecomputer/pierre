@@ -15,7 +15,10 @@ import {
 import { useState } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
-import { getFloatingContextMenuTriggerStyle } from '../_lib/getFloatingContextMenuTriggerStyle';
+import {
+  getContextMenuSideOffset,
+  getFloatingContextMenuTriggerStyle,
+} from '../_lib/getFloatingContextMenuTriggerStyle';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,9 +66,9 @@ function ClientRenderedContextMenu({
       <DropdownMenuContent
         data-file-tree-context-menu-root="true"
         data-test-react-context-menu="true"
-        align="center"
+        align="start"
         side="bottom"
-        sideOffset={4}
+        sideOffset={getContextMenuSideOffset(context.anchorRect)}
         className="min-w-[220px]"
         onCloseAutoFocus={(event) => {
           event.preventDefault();

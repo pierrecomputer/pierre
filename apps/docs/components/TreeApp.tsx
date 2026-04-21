@@ -250,25 +250,29 @@ function getUniquePath(model: FileTreeModel, basePath: string): string {
   return candidate;
 }
 
-// Positions the hidden Radix dropdown trigger at the file-tree anchor point so
-// the portaled menu aligns correctly for both right-click and trigger-button
-// opens.
+// Positions the hidden Radix dropdown trigger so its bottom-left corner sits on
+// the file-tree anchor point. Radix then aligns the menu's top-left corner to
+// that trigger point.
 function getFloatingContextMenuTriggerStyle(
   anchorRect: ContextMenuOpenContext['anchorRect']
 ): CSSProperties {
-  const anchorCenterX = anchorRect.left + anchorRect.width / 2;
   return {
     border: 0,
     height: 1,
-    left: `${String(anchorCenterX)}px`,
+    left: `${String(anchorRect.left)}px`,
     opacity: 0,
     padding: 0,
     pointerEvents: 'none',
     position: 'fixed',
     top: `${String(anchorRect.bottom - 1)}px`,
-    transform: 'translateX(-50%)',
     width: 1,
   };
+}
+
+function getContextMenuSideOffset(
+  anchorRect: ContextMenuOpenContext['anchorRect']
+): number {
+  return anchorRect.width === 0 && anchorRect.height === 0 ? 0 : -2;
 }
 
 function hasCustomIconOverrides(icons: FileTreeIcons): boolean {
@@ -702,9 +706,9 @@ function DefaultContextMenu({
       <DropdownMenuContent
         container={portalContainer}
         data-file-tree-context-menu-root="true"
-        align="center"
+        align="start"
         side="bottom"
-        sideOffset={4}
+        sideOffset={getContextMenuSideOffset(context.anchorRect)}
         className="min-w-[180px]"
         onCloseAutoFocus={(event) => {
           event.preventDefault();

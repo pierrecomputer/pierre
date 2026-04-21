@@ -26,10 +26,10 @@ async function readMainMenuGeometry(
 ): Promise<{
   anchorLeft: number;
   anchorTop: number;
-  menuCenterX: number;
+  menuLeft: number;
   menuTop: number;
   triggerBottom: number;
-  triggerCenterX: number;
+  triggerLeft: number;
 } | null> {
   return page.evaluate(() => {
     const host = document.querySelector('file-tree-container');
@@ -55,58 +55,54 @@ async function readMainMenuGeometry(
     return {
       anchorLeft: anchorRect.left,
       anchorTop: anchorRect.top,
-      menuCenterX: menuRect.left + menuRect.width / 2,
+      menuLeft: menuRect.left,
       menuTop: menuRect.top,
       triggerBottom: triggerRect.bottom,
-      triggerCenterX: triggerRect.left + triggerRect.width / 2,
+      triggerLeft: triggerRect.left,
     };
   });
 }
 
-async function expectMainMenuBelowTrigger(
+async function expectMainMenuTopLeftAlignedToTrigger(
   page: import('@playwright/test').Page
 ): Promise<void> {
   await expect
-    .poll(() => readMainMenuGeometry(page))
-    .toEqual(
-      expect.objectContaining({
-        menuCenterX: expect.any(Number),
-        menuTop: expect.any(Number),
-        triggerBottom: expect.any(Number),
-        triggerCenterX: expect.any(Number),
-      })
-    );
-
-  const geometry = await readMainMenuGeometry(page);
-  expect(geometry).not.toBeNull();
-  expect(
-    Math.abs(geometry!.menuCenterX - geometry!.triggerCenterX)
-  ).toBeLessThanOrEqual(24);
-  expect(geometry!.menuTop).toBeGreaterThanOrEqual(geometry!.triggerBottom - 2);
-  expect(geometry!.menuTop).toBeLessThanOrEqual(geometry!.triggerBottom + 32);
+    .poll(async () => {
+      const geometry = await readMainMenuGeometry(page);
+      return geometry == null
+        ? Number.POSITIVE_INFINITY
+        : Math.abs(geometry.menuLeft - geometry.triggerLeft);
+    })
+    .toBeLessThanOrEqual(4);
+  await expect
+    .poll(async () => {
+      const geometry = await readMainMenuGeometry(page);
+      return geometry == null
+        ? Number.POSITIVE_INFINITY
+        : Math.abs(geometry.menuTop - (geometry.triggerBottom + 4));
+    })
+    .toBeLessThanOrEqual(4);
 }
 
-async function expectMainMenuBelowPointerAnchor(
+async function expectMainMenuTopLeftAlignedToPointerAnchor(
   page: import('@playwright/test').Page
 ): Promise<void> {
   await expect
-    .poll(() => readMainMenuGeometry(page))
-    .toEqual(
-      expect.objectContaining({
-        anchorLeft: expect.any(Number),
-        anchorTop: expect.any(Number),
-        menuCenterX: expect.any(Number),
-        menuTop: expect.any(Number),
-      })
-    );
-
-  const geometry = await readMainMenuGeometry(page);
-  expect(geometry).not.toBeNull();
-  expect(
-    Math.abs(geometry!.menuCenterX - geometry!.anchorLeft)
-  ).toBeLessThanOrEqual(24);
-  expect(geometry!.menuTop).toBeGreaterThanOrEqual(geometry!.anchorTop - 2);
-  expect(geometry!.menuTop).toBeLessThanOrEqual(geometry!.anchorTop + 16);
+    .poll(async () => {
+      const geometry = await readMainMenuGeometry(page);
+      return geometry == null
+        ? Number.POSITIVE_INFINITY
+        : Math.abs(geometry.menuLeft - geometry.anchorLeft);
+    })
+    .toBeLessThanOrEqual(4);
+  await expect
+    .poll(async () => {
+      const geometry = await readMainMenuGeometry(page);
+      return geometry == null
+        ? Number.POSITIVE_INFINITY
+        : Math.abs(geometry.menuTop - geometry.anchorTop);
+    })
+    .toBeLessThanOrEqual(4);
 }
 
 async function readReactMenuGeometry(
@@ -226,7 +222,7 @@ async function expectContextMenuTriggerExpanded(
 }
 
 test.describe('trees-dev real page context menus', () => {
-  test('main demo trigger-opened menu stays aligned with the trigger center', async ({
+  test('main demo trigger-opened menu aligns top-left below the trigger bottom-left', async ({
     page,
   }) => {
     await page.goto('/trees-dev');
@@ -236,10 +232,10 @@ test.describe('trees-dev real page context menus', () => {
 
     await expect(page.locator('[data-test-context-menu="true"]')).toBeVisible();
     await expectContextMenuTriggerExpanded(page, 0, 'true');
-    await expectMainMenuBelowTrigger(page);
+    await expectMainMenuTopLeftAlignedToTrigger(page);
   });
 
-  test('main demo right-click menu stays aligned with the trigger center', async ({
+  test('main demo right-click menu aligns top-left to the pointer anchor', async ({
     page,
   }) => {
     await page.goto('/trees-dev');
@@ -257,7 +253,7 @@ test.describe('trees-dev real page context menus', () => {
     await expect(page.locator('[data-test-context-menu="true"]')).toHaveCount(
       1
     );
-    await expectMainMenuBelowPointerAnchor(page);
+    await expectMainMenuTopLeftAlignedToPointerAnchor(page);
   });
 
   test('navigating to the React demo with an open main menu does not log a root unmount warning', async ({

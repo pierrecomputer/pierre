@@ -196,6 +196,46 @@ test.describe('file-tree composition surfaces', () => {
     expect(triggerCenterY).toBeLessThanOrEqual(rowBox.y + rowBox.height);
   });
 
+  test('keyboard navigation retargets the focused row trigger away from a stale hover', async ({
+    page,
+  }) => {
+    await page.goto('/test/e2e/fixtures/file-tree-composition.html');
+    await page.waitForFunction(
+      () => window.__fileTreeCompositionFixtureReady === true
+    );
+
+    const sourceFocusRow = page.locator(
+      'file-tree-container button[data-item-path="src/"]'
+    );
+    const focusedRow = page.locator(
+      'file-tree-container button[data-item-path="src/lib/"]'
+    );
+    const hoveredRow = page.locator(
+      'file-tree-container button[data-item-path="src/lib/utils.ts"]'
+    );
+    const trigger = page.locator(
+      'file-tree-container button[data-type="context-menu-trigger"]'
+    );
+
+    await hoveredRow.hover();
+    await expect(hoveredRow).toHaveAttribute('data-item-context-hover', 'true');
+
+    await sourceFocusRow.focus();
+    await expect(sourceFocusRow).toHaveAttribute('data-item-focused', 'true');
+
+    await page.keyboard.press('ArrowDown');
+
+    await expect(focusedRow).toHaveAttribute('data-item-focused', 'true');
+    await expect(hoveredRow).toHaveAttribute('data-item-context-hover', 'true');
+    await expect(trigger).toHaveAttribute('data-visible', 'true');
+
+    await trigger.click();
+    await expect(page.locator('[data-test-context-menu]')).toBeVisible();
+    await expect(
+      page.locator('[data-test-file-tree-menu="src/lib/"]')
+    ).toHaveCount(1);
+  });
+
   test('keeps the context-menu shell slotted in light DOM while anchoring from the shadow tree', async ({
     page,
   }) => {

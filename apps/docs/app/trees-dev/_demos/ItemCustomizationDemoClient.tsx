@@ -16,7 +16,10 @@ import {
 import { createRoot, type Root as ReactDomRoot } from 'react-dom/client';
 
 import { ExampleCard } from '../_components/ExampleCard';
-import { getFloatingContextMenuTriggerStyle } from '../_lib/getFloatingContextMenuTriggerStyle';
+import {
+  getContextMenuSideOffset,
+  getFloatingContextMenuTriggerStyle,
+} from '../_lib/getFloatingContextMenuTriggerStyle';
 import {
   getItemCustomizationDecorationPreset,
   getTreesDevGitStatusPreset,
@@ -80,9 +83,9 @@ function ItemCustomizationContextMenu({
       <DropdownMenuContent
         data-test-item-customization-menu="true"
         data-file-tree-context-menu-root="true"
-        align="center"
+        align="start"
         side="bottom"
-        sideOffset={4}
+        sideOffset={getContextMenuSideOffset(context.anchorRect)}
         className="min-w-[220px]"
         onCloseAutoFocus={(event) => {
           event.preventDefault();

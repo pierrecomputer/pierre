@@ -23,7 +23,10 @@ import { createRoot, type Root as ReactDomRoot } from 'react-dom/client';
 import { StateLog, useStateLog } from '../_components/StateLog';
 import { createPresortedPreparedInput } from '../_lib/createPresortedPreparedInput';
 import { DEMO_FILE_TREE_ICONS } from '../_lib/demoIcons';
-import { getFloatingContextMenuTriggerStyle } from '../_lib/getFloatingContextMenuTriggerStyle';
+import {
+  getContextMenuSideOffset,
+  getFloatingContextMenuTriggerStyle,
+} from '../_lib/getFloatingContextMenuTriggerStyle';
 import {
   FILE_TREE_PROOF_VIEWPORT_HEIGHT,
   type TreesWorkloadDataPayload,
@@ -316,9 +319,9 @@ function DemoMutationContextMenu({
       <DropdownMenuContent
         data-test-context-menu="true"
         data-file-tree-context-menu-root="true"
-        align="center"
+        align="start"
         side="bottom"
-        sideOffset={4}
+        sideOffset={getContextMenuSideOffset(context.anchorRect)}
         className="min-w-[220px]"
         onCloseAutoFocus={(event) => {
           event.preventDefault();

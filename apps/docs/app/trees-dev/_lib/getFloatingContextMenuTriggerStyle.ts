@@ -1,13 +1,12 @@
 import type { ContextMenuOpenContext } from '@pierre/trees';
 import type { CSSProperties } from 'react';
 
-// Positions the hidden Radix trigger at the file-tree anchor point so the
-// portaled dropdown can align to the same center/bottom point for both trigger
-// clicks and right-click-opened menus.
+// Positions the hidden Radix trigger so its bottom-left corner sits on the
+// file-tree anchor point. Radix then aligns the menu's top-left corner to that
+// trigger point.
 export function getFloatingContextMenuTriggerStyle(
   anchorRect: ContextMenuOpenContext['anchorRect']
 ): CSSProperties {
-  const anchorCenterX = anchorRect.left + anchorRect.width / 2;
   return {
     width: 1,
     height: 1,
@@ -16,8 +15,13 @@ export function getFloatingContextMenuTriggerStyle(
     border: 0,
     padding: 0,
     position: 'fixed',
-    left: `${anchorCenterX}px`,
+    left: `${anchorRect.left}px`,
     top: `${anchorRect.bottom - 1}px`,
-    transform: 'translateX(-50%)',
   };
+}
+
+export function getContextMenuSideOffset(
+  anchorRect: ContextMenuOpenContext['anchorRect']
+): number {
+  return anchorRect.width === 0 && anchorRect.height === 0 ? 0 : 4;
 }
