@@ -49,7 +49,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const DEFAULT_EXPLORER_WIDTH = 300;
+const DEFAULT_EXPLORER_WIDTH = 280;
 const DEFAULT_MIN_EXPLORER_WIDTH = 180;
 const DEFAULT_MAX_EXPLORER_WIDTH = 600;
 const DEFAULT_NEW_FILE_NAME = 'untitled';

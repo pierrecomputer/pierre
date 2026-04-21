@@ -320,12 +320,12 @@ export function DemoTreeAppClient({
       {theme === 'dark' ? (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-[1px] right-0 hidden w-36 bg-gradient-to-r from-transparent via-[#070707]/70 to-[#070707] max-md:block"
+          className="pointer-events-none absolute inset-y-[1px] right-0 left-[310px] hidden bg-gradient-to-r from-transparent via-[#070707]/70 to-[#070707] max-md:block"
         />
       ) : (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-[1px] right-0 hidden w-36 bg-gradient-to-r from-transparent via-[#ffffff]/70 to-[#ffffff] max-md:block"
+          className="pointer-events-none absolute inset-y-[1px] right-0 left-[310px] hidden bg-gradient-to-r from-transparent via-[#ffffff]/70 to-[#ffffff] max-md:block"
         />
       )}
     </>
