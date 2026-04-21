@@ -28,6 +28,8 @@ const fileOptions = {
   disableFileHeader: true,
   theme: 'pierre-dark',
   themeType: 'dark',
+  overflow: 'wrap' as const,
+  enableLineSelection: true as const,
 } as const;
 
 const composition = {

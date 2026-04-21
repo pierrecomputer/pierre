@@ -17,6 +17,7 @@ const TREE_APP_DEMO_ITEM_HEIGHT = 24;
 
 const TREE_APP_FILE_OPTIONS = {
   disableFileHeader: true,
+  overflow: 'wrap',
   theme: 'pierre-dark',
   themeType: 'dark',
 } as const;

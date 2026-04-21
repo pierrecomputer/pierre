@@ -895,6 +895,18 @@ export function TreeApp<LAnnotation = unknown>({
     search.open();
   }, [search]);
 
+  // TreeApp always renders its file editor with soft wrapping so long lines
+  // stay visible without horizontal scrolling inside the fixed-width editor
+  // pane.
+  const effectiveFileOptions = useMemo<FileOptions<LAnnotation>>(
+    () =>
+      ({
+        ...fileOptions,
+        overflow: 'wrap',
+      }) as FileOptions<LAnnotation>,
+    [fileOptions]
+  );
+
   const treeSurfaceColor = useMemo(() => {
     const explicitTreeBackground =
       treeStyleRecord?.['--trees-bg-override'] ??
@@ -1050,14 +1062,14 @@ export function TreeApp<LAnnotation = unknown>({
       <File
         key={activePath}
         file={file}
-        options={fileOptions}
+        options={effectiveFileOptions}
         prerenderedHTML={prerenderedHTML}
         className="min-h-0 flex-1 overflow-auto"
       />
     );
   }, [
     activePath,
-    fileOptions,
+    effectiveFileOptions,
     files,
     prerenderedHTMLByPath,
     renderEditor,
