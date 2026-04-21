@@ -99,11 +99,6 @@ const REFERENCE_SECTIONS: readonly DocsSection[] = [
   { filePath: 'trees/docs/Reference/Icons/content.mdx' },
 ];
 
-// Belt-and-suspenders against Next.js metadata's shallow merge:
-// setting `openGraph`/`twitter` on a page replaces the parent's
-// objects wholesale, including the file-convention OG/Twitter images
-// inherited from `app/trees/`, so we restate the card image, card
-// type, brand title, and description here.
 const treesDocsTitle = 'Trees, from Pierre';
 const treesDocsDescription =
   'Guide-first documentation for @pierre/trees, covering React, vanilla, prepared input, styling, icons, Git status, large trees, and SSR hydration.';
