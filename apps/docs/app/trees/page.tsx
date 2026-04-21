@@ -96,7 +96,7 @@ export default function TreesPage() {
       <Header className="-mb-[1px]" />
       <Hero productId={PRODUCT_ID} />
 
-      <section className="mb-16 max-md:-mr-5 max-md:overflow-x-clip md:-mt-6">
+      <section className="mb-16 max-md:-mr-5 max-md:-ml-5 max-md:overflow-x-clip max-md:pl-5 md:-mt-6">
         <DemoTreeApp />
       </section>
 

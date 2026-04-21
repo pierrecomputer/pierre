@@ -228,7 +228,7 @@ export function DemoContextMenuClient({
             Reset
           </Button>
         </div>
-        <div className="max-md:-mr-5 max-md:overflow-x-clip">
+        <div className="max-md:-mr-5 max-md:-ml-5 max-md:overflow-x-clip max-md:pl-5">
           <TreeApp
             key={activeModeDemo.id}
             className="max-md:w-[720px] max-md:min-w-[720px]"

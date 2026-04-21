@@ -35,7 +35,7 @@ export function Hero({ productId }: HeroProps) {
   };
 
   return (
-    <section className="flex max-w-3xl flex-col gap-3 py-20 lg:max-w-4xl">
+    <section className="flex max-w-3xl flex-col gap-3 pt-20 pb-10 md:pb-20 lg:max-w-4xl">
       <HeroIcon productId={productId} />
 
       <h1 className="text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
@@ -55,7 +55,7 @@ export function Hero({ productId }: HeroProps) {
         .
       </p>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-3 min-[460px]:flex-row min-[500px]:items-center">
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -78,7 +78,7 @@ export function Hero({ productId }: HeroProps) {
           variant="secondary"
           asChild
           size="xl"
-          className="h-11 rounded-lg text-sm md:h-12 md:text-base"
+          className="h-11 rounded-lg px-5 text-sm md:h-12 md:text-base"
         >
           <Link href={product.docsPath}>
             <IconBook />
