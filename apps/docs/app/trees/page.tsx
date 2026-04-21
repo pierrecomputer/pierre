@@ -22,6 +22,7 @@ import {
   TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
   TREE_NEW_GIT_STATUSES,
 } from './gitStatusDemoData';
+import { TREES_PRODUCT_DESCRIPTION, TREES_TITLE } from './metadata';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
@@ -29,9 +30,8 @@ import { PierreCompanySection } from '@/components/PierreCompanySection';
 const PRODUCT_ID: ProductId = 'trees';
 
 export const metadata: Metadata = {
-  title: 'Trees, from Pierre',
-  description:
-    "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.",
+  title: TREES_TITLE,
+  description: TREES_PRODUCT_DESCRIPTION,
 };
 
 export default function TreesPage() {

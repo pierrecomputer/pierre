@@ -6,6 +6,7 @@ import { Fragment } from 'react';
 import { DocsLayout } from '../../docs/DocsLayout';
 import { HeadingAnchors } from '../../docs/HeadingAnchors';
 import { ProseWrapper } from '../../docs/ProseWrapper';
+import { TREES_DOCS_DESCRIPTION, TREES_TITLE } from '../metadata';
 import * as chooseYourIntegrationConstants from './Guides/ChooseYourIntegration/constants';
 import * as customizeIconsConstants from './Guides/CustomizeIcons/constants';
 import * as getStartedWithReactConstants from './Guides/GetStartedWithReact/constants';
@@ -100,9 +101,16 @@ const REFERENCE_SECTIONS: readonly DocsSection[] = [
 ];
 
 export const metadata: Metadata = {
-  title: 'Trees, from Pierre',
-  description:
-    'Guide-first documentation for @pierre/trees, covering React, vanilla, prepared input, styling, icons, Git status, large trees, and SSR hydration.',
+  title: TREES_TITLE,
+  description: TREES_DOCS_DESCRIPTION,
+  openGraph: {
+    title: TREES_TITLE,
+    description: TREES_DOCS_DESCRIPTION,
+  },
+  twitter: {
+    title: TREES_TITLE,
+    description: TREES_DOCS_DESCRIPTION,
+  },
 };
 
 export default function TreesDocsPage() {
