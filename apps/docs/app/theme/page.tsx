@@ -34,10 +34,6 @@ const themeTitle =
 const themeDescription =
   'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, Zed, and Shiki.';
 
-// `/theme/opengraph-image.png` is used for both the OG and Twitter
-// cards. Next.js's `twitter-image` file convention is separate from
-// `opengraph-image`, so the same URL is wired up explicitly here
-// rather than duplicating the asset on disk.
 export const metadata: Metadata = {
   title: themeTitle,
   description: themeDescription,

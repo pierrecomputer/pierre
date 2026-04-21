@@ -88,20 +88,9 @@ function worktreeTitlePrefix(): string {
 
 const WORKTREE_PREFIX = worktreeTitlePrefix();
 
-// Same Next.js app deploys to two domains based on `NEXT_PUBLIC_SITE`
-// (see `next.config.mjs`). Brand strings here switch on the env var so
-// unmatched routes (404s, `/_not-found`, etc.) render brand-correct
-// titles/descriptions/OG cards on each domain.
-//
-// Icons:
-// - On `diffs.com`, the root declares the favicon set explicitly; it
-//   serves Diffs content at `/`, `/docs`, `/theme`, `/playground`, and
-//   redirects `/trees/*` out.
-// - On `trees.software`, the root deliberately does NOT declare `icons`
-//   so the file-convention assets in `app/trees/` (`icon.{ico,svg}`,
-//   `apple-icon.png`) take over for the actual rendered routes (all of
-//   which sit under `/trees/*` because of the `next.config.mjs`
-//   rewrites).
+// On `trees.software`, `icons` is intentionally omitted so the
+// file-convention assets in `app/trees/` (`icon.{ico,svg}`,
+// `apple-icon.png`) take over.
 const SITE = (process.env.NEXT_PUBLIC_SITE ?? 'diffs') as ProductId;
 const isTrees = SITE === 'trees';
 const SITE_PRODUCT = PRODUCTS[SITE];
