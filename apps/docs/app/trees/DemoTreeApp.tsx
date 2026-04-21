@@ -1,4 +1,5 @@
 import { preloadFile } from '@pierre/diffs/ssr';
+import { FILE_TREE_DENSITY_PRESETS } from '@pierre/trees';
 import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { DemoTreeAppClient } from './DemoTreeAppClient';
@@ -13,7 +14,7 @@ import {
 } from './treeAppDemoData';
 
 const TREE_APP_DEMO_TREE_ID = 'tree-app-hero-demo';
-const TREE_APP_DEMO_ITEM_HEIGHT = 24;
+const TREE_APP_DEMO_DENSITY = 'compact' as const;
 
 const TREE_APP_DARK_FILE_OPTIONS = {
   disableFileHeader: true,
@@ -38,12 +39,13 @@ export async function DemoTreeApp() {
     id: TREE_APP_DEMO_TREE_ID,
     initialExpandedPaths: TREE_APP_DEMO_INITIAL_EXPANDED_PATHS,
     initialSelectedPaths: [TREE_APP_DEMO_INITIAL_ACTIVE_PATH],
-    itemHeight: TREE_APP_DEMO_ITEM_HEIGHT,
+    density: TREE_APP_DEMO_DENSITY,
     paths: TREE_APP_DEMO_PATHS,
     search: true,
     unsafeCSS: TREE_APP_DEMO_UNSAFE_CSS,
     initialVisibleRowCount:
-      TREE_NEW_VIEWPORT_HEIGHTS.treeApp / TREE_APP_DEMO_ITEM_HEIGHT,
+      TREE_NEW_VIEWPORT_HEIGHTS.treeApp /
+      FILE_TREE_DENSITY_PRESETS[TREE_APP_DEMO_DENSITY].itemHeight,
   });
 
   // Preload syntax-highlighted HTML for every demo file in parallel, under

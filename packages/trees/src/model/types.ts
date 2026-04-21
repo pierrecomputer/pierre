@@ -5,6 +5,7 @@ import type {
   GitStatus,
   GitStatusEntry,
 } from '../types';
+import type { FileTreeDensity } from './density';
 
 /**
  * The provisional public identity stays path-first so later phases can evolve
@@ -225,6 +226,7 @@ export interface FileTreeRenamingConfig {
 
 type FileTreeOptionSurface = FileTreeRenderOptions & {
   composition?: FileTreeCompositionOptions;
+  density?: FileTreeDensity;
   gitStatus?: readonly GitStatusEntry[];
   id?: string;
   icons?: FileTreeIcons;

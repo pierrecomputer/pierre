@@ -1,12 +1,15 @@
 'use client';
 
 import {
+  FILE_TREE_DENSITY_PRESETS,
+  type FileTreeDensityKeyword,
+} from '@pierre/trees';
+import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
 } from '@pierre/trees/react';
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 
 import { TreeExampleHeading } from '../components/TreeExampleHeading';
@@ -22,56 +25,35 @@ const PRESELECTED_FILE = 'src/components/Button.tsx';
 
 const DENSITY_PRESETS = [
   {
-    density: 0.8,
-    description: '24px rows, density 0.8',
-    height: 24,
+    density: 'compact',
+    description: '24px rows, 0.8 spacing',
     id: 'trees-density-demo-compact',
-    key: 'compact',
     label: 'Compact',
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.densityCompact,
   },
   {
-    density: 1,
-    description: '30px rows, density 1',
-    height: 30,
+    density: 'default',
+    description: '30px rows, 1.0 spacing',
     id: 'trees-density-demo-default',
-    key: 'default',
     label: 'Default',
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.densityDefault,
   },
   {
-    density: 1.2,
-    description: '36px rows, density 1.2',
-    height: 36,
+    density: 'relaxed',
+    description: '36px rows, 1.2 spacing',
     id: 'trees-density-demo-relaxed',
-    key: 'relaxed',
     label: 'Relaxed',
     viewportHeight: TREE_NEW_VIEWPORT_HEIGHTS.densityRelaxed,
   },
 ] as const;
 
-function densityStyle(
-  density: number,
-  height: number,
-  viewportHeight: number
-): CSSProperties {
-  return {
-    colorScheme: 'dark',
-    height: `${String(viewportHeight)}px`,
-    ['--trees-density-override' as string]: density,
-    ['--trees-row-height-override' as string]: `${String(height)}px`,
-  };
-}
-
 function DensityTree({
   density,
-  itemHeight,
   id,
   preloadedData,
   viewportHeight,
 }: {
-  density: number;
-  itemHeight: number;
+  density: FileTreeDensityKeyword;
   id: string;
   preloadedData: FileTreePreloadedData;
   viewportHeight: number;
@@ -79,9 +61,10 @@ function DensityTree({
   const { model } = useFileTree({
     flattenEmptyDirectories: true,
     id,
-    itemHeight,
+    density,
     paths: sampleFileList,
-    initialVisibleRowCount: viewportHeight / itemHeight,
+    initialVisibleRowCount:
+      viewportHeight / FILE_TREE_DENSITY_PRESETS[density].itemHeight,
   });
 
   useEffect(() => {
@@ -94,7 +77,10 @@ function DensityTree({
       className={getDefaultFileTreePanelClass()}
       model={model}
       preloadedData={preloadedData}
-      style={densityStyle(density, itemHeight, viewportHeight)}
+      style={{
+        colorScheme: 'dark',
+        height: `${String(viewportHeight)}px`,
+      }}
     />
   );
 }
@@ -108,7 +94,9 @@ interface DemoDensityClientProps {
 }
 
 export function DemoDensityClient({ preloadedData }: DemoDensityClientProps) {
-  const [mobileView, setMobileView] = useState<string>(DENSITY_PRESETS[0].key);
+  const [mobileView, setMobileView] = useState<string>(
+    DENSITY_PRESETS[0].density
+  );
 
   return (
     <TreeExampleSection>
@@ -117,12 +105,12 @@ export function DemoDensityClient({ preloadedData }: DemoDensityClientProps) {
         title="Adjustable density"
         description={
           <>
-            Pair a row height with a density preset to tune the tree&apos;s
-            proportions. Use <code>--trees-row-height-override</code> for the
-            row size, <code>--trees-density-override</code> for spacing, and
-            keep <code>itemHeight</code> aligned with the chosen row height.
-            Density now scales spacing around the rows rather than height
-            itself. See the{' '}
+            Pass <code>density=&quot;compact&quot;</code>,{' '}
+            <code>&quot;default&quot;</code>, or{' '}
+            <code>&quot;relaxed&quot;</code> (or a custom numeric factor) to{' '}
+            <code>useFileTree</code> to tune the tree&apos;s proportions in one
+            place — the keyword resolves both the row height and the spacing
+            factor. See the{' '}
             <Link
               href={`${PRODUCTS.trees.docsPath}#styling-and-theming`}
               className="inline-link"
@@ -139,7 +127,7 @@ export function DemoDensityClient({ preloadedData }: DemoDensityClientProps) {
         onValueChange={setMobileView}
       >
         {DENSITY_PRESETS.map((preset) => (
-          <ButtonGroupItem key={preset.key} value={preset.key}>
+          <ButtonGroupItem key={preset.density} value={preset.density}>
             {preset.label}
           </ButtonGroupItem>
         ))}
@@ -149,7 +137,7 @@ export function DemoDensityClient({ preloadedData }: DemoDensityClientProps) {
           <div
             key={preset.id}
             className={
-              mobileView === preset.key ? undefined : 'hidden md:block'
+              mobileView === preset.density ? undefined : 'hidden md:block'
             }
           >
             <TreeExampleHeading description={preset.description}>
@@ -158,8 +146,7 @@ export function DemoDensityClient({ preloadedData }: DemoDensityClientProps) {
             <DensityTree
               density={preset.density}
               id={preset.id}
-              itemHeight={preset.height}
-              preloadedData={preloadedData[preset.key]}
+              preloadedData={preloadedData[preset.density]}
               viewportHeight={preset.viewportHeight}
             />
           </div>

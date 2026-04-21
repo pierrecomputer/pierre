@@ -1,10 +1,12 @@
+import { FILE_TREE_DENSITY_PRESETS } from './density';
 import type {
   FileTreeRange,
   FileTreeStickyWindowLayout,
   FileTreeViewportMetrics,
 } from './types';
 
-export const FILE_TREE_DEFAULT_ITEM_HEIGHT = 30;
+export const FILE_TREE_DEFAULT_ITEM_HEIGHT =
+  FILE_TREE_DENSITY_PRESETS.default.itemHeight;
 export const FILE_TREE_DEFAULT_OVERSCAN = 10;
 export const FILE_TREE_DEFAULT_VIEWPORT_HEIGHT = 420;
 export const EMPTY_RANGE: FileTreeRange = { start: 0, end: -1 };

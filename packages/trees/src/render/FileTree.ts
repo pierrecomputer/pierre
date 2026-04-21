@@ -16,6 +16,10 @@ import {
   HEADER_SLOT_NAME,
 } from '../constants';
 import { normalizeFileTreeIcons } from '../iconConfig';
+import {
+  type FileTreeDensityPreset,
+  resolveFileTreeDensity,
+} from '../model/density';
 import { FileTreeController } from '../model/FileTreeController';
 import {
   type FileTreeGitStatusState,
@@ -172,6 +176,7 @@ export class FileTree
   readonly #searchEnabled: boolean;
   readonly #searchFakeFocus: boolean;
   readonly #slotHost = new FileTreeManagedSlotHost();
+  readonly #density: FileTreeDensityPreset;
   readonly #viewOptions: Pick<
     FileTreeOptions,
     'initialVisibleRowCount' | 'itemHeight' | 'overscan' | 'stickyFolders'
@@ -189,6 +194,7 @@ export class FileTree
   public constructor(options: FileTreeOptions) {
     const {
       composition,
+      density,
       fileTreeSearchMode,
       gitStatus,
       id,
@@ -219,8 +225,9 @@ export class FileTree
     this.#searchBlurBehavior = searchBlurBehavior;
     this.#searchEnabled = search === true;
     this.#searchFakeFocus = searchFakeFocus === true;
+    this.#density = resolveFileTreeDensity(density, itemHeight);
     this.#viewOptions = {
-      itemHeight,
+      itemHeight: this.#density.itemHeight,
       overscan,
       stickyFolders,
       initialVisibleRowCount,
@@ -285,6 +292,14 @@ export class FileTree
 
   public getComposition(): FileTreeCompositionOptions | undefined {
     return this.#composition;
+  }
+
+  public getItemHeight(): number {
+    return this.#density.itemHeight;
+  }
+
+  public getDensityFactor(): number {
+    return this.#density.factor;
   }
 
   public subscribe(listener: FileTreeListener): () => void {
@@ -705,6 +720,7 @@ export class FileTree
 export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
   const {
     composition,
+    density,
     fileTreeSearchMode,
     gitStatus,
     id,
@@ -724,6 +740,8 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     initialVisibleRowCount,
     ...controllerOptions
   } = options;
+  const resolvedDensity = resolveFileTreeDensity(density, itemHeight);
+  const resolvedItemHeight = resolvedDensity.itemHeight;
   const resolvedId = createServerId(id);
   const controller = new FileTreeController({
     ...controllerOptions,
@@ -734,7 +752,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
   const gitStatusState = resolveFileTreeGitStatusState(gitStatus);
   const initialViewportHeight = resolveInitialViewportHeight({
     initialVisibleRowCount,
-    itemHeight,
+    itemHeight: resolvedItemHeight,
   });
   const normalizedIcons = normalizeFileTreeIcons(icons);
   const customSpriteSheet = normalizedIcons.spriteSheet?.trim() ?? '';
@@ -759,7 +777,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
       directoriesWithGitChanges: gitStatusState?.directoriesWithChanges,
       icons,
       instanceId: resolvedId,
-      itemHeight,
+      itemHeight: resolvedItemHeight,
       overscan,
       renamingEnabled: renaming != null && renaming !== false,
       renderRowDecoration,

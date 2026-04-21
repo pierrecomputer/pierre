@@ -1,6 +1,7 @@
 'use client';
 
 import type { FileContents } from '@pierre/diffs';
+import { FILE_TREE_DENSITY_PRESETS } from '@pierre/trees';
 import type { FileTreePreloadedData } from '@pierre/trees/react';
 import { useFileTree } from '@pierre/trees/react';
 import type { CSSProperties } from 'react';
@@ -15,23 +16,19 @@ import { TreeApp } from '@/components/TreeApp';
 import type { TreeAppTheme } from '@/components/TreeApp';
 import type { GitStatusEntry } from '@/lib/treesCompat';
 
-const COMPACT_ITEM_HEIGHT = 24;
-const COMPACT_DENSITY = 0.8;
+const COMPACT_DENSITY = 'compact' as const;
 
 const darkTreePanelStyle = {
   colorScheme: 'dark',
   '--trees-search-bg-override': '#1f2631',
-  '--trees-density-override': COMPACT_DENSITY,
-  '--trees-row-height-override': `${String(COMPACT_ITEM_HEIGHT)}px`,
 } as CSSProperties;
 
 // Light variant drops the dark-specific search background override so the
 // trees stylesheet's `light-dark()` defaults can kick in for the rest of the
-// panel. Density/row-height stay the same since they're visual, not chromatic.
+// panel. Density (row height + spacing factor) lives on the model via the
+// `density` option, so it stays consistent across both themes.
 const lightTreePanelStyle = {
   colorScheme: 'light',
-  '--trees-density-override': COMPACT_DENSITY,
-  '--trees-row-height-override': `${String(COMPACT_ITEM_HEIGHT)}px`,
 } as CSSProperties;
 
 const treeStyleByTheme = {
@@ -233,13 +230,14 @@ export function DemoTreeAppClient({
       id: treeId,
       initialExpandedPaths,
       initialSelectedPaths: [initialActivePath],
-      itemHeight: COMPACT_ITEM_HEIGHT,
+      density: COMPACT_DENSITY,
       paths,
       renaming: true as const,
       search: true as const,
       unsafeCSS: TREE_APP_DEMO_UNSAFE_CSS,
       initialVisibleRowCount:
-        TREE_NEW_VIEWPORT_HEIGHTS.treeApp / COMPACT_ITEM_HEIGHT,
+        TREE_NEW_VIEWPORT_HEIGHTS.treeApp /
+        FILE_TREE_DENSITY_PRESETS[COMPACT_DENSITY].itemHeight,
     }),
     [initialActivePath, initialExpandedPaths, paths, treeId]
   );

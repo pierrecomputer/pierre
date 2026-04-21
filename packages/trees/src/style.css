@@ -102,9 +102,8 @@
 
       // Density
       //
-      // A unitless scale factor that drives padding, gaps, indentation, and
-      // related spacing. Use --trees-row-height-override to customize row
-      // height separately. Individual layout overrides still take precedence.
+      // A unitless scale factor for padding, gaps, and indentation. Usually
+      // set via `density` on useFileTree. Individual overrides take precedence.
       //
       //   Compact: 0.8
       //   Default: 1
@@ -119,7 +118,6 @@
       --trees-font-size-override
       --trees-font-weight-regular-override
       --trees-font-weight-semibold-override
-      --trees-row-height-override
       --trees-level-gap-override
       --trees-item-padding-x-override
       --trees-item-margin-x-override
@@ -527,7 +525,7 @@
       --trees-icon-nudge-override,
       calc(1px * var(--trees-density))
     );
-    --trees-row-height: var(--trees-row-height-override, 30px);
+    --trees-row-height: var(--trees-item-height, 30px);
     --trees-git-lane-width: var(--trees-git-lane-width-override, 12px);
     --trees-action-lane-width: var(
       --trees-action-lane-width-override,

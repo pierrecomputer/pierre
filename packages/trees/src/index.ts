@@ -20,6 +20,12 @@ export {
 } from './preparedInput';
 export { FILE_TREE_DEFAULT_ITEM_HEIGHT } from './model/virtualization';
 export {
+  FILE_TREE_DENSITY_PRESETS,
+  type FileTreeDensity,
+  type FileTreeDensityKeyword,
+  type FileTreeDensityPreset,
+} from './model/density';
+export {
   FileTree,
   preloadFileTree,
   serializeFileTreeSsrPayload,

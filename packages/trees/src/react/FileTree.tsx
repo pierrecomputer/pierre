@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 'use client';
 
-import type { HTMLAttributes, ReactNode } from 'react';
+import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import {
   useCallback,
   useEffect,
@@ -250,11 +250,21 @@ export function FileTree({
   );
   const resolvedHostId = id ?? preloadedData?.id;
 
+  // Paint the model's resolved density onto the host so callers don't have to
+  // set `--trees-item-height` and `--trees-density-override` themselves.
+  // Caller-provided `style` keys still win via spread order.
+  const mergedStyle: CSSProperties = {
+    ['--trees-item-height' as string]: `${String(model.getItemHeight())}px`,
+    ['--trees-density-override' as string]: model.getDensityFactor(),
+    ...hostProps.style,
+  };
+
   return (
     <FILE_TREE_TAG_NAME
       {...hostProps}
       id={resolvedHostId}
       ref={handleHostRef}
+      style={mergedStyle}
       suppressHydrationWarning={preloadedData != null}
     >
       {children}

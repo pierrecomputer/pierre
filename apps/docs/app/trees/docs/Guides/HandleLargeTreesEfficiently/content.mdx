@@ -37,7 +37,10 @@ The main rendering knobs are:
   layout
 - `initialVisibleRowCount`, when you want to budget SSR or first-render work
   before measurement
-- `itemHeight`, when your design changes row density enough to matter
+- `density`, when your design changes row density enough to matter — pass
+  `'compact' | 'default' | 'relaxed'` (or a custom numeric factor) to resolve
+  both the row height and the surrounding spacing in one place. Use `itemHeight`
+  only when you need a row height that doesn't match a preset.
 - `overscan`, when you need to trade a little extra work for smoother scrolling
 
 <DocsCodeExample {...LARGE_TREES_VIRTUALIZATION_KNOBS} />
