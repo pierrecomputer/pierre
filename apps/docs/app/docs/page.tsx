@@ -112,13 +112,6 @@ import {
 import Footer from '@/components/Footer';
 import { renderMDX } from '@/lib/mdx';
 
-// Belt-and-suspenders against Next.js metadata's shallow merge:
-// setting `openGraph`/`twitter` on a page replaces the parent's
-// objects wholesale (including the file-convention OG/Twitter images
-// that would otherwise be inherited from `app/opengraph-image.png` /
-// `app/twitter-image.png`), so we restate the card type and image
-// URLs here. URLs match the file-convention paths that Next.js serves
-// from the root segment.
 const docsTitle = 'Diffs docs';
 const docsDescription =
   'Documentation for @pierre/diffs: React and vanilla APIs, virtualization, theming, token hooks, the worker pool, and SSR hydration.';
