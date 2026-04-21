@@ -12,6 +12,7 @@ import {
 import localFont from 'next/font/local';
 
 import './globals.css';
+import { type ProductId, PRODUCTS } from './product-config';
 import { PreloadHighlighter } from '@/components/PreloadHighlighter';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -86,35 +87,53 @@ function worktreeTitlePrefix(): string {
 }
 
 const WORKTREE_PREFIX = worktreeTitlePrefix();
-const baseTitle = 'Diffs, from Pierre';
-const taggedTitle = `${WORKTREE_PREFIX}${baseTitle}`;
 
-// Using Next's `title.template` so the emoji + slug prefix also reaches pages
-// that export their own `metadata.title` (e.g. `app/trees/page.tsx`). Pages
-// that set a bare `title: 'X'` render as `🟢 [slug] X`; pages that need to
-// opt out entirely can set `title: { absolute: 'X' }`.
+// Same Next.js app deploys to two domains based on `NEXT_PUBLIC_SITE`
+// (see `next.config.mjs`). Brand strings here switch on the env var so
+// unmatched routes (404s, `/_not-found`, etc.) render brand-correct
+// titles/descriptions/OG cards on each domain.
+//
+// Icons:
+// - On `diffs.com`, the root declares the favicon set explicitly; it
+//   serves Diffs content at `/`, `/docs`, `/theme`, `/playground`, and
+//   redirects `/trees/*` out.
+// - On `trees.software`, the root deliberately does NOT declare `icons`
+//   so the file-convention assets in `app/trees/` (`icon.{ico,svg}`,
+//   `apple-icon.png`) take over for the actual rendered routes (all of
+//   which sit under `/trees/*` because of the `next.config.mjs`
+//   rewrites).
+const SITE = (process.env.NEXT_PUBLIC_SITE ?? 'diffs') as ProductId;
+const isTrees = SITE === 'trees';
+const SITE_PRODUCT = PRODUCTS[SITE];
+const SITE_ORIGIN = isTrees ? 'https://trees.software' : 'https://diffs.com';
+const baseTitle = `${SITE_PRODUCT.name}, from Pierre`;
+const taggedTitle = `${WORKTREE_PREFIX}${baseTitle}`;
+const description = SITE_PRODUCT.description;
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_ORIGIN),
   title: {
     default: taggedTitle,
     template: `${WORKTREE_PREFIX}%s`,
   },
-  description:
-    'An open source diff and file rendering library by The Pierre Computer Company.',
-  icons: {
-    icon: [
-      { url: '/favicon.svg', type: 'image/svg+xml' },
-      { url: '/favicon.png', type: 'image/png' },
-    ],
-    apple: '/apple-touch-icon.png',
-    shortcut: '/favicon.ico',
-  },
+  description,
+  ...(isTrees
+    ? {}
+    : {
+        icons: {
+          icon: [
+            { url: '/favicon.svg', type: 'image/svg+xml' },
+            { url: '/favicon.png', type: 'image/png' },
+          ],
+          apple: '/apple-touch-icon.png',
+        },
+      }),
   openGraph: {
     title: {
       default: taggedTitle,
       template: `${WORKTREE_PREFIX}%s`,
     },
-    description:
-      'An open source diff and file rendering library by The Pierre Computer Company.',
+    description,
   },
   twitter: {
     card: 'summary_large_image',
@@ -122,8 +141,7 @@ export const metadata: Metadata = {
       default: taggedTitle,
       template: `${WORKTREE_PREFIX}%s`,
     },
-    description:
-      'An open source diff and file rendering library by The Pierre Computer Company.',
+    description,
   },
 };
 

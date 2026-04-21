@@ -28,10 +28,29 @@ import { PierreCompanySection } from '@/components/PierreCompanySection';
 
 const PRODUCT_ID: ProductId = 'trees';
 
+// Belt-and-suspenders against Next.js metadata's shallow merge:
+// setting `openGraph`/`twitter` on a page replaces the parent's
+// objects wholesale, so we restate the card image, card type, brand
+// title, and description here. Image URLs match the file-convention
+// paths Next.js serves from `app/trees/`.
+const treesTitle = 'Trees, from Pierre';
+const treesDescription =
+  "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.";
+
 export const metadata: Metadata = {
-  title: 'Trees, from Pierre',
-  description:
-    "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.",
+  title: treesTitle,
+  description: treesDescription,
+  openGraph: {
+    title: treesTitle,
+    description: treesDescription,
+    images: ['/trees/opengraph-image.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: treesTitle,
+    description: treesDescription,
+    images: ['/trees/twitter-image.png'],
+  },
 };
 
 export default function TreesPage() {

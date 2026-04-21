@@ -29,23 +29,28 @@ import { PierreCompanySection } from '@/components/PierreCompanySection';
 import { Button } from '@/components/ui/button';
 import { renderMDX } from '@/lib/mdx';
 
+const themeTitle =
+  'Pierre Themes — Themes for Visual Studio Code, Cursor, Zed, and Shiki.';
+const themeDescription =
+  'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, Zed, and Shiki.';
+
+// `/theme/opengraph-image.png` is used for both the OG and Twitter
+// cards. Next.js's `twitter-image` file convention is separate from
+// `opengraph-image`, so the same URL is wired up explicitly here
+// rather than duplicating the asset on disk.
 export const metadata: Metadata = {
-  title:
-    'Pierre Themes — Themes for Visual Studio Code, Cursor, Zed, and Shiki.',
-  description:
-    'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, Zed, and Shiki.',
+  title: themeTitle,
+  description: themeDescription,
   openGraph: {
-    title:
-      'Pierre Themes — Themes for Visual Studio Code, Cursor, Zed, and Shiki.',
-    description:
-      'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, Zed, and Shiki.',
+    title: themeTitle,
+    description: themeDescription,
+    images: ['/theme/opengraph-image.png'],
   },
   twitter: {
     card: 'summary_large_image',
-    title:
-      'Pierre Themes — Themes for Visual Studio Code, Cursor, Zed, and Shiki.',
-    description:
-      'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, Zed, and Shiki.',
+    title: themeTitle,
+    description: themeDescription,
+    images: ['/theme/opengraph-image.png'],
   },
 };
 

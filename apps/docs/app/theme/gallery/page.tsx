@@ -1,4 +1,5 @@
 import { parseDiffFromFile, resolveTheme } from '@pierre/diffs';
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
 import { ThemesGridClient } from './ThemesGridClient';
@@ -162,6 +163,32 @@ const THEMES = [
   'min-light',
   'min-dark',
 ] as const;
+
+// Mirrors `app/theme/page.tsx` so `/theme/gallery` matches `/theme`'s
+// title, description, and shared OG/Twitter card image. We can't rely
+// on inheritance because Next.js page metadata doesn't propagate to
+// child routes (only layout metadata does), and we don't have a
+// `theme/layout.tsx` in this minimal-fix structure.
+const themeTitle =
+  'Pierre Themes — Themes for Visual Studio Code, Cursor, Zed, and Shiki.';
+const themeDescription =
+  'Beautiful light and dark themes, generated from a shared color palette, for Visual Studio Code, Cursor, Zed, and Shiki.';
+
+export const metadata: Metadata = {
+  title: themeTitle,
+  description: themeDescription,
+  openGraph: {
+    title: themeTitle,
+    description: themeDescription,
+    images: ['/theme/opengraph-image.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: themeTitle,
+    description: themeDescription,
+    images: ['/theme/opengraph-image.png'],
+  },
+};
 
 export default async function ThemeGalleryPage() {
   const resolvedThemes = await Promise.all(
