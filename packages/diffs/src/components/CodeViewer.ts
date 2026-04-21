@@ -390,6 +390,7 @@ export class CodeViewer<LAnnotation = undefined> {
   // - 'position' targets settle on the first frame that applies their
   //   scrollTop — there is no layout-dependent destination to chase.
   private pendingScrollTarget: CodeViewerScrollTarget | undefined;
+  private pendingLayoutAnchor: ScrollAnchor | undefined;
 
   // Active smooth-scroll animation state. Only populated while a scrollTo
   // with `behavior: 'smooth'` is in flight; cleared on settle (position +
@@ -491,6 +492,7 @@ export class CodeViewer<LAnnotation = undefined> {
     this.stickyOffset.style.height = '';
     this.container?.style.removeProperty('height');
     this.windowSpecs = { top: 0, bottom: 0 };
+    this.pendingLayoutAnchor = undefined;
     this.height = 0;
     this.scrollTop = 0;
     this.scrollHeight = 0;
@@ -581,6 +583,7 @@ export class CodeViewer<LAnnotation = undefined> {
     }
 
     // We'll attempt to scroll to this new target on the next render frame
+    this.pendingLayoutAnchor = undefined;
     this.pendingScrollTarget = target;
     this.scrollDirty = true;
     this.render();
@@ -649,6 +652,8 @@ export class CodeViewer<LAnnotation = undefined> {
       return;
     }
 
+    this.capturePendingLayoutAnchor();
+
     // NOTE(amadeus): This is also something that's probably ridiculously
     // expensive to pull off, and we should probably figure out some way to
     // incrementally version/render stuff
@@ -671,6 +676,18 @@ export class CodeViewer<LAnnotation = undefined> {
     if (!this.isContainerManaged && this.items.length > 0) {
       this.render();
     }
+  }
+
+  private capturePendingLayoutAnchor(): void {
+    if (
+      this.root == null ||
+      this.items.length === 0 ||
+      this.pendingScrollTarget != null
+    ) {
+      return;
+    }
+
+    this.pendingLayoutAnchor = this.getScrollAnchor(this.getScrollTop());
   }
 
   public render(immediate = false): void {
@@ -1482,6 +1499,9 @@ export class CodeViewer<LAnnotation = undefined> {
     //   and update the spring based on frameTime as needed
     const anchoredScrollTop =
       anchor != null ? this.resolveAnchoredScrollTop(anchor) : undefined;
+    if (anchor === this.pendingLayoutAnchor) {
+      this.pendingLayoutAnchor = undefined;
+    }
     // The amount of computed layout shift from the render
     const anchorScrollDelta =
       anchoredScrollTop != null ? anchoredScrollTop - currentScrollTop : 0;
@@ -1641,6 +1661,7 @@ export class CodeViewer<LAnnotation = undefined> {
   // pointerdown / keydown; we never mutate the event, just drop our state.
   private clearPendingScroll = (): void => {
     this.pendingScrollTarget = undefined;
+    this.pendingLayoutAnchor = undefined;
     this.scrollAnimation = undefined;
   };
 
@@ -1704,6 +1725,10 @@ export class CodeViewer<LAnnotation = undefined> {
    * destructive work we shouldn't care about paying for
    */
   private getScrollAnchor(scrollTop: number): ScrollAnchor | undefined {
+    if (this.pendingLayoutAnchor != null) {
+      return this.pendingLayoutAnchor;
+    }
+
     const { firstIndex, lastIndex, stickyTop, stickyBottom } = this.renderState;
     if (firstIndex === -1 || lastIndex === -1) {
       return undefined;
@@ -1738,6 +1763,14 @@ export class CodeViewer<LAnnotation = undefined> {
         break;
       }
 
+      if (absoluteItemTop >= scrollTop) {
+        return {
+          type: 'item',
+          id: item.item.id,
+          viewportOffset: absoluteItemTop - scrollTop,
+        };
+      }
+
       // First attempt to grab a the first fully visible line
       const localViewportTop = scrollTop - absoluteItemTop;
       const lineAnchor = item.instance.getNumericScrollAnchor(localViewportTop);
@@ -1751,15 +1784,6 @@ export class CodeViewer<LAnnotation = undefined> {
           viewportOffset: absoluteLineTop - scrollTop,
         };
       }
-
-      // We'll only fall back here if the file is collapsed, has no line
-      // changes or only part of the last line is visible which should still
-      // serve us correctly for a scroll anchor
-      return {
-        type: 'item',
-        id: item.item.id,
-        viewportOffset: absoluteItemTop - scrollTop,
-      };
     }
 
     // I don't think we'll ever make it this far...
