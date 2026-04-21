@@ -1123,7 +1123,13 @@ export class CodeViewer<LAnnotation = undefined> {
     target: CodeViewerScrollTarget
   ): number | undefined {
     if (target.type === 'position') {
-      return this.clampScrollTop(target.position);
+      return this.clampScrollTop(
+        target.position -
+          (target.stickyHeader === true &&
+          this.options.disableFileHeader !== true
+            ? this.metrics.diffHeaderHeight
+            : 0)
+      );
     }
 
     const item = this.idToItem.get(target.id);
@@ -1156,7 +1162,8 @@ export class CodeViewer<LAnnotation = undefined> {
         item.top + linePosition.top,
         linePosition.height,
         target.align,
-        target.offset
+        target.offset,
+        target.stickyHeader
       )
     );
   }
@@ -1170,23 +1177,38 @@ export class CodeViewer<LAnnotation = undefined> {
     targetTop: number,
     targetHeight: number,
     align: CodeViewerItemScrollTarget['align'],
-    offset = 0
+    offset = 0,
+    stickyHeader = false
   ): number {
     targetTop += this.viewerMetrics.paddingTop;
     const viewportHeight = this.getHeight();
+    const stickyHeaderOffset =
+      stickyHeader && this.options.disableFileHeader !== true
+        ? this.metrics.diffHeaderHeight
+        : 0;
+    const visibleViewportHeight = Math.max(
+      viewportHeight - stickyHeaderOffset,
+      0
+    );
 
-    if (align === 'center' && targetHeight + offset < viewportHeight) {
-      return targetTop - (viewportHeight - targetHeight) / 2 + offset;
+    if (align === 'center' && targetHeight + offset < visibleViewportHeight) {
+      return (
+        targetTop -
+        stickyHeaderOffset -
+        (visibleViewportHeight - targetHeight) / 2 +
+        offset
+      );
     }
     if (align === 'end') {
       return targetTop - (viewportHeight - targetHeight) + offset;
     }
     if (align === 'nearest') {
       const currentTop = this.getScrollTop();
+      const currentVisibleTop = currentTop + stickyHeaderOffset;
       const currentBottom = currentTop + viewportHeight;
-      const startTop = targetTop - offset;
+      const startTop = targetTop - stickyHeaderOffset - offset;
       const endTop = targetTop - (viewportHeight - targetHeight) + offset;
-      if (startTop < currentTop) {
+      if (targetTop - offset < currentVisibleTop) {
         return startTop;
       }
       if (targetTop + targetHeight + offset > currentBottom) {
@@ -1195,7 +1217,7 @@ export class CodeViewer<LAnnotation = undefined> {
       return currentTop;
     }
 
-    return targetTop - offset;
+    return targetTop - stickyHeaderOffset - offset;
   }
 
   private getLineScrollPosition(
