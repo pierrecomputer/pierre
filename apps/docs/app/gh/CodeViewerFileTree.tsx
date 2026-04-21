@@ -2,11 +2,16 @@
 
 import { useStableCallback } from '@pierre/diffs/react';
 import { FileTree, useFileTree } from '@pierre/trees/react';
-import { memo, type MouseEvent, useEffect } from 'react';
+import { type CSSProperties, memo, type MouseEvent, useEffect } from 'react';
 
 import { BASE_FILE_TREE_OPTIONS } from './constants';
 import type { CodeViewerFileTreeSource } from './types';
 import { cn } from '@/lib/utils';
+
+const DENSITY_OVERRIDE_STYLES = {
+  '--trees-density-override': 0.8,
+  '--trees-row-height-override': '24px',
+} as CSSProperties;
 
 interface CodeViewerFileTreeProps {
   className?: string;
@@ -43,6 +48,7 @@ export const CodeViewerFileTree = memo(function CodeViewerFileTree({
     gitStatus: source?.gitStatus,
     paths: source?.preparedInput.paths ?? [],
     preparedInput: source?.preparedInput,
+    itemHeight: 24,
   });
 
   // useFileTree intentionally snapshots options on first mount, so later
@@ -84,6 +90,7 @@ export const CodeViewerFileTree = memo(function CodeViewerFileTree({
       className={cn('h-full min-h-0 overflow-auto pt-[19px]', className)}
       model={model}
       onClick={handleClick}
+      style={DENSITY_OVERRIDE_STYLES}
     />
   ) : null;
 });
