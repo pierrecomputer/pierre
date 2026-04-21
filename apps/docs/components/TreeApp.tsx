@@ -1466,7 +1466,7 @@ export function TreeApp<LAnnotation = unknown>({
         <section className="flex min-w-0 flex-1 flex-col">
           {showTabBar ? (
             <div
-              className="group/tabbar flex h-10 items-center gap-1 px-2"
+              className="group/tabbar flex h-10 items-center gap-1 px-2 pt-0.75"
               style={{ backgroundColor: 'var(--tree-app-chrome-bg)' }}
             >
               <div className="relative flex min-w-0 flex-1">
