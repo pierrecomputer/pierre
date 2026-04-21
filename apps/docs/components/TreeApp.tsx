@@ -862,7 +862,7 @@ function ThemeToggleButton({
       title={nextLabel}
       aria-label={nextLabel}
       className={[
-        'flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm transition-colors',
+        'flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-sm opacity-25 transition duration-150 group-hover/tabbar:opacity-100 focus-visible:opacity-100',
         chrome.themeToggleButton,
       ].join(' ')}
     >
@@ -1423,7 +1423,7 @@ export function TreeApp<LAnnotation = unknown>({
   return (
     <div
       className={[
-        'relative flex flex-col overflow-hidden rounded-xl border shadow-lg p-1.5 h-[var(--tree-app-height)]',
+        'relative flex flex-col overflow-hidden rounded-xl bg-clip-padding border border-[rgb(0_0_0_/0.1)] dark:border-[rgb(255_255_255_/0.1)] shadow-lg p-1.5 h-[var(--tree-app-height)]',
         chrome.container,
         className,
       ]
