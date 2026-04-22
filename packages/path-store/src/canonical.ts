@@ -601,6 +601,10 @@ function createDirectoryNode(
   });
   state.snapshot.directories.set(nodeId, createDirectoryChildIndex());
   insertChildReference(state, parentId, nodeId);
+  if (state.collapseNewDirectoriesByDefault) {
+    state.collapsedDirectoryIds.add(nodeId);
+    state.hasCollapsedDirectoryOverrides = true;
+  }
   state.activeNodeCount++;
   return nodeId;
 }

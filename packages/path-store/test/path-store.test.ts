@@ -621,6 +621,25 @@ describe('PathStore', () => {
     ]);
   });
 
+  test('keeps closed-default semantics for directories added after all startup directories were expanded', () => {
+    const preparedInput = PathStore.preparePresortedInput(['src/a.ts']);
+    const store = new PathStore({
+      initialExpandedPaths: ['src/'],
+      preparedInput,
+    });
+
+    expect(getVisiblePaths(store, 0, 10)).toEqual(['src/', 'src/a.ts']);
+
+    store.add('new-dir/file.ts');
+
+    expect(getVisiblePaths(store, 0, 10)).toEqual([
+      'new-dir/',
+      'src/',
+      'src/a.ts',
+    ]);
+    expect(store.getVisibleSlice(0, 0)[0]?.isExpanded).toBe(false);
+  });
+
   test('returns visible row context with flattened ancestors and sibling metadata', () => {
     const store = new PathStore({
       flattenEmptyDirectories: true,

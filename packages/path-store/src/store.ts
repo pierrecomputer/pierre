@@ -304,6 +304,10 @@ export class PathStore {
           instrumentation
         )
     );
+    if (useExplicitOpenExpansionFastPath) {
+      this.#state.collapseNewDirectoriesByDefault = true;
+    }
+
     const expandedDirectoryCount = useExplicitOpenExpansionFastPath
       ? this.#state.snapshot.directories.size - 1
       : withBenchmarkPhase(
