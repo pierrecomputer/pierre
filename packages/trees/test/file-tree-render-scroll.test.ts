@@ -819,6 +819,41 @@ describe('file-tree render + scroll', () => {
     }
   });
 
+  test('stale directory row clicks after path reset are ignored', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['src'],
+        paths: ['README.md', 'src/index.ts'],
+        initialVisibleRowCount: 120 / 30,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const staleSrcButton = getItemButton(shadowRoot, dom, 'src/');
+
+      fileTree.resetPaths(['README.md']);
+      expect(fileTree.getItem('src/')).toBeNull();
+
+      staleSrcButton.dispatchEvent(
+        new dom.window.MouseEvent('click', { bubbles: true })
+      );
+      await flushDom();
+
+      expect(fileTree.getSelectedPaths()).toEqual([]);
+      expect(fileTree.getItem('src/')).toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('rapid double-click toggles against live directory state', async () => {
     const { cleanup, dom } = installDom();
     try {

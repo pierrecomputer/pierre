@@ -902,9 +902,22 @@ export class FileTreeController
 
   // Only use this for paths sourced from currently mounted directory rows. The
   // mounted-row invariant lets click handling skip public handle creation while
-  // preserving normal toggle semantics against the store's live expansion state.
+  // still revalidating stale DOM events against the live store.
+  public resolveMountedDirectoryPathFromInput(path: string): string | null {
+    const pathInfo = this.#store.getPathInfo(path);
+    return pathInfo?.kind === 'directory' ? pathInfo.path : null;
+  }
+
+  // Only use this for paths sourced from currently mounted directory rows. The
+  // live-path check prevents stale DOM events from throwing if the row was
+  // removed or became a file before the click handler ran.
   public toggleMountedDirectoryFromInput(path: string): void {
-    this.#toggleDirectory(path);
+    const directoryPath = this.resolveMountedDirectoryPathFromInput(path);
+    if (directoryPath == null) {
+      return;
+    }
+
+    this.#toggleDirectory(directoryPath);
   }
 
   public selectAllVisiblePaths(): void {

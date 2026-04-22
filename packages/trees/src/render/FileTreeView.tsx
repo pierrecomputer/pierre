@@ -3602,15 +3602,25 @@ export function FileTreeView({
         mode,
       });
 
+      const shouldToggleDirectory =
+        plan.toggleDirectory && row.kind === 'directory';
+      const mountedDirectoryPath = shouldToggleDirectory
+        ? controller.resolveMountedDirectoryPathFromInput(targetPath)
+        : null;
+      if (shouldToggleDirectory && mountedDirectoryPath == null) {
+        return;
+      }
+      const actionTargetPath = mountedDirectoryPath ?? targetPath;
+
       switch (plan.selection.kind) {
         case 'range':
-          controller.selectPathRange(targetPath, plan.selection.additive);
+          controller.selectPathRange(actionTargetPath, plan.selection.additive);
           break;
         case 'toggle':
-          controller.togglePathSelectionFromInput(targetPath);
+          controller.togglePathSelectionFromInput(actionTargetPath);
           break;
         case 'single':
-          controller.selectOnlyMountedPathFromInput(targetPath);
+          controller.selectOnlyMountedPathFromInput(actionTargetPath);
           break;
       }
 
@@ -3625,22 +3635,22 @@ export function FileTreeView({
         clickedElement != null &&
         clickedElement.dataset.itemParked !== 'true';
 
-      controller.focusMountedPathFromInput(targetPath);
+      controller.focusMountedPathFromInput(actionTargetPath);
       if (shouldExposeFocusedTrigger) {
         domFocusOwnerRef.current = true;
         setActiveItemPath((previousPath) =>
-          previousPath === targetPath ? previousPath : targetPath
+          previousPath === actionTargetPath ? previousPath : actionTargetPath
         );
         setLastContextMenuInteraction('focus');
       }
-      if (plan.toggleDirectory && row.kind === 'directory') {
-        controller.toggleMountedDirectoryFromInput(targetPath);
+      if (shouldToggleDirectory) {
+        controller.toggleMountedDirectoryFromInput(actionTargetPath);
       }
       if (plan.closeSearch) {
         controller.closeSearch();
       }
       if (plan.revealCanonical) {
-        revealCanonicalRowAtStickyOffset(targetPath, {
+        revealCanonicalRowAtStickyOffset(actionTargetPath, {
           targetOffset: 'sticky-parents',
         });
       }
