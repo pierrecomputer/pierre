@@ -19,6 +19,7 @@ test('file-tree profile fixture workload defaults mirror the intended tree profi
     'linux-5x',
     'linux-10x',
     'linux',
+    'aosp',
     'demo-small',
   ]);
   expect(DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME).toBe('linux-5x');

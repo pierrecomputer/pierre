@@ -9,6 +9,7 @@ import {
   type FileTreeProfileActionSummary,
   type FileTreeProfileActionTargetVisibility,
   type FileTreeProfilePageSummary,
+  type FileTreeProfileWorkload,
   getFileTreeProfileWorkload,
 } from '../../../scripts/lib/fileTreeProfileShared';
 import type {
@@ -36,15 +37,15 @@ declare global {
     __treesFileTreeFixtureReady?: boolean;
     __treesFileTreeProfile?: FileTreeProfilePageSummary;
     treesFileTreeProfile?: {
-      configureFixture: (config: { workloadName?: string }) => {
+      configureFixture: (config: { workloadName?: string }) => Promise<{
         workloadName: string;
-      };
-      getState: () => {
+      }>;
+      getState: () => Promise<{
         actionScenarioCount: number | null;
         hasRenderedTree: boolean;
         preparedActionId: string | null;
         workload: ReturnType<typeof createFileTreeProfileWorkloadSummary>;
-      };
+      }>;
       listExpansionActionScenarios: () => Promise<
         FileTreeProfileActionSummary[]
       >;
@@ -76,6 +77,8 @@ const MEASURE_NAME = 'trees-file-tree-profile-measure';
 const START_TRACE_LABEL = 'trees-file-tree-profile-start';
 const END_TRACE_LABEL = 'trees-file-tree-profile-end';
 const TREE_UPDATE_TIMEOUT_MS = 30_000;
+const AOSP_WORKLOAD_NAME = 'aosp';
+const AOSP_WORKLOAD_URL = '/trees-dev/aosp-files.json.gz';
 
 const searchParams = new URLSearchParams(window.location.search);
 const instrumentationEnabled = searchParams.get('instrumentation') !== '0';
@@ -118,6 +121,10 @@ let cachedExpansionActionScenarios: FileTreeProfileActionSummary[] | null =
   null;
 let cachedExpansionActionWorkloadName: string | null = null;
 let preparedActionScenario: FileTreeProfileActionSummary | null = null;
+const workloadPromiseCache = new Map<
+  string,
+  Promise<FileTreeProfileWorkload>
+>();
 const longTaskEntries: LongTaskEntry[] = [];
 const longTaskObserver =
   typeof PerformanceObserver !== 'undefined' &&
@@ -160,8 +167,96 @@ function getSelectedWorkloadName(): string {
     : workloadInput.value;
 }
 
-function getSelectedWorkload() {
-  return getFileTreeProfileWorkload(getSelectedWorkloadName());
+function assertStringArray(value: unknown, label: string): string[] {
+  if (
+    !Array.isArray(value) ||
+    !value.every((item): item is string => typeof item === 'string')
+  ) {
+    throw new Error(
+      `Invalid AOSP profile workload: expected ${label} strings.`
+    );
+  }
+  return value;
+}
+
+function parseAospPayload(value: unknown): {
+  allExpandedPaths: string[];
+  paths: string[];
+} {
+  if (typeof value !== 'object' || value == null) {
+    throw new Error('Invalid AOSP profile workload: expected a JSON object.');
+  }
+
+  const payload = value as {
+    allExpandedPaths?: unknown;
+    paths?: unknown;
+  };
+  return {
+    allExpandedPaths: assertStringArray(
+      payload.allExpandedPaths,
+      'allExpandedPaths'
+    ),
+    paths: assertStringArray(payload.paths, 'paths'),
+  };
+}
+
+async function parseAospPayloadBytes(bytes: ArrayBuffer): Promise<{
+  allExpandedPaths: string[];
+  paths: string[];
+}> {
+  try {
+    return parseAospPayload(JSON.parse(new TextDecoder().decode(bytes)));
+  } catch (directParseError) {
+    if (typeof DecompressionStream === 'undefined') {
+      throw directParseError;
+    }
+
+    const decompressedBytes = await new Response(
+      new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))
+    ).arrayBuffer();
+    return parseAospPayload(
+      JSON.parse(new TextDecoder().decode(decompressedBytes))
+    );
+  }
+}
+
+async function loadAospProfileWorkload(): Promise<FileTreeProfileWorkload> {
+  const response = await fetch(AOSP_WORKLOAD_URL);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load AOSP profile workload from ${AOSP_WORKLOAD_URL}: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const { allExpandedPaths, paths } = await parseAospPayloadBytes(
+    await response.arrayBuffer()
+  );
+  return {
+    expandedFolders: allExpandedPaths,
+    files: paths,
+    label: 'AOSP fixture',
+    name: AOSP_WORKLOAD_NAME,
+  };
+}
+
+async function loadFileTreeProfileWorkload(
+  workloadName: string
+): Promise<FileTreeProfileWorkload> {
+  const cachedWorkload = workloadPromiseCache.get(workloadName);
+  if (cachedWorkload != null) {
+    return cachedWorkload;
+  }
+
+  const workloadPromise =
+    workloadName === AOSP_WORKLOAD_NAME
+      ? loadAospProfileWorkload()
+      : Promise.resolve(getFileTreeProfileWorkload(workloadName));
+  workloadPromiseCache.set(workloadName, workloadPromise);
+  return workloadPromise;
+}
+
+async function getSelectedWorkload(): Promise<FileTreeProfileWorkload> {
+  return await loadFileTreeProfileWorkload(getSelectedWorkloadName());
 }
 
 function getRenderedItemCount(): number {
@@ -292,9 +387,9 @@ function createBenchmark(): Benchmark | null {
 
 function createProfileOptions(
   initialExpansion: FileTreeProfileActionInitialExpansion,
-  benchmark: Benchmark | null
+  benchmark: Benchmark | null,
+  workload: FileTreeProfileWorkload
 ) {
-  const workload = getSelectedWorkload();
   const createOptions = () =>
     createFileTreeProfileFixtureOptions(workload, { initialExpansion });
   return benchmark == null
@@ -305,12 +400,14 @@ function createProfileOptions(
       );
 }
 
-function setWorkloadCounters(benchmark: Benchmark | null): void {
+function setWorkloadCounters(
+  benchmark: Benchmark | null,
+  workload: FileTreeProfileWorkload
+): void {
   if (benchmark == null) {
     return;
   }
 
-  const workload = getSelectedWorkload();
   benchmark.instrumentation.setCounter(
     'workload.inputFiles',
     workload.files.length
@@ -323,10 +420,11 @@ function setWorkloadCounters(benchmark: Benchmark | null): void {
 
 function createProfileFileTree(
   initialExpansion: FileTreeProfileActionInitialExpansion,
-  benchmark: Benchmark | null
+  benchmark: Benchmark | null,
+  workload: FileTreeProfileWorkload
 ): FileTreeClass {
-  const options = createProfileOptions(initialExpansion, benchmark);
-  setWorkloadCounters(benchmark);
+  const options = createProfileOptions(initialExpansion, benchmark, workload);
+  setWorkloadCounters(benchmark, workload);
 
   return benchmark == null
     ? new FileTree({
@@ -345,13 +443,14 @@ function createProfileFileTree(
 
 async function renderProfileTree(
   initialExpansion: FileTreeProfileActionInitialExpansion,
-  benchmark: Benchmark | null
+  benchmark: Benchmark | null,
+  workload: FileTreeProfileWorkload
 ): Promise<{
   fileTree: FileTreeClass;
   renderedItemCount: number;
 }> {
   clearRenderedTree();
-  const fileTree = createProfileFileTree(initialExpansion, benchmark);
+  const fileTree = createProfileFileTree(initialExpansion, benchmark, workload);
   currentFileTree = fileTree;
 
   if (benchmark == null) {
@@ -374,11 +473,12 @@ async function renderProfileTree(
 
 function collectDirectoryCandidates(
   fileTree: FileTreeClass,
-  mountedPaths: Set<string>
+  mountedPaths: Set<string>,
+  workload: FileTreeProfileWorkload
 ): DirectoryCandidate[] {
   const seenPaths = new Set<string>();
   const candidates: DirectoryCandidate[] = [];
-  for (const path of getSelectedWorkload().expandedFolders) {
+  for (const path of workload.expandedFolders) {
     const item = fileTree.getItem(path);
     if (item == null || !item.isDirectory()) {
       continue;
@@ -453,13 +553,22 @@ function createActionScenario({
 async function buildExpansionActionScenarios(): Promise<
   FileTreeProfileActionSummary[]
 > {
+  const workload = await getSelectedWorkload();
   const scenarios: FileTreeProfileActionSummary[] = [];
   const usedOpenPaths = new Set<string>();
 
-  const { fileTree: openTree } = await renderProfileTree('open', null);
+  const { fileTree: openTree } = await renderProfileTree(
+    'open',
+    null,
+    workload
+  );
   await waitForPaint();
   const openMountedPaths = getMountedFolderPaths();
-  const openCandidates = collectDirectoryCandidates(openTree, openMountedPaths);
+  const openCandidates = collectDirectoryCandidates(
+    openTree,
+    openMountedPaths,
+    workload
+  );
   const openTargets = [
     {
       id: 'open-visible-shallow',
@@ -528,12 +637,17 @@ async function buildExpansionActionScenarios(): Promise<
     );
   }
 
-  const { fileTree: closedTree } = await renderProfileTree('closed', null);
+  const { fileTree: closedTree } = await renderProfileTree(
+    'closed',
+    null,
+    workload
+  );
   await waitForPaint();
   const closedMountedPaths = getMountedFolderPaths();
   const closedCandidates = collectDirectoryCandidates(
     closedTree,
-    closedMountedPaths
+    closedMountedPaths,
+    workload
   );
   const usedClosedPaths = new Set<string>();
   const closedVisibleTop = selectCandidate(
@@ -637,7 +751,11 @@ async function prepareActionProfile(
   }
 
   clearProfileSummary();
-  await renderProfileTree(scenario.initialExpansion, null);
+  await renderProfileTree(
+    scenario.initialExpansion,
+    null,
+    await getSelectedWorkload()
+  );
   await waitForPaint();
   for (const operation of scenario.setupOperations) {
     await applySetupOperation(operation);
@@ -654,6 +772,7 @@ async function profileRender(): Promise<FileTreeProfilePageSummary> {
   clearProfileSummary();
   const benchmark = createBenchmark();
   benchmark?.reset();
+  const workload = await getSelectedWorkload();
 
   const renderStartedAt = performance.now();
   const heapBefore = benchmark?.readHeapSnapshot() ?? null;
@@ -661,7 +780,11 @@ async function profileRender(): Promise<FileTreeProfilePageSummary> {
   console.timeStamp(START_TRACE_LABEL);
 
   try {
-    const { renderedItemCount } = await renderProfileTree('open', benchmark);
+    const { renderedItemCount } = await renderProfileTree(
+      'open',
+      benchmark,
+      workload
+    );
     const visibleRowsReadyAt = performance.now();
     await waitForPaint();
     const heapAfter = benchmark?.readHeapSnapshot() ?? null;
@@ -697,7 +820,7 @@ async function profileRender(): Promise<FileTreeProfilePageSummary> {
         longTaskTotalMs
       )}; longest ${formatMs(longestLongTaskMs)}.`,
       visibleRowsReadyMs: visibleRowsReadyAt - renderStartedAt,
-      workload: createFileTreeProfileWorkloadSummary(getSelectedWorkload()),
+      workload: createFileTreeProfileWorkloadSummary(workload),
     };
 
     window.__treesFileTreeProfile = summary;
@@ -734,7 +857,8 @@ async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
   clearProfileSummary();
   const benchmark = createBenchmark();
   benchmark?.reset();
-  setWorkloadCounters(benchmark);
+  const workload = await getSelectedWorkload();
+  setWorkloadCounters(benchmark, workload);
 
   const renderedItemCountBefore = getRenderedItemCount();
   const actionStartedAt = performance.now();
@@ -837,7 +961,7 @@ async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
       longTaskTotalMs
     )}; longest ${formatMs(longestLongTaskMs)}.`,
     visibleRowsReadyMs: visibleRowsReadyAt - actionStartedAt,
-    workload: createFileTreeProfileWorkloadSummary(getSelectedWorkload()),
+    workload: createFileTreeProfileWorkloadSummary(workload),
   };
 
   window.__treesFileTreeProfile = summary;
@@ -845,12 +969,12 @@ async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
   return summary;
 }
 
-function configureFixture(config: { workloadName?: string }): {
+async function configureFixture(config: { workloadName?: string }): Promise<{
   workloadName: string;
-} {
+}> {
   const requestedWorkloadName =
     config.workloadName ?? getSelectedWorkloadName();
-  const workload = getFileTreeProfileWorkload(requestedWorkloadName);
+  const workload = await loadFileTreeProfileWorkload(requestedWorkloadName);
   workloadInput.value = workload.name;
   clearActionScenarioCache();
   clearRenderedTree();
@@ -861,12 +985,13 @@ function configureFixture(config: { workloadName?: string }): {
   };
 }
 
-function getState() {
+async function getState() {
+  const workload = await getSelectedWorkload();
   return {
     actionScenarioCount: cachedExpansionActionScenarios?.length ?? null,
     hasRenderedTree: currentFileTree != null,
     preparedActionId: preparedActionScenario?.id ?? null,
-    workload: createFileTreeProfileWorkloadSummary(getSelectedWorkload()),
+    workload: createFileTreeProfileWorkloadSummary(workload),
   };
 }
 

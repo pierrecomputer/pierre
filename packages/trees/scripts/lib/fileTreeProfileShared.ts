@@ -1,5 +1,4 @@
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
-import type { VirtualizationWorkload } from '@pierre/tree-test-data';
 
 // Keep the profiling fixture on the narrow data-preparation entrypoint so the
 // Vite-served page does not accidentally import the source render runtime.
@@ -9,6 +8,7 @@ export const FILE_TREE_PROFILE_WORKLOAD_NAMES = [
   'linux-5x',
   'linux-10x',
   'linux',
+  'aosp',
   'demo-small',
 ] as const;
 
@@ -21,6 +21,13 @@ export const FILE_TREE_PROFILE_VIEWPORT_HEIGHT = 500;
 export interface FileTreeProfileWorkloadSummary {
   expandedFolderCount: number;
   fileCount: number;
+  label: string;
+  name: FileTreeProfileWorkloadName;
+}
+
+export interface FileTreeProfileWorkload {
+  expandedFolders: string[];
+  files: string[];
   label: string;
   name: FileTreeProfileWorkloadName;
 }
@@ -98,15 +105,27 @@ export function isFileTreeProfileWorkloadName(
 
 export function getFileTreeProfileWorkload(
   value: string | null | undefined
-): VirtualizationWorkload {
-  const workloadName = isFileTreeProfileWorkloadName(value ?? '')
-    ? value
+): FileTreeProfileWorkload {
+  const requestedWorkloadName = value ?? '';
+  const workloadName = isFileTreeProfileWorkloadName(requestedWorkloadName)
+    ? requestedWorkloadName
     : DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME;
-  return getVirtualizationWorkload(workloadName);
+  if (workloadName === 'aosp') {
+    throw new Error(
+      'The AOSP file-tree profile workload is loaded asynchronously from the browser fixture.'
+    );
+  }
+  const workload = getVirtualizationWorkload(workloadName);
+  return {
+    expandedFolders: workload.expandedFolders,
+    files: workload.files,
+    label: workload.label,
+    name: workloadName,
+  };
 }
 
 export function createFileTreeProfileFixtureOptions(
-  workload: VirtualizationWorkload,
+  workload: FileTreeProfileWorkload,
   options: {
     initialExpansion?: FileTreeProfileActionInitialExpansion;
   } = {}
@@ -124,12 +143,12 @@ export function createFileTreeProfileFixtureOptions(
 }
 
 export function createFileTreeProfileWorkloadSummary(
-  workload: VirtualizationWorkload
+  workload: FileTreeProfileWorkload
 ): FileTreeProfileWorkloadSummary {
   return {
     expandedFolderCount: workload.expandedFolders.length,
     fileCount: workload.files.length,
     label: workload.label,
-    name: workload.name as FileTreeProfileWorkloadName,
+    name: workload.name,
   };
 }
