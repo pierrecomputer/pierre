@@ -38,7 +38,7 @@ export function Hero({ productId }: HeroProps) {
     <section className="flex max-w-3xl flex-col gap-3 pt-20 pb-10 md:pb-20 lg:max-w-4xl">
       <HeroIcon productId={productId} />
 
-      <h1 className="text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
+      <h1 className="text-4xl font-semibold tracking-tight text-balance md:text-5xl lg:text-6xl">
         {product.tagline}
       </h1>
       <p className="text-md text-muted-foreground mb-2 max-w-[740px] text-pretty md:text-lg lg:text-xl">
