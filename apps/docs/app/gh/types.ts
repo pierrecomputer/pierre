@@ -1,9 +1,5 @@
 import type { AnnotationSide } from '@pierre/diffs';
-import type {
-  FileTreeOptions,
-  FileTreePreparedInput,
-  GitStatusEntry,
-} from '@pierre/trees';
+import type { FileTreeOptions, GitStatusEntry } from '@pierre/trees';
 
 type FileTreeInputSort = NonNullable<FileTreeOptions['sort']>;
 
@@ -70,7 +66,7 @@ export interface CodeViewerSavedCommentItem {
 // tree and do not cause it to rebuild.
 export interface CodeViewerFileTreeSource {
   gitStatus: readonly GitStatusEntry[];
+  paths: readonly string[];
   pathToItemId: ReadonlyMap<string, string>;
-  preparedInput: FileTreePreparedInput;
   sort: CodeViewerFileTreeSort;
 }

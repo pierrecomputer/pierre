@@ -4,13 +4,8 @@ import type {
   CodeViewerItem,
   DiffLineAnnotation,
 } from '@pierre/diffs';
-import {
-  type GitStatus,
-  type GitStatusEntry,
-  prepareFileTreeInput,
-} from '@pierre/trees';
+import type { GitStatus, GitStatusEntry } from '@pierre/trees';
 
-import { BASE_FILE_TREE_OPTIONS } from './constants';
 import type {
   CodeViewerCommentFileByItemId,
   CodeViewerDeletedCommentEvent,
@@ -151,11 +146,8 @@ export function createCodeViewerFileTreeSource(
   const sort = createPatchOrderSort(paths);
   return {
     gitStatus,
+    paths,
     pathToItemId,
-    preparedInput: prepareFileTreeInput(paths, {
-      flattenEmptyDirectories: BASE_FILE_TREE_OPTIONS.flattenEmptyDirectories,
-      sort,
-    }),
     sort,
   };
 }

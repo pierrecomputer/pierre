@@ -81,8 +81,7 @@ function CodeViewerFileTreeContent({
   const { model } = useFileTree({
     ...BASE_FILE_TREE_OPTIONS,
     gitStatus: source.gitStatus,
-    paths: source.preparedInput.paths,
-    preparedInput: source.preparedInput,
+    paths: source.paths,
     sort: source.sort,
     itemHeight: 24,
   });
