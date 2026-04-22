@@ -64,8 +64,8 @@ function getAttributeThemeValues(
   return themes.map((theme) => value?.[theme] ?? theme);
 }
 
-// Mirrors the small class/data-attribute contract the docs use from
-// next-themes, without rendering an inline script from a Client Component.
+// Mirrors the small class/data-attribute contract the docs need, without
+// rendering an inline script from a Client Component.
 function applyTheme({
   attribute,
   enableColorScheme,
