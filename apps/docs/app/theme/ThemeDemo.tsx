@@ -409,7 +409,7 @@ export function ThemeDemo() {
   );
 
   const activeDiffs = useMemo(
-    () => fileDiffs.filter((fd) => fd.hasChanges),
+    () => fileDiffs.filter((fd) => fd.hasChanges === true),
     [fileDiffs]
   );
 
@@ -621,7 +621,7 @@ export function ThemeDemo() {
             </div>
             <div className="divide-y divide-neutral-200 dark:divide-neutral-700">
               {fileDiffs.map((fileData) => {
-                if (fileData.hasChanges) {
+                if (fileData.hasChanges === true) {
                   return (
                     <FileDiff
                       key={fileData.id}

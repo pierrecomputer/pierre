@@ -1,5 +1,4 @@
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
-import type { VirtualizationWorkload } from '@pierre/tree-test-data';
 
 // Keep the profiling fixture on the narrow data-preparation entrypoint so the
 // Vite-served page does not accidentally import the source render runtime.
@@ -9,6 +8,7 @@ export const FILE_TREE_PROFILE_WORKLOAD_NAMES = [
   'linux-5x',
   'linux-10x',
   'linux',
+  'aosp',
   'demo-small',
 ] as const;
 
@@ -23,6 +23,43 @@ export interface FileTreeProfileWorkloadSummary {
   fileCount: number;
   label: string;
   name: FileTreeProfileWorkloadName;
+}
+
+export interface FileTreeProfileWorkload {
+  expandedFolders: string[];
+  files: string[];
+  label: string;
+  name: FileTreeProfileWorkloadName;
+}
+
+export type FileTreeProfileActionOperation = 'collapse' | 'expand';
+export type FileTreeProfileActionInitialExpansion = 'closed' | 'open';
+export type FileTreeProfileActionDispatch = 'api' | 'dom-click';
+export type FileTreeProfileActionTargetVisibility =
+  | 'hidden'
+  | 'offscreen'
+  | 'sticky'
+  | 'visible';
+
+export interface FileTreeProfileActionSetupOperation {
+  operation: FileTreeProfileActionOperation;
+  path: string;
+}
+
+export interface FileTreeProfileActionSummary {
+  dispatch: FileTreeProfileActionDispatch;
+  id: string;
+  initialExpansion: FileTreeProfileActionInitialExpansion;
+  label: string;
+  operation: FileTreeProfileActionOperation;
+  renderedItemCountAfter?: number;
+  renderedItemCountBefore?: number;
+  setupOperations: FileTreeProfileActionSetupOperation[];
+  targetDepth: number;
+  targetIsExpandedAfter?: boolean;
+  targetPath: string;
+  targetVisibility: FileTreeProfileActionTargetVisibility;
+  targetWasExpandedBefore?: boolean;
 }
 
 export interface FileTreeProfilePhaseSummary {
@@ -47,10 +84,13 @@ export interface FileTreeProfileInstrumentationSummary {
 }
 
 export interface FileTreeProfilePageSummary {
+  action?: FileTreeProfileActionSummary;
+  actionDurationMs?: number;
   instrumentation: FileTreeProfileInstrumentationSummary | null;
   longTaskCount: number;
   longTaskTotalMs: number;
   longestLongTaskMs: number;
+  profileKind?: 'action' | 'render';
   renderDurationMs: number;
   renderedItemCount: number;
   resultText: string | null;
@@ -68,34 +108,51 @@ export function isFileTreeProfileWorkloadName(
 
 export function getFileTreeProfileWorkload(
   value: string | null | undefined
-): VirtualizationWorkload {
-  const workloadName = isFileTreeProfileWorkloadName(value ?? '')
-    ? value
+): FileTreeProfileWorkload {
+  const requestedWorkloadName = value ?? '';
+  const workloadName = isFileTreeProfileWorkloadName(requestedWorkloadName)
+    ? requestedWorkloadName
     : DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME;
-  return getVirtualizationWorkload(workloadName);
+  if (workloadName === 'aosp') {
+    throw new Error(
+      'The AOSP file-tree profile workload is loaded asynchronously from the browser fixture.'
+    );
+  }
+  const workload = getVirtualizationWorkload(workloadName);
+  return {
+    expandedFolders: workload.expandedFolders,
+    files: workload.files,
+    label: workload.label,
+    name: workloadName,
+  };
 }
 
 export function createFileTreeProfileFixtureOptions(
-  workload: VirtualizationWorkload
+  workload: FileTreeProfileWorkload,
+  options: {
+    initialExpansion?: FileTreeProfileActionInitialExpansion;
+  } = {}
 ) {
+  const initialExpansion = options.initialExpansion ?? 'open';
   return {
     flattenEmptyDirectories: true,
     // All profiling workloads expand every derived directory, so open-default
     // startup is semantically identical to replaying a huge explicit expanded
     // path list and avoids constructor-side expansion normalization work.
-    initialExpansion: 'open' as const,
+    initialExpansion,
     preparedInput: preparePresortedFileTreeInput(workload.files),
     initialVisibleRowCount: FILE_TREE_PROFILE_VIEWPORT_HEIGHT / 30,
+    stickyFolders: true,
   };
 }
 
 export function createFileTreeProfileWorkloadSummary(
-  workload: VirtualizationWorkload
+  workload: FileTreeProfileWorkload
 ): FileTreeProfileWorkloadSummary {
   return {
     expandedFolderCount: workload.expandedFolders.length,
     fileCount: workload.files.length,
     label: workload.label,
-    name: workload.name as FileTreeProfileWorkloadName,
+    name: workload.name,
   };
 }

@@ -19,6 +19,7 @@ test('file-tree profile fixture workload defaults mirror the intended tree profi
     'linux-5x',
     'linux-10x',
     'linux',
+    'aosp',
     'demo-small',
   ]);
   expect(DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME).toBe('linux-5x');
@@ -35,6 +36,21 @@ test('file-tree profile fixture options mirror the Phase 4 docs tree behavior', 
   expect(options.initialVisibleRowCount).toBe(
     FILE_TREE_PROFILE_VIEWPORT_HEIGHT / 30
   );
+  expect(options.stickyFolders).toBe(true);
+  expect(options.preparedInput).toEqual(
+    preparePresortedFileTreeInput(workload.files)
+  );
+});
+
+test('file-tree profile fixture options can start from a collapsed action state', () => {
+  const workload = getFileTreeProfileWorkload('linux-5x');
+  const options = createFileTreeProfileFixtureOptions(workload, {
+    initialExpansion: 'closed',
+  });
+
+  expect(options.flattenEmptyDirectories).toBe(true);
+  expect(options.initialExpansion).toBe('closed');
+  expect(options.stickyFolders).toBe(true);
   expect(options.preparedInput).toEqual(
     preparePresortedFileTreeInput(workload.files)
   );

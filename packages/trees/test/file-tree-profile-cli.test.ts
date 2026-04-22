@@ -32,6 +32,9 @@ test('profile:file-tree CLI help advertises the expected workload/render workflo
   expect(stdout).toContain('bun ws trees profile:file-tree');
   expect(stdout).toContain('linux-5x');
   expect(stdout).toContain('file-tree-profile.html');
+  expect(stdout).toContain('starts `bun run chrome` automatically');
+  expect(stdout).toContain('--actions <mode>');
+  expect(stdout).toContain('--actions-only');
 });
 
 test('profile:file-tree CLI help reflects worktree-aware default ports', () => {
@@ -78,4 +81,27 @@ test('profile:file-tree CLI rejects unknown workloads before browser setup', () 
   expect(result.exitCode).not.toBe(0);
   expect(stdout).toBe('');
   expect(stderr).toContain("Invalid --workload value 'not-a-real-workload'");
+});
+
+test('profile:file-tree CLI rejects unknown action modes before browser setup', () => {
+  const result = Bun.spawnSync({
+    cmd: [
+      'bun',
+      'run',
+      './scripts/profileFileTree.ts',
+      '--actions',
+      'not-a-real-mode',
+    ],
+    cwd: packageRoot,
+    env: createCommandEnv(),
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+
+  const stdout = new TextDecoder().decode(result.stdout).trim();
+  const stderr = new TextDecoder().decode(result.stderr);
+
+  expect(result.exitCode).not.toBe(0);
+  expect(stdout).toBe('');
+  expect(stderr).toContain("Invalid --actions value 'not-a-real-mode'");
 });

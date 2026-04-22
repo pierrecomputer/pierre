@@ -699,7 +699,9 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     []
   );
 
-  const hasOpenCommentForm = annotations.some((ann) => !ann.metadata.isThread);
+  const hasOpenCommentForm = annotations.some(
+    (ann) => ann.metadata.isThread !== true
+  );
 
   // Hover comments and line selection conflict on click targets.
   // Give hover comments precedence when both toggles are on.
@@ -833,7 +835,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         renderAnnotation={
           showAnnotations
             ? (annotation) =>
-                annotation.metadata.isThread ? (
+                annotation.metadata.isThread === true ? (
                   <ExampleThread />
                 ) : (
                   <CommentForm
