@@ -139,6 +139,32 @@ function dispatchDragEvent(
   element.dispatchEvent(event);
 }
 
+function dispatchTouchEvent(
+  target: EventTarget,
+  dom: JSDOM,
+  type: string,
+  init: {
+    changedTouches?: readonly { clientX: number; clientY: number }[];
+    touches?: readonly { clientX: number; clientY: number }[];
+  }
+): void {
+  const event = new dom.window.Event(type, {
+    bubbles: true,
+    cancelable: true,
+  });
+  Object.defineProperties(event, {
+    changedTouches: {
+      configurable: true,
+      value: init.changedTouches ?? init.touches ?? [],
+    },
+    touches: {
+      configurable: true,
+      value: init.touches ?? [],
+    },
+  });
+  target.dispatchEvent(event);
+}
+
 function getTreeRoot(
   shadowRoot: ShadowRoot | null | undefined,
   dom: JSDOM
@@ -377,24 +403,154 @@ describe('file-tree drag and drop', () => {
         rendered.dom,
         'README.md'
       );
-      const touchStartEvent = new rendered.dom.window.Event('touchstart', {
-        bubbles: true,
-        cancelable: true,
-      });
-      Object.defineProperty(touchStartEvent, 'touches', {
-        configurable: true,
-        value: [{ clientX: 12, clientY: 12 }],
-      });
 
-      sourceButton.dispatchEvent(touchStartEvent);
+      dispatchTouchEvent(sourceButton, rendered.dom, 'touchstart', {
+        touches: [{ clientX: 12, clientY: 12 }],
+      });
       await flushDom();
       expect(sourceButton.getAttribute('draggable')).toBe('false');
 
-      rendered.dom.window.document.dispatchEvent(
-        new rendered.dom.window.Event('touchend', { bubbles: true })
+      dispatchTouchEvent(
+        rendered.dom.window.document,
+        rendered.dom,
+        'touchend',
+        {
+          changedTouches: [{ clientX: 12, clientY: 12 }],
+        }
       );
       await flushDom();
       expect(sourceButton.getAttribute('draggable')).toBe('true');
+    } finally {
+      rendered.cleanup();
+    }
+  });
+
+  test('touch drag activation keeps native draggable disabled', async () => {
+    const rendered = await renderFileTree({
+      dragAndDrop: true,
+      flattenEmptyDirectories: true,
+      initialExpandedPaths: ['src/'],
+      paths: ['README.md', 'src/index.ts'],
+      initialVisibleRowCount: 180 / 30,
+    });
+
+    try {
+      const sourceButton = getItemButton(
+        rendered.shadowRoot,
+        rendered.dom,
+        'README.md'
+      );
+      const draggableWrites: string[] = [];
+      const setAttribute = sourceButton.setAttribute.bind(sourceButton);
+      sourceButton.setAttribute = (name: string, value: string): void => {
+        if (name === 'draggable') {
+          draggableWrites.push(value);
+        }
+        setAttribute(name, value);
+      };
+
+      dispatchTouchEvent(sourceButton, rendered.dom, 'touchstart', {
+        touches: [{ clientX: 12, clientY: 12 }],
+      });
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      await flushDom();
+
+      expect(draggableWrites).not.toContain('true');
+      expect(sourceButton.getAttribute('draggable')).toBe('false');
+      expect(getDraggingPaths(rendered.shadowRoot)).toEqual(['README.md']);
+
+      dispatchTouchEvent(
+        rendered.dom.window.document,
+        rendered.dom,
+        'touchcancel',
+        {
+          changedTouches: [{ clientX: 12, clientY: 12 }],
+        }
+      );
+      await flushDom();
+      expect(sourceButton.getAttribute('draggable')).toBe('true');
+    } finally {
+      rendered.cleanup();
+    }
+  });
+
+  test('touch drag resolves drop targets when shadow hit-testing retargets to the host', async () => {
+    const rendered = await renderFileTree({
+      dragAndDrop: true,
+      flattenEmptyDirectories: true,
+      initialExpandedPaths: ['src/'],
+      paths: ['README.md', 'src/index.ts'],
+      initialVisibleRowCount: 180 / 30,
+    });
+
+    try {
+      const host = rendered.fileTree.getFileTreeContainer();
+      if (!(host instanceof rendered.dom.window.HTMLElement)) {
+        throw new Error('missing file tree host');
+      }
+      const sourceButton = getItemButton(
+        rendered.shadowRoot,
+        rendered.dom,
+        'README.md'
+      );
+      const targetButton = getItemButton(
+        rendered.shadowRoot,
+        rendered.dom,
+        'src/'
+      );
+      sourceButton.getBoundingClientRect = () =>
+        ({
+          bottom: 30,
+          height: 30,
+          left: 0,
+          right: 240,
+          top: 0,
+          width: 240,
+          x: 0,
+          y: 0,
+        }) as DOMRect;
+      targetButton.getBoundingClientRect = () =>
+        ({
+          bottom: 70,
+          height: 30,
+          left: 0,
+          right: 240,
+          top: 40,
+          width: 240,
+          x: 0,
+          y: 40,
+        }) as DOMRect;
+      rendered.dom.window.document.elementFromPoint = () => host;
+
+      dispatchTouchEvent(sourceButton, rendered.dom, 'touchstart', {
+        touches: [{ clientX: 12, clientY: 12 }],
+      });
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      await flushDom();
+      dispatchTouchEvent(
+        rendered.dom.window.document,
+        rendered.dom,
+        'touchmove',
+        {
+          touches: [{ clientX: 12, clientY: 52 }],
+        }
+      );
+      await flushDom();
+      expect(getDragTargetPaths(rendered.shadowRoot)).toEqual(['src/']);
+
+      dispatchTouchEvent(
+        rendered.dom.window.document,
+        rendered.dom,
+        'touchend',
+        {
+          changedTouches: [{ clientX: 12, clientY: 52 }],
+        }
+      );
+      await flushDom();
+
+      expect(rendered.fileTree.getItem('src/README.md')).not.toBeNull();
+      expect(getDraggingPaths(rendered.shadowRoot)).toEqual([]);
+      expect(getDragTargetPaths(rendered.shadowRoot)).toEqual([]);
     } finally {
       rendered.cleanup();
     }

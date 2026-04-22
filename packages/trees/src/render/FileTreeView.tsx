@@ -270,7 +270,40 @@ function getPointElement(
     pointRoot.elementFromPoint?.(clientX, clientY) ??
     documentElementFromPoint?.(clientX, clientY) ??
     null;
+  if (
+    rootNode instanceof ShadowRoot &&
+    (element == null || !rootNode.contains(element))
+  ) {
+    return getShadowPointElementByGeometry(rootNode, clientX, clientY);
+  }
+
   return element instanceof HTMLElement ? element : null;
+}
+
+function getShadowPointElementByGeometry(
+  rootNode: ShadowRoot,
+  clientX: number,
+  clientY: number
+): HTMLElement | null {
+  const candidates = Array.from(
+    rootNode.querySelectorAll<HTMLElement>(
+      '[data-type="item"], [data-item-flattened-subitem]'
+    )
+  );
+  for (let index = candidates.length - 1; index >= 0; index--) {
+    const candidate = candidates[index];
+    const rect = candidate.getBoundingClientRect();
+    if (
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    ) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 function resolveDropTargetFromElement(
@@ -1888,7 +1921,11 @@ export function FileTreeView({
     touchSourceElementRef.current = dragSource;
     dragSource.setAttribute('draggable', 'false');
 
-    const clearPendingTouchStart = (): void => {
+    const clearPendingTouchStart = (
+      options: { restoreNativeDraggable?: boolean } = {}
+    ): void => {
+      const restoreNativeDraggable =
+        options.restoreNativeDraggable ?? !touchDragActiveRef.current;
       if (touchLongPressTimerRef.current != null) {
         clearTimeout(touchLongPressTimerRef.current);
         touchLongPressTimerRef.current = null;
@@ -1899,7 +1936,7 @@ export function FileTreeView({
       if (touchCleanupRef.current === clearPendingTouchStart) {
         touchCleanupRef.current = null;
       }
-      if (!touchDragActiveRef.current) {
+      if (restoreNativeDraggable) {
         dragSource.setAttribute('draggable', 'true');
         if (touchSourceElementRef.current === dragSource) {
           touchSourceElementRef.current = null;
@@ -1938,7 +1975,10 @@ export function FileTreeView({
     document.addEventListener('touchcancel', handlePendingTouchEnd);
     touchCleanupRef.current = clearPendingTouchStart;
     touchLongPressTimerRef.current = setTimeout(() => {
-      clearPendingTouchStart();
+      // Keep native draggable disabled while the custom touch drag activates.
+      // iOS Safari can otherwise promote the same long press into its native
+      // HTML drag flow before the touch-specific listeners take over.
+      clearPendingTouchStart({ restoreNativeDraggable: false });
       if (controller.startDrag(targetPath) === false) {
         dragSource.setAttribute('draggable', 'true');
         if (touchSourceElementRef.current === dragSource) {
