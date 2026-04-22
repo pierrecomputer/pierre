@@ -196,6 +196,151 @@ test.describe('file-tree composition surfaces', () => {
     expect(triggerCenterY).toBeLessThanOrEqual(rowBox.y + rowBox.height);
   });
 
+  test('truncated markers match translucent row states and leave focused outlines clear', async ({
+    page,
+  }) => {
+    await page.goto('/test/e2e/fixtures/file-tree-composition.html');
+    await page.waitForFunction(
+      () => window.__fileTreeCompositionFixtureReady === true
+    );
+
+    await page.evaluate(() => {
+      const mount = document.querySelector(
+        '[data-file-tree-composition-mount]'
+      );
+      const host = document.querySelector('file-tree-container');
+      if (!(mount instanceof HTMLElement) || !(host instanceof HTMLElement)) {
+        throw new Error('Expected file-tree composition fixture elements.');
+      }
+
+      mount.style.width = '48px';
+      host.style.setProperty('--trees-bg-override', 'rgb(240, 240, 240)');
+      host.style.setProperty(
+        '--trees-bg-muted-override',
+        'rgba(0, 0, 0, 0.25)'
+      );
+      host.style.setProperty('--trees-focus-ring-width-override', '2px');
+    });
+
+    const flattenedPath = await page.evaluate(() => {
+      const host = document.querySelector('file-tree-container');
+      const flattenedRow = Array.from(
+        host?.shadowRoot?.querySelectorAll('button[data-type="item"]') ?? []
+      ).find(
+        (row) => row.querySelector('[data-item-flattened-subitems]') != null
+      );
+
+      return flattenedRow instanceof HTMLElement
+        ? (flattenedRow.dataset.itemPath ?? null)
+        : null;
+    });
+
+    if (flattenedPath == null) {
+      throw new Error('Expected a flattened row in the composition fixture.');
+    }
+
+    const row = page.locator(
+      `file-tree-container button[data-item-path="${flattenedPath}"]`
+    );
+    await row.hover();
+
+    await expect
+      .poll(() =>
+        page.evaluate((path) => {
+          const host = document.querySelector('file-tree-container');
+          const rowElement = Array.from(
+            host?.shadowRoot?.querySelectorAll('button[data-type="item"]') ?? []
+          ).find(
+            (candidate) => candidate.getAttribute('data-item-path') === path
+          );
+          const marker = rowElement?.querySelector('[data-truncate-marker]');
+          return marker instanceof HTMLElement
+            ? getComputedStyle(marker).opacity
+            : null;
+        }, flattenedPath)
+      )
+      .toBe('1');
+
+    const hoverStyles = await page.evaluate((path) => {
+      const host = document.querySelector('file-tree-container');
+      const rowElement = Array.from(
+        host?.shadowRoot?.querySelectorAll('button[data-type="item"]') ?? []
+      ).find((candidate) => candidate.getAttribute('data-item-path') === path);
+      const marker = rowElement?.querySelector('[data-truncate-marker]');
+      if (
+        !(rowElement instanceof HTMLElement) ||
+        !(marker instanceof HTMLElement)
+      ) {
+        throw new Error('Expected truncated flattened row marker.');
+      }
+
+      const rowStyle = getComputedStyle(rowElement);
+      const markerStyle = getComputedStyle(marker);
+      return {
+        markerBackgroundClip: markerStyle.backgroundClip,
+        markerBackgroundColor: markerStyle.backgroundColor,
+        markerBackgroundImage: markerStyle.backgroundImage,
+        rowBackgroundColor: rowStyle.backgroundColor,
+      };
+    }, flattenedPath);
+
+    expect(hoverStyles.rowBackgroundColor).toBe('rgba(0, 0, 0, 0.25)');
+    expect(hoverStyles.markerBackgroundColor).toBe('rgb(240, 240, 240)');
+    expect(hoverStyles.markerBackgroundImage).toContain('rgba(0, 0, 0, 0.25)');
+    expect(hoverStyles.markerBackgroundClip).toBe('content-box');
+
+    await row.focus();
+
+    const focusStyles = await page.evaluate((path) => {
+      const host = document.querySelector('file-tree-container');
+      const rowElement = Array.from(
+        host?.shadowRoot?.querySelectorAll('button[data-type="item"]') ?? []
+      ).find((candidate) => candidate.getAttribute('data-item-path') === path);
+      const marker = rowElement?.querySelector('[data-truncate-marker]');
+      if (!(marker instanceof HTMLElement)) {
+        throw new Error('Expected focused flattened row marker.');
+      }
+
+      const markerStyle = getComputedStyle(marker);
+      const markerBeforeStyle = getComputedStyle(marker, '::before');
+      return {
+        markerHeight: Number.parseFloat(markerStyle.height),
+        markerPaddingBottom: Number.parseFloat(markerStyle.paddingBottom),
+        markerPaddingTop: Number.parseFloat(markerStyle.paddingTop),
+        markerBeforeHeight: Number.parseFloat(markerBeforeStyle.height),
+        markerBeforeTop: Number.parseFloat(markerBeforeStyle.top),
+      };
+    }, flattenedPath);
+
+    expect(focusStyles.markerPaddingTop).toBe(2);
+    expect(focusStyles.markerPaddingBottom).toBe(2);
+    expect(focusStyles.markerBeforeTop).toBe(2);
+    expect(focusStyles.markerBeforeHeight).toBe(focusStyles.markerHeight - 4);
+
+    await page
+      .locator('file-tree-container button[data-item-path="README.md"]')
+      .focus();
+
+    const fileMarkerPadding = await page.evaluate(() => {
+      const host = document.querySelector('file-tree-container');
+      const marker = host?.shadowRoot?.querySelector(
+        'button[data-item-path="README.md"] [data-truncate-marker]'
+      );
+      if (!(marker instanceof HTMLElement)) {
+        throw new Error('Expected focused README.md row marker.');
+      }
+
+      const markerStyle = getComputedStyle(marker);
+      return {
+        bottom: Number.parseFloat(markerStyle.paddingBottom),
+        top: Number.parseFloat(markerStyle.paddingTop),
+      };
+    });
+
+    expect(fileMarkerPadding.top).toBe(0);
+    expect(fileMarkerPadding.bottom).toBe(0);
+  });
+
   test('keyboard navigation retargets the focused row trigger away from a stale hover', async ({
     page,
   }) => {

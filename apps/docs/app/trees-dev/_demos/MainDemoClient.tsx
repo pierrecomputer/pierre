@@ -899,10 +899,10 @@ export function MainDemoClient({
     });
   }, [
     addLog,
+    currentPaths,
     preparedInput,
     runMutation,
     runUpgrade,
-    sharedOptions,
     upgradeDataUrl,
   ]);
   const handleSearchDocumentation = useCallback(() => {

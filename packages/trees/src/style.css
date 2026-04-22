@@ -553,6 +553,7 @@
     color: var(--trees-fg);
     background-color: var(--trees-bg);
     --truncate-marker-background-color: var(--trees-bg);
+    --truncate-marker-background-overlay-color: transparent;
     font-family: var(--trees-font-family);
     font-weight: var(--trees-font-weight-regular);
   }
@@ -812,16 +813,27 @@
     line-height: var(--trees-row-height);
     gap: var(--trees-item-row-gap);
     border-radius: var(--trees-border-radius);
+    /* Row states may be translucent, so markers paint the tree background first
+     * and then the state color on top to avoid compositing the same alpha twice. */
+    --truncate-marker-background-color: var(--trees-bg);
+    --truncate-marker-background-overlay-color: transparent;
+    --truncate-marker-block-inset: 0px;
 
     &:hover,
     &[data-item-context-hover='true'] {
       background-color: var(--trees-bg-muted);
-      --truncate-marker-background-color: var(--trees-bg-muted);
+      --truncate-marker-background-overlay-color: var(--trees-bg-muted);
     }
 
     &[data-item-focused='true'],
     &:focus-visible {
       z-index: 2;
+
+      /* Flattened segment markers sit high enough to cover the row outline unless
+       * their painted background is inset by the focus ring width. */
+      [data-item-flattened-subitems] {
+        --truncate-marker-block-inset: var(--trees-focus-ring-width);
+      }
 
       &::before {
         position: absolute;
@@ -843,7 +855,7 @@
     &[data-item-selected='true'] {
       color: var(--trees-selected-fg);
       background-color: var(--trees-selected-bg);
-      --truncate-marker-background-color: var(--trees-selected-bg);
+      --truncate-marker-background-overlay-color: var(--trees-selected-bg);
       z-index: 3;
 
       [data-item-section='icon'] {
@@ -1374,6 +1386,14 @@
       --truncate-marker-background-color,
       light-dark(white, black)
     );
+    --truncate-internal-marker-background-overlay-color: var(
+      --truncate-marker-background-overlay-color,
+      transparent
+    );
+    --truncate-internal-marker-block-inset: var(
+      --truncate-marker-block-inset,
+      0px
+    );
     /* Duration of the fade out animation for the marker */
     --truncate-internal-marker-fade-out-duration: var(
       --truncate-marker-fade-out-duration,
@@ -1412,6 +1432,10 @@
     display: flex;
     position: absolute;
     height: var(--truncate-internal-single-line-height);
+    padding-block: var(--truncate-internal-marker-block-inset);
+    box-sizing: border-box;
+    align-items: center;
+    background-clip: content-box;
     z-index: 2;
     color: color-mix(
       in srgb,
@@ -1487,6 +1511,10 @@
   [data-truncate-variant='default'] {
     & [data-truncate-marker] {
       background-color: var(--truncate-internal-marker-background-color);
+      background-image: linear-gradient(
+        var(--truncate-internal-marker-background-overlay-color),
+        var(--truncate-internal-marker-background-overlay-color)
+      );
     }
     & [data-truncate-marker]::after,
     & [data-truncate-marker]::before {
@@ -1496,12 +1524,29 @@
         var(--truncate-internal-marker-fade-width) +
           var(--truncate-internal-marker-gap)
       );
-      height: var(--truncate-internal-single-line-height);
-      background: linear-gradient(
+      inset-block-start: var(--truncate-internal-marker-block-inset);
+      height: max(
+        0px,
+        calc(
+          var(--truncate-internal-single-line-height) -
+            var(--truncate-internal-marker-block-inset) * 2
+        )
+      );
+      background-color: var(--truncate-internal-marker-background-color);
+      background-image: linear-gradient(
+        var(--truncate-internal-marker-background-overlay-color),
+        var(--truncate-internal-marker-background-overlay-color)
+      );
+      -webkit-mask-image: linear-gradient(
         var(--truncate-internal-fade-dir),
-        var(--truncate-internal-marker-background-color) 0%,
-        var(--truncate-internal-marker-background-color)
-          var(--truncate-internal-marker-gap),
+        #000 0%,
+        #000 var(--truncate-internal-marker-gap),
+        transparent 100%
+      );
+      mask-image: linear-gradient(
+        var(--truncate-internal-fade-dir),
+        #000 0%,
+        #000 var(--truncate-internal-marker-gap),
         transparent 100%
       );
     }

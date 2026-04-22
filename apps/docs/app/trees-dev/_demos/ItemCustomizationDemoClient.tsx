@@ -237,6 +237,9 @@ function HydratedItemCustomizationTree({
       return;
     }
 
+    const contextMenuSlotElement =
+      contextMenuSlotRef.current ?? document.createElement('div');
+    contextMenuSlotRef.current = contextMenuSlotElement;
     const fileTree = new FileTree({
       ...options,
       gitStatus,
@@ -266,19 +269,18 @@ function HydratedItemCustomizationTree({
 
     return () => {
       cancelAnimationFrame(restoreSelectionFrame);
-      if (contextMenuSlotRef.current != null) {
-        clearItemCustomizationContextMenuSlot({
-          menuRootRef: contextMenuRootRef,
-          slotElement: contextMenuSlotRef.current,
-          unmount: true,
-        });
-      }
+      clearItemCustomizationContextMenuSlot({
+        menuRootRef: contextMenuRootRef,
+        slotElement: contextMenuSlotElement,
+        unmount: true,
+      });
       fileTree.cleanUp();
     };
   }, [
     containerHtml,
     contextMenuRootRef,
     contextMenuSlotRef,
+    desiredSelectedPaths,
     gitStatus,
     hasHydratedTreeRef,
     isRestoringSelectionRef,

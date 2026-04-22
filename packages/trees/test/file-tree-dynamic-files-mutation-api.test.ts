@@ -94,8 +94,8 @@ async function loadFileTreeController(): Promise<
 }
 
 async function loadFileTree(): Promise<typeof import('../src/index').FileTree> {
-  const module = await import('../src/render/FileTree');
-  const fileTree = Object.values(module).find(
+  const fileTreeModule = await import('../src/render/FileTree');
+  const fileTree = Object.values(fileTreeModule).find(
     (value): value is typeof import('../src/index').FileTree =>
       typeof value === 'function' &&
       'prototype' in value &&
