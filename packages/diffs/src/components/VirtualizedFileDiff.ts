@@ -398,21 +398,17 @@ export class VirtualizedFileDiff<
           top += hunkSeparatorHeight + separatorGap;
         }
 
-        // First rendered line whose top crosses the viewport top becomes the
-        // anchor. We deliberately choose the addition side when available so
-        // the semantic (lineNumber, side) pair round-trips back through
-        // getLinePosition without ambiguity.
         if (top >= localViewportTop) {
-          if (additionLine != null) {
-            anchor = {
-              lineNumber: additionLine.lineNumber,
-              side: 'additions',
-              top,
-            };
-          } else if (deletionLine != null) {
+          if (deletionLine != null) {
             anchor = {
               lineNumber: deletionLine.lineNumber,
               side: 'deletions',
+              top,
+            };
+          } else if (additionLine != null) {
+            anchor = {
+              lineNumber: additionLine.lineNumber,
+              side: 'additions',
               top,
             };
           }
