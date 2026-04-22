@@ -1,50 +1,38 @@
+`@pierre/trees` exposes one path-first model and two primary runtime entries: a
+thin React layer in [`@pierre/trees/react`](#get-started-with-react) and the
+vanilla class in [`@pierre/trees`](#get-started-with-vanilla).
+
 ### Choose your integration
 
-Start here if you are deciding how `@pierre/trees` fits into your app. Trees
-exposes one path-first model and two primary runtime entries: a thin React layer
-in `@pierre/trees/react`, and the vanilla class in `@pierre/trees`.
-
-#### Start with path-first identity
+#### 1. Path-first identity
 
 Treat canonical path strings as the public identity for every item in the tree.
-Selection, focus, search matches, rename events, drag and drop, Git status, and
-row annotations all talk about paths.
-
-That means `src/components/Button.tsx` is not just a label on screen. It is also
+For example, `src/components/Button.tsx` is not just a label on screen. It is
 the value you read from selection state, the path you focus programmatically,
-and the target you rename or move later. For the shared vocabulary behind that
-rule, jump to [Shared concepts](#shared-concepts).
+and the target you rename or move later.
 
-#### Choose React when your app already lives in React
+For the shared vocabulary behind that rule, jump to
+[Shared concepts](#shared-concepts).
 
-Pick the React entry point when the surrounding UI, data loading, and state
-management already live in React. The hook creates the model once, and the
-component mounts it.
+#### 2. React vs Vanilla JS
+
+Pick the React entry point when the surrounding UI already lives in React. Jump
+to the [getting started with React](#get-started-with-react) guide for more
+info.
 
 <DocsCodeExample {...CHOOSE_INTEGRATION_REACT_EXAMPLE} />
 
-Read [Get started with React](#get-started-with-react) next if that is your
-runtime.
-
-#### Choose vanilla when you want the model directly
-
 Pick the vanilla class when your app is not React-based, or when another
-framework will own lifecycle around an imperative model. The class instance is
-both the entry point and the state surface.
+framework will own lifecycle around an imperative model. Jump to the
+[getting started with vanilla JS](#get-started-with-vanilla) for more.
 
 <DocsCodeExample {...CHOOSE_INTEGRATION_VANILLA_EXAMPLE} />
 
-Read [Get started with vanilla](#get-started-with-vanilla) next if you want the
-class-first runtime.
-
-#### Read the tree-shape guide next
+#### 3. Understand tree-shape
 
 Both runtimes consume the same tree data. Small examples can start with raw
 `paths`, but real application trees should move to prepared input before the
-client pays that shaping work on every load.
-
-After your runtime quickstart, continue with
-[Shape tree data for fast rendering](#shape-tree-data-for-fast-rendering). That
-guide explains when `paths` is enough, when to switch to
-`prepareFileTreeInput(...)`, and when `preparePresortedFileTreeInput(...)` is
-the better fit.
+client pays that shaping work on every load. Regardless of your runtime being
+React or vanilla JS, be sure to read
+[Shape tree data for fast rendering](#shape-tree-data-for-fast-rendering) after
+your runtime quickstart.
