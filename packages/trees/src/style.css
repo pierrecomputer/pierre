@@ -128,6 +128,7 @@
       --trees-padding-inline-override
     */
 
+    --trees-accent: var(--trees-accent-override, #009fff);
     --trees-fg: var(
       --trees-fg-override,
       var(--trees-theme-sidebar-fg, light-dark(#6c6c71, #adadb1))
@@ -140,11 +141,25 @@
       --trees-bg-override,
       var(--trees-theme-sidebar-bg, light-dark(#f8f8f8, #141415))
     );
+    /* var(--trees-theme-list-hover-bg, light-dark(#dfebff59, #19283c59)) */
     --trees-bg-muted: var(
       --trees-bg-muted-override,
-      var(--trees-theme-list-hover-bg, light-dark(#dfebff59, #19283c59))
+      var(
+        --trees-theme-list-hover-bg,
+        light-dark(
+          color-mix(
+            in lab,
+            var(--trees-accent) var(--trees-bg-alpha-light, 8%),
+            var(--trees-bg)
+          ),
+          color-mix(
+            in lab,
+            var(--trees-accent) var(--trees-bg-alpha-dark, 10%),
+            var(--trees-bg)
+          )
+        )
+      )
     );
-    --trees-accent: var(--trees-accent-override, #009fff);
     --trees-input-bg: var(
       --trees-input-bg-override,
       light-dark(#f8f8f8, #070707)
