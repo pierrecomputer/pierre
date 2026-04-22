@@ -3,6 +3,7 @@ import {
   createFileTreeProfileWorkloadSummary,
   DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME,
   FILE_TREE_PROFILE_WORKLOAD_NAMES,
+  type FileTreeProfileActionDispatch,
   type FileTreeProfileActionInitialExpansion,
   type FileTreeProfileActionOperation,
   type FileTreeProfileActionSetupOperation,
@@ -36,7 +37,9 @@ declare global {
   interface Window {
     __treesFileTreeFixtureReady?: boolean;
     __treesFileTreeProfile?: FileTreeProfilePageSummary;
+    __treesFileTreeProfileError?: string;
     treesFileTreeProfile?: {
+      beginPreparedActionClickProfile: () => Promise<PreparedActionClickTarget>;
       configureFixture: (config: { workloadName?: string }) => Promise<{
         workloadName: string;
       }>;
@@ -65,11 +68,34 @@ interface LongTaskEntry {
 
 interface DirectoryCandidate {
   depth: number;
+  hasDescendants: boolean;
   isMounted: boolean;
   path: string;
 }
 
+type ActionRowMode = 'flow' | 'sticky';
 type Benchmark = ReturnType<typeof createBenchmarkInstrumentation>;
+type HeapSnapshot = ReturnType<Benchmark['readHeapSnapshot']>;
+
+interface PreparedActionClickTarget {
+  x: number;
+  y: number;
+}
+
+interface PreparedActionContext {
+  item: FileTreeDirectoryHandle;
+  scenario: FileTreeProfileActionSummary;
+  targetWasExpandedBefore: boolean;
+}
+
+interface PreparedActionProfileState extends PreparedActionContext {
+  actionStartedAt: number;
+  benchmark: Benchmark | null;
+  heapBefore: HeapSnapshot;
+  renderedItemCountBefore: number;
+  updatePromise: Promise<void>;
+  workload: FileTreeProfileWorkload;
+}
 
 const START_MARK_NAME = 'trees-file-tree-profile-start';
 const END_MARK_NAME = 'trees-file-tree-profile-end';
@@ -156,6 +182,7 @@ function clearRenderedTree(): void {
 
 function clearProfileSummary(): void {
   delete window.__treesFileTreeProfile;
+  delete window.__treesFileTreeProfileError;
   performance.clearMarks(START_MARK_NAME);
   performance.clearMarks(END_MARK_NAME);
   performance.clearMeasures(MEASURE_NAME);
@@ -267,6 +294,26 @@ function getRenderedItemCount(): number {
   );
 }
 
+function getProfileShadowRoot(): ShadowRoot {
+  const host = mount.querySelector('file-tree-container');
+  if (!(host instanceof HTMLElement) || host.shadowRoot == null) {
+    throw new Error('Cannot find the rendered file-tree shadow root.');
+  }
+
+  return host.shadowRoot;
+}
+
+function getVirtualizedScrollElement(): HTMLElement {
+  const scrollElement = getProfileShadowRoot().querySelector(
+    '[data-file-tree-virtualized-scroll="true"]'
+  );
+  if (!(scrollElement instanceof HTMLElement)) {
+    throw new Error('Cannot find the rendered file-tree scroll element.');
+  }
+
+  return scrollElement;
+}
+
 function getMountedFolderPaths(): Set<string> {
   const rows =
     mount
@@ -284,6 +331,113 @@ function getMountedFolderPaths(): Set<string> {
 function getPathDepth(path: string): number {
   const segmentCount = path.split('/').filter(Boolean).length;
   return Math.max(0, segmentCount - 1);
+}
+
+function getButtonPath(button: HTMLButtonElement, mode: ActionRowMode): string {
+  return mode === 'sticky'
+    ? (button.dataset.fileTreeStickyPath ?? button.dataset.itemPath ?? '')
+    : (button.dataset.itemPath ?? '');
+}
+
+function findFolderRowButton(
+  path: string,
+  mode: ActionRowMode
+): HTMLButtonElement | null {
+  const buttons = Array.from(
+    getProfileShadowRoot().querySelectorAll(
+      'button[data-type="item"][data-item-type="folder"]'
+    )
+  );
+  for (const button of buttons) {
+    if (!(button instanceof HTMLButtonElement)) {
+      continue;
+    }
+
+    const isSticky = button.dataset.fileTreeStickyRow === 'true';
+    if (mode === 'sticky' ? !isSticky : isSticky) {
+      continue;
+    }
+
+    if (getButtonPath(button, mode) === path) {
+      return button;
+    }
+  }
+
+  return null;
+}
+
+function getActionRowButton(
+  scenario: FileTreeProfileActionSummary
+): HTMLButtonElement {
+  const mode: ActionRowMode =
+    scenario.targetVisibility === 'sticky' ? 'sticky' : 'flow';
+  const matchingButton = findFolderRowButton(scenario.targetPath, mode);
+
+  if (!(matchingButton instanceof HTMLButtonElement)) {
+    throw new Error(
+      `Cannot click profile action ${scenario.id}; target row is not mounted: ${scenario.targetPath}.`
+    );
+  }
+
+  return matchingButton;
+}
+
+async function waitForFolderRowButton(
+  path: string,
+  mode: ActionRowMode
+): Promise<HTMLButtonElement> {
+  const startedAt = performance.now();
+
+  while (performance.now() - startedAt < TREE_UPDATE_TIMEOUT_MS) {
+    const button = findFolderRowButton(path, mode);
+    if (button != null) {
+      return button;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 16));
+  }
+
+  throw new Error(`Timed out waiting for ${mode} row ${path}.`);
+}
+
+async function prepareStickyActionTarget(path: string): Promise<void> {
+  if (currentFileTree == null) {
+    throw new Error('Cannot prepare a sticky action target before rendering.');
+  }
+
+  const item = getDirectoryHandle(path);
+  let flowButton = findFolderRowButton(path, 'flow');
+  if (flowButton == null && !item.isFocused()) {
+    const updatePromise = waitForNextTreeUpdate(currentFileTree);
+    item.focus();
+    await updatePromise;
+  }
+  await waitForPaint();
+
+  flowButton = await waitForFolderRowButton(path, 'flow');
+  const scrollElement = getVirtualizedScrollElement();
+  const rowRect = flowButton.getBoundingClientRect();
+  const scrollRect = scrollElement.getBoundingClientRect();
+  const rowHeight =
+    rowRect.height > 0 ? rowRect.height : currentFileTree.getItemHeight();
+  scrollElement.scrollTop += Math.max(
+    0,
+    rowRect.top - scrollRect.top + rowHeight
+  );
+  await waitForPaint();
+  await waitForFolderRowButton(path, 'sticky');
+}
+
+function getClickTarget(element: HTMLElement): PreparedActionClickTarget {
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    throw new Error('Cannot click profile action target with an empty rect.');
+  }
+
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  };
 }
 
 function getDirectoryHandle(path: string): FileTreeDirectoryHandle {
@@ -471,6 +625,28 @@ async function renderProfileTree(
   return { fileTree, renderedItemCount };
 }
 
+// Computes which directories have visible descendants without repeatedly
+// scanning the full workload for each action candidate.
+function collectDirectoryPathsWithDescendants(
+  workload: FileTreeProfileWorkload
+): Set<string> {
+  const directoryPaths = new Set(workload.expandedFolders);
+  const pathsWithDescendants = new Set<string>();
+
+  for (const filePath of workload.files) {
+    let slashIndex = filePath.indexOf('/');
+    while (slashIndex > 0) {
+      const directoryPath = filePath.slice(0, slashIndex);
+      if (directoryPaths.has(directoryPath)) {
+        pathsWithDescendants.add(directoryPath);
+      }
+      slashIndex = filePath.indexOf('/', slashIndex + 1);
+    }
+  }
+
+  return pathsWithDescendants;
+}
+
 function collectDirectoryCandidates(
   fileTree: FileTreeClass,
   mountedPaths: Set<string>,
@@ -478,6 +654,7 @@ function collectDirectoryCandidates(
 ): DirectoryCandidate[] {
   const seenPaths = new Set<string>();
   const candidates: DirectoryCandidate[] = [];
+  const pathsWithDescendants = collectDirectoryPathsWithDescendants(workload);
   for (const path of workload.expandedFolders) {
     const item = fileTree.getItem(path);
     if (item == null || !item.isDirectory()) {
@@ -492,6 +669,9 @@ function collectDirectoryCandidates(
     seenPaths.add(canonicalPath);
     candidates.push({
       depth: getPathDepth(canonicalPath),
+      hasDescendants:
+        pathsWithDescendants.has(canonicalPath) ||
+        pathsWithDescendants.has(path),
       isMounted: mountedPaths.has(canonicalPath),
       path: canonicalPath,
     });
@@ -522,6 +702,7 @@ function selectCandidate(
 }
 
 function createActionScenario({
+  dispatch,
   id,
   initialExpansion,
   label,
@@ -530,6 +711,7 @@ function createActionScenario({
   target,
   targetVisibility,
 }: {
+  dispatch?: FileTreeProfileActionDispatch;
   id: string;
   initialExpansion: FileTreeProfileActionInitialExpansion;
   label: string;
@@ -539,6 +721,11 @@ function createActionScenario({
   targetVisibility: FileTreeProfileActionTargetVisibility;
 }): FileTreeProfileActionSummary {
   return {
+    dispatch:
+      dispatch ??
+      (targetVisibility === 'visible' || targetVisibility === 'sticky'
+        ? 'dom-click'
+        : 'api'),
     id,
     initialExpansion,
     label,
@@ -587,6 +774,22 @@ async function buildExpansionActionScenarios(): Promise<
       visibility: 'visible' as const,
     },
     {
+      id: 'open-sticky-shallow',
+      label: 'Open sticky shallow',
+      pick: 'first' as const,
+      predicate: (candidate: DirectoryCandidate) =>
+        candidate.isMounted && candidate.hasDescendants && candidate.depth <= 1,
+      visibility: 'sticky' as const,
+    },
+    {
+      id: 'open-sticky-deep',
+      label: 'Open sticky deep',
+      pick: 'last' as const,
+      predicate: (candidate: DirectoryCandidate) =>
+        candidate.isMounted && candidate.hasDescendants && candidate.depth >= 2,
+      visibility: 'sticky' as const,
+    },
+    {
       id: 'open-offscreen-mid',
       label: 'Open offscreen mid-depth',
       pick: 'middle' as const,
@@ -624,17 +827,21 @@ async function buildExpansionActionScenarios(): Promise<
         operation: 'collapse',
         target,
         targetVisibility: targetConfig.visibility,
-      }),
-      createActionScenario({
-        id: `${targetConfig.id}-expand`,
-        initialExpansion: 'open',
-        label: `${targetConfig.label} expand`,
-        operation: 'expand',
-        setupOperations: [{ operation: 'collapse', path: target.path }],
-        target,
-        targetVisibility: targetConfig.visibility,
       })
     );
+    if (targetConfig.visibility !== 'sticky') {
+      scenarios.push(
+        createActionScenario({
+          id: `${targetConfig.id}-expand`,
+          initialExpansion: 'open',
+          label: `${targetConfig.label} expand`,
+          operation: 'expand',
+          setupOperations: [{ operation: 'collapse', path: target.path }],
+          target,
+          targetVisibility: targetConfig.visibility,
+        })
+      );
+    }
   }
 
   const { fileTree: closedTree } = await renderProfileTree(
@@ -760,6 +967,9 @@ async function prepareActionProfile(
   for (const operation of scenario.setupOperations) {
     await applySetupOperation(operation);
   }
+  if (scenario.targetVisibility === 'sticky') {
+    await prepareStickyActionTarget(scenario.targetPath);
+  }
 
   preparedActionScenario = scenario;
   return scenario;
@@ -835,10 +1045,10 @@ async function profileRender(): Promise<FileTreeProfilePageSummary> {
   }
 }
 
-async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
+function getPreparedActionContext(): PreparedActionContext {
   if (currentFileTree == null || preparedActionScenario == null) {
     throw new Error(
-      'Call prepareActionProfile(actionId) before profilePreparedAction().'
+      'Call prepareActionProfile(actionId) before profiling a prepared action.'
     );
   }
 
@@ -854,6 +1064,21 @@ async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
     );
   }
 
+  return {
+    item,
+    scenario,
+    targetWasExpandedBefore,
+  };
+}
+
+async function startPreparedActionProfile(
+  context: PreparedActionContext
+): Promise<PreparedActionProfileState> {
+  const fileTree = currentFileTree;
+  if (fileTree == null) {
+    throw new Error('Cannot profile an action before rendering the tree.');
+  }
+
   clearProfileSummary();
   const benchmark = createBenchmark();
   benchmark?.reset();
@@ -866,24 +1091,34 @@ async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
   performance.mark(START_MARK_NAME);
   console.timeStamp(START_TRACE_LABEL);
 
-  const updatePromise = waitForNextTreeUpdate(currentFileTree);
-  const dispatchStartedAt = performance.now();
-  if (benchmark == null) {
-    if (scenario.operation === 'expand') {
-      item.expand();
-    } else {
-      item.collapse();
-    }
-  } else {
-    benchmark.instrumentation.measurePhase('action.dispatch', () => {
-      if (scenario.operation === 'expand') {
-        item.expand();
-      } else {
-        item.collapse();
-      }
-    });
-  }
-  const actionDurationMs = performance.now() - dispatchStartedAt;
+  const updatePromise = waitForNextTreeUpdate(fileTree);
+
+  return {
+    ...context,
+    actionStartedAt,
+    benchmark,
+    heapBefore,
+    renderedItemCountBefore,
+    updatePromise,
+    workload,
+  };
+}
+
+async function finishPreparedActionProfile(
+  state: PreparedActionProfileState,
+  getActionDurationMs: () => number | null
+): Promise<FileTreeProfilePageSummary> {
+  const {
+    actionStartedAt,
+    benchmark,
+    heapBefore,
+    item,
+    renderedItemCountBefore,
+    scenario,
+    targetWasExpandedBefore,
+    updatePromise,
+    workload,
+  } = state;
 
   if (benchmark == null) {
     await updatePromise;
@@ -918,6 +1153,9 @@ async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
   console.timeStamp(END_TRACE_LABEL);
   performance.measure(MEASURE_NAME, START_MARK_NAME, END_MARK_NAME);
 
+  const rawActionDurationMs = getActionDurationMs();
+  const actionDurationMs =
+    rawActionDurationMs == null ? null : Math.max(0, rawActionDurationMs);
   const targetIsExpandedAfter = item.isExpanded();
   const measure = performance.getEntriesByName(MEASURE_NAME).at(-1);
   const actionEndedAt = performance.now();
@@ -932,7 +1170,9 @@ async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
   instrumentation.counters['workload.renderedRowsBefore'] =
     renderedItemCountBefore;
   instrumentation.counters['workload.actionTargetDepth'] = scenario.targetDepth;
-  instrumentation.counters['workload.actionDurationMs'] = actionDurationMs;
+  if (actionDurationMs != null) {
+    instrumentation.counters['workload.actionDurationMs'] = actionDurationMs;
+  }
 
   const action: FileTreeProfileActionSummary = {
     ...scenario,
@@ -943,7 +1183,6 @@ async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
   };
   const summary: FileTreeProfilePageSummary = {
     action,
-    actionDurationMs,
     instrumentation,
     longTaskCount,
     longTaskTotalMs,
@@ -951,9 +1190,9 @@ async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
     profileKind: 'action',
     renderDurationMs: measure?.duration ?? 0,
     renderedItemCount,
-    resultText: `${action.label}: ${action.operation} ${action.targetPath}. Action dispatch ${formatMs(
-      actionDurationMs
-    )}. Post-paint ready ${formatMs(
+    resultText: `${action.label}: ${action.operation} ${action.targetPath}. Input ${action.dispatch}. API action dispatch ${
+      actionDurationMs == null ? 'n/a' : formatMs(actionDurationMs)
+    }. Post-paint ready ${formatMs(
       measure?.duration ?? 0
     )}. Visible rows ready ${formatMs(
       visibleRowsReadyAt - actionStartedAt
@@ -962,11 +1201,66 @@ async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
     )}; longest ${formatMs(longestLongTaskMs)}.`,
     visibleRowsReadyMs: visibleRowsReadyAt - actionStartedAt,
     workload: createFileTreeProfileWorkloadSummary(workload),
+    ...(actionDurationMs == null ? {} : { actionDurationMs }),
   };
 
   window.__treesFileTreeProfile = summary;
   console.info('[trees file-tree profile]', summary.resultText);
   return summary;
+}
+
+async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
+  const context = getPreparedActionContext();
+  if (context.scenario.dispatch !== 'api') {
+    throw new Error(
+      `Profile action ${context.scenario.id} is configured for DOM click dispatch.`
+    );
+  }
+
+  const state = await startPreparedActionProfile(context);
+  const { benchmark, item, scenario } = state;
+  const dispatchStartedAt = performance.now();
+  if (benchmark == null) {
+    if (scenario.operation === 'expand') {
+      item.expand();
+    } else {
+      item.collapse();
+    }
+  } else {
+    benchmark.instrumentation.measurePhase('action.dispatch', () => {
+      if (scenario.operation === 'expand') {
+        item.expand();
+      } else {
+        item.collapse();
+      }
+    });
+  }
+  const actionDurationMs = performance.now() - dispatchStartedAt;
+
+  return await finishPreparedActionProfile(state, () => actionDurationMs);
+}
+
+async function beginPreparedActionClickProfile(): Promise<PreparedActionClickTarget> {
+  const context = getPreparedActionContext();
+  if (context.scenario.dispatch !== 'dom-click') {
+    throw new Error(
+      `Profile action ${context.scenario.id} is configured for direct API dispatch.`
+    );
+  }
+
+  const targetButton = getActionRowButton(context.scenario);
+  const target = getClickTarget(targetButton);
+  const state = await startPreparedActionProfile(context);
+
+  void finishPreparedActionProfile(state, () => null).catch(
+    (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      window.__treesFileTreeProfileError = message;
+      console.error('[trees file-tree profile] action click failed', error);
+    }
+  );
+
+  return target;
 }
 
 async function configureFixture(config: { workloadName?: string }): Promise<{
@@ -1007,6 +1301,7 @@ workloadInput.addEventListener('input', () => {
 });
 
 window.treesFileTreeProfile = {
+  beginPreparedActionClickProfile,
   configureFixture,
   getState,
   listExpansionActionScenarios,

@@ -332,6 +332,7 @@ declare global {
   interface Window {
     __treesFileTreeFixtureReady?: boolean;
     __treesFileTreeProfile?: PageRenderSummary;
+    __treesFileTreeProfileError?: string;
   }
 }
 
@@ -446,7 +447,7 @@ const AGGREGATE_METRIC_DEFINITIONS: Array<{
 }> = [
   {
     key: 'actionDurationMs',
-    label: 'Action dispatch',
+    label: 'API action dispatch',
     select: (result) => result.actionDurationMs,
   },
   {
@@ -2670,12 +2671,20 @@ async function waitForProfileSummary(
 ): Promise<PageRenderSummary> {
   const summary = await evaluateJson<{
     done: boolean;
+    error?: string;
     profile: PageRenderSummary | null;
   }>(
     cdp,
     `(async () => {
       const started = performance.now();
       while (performance.now() - started < ${timeoutMs}) {
+        if (window.__treesFileTreeProfileError != null) {
+          return {
+            done: true,
+            error: window.__treesFileTreeProfileError,
+            profile: window.__treesFileTreeProfile ?? null,
+          };
+        }
         if (window.__treesFileTreeProfile != null) {
           return { done: true, profile: window.__treesFileTreeProfile };
         }
@@ -2688,11 +2697,48 @@ async function waitForProfileSummary(
     })()`
   );
 
+  if (summary.error != null) {
+    throw new Error(summary.error);
+  }
+
   if (!summary.done || summary.profile == null) {
     throw new Error('Timed out waiting for the file-tree render summary.');
   }
 
   return summary.profile;
+}
+
+async function dispatchMouseClick(
+  cdp: CdpClient,
+  x: number,
+  y: number
+): Promise<void> {
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x,
+    y,
+    button: 'none',
+    pointerType: 'mouse',
+  });
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x,
+    y,
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+    pointerType: 'mouse',
+  });
+  await Bun.sleep(16);
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x,
+    y,
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+    pointerType: 'mouse',
+  });
 }
 
 async function clickRenderButton(cdp: CdpClient): Promise<void> {
@@ -2721,32 +2767,7 @@ async function clickRenderButton(cdp: CdpClient): Promise<void> {
     throw new Error(result.reason ?? 'Failed to click the render button.');
   }
 
-  await cdp.send('Input.dispatchMouseEvent', {
-    type: 'mouseMoved',
-    x: result.x,
-    y: result.y,
-    button: 'none',
-    pointerType: 'mouse',
-  });
-  await cdp.send('Input.dispatchMouseEvent', {
-    type: 'mousePressed',
-    x: result.x,
-    y: result.y,
-    button: 'left',
-    buttons: 1,
-    clickCount: 1,
-    pointerType: 'mouse',
-  });
-  await Bun.sleep(16);
-  await cdp.send('Input.dispatchMouseEvent', {
-    type: 'mouseReleased',
-    x: result.x,
-    y: result.y,
-    button: 'left',
-    buttons: 0,
-    clickCount: 1,
-    pointerType: 'mouse',
-  });
+  await dispatchMouseClick(cdp, result.x, result.y);
 }
 
 async function listExpansionActionScenarios(
@@ -2793,6 +2814,41 @@ async function profilePreparedAction(
       return await api.profilePreparedAction();
     })()`
   );
+}
+
+async function beginPreparedActionClickProfile(cdp: CdpClient): Promise<{
+  x: number;
+  y: number;
+}> {
+  return await evaluateJson<{ x: number; y: number }>(
+    cdp,
+    `(async () => {
+      const api = window.treesFileTreeProfile;
+      if (api == null) {
+        throw new Error('Missing treesFileTreeProfile fixture API.');
+      }
+      return await api.beginPreparedActionClickProfile();
+    })()`
+  );
+}
+
+async function clickPreparedActionAndWaitForSummary(
+  cdp: CdpClient,
+  timeoutMs: number
+): Promise<PageRenderSummary> {
+  const target = await beginPreparedActionClickProfile(cdp);
+  await dispatchMouseClick(cdp, target.x, target.y);
+  return await waitForProfileSummary(cdp, timeoutMs);
+}
+
+async function profilePreparedActionForScenario(
+  cdp: CdpClient,
+  scenario: FileTreeProfileActionSummary,
+  timeoutMs: number
+): Promise<PageRenderSummary> {
+  return scenario.dispatch === 'dom-click'
+    ? await clickPreparedActionAndWaitForSummary(cdp, timeoutMs)
+    : await profilePreparedAction(cdp);
 }
 
 async function clickAndWaitForRenderSummary(
@@ -3020,15 +3076,15 @@ async function collectActionFunctionCallCounts(
   cdp: CdpClient,
   profileUrl: string,
   timeoutMs: number,
-  actionId: string
+  scenario: FileTreeProfileActionSummary
 ): Promise<Map<string, number | null> | null> {
   return await collectFunctionCallCounts(
     cdp,
     profileUrl,
     timeoutMs,
     async () => {
-      await prepareActionProfile(cdp, actionId);
-      await profilePreparedAction(cdp);
+      const preparedScenario = await prepareActionProfile(cdp, scenario.id);
+      await profilePreparedActionForScenario(cdp, preparedScenario, timeoutMs);
     }
   );
 }
@@ -3079,21 +3135,25 @@ async function profileFileTreeExpansionActions(
 
     const results: ProfileResult[] = [];
     for (const scenario of scenarios) {
-      await prepareActionProfile(cdp, scenario.id);
+      const preparedScenario = await prepareActionProfile(cdp, scenario.id);
       const actionTraceOutputPath =
         traceOutputPath == null
           ? null
           : createActionTraceOutputPath(traceOutputPath, scenario.id);
       const { pageSummary, trace, cpuProfile } =
         await collectProfilingArtifacts(cdp, config.timeoutMs, () =>
-          profilePreparedAction(cdp)
+          profilePreparedActionForScenario(
+            cdp,
+            preparedScenario,
+            config.timeoutMs
+          )
         );
       const callCountsByFunction = config.includeCallCounts
         ? await collectActionFunctionCallCounts(
             cdp,
             profileUrl,
             config.timeoutMs,
-            scenario.id
+            preparedScenario
           )
         : null;
 
@@ -3125,7 +3185,10 @@ function printRunHumanSummary(
 ): void {
   const summaryRows = [['Visible rows', String(result.renderedItemCount)]];
   if (result.actionDurationMs != null) {
-    summaryRows.push(['Action dispatch', formatMs(result.actionDurationMs)]);
+    summaryRows.push([
+      'API action dispatch',
+      formatMs(result.actionDurationMs),
+    ]);
   }
 
   if (result.visibleRowsReadyMs != null) {
@@ -3183,6 +3246,7 @@ function printRunHumanSummary(
         [
           ['Scenario', result.action.label],
           ['Operation', result.action.operation],
+          ['Dispatch', result.action.dispatch],
           ['Initial expansion', result.action.initialExpansion],
           ['Target visibility', result.action.targetVisibility],
           ['Target depth', String(result.action.targetDepth)],
@@ -3450,9 +3514,11 @@ function printActionProfilesHumanSummary(
         'Action',
         'Op',
         'State',
+        'Input',
         'Visibility',
         'Depth',
-        'Dispatch med',
+        'API med',
+        'Click med',
         'Ready med',
         'Paint med',
         'CPU med',
@@ -3462,9 +3528,11 @@ function printActionProfilesHumanSummary(
         profile.action.label,
         profile.action.operation,
         profile.action.initialExpansion,
+        profile.action.dispatch,
         profile.action.targetVisibility,
         String(profile.action.targetDepth),
         formatMs(profile.summary.metrics.actionDurationMs.medianMs),
+        formatMs(profile.summary.metrics.clickDispatchMs.medianMs),
         formatMs(profile.summary.metrics.visibleRowsReadyMs.medianMs),
         formatMs(profile.summary.metrics.postPaintReadyMs.medianMs),
         formatMs(profile.summary.metrics.sampledCpuTimeMs.medianMs),
@@ -3476,6 +3544,8 @@ function printActionProfilesHumanSummary(
           'left',
           'left',
           'left',
+          'left',
+          'right',
           'right',
           'right',
           'right',
@@ -3483,7 +3553,7 @@ function printActionProfilesHumanSummary(
           'right',
           'right',
         ],
-        maxWidths: [34, 8, 8, 10, 7, 14, 12, 12, 12, 8],
+        maxWidths: [32, 8, 8, 9, 10, 7, 12, 12, 12, 12, 12, 8],
       }
     )
   );

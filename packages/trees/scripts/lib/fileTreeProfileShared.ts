@@ -34,9 +34,11 @@ export interface FileTreeProfileWorkload {
 
 export type FileTreeProfileActionOperation = 'collapse' | 'expand';
 export type FileTreeProfileActionInitialExpansion = 'closed' | 'open';
+export type FileTreeProfileActionDispatch = 'api' | 'dom-click';
 export type FileTreeProfileActionTargetVisibility =
   | 'hidden'
   | 'offscreen'
+  | 'sticky'
   | 'visible';
 
 export interface FileTreeProfileActionSetupOperation {
@@ -45,6 +47,7 @@ export interface FileTreeProfileActionSetupOperation {
 }
 
 export interface FileTreeProfileActionSummary {
+  dispatch: FileTreeProfileActionDispatch;
   id: string;
   initialExpansion: FileTreeProfileActionInitialExpansion;
   label: string;
