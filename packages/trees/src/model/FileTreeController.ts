@@ -2199,7 +2199,7 @@ export class FileTreeController
   }
 
   #setFocusedIndex(index: number, emit: boolean = true): void {
-    const nextPath = this.#getCurrentVisiblePaths()[index];
+    const nextPath = this.#resolveVisiblePathAtIndex(index);
     if (nextPath == null) {
       return;
     }

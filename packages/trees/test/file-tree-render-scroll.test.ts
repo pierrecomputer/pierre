@@ -579,6 +579,42 @@ describe('file-tree render + scroll', () => {
     controller.destroy();
   });
 
+  test('controller focus parent works after toggling with focus beyond the initial projection', async () => {
+    const FileTreeController = await loadFileTreeController();
+    const paths = Array.from(
+      { length: 700 },
+      (_, index) => `dir-${String(index).padStart(3, '0')}/child.txt`
+    );
+    const controller = new FileTreeController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths,
+    });
+
+    controller.focusPath('dir-650/child.txt');
+    expect(controller.getFocusedPath()).toBe('dir-650/child.txt');
+    expect(controller.getFocusedIndex()).toBeGreaterThan(512);
+
+    const firstDirectory = controller.getItem('dir-000/');
+    if (
+      firstDirectory == null ||
+      !firstDirectory.isDirectory() ||
+      !('collapse' in firstDirectory)
+    ) {
+      throw new Error('missing first directory');
+    }
+    firstDirectory.collapse();
+
+    expect(controller.getFocusedPath()).toBe('dir-650/child.txt');
+    expect(controller.getFocusedIndex()).toBeGreaterThan(512);
+
+    controller.focusParentItem();
+    expect(controller.getFocusedPath()).toBe('dir-650/');
+    expect(controller.getFocusedIndex()).toBeGreaterThan(512);
+
+    controller.destroy();
+  });
+
   test('resetPaths prunes stale selections and resets a hidden range anchor', async () => {
     const FileTreeController = await loadFileTreeController();
 
