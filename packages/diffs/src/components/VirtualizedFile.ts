@@ -83,7 +83,10 @@ export class VirtualizedFile<
       }
       this.renderRange = undefined;
     }
-    this.virtualizer.instanceChanged(this);
+    // CodeViewer will mark dirty for us
+    if (this.isSimpleMode()) {
+      this.virtualizer.instanceChanged(this);
+    }
   }
 
   // Measure rendered lines and update height cache.
