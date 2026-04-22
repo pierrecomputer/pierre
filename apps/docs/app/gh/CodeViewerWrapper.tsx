@@ -41,10 +41,6 @@ import { cn } from '@/lib/utils';
 const unsafeCSS = `[data-diffs-header] {
   container-type: scroll-state;
   container-name: sticky-header;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background-color: var(--diffs-bg);
 }
 @container sticky-header scroll-state(stuck: top) {
   [data-diffs-header]::after {
@@ -309,6 +305,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
         // FIXME(amadeus): We need to optimize this...
         enableLineSelection: true,
         enableGutterUtility: true,
+        stickyHeaders: true,
         unsafeCSS,
         onGutterUtilityClick(range, context) {
           if (context.item.type !== 'diff') {

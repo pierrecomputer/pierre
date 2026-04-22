@@ -46,7 +46,7 @@ export function GHViewer() {
       id: itemId,
       align: 'start',
       offset: 20,
-      behavior: 'smooth-auto',
+      behavior: 'smooth',
     });
   }, []);
   const handleCommentSaved = useCallback(
@@ -73,7 +73,6 @@ export function GHViewer() {
         lineNumber: comment.lineNumber,
         side: comment.side,
         align: 'center',
-        stickyHeader: true,
         behavior: 'smooth-auto',
       });
     },

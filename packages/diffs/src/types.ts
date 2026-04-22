@@ -489,8 +489,6 @@ export type CodeViewerItem<T = undefined> =
 export interface CodeViewerPositionScrollTarget {
   type: 'position';
   position: number;
-  /** Account for sticky headers when using scrollTo */
-  stickyHeader?: boolean;
   behavior?: CodeViewerScrollBehavior;
 }
 
@@ -501,8 +499,6 @@ export interface CodeViewerLineScrollTarget {
   side?: SelectionSide;
   align?: 'start' | 'center' | 'end' | 'nearest';
   offset?: number;
-  /** Account for sticky headers when using scrollTo */
-  stickyHeader?: boolean;
   behavior?: CodeViewerScrollBehavior;
 }
 

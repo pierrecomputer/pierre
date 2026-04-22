@@ -17,6 +17,7 @@ import type {
   CodeViewerItemVersion,
   CodeViewerLineScrollTarget,
   CodeViewerMetrics,
+  CodeViewerPositionScrollTarget,
   CodeViewerScrollBehavior,
   CodeViewerScrollTarget,
   HunkSeparators,
@@ -331,7 +332,7 @@ export interface CodeViewerOptions<LAnnotation>
   hunkSeparators?: Exclude<HunkSeparators, 'custom'>;
   itemMetrics?: VirtualFileMetrics;
   smoothScrollSettings?: SmoothScrollSettings;
-  stickyHeader?: boolean;
+  stickyHeaders?: boolean;
   viewerMetrics?: CodeViewerMetrics;
 }
 
@@ -345,6 +346,24 @@ interface SpringStepResult {
   position: number;
   velocity: number;
 }
+
+type PendingAlignTypes = Exclude<
+  CodeViewerLineScrollTarget['align'],
+  'nearest'
+>;
+
+interface PendingLineTarget extends Omit<CodeViewerLineScrollTarget, 'align'> {
+  align?: PendingAlignTypes;
+}
+
+interface PendingItemTarget extends Omit<CodeViewerItemScrollTarget, 'align'> {
+  align?: PendingAlignTypes;
+}
+
+type PendingScrollTarget =
+  | CodeViewerPositionScrollTarget
+  | PendingLineTarget
+  | PendingItemTarget;
 
 export class CodeViewer<LAnnotation = undefined> {
   static __STOP = false;
@@ -394,7 +413,7 @@ export class CodeViewer<LAnnotation = undefined> {
   //   target mid-flight.
   // - 'position' targets settle on the first frame that applies their
   //   scrollTop — there is no layout-dependent destination to chase.
-  private pendingScrollTarget: CodeViewerScrollTarget | undefined;
+  private pendingScrollTarget: PendingScrollTarget | undefined;
   private pendingLayoutAnchor: ScrollAnchor | undefined;
 
   // Active smooth-scroll animation state. Only populated while a scrollTo
@@ -587,15 +606,23 @@ export class CodeViewer<LAnnotation = undefined> {
       return;
     }
 
-    const destination = this.resolveScrollTargetTop(target);
+    const pendingTarget = this.normalizeScrollTarget(target);
+    if (pendingTarget == null) {
+      return;
+    }
+
+    const destination = this.resolveScrollTargetTop(pendingTarget);
     if (destination == null) {
       return;
     }
 
-    const behavior = this.resolveEffectiveScrollBehavior(target, destination);
+    const behavior = this.resolveEffectiveScrollBehavior(
+      pendingTarget,
+      destination
+    );
     if (behavior === 'smooth') {
       // Use ??= so if we have an animation in progress it will be smoothly
-      // transitioned into the new target
+      // transitioned into the new target and not reset
       this.scrollAnimation ??= {
         position: this.getScrollTop(),
         velocity: 0,
@@ -610,8 +637,7 @@ export class CodeViewer<LAnnotation = undefined> {
 
     // We'll attempt to scroll to this new target on the next render frame
     this.pendingLayoutAnchor = undefined;
-    this.pendingScrollTarget = target;
-    this.scrollDirty = true;
+    this.pendingScrollTarget = pendingTarget;
     this.render();
   }
 
@@ -965,8 +991,11 @@ export class CodeViewer<LAnnotation = undefined> {
   ): FileOptions<LAnnotation> | FileDiffOptions<LAnnotation> {
     const options =
       mode === 'file'
-        ? ({} satisfies FileOptions<LAnnotation>)
+        ? ({
+            stickyHeader: this.options.stickyHeaders,
+          } satisfies FileOptions<LAnnotation>)
         : ({
+            stickyHeader: this.options.stickyHeaders,
             hunkSeparators: this.options.hunkSeparators,
           } satisfies FileDiffOptions<LAnnotation>);
     // NOTE(amadeus): Hacks on hacks...
@@ -1177,33 +1206,111 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   /**
-   * Clamp a scroll-top into the valid scroll range [0, maxScroll], where
-   * maxScroll is derived from the current scrollHeight minus the viewport
-   * height.
+   * Clamps a scroll position to the min/max allowable scroll range based on
+   * the computed total height
    */
   private clampScrollTop(value: number): number {
-    const maxScroll = Math.max(this.getScrollHeight() - this.getHeight(), 0);
+    const { paddingBottom, paddingTop } = this.getViewerMetrics();
+    const maxScroll = Math.max(
+      paddingTop + this.getScrollHeight() + paddingBottom - this.getHeight(),
+      0
+    );
     return Math.max(0, Math.min(value, maxScroll));
   }
 
+  private getStickyHeaderOffset(): number {
+    return this.options.stickyHeaders === true &&
+      this.options.disableFileHeader !== true
+      ? this.getItemMetrics().diffHeaderHeight
+      : 0;
+  }
+
+  private getScrollTargetRect(
+    target: CodeViewerItemScrollTarget | CodeViewerLineScrollTarget
+  ): { top: number; height: number } | undefined {
+    const item = this.idToItem.get(target.id);
+    if (item == null) {
+      console.warn(`CodeViewer.scrollTo: unknown item id "${target.id}"`);
+      return undefined;
+    }
+
+    if (target.type === 'item') {
+      return { top: item.top, height: item.height };
+    }
+
+    const linePosition = this.getLineScrollPosition(item, target);
+    if (linePosition == null) {
+      console.warn(
+        `CodeViewer.scrollTo: unable to resolve line ${target.lineNumber} for item "${target.id}"`
+      );
+      return undefined;
+    }
+
+    return {
+      top: item.top + linePosition.top,
+      height: linePosition.height,
+    };
+  }
+
+  private normalizeScrollTarget(
+    target: CodeViewerScrollTarget
+  ): PendingScrollTarget | undefined {
+    if (target.type === 'position' || target.align !== 'nearest') {
+      return target as PendingScrollTarget;
+    }
+
+    const rect = this.getScrollTargetRect(target);
+    if (rect == null) {
+      return undefined;
+    }
+
+    // Determine a stable scrollTo target for `nearest` alignment. This is to
+    // ensure that we don't experience any scroll bouncing
+    const offset = target.offset ?? 0;
+    const targetTop = this.getViewerMetrics().paddingTop + rect.top;
+    const targetBottom = targetTop + rect.height;
+    const currentTop = this.getScrollTop();
+    const visibleTop =
+      currentTop + (target.type === 'line' ? this.getStickyHeaderOffset() : 0);
+    const visibleBottom = currentTop + this.getHeight();
+
+    // If the item is spanning beyond the full viewport,
+    // do nothing as it's already in view
+    if (
+      targetTop - offset <= visibleTop &&
+      targetBottom + offset >= visibleBottom
+    ) {
+      return undefined;
+    }
+
+    // Let's use the top as the target
+    if (targetTop - offset < visibleTop) {
+      return { ...target, align: 'start' };
+    }
+
+    // Let's use the top as the target
+    if (targetBottom + offset > visibleBottom) {
+      return { ...target, align: 'end' };
+    }
+
+    // The element is already in view, nothing to do.
+    return undefined;
+  }
+
   /**
-   * Resolve a public scroll target into a valid scroll-space top.
-   *
+   * Resolve a target's scroll position
+
    * Returns `undefined` when we can't resolve a target for whatever reason
-   *
-   * All successful returns are clamped to valid scroll positions.
    */
   private resolveScrollTargetTop(
-    target: CodeViewerScrollTarget
+    target: PendingScrollTarget
   ): number | undefined {
     if (target.type === 'position') {
-      return this.clampScrollTop(
-        target.position -
-          (target.stickyHeader === true &&
-          this.options.disableFileHeader !== true
-            ? this.getItemMetrics().diffHeaderHeight
-            : 0)
-      );
+      const clampedPosition = this.clampScrollTop(target.position);
+      return clampedPosition !== target.position
+        ? // If our position was clamped, we we shouldn't apply the sticky offset
+          clampedPosition
+        : this.clampScrollTop(target.position - this.getStickyHeaderOffset());
     }
 
     const item = this.idToItem.get(target.id);
@@ -1237,61 +1344,37 @@ export class CodeViewer<LAnnotation = undefined> {
         linePosition.height,
         target.align,
         target.offset,
-        target.stickyHeader
+        this.getStickyHeaderOffset()
       )
     );
   }
 
   /**
    * Given an existing scroll target (scroll top and height), figure out the
-   * correct scroll position to target based on the desired alignment and
-   * offset
+   * correct scroll position to target based on the desired alignment, offset
+   * and stickyOffset if necessary
    */
   private resolveAlignedScrollPosition(
+    // REVIEW: lets turn this into a named interface object, essentially named
+    // arguments that can't be confused/reversed
     targetTop: number,
     targetHeight: number,
-    align: CodeViewerItemScrollTarget['align'],
+    align: PendingAlignTypes,
     offset = 0,
-    stickyHeader = false
+    stickyOffset = 0
   ): number {
     targetTop += this.getViewerMetrics().paddingTop;
     const viewportHeight = this.getHeight();
-    const stickyHeaderOffset =
-      stickyHeader && this.options.disableFileHeader !== true
-        ? this.getItemMetrics().diffHeaderHeight
-        : 0;
-    const visibleViewportHeight = Math.max(
-      viewportHeight - stickyHeaderOffset,
-      0
-    );
-
-    if (align === 'center' && targetHeight + offset < visibleViewportHeight) {
-      return (
-        targetTop -
-        stickyHeaderOffset -
-        (visibleViewportHeight - targetHeight) / 2 +
-        offset
-      );
+    // If the item + offset is bigger than the viewport, we'll fall back to
+    // 'start'
+    if (align === 'center' && targetHeight + offset < viewportHeight) {
+      return targetTop - (viewportHeight - targetHeight) / 2 + offset;
     }
     if (align === 'end') {
       return targetTop - (viewportHeight - targetHeight) + offset;
     }
-    if (align === 'nearest') {
-      const currentTop = this.getScrollTop();
-      const currentVisibleTop = currentTop + stickyHeaderOffset;
-      const currentBottom = currentTop + viewportHeight;
-      const startTop = targetTop - stickyHeaderOffset - offset;
-      const endTop = targetTop - (viewportHeight - targetHeight) + offset;
-      if (targetTop - offset < currentVisibleTop) {
-        return startTop;
-      }
-      if (targetTop + targetHeight + offset > currentBottom) {
-        return endTop;
-      }
-      return currentTop;
-    }
-
-    return targetTop - stickyHeaderOffset - offset;
+    // 'start', the default
+    return targetTop - stickyOffset - offset;
   }
 
   private getLineScrollPosition(
@@ -1414,57 +1497,72 @@ export class CodeViewer<LAnnotation = undefined> {
       return;
     }
     const height = this.getHeight();
+    let currentScrollTop = this.getScrollTop();
+    // This boolean tracks whether we are expecting some sort of major layout
+    // change, which means we need to re-calculate our window from a new
+    // anchor computed position after we re-compute the layout
+    let recomputeScrollTop = this.pendingLayoutAnchor != null;
+    // We need to grab the anchor before we re-compute any layout updates, or
+    // else we'll get invalid anchor reference data
+    let anchor = this.getScrollAnchor(currentScrollTop);
+
+    // If any part of the layout is dirty, we should re-compute everything and
+    // force a contextualization
     if (this.layoutDirtyIndex != null) {
       this.recomputeLayout(this.layoutDirtyIndex);
       this.layoutDirtyIndex = undefined;
+      recomputeScrollTop = true;
     }
 
-    const currentScrollTop = this.getScrollTop();
-    // `frameScrollTop` is the scroll position this render frame is rendering
-    // toward — either the live scrollTop (idle / user-driven scroll), the
-    // re-resolved pending target (instant programmatic scroll), or the
-    // spring-interpolated position while a smooth scroll is animating.
-    // Window sizing, the big-jump heuristic, and the end-of-frame apply all
-    // use this value so items mount in the right place on the first pass.
+    // If we have an anchor and are expecting some sort of layout shift, let's
+    // compute a new current window position from that estimated layout change
+    if (recomputeScrollTop && anchor != null) {
+      const newScrollTop = this.resolveAnchoredScrollTop(anchor);
+      if (newScrollTop != null) {
+        const delta = newScrollTop - currentScrollTop;
+        currentScrollTop = newScrollTop;
+        if (this.scrollAnimation != null) {
+          // If we have a delta measurement adjustment, we have to pass that
+          // change onto the scroll animation to ensure the animation remains
+          // stable, later on
+          this.scrollAnimation.position += delta;
+        }
+      }
+    }
+
+    // From our currentScrollTop, we should compute where we might be headed
+    // towards, if we have a pending scroll target and/or animation in progress
     const frameScrollTop = this.computeFrameScrollTop(
       currentScrollTop,
       timestamp
     );
-    const scrollHeight = this.getScrollHeight();
+
     // When performing very large scroll jumps, we should attempt to render the
     // bare minimum to ensure we can paint quickly. We'll queue up a another
-    // render at the end to fill things out on the next tick.
+    // render at the end to fill things out on the next tick. If we had to
+    // recomputeScrollTop then we should not fitPerfectly because there's
+    // a good chance we'll be re-rendering everything again
     const fitPerfectly =
-      this.renderState.scrollTop === -1 ||
-      Math.abs(frameScrollTop - this.renderState.scrollTop) >
-        height + this.config.overscrollSize * 2;
+      !recomputeScrollTop &&
+      (this.renderState.scrollTop === -1 ||
+        Math.abs(frameScrollTop - this.renderState.scrollTop) >
+          height + this.config.overscrollSize * 2);
+
+    // If we are doing a fitPerfectly render than we should not attempt to anchor
+    if (fitPerfectly) {
+      anchor = undefined;
+    }
+
     this.windowSpecs = createWindowFromScrollPosition({
       scrollTop: frameScrollTop,
       height,
-      scrollHeight,
+      scrollHeight: this.getScrollHeight(),
       fitPerfectly,
       fitPerfectlyOverscroll: this.getFitPerfectlyOverscroll(),
       overscrollSize: this.config.overscrollSize,
     });
 
     const { top, bottom } = this.windowSpecs;
-    // Scroll Anchor Capture Rules
-    //
-    // - `fitPerfectly` is applied when we've done extremely large frame jumps
-    //   that can't re-use any existing UI. There's no point in attempting to
-    //   scroll anchor in these scenarios
-    // - behavior: 'instant' scroll targets will result in us rendering out a
-    //   desired frame target, which anchoring would work against
-    // - behavior: `smooth` scroll animations that don't result in
-    //   `fitPerfectly` should attempt to utilize a scroll anchor so they
-    //   animation feels smooth.
-    //
-    // We use `currentScrollTop` and the current item/line computed metrics
-    const anchor =
-      fitPerfectly ||
-      (this.pendingScrollTarget != null && this.scrollAnimation == null)
-        ? undefined
-        : this.getScrollAnchor(currentScrollTop);
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex >= 0) {
       for (let index = firstIndex; index <= lastIndex; index++) {
@@ -1756,17 +1854,27 @@ export class CodeViewer<LAnnotation = undefined> {
   };
 
   /**
+   * Figure out scrollTop accounting for sticky header if enabled and
+   * necessary
+   */
+  private getScrollAnchorViewportTop(
+    absoluteItemTop: number,
+    scrollTop: number
+  ): number {
+    return absoluteItemTop < scrollTop
+      ? scrollTop + this.getStickyHeaderOffset()
+      : scrollTop;
+  }
+
+  /**
    * Attempt to find a scroll anchor based on build in metrics of the existing
    * rendered files/diff.
    *
    * A scroll anchor represents the first fully visible element (in other
    * words, the first file or first line who's top is fully in the viewport).
-   *
-   * If we are doing frame jumps so large that no existing content would be
-   * visible on the next frame, an anchor is meaningless, and potentially
-   * destructive work we shouldn't care about paying for
    */
   private getScrollAnchor(scrollTop: number): ScrollAnchor | undefined {
+    // If we already have a pendingLayoutAnchor, let's use that.
     if (this.pendingLayoutAnchor != null) {
       return this.pendingLayoutAnchor;
     }
@@ -1777,14 +1885,8 @@ export class CodeViewer<LAnnotation = undefined> {
     }
 
     const viewportHeight = this.getHeight();
-    // If there is no chance that the old frame will show any part of the new
-    // frame, then a scroll anchor is cost we shouldn't define an anchor
-    if (
-      stickyTop === -1 ||
-      stickyBottom === -1 ||
-      scrollTop + viewportHeight < stickyTop ||
-      scrollTop > stickyBottom
-    ) {
+    // If we have no previoius frame, we shouldn't scroll anchor
+    if (stickyTop === -1 || stickyBottom === -1) {
       return undefined;
     }
 
@@ -1814,7 +1916,11 @@ export class CodeViewer<LAnnotation = undefined> {
       }
 
       // First attempt to grab a the first fully visible line
-      const localViewportTop = scrollTop - absoluteItemTop;
+      const anchorViewportTop = this.getScrollAnchorViewportTop(
+        absoluteItemTop,
+        scrollTop
+      );
+      const localViewportTop = anchorViewportTop - absoluteItemTop;
       const lineAnchor = item.instance.getNumericScrollAnchor(localViewportTop);
       if (lineAnchor != null) {
         const absoluteLineTop = absoluteItemTop + lineAnchor.top;
@@ -1884,7 +1990,7 @@ export class CodeViewer<LAnnotation = undefined> {
    * Decide whether a pending programmatic scroll has reached its
    * destination and should be cleared.
    */
-  private isPendingTargetSettled(target: CodeViewerScrollTarget): boolean {
+  private isPendingTargetSettled(target: PendingScrollTarget): boolean {
     const top = this.resolveScrollTargetTop(target);
     if (top == null) {
       return true;
