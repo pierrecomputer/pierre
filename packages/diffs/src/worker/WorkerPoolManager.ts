@@ -60,6 +60,12 @@ import type {
 
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
 
+class WorkerPoolTerminatedError extends Error {
+  constructor() {
+    super('WorkerPoolManager: operation canceled because the pool terminated');
+  }
+}
+
 interface GetCachesResult {
   fileCache: LRUMapPkg.LRUMap<string, RenderFileResult>;
   diffCache: LRUMapPkg.LRUMap<string, RenderDiffResult>;
@@ -99,6 +105,8 @@ export class WorkerPoolManager {
   private fileCache: LRUMapPkg.LRUMap<string, RenderFileResult>;
   private diffCache: LRUMapPkg.LRUMap<string, RenderDiffResult>;
   private _queuedBroadcast: number | undefined;
+  // Incremented on terminate so async lifecycle work can identify stale results.
+  private lifecycleGeneration = 0;
 
   constructor(
     private options: WorkerPoolOptions,
@@ -122,7 +130,7 @@ export class WorkerPoolManager {
     };
     this.fileCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
     this.diffCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
-    void this.initialize(langs);
+    this.queueInitialization(langs);
   }
 
   isWorkingPool(): boolean {
@@ -169,51 +177,76 @@ export class WorkerPoolManager {
     maxLineDiffLength = 1000,
     tokenizeMaxLineLength = 1000,
   }: Partial<WorkerRenderingOptions>): Promise<void> {
-    const newRenderOptions: WorkerRenderingOptions = {
-      theme,
-      useTokenTransformer,
-      lineDiffType,
-      maxLineDiffLength,
-      tokenizeMaxLineLength,
-    };
-    if (!this.isInitialized()) {
-      await this.initialize();
-    }
-    if (areDiffRenderOptionsEqual(newRenderOptions, this.renderOptions)) {
-      return;
-    }
-
-    const themeNames = getThemes(theme);
-    let resolvedThemes: ThemeRegistrationResolved[] = [];
-    if (!areThemesEqual(newRenderOptions.theme, this.renderOptions.theme)) {
-      if (hasResolvedThemes(themeNames)) {
-        resolvedThemes = getResolvedThemes(themeNames);
-      } else {
-        resolvedThemes = await resolveThemes(themeNames);
+    const { lifecycleGeneration } = this;
+    try {
+      const newRenderOptions: WorkerRenderingOptions = {
+        theme,
+        useTokenTransformer,
+        lineDiffType,
+        maxLineDiffLength,
+        tokenizeMaxLineLength,
+      };
+      if (!this.isInitialized()) {
+        await this.initialize();
       }
-    }
+      if (
+        !this.isCurrentLifecycle(lifecycleGeneration) ||
+        areDiffRenderOptionsEqual(newRenderOptions, this.renderOptions)
+      ) {
+        return;
+      }
 
-    if (this.highlighter != null) {
-      attachResolvedThemes(resolvedThemes, this.highlighter);
-      await this.setRenderOptionsOnWorkers(newRenderOptions, resolvedThemes);
-    } else {
-      const [highlighter] = await Promise.all([
-        getSharedHighlighter({
-          themes: themeNames,
-          langs: ['text'],
-          preferredHighlighter: this.preferredHighlighter,
-        }),
-        this.setRenderOptionsOnWorkers(newRenderOptions, resolvedThemes),
-      ]);
-      this.highlighter = highlighter;
-    }
+      const themeNames = getThemes(theme);
+      let resolvedThemes: ThemeRegistrationResolved[] = [];
+      if (!areThemesEqual(newRenderOptions.theme, this.renderOptions.theme)) {
+        if (hasResolvedThemes(themeNames)) {
+          resolvedThemes = getResolvedThemes(themeNames);
+        } else {
+          resolvedThemes = await resolveThemes(themeNames);
+        }
+      }
 
-    this.renderOptions = newRenderOptions;
-    this.diffCache.clear();
-    this.fileCache.clear();
+      if (!this.isCurrentLifecycle(lifecycleGeneration)) {
+        return;
+      }
 
-    for (const instance of this.themeSubscribers) {
-      instance.rerender();
+      if (this.highlighter != null) {
+        attachResolvedThemes(resolvedThemes, this.highlighter);
+        await this.setRenderOptionsOnWorkers(newRenderOptions, resolvedThemes);
+      } else {
+        const [highlighter] = await Promise.all([
+          getSharedHighlighter({
+            themes: themeNames,
+            langs: ['text'],
+            preferredHighlighter: this.preferredHighlighter,
+          }),
+          this.setRenderOptionsOnWorkers(newRenderOptions, resolvedThemes),
+        ]);
+        if (!this.isCurrentLifecycle(lifecycleGeneration)) {
+          return;
+        }
+        this.highlighter = highlighter;
+      }
+
+      if (!this.isCurrentLifecycle(lifecycleGeneration)) {
+        return;
+      }
+
+      this.renderOptions = newRenderOptions;
+      this.diffCache.clear();
+      this.fileCache.clear();
+
+      for (const instance of this.themeSubscribers) {
+        instance.rerender();
+      }
+    } catch (error) {
+      if (
+        error instanceof WorkerPoolTerminatedError ||
+        !this.isCurrentLifecycle(lifecycleGeneration)
+      ) {
+        return;
+      }
+      throw error;
     }
   }
 
@@ -332,6 +365,7 @@ export class WorkerPoolManager {
     if (this.initialized === true) {
       return;
     } else if (this.initialized === false) {
+      const { lifecycleGeneration } = this;
       this.initialized = new Promise((resolve, reject) => {
         void (async () => {
           try {
@@ -342,12 +376,20 @@ export class WorkerPoolManager {
             } else {
               resolvedThemes = await resolveThemes(themes);
             }
+            if (!this.isCurrentLifecycle(lifecycleGeneration)) {
+              resolve();
+              return;
+            }
 
             let resolvedLanguages: ResolvedLanguage[] = [];
             if (hasResolvedLanguages(languages)) {
               resolvedLanguages = getResolvedLanguages(languages);
             } else {
               resolvedLanguages = await resolveLanguages(languages);
+            }
+            if (!this.isCurrentLifecycle(lifecycleGeneration)) {
+              resolve();
+              return;
             }
 
             const [highlighter] = await Promise.all([
@@ -359,13 +401,10 @@ export class WorkerPoolManager {
               this.initializeWorkers(resolvedThemes, resolvedLanguages),
             ]);
 
-            // If we were terminated while initializing, we should probably kill
-            // any workers that may have been created
-            if (this.initialized === false) {
+            if (!this.isCurrentLifecycle(lifecycleGeneration)) {
               this.terminateWorkers();
-              throw new Error(
-                'WorkerPoolManager: workers failed to initialize'
-              );
+              resolve();
+              return;
             }
             this.highlighter = highlighter;
             this.initialized = true;
@@ -375,6 +414,13 @@ export class WorkerPoolManager {
             this.queueBroadcastStateChanges();
             resolve();
           } catch (e) {
+            if (
+              e instanceof WorkerPoolTerminatedError ||
+              !this.isCurrentLifecycle(lifecycleGeneration)
+            ) {
+              resolve();
+              return;
+            }
             this.initialized = false;
             this.workersFailed = true;
             this.queueBroadcastStateChanges();
@@ -503,7 +549,7 @@ export class WorkerPoolManager {
     lines?: string[]
   ): ThemedFileResult | undefined {
     if (this.highlighter == null) {
-      void this.initialize();
+      this.queueInitialization();
       return undefined;
     }
     return renderFileWithHighlighter(
@@ -557,6 +603,8 @@ export class WorkerPoolManager {
   }
 
   terminate(): void {
+    this.lifecycleGeneration++;
+    this.cancelPendingAsyncWorkerTasks();
     this.terminateWorkers();
     this.fileCache.clear();
     this.diffCache.clear();
@@ -567,6 +615,25 @@ export class WorkerPoolManager {
     this.initialized = false;
     this.workersFailed = false;
     this.queueBroadcastStateChanges();
+  }
+
+  private isCurrentLifecycle(lifecycleGeneration: number): boolean {
+    return this.lifecycleGeneration === lifecycleGeneration;
+  }
+
+  private queueInitialization(languages?: SupportedLanguages[]): void {
+    void this.initialize(languages).catch((error) => {
+      console.error(error);
+    });
+  }
+
+  private cancelPendingAsyncWorkerTasks(): void {
+    const error = new WorkerPoolTerminatedError();
+    for (const task of this.pendingTasks.values()) {
+      if ('reject' in task) {
+        task.reject(error);
+      }
+    }
   }
 
   private terminateWorkers() {
@@ -611,7 +678,7 @@ export class WorkerPoolManager {
     request: SubmitRequest
   ): void {
     if (this.initialized === false) {
-      void this.initialize();
+      this.queueInitialization();
     }
 
     const id = this.generateRequestId();

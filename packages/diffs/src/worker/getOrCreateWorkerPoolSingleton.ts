@@ -4,7 +4,7 @@ import type {
 } from './types';
 import { WorkerPoolManager } from './WorkerPoolManager';
 
-let workerPoolSingletone: WorkerPoolManager | undefined;
+let workerPoolSingleton: WorkerPoolManager | undefined;
 
 export interface SetupWorkerPoolProps {
   poolOptions: WorkerPoolOptions;
@@ -15,20 +15,17 @@ export function getOrCreateWorkerPoolSingleton({
   poolOptions,
   highlighterOptions,
 }: SetupWorkerPoolProps): WorkerPoolManager {
-  if (workerPoolSingletone == null) {
-    workerPoolSingletone = new WorkerPoolManager(
-      poolOptions,
-      highlighterOptions
-    );
-    void workerPoolSingletone.initialize();
-  }
-  return workerPoolSingletone;
+  workerPoolSingleton ??= new WorkerPoolManager(
+    poolOptions,
+    highlighterOptions
+  );
+  return workerPoolSingleton;
 }
 
 export function terminateWorkerPoolSingleton(): void {
-  if (workerPoolSingletone == null) {
+  if (workerPoolSingleton == null) {
     return;
   }
-  workerPoolSingletone.terminate();
-  workerPoolSingletone = undefined;
+  workerPoolSingleton.terminate();
+  workerPoolSingleton = undefined;
 }
