@@ -72,6 +72,9 @@ const TTY_QUIET_MS = 25;
 const TTY_MAX_DRAIN_MS = 250;
 const TTY_DRAIN_POLL_MS = 5;
 
+// After Ctrl+C, the wrapper process can close before grandchildren like
+// `next dev` finish their own shutdown output. Wait briefly for the descendants
+// we signaled so their final terminal writes happen before we restore the shell.
 const CHILD_TREE_MAX_WAIT_MS = 1_000;
 const CHILD_TREE_POLL_MS = 25;
 
@@ -159,6 +162,9 @@ async function exitCleanly(code: number) {
   process.exit(code);
 }
 
+// Snapshot the child process tree immediately before forwarding a signal.
+// Shell scripts often spawn grandchildren, and those descendants can still be
+// writing to the inherited terminal after the direct child has closed.
 function collectDescendantPids(rootPid: number) {
   const result = spawnSync('ps', ['-axo', 'pid=,ppid='], {
     encoding: 'utf8',
@@ -204,6 +210,8 @@ function collectDescendantPids(rootPid: number) {
   return descendants;
 }
 
+// `kill(pid, 0)` checks whether a process still exists without sending it a
+// signal. This lets shutdown wait for descendants without disturbing them again.
 function isProcessAlive(pid: number) {
   try {
     process.kill(pid, 0);
@@ -213,6 +221,8 @@ function isProcessAlive(pid: number) {
   }
 }
 
+// Wait for signaled descendants to exit before returning control to the user's
+// shell. The timeout is only a safety cap for stuck children, not a TTY delay.
 async function waitForProcessesToExit(pids: Set<number>) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < CHILD_TREE_MAX_WAIT_MS) {
@@ -234,6 +244,8 @@ async function waitForProcessesToExit(pids: Set<number>) {
 
 function handleChildExit(proc: ChildProcess) {
   const listeners = new Map<NodeJS.Signals, () => void>();
+  // Record descendants before forwarding SIGINT/SIGTERM/SIGHUP, because the
+  // direct child may close before slower grandchildren finish their cleanup.
   const signaledDescendants = new Set<number>();
 
   for (const signal of FORWARDED_SIGNALS) {
