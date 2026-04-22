@@ -1,45 +1,19 @@
 'use client';
 
-import { IconArrowUpRightCircle } from '@pierre/icons';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import NavLink from '../../components/NavLink';
 import {
+  DIFFS_THEME_PATH,
   getExternalUrl,
   getProductFromPathname,
   PRODUCTS,
 } from '@/app/product-config';
-import { cn } from '@/lib/utils';
+import { MobileNavLink } from '@/components/MobileNavLink';
 
 const siteProduct = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
 const isTrees = siteProduct === 'trees';
-
-function MobileNavLink({
-  href,
-  children,
-  external,
-}: {
-  href: string;
-  children: React.ReactNode;
-  external?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        'text-foreground flex items-center gap-1.5 rounded-md px-3 py-2 text-base transition-colors',
-        'hover:bg-muted active:bg-muted/70'
-      )}
-    >
-      {children}
-      {external === true && (
-        <IconArrowUpRightCircle className="text-muted-foreground" />
-      )}
-    </Link>
-  );
-}
 
 interface DocsSidebarProps {
   isMobileOpen?: boolean;
@@ -167,7 +141,7 @@ export function DocsSidebar({
 
       <nav
         ref={navRef}
-        className={`docs-sidebar ${isMobileOpen ? 'is-open' : ''}`}
+        className={`mobile-popover docs-sidebar ${isMobileOpen ? 'is-open' : ''}`}
         onClick={onMobileClose}
       >
         {isMobileOpen && (
@@ -178,9 +152,6 @@ export function DocsSidebar({
               Home
             </MobileNavLink>
             <MobileNavLink href={product.docsPath}>Docs</MobileNavLink>
-            {product.themePath != null && (
-              <MobileNavLink href={product.themePath}>Theme</MobileNavLink>
-            )}
             {product.id === 'diffs' && (
               <MobileNavLink
                 href={
@@ -199,6 +170,16 @@ export function DocsSidebar({
                 Diffs
               </MobileNavLink>
             )}
+            <MobileNavLink
+              href={
+                isTrees
+                  ? `${getExternalUrl('diffs')}${DIFFS_THEME_PATH}`
+                  : DIFFS_THEME_PATH
+              }
+              external={isTrees}
+            >
+              Theme
+            </MobileNavLink>
           </div>
         )}
         {headings.map((heading) => (

@@ -56,6 +56,12 @@ const EXTERNAL_URLS: Record<ProductId, string> = {
 };
 
 /**
+ * Theme lives only on the diffs site, so this path is the single source of
+ * truth whether we link to it cross-site (trees) or in-site (diffs).
+ */
+export const DIFFS_THEME_PATH = PRODUCTS.diffs.themePath ?? '/theme';
+
+/**
  * Return the external base URL for the given product.
  * Useful for cross-site links when two products live on separate domains.
  */

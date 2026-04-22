@@ -789,7 +789,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
             />
           )}
           <div
-            className={`playground-controls-drawer ${isControlsOpen ? 'is-open' : ''}`}
+            className={`mobile-popover ${isControlsOpen ? 'is-open' : ''}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">

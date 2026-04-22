@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { HeaderMobileMenu } from './HeaderMobileMenu';
 import { Button } from './ui/button';
 import { getProductFromPathname } from '@/app/product-config';
 import { cn } from '@/lib/utils';
@@ -77,6 +78,7 @@ function IconLink({ href, label, children }: IconLinkProps) {
 export function Header({ onMobileMenuToggle, className }: HeaderProps) {
   const pathname = usePathname();
   const [isStuck, setIsStuck] = useState(false);
+  const [internalMenuOpen, setInternalMenuOpen] = useState(false);
   const product = getProductFromPathname(pathname);
 
   useEffect(() => {
@@ -98,9 +100,13 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
   }, []);
 
   const homeHref = product.basePath !== '' ? product.basePath : '/';
-  const showMobileMenu =
-    pathname === product.docsPath ||
-    (product.themePath != null && pathname === product.themePath);
+  // When no parent-managed handler is provided, the Header owns its own
+  // mobile popover (used on home, playground, ssr). Docs/theme pages pass a
+  // handler so the existing DocsSidebar popover can be opened instead.
+  const ownsPopover = onMobileMenuToggle == null;
+  const handleMobileToggle = ownsPopover
+    ? () => setInternalMenuOpen((v) => !v)
+    : onMobileMenuToggle;
 
   return (
     <header
@@ -131,57 +137,65 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
         </span>
       </div>
 
-      {showMobileMenu && (
-        <div className="mr-auto flex items-center gap-1 md:hidden">
-          <IconChevronFlat size={16} className="text-border" />
-          <Button variant="ghost" size="icon" onClick={onMobileMenuToggle}>
-            <IconParagraph />
-          </Button>
-        </div>
+      <div className="mr-auto flex items-center gap-1 md:hidden">
+        <IconChevronFlat size={16} className="text-border" />
+        <Button variant="ghost" size="icon" onClick={handleMobileToggle}>
+          <IconParagraph />
+        </Button>
+      </div>
+
+      {ownsPopover && (
+        <HeaderMobileMenu
+          isOpen={internalMenuOpen}
+          onClose={() => setInternalMenuOpen(false)}
+          product={product}
+        />
       )}
 
       <nav className="flex items-center">
-        <NavLink href="/" basePath={product.basePath}>
-          Home
-        </NavLink>
-        <NavLink href="/docs" basePath={product.basePath}>
-          Docs
-        </NavLink>
-        {product.id === 'diffs' ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            asChild
-            className="text-muted-foreground gap-0.5 px-2 font-normal"
-          >
-            <Link
-              href="https://trees.software"
-              target="_blank"
-              rel="noopener noreferrer"
+        <div className="hidden items-center md:flex">
+          <NavLink href="/" basePath={product.basePath}>
+            Home
+          </NavLink>
+          <NavLink href="/docs" basePath={product.basePath}>
+            Docs
+          </NavLink>
+          {product.id === 'diffs' ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              asChild
+              className="text-muted-foreground gap-0.5 px-2 font-normal"
             >
-              Trees
-              <IconArrowUpRight />
-            </Link>
-          </Button>
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            asChild
-            className="text-muted-foreground gap-0.5 px-2 font-normal"
-          >
-            <Link
-              href="https://diffs.com"
-              target="_blank"
-              rel="noopener noreferrer"
+              <Link
+                href="https://trees.software"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Trees
+                <IconArrowUpRight />
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              asChild
+              className="text-muted-foreground gap-0.5 px-2 font-normal"
             >
-              Diffs
-              <IconArrowUpRight />
-            </Link>
-          </Button>
-        )}
+              <Link
+                href="https://diffs.com"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Diffs
+                <IconArrowUpRight />
+              </Link>
+            </Button>
+          )}
 
-        <div className="border-border mx-2 h-5 w-px border-l" />
+          <div className="border-border mx-2 h-5 w-px border-l" />
+        </div>
 
         <IconLink href="https://discord.gg/pierre" label="Discord">
           <IconBrandDiscord />
