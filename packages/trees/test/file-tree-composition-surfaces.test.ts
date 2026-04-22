@@ -865,6 +865,18 @@ describe('file-tree composition surfaces', () => {
         })
       );
       await flushDom();
+      expect(openedPath.current).toBeNull();
+
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      await flushDom();
+
+      triggerButton.dispatchEvent(
+        new dom.window.MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      await flushDom();
 
       expect(openedPath.current).toBe('src/index.ts');
 
