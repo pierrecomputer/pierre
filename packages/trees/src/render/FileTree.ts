@@ -119,15 +119,21 @@ function getHeaderSlotHtml(
   return `<div slot="${HEADER_SLOT_NAME}" data-file-tree-managed-slot="${HEADER_SLOT_NAME}">${headerHtml}</div>`;
 }
 
+// Builds the host element opening markup. The optional `hostStyle` string is
+// emitted as an inline `style="..."` so vanilla SSR consumers (who serialize
+// the payload directly) get the resolved density variables on first paint
+// without needing the React wrapper to paint them.
 function getFileTreeOuterStart(
   id: string,
-  mode: 'declarative' | 'dom'
+  mode: 'declarative' | 'dom',
+  hostStyle: string
 ): string {
   const templateAttr =
     mode === 'declarative'
       ? 'shadowrootmode="open"'
       : 'data-file-tree-shadowrootmode="open"';
-  return `<file-tree-container id="${id}" data-file-tree-virtualized="true"><template ${templateAttr}>`;
+  const styleAttr = hostStyle.length === 0 ? '' : ` style="${hostStyle}"`;
+  return `<file-tree-container id="${id}" data-file-tree-virtualized="true"${styleAttr}><template ${templateAttr}>`;
 }
 
 function getFileTreeOuterEnd(headerSlotHtml: string): string {
@@ -792,8 +798,17 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
 
   const shadowHtml = `${getBuiltInSpriteSheet(normalizedIcons.set)}${customSpriteSheet}<style ${FILE_TREE_STYLE_ATTRIBUTE}>${wrappedCoreCss}</style>${unsafeCssStyle}<div data-file-tree-id="${resolvedId}" data-file-tree-virtualized-wrapper="true"${coloredIconsAttr}>${bodyHtml}</div>`;
   const headerSlotHtml = getHeaderSlotHtml(composition);
-  const outerStart = getFileTreeOuterStart(resolvedId, 'declarative');
-  const domOuterStart = getFileTreeOuterStart(resolvedId, 'dom');
+  // Inline the resolved density on the host so vanilla SSR consumers get the
+  // same first paint as the React wrapper, where the model paints these vars
+  // for them. The two paths must agree because the SSR shadow body was laid
+  // out using the same resolved itemHeight.
+  const hostStyle = `--trees-item-height:${String(resolvedItemHeight)}px;--trees-density-override:${String(resolvedDensity.factor)}`;
+  const outerStart = getFileTreeOuterStart(
+    resolvedId,
+    'declarative',
+    hostStyle
+  );
+  const domOuterStart = getFileTreeOuterStart(resolvedId, 'dom', hostStyle);
   const outerEnd = getFileTreeOuterEnd(headerSlotHtml);
   return {
     domOuterStart,

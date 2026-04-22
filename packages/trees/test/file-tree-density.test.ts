@@ -5,6 +5,8 @@ import {
   resolveFileTreeDensity,
 } from '../src/model/density';
 import { FILE_TREE_DEFAULT_ITEM_HEIGHT } from '../src/model/virtualization';
+import { preloadFileTree } from '../src/render/FileTree';
+import { serializeFileTreeSsrPayload } from '../src/ssr';
 
 describe('resolveFileTreeDensity', () => {
   test('returns the default preset when density is undefined', () => {
@@ -49,6 +51,51 @@ describe('resolveFileTreeDensity', () => {
   test('FILE_TREE_DEFAULT_ITEM_HEIGHT is sourced from the default preset', () => {
     expect(FILE_TREE_DEFAULT_ITEM_HEIGHT).toBe(
       FILE_TREE_DENSITY_PRESETS.default.itemHeight
+    );
+  });
+});
+
+describe('preloadFileTree density host style', () => {
+  test('keyword density is inlined on the SSR host element', () => {
+    const payload = preloadFileTree({
+      density: 'compact',
+      paths: ['README.md'],
+    });
+
+    const compact = FILE_TREE_DENSITY_PRESETS.compact;
+    const expectedStyle = `style="--trees-item-height:${String(compact.itemHeight)}px;--trees-density-override:${String(compact.factor)}"`;
+
+    expect(payload.outerStart).toContain(expectedStyle);
+    expect(payload.domOuterStart).toContain(expectedStyle);
+
+    const declarativeHtml = serializeFileTreeSsrPayload(payload);
+    const domHtml = serializeFileTreeSsrPayload(payload, 'dom');
+    expect(declarativeHtml).toContain(expectedStyle);
+    expect(domHtml).toContain(expectedStyle);
+  });
+
+  test('numeric density keeps the default row height and inlines the factor', () => {
+    const payload = preloadFileTree({
+      density: 0.75,
+      paths: ['README.md'],
+    });
+
+    const expectedStyle = `style="--trees-item-height:${String(FILE_TREE_DENSITY_PRESETS.default.itemHeight)}px;--trees-density-override:0.75"`;
+
+    expect(payload.outerStart).toContain(expectedStyle);
+    expect(payload.domOuterStart).toContain(expectedStyle);
+  });
+
+  test('explicit itemHeight overrides the preset row height in the host style', () => {
+    const payload = preloadFileTree({
+      density: 'relaxed',
+      itemHeight: 44,
+      paths: ['README.md'],
+    });
+
+    const relaxed = FILE_TREE_DENSITY_PRESETS.relaxed;
+    expect(payload.outerStart).toContain(
+      `style="--trees-item-height:44px;--trees-density-override:${String(relaxed.factor)}"`
     );
   });
 });
