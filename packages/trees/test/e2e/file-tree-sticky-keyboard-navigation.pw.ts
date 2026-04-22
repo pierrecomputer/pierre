@@ -159,9 +159,10 @@ const prepareLinuxArcIncludeStickyStack = async (
 
 const prepareSyntheticBranchStickyStack = async (
   page: Page,
-  focusedPath: string
+  focusedPath: string,
+  query: string = '?scenario=synthetic-branch'
 ): Promise<StickyKeyboardSample> => {
-  await gotoFixture(page, '?scenario=synthetic-branch');
+  await gotoFixture(page, query);
   await setScrollTop(page, syntheticBranchScrollTop);
   await focusStickyPath(page, focusedPath);
   const baseline = await sample(page);
@@ -202,6 +203,12 @@ const getFocusedKeyboardProxyTop = (snapshot: StickyKeyboardSample): number => {
 
   return proxyRow.topWithinScroll;
 };
+
+const getStickyRow = (
+  snapshot: StickyKeyboardSample,
+  path: string
+): StickyKeyboardRowSnapshot | null =>
+  snapshot.rows.find((row) => row.path === path && row.isSticky) ?? null;
 
 const getMountedFlowRow = (
   snapshot: StickyKeyboardSample,
@@ -597,6 +604,72 @@ test.describe('sticky keyboard navigation fixture', () => {
     expect(targetRow).toBeDefined();
     expect(targetRow?.topWithinScroll).toBeGreaterThanOrEqual(
       after.stickyOverlayBottomWithinScroll
+    );
+  });
+
+  test('clicking a non-root sticky folder collapses it at the same visual top with a fractional scrollport', async ({
+    page,
+  }) => {
+    const baseline = await prepareSyntheticBranchStickyStack(
+      page,
+      'a1/b2/',
+      '?scenario=synthetic-branch&fractional-header=true'
+    );
+    const sourceStickyRow = getStickyRow(baseline, 'a1/b2/');
+    expect(sourceStickyRow).not.toBeNull();
+    if (sourceStickyRow == null) {
+      throw new Error('Missing source sticky row for a1/b2/.');
+    }
+
+    await page.waitForTimeout(80);
+    await page
+      .locator(
+        'file-tree-container button[data-file-tree-sticky-row="true"][data-file-tree-sticky-path="a1/b2/"]'
+      )
+      .click();
+    await nextFrames(page);
+
+    const after = await sample(page);
+    const targetRow = getMountedFlowRow(after, 'a1/b2/');
+    expect(after.focusedPath).toBe('a1/b2/');
+    expect(after.activeElementPath).toBe('a1/b2/');
+    expect(after.activeElementIsSticky).toBe(false);
+    expect(after.stickyPaths).not.toContain('a1/b2/');
+    expect(targetRow).not.toBeNull();
+    expect(targetRow?.topWithinScroll).toBeCloseTo(
+      sourceStickyRow.topWithinScroll,
+      2
+    );
+  });
+
+  test('clicking a linux non-root sticky folder collapses it at the same visual top', async ({
+    page,
+  }) => {
+    const baseline = await prepareLinuxArcStickyStack(page, 'arch/arc/');
+    const sourceStickyRow = getStickyRow(baseline, 'arch/arc/');
+    expect(sourceStickyRow).not.toBeNull();
+    if (sourceStickyRow == null) {
+      throw new Error('Missing source sticky row for arch/arc/.');
+    }
+
+    await page.waitForTimeout(80);
+    await page
+      .locator(
+        'file-tree-container button[data-file-tree-sticky-row="true"][data-file-tree-sticky-path="arch/arc/"]'
+      )
+      .click();
+    await nextFrames(page);
+
+    const after = await sample(page);
+    const targetRow = getMountedFlowRow(after, 'arch/arc/');
+    expect(after.focusedPath).toBe('arch/arc/');
+    expect(after.activeElementPath).toBe('arch/arc/');
+    expect(after.activeElementIsSticky).toBe(false);
+    expect(after.stickyPaths).not.toContain('arch/arc/');
+    expect(targetRow).not.toBeNull();
+    expect(targetRow?.topWithinScroll).toBeCloseTo(
+      sourceStickyRow.topWithinScroll,
+      2
     );
   });
 });

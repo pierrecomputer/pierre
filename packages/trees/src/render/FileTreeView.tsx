@@ -546,16 +546,57 @@ function isSearchOpenSeedKey(event: KeyboardEvent): boolean {
   );
 }
 
-// Prefers the live scroll element's measured height once layout has run,
-// falling back to the first-render hint while clientHeight is still zero
-// (SSR, initial mount, detached nodes, jsdom).
-function getMeasuredViewportHeight(
+// Reads the live scroll element's border-box height when an exact viewport
+// height is required. `clientHeight` rounds fractional CSS pixels, which
+// misaligns sticky virtualization in layouts where a slotted header leaves a
+// half-pixel scrollport.
+function readMeasuredViewportHeight(
   scrollElement: HTMLElement | null,
   fallbackViewportHeight: number
 ): number {
-  return scrollElement?.clientHeight != null && scrollElement.clientHeight > 0
+  if (scrollElement == null) {
+    return fallbackViewportHeight;
+  }
+
+  const rectHeight = scrollElement.getBoundingClientRect().height;
+  if (rectHeight > 0) {
+    return rectHeight;
+  }
+
+  return scrollElement.clientHeight > 0
     ? scrollElement.clientHeight
     : fallbackViewportHeight;
+}
+
+function getCachedViewportHeight(
+  cachedViewportHeight: number | null,
+  fallbackViewportHeight: number
+): number {
+  return cachedViewportHeight != null && cachedViewportHeight > 0
+    ? cachedViewportHeight
+    : fallbackViewportHeight;
+}
+
+// ResizeObserver exposes box sizes without forcing an extra layout read. Use
+// that value to refresh the viewport-height cache, falling back to the direct
+// measurement only in environments that omit the border-box size.
+function getResizeObserverViewportHeight(
+  entry: ResizeObserverEntry
+): number | null {
+  const borderBoxSize = entry.borderBoxSize;
+  const firstBorderBoxSize = Array.isArray(borderBoxSize)
+    ? borderBoxSize[0]
+    : borderBoxSize;
+
+  if (
+    firstBorderBoxSize != null &&
+    Number.isFinite(firstBorderBoxSize.blockSize) &&
+    firstBorderBoxSize.blockSize > 0
+  ) {
+    return firstBorderBoxSize.blockSize;
+  }
+
+  return entry.contentRect.height > 0 ? entry.contentRect.height : null;
 }
 
 // Thin imperative wrapper around `computeFocusedRowScrollIntoView`. The numeric
@@ -573,7 +614,7 @@ function scrollFocusedRowIntoView(
     focusedIndex,
     itemHeight,
     topInset,
-    viewportHeight: getMeasuredViewportHeight(
+    viewportHeight: readMeasuredViewportHeight(
       scrollElement,
       fallbackViewportHeight
     ),
@@ -603,7 +644,7 @@ function scrollFocusedRowToViewportOffset(
     itemHeight,
     targetViewportOffset,
     totalHeight,
-    viewportHeight: getMeasuredViewportHeight(
+    viewportHeight: readMeasuredViewportHeight(
       scrollElement,
       fallbackViewportHeight
     ),
@@ -1319,6 +1360,7 @@ export function FileTreeView({
   const rowButtonRefs = useRef(new Map<string, HTMLElement>());
   const stickyRowButtonRefs = useRef(new Map<string, HTMLElement>());
   const updateViewportRef = useRef<() => void>(() => {});
+  const measuredViewportHeightRef = useRef<number | null>(null);
   const domFocusOwnerRef = useRef(false);
   const previousFocusedPathRef = useRef<string | null>(null);
   const previousRenamingPathRef = useRef<string | null>(null);
@@ -1693,7 +1735,7 @@ export function FileTreeView({
 
       if (controller.isSearchOpen()) {
         const scrollElement = scrollRef.current;
-        const viewportHeight = getMeasuredViewportHeight(
+        const viewportHeight = readMeasuredViewportHeight(
           scrollElement,
           resolvedViewportHeight
         );
@@ -1756,7 +1798,7 @@ export function FileTreeView({
         return false;
       }
 
-      const liveViewportHeight = getMeasuredViewportHeight(
+      const liveViewportHeight = readMeasuredViewportHeight(
         scrollElement,
         resolvedViewportHeight
       );
@@ -2235,7 +2277,7 @@ export function FileTreeView({
           controller.selectOnlyPath(currentFocusedPath);
         }
         const scrollElement = scrollRef.current;
-        const viewportHeight = getMeasuredViewportHeight(
+        const viewportHeight = readMeasuredViewportHeight(
           scrollElement,
           resolvedViewportHeight
         );
@@ -2670,10 +2712,15 @@ export function FileTreeView({
       return;
     }
 
+    measuredViewportHeightRef.current = readMeasuredViewportHeight(
+      scrollElement,
+      initialViewportHeight
+    );
+
     const update = (): void => {
       const nextItemCount = controller.getVisibleCount();
-      const nextViewportHeight = getMeasuredViewportHeight(
-        scrollElement,
+      const nextViewportHeight = getCachedViewportHeight(
+        measuredViewportHeightRef.current,
         initialViewportHeight
       );
       const maxScrollTop = Math.max(
@@ -2845,7 +2892,14 @@ export function FileTreeView({
     scrollElement.addEventListener('keydown', onKeyDownPreScroll);
     const resizeObserver =
       typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => {
+        ? new ResizeObserver((entries) => {
+            const observedViewportHeight =
+              entries[0] == null
+                ? null
+                : getResizeObserverViewportHeight(entries[0]);
+            measuredViewportHeightRef.current =
+              observedViewportHeight ??
+              readMeasuredViewportHeight(scrollElement, initialViewportHeight);
             update();
           })
         : null;
@@ -2876,6 +2930,7 @@ export function FileTreeView({
       // rebinds (e.g. viewportHeight changes) while scrollTop is still 0,
       // because the sync effect only fires when scrollTop itself changes.
       isScrollingRef.current = false;
+      measuredViewportHeightRef.current = null;
       resizeObserver?.disconnect();
     };
   }, [controller, initialViewportHeight, itemHeight, overscan, stickyFolders]);

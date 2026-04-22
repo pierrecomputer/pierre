@@ -88,6 +88,9 @@ if (!(mount instanceof HTMLDivElement) || !(report instanceof HTMLPreElement)) {
 }
 
 const scenario = new URL(window.location.href).searchParams.get('scenario');
+const hasFractionalHeader =
+  new URL(window.location.href).searchParams.get('fractional-header') ===
+  'true';
 const workload = getVirtualizationWorkload('linux-1x');
 const syntheticBranchWorkload = createSyntheticBranchWorkload();
 const renderContextMenu = (item: ContextMenuItem): HTMLElement => {
@@ -96,6 +99,11 @@ const renderContextMenu = (item: ContextMenuItem): HTMLElement => {
   menu.textContent = `Menu for ${item.path}`;
   return menu;
 };
+const headerComposition = hasFractionalHeader
+  ? {
+      html: '<div data-sticky-keyboard-fractional-header style="height:77.5px">Fractional header</div>',
+    }
+  : undefined;
 const fileTree =
   scenario === 'synthetic-branch'
     ? new FileTree({
@@ -105,6 +113,7 @@ const fileTree =
             render: renderContextMenu,
             triggerMode: 'both',
           },
+          header: headerComposition,
         },
         fileTreeSearchMode: 'hide-non-matches',
         flattenEmptyDirectories: true,
@@ -121,6 +130,7 @@ const fileTree =
             render: renderContextMenu,
             triggerMode: 'both',
           },
+          header: headerComposition,
         },
         fileTreeSearchMode: 'hide-non-matches',
         flattenEmptyDirectories: true,
