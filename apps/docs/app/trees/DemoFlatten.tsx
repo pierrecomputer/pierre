@@ -84,8 +84,7 @@ interface DemoFlattenProps {
 type FlattenMobileView = 'hierarchical' | 'flattened';
 
 export function DemoFlatten({ preloadedData }: DemoFlattenProps) {
-  const [mobileView, setMobileView] =
-    useState<FlattenMobileView>('hierarchical');
+  const [mobileView, setMobileView] = useState<FlattenMobileView>('flattened');
 
   return (
     <TreeExampleSection>
@@ -111,13 +110,13 @@ export function DemoFlatten({ preloadedData }: DemoFlattenProps) {
         value={mobileView}
         onValueChange={(value) => setMobileView(value as FlattenMobileView)}
       >
-        <ButtonGroupItem value="hierarchical">
-          <IconFileTreeFill className="size-4" />
-          Default
-        </ButtonGroupItem>
         <ButtonGroupItem value="flattened">
           <IconFolders className="size-4" />
           Flattened
+        </ButtonGroupItem>
+        <ButtonGroupItem value="hierarchical">
+          <IconFileTreeFill className="size-4" />
+          Default
         </ButtonGroupItem>
       </ButtonGroup>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
