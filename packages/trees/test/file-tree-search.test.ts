@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
+import type { FileTreeSortComparator } from '../src/model/types';
+
 const FILES = [
   'README.md',
   'package.json',
@@ -197,6 +199,50 @@ describe('file-tree search', () => {
     expect(visiblePaths).toContain('src/utils/');
     expect(visiblePaths).toContain('src/utils/worker.ts');
     expect(visiblePaths).not.toContain('src/components/Button.tsx');
+
+    controller.destroy();
+  });
+
+  test('search works with flattened custom-sorted prepared input', async () => {
+    const { prepareFileTreeInput } = await import('../src/preparedInput');
+    const FileTreeController = await loadFileTreeController();
+    const paths = [
+      'test/addons/foo/a.js',
+      'src/x.js',
+      'test/addons/async-cleanup-hook/binding.gyp',
+      'test/addons/async-cleanup-hook/test.js',
+    ];
+    const rankByPath = new Map(paths.map((path, index) => [path, index]));
+    const sort: FileTreeSortComparator = (left, right) => {
+      const leftRank = rankByPath.get(left.path) ?? Number.MAX_SAFE_INTEGER;
+      const rightRank = rankByPath.get(right.path) ?? Number.MAX_SAFE_INTEGER;
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank;
+      }
+
+      if (left.depth !== right.depth) {
+        return left.depth - right.depth;
+      }
+
+      return left.path < right.path ? -1 : left.path > right.path ? 1 : 0;
+    };
+    const preparedInput = prepareFileTreeInput(paths, {
+      flattenEmptyDirectories: true,
+      sort,
+    });
+    const controller = new FileTreeController({
+      flattenEmptyDirectories: true,
+      initialExpansion: 'open',
+      paths: preparedInput.paths,
+      preparedInput,
+      sort,
+    });
+
+    controller.openSearch('async');
+
+    expect(controller.getSearchMatchingPaths()).toContain(
+      'test/addons/async-cleanup-hook/'
+    );
 
     controller.destroy();
   });

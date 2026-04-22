@@ -1,5 +1,6 @@
 import {
   getPreparedInputEntries,
+  getPreparedInputPreparedPathsValidateOrder,
   getPreparedInputPresortedPaths,
   getPreparedInputPresortedPathsContainDirectories,
   PathStoreBuilder,
@@ -253,12 +254,9 @@ export class PathStore {
           )
         );
       } else {
-        // preparedInput is the caller's explicit fast path, so skip the
-        // builder's redundant monotonic-order validation and only keep
-        // duplicate checks.
         builder.appendPreparedPaths(
           getPreparedInputEntries(options.preparedInput),
-          false
+          getPreparedInputPreparedPathsValidateOrder(options.preparedInput)
         );
       }
     } else {

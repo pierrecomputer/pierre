@@ -125,6 +125,7 @@ export interface PreparedPath {
 
 export type InternalPreparedInput = PathStorePreparedInput & {
   readonly preparedPaths?: readonly PreparedPath[];
+  readonly preparedPathsValidateOrder?: boolean;
   readonly presortedPaths?: readonly string[];
   readonly presortedPathsContainDirectories?: boolean;
 };

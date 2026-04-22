@@ -169,6 +169,8 @@ export function prepareInput(
     {
       paths: preparedPaths.map((entry) => entry.path),
       preparedPaths,
+      preparedPathsValidateOrder:
+        resolvePathStoreOptions(options).sort !== 'default',
     },
     'prepared'
   );
@@ -222,6 +224,13 @@ export function getPreparedInputEntries(
   }
 
   return preparedPaths;
+}
+
+export function getPreparedInputPreparedPathsValidateOrder(
+  preparedInput: import('./public-types').PathStorePreparedInput
+): boolean {
+  const internalPreparedInput = preparedInput as Partial<InternalPreparedInput>;
+  return internalPreparedInput.preparedPathsValidateOrder !== false;
 }
 
 export function getPreparedInputPresortedPaths(
