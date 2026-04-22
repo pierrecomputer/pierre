@@ -175,7 +175,7 @@ describe('preloadFileTree density host style', () => {
 });
 
 describe('FileTree vanilla render density host style', () => {
-  test('keyword density paints both vars on the host after render()', async () => {
+  test('render() paints the resolved density vars on the host and exposes them via the model accessors', async () => {
     const { cleanup, dom } = installDom();
     try {
       const mount = dom.window.document.createElement('div');
@@ -196,62 +196,8 @@ describe('FileTree vanilla render density host style', () => {
       expect(host?.style.getPropertyValue('--trees-density-override')).toBe(
         String(compact.factor)
       );
-
-      fileTree.cleanUp();
-    } finally {
-      cleanup();
-    }
-  });
-
-  test('numeric density keeps the default row height and inlines the factor', async () => {
-    const { cleanup, dom } = installDom();
-    try {
-      const mount = dom.window.document.createElement('div');
-      dom.window.document.body.appendChild(mount);
-
-      const fileTree = new FileTree({
-        density: 0.75,
-        paths: ['README.md'],
-      });
-      fileTree.render({ containerWrapper: mount });
-      await flushDom();
-
-      const host = fileTree.getFileTreeContainer();
-      expect(host?.style.getPropertyValue('--trees-item-height')).toBe(
-        `${String(FILE_TREE_DENSITY_PRESETS.default.itemHeight)}px`
-      );
-      expect(host?.style.getPropertyValue('--trees-density-override')).toBe(
-        '0.75'
-      );
-
-      fileTree.cleanUp();
-    } finally {
-      cleanup();
-    }
-  });
-
-  test('explicit itemHeight wins over the preset row height on the host', async () => {
-    const { cleanup, dom } = installDom();
-    try {
-      const mount = dom.window.document.createElement('div');
-      dom.window.document.body.appendChild(mount);
-
-      const fileTree = new FileTree({
-        density: 'relaxed',
-        itemHeight: 44,
-        paths: ['README.md'],
-      });
-      fileTree.render({ containerWrapper: mount });
-      await flushDom();
-
-      const host = fileTree.getFileTreeContainer();
-      const relaxed = FILE_TREE_DENSITY_PRESETS.relaxed;
-      expect(host?.style.getPropertyValue('--trees-item-height')).toBe('44px');
-      expect(host?.style.getPropertyValue('--trees-density-override')).toBe(
-        String(relaxed.factor)
-      );
-      expect(fileTree.getItemHeight()).toBe(44);
-      expect(fileTree.getDensityFactor()).toBe(relaxed.factor);
+      expect(fileTree.getItemHeight()).toBe(compact.itemHeight);
+      expect(fileTree.getDensityFactor()).toBe(compact.factor);
 
       fileTree.cleanUp();
     } finally {
@@ -287,6 +233,114 @@ describe('FileTree vanilla render density host style', () => {
       ).toBe('1.5');
 
       fileTree.cleanUp();
+      // Caller-set inline values must survive cleanUp because the model
+      // never owned them. Only vars written by `#applyDensityHostStyle`
+      // get stripped.
+      expect(customHost.style.getPropertyValue('--trees-item-height')).toBe(
+        '40px'
+      );
+      expect(
+        customHost.style.getPropertyValue('--trees-density-override')
+      ).toBe('1.5');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('reusing a host with a new density refreshes the model-owned vars', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const firstTree = new FileTree({
+        density: 'compact',
+        paths: ['README.md', 'src/index.ts'],
+      });
+      firstTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = firstTree.getFileTreeContainer();
+      if (!(host instanceof dom.window.HTMLElement)) {
+        throw new Error('expected first-render host');
+      }
+
+      const compact = FILE_TREE_DENSITY_PRESETS.compact;
+      expect(host.style.getPropertyValue('--trees-item-height')).toBe(
+        `${String(compact.itemHeight)}px`
+      );
+      expect(host.style.getPropertyValue('--trees-density-override')).toBe(
+        String(compact.factor)
+      );
+
+      firstTree.cleanUp();
+      // cleanUp() must strip the model-owned vars it wrote during mount so
+      // the next instance's empty-check guard sees a clean slate. Without
+      // this strip the new instance would inherit stale row heights.
+      expect(host.style.getPropertyValue('--trees-item-height')).toBe('');
+      expect(host.style.getPropertyValue('--trees-density-override')).toBe('');
+
+      const secondTree = new FileTree({
+        density: 'relaxed',
+        paths: ['README.md', 'src/index.ts'],
+      });
+      secondTree.hydrate({ fileTreeContainer: host });
+      await flushDom();
+
+      const relaxed = FILE_TREE_DENSITY_PRESETS.relaxed;
+      expect(host.style.getPropertyValue('--trees-item-height')).toBe(
+        `${String(relaxed.itemHeight)}px`
+      );
+      expect(host.style.getPropertyValue('--trees-density-override')).toBe(
+        String(relaxed.factor)
+      );
+
+      secondTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('reusing a host preserves a caller override applied between mounts', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const firstTree = new FileTree({
+        density: 'compact',
+        paths: ['README.md'],
+      });
+      firstTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = firstTree.getFileTreeContainer();
+      if (!(host instanceof dom.window.HTMLElement)) {
+        throw new Error('expected first-render host');
+      }
+      firstTree.cleanUp();
+
+      // Caller takes manual control of the row height between mounts. The
+      // next mount must respect this rather than reverting to the new
+      // model's value.
+      host.style.setProperty('--trees-item-height', '52px');
+
+      const secondTree = new FileTree({
+        density: 'relaxed',
+        paths: ['README.md'],
+      });
+      secondTree.hydrate({ fileTreeContainer: host });
+      await flushDom();
+
+      const relaxed = FILE_TREE_DENSITY_PRESETS.relaxed;
+      expect(host.style.getPropertyValue('--trees-item-height')).toBe('52px');
+      // The factor was never touched by the caller, so it still tracks the
+      // model and should refresh from compact's 0.8 to relaxed's value.
+      expect(host.style.getPropertyValue('--trees-density-override')).toBe(
+        String(relaxed.factor)
+      );
+
+      secondTree.cleanUp();
     } finally {
       cleanup();
     }
@@ -333,6 +387,14 @@ describe('FileTree vanilla render density host style', () => {
       );
 
       fileTree.cleanUp();
+      // SSR-supplied vars must survive cleanUp because the empty-check guard
+      // skipped writing them in the first place — they aren't model-owned.
+      expect(host.style.getPropertyValue('--trees-item-height')).toBe(
+        `${String(compact.itemHeight)}px`
+      );
+      expect(host.style.getPropertyValue('--trees-density-override')).toBe(
+        String(compact.factor)
+      );
     } finally {
       cleanup();
     }

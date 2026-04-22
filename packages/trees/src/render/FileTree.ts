@@ -196,6 +196,13 @@ export class FileTree
   #selectionVersion: number;
   #selectionSubscription: (() => void) | null = null;
   #wrapper: HTMLDivElement | undefined;
+  // Per-instance ownership flags for the density CSS variables on the host.
+  // Flip true only when `#applyDensityHostStyle` actually wrote the var
+  // (i.e. nothing inline was already there); `#unmount()` uses these to strip
+  // exactly what we wrote so that hosts reused for a new instance start from
+  // a clean slate while SSR-supplied or caller-set values are left alone.
+  #wroteHostItemHeight = false;
+  #wroteHostDensityFactor = false;
 
   public constructor(options: FileTreeOptions) {
     const {
@@ -265,6 +272,7 @@ export class FileTree
     this.#slotHost.setHost(null);
     if (this.#fileTreeContainer != null) {
       delete this.#fileTreeContainer.dataset.fileTreeVirtualized;
+      this.#removeOwnedDensityHostStyle(this.#fileTreeContainer);
       this.#fileTreeContainer = undefined;
     }
   }
@@ -727,22 +735,42 @@ export class FileTree
   // resolved row height and density factor onto the host as CSS custom
   // properties so the painted row height (`--trees-row-height`, derived from
   // `--trees-item-height` in style.css) stays in sync with the itemHeight
-  // virtualization uses to position rows. Existing inline values win — that
-  // covers SSR-supplied attributes during hydrate and any caller-set host
-  // overrides set before mount, matching the React wrapper's "caller style
-  // wins via spread order" semantic.
+  // virtualization uses to position rows. Pre-existing inline values win —
+  // that covers SSR-supplied attributes during hydrate and any caller-set
+  // host overrides, matching the React wrapper's "caller style wins via
+  // spread order" semantic. Each branch records ownership so `#unmount()`
+  // can strip exactly what we wrote and host-reuse scenarios start from a
+  // clean slate on the next mount.
   #applyDensityHostStyle(host: HTMLElement): void {
     if (host.style.getPropertyValue('--trees-item-height') === '') {
       host.style.setProperty(
         '--trees-item-height',
         `${String(this.#density.itemHeight)}px`
       );
+      this.#wroteHostItemHeight = true;
     }
     if (host.style.getPropertyValue('--trees-density-override') === '') {
       host.style.setProperty(
         '--trees-density-override',
         String(this.#density.factor)
       );
+      this.#wroteHostDensityFactor = true;
+    }
+  }
+
+  // Strips just the density vars this instance wrote during `#prepareHost()`,
+  // leaving SSR-supplied or caller-set values untouched. Called from
+  // `#unmount()` so a subsequent `new FileTree({ density }).hydrate({
+  // fileTreeContainer: sameHost })` starts from a clean slate instead of
+  // hitting the empty-check guard above and inheriting stale model values.
+  #removeOwnedDensityHostStyle(host: HTMLElement): void {
+    if (this.#wroteHostItemHeight) {
+      host.style.removeProperty('--trees-item-height');
+      this.#wroteHostItemHeight = false;
+    }
+    if (this.#wroteHostDensityFactor) {
+      host.style.removeProperty('--trees-density-override');
+      this.#wroteHostDensityFactor = false;
     }
   }
 }
