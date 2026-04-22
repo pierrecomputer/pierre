@@ -1,12 +1,86 @@
 import { describe, expect, test } from 'bun:test';
+import { JSDOM } from 'jsdom';
 
 import {
   FILE_TREE_DENSITY_PRESETS,
   resolveFileTreeDensity,
 } from '../src/model/density';
 import { FILE_TREE_DEFAULT_ITEM_HEIGHT } from '../src/model/virtualization';
-import { preloadFileTree } from '../src/render/FileTree';
+import { FileTree, preloadFileTree } from '../src/render/FileTree';
 import { serializeFileTreeSsrPayload } from '../src/ssr';
+
+// Stands up just enough of a DOM for the vanilla `FileTree` to mount so we can
+// inspect the host element's inline styles after `render()` and `hydrate()`.
+function installDom(): {
+  cleanup: () => void;
+  dom: JSDOM;
+} {
+  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
+    url: 'http://localhost',
+  });
+  const originalValues = {
+    CSSStyleSheet: Reflect.get(globalThis, 'CSSStyleSheet'),
+    customElements: Reflect.get(globalThis, 'customElements'),
+    document: Reflect.get(globalThis, 'document'),
+    Event: Reflect.get(globalThis, 'Event'),
+    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
+    HTMLDivElement: Reflect.get(globalThis, 'HTMLDivElement'),
+    HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
+    HTMLTemplateElement: Reflect.get(globalThis, 'HTMLTemplateElement'),
+    MutationObserver: Reflect.get(globalThis, 'MutationObserver'),
+    navigator: Reflect.get(globalThis, 'navigator'),
+    Node: Reflect.get(globalThis, 'Node'),
+    ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
+    SVGElement: Reflect.get(globalThis, 'SVGElement'),
+    ShadowRoot: Reflect.get(globalThis, 'ShadowRoot'),
+    window: Reflect.get(globalThis, 'window'),
+  };
+
+  class MockStyleSheet {
+    replaceSync(_value: string): void {}
+  }
+
+  class MockResizeObserver {
+    observe(_target: Element): void {}
+    disconnect(): void {}
+  }
+
+  Object.assign(globalThis, {
+    CSSStyleSheet: MockStyleSheet,
+    customElements: dom.window.customElements,
+    document: dom.window.document,
+    Event: dom.window.Event,
+    HTMLElement: dom.window.HTMLElement,
+    HTMLDivElement: dom.window.HTMLDivElement,
+    HTMLStyleElement: dom.window.HTMLStyleElement,
+    HTMLTemplateElement: dom.window.HTMLTemplateElement,
+    MutationObserver: dom.window.MutationObserver,
+    navigator: dom.window.navigator,
+    Node: dom.window.Node,
+    ResizeObserver: MockResizeObserver,
+    SVGElement: dom.window.SVGElement,
+    ShadowRoot: dom.window.ShadowRoot,
+    window: dom.window,
+  });
+
+  return {
+    cleanup() {
+      for (const [key, value] of Object.entries(originalValues)) {
+        if (value === undefined) {
+          Reflect.deleteProperty(globalThis, key);
+        } else {
+          Object.assign(globalThis, { [key]: value });
+        }
+      }
+      dom.window.close();
+    },
+    dom,
+  };
+}
+
+async function flushDom(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 describe('resolveFileTreeDensity', () => {
   test('returns the default preset when density is undefined', () => {
@@ -97,5 +171,170 @@ describe('preloadFileTree density host style', () => {
     expect(payload.outerStart).toContain(
       `style="--trees-item-height:44px;--trees-density-override:${String(relaxed.factor)}"`
     );
+  });
+});
+
+describe('FileTree vanilla render density host style', () => {
+  test('keyword density paints both vars on the host after render()', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        density: 'compact',
+        paths: ['README.md', 'src/index.ts'],
+      });
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      const compact = FILE_TREE_DENSITY_PRESETS.compact;
+      expect(host?.style.getPropertyValue('--trees-item-height')).toBe(
+        `${String(compact.itemHeight)}px`
+      );
+      expect(host?.style.getPropertyValue('--trees-density-override')).toBe(
+        String(compact.factor)
+      );
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('numeric density keeps the default row height and inlines the factor', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        density: 0.75,
+        paths: ['README.md'],
+      });
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      expect(host?.style.getPropertyValue('--trees-item-height')).toBe(
+        `${String(FILE_TREE_DENSITY_PRESETS.default.itemHeight)}px`
+      );
+      expect(host?.style.getPropertyValue('--trees-density-override')).toBe(
+        '0.75'
+      );
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('explicit itemHeight wins over the preset row height on the host', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        density: 'relaxed',
+        itemHeight: 44,
+        paths: ['README.md'],
+      });
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      const relaxed = FILE_TREE_DENSITY_PRESETS.relaxed;
+      expect(host?.style.getPropertyValue('--trees-item-height')).toBe('44px');
+      expect(host?.style.getPropertyValue('--trees-density-override')).toBe(
+        String(relaxed.factor)
+      );
+      expect(fileTree.getItemHeight()).toBe(44);
+      expect(fileTree.getDensityFactor()).toBe(relaxed.factor);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('caller-set host inline values win, mirroring the React wrapper', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const customHost = dom.window.document.createElement(
+        'file-tree-container'
+      );
+      customHost.style.setProperty('--trees-item-height', '40px');
+      customHost.style.setProperty('--trees-density-override', '1.5');
+      mount.appendChild(customHost);
+
+      const fileTree = new FileTree({
+        density: 'compact',
+        paths: ['README.md'],
+      });
+      fileTree.render({ fileTreeContainer: customHost });
+      await flushDom();
+
+      expect(customHost.style.getPropertyValue('--trees-item-height')).toBe(
+        '40px'
+      );
+      expect(
+        customHost.style.getPropertyValue('--trees-density-override')
+      ).toBe('1.5');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('hydrate preserves the SSR-supplied inline density vars', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const payload = preloadFileTree({
+        density: 'compact',
+        paths: ['README.md', 'src/index.ts'],
+      });
+
+      const mount = dom.window.document.createElement('div');
+      mount.innerHTML = serializeFileTreeSsrPayload(payload, 'dom');
+      dom.window.document.body.appendChild(mount);
+
+      const host = mount.querySelector('file-tree-container');
+      if (!(host instanceof dom.window.HTMLElement)) {
+        throw new Error('expected SSR host');
+      }
+
+      const compact = FILE_TREE_DENSITY_PRESETS.compact;
+      expect(host.style.getPropertyValue('--trees-item-height')).toBe(
+        `${String(compact.itemHeight)}px`
+      );
+      expect(host.style.getPropertyValue('--trees-density-override')).toBe(
+        String(compact.factor)
+      );
+
+      const fileTree = new FileTree({
+        density: 'compact',
+        id: payload.id,
+        paths: ['README.md', 'src/index.ts'],
+      });
+      fileTree.hydrate({ fileTreeContainer: host });
+      await flushDom();
+
+      expect(host.style.getPropertyValue('--trees-item-height')).toBe(
+        `${String(compact.itemHeight)}px`
+      );
+      expect(host.style.getPropertyValue('--trees-density-override')).toBe(
+        String(compact.factor)
+      );
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
   });
 });

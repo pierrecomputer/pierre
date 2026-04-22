@@ -717,9 +717,33 @@ export class FileTree
     this.#syncUnsafeCSS(shadowRoot);
     host.dataset.fileTreeVirtualized = 'true';
     host.style.display = 'flex';
+    this.#applyDensityHostStyle(host);
     this.#slotHost.setHost(host);
     this.#fileTreeContainer = host;
     return host;
+  }
+
+  // Mirrors the React wrapper and `preloadFileTree` SSR path: paint the
+  // resolved row height and density factor onto the host as CSS custom
+  // properties so the painted row height (`--trees-row-height`, derived from
+  // `--trees-item-height` in style.css) stays in sync with the itemHeight
+  // virtualization uses to position rows. Existing inline values win — that
+  // covers SSR-supplied attributes during hydrate and any caller-set host
+  // overrides set before mount, matching the React wrapper's "caller style
+  // wins via spread order" semantic.
+  #applyDensityHostStyle(host: HTMLElement): void {
+    if (host.style.getPropertyValue('--trees-item-height') === '') {
+      host.style.setProperty(
+        '--trees-item-height',
+        `${String(this.#density.itemHeight)}px`
+      );
+    }
+    if (host.style.getPropertyValue('--trees-density-override') === '') {
+      host.style.setProperty(
+        '--trees-density-override',
+        String(this.#density.factor)
+      );
+    }
   }
 }
 

@@ -48,13 +48,16 @@ Git-status colors without rebuilding the theme system by hand.
 
 #### Set density with `density`
 
-Pass `density` to `useFileTree` (or `preloadFileTree`) to bundle row height and
-spacing into one option. The keyword form (`'compact'`, `'default'`,
-`'relaxed'`) resolves both at once; a numeric form keeps the default row height
-and supplies a custom spacing factor. The React `<FileTree>` wrapper then paints
-`--trees-item-height` and `--trees-density-override` onto the host so the
-virtualized and painted row heights stay aligned. Set `itemHeight` only when you
-need a row height that doesn't match a preset.
+Pass `density` to `useFileTree` (or `preloadFileTree`, or the vanilla `FileTree`
+constructor) to bundle row height and spacing into one option. The keyword form
+(`'compact'`, `'default'`, `'relaxed'`) resolves both at once; a numeric form
+keeps the default row height and supplies a custom spacing factor. Every runtime
+— vanilla CSR, vanilla SSR, React CSR, and React SSR — paints
+`--trees-item-height` and `--trees-density-override` onto the host from the
+resolved density so the virtualized and painted row heights stay aligned.
+Caller-set inline values on the host still win, so you can override either
+variable directly when you need a one-off. Set `itemHeight` only when you need a
+row height that doesn't match a preset.
 
 The keyword presets are exported as `FILE_TREE_DENSITY_PRESETS` so SSR helpers
 like `initialVisibleRowCount` can divide by the preset's row height without
