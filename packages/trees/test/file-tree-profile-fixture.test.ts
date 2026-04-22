@@ -36,6 +36,7 @@ test('file-tree profile fixture options mirror the Phase 4 docs tree behavior', 
   expect(options.initialVisibleRowCount).toBe(
     FILE_TREE_PROFILE_VIEWPORT_HEIGHT / 30
   );
+  expect(options.stickyFolders).toBe(true);
   expect(options.preparedInput).toEqual(
     preparePresortedFileTreeInput(workload.files)
   );
@@ -49,6 +50,7 @@ test('file-tree profile fixture options can start from a collapsed action state'
 
   expect(options.flattenEmptyDirectories).toBe(true);
   expect(options.initialExpansion).toBe('closed');
+  expect(options.stickyFolders).toBe(true);
   expect(options.preparedInput).toEqual(
     preparePresortedFileTreeInput(workload.files)
   );

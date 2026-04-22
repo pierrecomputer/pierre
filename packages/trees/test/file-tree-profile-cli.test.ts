@@ -32,6 +32,7 @@ test('profile:file-tree CLI help advertises the expected workload/render workflo
   expect(stdout).toContain('bun ws trees profile:file-tree');
   expect(stdout).toContain('linux-5x');
   expect(stdout).toContain('file-tree-profile.html');
+  expect(stdout).toContain('starts `bun run chrome` automatically');
   expect(stdout).toContain('--actions <mode>');
   expect(stdout).toContain('--actions-only');
 });

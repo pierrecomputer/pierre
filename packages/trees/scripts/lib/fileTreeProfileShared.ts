@@ -139,6 +139,7 @@ export function createFileTreeProfileFixtureOptions(
     initialExpansion,
     preparedInput: preparePresortedFileTreeInput(workload.files),
     initialVisibleRowCount: FILE_TREE_PROFILE_VIEWPORT_HEIGHT / 30,
+    stickyFolders: true,
   };
 }
 

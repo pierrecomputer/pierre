@@ -348,6 +348,7 @@ const WORKTREE_PORT_OFFSET = readWorktreePortOffset();
 const DEFAULT_BROWSER_DEBUG_PORT = 9222 + WORKTREE_PORT_OFFSET;
 const DEFAULT_FIXTURE_SERVER_PORT = 9221 + WORKTREE_PORT_OFFSET;
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
+const repoRoot = resolve(packageRoot, '../..');
 const DEFAULT_BROWSER_URL = `http://127.0.0.1:${DEFAULT_BROWSER_DEBUG_PORT}`;
 const DEFAULT_URL = `http://127.0.0.1:${DEFAULT_FIXTURE_SERVER_PORT}/test/e2e/fixtures/file-tree-profile.html`;
 const DEFAULT_WORKLOAD_NAME = DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME;
@@ -501,6 +502,9 @@ function printHelpAndExit(): never {
   console.log('Options:');
   console.log(
     `  --browser-url <url>    Chrome remote debugging base URL (default: ${DEFAULT_BROWSER_URL})`
+  );
+  console.log(
+    '                         If the local debug port is closed, the profiler starts `bun run chrome` automatically'
   );
   console.log(
     `  --url <url>            Page to profile (default: ${DEFAULT_URL})`
@@ -1143,6 +1147,110 @@ function ensureProductionDistBuild(): void {
         .join('\n\n')
     );
   }
+}
+
+function createBrowserVersionUrl(browserUrl: string): string {
+  try {
+    return new URL('/json/version', browserUrl).toString();
+  } catch {
+    return `${browserUrl.replace(/\/$/, '')}/json/version`;
+  }
+}
+
+async function isChromeDebugEndpointAvailable(
+  browserUrl: string,
+  timeoutMs: number
+): Promise<boolean> {
+  try {
+    const version = await fetchJson<Partial<InspectVersionResponse>>(
+      createBrowserVersionUrl(browserUrl),
+      undefined,
+      timeoutMs
+    );
+    return (
+      typeof version.webSocketDebuggerUrl === 'string' &&
+      version.webSocketDebuggerUrl !== ''
+    );
+  } catch {
+    return false;
+  }
+}
+
+function readLocalBrowserDebugPort(browserUrl: string): number | null {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(browserUrl);
+  } catch {
+    return null;
+  }
+
+  const localHosts = new Set(['127.0.0.1', '::1', '[::1]', 'localhost']);
+  if (
+    parsedUrl.protocol !== 'http:' ||
+    !localHosts.has(parsedUrl.hostname) ||
+    parsedUrl.port === ''
+  ) {
+    return null;
+  }
+
+  const port = Number.parseInt(parsedUrl.port, 10);
+  return Number.isInteger(port) && port > 0 ? port : null;
+}
+
+function launchChromeDebugPort(browserUrl: string): void {
+  const browserDebugPort = readLocalBrowserDebugPort(browserUrl);
+  if (browserDebugPort == null) {
+    throw new Error(
+      `Chrome debug endpoint ${createBrowserVersionUrl(
+        browserUrl
+      )} is not reachable. Automatic launch is only supported for localhost browser URLs with an explicit port.`
+    );
+  }
+
+  const launchResult = Bun.spawnSync({
+    cmd: ['bun', 'run', 'chrome'],
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      AGENT: '1',
+      PIERRE_PORT_OFFSET: String(browserDebugPort - 9222),
+    },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+
+  if (launchResult.exitCode !== 0) {
+    const stdout = decodeOutput(launchResult.stdout);
+    const stderr = decodeOutput(launchResult.stderr);
+    throw new Error(
+      [
+        `Failed to launch Chrome debug port ${browserDebugPort}.`,
+        stdout !== '' ? `stdout:\n${stdout}` : null,
+        stderr !== '' ? `stderr:\n${stderr}` : null,
+      ]
+        .filter((value): value is string => value != null)
+        .join('\n\n')
+    );
+  }
+}
+
+async function ensureChromeDebugPort(config: ProfileConfig): Promise<void> {
+  if (await isChromeDebugEndpointAvailable(config.browserUrl, 1_000)) {
+    return;
+  }
+
+  launchChromeDebugPort(config.browserUrl);
+  if (
+    await isChromeDebugEndpointAvailable(config.browserUrl, config.timeoutMs)
+  ) {
+    return;
+  }
+
+  throw new Error(
+    `Chrome debug endpoint ${createBrowserVersionUrl(
+      config.browserUrl
+    )} is still not reachable after launching Chrome.`
+  );
 }
 
 async function waitForUrl(url: string, timeoutMs: number): Promise<void> {
@@ -3996,6 +4104,7 @@ async function main(): Promise<void> {
   let serverProcess: Bun.Subprocess | null = null;
 
   try {
+    await ensureChromeDebugPort(config);
     serverProcess = await startFixtureServerIfNeeded(config);
 
     const workloads: ProfileWorkloadOutput[] = [];
@@ -4026,7 +4135,9 @@ async function main(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `${message}\n\nRun Chrome with remote debugging first, for example:\n/Applications/Google\\ Chrome\\ Dev.app/Contents/MacOS/Google\\ Chrome\\ Dev --remote-debugging-port=${DEFAULT_BROWSER_DEBUG_PORT} --user-data-dir=/tmp/chrome-devtools-codex`
+      `${message}\n\nThe profiler checks ${createBrowserVersionUrl(
+        config.browserUrl
+      )} before profiling and starts \`bun run chrome\` automatically when a local debug port is closed.`
     );
   } finally {
     serverProcess?.kill();
