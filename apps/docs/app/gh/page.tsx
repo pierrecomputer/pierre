@@ -8,7 +8,7 @@ export default function AdvancedDiffPage() {
   return (
     <WorkerPoolContext>
       <div className="flex h-dvh flex-col">
-        <Header className="px-5" />
+        <Header className="mx-0 px-5 md:px-5" />
         <GHViewer />
       </div>
     </WorkerPoolContext>
