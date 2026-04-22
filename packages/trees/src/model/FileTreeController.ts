@@ -648,7 +648,7 @@ export class FileTreeController
     }
   }
 
-  // DOM row clicks already know the target row is mounted, so they can focus it
+  // DOM row events already know the target row is mounted, so they can focus it
   // by path without materializing every visible row in large open trees.
   public focusMountedPathFromInput(path: string): void {
     const resolvedPath = this.#store.getPathInfo(path)?.path ?? null;
@@ -900,19 +900,11 @@ export class FileTreeController
       : this.#getOrCreateItemHandle(itemInfo.path, itemInfo);
   }
 
-  // Mounted directory rows already carry their expanded state, so click
-  // handling can skip the extra isExpanded() lookup that the public handle
-  // toggle performs before applying the same store mutation.
-  public toggleMountedDirectoryFromInput(
-    path: string,
-    isExpanded: boolean
-  ): void {
-    if (isExpanded) {
-      this.#collapseDirectory(path);
-      return;
-    }
-
-    this.#store.expand(path);
+  // Only use this for paths sourced from currently mounted directory rows. The
+  // mounted-row invariant lets click handling skip public handle creation while
+  // preserving normal toggle semantics against the store's live expansion state.
+  public toggleMountedDirectoryFromInput(path: string): void {
+    this.#toggleDirectory(path);
   }
 
   public selectAllVisiblePaths(): void {
@@ -933,8 +925,9 @@ export class FileTreeController
     this.#applySelection([resolvedPath], resolvedPath);
   }
 
-  // Mounted rows already provide canonical public paths, so regular row clicks
-  // can update selection without re-normalizing the same path through the store.
+  // Only use this for paths sourced from currently mounted rows. Visible rows
+  // already provide canonical public paths, so regular row clicks can update
+  // selection without re-normalizing the same path through the store.
   public selectOnlyMountedPathFromInput(path: string): void {
     this.#applySelection([path], path);
   }

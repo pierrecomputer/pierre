@@ -819,6 +819,90 @@ describe('file-tree render + scroll', () => {
     }
   });
 
+  test('rapid double-click toggles against live directory state', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['src'],
+        paths: ['README.md', 'src/index.ts', 'src/lib/util.ts'],
+        initialVisibleRowCount: 120 / 30,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const srcDirectory = fileTree.getItem('src/');
+      if (
+        srcDirectory == null ||
+        srcDirectory.isDirectory() !== true ||
+        !('isExpanded' in srcDirectory)
+      ) {
+        throw new Error('expected src directory item');
+      }
+
+      clickItem(shadowRoot, dom, 'src/');
+      clickItem(shadowRoot, dom, 'src/');
+      await flushDom();
+
+      expect(srcDirectory.isExpanded()).toBe(true);
+      expect(shadowRoot?.innerHTML).toContain('src/index.ts');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('flattened directory row clicks select and toggle the terminal path', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: true,
+        initialExpandedPaths: ['root/', 'root/branch/leaf/'],
+        paths: [
+          'root/branch/leaf/file.ts',
+          'root/branch/leaf/other.ts',
+          'root/sibling.ts',
+        ],
+        initialVisibleRowCount: 180 / 30,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const leafDirectory = fileTree.getItem('root/branch/leaf/');
+      if (
+        leafDirectory == null ||
+        leafDirectory.isDirectory() !== true ||
+        !('isExpanded' in leafDirectory)
+      ) {
+        throw new Error('expected flattened leaf directory item');
+      }
+
+      expect(getItemButton(shadowRoot, dom, 'root/branch/leaf/')).toBeTruthy();
+      expect(shadowRoot?.innerHTML).toContain('file.ts');
+
+      clickItem(shadowRoot, dom, 'root/branch/leaf/');
+      await flushDom();
+
+      expect(leafDirectory.isExpanded()).toBe(false);
+      expect(fileTree.getSelectedPaths()).toEqual(['root/branch/leaf/']);
+      expect(fileTree.getFocusedPath()).toBe('root/branch/leaf/');
+      expect(shadowRoot?.innerHTML).not.toContain('file.ts');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('modified clicks recreate the baseline selection semantics in spirit', async () => {
     const { cleanup, dom } = installDom();
     try {

@@ -3634,7 +3634,7 @@ export function FileTreeView({
         setLastContextMenuInteraction('focus');
       }
       if (plan.toggleDirectory && row.kind === 'directory') {
-        controller.toggleMountedDirectoryFromInput(targetPath, row.isExpanded);
+        controller.toggleMountedDirectoryFromInput(targetPath);
       }
       if (plan.closeSearch) {
         controller.closeSearch();
