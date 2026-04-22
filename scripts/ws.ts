@@ -68,10 +68,12 @@ const FORWARDED_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
 
 // Some dev tools ask the terminal for state during shutdown. Their replies can
 // arrive after the child exits, so briefly drain stdin until it has gone quiet.
-const TTY_MIN_DRAIN_MS = 300;
 const TTY_QUIET_MS = 25;
-const TTY_MAX_DRAIN_MS = 750;
+const TTY_MAX_DRAIN_MS = 250;
 const TTY_DRAIN_POLL_MS = 5;
+
+const CHILD_TREE_MAX_WAIT_MS = 1_000;
+const CHILD_TREE_POLL_MS = 25;
 
 let isExiting = false;
 
@@ -129,10 +131,7 @@ async function drainTTYInput() {
       const now = Date.now();
       if (sawInput) {
         lastInputAt = now;
-      } else if (
-        now - startedAt >= TTY_MIN_DRAIN_MS &&
-        now - lastInputAt >= TTY_QUIET_MS
-      ) {
+      } else if (now - lastInputAt >= TTY_QUIET_MS) {
         break;
       }
 
@@ -160,11 +159,91 @@ async function exitCleanly(code: number) {
   process.exit(code);
 }
 
+function collectDescendantPids(rootPid: number) {
+  const result = spawnSync('ps', ['-axo', 'pid=,ppid='], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  if (result.status !== 0) {
+    return [];
+  }
+
+  const childrenByParent = new Map<number, number[]>();
+  for (const line of result.stdout.split('\n')) {
+    const parts = line.trim().split(/\s+/);
+    if (parts.length !== 2) {
+      continue;
+    }
+
+    const pid = Number(parts[0]);
+    const ppid = Number(parts[1]);
+    if (!Number.isInteger(pid) || !Number.isInteger(ppid)) {
+      continue;
+    }
+
+    const children = childrenByParent.get(ppid);
+    if (children) {
+      children.push(pid);
+    } else {
+      childrenByParent.set(ppid, [pid]);
+    }
+  }
+
+  const descendants: number[] = [];
+  const stack = [...(childrenByParent.get(rootPid) ?? [])];
+  while (stack.length > 0) {
+    const pid = stack.pop();
+    if (pid === undefined) {
+      continue;
+    }
+
+    descendants.push(pid);
+    stack.push(...(childrenByParent.get(pid) ?? []));
+  }
+
+  return descendants;
+}
+
+function isProcessAlive(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForProcessesToExit(pids: Set<number>) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < CHILD_TREE_MAX_WAIT_MS) {
+    let hasAliveProcess = false;
+    for (const pid of pids) {
+      if (isProcessAlive(pid)) {
+        hasAliveProcess = true;
+        break;
+      }
+    }
+
+    if (!hasAliveProcess) {
+      return;
+    }
+
+    await Bun.sleep(CHILD_TREE_POLL_MS);
+  }
+}
+
 function handleChildExit(proc: ChildProcess) {
   const listeners = new Map<NodeJS.Signals, () => void>();
+  const signaledDescendants = new Set<number>();
 
   for (const signal of FORWARDED_SIGNALS) {
     const handler = () => {
+      if (proc.pid !== undefined) {
+        for (const pid of collectDescendantPids(proc.pid)) {
+          signaledDescendants.add(pid);
+        }
+      }
+
       if (proc.exitCode === null && proc.signalCode === null) {
         proc.kill(signal);
       }
@@ -179,7 +258,12 @@ function handleChildExit(proc: ChildProcess) {
       process.off(forwardedSignal, handler);
     }
 
-    void exitCleanly(signal ? (SIGNAL_EXIT_CODES[signal] ?? 1) : (code ?? 0));
+    void (async () => {
+      await waitForProcessesToExit(signaledDescendants);
+      await exitCleanly(
+        signal ? (SIGNAL_EXIT_CODES[signal] ?? 1) : (code ?? 0)
+      );
+    })();
   });
 }
 
