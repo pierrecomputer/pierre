@@ -68,8 +68,9 @@ const FORWARDED_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
 
 // Some dev tools ask the terminal for state during shutdown. Their replies can
 // arrive after the child exits, so briefly drain stdin until it has gone quiet.
+const TTY_MIN_DRAIN_MS = 300;
 const TTY_QUIET_MS = 25;
-const TTY_MAX_DRAIN_MS = 250;
+const TTY_MAX_DRAIN_MS = 750;
 const TTY_DRAIN_POLL_MS = 5;
 
 let isExiting = false;
@@ -128,7 +129,10 @@ async function drainTTYInput() {
       const now = Date.now();
       if (sawInput) {
         lastInputAt = now;
-      } else if (now - lastInputAt >= TTY_QUIET_MS) {
+      } else if (
+        now - startedAt >= TTY_MIN_DRAIN_MS &&
+        now - lastInputAt >= TTY_QUIET_MS
+      ) {
         break;
       }
 
