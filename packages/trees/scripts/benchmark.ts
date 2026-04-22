@@ -1,3 +1,4 @@
+import { PathStore, type PathStorePreparedInput } from '@pierre/path-store';
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -13,15 +14,17 @@ import {
   type FileTreeLayoutStickyRow,
 } from '../src/model/fileTreeLayout';
 import type {
+  FileTreeDirectoryHandle,
   FileTreeStickyRowCandidate,
   FileTreeVisibleRow,
 } from '../src/model/types';
 
-const PRESET_NAMES = ['get-item', 'sticky-scroll', 'all'] as const;
+const PRESET_NAMES = ['get-item', 'sticky-scroll', 'expansion', 'all'] as const;
 const DEFAULT_PRESET: BenchmarkPresetName = 'get-item';
 const DEFAULT_SAMPLE_COUNT = 8;
 const DEFAULT_WARMUP_COUNT = 1;
 const COLD_SAMPLE_COUNT = 3;
+const EXPANSION_SAMPLE_COUNT = 4;
 const ITEM_HEIGHT = 30;
 const VIEWPORT_HEIGHT = 700;
 const OVERSCAN = 10;
@@ -53,7 +56,7 @@ interface BenchmarkStats {
 }
 
 interface BenchmarkManifest {
-  category: 'get-item' | 'sticky-scroll';
+  category: 'expansion' | 'get-item' | 'sticky-scroll';
   fileCount: number;
   name: string;
   notes?: readonly string[];
@@ -268,6 +271,26 @@ function createAospController(
   });
 }
 
+function createAospPathStore(workload: AospBenchmarkWorkload): PathStore {
+  return new PathStore({
+    flattenEmptyDirectories: true,
+    initialExpandedPaths: workload.allExpandedPaths,
+    preparedInput: workload.preparedInput as unknown as PathStorePreparedInput,
+  });
+}
+
+function getAospTopLevelDirectoryPath(workload: AospBenchmarkWorkload): string {
+  const topLevelPath = workload.allExpandedPaths.find(
+    (path) => !path.includes('/')
+  );
+  if (topLevelPath == null) {
+    throw new Error(
+      'AOSP workload did not include a top-level directory path.'
+    );
+  }
+  return topLevelPath;
+}
+
 function createAospScrollTops(visibleCount: number): readonly number[] {
   const maxScrollableIndex = Math.max(0, visibleCount - WINDOW_ROW_COUNT);
   const indices = [
@@ -480,12 +503,18 @@ function consume(value: unknown): void {
   }
 
   const maybeRows = value as {
+    indexSize?: number;
     overlayRows?: readonly unknown[];
+    projectionRows?: number;
     rows?: readonly unknown[];
     snapshot?: { physical?: { totalRowCount?: number } };
+    visibleCount?: number;
     visibleRows?: readonly unknown[];
   };
+  sink += maybeRows.indexSize ?? 0;
+  sink += maybeRows.projectionRows ?? 0;
   sink += maybeRows.rows?.length ?? 0;
+  sink += maybeRows.visibleCount ?? 0;
   sink += maybeRows.visibleRows?.length ?? 0;
   sink += maybeRows.overlayRows?.length ?? 0;
   sink += maybeRows.snapshot?.physical?.totalRowCount ?? 0;
@@ -803,6 +832,89 @@ function createStickyScrollSequenceWindowReadScenarioFactory(): BenchmarkScenari
   };
 }
 
+function createExpansionProjectionIndexScenarioFactory(): BenchmarkScenarioFactory {
+  const name = 'expansion/projection-index/aosp/warm';
+
+  return {
+    name,
+    build() {
+      const workload = loadAospWorkload();
+      const store = createAospPathStore(workload);
+      const visibleCount = store.getVisibleCount();
+
+      return {
+        manifest: {
+          category: 'expansion',
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            'Measures the full visible projection plus visibleIndexByPath map build seen inside expansion/collapse traces.',
+          ],
+          visibleCount,
+          workload: 'aosp',
+        },
+        measure() {
+          const projection = store.getVisibleTreeProjectionData();
+          return {
+            indexSize: projection.visibleIndexByPath.size,
+            projectionRows: projection.paths.length,
+          };
+        },
+        sampleCount: EXPANSION_SAMPLE_COUNT,
+        warmupCount: 0,
+      };
+    },
+  };
+}
+
+function createExpansionControllerToggleScenarioFactory(): BenchmarkScenarioFactory {
+  const name = 'expansion/controller-toggle/aosp/warm';
+
+  return {
+    name,
+    build() {
+      const workload = loadAospWorkload();
+      const controller = createAospController(workload);
+      const togglePath = getAospTopLevelDirectoryPath(workload);
+      const item = controller.getItem(togglePath);
+      if (item == null || !item.isDirectory()) {
+        throw new Error(`Expected AOSP directory item for path: ${togglePath}`);
+      }
+      const directoryItem = item as FileTreeDirectoryHandle;
+
+      let expanded = directoryItem.isExpanded();
+
+      return {
+        destroy() {
+          controller.destroy();
+        },
+        manifest: {
+          category: 'expansion',
+          fileCount: workload.fileCount,
+          name,
+          notes: [
+            'Alternates one public controller collapse/expand so the timed region includes store mutation, notification, full projection rebuild, and visibleIndexByPath creation.',
+            `Toggle path: ${togglePath}`,
+          ],
+          visibleCount: controller.getVisibleCount(),
+          workload: 'aosp',
+        },
+        measure() {
+          if (expanded) {
+            directoryItem.collapse();
+          } else {
+            directoryItem.expand();
+          }
+          expanded = !expanded;
+          return { visibleCount: controller.getVisibleCount() };
+        },
+        sampleCount: EXPANSION_SAMPLE_COUNT,
+        warmupCount: 0,
+      };
+    },
+  };
+}
+
 function createStickyFullLayoutColdProjectionScenarioFactory(): BenchmarkScenarioFactory {
   const name = 'sticky-scroll/full-layout/aosp/cold-projection';
 
@@ -1055,6 +1167,8 @@ function createScenarioFactories(): BenchmarkScenarioFactory[] {
     createStickyLayoutFromFullRowsScenarioFactory(),
     createNoStickyLayoutScenarioFactory(),
     createNoStickyWindowReadScenarioFactory(),
+    createExpansionProjectionIndexScenarioFactory(),
+    createExpansionControllerToggleScenarioFactory(),
   ];
 }
 
@@ -1066,6 +1180,8 @@ function getPresetFilter(preset: BenchmarkPresetName): RegExp | undefined {
       return /^get-item\//;
     case 'sticky-scroll':
       return /^sticky-scroll\//;
+    case 'expansion':
+      return /^expansion\//;
   }
 }
 
