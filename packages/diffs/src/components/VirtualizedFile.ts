@@ -7,6 +7,7 @@ import type {
   StickySpecs,
   VirtualFileMetrics,
 } from '../types';
+import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { iterateOverFile } from '../utils/iterateOverFile';
 import type { WorkerPoolManager } from '../worker';
 import type { CodeViewer } from './CodeViewer';
@@ -38,6 +39,16 @@ export class VirtualizedFile<
     isContainerManaged = false
   ) {
     super(options, workerManager, isContainerManaged);
+  }
+
+  public setMetrics(metrics: VirtualFileMetrics, force = false): void {
+    if (!force && areObjectsEqual(this.metrics, metrics)) {
+      return;
+    }
+
+    this.metrics = metrics;
+    this.heightCache.clear();
+    this.renderRange = undefined;
   }
 
   // Get the height for a line, using cached value if available.

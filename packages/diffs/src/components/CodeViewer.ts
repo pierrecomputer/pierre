@@ -25,6 +25,7 @@ import type {
   VirtualFileMetrics,
   VirtualWindowSpecs,
 } from '../types';
+import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 import { roundToDevicePixel } from '../utils/roundToDevicePixel';
 import type { WorkerPoolManager } from '../worker';
@@ -328,6 +329,10 @@ export interface CodeViewerOptions<LAnnotation>
     CodeViewerPassThroughOptions<LAnnotation>,
     CodeViewerSharedCallbackOptions<LAnnotation> {
   hunkSeparators?: Exclude<HunkSeparators, 'custom'>;
+  itemMetrics?: VirtualFileMetrics;
+  smoothScrollSettings?: SmoothScrollSettings;
+  stickyHeader?: boolean;
+  viewerMetrics?: CodeViewerMetrics;
 }
 
 interface ScrollToAnimation {
@@ -408,15 +413,19 @@ export class CodeViewer<LAnnotation = undefined> {
   private container: HTMLDivElement | undefined = document.createElement('div');
   private stickyContainer = document.createElement('div');
   private stickyOffset = document.createElement('div');
+  private options: CodeViewerOptions<LAnnotation>;
+  private workerManager: WorkerPoolManager | undefined;
+  private isContainerManaged: boolean;
 
   constructor(
-    private viewerMetrics: CodeViewerMetrics = DEFAULT_CODE_VIEWER_METRICS,
-    private options: CodeViewerOptions<LAnnotation> = { theme: DEFAULT_THEMES },
-    private metrics: VirtualFileMetrics = DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS,
-    private smoothScrollSettings: SmoothScrollSettings = DEFAULT_SMOOTH_SCROLL_SETTINGS,
-    private workerManager?: WorkerPoolManager | undefined,
-    private isContainerManaged = false
+    options: CodeViewerOptions<LAnnotation> = { theme: DEFAULT_THEMES },
+    workerManager?: WorkerPoolManager | undefined,
+    isContainerManaged = false
   ) {
+    this.options = options;
+    this.workerManager = workerManager;
+    this.isContainerManaged = isContainerManaged;
+
     this.stickyOffset.style.contain = 'layout size';
     this.stickyContainer.style.position = 'sticky';
     this.stickyContainer.style.width = '100%';
@@ -424,7 +433,25 @@ export class CodeViewer<LAnnotation = undefined> {
     this.stickyContainer.style.isolation = 'isolate';
     this.stickyContainer.style.display = 'flex';
     this.stickyContainer.style.flexDirection = 'column';
-    this.stickyContainer.style.gap = `${this.viewerMetrics.gap}px`;
+  }
+
+  private getViewerMetrics(): CodeViewerMetrics {
+    return this.options.viewerMetrics ?? DEFAULT_CODE_VIEWER_METRICS;
+  }
+
+  private getItemMetrics(): VirtualFileMetrics {
+    return this.options.itemMetrics ?? DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS;
+  }
+
+  private getSmoothScrollSettings(): SmoothScrollSettings {
+    return this.options.smoothScrollSettings ?? DEFAULT_SMOOTH_SCROLL_SETTINGS;
+  }
+
+  private syncViewerMetrics(): void {
+    const { gap, paddingBottom, paddingTop } = this.getViewerMetrics();
+    this.stickyContainer.style.gap = `${gap}px`;
+    this.container?.style.setProperty('margin-top', `${paddingTop}px`);
+    this.container?.style.setProperty('margin-bottom', `${paddingBottom}px`);
   }
 
   public setup(root: HTMLElement): void {
@@ -434,8 +461,7 @@ export class CodeViewer<LAnnotation = undefined> {
     this.root = root;
     this.container ??= document.createElement('div');
     this.container.style.contain = 'layout size style contents';
-    this.container.style.marginTop = `${this.viewerMetrics.paddingTop}px`;
-    this.container.style.marginBottom = `${this.viewerMetrics.paddingBottom}px`;
+    this.syncViewerMetrics();
     this.container.appendChild(this.stickyOffset);
     this.container.appendChild(this.stickyContainer);
     this.root.appendChild(this.container);
@@ -621,8 +647,9 @@ export class CodeViewer<LAnnotation = undefined> {
       return;
     }
 
+    const viewerMetrics = this.getViewerMetrics();
     let nextTop =
-      this.items.length === 0 ? 0 : this.scrollHeight + this.viewerMetrics.gap;
+      this.items.length === 0 ? 0 : this.scrollHeight + viewerMetrics.gap;
     for (let index = 0; index < inputs.length; index++) {
       const input = inputs[index];
       if (input == null) {
@@ -637,10 +664,10 @@ export class CodeViewer<LAnnotation = undefined> {
       this.idToItem.set(item.item.id, item);
       this.instanceToItem.set(item.instance, item);
       item.height = prepareItemInstance(item);
-      nextTop += item.height + this.viewerMetrics.gap;
+      nextTop += item.height + viewerMetrics.gap;
     }
 
-    this.scrollHeight = nextTop - this.viewerMetrics.gap;
+    this.scrollHeight = nextTop - viewerMetrics.gap;
     this.scrollDirty = true;
     if (render) {
       this.render();
@@ -653,17 +680,30 @@ export class CodeViewer<LAnnotation = undefined> {
     }
 
     this.capturePendingLayoutAnchor();
+    const previousViewerMetrics = this.getViewerMetrics();
+    const previousItemMetrics = this.getItemMetrics();
 
     // NOTE(amadeus): This is also something that's probably ridiculously
     // expensive to pull off, and we should probably figure out some way to
     // incrementally version/render stuff
     this.options = options;
+    const nextItemMetrics = this.getItemMetrics();
+    const itemMetricsChanged = !areObjectsEqual(
+      previousItemMetrics,
+      nextItemMetrics
+    );
+    if (!areObjectsEqual(previousViewerMetrics, this.getViewerMetrics())) {
+      this.syncViewerMetrics();
+    }
     for (let index = 0; index < this.items.length; index++) {
       const item = this.items[index];
       if (item == null) {
         throw new Error('CodeViewer.setOptions: invalid item index');
       }
 
+      if (itemMetricsChanged) {
+        item.instance.setMetrics(nextItemMetrics, true);
+      }
       if (item.type === 'diff') {
         item.instance.setOptions(this.createOptions(item.type, item.item.id));
       } else {
@@ -808,6 +848,7 @@ export class CodeViewer<LAnnotation = undefined> {
     index: number,
     top: number
   ): CodeViewerContextItem<LAnnotation> {
+    const itemMetrics = this.getItemMetrics();
     if (input.type === 'diff') {
       return {
         type: 'diff',
@@ -817,7 +858,7 @@ export class CodeViewer<LAnnotation = undefined> {
         instance: new VirtualizedFileDiff<LAnnotation>(
           this.createOptions('diff', input.id),
           this,
-          this.metrics,
+          itemMetrics,
           this.workerManager,
           this.isContainerManaged
         ),
@@ -835,7 +876,7 @@ export class CodeViewer<LAnnotation = undefined> {
       instance: new VirtualizedFile<LAnnotation>(
         this.createOptions('file', input.id),
         this,
-        this.metrics,
+        itemMetrics,
         this.workerManager,
         this.isContainerManaged
       ),
@@ -1160,7 +1201,7 @@ export class CodeViewer<LAnnotation = undefined> {
         target.position -
           (target.stickyHeader === true &&
           this.options.disableFileHeader !== true
-            ? this.metrics.diffHeaderHeight
+            ? this.getItemMetrics().diffHeaderHeight
             : 0)
       );
     }
@@ -1213,11 +1254,11 @@ export class CodeViewer<LAnnotation = undefined> {
     offset = 0,
     stickyHeader = false
   ): number {
-    targetTop += this.viewerMetrics.paddingTop;
+    targetTop += this.getViewerMetrics().paddingTop;
     const viewportHeight = this.getHeight();
     const stickyHeaderOffset =
       stickyHeader && this.options.disableFileHeader !== true
-        ? this.metrics.diffHeaderHeight
+        ? this.getItemMetrics().diffHeaderHeight
         : 0;
     const visibleViewportHeight = Math.max(
       viewportHeight - stickyHeaderOffset,
@@ -1306,7 +1347,7 @@ export class CodeViewer<LAnnotation = undefined> {
     frameTimestamp: number
   ): SpringStepResult {
     const dt = Math.max(0, frameTimestamp - animation.lastTimestamp);
-    const { omega } = this.smoothScrollSettings;
+    const { omega } = this.getSmoothScrollSettings();
     const decay = Math.exp(-omega * dt);
     const displacement = animation.position - destination;
     const springCoeff = animation.velocity + omega * displacement;
@@ -1352,7 +1393,7 @@ export class CodeViewer<LAnnotation = undefined> {
     animation.position = position;
     animation.velocity = velocity;
 
-    const { positionEpsilon, velocityEpsilon } = this.smoothScrollSettings;
+    const { positionEpsilon, velocityEpsilon } = this.getSmoothScrollSettings();
     if (
       Math.abs(destination - position) <= positionEpsilon &&
       Math.abs(velocity) <= velocityEpsilon
@@ -1599,7 +1640,7 @@ export class CodeViewer<LAnnotation = undefined> {
       }
       currentTop += item.instance.getVirtualizedHeight();
       if (index < this.items.length - 1) {
-        currentTop += this.viewerMetrics.gap;
+        currentTop += this.getViewerMetrics().gap;
       }
     }
 
@@ -1620,6 +1661,7 @@ export class CodeViewer<LAnnotation = undefined> {
     }
 
     const height = this.getHeight();
+    const itemMetrics = this.getItemMetrics();
     const stickyTop = Math.max(firstStickySpecs.topOffset, 0);
     const stickyBottom = lastStickySpecs.topOffset + lastStickySpecs.height;
     const stickyContainerHeight = stickyBottom - stickyTop;
@@ -1640,11 +1682,11 @@ export class CodeViewer<LAnnotation = undefined> {
     // NOTE(amadeus): Wee polish lad -- when dragging the scrollbar up or
     // down quickly, this prevents the laggy scroll view from lining up with
     // the numbers exactly
-    const randomOffset = ((Math.random() * this.metrics.lineHeight) >> 0) * -1;
+    const randomOffset = ((Math.random() * itemMetrics.lineHeight) >> 0) * -1;
     const stickyJitter =
       -Math.max(stickyContainerHeight + randomOffset, 0) + height;
     this.stickyContainer.style.top = `${stickyJitter}px`;
-    this.stickyContainer.style.bottom = `${stickyJitter + this.metrics.diffHeaderHeight}px`;
+    this.stickyContainer.style.bottom = `${stickyJitter + itemMetrics.diffHeaderHeight}px`;
   }
 
   private handleScroll = (): void => {
@@ -1752,7 +1794,7 @@ export class CodeViewer<LAnnotation = undefined> {
         continue;
       }
 
-      const absoluteItemTop = this.viewerMetrics.paddingTop + item.top;
+      const absoluteItemTop = this.getViewerMetrics().paddingTop + item.top;
       const absoluteItemBottom = absoluteItemTop + item.height;
       // Skip items entirely above the viewport since we can't see it
       if (absoluteItemBottom <= scrollTop) {
@@ -1803,7 +1845,7 @@ export class CodeViewer<LAnnotation = undefined> {
       return undefined;
     }
 
-    const { paddingTop } = this.viewerMetrics;
+    const { paddingTop } = this.getViewerMetrics();
     if (anchor.type === 'item') {
       const absoluteItemTop = paddingTop + item.top;
       return this.clampScrollTop(absoluteItemTop - anchor.viewportOffset);
@@ -1970,14 +2012,14 @@ export class CodeViewer<LAnnotation = undefined> {
       return;
     }
 
+    const viewerMetrics = this.getViewerMetrics();
     let runningTop = 0;
     if (startIndex > 0) {
       const previousItem = this.items[startIndex - 1];
       if (previousItem == null) {
         throw new Error('CodeViewer.recomputeLayout: invalid dirty index');
       }
-      runningTop =
-        previousItem.top + previousItem.height + this.viewerMetrics.gap;
+      runningTop = previousItem.top + previousItem.height + viewerMetrics.gap;
     }
 
     for (let index = startIndex; index < this.items.length; index++) {
@@ -1993,7 +2035,7 @@ export class CodeViewer<LAnnotation = undefined> {
       }
       runningTop += item.height;
       if (index < this.items.length - 1) {
-        runningTop += this.viewerMetrics.gap;
+        runningTop += viewerMetrics.gap;
       }
     }
 
@@ -2018,9 +2060,7 @@ export class CodeViewer<LAnnotation = undefined> {
   // between.  We do this by adding the the gap and header height above and
   // below the viewport
   private getFitPerfectlyOverscroll() {
-    const { diffHeaderHeight } = this.metrics;
-    const { gap } = this.viewerMetrics;
-    return gap + diffHeaderHeight;
+    return this.getViewerMetrics().gap + this.getItemMetrics().diffHeaderHeight;
   }
 }
 

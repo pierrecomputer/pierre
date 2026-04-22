@@ -22,15 +22,12 @@ import {
   CodeViewer as CodeViewerClass,
   type CodeViewerCoordinator,
   type CodeViewerItem,
-  type CodeViewerMetrics,
   type CodeViewerOptions,
   type CodeViewerRenderedItem,
   type CodeViewerScrollTarget,
   type DiffLineAnnotation,
   type GetHoveredLineResult,
   type LineAnnotation,
-  type SmoothScrollSettings,
-  type VirtualFileMetrics,
   type VirtualWindowSpecs,
 } from '../index';
 import { areManagedSnapshotsEqual } from '../utils/areManagedSnapshotsEqual';
@@ -48,9 +45,6 @@ type CodeViewerGutterUtilityGetter =
 
 interface CodeViewerBaseProps<LAnnotation> {
   options?: CodeViewerOptions<LAnnotation>;
-  viewerMetrics?: CodeViewerMetrics;
-  metrics?: VirtualFileMetrics;
-  smoothScrollSettings?: SmoothScrollSettings;
   className?: string;
   style?: CSSProperties;
   containerRef?: Ref<HTMLDivElement>;
@@ -134,7 +128,6 @@ function CodeViewerInner<LAnnotation = undefined>(
     containerRef,
     disableWorkerPool = false,
     items,
-    metrics,
     onScroll,
     options,
     renderAnnotation,
@@ -142,9 +135,7 @@ function CodeViewerInner<LAnnotation = undefined>(
     renderGutterUtility,
     renderHeaderMetadata,
     renderHeaderPrefix,
-    smoothScrollSettings,
     style,
-    viewerMetrics,
   }: CodeViewerProps<LAnnotation>,
   ref: React.ForwardedRef<CodeViewerHandle<LAnnotation>>
 ): React.JSX.Element {
@@ -200,10 +191,7 @@ function CodeViewerInner<LAnnotation = undefined>(
       node !== cachedDataRef.current.instance?.getContainerElement()
     ) {
       cachedDataRef.current.instance = new CodeViewerClass<LAnnotation>(
-        viewerMetrics,
         managedOptions,
-        metrics,
-        smoothScrollSettings,
         !disableWorkerPool ? poolManager : undefined,
         true
       );

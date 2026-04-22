@@ -9,6 +9,7 @@ import type {
   StickySpecs,
   VirtualFileMetrics,
 } from '../types';
+import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { resolveVirtualFileMetrics } from '../utils/resolveVirtualFileMetrics';
@@ -60,6 +61,24 @@ export class VirtualizedFileDiff<
       typeof hunkSeparators === 'function' ? 'custom' : hunkSeparators,
       metrics
     );
+  }
+
+  public setMetrics(
+    metrics?: Partial<VirtualFileMetrics>,
+    force = false
+  ): void {
+    const { hunkSeparators = 'line-info' } = this.options;
+    const nextMetrics = resolveVirtualFileMetrics(
+      typeof hunkSeparators === 'function' ? 'custom' : hunkSeparators,
+      metrics
+    );
+    if (!force && areObjectsEqual(this.metrics, nextMetrics)) {
+      return;
+    }
+
+    this.metrics = nextMetrics;
+    this.heightCache.clear();
+    this.renderRange = undefined;
   }
 
   // Get the height for a line, using cached value if available.
