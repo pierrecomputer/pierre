@@ -768,26 +768,48 @@ function getContextMenuAnchorButton(
   return rowButton?.dataset.itemParked === 'true' ? null : rowButton;
 }
 
+// Sticky keyboard handling runs during the browser event that follows a scroll.
+// Reading the mounted overlay mirrors keeps that event aligned with the row the
+// user can currently focus, even if the React layout snapshot is one frame old.
 function getMountedStickyRowPaths(rootElement: HTMLElement | null): string[] {
   if (rootElement == null) {
     return [];
   }
 
-  return Array.from(
-    rootElement.querySelectorAll('button[data-file-tree-sticky-row="true"]')
-  )
-    .filter((element): element is HTMLElement => element instanceof HTMLElement)
-    .map((element) => element.dataset.fileTreeStickyPath ?? null)
-    .filter((path): path is string => path != null);
+  const paths: string[] = [];
+  for (const element of rootElement.querySelectorAll(
+    'button[data-file-tree-sticky-row="true"]'
+  )) {
+    if (!(element instanceof HTMLElement)) {
+      continue;
+    }
+
+    const path = element.dataset.fileTreeStickyPath;
+    if (path != null) {
+      paths.push(path);
+    }
+  }
+
+  return paths;
 }
 
-// Sticky keyboard handling runs during the browser event that follows a scroll.
-// Reading the mounted overlay refs keeps that event aligned with the row the
-// user can currently focus, even if the React layout snapshot is one frame old.
-function getMountedStickyRowPathSet(
-  paths: readonly string[]
-): ReadonlySet<string> {
-  return new Set(paths);
+function getFocusedParkedRowElement(
+  rootElement: HTMLElement | null,
+  path: string | null
+): HTMLElement | null {
+  if (rootElement == null || path == null) {
+    return null;
+  }
+
+  for (const element of rootElement.querySelectorAll(
+    'button[data-item-focused="true"][data-item-parked="true"]'
+  )) {
+    if (element instanceof HTMLElement && element.dataset.itemPath === path) {
+      return element;
+    }
+  }
+
+  return null;
 }
 
 function createContextMenuItem(
@@ -1349,6 +1371,10 @@ export function FileTreeView({
     path: string;
     viewportOffset: number;
   } | null>(null);
+  const pendingStickyKeyboardScrollTopRef = useRef<{
+    path: string;
+    scrollTop: number;
+  } | null>(null);
   const debugContextMenuTriggerPathRef = useRef<string | null>(null);
   const debugDisableScrollSuppressionRef = useRef(false);
 
@@ -1630,8 +1656,25 @@ export function FileTreeView({
         return;
       }
 
+      const anchorButton = getTriggerAnchorButton(targetPath);
+      if (anchorButton?.dataset.fileTreeStickyRow === 'true') {
+        const scrollElement = scrollRef.current;
+        pendingStickyKeyboardFocusPathRef.current = targetPath;
+        pendingStickyKeyboardViewportOffsetRef.current = null;
+        pendingStickyKeyboardScrollTopRef.current =
+          scrollElement == null
+            ? null
+            : {
+                path: targetPath,
+                scrollTop: scrollElement.scrollTop,
+              };
+        domFocusOwnerRef.current = true;
+        setActiveItemPath((previousPath) =>
+          previousPath === targetPath ? previousPath : targetPath
+        );
+      }
       item.focus();
-      updateTriggerPosition(getTriggerAnchorButton(targetPath));
+      updateTriggerPosition(anchorButton);
       shouldRestoreContextMenuFocusRef.current = true;
       setContextMenuState({
         anchorRect: options?.anchorRect ?? null,
@@ -2233,9 +2276,7 @@ export function FileTreeView({
     const activeTreeElement =
       rootRef.current == null ? null : getActiveTreeElement(rootRef.current);
     const mountedStickyRowPaths = getMountedStickyRowPaths(rootRef.current);
-    const mountedStickyRowPathSet = getMountedStickyRowPathSet(
-      mountedStickyRowPaths
-    );
+    const mountedStickyRowPathSet = new Set(mountedStickyRowPaths);
     const activeStickyFocusPath =
       activeTreeElement?.dataset.fileTreeStickyPath ?? null;
     const activeStickyRowOwnsFocus =
@@ -2246,6 +2287,20 @@ export function FileTreeView({
       activeStickyFocusPath !== focusedPath &&
       mountedStickyRowPathSet.has(activeStickyFocusPath)
     ) {
+      // Syncing controller focus to a sticky DOM mirror can otherwise reveal
+      // the offscreen canonical row before the key action decides what to do.
+      // Shift+F10 may also be followed by a native contextmenu event, so this
+      // preservation has to be in place before the controller emits.
+      const scrollElement = scrollRef.current;
+      pendingStickyKeyboardFocusPathRef.current = activeStickyFocusPath;
+      pendingStickyKeyboardViewportOffsetRef.current = null;
+      pendingStickyKeyboardScrollTopRef.current =
+        scrollElement == null
+          ? null
+          : {
+              path: activeStickyFocusPath,
+              scrollTop: scrollElement.scrollTop,
+            };
       controller.focusPath(activeStickyFocusPath);
     }
 
@@ -2276,18 +2331,12 @@ export function FileTreeView({
       startedFromStickyRow &&
       focusedDirectoryItem != null &&
       focusedDirectoryItem.isExpanded();
-    const focusedParkedRowElement =
-      rootRef.current == null || effectiveFocusedPath == null
-        ? null
-        : (Array.from(
-            rootRef.current.querySelectorAll(
-              'button[data-item-focused="true"][data-item-parked="true"]'
-            )
-          ).find(
-            (element): element is HTMLElement =>
-              element instanceof HTMLElement &&
-              element.dataset.itemPath === effectiveFocusedPath
-          ) ?? null);
+    const isKeyboardContextMenuRequest =
+      contextMenuEnabled && isContextMenuOpenKey(event);
+    const focusedParkedRowElement = getFocusedParkedRowElement(
+      rootRef.current,
+      effectiveFocusedPath
+    );
     const scrollElement = scrollRef.current;
     const scrollElementRect = scrollElement?.getBoundingClientRect() ?? null;
     const activeElementTopWithinViewport =
@@ -2320,8 +2369,7 @@ export function FileTreeView({
     } else if (event.shiftKey && event.key === 'ArrowUp') {
       controller.extendSelectionFromFocused(-1);
     } else if (
-      contextMenuEnabled &&
-      isContextMenuOpenKey(event) &&
+      isKeyboardContextMenuRequest &&
       effectiveFocusedPath != null &&
       effectiveFocusedIndex >= 0
     ) {
@@ -2330,8 +2378,11 @@ export function FileTreeView({
           effectiveFocusedIndex,
           effectiveFocusedIndex
         )[0] ?? null;
-      const focusedButton =
-        rowButtonRefs.current.get(effectiveFocusedPath) ?? null;
+      const focusedButton = getContextMenuAnchorButton(
+        effectiveFocusedPath,
+        stickyRowButtonRefs.current,
+        rowButtonRefs.current
+      );
       if (focusedRow == null || focusedButton == null) {
         handled = false;
       } else {
@@ -2393,39 +2444,61 @@ export function FileTreeView({
       nextFocusedPath != null &&
       (stickyRowPathSet.has(nextFocusedPath) ||
         mountedStickyRowPathSet.has(nextFocusedPath));
-    if (
+    const stickyKeyboardMoveLandsOnDifferentStickyRow =
       shouldPreserveLocalStickyFocusMove &&
-      startedFromStickyRow &&
+      nextFocusedPath !== effectiveFocusedPath;
+    const stickyKeyboardMenuStaysOnStickyRow =
+      isKeyboardContextMenuRequest &&
+      activeStickyRowOwnsFocus &&
+      activeStickyFocusPath === effectiveFocusedPath &&
+      nextFocusedPath === effectiveFocusedPath;
+    const shouldPreserveStickyKeyboardFocusPath =
+      (stickyKeyboardMoveLandsOnDifferentStickyRow &&
+        nextFocusedPathIsMountedSticky) ||
+      stickyKeyboardMenuStaysOnStickyRow;
+    if (
+      (startedFromStickyRow || stickyKeyboardMenuStaysOnStickyRow) &&
       nextFocusedPath != null &&
-      nextFocusedPath !== effectiveFocusedPath &&
-      nextFocusedPathIsMountedSticky
+      shouldPreserveStickyKeyboardFocusPath
     ) {
       pendingStickyKeyboardFocusPathRef.current = nextFocusedPath;
       pendingStickyKeyboardViewportOffsetRef.current = null;
+      pendingStickyKeyboardScrollTopRef.current =
+        scrollElement == null
+          ? null
+          : {
+              path: nextFocusedPath,
+              scrollTop: scrollElement.scrollTop,
+            };
       domFocusOwnerRef.current = true;
       setActiveItemPath((previousPath) =>
         previousPath === nextFocusedPath ? previousPath : nextFocusedPath
       );
     } else {
       pendingStickyKeyboardFocusPathRef.current = null;
+      const stickyArrowUpExitsStack =
+        event.key === 'ArrowUp' &&
+        startedFromStickyRow &&
+        nextFocusedPath !== effectiveFocusedPath;
+      const stickyCollapseStaysOnRow =
+        shouldRestoreCollapsedStickyFocusViewport &&
+        nextFocusedPath === effectiveFocusedPath;
       if (
         nextFocusedPath != null &&
-        ((event.key === 'ArrowUp' &&
-          startedFromStickyRow &&
-          nextFocusedPath !== effectiveFocusedPath) ||
-          (shouldRestoreCollapsedStickyFocusViewport &&
-            nextFocusedPath === effectiveFocusedPath))
+        (stickyArrowUpExitsStack || stickyCollapseStaysOnRow)
       ) {
         pendingStickyKeyboardViewportOffsetRef.current = {
           path: nextFocusedPath,
           viewportOffset: stickyKeyboardViewportOffset,
         };
+        pendingStickyKeyboardScrollTopRef.current = null;
         domFocusOwnerRef.current = true;
         setActiveItemPath((previousPath) =>
           previousPath === nextFocusedPath ? previousPath : nextFocusedPath
         );
       } else {
         pendingStickyKeyboardViewportOffsetRef.current = null;
+        pendingStickyKeyboardScrollTopRef.current = null;
       }
     }
 
@@ -2967,14 +3040,15 @@ export function FileTreeView({
       pendingStickyKeyboardFocusPathRef.current;
     const pendingStickyKeyboardViewportOffset =
       pendingStickyKeyboardViewportOffsetRef.current;
+    const pendingStickyKeyboardScrollTop =
+      pendingStickyKeyboardScrollTopRef.current;
     const focusWithinTree = activeTreeElement != null;
     const shouldOwnDomFocus = domFocusOwnerRef.current || focusWithinTree;
     const focusedPathChanged = previousFocusedPathRef.current !== focusedPath;
     const shouldPreserveStickyKeyboardFocusViewport =
       pendingStickyKeyboardFocusPath != null &&
       pendingStickyKeyboardFocusPath === focusedPath &&
-      focusedPath != null &&
-      stickyRowPathSet.has(focusedPath);
+      focusedPath != null;
 
     const shouldRestoreFocusedRowViewportOffset =
       shouldRestoreTreeFocusAfterSearchClose &&
@@ -3008,8 +3082,16 @@ export function FileTreeView({
         totalScrollableHeight,
         pendingStickyKeyboardViewportOffset.viewportOffset
       );
+    const shouldRestoreStickyKeyboardScrollTop =
+      pendingStickyKeyboardScrollTop != null &&
+      pendingStickyKeyboardScrollTop.path === focusedPath &&
+      scrollElement.scrollTop !== pendingStickyKeyboardScrollTop.scrollTop;
+    if (shouldRestoreStickyKeyboardScrollTop) {
+      scrollElement.scrollTop = pendingStickyKeyboardScrollTop.scrollTop;
+    }
 
     if (
+      shouldRestoreStickyKeyboardScrollTop ||
       shouldRestoreStickyFocusedRowViewportOffset ||
       shouldRestoreStickyKeyboardViewportOffset ||
       shouldRestoreFocusedRowViewportOffset ||
@@ -3065,6 +3147,7 @@ export function FileTreeView({
       pendingStickyFocusPath === focusedPath ||
       pendingStickyKeyboardFocusPath === focusedPath ||
       pendingStickyKeyboardViewportOffset?.path === focusedPath ||
+      pendingStickyKeyboardScrollTop?.path === focusedPath ||
       activeTreeElementPath == null ||
       activeTreeElementPath !== focusedPath
     ) {
@@ -3077,6 +3160,9 @@ export function FileTreeView({
       }
       if (pendingStickyKeyboardViewportOffset?.path === focusedPath) {
         pendingStickyKeyboardViewportOffsetRef.current = null;
+      }
+      if (pendingStickyKeyboardScrollTop?.path === focusedPath) {
+        pendingStickyKeyboardScrollTopRef.current = null;
       }
       restoreTreeFocusAfterSearchCloseRef.current = false;
       restoreTreeFocusViewportOffsetRef.current = null;
@@ -3094,7 +3180,6 @@ export function FileTreeView({
     resolvedViewportHeight,
     searchEnabled,
     stickyOverlayHeight,
-    stickyRowPathSet,
     totalScrollableHeight,
     visibleRows,
   ]);

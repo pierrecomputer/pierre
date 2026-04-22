@@ -13,6 +13,7 @@ type StickyKeyboardSample = {
   activeElementPath: string | null;
   activeElementIsParked: boolean;
   activeElementIsSticky: boolean;
+  contextMenuPath: string | null;
   focusedPath: string | null;
   focusedRows: StickyKeyboardRowSnapshot[];
   mountedFlowPaths: string[];
@@ -258,6 +259,30 @@ test.describe('sticky keyboard navigation fixture', () => {
     expect(after.scrollTop).toBe(baseline.scrollTop);
     expect(after.stickyPaths).toEqual(baseline.stickyPaths);
     expect(after.mountedFlowPaths).toEqual(baseline.mountedFlowPaths);
+  });
+
+  test('Shift+F10 from a focused sticky DOM mirror opens the menu for that sticky path', async ({
+    page,
+  }) => {
+    await gotoFixture(page, '?scenario=synthetic-branch');
+    await setScrollTop(page, syntheticBranchScrollTop);
+    await focusStickyDomOnly(page, 'a1/b2/');
+
+    const baseline = await sample(page);
+    expect(baseline.contextMenuPath).toBeNull();
+    expect(baseline.scrollTop).toBe(syntheticBranchScrollTop);
+    expect(baseline.activeElementPath).toBe('a1/b2/');
+    expect(baseline.activeElementIsSticky).toBe(true);
+
+    await page.keyboard.down('Shift');
+    await page.keyboard.press('F10');
+    await page.keyboard.up('Shift');
+    await nextFrames(page);
+
+    const after = await sample(page);
+    expect(after.contextMenuPath).toBe('a1/b2/');
+    expect(after.focusedPath).toBe('a1/b2/');
+    expect(after.scrollTop).toBe(baseline.scrollTop);
   });
 
   test('ArrowDown from a first sticky folder at its depth keeps the sticky stack stable', async ({

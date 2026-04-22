@@ -1,5 +1,7 @@
 import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 
+import type { ContextMenuItem } from '../../../src/index';
+
 const fileTreeRuntimePath: string = '/dist/index.js';
 const { FileTree, preparePresortedFileTreeInput } = (await import(
   /* @vite-ignore */ fileTreeRuntimePath
@@ -18,6 +20,7 @@ type StickyKeyboardSample = {
   activeElementPath: string | null;
   activeElementIsParked: boolean;
   activeElementIsSticky: boolean;
+  contextMenuPath: string | null;
   focusedPath: string | null;
   focusedRows: StickyKeyboardRowSnapshot[];
   mountedFlowPaths: string[];
@@ -87,9 +90,22 @@ if (!(mount instanceof HTMLDivElement) || !(report instanceof HTMLPreElement)) {
 const scenario = new URL(window.location.href).searchParams.get('scenario');
 const workload = getVirtualizationWorkload('linux-1x');
 const syntheticBranchWorkload = createSyntheticBranchWorkload();
+const renderContextMenu = (item: ContextMenuItem): HTMLElement => {
+  const menu = document.createElement('div');
+  menu.dataset.testStickyKeyboardMenu = item.path;
+  menu.textContent = `Menu for ${item.path}`;
+  return menu;
+};
 const fileTree =
   scenario === 'synthetic-branch'
     ? new FileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: renderContextMenu,
+            triggerMode: 'both',
+          },
+        },
         fileTreeSearchMode: 'hide-non-matches',
         flattenEmptyDirectories: true,
         initialExpandedPaths: syntheticBranchWorkload.expandedFolders,
@@ -99,6 +115,13 @@ const fileTree =
         initialVisibleRowCount: 700 / 30,
       })
     : new FileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: renderContextMenu,
+            triggerMode: 'both',
+          },
+        },
         fileTreeSearchMode: 'hide-non-matches',
         flattenEmptyDirectories: true,
         initialExpandedPaths: workload.expandedFolders,
@@ -223,6 +246,7 @@ const sample = (): StickyKeyboardSample => {
   const activeElement = getShadow().activeElement;
   const activeHtmlElement =
     activeElement instanceof HTMLElement ? activeElement : null;
+  const contextMenu = host.querySelector('[data-test-sticky-keyboard-menu]');
   const rows = getRows()
     .map((button): StickyKeyboardRowSnapshot | null => {
       const path = getRowPath(button);
@@ -252,6 +276,10 @@ const sample = (): StickyKeyboardSample => {
       activeHtmlElement?.dataset.itemParked === 'true' ? true : false,
     activeElementIsSticky:
       activeHtmlElement?.dataset.fileTreeStickyRow === 'true' ? true : false,
+    contextMenuPath:
+      contextMenu instanceof HTMLElement
+        ? (contextMenu.dataset.testStickyKeyboardMenu ?? null)
+        : null,
     focusedPath: fileTree.getFocusedPath(),
     focusedRows,
     mountedFlowPaths,
