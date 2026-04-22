@@ -49,7 +49,9 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     []
   );
 
-  const hasOpenCommentForm = annotations.some((ann) => !ann.metadata.isThread);
+  const hasOpenCommentForm = annotations.some(
+    (ann) => ann.metadata.isThread !== true
+  );
   const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(
     null
   );
@@ -112,7 +114,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         }}
         lineAnnotations={annotations}
         renderAnnotation={(annotation) =>
-          annotation.metadata.isThread ? (
+          annotation.metadata.isThread === true ? (
             <Thread />
           ) : (
             <CommentForm

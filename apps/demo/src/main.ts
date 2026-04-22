@@ -441,7 +441,7 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
 }
 
 function handlePreload() {
-  if (!isHighlighterNull()) return;
+  if (isHighlighterNull() !== true) return;
   const langs: SupportedLanguages[] = [];
   const themes: DiffsThemeNames[] = [];
   for (const item of FileStreamCodeConfigs) {

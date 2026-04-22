@@ -28,8 +28,8 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
   const [themeType, setThemeType] = useState<'dark' | 'light'>(
     prerenderedDiff.options?.themeType === 'light' ? 'light' : 'dark'
   );
-  const [disableBackground, setDisableBackground] = useState(
-    prerenderedDiff.options?.disableBackground ?? false
+  const [disableBackground, setDisableBackground] = useState<boolean>(
+    prerenderedDiff.options?.disableBackground === true
   );
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>(
     prerenderedDiff.options?.diffStyle ?? 'split'

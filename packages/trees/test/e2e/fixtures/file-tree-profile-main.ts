@@ -3,10 +3,18 @@ import {
   createFileTreeProfileWorkloadSummary,
   DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME,
   FILE_TREE_PROFILE_WORKLOAD_NAMES,
+  type FileTreeProfileActionInitialExpansion,
+  type FileTreeProfileActionOperation,
+  type FileTreeProfileActionSetupOperation,
+  type FileTreeProfileActionSummary,
+  type FileTreeProfileActionTargetVisibility,
   type FileTreeProfilePageSummary,
   getFileTreeProfileWorkload,
 } from '../../../scripts/lib/fileTreeProfileShared';
-import type { FileTree as FileTreeClass } from '../../../src/index';
+import type {
+  FileTree as FileTreeClass,
+  FileTreeDirectoryHandle,
+} from '../../../src/index';
 import { createBenchmarkInstrumentation } from './file-tree-profile-benchmarkInstrumentation';
 
 // @ts-expect-error -- the Vite fixture serves the built trees dist from the
@@ -32,9 +40,18 @@ declare global {
         workloadName: string;
       };
       getState: () => {
+        actionScenarioCount: number | null;
         hasRenderedTree: boolean;
+        preparedActionId: string | null;
         workload: ReturnType<typeof createFileTreeProfileWorkloadSummary>;
       };
+      listExpansionActionScenarios: () => Promise<
+        FileTreeProfileActionSummary[]
+      >;
+      prepareActionProfile: (
+        actionId: string
+      ) => Promise<FileTreeProfileActionSummary>;
+      profilePreparedAction: () => Promise<FileTreeProfilePageSummary>;
       profileRender: () => Promise<FileTreeProfilePageSummary>;
     };
   }
@@ -45,11 +62,20 @@ interface LongTaskEntry {
   startTime: number;
 }
 
+interface DirectoryCandidate {
+  depth: number;
+  isMounted: boolean;
+  path: string;
+}
+
+type Benchmark = ReturnType<typeof createBenchmarkInstrumentation>;
+
 const START_MARK_NAME = 'trees-file-tree-profile-start';
 const END_MARK_NAME = 'trees-file-tree-profile-end';
 const MEASURE_NAME = 'trees-file-tree-profile-measure';
 const START_TRACE_LABEL = 'trees-file-tree-profile-start';
 const END_TRACE_LABEL = 'trees-file-tree-profile-end';
+const TREE_UPDATE_TIMEOUT_MS = 30_000;
 
 const searchParams = new URLSearchParams(window.location.search);
 const instrumentationEnabled = searchParams.get('instrumentation') !== '0';
@@ -88,6 +114,10 @@ if (workloadInput.value === '') {
 }
 
 let currentFileTree: FileTreeClass | null = null;
+let cachedExpansionActionScenarios: FileTreeProfileActionSummary[] | null =
+  null;
+let cachedExpansionActionWorkloadName: string | null = null;
+let preparedActionScenario: FileTreeProfileActionSummary | null = null;
 const longTaskEntries: LongTaskEntry[] = [];
 const longTaskObserver =
   typeof PerformanceObserver !== 'undefined' &&
@@ -104,9 +134,16 @@ const longTaskObserver =
 
 longTaskObserver?.observe({ type: 'longtask', buffered: true });
 
+function clearActionScenarioCache(): void {
+  cachedExpansionActionScenarios = null;
+  cachedExpansionActionWorkloadName = null;
+  preparedActionScenario = null;
+}
+
 function clearRenderedTree(): void {
   currentFileTree?.cleanUp();
   currentFileTree = null;
+  preparedActionScenario = null;
   mount.innerHTML = '';
 }
 
@@ -127,6 +164,43 @@ function getSelectedWorkload() {
   return getFileTreeProfileWorkload(getSelectedWorkloadName());
 }
 
+function getRenderedItemCount(): number {
+  return (
+    mount
+      .querySelector('file-tree-container')
+      ?.shadowRoot?.querySelectorAll('button[data-type="item"]').length ?? 0
+  );
+}
+
+function getMountedFolderPaths(): Set<string> {
+  const rows =
+    mount
+      .querySelector('file-tree-container')
+      ?.shadowRoot?.querySelectorAll(
+        'button[data-type="item"][data-item-type="folder"]:not([data-file-tree-sticky-row="true"])'
+      ) ?? [];
+  return new Set(
+    Array.from(rows)
+      .map((row) => row.getAttribute('data-item-path') ?? '')
+      .filter((path) => path !== '')
+  );
+}
+
+function getPathDepth(path: string): number {
+  const segmentCount = path.split('/').filter(Boolean).length;
+  return Math.max(0, segmentCount - 1);
+}
+
+function getDirectoryHandle(path: string): FileTreeDirectoryHandle {
+  const item = currentFileTree?.getItem(path);
+  if (item == null || !item.isDirectory()) {
+    throw new Error(
+      `Expected profile action target to be a directory: ${path}`
+    );
+  }
+  return item as FileTreeDirectoryHandle;
+}
+
 async function waitForRenderedTree(): Promise<{
   host: HTMLElement;
   renderedItemCount: number;
@@ -135,14 +209,12 @@ async function waitForRenderedTree(): Promise<{
 
   while (true) {
     const host = mount.querySelector('file-tree-container');
-    const renderedItemCount =
-      host?.shadowRoot?.querySelectorAll('button[data-type="item"]').length ??
-      0;
+    const renderedItemCount = getRenderedItemCount();
     if (host instanceof HTMLElement && renderedItemCount > 0) {
       return { host, renderedItemCount };
     }
 
-    if (performance.now() - startedAt > 30_000) {
+    if (performance.now() - startedAt > TREE_UPDATE_TIMEOUT_MS) {
       throw new Error('Timed out waiting for the file-tree to render.');
     }
 
@@ -150,9 +222,29 @@ async function waitForRenderedTree(): Promise<{
   }
 }
 
+async function waitForAnimationFrame(): Promise<void> {
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
 async function waitForPaint(): Promise<void> {
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await waitForAnimationFrame();
+  await waitForAnimationFrame();
+}
+
+function waitForNextTreeUpdate(fileTree: FileTreeClass): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let unsubscribe: (() => void) | null = null;
+    const timeout = window.setTimeout(() => {
+      unsubscribe?.();
+      reject(new Error('Timed out waiting for the file-tree action update.'));
+    }, TREE_UPDATE_TIMEOUT_MS);
+
+    unsubscribe = fileTree.subscribe(() => {
+      window.clearTimeout(timeout);
+      unsubscribe?.();
+      resolve();
+    });
+  });
 }
 
 function formatMs(value: number): string {
@@ -169,71 +261,407 @@ function getTaskOverlapMs(
   return Math.max(0, overlapEnd - overlapStart);
 }
 
-async function profileRender(): Promise<FileTreeProfilePageSummary> {
-  renderButton.disabled = true;
-  renderButton.textContent = 'Rendering…';
+function summarizeLongTasks(
+  startTime: number,
+  endTime: number
+): {
+  longTaskCount: number;
+  longTaskTotalMs: number;
+  longestLongTaskMs: number;
+} {
+  const overlappingTasks = longTaskEntries
+    .map((entry) => ({
+      ...entry,
+      overlapMs: getTaskOverlapMs(entry, startTime, endTime),
+    }))
+    .filter((entry) => entry.overlapMs > 0);
+  return {
+    longTaskCount: overlappingTasks.length,
+    longTaskTotalMs: overlappingTasks.reduce((total, entry) => {
+      return total + entry.overlapMs;
+    }, 0),
+    longestLongTaskMs: overlappingTasks.reduce((longest, entry) => {
+      return Math.max(longest, entry.overlapMs);
+    }, 0),
+  };
+}
 
-  clearProfileSummary();
-  clearRenderedTree();
+function createBenchmark(): Benchmark | null {
+  return instrumentationEnabled ? createBenchmarkInstrumentation() : null;
+}
 
-  const benchmark = instrumentationEnabled
-    ? createBenchmarkInstrumentation()
-    : null;
-  benchmark?.reset();
+function createProfileOptions(
+  initialExpansion: FileTreeProfileActionInitialExpansion,
+  benchmark: Benchmark | null
+) {
+  const workload = getSelectedWorkload();
+  const createOptions = () =>
+    createFileTreeProfileFixtureOptions(workload, { initialExpansion });
+  return benchmark == null
+    ? createOptions()
+    : benchmark.instrumentation.measurePhase(
+        'page.createOptions',
+        createOptions
+      );
+}
+
+function setWorkloadCounters(benchmark: Benchmark | null): void {
+  if (benchmark == null) {
+    return;
+  }
 
   const workload = getSelectedWorkload();
+  benchmark.instrumentation.setCounter(
+    'workload.inputFiles',
+    workload.files.length
+  );
+  benchmark.instrumentation.setCounter(
+    'workload.expandedFolders',
+    workload.expandedFolders.length
+  );
+}
+
+function createProfileFileTree(
+  initialExpansion: FileTreeProfileActionInitialExpansion,
+  benchmark: Benchmark | null
+): FileTreeClass {
+  const options = createProfileOptions(initialExpansion, benchmark);
+  setWorkloadCounters(benchmark);
+
+  return benchmark == null
+    ? new FileTree({
+        ...options,
+        id: 'file-tree-profile',
+      })
+    : benchmark.instrumentation.measurePhase(
+        'page.createFileTree',
+        () =>
+          new FileTree({
+            ...options,
+            id: 'file-tree-profile',
+          })
+      );
+}
+
+async function renderProfileTree(
+  initialExpansion: FileTreeProfileActionInitialExpansion,
+  benchmark: Benchmark | null
+): Promise<{
+  fileTree: FileTreeClass;
+  renderedItemCount: number;
+}> {
+  clearRenderedTree();
+  const fileTree = createProfileFileTree(initialExpansion, benchmark);
+  currentFileTree = fileTree;
+
+  if (benchmark == null) {
+    fileTree.render({ containerWrapper: mount });
+  } else {
+    benchmark.instrumentation.measurePhase('page.renderTree', () => {
+      fileTree.render({ containerWrapper: mount });
+    });
+  }
+
+  const { renderedItemCount } =
+    benchmark == null
+      ? await waitForRenderedTree()
+      : await benchmark.instrumentation.measurePhase(
+          'page.waitForRenderReady',
+          () => waitForRenderedTree()
+        );
+  return { fileTree, renderedItemCount };
+}
+
+function collectDirectoryCandidates(
+  fileTree: FileTreeClass,
+  mountedPaths: Set<string>
+): DirectoryCandidate[] {
+  const seenPaths = new Set<string>();
+  const candidates: DirectoryCandidate[] = [];
+  for (const path of getSelectedWorkload().expandedFolders) {
+    const item = fileTree.getItem(path);
+    if (item == null || !item.isDirectory()) {
+      continue;
+    }
+
+    const canonicalPath = item.getPath();
+    if (seenPaths.has(canonicalPath)) {
+      continue;
+    }
+
+    seenPaths.add(canonicalPath);
+    candidates.push({
+      depth: getPathDepth(canonicalPath),
+      isMounted: mountedPaths.has(canonicalPath),
+      path: canonicalPath,
+    });
+  }
+  return candidates;
+}
+
+function selectCandidate(
+  candidates: readonly DirectoryCandidate[],
+  usedPaths: Set<string>,
+  predicate: (candidate: DirectoryCandidate) => boolean,
+  pick: 'first' | 'last' | 'middle'
+): DirectoryCandidate | null {
+  const matches = candidates.filter((candidate) => {
+    return !usedPaths.has(candidate.path) && predicate(candidate);
+  });
+  if (matches.length === 0) {
+    return null;
+  }
+
+  if (pick === 'last') {
+    return matches[matches.length - 1] ?? null;
+  }
+  if (pick === 'middle') {
+    return matches[Math.floor(matches.length / 2)] ?? null;
+  }
+  return matches[0] ?? null;
+}
+
+function createActionScenario({
+  id,
+  initialExpansion,
+  label,
+  operation,
+  setupOperations = [],
+  target,
+  targetVisibility,
+}: {
+  id: string;
+  initialExpansion: FileTreeProfileActionInitialExpansion;
+  label: string;
+  operation: FileTreeProfileActionOperation;
+  setupOperations?: FileTreeProfileActionSetupOperation[];
+  target: DirectoryCandidate;
+  targetVisibility: FileTreeProfileActionTargetVisibility;
+}): FileTreeProfileActionSummary {
+  return {
+    id,
+    initialExpansion,
+    label,
+    operation,
+    setupOperations,
+    targetDepth: target.depth,
+    targetPath: target.path,
+    targetVisibility,
+  };
+}
+
+async function buildExpansionActionScenarios(): Promise<
+  FileTreeProfileActionSummary[]
+> {
+  const scenarios: FileTreeProfileActionSummary[] = [];
+  const usedOpenPaths = new Set<string>();
+
+  const { fileTree: openTree } = await renderProfileTree('open', null);
+  await waitForPaint();
+  const openMountedPaths = getMountedFolderPaths();
+  const openCandidates = collectDirectoryCandidates(openTree, openMountedPaths);
+  const openTargets = [
+    {
+      id: 'open-visible-shallow',
+      label: 'Open visible shallow',
+      pick: 'first' as const,
+      predicate: (candidate: DirectoryCandidate) =>
+        candidate.isMounted && candidate.depth <= 1,
+      visibility: 'visible' as const,
+    },
+    {
+      id: 'open-visible-deep',
+      label: 'Open visible deep',
+      pick: 'last' as const,
+      predicate: (candidate: DirectoryCandidate) =>
+        candidate.isMounted && candidate.depth >= 2,
+      visibility: 'visible' as const,
+    },
+    {
+      id: 'open-offscreen-mid',
+      label: 'Open offscreen mid-depth',
+      pick: 'middle' as const,
+      predicate: (candidate: DirectoryCandidate) =>
+        !candidate.isMounted && candidate.depth >= 1 && candidate.depth <= 3,
+      visibility: 'offscreen' as const,
+    },
+    {
+      id: 'open-offscreen-deep',
+      label: 'Open offscreen deep',
+      pick: 'last' as const,
+      predicate: (candidate: DirectoryCandidate) =>
+        !candidate.isMounted && candidate.depth >= 4,
+      visibility: 'offscreen' as const,
+    },
+  ];
+
+  for (const targetConfig of openTargets) {
+    const target = selectCandidate(
+      openCandidates,
+      usedOpenPaths,
+      targetConfig.predicate,
+      targetConfig.pick
+    );
+    if (target == null) {
+      continue;
+    }
+
+    usedOpenPaths.add(target.path);
+    scenarios.push(
+      createActionScenario({
+        id: `${targetConfig.id}-collapse`,
+        initialExpansion: 'open',
+        label: `${targetConfig.label} collapse`,
+        operation: 'collapse',
+        target,
+        targetVisibility: targetConfig.visibility,
+      }),
+      createActionScenario({
+        id: `${targetConfig.id}-expand`,
+        initialExpansion: 'open',
+        label: `${targetConfig.label} expand`,
+        operation: 'expand',
+        setupOperations: [{ operation: 'collapse', path: target.path }],
+        target,
+        targetVisibility: targetConfig.visibility,
+      })
+    );
+  }
+
+  const { fileTree: closedTree } = await renderProfileTree('closed', null);
+  await waitForPaint();
+  const closedMountedPaths = getMountedFolderPaths();
+  const closedCandidates = collectDirectoryCandidates(
+    closedTree,
+    closedMountedPaths
+  );
+  const usedClosedPaths = new Set<string>();
+  const closedVisibleTop = selectCandidate(
+    closedCandidates,
+    usedClosedPaths,
+    (candidate) => candidate.isMounted && candidate.depth === 0,
+    'first'
+  );
+  if (closedVisibleTop != null) {
+    usedClosedPaths.add(closedVisibleTop.path);
+    scenarios.push(
+      createActionScenario({
+        id: 'closed-visible-top-expand',
+        initialExpansion: 'closed',
+        label: 'Closed visible top-level expand',
+        operation: 'expand',
+        target: closedVisibleTop,
+        targetVisibility: 'visible',
+      })
+    );
+  }
+
+  const closedHiddenDeep =
+    selectCandidate(
+      closedCandidates,
+      usedClosedPaths,
+      (candidate) => !candidate.isMounted && candidate.depth >= 4,
+      'last'
+    ) ??
+    selectCandidate(
+      closedCandidates,
+      usedClosedPaths,
+      (candidate) => !candidate.isMounted && candidate.depth >= 2,
+      'last'
+    );
+  if (closedHiddenDeep != null) {
+    scenarios.push(
+      createActionScenario({
+        id: 'closed-hidden-deep-expand',
+        initialExpansion: 'closed',
+        label: 'Closed hidden deep expand',
+        operation: 'expand',
+        target: closedHiddenDeep,
+        targetVisibility: 'hidden',
+      })
+    );
+  }
+
+  clearRenderedTree();
+  renderButton.textContent = 'Render';
+  return scenarios;
+}
+
+async function listExpansionActionScenarios(): Promise<
+  FileTreeProfileActionSummary[]
+> {
+  const workloadName = getSelectedWorkloadName();
+  if (
+    cachedExpansionActionScenarios != null &&
+    cachedExpansionActionWorkloadName === workloadName
+  ) {
+    return cachedExpansionActionScenarios;
+  }
+
+  clearProfileSummary();
+  cachedExpansionActionScenarios = await buildExpansionActionScenarios();
+  cachedExpansionActionWorkloadName = workloadName;
+  return cachedExpansionActionScenarios;
+}
+
+async function applySetupOperation(
+  operation: FileTreeProfileActionSetupOperation
+): Promise<void> {
+  if (currentFileTree == null) {
+    throw new Error('Cannot apply an action setup before rendering the tree.');
+  }
+
+  const item = getDirectoryHandle(operation.path);
+  const shouldBeExpanded = operation.operation === 'expand';
+  if (item.isExpanded() === shouldBeExpanded) {
+    return;
+  }
+
+  const updatePromise = waitForNextTreeUpdate(currentFileTree);
+  if (shouldBeExpanded) {
+    item.expand();
+  } else {
+    item.collapse();
+  }
+  await updatePromise;
+  await waitForPaint();
+}
+
+async function prepareActionProfile(
+  actionId: string
+): Promise<FileTreeProfileActionSummary> {
+  const scenarios = await listExpansionActionScenarios();
+  const scenario = scenarios.find((candidate) => candidate.id === actionId);
+  if (scenario == null) {
+    throw new Error(`Unknown file-tree profile action scenario: ${actionId}`);
+  }
+
+  clearProfileSummary();
+  await renderProfileTree(scenario.initialExpansion, null);
+  await waitForPaint();
+  for (const operation of scenario.setupOperations) {
+    await applySetupOperation(operation);
+  }
+
+  preparedActionScenario = scenario;
+  return scenario;
+}
+
+async function profileRender(): Promise<FileTreeProfilePageSummary> {
+  renderButton.disabled = true;
+  renderButton.textContent = 'Rendering...';
+
+  clearProfileSummary();
+  const benchmark = createBenchmark();
+  benchmark?.reset();
+
   const renderStartedAt = performance.now();
   const heapBefore = benchmark?.readHeapSnapshot() ?? null;
   performance.mark(START_MARK_NAME);
   console.timeStamp(START_TRACE_LABEL);
 
   try {
-    const options =
-      benchmark == null
-        ? createFileTreeProfileFixtureOptions(workload)
-        : benchmark.instrumentation.measurePhase('page.createOptions', () =>
-            createFileTreeProfileFixtureOptions(workload)
-          );
-    benchmark?.instrumentation.setCounter(
-      'workload.inputFiles',
-      workload.files.length
-    );
-    benchmark?.instrumentation.setCounter(
-      'workload.expandedFolders',
-      workload.expandedFolders.length
-    );
-
-    const fileTree =
-      benchmark == null
-        ? new FileTree({
-            ...options,
-            id: 'file-tree-profile',
-          })
-        : benchmark.instrumentation.measurePhase(
-            'page.createFileTree',
-            () =>
-              new FileTree({
-                ...options,
-                id: 'file-tree-profile',
-              })
-          );
-    currentFileTree = fileTree;
-
-    if (benchmark == null) {
-      fileTree.render({ containerWrapper: mount });
-    } else {
-      benchmark.instrumentation.measurePhase('page.renderTree', () => {
-        fileTree.render({ containerWrapper: mount });
-      });
-    }
-
-    const { renderedItemCount } =
-      benchmark == null
-        ? await waitForRenderedTree()
-        : await benchmark.instrumentation.measurePhase(
-            'page.waitForRenderReady',
-            () => waitForRenderedTree()
-          );
+    const { renderedItemCount } = await renderProfileTree('open', benchmark);
     const visibleRowsReadyAt = performance.now();
     await waitForPaint();
     const heapAfter = benchmark?.readHeapSnapshot() ?? null;
@@ -244,19 +672,8 @@ async function profileRender(): Promise<FileTreeProfilePageSummary> {
 
     const measure = performance.getEntriesByName(MEASURE_NAME).at(-1);
     const renderEndedAt = performance.now();
-    const renderLongTasks = longTaskEntries
-      .map((entry) => ({
-        ...entry,
-        overlapMs: getTaskOverlapMs(entry, renderStartedAt, renderEndedAt),
-      }))
-      .filter((entry) => entry.overlapMs > 0);
-    const longTaskCount = renderLongTasks.length;
-    const longTaskTotalMs = renderLongTasks.reduce((total, entry) => {
-      return total + entry.overlapMs;
-    }, 0);
-    const longestLongTaskMs = renderLongTasks.reduce((longest, entry) => {
-      return Math.max(longest, entry.overlapMs);
-    }, 0);
+    const { longTaskCount, longTaskTotalMs, longestLongTaskMs } =
+      summarizeLongTasks(renderStartedAt, renderEndedAt);
     const instrumentation = benchmark?.summarize(heapBefore, heapAfter) ?? {
       phases: [],
       counters: {},
@@ -269,6 +686,7 @@ async function profileRender(): Promise<FileTreeProfilePageSummary> {
       longTaskCount,
       longTaskTotalMs,
       longestLongTaskMs,
+      profileKind: 'render',
       renderDurationMs: measure?.duration ?? 0,
       renderedItemCount,
       resultText: `Post-paint ready ${formatMs(
@@ -279,7 +697,7 @@ async function profileRender(): Promise<FileTreeProfilePageSummary> {
         longTaskTotalMs
       )}; longest ${formatMs(longestLongTaskMs)}.`,
       visibleRowsReadyMs: visibleRowsReadyAt - renderStartedAt,
-      workload: createFileTreeProfileWorkloadSummary(workload),
+      workload: createFileTreeProfileWorkloadSummary(getSelectedWorkload()),
     };
 
     window.__treesFileTreeProfile = summary;
@@ -294,6 +712,139 @@ async function profileRender(): Promise<FileTreeProfilePageSummary> {
   }
 }
 
+async function profilePreparedAction(): Promise<FileTreeProfilePageSummary> {
+  if (currentFileTree == null || preparedActionScenario == null) {
+    throw new Error(
+      'Call prepareActionProfile(actionId) before profilePreparedAction().'
+    );
+  }
+
+  const scenario = preparedActionScenario;
+  const item = getDirectoryHandle(scenario.targetPath);
+  const targetWasExpandedBefore = item.isExpanded();
+  if (
+    (scenario.operation === 'expand' && targetWasExpandedBefore) ||
+    (scenario.operation === 'collapse' && !targetWasExpandedBefore)
+  ) {
+    throw new Error(
+      `Profile action ${scenario.id} would be a no-op for ${scenario.targetPath}.`
+    );
+  }
+
+  clearProfileSummary();
+  const benchmark = createBenchmark();
+  benchmark?.reset();
+  setWorkloadCounters(benchmark);
+
+  const renderedItemCountBefore = getRenderedItemCount();
+  const actionStartedAt = performance.now();
+  const heapBefore = benchmark?.readHeapSnapshot() ?? null;
+  performance.mark(START_MARK_NAME);
+  console.timeStamp(START_TRACE_LABEL);
+
+  const updatePromise = waitForNextTreeUpdate(currentFileTree);
+  const dispatchStartedAt = performance.now();
+  if (benchmark == null) {
+    if (scenario.operation === 'expand') {
+      item.expand();
+    } else {
+      item.collapse();
+    }
+  } else {
+    benchmark.instrumentation.measurePhase('action.dispatch', () => {
+      if (scenario.operation === 'expand') {
+        item.expand();
+      } else {
+        item.collapse();
+      }
+    });
+  }
+  const actionDurationMs = performance.now() - dispatchStartedAt;
+
+  if (benchmark == null) {
+    await updatePromise;
+  } else {
+    await benchmark.instrumentation.measurePhase(
+      'action.waitForTreeUpdate',
+      () => updatePromise
+    );
+  }
+
+  if (benchmark == null) {
+    await waitForAnimationFrame();
+  } else {
+    await benchmark.instrumentation.measurePhase(
+      'action.waitForVisibleRows',
+      () => waitForAnimationFrame()
+    );
+  }
+  const visibleRowsReadyAt = performance.now();
+  const { renderedItemCount } = await waitForRenderedTree();
+
+  if (benchmark == null) {
+    await waitForAnimationFrame();
+  } else {
+    await benchmark.instrumentation.measurePhase('action.waitForPaint', () =>
+      waitForAnimationFrame()
+    );
+  }
+  const heapAfter = benchmark?.readHeapSnapshot() ?? null;
+
+  performance.mark(END_MARK_NAME);
+  console.timeStamp(END_TRACE_LABEL);
+  performance.measure(MEASURE_NAME, START_MARK_NAME, END_MARK_NAME);
+
+  const targetIsExpandedAfter = item.isExpanded();
+  const measure = performance.getEntriesByName(MEASURE_NAME).at(-1);
+  const actionEndedAt = performance.now();
+  const { longTaskCount, longTaskTotalMs, longestLongTaskMs } =
+    summarizeLongTasks(actionStartedAt, actionEndedAt);
+  const instrumentation = benchmark?.summarize(heapBefore, heapAfter) ?? {
+    phases: [],
+    counters: {},
+    heap: null,
+  };
+  instrumentation.counters['workload.renderedRows'] = renderedItemCount;
+  instrumentation.counters['workload.renderedRowsBefore'] =
+    renderedItemCountBefore;
+  instrumentation.counters['workload.actionTargetDepth'] = scenario.targetDepth;
+  instrumentation.counters['workload.actionDurationMs'] = actionDurationMs;
+
+  const action: FileTreeProfileActionSummary = {
+    ...scenario,
+    renderedItemCountAfter: renderedItemCount,
+    renderedItemCountBefore,
+    targetIsExpandedAfter,
+    targetWasExpandedBefore,
+  };
+  const summary: FileTreeProfilePageSummary = {
+    action,
+    actionDurationMs,
+    instrumentation,
+    longTaskCount,
+    longTaskTotalMs,
+    longestLongTaskMs,
+    profileKind: 'action',
+    renderDurationMs: measure?.duration ?? 0,
+    renderedItemCount,
+    resultText: `${action.label}: ${action.operation} ${action.targetPath}. Action dispatch ${formatMs(
+      actionDurationMs
+    )}. Post-paint ready ${formatMs(
+      measure?.duration ?? 0
+    )}. Visible rows ready ${formatMs(
+      visibleRowsReadyAt - actionStartedAt
+    )}. Rendered rows ${renderedItemCountBefore} -> ${renderedItemCount}. Long tasks ${longTaskCount}; total ${formatMs(
+      longTaskTotalMs
+    )}; longest ${formatMs(longestLongTaskMs)}.`,
+    visibleRowsReadyMs: visibleRowsReadyAt - actionStartedAt,
+    workload: createFileTreeProfileWorkloadSummary(getSelectedWorkload()),
+  };
+
+  window.__treesFileTreeProfile = summary;
+  console.info('[trees file-tree profile]', summary.resultText);
+  return summary;
+}
+
 function configureFixture(config: { workloadName?: string }): {
   workloadName: string;
 } {
@@ -301,6 +852,7 @@ function configureFixture(config: { workloadName?: string }): {
     config.workloadName ?? getSelectedWorkloadName();
   const workload = getFileTreeProfileWorkload(requestedWorkloadName);
   workloadInput.value = workload.name;
+  clearActionScenarioCache();
   clearRenderedTree();
   clearProfileSummary();
   renderButton.textContent = 'Render';
@@ -311,7 +863,9 @@ function configureFixture(config: { workloadName?: string }): {
 
 function getState() {
   return {
+    actionScenarioCount: cachedExpansionActionScenarios?.length ?? null,
     hasRenderedTree: currentFileTree != null,
+    preparedActionId: preparedActionScenario?.id ?? null,
     workload: createFileTreeProfileWorkloadSummary(getSelectedWorkload()),
   };
 }
@@ -321,6 +875,7 @@ renderButton.addEventListener('click', () => {
 });
 
 workloadInput.addEventListener('input', () => {
+  clearActionScenarioCache();
   clearRenderedTree();
   clearProfileSummary();
   renderButton.textContent = 'Render';
@@ -329,6 +884,9 @@ workloadInput.addEventListener('input', () => {
 window.treesFileTreeProfile = {
   configureFixture,
   getState,
+  listExpansionActionScenarios,
+  prepareActionProfile,
+  profilePreparedAction,
   profileRender,
 };
 window.__treesFileTreeFixtureReady = true;

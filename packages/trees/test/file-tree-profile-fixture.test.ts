@@ -40,6 +40,19 @@ test('file-tree profile fixture options mirror the Phase 4 docs tree behavior', 
   );
 });
 
+test('file-tree profile fixture options can start from a collapsed action state', () => {
+  const workload = getFileTreeProfileWorkload('linux-5x');
+  const options = createFileTreeProfileFixtureOptions(workload, {
+    initialExpansion: 'closed',
+  });
+
+  expect(options.flattenEmptyDirectories).toBe(true);
+  expect(options.initialExpansion).toBe('closed');
+  expect(options.preparedInput).toEqual(
+    preparePresortedFileTreeInput(workload.files)
+  );
+});
+
 test('file-tree profile fixture HTML stays minimal and idle-on-load', () => {
   const html = readFileSync(
     `${packageRoot}/test/e2e/fixtures/file-tree-profile.html`,

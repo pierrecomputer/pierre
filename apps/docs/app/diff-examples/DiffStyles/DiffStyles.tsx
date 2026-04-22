@@ -66,8 +66,8 @@ export function DiffStyles({
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>(
     options?.overflow ?? 'wrap'
   );
-  const [disableLineNumbers, setDisableLineNumbers] = useState(
-    options?.disableLineNumbers ?? false
+  const [disableLineNumbers, setDisableLineNumbers] = useState<boolean>(
+    options?.disableLineNumbers === true
   );
 
   return (

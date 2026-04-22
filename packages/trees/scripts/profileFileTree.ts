@@ -8,11 +8,15 @@ import { loadWorktreeEnv } from '../../../scripts/load-worktree-env.mjs';
 import {
   DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME,
   FILE_TREE_PROFILE_WORKLOAD_NAMES,
+  type FileTreeProfileActionSummary,
   type FileTreeProfilePageSummary,
   type FileTreeProfileWorkloadName,
 } from './lib/fileTreeProfileShared';
 
+type ProfileActionsMode = 'expansion' | 'off';
+
 interface ProfileConfig {
+  actionsMode: ProfileActionsMode;
   browserUrl: string;
   url: string;
   workloads: FileTreeProfileWorkloadName[];
@@ -24,6 +28,7 @@ interface ProfileConfig {
   showDominantTraceEvents: boolean;
   outputJson: boolean;
   comparePath?: string;
+  profileRender: boolean;
   traceOutputPath: string;
   ensureBuild: boolean;
   ensureServer: boolean;
@@ -127,6 +132,8 @@ interface HeapSummary {
 }
 
 interface ProfileResult {
+  action: FileTreeProfileActionSummary | null;
+  actionDurationMs: number | null;
   runNumber: number;
   browserUrl: string;
   url: string;
@@ -157,6 +164,7 @@ interface AggregateMetricSummary {
 }
 
 type AggregateMetricKey =
+  | 'actionDurationMs'
   | 'visibleRowsReadyMs'
   | 'postPaintReadyMs'
   | 'clickDispatchMs'
@@ -172,12 +180,21 @@ interface JsonAggregateSummary {
 }
 
 interface ProfileWorkloadOutput {
+  actionProfiles: ProfileActionOutput[];
+  actionSummary: JsonAggregateSummary | null;
   workload: PageWorkloadSummary;
   runs: ProfileResult[];
   summary: JsonAggregateSummary;
 }
 
+interface ProfileActionOutput {
+  action: FileTreeProfileActionSummary;
+  runs: ProfileResult[];
+  summary: JsonAggregateSummary;
+}
+
 interface ProfileConfigSummary {
+  actionsMode: ProfileActionsMode;
   browserUrl: string;
   url: string;
   workloads: string[];
@@ -186,6 +203,7 @@ interface ProfileConfigSummary {
   warmupRuns: number;
   instrumentationMode: 'on' | 'off';
   includeCallCounts: boolean;
+  profileRender: boolean;
   showDominantTraceEvents: boolean;
 }
 
@@ -426,6 +444,11 @@ const AGGREGATE_METRIC_DEFINITIONS: Array<{
   select: (result: ProfileResult) => number | null;
 }> = [
   {
+    key: 'actionDurationMs',
+    label: 'Action dispatch',
+    select: (result) => result.actionDurationMs,
+  },
+  {
     key: 'visibleRowsReadyMs',
     label: 'Visible rows ready',
     select: (result) => result.visibleRowsReadyMs,
@@ -504,6 +527,12 @@ function printHelpAndExit(): never {
     '  --dominant-trace-events Show the lower-signal dominant trace event table in human output'
   );
   console.log(
+    '  --actions <mode>      Run action profiles: off or expansion (default: off)'
+  );
+  console.log(
+    '  --actions-only        Run expansion action profiles without the standalone render profile'
+  );
+  console.log(
     `  --trace-out <path>     Where to save the Chrome trace JSON when tracing succeeds (default: ${DEFAULT_TRACE_OUTPUT_EXAMPLE_PATH})`
   );
   console.log(
@@ -545,6 +574,16 @@ function parseInstrumentationMode(value: string): 'on' | 'off' {
   );
 }
 
+function parseActionsMode(value: string): ProfileActionsMode {
+  if (value === 'off' || value === 'expansion') {
+    return value;
+  }
+
+  throw new Error(
+    `Invalid --actions value '${value}'. Expected 'off' or 'expansion'.`
+  );
+}
+
 function parseWorkloadName(value: string): FileTreeProfileWorkloadName {
   if (KNOWN_WORKLOAD_NAMES.has(value as FileTreeProfileWorkloadName)) {
     return value as FileTreeProfileWorkloadName;
@@ -571,6 +610,15 @@ function createDefaultTraceOutputPath(): string {
   );
 }
 
+function slugifyTracePart(value: string): string {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug.length > 0 ? slug : 'item';
+}
+
 function createRunTraceOutputPath(
   traceOutputPath: string,
   workloadName: string,
@@ -580,12 +628,7 @@ function createRunTraceOutputPath(
 ): string {
   const suffixParts: string[] = [];
   if (workloadCount > 1) {
-    const workloadSlug = workloadName
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-    suffixParts.push(workloadSlug.length > 0 ? workloadSlug : 'workload');
+    suffixParts.push(slugifyTracePart(workloadName));
   }
 
   if (totalRuns > 1) {
@@ -605,6 +648,19 @@ function createRunTraceOutputPath(
   }
 
   return `${traceOutputPath.slice(0, extensionIndex)}${runSuffix}${traceOutputPath.slice(extensionIndex)}`;
+}
+
+function createActionTraceOutputPath(
+  traceOutputPath: string,
+  actionId: string
+): string {
+  const actionSuffix = `-${slugifyTracePart(actionId)}`;
+  const extensionIndex = traceOutputPath.lastIndexOf('.');
+  if (extensionIndex <= 0) {
+    return `${traceOutputPath}${actionSuffix}`;
+  }
+
+  return `${traceOutputPath.slice(0, extensionIndex)}${actionSuffix}${traceOutputPath.slice(extensionIndex)}`;
 }
 
 function isFileTreeProfileFixtureUrl(url: string): boolean {
@@ -639,6 +695,7 @@ function createProfileUrl(
 
 function parseArgs(argv: string[]): ProfileConfig {
   const config: ProfileConfig = {
+    actionsMode: 'off',
     browserUrl: DEFAULT_BROWSER_URL,
     url: DEFAULT_URL,
     workloads: [DEFAULT_WORKLOAD_NAME],
@@ -649,6 +706,7 @@ function parseArgs(argv: string[]): ProfileConfig {
     includeCallCounts: false,
     showDominantTraceEvents: false,
     outputJson: false,
+    profileRender: true,
     traceOutputPath: createDefaultTraceOutputPath(),
     ensureBuild: true,
     ensureServer: true,
@@ -675,6 +733,12 @@ function parseArgs(argv: string[]): ProfileConfig {
       continue;
     }
 
+    if (rawArg === '--actions-only') {
+      config.actionsMode = 'expansion';
+      config.profileRender = false;
+      continue;
+    }
+
     if (rawArg === '--no-build') {
       config.ensureBuild = false;
       continue;
@@ -694,6 +758,7 @@ function parseArgs(argv: string[]): ProfileConfig {
       flag === '--runs' ||
       flag === '--warmup-runs' ||
       flag === '--instrumentation' ||
+      flag === '--actions' ||
       flag === '--trace-out' ||
       flag === '--compare'
     ) {
@@ -725,6 +790,8 @@ function parseArgs(argv: string[]): ProfileConfig {
         config.warmupRuns = parseNonNegativeInteger(value, '--warmup-runs');
       } else if (flag === '--instrumentation') {
         config.instrumentationMode = parseInstrumentationMode(value);
+      } else if (flag === '--actions') {
+        config.actionsMode = parseActionsMode(value);
       } else if (flag === '--compare') {
         config.comparePath = resolve(process.cwd(), value);
       } else {
@@ -737,6 +804,9 @@ function parseArgs(argv: string[]): ProfileConfig {
   }
 
   config.workloads = [...new Set(config.workloads)];
+  if (!config.profileRender && config.actionsMode === 'off') {
+    throw new Error('--actions-only requires action profiling.');
+  }
   return config;
 }
 
@@ -877,6 +947,7 @@ function createProfileConfigSummary(
   config: ProfileConfig
 ): ProfileConfigSummary {
   return {
+    actionsMode: config.actionsMode,
     browserUrl: config.browserUrl,
     url: config.url,
     workloads: [...config.workloads],
@@ -885,19 +956,28 @@ function createProfileConfigSummary(
     warmupRuns: config.warmupRuns,
     instrumentationMode: config.instrumentationMode,
     includeCallCounts: config.includeCallCounts,
+    profileRender: config.profileRender,
     showDominantTraceEvents: config.showDominantTraceEvents,
   };
 }
 
-function createWorkloadOutput(results: ProfileResult[]): ProfileWorkloadOutput {
-  if (results.length === 0) {
+function createWorkloadOutput(
+  workload: PageWorkloadSummary,
+  results: ProfileResult[],
+  actionProfiles: ProfileActionOutput[]
+): ProfileWorkloadOutput {
+  if (results.length === 0 && actionProfiles.length === 0) {
     throw new Error('Cannot summarize an empty workload result set.');
   }
 
+  const actionRuns = actionProfiles.flatMap((profile) => profile.runs);
   return {
-    workload: results[0].workload,
+    actionProfiles,
+    actionSummary:
+      actionRuns.length === 0 ? null : createJsonAggregateSummary(actionRuns),
     runs: results,
     summary: createJsonAggregateSummary(results),
+    workload,
   };
 }
 
@@ -2355,7 +2435,9 @@ function createNestedPhaseRows(phases: InstrumentedPhaseSummary[]): Array<{
   return rows;
 }
 
-function startTrace(cdp: CdpClient): Promise<TraceFile> {
+async function startTrace(cdp: CdpClient): Promise<{
+  traceComplete: Promise<TraceFile>;
+}> {
   const traceEvents: TraceEvent[] = [];
   const removeListener = cdp.on('Tracing.dataCollected', (params) => {
     const payload = params as { value?: TraceEvent[] };
@@ -2371,15 +2453,12 @@ function startTrace(cdp: CdpClient): Promise<TraceFile> {
       return { traceEvents };
     });
 
-  return cdp
-    .send('Tracing.start', {
-      categories: TRACE_CATEGORIES,
-      transferMode: 'ReportEvents',
-    })
-    .then(async () => {
-      await Bun.sleep(TRACE_START_SETTLE_MS);
-      return traceComplete;
-    });
+  await cdp.send('Tracing.start', {
+    categories: TRACE_CATEGORIES,
+    transferMode: 'ReportEvents',
+  });
+  await Bun.sleep(TRACE_START_SETTLE_MS);
+  return { traceComplete };
 }
 
 async function startCpuProfile(cdp: CdpClient): Promise<void> {
@@ -2562,6 +2641,60 @@ async function clickRenderButton(cdp: CdpClient): Promise<void> {
   });
 }
 
+async function listExpansionActionScenarios(
+  cdp: CdpClient
+): Promise<FileTreeProfileActionSummary[]> {
+  return await evaluateJson<FileTreeProfileActionSummary[]>(
+    cdp,
+    `(async () => {
+      const api = window.treesFileTreeProfile;
+      if (api == null) {
+        throw new Error('Missing treesFileTreeProfile fixture API.');
+      }
+      return await api.listExpansionActionScenarios();
+    })()`
+  );
+}
+
+async function prepareActionProfile(
+  cdp: CdpClient,
+  actionId: string
+): Promise<FileTreeProfileActionSummary> {
+  return await evaluateJson<FileTreeProfileActionSummary>(
+    cdp,
+    `(async () => {
+      const api = window.treesFileTreeProfile;
+      if (api == null) {
+        throw new Error('Missing treesFileTreeProfile fixture API.');
+      }
+      return await api.prepareActionProfile(${JSON.stringify(actionId)});
+    })()`
+  );
+}
+
+async function profilePreparedAction(
+  cdp: CdpClient
+): Promise<PageRenderSummary> {
+  return await evaluateJson<PageRenderSummary>(
+    cdp,
+    `(async () => {
+      const api = window.treesFileTreeProfile;
+      if (api == null) {
+        throw new Error('Missing treesFileTreeProfile fixture API.');
+      }
+      return await api.profilePreparedAction();
+    })()`
+  );
+}
+
+async function clickAndWaitForRenderSummary(
+  cdp: CdpClient,
+  timeoutMs: number
+): Promise<PageRenderSummary> {
+  await clickRenderButton(cdp);
+  return await waitForProfileSummary(cdp, timeoutMs);
+}
+
 async function collectProfilingArtifacts(
   cdp: CdpClient,
   timeoutMs: number,
@@ -2575,7 +2708,7 @@ async function collectProfilingArtifacts(
   let cpuProfileStarted = false;
 
   try {
-    tracePromise = startTrace(cdp);
+    tracePromise = (await startTrace(cdp)).traceComplete;
   } catch {
     tracePromise = null;
   }
@@ -2628,13 +2761,13 @@ async function collectProfilingArtifacts(
 async function collectFunctionCallCounts(
   cdp: CdpClient,
   url: string,
-  timeoutMs: number
+  timeoutMs: number,
+  action: () => Promise<unknown>
 ): Promise<Map<string, number | null> | null> {
   try {
     await navigateToFixture(cdp, url, timeoutMs);
     await startPreciseCoverage(cdp);
-    await clickRenderButton(cdp);
-    await waitForProfileSummary(cdp, timeoutMs);
+    await action();
     const coverage = await stopPreciseCoverage(cdp);
     if (coverage == null) {
       return null;
@@ -2658,6 +2791,57 @@ function writeTraceIfAvailable(
   mkdirSync(dirname(traceOutputPath), { recursive: true });
   writeFileSync(traceOutputPath, JSON.stringify(trace));
   return traceOutputPath;
+}
+
+function createProfileResult({
+  browserUrl,
+  callCountsByFunction,
+  cpuProfile,
+  pageSummary,
+  runNumber,
+  trace,
+  traceOutputPath,
+  url,
+}: {
+  browserUrl: string;
+  callCountsByFunction: Map<string, number | null> | null;
+  cpuProfile: CpuProfile | null;
+  pageSummary: PageRenderSummary;
+  runNumber: number;
+  trace: TraceFile | null;
+  traceOutputPath: string | null;
+  url: string;
+}): ProfileResult {
+  return {
+    action: pageSummary.action ?? null,
+    actionDurationMs:
+      pageSummary.actionDurationMs == null
+        ? null
+        : Number(pageSummary.actionDurationMs.toFixed(3)),
+    runNumber,
+    browserUrl,
+    url,
+    workload: getPageWorkloadSummary(pageSummary, url),
+    traceOutputPath: writeTraceIfAvailable(trace, traceOutputPath),
+    renderedItemCount: pageSummary.renderedItemCount,
+    visibleRowsReadyMs:
+      pageSummary.visibleRowsReadyMs == null
+        ? null
+        : Number(pageSummary.visibleRowsReadyMs.toFixed(3)),
+    renderDurationMs: Number(pageSummary.renderDurationMs.toFixed(3)),
+    longTaskCount: pageSummary.longTaskCount ?? null,
+    longTaskTotalMs:
+      pageSummary.longTaskTotalMs == null
+        ? null
+        : Number(pageSummary.longTaskTotalMs.toFixed(3)),
+    longestLongTaskMs:
+      pageSummary.longestLongTaskMs == null
+        ? null
+        : Number(pageSummary.longestLongTaskMs.toFixed(3)),
+    instrumentation: summarizeInstrumentation(pageSummary),
+    trace: summarizeTrace(trace, pageSummary),
+    cpuProfile: summarizeCpuProfile(cpuProfile, callCountsByFunction),
+  };
 }
 
 async function profileFileTreeRender(
@@ -2700,40 +2884,126 @@ async function profileFileTreeRender(
     const { pageSummary, trace, cpuProfile } = await collectProfilingArtifacts(
       cdp,
       config.timeoutMs,
-      async () => {
-        await clickRenderButton(cdp);
-        return await waitForProfileSummary(cdp, config.timeoutMs);
-      }
+      () => clickAndWaitForRenderSummary(cdp, config.timeoutMs)
     );
     const callCountsByFunction = config.includeCallCounts
-      ? await collectFunctionCallCounts(cdp, profileUrl, config.timeoutMs)
+      ? await collectFunctionCallCounts(cdp, profileUrl, config.timeoutMs, () =>
+          clickAndWaitForRenderSummary(cdp, config.timeoutMs)
+        )
       : null;
 
-    return {
-      runNumber,
+    return createProfileResult({
       browserUrl: config.browserUrl,
+      callCountsByFunction,
+      cpuProfile,
+      pageSummary,
+      runNumber,
+      trace,
+      traceOutputPath,
       url: profileUrl,
-      workload: getPageWorkloadSummary(pageSummary, profileUrl),
-      traceOutputPath: writeTraceIfAvailable(trace, traceOutputPath),
-      renderedItemCount: pageSummary.renderedItemCount,
-      visibleRowsReadyMs:
-        pageSummary.visibleRowsReadyMs == null
+    });
+  } finally {
+    cdp.close();
+    await closePageTarget(config.browserUrl, target.id, config.timeoutMs);
+  }
+}
+
+async function collectActionFunctionCallCounts(
+  cdp: CdpClient,
+  profileUrl: string,
+  timeoutMs: number,
+  actionId: string
+): Promise<Map<string, number | null> | null> {
+  return await collectFunctionCallCounts(
+    cdp,
+    profileUrl,
+    timeoutMs,
+    async () => {
+      await prepareActionProfile(cdp, actionId);
+      await profilePreparedAction(cdp);
+    }
+  );
+}
+
+async function profileFileTreeExpansionActions(
+  config: ProfileConfig,
+  workloadName: string,
+  runNumber: number,
+  traceOutputPath: string | null
+): Promise<ProfileResult[]> {
+  const profileUrl = createProfileUrl(
+    config.url,
+    config.instrumentationMode,
+    workloadName
+  );
+  const version = await fetchJson<InspectVersionResponse>(
+    `${config.browserUrl}/json/version`,
+    undefined,
+    config.timeoutMs
+  );
+  if (version.webSocketDebuggerUrl === '') {
+    throw new Error(
+      `Chrome at ${config.browserUrl} did not expose a browser WebSocket URL.`
+    );
+  }
+
+  const target = await createPageTarget(
+    config.browserUrl,
+    profileUrl,
+    config.timeoutMs
+  );
+  const cdp = await CdpClient.connect(
+    target.webSocketDebuggerUrl,
+    config.timeoutMs
+  );
+
+  try {
+    await cdp.send('Page.enable');
+    await cdp.send('Runtime.enable');
+    await navigateToFixture(cdp, profileUrl, config.timeoutMs);
+
+    const scenarios = await listExpansionActionScenarios(cdp);
+    if (scenarios.length === 0) {
+      throw new Error(
+        `No expansion action scenarios were available for workload ${workloadName}.`
+      );
+    }
+
+    const results: ProfileResult[] = [];
+    for (const scenario of scenarios) {
+      await prepareActionProfile(cdp, scenario.id);
+      const actionTraceOutputPath =
+        traceOutputPath == null
           ? null
-          : Number(pageSummary.visibleRowsReadyMs.toFixed(3)),
-      renderDurationMs: Number(pageSummary.renderDurationMs.toFixed(3)),
-      longTaskCount: pageSummary.longTaskCount ?? null,
-      longTaskTotalMs:
-        pageSummary.longTaskTotalMs == null
-          ? null
-          : Number(pageSummary.longTaskTotalMs.toFixed(3)),
-      longestLongTaskMs:
-        pageSummary.longestLongTaskMs == null
-          ? null
-          : Number(pageSummary.longestLongTaskMs.toFixed(3)),
-      instrumentation: summarizeInstrumentation(pageSummary),
-      trace: summarizeTrace(trace, pageSummary),
-      cpuProfile: summarizeCpuProfile(cpuProfile, callCountsByFunction),
-    };
+          : createActionTraceOutputPath(traceOutputPath, scenario.id);
+      const { pageSummary, trace, cpuProfile } =
+        await collectProfilingArtifacts(cdp, config.timeoutMs, () =>
+          profilePreparedAction(cdp)
+        );
+      const callCountsByFunction = config.includeCallCounts
+        ? await collectActionFunctionCallCounts(
+            cdp,
+            profileUrl,
+            config.timeoutMs,
+            scenario.id
+          )
+        : null;
+
+      results.push(
+        createProfileResult({
+          browserUrl: config.browserUrl,
+          callCountsByFunction,
+          cpuProfile,
+          pageSummary,
+          runNumber,
+          trace,
+          traceOutputPath: actionTraceOutputPath,
+          url: profileUrl,
+        })
+      );
+    }
+
+    return results;
   } finally {
     cdp.close();
     await closePageTarget(config.browserUrl, target.id, config.timeoutMs);
@@ -2746,6 +3016,9 @@ function printRunHumanSummary(
   showDominantTraceEvents: boolean
 ): void {
   const summaryRows = [['Visible rows', String(result.renderedItemCount)]];
+  if (result.actionDurationMs != null) {
+    summaryRows.push(['Action dispatch', formatMs(result.actionDurationMs)]);
+  }
 
   if (result.visibleRowsReadyMs != null) {
     summaryRows.push([
@@ -2795,6 +3068,34 @@ function printRunHumanSummary(
   }
 
   console.log(`Run ${result.runNumber}/${totalRuns}`);
+  if (result.action != null) {
+    console.log(
+      createTable(
+        ['Action', 'Value'],
+        [
+          ['Scenario', result.action.label],
+          ['Operation', result.action.operation],
+          ['Initial expansion', result.action.initialExpansion],
+          ['Target visibility', result.action.targetVisibility],
+          ['Target depth', String(result.action.targetDepth)],
+          ['Target path', result.action.targetPath],
+          [
+            'Target expanded',
+            `${String(result.action.targetWasExpandedBefore ?? 'n/a')} -> ${String(result.action.targetIsExpandedAfter ?? 'n/a')}`,
+          ],
+          [
+            'Rendered rows',
+            `${String(result.action.renderedItemCountBefore ?? 'n/a')} -> ${String(result.action.renderedItemCountAfter ?? 'n/a')}`,
+          ],
+        ],
+        {
+          alignments: ['left', 'left'],
+          maxWidths: [22, 78],
+        }
+      )
+    );
+    console.log('');
+  }
   console.log(
     createTable(['Metric', 'Value'], summaryRows, {
       alignments: ['left', 'right'],
@@ -2967,6 +3268,36 @@ function createJsonAggregateSummary(
   };
 }
 
+function createActionOutputs(results: ProfileResult[]): ProfileActionOutput[] {
+  const outputs: ProfileActionOutput[] = [];
+  const outputById = new Map<string, ProfileActionOutput>();
+
+  for (const result of results) {
+    if (result.action == null) {
+      continue;
+    }
+
+    let output = outputById.get(result.action.id);
+    if (output == null) {
+      output = {
+        action: result.action,
+        runs: [],
+        summary: createJsonAggregateSummary([]),
+      };
+      outputById.set(result.action.id, output);
+      outputs.push(output);
+    }
+
+    output.runs.push(result);
+    output.action = result.action;
+  }
+
+  return outputs.map((output) => ({
+    ...output,
+    summary: createJsonAggregateSummary(output.runs),
+  }));
+}
+
 function printAggregateHumanSummary(
   summary: JsonAggregateSummary,
   measuredRuns: number
@@ -2993,6 +3324,66 @@ function printAggregateHumanSummary(
       }
     )
   );
+}
+
+function printActionProfilesHumanSummary(
+  actionProfiles: ProfileActionOutput[],
+  actionSummary: JsonAggregateSummary | null,
+  measuredRuns: number
+): void {
+  if (actionProfiles.length === 0) {
+    return;
+  }
+
+  console.log('Action Profile Summary');
+  console.log(
+    createTable(
+      [
+        'Action',
+        'Op',
+        'State',
+        'Visibility',
+        'Depth',
+        'Dispatch med',
+        'Ready med',
+        'Paint med',
+        'CPU med',
+        'Runs',
+      ],
+      actionProfiles.map((profile) => [
+        profile.action.label,
+        profile.action.operation,
+        profile.action.initialExpansion,
+        profile.action.targetVisibility,
+        String(profile.action.targetDepth),
+        formatMs(profile.summary.metrics.actionDurationMs.medianMs),
+        formatMs(profile.summary.metrics.visibleRowsReadyMs.medianMs),
+        formatMs(profile.summary.metrics.postPaintReadyMs.medianMs),
+        formatMs(profile.summary.metrics.sampledCpuTimeMs.medianMs),
+        `${profile.summary.measuredRuns}/${measuredRuns}`,
+      ]),
+      {
+        alignments: [
+          'left',
+          'left',
+          'left',
+          'left',
+          'right',
+          'right',
+          'right',
+          'right',
+          'right',
+          'right',
+        ],
+        maxWidths: [34, 8, 8, 10, 7, 14, 12, 12, 12, 8],
+      }
+    )
+  );
+
+  if (actionSummary != null) {
+    console.log('');
+    printAggregateHumanSummary(actionSummary, actionSummary.measuredRuns);
+  }
 }
 
 function formatSignedNumber(
@@ -3115,6 +3506,7 @@ function createLegacyConfigSummaryFromRuns(
   });
 
   return {
+    actionsMode: 'off',
     browserUrl: firstRun?.browserUrl ?? DEFAULT_BROWSER_URL,
     url: normalizeComparableUrl(firstRun?.url ?? DEFAULT_URL),
     workloads:
@@ -3124,6 +3516,7 @@ function createLegacyConfigSummaryFromRuns(
     warmupRuns: 0,
     instrumentationMode: inferInstrumentationModeFromUrl(firstRun?.url ?? ''),
     includeCallCounts,
+    profileRender: true,
     showDominantTraceEvents: false,
   };
 }
@@ -3152,7 +3545,16 @@ function normalizeProfileBenchmarkOutput(
   if (Array.isArray(rawValue.workloads)) {
     const workloads = (rawValue.workloads as ProfileWorkloadOutput[]).map(
       (workloadOutput) => {
+        const actionProfiles = workloadOutput.actionProfiles ?? [];
         return {
+          actionProfiles,
+          actionSummary:
+            workloadOutput.actionSummary ??
+            (actionProfiles.length === 0
+              ? null
+              : createJsonAggregateSummary(
+                  actionProfiles.flatMap((profile) => profile.runs)
+                )),
           workload: workloadOutput.workload,
           runs: workloadOutput.runs,
           summary: createJsonAggregateSummary(workloadOutput.runs),
@@ -3181,10 +3583,12 @@ function normalizeProfileBenchmarkOutput(
         ),
         runs: rawConfig.runs ?? workloads[0].runs.length,
         warmupRuns: rawConfig.warmupRuns ?? fallbackConfig.warmupRuns,
+        actionsMode: rawConfig.actionsMode ?? fallbackConfig.actionsMode,
         instrumentationMode:
           rawConfig.instrumentationMode ?? fallbackConfig.instrumentationMode,
         includeCallCounts:
           rawConfig.includeCallCounts ?? fallbackConfig.includeCallCounts,
+        profileRender: rawConfig.profileRender ?? fallbackConfig.profileRender,
         showDominantTraceEvents:
           rawConfig.showDominantTraceEvents ??
           fallbackConfig.showDominantTraceEvents,
@@ -3199,7 +3603,7 @@ function normalizeProfileBenchmarkOutput(
       throw new Error(`No benchmark runs found in ${sourcePath}.`);
     }
 
-    const workloadOutput = createWorkloadOutput(runs);
+    const workloadOutput = createWorkloadOutput(runs[0].workload, runs, []);
     return {
       benchmark: 'treesFileTreeProfile',
       config: createLegacyConfigSummaryFromRuns(runs),
@@ -3327,7 +3731,8 @@ function printWorkloadHumanSummary(
       'Expanded folders',
       formatCount(workloadOutput.workload.expandedFolderCount),
     ],
-    ['Measured runs', String(workloadOutput.runs.length)],
+    ['Render runs', String(workloadOutput.runs.length)],
+    ['Action scenarios', String(workloadOutput.actionProfiles.length)],
     ['Warmup runs', String(config.warmupRuns)],
   ];
 
@@ -3355,6 +3760,17 @@ function printWorkloadHumanSummary(
     printAggregateHumanSummary(
       workloadOutput.summary,
       workloadOutput.runs.length
+    );
+  }
+
+  if (workloadOutput.actionProfiles.length > 0) {
+    if (workloadOutput.runs.length > 0) {
+      console.log('');
+    }
+    printActionProfilesHumanSummary(
+      workloadOutput.actionProfiles,
+      workloadOutput.actionSummary,
+      config.runs
     );
   }
 }
@@ -3473,6 +3889,8 @@ function printRunsHumanSummary(output: ProfileBenchmarkOutput): void {
     ['Measured runs/workload', String(output.config.runs)],
     ['Warmup runs/workload', String(output.config.warmupRuns)],
     ['Instrumentation', output.config.instrumentationMode],
+    ['Render profile', output.config.profileRender ? 'on' : 'off'],
+    ['Action profiles', output.config.actionsMode],
     ['Call counts', output.config.includeCallCounts ? 'on' : 'off'],
     [
       'Dominant trace events',
@@ -3506,21 +3924,33 @@ async function runWorkloadProfile(
   workloadName: string
 ): Promise<ProfileWorkloadOutput> {
   const results: ProfileResult[] = [];
+  const actionResults: ProfileResult[] = [];
 
   for (
     let warmupRunNumber = 1;
     warmupRunNumber <= config.warmupRuns;
     warmupRunNumber += 1
   ) {
-    await profileFileTreeRender(
-      {
-        ...config,
-        includeCallCounts: false,
-      },
-      workloadName,
-      warmupRunNumber,
-      null
-    );
+    const warmupConfig = {
+      ...config,
+      includeCallCounts: false,
+    };
+    if (config.profileRender) {
+      await profileFileTreeRender(
+        warmupConfig,
+        workloadName,
+        warmupRunNumber,
+        null
+      );
+    }
+    if (config.actionsMode === 'expansion') {
+      await profileFileTreeExpansionActions(
+        warmupConfig,
+        workloadName,
+        warmupRunNumber,
+        null
+      );
+    }
   }
 
   for (let runNumber = 1; runNumber <= config.runs; runNumber += 1) {
@@ -3531,16 +3961,34 @@ async function runWorkloadProfile(
       runNumber,
       config.runs
     );
-    const result = await profileFileTreeRender(
-      config,
-      workloadName,
-      runNumber,
-      traceOutputPath
-    );
-    results.push(result);
+    if (config.profileRender) {
+      const result = await profileFileTreeRender(
+        config,
+        workloadName,
+        runNumber,
+        traceOutputPath
+      );
+      results.push(result);
+    }
+    if (config.actionsMode === 'expansion') {
+      actionResults.push(
+        ...(await profileFileTreeExpansionActions(
+          config,
+          workloadName,
+          runNumber,
+          traceOutputPath
+        ))
+      );
+    }
   }
 
-  return createWorkloadOutput(results);
+  const actionProfiles = createActionOutputs(actionResults);
+  const workload = results[0]?.workload ?? actionResults[0]?.workload;
+  if (workload == null) {
+    throw new Error(`No profile results were produced for ${workloadName}.`);
+  }
+
+  return createWorkloadOutput(workload, results, actionProfiles);
 }
 
 async function main(): Promise<void> {

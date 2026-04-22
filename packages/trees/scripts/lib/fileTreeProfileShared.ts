@@ -25,6 +25,33 @@ export interface FileTreeProfileWorkloadSummary {
   name: FileTreeProfileWorkloadName;
 }
 
+export type FileTreeProfileActionOperation = 'collapse' | 'expand';
+export type FileTreeProfileActionInitialExpansion = 'closed' | 'open';
+export type FileTreeProfileActionTargetVisibility =
+  | 'hidden'
+  | 'offscreen'
+  | 'visible';
+
+export interface FileTreeProfileActionSetupOperation {
+  operation: FileTreeProfileActionOperation;
+  path: string;
+}
+
+export interface FileTreeProfileActionSummary {
+  id: string;
+  initialExpansion: FileTreeProfileActionInitialExpansion;
+  label: string;
+  operation: FileTreeProfileActionOperation;
+  renderedItemCountAfter?: number;
+  renderedItemCountBefore?: number;
+  setupOperations: FileTreeProfileActionSetupOperation[];
+  targetDepth: number;
+  targetIsExpandedAfter?: boolean;
+  targetPath: string;
+  targetVisibility: FileTreeProfileActionTargetVisibility;
+  targetWasExpandedBefore?: boolean;
+}
+
 export interface FileTreeProfilePhaseSummary {
   count: number;
   durationMs: number;
@@ -47,10 +74,13 @@ export interface FileTreeProfileInstrumentationSummary {
 }
 
 export interface FileTreeProfilePageSummary {
+  action?: FileTreeProfileActionSummary;
+  actionDurationMs?: number;
   instrumentation: FileTreeProfileInstrumentationSummary | null;
   longTaskCount: number;
   longTaskTotalMs: number;
   longestLongTaskMs: number;
+  profileKind?: 'action' | 'render';
   renderDurationMs: number;
   renderedItemCount: number;
   resultText: string | null;
@@ -76,14 +106,18 @@ export function getFileTreeProfileWorkload(
 }
 
 export function createFileTreeProfileFixtureOptions(
-  workload: VirtualizationWorkload
+  workload: VirtualizationWorkload,
+  options: {
+    initialExpansion?: FileTreeProfileActionInitialExpansion;
+  } = {}
 ) {
+  const initialExpansion = options.initialExpansion ?? 'open';
   return {
     flattenEmptyDirectories: true,
     // All profiling workloads expand every derived directory, so open-default
     // startup is semantically identical to replaying a huge explicit expanded
     // path list and avoids constructor-side expansion normalization work.
-    initialExpansion: 'open' as const,
+    initialExpansion,
     preparedInput: preparePresortedFileTreeInput(workload.files),
     initialVisibleRowCount: FILE_TREE_PROFILE_VIEWPORT_HEIGHT / 30,
   };
