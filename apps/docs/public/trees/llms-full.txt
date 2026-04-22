@@ -793,6 +793,23 @@ variables the tree already understands.
 That gives you matching panel colors, selection colors, search-field colors, and
 Git-status colors without rebuilding the theme system by hand.
 
+#### Set density with `density`
+
+Pass `density` to `useFileTree` (or `preloadFileTree`, or the vanilla `FileTree`
+constructor) to bundle row height and spacing into one option. The keyword form
+(`'compact'`, `'default'`, `'relaxed'`) resolves both at once; a numeric form
+keeps the default row height and supplies a custom spacing factor. Every runtime
+— vanilla CSR, vanilla SSR, React CSR, and React SSR — paints
+`--trees-item-height` and `--trees-density-override` onto the host from the
+resolved density so the virtualized and painted row heights stay aligned.
+Caller-set inline values on the host still win, so you can override either
+variable directly when you need a one-off. Set `itemHeight` only when you need a
+row height that doesn't match a preset.
+
+The keyword presets are exported as `FILE_TREE_DENSITY_PRESETS` so SSR helpers
+like `initialVisibleRowCount` can divide by the preset's row height without
+hard-coding it.
+
 #### Choose the right styling layer
 
 Use:
@@ -1143,7 +1160,10 @@ The main rendering knobs are:
   layout
 - `initialVisibleRowCount`, when you want to budget SSR or first-render work
   before measurement
-- `itemHeight`, when your design changes row density enough to matter
+- `density`, when your design changes row density enough to matter — pass
+  `'compact' | 'default' | 'relaxed'` (or a custom numeric factor) to resolve
+  both the row height and the surrounding spacing in one place. Use `itemHeight`
+  only when you need a row height that doesn't match a preset.
 - `overscan`, when you need to trade a little extra work for smoother scrolling
 
 Give the rendered tree host a real CSS height. The row-count hint only shapes
@@ -1394,7 +1414,8 @@ runtimes.
 | `gitStatus`               | Built-in Git-style row signals.                                      | Added, modified, deleted, ignored, renamed, and untracked states.            |
 | `icons`                   | Built-in icon set or icon configuration object.                      | Set selection, color mode, remaps, or sprite-sheet extension.                |
 | `renderRowDecoration`     | Custom non-Git row signal renderer.                                  | Generated-file badges, remote markers, validation hints.                     |
-| `itemHeight`              | Row-height hint for the virtualized view.                            | Custom density.                                                              |
+| `density`                 | Density preset or custom spacing factor.                             | Tune row height and spacing in one place.                                    |
+| `itemHeight`              | Explicit row-height override.                                        | Row height that doesn't match a `density` preset.                            |
 | `overscan`                | Extra rows rendered outside the visible window.                      | Smooth scrolling tradeoffs.                                                  |
 | `initialVisibleRowCount`  | Optional first-render row budget before the browser measures height. | Tune SSR and hydration work without pinning steady-state size.               |
 | `unsafeCSS`               | Advanced CSS injection into the tree shadow root.                    | Narrow escape hatch when supported styling surfaces are not enough.          |
@@ -1469,9 +1490,16 @@ For deeper lookup, jump to [Styling and theming](#styling-and-theming) and
 
 #### Scale and rendering settings
 
-`initialVisibleRowCount`, `itemHeight`, and `overscan` are rendering knobs, not
-onboarding concepts. The rendered container sets steady-state height; these
-options only tune the first-render budget and the virtualized row window.
+`initialVisibleRowCount`, `density`, `itemHeight`, and `overscan` are rendering
+knobs, not onboarding concepts. The rendered container sets steady-state height;
+these options only tune the first-render budget, visual density, and the
+virtualized row window.
+
+For density, prefer the `density` keyword (`'compact' | 'default' | 'relaxed'`)
+or a numeric factor — it resolves both row height and spacing in one place, and
+the React `<FileTree>` wrapper paints `--trees-item-height` and
+`--trees-density-override` for you. Reach for `itemHeight` only when you need a
+row height that doesn't match a preset.
 
 Use [Handle large trees efficiently](#handle-large-trees-efficiently) when scale
 becomes the real problem.

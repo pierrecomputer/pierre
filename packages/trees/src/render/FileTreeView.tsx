@@ -768,6 +768,28 @@ function getContextMenuAnchorButton(
   return rowButton?.dataset.itemParked === 'true' ? null : rowButton;
 }
 
+function getMountedStickyRowPaths(rootElement: HTMLElement | null): string[] {
+  if (rootElement == null) {
+    return [];
+  }
+
+  return Array.from(
+    rootElement.querySelectorAll('button[data-file-tree-sticky-row="true"]')
+  )
+    .filter((element): element is HTMLElement => element instanceof HTMLElement)
+    .map((element) => element.dataset.fileTreeStickyPath ?? null)
+    .filter((path): path is string => path != null);
+}
+
+// Sticky keyboard handling runs during the browser event that follows a scroll.
+// Reading the mounted overlay refs keeps that event aligned with the row the
+// user can currently focus, even if the React layout snapshot is one frame old.
+function getMountedStickyRowPathSet(
+  paths: readonly string[]
+): ReadonlySet<string> {
+  return new Set(paths);
+}
+
 function createContextMenuItem(
   row: FileTreeVisibleRow,
   path: string
@@ -1322,6 +1344,11 @@ export function FileTreeView({
   contextMenuStateRef.current = contextMenuState;
 
   const pendingStickyFocusPathRef = useRef<string | null>(null);
+  const pendingStickyKeyboardFocusPathRef = useRef<string | null>(null);
+  const pendingStickyKeyboardViewportOffsetRef = useRef<{
+    path: string;
+    viewportOffset: number;
+  } | null>(null);
   const debugContextMenuTriggerPathRef = useRef<string | null>(null);
   const debugDisableScrollSuppressionRef = useRef(false);
 
@@ -2203,6 +2230,27 @@ export function FileTreeView({
       return;
     }
 
+    const activeTreeElement =
+      rootRef.current == null ? null : getActiveTreeElement(rootRef.current);
+    const mountedStickyRowPaths = getMountedStickyRowPaths(rootRef.current);
+    const mountedStickyRowPathSet = getMountedStickyRowPathSet(
+      mountedStickyRowPaths
+    );
+    const activeStickyFocusPath =
+      activeTreeElement?.dataset.fileTreeStickyPath ?? null;
+    const activeStickyRowOwnsFocus =
+      activeTreeElement?.dataset.fileTreeStickyRow === 'true' &&
+      activeStickyFocusPath != null;
+    if (
+      activeStickyRowOwnsFocus &&
+      activeStickyFocusPath !== focusedPath &&
+      mountedStickyRowPathSet.has(activeStickyFocusPath)
+    ) {
+      controller.focusPath(activeStickyFocusPath);
+    }
+
+    const effectiveFocusedPath = controller.getFocusedPath();
+    const effectiveFocusedIndex = controller.getFocusedIndex();
     const focusedItem = controller.getFocusedItem();
     if (focusedItem == null) {
       return;
@@ -2211,6 +2259,56 @@ export function FileTreeView({
     const focusedDirectoryItem = isFileTreeDirectoryHandle(focusedItem)
       ? focusedItem
       : null;
+    const startedFromStickyRow =
+      effectiveFocusedPath != null &&
+      (stickyRowPathSet.has(effectiveFocusedPath) ||
+        (activeStickyRowOwnsFocus &&
+          activeStickyFocusPath === effectiveFocusedPath &&
+          mountedStickyRowPathSet.has(effectiveFocusedPath)));
+    const shouldPreserveLocalStickyFocusMove =
+      event.key === 'ArrowDown' ||
+      event.key === 'ArrowUp' ||
+      (event.key === 'ArrowRight' &&
+        focusedDirectoryItem != null &&
+        focusedDirectoryItem.isExpanded());
+    const focusedParkedRowElement =
+      rootRef.current == null || effectiveFocusedPath == null
+        ? null
+        : (Array.from(
+            rootRef.current.querySelectorAll(
+              'button[data-item-focused="true"][data-item-parked="true"]'
+            )
+          ).find(
+            (element): element is HTMLElement =>
+              element instanceof HTMLElement &&
+              element.dataset.itemPath === effectiveFocusedPath
+          ) ?? null);
+    const scrollElement = scrollRef.current;
+    const scrollElementRect = scrollElement?.getBoundingClientRect() ?? null;
+    const activeElementTopWithinViewport =
+      scrollElementRect == null || activeTreeElement == null
+        ? null
+        : activeTreeElement.getBoundingClientRect().top - scrollElementRect.top;
+    const parkedElementTopWithinViewport =
+      scrollElementRect == null || focusedParkedRowElement == null
+        ? null
+        : focusedParkedRowElement.getBoundingClientRect().top -
+          scrollElementRect.top;
+    const minimumStickyKeyboardViewportOffset = Math.max(
+      0,
+      stickyOverlayHeight - itemHeight
+    );
+    const stickyKeyboardViewportOffset = Math.max(
+      0,
+      Math.min(
+        parkedElementTopWithinViewport ??
+          Math.max(
+            activeElementTopWithinViewport ?? 0,
+            minimumStickyKeyboardViewportOffset
+          ),
+        Math.max(0, resolvedViewportHeight - itemHeight)
+      )
+    );
     let handled = true;
     if (event.shiftKey && event.key === 'ArrowDown') {
       controller.extendSelectionFromFocused(1);
@@ -2219,16 +2317,20 @@ export function FileTreeView({
     } else if (
       contextMenuEnabled &&
       isContextMenuOpenKey(event) &&
-      focusedPath != null &&
-      focusedIndex >= 0
+      effectiveFocusedPath != null &&
+      effectiveFocusedIndex >= 0
     ) {
       const focusedRow =
-        controller.getVisibleRows(focusedIndex, focusedIndex)[0] ?? null;
-      const focusedButton = rowButtonRefs.current.get(focusedPath) ?? null;
+        controller.getVisibleRows(
+          effectiveFocusedIndex,
+          effectiveFocusedIndex
+        )[0] ?? null;
+      const focusedButton =
+        rowButtonRefs.current.get(effectiveFocusedPath) ?? null;
       if (focusedRow == null || focusedButton == null) {
         handled = false;
       } else {
-        openContextMenuForRow(focusedRow, focusedPath);
+        openContextMenuForRow(focusedRow, effectiveFocusedPath);
       }
     } else if ((event.ctrlKey || event.metaKey) && isSpaceSelectionKey(event)) {
       controller.toggleFocusedSelection();
@@ -2281,6 +2383,41 @@ export function FileTreeView({
     }
 
     setLastContextMenuInteraction('focus');
+    const nextFocusedPath = controller.getFocusedPath();
+    const nextFocusedPathIsMountedSticky =
+      nextFocusedPath != null &&
+      (stickyRowPathSet.has(nextFocusedPath) ||
+        mountedStickyRowPathSet.has(nextFocusedPath));
+    if (
+      shouldPreserveLocalStickyFocusMove &&
+      startedFromStickyRow &&
+      nextFocusedPath != null &&
+      nextFocusedPath !== effectiveFocusedPath &&
+      nextFocusedPathIsMountedSticky
+    ) {
+      pendingStickyKeyboardFocusPathRef.current = nextFocusedPath;
+      pendingStickyKeyboardViewportOffsetRef.current = null;
+      domFocusOwnerRef.current = true;
+      setActiveItemPath((previousPath) =>
+        previousPath === nextFocusedPath ? previousPath : nextFocusedPath
+      );
+    } else {
+      pendingStickyKeyboardFocusPathRef.current = null;
+      if (
+        event.key === 'ArrowUp' &&
+        startedFromStickyRow &&
+        nextFocusedPath != null &&
+        nextFocusedPath !== effectiveFocusedPath
+      ) {
+        pendingStickyKeyboardViewportOffsetRef.current = {
+          path: nextFocusedPath,
+          viewportOffset: stickyKeyboardViewportOffset,
+        };
+        domFocusOwnerRef.current = true;
+      } else {
+        pendingStickyKeyboardViewportOffsetRef.current = null;
+      }
+    }
 
     // Focus-only and selection-only controller updates do not change
     // range/itemCount, so force a render tick before the DOM-focus sync effect
@@ -2816,9 +2953,18 @@ export function FileTreeView({
     const preservedViewportOffset =
       restoreTreeFocusViewportOffsetRef.current ?? 0;
     const pendingStickyFocusPath = pendingStickyFocusPathRef.current;
+    const pendingStickyKeyboardFocusPath =
+      pendingStickyKeyboardFocusPathRef.current;
+    const pendingStickyKeyboardViewportOffset =
+      pendingStickyKeyboardViewportOffsetRef.current;
     const focusWithinTree = activeTreeElement != null;
     const shouldOwnDomFocus = domFocusOwnerRef.current || focusWithinTree;
     const focusedPathChanged = previousFocusedPathRef.current !== focusedPath;
+    const shouldPreserveStickyKeyboardFocusViewport =
+      pendingStickyKeyboardFocusPath != null &&
+      pendingStickyKeyboardFocusPath === focusedPath &&
+      focusedPath != null &&
+      stickyRowPathSet.has(focusedPath);
 
     const shouldRestoreFocusedRowViewportOffset =
       shouldRestoreTreeFocusAfterSearchClose &&
@@ -2841,13 +2987,26 @@ export function FileTreeView({
         totalScrollableHeight,
         stickyOverlayHeight
       );
+    const shouldRestoreStickyKeyboardViewportOffset =
+      pendingStickyKeyboardViewportOffset != null &&
+      pendingStickyKeyboardViewportOffset.path === focusedPath &&
+      scrollFocusedRowToViewportOffset(
+        scrollElement,
+        focusedIndex,
+        itemHeight,
+        resolvedViewportHeight,
+        totalScrollableHeight,
+        pendingStickyKeyboardViewportOffset.viewportOffset
+      );
 
     if (
       shouldRestoreStickyFocusedRowViewportOffset ||
+      shouldRestoreStickyKeyboardViewportOffset ||
       shouldRestoreFocusedRowViewportOffset ||
       (shouldOwnDomFocus &&
         focusedPathChanged &&
         pendingStickyFocusPath !== focusedPath &&
+        !shouldPreserveStickyKeyboardFocusViewport &&
         scrollFocusedRowIntoView(
           scrollElement,
           focusedIndex,
@@ -2894,12 +3053,20 @@ export function FileTreeView({
       focusedPathChanged ||
       shouldRestoreTreeFocusAfterSearchClose ||
       pendingStickyFocusPath === focusedPath ||
+      pendingStickyKeyboardFocusPath === focusedPath ||
+      pendingStickyKeyboardViewportOffset?.path === focusedPath ||
       activeTreeElementPath == null ||
       activeTreeElementPath !== focusedPath
     ) {
       focusElement(focusedButton);
       if (pendingStickyFocusPath === focusedPath) {
         pendingStickyFocusPathRef.current = null;
+      }
+      if (pendingStickyKeyboardFocusPath === focusedPath) {
+        pendingStickyKeyboardFocusPathRef.current = null;
+      }
+      if (pendingStickyKeyboardViewportOffset?.path === focusedPath) {
+        pendingStickyKeyboardViewportOffsetRef.current = null;
       }
       restoreTreeFocusAfterSearchCloseRef.current = false;
       restoreTreeFocusViewportOffsetRef.current = null;
@@ -2917,6 +3084,7 @@ export function FileTreeView({
     resolvedViewportHeight,
     searchEnabled,
     stickyOverlayHeight,
+    stickyRowPathSet,
     totalScrollableHeight,
     visibleRows,
   ]);
