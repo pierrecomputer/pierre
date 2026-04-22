@@ -218,7 +218,7 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
           <div
             className={mobileView === 'legend' ? undefined : 'hidden md:block'}
           >
-            <GitStatusLegend colorMode={colorMode} />
+            <GitStatusLegend />
           </div>
         </div>
       </div>
@@ -236,76 +236,60 @@ const GIT_STATUS_LEGEND: ReadonlyArray<{
     | 'ignored'
     | 'descendant';
   badge: string | null;
-  light: string;
-  dark: string;
+  badgeClassName?: string;
   badgeOpacity?: number;
   description: string;
 }> = [
   {
     status: 'modified',
     badge: 'M',
-    light: '#1ca1c7',
-    dark: '#08c0ef',
+    badgeClassName: 'text-[#1ca1c7] dark:text-[#08c0ef]',
     description: 'Tracked file with uncommitted changes',
   },
   {
     status: 'added',
     badge: 'A',
-    light: '#16a994',
-    dark: '#00cab1',
+    badgeClassName: 'text-[#16a994] dark:text-[#00cab1]',
     description: 'New file staged in the working tree',
   },
   {
     status: 'deleted',
     badge: 'D',
-    light: '#ff2e3f',
-    dark: '#ff6762',
+    badgeClassName: 'text-[#ff2e3f] dark:text-[#ff6762]',
     description: 'Tracked file removed from the working tree',
   },
   {
     status: 'renamed',
     badge: 'R',
-    light: '#d5a910',
-    dark: '#ffd452',
+    badgeClassName: 'text-[#d5a910] dark:text-[#ffd452]',
     description: 'Tracked file moved or renamed',
   },
   {
     status: 'untracked',
     badge: 'U',
-    light: '#16a994',
-    dark: '#00cab1',
+    badgeClassName: 'text-[#16a994] dark:text-[#00cab1]',
     description: 'New file not yet tracked by Git',
   },
   {
     status: 'ignored',
     badge: null,
-    light: '#adadb1',
-    dark: '#4a4a4e',
     description: 'Path excluded by gitignore; inherits muted styling',
   },
   {
     status: 'descendant',
     badge: '●',
-    light: '#1ca1c7',
-    dark: '#08c0ef',
+    badgeClassName: 'text-[#1ca1c7] dark:text-[#08c0ef]',
     badgeOpacity: 0.5,
     description: 'Folder contains changed descendants',
   },
 ];
 
-function GitStatusLegend({ colorMode }: { colorMode: 'light' | 'dark' }) {
-  const isDark = colorMode === 'dark';
-  const containerClass = [
-    'bg-background text-foreground w-full overflow-hidden rounded-lg border border-[var(--color-border)] md:flex-none dark:bg-[#141415] order-first md:order-last',
-    isDark ? 'dark' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+function GitStatusLegend() {
   return (
-    <div className={containerClass} style={{ colorScheme: colorMode }}>
+    <div className="bg-background text-foreground order-first w-full overflow-hidden rounded-lg border border-[var(--color-border)] md:order-last md:flex-none">
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-muted/50 border-b border-[var(--color-border)] dark:bg-[#070707] dark:text-neutral-400">
+          <tr className="bg-muted/50 border-b border-[var(--color-border)]">
             <th className="w-14 px-4 py-2.5 text-left font-medium">
               Indicator
             </th>
@@ -315,7 +299,6 @@ function GitStatusLegend({ colorMode }: { colorMode: 'light' | 'dark' }) {
         </thead>
         <tbody>
           {GIT_STATUS_LEGEND.map((entry) => {
-            const statusColor = isDark ? entry.dark : entry.light;
             return (
               <tr
                 key={entry.status}
@@ -329,9 +312,8 @@ function GitStatusLegend({ colorMode }: { colorMode: 'light' | 'dark' }) {
                   ) : (
                     <span
                       aria-label={entry.status}
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-xs font-semibold tabular-nums shadow-[inset_0_0_0_1px_rgb(0_0_0_/_0.05)]"
+                      className={`inline-flex h-6 w-6 items-center justify-center rounded-md text-xs font-semibold tabular-nums shadow-[inset_0_0_0_1px_rgb(0_0_0_/_0.05)] ${entry.badgeClassName ?? ''}`}
                       style={{
-                        color: statusColor,
                         opacity: entry.badgeOpacity,
                       }}
                     >
@@ -340,9 +322,9 @@ function GitStatusLegend({ colorMode }: { colorMode: 'light' | 'dark' }) {
                   )}
                 </td>
                 <td className="px-4 py-2">
-                  <code className="dark:text-neutral-300">{entry.status}</code>
+                  <code>{entry.status}</code>
                 </td>
-                <td className="text-muted-foreground px-4 py-2 dark:text-neutral-400">
+                <td className="text-muted-foreground px-4 py-2">
                   {entry.description}
                 </td>
               </tr>
