@@ -1299,7 +1299,7 @@ function renderStyledRow(
             if (!contextMenuRightClickEnabled) {
               return;
             }
-            controller.focusPath(targetPath);
+            controller.focusMountedPathFromInput(targetPath);
             openContextMenuForRow(row, targetPath, {
               anchorRect: createAnchorRectFromPoint(
                 event.clientX,
@@ -1311,7 +1311,7 @@ function renderStyledRow(
         : undefined,
     onFocus: !isSticky
       ? () => {
-          controller.focusPath(targetPath);
+          controller.focusMountedPathFromInput(targetPath);
         }
       : undefined,
     onKeyDown: !isSticky ? onKeyDown : undefined,
@@ -3591,7 +3591,6 @@ export function FileTreeView({
       targetPath: string,
       mode: FileTreeRenderedRowMode
     ): void => {
-      const item = controller.getItem(targetPath);
       const plan = computeFileTreeRowClickPlan({
         event: {
           ctrlKey: event.ctrlKey,
@@ -3599,7 +3598,7 @@ export function FileTreeView({
           shiftKey: event.shiftKey,
         },
         isDirectory: row.kind === 'directory',
-        isSearchOpen: controller.isSearchOpen(),
+        isSearchOpen,
         mode,
       });
 
@@ -3611,7 +3610,7 @@ export function FileTreeView({
           controller.togglePathSelectionFromInput(targetPath);
           break;
         case 'single':
-          controller.selectOnlyPath(targetPath);
+          controller.selectOnlyMountedPathFromInput(targetPath);
           break;
       }
 
@@ -3626,7 +3625,7 @@ export function FileTreeView({
         clickedElement != null &&
         clickedElement.dataset.itemParked !== 'true';
 
-      item?.focus();
+      controller.focusMountedPathFromInput(targetPath);
       if (shouldExposeFocusedTrigger) {
         domFocusOwnerRef.current = true;
         setActiveItemPath((previousPath) =>
@@ -3634,8 +3633,8 @@ export function FileTreeView({
         );
         setLastContextMenuInteraction('focus');
       }
-      if (plan.toggleDirectory && isFileTreeDirectoryHandle(item)) {
-        item.toggle();
+      if (plan.toggleDirectory && row.kind === 'directory') {
+        controller.toggleMountedDirectoryFromInput(targetPath, row.isExpanded);
       }
       if (plan.closeSearch) {
         controller.closeSearch();
@@ -3648,6 +3647,7 @@ export function FileTreeView({
     },
     [
       controller,
+      isSearchOpen,
       layoutSnapshot.visible.endIndex,
       layoutSnapshot.visible.startIndex,
       revealCanonicalRowAtStickyOffset,
