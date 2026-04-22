@@ -1,7 +1,8 @@
 'use client';
 
 import { File } from '@pierre/diffs/react';
-import { useTheme } from 'next-themes';
+
+import { useTheme } from '@/components/theme-provider';
 
 export function TreeCssViewer({
   contents,

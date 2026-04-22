@@ -22,6 +22,8 @@ import { PRODUCTS } from '@/app/product-config';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 const PRESELECTED_FILE = 'src/components/Button.tsx';
+const DENSITY_DESCRIPTION_SUFFIX =
+  " to tune the tree's proportions in one place — the keyword resolves both the row height and the spacing factor. See the ";
 
 const DENSITY_PRESETS = [
   {
@@ -108,9 +110,8 @@ export function DemoDensityClient({ preloadedData }: DemoDensityClientProps) {
             Pass <code>density=&quot;compact&quot;</code>,{' '}
             <code>&quot;default&quot;</code>, or{' '}
             <code>&quot;relaxed&quot;</code> (or a custom numeric factor) to{' '}
-            <code>useFileTree</code> to tune the tree&apos;s proportions in one
-            place — the keyword resolves both the row height and the spacing
-            factor. See the{' '}
+            <code>useFileTree</code>
+            {DENSITY_DESCRIPTION_SUFFIX}
             <Link
               href={`${PRODUCTS.trees.docsPath}#styling-and-theming`}
               className="inline-link"
