@@ -1925,9 +1925,6 @@ export const TREE_APP_DEMO_PATHS: readonly string[] =
   Object.keys(TREE_APP_DEMO_FILES);
 
 export const TREE_APP_DEMO_INITIAL_EXPANDED_PATHS: readonly string[] = [
-  '.github',
-  '.github/workflows',
-  'docs',
   'src',
   'src/components',
   'src/hooks',
