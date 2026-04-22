@@ -1794,6 +1794,7 @@ export function FileTreeView({
 
   const shouldSuppressContextMenu = (): boolean => {
     return (
+      isScrollingRef.current === true ||
       touchLongPressTimerRef.current != null ||
       touchDragActiveRef.current === true
     );
@@ -3543,6 +3544,10 @@ export function FileTreeView({
   );
 
   const openMenuFromTrigger = (): void => {
+    if (isScrollingRef.current) {
+      return;
+    }
+
     if (!contextMenuButtonTriggerEnabled) {
       return;
     }

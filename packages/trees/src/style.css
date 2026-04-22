@@ -872,6 +872,27 @@
     pointer-events: auto;
   }
 
+  /* Sticky rows opt back into pointer events because the overlay wrapper is
+   * inert. During scroll, put them back under the same hover suppression as
+   * the virtualized list so translucent hover states and menu triggers do not
+   * paint over rows moving beneath the sticky stack. */
+  [data-file-tree-virtualized-root='true'][data-is-scrolling]
+    [data-type='item'][data-file-tree-sticky-row='true'] {
+    pointer-events: none;
+  }
+
+  [data-file-tree-virtualized-root='true'][data-is-scrolling]
+    [data-type='item'][data-file-tree-sticky-row='true']:hover:not(
+      [data-item-selected='true']
+    ),
+  [data-file-tree-virtualized-root='true'][data-is-scrolling]
+    [data-type='item'][data-file-tree-sticky-row='true'][data-item-context-hover='true']:not(
+      [data-item-selected='true']
+    ) {
+    background-color: var(--trees-bg);
+    --truncate-marker-background-overlay-color: transparent;
+  }
+
   [data-item-selected='true']:has(+ [data-item-selected='true']) {
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;

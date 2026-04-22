@@ -134,10 +134,40 @@ type StickyContextMenuMeasurement = {
   steps: StickyContextMenuStep[];
 };
 
+type StickyHoverSuppressionSample = {
+  anchorDisplay: string | null;
+  anchorVisible: boolean;
+  menuPath: string | null;
+  rowBackgroundColor: string | null;
+  rowContextHovered: boolean;
+  rowMatchesHover: boolean;
+  rowMounted: boolean;
+  rowPointerEvents: string | null;
+  rootIsScrolling: boolean;
+  triggerDisplay: string | null;
+  triggerVisible: boolean;
+  virtualizedListIsScrolling: boolean;
+};
+
+type StickyContextMenuDispatchResult = {
+  defaultPrevented: boolean;
+  menuPath: string | null;
+};
+
+type StickyRowRect = {
+  height: number;
+  left: number;
+  top: number;
+  width: number;
+};
+
 declare global {
   interface Window {
     __stickyContextMenuDriftFixtureReady?: boolean;
     __stickyContextMenuDriftProbe?: {
+      dispatchStickyContextMenu: (
+        path: string
+      ) => StickyContextMenuDispatchResult;
       findScenarioCandidate: (options?: {
         maxScrollTop?: number;
         minDepth?: number;
@@ -145,6 +175,7 @@ declare global {
         settleFrames?: number;
         step?: number;
       }) => Promise<StickyContextMenuCandidate | null>;
+      hoverRow: (path: string) => void;
       nextFrames: (count?: number) => Promise<void>;
       runScenario: (
         path: string,
@@ -158,6 +189,7 @@ declare global {
           settled: StickyContextMenuSample;
         }>
       >;
+      sampleHoverSuppression: (path: string) => StickyHoverSuppressionSample;
       setScrollSuppressionDisabled: (disabled: boolean) => void;
       setScrollTop: (scrollTop: number) => void;
       setTriggerPath: (path: string | null) => void;
@@ -194,6 +226,46 @@ const setScrollTop = async (page: Page, scrollTop: number): Promise<void> => {
   await page.evaluate((nextScrollTop) => {
     window.__stickyContextMenuDriftProbe?.setScrollTop(nextScrollTop);
   }, scrollTop);
+};
+
+// Uses real pointer movement for native :hover coverage; the fixture-level
+// hover hook only covers React's context-hover state.
+const getStickyRowRect = async (
+  page: Page,
+  path: string
+): Promise<StickyRowRect> => {
+  const rect = await page.evaluate((nextPath) => {
+    const host = document.querySelector('file-tree-container');
+    const shadowRoot = host?.shadowRoot;
+    const row = Array.from(
+      shadowRoot?.querySelectorAll(
+        'button[data-file-tree-sticky-row="true"]'
+      ) ?? []
+    ).find((button): button is HTMLButtonElement => {
+      return (
+        button instanceof HTMLButtonElement &&
+        button.dataset.fileTreeStickyPath === nextPath
+      );
+    });
+    if (!(row instanceof HTMLButtonElement)) {
+      return null;
+    }
+
+    const rowRect = row.getBoundingClientRect();
+    return {
+      height: rowRect.height,
+      left: rowRect.left,
+      top: rowRect.top,
+      width: rowRect.width,
+    };
+  }, path);
+
+  expect(rect).not.toBeNull();
+  if (rect == null) {
+    throw new Error(`Missing sticky row for ${path}.`);
+  }
+
+  return rect;
 };
 
 const toMeasuredStep = (
@@ -495,6 +567,120 @@ test.describe('sticky context-menu drift fixture @diagnostic', () => {
 });
 
 test.describe('sticky focused row context-menu regressions', () => {
+  test('suppresses sticky hover and context-menu opening while scrolling', async ({
+    page,
+  }) => {
+    await page.goto(
+      '/test/e2e/fixtures/file-tree-sticky-context-menu-scroll-drift.html'
+    );
+    await page.waitForFunction(
+      () => window.__stickyContextMenuDriftFixtureReady === true
+    );
+
+    const candidate = await page.evaluate(async (nextSettleFrames) => {
+      return (
+        (await window.__stickyContextMenuDriftProbe?.findScenarioCandidate({
+          maxScrollTop: 3000,
+          minDepth: 4,
+          minStickyCount: 3,
+          settleFrames: nextSettleFrames,
+          step: 30,
+        })) ?? null
+      );
+    }, settleFrames);
+    expect(candidate).not.toBeNull();
+    if (candidate == null) {
+      return;
+    }
+
+    const hoverPath = candidate.stickyPaths[0];
+    expect(hoverPath).toBeDefined();
+    if (hoverPath == null) {
+      throw new Error('Missing sticky row path to hover.');
+    }
+
+    await setScrollTop(page, candidate.scrollTop);
+    await page.waitForTimeout(80);
+    await nextFrames(page);
+
+    const resting = await page.evaluate((path) => {
+      return (
+        window.__stickyContextMenuDriftProbe?.sampleHoverSuppression(path) ??
+        null
+      );
+    }, hoverPath);
+    expect(resting).not.toBeNull();
+    if (resting == null) {
+      return;
+    }
+    expect(resting.rowMounted).toBe(true);
+    expect(resting.rootIsScrolling).toBe(false);
+    expect(resting.virtualizedListIsScrolling).toBe(false);
+
+    const stickyRect = await getStickyRowRect(page, hoverPath);
+    await page.mouse.move(
+      stickyRect.left + stickyRect.width / 2,
+      stickyRect.top + stickyRect.height / 2
+    );
+    await page.evaluate((path) => {
+      window.__stickyContextMenuDriftProbe?.hoverRow(path);
+    }, hoverPath);
+    await nextFrames(page);
+
+    const hovered = await page.evaluate((path) => {
+      return (
+        window.__stickyContextMenuDriftProbe?.sampleHoverSuppression(path) ??
+        null
+      );
+    }, hoverPath);
+    expect(hovered).not.toBeNull();
+    if (hovered == null) {
+      return;
+    }
+    expect(hovered.rowContextHovered).toBe(true);
+    expect(hovered.rowPointerEvents).toBe('auto');
+    expect(hovered.anchorVisible).toBe(true);
+    expect(hovered.triggerVisible).toBe(true);
+    expect(hovered.rowBackgroundColor).not.toBe(resting.rowBackgroundColor);
+
+    const scrolling = await page.evaluate(
+      ({ path, scrollTop }) => {
+        const probe = window.__stickyContextMenuDriftProbe;
+        probe?.setScrollTop(scrollTop);
+        return probe?.sampleHoverSuppression(path) ?? null;
+      },
+      { path: hoverPath, scrollTop: candidate.scrollTop + 2 }
+    );
+    expect(scrolling).not.toBeNull();
+    if (scrolling == null) {
+      return;
+    }
+    expect(scrolling.rootIsScrolling).toBe(true);
+    expect(scrolling.virtualizedListIsScrolling).toBe(true);
+    expect(scrolling.rowPointerEvents).toBe('none');
+    expect(scrolling.rowBackgroundColor).toBe(resting.rowBackgroundColor);
+    expect(scrolling.anchorDisplay).toBe('none');
+
+    const contextMenuAttempt = await page.evaluate((path) => {
+      return (
+        window.__stickyContextMenuDriftProbe?.dispatchStickyContextMenu(path) ??
+        null
+      );
+    }, hoverPath);
+    expect(contextMenuAttempt).not.toBeNull();
+    expect(contextMenuAttempt?.defaultPrevented).toBe(true);
+    await nextFrames(page);
+
+    const afterContextMenuAttempt = await page.evaluate((path) => {
+      return (
+        window.__stickyContextMenuDriftProbe?.sampleHoverSuppression(path) ??
+        null
+      );
+    }, hoverPath);
+    expect(afterContextMenuAttempt?.menuPath).toBeNull();
+    expect(contextMenuAttempt?.menuPath).toBeNull();
+  });
+
   test('does not restore the trigger to a parked focused row after hover clears', async ({
     page,
   }) => {

@@ -122,8 +122,29 @@ type StickyContextMenuScenarioCandidate = {
   stickyPaths: string[];
 };
 
+type StickyHoverSuppressionSample = {
+  anchorDisplay: string | null;
+  anchorVisible: boolean;
+  menuPath: string | null;
+  rowBackgroundColor: string | null;
+  rowContextHovered: boolean;
+  rowMatchesHover: boolean;
+  rowMounted: boolean;
+  rowPointerEvents: string | null;
+  rootIsScrolling: boolean;
+  triggerDisplay: string | null;
+  triggerVisible: boolean;
+  virtualizedListIsScrolling: boolean;
+};
+
+type StickyContextMenuDispatchResult = {
+  defaultPrevented: boolean;
+  menuPath: string | null;
+};
+
 type StickyContextMenuDriftProbe = {
   clearTrigger: () => void;
+  dispatchStickyContextMenu: (path: string) => StickyContextMenuDispatchResult;
   findScenarioCandidate: (options?: {
     maxScrollTop?: number;
     minDepth?: number;
@@ -139,6 +160,7 @@ type StickyContextMenuDriftProbe = {
     settleFrames?: number
   ) => Promise<StickyContextMenuScenarioStep[]>;
   sample: (path: string) => StickyContextMenuSample;
+  sampleHoverSuppression: (path: string) => StickyHoverSuppressionSample;
   setScrollSuppressionDisabled: (disabled: boolean) => void;
   setScrollTop: (scrollTop: number) => void;
   setTriggerPath: (path: string | null) => void;
@@ -449,6 +471,67 @@ const hoverRow = (path: string): void => {
   );
 };
 
+const getRenderedMenuPath = (): string | null => {
+  const menu = document.querySelector('[data-test-sticky-drift-menu]');
+  return menu instanceof HTMLElement
+    ? (menu.dataset.testStickyDriftMenu ?? null)
+    : null;
+};
+
+// Samples the sticky row, root scroll-suppression flags, and floating trigger
+// together so the test can catch one-frame disagreements between them.
+const sampleHoverSuppression = (path: string): StickyHoverSuppressionSample => {
+  const row = getRowButton(path);
+  const rowStyle = row == null ? null : getComputedStyle(row);
+  const anchor = getAnchorElement();
+  const anchorStyle = anchor == null ? null : getComputedStyle(anchor);
+  const trigger = getTriggerElement();
+  const triggerStyle = trigger == null ? null : getComputedStyle(trigger);
+  const virtualizedList = getVirtualizedListElement();
+
+  return {
+    anchorDisplay: emptyStringToNull(anchorStyle?.display ?? ''),
+    anchorVisible: anchor?.dataset.visible === 'true',
+    menuPath: getRenderedMenuPath(),
+    rowBackgroundColor: emptyStringToNull(rowStyle?.backgroundColor ?? ''),
+    rowContextHovered: row?.dataset.itemContextHover === 'true',
+    rowMatchesHover: row?.matches(':hover') === true,
+    rowMounted: row instanceof HTMLButtonElement,
+    rowPointerEvents: emptyStringToNull(rowStyle?.pointerEvents ?? ''),
+    rootIsScrolling: getRootElement().dataset.isScrolling != null,
+    triggerDisplay: emptyStringToNull(triggerStyle?.display ?? ''),
+    triggerVisible: trigger?.dataset.visible === 'true',
+    virtualizedListIsScrolling: virtualizedList?.dataset.isScrolling != null,
+  };
+};
+
+// Bypasses browser hit-testing to prove late contextmenu events still cannot
+// open a sticky-row menu while the tree is suppressing scroll interactions.
+const dispatchStickyContextMenu = (
+  path: string
+): StickyContextMenuDispatchResult => {
+  const row = getRowButton(path);
+  if (!(row instanceof HTMLButtonElement)) {
+    throw new Error(`Expected visible row for ${path}`);
+  }
+
+  const rect = row.getBoundingClientRect();
+  const event = new MouseEvent('contextmenu', {
+    bubbles: true,
+    button: 2,
+    cancelable: true,
+    clientX: rect.left + rect.width / 2,
+    clientY: rect.top + rect.height / 2,
+    composed: true,
+  });
+  const dispatched = row.dispatchEvent(event);
+
+  return {
+    defaultPrevented: event.defaultPrevented || !dispatched,
+    menuPath: getRenderedMenuPath(),
+  };
+};
+
 const setScrollSuppressionDisabled = (disabled: boolean): void => {
   getRootElement().dispatchEvent(
     new CustomEvent('file-tree-debug-set-scroll-suppression', {
@@ -674,11 +757,13 @@ const stickyContextMenuDriftWindow = window as StickyContextMenuDriftWindow;
 
 stickyContextMenuDriftWindow.__stickyContextMenuDriftProbe = {
   clearTrigger,
+  dispatchStickyContextMenu,
   findScenarioCandidate,
   hoverRow,
   nextFrames,
   runScenario,
   sample,
+  sampleHoverSuppression,
   setScrollSuppressionDisabled,
   setScrollTop,
   setTriggerPath,
