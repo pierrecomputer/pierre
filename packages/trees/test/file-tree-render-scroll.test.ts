@@ -14,6 +14,7 @@ import {
   FILE_TREE_DEFAULT_OVERSCAN,
   FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
 } from '../src/model/virtualization';
+import { getResizeObserverViewportHeight } from '../src/render/FileTreeView';
 import { serializeFileTreeSsrPayload } from '../src/ssr';
 
 function installDom() {
@@ -82,6 +83,16 @@ function installDom() {
 
 async function flushDom(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function createResizeObserverEntry(
+  borderBoxSize: unknown,
+  contentRectHeight: number
+): ResizeObserverEntry {
+  return {
+    borderBoxSize,
+    contentRect: { height: contentRectHeight },
+  } as unknown as ResizeObserverEntry;
 }
 
 function getFocusedTreeElement(
@@ -423,6 +434,30 @@ async function loadPreloadFileTree(): Promise<
 }
 
 describe('file-tree render + scroll', () => {
+  test('reads viewport height from ResizeObserver border box entries', () => {
+    expect(
+      getResizeObserverViewportHeight(
+        createResizeObserverEntry([{ blockSize: 123.5, inlineSize: 10 }], 90)
+      )
+    ).toBe(123.5);
+
+    expect(
+      getResizeObserverViewportHeight(
+        createResizeObserverEntry({ blockSize: 88.25, inlineSize: 10 }, 90)
+      )
+    ).toBe(88.25);
+
+    expect(
+      getResizeObserverViewportHeight(
+        createResizeObserverEntry([{ blockSize: 0, inlineSize: 10 }], 64.5)
+      )
+    ).toBe(64.5);
+
+    expect(
+      getResizeObserverViewportHeight(createResizeObserverEntry(undefined, 0))
+    ).toBeNull();
+  });
+
   test('controller exposes path-first visible rows without leaking numeric ids', async () => {
     const FileTreeController = await loadFileTreeController();
 

@@ -867,7 +867,7 @@ describe('file-tree composition surfaces', () => {
       await flushDom();
       expect(openedPath.current).toBeNull();
 
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      await new Promise((resolve) => setTimeout(resolve, 80));
       await flushDom();
 
       triggerButton.dispatchEvent(
