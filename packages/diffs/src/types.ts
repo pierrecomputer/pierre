@@ -373,6 +373,7 @@ export interface BaseCodeOptions {
   collapsed?: boolean;
   disableFileHeader?: boolean;
   disableVirtualizationBuffers?: boolean;
+  stickyHeader?: boolean;
 
   // Shiki config options, ignored if you're using a WorkerPoolManager
   preferredHighlighter?: HighlighterTypes;

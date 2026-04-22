@@ -416,10 +416,11 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   private renderHeader(file: FileContents) {
-    const { headerRenderMode = 'default' } = this.options;
+    const { headerRenderMode = 'default', stickyHeader = false } = this.options;
     return createFileHeaderElement({
       fileOrDiff: file,
       mode: headerRenderMode,
+      stickyHeader,
     });
   }
 

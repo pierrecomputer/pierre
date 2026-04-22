@@ -350,6 +350,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
       overflow = 'scroll',
+      stickyHeader = false,
       theme = DEFAULT_THEMES,
       headerRenderMode = 'default',
       tokenizeMaxLineLength = 1000,
@@ -371,6 +372,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       lineDiffType,
       maxLineDiffLength,
       overflow,
+      stickyHeader,
       theme: this.workerManager?.getDiffRenderOptions().theme ?? theme,
       headerRenderMode,
       tokenizeMaxLineLength,
@@ -1319,10 +1321,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private renderHeader(diff: FileDiffMetadata): HASTElement {
-    const { headerRenderMode } = this.getOptionsWithDefaults();
+    const { headerRenderMode, stickyHeader } = this.getOptionsWithDefaults();
     return createFileHeaderElement({
       fileOrDiff: diff,
       mode: headerRenderMode,
+      stickyHeader,
     });
   }
 }

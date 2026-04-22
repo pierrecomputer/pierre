@@ -238,6 +238,13 @@
     );
   }
 
+  [data-diffs-header][data-sticky] {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: var(--diffs-bg);
+  }
+
   [data-file-info] {
     padding: 10px;
     font-weight: 700;
