@@ -202,6 +202,14 @@ const getFocusedKeyboardProxyTop = (snapshot: StickyKeyboardSample): number => {
   return proxyRow.topWithinScroll;
 };
 
+const getMountedFlowRow = (
+  snapshot: StickyKeyboardSample,
+  path: string
+): StickyKeyboardRowSnapshot | null =>
+  snapshot.rows.find(
+    (row) => row.path === path && !row.isSticky && !row.isParked
+  ) ?? null;
+
 test.describe('sticky keyboard navigation fixture', () => {
   test('ArrowDown from a non-first sticky folder focuses the next sticky folder without shifting the list', async ({
     page,
@@ -421,6 +429,94 @@ test.describe('sticky keyboard navigation fixture', () => {
       baseline,
       'a1/b2/c1/'
     );
+  });
+
+  test('ArrowRight from the deepest synthetic sticky folder reveals its first file below the overlay', async ({
+    page,
+  }) => {
+    await prepareSyntheticBranchStickyStack(page, 'a1/b2/c1/d2/');
+
+    await page.keyboard.press('ArrowRight');
+    await nextFrames(page);
+
+    const after = await sample(page);
+    const targetPath = 'a1/b2/c1/d2/file_1';
+    const targetRow = getMountedFlowRow(after, targetPath);
+    expect(after.focusedPath).toBe(targetPath);
+    expect(after.activeElementPath).toBe(targetPath);
+    expect(after.activeElementIsSticky).toBe(false);
+    expect(after.stickyPaths).toEqual([...syntheticBranchStickyPaths]);
+    expect(after.mountedFlowPaths[0]).toBe(targetPath);
+    expect(targetRow).not.toBeNull();
+    expect(targetRow?.topWithinScroll).toBeGreaterThanOrEqual(
+      after.stickyOverlayBottomWithinScroll
+    );
+  });
+
+  test('ArrowLeft from an expanded sticky folder collapses it without leaving child rows above focus', async ({
+    page,
+  }) => {
+    const baseline = await prepareSyntheticBranchStickyStack(page, 'a1/b2/');
+    const sourceProxyTop = getFocusedKeyboardProxyTop(baseline);
+
+    await page.keyboard.press('ArrowLeft');
+    await nextFrames(page);
+
+    const after = await sample(page);
+    const targetRow = getMountedFlowRow(after, 'a1/b2/');
+    expect(after.focusedPath).toBe('a1/b2/');
+    expect(after.activeElementPath).toBe('a1/b2/');
+    expect(after.activeElementIsSticky).toBe(false);
+    expect(after.stickyPaths).not.toContain('a1/b2/');
+    expect(after.stickyPaths).not.toContain('a1/b2/c1/');
+    expect(after.mountedFlowPaths).not.toContain('a1/b2/c1/');
+    expect(after.mountedFlowPaths).not.toContain('a1/b2/c1/d2/file_5');
+    expect(targetRow).not.toBeNull();
+    expect(targetRow?.topWithinScroll).toBeCloseTo(sourceProxyTop, 1);
+  });
+
+  test('ArrowLeft from a nested expanded sticky folder drops descendant sticky rows without hiding focus', async ({
+    page,
+  }) => {
+    const baseline = await prepareSyntheticBranchStickyStack(page, 'a1/b2/c1/');
+    const sourceProxyTop = getFocusedKeyboardProxyTop(baseline);
+
+    await page.keyboard.press('ArrowLeft');
+    await nextFrames(page);
+
+    const after = await sample(page);
+    const targetRow = getMountedFlowRow(after, 'a1/b2/c1/');
+    expect(after.focusedPath).toBe('a1/b2/c1/');
+    expect(after.activeElementPath).toBe('a1/b2/c1/');
+    expect(after.activeElementIsSticky).toBe(false);
+    expect(after.stickyPaths).toContain('a1/');
+    expect(after.stickyPaths).not.toContain('a1/b2/c1/');
+    expect(after.stickyPaths).not.toContain('a1/b2/c1/d2/');
+    expect(after.mountedFlowPaths).not.toContain('a1/b2/c1/d2/');
+    expect(after.mountedFlowPaths).not.toContain('a1/b2/c1/d2/file_5');
+    expect(targetRow).not.toBeNull();
+    expect(targetRow?.topWithinScroll).toBeCloseTo(sourceProxyTop, 1);
+  });
+
+  test('second ArrowLeft after collapsing a sticky folder follows parent navigation', async ({
+    page,
+  }) => {
+    await prepareSyntheticBranchStickyStack(page, 'a1/b2/');
+
+    await page.keyboard.press('ArrowLeft');
+    await nextFrames(page);
+    const afterCollapse = await sample(page);
+    expect(afterCollapse.focusedPath).toBe('a1/b2/');
+    expect(afterCollapse.activeElementPath).toBe('a1/b2/');
+    expect(afterCollapse.activeElementIsSticky).toBe(false);
+
+    await page.keyboard.press('ArrowLeft');
+    await nextFrames(page);
+
+    const afterParent = await sample(page);
+    expect(afterParent.focusedPath).toBe('a1/');
+    expect(afterParent.activeElementPath).toBe('a1/');
+    expect(afterParent.stickyPaths).not.toContain('a1/b2/');
   });
 
   test('Shift+ArrowDown from a synthetic sticky folder preserves the sticky viewport while extending selection', async ({

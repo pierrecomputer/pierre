@@ -2271,6 +2271,11 @@ export function FileTreeView({
       (event.key === 'ArrowRight' &&
         focusedDirectoryItem != null &&
         focusedDirectoryItem.isExpanded());
+    const shouldRestoreCollapsedStickyFocusViewport =
+      event.key === 'ArrowLeft' &&
+      startedFromStickyRow &&
+      focusedDirectoryItem != null &&
+      focusedDirectoryItem.isExpanded();
     const focusedParkedRowElement =
       rootRef.current == null || effectiveFocusedPath == null
         ? null
@@ -2404,16 +2409,21 @@ export function FileTreeView({
     } else {
       pendingStickyKeyboardFocusPathRef.current = null;
       if (
-        event.key === 'ArrowUp' &&
-        startedFromStickyRow &&
         nextFocusedPath != null &&
-        nextFocusedPath !== effectiveFocusedPath
+        ((event.key === 'ArrowUp' &&
+          startedFromStickyRow &&
+          nextFocusedPath !== effectiveFocusedPath) ||
+          (shouldRestoreCollapsedStickyFocusViewport &&
+            nextFocusedPath === effectiveFocusedPath))
       ) {
         pendingStickyKeyboardViewportOffsetRef.current = {
           path: nextFocusedPath,
           viewportOffset: stickyKeyboardViewportOffset,
         };
         domFocusOwnerRef.current = true;
+        setActiveItemPath((previousPath) =>
+          previousPath === nextFocusedPath ? previousPath : nextFocusedPath
+        );
       } else {
         pendingStickyKeyboardViewportOffsetRef.current = null;
       }
