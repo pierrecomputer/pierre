@@ -584,7 +584,7 @@ export function getResizeObserverViewportHeight(
   entry: ResizeObserverEntry
 ): number | null {
   const borderBoxSize = entry.borderBoxSize;
-  const firstBorderBoxSize = Array.isArray(borderBoxSize)
+  const firstBorderBoxSize: ResizeObserverSize = Array.isArray(borderBoxSize)
     ? borderBoxSize[0]
     : borderBoxSize;
 
