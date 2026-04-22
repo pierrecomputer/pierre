@@ -51,6 +51,7 @@ import {
   collapsePath,
   expandPath,
   getVisibleCount,
+  getVisibleIndexByPath,
   getVisibleRowContext,
   getVisibleSlice,
   getVisibleTreeProjectionData as getVisibleTreeProjectionDataFromState,
@@ -474,6 +475,18 @@ export class PathStore {
     maxRows?: number
   ): PathStoreVisibleTreeProjectionData {
     return getVisibleTreeProjectionDataFromState(this.#state, maxRows);
+  }
+
+  /**
+   * Resolves a path to its visible row index without building a full projection
+   * index. Returns null when the path is unknown or currently hidden.
+   */
+  public getVisibleIndex(path: string): number | null {
+    return withBenchmarkPhase(
+      this.#state.instrumentation,
+      'store.getVisibleIndex',
+      () => getVisibleIndexByPath(this.#state, path)
+    );
   }
 
   /**

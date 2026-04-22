@@ -8,6 +8,7 @@ import {
 } from './canonical';
 import {
   ensureChildPositions,
+  getVisibleChildPrefixCount,
   selectChildIndexByVisibleIndex,
 } from './child-index';
 import { createCollapseEvent, createExpandEvent } from './events';
@@ -380,6 +381,70 @@ export function getVisibleTreeProjection(
   return createVisibleTreeProjectionFromData(
     getVisibleTreeProjectionData(state)
   );
+}
+
+// Resolves one canonical path to its current visible row index using stored
+// subtree counts rather than materializing the whole path-to-index map.
+export function getVisibleIndexByPath(
+  state: PathStoreState,
+  path: string
+): number | null {
+  const nodeId = findNodeId(state, path);
+  if (nodeId == null || nodeId === state.snapshot.rootId) {
+    return null;
+  }
+
+  const node = requireNode(state, nodeId);
+  if (
+    isDirectoryNode(node) &&
+    getFlattenedTerminalDirectoryId(state, nodeId) !== nodeId
+  ) {
+    return null;
+  }
+
+  let visibleIndex = 0;
+  let currentNodeId = nodeId;
+  const { nodes, rootId } = state.snapshot;
+
+  while (currentNodeId !== rootId) {
+    const currentNode = requireNode(state, currentNodeId);
+    const parentId = currentNode.parentId;
+    const parentIndex = getDirectoryIndex(state, parentId);
+    const childPosition = ensureChildPositions(parentIndex).get(currentNodeId);
+    if (childPosition == null) {
+      throw new Error(
+        `Child ${String(currentNodeId)} was not found in its parent index`
+      );
+    }
+
+    visibleIndex += getVisibleChildPrefixCount(
+      nodes,
+      parentIndex,
+      childPosition
+    );
+
+    if (parentId !== rootId) {
+      const parentNode = requireNode(state, parentId);
+      const flattenedChildDirectoryId = getFlattenedChildDirectoryId(
+        state,
+        parentId
+      );
+      if (
+        !isDirectoryExpanded(state, parentId, parentNode) &&
+        flattenedChildDirectoryId !== currentNodeId
+      ) {
+        return null;
+      }
+
+      if (getFlattenedTerminalDirectoryId(state, parentId) === parentId) {
+        visibleIndex += 1;
+      }
+    }
+
+    currentNodeId = parentId;
+  }
+
+  return visibleIndex;
 }
 
 export function expandPath(

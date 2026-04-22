@@ -229,6 +229,47 @@ export function selectChildIndexByVisibleIndex(
   );
 }
 
+// Returns the number of visible rows contributed by siblings before a child.
+// Wide directories use the same chunk sums as visible-index selection so path
+// lookups do not need to scan thousands of siblings one by one.
+export function getVisibleChildPrefixCount(
+  nodes: readonly PathStoreNode[],
+  index: DirectoryChildIndex,
+  childPosition: number
+): number {
+  let visibleCount = 0;
+  const chunkSums = index.childVisibleChunkSums;
+  let scanStart = 0;
+
+  if (chunkSums != null) {
+    const chunkIndex = childPosition >> PATH_STORE_CHILD_INDEX_CHUNK_SHIFT;
+    for (let chunkOffset = 0; chunkOffset < chunkIndex; chunkOffset += 1) {
+      visibleCount += chunkSums[chunkOffset] ?? 0;
+    }
+    scanStart = chunkIndex << PATH_STORE_CHILD_INDEX_CHUNK_SHIFT;
+  }
+
+  for (
+    let childIndex = scanStart;
+    childIndex < childPosition;
+    childIndex += 1
+  ) {
+    const childId = index.childIds[childIndex];
+    if (childId == null) {
+      continue;
+    }
+
+    const childNode = nodes[childId];
+    if (childNode == null) {
+      continue;
+    }
+
+    visibleCount += childNode.visibleSubtreeCount;
+  }
+
+  return visibleCount;
+}
+
 export function rebuildVisibleChildChunks(
   nodes: readonly PathStoreNode[],
   index: DirectoryChildIndex

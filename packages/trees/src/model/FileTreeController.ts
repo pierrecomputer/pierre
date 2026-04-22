@@ -53,8 +53,6 @@ interface FileTreeVisibleProjection {
   paths: readonly string[];
   posInSetByIndex: ProjectionIndexBuffer;
   setSizeByIndex: ProjectionIndexBuffer;
-  visibleIndexByPath: Map<string, number> | null;
-  visibleIndexByPathFactory: () => Map<string, number>;
 }
 
 type MutationListener = (event: FileTreeMutationEvent) => void;
@@ -126,21 +124,6 @@ function getAncestorDirectoryPaths(path: string): readonly string[] {
   return segments
     .slice(0, -1)
     .map((_, index) => `${segments.slice(0, index + 1).join('/')}/`);
-}
-
-function findNearestVisibleAncestorPath(
-  visibleIndexByPath: ReadonlyMap<string, number>,
-  path: string
-): string | null {
-  const ancestorPaths = getAncestorDirectoryPaths(path);
-  for (let index = ancestorPaths.length - 1; index >= 0; index -= 1) {
-    const ancestorPath = ancestorPaths[index];
-    if (ancestorPath != null && visibleIndexByPath.has(ancestorPath)) {
-      return ancestorPath;
-    }
-  }
-
-  return null;
 }
 
 function getImmediateParentPath(path: string): string | null {
@@ -421,11 +404,11 @@ function toTreesMutationEvent(
   }
 }
 
-// Keeps logical focus on a visible row. When a focused descendant disappears,
-// this falls back to the nearest visible ancestor before defaulting to row 0.
-function resolveFocusedIndex(
+// Keeps focus resolution cheap after expand/collapse by asking for only the
+// candidate path and its ancestors instead of forcing a full visible-index map.
+function resolveFocusedIndexByLookup(
   rowCount: number,
-  visibleIndexByPath: ReadonlyMap<string, number>,
+  getVisibleIndex: (path: string) => number | null,
   candidatePath: string | null
 ): number {
   if (rowCount === 0) {
@@ -433,17 +416,22 @@ function resolveFocusedIndex(
   }
 
   if (candidatePath != null) {
-    const directIndex = visibleIndexByPath.get(candidatePath);
+    const directIndex = getVisibleIndex(candidatePath);
     if (directIndex != null) {
       return directIndex;
     }
 
-    const ancestorPath = findNearestVisibleAncestorPath(
-      visibleIndexByPath,
-      candidatePath
-    );
-    if (ancestorPath != null) {
-      return visibleIndexByPath.get(ancestorPath) ?? 0;
+    const ancestorPaths = getAncestorDirectoryPaths(candidatePath);
+    for (let index = ancestorPaths.length - 1; index >= 0; index -= 1) {
+      const ancestorPath = ancestorPaths[index];
+      if (ancestorPath == null) {
+        continue;
+      }
+
+      const ancestorIndex = getVisibleIndex(ancestorPath);
+      if (ancestorIndex != null) {
+        return ancestorIndex;
+      }
     }
   }
 
@@ -456,7 +444,8 @@ function resolveFocusedIndex(
 // treeitem ARIA attrs without exposing PathStore's numeric row identities.
 function createVisibleProjection(
   projection: PathStoreVisibleTreeProjectionData,
-  focusedPathCandidate: string | null
+  focusedPathCandidate: string | null,
+  resolveVisibleIndexByPath?: (path: string) => number | null
 ): FileTreeVisibleProjection {
   if (projection.paths.length === 0) {
     return {
@@ -465,8 +454,6 @@ function createVisibleProjection(
       paths: projection.paths,
       posInSetByIndex: projection.posInSetByIndex,
       setSizeByIndex: projection.setSizeByIndex,
-      visibleIndexByPath: null,
-      visibleIndexByPathFactory: () => projection.visibleIndexByPath,
     };
   }
 
@@ -477,24 +464,23 @@ function createVisibleProjection(
       paths: projection.paths,
       posInSetByIndex: projection.posInSetByIndex,
       setSizeByIndex: projection.setSizeByIndex,
-      visibleIndexByPath: null,
-      visibleIndexByPathFactory: () => projection.visibleIndexByPath,
     };
   }
 
-  const visibleIndexByPath = projection.visibleIndexByPath;
+  const getVisibleIndex =
+    resolveVisibleIndexByPath ??
+    ((path: string): number | null =>
+      projection.visibleIndexByPath.get(path) ?? null);
   return {
-    focusedIndex: resolveFocusedIndex(
+    focusedIndex: resolveFocusedIndexByLookup(
       projection.paths.length,
-      visibleIndexByPath,
+      getVisibleIndex,
       focusedPathCandidate
     ),
     getParentIndex: projection.getParentIndex,
     paths: projection.paths,
     posInSetByIndex: projection.posInSetByIndex,
     setSizeByIndex: projection.setSizeByIndex,
-    visibleIndexByPath,
-    visibleIndexByPathFactory: () => visibleIndexByPath,
   };
 }
 
@@ -553,8 +539,6 @@ export class FileTreeController
   #suppressStoreNotifications = false;
   #visibleCount = 0;
   #unsubscribe: (() => void) | null;
-  #visibleIndexByPath: Map<string, number> | null = null;
-  #visibleIndexByPathFactory: (() => Map<string, number>) | null = null;
 
   public constructor(options: FileTreeControllerOptions) {
     const {
@@ -1528,13 +1512,6 @@ export class FileTreeController
     } satisfies FileTreeResetEvent);
   }
 
-  #ensureVisibleIndexByPath(): ReadonlyMap<string, number> {
-    this.#visibleIndexByPath ??=
-      this.#visibleIndexByPathFactory?.() ?? new Map();
-
-    return this.#visibleIndexByPath;
-  }
-
   #findNearestVisibleSiblingPath(path: string): string | null {
     this.#ensureFullProjection();
     const parentPath = getImmediateParentPath(path);
@@ -1568,12 +1545,17 @@ export class FileTreeController
       return directIndex;
     }
 
-    const ancestorPath = findNearestVisibleAncestorPath(
-      this.#searchVisibleIndexByPath ?? this.#ensureVisibleIndexByPath(),
-      path
-    );
-    if (ancestorPath != null) {
-      return this.#getVisibleIndexByPath(ancestorPath);
+    const ancestorPaths = getAncestorDirectoryPaths(path);
+    for (let index = ancestorPaths.length - 1; index >= 0; index -= 1) {
+      const ancestorPath = ancestorPaths[index];
+      if (ancestorPath == null) {
+        continue;
+      }
+
+      const ancestorIndex = this.#getVisibleIndexByPath(ancestorPath);
+      if (ancestorIndex !== -1) {
+        return ancestorIndex;
+      }
     }
 
     return this.#getCurrentVisiblePaths().length > 0 ? 0 : -1;
@@ -1961,11 +1943,12 @@ export class FileTreeController
   }
 
   #getVisibleIndexByPath(path: string): number {
-    return (
-      this.#searchVisibleIndexByPath?.get(path) ??
-      this.#ensureVisibleIndexByPath().get(path) ??
-      -1
-    );
+    const searchIndex = this.#searchVisibleIndexByPath?.get(path);
+    if (searchIndex != null) {
+      return searchIndex;
+    }
+
+    return this.#store.getVisibleIndex(path) ?? -1;
   }
 
   #focusRelativeSearchMatch(direction: -1 | 1): void {
@@ -2159,13 +2142,13 @@ export class FileTreeController
   ): void {
     const rawVisibleCount = this.#store.getVisibleCount();
     this.#storeVisibleCount = rawVisibleCount;
+    const projectionData = this.#store.getVisibleTreeProjectionData(
+      full ? undefined : Math.min(rawVisibleCount, INITIAL_PROJECTION_ROW_LIMIT)
+    );
     const projection = createVisibleProjection(
-      this.#store.getVisibleTreeProjectionData(
-        full
-          ? undefined
-          : Math.min(rawVisibleCount, INITIAL_PROJECTION_ROW_LIMIT)
-      ),
-      focusedPathCandidate
+      projectionData,
+      focusedPathCandidate,
+      full ? (path) => this.#store.getVisibleIndex(path) : undefined
     );
     this.#ancestorIndicesByIndex.clear();
     this.#ancestorPathsByIndex.clear();
@@ -2174,8 +2157,6 @@ export class FileTreeController
     this.#projectionPaths = projection.paths;
     this.#projectionPosInSetByIndex = projection.posInSetByIndex;
     this.#projectionSetSizeByIndex = projection.setSizeByIndex;
-    this.#visibleIndexByPath = projection.visibleIndexByPath;
-    this.#visibleIndexByPathFactory = projection.visibleIndexByPathFactory;
     this.#syncSearchVisibilityState();
     this.#focusedIndex =
       focusedPathCandidate == null
@@ -2186,7 +2167,20 @@ export class FileTreeController
     this.#focusedPath =
       this.#focusedIndex < 0
         ? null
-        : (this.#getCurrentVisiblePaths()[this.#focusedIndex] ?? null);
+        : this.#resolveVisiblePathAtIndex(this.#focusedIndex);
+  }
+
+  #resolveVisiblePathAtIndex(index: number): string | null {
+    const projectedPath = this.#getCurrentVisiblePaths()[index];
+    if (projectedPath != null) {
+      return projectedPath;
+    }
+
+    if (this.#searchVisibleIndices != null) {
+      return null;
+    }
+
+    return this.#store.getVisibleRowContext(index)?.row.path ?? null;
   }
 
   #resolveSelectionPath(path: string): string | null {
@@ -2298,7 +2292,13 @@ export class FileTreeController
           : this.#searchValue === ''
             ? this.#focusedPath
             : focusPathCandidate;
-      this.#rebuildVisibleProjection(searchFocusCandidate, true);
+      const shouldBuildFullProjection =
+        this.#searchValue != null ||
+        (event.operation !== 'expand' && event.operation !== 'collapse');
+      this.#rebuildVisibleProjection(
+        searchFocusCandidate,
+        shouldBuildFullProjection
+      );
       this.#emit();
       const mutationEvent = toTreesMutationEvent(event);
       if (mutationEvent != null) {
