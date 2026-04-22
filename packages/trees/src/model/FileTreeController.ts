@@ -2,6 +2,9 @@ import { PathStore } from '@pierre/path-store';
 import type {
   PathStoreEvent,
   PathStorePathInfo,
+  PathStoreVisibleAncestorRow,
+  PathStoreVisibleRowContext,
+  PathStoreVisibleRow as PathStoreVisibleRowData,
   PathStoreVisibleTreeProjectionData,
 } from '@pierre/path-store';
 
@@ -38,6 +41,7 @@ import type {
   FileTreeResetOptions,
   FileTreeSearchMode,
   FileTreeSearchSessionHandle,
+  FileTreeStickyRowCandidate,
   FileTreeVisibleRow,
 } from './types';
 
@@ -91,6 +95,7 @@ function isPathMutationEvent(
 // cap its first projection build and defer the full 494k-row metadata walk
 // until the user actually navigates outside that initial window.
 const INITIAL_PROJECTION_ROW_LIMIT = 512;
+const CONTEXT_VISIBLE_ROW_RANGE_LIMIT = 512;
 
 function arePathSetsEqual(
   currentPaths: ReadonlySet<string>,
@@ -508,6 +513,7 @@ export class FileTreeController
   readonly #mutationListeners: MutationListenerByType = new Map();
   #dragAndDropConfig: FileTreeDragAndDropConfig | null = null;
   #dragSession: FileTreeDragSession | null = null;
+  #ancestorIndicesByIndex = new Map<number, readonly number[]>();
   #ancestorPathsByIndex = new Map<number, readonly string[]>();
   #focusedIndex = -1;
   #focusedPath: string | null = null;
@@ -735,14 +741,36 @@ export class FileTreeController
       return [];
     }
 
-    if (!this.#hasFullProjection && end >= this.#projectionPaths.length) {
-      this.#ensureFullProjection();
-    }
-
     const boundedStart = Math.max(0, start);
     const boundedEnd = Math.min(this.#visibleCount - 1, end);
     if (boundedEnd < boundedStart) {
       return [];
+    }
+
+    const boundedLength = boundedEnd - boundedStart + 1;
+    if (
+      this.#searchVisibleIndices == null &&
+      !this.#hasFullProjection &&
+      boundedEnd >= this.#projectionPaths.length &&
+      boundedLength <= CONTEXT_VISIBLE_ROW_RANGE_LIMIT
+    ) {
+      const rows: FileTreeVisibleRow[] = [];
+      for (let index = boundedStart; index <= boundedEnd; index += 1) {
+        const context = this.#store.getVisibleRowContext(index);
+        if (context == null) {
+          break;
+        }
+
+        rows.push(this.#createVisibleRowFromContext(context));
+      }
+      return rows;
+    }
+
+    if (
+      !this.#hasFullProjection &&
+      boundedEnd >= this.#projectionPaths.length
+    ) {
+      this.#ensureFullProjection();
     }
 
     if (this.#searchVisibleIndices != null) {
@@ -798,27 +826,10 @@ export class FileTreeController
             );
           }
 
-          return {
+          return this.#createVisibleRow(row, visibleIndex, projectionIndex, {
             ancestorPaths: this.#getAncestorPaths(projectionIndex),
-            depth: row.depth,
-            flattenedSegments: row.flattenedSegments?.map((segment) => ({
-              isTerminal: segment.isTerminal,
-              name: segment.name,
-              path: segment.path,
-            })),
-            hasChildren: row.hasChildren,
-            index: visibleIndex,
-            isExpanded: row.isExpanded,
-            isFlattened: row.isFlattened,
-            isFocused: projectionPath === this.#focusedPath,
-            isSelected: this.#selectedPaths.has(projectionPath),
-            kind: row.kind,
-            level: row.depth,
-            name: row.name,
             path: projectionPath,
-            posInSet: this.#projectionPosInSetByIndex[projectionIndex] ?? 0,
-            setSize: this.#projectionSetSizeByIndex[projectionIndex] ?? 0,
-          } satisfies FileTreeVisibleRow;
+          });
         }
       );
     }
@@ -834,28 +845,48 @@ export class FileTreeController
           );
         }
 
-        return {
+        return this.#createVisibleRow(row, index, index, {
           ancestorPaths: this.#getAncestorPaths(index),
-          depth: row.depth,
-          flattenedSegments: row.flattenedSegments?.map((segment) => ({
-            isTerminal: segment.isTerminal,
-            name: segment.name,
-            path: segment.path,
-          })),
-          hasChildren: row.hasChildren,
-          index,
-          isExpanded: row.isExpanded,
-          isFlattened: row.isFlattened,
-          isFocused: projectionPath === this.#focusedPath,
-          isSelected: this.#selectedPaths.has(projectionPath),
-          kind: row.kind,
-          level: row.depth,
-          name: row.name,
           path: projectionPath,
-          posInSet: this.#projectionPosInSetByIndex[index] ?? 0,
-          setSize: this.#projectionSetSizeByIndex[index] ?? 0,
-        } satisfies FileTreeVisibleRow;
+        });
       });
+  }
+
+  public getStickyRowCandidates(
+    scrollTop: number,
+    itemHeight: number
+  ): readonly FileTreeStickyRowCandidate[] | null {
+    if (this.#searchVisibleIndices != null) {
+      return null;
+    }
+
+    if (this.#visibleCount === 0 || scrollTop <= 0 || itemHeight <= 0) {
+      return [];
+    }
+
+    const stickyRows: FileTreeStickyRowCandidate[] = [];
+    for (let slotDepth = 0; slotDepth < this.#visibleCount; slotDepth += 1) {
+      const slotTop = scrollTop + slotDepth * itemHeight;
+      const thresholdIndex = Math.min(
+        this.#visibleCount - 1,
+        Math.floor(slotTop / itemHeight)
+      );
+      const candidateContext =
+        this.#getStickyCandidateContextAt(thresholdIndex, slotDepth) ??
+        (thresholdIndex > 0
+          ? this.#getStickyCandidateContextAt(thresholdIndex - 1, slotDepth)
+          : undefined);
+      if (candidateContext == null) {
+        break;
+      }
+
+      stickyRows.push({
+        row: this.#createVisibleRowFromContext(candidateContext),
+        subtreeEndIndex: candidateContext.subtreeEndIndex,
+      });
+    }
+
+    return stickyRows;
   }
 
   /**
@@ -1570,20 +1601,102 @@ export class FileTreeController
     return handle;
   }
 
+  #createVisibleRow(
+    row: PathStoreVisibleRowData,
+    visibleIndex: number,
+    projectionIndex: number,
+    projection: {
+      ancestorPaths: readonly string[];
+      path: string;
+      posInSet?: number;
+      setSize?: number;
+    }
+  ): FileTreeVisibleRow {
+    return {
+      ancestorPaths: projection.ancestorPaths,
+      depth: row.depth,
+      flattenedSegments: row.flattenedSegments?.map((segment) => ({
+        isTerminal: segment.isTerminal,
+        name: segment.name,
+        path: segment.path,
+      })),
+      hasChildren: row.hasChildren,
+      index: visibleIndex,
+      isExpanded: row.isExpanded,
+      isFlattened: row.isFlattened,
+      isFocused: projection.path === this.#focusedPath,
+      isSelected: this.#selectedPaths.has(projection.path),
+      kind: row.kind,
+      level: row.depth,
+      name: row.name,
+      path: projection.path,
+      posInSet:
+        projection.posInSet ??
+        this.#projectionPosInSetByIndex[projectionIndex] ??
+        0,
+      setSize:
+        projection.setSize ??
+        this.#projectionSetSizeByIndex[projectionIndex] ??
+        0,
+    };
+  }
+
+  #createVisibleRowFromContext(
+    context: PathStoreVisibleRowContext | PathStoreVisibleAncestorRow
+  ): FileTreeVisibleRow {
+    return this.#createVisibleRow(context.row, context.index, context.index, {
+      ancestorPaths: context.ancestorPaths,
+      path: context.row.path,
+      posInSet: context.posInSet,
+      setSize: context.setSize,
+    });
+  }
+
+  #getStickyCandidateContextAt(
+    index: number,
+    slotDepth: number
+  ): PathStoreVisibleRowContext | PathStoreVisibleAncestorRow | undefined {
+    const context = this.#store.getVisibleRowContext(index);
+    if (context == null) {
+      return undefined;
+    }
+
+    const ancestorRow = context.ancestorRows[slotDepth];
+    if (ancestorRow != null) {
+      return ancestorRow;
+    }
+
+    return slotDepth === context.ancestorRows.length &&
+      context.row.kind === 'directory' &&
+      context.row.isExpanded
+      ? context
+      : undefined;
+  }
+
+  #getAncestorIndices(index: number): readonly number[] {
+    const cached = this.#ancestorIndicesByIndex.get(index);
+    if (cached != null) {
+      return cached;
+    }
+
+    const parentIndex = this.#getParentIndexForVisibleRow(index);
+    const ancestorIndices =
+      parentIndex < 0
+        ? []
+        : [...this.#getAncestorIndices(parentIndex), parentIndex];
+    this.#ancestorIndicesByIndex.set(index, ancestorIndices);
+    return ancestorIndices;
+  }
+
   #getAncestorPaths(index: number): readonly string[] {
     const cached = this.#ancestorPathsByIndex.get(index);
     if (cached != null) {
       return cached;
     }
 
-    const parentIndex = this.#getParentIndexForVisibleRow(index);
-    const ancestorPaths =
-      parentIndex < 0
-        ? []
-        : [
-            ...this.#getAncestorPaths(parentIndex),
-            this.#projectionPaths[parentIndex] ?? '',
-          ].filter((path) => path !== '');
+    const ancestorPaths = this.#getAncestorIndices(index)
+      .map((ancestorIndex) => this.#projectionPaths[ancestorIndex] ?? '')
+      .filter((path) => path !== '');
     this.#ancestorPathsByIndex.set(index, ancestorPaths);
     return ancestorPaths;
   }
@@ -2054,6 +2167,7 @@ export class FileTreeController
       ),
       focusedPathCandidate
     );
+    this.#ancestorIndicesByIndex.clear();
     this.#ancestorPathsByIndex.clear();
     this.#hasFullProjection = projection.paths.length >= rawVisibleCount;
     this.#getParentIndexForVisibleRow = projection.getParentIndex;

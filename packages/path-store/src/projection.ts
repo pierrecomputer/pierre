@@ -26,7 +26,9 @@ import type {
   PathStoreCollapseEvent,
   PathStoreDirectoryLoadState,
   PathStoreExpandEvent,
+  PathStoreVisibleAncestorRow,
   PathStoreVisibleRow,
+  PathStoreVisibleRowContext,
   PathStoreVisibleTreeProjection,
   PathStoreVisibleTreeProjectionData,
   PathStoreVisibleTreeProjectionRow,
@@ -70,6 +72,205 @@ function ensureProjectionDepthCapacity(
 
 export function getVisibleCount(state: PathStoreState): number {
   return requireNode(state, state.snapshot.rootId).visibleSubtreeCount;
+}
+
+interface VisibleRowCursorWithIndex {
+  cursor: VisibleRowCursor;
+  index: number;
+  posInSet: number;
+  setSize: number;
+}
+
+function getVisibleRowSubtreeEndIndex(
+  state: PathStoreState,
+  cursor: VisibleRowCursor,
+  index: number,
+  totalVisibleCount: number
+): number {
+  const terminalNode = requireNode(state, cursor.terminalNodeId);
+  const subtreeSize = Math.max(1, terminalNode.visibleSubtreeCount);
+  return Math.min(totalVisibleCount - 1, index + subtreeSize - 1);
+}
+
+function materializeVisibleAncestorRow(
+  state: PathStoreState,
+  entry: VisibleRowCursorWithIndex,
+  totalVisibleCount: number,
+  ancestorPaths: readonly string[]
+): PathStoreVisibleAncestorRow {
+  return {
+    ancestorPaths,
+    index: entry.index,
+    posInSet: entry.posInSet,
+    row: materializeVisibleRow(state, entry.cursor),
+    setSize: entry.setSize,
+    subtreeEndIndex: getVisibleRowSubtreeEndIndex(
+      state,
+      entry.cursor,
+      entry.index,
+      totalVisibleCount
+    ),
+  };
+}
+
+function selectVisibleRowContextWithinDirectory(
+  state: PathStoreState,
+  directoryNodeId: NodeId,
+  index: number,
+  directoryStartIndex: number,
+  parentVisibleDepth: number,
+  ancestors: readonly VisibleRowCursorWithIndex[]
+): {
+  ancestors: readonly VisibleRowCursorWithIndex[];
+  cursor: VisibleRowCursor;
+  index: number;
+  posInSet: number;
+  setSize: number;
+} {
+  const directoryIndex = getDirectoryIndex(state, directoryNodeId);
+  const { childIndex, childVisibleIndex, localVisibleIndex } =
+    selectChildIndexByVisibleIndex(state.snapshot.nodes, directoryIndex, index);
+  const childId = directoryIndex.childIds[childIndex];
+  if (childId == null) {
+    throw new Error(`Visible index ${String(index)} is out of range`);
+  }
+
+  return selectVisibleRowContextWithinSubtree(
+    state,
+    childId,
+    localVisibleIndex,
+    directoryStartIndex + childVisibleIndex,
+    parentVisibleDepth + 1,
+    childIndex,
+    directoryIndex.childIds.length,
+    ancestors
+  );
+}
+
+function selectVisibleRowContextWithinSubtree(
+  state: PathStoreState,
+  nodeId: NodeId,
+  index: number,
+  rowIndex: number,
+  visibleDepth: number,
+  posInSet: number,
+  setSize: number,
+  ancestors: readonly VisibleRowCursorWithIndex[]
+): {
+  ancestors: readonly VisibleRowCursorWithIndex[];
+  cursor: VisibleRowCursor;
+  index: number;
+  posInSet: number;
+  setSize: number;
+} {
+  const node = requireNode(state, nodeId);
+  if (!isDirectoryNode(node)) {
+    if (index === 0) {
+      return {
+        ancestors,
+        cursor: {
+          headNodeId: nodeId,
+          terminalNodeId: nodeId,
+          visibleDepth,
+        },
+        index: rowIndex,
+        posInSet,
+        setSize,
+      };
+    }
+
+    throw new Error(`Visible index ${String(index)} is out of range for file`);
+  }
+
+  const currentCursor = createVisibleRowCursor(state, nodeId, visibleDepth);
+  if (index === 0) {
+    return {
+      ancestors,
+      cursor: currentCursor,
+      index: rowIndex,
+      posInSet,
+      setSize,
+    };
+  }
+
+  const terminalNode = requireNode(state, currentCursor.terminalNodeId);
+  if (
+    !isDirectoryNode(terminalNode) ||
+    !isDirectoryExpanded(state, currentCursor.terminalNodeId, terminalNode)
+  ) {
+    throw new Error(
+      `Visible index ${String(index)} is out of range for collapsed directory`
+    );
+  }
+
+  return selectVisibleRowContextWithinDirectory(
+    state,
+    currentCursor.terminalNodeId,
+    index - 1,
+    rowIndex + 1,
+    currentCursor.visibleDepth,
+    [
+      ...ancestors,
+      { cursor: currentCursor, index: rowIndex, posInSet, setSize },
+    ]
+  );
+}
+
+export function getVisibleRowContext(
+  state: PathStoreState,
+  index: number
+): PathStoreVisibleRowContext | null {
+  const totalVisibleCount = getVisibleCount(state);
+  if (index < 0 || index >= totalVisibleCount) {
+    return null;
+  }
+
+  const selected = selectVisibleRowContextWithinDirectory(
+    state,
+    state.snapshot.rootId,
+    index,
+    0,
+    -1,
+    []
+  );
+  const ancestorPaths = selected.ancestors.map((ancestor) =>
+    materializeNodePath(state, ancestor.cursor.terminalNodeId)
+  );
+  let cachedAncestorRows: readonly PathStoreVisibleAncestorRow[] | null = null;
+
+  return {
+    ancestorPaths,
+    get ancestorRows() {
+      if (cachedAncestorRows != null) {
+        return cachedAncestorRows;
+      }
+
+      const ancestorRows: PathStoreVisibleAncestorRow[] = [];
+      const rowAncestorPaths: string[] = [];
+      for (const ancestor of selected.ancestors) {
+        const ancestorRow = materializeVisibleAncestorRow(
+          state,
+          ancestor,
+          totalVisibleCount,
+          [...rowAncestorPaths]
+        );
+        ancestorRows.push(ancestorRow);
+        rowAncestorPaths.push(ancestorRow.row.path);
+      }
+      cachedAncestorRows = ancestorRows;
+      return cachedAncestorRows;
+    },
+    index: selected.index,
+    posInSet: selected.posInSet,
+    row: materializeVisibleRow(state, selected.cursor),
+    setSize: selected.setSize,
+    subtreeEndIndex: getVisibleRowSubtreeEndIndex(
+      state,
+      selected.cursor,
+      selected.index,
+      totalVisibleCount
+    ),
+  };
 }
 
 export function getVisibleSlice(

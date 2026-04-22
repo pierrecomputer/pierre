@@ -101,6 +101,25 @@ export interface PathStoreVisibleRow {
   path: string;
 }
 
+export interface PathStoreVisibleAncestorRow {
+  ancestorPaths: readonly string[];
+  index: number;
+  posInSet: number;
+  row: PathStoreVisibleRow;
+  setSize: number;
+  subtreeEndIndex: number;
+}
+
+export interface PathStoreVisibleRowContext {
+  ancestorPaths: readonly string[];
+  ancestorRows: readonly PathStoreVisibleAncestorRow[];
+  index: number;
+  posInSet: number;
+  row: PathStoreVisibleRow;
+  setSize: number;
+  subtreeEndIndex: number;
+}
+
 export interface PathStoreVisibleTreeProjectionRow {
   index: number;
   parentPath: string | null;

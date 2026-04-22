@@ -168,7 +168,11 @@ export function selectChildIndexByVisibleIndex(
   nodes: readonly PathStoreNode[],
   index: DirectoryChildIndex,
   visibleIndex: number
-): { childIndex: number; localVisibleIndex: number } {
+): {
+  childIndex: number;
+  childVisibleIndex: number;
+  localVisibleIndex: number;
+} {
   const chunkSums = index.childVisibleChunkSums;
 
   if (chunkSums != null) {
@@ -176,12 +180,16 @@ export function selectChildIndexByVisibleIndex(
     let childIndex = 0;
     for (const chunkVisibleCount of chunkSums) {
       if (remainingIndex < chunkVisibleCount) {
-        return selectChildIndexWithinChunk(
+        const selected = selectChildIndexWithinChunk(
           nodes,
           index,
           childIndex,
           remainingIndex
         );
+        return {
+          ...selected,
+          childVisibleIndex: visibleIndex - selected.localVisibleIndex,
+        };
       }
 
       remainingIndex -= chunkVisibleCount;
@@ -206,7 +214,11 @@ export function selectChildIndexByVisibleIndex(
     }
 
     if (remainingIndex < childNode.visibleSubtreeCount) {
-      return { childIndex, localVisibleIndex: remainingIndex };
+      return {
+        childIndex,
+        childVisibleIndex: visibleIndex - remainingIndex,
+        localVisibleIndex: remainingIndex,
+      };
     }
 
     remainingIndex -= childNode.visibleSubtreeCount;

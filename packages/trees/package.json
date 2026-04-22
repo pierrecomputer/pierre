@@ -51,8 +51,9 @@
   },
   "scripts": {
     "build": "tsdown --clean && bun scripts/assert-no-path-store.ts",
-    "benchmark": "bun run benchmark:file-tree-get-item",
-    "benchmark:file-tree-get-item": "bun run ./scripts/benchmarkFileTreeGetItem.ts",
+    "benchmark": "bun run ./scripts/benchmark.ts",
+    "benchmark:file-tree-get-item": "bun run ./scripts/benchmark.ts --preset get-item",
+    "benchmark:sticky-scroll": "bun run ./scripts/benchmark.ts --preset sticky-scroll",
     "profile:file-tree": "bun run ./scripts/profileFileTree.ts",
     "dev": "echo 'Watching for changes…' && tsdown --watch src --watch ../path-store/src --log-level error",
     "test": "bun test",

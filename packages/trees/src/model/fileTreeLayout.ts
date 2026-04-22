@@ -10,6 +10,9 @@ export type FileTreeLayoutMetrics = {
   overscan: number;
   scrollTop: number;
   viewportHeight: number;
+  // Optional precomputed sticky rows. Callers that can derive sticky state from
+  // compact ancestor metadata pass it here to avoid scanning every visible row.
+  stickyRows?: readonly FileTreeLayoutStickyRow[];
   // Optional external row count. Callers can skip materializing the full row
   // array (O(n) per scroll) when sticky-row computation is not needed — pass
   // an empty `rows` array plus the real count here so geometry still resolves.
@@ -333,7 +336,10 @@ export function computeFileTreeLayout<Row extends FileTreeLayoutRow>(
   const overscan = Math.max(0, Math.floor(metrics.overscan));
   const maxScrollTop = Math.max(0, totalHeight - viewportHeight);
   const scrollTop = clamp(metrics.scrollTop, 0, maxScrollTop);
-  const stickyRows = computeStickyRows(rows, scrollTop, metrics.itemHeight);
+  const stickyRows =
+    (metrics.stickyRows as
+      | readonly FileTreeLayoutStickyRow<Row>[]
+      | undefined) ?? computeStickyRows(rows, scrollTop, metrics.itemHeight);
   const stickyHeight = stickyRows.reduce(
     (maximumBottom, entry) =>
       Math.max(maximumBottom, entry.top + metrics.itemHeight),

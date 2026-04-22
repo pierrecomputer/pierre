@@ -120,6 +120,11 @@ export interface FileTreeVisibleRow {
   setSize: number;
 }
 
+export interface FileTreeStickyRowCandidate {
+  row: FileTreeVisibleRow;
+  subtreeEndIndex: number;
+}
+
 export interface FileTreeItemHandleBase {
   deselect(): void;
   focus(): void;

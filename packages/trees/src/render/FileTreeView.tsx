@@ -36,6 +36,7 @@ import type {
   FileTreeDropTarget,
   FileTreeItemHandle,
   FileTreeRowDecoration,
+  FileTreeStickyRowCandidate,
   FileTreeViewProps,
   FileTreeVisibleRow,
 } from '../model/types';
@@ -199,6 +200,29 @@ type FileTreeViewLayoutState = {
   visibleRows: readonly FileTreeVisibleRow[];
 };
 
+function computeStickyRowsFromCandidates(
+  candidates: readonly FileTreeStickyRowCandidate[],
+  scrollTop: number,
+  itemHeight: number,
+  totalRowCount: number
+): readonly FileTreeLayoutStickyRow<FileTreeVisibleRow>[] {
+  return candidates
+    .map((candidate, slotDepth) => {
+      const defaultTop = slotDepth * itemHeight;
+      const nextBoundaryIndex = candidate.subtreeEndIndex + 1;
+      if (nextBoundaryIndex >= totalRowCount) {
+        return { row: candidate.row, top: defaultTop };
+      }
+
+      const nextBoundaryTop = nextBoundaryIndex * itemHeight - scrollTop;
+      return {
+        row: candidate.row,
+        top: Math.min(defaultTop, nextBoundaryTop - itemHeight),
+      };
+    })
+    .filter((entry) => entry.top + itemHeight > 0);
+}
+
 // Builds one visible-row snapshot so the layout engine and renderer consume the
 // same projection, sticky chain, occlusion window, and mounted list slice.
 //
@@ -222,22 +246,47 @@ function computeFileTreeViewLayoutState({
   viewportHeight: number;
 }): FileTreeViewLayoutState {
   const visibleCount = controller.getVisibleCount();
-  const visibleRows =
+  const stickyCandidates =
     stickyFolders && visibleCount > 0
+      ? controller.getStickyRowCandidates(scrollTop, itemHeight)
+      : [];
+  const visibleRows =
+    stickyCandidates == null && stickyFolders && visibleCount > 0
       ? controller.getVisibleRows(0, visibleCount - 1)
       : [];
+  const stickyRows =
+    stickyCandidates == null
+      ? undefined
+      : computeStickyRowsFromCandidates(
+          stickyCandidates,
+          scrollTop,
+          itemHeight,
+          visibleCount
+        );
   const snapshot = computeFileTreeLayout(visibleRows, {
     itemHeight,
     overscan,
     scrollTop,
+    stickyRows,
     totalRowCount: visibleCount,
     viewportHeight,
   });
 
+  const previewStickyCandidates =
+    stickyFolders && scrollTop <= 0 && visibleCount > 0
+      ? controller.getStickyRowCandidates(1, itemHeight)
+      : [];
   const overlayRows =
-    stickyFolders && scrollTop <= 0 && visibleRows.length > 0
-      ? computeStickyRows(visibleRows, 1, itemHeight)
-      : snapshot.sticky.rows;
+    previewStickyCandidates != null && scrollTop <= 0
+      ? computeStickyRowsFromCandidates(
+          previewStickyCandidates,
+          1,
+          itemHeight,
+          visibleCount
+        )
+      : stickyFolders && scrollTop <= 0 && visibleRows.length > 0
+        ? computeStickyRows(visibleRows, 1, itemHeight)
+        : snapshot.sticky.rows;
   const overlayHeight = overlayRows.reduce(
     (maxBottom, entry) => Math.max(maxBottom, entry.top + itemHeight),
     0
