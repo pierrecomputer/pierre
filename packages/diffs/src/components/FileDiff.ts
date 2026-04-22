@@ -1850,6 +1850,9 @@ export class FileDiff<LAnnotation = undefined> {
             rowCount += totalRows;
           }
           preTrimCount -= rowsToRemove;
+          if (preTrimCount === 0 && newSize === 0) {
+            pendingMetadataTrim = true;
+          }
         }
         // If we are in a post clip era...
         else if (hasPostTrim) {

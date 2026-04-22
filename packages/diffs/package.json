@@ -72,9 +72,11 @@
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",
     "@types/hast": "catalog:",
+    "@types/jsdom": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "autoprefixer": "catalog:",
+    "jsdom": "catalog:",
     "lightningcss": "catalog:",
     "postcss": "catalog:",
     "postcss-calc": "catalog:",
