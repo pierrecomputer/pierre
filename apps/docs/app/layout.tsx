@@ -9,7 +9,6 @@ import {
   JetBrains_Mono,
 } from 'next/font/google';
 import localFont from 'next/font/local';
-import Script from 'next/script';
 
 import './globals.css';
 import { type ProductId, PRODUCTS } from './product-config';
@@ -168,12 +167,13 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${berkeleyMono.variable} ${geistSans.variable} ${geistMono.variable} ${firaMono.variable} ${ibmPlexMono.variable} ${jetbrainsMono.variable} ${inter.variable}`}
     >
-      <body>
-        <Script
+      <head>
+        <script
           id="docs-theme-bootstrap"
-          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
         />
+      </head>
+      <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           {children}
           <Toaster />
