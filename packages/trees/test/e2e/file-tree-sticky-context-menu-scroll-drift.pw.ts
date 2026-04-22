@@ -493,3 +493,185 @@ test.describe('sticky context-menu drift fixture @diagnostic', () => {
     expect(reportText).toContain('down-2');
   });
 });
+
+test.describe('sticky focused row context-menu regressions', () => {
+  test('does not restore the trigger to a parked focused row after hover clears', async ({
+    page,
+  }) => {
+    await page.goto(
+      '/test/e2e/fixtures/file-tree-sticky-context-menu-scroll-drift.html'
+    );
+    await page.waitForFunction(
+      () => window.__stickyContextMenuDriftFixtureReady === true
+    );
+
+    const focusedPath = await page.evaluate(() => {
+      const host = document.querySelector('file-tree-container');
+      const shadowRoot = host?.shadowRoot;
+      const row = Array.from(
+        shadowRoot?.querySelectorAll('button[data-type="item"]') ?? []
+      ).find((button) => {
+        return (
+          button instanceof HTMLButtonElement &&
+          button.dataset.fileTreeStickyRow !== 'true' &&
+          button.dataset.itemParked !== 'true' &&
+          button.dataset.itemType === 'file'
+        );
+      });
+      if (!(row instanceof HTMLButtonElement) || row.dataset.itemPath == null) {
+        throw new Error('Expected a visible file row to focus.');
+      }
+
+      row.click();
+      return row.dataset.itemPath;
+    });
+    await nextFrames(page);
+
+    await page.evaluate(
+      ({ scrollTop }) => {
+        window.__stickyContextMenuDriftProbe?.setScrollTop(scrollTop);
+      },
+      { scrollTop: 1500 }
+    );
+    await nextFrames(page);
+    await page.waitForFunction((path) => {
+      const host = document.querySelector('file-tree-container');
+      const parkedRow = host?.shadowRoot?.querySelector<HTMLButtonElement>(
+        `button[data-item-path="${path}"][data-item-parked="true"]`
+      );
+      return parkedRow instanceof HTMLButtonElement;
+    }, focusedPath);
+    await page.waitForTimeout(80);
+    await nextFrames(page);
+
+    const hoveredPath = await page.evaluate((path) => {
+      const host = document.querySelector('file-tree-container');
+      const shadowRoot = host?.shadowRoot;
+      const row = Array.from(
+        shadowRoot?.querySelectorAll('button[data-type="item"]') ?? []
+      ).find((button) => {
+        return (
+          button instanceof HTMLButtonElement &&
+          button.dataset.fileTreeStickyRow !== 'true' &&
+          button.dataset.itemParked !== 'true' &&
+          button.dataset.itemPath !== path
+        );
+      });
+      if (!(row instanceof HTMLButtonElement) || row.dataset.itemPath == null) {
+        throw new Error('Expected a visible row to hover.');
+      }
+
+      row.dispatchEvent(
+        new PointerEvent('pointerover', { bubbles: true, composed: true })
+      );
+      return row.dataset.itemPath;
+    }, focusedPath);
+    await nextFrames(page);
+
+    await expect(
+      page.locator(
+        'file-tree-container button[data-type="context-menu-trigger"]'
+      )
+    ).toHaveAttribute('data-visible', 'true');
+
+    await page.evaluate(() => {
+      const host = document.querySelector('file-tree-container');
+      const root = host?.shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-root="true"]'
+      );
+      root?.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+    });
+    await nextFrames(page);
+
+    await expect(
+      page.locator(
+        'file-tree-container button[data-type="context-menu-trigger"]'
+      )
+    ).toHaveAttribute('data-visible', 'false');
+    await expect(
+      page.locator('file-tree-container [data-type="context-menu-anchor"]')
+    ).toHaveAttribute('data-visible', 'false');
+
+    expect(hoveredPath).not.toBe(focusedPath);
+  });
+
+  test('clears visual focus after a focused row is parked and restored', async ({
+    page,
+  }) => {
+    await page.goto(
+      '/test/e2e/fixtures/file-tree-sticky-context-menu-scroll-drift.html'
+    );
+    await page.waitForFunction(
+      () => window.__stickyContextMenuDriftFixtureReady === true
+    );
+
+    const focusedPath = await page.evaluate(() => {
+      const outsideButton = document.createElement('button');
+      outsideButton.dataset.testOutsideFocus = 'true';
+      outsideButton.type = 'button';
+      outsideButton.textContent = 'Outside focus';
+      document.body.append(outsideButton);
+
+      const host = document.querySelector('file-tree-container');
+      const shadowRoot = host?.shadowRoot;
+      const row = Array.from(
+        shadowRoot?.querySelectorAll('button[data-type="item"]') ?? []
+      ).find((button) => {
+        return (
+          button instanceof HTMLButtonElement &&
+          button.dataset.fileTreeStickyRow !== 'true' &&
+          button.dataset.itemParked !== 'true' &&
+          button.dataset.itemType === 'file'
+        );
+      });
+      if (!(row instanceof HTMLButtonElement) || row.dataset.itemPath == null) {
+        throw new Error('Expected a visible file row to focus.');
+      }
+
+      row.click();
+      return row.dataset.itemPath;
+    });
+    await nextFrames(page);
+
+    await page.evaluate(
+      ({ scrollTop }) => {
+        window.__stickyContextMenuDriftProbe?.setScrollTop(scrollTop);
+      },
+      { scrollTop: 1500 }
+    );
+    await nextFrames(page);
+    await page.waitForFunction((path) => {
+      const host = document.querySelector('file-tree-container');
+      const parkedRow = host?.shadowRoot?.querySelector<HTMLButtonElement>(
+        `button[data-item-path="${path}"][data-item-parked="true"]`
+      );
+      return parkedRow instanceof HTMLButtonElement;
+    }, focusedPath);
+    await page.waitForTimeout(80);
+    await nextFrames(page);
+
+    await page.evaluate(() => {
+      window.__stickyContextMenuDriftProbe?.setScrollTop(0);
+    });
+    await page.waitForTimeout(80);
+    await nextFrames(page);
+
+    await expect(
+      page.locator(
+        `file-tree-container button[data-item-path="${focusedPath}"][data-item-focused="true"]`
+      )
+    ).toHaveCount(1);
+
+    await page.locator('[data-test-outside-focus="true"]').focus();
+    await nextFrames(page);
+
+    await expect(
+      page.locator('file-tree-container button[data-item-focused="true"]')
+    ).toHaveCount(0);
+    await expect(
+      page.locator(
+        'file-tree-container button[data-type="context-menu-trigger"]'
+      )
+    ).toHaveAttribute('data-visible', 'false');
+  });
+});

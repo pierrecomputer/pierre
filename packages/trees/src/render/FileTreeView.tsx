@@ -759,7 +759,13 @@ function getContextMenuAnchorButton(
     return null;
   }
 
-  return stickyButtonRefs.get(path) ?? rowButtonRefs.get(path) ?? null;
+  const stickyButton = stickyButtonRefs.get(path) ?? null;
+  if (stickyButton != null) {
+    return stickyButton;
+  }
+
+  const rowButton = rowButtonRefs.get(path) ?? null;
+  return rowButton?.dataset.itemParked === 'true' ? null : rowButton;
 }
 
 function createContextMenuItem(
@@ -1305,6 +1311,7 @@ export function FileTreeView({
   const [lastContextMenuInteraction, setLastContextMenuInteraction] = useState<
     'focus' | 'pointer' | null
   >(null);
+  const [scrollSettledRevision, setScrollSettledRevision] = useState(0);
   const [contextMenuState, setContextMenuState] = useState<{
     anchorRect: FileTreeContextMenuOpenContext['anchorRect'] | null;
     item: FileTreeContextMenuItem;
@@ -2345,6 +2352,16 @@ export function FileTreeView({
     if (rootElement == null) {
       return;
     }
+    let nullFocusOutTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearNullFocusOutTimer = (): void => {
+      if (nullFocusOutTimer == null) {
+        return;
+      }
+
+      clearTimeout(nullFocusOutTimer);
+      nullFocusOutTimer = null;
+    };
 
     const updateActiveItemPath = (): void => {
       const activeTreeElement = getActiveTreeElement(rootElement);
@@ -2355,6 +2372,7 @@ export function FileTreeView({
     };
 
     const onFocusIn = (): void => {
+      clearNullFocusOutTimer();
       domFocusOwnerRef.current = true;
       updateActiveItemPath();
     };
@@ -2362,22 +2380,43 @@ export function FileTreeView({
       const nextTarget = event.relatedTarget;
       if (nextTarget == null) {
         // Virtualization can swap the focused row between rendered and parked
-        // states before the replacement element receives focus.
+        // states before the replacement element receives focus. Defer the
+        // ownership check so a true blur to the page can still clear visual
+        // focus once the browser has finished moving focus.
+        clearNullFocusOutTimer();
+        nullFocusOutTimer = setTimeout(() => {
+          nullFocusOutTimer = null;
+          if (getActiveTreeElement(rootElement) != null) {
+            updateActiveItemPath();
+            return;
+          }
+
+          domFocusOwnerRef.current = false;
+          setActiveItemPath(null);
+        }, 0);
         return;
       }
 
       if (!(nextTarget instanceof Node) || !rootElement.contains(nextTarget)) {
+        clearNullFocusOutTimer();
         domFocusOwnerRef.current = false;
         setActiveItemPath(null);
         return;
       }
 
-      updateActiveItemPath();
+      const nextActiveItemPath =
+        nextTarget instanceof HTMLElement
+          ? (nextTarget.dataset.itemPath ?? null)
+          : null;
+      setActiveItemPath((previousPath) =>
+        previousPath === nextActiveItemPath ? previousPath : nextActiveItemPath
+      );
     };
 
     rootElement.addEventListener('focusin', onFocusIn);
     rootElement.addEventListener('focusout', onFocusOut);
     return () => {
+      clearNullFocusOutTimer();
       rootElement.removeEventListener('focusin', onFocusIn);
       rootElement.removeEventListener('focusout', onFocusOut);
     };
@@ -2475,6 +2514,7 @@ export function FileTreeView({
           delete rootElement.dataset.isScrolling;
         }
         isScrollingRef.current = false;
+        setScrollSettledRevision((revision) => revision + 1);
         scrollTimer = null;
       }, 50);
     };
@@ -2881,8 +2921,18 @@ export function FileTreeView({
     visibleRows,
   ]);
 
+  const focusedRowIsVisible =
+    focusedIndex >= 0 &&
+    focusedIndex >= layoutSnapshot.visible.startIndex &&
+    focusedIndex <= layoutSnapshot.visible.endIndex;
+  const focusedRowIsSticky =
+    focusedPath != null &&
+    stickyRows.some((entry) => getFileTreeRowPath(entry.row) === focusedPath);
+  const focusedRowHasVisibleAnchor = focusedRowIsVisible || focusedRowIsSticky;
   const focusTriggerPath =
-    contextMenuButtonTriggerEnabled && domFocusOwnerRef.current === true
+    contextMenuButtonTriggerEnabled &&
+    domFocusOwnerRef.current === true &&
+    focusedRowHasVisibleAnchor
       ? focusedPath
       : null;
   const pointerTriggerPath =
@@ -2896,11 +2946,17 @@ export function FileTreeView({
   const isPointerContextMenuOpen = contextMenuState?.source === 'right-click';
 
   useLayoutEffect(() => {
+    if (isScrollingRef.current && contextMenuState == null) {
+      return;
+    }
+
     updateTriggerPosition(getTriggerAnchorButton(triggerPath));
   }, [
+    contextMenuState,
     getTriggerAnchorButton,
     range,
     resolvedViewportHeight,
+    scrollSettledRevision,
     stickyRows,
     triggerPath,
     updateTriggerPosition,

@@ -874,6 +874,205 @@ describe('file-tree composition surfaces', () => {
     }
   });
 
+  test('hides the focused trigger when the retained focused row is parked offscreen', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            triggerMode: 'button',
+          },
+        },
+        flattenEmptyDirectories: false,
+        initialExpansion: 'open',
+        initialVisibleRowCount: 90 / 30,
+        overscan: 0,
+        paths: [
+          'README.md',
+          ...Array.from({ length: 20 }, (_unused, index) => {
+            return `src/generated/file-${String(index).padStart(2, '0')}.ts`;
+          }),
+        ],
+        stickyFolders: true,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const root = getTreeRoot(shadowRoot, dom);
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      const firstRow = shadowRoot?.querySelector(
+        'button[data-type="item"][data-item-type="file"]'
+      );
+      const trigger = shadowRoot?.querySelector(
+        '[data-type="context-menu-trigger"]'
+      );
+
+      if (
+        !(firstRow instanceof dom.window.HTMLButtonElement) ||
+        !(scrollElement instanceof dom.window.HTMLElement) ||
+        !(trigger instanceof dom.window.HTMLButtonElement)
+      ) {
+        throw new Error('expected virtualized tree elements');
+      }
+      const focusedPath = firstRow.dataset.itemPath;
+      if (focusedPath == null) {
+        throw new Error('expected focused row path');
+      }
+
+      firstRow.dispatchEvent(
+        new dom.window.MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      await flushDom();
+      expect(fileTree.getFocusedPath()).toBe(focusedPath);
+      expect(trigger.dataset.visible).toBe('true');
+
+      scrollElement.scrollTop = 240;
+      scrollElement.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      await flushDom();
+
+      const parkedFirstRow = getItemButton(shadowRoot, dom, focusedPath);
+      expect(parkedFirstRow.dataset.itemParked).toBe('true');
+
+      const visibleHoverRow = Array.from(
+        shadowRoot?.querySelectorAll('button[data-type="item"]') ?? []
+      ).find((button) => {
+        return (
+          button instanceof dom.window.HTMLButtonElement &&
+          button.dataset.itemParked !== 'true' &&
+          button.dataset.fileTreeStickyRow !== 'true' &&
+          button.dataset.itemPath !== focusedPath
+        );
+      });
+      if (!(visibleHoverRow instanceof dom.window.HTMLButtonElement)) {
+        throw new Error('expected a visible hover row');
+      }
+
+      visibleHoverRow.dispatchEvent(
+        new dom.window.Event('pointerover', { bubbles: true, composed: true })
+      );
+      await flushDom();
+      expect(trigger.dataset.visible).toBe('true');
+
+      root.dispatchEvent(new dom.window.Event('pointerleave'));
+      await flushDom();
+
+      expect(trigger.dataset.visible).toBe('false');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('clears visual focus after a null-target blur from a row restored after parking', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            triggerMode: 'button',
+          },
+        },
+        flattenEmptyDirectories: false,
+        initialExpansion: 'open',
+        initialVisibleRowCount: 90 / 30,
+        overscan: 0,
+        paths: [
+          'README.md',
+          ...Array.from({ length: 20 }, (_unused, index) => {
+            return `src/generated/file-${String(index).padStart(2, '0')}.ts`;
+          }),
+        ],
+        stickyFolders: true,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      const trigger = shadowRoot?.querySelector(
+        '[data-type="context-menu-trigger"]'
+      );
+      const firstRow = shadowRoot?.querySelector(
+        'button[data-type="item"][data-item-type="file"]'
+      );
+
+      if (
+        !(firstRow instanceof dom.window.HTMLButtonElement) ||
+        !(scrollElement instanceof dom.window.HTMLElement) ||
+        !(trigger instanceof dom.window.HTMLButtonElement)
+      ) {
+        throw new Error('expected virtualized tree elements');
+      }
+      const focusedPath = firstRow.dataset.itemPath;
+      if (focusedPath == null) {
+        throw new Error('expected focused row path');
+      }
+
+      firstRow.dispatchEvent(
+        new dom.window.MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      await flushDom();
+
+      scrollElement.scrollTop = 240;
+      scrollElement.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+      expect(
+        getItemButton(shadowRoot, dom, focusedPath).dataset.itemParked
+      ).toBe('true');
+
+      scrollElement.scrollTop = 0;
+      scrollElement.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+      await flushDom();
+
+      const restoredFirstRow = getItemButton(shadowRoot, dom, focusedPath);
+      expect(restoredFirstRow.dataset.itemParked).toBeUndefined();
+      expect(restoredFirstRow.dataset.itemFocused).toBe('true');
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      await flushDom();
+      expect(trigger.dataset.visible).toBe('true');
+
+      restoredFirstRow.blur();
+      await flushDom();
+      await flushDom();
+
+      expect(
+        shadowRoot?.querySelector('button[data-item-focused="true"]')
+      ).toBeNull();
+      expect(trigger.dataset.visible).toBe('false');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('button-capable modes reserve the action lane and keep lane attrs stable', async () => {
     const { cleanup, dom } = installDom();
     try {
