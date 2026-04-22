@@ -17,13 +17,18 @@ import * as shapeTreeDataForFastRenderingConstants from './Guides/ShapeTreeDataF
 import * as showGitStatusAndRowAnnotationsConstants from './Guides/ShowGitStatusAndRowAnnotations/constants';
 import * as ssrGuideConstants from './Guides/SSR/constants';
 import * as styleAndThemeTheTreeConstants from './Guides/StyleAndThemeTheTree/constants';
+import {
+  OVERVIEW_FILES,
+  OVERVIEW_INITIAL_EXPANDED_ITEMS,
+  OVERVIEW_OPTIONS,
+} from './Overview/constants';
 import * as reactApiConstants from './Reference/ReactAPI/constants';
 import * as ssrApiConstants from './Reference/SSRAPI/constants';
 import * as stylingAndThemingConstants from './Reference/StylingAndTheming/constants';
 import * as vanillaApiConstants from './Reference/VanillaAPI/constants';
 import Footer from '@/components/Footer';
-import { Notice } from '@/components/ui/notice';
 import { renderMDX, renderMDXWithPreloadedFiles } from '@/lib/mdx';
+import { preloadFileTree } from '@/lib/treesCompat';
 
 interface DocsSection {
   filePath: string;
@@ -125,7 +130,7 @@ export default function TreesDocsPage() {
       <DocsLayout>
         <div className="min-w-0 space-y-10">
           <HeadingAnchors />
-          <IntroSection />
+          <OverviewSection />
           <DocsSectionGroup
             id="guides"
             title="Guides"
@@ -143,27 +148,21 @@ export default function TreesDocsPage() {
   );
 }
 
-function IntroSection() {
-  return (
-    <ProseWrapper>
-      <h1>Trees docs</h1>
-      <Notice variant="warning">
-        Trees is in beta. Start from the public React, vanilla, and SSR entry
-        points on this page. Expect polish and small API shifts between beta
-        releases.
-      </Notice>
-      <p>
-        These docs stay guide-first. Pick your runtime, shape tree data before
-        it reaches the UI, and then add search, item actions, styling, icons,
-        row signals, or SSR as needed.
-      </p>
-      <p>
-        Trees keeps one path-first model across React, vanilla, and hydration.
-        Selection, focus, search, rename, drag and drop, Git status, and row
-        annotations all work in terms of canonical paths.
-      </p>
-    </ProseWrapper>
+async function OverviewSection() {
+  const ssrPayload = preloadFileTree(
+    { ...OVERVIEW_OPTIONS, initialFiles: OVERVIEW_FILES },
+    { initialExpandedItems: OVERVIEW_INITIAL_EXPANDED_ITEMS }
   );
+  const content = await renderMDX({
+    filePath: 'trees/docs/Overview/content.mdx',
+    scope: {
+      OVERVIEW_FILES,
+      OVERVIEW_INITIAL_EXPANDED_ITEMS,
+      OVERVIEW_OPTIONS,
+      overviewPrerenderedHTML: ssrPayload.shadowHtml,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
 }
 
 // Render each section, preloading its code snippets in parallel when the

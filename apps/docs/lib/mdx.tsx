@@ -4,6 +4,7 @@ import {
   IconArrowRight,
   IconBulbFill,
   IconCiWarningFill,
+  IconFlagFill,
   IconInfoFill,
 } from '@pierre/icons';
 import { compileMDX } from 'next-mdx-remote/rsc';
@@ -58,6 +59,7 @@ const defaultComponents = {
   IconCiWarningFill,
   IconInfoFill,
   IconBulbFill,
+  IconFlagFill,
   DocsCodeExample,
   CustomHunkSeparators,
   FileTree,

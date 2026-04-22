@@ -1,0 +1,23 @@
+## Overview
+
+<Notice variant="warning" icon={<IconFlagFill />}>
+  **Trees is in beta.** Start from the public React, vanilla, and SSR entry
+  points on this page. Expect polish and small API shifts between beta releases.
+</Notice>
+
+**Trees** keeps one path-first model across React, vanilla, and SSR hydration.
+Selection, focus, search, rename, drag and drop, Git status, and row annotations
+all work in terms of canonical paths.
+
+<FileTree
+  files={OVERVIEW_FILES}
+  options={OVERVIEW_OPTIONS}
+  initialExpandedItems={OVERVIEW_INITIAL_EXPANDED_ITEMS}
+  prerenderedHTML={overviewPrerenderedHTML}
+  className="py-4 rounded-lg border-1"
+  style={{ height: 394 }}
+/>
+
+These docs stay guide-first. Pick your runtime, shape tree data before it
+reaches the UI, and then add search, item actions, styling, icons, row signals,
+or SSR as needed.
