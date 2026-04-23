@@ -1,4 +1,4 @@
-import type { AnnotationSide } from '@pierre/diffs';
+import type { AnnotationSide, SelectedLineRange } from '@pierre/diffs';
 import type { FileTreeOptions, GitStatusEntry } from '@pierre/trees';
 
 type FileTreeInputSort = NonNullable<FileTreeOptions['sort']>;
@@ -10,12 +10,14 @@ export interface SavedCommentMetadata {
   key: string;
   author: string;
   message: string;
+  range: SelectedLineRange;
 }
 
 export interface DraftCommentMetadata {
   kind: 'draft';
   key: string;
   message: string;
+  range: SelectedLineRange;
 }
 
 export type CommentMetadata = SavedCommentMetadata | DraftCommentMetadata;
@@ -36,6 +38,7 @@ export interface CodeViewerSavedCommentEvent {
   key: string;
   lineNumber: number;
   message: string;
+  range: SelectedLineRange;
   side: AnnotationSide;
 }
 
@@ -50,6 +53,7 @@ export interface CodeViewerSavedCommentEntry {
   key: string;
   lineNumber: number;
   message: string;
+  range: SelectedLineRange;
   side: AnnotationSide;
 }
 

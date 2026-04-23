@@ -67,11 +67,15 @@ export function GHViewer() {
   );
   const handleSelectComment = useCallback(
     (comment: CodeViewerSavedCommentEntry) => {
+      viewerRef.current?.setSelectedLines({
+        id: comment.itemId,
+        range: comment.range,
+      });
       viewerRef.current?.scrollTo({
         type: 'line',
         id: comment.itemId,
-        lineNumber: comment.lineNumber,
-        side: comment.side,
+        lineNumber: comment.range.end,
+        side: comment.range.endSide ?? comment.range.side,
         align: 'center',
         behavior: 'smooth-auto',
       });

@@ -1,4 +1,5 @@
 import {
+  areSelectionsEqual,
   type CodeViewerDiffItem,
   type CodeViewerItem,
   type CodeViewerLineSelection,
@@ -91,6 +92,17 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
     }
   );
 
+  const handleToggleCommentSelection = useStableCallback(
+    (selection: CodeViewerLineSelection) => {
+      setSelectedLines((prev) =>
+        prev?.id === selection.id &&
+        areSelectionsEqual(prev.range, selection.range)
+          ? null
+          : selection
+      );
+    }
+  );
+
   const handleCreateDraftComment = useStableCallback(
     (range: SelectedLineRange, itemId: string) => {
       const side = range.endSide ?? range.side;
@@ -139,6 +151,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
             kind: 'draft',
             key: commentKey,
             message: '',
+            range,
           },
         });
         item.annotations = nextAnnotations;
@@ -182,6 +195,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
         return next;
       });
 
+      setSelectedLines(null);
       if (removedAnnotation != null && isSavedAnnotation(removedAnnotation)) {
         onCommentDeleted?.({ itemId, key });
       }
@@ -233,6 +247,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
                 key,
                 author: 'you',
                 message: trimmedMessage,
+                range: annotation.metadata.range,
               },
             };
           });
@@ -254,12 +269,14 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
         return next;
       });
 
+      setSelectedLines(null);
       onCommentSaved?.({
         author: 'you',
         itemId,
         key,
         lineNumber: draftAnnotation.lineNumber,
         message: trimmedMessage,
+        range: draftAnnotation.metadata.range,
         side: draftAnnotation.side,
       });
     }
@@ -296,6 +313,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
           annotation={annotation}
           itemId={item.id}
           onDelete={handleRemoveComment}
+          onToggleSelection={handleToggleCommentSelection}
         />
       );
     }

@@ -198,6 +198,7 @@ export function upsertSavedCommentSidebarEntry(
     key: entry.key,
     lineNumber: entry.lineNumber,
     message: entry.message,
+    range: entry.range,
     side: entry.side,
   };
 
