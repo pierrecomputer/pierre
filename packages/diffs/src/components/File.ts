@@ -218,8 +218,11 @@ export class File<LAnnotation = undefined> {
     this.lineAnnotations = lineAnnotations;
   }
 
-  public setSelectedLines(range: SelectedLineRange | null): void {
-    this.interactionManager.setSelection(range);
+  public setSelectedLines(
+    range: SelectedLineRange | null,
+    options?: { notify?: boolean }
+  ): void {
+    this.interactionManager.setSelection(range, options);
   }
 
   public flushManagers(): void {

@@ -185,6 +185,7 @@ export interface InteractionManagerBaseOptions<
   onTokenLeave?(props: OnTokenEventProps<TMode>, event: PointerEvent): unknown;
   __debugPointerEvents?: LogTypes;
   enableLineSelection?: boolean;
+  controlledSelection?: boolean;
   onLineSelected?: (range: SelectedLineRange | null) => void;
   onLineSelectionStart?: (range: SelectedLineRange | null) => void;
   onLineSelectionChange?: (range: SelectedLineRange | null) => void;
@@ -225,6 +226,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   private hasDocumentPointerListeners = false;
 
   private selectedRange: SelectedLineRange | null = null;
+  private proposedSelectedRange: SelectedLineRange | null | undefined;
   private renderedSelectionRange: SelectedLineRange | null | undefined;
   private selectionAnchor: SelectionPoint | undefined;
   private queuedSelectionRender: number | undefined;
@@ -301,7 +303,11 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     return this.renderedSelectionRange === null;
   }
 
-  setSelection(range: SelectedLineRange | null): void {
+  setSelection(
+    range: SelectedLineRange | null,
+    // NOTE(amadeus): I do want to think about this a bit more...
+    options?: { notify?: boolean }
+  ): void {
     const isRangeChange = !(
       range === this.selectedRange ||
       areSelectionsEqual(range ?? undefined, this.selectedRange ?? undefined)
@@ -309,9 +315,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     if (!this.isSelectionDirty() && !isRangeChange) {
       return;
     }
+    this.proposedSelectedRange = undefined;
     this.selectedRange = range;
     this.renderSelection();
-    if (isRangeChange) {
+    if (isRangeChange && options?.notify !== false) {
       this.notifySelectionCommitted();
     }
   }
@@ -748,7 +755,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           : (this.selectedRange.endSide ?? this.selectedRange.side),
       };
       this.updateSelection(lineNumber, eventSide, false);
-      this.notifySelectionStart(this.selectedRange);
+      this.notifySelectionStart(this.getCurrentSelectionRange());
       this.pointerSession = { mode: 'selecting', pointerId: event.pointerId };
       this.attachDocumentPointerListeners();
       return;
@@ -770,10 +777,14 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       return;
     }
 
-    this.selectedRange = null;
+    if (this.options.controlledSelection === true) {
+      this.proposedSelectedRange = null;
+    } else {
+      this.selectedRange = null;
+    }
     this.selectionAnchor = { lineNumber, side: eventSide };
     this.updateSelection(lineNumber, eventSide, false);
-    this.notifySelectionStart(this.selectedRange);
+    this.notifySelectionStart(this.getCurrentSelectionRange());
     this.pointerSession = { mode: 'selecting', pointerId: event.pointerId };
     this.attachDocumentPointerListeners();
   }
@@ -804,7 +815,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         side: point.side,
       };
       this.updateSelection(point.lineNumber, point.side, false);
-      this.notifySelectionStart(this.selectedRange);
+      this.notifySelectionStart(this.getCurrentSelectionRange());
     }
     this.attachDocumentPointerListeners();
   }
@@ -865,7 +876,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           pointerInfo.eventSide,
           false
         );
-        this.notifySelectionStart(this.selectedRange);
+        this.notifySelectionStart(this.getCurrentSelectionRange());
         this.notifySelectionChangeDelta();
         this.pointerSession = {
           mode: 'selecting',
@@ -900,8 +911,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         );
         this.selectionAnchor = undefined;
         if (enableLineSelection) {
-          this.notifySelectionEnd(this.selectedRange);
+          this.notifySelectionEnd(this.getCurrentSelectionRange());
           this.notifySelectionCommitted();
+          this.clearProposedSelection();
         }
         this.clearPointerSession();
         this.detachDocumentPointerListeners();
@@ -915,8 +927,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         this.selectionAnchor = undefined;
         this.clearPendingSingleLineState();
         this.detachDocumentPointerListeners();
-        this.notifySelectionEnd(this.selectedRange);
+        this.notifySelectionEnd(this.getCurrentSelectionRange());
         this.notifySelectionCommitted();
+        this.clearProposedSelection();
         return;
       }
       case 'selecting': {
@@ -926,8 +939,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         this.selectionAnchor = undefined;
         this.detachDocumentPointerListeners();
         this.clearPointerSession();
-        this.notifySelectionEnd(this.selectedRange);
+        this.notifySelectionEnd(this.getCurrentSelectionRange());
         this.notifySelectionCommitted();
+        this.clearProposedSelection();
       }
     }
   };
@@ -945,6 +959,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           }
         }
         this.selectionAnchor = undefined;
+        this.clearProposedSelection();
         this.clearPendingSingleLineState();
         this.clearPointerSession();
         this.detachDocumentPointerListeners();
@@ -1110,12 +1125,22 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       : [lineNumber - 1, lineNumber - 1];
   }
 
+  private getCurrentSelectionRange(): SelectedLineRange | null {
+    return this.proposedSelectedRange !== undefined
+      ? this.proposedSelectedRange
+      : this.selectedRange;
+  }
+
+  private clearProposedSelection(): void {
+    this.proposedSelectedRange = undefined;
+  }
+
   private updateSelection(
     currentLine: number | null,
     side?: SelectionSide,
     emitChange = true
   ): void {
-    const { selectedRange: previousRange } = this;
+    const previousRange = this.getCurrentSelectionRange();
     let nextRange: SelectedLineRange | null;
     if (currentLine == null) {
       nextRange = null;
@@ -1134,11 +1159,17 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     ) {
       return;
     }
-    this.selectedRange = nextRange;
+    if (this.options.controlledSelection === true) {
+      this.proposedSelectedRange = nextRange;
+    } else {
+      this.selectedRange = nextRange;
+      this.queuedSelectionRender ??= requestAnimationFrame(
+        this.renderSelection
+      );
+    }
     if (emitChange) {
       this.notifySelectionChangeDelta();
     }
-    this.queuedSelectionRender ??= requestAnimationFrame(this.renderSelection);
   }
 
   private getIndexesFromSelection(
@@ -1270,11 +1301,13 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   };
 
   private notifySelectionCommitted(): void {
-    this.options.onLineSelected?.(this.selectedRange ?? null);
+    this.options.onLineSelected?.(this.getCurrentSelectionRange() ?? null);
   }
 
   private notifySelectionChangeDelta(): void {
-    this.options.onLineSelectionChange?.(this.selectedRange ?? null);
+    this.options.onLineSelectionChange?.(
+      this.getCurrentSelectionRange() ?? null
+    );
   }
 
   private notifySelectionStart(range: SelectedLineRange | null): void {
@@ -1640,6 +1673,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     renderGutterUtility,
     __debugPointerEvents,
     enableLineSelection,
+    controlledSelection,
     onLineSelected,
     onLineSelectionStart,
     onLineSelectionChange,
@@ -1648,7 +1682,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
   onHunkExpand?: (
     hunkIndex: number,
     direction: ExpansionDirections,
-    expansionLineCount?: number
+    expansionLineCountOverride?: number
   ) => unknown,
   getLineIndex?: GetLineIndexUtility,
   onMergeConflictActionClick?: (target: MergeConflictActionTarget) => void
@@ -1676,6 +1710,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     __debugPointerEvents,
 
     enableLineSelection,
+    controlledSelection,
     onLineSelected,
     onLineSelectionStart,
     onLineSelectionChange,

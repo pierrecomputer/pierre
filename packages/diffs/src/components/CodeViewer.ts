@@ -5,6 +5,7 @@ import {
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
 } from '../constants';
+import type { SelectedLineRange } from '../managers/InteractionManager';
 import {
   dequeueRender,
   queueRender,
@@ -27,6 +28,7 @@ import type {
   VirtualWindowSpecs,
 } from '../types';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
+import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 import { roundToDevicePixel } from '../utils/roundToDevicePixel';
 import type { WorkerPoolManager } from '../worker';
@@ -122,6 +124,11 @@ export interface CodeViewerRenderedFileItem<LAnnotation> {
 export type CodeViewerRenderedItem<LAnnotation> =
   | CodeViewerRenderedDiffItem<LAnnotation>
   | CodeViewerRenderedFileItem<LAnnotation>;
+
+export interface CodeViewerLineSelection {
+  id: string;
+  range: SelectedLineRange;
+}
 
 export interface CodeViewerCoordinator<LAnnotation> {
   hasHeaderRenderers: boolean;
@@ -224,6 +231,7 @@ const CODE_VIEWER_DIFF_OPTION_KEYS = [
   'enableGutterUtility',
   '__debugPointerEvents',
   'enableLineSelection',
+  'controlledSelection',
   'disableErrorHandling',
 ] as const;
 
@@ -247,6 +255,7 @@ const CODE_VIEWER_FILE_OPTION_KEYS = [
   'enableGutterUtility',
   '__debugPointerEvents',
   'enableLineSelection',
+  'controlledSelection',
   'disableErrorHandling',
 ] as const;
 
@@ -267,7 +276,7 @@ type CodeViewerModeItemContext<
 type CodeViewerModeOptionCallback<
   LAnnotation,
   TMode extends CodeViewerMode,
-  TKey extends CodeViewerSharedCallbackKeys,
+  TKey extends CodeViewerSharedCallbackKeys | CodeViewerSelectionCallbackKeys,
 > = TMode extends 'file'
   ? CodeViewerFileOptionCallback<LAnnotation, TKey>
   : CodeViewerDiffOptionCallback<LAnnotation, TKey>;
@@ -275,7 +284,7 @@ type CodeViewerModeOptionCallback<
 type CodeViewerModeInternalOptionCallback<
   LAnnotation,
   TMode extends CodeViewerMode,
-  TKey extends CodeViewerSharedCallbackKeys,
+  TKey extends CodeViewerSharedCallbackKeys | CodeViewerSelectionCallbackKeys,
 > = (
   ...args: [
     ...OverloadCallbackArgs<
@@ -309,6 +318,9 @@ const CODE_VIEWER_SHARED_CALLBACK_KEYS = [
   'onTokenClick',
   'onTokenEnter',
   'onTokenLeave',
+] as const;
+
+const CODE_VIEWER_SELECTION_CALLBACK_KEYS = [
   'onLineSelected',
   'onLineSelectionStart',
   'onLineSelectionChange',
@@ -318,8 +330,18 @@ const CODE_VIEWER_SHARED_CALLBACK_KEYS = [
 type CodeViewerSharedCallbackKeys =
   (typeof CODE_VIEWER_SHARED_CALLBACK_KEYS)[number];
 
+type CodeViewerSelectionCallbackKeys =
+  (typeof CODE_VIEWER_SELECTION_CALLBACK_KEYS)[number];
+
 type CodeViewerSharedCallbackOptions<LAnnotation> = {
   [TKey in CodeViewerSharedCallbackKeys]?: CodeViewerOptionCallback<
+    LAnnotation,
+    TKey
+  >;
+};
+
+type CodeViewerSelectionCallbackOptions<LAnnotation> = {
+  [TKey in CodeViewerSelectionCallbackKeys]?: CodeViewerOptionCallback<
     LAnnotation,
     TKey
   >;
@@ -328,11 +350,14 @@ type CodeViewerSharedCallbackOptions<LAnnotation> = {
 export interface CodeViewerOptions<LAnnotation>
   extends
     CodeViewerPassThroughOptions<LAnnotation>,
-    CodeViewerSharedCallbackOptions<LAnnotation> {
+    CodeViewerSharedCallbackOptions<LAnnotation>,
+    CodeViewerSelectionCallbackOptions<LAnnotation> {
   hunkSeparators?: Exclude<HunkSeparators, 'custom'>;
   itemMetrics?: VirtualFileMetrics;
   smoothScrollSettings?: SmoothScrollSettings;
   stickyHeaders?: boolean;
+  controlledSelection?: boolean;
+  onSelectedLinesChange?(selection: CodeViewerLineSelection | null): void;
   viewerMetrics?: CodeViewerMetrics;
 }
 
@@ -377,6 +402,7 @@ export class CodeViewer<LAnnotation = undefined> {
   };
   private items: CodeViewerContextItem<LAnnotation>[] = [];
   private idToItem: Map<string, CodeViewerContextItem<LAnnotation>> = new Map();
+  private selectedLines: CodeViewerLineSelection | null = null;
   // NOTE(amadeus): We should probably attach an id to instances and use that
   // for lookups, instead of maintaining this map...
   private instanceToItem: Map<
@@ -529,6 +555,7 @@ export class CodeViewer<LAnnotation = undefined> {
 
   public reset(): void {
     this.cleanAllRenderedItems();
+    this.selectedLines = null;
     this.items.length = 0;
     this.idToItem.clear();
     this.instanceToItem.clear();
@@ -641,12 +668,29 @@ export class CodeViewer<LAnnotation = undefined> {
     this.render();
   }
 
+  public setSelectedLines(
+    selection: CodeViewerLineSelection | null,
+    options?: { notify?: boolean }
+  ): void {
+    this.applySelectedLines(selection, options);
+  }
+
+  public getSelectedLines(): CodeViewerLineSelection | null {
+    return this.selectedLines;
+  }
+
+  public clearSelectedLines(options?: { notify?: boolean }): void {
+    this.applySelectedLines(null, options);
+  }
+
   public addItem(input: CodeViewerItem<LAnnotation>): void {
     this.addItems([input]);
+    this.syncSelection();
   }
 
   public addItems(inputs: readonly CodeViewerItem<LAnnotation>[]): void {
     this.appendItemsInternal(inputs);
+    this.syncSelection();
   }
 
   public setItems(items: readonly CodeViewerItem<LAnnotation>[]): void {
@@ -657,6 +701,7 @@ export class CodeViewer<LAnnotation = undefined> {
     } else if (!this.tryAppendItems(items)) {
       this.reconcileItems(items);
     }
+    this.syncSelection();
   }
 
   /**
@@ -939,6 +984,49 @@ export class CodeViewer<LAnnotation = undefined> {
     return item as CodeViewerModeItemContext<LAnnotation, TMode>;
   }
 
+  private applySelectedLines(
+    selection: CodeViewerLineSelection | null,
+    options?: { notify?: boolean }
+  ): void {
+    const { selectedLines: prevSelection } = this;
+    if (
+      (selection == null && prevSelection == null) ||
+      (selection != null &&
+        prevSelection?.id === selection.id &&
+        areSelectionsEqual(prevSelection.range, selection.range))
+    ) {
+      return;
+    }
+
+    // If we are selecting a new element and had a previous selection, null out
+    // the current selection, otherwise if it's a selection on the same item
+    // the next selection will take care of that for us
+    if (prevSelection != null && prevSelection.id !== selection?.id) {
+      this.idToItem
+        .get(prevSelection.id)
+        ?.instance.setSelectedLines(null, { notify: false });
+    }
+
+    this.selectedLines = selection;
+    this.idToItem
+      .get(selection?.id ?? '')
+      ?.instance.setSelectedLines(selection?.range ?? null, options);
+  }
+
+  private syncSelection(): void {
+    if (this.selectedLines == null) {
+      return;
+    }
+
+    const item = this.idToItem.get(this.selectedLines.id);
+    if (item == null) {
+      this.selectedLines = null;
+      return;
+    }
+
+    item.instance.setSelectedLines(this.selectedLines.range, { notify: false });
+  }
+
   private wrapCallbackWithContext<
     TMode extends CodeViewerMode,
     TArgs extends unknown[],
@@ -980,6 +1068,39 @@ export class CodeViewer<LAnnotation = undefined> {
     ) as CodeViewerModeOptions<LAnnotation, TMode>[TKey] | undefined;
   }
 
+  private getWrappedSelectionOptionCallback<
+    TMode extends CodeViewerMode,
+    TKey extends CodeViewerSelectionCallbackKeys,
+  >(
+    mode: TMode,
+    key: TKey,
+    itemId: string
+  ): CodeViewerModeOptions<LAnnotation, TMode>[TKey] | undefined {
+    if (this.options.enableLineSelection !== true) {
+      return undefined;
+    }
+    const callback = this.options[key] as
+      | ((
+          range: SelectedLineRange | null,
+          context: CodeViewerModeItemContext<LAnnotation, TMode>
+        ) => unknown)
+      | undefined;
+    return ((range: SelectedLineRange | null) => {
+      const item = this.getItemByMode(itemId, mode);
+      if (item == null) {
+        return undefined;
+      }
+      const selection = range == null ? null : { id: itemId, range };
+      if (this.options.controlledSelection !== true) {
+        if (range != null || this.selectedLines?.id === itemId) {
+          this.applySelectedLines(selection, { notify: false });
+        }
+      }
+      this.options.onSelectedLinesChange?.(selection);
+      return callback?.(range, item);
+    }) as CodeViewerModeOptions<LAnnotation, TMode>[TKey] | undefined;
+  }
+
   private createOptions(mode: 'file', itemId: string): FileOptions<LAnnotation>;
   private createOptions(
     mode: 'diff',
@@ -1014,6 +1135,17 @@ export class CodeViewer<LAnnotation = undefined> {
 
     for (const key of CODE_VIEWER_SHARED_CALLBACK_KEYS) {
       const callback = this.getWrappedOptionCallback(mode, key, itemId);
+      if (callback !== undefined) {
+        target[key] = callback;
+      }
+    }
+
+    for (const key of CODE_VIEWER_SELECTION_CALLBACK_KEYS) {
+      const callback = this.getWrappedSelectionOptionCallback(
+        mode,
+        key,
+        itemId
+      );
       if (callback !== undefined) {
         target[key] = callback;
       }

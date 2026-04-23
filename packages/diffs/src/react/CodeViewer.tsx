@@ -22,6 +22,7 @@ import {
   CodeViewer as CodeViewerClass,
   type CodeViewerCoordinator,
   type CodeViewerItem,
+  type CodeViewerLineSelection,
   type CodeViewerOptions,
   type CodeViewerRenderedItem,
   type CodeViewerScrollTarget,
@@ -49,6 +50,8 @@ interface CodeViewerBaseProps<LAnnotation> {
   style?: CSSProperties;
   containerRef?: Ref<HTMLDivElement>;
   disableWorkerPool?: boolean;
+  selectedLines?: CodeViewerLineSelection | null;
+  onSelectedLinesChange?(selection: CodeViewerLineSelection | null): void;
   onScroll?(scrollTop: number, viewer: CodeViewerClass<LAnnotation>): void;
   renderCustomHeader?(item: CodeViewerItem<LAnnotation>): ReactNode;
   renderHeaderPrefix?(item: CodeViewerItem<LAnnotation>): ReactNode;
@@ -86,6 +89,9 @@ export type CodeViewerProps<LAnnotation = undefined> =
 
 export interface CodeViewerHandle<LAnnotation> {
   scrollTo(target: CodeViewerScrollTarget): void;
+  setSelectedLines(selection: CodeViewerLineSelection | null): void;
+  getSelectedLines(): CodeViewerLineSelection | null;
+  clearSelectedLines(): void;
   getWindowSpecs(): VirtualWindowSpecs;
   getInstance(): CodeViewerClass<LAnnotation> | undefined;
 }
@@ -129,12 +135,14 @@ function CodeViewerInner<LAnnotation = undefined>(
     disableWorkerPool = false,
     items,
     onScroll,
+    onSelectedLinesChange,
     options,
     renderAnnotation,
     renderCustomHeader,
     renderGutterUtility,
     renderHeaderMetadata,
     renderHeaderPrefix,
+    selectedLines,
     style,
   }: CodeViewerProps<LAnnotation>,
   ref: React.ForwardedRef<CodeViewerHandle<LAnnotation>>
@@ -152,6 +160,12 @@ function CodeViewerInner<LAnnotation = undefined>(
     renderHeaderMetadata != null;
   const hasRenderers =
     hasHeaderRenderers || hasAnnotationRenderer || hasGutterRenderer;
+  const emitSelectedLinesChange = useStableCallback(
+    (selection: CodeViewerLineSelection | null) => {
+      onSelectedLinesChange?.(selection);
+    }
+  );
+  const controlledSelection = selectedLines !== undefined;
 
   const managedOptions = useMemo(
     () =>
@@ -159,8 +173,18 @@ function CodeViewerInner<LAnnotation = undefined>(
         options,
         hasCustomHeader,
         hasGutterRenderer,
+        onSelectedLinesChange:
+          onSelectedLinesChange != null ? emitSelectedLinesChange : undefined,
+        controlledSelection,
       }),
-    [options, hasCustomHeader, hasGutterRenderer]
+    [
+      options,
+      hasCustomHeader,
+      hasGutterRenderer,
+      onSelectedLinesChange,
+      emitSelectedLinesChange,
+      controlledSelection,
+    ]
   );
 
   const [slotContentStore] = useState<ManagedContentStore<LAnnotation>>(() =>
@@ -269,6 +293,10 @@ function CodeViewerInner<LAnnotation = undefined>(
         shouldRender = true;
       }
 
+      if (selectedLines !== undefined) {
+        instance.setSelectedLines(selectedLines, { notify: false });
+      }
+
       const slotPublish = instance.setSlotCoordinator(slotCoordinator);
       let forceInlinePublish = false;
       if (slotCoordinator !== prevSlotCoordinator) {
@@ -313,6 +341,40 @@ function CodeViewerInner<LAnnotation = undefined>(
           instance.scrollTo(target);
         }
       },
+      setSelectedLines(selection) {
+        const { instance } = cachedDataRef.current;
+        if (instance == null) {
+          console.error(
+            'CodeViewer.setSelectedLines: no valid instance to update selection with',
+            selection
+          );
+        } else {
+          instance.setSelectedLines(selection, { notify: false });
+          emitSelectedLinesChange(selection);
+        }
+      },
+      getSelectedLines() {
+        const { instance } = cachedDataRef.current;
+        if (instance == null) {
+          console.error(
+            'CodeViewer.getSelectedLines: no valid instance exists'
+          );
+          return null;
+        } else {
+          return instance.getSelectedLines();
+        }
+      },
+      clearSelectedLines() {
+        const { instance } = cachedDataRef.current;
+        if (instance == null) {
+          console.error(
+            'CodeViewer.clearSelectedLines: no valid instance to update selection with'
+          );
+        } else {
+          instance.clearSelectedLines({ notify: false });
+          emitSelectedLinesChange(null);
+        }
+      },
       getWindowSpecs() {
         const { instance } = cachedDataRef.current;
         if (instance == null) {
@@ -326,7 +388,7 @@ function CodeViewerInner<LAnnotation = undefined>(
         return cachedDataRef.current.instance;
       },
     }),
-    []
+    [emitSelectedLinesChange]
   );
 
   return (
@@ -382,19 +444,28 @@ interface CreateManagedCodeViewerOptionsProps<LAnnotation> {
   options: CodeViewerOptions<LAnnotation> | undefined;
   hasCustomHeader: boolean;
   hasGutterRenderer: boolean;
+  onSelectedLinesChange?(selection: CodeViewerLineSelection | null): void;
+  controlledSelection: boolean;
 }
 
 function createManagedCodeViewerOptions<LAnnotation>({
   options,
   hasCustomHeader,
   hasGutterRenderer,
+  onSelectedLinesChange,
+  controlledSelection,
 }: CreateManagedCodeViewerOptionsProps<LAnnotation>):
   | CodeViewerOptions<LAnnotation>
   | undefined {
-  if (!hasCustomHeader && !hasGutterRenderer) {
+  if (
+    !hasCustomHeader &&
+    !hasGutterRenderer &&
+    onSelectedLinesChange == null &&
+    !controlledSelection
+  ) {
     return options;
   }
-  options = { ...options };
+  options = { ...options, controlledSelection, onSelectedLinesChange };
 
   // The imperative CodeViewer adapters use this callback's presence to
   // switch file and diff headers into custom-slot mode. React portals

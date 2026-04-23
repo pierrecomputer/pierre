@@ -411,8 +411,13 @@ export class FileDiff<LAnnotation = undefined> {
     return true;
   }
 
-  public setSelectedLines(range: SelectedLineRange | null): void {
-    this.interactionManager.setSelection(range);
+  public setSelectedLines(
+    range: SelectedLineRange | null,
+    // NOTE(amadeus): We should probably at the very least treat this as a
+    // shared type somehow...
+    options?: { notify?: boolean }
+  ): void {
+    this.interactionManager.setSelection(range, options);
   }
 
   public flushManagers(): void {
