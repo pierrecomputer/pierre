@@ -275,9 +275,14 @@ export class File<LAnnotation = undefined> {
       lineAnnotations,
     } = props;
     this.hydrateElements(fileContainer, prerenderedHTML);
-    // If we have no pre tag and header tag, then something probably didn't
-    // pre-render and we should kick off a render.
-    if (this.pre == null && this.headerElement == null) {
+    if (
+      shouldRenderCode(this.pre, file) ||
+      shouldRenderHeader(
+        this.headerElement,
+        file,
+        this.options.disableFileHeader
+      )
+    ) {
       this.render({ ...props, preventEmit: true });
     }
     // Otherwise orchestrate our setup.
@@ -1228,4 +1233,19 @@ export class File<LAnnotation = undefined> {
     this.errorWrapper?.remove();
     this.errorWrapper = undefined;
   }
+}
+
+function shouldRenderCode(
+  pre: HTMLPreElement | undefined,
+  file: FileContents | undefined
+): boolean {
+  return pre == null && file != null;
+}
+
+function shouldRenderHeader(
+  headerElement: HTMLElement | undefined,
+  file: FileContents | undefined,
+  disableFileHeader: boolean = false
+): boolean {
+  return headerElement == null && file != null && !disableFileHeader;
 }

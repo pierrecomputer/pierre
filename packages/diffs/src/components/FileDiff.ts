@@ -493,9 +493,17 @@ export class FileDiff<LAnnotation = undefined> {
       fileDiff,
     } = props;
     this.hydrateElements(fileContainer, prerenderedHTML);
-    // If we have no pre tag and header tag, then something probably didn't
-    // pre-render and we should kick off a render.
-    if (this.pre == null && this.headerElement == null) {
+    if (
+      shouldRenderCode(
+        this.pre,
+        hasDiffContent({ fileDiff, oldFile, newFile })
+      ) ||
+      shouldRenderHeader(
+        this.headerElement,
+        hasDiffHeaderContent({ fileDiff, oldFile, newFile }),
+        this.options.disableFileHeader
+      )
+    ) {
       this.render({ ...props, preventEmit: true });
     }
     // Otherwise orchestrate our setup
@@ -2099,6 +2107,47 @@ export class FileDiff<LAnnotation = undefined> {
     this.errorWrapper?.remove();
     this.errorWrapper = undefined;
   }
+}
+
+interface HasContentProps {
+  fileDiff: FileDiffMetadata | undefined;
+  oldFile: FileContents | undefined;
+  newFile: FileContents | undefined;
+}
+
+function hasDiffContent({
+  fileDiff,
+  oldFile,
+  newFile,
+}: HasContentProps): boolean {
+  return (
+    (fileDiff != null && fileDiff.hunks.length > 0) ||
+    oldFile != null ||
+    newFile != null
+  );
+}
+
+function hasDiffHeaderContent({
+  fileDiff,
+  oldFile,
+  newFile,
+}: HasContentProps): boolean {
+  return fileDiff != null || oldFile != null || newFile != null;
+}
+
+function shouldRenderCode(
+  pre: HTMLPreElement | undefined,
+  hasContent: boolean
+): boolean {
+  return pre == null && hasContent;
+}
+
+function shouldRenderHeader(
+  headerElement: HTMLElement | undefined,
+  hasContent: boolean,
+  disableFileHeader = false
+): boolean {
+  return headerElement == null && hasContent && !disableFileHeader;
 }
 
 function getElementChildren(
