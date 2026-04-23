@@ -1,6 +1,7 @@
 import {
   type CodeViewerDiffItem,
   type CodeViewerItem,
+  type CodeViewerLineSelection,
   type CodeViewerOptions,
   DEFAULT_THEMES,
   DEFAULT_VIRTUAL_FILE_METRICS,
@@ -20,6 +21,7 @@ import {
   type SetStateAction,
   useMemo,
   useRef,
+  useState,
 } from 'react';
 
 import { DraftAnnotation } from './DraftAnnotation';
@@ -80,6 +82,14 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
   setItems,
 }: CodeViewerWrapperProps) {
   const nextCommentKeyRef = useRef(0);
+  const [selectedLines, setSelectedLines] =
+    useState<CodeViewerLineSelection | null>(null);
+
+  const handleSetSelection = useStableCallback(
+    (selection: CodeViewerLineSelection | null) => {
+      setSelectedLines(selection);
+    }
+  );
 
   const handleCreateDraftComment = useStableCallback(
     (range: SelectedLineRange, itemId: string) => {
@@ -326,6 +336,8 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
         className
       )}
       options={options}
+      selectedLines={selectedLines}
+      onSelectedLinesChange={handleSetSelection}
       // To test annotations and headers and stuff...
       renderAnnotation={renderCommentAnnotation}
       // metrics={CUSTOM_HEADER_METRICS}
