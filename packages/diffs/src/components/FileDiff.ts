@@ -496,7 +496,8 @@ export class FileDiff<LAnnotation = undefined> {
     if (
       shouldRenderCode(
         this.pre,
-        hasDiffContent({ fileDiff, oldFile, newFile })
+        hasDiffContent({ fileDiff, oldFile, newFile }),
+        this.options.collapsed
       ) ||
       shouldRenderHeader(
         this.headerElement,
@@ -2137,9 +2138,10 @@ function hasDiffHeaderContent({
 
 function shouldRenderCode(
   pre: HTMLPreElement | undefined,
-  hasContent: boolean
+  hasContent: boolean,
+  collapsed = false
 ): boolean {
-  return pre == null && hasContent;
+  return !collapsed && pre == null && hasContent;
 }
 
 function shouldRenderHeader(

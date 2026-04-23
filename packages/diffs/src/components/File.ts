@@ -276,7 +276,7 @@ export class File<LAnnotation = undefined> {
     } = props;
     this.hydrateElements(fileContainer, prerenderedHTML);
     if (
-      shouldRenderCode(this.pre, file) ||
+      shouldRenderCode(this.pre, file, this.options.collapsed) ||
       shouldRenderHeader(
         this.headerElement,
         file,
@@ -1237,9 +1237,10 @@ export class File<LAnnotation = undefined> {
 
 function shouldRenderCode(
   pre: HTMLPreElement | undefined,
-  file: FileContents | undefined
+  file: FileContents | undefined,
+  collapsed = false
 ): boolean {
-  return pre == null && file != null;
+  return !collapsed && pre == null && file != null;
 }
 
 function shouldRenderHeader(

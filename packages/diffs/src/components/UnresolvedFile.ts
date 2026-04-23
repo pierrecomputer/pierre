@@ -355,16 +355,25 @@ export class UnresolvedFile<
     }
     this.hydrateElements(fileContainer, prerenderedHTML);
     this.setActiveMergeConflictState(source.actions, source.markerRows);
-    // If we have no pre tag, then we should render
-    if (this.pre == null) {
+    // If necessary hydration elements don't exist, we should assume a full
+    // render
+    if (
+      shouldRenderCode(this.pre, source.fileDiff, this.options.collapsed) ||
+      shouldRenderHeader(
+        this.headerElement,
+        source.fileDiff,
+        this.options.disableFileHeader
+      )
+    ) {
       this.render({ ...props, preventEmit: true });
     }
     // Otherwise orchestrate our setup
     else {
       this.hydrationSetup({ fileDiff: source.fileDiff, lineAnnotations });
+      if (this.pre != null) {
+        this.renderMergeConflictActionSlots();
+      }
     }
-
-    this.renderMergeConflictActionSlots();
     if (!preventEmit) {
       this.emitPostRender();
     }
@@ -821,6 +830,22 @@ function shiftMergeConflictRegion(
         ? conflict.baseMarkerLineNumber + lineDelta
         : undefined,
   };
+}
+
+function shouldRenderCode(
+  pre: HTMLPreElement | undefined,
+  fileDiff: FileDiffMetadata | undefined,
+  collapsed = false
+): boolean {
+  return !collapsed && pre == null && fileDiff != null;
+}
+
+function shouldRenderHeader(
+  headerElement: HTMLElement | undefined,
+  fileDiff: FileDiffMetadata | undefined,
+  disableFileHeader = false
+): boolean {
+  return headerElement == null && fileDiff != null && !disableFileHeader;
 }
 
 // NOTE(amadeus): Should probably pull this out into a util, and make variants
