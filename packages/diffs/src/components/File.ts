@@ -17,6 +17,7 @@ import {
   type InteractionManagerBaseOptions,
   pluckInteractionOptions,
   type SelectedLineRange,
+  type SelectionWriteOptions,
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
@@ -220,7 +221,7 @@ export class File<LAnnotation = undefined> {
 
   public setSelectedLines(
     range: SelectedLineRange | null,
-    options?: { notify?: boolean }
+    options?: SelectionWriteOptions
   ): void {
     this.interactionManager.setSelection(range, options);
   }

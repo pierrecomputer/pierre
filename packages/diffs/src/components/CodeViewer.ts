@@ -5,7 +5,10 @@ import {
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
 } from '../constants';
-import type { SelectedLineRange } from '../managers/InteractionManager';
+import type {
+  SelectedLineRange,
+  SelectionWriteOptions,
+} from '../managers/InteractionManager';
 import {
   dequeueRender,
   queueRender,
@@ -670,7 +673,7 @@ export class CodeViewer<LAnnotation = undefined> {
 
   public setSelectedLines(
     selection: CodeViewerLineSelection | null,
-    options?: { notify?: boolean }
+    options?: SelectionWriteOptions
   ): void {
     this.applySelectedLines(selection, options);
   }
@@ -679,7 +682,7 @@ export class CodeViewer<LAnnotation = undefined> {
     return this.selectedLines;
   }
 
-  public clearSelectedLines(options?: { notify?: boolean }): void {
+  public clearSelectedLines(options?: SelectionWriteOptions): void {
     this.applySelectedLines(null, options);
   }
 
@@ -986,7 +989,7 @@ export class CodeViewer<LAnnotation = undefined> {
 
   private applySelectedLines(
     selection: CodeViewerLineSelection | null,
-    options?: { notify?: boolean }
+    options?: SelectionWriteOptions
   ): void {
     const { selectedLines: prevSelection } = this;
     if (

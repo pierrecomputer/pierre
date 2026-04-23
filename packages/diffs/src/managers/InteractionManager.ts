@@ -56,6 +56,10 @@ export interface SelectedLineRange {
   endSide?: SelectionSide;
 }
 
+export interface SelectionWriteOptions {
+  notify?: boolean;
+}
+
 export type GetLineIndexUtility = (
   lineNumber: number,
   side?: SelectionSide
@@ -305,8 +309,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
   setSelection(
     range: SelectedLineRange | null,
-    // NOTE(amadeus): I do want to think about this a bit more...
-    options?: { notify?: boolean }
+    options?: SelectionWriteOptions
   ): void {
     const isRangeChange = !(
       range === this.selectedRange ||

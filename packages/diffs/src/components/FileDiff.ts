@@ -18,6 +18,7 @@ import {
   type InteractionManagerBaseOptions,
   pluckInteractionOptions,
   type SelectedLineRange,
+  type SelectionWriteOptions,
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
 import { ScrollSyncManager } from '../managers/ScrollSyncManager';
@@ -413,9 +414,7 @@ export class FileDiff<LAnnotation = undefined> {
 
   public setSelectedLines(
     range: SelectedLineRange | null,
-    // NOTE(amadeus): We should probably at the very least treat this as a
-    // shared type somehow...
-    options?: { notify?: boolean }
+    options?: SelectionWriteOptions
   ): void {
     this.interactionManager.setSelection(range, options);
   }
