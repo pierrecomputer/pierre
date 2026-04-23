@@ -38,6 +38,7 @@ export class VirtualizedFileDiff<
   // Only stores lines that differ what is returned from `getLineHeight`
   private heightCache: Map<number, number> = new Map();
   private isVisible: boolean = false;
+  private isSetup: boolean = false;
   private virtualizer: Virtualizer;
 
   constructor(
@@ -190,6 +191,7 @@ export class VirtualizedFileDiff<
     if (this.fileContainer != null) {
       this.virtualizer.disconnect(this.fileContainer);
     }
+    this.isSetup = false;
     super.cleanUp();
   }
 
@@ -340,9 +342,7 @@ export class VirtualizedFileDiff<
     fileDiff,
     ...props
   }: FileDiffRenderProps<LAnnotation> = {}): boolean {
-    // NOTE(amadeus): Probably not the safest way to determine first render...
-    // but for now...
-    const isFirstRender = this.fileContainer == null;
+    const { isSetup } = this;
 
     this.fileDiff ??=
       fileDiff ??
@@ -363,7 +363,7 @@ export class VirtualizedFileDiff<
       return false;
     }
 
-    if (isFirstRender) {
+    if (!isSetup) {
       this.computeApproximateSize();
       this.virtualizer.connect(fileContainer, this);
       this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
@@ -371,6 +371,7 @@ export class VirtualizedFileDiff<
         this.top,
         this.height
       );
+      this.isSetup = true;
     } else {
       this.top ??= this.virtualizer.getOffsetInScrollContainer(fileContainer);
     }
