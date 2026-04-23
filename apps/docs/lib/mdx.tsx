@@ -7,6 +7,7 @@ import {
   IconFlagFill,
   IconInfoFill,
 } from '@pierre/icons';
+import { FileTree } from '@trees/_lib/treesCompatClient';
 import { compileMDX } from 'next-mdx-remote/rsc';
 import Link from 'next/link';
 import { readFile } from 'node:fs/promises';
@@ -14,26 +15,25 @@ import { join } from 'node:path';
 import type { ComponentPropsWithoutRef } from 'react';
 import remarkGfm from 'remark-gfm';
 
-import { CustomHunkSeparators } from '../app/diff-examples/CustomHunkSeparators/CustomHunkSeparators';
-import { DocsCodeExample } from '../app/docs/DocsCodeExample';
-import { PackageManagerTabs } from '../app/docs/Installation/PackageManagerTabs';
-import { CodeToggle } from '../app/docs/Overview/CodeToggle';
+import { CustomHunkSeparators } from '../app/(diffs)/_examples/CustomHunkSeparators/CustomHunkSeparators';
+import { PackageManagerTabs } from '../app/(diffs)/docs/Installation/PackageManagerTabs';
+import { CodeToggle } from '../app/(diffs)/docs/Overview/CodeToggle';
 import {
   ComponentTabs,
   SharedPropTabs,
-} from '../app/docs/ReactAPI/ComponentTabs';
-import { TokenHookTabs } from '../app/docs/TokenHooks/ComponentTabs';
-import { AcceptRejectTabs } from '../app/docs/Utilities/AcceptRejectTabs';
+} from '../app/(diffs)/docs/ReactAPI/ComponentTabs';
+import { TokenHookTabs } from '../app/(diffs)/docs/TokenHooks/ComponentTabs';
+import { AcceptRejectTabs } from '../app/(diffs)/docs/Utilities/AcceptRejectTabs';
 import {
   DiffHunksTabs,
   VanillaComponentTabs,
   VanillaPropTabs,
-} from '../app/docs/VanillaAPI/ComponentTabs';
+} from '../app/(diffs)/docs/VanillaAPI/ComponentTabs';
+import { DocsCodeExample } from '../components/docs/DocsCodeExample';
 import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
 import remarkTocIgnore from './remark-toc-ignore';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
-import { FileTree } from '@/lib/treesCompatClient';
 
 function MdxLink(props: ComponentPropsWithoutRef<'a'>) {
   const href = props.href;

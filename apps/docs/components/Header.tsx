@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 
 import { HeaderMobileMenu } from './HeaderMobileMenu';
 import { Button } from './ui/button';
-import { getProductFromPathname } from '@/app/product-config';
+import { getProductFromPathname } from '@/lib/product-config';
 import { cn } from '@/lib/utils';
 
 export interface HeaderProps {

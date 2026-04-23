@@ -11,10 +11,10 @@ import {
 import localFont from 'next/font/local';
 
 import './globals.css';
-import { type ProductId, PRODUCTS } from './product-config';
 import { PreloadHighlighter } from '@/components/PreloadHighlighter';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
+import { type ProductId, PRODUCTS } from '@/lib/product-config';
 
 const inter = Inter({
   variable: '--font-inter',

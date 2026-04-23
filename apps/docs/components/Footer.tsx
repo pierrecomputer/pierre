@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-import { getExternalUrl, PRODUCTS } from '@/app/product-config';
+import { getExternalUrl, PRODUCTS } from '@/lib/product-config';
 
 const siteProduct = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
 const isTrees = siteProduct === 'trees';

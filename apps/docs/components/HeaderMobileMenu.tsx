@@ -8,7 +8,7 @@ import {
   getExternalUrl,
   type ProductConfig,
   PRODUCTS,
-} from '@/app/product-config';
+} from '@/lib/product-config';
 
 const siteProduct = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
 const isTrees = siteProduct === 'trees';

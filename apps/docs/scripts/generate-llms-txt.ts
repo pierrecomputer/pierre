@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, extname, join } from 'path';
 import { pathToFileURL } from 'url';
 
-import { PRODUCTS } from '../app/product-config';
-import type { ProductId } from '../app/product-config';
+import { PRODUCTS } from '../lib/product-config';
+import type { ProductId } from '../lib/product-config';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
