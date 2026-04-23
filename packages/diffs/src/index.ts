@@ -3,7 +3,6 @@ import {
   createCssVariablesTheme as createCSSVariablesTheme,
 } from 'shiki';
 
-export * from './components/AdvancedVirtualizedFileDiff';
 export * from './components/CodeViewer';
 export * from './components/File';
 export * from './components/FileDiff';

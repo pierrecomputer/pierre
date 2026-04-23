@@ -9,6 +9,10 @@ import type {
 } from '../types';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { iterateOverFile } from '../utils/iterateOverFile';
+import {
+  getVirtualFileHeaderRegion,
+  getVirtualFilePaddingBottom,
+} from '../utils/resolveVirtualFileMetrics';
 import type { WorkerPoolManager } from '../worker';
 import type { CodeViewer } from './CodeViewer';
 import { File, type FileOptions, type FileRenderProps } from './File';
@@ -196,9 +200,7 @@ export class VirtualizedFile<
     const { disableFileHeader = false, collapsed = false } = this.options;
     const lines = this.getOrCreateLineCache(this.file);
     const lastLineIndex = getLastVisibleLineIndex(lines);
-    let top = disableFileHeader
-      ? this.metrics.spacing
-      : this.metrics.diffHeaderHeight;
+    let top = getVirtualFileHeaderRegion(this.metrics, disableFileHeader);
 
     if (collapsed || lastLineIndex < 0) {
       return { top, height: 0 };
@@ -250,9 +252,10 @@ export class VirtualizedFile<
       return undefined;
     }
 
-    const headerRegion = disableFileHeader
-      ? this.metrics.spacing
-      : this.metrics.diffHeaderHeight;
+    const headerRegion = getVirtualFileHeaderRegion(
+      this.metrics,
+      disableFileHeader
+    );
     const firstRenderedLineIndex = Math.min(
       this.renderRange.startingLine,
       lastLineIndex
@@ -341,15 +344,15 @@ export class VirtualizedFile<
       collapsed = false,
       overflow = 'scroll',
     } = this.options;
-    const { diffHeaderHeight, spacing, lineHeight } = this.metrics;
+    const { lineHeight } = this.metrics;
     const lines = this.getOrCreateLineCache(this.file);
+    const headerRegion = getVirtualFileHeaderRegion(
+      this.metrics,
+      disableFileHeader
+    );
+    const paddingBottom = getVirtualFilePaddingBottom(this.metrics);
 
-    // Header or initial padding
-    if (!disableFileHeader) {
-      this.height += diffHeaderHeight;
-    } else {
-      this.height += spacing;
-    }
+    this.height += headerRegion;
     if (collapsed) {
       return;
     }
@@ -365,9 +368,8 @@ export class VirtualizedFile<
       });
     }
 
-    // Bottom padding
     if (lines.length > 0) {
-      this.height += spacing;
+      this.height += paddingBottom;
     }
 
     if (
@@ -516,12 +518,16 @@ export class VirtualizedFile<
     { top, bottom }: RenderWindow
   ): RenderRange {
     const { disableFileHeader = false, overflow = 'scroll' } = this.options;
-    const { diffHeaderHeight, spacing, hunkLineCount, lineHeight } =
-      this.metrics;
+    const { hunkLineCount, lineHeight } = this.metrics;
     const lines = this.getOrCreateLineCache(file);
     const lineCount = lines.length;
     const fileHeight = this.height;
-    const headerRegion = disableFileHeader ? spacing : diffHeaderHeight;
+    const headerRegion = getVirtualFileHeaderRegion(
+      this.metrics,
+      disableFileHeader
+    );
+    const paddingBottom =
+      lineCount > 0 ? getVirtualFilePaddingBottom(this.metrics) : 0;
 
     // File is outside render window
     if (fileTop < top - fileHeight || fileTop > bottom) {
@@ -529,7 +535,7 @@ export class VirtualizedFile<
         startingLine: 0,
         totalLines: 0,
         bufferBefore: 0,
-        bufferAfter: fileHeight - headerRegion - spacing,
+        bufferAfter: fileHeight - headerRegion - paddingBottom,
       };
     }
 
@@ -651,7 +657,7 @@ export class VirtualizedFile<
         startingLine: 0,
         totalLines: 0,
         bufferBefore: 0,
-        bufferAfter: fileHeight - headerRegion - spacing,
+        bufferAfter: fileHeight - headerRegion - paddingBottom,
       };
     }
 
@@ -678,8 +684,11 @@ export class VirtualizedFile<
     const finalHunkIndex = startHunk + clampedTotalLines / hunkLineCount;
     const bufferAfter =
       finalHunkIndex < hunkOffsets.length
-        ? fileHeight - headerRegion - hunkOffsets[finalHunkIndex] - spacing
-        : fileHeight - (absoluteLineTop - fileTop) - spacing;
+        ? fileHeight -
+          headerRegion -
+          hunkOffsets[finalHunkIndex] -
+          paddingBottom
+        : fileHeight - (absoluteLineTop - fileTop) - paddingBottom;
 
     return {
       startingLine,

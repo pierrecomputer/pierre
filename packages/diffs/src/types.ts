@@ -757,6 +757,13 @@ export interface VirtualFileMetrics {
   /** Vertical spacing used around hunks and file-level padding. You should not
    * change this from the default if you aren't applying custom CSS */
   spacing: number;
+  /** Optional top padding applied after the file header, or before content
+   * when the header is disabled. Defaults to 0 with a header, otherwise
+   * defaults to spacing if header is disabled */
+  paddingTop?: number;
+  /** Optional bottom padding applied after file content, and only if there is
+   * code for the diff. Defaults to spacing if none provided */
+  paddingBottom?: number;
 }
 
 export interface CodeViewerMetrics {

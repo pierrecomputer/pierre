@@ -12,7 +12,11 @@ import type {
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
-import { resolveVirtualFileMetrics } from '../utils/resolveVirtualFileMetrics';
+import {
+  getVirtualFileHeaderRegion,
+  getVirtualFilePaddingBottom,
+  resolveVirtualFileMetrics,
+} from '../utils/resolveVirtualFileMetrics';
 import type { WorkerPoolManager } from '../worker';
 import type { CodeViewer } from './CodeViewer';
 import {
@@ -243,7 +247,7 @@ export class VirtualizedFileDiff<
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       hunkSeparators = 'line-info',
     } = this.options;
-    const { diffHeaderHeight, hunkSeparatorHeight, spacing } = this.metrics;
+    const { hunkSeparatorHeight, spacing } = this.metrics;
     const diffStyle = this.getDiffStyle();
     const separatorGap =
       hunkSeparators !== 'simple' &&
@@ -253,7 +257,7 @@ export class VirtualizedFileDiff<
         : 0;
     const targetLineIndex =
       diffStyle === 'split' ? targetLineIndexes[1] : targetLineIndexes[0];
-    let top = disableFileHeader ? spacing : diffHeaderHeight;
+    let top = getVirtualFileHeaderRegion(this.metrics, disableFileHeader);
 
     if (collapsed) {
       return { top, height: 0 };
@@ -354,7 +358,7 @@ export class VirtualizedFileDiff<
       return undefined;
     }
 
-    const { diffHeaderHeight, hunkSeparatorHeight, spacing } = this.metrics;
+    const { hunkSeparatorHeight, spacing } = this.metrics;
     const diffStyle = this.getDiffStyle();
     const separatorGap =
       hunkSeparators !== 'simple' &&
@@ -363,7 +367,7 @@ export class VirtualizedFileDiff<
         ? spacing
         : 0;
 
-    let top = disableFileHeader ? spacing : diffHeaderHeight;
+    let top = getVirtualFileHeaderRegion(this.metrics, disableFileHeader);
     let anchor: NumericScrollLineAnchor | undefined;
 
     // This may end up being quite expensive on extremely large files, we may
@@ -522,7 +526,7 @@ export class VirtualizedFileDiff<
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       hunkSeparators = 'line-info',
     } = this.options;
-    const { diffHeaderHeight, spacing, hunkSeparatorHeight } = this.metrics;
+    const { spacing, hunkSeparatorHeight } = this.metrics;
     const diffStyle = this.getDiffStyle();
     const separatorGap =
       hunkSeparators !== 'simple' &&
@@ -530,13 +534,13 @@ export class VirtualizedFileDiff<
       hunkSeparators !== 'line-info-basic'
         ? spacing
         : 0;
+    const headerRegion = getVirtualFileHeaderRegion(
+      this.metrics,
+      disableFileHeader
+    );
+    const paddingBottom = getVirtualFilePaddingBottom(this.metrics);
 
-    // Header or initial padding
-    if (!disableFileHeader) {
-      this.height += diffHeaderHeight;
-    } else if (hunkSeparators !== 'simple' && hunkSeparators !== 'metadata') {
-      this.height += spacing;
-    }
+    this.height += headerRegion;
     if (collapsed) {
       return;
     }
@@ -585,7 +589,7 @@ export class VirtualizedFileDiff<
 
     // Bottom padding
     if (this.fileDiff.hunks.length > 0) {
-      this.height += spacing;
+      this.height += paddingBottom;
     }
 
     if (
@@ -827,19 +831,18 @@ export class VirtualizedFileDiff<
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       hunkSeparators = 'line-info',
     } = this.options;
-    const {
-      diffHeaderHeight,
-      spacing,
-      hunkLineCount,
-      hunkSeparatorHeight,
-      lineHeight,
-    } = this.metrics;
+    const { spacing, hunkLineCount, hunkSeparatorHeight, lineHeight } =
+      this.metrics;
     const diffStyle = this.getDiffStyle();
     const fileHeight = this.height;
     const lineCount = this.getExpandedLineCount(fileDiff, diffStyle);
 
-    // Calculate headerRegion before early returns
-    const headerRegion = disableFileHeader ? spacing : diffHeaderHeight;
+    const headerRegion = getVirtualFileHeaderRegion(
+      this.metrics,
+      disableFileHeader
+    );
+    const paddingBottom =
+      fileDiff.hunks.length > 0 ? getVirtualFilePaddingBottom(this.metrics) : 0;
 
     // File is outside render window
     if (fileTop < top - fileHeight || fileTop > bottom) {
@@ -847,12 +850,7 @@ export class VirtualizedFileDiff<
         startingLine: 0,
         totalLines: 0,
         bufferBefore: 0,
-        bufferAfter:
-          fileHeight -
-          headerRegion -
-          // This last file gap represents the bottom padding that buffers
-          // should not account for
-          spacing,
+        bufferAfter: fileHeight - headerRegion - paddingBottom,
       };
     }
 
@@ -990,11 +988,7 @@ export class VirtualizedFileDiff<
         startingLine: 0,
         totalLines: 0,
         bufferBefore: 0,
-        bufferAfter:
-          fileHeight -
-          headerRegion -
-          // We gotta subtract the bottom padding off of the buffer
-          spacing,
+        bufferAfter: fileHeight - headerRegion - paddingBottom,
       };
     }
 
@@ -1026,12 +1020,12 @@ export class VirtualizedFileDiff<
           headerRegion -
           hunkOffsets[finalHunkIndex] -
           // We gotta subtract the bottom padding off of the buffer
-          spacing
+          paddingBottom
         : // We stopped early, calculate from current position
           fileHeight -
           (absoluteLineTop - fileTop) -
           // We gotta subtract the bottom padding off of the buffer
-          spacing;
+          paddingBottom;
 
     return {
       startingLine,
