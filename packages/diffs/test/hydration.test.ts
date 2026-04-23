@@ -78,6 +78,10 @@ class SpyFile extends File {
     this.renderCalls += 1;
     return true;
   }
+
+  public getHydratedContainer(): HTMLElement | undefined {
+    return this.fileContainer;
+  }
 }
 
 class SpyFileDiff extends FileDiff {
@@ -86,6 +90,10 @@ class SpyFileDiff extends FileDiff {
   public override render(_props: FileDiffRenderProps<undefined>): boolean {
     this.renderCalls += 1;
     return true;
+  }
+
+  public getHydratedContainer(): HTMLElement | undefined {
+    return this.fileContainer;
   }
 }
 
@@ -97,6 +105,10 @@ class SpyUnresolvedFile extends UnresolvedFile {
   ): boolean {
     this.renderCalls += 1;
     return true;
+  }
+
+  public getHydratedContainer(): HTMLElement | undefined {
+    return this.fileContainer;
   }
 }
 
@@ -162,6 +174,28 @@ describe('collapsed hydration', () => {
     }
   });
 
+  test('File registers empty collapsed hydration container', () => {
+    const dom = installDomConstructors();
+    try {
+      const instance = new SpyFile({
+        collapsed: true,
+        disableFileHeader: true,
+      });
+      const fileContainer = dom.createHydrationContainer({ header: false });
+      const props: FileHydrateProps<undefined> = {
+        file,
+        fileContainer,
+      };
+
+      instance.hydrate(props);
+
+      expect(instance.renderCalls).toBe(0);
+      expect(instance.getHydratedContainer()).toBe(fileContainer);
+    } finally {
+      dom.cleanup();
+    }
+  });
+
   test('FileDiff does not rerender missing code while collapsed', () => {
     const dom = installDomConstructors();
     try {
@@ -195,6 +229,30 @@ describe('collapsed hydration', () => {
       instance.hydrate(props);
 
       expect(instance.renderCalls).toBe(1);
+    } finally {
+      dom.cleanup();
+    }
+  });
+
+  test('FileDiff registers empty collapsed hydration container', () => {
+    const dom = installDomConstructors();
+    try {
+      const instance = new SpyFileDiff({
+        collapsed: true,
+        disableFileHeader: true,
+      });
+      const fileContainer = dom.createHydrationContainer({ header: false });
+      const props: FileDiffHydrationProps<undefined> = {
+        fileDiff,
+        oldFile: file,
+        newFile: file,
+        fileContainer,
+      };
+
+      instance.hydrate(props);
+
+      expect(instance.renderCalls).toBe(0);
+      expect(instance.getHydratedContainer()).toBe(fileContainer);
     } finally {
       dom.cleanup();
     }
@@ -254,6 +312,34 @@ describe('collapsed hydration', () => {
       instance.hydrate(props);
 
       expect(instance.renderCalls).toBe(1);
+    } finally {
+      dom.cleanup();
+    }
+  });
+
+  test('UnresolvedFile registers empty collapsed hydration container', () => {
+    const dom = installDomConstructors();
+    try {
+      let actionRenderCalls = 0;
+      const instance = new SpyUnresolvedFile({
+        collapsed: true,
+        disableFileHeader: true,
+        mergeConflictActionsType() {
+          actionRenderCalls += 1;
+          return undefined;
+        },
+      });
+      const fileContainer = dom.createHydrationContainer({ header: false });
+      const props: UnresolvedFileHydrationProps<undefined> = {
+        file: unresolvedFile,
+        fileContainer,
+      };
+
+      instance.hydrate(props);
+
+      expect(instance.renderCalls).toBe(0);
+      expect(actionRenderCalls).toBe(0);
+      expect(instance.getHydratedContainer()).toBe(fileContainer);
     } finally {
       dom.cleanup();
     }
