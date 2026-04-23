@@ -54,4 +54,32 @@ describe('parseDiffFromFile', () => {
     });
     expect(withoutWhitespace.hunks).toHaveLength(0);
   });
+
+  test('should have type "change" (default) when files did not change', () => {
+    const oldFile = {
+      name: 'test.txt',
+      contents: 'abc',
+    };
+    const newFile = {
+      name: 'test.txt',
+      contents: 'abc',
+    };
+
+    const result = parseDiffFromFile(oldFile, newFile);
+    expect(result.type).toBe('change');
+  });
+
+  test('should have type "change" (default) when empty files did not change', () => {
+    const oldFile = {
+      name: 'test.txt',
+      contents: '',
+    };
+    const newFile = {
+      name: 'test.txt',
+      contents: '',
+    };
+
+    const result = parseDiffFromFile(oldFile, newFile);
+    expect(result.type).toBe('change');
+  });
 });

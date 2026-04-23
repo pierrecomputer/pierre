@@ -456,10 +456,18 @@ export function processFile(
       }
     }
     // Sort of a hack for detecting deleted/added files...
-    else if (newFile != null && newFile.contents === '') {
-      currentFile.type = 'deleted';
-    } else if (oldFile != null && oldFile.contents === '') {
+    else if (
+      (oldFile == null || oldFile.contents === '') &&
+      newFile != null &&
+      newFile.contents !== ''
+    ) {
       currentFile.type = 'new';
+    } else if (
+      oldFile != null &&
+      oldFile.contents !== '' &&
+      (newFile == null || newFile.contents === '')
+    ) {
+      currentFile.type = 'deleted';
     }
   }
   if (
