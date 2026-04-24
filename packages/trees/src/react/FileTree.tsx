@@ -21,7 +21,7 @@ import type {
   FileTreeContextMenuItem,
   FileTreeContextMenuOpenContext,
   FileTreeSsrPayload,
-} from '../model/types';
+} from '../model/publicTypes';
 import type { FileTree as FileTreeModel } from '../render/FileTree';
 
 const useClientLayoutEffect =

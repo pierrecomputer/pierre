@@ -7,17 +7,17 @@ import { gunzipSync } from 'node:zlib';
 
 import { preparePresortedFileTreeInput } from '../src/index';
 import { FileTreeController } from '../src/model/FileTreeController';
+import type { FileTreeStickyRowCandidate } from '../src/model/internalTypes';
 import {
   computeFileTreeLayout,
   computeStickyRows,
   type FileTreeLayoutSnapshot,
   type FileTreeLayoutStickyRow,
-} from '../src/model/fileTreeLayout';
+} from '../src/model/layout';
 import type {
   FileTreeDirectoryHandle,
-  FileTreeStickyRowCandidate,
   FileTreeVisibleRow,
-} from '../src/model/types';
+} from '../src/model/publicTypes';
 
 const PRESET_NAMES = ['get-item', 'sticky-scroll', 'expansion', 'all'] as const;
 const DEFAULT_PRESET: BenchmarkPresetName = 'get-item';

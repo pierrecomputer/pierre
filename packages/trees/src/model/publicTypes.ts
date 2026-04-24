@@ -1,16 +1,11 @@
 import type { FileTreeIcons, RemappedIcon } from '../iconConfig';
 import type { FileTreePreparedInput } from '../preparedInput';
-import type {
-  ContextMenuAnchorRect,
-  GitStatus,
-  GitStatusEntry,
-} from '../types';
+import type { ContextMenuAnchorRect, GitStatusEntry } from '../publicTypes';
 import type { FileTreeDensity } from './density';
 
 /**
- * The provisional public identity stays path-first so later phases can evolve
- * internal row bookkeeping without freezing the underlying path-store numeric
- * IDs.
+ * Public tree identity is path-first so render and model callers never depend
+ * on the underlying path-store numeric IDs.
  */
 export type FileTreePublicId = string;
 
@@ -118,11 +113,6 @@ export interface FileTreeVisibleRow {
   path: FileTreePublicId;
   posInSet: number;
   setSize: number;
-}
-
-export interface FileTreeStickyRowCandidate {
-  row: FileTreeVisibleRow;
-  subtreeEndIndex: number;
 }
 
 export interface FileTreeItemHandleBase {
@@ -251,50 +241,6 @@ type FileTreeOptionSurface = FileTreeRenderOptions & {
 
 export type FileTreeOptions = FileTreeControllerOptions & FileTreeOptionSurface;
 
-export interface FileTreeViewportMetrics {
-  itemCount: number;
-  itemHeight: number;
-  overscan?: number;
-  scrollTop: number;
-  viewportHeight: number;
-}
-
-export interface FileTreeRange {
-  end: number;
-  start: number;
-}
-
-export interface FileTreeStickyWindowLayout {
-  offsetHeight: number;
-  stickyInset: number;
-  totalHeight: number;
-  windowHeight: number;
-}
-
-export interface FileTreeViewProps extends Omit<
-  FileTreeRenderOptions,
-  'initialVisibleRowCount'
-> {
-  composition?: FileTreeCompositionOptions;
-  controller: import('./FileTreeController').FileTreeController;
-  directoriesWithGitChanges?: ReadonlySet<FileTreePublicId>;
-  gitStatusByPath?: ReadonlyMap<FileTreePublicId, GitStatus>;
-  ignoredGitDirectories?: ReadonlySet<FileTreePublicId>;
-  icons?: FileTreeIcons;
-  // First-render viewport height in CSS pixels, used as the fallback when the
-  // scroll element's clientHeight is still zero. The public option is
-  // `initialVisibleRowCount` (rows); the resolver multiplies it by itemHeight
-  // before passing the pixel value down here.
-  initialViewportHeight?: number;
-  instanceId?: string;
-  renamingEnabled?: boolean;
-  renderRowDecoration?: FileTreeRowDecorationRenderer;
-  searchBlurBehavior?: FileTreeSearchBlurBehavior;
-  searchEnabled?: boolean;
-  searchFakeFocus?: boolean;
-  slotHost?: FileTreeSlotHost;
-}
-
 export interface FileTreeRenderProps {
   containerWrapper?: HTMLElement;
   fileTreeContainer?: HTMLElement;
@@ -394,8 +340,6 @@ export interface FileTreeMutationHandle {
   ): void;
 }
 
-export type FileTreeControllerListener = () => void;
-
 export type FileTreeListener = () => void;
 
 export type FileTreeSelectionChangeListener = (
@@ -477,8 +421,3 @@ export interface FileTreeRowDecorationContext {
 export type FileTreeRowDecorationRenderer = (
   context: FileTreeRowDecorationContext
 ) => FileTreeRowDecoration | null;
-
-export interface FileTreeSlotHost {
-  clearSlotContent(slotName: string): void;
-  setSlotContent(slotName: string, content: HTMLElement | null): void;
-}

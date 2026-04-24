@@ -1,4 +1,4 @@
-import type { GitStatusEntry } from '../types';
+import type { GitStatusEntry } from '../publicTypes';
 
 /**
  * Produces a stable cache key for a git status array.

@@ -3,7 +3,7 @@ import type {
   FileTreeRange,
   FileTreeStickyWindowLayout,
   FileTreeViewportMetrics,
-} from './types';
+} from './internalTypes';
 
 export const FILE_TREE_DEFAULT_ITEM_HEIGHT =
   FILE_TREE_DENSITY_PRESETS.default.itemHeight;

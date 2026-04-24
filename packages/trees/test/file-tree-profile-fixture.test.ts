@@ -25,7 +25,7 @@ test('file-tree profile fixture workload defaults mirror the intended tree profi
   expect(DEFAULT_FILE_TREE_PROFILE_WORKLOAD_NAME).toBe('linux-5x');
 });
 
-test('file-tree profile fixture options mirror the Phase 4 docs tree behavior', () => {
+test('file-tree profile fixture options mirror the docs tree profile defaults', () => {
   const workload = getFileTreeProfileWorkload('linux-5x');
   const options = createFileTreeProfileFixtureOptions(workload);
 
@@ -69,5 +69,5 @@ test('file-tree profile fixture HTML stays minimal and idle-on-load', () => {
   expect(document.querySelector('[data-profile-mount]')).not.toBeNull();
   expect(document.querySelector('file-tree-container')).toBeNull();
   expect(document.querySelector('h1')).toBeNull();
-  expect(html.includes('Capability / phase matrix')).toBe(false);
+  expect(html.includes('Capability')).toBe(false);
 });

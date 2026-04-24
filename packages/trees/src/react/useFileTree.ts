@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 
-import type { FileTreeOptions } from '../model/types';
+import type { FileTreeOptions } from '../model/publicTypes';
 import { FileTree } from '../render/FileTree';
 
 export interface UseFileTreeResult {

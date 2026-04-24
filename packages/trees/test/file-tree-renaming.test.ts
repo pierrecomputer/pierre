@@ -1,79 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
-function installDom() {
-  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
-    url: 'http://localhost',
-  });
-  const originalValues = {
-    CSSStyleSheet: Reflect.get(globalThis, 'CSSStyleSheet'),
-    customElements: Reflect.get(globalThis, 'customElements'),
-    document: Reflect.get(globalThis, 'document'),
-    Event: Reflect.get(globalThis, 'Event'),
-    HTMLButtonElement: Reflect.get(globalThis, 'HTMLButtonElement'),
-    HTMLDivElement: Reflect.get(globalThis, 'HTMLDivElement'),
-    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
-    HTMLInputElement: Reflect.get(globalThis, 'HTMLInputElement'),
-    HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
-    HTMLTemplateElement: Reflect.get(globalThis, 'HTMLTemplateElement'),
-    MutationObserver: Reflect.get(globalThis, 'MutationObserver'),
-    navigator: Reflect.get(globalThis, 'navigator'),
-    Node: Reflect.get(globalThis, 'Node'),
-    ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
-    SVGElement: Reflect.get(globalThis, 'SVGElement'),
-    ShadowRoot: Reflect.get(globalThis, 'ShadowRoot'),
-    window: Reflect.get(globalThis, 'window'),
-  };
-
-  class MockStyleSheet {
-    replaceSync(_value: string): void {}
-  }
-
-  class MockResizeObserver {
-    observe(_target: Element): void {}
-    disconnect(): void {}
-  }
-
-  Object.assign(globalThis, {
-    CSSStyleSheet: MockStyleSheet,
-    customElements: dom.window.customElements,
-    document: dom.window.document,
-    Event: dom.window.Event,
-    HTMLButtonElement: dom.window.HTMLButtonElement,
-    HTMLDivElement: dom.window.HTMLDivElement,
-    HTMLElement: dom.window.HTMLElement,
-    HTMLInputElement: dom.window.HTMLInputElement,
-    HTMLStyleElement: dom.window.HTMLStyleElement,
-    HTMLTemplateElement: dom.window.HTMLTemplateElement,
-    MutationObserver: dom.window.MutationObserver,
-    navigator: dom.window.navigator,
-    Node: dom.window.Node,
-    ResizeObserver: MockResizeObserver,
-    SVGElement: dom.window.SVGElement,
-    ShadowRoot: dom.window.ShadowRoot,
-    window: dom.window,
-  });
-
-  return {
-    cleanup() {
-      for (const [key, value] of Object.entries(originalValues)) {
-        if (value === undefined) {
-          Reflect.deleteProperty(globalThis, key);
-        } else {
-          Object.assign(globalThis, { [key]: value });
-        }
-      }
-      dom.window.close();
-    },
-    dom,
-  };
-}
-
-async function flushDom(times: number = 2): Promise<void> {
-  for (let index = 0; index < times; index += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-}
+import { flushDom, installDom } from './helpers/dom';
+import { loadFileTree } from './helpers/loadFileTree';
 
 function pressKey(
   target: Element,
@@ -194,21 +123,6 @@ function getSearchInput(shadowRoot: ShadowRoot, dom: JSDOM): HTMLInputElement {
   }
 
   return input;
-}
-
-async function loadFileTree(): Promise<typeof import('../src/index').FileTree> {
-  const fileTreeModule = await import('../src/render/FileTree');
-  const fileTree = Object.values(fileTreeModule).find(
-    (value): value is typeof import('../src/index').FileTree =>
-      typeof value === 'function' &&
-      'prototype' in value &&
-      'render' in value.prototype
-  );
-  if (fileTree == null) {
-    throw new Error('Expected FileTree export');
-  }
-
-  return fileTree;
 }
 
 describe('file-tree renaming', () => {

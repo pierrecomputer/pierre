@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { JSDOM } from 'jsdom';
 
 import {
   FILE_TREE_DENSITY_PRESETS,
@@ -8,79 +7,10 @@ import {
 import { FILE_TREE_DEFAULT_ITEM_HEIGHT } from '../src/model/virtualization';
 import { FileTree, preloadFileTree } from '../src/render/FileTree';
 import { serializeFileTreeSsrPayload } from '../src/ssr';
+import { flushDom, installDom } from './helpers/dom';
 
 // Stands up just enough of a DOM for the vanilla `FileTree` to mount so we can
 // inspect the host element's inline styles after `render()` and `hydrate()`.
-function installDom(): {
-  cleanup: () => void;
-  dom: JSDOM;
-} {
-  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
-    url: 'http://localhost',
-  });
-  const originalValues = {
-    CSSStyleSheet: Reflect.get(globalThis, 'CSSStyleSheet'),
-    customElements: Reflect.get(globalThis, 'customElements'),
-    document: Reflect.get(globalThis, 'document'),
-    Event: Reflect.get(globalThis, 'Event'),
-    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
-    HTMLDivElement: Reflect.get(globalThis, 'HTMLDivElement'),
-    HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
-    HTMLTemplateElement: Reflect.get(globalThis, 'HTMLTemplateElement'),
-    MutationObserver: Reflect.get(globalThis, 'MutationObserver'),
-    navigator: Reflect.get(globalThis, 'navigator'),
-    Node: Reflect.get(globalThis, 'Node'),
-    ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
-    SVGElement: Reflect.get(globalThis, 'SVGElement'),
-    ShadowRoot: Reflect.get(globalThis, 'ShadowRoot'),
-    window: Reflect.get(globalThis, 'window'),
-  };
-
-  class MockStyleSheet {
-    replaceSync(_value: string): void {}
-  }
-
-  class MockResizeObserver {
-    observe(_target: Element): void {}
-    disconnect(): void {}
-  }
-
-  Object.assign(globalThis, {
-    CSSStyleSheet: MockStyleSheet,
-    customElements: dom.window.customElements,
-    document: dom.window.document,
-    Event: dom.window.Event,
-    HTMLElement: dom.window.HTMLElement,
-    HTMLDivElement: dom.window.HTMLDivElement,
-    HTMLStyleElement: dom.window.HTMLStyleElement,
-    HTMLTemplateElement: dom.window.HTMLTemplateElement,
-    MutationObserver: dom.window.MutationObserver,
-    navigator: dom.window.navigator,
-    Node: dom.window.Node,
-    ResizeObserver: MockResizeObserver,
-    SVGElement: dom.window.SVGElement,
-    ShadowRoot: dom.window.ShadowRoot,
-    window: dom.window,
-  });
-
-  return {
-    cleanup() {
-      for (const [key, value] of Object.entries(originalValues)) {
-        if (value === undefined) {
-          Reflect.deleteProperty(globalThis, key);
-        } else {
-          Object.assign(globalThis, { [key]: value });
-        }
-      }
-      dom.window.close();
-    },
-    dom,
-  };
-}
-
-async function flushDom(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-}
 
 describe('resolveFileTreeDensity', () => {
   test('returns the default preset when density is undefined', () => {

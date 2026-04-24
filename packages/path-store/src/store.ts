@@ -1135,11 +1135,10 @@ export class PathStore {
     directoryPath: string,
     patch: PathStoreChildPatch
   ): void {
-    // Phase 7A chooses correctness over patch-application cleverness: validate
-    // the whole child patch against a throwaway subtree store first so the real
-    // store stays atomic if any later operation would fail. This is an
-    // intentionally heavier O(n) preflight for large directories and a good
-    // candidate for targeted optimization after 7A semantics are proven.
+    // Validate the whole child patch against a throwaway subtree store first so
+    // the real store stays atomic if any later operation would fail. This is an
+    // intentionally heavier O(n) preflight for large directories and a targeted
+    // optimization point if async patch workloads prove it hot.
     const validationStore = new PathStore({
       paths: this.list(directoryPath),
       presorted: true,

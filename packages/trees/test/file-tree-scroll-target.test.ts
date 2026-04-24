@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   computeFocusedRowScrollIntoView,
   computeViewportOffsetScrollTop,
-} from '../src/render/fileTreeScrollTarget';
+} from '../src/render/scrollTarget';
 
 describe('computeFocusedRowScrollIntoView', () => {
   const itemHeight = 30;

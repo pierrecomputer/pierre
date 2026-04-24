@@ -1,5 +1,9 @@
 export * from './constants';
-export type { GitStatus, GitStatusEntry, ContextMenuAnchorRect } from './types';
+export type {
+  ContextMenuAnchorRect,
+  GitStatus,
+  GitStatusEntry,
+} from './publicTypes';
 export type {
   FileTreeBuiltInIconSet,
   FileTreeIconConfig,
@@ -77,9 +81,8 @@ export type {
   FileTreeSearchMode,
   FileTreeSearchSessionHandle,
   FileTreeSelectionChangeListener,
-  FileTreeSlotHost,
   FileTreeSortComparator,
   FileTreeSortEntry,
   FileTreeSsrPayload,
   FileTreeVisibleRow,
-} from './model/types';
+} from './model/publicTypes';

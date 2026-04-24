@@ -6,78 +6,8 @@ import type {
   FileTreeDropResult,
   FileTreeOptions,
 } from '../src/index';
-
-function installDom() {
-  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
-    url: 'http://localhost',
-  });
-  const originalValues = {
-    CSSStyleSheet: Reflect.get(globalThis, 'CSSStyleSheet'),
-    customElements: Reflect.get(globalThis, 'customElements'),
-    document: Reflect.get(globalThis, 'document'),
-    Event: Reflect.get(globalThis, 'Event'),
-    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
-    HTMLButtonElement: Reflect.get(globalThis, 'HTMLButtonElement'),
-    HTMLDivElement: Reflect.get(globalThis, 'HTMLDivElement'),
-    HTMLInputElement: Reflect.get(globalThis, 'HTMLInputElement'),
-    HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
-    HTMLTemplateElement: Reflect.get(globalThis, 'HTMLTemplateElement'),
-    MutationObserver: Reflect.get(globalThis, 'MutationObserver'),
-    navigator: Reflect.get(globalThis, 'navigator'),
-    Node: Reflect.get(globalThis, 'Node'),
-    ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
-    SVGElement: Reflect.get(globalThis, 'SVGElement'),
-    ShadowRoot: Reflect.get(globalThis, 'ShadowRoot'),
-    window: Reflect.get(globalThis, 'window'),
-  };
-
-  class MockStyleSheet {
-    replaceSync(_value: string): void {}
-  }
-
-  class MockResizeObserver {
-    observe(_target: Element): void {}
-    disconnect(): void {}
-  }
-
-  Object.assign(globalThis, {
-    CSSStyleSheet: MockStyleSheet,
-    customElements: dom.window.customElements,
-    document: dom.window.document,
-    Event: dom.window.Event,
-    HTMLElement: dom.window.HTMLElement,
-    HTMLButtonElement: dom.window.HTMLButtonElement,
-    HTMLDivElement: dom.window.HTMLDivElement,
-    HTMLInputElement: dom.window.HTMLInputElement,
-    HTMLStyleElement: dom.window.HTMLStyleElement,
-    HTMLTemplateElement: dom.window.HTMLTemplateElement,
-    MutationObserver: dom.window.MutationObserver,
-    navigator: dom.window.navigator,
-    Node: dom.window.Node,
-    ResizeObserver: MockResizeObserver,
-    SVGElement: dom.window.SVGElement,
-    ShadowRoot: dom.window.ShadowRoot,
-    window: dom.window,
-  });
-
-  return {
-    cleanup() {
-      for (const [key, value] of Object.entries(originalValues)) {
-        if (value === undefined) {
-          Reflect.deleteProperty(globalThis, key);
-        } else {
-          Object.assign(globalThis, { [key]: value });
-        }
-      }
-      dom.window.close();
-    },
-    dom,
-  };
-}
-
-async function flushDom(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-}
+import { flushDom, installDom } from './helpers/dom';
+import { loadFileTree, loadFileTreeController } from './helpers/loadFileTree';
 
 type MockDataTransfer = {
   data: Map<string, string>;
@@ -262,29 +192,6 @@ function getParkedDraggingButton(
       `[data-item-path="${path}"][data-item-parked="true"][data-item-dragging="true"]`
     ) ?? null
   );
-}
-
-async function loadFileTree(): Promise<typeof import('../src/index').FileTree> {
-  const fileTreeModule = await import('../src/render/FileTree');
-  const fileTree = Object.values(fileTreeModule).find(
-    (value): value is typeof import('../src/index').FileTree =>
-      typeof value === 'function' &&
-      'prototype' in value &&
-      'render' in value.prototype
-  );
-  if (fileTree == null) {
-    throw new Error('Expected FileTree export');
-  }
-
-  return fileTree;
-}
-
-async function loadFileTreeController(): Promise<
-  typeof import('../src/model/FileTreeController').FileTreeController
-> {
-  const { FileTreeController } =
-    await import('../src/model/FileTreeController');
-  return FileTreeController;
 }
 
 async function renderFileTree(options: FileTreeOptions) {

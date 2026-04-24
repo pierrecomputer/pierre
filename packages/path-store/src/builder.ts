@@ -1124,8 +1124,8 @@ export class PathStoreBuilder {
     }
   }
 
-  // Computes subtree counts after bulk ingest so later phases can add
-  // projection math without changing the canonical storage layout.
+  // Computes subtree counts after bulk ingest so projection math can read
+  // aggregate counts without changing the canonical storage layout.
   private computeSubtreeCounts(nodeId: NodeId): number {
     const node = this.nodes[nodeId];
     if (node === undefined) {

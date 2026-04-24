@@ -2,9 +2,9 @@ import type {
   FileTreeContextMenuButtonVisibility,
   FileTreeContextMenuTriggerMode,
   FileTreeVisibleRow,
-} from '../model/types';
-import type { GitStatus } from '../types';
-import type { FileTreeRowClickMode } from './fileTreeRowClickPlan';
+} from '../model/publicTypes';
+import type { GitStatus } from '../publicTypes';
+import type { FileTreeRowClickMode } from './rowClickPlan';
 
 // Visual/interaction state that shows up as data attributes on the row. Kept as
 // plain booleans (rather than references to dragSession, selectionSets, etc.)

@@ -4,7 +4,7 @@ import type {
   FileTreeDropResult,
   FileTreeDropTarget,
   FileTreePublicId,
-} from './types';
+} from './publicTypes';
 
 export interface FileTreeDragSession {
   draggedPaths: readonly FileTreePublicId[];

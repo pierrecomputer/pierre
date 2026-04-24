@@ -1,6 +1,6 @@
 import { h, hydrate, render } from 'preact';
 
-import type { FileTreeViewProps } from '../model/types';
+import type { FileTreeViewProps } from '../model/internalTypes';
 import { FileTreeView } from './FileTreeView';
 
 export const fileTreeRenderer: {

@@ -1,4 +1,4 @@
-import type { GitStatus, GitStatusEntry } from '../types';
+import type { GitStatus, GitStatusEntry } from '../publicTypes';
 import { getGitStatusSignature } from '../utils/getGitStatusSignature';
 import { normalizeInputPath } from '../utils/normalizeInputPath';
 

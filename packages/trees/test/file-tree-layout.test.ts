@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   computeFileTreeLayout,
   type FileTreeLayoutRow,
-} from '../src/model/fileTreeLayout';
+} from '../src/model/layout';
 
 function directoryRow(
   path: string,

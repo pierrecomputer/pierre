@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { FileTreeVisibleRow } from '../src/model/types';
+import type { FileTreeVisibleRow } from '../src/model/publicTypes';
 import {
   computeFileTreeRowElementAttributes,
   type FileTreeRowElementAttributesInput,
   type FileTreeRowFeatureFlags,
   type FileTreeRowStateFlags,
-} from '../src/render/fileTreeRowAttributes';
+} from '../src/render/rowAttributes';
 
 function makeRow(
   overrides: Partial<FileTreeVisibleRow> = {}

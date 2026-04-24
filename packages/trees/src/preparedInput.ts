@@ -1,6 +1,6 @@
 import { PathStore } from '@pierre/path-store';
 
-import type { FileTreeSortComparator } from './model/types';
+import type { FileTreeSortComparator } from './model/publicTypes';
 
 declare const FILE_TREE_PREPARED_INPUT: unique symbol;
 

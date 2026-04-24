@@ -25,6 +25,7 @@ import {
   type FileTreeGitStatusState,
   resolveFileTreeGitStatusState,
 } from '../model/gitStatus';
+import type { FileTreeViewProps } from '../model/internalTypes';
 import type {
   FileTreeBatchOperation,
   FileTreeCompositionOptions,
@@ -43,8 +44,7 @@ import type {
   FileTreeSearchSessionHandle,
   FileTreeSelectionChangeListener,
   FileTreeSsrPayload,
-  FileTreeViewProps,
-} from '../model/types';
+} from '../model/publicTypes';
 import {
   FILE_TREE_DEFAULT_ITEM_HEIGHT,
   FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
@@ -84,9 +84,8 @@ function createServerId(explicitId?: string): string {
   return `pst_srv_${serverInstanceId}`;
 }
 
-// Translates the public row-budget hint into the provisional pixel height shared
-// by SSR and the first client render before the DOM can report a measured
-// scroll viewport.
+// Translates the public row-budget hint into the pixel height shared by SSR and
+// the first client render before the DOM can report a measured scroll viewport.
 function resolveInitialViewportHeight({
   initialVisibleRowCount,
   itemHeight,

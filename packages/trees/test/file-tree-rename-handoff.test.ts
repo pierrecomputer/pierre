@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { classifyFileTreeRenameHandoff } from '../src/render/fileTreeRenameHandoff';
+import { classifyFileTreeRenameHandoff } from '../src/render/renameHandoff';
 
 describe('classifyFileTreeRenameHandoff', () => {
   test('returns reset when no rename is active', () => {

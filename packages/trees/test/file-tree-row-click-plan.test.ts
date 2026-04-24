@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   computeFileTreeRowClickPlan,
   type FileTreeRowClickPlanInput,
-} from '../src/render/fileTreeRowClickPlan';
+} from '../src/render/rowClickPlan';
 
 const baseInput: FileTreeRowClickPlanInput = {
   event: { ctrlKey: false, metaKey: false, shiftKey: false },

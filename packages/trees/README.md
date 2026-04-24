@@ -2,15 +2,16 @@
 
 Path-first file tree UI for the web.
 
-`@pierre/trees` ships one implementation with three public entry points:
+`@pierre/trees` ships one implementation through four public entry points:
 
-- `@pierre/trees` — imperative model + vanilla mounting API
+- `@pierre/trees` — vanilla model, mounting API, prepared input helpers, icons,
+  theming, and core types
 - `@pierre/trees/react` — React hooks and `<FileTree model={...} />`
-- `@pierre/trees/ssr` — declarative-shadow-DOM preload helper
+- `@pierre/trees/ssr` — preload helpers for declarative-shadow-DOM SSR
+- `@pierre/trees/web-components` — custom-element registration side effect
 
-The tree renders inside a shadow root, uses CSS custom properties for theming,
-and keeps its public API keyed by canonical paths instead of internal numeric
-IDs.
+The tree renders inside a shadow root and keeps public state keyed by canonical
+path strings, not internal numeric IDs.
 
 ## Install
 
@@ -36,22 +37,19 @@ const tree = new FileTree({
 tree.render({ containerWrapper: mount });
 ```
 
-Useful model methods:
+Common model methods include:
 
-- `tree.add(path)`
-- `tree.move(fromPath, toPath)`
-- `tree.remove(path)`
-- `tree.resetPaths(paths)`
-- `tree.setSearch(value)` / `tree.openSearch()` / `tree.closeSearch()`
-- `tree.setGitStatus(entries)`
-- `tree.setIcons(config)`
-- `tree.getItem(path)` / `tree.getSelectedPaths()` / `tree.getFocusedPath()`
+- `tree.add(path)`, `tree.move(fromPath, toPath)`, `tree.remove(path)`, and
+  `tree.resetPaths(paths)`
+- `tree.openSearch()`, `tree.setSearch(value)`, and `tree.closeSearch()`
+- `tree.setGitStatus(entries)` and `tree.setIcons(config)`
+- `tree.getItem(path)`, `tree.getSelectedPaths()`, and `tree.getFocusedPath()`
 - `tree.cleanUp()`
 
 ## Prepared input
 
-For large or frequently reloaded trees, prepare the input once outside the UI
-and pass the prepared result into `FileTree`.
+Prepare large or frequently reloaded path lists once, then pass the prepared
+result to `FileTree`.
 
 ```ts
 import { FileTree, preparePresortedFileTreeInput } from '@pierre/trees';
@@ -62,7 +60,7 @@ const preparedInput = preparePresortedFileTreeInput(paths);
 const tree = new FileTree({ preparedInput });
 ```
 
-Use `prepareFileTreeInput(paths)` when you start with raw input. Use
+Use `prepareFileTreeInput(paths)` for raw input. Use
 `preparePresortedFileTreeInput(paths)` when the final order is already known.
 
 ## React usage
@@ -90,12 +88,8 @@ export function Example({ paths }: { paths: string[] }) {
 }
 ```
 
-Available hooks from `@pierre/trees/react`:
-
-- `useFileTree(options)`
-- `useFileTreeSearch(model)`
-- `useFileTreeSelection(model)`
-- `useFileTreeSelector(model, selector)`
+`@pierre/trees/react` exports `FileTree`, `useFileTree`, `useFileTreeSearch`,
+`useFileTreeSelection`, and `useFileTreeSelector`.
 
 ## SSR
 
@@ -128,7 +122,7 @@ export function HydratedTree() {
 }
 ```
 
-`preloadFileTree()` returns:
+`preloadFileTree()` returns `FileTreeSsrPayload`:
 
 ```ts
 {
@@ -143,9 +137,9 @@ export function HydratedTree() {
 Use `${payload.outerStart}${payload.shadowHtml}${payload.outerEnd}` when the
 HTML parser will see the markup directly, such as a full server-rendered HTML
 response. Use `${payload.domOuterStart}${payload.shadowHtml}${payload.outerEnd}`
-when you need to insert the full container string through DOM APIs like
-`innerHTML` or `dangerouslySetInnerHTML`. Pass `{ id, shadowHtml }` to the React
-component as `preloadedData`.
+when inserting the full container string through DOM APIs like `innerHTML` or
+`dangerouslySetInnerHTML`. Pass `{ id, shadowHtml }` to the React component as
+`preloadedData`.
 
 ## Styling
 
@@ -156,8 +150,7 @@ The host element and shadow root read CSS variables such as:
 - `--trees-fg-override`
 - `--trees-theme-*`
 
-You can translate a Shiki / VS Code style theme into tree CSS with
-`themeToTreeStyles()`:
+Translate a Shiki or VS Code theme into tree CSS with `themeToTreeStyles()`:
 
 ```ts
 import { themeToTreeStyles } from '@pierre/trees';
@@ -182,7 +175,8 @@ const tree = new FileTree({
 Treat `unsafeCSS` as an escape hatch. Start with host styles, CSS variables, and
 `themeToTreeStyles()` first.
 
-If you need the custom element registration side effect directly, import:
+Import the web-components entry point only when you need the custom element
+registration side effect:
 
 ```ts
 import '@pierre/trees/web-components';
@@ -190,20 +184,8 @@ import '@pierre/trees/web-components';
 
 ## Icons, git status, and composition
 
-The root package exports the icon and git-status types used by the tree model,
-including:
-
-- `FileTreeIcons`
-- `FileTreeIconConfig`
-- `GitStatusEntry`
-- `ContextMenuItem`
-- `ContextMenuOpenContext`
-- `ContextMenuTriggerMode`
-- `ContextMenuButtonVisibility`
-
-Header and context-menu composition are configured through the tree options.
-Rows, search state, drag/drop targets, and mutation events all report canonical
-paths.
+The root package exports icon, git-status, context-menu, drag/drop, mutation,
+and row-decoration types. Public callbacks report canonical paths.
 
 ```ts
 const tree = new FileTree({
@@ -217,16 +199,15 @@ const tree = new FileTree({
 ```
 
 When the context menu is enabled without an explicit `triggerMode`, it defaults
-to `'right-click'`. Set `triggerMode: 'button'` or `triggerMode: 'both'` when
-you want the dedicated right-side action lane. In those button-capable modes,
-`buttonVisibility` defaults to `'when-needed'`; set it to `'always'` to show
-decorative per-row affordances while the tree still uses one real floating
-trigger button and one slotted menu surface.
+to `'right-click'`. Set `triggerMode` to `'button'` or `'both'` for the
+dedicated right-side action lane. In button-capable modes, `buttonVisibility`
+defaults to `'when-needed'`; set it to `'always'` to show decorative per-row
+affordances while the tree still uses one floating trigger button and one
+slotted menu surface.
 
-`renderRowDecoration` now occupies its own flexible lane. Built-in git status
-rendering stays separate in the next fixed lane, so custom decoration content,
-git status, and the context-menu affordance can appear on the same row without
-overriding each other.
+`renderRowDecoration` owns a flexible row lane. Built-in git status uses the
+next fixed lane, so custom decoration content, git status, and the context-menu
+affordance can appear on the same row.
 
 ## Development
 

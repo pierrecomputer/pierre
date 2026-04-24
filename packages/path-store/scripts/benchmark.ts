@@ -11,8 +11,8 @@ import {
 import type { PathStoreVisibleRow } from '../src/public-types';
 
 const WORKLOAD_NAMES = ['linux-5x', 'linux-10x'] as const;
-const PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME = 'wide-directory-5k' as const;
-const PHASE_5_FLATTEN_CHAIN_WORKLOAD_NAME = 'flatten-chain-5k' as const;
+const WIDE_DIRECTORY_WORKLOAD_NAME = 'wide-directory-5k' as const;
+const FLATTEN_CHAIN_WORKLOAD_NAME = 'flatten-chain-5k' as const;
 const VIEWPORT_MODES = ['first', 'middle'] as const;
 const VISIBLE_WINDOW_SIZES = [30, 100, 200, 500] as const;
 const QUICK_VISIBLE_WINDOW_SIZES = [30, 200] as const;
@@ -72,7 +72,7 @@ const COOPERATIVE_BENCH_PATCH_FILE_PATHS = [
   'aaa-cooperative-bench-b/file-b.ts',
   'aaa-cooperative-bench-c/file-c.ts',
 ] as const;
-const PHASE_4_WIDE_DIRECTORY_FILE_COUNT = 5_000;
+const WIDE_DIRECTORY_FILE_COUNT = 5_000;
 const HUMAN_BENCHMARK_NAME_MIN_WIDTH = 32;
 const HUMAN_BENCHMARK_NAME_MAX_WIDTH = 72;
 const HUMAN_PROGRESS_LABEL_WIDTH = 44;
@@ -90,8 +90,8 @@ const COMPARE_MAX_SAMPLE_POOL = 1_024;
 
 type BenchmarkWorkloadName =
   | (typeof WORKLOAD_NAMES)[number]
-  | typeof PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME
-  | typeof PHASE_5_FLATTEN_CHAIN_WORKLOAD_NAME;
+  | typeof WIDE_DIRECTORY_WORKLOAD_NAME
+  | typeof FLATTEN_CHAIN_WORKLOAD_NAME;
 type BenchmarkProfileName = (typeof BENCHMARK_PROFILE_NAMES)[number];
 type BenchmarkFilterPresetName = (typeof BENCHMARK_FILTER_PRESET_NAMES)[number];
 type BenchmarkPresetName = BenchmarkProfileName | BenchmarkFilterPresetName;
@@ -2866,11 +2866,11 @@ async function runBenchmarksForHuman(
 }
 
 function loadWorkload(workloadName: BenchmarkWorkloadName): BenchmarkWorkload {
-  if (workloadName === PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME) {
+  if (workloadName === WIDE_DIRECTORY_WORKLOAD_NAME) {
     return createWideDirectoryWorkload();
   }
 
-  if (workloadName === PHASE_5_FLATTEN_CHAIN_WORKLOAD_NAME) {
+  if (workloadName === FLATTEN_CHAIN_WORKLOAD_NAME) {
     return createFlattenChainWorkload();
   }
 
@@ -2906,7 +2906,7 @@ function loadWorkload(workloadName: BenchmarkWorkloadName): BenchmarkWorkload {
 
 function createWideDirectoryWorkload(): BenchmarkWorkload {
   const rawFiles = Array.from(
-    { length: PHASE_4_WIDE_DIRECTORY_FILE_COUNT },
+    { length: WIDE_DIRECTORY_FILE_COUNT },
     (_, index) => `wide/item${index + 1}.ts`
   );
   let preparedFiles: readonly string[] | undefined;
@@ -2930,7 +2930,7 @@ function createWideDirectoryWorkload(): BenchmarkWorkload {
       return preparedFiles;
     },
     label: 'Synthetic wide directory fixture',
-    name: PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME,
+    name: WIDE_DIRECTORY_WORKLOAD_NAME,
     rawFiles,
     rootCount: 1,
     rootDirectoryPaths: ['wide/'],
@@ -2971,7 +2971,7 @@ function createFlattenChainWorkload(): BenchmarkWorkload {
       return preparedFiles;
     },
     label: 'Synthetic flatten-heavy fixture',
-    name: PHASE_5_FLATTEN_CHAIN_WORKLOAD_NAME,
+    name: FLATTEN_CHAIN_WORKLOAD_NAME,
     rawFiles,
     rootCount: bucketCount,
     rootDirectoryPaths: getRootDirectoryPaths(rawFiles),
@@ -5739,9 +5739,7 @@ function createScenarioFactories(
       );
     }
 
-    const wideDirectoryWorkload = loadWorkload(
-      PHASE_4_WIDE_DIRECTORY_WORKLOAD_NAME
-    );
+    const wideDirectoryWorkload = loadWorkload(WIDE_DIRECTORY_WORKLOAD_NAME);
     factories.push(
       createVisibleScenarioFactory(wideDirectoryWorkload, 'middle', 200)
     );
@@ -5752,9 +5750,7 @@ function createScenarioFactories(
       createVisibleScenarioFactory(wideDirectoryWorkload, 'middle', 500)
     );
 
-    const flattenChainWorkload = loadWorkload(
-      PHASE_5_FLATTEN_CHAIN_WORKLOAD_NAME
-    );
+    const flattenChainWorkload = loadWorkload(FLATTEN_CHAIN_WORKLOAD_NAME);
     factories.push(
       createVisibleScenarioFactory(flattenChainWorkload, 'middle', 200)
     );
