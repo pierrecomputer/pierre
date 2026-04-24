@@ -26,6 +26,7 @@ import type {
   DirectoryChildIndex,
   NodeId,
   PathStoreNode,
+  PreparedPath,
 } from './internal-types';
 import { PATH_STORE_NODE_FLAG_EXPLICIT } from './internal-types';
 import { PATH_STORE_NODE_FLAG_REMOVED } from './internal-types';
@@ -56,11 +57,11 @@ export function listPaths(state: PathStoreState, path?: string): string[] {
   return collectCanonicalEntries(state, nodeId);
 }
 
-export function addPath(
+export function addPreparedPath(
   state: PathStoreState,
-  path: string
+  preparedPath: PreparedPath
 ): PathStoreAddEvent {
-  const preparedPath = parseInputPath(path);
+  const path = preparedPath.path;
   const parentSegments = preparedPath.isDirectory
     ? preparedPath.segments
     : preparedPath.segments.slice(0, -1);
@@ -107,6 +108,13 @@ export function addPath(
       nextProjectionSignature
     ),
   });
+}
+
+export function addPath(
+  state: PathStoreState,
+  path: string
+): PathStoreAddEvent {
+  return addPreparedPath(state, parseInputPath(path));
 }
 
 export function removePath(

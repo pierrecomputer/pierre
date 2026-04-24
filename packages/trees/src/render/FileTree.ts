@@ -27,7 +27,12 @@ import {
 } from '../model/gitStatus';
 import type {
   FileTreeBatchOperation,
+  FileTreeBulkIngestEventForType,
+  FileTreeBulkIngestEventType,
+  FileTreeBulkIngestHandle,
+  FileTreeBulkIngestInfo,
   FileTreeCompositionOptions,
+  FileTreeControllerOptions,
   FileTreeHydrationProps,
   FileTreeItemHandle,
   FileTreeListener,
@@ -39,6 +44,10 @@ import type {
   FileTreeRemoveOptions,
   FileTreeRenderProps,
   FileTreeResetOptions,
+  FileTreeRevealLoadingEventForType,
+  FileTreeRevealLoadingEventType,
+  FileTreeRevealLoadingHandle,
+  FileTreeRevealLoadingInfo,
   FileTreeRowDecorationRenderer,
   FileTreeSearchSessionHandle,
   FileTreeSelectionChangeListener,
@@ -62,7 +71,6 @@ import {
   unmountFileTreeRoot,
 } from './runtime';
 import { FileTreeManagedSlotHost } from './slotHost';
-
 let serverInstanceId = 0;
 let clientInstanceId = 0;
 
@@ -168,7 +176,11 @@ function getTopLevelSpriteSheets(shadowRoot: ShadowRoot): SVGElement[] {
 }
 
 export class FileTree
-  implements FileTreeMutationHandle, FileTreeSearchSessionHandle
+  implements
+    FileTreeMutationHandle,
+    FileTreeSearchSessionHandle,
+    FileTreeRevealLoadingHandle,
+    FileTreeBulkIngestHandle
 {
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
 
@@ -251,7 +263,7 @@ export class FileTree
       initialSearchQuery,
       onSearchChange,
       renaming,
-    });
+    } as FileTreeControllerOptions);
     this.#selectionVersion = this.#controller.getSelectionVersion();
     this.#selectionSubscription =
       this.#onSelectionChange == null
@@ -361,6 +373,36 @@ export class FileTree
     handler: (event: FileTreeMutationEventForType<TType>) => void
   ): () => void {
     return this.#controller.onMutation(type, handler);
+  }
+
+  public getRevealLoadingInfo(path: string): FileTreeRevealLoadingInfo | null {
+    return this.#controller.getRevealLoadingInfo(path);
+  }
+
+  public onRevealLoading<TType extends FileTreeRevealLoadingEventType | '*'>(
+    type: TType,
+    handler: (event: FileTreeRevealLoadingEventForType<TType>) => void
+  ): () => void {
+    return this.#controller.onRevealLoading(type, handler);
+  }
+
+  public getBulkIngestInfo(): FileTreeBulkIngestInfo | null {
+    return this.#controller.getBulkIngestInfo();
+  }
+
+  public onBulkIngest<TType extends FileTreeBulkIngestEventType | '*'>(
+    type: TType,
+    handler: (event: FileTreeBulkIngestEventForType<TType>) => void
+  ): () => void {
+    return this.#controller.onBulkIngest(type, handler);
+  }
+
+  public startBulkIngest(): void {
+    this.#controller.startBulkIngest();
+  }
+
+  public cancelBulkIngest(): void {
+    this.#controller.cancelBulkIngest();
   }
 
   public setSearch(value: string | null): void {
@@ -806,7 +848,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     fileTreeSearchMode,
     initialSearchQuery,
     renaming,
-  });
+  } as FileTreeControllerOptions);
   const gitStatusState = resolveFileTreeGitStatusState(gitStatus);
   const initialViewportHeight = resolveInitialViewportHeight({
     initialVisibleRowCount,

@@ -45,6 +45,12 @@ export type FileTreeSortComparator = (
 
 export type FileTreeInitialExpansion = 'closed' | 'open' | number;
 
+export type FileTreeDirectoryLoadState =
+  | 'unloaded'
+  | 'loading'
+  | 'loaded'
+  | 'error';
+
 export interface FileTreeRemoveOptions {
   recursive?: boolean;
 }
@@ -74,26 +80,85 @@ interface FileTreeStoreOptions {
   sort?: 'default' | FileTreeSortComparator;
 }
 
-type FileTreeInputOptions =
-  | {
-      paths: readonly FileTreePublicId[];
-      preparedInput?: FileTreePreparedInput;
-    }
-  | {
-      paths?: readonly FileTreePublicId[];
-      preparedInput: FileTreePreparedInput;
-    };
+export interface FileTreeRevealDirectorySnapshot {
+  childDirectoryKnownChildCounts?: readonly (number | null | undefined)[];
+  children: readonly FileTreePublicId[];
+}
 
-type FileTreeControllerBehaviorOptions = FileTreeStoreOptions & {
+export type FileTreeRevealDirectoryBatchResult =
+  | { errorMessage: string; snapshot?: never }
+  | { errorMessage?: never; snapshot: FileTreeRevealDirectorySnapshot };
+
+export interface FileTreeRevealLoadingSource {
+  loadDirectories(
+    paths: readonly FileTreePublicId[],
+    signal: AbortSignal
+  ): Promise<readonly FileTreeRevealDirectoryBatchResult[]>;
+  loadDirectory(
+    path: FileTreePublicId,
+    signal: AbortSignal
+  ): Promise<FileTreeRevealDirectorySnapshot>;
+}
+
+export interface FileTreeRevealLoadingPolicy {
+  maxSpeculativeBatchSize?: number;
+  maxSpeculativeInflightRequests?: number;
+}
+
+export interface FileTreeRevealLoadingConfig {
+  mode: 'reveal';
+  policy?: FileTreeRevealLoadingPolicy;
+  source: FileTreeRevealLoadingSource;
+}
+
+export interface FileTreeBulkIngestHeader {
+  totalPathCount?: number;
+}
+
+export interface FileTreeBulkIngestChunk {
+  paths: readonly FileTreePublicId[];
+}
+
+export interface FileTreeBulkIngestSession {
+  chunks: AsyncIterable<FileTreeBulkIngestChunk>;
+  header: FileTreeBulkIngestHeader;
+}
+
+export interface FileTreeBulkIngestSource {
+  openSession(signal: AbortSignal): Promise<FileTreeBulkIngestSession>;
+}
+
+export interface FileTreeBulkIngestPolicy {
+  checkpointPathCountCeiling?: number;
+  checkpointTimeBudgetMs?: number;
+}
+
+export interface FileTreeBulkIngestConfig {
+  mode: 'bulk';
+  policy?: FileTreeBulkIngestPolicy;
+  source: FileTreeBulkIngestSource;
+}
+
+export type FileTreeLoadingConfig =
+  | FileTreeRevealLoadingConfig
+  | FileTreeBulkIngestConfig;
+
+type FileTreeInputOptions = {
+  paths?: readonly FileTreePublicId[];
+  preparedInput?: FileTreePreparedInput;
+};
+
+export interface FileTreeControllerBaseOptions extends FileTreeStoreOptions {
   dragAndDrop?: boolean | FileTreeDragAndDropConfig;
   fileTreeSearchMode?: FileTreeSearchMode;
   initialSearchQuery?: string | null;
   initialSelectedPaths?: readonly FileTreePublicId[];
+  loading?: FileTreeLoadingConfig;
   onSearchChange?: FileTreeSearchChangeListener;
   renaming?: boolean | FileTreeRenamingConfig;
-};
+}
 
-export type FileTreeControllerOptions = FileTreeControllerBehaviorOptions &
+export type FileTreeControllerOptions = FileTreeControllerBaseOptions &
   FileTreeInputOptions;
 
 export interface FileTreeVisibleSegment {
@@ -365,6 +430,105 @@ export type FileTreeMutationEventForType<
   ? FileTreeMutationEvent
   : Extract<FileTreeMutationEvent, { operation: TType }>;
 
+export interface FileTreeRevealLoadingInfo {
+  errorMessage?: string;
+  knownChildCount?: number;
+  path: FileTreePublicId;
+  state: FileTreeDirectoryLoadState;
+}
+
+export interface FileTreeRevealLoadingStartedEvent {
+  info: FileTreeRevealLoadingInfo;
+  path: FileTreePublicId;
+  type: 'started';
+}
+
+export interface FileTreeRevealLoadingCompletedEvent {
+  info: FileTreeRevealLoadingInfo;
+  path: FileTreePublicId;
+  type: 'completed';
+}
+
+export interface FileTreeRevealLoadingFailedEvent {
+  info: FileTreeRevealLoadingInfo;
+  path: FileTreePublicId;
+  type: 'failed';
+}
+
+export interface FileTreeRevealLoadingCancelledEvent {
+  info: FileTreeRevealLoadingInfo;
+  path: FileTreePublicId;
+  type: 'cancelled';
+}
+
+export type FileTreeRevealLoadingEvent =
+  | FileTreeRevealLoadingStartedEvent
+  | FileTreeRevealLoadingCompletedEvent
+  | FileTreeRevealLoadingFailedEvent
+  | FileTreeRevealLoadingCancelledEvent;
+
+export type FileTreeRevealLoadingEventType = FileTreeRevealLoadingEvent['type'];
+
+export type FileTreeRevealLoadingEventForType<
+  TType extends FileTreeRevealLoadingEventType | '*',
+> = TType extends '*'
+  ? FileTreeRevealLoadingEvent
+  : Extract<FileTreeRevealLoadingEvent, { type: TType }>;
+
+export type FileTreeBulkIngestStatus =
+  | 'idle'
+  | 'ingesting'
+  | 'completed'
+  | 'cancelled'
+  | 'failed';
+
+export interface FileTreeBulkIngestInfo {
+  errorMessage?: string;
+  ingestedPathCount: number;
+  status: FileTreeBulkIngestStatus;
+  totalPathCount?: number;
+}
+
+export interface FileTreeBulkIngestStartedEvent {
+  info: FileTreeBulkIngestInfo;
+  type: 'started';
+}
+
+export interface FileTreeBulkIngestProgressedEvent {
+  info: FileTreeBulkIngestInfo;
+  type: 'progressed';
+}
+
+export interface FileTreeBulkIngestCompletedEvent {
+  info: FileTreeBulkIngestInfo;
+  type: 'completed';
+}
+
+export interface FileTreeBulkIngestCancelledEvent {
+  info: FileTreeBulkIngestInfo;
+  type: 'cancelled';
+}
+
+export interface FileTreeBulkIngestFailedEvent {
+  info: FileTreeBulkIngestInfo;
+  type: 'failed';
+}
+
+export type FileTreeBulkIngestEvent =
+  | FileTreeBulkIngestStartedEvent
+  | FileTreeBulkIngestProgressedEvent
+  | FileTreeBulkIngestCompletedEvent
+  | FileTreeBulkIngestCancelledEvent
+  | FileTreeBulkIngestFailedEvent;
+
+export type FileTreeBulkIngestEventType = FileTreeBulkIngestEvent['type'];
+
+export type FileTreeBulkIngestEventForType<
+  TType extends FileTreeBulkIngestEventType | '*',
+> = TType extends '*'
+  ? FileTreeBulkIngestEvent
+  : Extract<FileTreeBulkIngestEvent, { type: TType }>;
+
 export interface FileTreeResetOptions {
   // When provided, replaces the baseline expansion set stored at construction
   // time. Useful when the caller is swapping in a dramatically different path
@@ -392,6 +556,26 @@ export interface FileTreeMutationHandle {
     paths: readonly FileTreePublicId[],
     options?: FileTreeResetOptions
   ): void;
+}
+
+export interface FileTreeRevealLoadingHandle {
+  getRevealLoadingInfo(
+    path: FileTreePublicId
+  ): FileTreeRevealLoadingInfo | null;
+  onRevealLoading<TType extends FileTreeRevealLoadingEventType | '*'>(
+    type: TType,
+    handler: (event: FileTreeRevealLoadingEventForType<TType>) => void
+  ): () => void;
+}
+
+export interface FileTreeBulkIngestHandle {
+  cancelBulkIngest(): void;
+  getBulkIngestInfo(): FileTreeBulkIngestInfo | null;
+  onBulkIngest<TType extends FileTreeBulkIngestEventType | '*'>(
+    type: TType,
+    handler: (event: FileTreeBulkIngestEventForType<TType>) => void
+  ): () => void;
+  startBulkIngest(): void;
 }
 
 export type FileTreeControllerListener = () => void;

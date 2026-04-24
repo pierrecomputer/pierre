@@ -6,6 +6,7 @@ import {
   AOSP_PREVIEW_PATHS,
   AOSP_TOTAL_PATH_COUNT,
 } from './aospPreview';
+import { deriveAllExpandedPaths } from './deriveAllExpandedPaths';
 import {
   AOSP_UPGRADE_DATA_URL,
   getWorkloadOption,
@@ -29,36 +30,6 @@ const workloadPromiseCache = new Map<
   TreesWorkloadName,
   Promise<LoadedWorkload>
 >();
-
-// Derives every ancestor folder path once so the demo can switch between the
-// workload default, fully expanded, and fully collapsed tree states.
-function deriveExpandedPaths(paths: readonly string[]): string[] {
-  const folders = new Set<string>();
-
-  for (const path of paths) {
-    const isDirectory = path.endsWith('/');
-    const normalizedPath = isDirectory ? path.slice(0, -1) : path;
-    if (normalizedPath.length === 0) {
-      continue;
-    }
-
-    let searchIndex = normalizedPath.indexOf('/');
-    const limit = isDirectory
-      ? normalizedPath.length
-      : normalizedPath.lastIndexOf('/');
-
-    while (searchIndex >= 0 && searchIndex <= limit) {
-      folders.add(normalizedPath.slice(0, searchIndex));
-      searchIndex = normalizedPath.indexOf('/', searchIndex + 1);
-    }
-
-    if (isDirectory) {
-      folders.add(normalizedPath);
-    }
-  }
-
-  return [...folders];
-}
 
 function adaptSharedWorkload(
   name: Exclude<TreesWorkloadName, 'aosp'>
@@ -118,7 +89,7 @@ export async function loadWorkloadDataPayload(
     expansionMode === 'all'
       ? workloadName === 'aosp'
         ? AOSP_PREVIEW_ALL_EXPANDED_PATHS
-        : deriveExpandedPaths(workload.paths)
+        : deriveAllExpandedPaths(workload.paths)
       : expansionMode === 'collapsed'
         ? []
         : workload.defaultExpandedPaths;

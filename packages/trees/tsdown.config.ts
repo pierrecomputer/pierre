@@ -12,7 +12,9 @@ const config: UserConfig = defineConfig([
     tsconfig: './tsconfig.json',
     clean: true,
     dts: {
+      cwd: '../..',
       sourcemap: true,
+      tsconfig: 'packages/trees/scripts/tsconfig.dts.json',
       tsgo: true,
     },
     unbundle: true,

@@ -18,6 +18,12 @@ export interface PathStoreOptions {
 
 export type PathStoreInitialExpansion = 'closed' | 'open' | number;
 
+/**
+ * Opaque snapshot returned by PathStore.prepareInput(),
+ * PathStore.preparePresortedInput(), or PathStorePreparedInputBuilder.build().
+ * Callers may read `paths`, but path-store also relies on hidden metadata carried
+ * on the object to preserve sort semantics and fast-path construction details.
+ */
 export interface PathStorePreparedInput {
   paths: readonly string[];
 }
@@ -52,6 +58,10 @@ export type PathStoreDirectoryLoadState =
   | 'loading'
   | 'loaded'
   | 'error';
+
+export interface PathStoreMarkDirectoryUnloadedOptions {
+  knownChildCount?: number;
+}
 
 export interface PathStoreChildPatch {
   metadata?: {

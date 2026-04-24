@@ -6,15 +6,17 @@ export function ExampleCard({
   children,
   controls,
   footer,
+  className,
 }: {
   title: string;
   description: string;
   children: ReactNode;
   controls?: ReactNode;
   footer?: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="@container/card max-w-[480px]">
+    <div className={`@container/card max-w-[480px] ${className ?? ''}`.trim()}>
       <h2 className="text-sm font-bold">{title}</h2>
       <p className="text-muted-foreground mb-2 min-h-[3rem] text-xs">
         {description}

@@ -28,3 +28,9 @@ export function preparePresortedFileTreeInput(
 ): FileTreePreparedInput {
   return PathStore.preparePresortedInput(paths) as FileTreePreparedInput;
 }
+
+export function toPathStorePreparedInput(
+  preparedInput: FileTreePreparedInput
+): { paths: readonly string[] } {
+  return preparedInput;
+}

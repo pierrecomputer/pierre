@@ -23,6 +23,7 @@ import { createRoot, type Root as ReactDomRoot } from 'react-dom/client';
 import { StateLog, useStateLog } from '../_components/StateLog';
 import { createPresortedPreparedInput } from '../_lib/createPresortedPreparedInput';
 import { DEMO_FILE_TREE_ICONS } from '../_lib/demoIcons';
+import { fetchUpgradePayload } from '../_lib/fetchUpgradePayload';
 import {
   getContextMenuSideOffset,
   getFloatingContextMenuTriggerStyle,
@@ -229,34 +230,6 @@ function getAvailableMutationPath(tree: FileTree, basePath: string): string {
     suffix += 1;
   }
   return candidatePath;
-}
-
-interface UpgradePayload {
-  allExpandedPaths: readonly string[];
-  paths: readonly string[];
-}
-
-// Fetches a gzipped upgrade payload from the CDN, gunzips it in the browser
-// via DecompressionStream, and parses it. This is how the AOSP workload avoids
-// shipping 130 MB of uncompressed JSON through the Vercel serverless function
-// — the client downloads ~11 MB from the edge instead, and the expansion list
-// is precomputed so we don't walk 1.6 M paths after decompression.
-async function fetchUpgradePayload(
-  url: string,
-  signal: AbortSignal
-): Promise<UpgradePayload> {
-  const response = await fetch(url, { signal });
-  if (!response.ok || response.body == null) {
-    throw new Error(
-      `Failed to fetch upgrade path list (${String(response.status)})`
-    );
-  }
-
-  const decompressedStream = response.body.pipeThrough(
-    new DecompressionStream('gzip')
-  );
-  const decompressedText = await new Response(decompressedStream).text();
-  return JSON.parse(decompressedText) as UpgradePayload;
 }
 
 function formatMutationEvent(event: FileTreeMutationEvent): string {

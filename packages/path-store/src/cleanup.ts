@@ -159,8 +159,9 @@ function collectExpansionOverridePaths(
   };
 }
 
-// Keeps only non-default load states so cleanup can rebuild the load-info map
-// and still restore unloaded/error directories after compaction.
+// Keeps non-default load states plus loaded directories that still carry
+// reveal child-count hints, so cleanup can rebuild the load-info map without
+// erasing caller-visible metadata.
 function collectDirectoryLoadInfos(
   state: PathStoreState
 ): PersistedDirectoryLoadInfo[] {
@@ -168,7 +169,11 @@ function collectDirectoryLoadInfos(
 
   for (const [nodeId, info] of state.directoryLoadInfoById) {
     const node = isLiveDirectoryNode(state, nodeId);
-    if (node == null || getDirectoryLoadState(state, nodeId) === 'loaded') {
+    if (
+      node == null ||
+      (getDirectoryLoadState(state, nodeId) === 'loaded' &&
+        info.knownChildCount == null)
+    ) {
       continue;
     }
 
@@ -176,6 +181,7 @@ function collectDirectoryLoadInfos(
       info: {
         activeAttemptId: null,
         errorMessage: info.errorMessage,
+        knownChildCount: info.knownChildCount,
         nextAttemptId: info.nextAttemptId,
         state: info.state,
       },
@@ -237,6 +243,7 @@ function restoreDirectoryLoadInfos(
     state.directoryLoadInfoById.set(nodeId, {
       activeAttemptId: null,
       errorMessage: retainedInfo.info.errorMessage,
+      knownChildCount: retainedInfo.info.knownChildCount,
       nextAttemptId: retainedInfo.info.nextAttemptId,
       state: retainedInfo.info.state,
     });

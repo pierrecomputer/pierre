@@ -10,6 +10,11 @@ import { Switch } from '@/components/ui/switch';
 
 const DEMO_PAGES = [
   { slug: '', label: 'Main Demo' },
+  { slug: 'debug-static', label: 'Debug Static' },
+  { slug: 'debug-static-render', label: 'Debug Static Render' },
+  { slug: 'debug-reveal', label: 'Debug Reveal' },
+  { slug: 'reveal', label: 'Reveal Loading' },
+  { slug: 'bulk', label: 'Bulk Ingest' },
   { slug: 'react', label: 'React' },
   { slug: 'responsiveness', label: 'Responsiveness' },
   { slug: 'density', label: 'Density' },
@@ -37,10 +42,7 @@ export function TreesDevSidebar({ onNavigate }: { onNavigate?: () => void }) {
       </p>
       {DEMO_PAGES.map(({ slug, label }) => {
         const href = slug === '' ? '/trees-dev' : `/trees-dev/${slug}`;
-        const isActive =
-          slug === ''
-            ? pathname === '/trees-dev'
-            : pathname.startsWith(`/trees-dev/${slug}`);
+        const isActive = pathname === href;
         return (
           <NavLink key={slug} href={href} active={isActive}>
             {label}

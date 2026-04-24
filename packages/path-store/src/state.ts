@@ -183,6 +183,7 @@ function getOrCreateDirectoryLoadInfo(
   const nextInfo: DirectoryLoadInfo = {
     activeAttemptId: null,
     errorMessage: null,
+    knownChildCount: null,
     nextAttemptId: 1,
     state: 'loaded',
   };
@@ -202,6 +203,38 @@ export function getDirectoryLoadError(
   nodeId: NodeId
 ): string | null {
   return state.directoryLoadInfoById.get(nodeId)?.errorMessage ?? null;
+}
+
+function validateKnownChildCount(
+  knownChildCount: number | null
+): number | null {
+  if (knownChildCount == null) {
+    return null;
+  }
+
+  if (!Number.isInteger(knownChildCount) || knownChildCount < 0) {
+    throw new Error(
+      `knownChildCount must be a non-negative integer. Received: ${String(knownChildCount)}`
+    );
+  }
+
+  return knownChildCount;
+}
+
+export function getDirectoryKnownChildCount(
+  state: PathStoreState,
+  nodeId: NodeId
+): number | null {
+  return state.directoryLoadInfoById.get(nodeId)?.knownChildCount ?? null;
+}
+
+export function setDirectoryKnownChildCount(
+  state: PathStoreState,
+  nodeId: NodeId,
+  knownChildCount: number | null
+): void {
+  const loadInfo = getOrCreateDirectoryLoadInfo(state, nodeId);
+  loadInfo.knownChildCount = validateKnownChildCount(knownChildCount);
 }
 
 export function beginDirectoryLoad(
@@ -231,11 +264,13 @@ export function beginDirectoryLoad(
 
 export function markDirectoryUnloadedState(
   state: PathStoreState,
-  nodeId: NodeId
+  nodeId: NodeId,
+  knownChildCount: number | null = null
 ): void {
   const loadInfo = getOrCreateDirectoryLoadInfo(state, nodeId);
   loadInfo.activeAttemptId = null;
   loadInfo.errorMessage = null;
+  loadInfo.knownChildCount = validateKnownChildCount(knownChildCount);
   loadInfo.state = 'unloaded';
 }
 

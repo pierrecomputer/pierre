@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { sortCanonicalPaths } from '@pierre/tree-test-data';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 // Produces the two artifacts the trees-dev demo needs to serve the AOSP
@@ -14,7 +15,7 @@ import { resolve as resolvePath } from 'node:path';
 // Run from the repo root: `bun apps/docs/scripts/generateAospArtifacts.ts`.
 import { gzipSync } from 'node:zlib';
 
-import { preparePaths as sortCanonicalPaths } from '../../../packages/path-store/src/builder';
+import { deriveAllExpandedPaths } from '../app/trees-dev/_lib/deriveAllExpandedPaths';
 
 const PREVIEW_PATH_COUNT = 100;
 const repoRoot = resolvePath(import.meta.dirname, '../../..');
@@ -28,37 +29,6 @@ const previewOutputPath = resolvePath(
 );
 const gzOutputDir = resolvePath(repoRoot, 'apps/docs/public/trees-dev');
 const gzOutputPath = resolvePath(gzOutputDir, 'aosp-files.json.gz');
-
-// Matches deriveExpandedPaths in workloadLoader.ts, but we precompute at
-// artifact-build time so the client can simply read the result out of the gzip
-// payload instead of walking 1.5 M paths after decompression.
-function deriveAllExpandedPaths(paths: readonly string[]): string[] {
-  const folders = new Set<string>();
-
-  for (const path of paths) {
-    const isDirectory = path.endsWith('/');
-    const normalizedPath = isDirectory ? path.slice(0, -1) : path;
-    if (normalizedPath.length === 0) {
-      continue;
-    }
-
-    let searchIndex = normalizedPath.indexOf('/');
-    const limit = isDirectory
-      ? normalizedPath.length
-      : normalizedPath.lastIndexOf('/');
-
-    while (searchIndex >= 0 && searchIndex <= limit) {
-      folders.add(normalizedPath.slice(0, searchIndex));
-      searchIndex = normalizedPath.indexOf('/', searchIndex + 1);
-    }
-
-    if (isDirectory) {
-      folders.add(normalizedPath);
-    }
-  }
-
-  return [...folders];
-}
 
 console.log(`[aosp] reading ${sourcePath}`);
 const rawPaths = JSON.parse(readFileSync(sourcePath, 'utf8')) as string[];

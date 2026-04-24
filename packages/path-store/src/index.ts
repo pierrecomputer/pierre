@@ -1,3 +1,4 @@
+export { PathStorePreparedInputBuilder } from './prepared-input-builder';
 export { PathStore } from './store';
 export { createPathStoreScheduler } from './scheduler';
 export { StaticPathStore } from './static-store';
@@ -23,6 +24,7 @@ export type {
   PathStorePathInfo,
   PathStorePreparedInput,
   PathStoreRemoveOptions,
+  PathStoreMarkDirectoryUnloadedOptions,
   PathStoreVisibleAncestorRow,
   PathStoreVisibleRow,
   PathStoreVisibleRowContext,

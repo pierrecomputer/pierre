@@ -28,11 +28,16 @@ const nextConfig = {
   experimental: {
     cssChunking: 'strict',
   },
-  // allowedDevOrigins: [],
+  allowedDevOrigins: ['127.0.0.1'],
   // Resolve and transpile workspace packages so subpath exports (e.g. @pierre/trees/react)
   // resolve correctly when Next follows client-component imports from the server.
-  transpilePackages: ['@pierre/trees', '@pierre/diffs', '@pierre/truncate'],
-  // Opt the /trees-dev route out of bfcache / HTTP document caching.
+  transpilePackages: [
+    '@pierre/trees',
+    '@pierre/path-store',
+    '@pierre/diffs',
+    '@pierre/truncate',
+  ],
+  // Opt the /trees-dev routes out of bfcache / HTTP document caching.
   // iOS Safari kills tabs that briefly hold two copies of the 1.6M-path AOSP
   // tree during a refresh; no-store tells the browser to fully release the old
   // document before it starts booting the new one.
@@ -40,6 +45,15 @@ const nextConfig = {
     return [
       {
         source: '/trees-dev',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, max-age=0',
+          },
+        ],
+      },
+      {
+        source: '/trees-dev/:path*',
         headers: [
           {
             key: 'Cache-Control',

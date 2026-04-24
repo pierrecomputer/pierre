@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>file-tree debug static fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+
+      [data-file-tree-debug-static-shell] {
+        display: grid;
+        gap: 16px;
+        max-width: 980px;
+      }
+
+      [data-file-tree-debug-static-controls] {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      [data-file-tree-debug-static-mount] {
+        width: 360px;
+        height: 260px;
+        border: 1px solid #ccc;
+      }
+
+      [data-file-tree-debug-static-state] {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+
+      [data-file-tree-debug-static-state] pre {
+        margin: 0;
+        padding: 8px;
+        border: 1px solid #ccc;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-file-tree-debug-static-shell>
+      <div data-file-tree-debug-static-controls>
+        <button type="button" data-file-tree-debug-static-action="expand-art">
+          Expand art/
+        </button>
+        <button
+          type="button"
+          data-file-tree-debug-static-action="focus-art-file"
+        >
+          Focus art/a.ts
+        </button>
+        <button
+          type="button"
+          data-file-tree-debug-static-action="select-art-file"
+        >
+          Select art/a.ts
+        </button>
+      </div>
+      <div data-file-tree-debug-static-state>
+        <pre data-file-tree-debug-static-controller-state></pre>
+        <pre data-file-tree-debug-static-wrapper-state></pre>
+        <pre data-file-tree-debug-static-dom-state></pre>
+      </div>
+      <div data-file-tree-debug-static-mount></div>
+    </div>
+
+    <script type="module">
+      import { FileTree, FileTreeController } from '/dist/index.js';
+
+      const paths = ['art/a.ts', 'art/b.ts', 'src/index.ts'];
+      const artPath = 'art/';
+      const artFilePath = 'art/a.ts';
+      const mount = document.querySelector(
+        '[data-file-tree-debug-static-mount]'
+      );
+      const controllerState = document.querySelector(
+        '[data-file-tree-debug-static-controller-state]'
+      );
+      const wrapperState = document.querySelector(
+        '[data-file-tree-debug-static-wrapper-state]'
+      );
+      const domState = document.querySelector(
+        '[data-file-tree-debug-static-dom-state]'
+      );
+      if (
+        !(mount instanceof HTMLDivElement) ||
+        !(controllerState instanceof HTMLPreElement) ||
+        !(wrapperState instanceof HTMLPreElement) ||
+        !(domState instanceof HTMLPreElement)
+      ) {
+        throw new Error('Missing file-tree debug static fixture mounts.');
+      }
+
+      const controller = new FileTreeController({
+        flattenEmptyDirectories: false,
+        paths,
+      });
+      const tree = new FileTree({
+        flattenEmptyDirectories: false,
+        id: 'file-tree-debug-static-fixture',
+        paths,
+        viewportHeight: 240,
+      });
+      tree.render({ containerWrapper: mount });
+
+      const getRenderedPaths = () => {
+        const shadowRoot = tree.getFileTreeContainer()?.shadowRoot;
+        if (!(shadowRoot instanceof ShadowRoot)) {
+          return [];
+        }
+        return Array.from(shadowRoot.querySelectorAll('[data-item-path]')).map(
+          (element) => element.getAttribute('data-item-path')
+        );
+      };
+
+      const getDirectoryExpanded = (value) => {
+        if (value == null || value.isDirectory() !== true) {
+          return null;
+        }
+        return value.isExpanded();
+      };
+
+      const syncState = () => {
+        controllerState.textContent = JSON.stringify(
+          {
+            artExpanded: getDirectoryExpanded(controller.getItem(artPath)),
+            focus: controller.getFocusedPath(),
+            rows: controller
+              .getVisibleRows(0, Math.max(0, controller.getVisibleCount() - 1))
+              .map((row) => row.path),
+            selection: controller.getSelectedPaths(),
+            visibleCount: controller.getVisibleCount(),
+          },
+          null,
+          2
+        );
+        wrapperState.textContent = JSON.stringify(
+          {
+            artExpanded: getDirectoryExpanded(tree.getItem(artPath)),
+            focus: tree.getFocusedPath(),
+            selection: tree.getSelectedPaths(),
+          },
+          null,
+          2
+        );
+        domState.textContent = JSON.stringify(
+          {
+            rows: getRenderedPaths(),
+          },
+          null,
+          2
+        );
+      };
+
+      controller.subscribe(syncState);
+      tree.subscribe(syncState);
+      syncState();
+
+      document
+        .querySelector('[data-file-tree-debug-static-action="expand-art"]')
+        ?.addEventListener('click', () => {
+          const controllerItem = controller.getItem(artPath);
+          if (controllerItem != null && controllerItem.isDirectory()) {
+            controllerItem.expand();
+          }
+          const treeItem = tree.getItem(artPath);
+          if (treeItem != null && treeItem.isDirectory()) {
+            treeItem.expand();
+          }
+          syncState();
+        });
+      document
+        .querySelector('[data-file-tree-debug-static-action="focus-art-file"]')
+        ?.addEventListener('click', () => {
+          controller.focusPath(artFilePath);
+          tree.focusPath(artFilePath);
+          syncState();
+        });
+      document
+        .querySelector('[data-file-tree-debug-static-action="select-art-file"]')
+        ?.addEventListener('click', () => {
+          controller.selectOnlyPath(artFilePath);
+          tree.getItem(artFilePath)?.select();
+          syncState();
+        });
+
+      const waitForTree = async () => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('file-tree-container');
+          if (
+            host instanceof HTMLElement &&
+            host.shadowRoot?.querySelector('button[data-type="item"]') != null
+          ) {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error(
+              'Timed out waiting for the file-tree debug static fixture.'
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, 16));
+        }
+      };
+
+      await waitForTree();
+      window.__fileTreeDebugStaticFixtureReady = true;
+    </script>
+  </body>
+</html>

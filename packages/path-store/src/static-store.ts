@@ -18,11 +18,15 @@ import {
 import { parseLookupPath } from './path';
 import type {
   PathStoreConstructorOptions,
+  PathStorePathInfo,
   PathStoreVisibleRow,
+  PathStoreVisibleTreeProjectionData,
 } from './public-types';
 import { getSegmentValue } from './segments';
 import { compareSegmentValues } from './sort';
+import type { PathStoreState } from './state';
 import { resolveInitialExpansion } from './state';
+import { createVisibleTreeProjection } from './visible-tree-projection';
 
 const STATIC_CHILD_INDEX_CHUNK_SHIFT = 5;
 const STATIC_CHILD_INDEX_CHUNK_SIZE = 1 << STATIC_CHILD_INDEX_CHUNK_SHIFT;
@@ -849,8 +853,30 @@ function getStaticVisibleCount(state: StaticPathStoreState): number {
   return requireStaticNode(state, state.snapshot.rootId).visibleSubtreeCount;
 }
 
+function createStaticStateFromPathStoreState(
+  sourceState: PathStoreState
+): StaticPathStoreState {
+  const staticSnapshot = createStaticSnapshot(sourceState.snapshot);
+  const state: StaticPathStoreState = {
+    collapsedDirectoryIds: new Set(sourceState.collapsedDirectoryIds),
+    defaultExpansion: sourceState.defaultExpansion,
+    expandedDirectoryIds: new Set(sourceState.expandedDirectoryIds),
+    pathByNodeId: new Array(staticSnapshot.nodes.length).fill(null),
+    snapshot: staticSnapshot,
+  };
+  state.pathByNodeId[staticSnapshot.rootId] = '';
+  return state;
+}
+
 export class StaticPathStore {
-  readonly #state: StaticPathStoreState;
+  #state: StaticPathStoreState;
+
+  public static fromState(sourceState: PathStoreState): StaticPathStore {
+    const store = new StaticPathStore();
+    store.#state = createStaticStateFromPathStoreState(sourceState);
+    recomputeStaticVisibleCounts(store.#state);
+    return store;
+  }
 
   public constructor(options: PathStoreConstructorOptions = {}) {
     const builder = new PathStoreBuilder(options);
@@ -936,6 +962,61 @@ export class StaticPathStore {
     }
 
     return rows;
+  }
+
+  public getVisibleTreeProjectionData(
+    maxRows: number = this.getVisibleCount()
+  ): PathStoreVisibleTreeProjectionData {
+    const visibleCount = this.getVisibleCount();
+    const rowCount = Math.max(0, Math.min(maxRows, visibleCount));
+    if (rowCount === 0) {
+      const emptyIndexBuffer = new Int32Array(0);
+      return {
+        getParentIndex: () => -1,
+        paths: [],
+        posInSetByIndex: emptyIndexBuffer,
+        setSizeByIndex: emptyIndexBuffer,
+        visibleIndexByPath: new Map<string, number>(),
+      };
+    }
+
+    const projection = createVisibleTreeProjection(
+      this.getVisibleSlice(0, rowCount - 1)
+    );
+    const paths = new Array<string>(projection.rows.length);
+    const posInSetByIndex = new Int32Array(projection.rows.length);
+    const setSizeByIndex = new Int32Array(projection.rows.length);
+    for (let index = 0; index < projection.rows.length; index += 1) {
+      const row = projection.rows[index];
+      if (row == null) {
+        continue;
+      }
+      paths[index] = row.path;
+      posInSetByIndex[index] = row.posInSet;
+      setSizeByIndex[index] = row.setSize;
+    }
+
+    return {
+      getParentIndex: projection.getParentIndex,
+      paths,
+      posInSetByIndex,
+      setSizeByIndex,
+      visibleIndexByPath: projection.visibleIndexByPath,
+    };
+  }
+
+  public getPathInfo(path: string): PathStorePathInfo | null {
+    const nodeId = findStaticNodeId(this.#state, path);
+    if (nodeId == null) {
+      return null;
+    }
+
+    const node = requireStaticNode(this.#state, nodeId);
+    return {
+      depth: node.depth,
+      kind: node.kind === PATH_STORE_NODE_KIND_DIRECTORY ? 'directory' : 'file',
+      path: materializeStaticNodePath(this.#state, nodeId),
+    };
   }
 
   public expand(path: string): void {

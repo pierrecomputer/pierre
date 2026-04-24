@@ -98,6 +98,7 @@ export function setNodeDepth(node: PathStoreNode, depth: number): void {
 export interface DirectoryLoadInfo {
   activeAttemptId: number | null;
   errorMessage: string | null;
+  knownChildCount: number | null;
   nextAttemptId: number;
   state: PathStoreDirectoryLoadState;
 }

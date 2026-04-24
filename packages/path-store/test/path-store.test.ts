@@ -7,6 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   createVisibleTreeProjection,
   PathStore,
+  PathStorePreparedInputBuilder,
   StaticPathStore,
 } from '../src/index';
 import type {
@@ -312,6 +313,131 @@ describe('preparePaths', () => {
         sort,
       })
     ).toEqual(['b.ts', 'a.ts', 'dir/']);
+  });
+});
+
+describe('PathStorePreparedInputBuilder', () => {
+  test('appends chunks and builds prepared input snapshots', () => {
+    const builder = new PathStorePreparedInputBuilder({
+      flattenEmptyDirectories: true,
+    });
+
+    builder.appendPresortedPaths(['alpha/', 'alpha/file.ts'], true);
+    builder.appendPaths(['beta/z.ts', 'beta/a.ts']);
+
+    const preparedInput = builder.build();
+    expect(preparedInput.paths).toEqual([
+      'alpha/',
+      'alpha/file.ts',
+      'beta/a.ts',
+      'beta/z.ts',
+    ]);
+
+    const store = new PathStore({
+      flattenEmptyDirectories: true,
+      preparedInput,
+    });
+
+    expect(store.list()).toEqual(['alpha/file.ts', 'beta/a.ts', 'beta/z.ts']);
+  });
+
+  test('preserves custom sort snapshots that revisit a directory later in the order', () => {
+    const sort = (left: { basename: string }, right: { basename: string }) =>
+      right.basename.localeCompare(left.basename);
+    const rawPaths = ['beta/a.ts', 'beta/z.ts', 'alpha/m.ts'];
+    const builder = new PathStorePreparedInputBuilder({ sort });
+
+    builder.appendPaths(rawPaths);
+
+    const preparedInput = builder.build();
+    const preparedStore = new PathStore({ preparedInput, sort });
+    const rawStore = new PathStore({ paths: rawPaths, sort });
+
+    expect(preparedStore.list()).toEqual(rawStore.list());
+    expect(getVisibleRowsSansIds(preparedStore)).toEqual(
+      getVisibleRowsSansIds(rawStore)
+    );
+  });
+
+  test('rejects out-of-order public builder appends', () => {
+    const builder = new PathStorePreparedInputBuilder();
+
+    builder.appendPresortedPaths(['beta.ts']);
+
+    expect(() => builder.appendPresortedPaths(['alpha.ts'])).toThrow(
+      'Builder input must be sorted before appendPaths()'
+    );
+  });
+});
+
+describe('appendPreparedInput', () => {
+  test('applies presorted chunks as coherent batch mutations', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['alpha/a.ts'],
+    });
+    const events = collectWildcardEvents(store);
+
+    store.appendPreparedInput(
+      PathStore.preparePresortedInput(['alpha/b.ts', 'alpha/c.ts'])
+    );
+    store.appendPreparedInput(PathStore.preparePresortedInput(['beta/']));
+
+    expect(store.list()).toEqual([
+      'alpha/a.ts',
+      'alpha/b.ts',
+      'alpha/c.ts',
+      'beta/',
+    ]);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      canonicalChanged: true,
+      operation: 'batch',
+      projectionChanged: true,
+      visibleCountDelta: 2,
+    });
+    expect(events[0]?.operation === 'batch' ? events[0].events : []).toEqual([
+      expect.objectContaining({
+        operation: 'add',
+        path: 'alpha/b.ts',
+        visibleCountDelta: 1,
+      }),
+      expect.objectContaining({
+        operation: 'add',
+        path: 'alpha/c.ts',
+        visibleCountDelta: 1,
+      }),
+    ]);
+    expect(events[1]).toMatchObject({
+      canonicalChanged: true,
+      operation: 'batch',
+      projectionChanged: true,
+      visibleCountDelta: 1,
+    });
+    expect(events[1]?.operation === 'batch' ? events[1].events : []).toEqual([
+      expect.objectContaining({
+        operation: 'add',
+        path: 'beta/',
+        visibleCountDelta: 1,
+      }),
+    ]);
+    assertMatchesRebuild(store);
+  });
+
+  test('rejects chunks that would insert before the current canonical tail', () => {
+    const store = new PathStore({
+      paths: ['beta/file.ts'],
+    });
+
+    expect(() =>
+      store.appendPreparedInput(
+        PathStore.preparePresortedInput(['alpha/file.ts'])
+      )
+    ).toThrow(
+      'appendPreparedInput only accepts paths that append after the current canonical tail'
+    );
+    expect(store.list()).toEqual(['beta/file.ts']);
   });
 });
 
@@ -1353,6 +1479,40 @@ describe('PathStore', () => {
     ]);
   });
 
+  test('exposes load error text and known child count hints through public getters', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['src/'],
+    });
+
+    expect(store.getDirectoryLoadError('src/')).toBeNull();
+    expect(store.getDirectoryKnownChildCount('src/')).toBeNull();
+
+    store.markDirectoryUnloaded('src/', { knownChildCount: 12 });
+    expect(store.getDirectoryKnownChildCount('src/')).toBe(12);
+
+    const firstAttempt = store.beginChildLoad('src/');
+    expect(store.failChildLoad(firstAttempt, 'boom')).toBe(true);
+    expect(store.getDirectoryLoadError('src/')).toBe('boom');
+    expect(store.getDirectoryKnownChildCount('src/')).toBe(12);
+
+    store.markDirectoryUnloaded('src/');
+    expect(store.getDirectoryLoadError('src/')).toBeNull();
+    expect(store.getDirectoryKnownChildCount('src/')).toBeNull();
+
+    const retryAttempt = store.beginChildLoad('src/');
+    expect(
+      store.applyChildPatch(retryAttempt, {
+        metadata: { knownChildCount: 1 },
+        operations: [{ path: 'src/file.ts', type: 'add' }],
+      })
+    ).toBe(true);
+    expect(store.completeChildLoad(retryAttempt)).toBe(true);
+    expect(store.getDirectoryLoadError('src/')).toBeNull();
+    expect(store.getDirectoryKnownChildCount('src/')).toBe(1);
+  });
+
   test('rejects marking a directory with known children as unloaded', () => {
     const store = new PathStore({
       flattenEmptyDirectories: false,
@@ -2048,6 +2208,34 @@ describe('PathStore', () => {
     expect(projection.setSizeByIndex[511]).toBe(1000);
   });
 
+  test('static store projection data matches the mutable store snapshot', () => {
+    const mutableStore = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: createDeepChainWithSiblingDirectoryPaths(3),
+    });
+    mutableStore.collapse('sibling-folder/');
+
+    const staticStore = mutableStore.toStaticStore();
+    const mutableProjection = mutableStore.getVisibleTreeProjectionData();
+    const staticProjection = staticStore.getVisibleTreeProjectionData();
+
+    expect(staticProjection.paths).toEqual(mutableProjection.paths);
+    expect([...staticProjection.posInSetByIndex]).toEqual([
+      ...mutableProjection.posInSetByIndex,
+    ]);
+    expect([...staticProjection.setSizeByIndex]).toEqual([
+      ...mutableProjection.setSizeByIndex,
+    ]);
+    expect(Array.from(staticProjection.visibleIndexByPath.entries())).toEqual(
+      Array.from(mutableProjection.visibleIndexByPath.entries())
+    );
+    expect(staticStore.getPathInfo('level1/level2')).toEqual(
+      mutableStore.getPathInfo('level1/level2')
+    );
+    expect(staticStore.getPathInfo('missing.ts')).toBeNull();
+  });
+
   test('supports visible tree projection depths beyond the initial typed-array capacity', () => {
     const depth = 80;
     const rows = Array.from({ length: depth }, (_, index) => ({
@@ -2212,6 +2400,29 @@ describe('PathStore', () => {
     expect(getVisibleRowsSansIds(staticStore, 0, 20)).toEqual(
       getVisibleRowsSansIds(mutableStore, 0, 20)
     );
+  });
+
+  test('toStaticStore freezes the current visible snapshot while the mutable store keeps changing', () => {
+    const mutableStore = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md', 'src/a.ts', 'src/b.ts'],
+    });
+    mutableStore.collapse('src/');
+
+    const staticStore = mutableStore.toStaticStore();
+
+    mutableStore.expand('src/');
+    mutableStore.add('src/c.ts');
+
+    expect(getVisiblePaths(staticStore, 0, 9)).toEqual(['src/', 'README.md']);
+    expect(getVisiblePaths(mutableStore, 0, 9)).toEqual([
+      'src/',
+      'src/a.ts',
+      'src/b.ts',
+      'src/c.ts',
+      'README.md',
+    ]);
   });
 
   test('static store exposes no topology mutation methods', () => {
@@ -3075,6 +3286,31 @@ describe('PathStore', () => {
         path: 'alpha/',
       })
     );
+  });
+
+  test('cleanup preserves known child-count hints for loaded directories across both modes', () => {
+    const store = new PathStore({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['alpha/', 'beta/file.ts'],
+    });
+
+    store.markDirectoryUnloaded('alpha/', { knownChildCount: 3 });
+    const attempt = store.beginChildLoad('alpha/');
+    store.completeChildLoad(attempt);
+
+    expect(store.getDirectoryLoadState('alpha/')).toBe('loaded');
+    expect(store.getDirectoryKnownChildCount('alpha/')).toBe(3);
+
+    const stableResult = store.cleanup();
+    expect(stableResult.idsPreserved).toBe(true);
+    expect(store.getDirectoryLoadState('alpha/')).toBe('loaded');
+    expect(store.getDirectoryKnownChildCount('alpha/')).toBe(3);
+
+    const aggressiveResult = store.cleanup({ mode: 'aggressive' });
+    expect(aggressiveResult.idsPreserved).toBe(false);
+    expect(store.getDirectoryLoadState('alpha/')).toBe('loaded');
+    expect(store.getDirectoryKnownChildCount('alpha/')).toBe(3);
   });
 
   test('cleanup remains rebuild-equivalent with flattening enabled', () => {

@@ -1,14 +1,21 @@
-import { PathStore } from '@pierre/path-store';
+import { PathStore, PathStorePreparedInputBuilder } from '@pierre/path-store';
 import type {
+  PathStoreConstructorOptions,
   PathStoreEvent,
+  PathStoreLoadAttempt,
   PathStorePathInfo,
+  PathStorePreparedInput,
   PathStoreVisibleAncestorRow,
   PathStoreVisibleRowContext,
   PathStoreVisibleRow as PathStoreVisibleRowData,
   PathStoreVisibleTreeProjectionData,
 } from '@pierre/path-store';
 
-import type { FileTreePreparedInput } from '../preparedInput';
+import {
+  type FileTreePreparedInput,
+  preparePresortedFileTreeInput,
+  toPathStorePreparedInput,
+} from '../preparedInput';
 import { renameFileTreePaths } from '../utils/renameFileTreePaths';
 import {
   buildDropOperations,
@@ -18,9 +25,15 @@ import {
   isSelfOrDescendantDrop,
   resolveDraggedPathsForStart,
 } from './dragAndDrop';
+import { prepareRevealDirectorySnapshot } from './loading/reveal';
 import type {
   FileTreeBatchEvent,
   FileTreeBatchOperation,
+  FileTreeBulkIngestEvent,
+  FileTreeBulkIngestEventForType,
+  FileTreeBulkIngestEventType,
+  FileTreeBulkIngestHandle,
+  FileTreeBulkIngestInfo,
   FileTreeControllerListener,
   FileTreeControllerOptions,
   FileTreeDirectoryHandle,
@@ -39,6 +52,12 @@ import type {
   FileTreeRenamingConfig,
   FileTreeResetEvent,
   FileTreeResetOptions,
+  FileTreeRevealDirectorySnapshot,
+  FileTreeRevealLoadingEvent,
+  FileTreeRevealLoadingEventForType,
+  FileTreeRevealLoadingEventType,
+  FileTreeRevealLoadingHandle,
+  FileTreeRevealLoadingInfo,
   FileTreeSearchMode,
   FileTreeSearchSessionHandle,
   FileTreeStickyRowCandidate,
@@ -60,6 +79,75 @@ type MutationListenerByType = Map<
   FileTreeMutationEventType | '*',
   Set<MutationListener>
 >;
+type RevealLoadingListener = (event: FileTreeRevealLoadingEvent) => void;
+type RevealLoadingListenerByType = Map<
+  FileTreeRevealLoadingEventType | '*',
+  Set<RevealLoadingListener>
+>;
+type BulkIngestListener = (event: FileTreeBulkIngestEvent) => void;
+type BulkIngestListenerByType = Map<
+  FileTreeBulkIngestEventType | '*',
+  Set<BulkIngestListener>
+>;
+
+interface RevealSingleRequest {
+  abortController: AbortController;
+  attempt: PathStoreLoadAttempt;
+  kind: 'single';
+  path: string;
+}
+
+interface RevealBatchRequest {
+  abortController: AbortController;
+  attemptsByPath: Map<string, PathStoreLoadAttempt>;
+  explicitPaths: Set<string>;
+  kind: 'batch';
+  paths: readonly string[];
+}
+
+type RevealRequest = RevealSingleRequest | RevealBatchRequest;
+
+function getRevealRequestPaths(request: RevealRequest): readonly string[] {
+  return request.kind === 'batch' ? request.paths : [request.path];
+}
+
+function registerTypedListener<TEvent, TKey extends string>(
+  listenersByType: Map<TKey | '*', Set<(event: TEvent) => void>>,
+  key: TKey | '*',
+  handler: (event: TEvent) => void
+): () => void {
+  let listenersForType = listenersByType.get(key);
+  if (listenersForType == null) {
+    listenersForType = new Set();
+    listenersByType.set(key, listenersForType);
+  }
+  listenersForType.add(handler);
+  return () => {
+    const registeredListeners = listenersByType.get(key);
+    registeredListeners?.delete(handler);
+    if (registeredListeners?.size === 0) {
+      listenersByType.delete(key);
+    }
+  };
+}
+
+function emitTypedListeners<TEvent, TKey extends string>(
+  listenersByType: Map<TKey | '*', Set<(event: TEvent) => void>>,
+  key: TKey,
+  event: TEvent
+): void {
+  listenersByType.get(key)?.forEach((listener) => {
+    listener(event);
+  });
+  listenersByType.get('*')?.forEach((listener) => {
+    listener(event);
+  });
+}
+
+function now(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
 interface FileTreeRenameViewState {
   cancel(): void;
   commit(): void;
@@ -71,6 +159,10 @@ interface FileTreeRenameViewState {
 
 interface FileTreeStartRenamingOptions {
   removeIfCanceled?: boolean;
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export const FILE_TREE_RENAME_VIEW = Symbol('FILE_TREE_RENAME_VIEW');
@@ -105,6 +197,23 @@ function arePathSetsEqual(
 
   for (const path of nextPaths) {
     if (!currentPaths.has(path)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areOrderedPathsEqual(
+  currentPaths: readonly string[],
+  nextPaths: readonly string[]
+): boolean {
+  if (currentPaths.length !== nextPaths.length) {
+    return false;
+  }
+
+  for (let index = 0; index < currentPaths.length; index += 1) {
+    if (currentPaths[index] !== nextPaths[index]) {
       return false;
     }
   }
@@ -489,14 +598,31 @@ function createVisibleProjection(
  * can evolve in later phases without leaking internal store IDs.
  */
 export class FileTreeController
-  implements FileTreeMutationHandle, FileTreeSearchSessionHandle
+  implements
+    FileTreeMutationHandle,
+    FileTreeSearchSessionHandle,
+    FileTreeRevealLoadingHandle,
+    FileTreeBulkIngestHandle
 {
-  readonly #baseOptions: Omit<
-    FileTreeControllerOptions,
-    'dragAndDrop' | 'paths' | 'preparedInput'
-  >;
+  readonly #bulkIngestListeners: BulkIngestListenerByType = new Map();
+  #bulkIngestInfo: FileTreeBulkIngestInfo | null = null;
+  #bulkIngestAbortController: AbortController | null = null;
+  #bulkIngestRunId = 0;
+  #bulkSeedPaths: readonly string[] = [];
   readonly #listeners = new Set<FileTreeControllerListener>();
+  readonly #loading: FileTreeControllerOptions['loading'];
   readonly #mutationListeners: MutationListenerByType = new Map();
+  readonly #revealLoadingListeners: RevealLoadingListenerByType = new Map();
+  #revealCustomSortWarned = false;
+  readonly #revealInflightByPath = new Map<string, RevealRequest>();
+  readonly #revealQueuedSpeculativePaths = new Set<string>();
+  #revealRelevantSpeculativePaths = new Set<string>();
+  #revealSpeculativeReconcileScheduled = false;
+  readonly #revealRunningBatches = new Set<RevealBatchRequest>();
+  readonly #storeOptions: Omit<
+    PathStoreConstructorOptions,
+    'paths' | 'preparedInput'
+  >;
   #dragAndDropConfig: FileTreeDragAndDropConfig | null = null;
   #dragSession: FileTreeDragSession | null = null;
   #ancestorIndicesByIndex = new Map<number, readonly number[]>();
@@ -546,18 +672,26 @@ export class FileTreeController
       fileTreeSearchMode,
       initialSearchQuery,
       initialSelectedPaths,
+      loading,
       renaming,
       onSearchChange,
       paths,
       preparedInput,
-      ...baseOptions
+      ...storeOptions
     } = options;
-    const resolvedInput = resolveFileTreeInput(
-      { paths, preparedInput },
-      'constructor',
-      baseOptions.sort
-    );
-    this.#baseOptions = baseOptions;
+    const resolvedInput =
+      paths == null && preparedInput == null
+        ? { paths: [] as readonly string[], preparedInput: undefined }
+        : resolveFileTreeInput(
+            { paths, preparedInput },
+            'constructor',
+            storeOptions.sort
+          );
+    this.#loading = loading;
+    this.#storeOptions = storeOptions as Omit<
+      PathStoreConstructorOptions,
+      'paths' | 'preparedInput'
+    >;
     if (dragAndDrop != null && dragAndDrop !== false) {
       this.#dragAndDropConfig = dragAndDrop === true ? {} : dragAndDrop;
     }
@@ -573,6 +707,16 @@ export class FileTreeController
       resolvedInput.paths,
       resolvedInput.preparedInput
     );
+    this.#initializeRevealStore(this.#store, resolvedInput.paths);
+    if (loading?.mode === 'bulk') {
+      this.#bulkSeedPaths =
+        resolvedInput.preparedInput?.paths ??
+        PathStore.preparePaths(resolvedInput.paths, this.#storeOptions);
+      this.#bulkIngestInfo = {
+        ingestedPathCount: this.#bulkSeedPaths.length,
+        status: 'idle',
+      };
+    }
     const resolvedInitialSelectedPaths =
       initialSelectedPaths
         ?.map((path) => this.#resolveSelectionPath(path))
@@ -593,8 +737,18 @@ export class FileTreeController
   public destroy(): void {
     this.#unsubscribe?.();
     this.#unsubscribe = null;
+    new Set(this.#revealInflightByPath.values()).forEach((request) => {
+      this.#cancelRevealRequest(request);
+    });
+    this.#cancelActiveBulkIngest();
+    this.#bulkIngestListeners.clear();
     this.#mutationListeners.clear();
     this.#listeners.clear();
+    this.#revealInflightByPath.clear();
+    this.#revealLoadingListeners.clear();
+    this.#revealQueuedSpeculativePaths.clear();
+    this.#revealRelevantSpeculativePaths.clear();
+    this.#revealRunningBatches.clear();
     this.#itemHandles.clear();
     this.#dragSession = null;
     this.#invalidateKnownPathCaches();
@@ -736,12 +890,14 @@ export class FileTreeController
     end: number
   ): readonly FileTreeVisibleRow[] {
     if (end < start || this.#visibleCount === 0) {
+      this.#updateRevealSpeculativeWindow([]);
       return [];
     }
 
     const boundedStart = Math.max(0, start);
     const boundedEnd = Math.min(this.#visibleCount - 1, end);
     if (boundedEnd < boundedStart) {
+      this.#updateRevealSpeculativeWindow([]);
       return [];
     }
 
@@ -810,7 +966,7 @@ export class FileTreeController
         runEndIndex = projectionIndex;
       }
 
-      return Array.from(
+      const rows = Array.from(
         { length: boundedEnd - boundedStart + 1 },
         (_, visibleOffset) => {
           const visibleIndex = boundedStart + visibleOffset;
@@ -830,9 +986,11 @@ export class FileTreeController
           });
         }
       );
+      this.#updateRevealSpeculativeWindow(rows);
+      return rows;
     }
 
-    return this.#store
+    const rows = this.#store
       .getVisibleSlice(boundedStart, boundedEnd)
       .map((row, offset) => {
         const index = boundedStart + offset;
@@ -848,6 +1006,8 @@ export class FileTreeController
           path: projectionPath,
         });
       });
+    this.#updateRevealSpeculativeWindow(rows);
+    return rows;
   }
 
   public getStickyRowCandidates(
@@ -1259,11 +1419,15 @@ export class FileTreeController
    * without exposing the raw store to tree consumers.
    */
   public add(path: string): void {
-    this.#store.add(path);
+    this.#runPathChangingMutation(() => {
+      this.#store.add(path);
+    });
   }
 
   public remove(path: string, options: FileTreeRemoveOptions = {}): void {
-    this.#store.remove(path, options);
+    this.#runPathChangingMutation(() => {
+      this.#store.remove(path, options);
+    });
   }
 
   public move(
@@ -1271,32 +1435,110 @@ export class FileTreeController
     toPath: string,
     options: FileTreeMoveOptions = {}
   ): void {
-    this.#store.move(fromPath, toPath, options);
+    this.#runPathChangingMutation(() => {
+      this.#store.move(fromPath, toPath, options);
+    });
   }
 
   public batch(operations: readonly FileTreeBatchOperation[]): void {
-    this.#store.batch(operations);
+    this.#runPathChangingMutation(() => {
+      this.#store.batch(operations);
+    });
   }
 
   public onMutation<TType extends FileTreeMutationEventType | '*'>(
     type: TType,
     handler: (event: FileTreeMutationEventForType<TType>) => void
   ): () => void {
-    const key = type;
-    const typedHandler = handler as MutationListener;
-    let listenersForType = this.#mutationListeners.get(key);
-    if (listenersForType == null) {
-      listenersForType = new Set();
-      this.#mutationListeners.set(key, listenersForType);
+    return registerTypedListener(
+      this.#mutationListeners,
+      type,
+      handler as MutationListener
+    );
+  }
+
+  public getRevealLoadingInfo(path: string): FileTreeRevealLoadingInfo | null {
+    if (this.#loading?.mode !== 'reveal') {
+      return null;
     }
-    listenersForType.add(typedHandler);
-    return () => {
-      const registeredListeners = this.#mutationListeners.get(key);
-      registeredListeners?.delete(typedHandler);
-      if (registeredListeners?.size === 0) {
-        this.#mutationListeners.delete(key);
-      }
+
+    const pathInfo = this.#store.getPathInfo(path);
+    if (pathInfo == null || pathInfo.kind !== 'directory') {
+      return null;
+    }
+
+    const errorMessage = this.#store.getDirectoryLoadError(pathInfo.path);
+    const knownChildCount = this.#store.getDirectoryKnownChildCount(
+      pathInfo.path
+    );
+
+    return {
+      ...(errorMessage == null ? {} : { errorMessage }),
+      ...(knownChildCount == null ? {} : { knownChildCount }),
+      path: pathInfo.path,
+      state: this.#store.getDirectoryLoadState(pathInfo.path),
     };
+  }
+
+  public onRevealLoading<TType extends FileTreeRevealLoadingEventType | '*'>(
+    type: TType,
+    handler: (event: FileTreeRevealLoadingEventForType<TType>) => void
+  ): () => void {
+    if (this.#loading?.mode !== 'reveal') {
+      return () => {};
+    }
+
+    return registerTypedListener(
+      this.#revealLoadingListeners,
+      type,
+      handler as RevealLoadingListener
+    );
+  }
+
+  public getBulkIngestInfo(): FileTreeBulkIngestInfo | null {
+    if (this.#loading?.mode !== 'bulk' || this.#bulkIngestInfo == null) {
+      return null;
+    }
+
+    return { ...this.#bulkIngestInfo };
+  }
+
+  public onBulkIngest<TType extends FileTreeBulkIngestEventType | '*'>(
+    type: TType,
+    handler: (event: FileTreeBulkIngestEventForType<TType>) => void
+  ): () => void {
+    if (this.#loading?.mode !== 'bulk') {
+      return () => {};
+    }
+
+    return registerTypedListener(
+      this.#bulkIngestListeners,
+      type,
+      handler as BulkIngestListener
+    );
+  }
+
+  public startBulkIngest(): void {
+    if (this.#loading?.mode !== 'bulk') {
+      return;
+    }
+
+    this.#cancelActiveBulkIngest();
+    this.#resetStoreToBulkSeedPathsIfNeeded();
+    const runId = this.#bulkIngestRunId + 1;
+    this.#bulkIngestRunId = runId;
+    const abortController = new AbortController();
+    this.#bulkIngestAbortController = abortController;
+    this.#bulkIngestInfo = {
+      ingestedPathCount: this.#bulkSeedPaths.length,
+      status: 'ingesting',
+    };
+    this.#emitBulkIngestEvent('started');
+    void this.#runBulkIngest(runId, abortController);
+  }
+
+  public cancelBulkIngest(): void {
+    this.#cancelActiveBulkIngest();
   }
 
   public setSearch(value: string | null): void {
@@ -1495,8 +1737,11 @@ export class FileTreeController
     const resolvedInput = resolveFileTreeInput(
       { paths, preparedInput: options.preparedInput },
       'resetPaths',
-      this.#baseOptions.sort
+      this.#storeOptions.sort
     );
+    if (this.#loading?.mode === 'bulk') {
+      this.#cancelActiveBulkIngest();
+    }
     const nextStore = this.#createStore(
       resolvedInput.paths,
       resolvedInput.preparedInput,
@@ -1509,8 +1754,15 @@ export class FileTreeController
 
     this.#unsubscribe?.();
     this.#store = nextStore;
+    if (this.#loading?.mode === 'bulk') {
+      this.#bulkSeedPaths =
+        resolvedInput.preparedInput?.paths ??
+        PathStore.preparePaths(resolvedInput.paths, this.#storeOptions);
+    }
+    this.#initializeRevealStore(this.#store, resolvedInput.paths);
     this.#itemHandles.clear();
     this.#invalidateKnownPathCaches();
+    this.#syncBulkIngestIdleInfo(resolvedInput.paths.length);
     const nextSelectedPaths = previousSelectedPaths
       .map((selectedPath) => nextStore.getPathInfo(selectedPath)?.path ?? null)
       .filter((resolved): resolved is string => resolved != null);
@@ -1815,18 +2067,100 @@ export class FileTreeController
     validationStore.batch(operations);
   }
 
+  // Cancels an active bulk ingest before user-driven canonical changes so later
+  // streamed checkpoints cannot overwrite the live tree. Successful mutations
+  // become the next bulk seed because they are now the controller's truth.
+  #runPathChangingMutation<TValue>(mutation: () => TValue): TValue {
+    if (this.#loading?.mode === 'bulk') {
+      this.#cancelActiveBulkIngest();
+    }
+
+    const result = mutation();
+
+    if (this.#loading?.mode === 'bulk') {
+      this.#bulkSeedPaths = this.#store.list();
+      this.#syncBulkIngestIdleInfo(this.#bulkSeedPaths.length);
+    }
+
+    return result;
+  }
+
+  #resetStoreToBulkSeedPathsIfNeeded(): void {
+    if (this.#loading?.mode !== 'bulk') {
+      return;
+    }
+
+    const currentPaths = this.#store.list();
+    if (areOrderedPathsEqual(currentPaths, this.#bulkSeedPaths)) {
+      return;
+    }
+
+    this.resetPaths(this.#bulkSeedPaths, {
+      initialExpandedPaths: this.#getExpandedDirectoryPaths(),
+      preparedInput: preparePresortedFileTreeInput(this.#bulkSeedPaths),
+    });
+  }
+
+  #syncBulkIngestIdleInfo(pathCount: number): void {
+    if (this.#loading?.mode !== 'bulk') {
+      return;
+    }
+
+    this.#bulkIngestInfo = {
+      ingestedPathCount: pathCount,
+      status: 'idle',
+    };
+  }
+
+  #initializeRevealStore(store: PathStore, seedPaths: readonly string[]): void {
+    if (this.#loading?.mode !== 'reveal') {
+      return;
+    }
+
+    const directoryPaths = new Set<string>();
+    for (const path of seedPaths) {
+      if (path.endsWith('/')) {
+        directoryPaths.add(path);
+      }
+      for (const ancestorPath of getAncestorDirectoryPaths(path)) {
+        directoryPaths.add(ancestorPath);
+      }
+    }
+
+    store.batch(() => {
+      for (const directoryPath of directoryPaths) {
+        if (store.getDirectoryLoadState(directoryPath) !== 'loaded') {
+          continue;
+        }
+        const hasKnownDescendant = store
+          .list(directoryPath)
+          .some((knownPath) => knownPath !== directoryPath);
+        if (hasKnownDescendant) {
+          continue;
+        }
+
+        const knownChildCount =
+          store.getDirectoryKnownChildCount(directoryPath);
+        store.markDirectoryUnloaded(
+          directoryPath,
+          knownChildCount == null ? {} : { knownChildCount }
+        );
+      }
+    });
+  }
+
   #createStore(
-    paths: readonly string[],
+    paths: readonly string[] | undefined,
     preparedInput?: FileTreePreparedInput,
     initialExpandedPathsOverride?: readonly string[]
   ): PathStore {
     return new PathStore({
-      ...this.#baseOptions,
-      paths,
+      ...this.#storeOptions,
+      paths: paths ?? [],
       preparedInput:
         preparedInput == null
           ? undefined
-          : (preparedInput as unknown as { paths: readonly string[] }),
+          : toPathStorePreparedInput(preparedInput),
       ...(initialExpandedPathsOverride !== undefined
         ? { initialExpandedPaths: initialExpandedPathsOverride }
         : {}),
@@ -1840,6 +2174,600 @@ export class FileTreeController
 
     this.#listedPaths = this.#store.list();
     return this.#listedPaths;
+  }
+
+  #emitRevealLoadingEvent(
+    type: FileTreeRevealLoadingEventType,
+    path: string
+  ): void {
+    const info = this.getRevealLoadingInfo(path);
+    if (info == null) {
+      return;
+    }
+
+    emitTypedListeners(this.#revealLoadingListeners, type, {
+      info,
+      path,
+      type,
+    });
+  }
+
+  #cancelRevealRequest(request: RevealRequest): void {
+    request.abortController.abort();
+    if (request.kind === 'batch') {
+      this.#revealRunningBatches.delete(request);
+    }
+
+    const cancelledPaths: string[] = [];
+    this.#store.batch((store) => {
+      for (const path of getRevealRequestPaths(request)) {
+        if (this.#revealInflightByPath.get(path) === request) {
+          this.#revealInflightByPath.delete(path);
+        }
+
+        const pathInfo = store.getPathInfo(path);
+        if (pathInfo == null || pathInfo.kind !== 'directory') {
+          continue;
+        }
+        if (store.getDirectoryLoadState(pathInfo.path) !== 'loading') {
+          continue;
+        }
+
+        const knownChildCount = store.getDirectoryKnownChildCount(
+          pathInfo.path
+        );
+        store.markDirectoryUnloaded(
+          pathInfo.path,
+          knownChildCount == null ? {} : { knownChildCount }
+        );
+        cancelledPaths.push(pathInfo.path);
+      }
+    });
+
+    for (const path of cancelledPaths) {
+      this.#emitRevealLoadingEvent('cancelled', path);
+    }
+  }
+
+  #warnRevealCustomSortSlowPath(): void {
+    if (this.#revealCustomSortWarned) {
+      return;
+    }
+
+    if (
+      typeof process !== 'undefined' &&
+      process.env.NODE_ENV === 'production'
+    ) {
+      this.#revealCustomSortWarned = true;
+      return;
+    }
+
+    this.#revealCustomSortWarned = true;
+    console.warn(
+      'FileTree reveal loading resorts async children locally when a custom comparator is configured. This keeps async-loaded directories correct but costs extra work.'
+    );
+  }
+
+  #getRevealPolicy(): {
+    maxSpeculativeBatchSize: number;
+    maxSpeculativeInflightRequests: number;
+  } {
+    const policy =
+      this.#loading?.mode === 'reveal' ? this.#loading.policy : null;
+    return {
+      maxSpeculativeBatchSize: policy?.maxSpeculativeBatchSize ?? 8,
+      maxSpeculativeInflightRequests:
+        policy?.maxSpeculativeInflightRequests ?? 1,
+    };
+  }
+
+  #applyRevealSnapshot(
+    path: string,
+    attempt: PathStoreLoadAttempt,
+    snapshot: FileTreeRevealDirectorySnapshot
+  ): boolean {
+    const preparedSnapshot = prepareRevealDirectorySnapshot({
+      directoryPath: path,
+      onCustomSort: () => {
+        this.#warnRevealCustomSortSlowPath();
+      },
+      snapshot,
+      sort: this.#storeOptions.sort,
+    });
+
+    let applied = false;
+    let completed = false;
+    this.#store.batch((store) => {
+      applied = store.applyChildPatch(attempt, {
+        operations: preparedSnapshot.children.map((childPath) => ({
+          path: childPath,
+          type: 'add' as const,
+        })),
+      });
+      if (!applied) {
+        return;
+      }
+
+      for (const childPath of preparedSnapshot.children) {
+        if (!childPath.endsWith('/')) {
+          continue;
+        }
+
+        const knownChildCount =
+          preparedSnapshot.childDirectoryKnownChildCountByPath.get(childPath);
+        store.markDirectoryUnloaded(
+          childPath,
+          knownChildCount == null ? {} : { knownChildCount }
+        );
+      }
+
+      completed = store.completeChildLoad(attempt);
+    });
+
+    return applied && completed;
+  }
+
+  #cancelIrrelevantRevealBatches(): void {
+    for (const request of this.#revealRunningBatches) {
+      const stillRelevant = request.paths.some(
+        (path) =>
+          request.explicitPaths.has(path) ||
+          this.#revealRelevantSpeculativePaths.has(path)
+      );
+      if (stillRelevant) {
+        continue;
+      }
+
+      this.#cancelRevealRequest(request);
+    }
+  }
+
+  #pumpRevealSpeculativeBatches(): void {
+    if (this.#loading?.mode !== 'reveal') {
+      return;
+    }
+
+    const { maxSpeculativeBatchSize, maxSpeculativeInflightRequests } =
+      this.#getRevealPolicy();
+    while (this.#revealRunningBatches.size < maxSpeculativeInflightRequests) {
+      const nextPaths: string[] = [];
+      for (const path of this.#revealQueuedSpeculativePaths) {
+        if (!this.#revealRelevantSpeculativePaths.has(path)) {
+          this.#revealQueuedSpeculativePaths.delete(path);
+          continue;
+        }
+        if (this.#revealInflightByPath.has(path)) {
+          this.#revealQueuedSpeculativePaths.delete(path);
+          continue;
+        }
+        if (this.#store.getDirectoryLoadState(path) !== 'unloaded') {
+          this.#revealQueuedSpeculativePaths.delete(path);
+          continue;
+        }
+
+        nextPaths.push(path);
+        this.#revealQueuedSpeculativePaths.delete(path);
+        if (nextPaths.length >= maxSpeculativeBatchSize) {
+          break;
+        }
+      }
+
+      if (nextPaths.length === 0) {
+        return;
+      }
+
+      void this.#startRevealSpeculativeBatch(nextPaths);
+    }
+  }
+
+  async #startRevealSpeculativeBatch(paths: readonly string[]): Promise<void> {
+    if (this.#loading?.mode !== 'reveal' || paths.length === 0) {
+      return;
+    }
+
+    const attemptsByPath = new Map<string, PathStoreLoadAttempt>();
+    for (const path of paths) {
+      const pathInfo = this.#store.getPathInfo(path);
+      if (pathInfo == null || pathInfo.kind !== 'directory') {
+        continue;
+      }
+      if (this.#store.getDirectoryLoadState(pathInfo.path) !== 'unloaded') {
+        continue;
+      }
+
+      const attempt = this.#store.beginChildLoad(pathInfo.path);
+      if (attempt.reused) {
+        continue;
+      }
+      attemptsByPath.set(pathInfo.path, attempt);
+    }
+
+    if (attemptsByPath.size === 0) {
+      return;
+    }
+
+    const request: RevealBatchRequest = {
+      abortController: new AbortController(),
+      attemptsByPath,
+      explicitPaths: new Set(),
+      kind: 'batch',
+      paths: [...attemptsByPath.keys()],
+    };
+    this.#revealRunningBatches.add(request);
+    for (const path of request.paths) {
+      this.#revealInflightByPath.set(path, request);
+      this.#emitRevealLoadingEvent('started', path);
+    }
+
+    try {
+      const results = await this.#loading.source.loadDirectories(
+        request.paths,
+        request.abortController.signal
+      );
+      if (request.abortController.signal.aborted) {
+        return;
+      }
+      if (results.length !== request.paths.length) {
+        throw new Error(
+          `Reveal batch result length mismatch. Expected ${String(request.paths.length)} result entries, received ${String(results.length)}.`
+        );
+      }
+
+      request.paths.forEach((path, index) => {
+        const attempt = request.attemptsByPath.get(path);
+        const result = results[index];
+        if (attempt == null || result == null) {
+          return;
+        }
+
+        if ('errorMessage' in result) {
+          const failed = this.#store.failChildLoad(
+            attempt,
+            result.errorMessage
+          );
+          if (failed) {
+            this.#emitRevealLoadingEvent('failed', path);
+          }
+          if (this.#revealInflightByPath.get(path) === request) {
+            this.#revealInflightByPath.delete(path);
+          }
+          if (request.explicitPaths.has(path)) {
+            void this.#startRevealExplicitLoad(path);
+          }
+          return;
+        }
+
+        if (this.#applyRevealSnapshot(path, attempt, result.snapshot)) {
+          this.#emitRevealLoadingEvent('completed', path);
+        }
+        if (this.#revealInflightByPath.get(path) === request) {
+          this.#revealInflightByPath.delete(path);
+        }
+      });
+    } catch (error) {
+      if (!request.abortController.signal.aborted) {
+        const errorMessage = toErrorMessage(error);
+        for (const path of request.paths) {
+          const attempt = request.attemptsByPath.get(path);
+          if (attempt == null) {
+            continue;
+          }
+
+          const failed = this.#store.failChildLoad(attempt, errorMessage);
+          if (failed) {
+            this.#emitRevealLoadingEvent('failed', path);
+          }
+          if (this.#revealInflightByPath.get(path) === request) {
+            this.#revealInflightByPath.delete(path);
+          }
+          if (request.explicitPaths.has(path)) {
+            void this.#startRevealExplicitLoad(path);
+          }
+        }
+      }
+    } finally {
+      this.#revealRunningBatches.delete(request);
+      for (const path of request.paths) {
+        if (this.#revealInflightByPath.get(path) === request) {
+          this.#revealInflightByPath.delete(path);
+        }
+      }
+      this.#pumpRevealSpeculativeBatches();
+    }
+  }
+
+  async #startRevealExplicitLoad(path: string): Promise<void> {
+    if (this.#loading?.mode !== 'reveal') {
+      return;
+    }
+
+    const pathInfo = this.#store.getPathInfo(path);
+    if (pathInfo == null || pathInfo.kind !== 'directory') {
+      return;
+    }
+
+    const canonicalPath = pathInfo.path;
+    const existingRequest = this.#revealInflightByPath.get(canonicalPath);
+    if (existingRequest != null) {
+      if (existingRequest.kind === 'batch') {
+        existingRequest.explicitPaths.add(canonicalPath);
+      }
+      return;
+    }
+
+    const loadState = this.#store.getDirectoryLoadState(canonicalPath);
+    if (loadState === 'loaded' || loadState === 'loading') {
+      return;
+    }
+
+    this.#revealQueuedSpeculativePaths.delete(canonicalPath);
+    const attempt = this.#store.beginChildLoad(canonicalPath);
+    const request: RevealSingleRequest = {
+      abortController: new AbortController(),
+      attempt,
+      kind: 'single',
+      path: canonicalPath,
+    };
+    this.#revealInflightByPath.set(canonicalPath, request);
+    if (!attempt.reused) {
+      this.#emitRevealLoadingEvent('started', canonicalPath);
+    }
+
+    try {
+      const snapshot = await this.#loading.source.loadDirectory(
+        canonicalPath,
+        request.abortController.signal
+      );
+      if (request.abortController.signal.aborted) {
+        return;
+      }
+      if (this.#applyRevealSnapshot(canonicalPath, attempt, snapshot)) {
+        this.#emitRevealLoadingEvent('completed', canonicalPath);
+      }
+    } catch (error) {
+      if (!request.abortController.signal.aborted) {
+        const failed = this.#store.failChildLoad(
+          attempt,
+          toErrorMessage(error)
+        );
+        if (failed) {
+          this.#emitRevealLoadingEvent('failed', canonicalPath);
+        }
+      }
+    } finally {
+      if (this.#revealInflightByPath.get(canonicalPath) === request) {
+        this.#revealInflightByPath.delete(canonicalPath);
+      }
+      this.#pumpRevealSpeculativeBatches();
+    }
+  }
+
+  #scheduleRevealSpeculativeReconcile(): void {
+    if (this.#revealSpeculativeReconcileScheduled) {
+      return;
+    }
+
+    this.#revealSpeculativeReconcileScheduled = true;
+    queueMicrotask(() => {
+      this.#revealSpeculativeReconcileScheduled = false;
+      this.#cancelIrrelevantRevealBatches();
+      this.#pumpRevealSpeculativeBatches();
+    });
+  }
+
+  #updateRevealSpeculativeWindow(rows: readonly FileTreeVisibleRow[]): void {
+    if (this.#loading?.mode !== 'reveal') {
+      return;
+    }
+
+    const nextRelevantPaths = new Set<string>();
+    for (const row of rows) {
+      if (row.kind !== 'directory') {
+        continue;
+      }
+      if (this.#store.getDirectoryLoadState(row.path) === 'unloaded') {
+        nextRelevantPaths.add(row.path);
+      }
+    }
+
+    this.#revealRelevantSpeculativePaths = nextRelevantPaths;
+    for (const path of this.#revealQueuedSpeculativePaths) {
+      if (!nextRelevantPaths.has(path)) {
+        this.#revealQueuedSpeculativePaths.delete(path);
+      }
+    }
+
+    for (const path of nextRelevantPaths) {
+      if (
+        this.#revealInflightByPath.has(path) ||
+        this.#revealQueuedSpeculativePaths.has(path) ||
+        this.#store.getDirectoryLoadState(path) !== 'unloaded'
+      ) {
+        continue;
+      }
+
+      this.#revealQueuedSpeculativePaths.add(path);
+    }
+
+    this.#scheduleRevealSpeculativeReconcile();
+  }
+
+  #emitBulkIngestEvent(type: FileTreeBulkIngestEventType): void {
+    if (this.#bulkIngestInfo == null) {
+      return;
+    }
+
+    emitTypedListeners(this.#bulkIngestListeners, type, {
+      info: { ...this.#bulkIngestInfo },
+      type,
+    });
+  }
+
+  #cancelActiveBulkIngest(): void {
+    if (
+      this.#loading?.mode !== 'bulk' ||
+      this.#bulkIngestAbortController == null
+    ) {
+      return;
+    }
+
+    const abortController = this.#bulkIngestAbortController;
+    this.#bulkIngestAbortController = null;
+    abortController.abort();
+    if (this.#bulkIngestInfo?.status === 'ingesting') {
+      this.#bulkIngestInfo = {
+        ...this.#bulkIngestInfo,
+        ingestedPathCount: this.#store.list().length,
+        status: 'cancelled',
+      };
+      this.#emitBulkIngestEvent('cancelled');
+    }
+  }
+
+  #publishBulkCheckpoint(
+    preparedInput: PathStorePreparedInput,
+    ingestedPathCount: number
+  ): void {
+    this.#store.appendPreparedInput(preparedInput);
+
+    if (this.#bulkIngestInfo != null) {
+      this.#bulkIngestInfo = {
+        ...this.#bulkIngestInfo,
+        ingestedPathCount,
+        status: 'ingesting',
+      };
+      this.#emitBulkIngestEvent('progressed');
+    }
+  }
+
+  async #runBulkIngest(
+    runId: number,
+    abortController: AbortController
+  ): Promise<void> {
+    const loading = this.#loading;
+    if (loading?.mode !== 'bulk') {
+      return;
+    }
+
+    let pendingBuilder = new PathStorePreparedInputBuilder(this.#storeOptions);
+    const checkpointPathCountCeiling =
+      loading.policy?.checkpointPathCountCeiling;
+    const checkpointTimeBudgetMs = loading.policy?.checkpointTimeBudgetMs ?? 16;
+    let publishedPathCount = this.#bulkSeedPaths.length;
+    let ingestedPathCount = this.#bulkSeedPaths.length;
+    let lastPublishTime = now();
+    let pendingPathCount = 0;
+    let totalPathCount: number | undefined;
+
+    try {
+      const session = await loading.source.openSession(abortController.signal);
+      if (
+        this.#bulkIngestRunId !== runId ||
+        this.#bulkIngestAbortController !== abortController
+      ) {
+        return;
+      }
+
+      totalPathCount = session.header.totalPathCount;
+      if (totalPathCount != null) {
+        if (
+          !Number.isInteger(totalPathCount) ||
+          totalPathCount < ingestedPathCount
+        ) {
+          throw new Error(
+            `Bulk ingest totalPathCount must be an integer >= the seed path count. Received: ${String(totalPathCount)}`
+          );
+        }
+        if (this.#bulkIngestInfo != null) {
+          this.#bulkIngestInfo = {
+            ...this.#bulkIngestInfo,
+            totalPathCount,
+          };
+          this.#emitBulkIngestEvent('progressed');
+        }
+      }
+
+      for await (const chunk of session.chunks) {
+        if (
+          this.#bulkIngestRunId !== runId ||
+          this.#bulkIngestAbortController !== abortController
+        ) {
+          return;
+        }
+
+        pendingBuilder.appendPresortedPaths(chunk.paths);
+        ingestedPathCount += chunk.paths.length;
+        pendingPathCount += chunk.paths.length;
+        if (totalPathCount != null && ingestedPathCount > totalPathCount) {
+          throw new Error(
+            `Bulk ingest exceeded totalPathCount. Received ${String(ingestedPathCount)} paths for a total of ${String(totalPathCount)}.`
+          );
+        }
+
+        const elapsedMs = now() - lastPublishTime;
+        if (
+          elapsedMs >= checkpointTimeBudgetMs ||
+          (checkpointPathCountCeiling != null &&
+            pendingPathCount >= checkpointPathCountCeiling)
+        ) {
+          this.#publishBulkCheckpoint(
+            pendingBuilder.build(),
+            ingestedPathCount
+          );
+          pendingBuilder = new PathStorePreparedInputBuilder(
+            this.#storeOptions
+          );
+          publishedPathCount = ingestedPathCount;
+          pendingPathCount = 0;
+          lastPublishTime = now();
+        }
+      }
+
+      if (
+        this.#bulkIngestRunId !== runId ||
+        this.#bulkIngestAbortController !== abortController
+      ) {
+        return;
+      }
+
+      if (pendingPathCount > 0) {
+        this.#publishBulkCheckpoint(pendingBuilder.build(), ingestedPathCount);
+        publishedPathCount = ingestedPathCount;
+      }
+      if (totalPathCount != null && ingestedPathCount !== totalPathCount) {
+        throw new Error(
+          `Bulk ingest completed with ${String(ingestedPathCount)} paths but expected ${String(totalPathCount)}.`
+        );
+      }
+
+      this.#bulkIngestAbortController = null;
+      this.#bulkIngestInfo = {
+        ...(totalPathCount == null ? {} : { totalPathCount }),
+        ingestedPathCount,
+        status: 'completed',
+      };
+      this.#emitBulkIngestEvent('completed');
+    } catch (error) {
+      if (abortController.signal.aborted || this.#bulkIngestRunId !== runId) {
+        return;
+      }
+
+      this.#bulkIngestAbortController = null;
+      this.#bulkIngestInfo = {
+        errorMessage: toErrorMessage(error),
+        ...(totalPathCount == null ? {} : { totalPathCount }),
+        ingestedPathCount: publishedPathCount,
+        status: 'failed',
+      };
+      this.#emitBulkIngestEvent('failed');
+    } finally {
+      if (
+        this.#bulkIngestAbortController === abortController &&
+        abortController.signal.aborted
+      ) {
+        this.#bulkIngestAbortController = null;
+      }
+    }
   }
 
   #getAllKnownPaths(): readonly string[] {
@@ -2139,12 +3067,7 @@ export class FileTreeController
   }
 
   #emitMutation(event: FileTreeMutationEvent): void {
-    this.#mutationListeners.get(event.operation)?.forEach((listener) => {
-      listener(event);
-    });
-    this.#mutationListeners.get('*')?.forEach((listener) => {
-      listener(event);
-    });
+    emitTypedListeners(this.#mutationListeners, event.operation, event);
   }
 
   #expandDirectory(path: string): void {
@@ -2159,6 +3082,7 @@ export class FileTreeController
     if (!this.#store.isExpanded(path)) {
       this.#store.expand(path);
     }
+    void this.#startRevealExplicitLoad(path);
   }
 
   #moveFocus(offset: -1 | 1): void {
