@@ -82,21 +82,22 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
       console.timeEnd('--     request time');
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.text();
         console.error('Failed to fetch patch:', error);
         return undefined;
       }
 
-      console.time('--     parsing json');
-      const data = await response.json();
-      console.timeEnd('--     parsing json');
+      console.time('--     reading patch');
+      const patchContent = await response.text();
+      console.timeEnd('--     reading patch');
 
       console.time('--  parsing patches');
       const parsedPatches = parsePatchFiles(
-        data.content,
+        patchContent,
         // Use the url as a cache key
         encodeURIComponent(prPath)
       );
+      console.log(parsedPatches);
       console.timeEnd('--  parsing patches');
 
       console.time('-- computing layout');
@@ -149,6 +150,7 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
       setCommentSections([]);
       setItems(items);
       console.timeEnd('-- computing layout');
+      console.log('total items', items.length);
       // DEBUG AREA
       // window.scrollTo({ top: 4762353 });
       // queueRender(() => {

@@ -1,5 +1,5 @@
 import { readFile } from 'fs/promises';
-import { type NextRequest, NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { join } from 'path';
 
 export async function GET(request: NextRequest) {
@@ -7,10 +7,7 @@ export async function GET(request: NextRequest) {
   const path = searchParams.get('path');
 
   if (!path) {
-    return NextResponse.json(
-      { error: 'Path parameter is required' },
-      { status: 400 }
-    );
+    return createTextResponse('Path parameter is required', { status: 400 });
   }
 
   // Dev override to fetch the monster patch without required GitHub
@@ -23,15 +20,10 @@ export async function GET(request: NextRequest) {
         // 'smol.patch'
       );
       const patchContent = await readFile(localPatchPath, 'utf-8');
-      return NextResponse.json({
-        content: patchContent,
-        url: 'local',
-      });
+      return createTextResponse(patchContent, { sourceURL: 'local' });
     } catch (error) {
-      return NextResponse.json(
-        {
-          error: `Failed to read local patch: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        },
+      return createTextResponse(
+        `Failed to read local patch: ${error instanceof Error ? error.message : 'Unknown error'}`,
         { status: 500 }
       );
     }
@@ -41,10 +33,9 @@ export async function GET(request: NextRequest) {
     // Validate the path format (should be /org/repo/pull/{number})
     const pathSegments = path.split('/').filter(Boolean);
     if (pathSegments.length < 4 || pathSegments[2] !== 'pull') {
-      return NextResponse.json(
-        { error: 'Invalid GitHub PR path format' },
-        { status: 400 }
-      );
+      return createTextResponse('Invalid GitHub PR path format', {
+        status: 400,
+      });
     }
 
     // Ensure the path ends with .patch
@@ -64,22 +55,45 @@ export async function GET(request: NextRequest) {
     });
 
     if (!response.ok) {
-      return NextResponse.json(
-        { error: `Failed to fetch patch: ${response.statusText}` },
-        { status: response.status }
+      return createTextResponse(
+        `Failed to fetch patch: ${response.statusText}`,
+        {
+          status: response.status,
+        }
       );
     }
 
-    const patchContent = await response.text();
+    if (response.body == null) {
+      return createTextResponse(await response.text(), { sourceURL: patchURL });
+    }
 
-    return NextResponse.json({
-      content: patchContent,
-      url: patchURL,
-    });
+    return createTextResponse(response.body, { sourceURL: patchURL });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
+    return createTextResponse(
+      error instanceof Error ? error.message : 'Unknown error',
       { status: 500 }
     );
   }
+}
+
+interface TextResponseOptions {
+  status?: number;
+  sourceURL?: string;
+}
+
+function createTextResponse(
+  body: string | ReadableStream<Uint8Array>,
+  { status = 200, sourceURL }: TextResponseOptions = {}
+): Response {
+  const headers = new Headers({
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Cache-Control': 'no-store',
+  });
+  if (sourceURL != null) {
+    headers.set('X-Patch-Source', sourceURL);
+  }
+  return new Response(body, {
+    status,
+    headers,
+  });
 }
