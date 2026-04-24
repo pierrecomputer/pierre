@@ -108,17 +108,22 @@ const treesDocsTitle = 'Trees, from Pierre';
 const treesDocsDescription =
   'Guide-first documentation for @pierre/trees, covering React, vanilla, prepared input, styling, icons, Git status, large trees, and SSR hydration.';
 
+// Next.js replaces (does not deep-merge) nested metadata objects like
+// `openGraph` and `twitter` from parent segments. Re-declare `images` here
+// so the trees OG/Twitter cards from `app/layout.tsx` survive on `/docs`.
 export const metadata: Metadata = {
   title: treesDocsTitle,
   description: treesDocsDescription,
   openGraph: {
     title: treesDocsTitle,
     description: treesDocsDescription,
+    images: ['/trees-brand/opengraph-image.png'],
   },
   twitter: {
     card: 'summary_large_image',
     title: treesDocsTitle,
     description: treesDocsDescription,
+    images: ['/trees-brand/twitter-image.png'],
   },
 };
 
