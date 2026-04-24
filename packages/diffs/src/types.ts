@@ -380,6 +380,7 @@ export interface BaseCodeOptions {
   useCSSClasses?: boolean;
   useTokenTransformer?: boolean;
   tokenizeMaxLineLength?: number;
+  tokenizeMaxLength?: number;
 
   // Custom CSS injection
   unsafeCSS?: string;
