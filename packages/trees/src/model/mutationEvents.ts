@@ -1,18 +1,65 @@
-// Converts PathStore mutation events into FileTree's narrower public mutation surface.
-// Only exported functions form this module's cross-file contract; unexported helpers
-// are private mapping steps.
-import type { PathStoreEvent } from '@pierre/path-store';
-
+// Converts underlying store mutation events into FileTree's narrower public mutation surface.
 import type {
   FileTreeBatchEvent,
   FileTreeMutationEvent,
   FileTreeMutationSemanticEvent,
 } from './publicTypes';
 
+// Mirrors only the underlying store event fields this module reads. These are
+// FileTree-prefixed on purpose: this file is emitted as a declaration entry,
+// and the private store package must not leak into @pierre/trees types.
+type FileTreeStoreEventInvalidation = {
+  canonicalChanged: boolean;
+  projectionChanged: boolean;
+  visibleCountDelta: number | null;
+};
+
+type FileTreeStoreAddEvent = FileTreeStoreEventInvalidation & {
+  operation: 'add';
+  path: string;
+};
+
+type FileTreeStoreRemoveEvent = FileTreeStoreEventInvalidation & {
+  operation: 'remove';
+  path: string;
+  recursive: boolean;
+};
+
+type FileTreeStoreMoveEvent = FileTreeStoreEventInvalidation & {
+  from: string;
+  operation: 'move';
+  to: string;
+};
+
+type FileTreeStoreIgnoredSemanticEvent = FileTreeStoreEventInvalidation & {
+  operation:
+    | 'expand'
+    | 'collapse'
+    | 'mark-directory-unloaded'
+    | 'begin-child-load'
+    | 'apply-child-patch'
+    | 'complete-child-load'
+    | 'fail-child-load'
+    | 'cleanup';
+};
+
+type FileTreeStoreSemanticEvent =
+  | FileTreeStoreAddEvent
+  | FileTreeStoreRemoveEvent
+  | FileTreeStoreMoveEvent
+  | FileTreeStoreIgnoredSemanticEvent;
+
+type FileTreeStoreBatchEvent = FileTreeStoreEventInvalidation & {
+  events: readonly FileTreeStoreSemanticEvent[];
+  operation: 'batch';
+};
+
+type FileTreeStoreEvent = FileTreeStoreSemanticEvent | FileTreeStoreBatchEvent;
+
 export function isPathMutationEvent(
-  event: PathStoreEvent
+  event: FileTreeStoreEvent
 ): event is Extract<
-  PathStoreEvent,
+  FileTreeStoreEvent,
   { operation: 'add' | 'remove' | 'move' | 'batch' }
 > {
   return (
@@ -60,7 +107,7 @@ function isPathRemoved(path: string, removedPath: string): boolean {
 // stays aligned with the mutated topology before the next projection rebuild.
 export function remapPathThroughMutation(
   path: string | null,
-  event: PathStoreEvent,
+  event: FileTreeStoreEvent,
   preserveRemovedPath: boolean = false
 ): string | null {
   if (path == null) {
@@ -103,7 +150,7 @@ export function remapPathThroughMutation(
   }
 }
 
-function createMutationInvalidation(event: PathStoreEvent): {
+function createMutationInvalidation(event: FileTreeStoreEvent): {
   canonicalChanged: boolean;
   projectionChanged: boolean;
   visibleCountDelta: number | null;
@@ -116,7 +163,7 @@ function createMutationInvalidation(event: PathStoreEvent): {
 }
 
 function toTreesMutationSemanticEvent(
-  event: Extract<PathStoreEvent, { operation: 'add' | 'remove' | 'move' }>
+  event: Extract<FileTreeStoreEvent, { operation: 'add' | 'remove' | 'move' }>
 ): FileTreeMutationSemanticEvent {
   switch (event.operation) {
     case 'add':
@@ -143,7 +190,7 @@ function toTreesMutationSemanticEvent(
 }
 
 function toTreesBatchEvent(
-  event: Extract<PathStoreEvent, { operation: 'batch' }>
+  event: Extract<FileTreeStoreEvent, { operation: 'batch' }>
 ): FileTreeBatchEvent {
   return {
     ...createMutationInvalidation(event),
@@ -152,7 +199,7 @@ function toTreesBatchEvent(
         (
           childEvent
         ): childEvent is Extract<
-          PathStoreEvent,
+          FileTreeStoreEvent,
           { operation: 'add' | 'remove' | 'move' }
         > =>
           childEvent.operation === 'add' ||
@@ -165,7 +212,7 @@ function toTreesBatchEvent(
 }
 
 export function toTreesMutationEvent(
-  event: PathStoreEvent
+  event: FileTreeStoreEvent
 ): FileTreeMutationEvent | null {
   switch (event.operation) {
     case 'add':
