@@ -61,15 +61,7 @@
     "typescript/no-meaningless-void-operator": "off",
     "typescript/no-duplicate-type-constituents": "off"
   },
-  "overrides": [
-    {
-      "files": ["apps/docs/app/trees/ClientPage.tsx"],
-      "rules": {
-        "typescript/no-unsafe-return": "off",
-        "typescript/strict-boolean-expressions": "off"
-      }
-    }
-  ],
+  "overrides": [],
   "settings": {
     "jsx-a11y": {
       "polymorphicPropName": null,

@@ -17,11 +17,11 @@
 - [Hunk Separators](https://diffs.com/docs#hunk-separators): Built-in separator presets, CSS customization hooks, and the discouraged vanilla escape hatch
 - [Utilities](https://diffs.com/docs#utilities): parseDiffFromFile, parsePatchFiles, highlighter management, accept/reject hunks
 - [Styling](https://diffs.com/docs#styling): CSS variables, inline styles, and unsafe CSS injection
-- [Themes](https://diffs.com/docs#themes): Pierre Light/Dark themes, custom theme creation, and registration
+- [Usage](https://diffs.com/docs#usage): Pierre Light/Dark themes, custom theme creation, and registration
 - [Worker Pool](https://diffs.com/docs#worker-pool): Off-main-thread syntax highlighting with configurable worker pools
 - [SSR](https://diffs.com/docs#ssr): Server-side rendering with preload functions for instant first paint
 
 ## See also
 
-- [@pierre/trees](https://diffs.com/trees/llms.txt): File tree rendering library
+- [@pierre/trees](https://trees.software/llms.txt): File tree rendering library
 - [Full documentation](https://diffs.com/llms-full.txt): Complete @pierre/diffs docs in a single file

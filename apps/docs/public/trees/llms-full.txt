@@ -4,7 +4,11 @@
 
 - Package: `@pierre/trees` on [npm](https://www.npmjs.com/package/@pierre/trees)
 - GitHub: https://github.com/pierrecomputer/pierre
-- Docs: https://diffs.com/trees/docs
+- Docs: https://trees.software/docs
+
+`@pierre/trees` exposes one path-first model and two primary runtime entries: a
+thin React layer in [`@pierre/trees/react`](#get-started-with-react) and the
+vanilla class in [`@pierre/trees`](#get-started-with-vanilla).
 
 `@pierre/trees` exposes one path-first model and two primary runtime entries: a
 thin React layer in [`@pierre/trees/react`](#get-started-with-react) and the

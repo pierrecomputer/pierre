@@ -1,24 +1,23 @@
 import { preloadFileTree } from '@pierre/trees/ssr';
-import type { Metadata } from 'next';
 
-import { DemoA11y } from './_components/DemoA11y';
-import { DemoContextMenu } from './_components/DemoContextMenu';
-import { DemoCustomIcons } from './_components/DemoCustomIcons';
-import { DemoDensity } from './_components/DemoDensity';
-import { DemoDragDrop } from './_components/DemoDragDrop';
-import { DemoFlatten } from './_components/DemoFlatten';
-import { DemoGitStatus } from './_components/DemoGitStatus';
-import { DemoSearch } from './_components/DemoSearch';
-import { DemoStyling } from './_components/DemoStyling';
-import { DemoTheming } from './_components/DemoTheming';
-import { DemoTreeApp } from './_components/DemoTreeApp';
-import { DemoVirtualization } from './_components/DemoVirtualization';
-import { sampleFileList } from './_lib/demo-data';
-import { TREE_NEW_VIEWPORT_HEIGHTS } from './_lib/dimensions';
+import { DemoA11y } from '../_components/DemoA11y';
+import { DemoContextMenu } from '../_components/DemoContextMenu';
+import { DemoCustomIcons } from '../_components/DemoCustomIcons';
+import { DemoDensity } from '../_components/DemoDensity';
+import { DemoDragDrop } from '../_components/DemoDragDrop';
+import { DemoFlatten } from '../_components/DemoFlatten';
+import { DemoGitStatus } from '../_components/DemoGitStatus';
+import { DemoSearch } from '../_components/DemoSearch';
+import { DemoStyling } from '../_components/DemoStyling';
+import { DemoTheming } from '../_components/DemoTheming';
+import { DemoTreeApp } from '../_components/DemoTreeApp';
+import { DemoVirtualization } from '../_components/DemoVirtualization';
+import { sampleFileList } from '../_lib/demo-data';
+import { TREE_NEW_VIEWPORT_HEIGHTS } from '../_lib/dimensions';
 import {
   TREE_NEW_GIT_STATUS_EXPANDED_PATHS,
   TREE_NEW_GIT_STATUSES,
-} from './_lib/gitStatusDemoData';
+} from '../_lib/gitStatusDemoData';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
@@ -27,26 +26,6 @@ import { PierreCompanySection } from '@/components/PierreCompanySection';
 import type { ProductId } from '@/lib/product-config';
 
 const PRODUCT_ID: ProductId = 'trees';
-
-const treesTitle = 'Trees, from Pierre';
-const treesDescription =
-  "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.";
-
-export const metadata: Metadata = {
-  title: treesTitle,
-  description: treesDescription,
-  openGraph: {
-    title: treesTitle,
-    description: treesDescription,
-    images: ['/trees/opengraph-image.png'],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: treesTitle,
-    description: treesDescription,
-    images: ['/trees/twitter-image.png'],
-  },
-};
 
 export default function TreesPage() {
   const flattenHierarchicalPreloadedData = preloadFileTree({

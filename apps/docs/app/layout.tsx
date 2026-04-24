@@ -88,9 +88,11 @@ function worktreeTitlePrefix(): string {
 
 const WORKTREE_PREFIX = worktreeTitlePrefix();
 
-// On `trees.software`, `icons` is intentionally omitted so the
-// file-convention assets in `app/trees/` (`icon.{ico,svg}`,
-// `apple-icon.png`) take over.
+// Each build (NEXT_PUBLIC_SITE=diffs|trees) is a self-contained site, so all
+// per-product branding (icons, OG/twitter images) is set here explicitly
+// rather than via Next file conventions in route groups. This guarantees the
+// dispatcher route at `app/page.tsx` (which is outside both groups) gets the
+// right brand assets.
 const SITE = (process.env.NEXT_PUBLIC_SITE ?? 'diffs') as ProductId;
 const isTrees = SITE === 'trees';
 const SITE_PRODUCT = PRODUCTS[SITE];
@@ -98,6 +100,27 @@ const SITE_ORIGIN = isTrees ? 'https://trees.software' : 'https://diffs.com';
 const baseTitle = `${SITE_PRODUCT.name}, from Pierre`;
 const taggedTitle = `${WORKTREE_PREFIX}${baseTitle}`;
 const description = SITE_PRODUCT.description;
+const SITE_ICONS: Metadata['icons'] = isTrees
+  ? {
+      icon: [
+        { url: '/trees-brand/icon.svg', type: 'image/svg+xml' },
+        { url: '/trees-brand/icon.ico', sizes: 'any' },
+      ],
+      apple: '/trees-brand/apple-icon.png',
+    }
+  : {
+      icon: [
+        { url: '/favicon.svg', type: 'image/svg+xml' },
+        { url: '/favicon.png', type: 'image/png' },
+      ],
+      apple: '/apple-touch-icon.png',
+    };
+const SITE_OG_IMAGE = isTrees
+  ? '/trees-brand/opengraph-image.png'
+  : '/diffs-brand/opengraph-image.png';
+const SITE_TWITTER_IMAGE = isTrees
+  ? '/trees-brand/twitter-image.png'
+  : '/diffs-brand/twitter-image.png';
 const themeBootstrapScript = `(${String(function applyInitialTheme() {
   try {
     const storedTheme = window.localStorage.getItem('theme');
@@ -128,23 +151,14 @@ export const metadata: Metadata = {
     template: `${WORKTREE_PREFIX}%s`,
   },
   description,
-  ...(isTrees
-    ? {}
-    : {
-        icons: {
-          icon: [
-            { url: '/favicon.svg', type: 'image/svg+xml' },
-            { url: '/favicon.png', type: 'image/png' },
-          ],
-          apple: '/apple-touch-icon.png',
-        },
-      }),
+  icons: SITE_ICONS,
   openGraph: {
     title: {
       default: taggedTitle,
       template: `${WORKTREE_PREFIX}%s`,
     },
     description,
+    images: [SITE_OG_IMAGE],
   },
   twitter: {
     card: 'summary_large_image',
@@ -153,6 +167,7 @@ export const metadata: Metadata = {
       template: `${WORKTREE_PREFIX}%s`,
     },
     description,
+    images: [SITE_TWITTER_IMAGE],
   },
 };
 

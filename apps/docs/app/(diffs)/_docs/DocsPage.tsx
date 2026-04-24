@@ -13,22 +13,22 @@ import {
   FILE_DIFF_METADATA_TYPE,
   PARSE_DIFF_FROM_FILE_EXAMPLE,
   PARSE_PATCH_FILES_EXAMPLE,
-} from './CoreTypes/constants';
+} from '../docs/CoreTypes/constants';
 import {
   CUSTOM_HUNK_SEPARATORS_EXAMPLE,
   CUSTOM_HUNK_SEPARATORS_SWITCHER,
-} from './CustomHunkSeparators/constants';
+} from '../docs/CustomHunkSeparators/constants';
 import {
   INSTALLATION_EXAMPLES,
   PACKAGE_MANAGERS,
-} from './Installation/constants';
+} from '../docs/Installation/constants';
 import {
   OVERVIEW_INITIAL_EXAMPLE,
   OVERVIEW_REACT_PATCH_FILE,
   OVERVIEW_REACT_SINGLE_FILE,
   OVERVIEW_VANILLA_PATCH_FILE,
   OVERVIEW_VANILLA_SINGLE_FILE,
-} from './Overview/constants';
+} from '../docs/Overview/constants';
 import {
   REACT_API_FILE,
   REACT_API_FILE_DIFF,
@@ -39,7 +39,7 @@ import {
   REACT_API_SHARED_FILE_OPTIONS,
   REACT_API_SHARED_FILE_RENDER_PROPS,
   REACT_API_UNRESOLVED_FILE,
-} from './ReactAPI/constants';
+} from '../docs/ReactAPI/constants';
 import {
   SSR_PRELOAD_FILE,
   SSR_PRELOAD_FILE_DIFF,
@@ -49,13 +49,16 @@ import {
   SSR_PRELOAD_UNRESOLVED_FILE,
   SSR_USAGE_CLIENT,
   SSR_USAGE_SERVER,
-} from './SSR/constants';
+} from '../docs/SSR/constants';
 import {
   STYLING_CODE_GLOBAL,
   STYLING_CODE_INLINE,
   STYLING_CODE_UNSAFE,
-} from './Styling/constants';
-import { TOKEN_HOOKS_REACT, TOKEN_HOOKS_VANILLA } from './TokenHooks/constants';
+} from '../docs/Styling/constants';
+import {
+  TOKEN_HOOKS_REACT,
+  TOKEN_HOOKS_VANILLA,
+} from '../docs/TokenHooks/constants';
 import {
   HELPER_DIFF_ACCEPT_REJECT,
   HELPER_DIFF_ACCEPT_REJECT_REACT,
@@ -69,7 +72,7 @@ import {
   HELPER_RESOLVE_MERGE_CONFLICT,
   HELPER_SET_LANGUAGE_OVERRIDE,
   HELPER_TRIM_PATCH_CONTEXT,
-} from './Utilities/constants';
+} from '../docs/Utilities/constants';
 import {
   VANILLA_API_CUSTOM_HUNK_FILE,
   VANILLA_API_FILE_DIFF_EXAMPLE,
@@ -80,12 +83,12 @@ import {
   VANILLA_API_HUNKS_RENDERER_FILE,
   VANILLA_API_HUNKS_RENDERER_PATCH_FILE,
   VANILLA_API_UNRESOLVED_FILE_EXAMPLE,
-} from './VanillaAPI/constants';
+} from '../docs/VanillaAPI/constants';
 import {
   VIRTUALIZATION_REACT_BASIC,
   VIRTUALIZATION_REACT_CONFIG,
   VIRTUALIZATION_VANILLA_DIFF,
-} from './Virtualization/constants';
+} from '../docs/Virtualization/constants';
 import {
   WORKER_POOL_API_REFERENCE,
   WORKER_POOL_ARCHITECTURE_ASCII,
@@ -105,7 +108,7 @@ import {
   WORKER_POOL_VSCODE_INLINE_SCRIPT,
   WORKER_POOL_VSCODE_LOCAL_ROOTS,
   WORKER_POOL_VSCODE_WORKER_URI,
-} from './WorkerPool/constants';
+} from '../docs/WorkerPool/constants';
 import { DocsLayout } from '@/components/docs/DocsLayout';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import { ProseWrapper } from '@/components/docs/ProseWrapper';
@@ -122,13 +125,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: docsTitle,
     description: docsDescription,
-    images: ['/opengraph-image.png'],
   },
   twitter: {
     card: 'summary_large_image',
     title: docsTitle,
     description: docsDescription,
-    images: ['/twitter-image.png'],
   },
 };
 

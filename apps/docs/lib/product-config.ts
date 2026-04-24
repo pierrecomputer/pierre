@@ -41,8 +41,8 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
       "@pierre/trees is an open source file tree rendering library. It's built for performance and flexibility, is super customizable, and comes packed with features.",
     llmsDescription:
       'An open source file tree rendering library for the web. Built for extreme performance on large trees, with React and vanilla JS APIs, SSR support, and customizable styling.',
-    basePath: isTrees ? '' : '/trees',
-    docsPath: isTrees ? '/docs' : '/trees/docs',
+    basePath: '',
+    docsPath: '/docs',
     packageName: '@pierre/trees',
     installCommand: 'bun i @pierre/trees',
     githubUrl: 'https://github.com/pierrecomputer/pierre',
@@ -74,15 +74,10 @@ export function getProductConfig(productId: ProductId): ProductConfig {
 }
 
 /**
- * Determine which product we're in based on pathname.
- * On the trees site (NEXT_PUBLIC_SITE=trees) every page is a trees page.
+ * Determine which product we're in. With diffs and trees split into separate
+ * sites (selected by NEXT_PUBLIC_SITE), every page in a build belongs to a
+ * single product, so the pathname is unused.
  */
-export function getProductFromPathname(pathname: string): ProductConfig {
-  if (isTrees) {
-    return PRODUCTS.trees;
-  }
-  if (pathname.startsWith('/trees')) {
-    return PRODUCTS.trees;
-  }
-  return PRODUCTS.diffs;
+export function getProductFromPathname(_pathname: string): ProductConfig {
+  return isTrees ? PRODUCTS.trees : PRODUCTS.diffs;
 }

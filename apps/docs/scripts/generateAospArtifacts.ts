@@ -24,7 +24,7 @@ const sourcePath = resolvePath(
 );
 const previewOutputPath = resolvePath(
   repoRoot,
-  'apps/docs/app/trees-dev/_lib/aospPreview.ts'
+  'apps/docs/app/(trees)/trees-dev/_lib/aospPreview.ts'
 );
 const gzOutputDir = resolvePath(repoRoot, 'apps/docs/public/trees-dev');
 const gzOutputPath = resolvePath(gzOutputDir, 'aosp-files.json.gz');

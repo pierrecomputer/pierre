@@ -49,45 +49,20 @@ const nextConfig = {
       },
     ];
   },
-  rewrites() {
-    if (!isTrees) {
-      return [];
-    }
-    // On the trees site, serve tree pages at the root.
-    return {
-      beforeFiles: [
-        { source: '/', destination: '/trees' },
-        { source: '/docs', destination: '/trees/docs' },
-      ],
-    };
-  },
   redirects() {
     if (isTrees) {
-      // Canonicalize /trees → / and /trees/docs → /docs on the trees site.
+      // Trees content now lives at `/`, so the old `/trees` URLs are obsolete
+      // on this site. Redirect any incoming legacy links to the canonical
+      // location. `/new` is a long-standing alias kept for memorability.
       return [
-        {
-          source: '/trees',
-          destination: '/',
-          permanent: true,
-        },
-        {
-          source: '/trees/docs',
-          destination: '/docs',
-          permanent: true,
-        },
-        {
-          source: '/new',
-          destination: '/',
-          permanent: true,
-        },
-        {
-          source: '/trees/new',
-          destination: '/',
-          permanent: true,
-        },
+        { source: '/trees', destination: '/', permanent: true },
+        { source: '/trees/docs', destination: '/docs', permanent: true },
+        { source: '/trees/:path*', destination: '/:path*', permanent: true },
+        { source: '/new', destination: '/', permanent: true },
       ];
     }
-    // On the diffs site, redirect /trees paths to the external trees domain.
+    // On the diffs site, anything that used to live under `/trees` belongs to
+    // the trees site now hosted on a separate domain.
     return [
       {
         source: '/trees/:path*',

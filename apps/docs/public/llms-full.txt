@@ -3498,26 +3498,177 @@ future versions or in edge cases that may be difficult to anticipate.
 />
 ```
 
-## Themes
+## Usage
 
-Pierre Diffs ships with our custom open source themes,
-[Pierre Light and Pierre Dark](/theme). We generate our themes with a custom
-build process that takes a shared color palette, assigns colors to specific
-roles for syntax highlighting, and builds JSON files and editor extensions. This
-makes our themes compatible with Shiki, Visual Studio Code, Cursor, and Zed.
+Install the Pierre theme pack from your editor's extension marketplace:
 
-| Editor / Platform  | Source                                                                                                 |
-| ------------------ | ------------------------------------------------------------------------------------------------------ |
-| Visual Studio Code | [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pierrecomputer.pierre-theme) |
-| Cursor             | [Open VSX](https://open-vsx.org/extension/pierrecomputer/pierre-theme)                                 |
-| Zed                | [Zed Extensions](https://zed.dev/extensions/pierre-theme)                                              |
-| Shiki              | [Theme repository](https://github.com/pierrecomputer/theme/tree/main/themes)                           |
+1. **Visual Studio Code** — Install from the
+   [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=pierrecomputer.pierre-theme)
+2. **Cursor** — Install from
+   [Open VSX](https://open-vsx.org/extension/pierrecomputer/pierre-theme)
+3. **Zed** — Install from the
+   [Zed Extensions](https://zed.dev/extensions/pierre-theme)
 
-While you can use any Shiki theme with Pierre Diffs by passing the theme name to
-the `theme` option, you can also create and register custom themes compatible
-with Shiki and Visual Studio Code. We recommend using our themes as a starting
-point for your own custom themes—head to our [themes documentation](/theme) to
-get started.
+Then open your editor and select "Pierre Dark" or "Pierre Light" in settings or
+the command palette.
+
+## Build a theme
+
+Create custom themes for use with `@pierre/diffs` (plus Shiki, Visual Studio
+Code, Cursor, and Zed) by forking our open-source
+[Pierre Theme](https://github.com/pierrecomputer/theme) repository.
+
+> The Pierre themes are bundled with `@pierre/diffs` as `pierre-dark` and
+> `pierre-light`, so you can use them without any additional setup.
+
+### Getting started
+
+The fastest way to create a custom theme is to fork the Pierre Theme repository,
+modify our color palette, and regenerate the themes. This repository uses
+TypeScript to generate theme JSON files, giving you type safety and the ability
+to generate multiple theme files—for various editors, too—from a single color
+palette.
+
+1. **Fork the repo** — Visit
+   [github.com/pierrecomputer/theme](https://github.com/pierrecomputer/theme)
+   and click "Fork" to create your own copy
+2. **Clone your fork** — `git clone https://github.com/YOUR_USERNAME/theme.git`
+3. **Install dependencies** — `npm install`
+4. **Start the dev server** — `npm start` (watches for changes and rebuilds)
+
+### Project structure
+
+The Pierre Theme repository is organized as follows:
+
+### Color palette
+
+The `src/palette.ts` file is the single source of truth for all colors in your
+theme. We take each color from the palette and provide several tints and shades
+for each, like 100, 200, 300, etc. We ship with _all_ our tints and shades, so
+this is overkill for most themes, but it's sometimes helpful to have full access
+to your entire brand or product palette.
+
+After defining your color scales, you define role types that map colors to
+semantic purposes—backgrounds, foregrounds, borders, accents, states, syntax
+highlighting, and ANSI terminal colors:
+
+Then export light and dark theme configurations using your color scales:
+
+The dark theme follows the same pattern with adjusted values for dark mode.
+After editing your palette, the build script automatically regenerates all theme
+variants. Each color in the palette is used consistently across light theme,
+dark theme, and vibrant variants.
+
+See the full source files on GitHub:
+
+- [`src/palette.ts`](https://github.com/pierrecomputer/theme/blob/main/src/palette.ts)
+- [`src/theme.ts`](https://github.com/pierrecomputer/theme/blob/main/src/theme.ts)
+- [`src/build.ts`](https://github.com/pierrecomputer/theme/blob/main/src/build.ts)
+
+### Theme file
+
+The `src/theme.ts` file maps your `src/palette.ts` colors to specific syntax
+tokens. This is where you control which colors are used for editor interface
+elements and syntax highlighting (keywords, functions,comments, strings, etc).
+
+See the full source:
+[`src/theme.ts`](https://github.com/pierrecomputer/theme/blob/main/src/theme.ts).
+
+> For a complete reference of TextMate scopes, see the [VS Code syntax
+> highlighting
+> documentation](https://code.visualstudio.com/api/language-extensions/syntax-highlight-guide)
+> and the [TextMate language grammars
+> manual](https://macromates.com/manual/en/language_grammars).
+
+### Update `package.json`
+
+Before publishing your theme, update the `package.json` with your own details.
+The VS Code Marketplace uses fields like `displayName`, `description`, `icon`,
+`repository`, and `categories` for your listing. See the
+[extension manifest reference](https://code.visualstudio.com/api/references/extension-manifest)
+for all available fields.
+
+### Build & Test
+
+The repository includes npm scripts for development:
+
+| Script            | Description                                       |
+| ----------------- | ------------------------------------------------- |
+| `npm start`       | Watch mode — rebuilds on file changes             |
+| `npm run build`   | Generate theme JSON files in `./themes` directory |
+| `npm test`        | Validate theme structure (runs build first)       |
+| `npm run package` | Create `.vsix` file for VS Code/Cursor publishing |
+
+> **Warning:** Heads up! Our `package` script is specifically designed so that you can
+> publish your theme to npm while also being used for generating the VS Code and
+> Cursor extensions. We do this by temporarily renaming the package before
+> generating the VSIX extension file. We replicate this in another way in [our
+> GitHub Action for automatically publishing the
+> theme](https://github.com/pierrecomputer/theme/blob/main/.github/workflows/publish.yml)
+> to the VS Code Marketplace and Open VSX on release.
+
+Here's how these all come together. After you make your changes to the color
+palette, roles, theme file, and package.json:
+
+- Use `npm run build` to generate the `./themes` directory with your theme JSON
+  files.
+- Use `npm run package` to create the `.vsix` file.
+- Use `npm run test` to validate the theme structure.
+
+After you've built your theme, you can upload the compiled `.vsix` file to the
+VS Code Marketplace or Open VSX, and use the theme JSON files with
+`@pierre/diffs`.
+
+### Using with Diffs
+
+Once you've built your theme JSON files, you can use them with `@pierre/diffs`
+by registering them before rendering:
+
+Then reference your theme in any component:
+
+### Vibrant themes
+
+The Pierre Theme repo automatically generates "Vibrant" variants that use the
+Display P3 color space for ~25% more color range on compatible displays. These
+colors are generated automatically when you run `npm run build` and come from a
+color conversion algorithm.
+
+> **Warning:** Display P3 colors are not supported in VS Code or Cursor, so those theme files
+> aren't generated. Instead, we only generate the `.json` files for use with
+> `@pierre/diffs` and Shiki on the web.
+
+The vibrant variants are generated automatically when you run `npm run build`.
+They use enhanced saturation to push colors into the wider P3 gamut. See the
+repo's
+[`DISPLAY-P3.md`](https://github.com/pierrecomputer/theme/blob/main/DISPLAY-P3.md)
+for technical details on the color conversion algorithm.
+
+### Publishing
+
+To publish your theme to the VS Code Marketplace or Open VSX:
+
+1. Update `package.json` with your publisher ID and theme metadata
+2. Run `npm run package` to create the `.vsix` file
+3. Upload to the
+   [VS Code Marketplace](https://marketplace.visualstudio.com/manage) or
+   [Open VSX](https://open-vsx.org/)
+
+If you've forked our theme repository, we automate the publishing process. Our
+workflow uses GitHub Actions to build, test, and publish the package to npm and
+the theme extension to the VS Code Marketplace and Open VSX on `release`. You
+can adapt this workflow to your own repository—you’ll have to update some
+variables and add the appropriate secrets in your repository settings.
+
+For Shiki/web use only, you can skip publishing and simply host your theme JSON
+files or bundle them with your application.
+
+---
+
+#### Credit
+
+Thanks again to the Primer team at GitHub for their work on the open source
+[GitHub VS Code themes](https://github.com/primer/github-vscode-theme). We
+forked their project and heavily modified it for our own themes.
 
 **Package JSON Example** (`package.json`):
 

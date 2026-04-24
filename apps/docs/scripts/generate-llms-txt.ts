@@ -148,7 +148,7 @@ const SEE_ALSO: Record<ProductId, Product['seeAlso']> = {
   diffs: [
     {
       label: '@pierre/trees',
-      url: 'https://diffs.com/trees/llms.txt',
+      url: 'https://trees.software/llms.txt',
       description: 'File tree rendering library',
     },
     {
@@ -165,7 +165,7 @@ const SEE_ALSO: Record<ProductId, Product['seeAlso']> = {
     },
     {
       label: 'Full documentation',
-      url: 'https://diffs.com/trees/llms-full.txt',
+      url: 'https://trees.software/llms-full.txt',
       description: 'Complete @pierre/trees docs in a single file',
     },
   ],
@@ -499,13 +499,13 @@ const PRODUCT_SECTIONS: Record<ProductId, readonly string[]> = {
 };
 
 const DOCS_PREFIX: Record<ProductId, string> = {
-  diffs: 'docs',
-  trees: 'trees/docs',
+  diffs: '(diffs)/docs',
+  trees: '(trees)/docs',
 };
 
 const LLMS_DOCS_URL: Record<ProductId, string> = {
   diffs: 'https://diffs.com/docs',
-  trees: 'https://diffs.com/trees/docs',
+  trees: 'https://trees.software/docs',
 };
 
 async function main() {

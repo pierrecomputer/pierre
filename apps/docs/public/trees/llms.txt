@@ -8,25 +8,25 @@
 
 ## Docs
 
-- [Choose your integration](https://diffs.com/trees/docs#choose-your-integration): Choosing between React and vanilla, with the shared path-first model
-- [Get started with React](https://diffs.com/trees/docs#get-started-with-react): React quickstart with useFileTree, FileTree, selectors, and prepared input
-- [Get started with vanilla](https://diffs.com/trees/docs#get-started-with-vanilla): Vanilla quickstart with new FileTree, render, model methods, and prepared input
-- [Shape tree data for fast rendering](https://diffs.com/trees/docs#shape-tree-data-for-fast-rendering): When to use paths, prepared input, and presorted prepared input
-- [Navigate selection, focus, and search](https://diffs.com/trees/docs#navigate-selection-focus-and-search): Selection, focus, keyboard movement, and fileTreeSearchMode guidance
-- [Rename, drag, and trigger item actions](https://diffs.com/trees/docs#rename-drag-and-trigger-item-actions): Renaming, drag and drop, and optional context menu workflows
-- [Style and theme the tree](https://diffs.com/trees/docs#style-and-theme-the-tree): Host styling, CSS variables, themeToTreeStyles, and unsafeCSS guidance
-- [Customize icons](https://diffs.com/trees/docs#customize-icons): Built-in icon sets, remaps, color mode, and sprite-sheet extension
-- [Show Git status and row annotations](https://diffs.com/trees/docs#show-git-status-and-row-annotations): Built-in gitStatus signals and custom row decorations
-- [Handle large trees efficiently](https://diffs.com/trees/docs#handle-large-trees-efficiently): Prepared input, virtualization settings, and SSR guidance for large trees
-- [SSR](https://diffs.com/trees/docs#ssr): Server preload, React and vanilla hydration, and opaque SSR handoff guidance
-- [Shared concepts](https://diffs.com/trees/docs#shared-concepts): Path-first identity, shared options, search modes, mutation vocabulary, and SSR framing
-- [React API](https://diffs.com/trees/docs#react-api): useFileTree, FileTree, selector hooks, and React-specific composition lookup
-- [Vanilla API](https://diffs.com/trees/docs#vanilla-api): FileTree construction, lifecycle, imperative methods, and subscriptions
-- [SSR API](https://diffs.com/trees/docs#ssr-api): preloadFileTree, serializeFileTreeSsrPayload, and hydration handoff rules
-- [Styling and theming](https://diffs.com/trees/docs#styling-and-theming): Host styling, CSS variable families, fallback precedence, and theme helpers
-- [Icons](https://diffs.com/trees/docs#icons): Icon sets, FileTreeIconConfig, remap precedence, and runtime touchpoints
+- [Choose your integration](https://trees.software/docs#choose-your-integration): Choosing between React and vanilla, with the shared path-first model
+- [Get started with React](https://trees.software/docs#get-started-with-react): React quickstart with useFileTree, FileTree, selectors, and prepared input
+- [Get started with vanilla](https://trees.software/docs#get-started-with-vanilla): Vanilla quickstart with new FileTree, render, model methods, and prepared input
+- [Shape tree data for fast rendering](https://trees.software/docs#shape-tree-data-for-fast-rendering): When to use paths, prepared input, and presorted prepared input
+- [Navigate selection, focus, and search](https://trees.software/docs#navigate-selection-focus-and-search): Selection, focus, keyboard movement, and fileTreeSearchMode guidance
+- [Rename, drag, and trigger item actions](https://trees.software/docs#rename-drag-and-trigger-item-actions): Renaming, drag and drop, and optional context menu workflows
+- [Style and theme the tree](https://trees.software/docs#style-and-theme-the-tree): Host styling, CSS variables, themeToTreeStyles, and unsafeCSS guidance
+- [Customize icons](https://trees.software/docs#customize-icons): Built-in icon sets, remaps, color mode, and sprite-sheet extension
+- [Show Git status and row annotations](https://trees.software/docs#show-git-status-and-row-annotations): Built-in gitStatus signals and custom row decorations
+- [Handle large trees efficiently](https://trees.software/docs#handle-large-trees-efficiently): Prepared input, virtualization settings, and SSR guidance for large trees
+- [SSR](https://trees.software/docs#ssr): Server preload, React and vanilla hydration, and opaque SSR handoff guidance
+- [Shared concepts](https://trees.software/docs#shared-concepts): Path-first identity, shared options, search modes, mutation vocabulary, and SSR framing
+- [React API](https://trees.software/docs#react-api): useFileTree, FileTree, selector hooks, and React-specific composition lookup
+- [Vanilla API](https://trees.software/docs#vanilla-api): FileTree construction, lifecycle, imperative methods, and subscriptions
+- [SSR API](https://trees.software/docs#ssr-api): preloadFileTree, serializeFileTreeSsrPayload, and hydration handoff rules
+- [Styling and theming](https://trees.software/docs#styling-and-theming): Host styling, CSS variable families, fallback precedence, and theme helpers
+- [Icons](https://trees.software/docs#icons): Icon sets, FileTreeIconConfig, remap precedence, and runtime touchpoints
 
 ## See also
 
 - [@pierre/diffs](https://diffs.com/llms.txt): Diff and code rendering library
-- [Full documentation](https://diffs.com/trees/llms-full.txt): Complete @pierre/trees docs in a single file
+- [Full documentation](https://trees.software/llms-full.txt): Complete @pierre/trees docs in a single file

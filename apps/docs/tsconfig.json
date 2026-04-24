@@ -45,7 +45,7 @@
     "paths": {
       "@/*": ["./*"],
       "@diffs/*": ["./app/(diffs)/*"],
-      "@trees/*": ["./app/(trees)/trees/*"]
+      "@trees/*": ["./app/(trees)/*"]
     }
   }
 }
