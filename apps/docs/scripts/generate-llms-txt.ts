@@ -132,7 +132,7 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
 };
 
 const MDX_FILENAME_OVERRIDES: Record<string, string> = {
-  'docs/Theming': 'docs-content.mdx',
+  '(diffs)/docs/Theming': 'docs-content.mdx',
 };
 
 const EXCLUDED_CONSTANTS = new Set([
