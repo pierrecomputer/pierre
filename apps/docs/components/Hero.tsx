@@ -62,12 +62,11 @@ export function Hero({ productId }: HeroProps) {
               onClick={() => void copyToClipboard()}
               className="inline-flex items-center gap-4 rounded-lg bg-neutral-900 px-5 py-3 font-mono text-sm tracking-tight text-white transition-colors hover:bg-neutral-800 md:text-base dark:border dark:border-white/20 dark:bg-black dark:hover:border-white/30"
             >
-              <span className="text-[95%]">{product.installCommand}</span>
-              {copied ? (
-                <IconCheck className="ml-auto" />
-              ) : (
-                <IconCopyFill className="ml-auto" />
-              )}
+              <div className="size-4 min-[460px]:hidden" />
+              <span className="mx-auto text-[95%] min-[460px]:mx-0">
+                {product.installCommand}
+              </span>
+              {copied ? <IconCheck /> : <IconCopyFill />}
             </button>
           </TooltipTrigger>
           <TooltipContent>
