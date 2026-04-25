@@ -9,6 +9,10 @@ import type { Metadata } from 'next';
 import { MERGE_CONFLICT_EXAMPLE } from '../_examples/MergeConflict/constants';
 import { MergeConflict } from '../_examples/MergeConflict/MergeConflict';
 import {
+  CODE_VIEWER_REACT_EXAMPLE,
+  CODE_VIEWER_VANILLA_EXAMPLE,
+} from '../docs/CodeViewer/constants';
+import {
   FILE_CONTENTS_TYPE,
   FILE_DIFF_METADATA_TYPE,
   PARSE_DIFF_FROM_FILE_EXAMPLE,
@@ -30,6 +34,7 @@ import {
   OVERVIEW_VANILLA_SINGLE_FILE,
 } from '../docs/Overview/constants';
 import {
+  REACT_API_CODE_VIEWER,
   REACT_API_FILE,
   REACT_API_FILE_DIFF,
   REACT_API_MULTI_FILE_DIFF,
@@ -74,6 +79,7 @@ import {
   HELPER_TRIM_PATCH_CONTEXT,
 } from '../docs/Utilities/constants';
 import {
+  VANILLA_API_CODE_VIEWER_EXAMPLE,
   VANILLA_API_CUSTOM_HUNK_FILE,
   VANILLA_API_FILE_DIFF_EXAMPLE,
   VANILLA_API_FILE_DIFF_PROPS,
@@ -150,6 +156,7 @@ export default function DocsPage() {
           <CoreTypesSection />
           <ReactAPISection />
           <VanillaAPISection />
+          <CodeViewerSection />
           <VirtualizationSection />
           <CustomHunkSeparatorsSection />
           <UtilitiesSection />
@@ -248,6 +255,7 @@ async function OverviewSection() {
 
 async function ReactAPISection() {
   const [
+    reactAPICodeViewer,
     reactAPIMultiFileDiff,
     reactAPIFile,
     reactAPIPatch,
@@ -258,6 +266,7 @@ async function ReactAPISection() {
     sharedFileOptions,
     sharedFileRenderProps,
   ] = await Promise.all([
+    preloadFile(REACT_API_CODE_VIEWER),
     preloadFile(REACT_API_MULTI_FILE_DIFF),
     preloadFile(REACT_API_FILE),
     preloadFile(REACT_API_PATCH_DIFF),
@@ -271,6 +280,7 @@ async function ReactAPISection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/ReactAPI/content.mdx',
     scope: {
+      reactAPICodeViewer,
       reactAPIMultiFileDiff,
       reactAPIPatch,
       reactAPIFileDiff,
@@ -287,6 +297,7 @@ async function ReactAPISection() {
 
 async function VanillaAPISection() {
   const [
+    codeViewerExample,
     fileDiffExample,
     fileExample,
     fileDiffProps,
@@ -297,6 +308,7 @@ async function VanillaAPISection() {
     diffHunksRendererPatch,
     fileRenderer,
   ] = await Promise.all([
+    preloadFile(VANILLA_API_CODE_VIEWER_EXAMPLE),
     preloadFile(VANILLA_API_FILE_DIFF_EXAMPLE),
     preloadFile(VANILLA_API_FILE_EXAMPLE),
     preloadFile(VANILLA_API_FILE_DIFF_PROPS),
@@ -310,6 +322,7 @@ async function VanillaAPISection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/VanillaAPI/content.mdx',
     scope: {
+      codeViewerExample,
       fileDiffExample,
       fileExample,
       fileDiffProps,
@@ -319,6 +332,21 @@ async function VanillaAPISection() {
       diffHunksRenderer,
       diffHunksRendererPatch,
       fileRenderer,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function CodeViewerSection() {
+  const [codeViewerReactExample, codeViewerVanillaExample] = await Promise.all([
+    preloadFile(CODE_VIEWER_REACT_EXAMPLE),
+    preloadFile(CODE_VIEWER_VANILLA_EXAMPLE),
+  ]);
+  const content = await renderMDX({
+    filePath: '(diffs)/docs/CodeViewer/content.mdx',
+    scope: {
+      codeViewerReactExample,
+      codeViewerVanillaExample,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;

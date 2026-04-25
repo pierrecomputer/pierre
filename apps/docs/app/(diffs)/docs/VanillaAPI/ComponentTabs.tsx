@@ -6,23 +6,25 @@ import { useState } from 'react';
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
-type ComponentType = 'file-diff' | 'file' | 'unresolved-file';
+type ComponentType = 'code-viewer' | 'file-diff' | 'file' | 'unresolved-file';
 type PropsType = 'file-diff' | 'file';
 type DiffHunksType = 'from-file' | 'from-patch';
 
 interface VanillaComponentTabsProps {
+  codeViewerExample: PreloadedFileResult<undefined>;
   fileDiffExample: PreloadedFileResult<undefined>;
   fileExample: PreloadedFileResult<undefined>;
   unresolvedFileExample: PreloadedFileResult<undefined>;
 }
 
 export function VanillaComponentTabs({
+  codeViewerExample,
   fileDiffExample,
   fileExample,
   unresolvedFileExample,
 }: VanillaComponentTabsProps) {
   const [componentType, setComponentType] =
-    useState<ComponentType>('file-diff');
+    useState<ComponentType>('code-viewer');
 
   return (
     <>
@@ -30,6 +32,7 @@ export function VanillaComponentTabs({
         value={componentType}
         onValueChange={(value) => setComponentType(value as ComponentType)}
       >
+        <ButtonGroupItem value="code-viewer">CodeViewer</ButtonGroupItem>
         <ButtonGroupItem value="file-diff">FileDiff</ButtonGroupItem>
         <ButtonGroupItem value="file">File</ButtonGroupItem>
         <ButtonGroupItem value="unresolved-file">
@@ -38,6 +41,13 @@ export function VanillaComponentTabs({
       </ButtonGroup>
       {(() => {
         switch (componentType) {
+          case 'code-viewer':
+            return (
+              <DocsCodeExample
+                {...codeViewerExample}
+                key={`component-type-${componentType}`}
+              />
+            );
           case 'file-diff':
             return (
               <DocsCodeExample

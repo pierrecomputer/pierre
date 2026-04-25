@@ -15,6 +15,7 @@ import type { ComponentPropsWithoutRef } from 'react';
 import remarkGfm from 'remark-gfm';
 
 import { CustomHunkSeparators } from '../app/(diffs)/_examples/CustomHunkSeparators/CustomHunkSeparators';
+import { CodeViewerExampleTabs } from '../app/(diffs)/docs/CodeViewer/ExampleTabs';
 import { PackageManagerTabs } from '../app/(diffs)/docs/Installation/PackageManagerTabs';
 import { CodeToggle } from '../app/(diffs)/docs/Overview/CodeToggle';
 import {
@@ -61,6 +62,7 @@ const defaultComponents = {
   IconBulbFill,
   IconFlagFill,
   DocsCodeExample,
+  CodeViewerExampleTabs,
   CustomHunkSeparators,
   OverviewFileTree,
   MultiFileDiff,

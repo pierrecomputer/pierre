@@ -1,8 +1,9 @@
 'use client';
 
+import { WorkerPoolContext } from '@diffs/_components/WorkerPoolContext';
+
 import { GHViewer } from './GHViewer';
 import { Header } from '@/components/Header';
-import { WorkerPoolContext } from '@/components/WorkerPoolContext';
 
 export default function AdvancedDiffPage() {
   return (

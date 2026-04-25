@@ -134,6 +134,67 @@ instance.render({ file, containerWrapper: container });`,
     options,
   };
 
+export const VANILLA_API_CODE_VIEWER_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'code_viewer_example.ts',
+    contents: `import {
+  CodeViewer,
+  parseDiffFromFile,
+  type CodeViewerItem,
+} from '@pierre/diffs';
+
+const root = document.getElementById('review-root');
+if (root == null) {
+  throw new Error('Expected #review-root to exist');
+}
+
+root.style.height = '600px';
+root.style.overflow = 'auto';
+
+const viewer = new CodeViewer({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  stickyHeaders: true,
+  viewerMetrics: { paddingTop: 16, paddingBottom: 24, gap: 12 },
+});
+
+viewer.setup(root);
+
+const items: CodeViewerItem[] = [
+  {
+    id: 'diff:src/app.ts',
+    type: 'diff',
+    fileDiff: parseDiffFromFile(
+      {
+        name: 'src/app.ts',
+        contents: 'export function greet() {\\n  return "hello";\\n}',
+      },
+      {
+        name: 'src/app.ts',
+        contents:
+          'export function greet(name: string) {\\n  return "hello " + name;\\n}',
+      }
+    ),
+    annotations: [{ side: 'additions', lineNumber: 2 }],
+  },
+  {
+    id: 'file:README.md',
+    type: 'file',
+    file: {
+      name: 'README.md',
+      contents: '# Docs\\n\\nThis file is rendered inline with the diff list.',
+    },
+  },
+];
+
+viewer.setItems(items);
+
+window.addEventListener('beforeunload', () => {
+  viewer.cleanUp();
+});`,
+  },
+  options,
+};
+
 // =============================================================================
 // FILEDIFF PROPS
 // =============================================================================

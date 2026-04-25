@@ -11,6 +11,7 @@ const NumberColumnWidthOverride = {
 } as CSSProperties;
 
 type ExampleTypes =
+  | 'code-viewer'
   | 'multi-file-diff'
   | 'patch-diff'
   | 'file-diff'
@@ -23,6 +24,7 @@ type SharedPropsTypes =
   | 'file-render-props';
 
 interface ComponentTabsProps {
+  reactAPICodeViewer: PreloadedFileResult<undefined>;
   reactAPIMultiFileDiff: PreloadedFileResult<undefined>;
   reactAPIFileDiff: PreloadedFileResult<undefined>;
   reactAPIPatch: PreloadedFileResult<undefined>;
@@ -31,13 +33,14 @@ interface ComponentTabsProps {
 }
 
 export function ComponentTabs({
+  reactAPICodeViewer,
   reactAPIMultiFileDiff,
   reactAPIFileDiff,
   reactAPIPatch,
   reactAPIFile,
   reactAPIUnresolvedFile,
 }: ComponentTabsProps) {
-  const [example, setExample] = useState<ExampleTypes>('multi-file-diff');
+  const [example, setExample] = useState<ExampleTypes>('code-viewer');
 
   return (
     <>
@@ -45,6 +48,7 @@ export function ComponentTabs({
         value={example}
         onValueChange={(value) => setExample(value as ExampleTypes)}
       >
+        <ButtonGroupItem value="code-viewer">CodeViewer</ButtonGroupItem>
         <ButtonGroupItem value="multi-file-diff">MultiFileDiff</ButtonGroupItem>
         <ButtonGroupItem value="patch-diff">PatchDiff</ButtonGroupItem>
         <ButtonGroupItem value="file-diff">FileDiff</ButtonGroupItem>
@@ -55,6 +59,8 @@ export function ComponentTabs({
       </ButtonGroup>
       {(() => {
         switch (example) {
+          case 'code-viewer':
+            return <DocsCodeExample {...reactAPICodeViewer} key={example} />;
           case 'multi-file-diff':
             return <DocsCodeExample {...reactAPIMultiFileDiff} key={example} />;
           case 'file-diff':
