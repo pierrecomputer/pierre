@@ -71,8 +71,6 @@
   },
   "dependencies": {
     "@pierre/path-store": "workspace:*",
-    "preact": "catalog:",
-    "preact-render-to-string": "catalog:"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",
@@ -92,7 +90,17 @@
     "typescript": "catalog:",
     "vite": "catalog:"
   },
+  "peerDependenciesMeta": {
+    "preact": {
+      "optional": true
+    },
+    "preact-render-to-string": {
+      "optional": true
+    }
+  },
   "peerDependencies": {
+    "preact": "catalog:",
+    "preact-render-to-string": "catalog:",
     "react": "^18.3.1 || ^19.0.0",
     "react-dom": "^18.3.1 || ^19.0.0"
   }
