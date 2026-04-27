@@ -30,6 +30,9 @@ export default async function TreesDevItemCustomizationPage() {
   const defaultDecorationPreset = getItemCustomizationDecorationPreset(
     ITEM_CUSTOMIZATION_DEMO_DEFAULTS.decorationPresetId
   );
+  const preparedInput = workloadData.pathsArePresorted
+    ? createPresortedPreparedInput(workloadData.paths)
+    : undefined;
   const sharedOptions: Omit<
     FileTreePathOptions,
     | 'composition'
@@ -37,14 +40,12 @@ export default async function TreesDevItemCustomizationPage() {
     | 'id'
     | 'onSelectionChange'
     | 'renderRowDecoration'
+    | 'preparedInput'
   > = {
     flattenEmptyDirectories,
     icons: ITEM_CUSTOMIZATION_DECORATION_ICONS,
     initialExpandedPaths: workloadData.initialExpandedPaths,
     paths: workloadData.paths,
-    preparedInput: workloadData.pathsArePresorted
-      ? createPresortedPreparedInput(workloadData.paths)
-      : undefined,
     initialVisibleRowCount: ITEM_CUSTOMIZATION_VIEWPORT_HEIGHT / 30,
   };
 
@@ -59,6 +60,7 @@ export default async function TreesDevItemCustomizationPage() {
     },
     gitStatus: defaultGitStatusPreset.entries,
     id: 'trees-dev-item-customization',
+    preparedInput,
     renderRowDecoration: defaultDecorationPreset.renderer ?? undefined,
   });
 
@@ -66,6 +68,7 @@ export default async function TreesDevItemCustomizationPage() {
     <ItemCustomizationDemoClient
       containerHtml={serializeFileTreeSsrPayload(payload, 'dom')}
       fileCountLabel={workloadData.selectedWorkload.fileCountLabel}
+      pathsArePresorted={workloadData.pathsArePresorted}
       sharedOptions={sharedOptions}
     />
   );

@@ -33,7 +33,10 @@ const TREE_HEADER_HTML =
 
 export default async function TreesDevDragAndDropPage() {
   const { flattenEmptyDirectories } = await readSettingsCookies();
-  const sharedOptions: Omit<FileTreePathOptions, 'dragAndDrop' | 'id'> = {
+  const sharedOptions: Omit<
+    FileTreePathOptions,
+    'dragAndDrop' | 'id' | 'preparedInput'
+  > = {
     composition: {
       header: {
         html: TREE_HEADER_HTML,
@@ -49,7 +52,6 @@ export default async function TreesDevDragAndDropPage() {
       'workspace/',
     ],
     paths: DRAG_AND_DROP_PREPARED_INPUT.paths,
-    preparedInput: DRAG_AND_DROP_PREPARED_INPUT,
     search: true,
     initialVisibleRowCount: 460 / 30,
   };
@@ -58,6 +60,7 @@ export default async function TreesDevDragAndDropPage() {
     ...sharedOptions,
     dragAndDrop: true,
     id: 'trees-drag-and-drop',
+    preparedInput: DRAG_AND_DROP_PREPARED_INPUT,
   });
 
   return (

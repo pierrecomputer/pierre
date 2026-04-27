@@ -17,6 +17,7 @@ import {
 import { createRoot, type Root as ReactDomRoot } from 'react-dom/client';
 
 import { ExampleCard } from '../_components/ExampleCard';
+import { createPresortedPreparedInput } from '../_lib/createPresortedPreparedInput';
 import {
   getContextMenuSideOffset,
   getFloatingContextMenuTriggerStyle,
@@ -42,6 +43,7 @@ import {
 interface ItemCustomizationDemoClientProps {
   containerHtml: string;
   fileCountLabel: string;
+  pathsArePresorted: boolean;
   sharedOptions: Omit<
     FileTreePathOptions,
     | 'composition'
@@ -49,6 +51,7 @@ interface ItemCustomizationDemoClientProps {
     | 'id'
     | 'onSelectionChange'
     | 'renderRowDecoration'
+    | 'preparedInput'
   >;
 }
 
@@ -301,6 +304,7 @@ function HydratedItemCustomizationTree({
 export function ItemCustomizationDemoClient({
   containerHtml,
   fileCountLabel,
+  pathsArePresorted,
   sharedOptions,
 }: ItemCustomizationDemoClientProps) {
   const desiredSelectedPathsRef = useRef<readonly string[]>([]);
@@ -331,6 +335,13 @@ export function ItemCustomizationDemoClient({
   const [selectedPaths, setSelectedPaths] = useState<readonly string[]>([]);
   const [lastMenuInteraction, setLastMenuInteraction] = useState(
     'Open the context menu to inspect a row.'
+  );
+  const preparedInput = useMemo(
+    () =>
+      pathsArePresorted
+        ? createPresortedPreparedInput(sharedOptions.paths)
+        : undefined,
+    [pathsArePresorted, sharedOptions.paths]
   );
 
   const activeGitStatusPreset = useMemo(
@@ -410,6 +421,7 @@ export function ItemCustomizationDemoClient({
       },
       id: 'trees-dev-item-customization',
       onSelectionChange: handleSelectionChange,
+      preparedInput,
       renderRowDecoration: activeDecorationRenderer,
     };
   }, [
@@ -418,6 +430,7 @@ export function ItemCustomizationDemoClient({
     contextMenuEnabled,
     handleMenuAction,
     handleSelectionChange,
+    preparedInput,
     sharedOptions,
     triggerMode,
   ]);

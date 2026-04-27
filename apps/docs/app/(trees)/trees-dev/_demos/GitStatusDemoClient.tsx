@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
 import { useGitStatusControls } from '../_components/useGitStatusControls';
+import { createPresortedPreparedInput } from '../_lib/createPresortedPreparedInput';
 import {
   ITEM_CUSTOMIZATION_DEMO_DEFAULTS,
   TREES_DEV_GIT_STATUS_PRESETS,
@@ -14,12 +15,17 @@ import {
 interface GitStatusDemoClientProps {
   containerHtml: string;
   fileCountLabel: string;
-  sharedOptions: Omit<FileTreePathOptions, 'gitStatus' | 'id'>;
+  pathsArePresorted: boolean;
+  sharedOptions: Omit<
+    FileTreePathOptions,
+    'gitStatus' | 'id' | 'preparedInput'
+  >;
 }
 
 export function GitStatusDemoClient({
   containerHtml,
   fileCountLabel,
+  pathsArePresorted,
   sharedOptions,
 }: GitStatusDemoClientProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -30,12 +36,20 @@ export function GitStatusDemoClient({
     presets: TREES_DEV_GIT_STATUS_PRESETS,
   });
   const initialGitStatusRef = useRef(gitStatus);
+  const preparedInput = useMemo(
+    () =>
+      pathsArePresorted
+        ? createPresortedPreparedInput(sharedOptions.paths)
+        : undefined,
+    [pathsArePresorted, sharedOptions.paths]
+  );
   const options = useMemo<FileTreePathOptions>(
     () => ({
       ...sharedOptions,
+      preparedInput,
       id: 'trees-git-status',
     }),
-    [sharedOptions]
+    [preparedInput, sharedOptions]
   );
 
   useEffect(() => {

@@ -25,13 +25,16 @@ export default async function TreesDevGitStatusPage() {
   const defaultGitStatusPreset = getTreesDevGitStatusPreset(
     ITEM_CUSTOMIZATION_DEMO_DEFAULTS.gitStatusPresetId
   );
-  const sharedOptions: Omit<FileTreePathOptions, 'gitStatus' | 'id'> = {
+  const preparedInput = workloadData.pathsArePresorted
+    ? createPresortedPreparedInput(workloadData.paths)
+    : undefined;
+  const sharedOptions: Omit<
+    FileTreePathOptions,
+    'gitStatus' | 'id' | 'preparedInput'
+  > = {
     flattenEmptyDirectories,
     initialExpandedPaths: workloadData.initialExpandedPaths,
     paths: workloadData.paths,
-    preparedInput: workloadData.pathsArePresorted
-      ? createPresortedPreparedInput(workloadData.paths)
-      : undefined,
     initialVisibleRowCount: GIT_STATUS_VIEWPORT_HEIGHT / 30,
   };
 
@@ -39,12 +42,14 @@ export default async function TreesDevGitStatusPage() {
     ...sharedOptions,
     gitStatus: defaultGitStatusPreset.entries,
     id: 'trees-git-status',
+    preparedInput,
   });
 
   return (
     <GitStatusDemoClient
       containerHtml={serializeFileTreeSsrPayload(payload, 'dom')}
       fileCountLabel={workloadData.selectedWorkload.fileCountLabel}
+      pathsArePresorted={workloadData.pathsArePresorted}
       sharedOptions={sharedOptions}
     />
   );
