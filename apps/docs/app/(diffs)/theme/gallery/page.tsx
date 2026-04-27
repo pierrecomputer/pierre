@@ -1,5 +1,5 @@
 import { parseDiffFromFile, resolveTheme } from '@pierre/diffs';
-import { themeToTreeStyles } from '@trees/_lib/treesCompat';
+import { themeToTreeStyles } from '@pierre/trees';
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 

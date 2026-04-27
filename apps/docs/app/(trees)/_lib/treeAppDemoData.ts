@@ -1,5 +1,5 @@
 import type { FileContents } from '@pierre/diffs';
-import type { GitStatusEntry } from '@trees/_lib/treesCompat';
+import type { GitStatusEntry } from '@pierre/trees';
 
 export const TREE_APP_DEMO_FILES: Readonly<Record<string, FileContents>> = {
   // ---------------------------------------------------------------------------

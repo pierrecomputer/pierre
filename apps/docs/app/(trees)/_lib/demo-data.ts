@@ -1,9 +1,3 @@
-import type {
-  FileTreeOptions,
-  FileTreeSelectionItem,
-  FileTreeStateConfig,
-} from '@trees/_lib/treesCompat';
-
 export const sampleFileList: string[] = [
   'README.md',
   'package.json',
@@ -38,15 +32,3 @@ export const sampleFileList: string[] = [
   'node_modules/react-dom/index.js',
   'node_modules/typescript/package.json',
 ];
-
-export const sharedDemoFileTreeOptions: FileTreeOptions = {
-  flattenEmptyDirectories: true,
-  initialFiles: sampleFileList,
-};
-
-export const sharedDemoStateConfig: FileTreeStateConfig = {
-  initialExpandedItems: ['Build/assets/images/social'],
-  onSelection: (selection: FileTreeSelectionItem[]) => {
-    console.log('selection', selection);
-  },
-};

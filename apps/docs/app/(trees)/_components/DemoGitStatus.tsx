@@ -6,13 +6,13 @@ import {
   IconFolders,
   IconTableRowHeader,
 } from '@pierre/icons';
+import type { GitStatusEntry } from '@pierre/trees';
 import {
   FileTree,
   type FileTreePreloadedData,
   useFileTree,
 } from '@pierre/trees/react';
 import type { FileTreePathOptions } from '@trees/_lib/fileTreePathOptions';
-import type { GitStatusEntry } from '@trees/_lib/treesCompat';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';

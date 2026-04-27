@@ -1,4 +1,4 @@
-import type { GitStatusEntry } from '@trees/_lib/treesCompat';
+import type { GitStatusEntry } from '@pierre/trees';
 
 export const TREE_NEW_GIT_STATUS_EXPANDED_PATHS = [
   'src',

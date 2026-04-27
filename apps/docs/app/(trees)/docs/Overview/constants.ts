@@ -1,8 +1,13 @@
-import type { FileTreeOptions } from '@trees/_lib/treesCompatShared';
+import type { FileTreeOptions } from '@pierre/trees';
+
+export type OverviewFileTreeOptions = Omit<
+  FileTreeOptions,
+  'paths' | 'preparedInput' | 'initialExpandedPaths'
+>;
 
 export const OVERVIEW_TREE_ID = 'trees-docs-overview';
 
-export const OVERVIEW_FILES: string[] = [
+export const OVERVIEW_PATHS: string[] = [
   'README.md',
   'package.json',
   '.gitignore',
@@ -15,11 +20,11 @@ export const OVERVIEW_FILES: string[] = [
   'public/favicon.ico',
 ];
 
-export const OVERVIEW_INITIAL_EXPANDED_ITEMS: string[] = [
+export const OVERVIEW_INITIAL_EXPANDED_PATHS: string[] = [
   'src',
   'src/components',
 ];
 
-export const OVERVIEW_OPTIONS: FileTreeOptions = {
+export const OVERVIEW_OPTIONS: OverviewFileTreeOptions = {
   id: OVERVIEW_TREE_ID,
 };

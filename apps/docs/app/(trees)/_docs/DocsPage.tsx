@@ -1,6 +1,6 @@
 import '@/app/prose.css';
 import type { PreloadFileOptions } from '@pierre/diffs/ssr';
-import { preloadFileTree } from '@trees/_lib/treesCompat';
+import { preloadFileTree } from '@pierre/trees/ssr';
 import type { Metadata } from 'next';
 import { Fragment } from 'react';
 
@@ -16,9 +16,9 @@ import * as showGitStatusAndRowAnnotationsConstants from '../docs/Guides/ShowGit
 import * as ssrGuideConstants from '../docs/Guides/SSR/constants';
 import * as styleAndThemeTheTreeConstants from '../docs/Guides/StyleAndThemeTheTree/constants';
 import {
-  OVERVIEW_FILES,
-  OVERVIEW_INITIAL_EXPANDED_ITEMS,
+  OVERVIEW_INITIAL_EXPANDED_PATHS,
   OVERVIEW_OPTIONS,
+  OVERVIEW_PATHS,
 } from '../docs/Overview/constants';
 import * as reactApiConstants from '../docs/Reference/ReactAPI/constants';
 import * as ssrApiConstants from '../docs/Reference/SSRAPI/constants';
@@ -152,17 +152,21 @@ export default function TreesDocsPage() {
 }
 
 async function OverviewSection() {
-  const ssrPayload = preloadFileTree(
-    { ...OVERVIEW_OPTIONS, initialFiles: OVERVIEW_FILES },
-    { initialExpandedItems: OVERVIEW_INITIAL_EXPANDED_ITEMS }
-  );
+  const ssrPayload = preloadFileTree({
+    ...OVERVIEW_OPTIONS,
+    paths: OVERVIEW_PATHS,
+    initialExpandedPaths: OVERVIEW_INITIAL_EXPANDED_PATHS,
+  });
   const content = await renderMDX({
     filePath: '(trees)/docs/Overview/content.mdx',
     scope: {
-      OVERVIEW_FILES,
-      OVERVIEW_INITIAL_EXPANDED_ITEMS,
+      OVERVIEW_INITIAL_EXPANDED_PATHS,
       OVERVIEW_OPTIONS,
-      overviewPrerenderedHTML: ssrPayload.shadowHtml,
+      OVERVIEW_PATHS,
+      overviewPreloadedData: {
+        id: ssrPayload.id,
+        shadowHtml: ssrPayload.shadowHtml,
+      },
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;

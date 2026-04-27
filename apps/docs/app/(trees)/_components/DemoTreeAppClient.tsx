@@ -2,11 +2,11 @@
 
 import type { FileContents } from '@pierre/diffs';
 import { FILE_TREE_DENSITY_PRESETS } from '@pierre/trees';
+import type { GitStatusEntry } from '@pierre/trees';
 import type { FileTreePreloadedData } from '@pierre/trees/react';
 import { useFileTree } from '@pierre/trees/react';
 import { TreeApp } from '@trees/_components/TreeApp';
 import type { TreeAppTheme } from '@trees/_components/TreeApp';
-import type { GitStatusEntry } from '@trees/_lib/treesCompat';
 import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 

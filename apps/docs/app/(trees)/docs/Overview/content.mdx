@@ -9,13 +9,11 @@
 Selection, focus, search, rename, drag and drop, Git status, and row annotations
 all work in terms of canonical paths.
 
-<FileTree
-  files={OVERVIEW_FILES}
+<OverviewFileTree
+  paths={OVERVIEW_PATHS}
   options={OVERVIEW_OPTIONS}
-  initialExpandedItems={OVERVIEW_INITIAL_EXPANDED_ITEMS}
-  prerenderedHTML={overviewPrerenderedHTML}
-  className="py-4 rounded-lg border-1"
-  style={{ height: 394, maxWidth: 400 }}
+  initialExpandedPaths={OVERVIEW_INITIAL_EXPANDED_PATHS}
+  preloadedData={overviewPreloadedData}
 />
 
 These docs stay guide-first. Pick your runtime, shape tree data before it

@@ -1,4 +1,4 @@
-import type { GitStatusEntry } from '@trees/_lib/treesCompat';
+import type { GitStatusEntry } from '@pierre/trees';
 import type { CSSProperties } from 'react';
 
 /** Default panel look for FileTree in docs examples. Apply via className + style on FileTree. */

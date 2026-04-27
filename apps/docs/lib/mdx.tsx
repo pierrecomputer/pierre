@@ -7,7 +7,6 @@ import {
   IconFlagFill,
   IconInfoFill,
 } from '@pierre/icons';
-import { FileTree } from '@trees/_lib/treesCompatClient';
 import { compileMDX } from 'next-mdx-remote/rsc';
 import Link from 'next/link';
 import { readFile } from 'node:fs/promises';
@@ -29,6 +28,7 @@ import {
   VanillaComponentTabs,
   VanillaPropTabs,
 } from '../app/(diffs)/docs/VanillaAPI/ComponentTabs';
+import { OverviewFileTree } from '../app/(trees)/docs/Overview/OverviewFileTree';
 import { DocsCodeExample } from '../components/docs/DocsCodeExample';
 import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
 import remarkTocIgnore from './remark-toc-ignore';
@@ -62,7 +62,7 @@ const defaultComponents = {
   IconFlagFill,
   DocsCodeExample,
   CustomHunkSeparators,
-  FileTree,
+  OverviewFileTree,
   MultiFileDiff,
   // Interactive tab components
   PackageManagerTabs,
