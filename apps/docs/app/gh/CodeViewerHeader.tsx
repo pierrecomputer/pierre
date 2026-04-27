@@ -33,6 +33,18 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+const COMMIT_HASH_METADATA_PATTERN = /^From\s+([a-f0-9]+)\s/im;
+
+function getPatchTreePathPrefix(
+  patchMetadata: string | undefined,
+  patchIndex: number
+): string {
+  const commitHash = patchMetadata?.match(COMMIT_HASH_METADATA_PATTERN)?.[1];
+  return commitHash != null
+    ? commitHash.slice(0, 5)
+    : `Commit ${patchIndex + 1}`;
+}
+
 interface HeaderProps {
   className?: string;
   diffStyle: 'split' | 'unified';
@@ -117,7 +129,11 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
       const pathToItemId = new Map<string, string>();
       const itemIdToFile = new Map<string, CodeViewerCommentSidebarFile>();
       const gitStatus: GitStatusEntry[] = [];
-      for (const patch of parsedPatches) {
+      for (const [patchIndex, patch] of parsedPatches.entries()) {
+        const treePathPrefix = getPatchTreePathPrefix(
+          patch.patchMetadata,
+          patchIndex
+        );
         for (const fileDiff of patch.files) {
           const id = `${fileIndex++}`;
           const fileOrder = items.length;
@@ -131,13 +147,14 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
 
           const path = fileDiff.name;
           itemIdToFile.set(id, { fileOrder, path });
-          if (path.length === 0 || pathToItemId.has(path)) {
+          const treePath = `${treePathPrefix}/${path}`;
+          if (path.length === 0 || pathToItemId.has(treePath)) {
             continue;
           }
-          paths.push(path);
-          pathToItemId.set(path, id);
+          paths.push(treePath);
+          pathToItemId.set(treePath, id);
           gitStatus.push({
-            path,
+            path: treePath,
             status: mapChangeTypeToGitStatus(fileDiff.type),
           });
         }
