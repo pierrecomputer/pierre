@@ -23,6 +23,9 @@ const isTrees = site === 'trees';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Per-site build dir so `diffs:dev` and `trees:dev` can run concurrently;
+  // Next 16's dev lockfile is per-directory, not per-port.
+  distDir: `.next/${site}`,
   reactCompiler: true,
   devIndicators: false,
   experimental: {

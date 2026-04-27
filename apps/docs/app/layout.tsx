@@ -88,15 +88,17 @@ function worktreeTitlePrefix(): string {
 
 const WORKTREE_PREFIX = worktreeTitlePrefix();
 
-// Each build (NEXT_PUBLIC_SITE=diffs|trees) is a self-contained site, so all
-// per-product branding (icons, OG/twitter images) is set here explicitly
-// rather than via Next file conventions in route groups. This guarantees the
-// dispatcher route at `app/page.tsx` (which is outside both groups) gets the
-// right brand assets.
+// Per-site branding (icons, OG/twitter) is set here explicitly so the
+// dispatcher route at `app/page.tsx` (outside both route groups) inherits it.
 const SITE = (process.env.NEXT_PUBLIC_SITE ?? 'diffs') as ProductId;
 const isTrees = SITE === 'trees';
 const SITE_PRODUCT = PRODUCTS[SITE];
-const SITE_ORIGIN = isTrees ? 'https://trees.software' : 'https://diffs.com';
+const PROD_ORIGIN = isTrees ? 'https://trees.software' : 'https://diffs.com';
+// In dev, point `metadataBase` at localhost so OG previewers fetch
+// in-progress assets instead of whatever's deployed.
+const isDev = process.env.NODE_ENV !== 'production';
+const DEV_PORT = process.env.PORT ?? (isTrees ? '3691' : '3690');
+const SITE_ORIGIN = isDev ? `http://localhost:${DEV_PORT}` : PROD_ORIGIN;
 const baseTitle = `${SITE_PRODUCT.name}, from Pierre`;
 const taggedTitle = `${WORKTREE_PREFIX}${baseTitle}`;
 const description = SITE_PRODUCT.description;
