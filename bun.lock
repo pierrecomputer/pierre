@@ -8,7 +8,7 @@
         "@pierre/vscode-icons": "^0.0.7",
       },
       "devDependencies": {
-        "@pierre/icons": "^0.3.2",
+        "@pierre/icons": "^0.4.0",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
         "husky": "^9.1.7",
@@ -104,7 +104,7 @@
     },
     "packages/diffs": {
       "name": "@pierre/diffs",
-      "version": "1.1.16",
+      "version": "1.1.19",
       "dependencies": {
         "@pierre/theme": "catalog:",
         "@shikijs/transformers": "^3.0.0",
@@ -191,7 +191,7 @@
     },
     "packages/trees": {
       "name": "@pierre/trees",
-      "version": "1.0.0-beta.1",
+      "version": "1.0.0-beta.3",
       "dependencies": {
         "@pierre/path-store": "workspace:*",
         "preact": "catalog:",
@@ -255,7 +255,7 @@
     "@octokit/auth-app": "8.1.1",
     "@octokit/openapi-types": "26.0.0",
     "@octokit/rest": "22.0.0",
-    "@pierre/icons": "0.3.2",
+    "@pierre/icons": "0.4.0",
     "@pierre/storage": "0.0.10",
     "@pierre/theme": "0.0.28",
     "@pierre/vscode-icons": "0.0.7",
@@ -629,7 +629,7 @@
 
     "@pierre/docs": ["@pierre/docs@workspace:apps/docs"],
 
-    "@pierre/icons": ["@pierre/icons@0.3.2", "", { "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-uZ3gy1rmeyuK0OH3maIu2maVnHV+oSdz0mN3CqfNgPW9w9tZLAL1/5AyQ4KWCV5IR7mQr8ODSIe6dHPiMH+qUg=="],
+    "@pierre/icons": ["@pierre/icons@0.4.0", "", { "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-BR6+0OyU1mInlW8aeNkrf3hebN+vzVOyx7xYtdyTDYGxBUqKL9Kr9K8YBm7Xcrqg5J5SjEWjRVmLMan4z5XRAQ=="],
 
     "@pierre/path-store": ["@pierre/path-store@workspace:packages/path-store"],
 
