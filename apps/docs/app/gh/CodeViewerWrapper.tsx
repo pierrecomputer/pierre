@@ -350,7 +350,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
       containerRef={scrollRef}
       items={items}
       className={cn(
-        'border-border relative h-full min-h-0 min-w-0 flex-1 overflow-auto border-l px-5 w-full [contain:strict] [overflow-anchor:none] [overscroll-behavior-x:none] [will-change:scroll-position] [&_diffs-container]:overflow-clip [&_diffs-container]:rounded-lg [&_diffs-container]:shadow-[0_0_0_1px_var(--color-border)] [&_diffs-container]:[contain:layout_paint_style]',
+        'border-border relative h-full min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain px-5 w-full md:border-l [contain:strict] [overflow-anchor:none] [will-change:scroll-position] [&_diffs-container]:overflow-clip [&_diffs-container]:rounded-lg [&_diffs-container]:shadow-[0_0_0_1px_var(--color-border)] [&_diffs-container]:[contain:layout_paint_style]',
         className
       )}
       options={options}

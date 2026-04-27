@@ -44,7 +44,12 @@ export const CodeViewerCommentsList = memo(function CodeViewerCommentsList({
   }
 
   return (
-    <div className={cn('h-full min-h-0 overflow-auto', className)}>
+    <div
+      className={cn(
+        'h-full min-h-0 overflow-auto overscroll-contain',
+        className
+      )}
+    >
       {commentSections.map((section) => (
         <section
           key={section.itemId}

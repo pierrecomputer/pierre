@@ -106,7 +106,10 @@ function CodeViewerFileTreeContent({
 
   return (
     <FileTree
-      className={cn('h-full min-h-0 overflow-auto pt-[19px]', className)}
+      className={cn(
+        'h-full min-h-0 overflow-auto overscroll-contain pt-[19px]',
+        className
+      )}
       model={model}
       onClick={handleClick}
       style={DENSITY_OVERRIDE_STYLES}

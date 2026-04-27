@@ -3,6 +3,7 @@ import { useStableCallback } from '@pierre/diffs/react';
 import {
   IconDiffSplit,
   IconDiffUnified,
+  IconFileTreeFill,
   IconParagraph,
   IconWordWrap,
 } from '@pierre/icons';
@@ -35,6 +36,9 @@ import { cn } from '@/lib/utils';
 interface HeaderProps {
   className?: string;
   diffStyle: 'split' | 'unified';
+  fileTreeAvailable: boolean;
+  fileTreeOverlayOpen: boolean;
+  onToggleFileTreeOverlay(): void;
   setDiffStyle: Dispatch<SetStateAction<'split' | 'unified'>>;
   setCommentSections: Dispatch<SetStateAction<CodeViewerSavedCommentItem[]>>;
   setCommentFileByItemId: Dispatch<
@@ -50,6 +54,9 @@ interface HeaderProps {
 export const CodeViewerHeader = memo(function CodeViewerHeader({
   className,
   diffStyle,
+  fileTreeAvailable,
+  fileTreeOverlayOpen,
+  onToggleFileTreeOverlay,
   overflow,
   setCommentSections,
   setCommentFileByItemId,
@@ -198,51 +205,69 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
             placeholder="e.g. https://github.com/twbs/bootstrap/pull/42139"
           />
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-pressed={diffStyle === 'split'}
-          title={
-            diffStyle === 'split'
-              ? 'Switch to unified view'
-              : 'Switch to split view'
-          }
-          className="border-border/80 rounded-lg"
-          onClick={() =>
-            setDiffStyle((currentStyle) =>
-              currentStyle === 'split' ? 'unified' : 'split'
-            )
-          }
-        >
-          {diffStyle === 'split' ? (
-            <IconDiffSplit className="size-4" />
-          ) : (
-            <IconDiffUnified className="size-4" />
-          )}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          aria-pressed={overflow === 'wrap'}
-          title={overflow === 'wrap' ? 'Disable wrapping' : 'Enable wrapping'}
-          className="border-border/80 rounded-lg"
-          onClick={() =>
-            setOverflow((currentOverflow) =>
-              currentOverflow === 'wrap' ? 'scroll' : 'wrap'
-            )
-          }
-        >
-          {overflow === 'wrap' ? (
-            <IconWordWrap className="size-4" />
-          ) : (
-            <IconParagraph className="size-4" />
-          )}
-        </Button>
-        <Button type="submit" disabled={fetching} className="w-26">
-          {fetching ? 'Fetching…' : 'Fetch Diff'}
-        </Button>
+        <div className="flex w-full gap-2 md:w-auto">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-pressed={fileTreeOverlayOpen}
+            disabled={!fileTreeAvailable}
+            title={fileTreeOverlayOpen ? 'Hide file tree' : 'Show file tree'}
+            className="border-border/80 shrink-0 rounded-lg md:hidden"
+            onClick={onToggleFileTreeOverlay}
+          >
+            <IconFileTreeFill className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-pressed={diffStyle === 'split'}
+            title={
+              diffStyle === 'split'
+                ? 'Switch to unified view'
+                : 'Switch to split view'
+            }
+            className="border-border/80 shrink-0 rounded-lg"
+            onClick={() =>
+              setDiffStyle((currentStyle) =>
+                currentStyle === 'split' ? 'unified' : 'split'
+              )
+            }
+          >
+            {diffStyle === 'split' ? (
+              <IconDiffSplit className="size-4" />
+            ) : (
+              <IconDiffUnified className="size-4" />
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-pressed={overflow === 'wrap'}
+            title={overflow === 'wrap' ? 'Disable wrapping' : 'Enable wrapping'}
+            className="border-border/80 shrink-0 rounded-lg"
+            onClick={() =>
+              setOverflow((currentOverflow) =>
+                currentOverflow === 'wrap' ? 'scroll' : 'wrap'
+              )
+            }
+          >
+            {overflow === 'wrap' ? (
+              <IconWordWrap className="size-4" />
+            ) : (
+              <IconParagraph className="size-4" />
+            )}
+          </Button>
+          <Button
+            type="submit"
+            disabled={fetching}
+            className="w-26 flex-1 md:flex-none"
+          >
+            {fetching ? 'Fetching…' : 'Fetch Diff'}
+          </Button>
+        </div>
       </form>
     </div>
   );

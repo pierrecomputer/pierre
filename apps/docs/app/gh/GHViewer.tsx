@@ -2,7 +2,7 @@
 
 import { type CodeViewerItem } from '@pierre/diffs';
 import { type CodeViewerHandle } from '@pierre/diffs/react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { CodeViewerHeader } from './CodeViewerHeader';
 import { CodeViewerSidebar } from './CodeViewerSidebar';
@@ -37,10 +37,25 @@ export function GHViewer() {
   const [commentSections, setCommentSections] = useState<
     CodeViewerSavedCommentItem[]
   >([]);
+  const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewerHandle<CommentMetadata> | null>(null);
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const updateDiffStyle = (matches: boolean) => {
+      setDiffStyle(matches ? 'unified' : 'split');
+    };
+    const handleChange = (event: MediaQueryListEvent) => {
+      updateDiffStyle(event.matches);
+    };
+
+    updateDiffStyle(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
   const handleSelectTreeItem = useCallback((itemId: string) => {
+    setFileTreeOverlayOpen(false);
     viewerRef.current?.scrollTo({
       type: 'item',
       id: itemId,
@@ -65,8 +80,15 @@ export function GHViewer() {
     },
     []
   );
+  const handleToggleFileTreeOverlay = useCallback(() => {
+    setFileTreeOverlayOpen((open) => !open);
+  }, []);
+  const handleCloseFileTreeOverlay = useCallback(() => {
+    setFileTreeOverlayOpen(false);
+  }, []);
   const handleSelectComment = useCallback(
     (comment: CodeViewerSavedCommentEntry) => {
+      setFileTreeOverlayOpen(false);
       viewerRef.current?.setSelectedLines({
         id: comment.itemId,
         range: comment.range,
@@ -84,11 +106,14 @@ export function GHViewer() {
   );
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] contain-strict [grid-template-areas:'header_header''tree_viewer']">
+    <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] contain-strict [grid-template-areas:'header''viewer'] md:grid-cols-[320px_minmax(0,1fr)] md:[grid-template-areas:'header_header''tree_viewer']">
       <CodeViewerHeader
         className="contain-layout contain-paint [grid-area:header]"
         diffStyle={diffStyle}
+        fileTreeOverlayOpen={fileTreeOverlayOpen}
+        fileTreeAvailable={treeSource != null}
         overflow={overflow}
+        onToggleFileTreeOverlay={handleToggleFileTreeOverlay}
         setCommentSections={setCommentSections}
         setCommentFileByItemId={setCommentFileByItemId}
         setItems={setItems}
@@ -98,8 +123,9 @@ export function GHViewer() {
         setTreeSource={setTreeSource}
       />
       <CodeViewerSidebar
-        className="contain-strict [grid-area:tree]"
         commentSections={commentSections}
+        mobileOverlayOpen={fileTreeOverlayOpen}
+        onMobileClose={handleCloseFileTreeOverlay}
         onSelectComment={handleSelectComment}
         source={treeSource}
         onSelectItem={handleSelectTreeItem}
