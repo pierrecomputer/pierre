@@ -1,4 +1,5 @@
 import { preparePaths as sortCanonicalPathsFromPathStore } from '../path-store/src/builder.ts';
+import ghFixture from './gh-fixture.json';
 import linuxFixture from './linux-files.json';
 import pierreSnapshotFiles from './pierre-snapshot-files.json';
 
@@ -40,7 +41,7 @@ export const DEFAULT_VIRTUALIZATION_WORKLOAD_NAME = 'linux-5x';
 
 /** @type {LinuxKernelFixture} */
 export const linuxKernelFixture = linuxFixture;
-export { pierreSnapshotFiles };
+export { ghFixture, pierreSnapshotFiles };
 
 /**
  * Collects every ancestor folder that should start expanded for a path list.

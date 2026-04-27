@@ -15,6 +15,7 @@ const DEMO_PAGES = [
   { slug: 'density', label: 'Density' },
   { slug: 'search', label: 'Search' },
   { slug: 'git-status', label: 'Git Status' },
+  { slug: 'gh-fixture', label: 'gh fixture' },
   { slug: 'item-customization', label: 'Item Customization' },
   { slug: 'drag-and-drop', label: 'Drag and Drop' },
 ] as const;

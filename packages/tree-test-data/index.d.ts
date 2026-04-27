@@ -1,3 +1,22 @@
+export type GitHubFixtureStatus =
+  | 'added'
+  | 'deleted'
+  | 'ignored'
+  | 'modified'
+  | 'renamed'
+  | 'untracked';
+
+export interface GitHubFixtureGitStatusEntry {
+  path: string;
+  status: GitHubFixtureStatus;
+}
+
+export interface GitHubFixture {
+  gitStatus: GitHubFixtureGitStatusEntry[];
+  pathToItemId: Record<string, string>;
+  paths: string[];
+}
+
 export interface LinuxKernelFixture {
   files: string[];
   folders: string[];
@@ -24,6 +43,7 @@ export type VirtualizationWorkloadName =
 
 export const VIRTUALIZATION_WORKLOAD_NAMES: readonly VirtualizationWorkloadName[];
 export const DEFAULT_VIRTUALIZATION_WORKLOAD_NAME: VirtualizationWorkloadName;
+export const ghFixture: GitHubFixture;
 export const linuxKernelFixture: LinuxKernelFixture;
 export const pierreSnapshotFiles: string[];
 export function sortCanonicalPaths(files: readonly string[]): string[];
