@@ -20,7 +20,6 @@ import {
   removeSavedCommentSidebarEntry,
   upsertSavedCommentSidebarEntry,
 } from './utils';
-import { WorkerPoolStatus } from './WorkerPoolStatus';
 
 export function GHViewer() {
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
@@ -127,6 +126,7 @@ export function GHViewer() {
         mobileOverlayOpen={fileTreeOverlayOpen}
         onMobileClose={handleCloseFileTreeOverlay}
         onSelectComment={handleSelectComment}
+        scrollRef={scrollRef}
         source={treeSource}
         onSelectItem={handleSelectTreeItem}
       />
@@ -142,7 +142,6 @@ export function GHViewer() {
         onCommentSaved={handleCommentSaved}
         setItems={setItems}
       />
-      <WorkerPoolStatus scrollRef={scrollRef} />
     </div>
   );
 }

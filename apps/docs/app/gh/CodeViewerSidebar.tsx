@@ -1,7 +1,7 @@
 'use client';
 
 import { IconX } from '@pierre/icons';
-import { memo, useId, useState } from 'react';
+import { memo, type RefObject, useId, useState } from 'react';
 
 import { CodeViewerCommentsList } from './CodeViewerCommentsList';
 import { CodeViewerFileTree } from './CodeViewerFileTree';
@@ -10,6 +10,7 @@ import type {
   CodeViewerSavedCommentEntry,
   CodeViewerSavedCommentItem,
 } from './types';
+import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { cn } from '@/lib/utils';
 
 type SidebarTab = 'files' | 'comments';
@@ -21,6 +22,7 @@ interface CodeViewerSidebarProps {
   onMobileClose?(): void;
   onSelectComment?(comment: CodeViewerSavedCommentEntry): void;
   onSelectItem?(itemId: string): void;
+  scrollRef: RefObject<HTMLDivElement | null>;
   source: CodeViewerFileTreeSource | null;
 }
 
@@ -40,6 +42,7 @@ export const CodeViewerSidebar = memo(function CodeViewerSidebar({
   onMobileClose,
   onSelectComment,
   onSelectItem,
+  scrollRef,
   source,
 }: CodeViewerSidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
@@ -143,6 +146,7 @@ export const CodeViewerSidebar = memo(function CodeViewerSidebar({
             />
           </div>
         </div>
+        <WorkerPoolStatus scrollRef={scrollRef} />
       </div>
     </>
   );

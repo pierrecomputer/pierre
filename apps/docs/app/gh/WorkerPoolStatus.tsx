@@ -84,8 +84,8 @@ interface StatItemProps {
 function StatItem({ label, value }: StatItemProps) {
   return (
     <div className="flex justify-between">
-      <span className="text-gray-400">{label}:</span>
-      <span className="min-w-[3c] pl-[1ch] text-right text-white tabular-nums">
+      <span className="text-muted-foreground">{label}:</span>
+      <span className="text-foreground min-w-[3c] pl-[1ch] text-right tabular-nums">
         {value}
       </span>
     </div>
@@ -104,26 +104,26 @@ function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
   );
 
   const getStatusColor = () => {
-    if (stats.workersFailed) return 'bg-red-500';
-    if (stats.managerState === 'initialized') return 'bg-green-500';
-    if (stats.managerState === 'initializing') return 'bg-yellow-500';
-    return 'bg-gray-500';
+    if (stats.workersFailed) return 'bg-destructive';
+    if (stats.managerState === 'initialized') return 'bg-emerald-500';
+    if (stats.managerState === 'initializing') return 'bg-amber-500';
+    return 'bg-muted-foreground';
   };
 
   return (
     <div
-      className="fixed right-0 bottom-0 mr-4 mb-4 rounded-lg border border-gray-700 bg-gray-900/95 px-3 py-2 text-xs shadow-lg"
+      className="border-border bg-background text-muted-foreground shrink-0 border-t px-3 py-2 text-xs"
       style={{ fontFamily: 'var(--font-berkeley-mono)' }}
     >
-      <div className="mb-3 flex items-center justify-between gap-2 border-b border-gray-700 pb-2">
+      <div className="border-border mb-3 flex items-center justify-between gap-2 border-b pb-2">
         <div className="flex items-center gap-2">
           <div className={`h-2 w-2 rounded-full ${getStatusColor()}`}></div>
-          <span className="font-medium text-gray-300">Worker Pool</span>
+          <span className="text-foreground font-medium">CodeViewer Status</span>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={scrollTester.toggleState}
-            className="-mr-1 flex h-5 cursor-pointer items-center justify-center rounded p-2 text-gray-400 hover:bg-gray-700 hover:text-white"
+            className="text-muted-foreground hover:bg-muted hover:text-foreground -mr-1 flex h-5 cursor-pointer items-center justify-center rounded p-2"
             title={isBrrt ? 'Pause autoscroll' : 'Start autoscroll'}
           >
             {isBrrt ? 'no' : 'go'} brrt {isBrrt ? '⏸' : '▶'}
