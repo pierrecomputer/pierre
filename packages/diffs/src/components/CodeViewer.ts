@@ -359,12 +359,15 @@ export interface CodeViewerOptions<LAnnotation>
     CodeViewerSelectionCallbackOptions<LAnnotation> {
   hunkSeparators?: Exclude<HunkSeparators, 'custom'>;
   itemMetrics?: VirtualFileMetrics;
+  pointerEventsOnScroll?: boolean;
   smoothScrollSettings?: SmoothScrollSettings;
   stickyHeaders?: boolean;
   controlledSelection?: boolean;
   onSelectedLinesChange?(selection: CodeViewerLineSelection | null): void;
   viewerMetrics?: CodeViewerMetrics;
 }
+
+const DEFAULT_POINTER_EVENTS_RESTORE_DELAY_MS = 120;
 
 interface ScrollToAnimation {
   position: number;
@@ -423,6 +426,8 @@ export class CodeViewer<LAnnotation = undefined> {
   private lastContainerHeight = -1;
   private scrollTop: number = 0;
   private scrollDirty = true;
+  private pointerEventsRestoreTimer: ReturnType<typeof setTimeout> | undefined;
+  private pointerEventsDisabled = false;
   private height: number = 0;
   private heightDirty = true;
   private windowSpecs: VirtualWindowSpecs = { top: 0, bottom: 0 };
@@ -497,6 +502,42 @@ export class CodeViewer<LAnnotation = undefined> {
     return this.options.smoothScrollSettings ?? DEFAULT_SMOOTH_SCROLL_SETTINGS;
   }
 
+  private shouldDisablePointerEvents(): boolean {
+    return this.options.pointerEventsOnScroll !== true;
+  }
+
+  private clearPointerEventsTimer(): void {
+    if (this.pointerEventsRestoreTimer != null) {
+      clearTimeout(this.pointerEventsRestoreTimer);
+      this.pointerEventsRestoreTimer = undefined;
+    }
+  }
+
+  private suspendPointerEvents(): void {
+    if (!this.shouldDisablePointerEvents()) {
+      return;
+    }
+
+    this.clearPointerEventsTimer();
+    if (!this.pointerEventsDisabled) {
+      this.stickyContainer.style.pointerEvents = 'none';
+      this.pointerEventsDisabled = true;
+    }
+    this.pointerEventsRestoreTimer = setTimeout(
+      this.restorePointerEvents,
+      DEFAULT_POINTER_EVENTS_RESTORE_DELAY_MS
+    );
+  }
+
+  private restorePointerEvents = (): void => {
+    this.clearPointerEventsTimer();
+    if (!this.pointerEventsDisabled) {
+      return;
+    }
+    this.stickyContainer.style.removeProperty('pointer-events');
+    this.pointerEventsDisabled = false;
+  };
+
   private syncViewerMetrics(): void {
     const { gap, paddingBottom, paddingTop } = this.getViewerMetrics();
     this.stickyContainer.style.gap = `${gap}px`;
@@ -559,6 +600,7 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   public reset(): void {
+    this.restorePointerEvents();
     this.cleanAllRenderedItems();
     this.selectedLines = null;
     this.items.length = 0;
@@ -586,6 +628,7 @@ export class CodeViewer<LAnnotation = undefined> {
 
   public cleanUp(): void {
     this.reset();
+    this.restorePointerEvents();
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
     this.root?.removeEventListener('scroll', this.handleScroll);
@@ -668,6 +711,7 @@ export class CodeViewer<LAnnotation = undefined> {
     }
 
     // We'll attempt to scroll to this new target on the next render frame
+    this.suspendPointerEvents();
     this.pendingLayoutAnchor = undefined;
     this.pendingScrollTarget = pendingTarget;
     this.render();
@@ -1928,6 +1972,7 @@ export class CodeViewer<LAnnotation = undefined> {
     if (CodeViewer.__STOP) {
       return;
     }
+    this.suspendPointerEvents();
     this.scrollDirty = true;
     this.notifyScroll();
     this.render();
@@ -2117,6 +2162,7 @@ export class CodeViewer<LAnnotation = undefined> {
     if (rounded === this.renderState.scrollTop) {
       return;
     }
+    this.suspendPointerEvents();
     this.root.scrollTo({ top: rounded, behavior: 'instant' });
     this.renderState.scrollTop = rounded;
     this.scrollDirty = true;
