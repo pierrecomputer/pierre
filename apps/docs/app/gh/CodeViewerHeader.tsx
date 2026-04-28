@@ -1,5 +1,5 @@
 import { type CodeViewerItem, parsePatchFiles } from '@pierre/diffs';
-import { useStableCallback } from '@pierre/diffs/react';
+import { type CodeViewerHandle, useStableCallback } from '@pierre/diffs/react';
 import {
   IconDiffSplit,
   IconDiffUnified,
@@ -11,6 +11,7 @@ import type { GitStatusEntry } from '@pierre/trees';
 import {
   type Dispatch,
   memo,
+  type RefObject,
   type SetStateAction,
   type SyntheticEvent,
   useRef,
@@ -62,6 +63,7 @@ interface HeaderProps {
   overflow: 'wrap' | 'scroll';
   setOverflow: Dispatch<SetStateAction<'wrap' | 'scroll'>>;
   setKey: Dispatch<SetStateAction<number>>;
+  viewerRef: RefObject<CodeViewerHandle<CommentMetadata> | null>;
 }
 
 export const CodeViewerHeader = memo(function CodeViewerHeader({
@@ -78,6 +80,7 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
   setDiffStyle,
   setKey,
   setTreeSource,
+  viewerRef,
 }: HeaderProps) {
   const hasFetched = useRef(false);
   const [fetching, setFetching] = useState(false);
@@ -117,7 +120,6 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
         // Use the url as a cache key
         encodeURIComponent(prPath)
       );
-      console.log(parsedPatches);
       console.timeEnd('--  parsing patches');
 
       console.time('-- computing layout');
@@ -179,7 +181,6 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
       setCommentSections([]);
       setItems(items);
       console.timeEnd('-- computing layout');
-      console.log('total items', items.length);
       // DEBUG AREA
       // window.scrollTo({ top: 4762353 });
       // queueRender(() => {
@@ -288,6 +289,20 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
             className="w-26 flex-1 md:flex-none"
           >
             {fetching ? 'Fetching…' : 'Fetch Diff'}
+          </Button>
+          <Button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              viewerRef.current?.scrollTo({
+                type: 'position',
+                behavior: 'smooth',
+                position: 70_000,
+              });
+            }}
+          >
+            Test
           </Button>
         </div>
       </form>

@@ -120,6 +120,7 @@ export function GHViewer() {
         setDiffStyle={setDiffStyle}
         setKey={setKey}
         setTreeSource={setTreeSource}
+        viewerRef={viewerRef}
       />
       <CodeViewerSidebar
         commentSections={commentSections}
