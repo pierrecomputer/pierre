@@ -98,7 +98,12 @@ function CodeViewerFileTreeContent({
       }
 
       const itemId = source?.pathToItemId.get(path);
-      if (itemId != null) {
+      if (itemId == null) {
+        console.warn(
+          'CodeViewerFileTreeContent.handleClick: item does not exist for path:',
+          path
+        );
+      } else {
         onSelectItem(itemId);
       }
     }
@@ -111,7 +116,7 @@ function CodeViewerFileTreeContent({
         className
       )}
       model={model}
-      onClick={handleClick}
+      onClick={onSelectItem != null ? handleClick : undefined}
       style={DENSITY_OVERRIDE_STYLES}
     />
   );
