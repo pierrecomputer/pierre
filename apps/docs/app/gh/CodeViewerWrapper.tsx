@@ -285,21 +285,28 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
 
   const handleToggleItemCollapsed = useStableCallback((itemId: string) => {
     setItems((prev) => {
-      const next = [...prev];
-      const itemIndex = next.findIndex(
+      const viewer = viewerRef.current?.getInstance();
+      const itemIndex = prev.findIndex(
         (candidate) => candidate.id === itemId && isDiffItem(candidate)
       );
-      const item = next[itemIndex];
-
-      if (item == null || !isDiffItem(item)) {
+      const item = prev[itemIndex];
+      if (item == null || viewer == null) {
         return prev;
       }
 
+      const next = [...prev];
       next[itemIndex] = {
         ...item,
         collapsed: item.collapsed !== true,
         version: typeof item.version === 'number' ? ++item.version : 1,
       };
+      // NOTE(amadeus): If the top of the item is before the scrollTop, then
+      // we'll want to apply a scroll fix on the next render to ensure we
+      // keep the collapsed file in view and anchored
+      const itemTop = viewer.getTopForItem(itemId);
+      if (itemTop != null && itemTop < viewer.getScrollTop()) {
+        viewer.scrollTo({ type: 'item', id: item.id, align: 'start' });
+      }
       return next;
     });
   });
