@@ -83,6 +83,10 @@ function installDom() {
 
 function createRoot(): HTMLDivElement {
   const root = document.createElement('div');
+  root.scrollTo = (options?: ScrollToOptions | number, y?: number) => {
+    root.scrollTop =
+      typeof options === 'number' ? (y ?? 0) : (options?.top ?? root.scrollTop);
+  };
   Object.defineProperty(root, 'getBoundingClientRect', {
     value: () => ({
       bottom: 800,
@@ -104,6 +108,10 @@ function createRoot(): HTMLDivElement {
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function dispatchScroll(root: HTMLElement): void {
+  root.dispatchEvent(new window.Event('scroll'));
 }
 
 function makeFile(name: string, lineCount = 20): FileContents {
@@ -239,6 +247,70 @@ describe('CodeViewer item collapsed state', () => {
       const renderedItem = viewer.getRenderedItems()[0];
       expect(renderedItem).toBeDefined();
       expect(hasRenderedCode(renderedItem)).toBe(true);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('keeps rendering after many collapsed items shrink the layout', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeViewer();
+    const items: CodeViewerItem[] = Array.from({ length: 40 }, (_, index) => ({
+      id: `file:${index}`,
+      type: 'file',
+      file: makeFile(`example-${index}.txt`, 30),
+      version: 0,
+    }));
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, items);
+
+      root.scrollTop = 20_000;
+      dispatchScroll(root);
+      viewer.render(true);
+
+      const collapsedItems = items.map((item) => ({
+        ...item,
+        collapsed: true,
+        version: 1,
+      }));
+
+      await renderItems(viewer, collapsedItems);
+
+      expect(viewer.getRenderedItems().length).toBeGreaterThan(0);
+      const { top, bottom } = viewer.getWindowSpecs();
+      expect(top).toBeLessThanOrEqual(bottom);
+      expect(root.scrollTop).toBeLessThan(20_000);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('collapsed rendered items keep sticky specs available', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeViewer({ stickyHeaders: true });
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [
+        {
+          id: 'file:collapsed.txt',
+          type: 'file',
+          file: makeFile('collapsed.txt'),
+          collapsed: true,
+        },
+      ]);
+
+      const renderedItem = viewer.getRenderedItems()[0];
+      expect(renderedItem).toBeDefined();
+      expect(renderedItem.instance.getAdvancedStickySpecs()).toEqual({
+        topOffset: 0,
+        height: renderedItem.instance.getVirtualizedHeight(),
+      });
     } finally {
       viewer.cleanUp();
       await wait(0);

@@ -29,7 +29,6 @@ import {
   type DiffLineAnnotation,
   type GetHoveredLineResult,
   type LineAnnotation,
-  type VirtualWindowSpecs,
 } from '../index';
 import { areManagedSnapshotsEqual } from '../utils/areManagedSnapshotsEqual';
 import { renderDiffChildren } from './utils/renderDiffChildren';
@@ -92,7 +91,6 @@ export interface CodeViewerHandle<LAnnotation> {
   setSelectedLines(selection: CodeViewerLineSelection | null): void;
   getSelectedLines(): CodeViewerLineSelection | null;
   clearSelectedLines(): void;
-  getWindowSpecs(): VirtualWindowSpecs;
   getInstance(): CodeViewerClass<LAnnotation> | undefined;
 }
 
@@ -373,15 +371,6 @@ function CodeViewerInner<LAnnotation = undefined>(
         } else {
           instance.clearSelectedLines({ notify: false });
           emitSelectedLinesChange(null);
-        }
-      },
-      getWindowSpecs() {
-        const { instance } = cachedDataRef.current;
-        if (instance == null) {
-          console.error('CodeViewer.getWindowSpecs: no valid instance exists');
-          return { top: 0, bottom: 0 };
-        } else {
-          return instance.getWindowSpecs();
         }
       },
       getInstance() {

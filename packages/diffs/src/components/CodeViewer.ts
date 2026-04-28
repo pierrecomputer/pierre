@@ -961,6 +961,14 @@ export class CodeViewer<LAnnotation = undefined> {
     return item.top;
   }
 
+  public getTopForItem(id: string): number | undefined {
+    const item = this.idToItem.get(id);
+    if (item == null) {
+      return undefined;
+    }
+    return item.top;
+  }
+
   private createItem(
     input: CodeViewerItem<LAnnotation>,
     index: number,
@@ -2186,7 +2194,7 @@ export class CodeViewer<LAnnotation = undefined> {
     return roundToDevicePixel(this.getScrollTop()) === roundToDevicePixel(top);
   }
 
-  private getScrollTop(): number {
+  public getScrollTop(): number {
     if (!this.scrollDirty) {
       return this.scrollTop;
     }
@@ -2195,7 +2203,7 @@ export class CodeViewer<LAnnotation = undefined> {
     return this.scrollTop;
   }
 
-  private getHeight(): number {
+  public getHeight(): number {
     if (!this.heightDirty) {
       return this.height;
     }
@@ -2204,7 +2212,7 @@ export class CodeViewer<LAnnotation = undefined> {
     return this.height;
   }
 
-  private getScrollHeight(): number {
+  public getScrollHeight(): number {
     return this.scrollHeight;
   }
 
