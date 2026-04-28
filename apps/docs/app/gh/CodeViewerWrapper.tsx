@@ -15,6 +15,7 @@ import {
   type CodeViewerHandle,
   useStableCallback,
 } from '@pierre/diffs/react';
+import { IconChevronSm } from '@pierre/icons';
 import {
   type Dispatch,
   memo,
@@ -282,6 +283,27 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
     }
   );
 
+  const handleToggleItemCollapsed = useStableCallback((itemId: string) => {
+    setItems((prev) => {
+      const next = [...prev];
+      const itemIndex = next.findIndex(
+        (candidate) => candidate.id === itemId && isDiffItem(candidate)
+      );
+      const item = next[itemIndex];
+
+      if (item == null || !isDiffItem(item)) {
+        return prev;
+      }
+
+      next[itemIndex] = {
+        ...item,
+        collapsed: item.collapsed !== true,
+        version: typeof item.version === 'number' ? ++item.version : 1,
+      };
+      return next;
+    });
+  });
+
   const renderCommentAnnotation = useStableCallback(
     (
       annotation:
@@ -314,6 +336,21 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
           itemId={item.id}
           onDelete={handleRemoveComment}
           onToggleSelection={handleToggleCommentSelection}
+        />
+      );
+    }
+  );
+
+  const renderHeaderPrefix = useStableCallback(
+    (item: CodeViewerItem<CommentMetadata>) => {
+      if (item.type !== 'diff') {
+        return null;
+      }
+
+      return (
+        <CollapseDiffButton
+          collapsed={item.collapsed === true}
+          onToggle={() => handleToggleItemCollapsed(item.id)}
         />
       );
     }
@@ -358,11 +395,38 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
       onSelectedLinesChange={handleSetSelection}
       // To test annotations and headers and stuff...
       renderAnnotation={renderCommentAnnotation}
+      renderHeaderPrefix={renderHeaderPrefix}
       // metrics={CUSTOM_HEADER_METRICS}
       // renderCustomHeader={renderHeader}
     />
   );
 });
+
+interface CollapseDiffButtonProps {
+  collapsed: boolean;
+  onToggle(): void;
+}
+
+function CollapseDiffButton({ collapsed, onToggle }: CollapseDiffButtonProps) {
+  return (
+    <button
+      type="button"
+      aria-expanded={!collapsed}
+      aria-label={collapsed ? 'Expand diff' : 'Collapse diff'}
+      className="text-muted-foreground hover:bg-muted hover:text-foreground ml-[-8px] inline-flex size-6 cursor-pointer items-center justify-center rounded-md transition"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onToggle();
+      }}
+    >
+      <IconChevronSm
+        aria-hidden="true"
+        className={cn('size-4 transition-transform', collapsed && '-rotate-90')}
+      />
+    </button>
+  );
+}
 
 export const CUSTOM_HEADER_METRICS = {
   ...DEFAULT_VIRTUAL_FILE_METRICS,
