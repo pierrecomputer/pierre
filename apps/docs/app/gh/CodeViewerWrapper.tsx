@@ -298,7 +298,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
       next[itemIndex] = {
         ...item,
         collapsed: item.collapsed !== true,
-        version: typeof item.version === 'number' ? ++item.version : 1,
+        version: typeof item.version === 'number' ? item.version + 1 : 1,
       };
       // NOTE(amadeus): If the top of the item is before the scrollTop, then
       // we'll want to apply a scroll fix on the next render to ensure we
