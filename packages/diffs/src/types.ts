@@ -473,6 +473,7 @@ export type CodeViewerFileItem<T = undefined> = {
   file: FileContents;
   annotations?: LineAnnotation<T>[];
   version?: CodeViewerItemVersion;
+  collapsed?: boolean;
 };
 
 export type CodeViewerDiffItem<T = undefined> = {
@@ -481,6 +482,7 @@ export type CodeViewerDiffItem<T = undefined> = {
   fileDiff: FileDiffMetadata;
   annotations?: DiffLineAnnotation<T>[];
   version?: CodeViewerItemVersion;
+  collapsed?: boolean;
 };
 
 export type CodeViewerItem<T = undefined> =

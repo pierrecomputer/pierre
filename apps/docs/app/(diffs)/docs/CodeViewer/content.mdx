@@ -34,10 +34,13 @@ yourself.
   the whole surface.
 - Selection is viewer-wide, so the payload shape is `{ id, range }` instead of
   only a line range.
+- Set `collapsed: true` on an item to mount that file or diff as header-only.
+  Collapse state is part of the item snapshot, so publish a new `version` when
+  changing it for an existing item id.
 - Viewer-level options such as `viewerMetrics`, `itemMetrics`, `stickyHeaders`,
   `pointerEventsOnScroll`, and `smoothScrollSettings` tune the outer
   orchestrator. Most of the regular `File` / `FileDiff` options are still
-  forwarded to each item.
+  forwarded to each item, but `collapsed` is item-owned in `CodeViewer`.
 
 ### Examples
 

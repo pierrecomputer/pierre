@@ -213,7 +213,6 @@ const CODE_VIEWER_DIFF_OPTION_KEYS = [
   'disableLineNumbers',
   'overflow',
   'themeType',
-  'collapsed',
   'disableFileHeader',
   'disableVirtualizationBuffers',
   'preferredHighlighter',
@@ -246,7 +245,6 @@ const CODE_VIEWER_FILE_OPTION_KEYS = [
   'disableLineNumbers',
   'overflow',
   'themeType',
-  'collapsed',
   'disableFileHeader',
   'disableVirtualizationBuffers',
   'preferredHighlighter',
@@ -825,9 +823,9 @@ export class CodeViewer<LAnnotation = undefined> {
         item.instance.setMetrics(nextItemMetrics, true);
       }
       if (item.type === 'diff') {
-        item.instance.setOptions(this.createOptions(item.type, item.item.id));
+        item.instance.setOptions(this.createOptions(item.item));
       } else {
-        item.instance.setOptions(this.createOptions('file', item.item.id));
+        item.instance.setOptions(this.createOptions(item.item));
       }
     }
 
@@ -976,7 +974,7 @@ export class CodeViewer<LAnnotation = undefined> {
         version: input.version,
         index,
         instance: new VirtualizedFileDiff<LAnnotation>(
-          this.createOptions('diff', input.id),
+          this.createOptions(input),
           this,
           itemMetrics,
           this.workerManager,
@@ -994,7 +992,7 @@ export class CodeViewer<LAnnotation = undefined> {
       version: input.version,
       index,
       instance: new VirtualizedFile<LAnnotation>(
-        this.createOptions('file', input.id),
+        this.createOptions(input),
         this,
         itemMetrics,
         this.workerManager,
@@ -1150,15 +1148,16 @@ export class CodeViewer<LAnnotation = undefined> {
     }) as CodeViewerModeOptions<LAnnotation, TMode>[TKey] | undefined;
   }
 
-  private createOptions(mode: 'file', itemId: string): FileOptions<LAnnotation>;
   private createOptions(
-    mode: 'diff',
-    itemId: string
+    item: CodeViewerFileItem<LAnnotation>
+  ): FileOptions<LAnnotation>;
+  private createOptions(
+    item: CodeViewerDiffItem<LAnnotation>
   ): FileDiffOptions<LAnnotation>;
   private createOptions(
-    mode: CodeViewerMode,
-    itemId: string
+    item: CodeViewerItem<LAnnotation>
   ): FileOptions<LAnnotation> | FileDiffOptions<LAnnotation> {
+    const { id: itemId, type: mode } = item;
     const options =
       mode === 'file'
         ? ({
@@ -1181,6 +1180,7 @@ export class CodeViewer<LAnnotation = undefined> {
         target[key] = value;
       }
     }
+    target.collapsed = item.collapsed === true;
 
     for (const key of CODE_VIEWER_SHARED_CALLBACK_KEYS) {
       const callback = this.getWrappedOptionCallback(mode, key, itemId);
@@ -1383,6 +1383,11 @@ export class CodeViewer<LAnnotation = undefined> {
 
     item.item = nextItem;
     item.version = nextItem.version;
+    if (item.type === 'diff') {
+      item.instance.setOptions(this.createOptions(item.item));
+    } else {
+      item.instance.setOptions(this.createOptions(item.item));
+    }
     return true;
   }
 
