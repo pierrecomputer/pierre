@@ -11,7 +11,7 @@ import {
   test,
 } from 'bun:test';
 import { JSDOM } from 'jsdom';
-import { act, useState } from 'react';
+import { act, StrictMode, useState } from 'react';
 import { createRoot, hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 
@@ -258,11 +258,72 @@ describe('file-tree React lane', () => {
       act(() => {
         localRoot.unmount();
       });
+      expect(cleanUpSpy).toHaveBeenCalledTimes(0);
+      await flushDom();
       expect(cleanUpSpy).toHaveBeenCalledTimes(1);
       cleanUpSpy.mockRestore();
     } finally {
       localContainer.remove();
     }
+  });
+
+  test('keeps the model subscribed through StrictMode effect replay', async () => {
+    let capturedModel: InstanceType<
+      typeof import('../src/render/FileTree').FileTree
+    > | null = null;
+    const options = {
+      flattenEmptyDirectories: false,
+      initialExpandedPaths: ['src/'],
+      paths: ['README.md', 'src/index.ts', 'src/lib.ts'],
+      initialVisibleRowCount: 120 / 30,
+    } as const;
+
+    function Harness() {
+      const { model } = useFileTree(options);
+      capturedModel = model;
+      return <FileTreeReact model={model} />;
+    }
+
+    await actAndFlush(() => {
+      root.render(
+        <StrictMode>
+          <Harness />
+        </StrictMode>
+      );
+    });
+
+    const host = getHost(container);
+    expect(getItemButton(host, 'src/').getAttribute('aria-expanded')).toBe(
+      'true'
+    );
+    expect(getItemButton(host, 'src/index.ts')).not.toBeNull();
+
+    const model = capturedModel as {
+      getItem(path: string): import('../src').FileTreeItemHandle | null;
+    } | null;
+    if (model == null) {
+      throw new Error('expected model from useFileTree');
+    }
+
+    const sourceDirectory = model.getItem('src/');
+    if (
+      sourceDirectory == null ||
+      sourceDirectory.isDirectory() !== true ||
+      !('collapse' in sourceDirectory)
+    ) {
+      throw new Error('expected src directory item');
+    }
+
+    await actAndFlush(() => {
+      sourceDirectory.collapse();
+    });
+
+    expect(getItemButton(host, 'src/').getAttribute('aria-expanded')).toBe(
+      'false'
+    );
+    expect(
+      host.shadowRoot?.querySelector('[data-item-path="src/index.ts"]')
+    ).toBeNull();
   });
 
   test('can remount the same model instance after unmount', async () => {
