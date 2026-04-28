@@ -312,9 +312,21 @@ export class VirtualizedFile<
   }
 
   public getAdvancedStickySpecs(): StickySpecs | undefined {
-    if (this.renderRange == null || this.top == null) {
+    if (this.top == null) {
       return undefined;
     }
+
+    if (this.options.collapsed === true) {
+      return {
+        topOffset: this.top,
+        height: this.height,
+      };
+    }
+
+    if (this.renderRange == null) {
+      return undefined;
+    }
+
     const { bufferBefore, bufferAfter, totalLines } = this.renderRange;
     return {
       topOffset: this.top + bufferBefore + (totalLines === 0 ? bufferAfter : 0),
