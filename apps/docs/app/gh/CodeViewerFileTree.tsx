@@ -2,8 +2,9 @@
 
 import { useStableCallback } from '@pierre/diffs/react';
 import { FileTree, useFileTree } from '@pierre/trees/react';
-import { type CSSProperties, memo, type MouseEvent, useRef } from 'react';
+import { type CSSProperties, memo, useRef } from 'react';
 
+import type { FileTreePublicId } from '../../../../packages/trees/dist/model/publicTypes';
 import { BASE_FILE_TREE_OPTIONS } from './constants';
 import type { CodeViewerFileTreeSource } from './types';
 import { cn } from '@/lib/utils';
@@ -47,25 +48,6 @@ export const CodeViewerFileTree = memo(function CodeViewerFileTree({
   );
 });
 
-// Resolves the tree row underneath a click event by walking through the
-// shadow DOM via composedPath(). Returns null for folder clicks, or when the
-// event did not originate on a row button at all.
-function resolveClickedFilePath(event: MouseEvent<HTMLElement>): string | null {
-  for (const node of event.nativeEvent.composedPath()) {
-    if (!(node instanceof HTMLElement) || node.dataset.type !== 'item') {
-      continue;
-    }
-
-    if (node.dataset.itemType !== 'file') {
-      return null;
-    }
-
-    return node.dataset.itemPath ?? null;
-  }
-
-  return null;
-}
-
 interface CodeViewerFileTreeContentProps extends Omit<
   CodeViewerFileTreeProps,
   'source'
@@ -78,36 +60,27 @@ function CodeViewerFileTreeContent({
   onSelectItem,
   source,
 }: CodeViewerFileTreeContentProps) {
+  const onSelectionChange = useStableCallback(
+    (selectedPaths: readonly FileTreePublicId[]) => {
+      if (selectedPaths.length !== 1 || onSelectItem == null) {
+        return;
+      }
+      const [path] = selectedPaths;
+      const itemId = source?.pathToItemId.get(path);
+      if (itemId != null) {
+        onSelectItem(itemId);
+      }
+    }
+  );
+
   const { model } = useFileTree({
     ...BASE_FILE_TREE_OPTIONS,
     gitStatus: source.gitStatus,
     paths: source.paths,
     sort: source.sort,
+    onSelectionChange,
     itemHeight: 24,
   });
-
-  const handleClick = useStableCallback(
-    (event: MouseEvent<HTMLElement, globalThis.MouseEvent>) => {
-      if (onSelectItem == null) {
-        return;
-      }
-
-      const path = resolveClickedFilePath(event);
-      if (path == null) {
-        return;
-      }
-
-      const itemId = source?.pathToItemId.get(path);
-      if (itemId == null) {
-        console.warn(
-          'CodeViewerFileTreeContent.handleClick: item does not exist for path:',
-          path
-        );
-      } else {
-        onSelectItem(itemId);
-      }
-    }
-  );
 
   return (
     <FileTree
@@ -116,7 +89,6 @@ function CodeViewerFileTreeContent({
         className
       )}
       model={model}
-      onClick={onSelectItem != null ? handleClick : undefined}
       style={DENSITY_OVERRIDE_STYLES}
     />
   );
