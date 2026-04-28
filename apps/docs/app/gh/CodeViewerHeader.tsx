@@ -141,6 +141,7 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
           items.push({
             id,
             type: 'diff',
+            collapsed: fileDiff.type === 'deleted',
             fileDiff,
             version: 0,
           });
