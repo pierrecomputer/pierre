@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { FileTreeOptions } from '../model/publicTypes';
 import { FileTree } from '../render/FileTree';
+
+interface CleanUpRef {
+  timeout: ReturnType<typeof setTimeout> | null;
+  model: FileTree;
+}
 
 export interface UseFileTreeResult {
   model: FileTree;
@@ -13,17 +18,19 @@ export interface UseFileTreeResult {
 // runtime. Later option changes are intentionally ignored; callers must use
 // explicit model methods like resetPaths and setComposition.
 export function useFileTree(options: FileTreeOptions): UseFileTreeResult {
-  const modelRef = useRef<FileTree | null>(null);
-
-  modelRef.current ??= new FileTree(options);
-
+  const [model] = useState(() => new FileTree(options));
+  const cleanUpRef = useRef<CleanUpRef>({ timeout: null, model });
   useEffect(() => {
-    const model = modelRef.current;
+    const { current } = cleanUpRef;
+    // NOTE(amadeus): This is designed to ensure strict mode doesn't blow away
+    // our instance -- we wait a cycle to clean up
+    if (current.timeout != null) {
+      clearTimeout(current.timeout);
+      current.timeout = null;
+    }
     return () => {
-      model?.cleanUp();
-      modelRef.current = null;
+      current.timeout = setTimeout(() => current.model.cleanUp(), 1);
     };
   }, []);
-
-  return { model: modelRef.current };
+  return { model };
 }
