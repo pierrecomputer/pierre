@@ -9,4 +9,5 @@ export const BASE_FILE_TREE_OPTIONS = {
   id: 'gh-code-viewer-tree',
   initialExpansion: 'open',
   search: true,
+  stickyFolders: true,
 } as const satisfies Omit<FileTreeOptions, 'paths' | 'preparedInput'>;
