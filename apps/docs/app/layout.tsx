@@ -89,40 +89,64 @@ function worktreeTitlePrefix(): string {
 const WORKTREE_PREFIX = worktreeTitlePrefix();
 
 // Per-site branding (icons, OG/twitter) is set here explicitly so the
-// dispatcher route at `app/page.tsx` (outside both route groups) inherits it.
+// dispatcher route at `app/page.tsx` (outside the route groups) inherits it.
 const SITE = (process.env.NEXT_PUBLIC_SITE ?? 'diffs') as ProductId;
-const isTrees = SITE === 'trees';
 const SITE_PRODUCT = PRODUCTS[SITE];
-const PROD_ORIGIN = isTrees ? 'https://trees.software' : 'https://diffs.com';
+const PROD_ORIGIN_BY_SITE: Record<ProductId, string> = {
+  diffs: 'https://diffs.com',
+  trees: 'https://trees.software',
+  diffshub: 'https://diffshub.com',
+};
+const DEV_PORT_BY_SITE: Record<ProductId, string> = {
+  diffs: '3690',
+  trees: '3691',
+  diffshub: '3692',
+};
+const PROD_ORIGIN = PROD_ORIGIN_BY_SITE[SITE];
 // In dev, point `metadataBase` at localhost so OG previewers fetch
 // in-progress assets instead of whatever's deployed.
 const isDev = process.env.NODE_ENV !== 'production';
-const DEV_PORT = process.env.PORT ?? (isTrees ? '3691' : '3690');
+const DEV_PORT = process.env.PORT ?? DEV_PORT_BY_SITE[SITE];
 const SITE_ORIGIN = isDev ? `http://localhost:${DEV_PORT}` : PROD_ORIGIN;
 const baseTitle = `${SITE_PRODUCT.name}, from Pierre`;
 const taggedTitle = `${WORKTREE_PREFIX}${baseTitle}`;
 const description = SITE_PRODUCT.description;
-const SITE_ICONS: Metadata['icons'] = isTrees
-  ? {
-      icon: [
-        { url: '/trees-brand/icon.svg', type: 'image/svg+xml' },
-        { url: '/trees-brand/icon.ico', sizes: 'any' },
-      ],
-      apple: '/trees-brand/apple-icon.png',
-    }
-  : {
-      icon: [
-        { url: '/favicon.svg', type: 'image/svg+xml' },
-        { url: '/favicon.png', type: 'image/png' },
-      ],
-      apple: '/apple-touch-icon.png',
-    };
-const SITE_OG_IMAGE = isTrees
-  ? '/trees-brand/opengraph-image.png'
-  : '/diffs-brand/opengraph-image.png';
-const SITE_TWITTER_IMAGE = isTrees
-  ? '/trees-brand/twitter-image.png'
-  : '/diffs-brand/twitter-image.png';
+const SITE_ICONS_BY_SITE: Record<ProductId, Metadata['icons']> = {
+  diffs: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
+  trees: {
+    icon: [
+      { url: '/trees-brand/icon.svg', type: 'image/svg+xml' },
+      { url: '/trees-brand/icon.ico', sizes: 'any' },
+    ],
+    apple: '/trees-brand/apple-icon.png',
+  },
+  diffshub: {
+    icon: [
+      { url: '/diffshub-brand/icon.svg', type: 'image/svg+xml' },
+      { url: '/diffshub-brand/icon.png', type: 'image/png' },
+    ],
+    apple: '/diffshub-brand/apple-icon.png',
+  },
+};
+const SITE_OG_IMAGE_BY_SITE: Record<ProductId, string> = {
+  diffs: '/diffs-brand/opengraph-image.png',
+  trees: '/trees-brand/opengraph-image.png',
+  diffshub: '/diffshub-brand/opengraph-image.png',
+};
+const SITE_TWITTER_IMAGE_BY_SITE: Record<ProductId, string> = {
+  diffs: '/diffs-brand/twitter-image.png',
+  trees: '/trees-brand/twitter-image.png',
+  diffshub: '/diffshub-brand/twitter-image.png',
+};
+const SITE_ICONS = SITE_ICONS_BY_SITE[SITE];
+const SITE_OG_IMAGE = SITE_OG_IMAGE_BY_SITE[SITE];
+const SITE_TWITTER_IMAGE = SITE_TWITTER_IMAGE_BY_SITE[SITE];
 const themeBootstrapScript = `(${String(function applyInitialTheme() {
   try {
     const storedTheme = window.localStorage.getItem('theme');
