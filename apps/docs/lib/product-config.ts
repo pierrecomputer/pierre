@@ -1,4 +1,4 @@
-export type ProductId = 'diffs' | 'trees';
+export type ProductId = 'diffs' | 'trees' | 'diffshub';
 
 export interface ProductConfig {
   id: ProductId;
@@ -16,6 +16,7 @@ export interface ProductConfig {
 
 const siteProduct = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
 const isTrees = siteProduct === 'trees';
+const isDiffshub = siteProduct === 'diffshub';
 
 export const PRODUCTS: Record<ProductId, ProductConfig> = {
   diffs: {
@@ -47,12 +48,27 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
     installCommand: 'bun i @pierre/trees',
     githubUrl: 'https://github.com/pierrecomputer/pierre',
   },
+  // Stub microsite. No package, no docs yet — copy is intentionally
+  // placeholder until we figure out what diffshub.com actually is.
+  diffshub: {
+    id: 'diffshub',
+    name: 'Diffshub',
+    tagline: 'Coming soon',
+    description: 'A focused microsite from The Pierre Computer Co.',
+    llmsDescription: 'Diffshub is a microsite from The Pierre Computer Co.',
+    basePath: '',
+    docsPath: '/',
+    packageName: '',
+    installCommand: '',
+    githubUrl: 'https://github.com/pierrecomputer/pierre',
+  },
 };
 
 /** External base URL for the other product's site. */
 const EXTERNAL_URLS: Record<ProductId, string> = {
   diffs: 'https://diffs.com',
   trees: 'https://trees.software',
+  diffshub: 'https://diffshub.com',
 };
 
 /**
@@ -74,10 +90,12 @@ export function getProductConfig(productId: ProductId): ProductConfig {
 }
 
 /**
- * Determine which product we're in. With diffs and trees split into separate
- * sites (selected by NEXT_PUBLIC_SITE), every page in a build belongs to a
- * single product, so the pathname is unused.
+ * Determine which product we're in. With diffs, trees, and diffshub split
+ * into separate sites (selected by NEXT_PUBLIC_SITE), every page in a build
+ * belongs to a single product, so the pathname is unused.
  */
 export function getProductFromPathname(_pathname: string): ProductConfig {
-  return isTrees ? PRODUCTS.trees : PRODUCTS.diffs;
+  if (isDiffshub) return PRODUCTS.diffshub;
+  if (isTrees) return PRODUCTS.trees;
+  return PRODUCTS.diffs;
 }

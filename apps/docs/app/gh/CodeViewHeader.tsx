@@ -1,24 +1,30 @@
 import { type CodeViewItem, parsePatchFiles } from '@pierre/diffs';
 import { type CodeViewHandle, useStableCallback } from '@pierre/diffs/react';
 import {
+  IconArrow,
+  IconCodeStyleBars,
   IconDiffSplit,
   IconDiffUnified,
+  IconEyeSlash,
   IconFileTreeFill,
-  IconParagraph,
-  IconWordWrap,
+  IconGearFill,
+  IconSymbolDiffstat,
 } from '@pierre/icons';
 import type { GitStatusEntry } from '@pierre/trees';
+import Link from 'next/link';
 import {
   type Dispatch,
   memo,
   type RefObject,
   type SetStateAction,
   type SyntheticEvent,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
 
 import { DEFAULT_PR_URL } from './constants';
+import { DiffsHubLogo } from './DiffsHubLogo';
 import type {
   CodeViewCommentFileByItemId,
   CodeViewCommentSidebarFile,
@@ -32,10 +38,22 @@ import {
   mapChangeTypeToGitStatus,
 } from './utils';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
 const COMMIT_HASH_METADATA_PATTERN = /^From\s+([a-f0-9]+)\s/im;
 const INITIAL_COLLAPSED_DIFF_LINE_THRESHOLD = 200_000;
+
+/** Full-row hit target: native label activates the nested switch when the caption is clicked. */
+const VIEW_OPTION_LABEL_CLASS =
+  'w-full flex cursor-pointer items-center justify-between gap-4 px-2 py-1.5 text-sm';
 
 function getPatchTreePathPrefix(
   patchMetadata: string | undefined,
@@ -80,12 +98,28 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   setDiffStyle,
   setKey,
   setTreeSource,
-  viewerRef,
 }: HeaderProps) {
   const hasFetched = useRef(false);
-  const [fetching, setFetching] = useState(false);
+  /** Placeholder toggles for the settings menu; not wired to the viewer yet. */
+  const [showBackgrounds, setShowBackgrounds] = useState(true);
+  const [lineNumbers, setLineNumbers] = useState(true);
+  const [indicatorStyle, setIndicatorStyle] = useState<
+    'bars' | 'classic' | 'none'
+  >('bars');
   const lastLoadedURLRef = useRef<string | null>(null);
   const [url, setURL] = useState(DEFAULT_PR_URL);
+  /** Radix `align` is not CSS-breakpoint aware; mirror Tailwind `md` (768px). */
+  const [viewOptionsMenuAlign, setViewOptionsMenuAlign] = useState<
+    'start' | 'end'
+  >('start');
+  useLayoutEffect(() => {
+    const media = window.matchMedia('(min-width: 768px)');
+    const sync = () => setViewOptionsMenuAlign(media.matches ? 'end' : 'start');
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
   const renderPullRequest = useStableCallback(async (input: string) => {
     const normalizedURL = input.trim();
     const prPath = getPullRequestPath(normalizedURL);
@@ -94,7 +128,6 @@ export const CodeViewHeader = memo(function CodeViewHeader({
       return undefined;
     }
 
-    setFetching(true);
     lastLoadedURLRef.current = normalizedURL;
 
     try {
@@ -191,8 +224,6 @@ export const CodeViewHeader = memo(function CodeViewHeader({
     } catch (error) {
       console.error('Error fetching or processing patch:', error);
       return undefined;
-    } finally {
-      setFetching(false);
     }
   });
   const handleSubmit = useStableCallback(
@@ -208,104 +239,167 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   return (
     <div
       className={cn(
-        'border-border bg-muted max-w-full border-t border-b p-2 px-5',
+        'flex flex-wrap md:flex-nowrap border-border bg-background items-center gap-2.5 rounded-xl border p-3 md:py-2 shadow-xs',
         className
       )}
     >
+      <DiffsHubLogo className="absolute top-3 left-[50%] -translate-x-1/2 md:static md:translate-x-0" />
+      <span className="text-md hidden text-neutral-300 md:-mr-2 md:inline-flex">
+        /
+      </span>
       <form
-        className="flex w-full flex-col gap-2 md:flex-row md:gap-2"
+        className="order-last flex w-full flex-col gap-2 md:order-none md:flex-row md:gap-2"
         // eslint-disable-next-line @typescript-eslint/no-misused-promises
         onSubmit={handleSubmit}
       >
-        <div className="bg-background focus-within:ring-ring flex w-full flex-col items-start rounded-md border-1 px-3 py-3 focus-within:ring-2 focus-within:ring-offset-[-1px] md:flex-row md:items-center md:gap-2 md:py-1">
-          <label className="text-muted-foreground block text-sm text-nowrap">
-            GitHub URL
-          </label>
-          <input
-            className="block w-full text-sm focus-visible:outline-none"
-            value={url}
-            onChange={({ currentTarget }) => setURL(currentTarget.value)}
-            placeholder="e.g. https://github.com/twbs/bootstrap/pull/42139"
-          />
-        </div>
-        <div className="flex w-full gap-2 md:w-auto">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-pressed={fileTreeOverlayOpen}
-            disabled={!fileTreeAvailable}
-            title={fileTreeOverlayOpen ? 'Hide file tree' : 'Show file tree'}
-            className="border-border/80 shrink-0 rounded-lg md:hidden"
-            onClick={onToggleFileTreeOverlay}
-          >
-            <IconFileTreeFill className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-pressed={diffStyle === 'split'}
-            title={
-              diffStyle === 'split'
-                ? 'Switch to unified view'
-                : 'Switch to split view'
-            }
-            className="border-border/80 shrink-0 rounded-lg"
-            onClick={() =>
-              setDiffStyle((currentStyle) =>
-                currentStyle === 'split' ? 'unified' : 'split'
-              )
-            }
-          >
-            {diffStyle === 'split' ? (
-              <IconDiffSplit className="size-4" />
-            ) : (
-              <IconDiffUnified className="size-4" />
-            )}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-pressed={overflow === 'wrap'}
-            title={overflow === 'wrap' ? 'Disable wrapping' : 'Enable wrapping'}
-            className="border-border/80 shrink-0 rounded-lg"
-            onClick={() =>
-              setOverflow((currentOverflow) =>
-                currentOverflow === 'wrap' ? 'scroll' : 'wrap'
-              )
-            }
-          >
-            {overflow === 'wrap' ? (
-              <IconWordWrap className="size-4" />
-            ) : (
-              <IconParagraph className="size-4" />
-            )}
-          </Button>
-          <Button
-            type="submit"
-            disabled={fetching}
-            className="w-26 flex-1 md:flex-none"
-          >
-            {fetching ? 'Fetching…' : 'Fetch Diff'}
-          </Button>
-          <Button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              viewerRef.current?.scrollTo({
-                type: 'position',
-                behavior: 'smooth',
-                position: 70_000,
-              });
-            }}
-          >
-            Test
-          </Button>
-        </div>
+        <input
+          className="text-md focus:bg-accent block h-8 w-full min-w-[220px] rounded-md px-2 text-center focus-visible:outline-none md:h-9 md:text-left"
+          value={url}
+          onChange={({ currentTarget }) => setURL(currentTarget.value)}
+          placeholder="e.g. https://github.com/twbs/bootstrap/pull/42139"
+        />
+        <Button
+          type="submit"
+          variant="default"
+          size="icon"
+          className="hidden md:flex"
+        >
+          <IconArrow className="size-4 rotate-180" />
+        </Button>
       </form>
+      <div className="bg-border mx-1 hidden h-5 w-px md:block" />
+      <div className="flex w-full items-center gap-2 md:w-auto">
+        <Button
+          type="button"
+          variant="muted"
+          size="icon"
+          aria-pressed={fileTreeOverlayOpen}
+          disabled={!fileTreeAvailable}
+          title={fileTreeOverlayOpen ? 'Hide file tree' : 'Show file tree'}
+          className="border-border/80 shrink-0 rounded-lg md:hidden"
+          onClick={onToggleFileTreeOverlay}
+        >
+          <IconFileTreeFill className="size-4" />
+        </Button>
+        <ButtonGroup
+          className="ml-auto hidden md:flex"
+          value={diffStyle}
+          onValueChange={(value) => setDiffStyle(value as 'split' | 'unified')}
+        >
+          <ButtonGroupItem value="split" className="size-9 p-0">
+            <IconDiffSplit className="size-4" />
+            <span className="sr-only">Split view</span>
+          </ButtonGroupItem>
+          <ButtonGroupItem value="unified" className="size-9 p-0">
+            <IconDiffUnified className="size-4" />
+            <span className="sr-only">Unified view</span>
+          </ButtonGroupItem>
+        </ButtonGroup>
+        <DropdownMenu open={viewOptionsOpen} onOpenChange={setViewOptionsOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant={viewOptionsOpen ? 'outline' : 'muted'}
+              size="icon"
+              title="View options"
+              className="rounded-lg"
+            >
+              <IconGearFill className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align={viewOptionsMenuAlign} className="w-56">
+            <DropdownMenuItem
+              className="cursor-default p-0"
+              onSelect={(event) => event.preventDefault()}
+            >
+              <label className={VIEW_OPTION_LABEL_CLASS}>
+                <span className="min-w-0 flex-1">Backgrounds</span>
+                <Switch
+                  checked={showBackgrounds}
+                  onCheckedChange={setShowBackgrounds}
+                />
+              </label>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-default p-0"
+              onSelect={(event) => event.preventDefault()}
+            >
+              <label className={VIEW_OPTION_LABEL_CLASS}>
+                <span className="min-w-0 flex-1">Line numbers</span>
+                <Switch
+                  checked={lineNumbers}
+                  onCheckedChange={setLineNumbers}
+                />
+              </label>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-default p-0"
+              onSelect={(event) => event.preventDefault()}
+            >
+              <label className={VIEW_OPTION_LABEL_CLASS}>
+                <span className="min-w-0 flex-1">Word wrap</span>
+                <Switch
+                  checked={overflow === 'wrap'}
+                  onCheckedChange={(checked) =>
+                    setOverflow(checked ? 'wrap' : 'scroll')
+                  }
+                  className="shrink-0"
+                />
+              </label>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="w-full px-2 focus:bg-transparent md:hidden"
+              onSelect={(event) => event.preventDefault()}
+            >
+              <span>Diff layout</span>
+              <ButtonGroup
+                className="ml-auto"
+                value={diffStyle}
+                onValueChange={(value) =>
+                  setDiffStyle(value as 'split' | 'unified')
+                }
+              >
+                <ButtonGroupItem value="split" className="size-7 p-0">
+                  <IconDiffSplit className="size-4" />
+                  <span className="sr-only">Split view</span>
+                </ButtonGroupItem>
+                <ButtonGroupItem value="unified" className="size-7 p-0">
+                  <IconDiffUnified className="size-4" />
+                  <span className="sr-only">Unified view</span>
+                </ButtonGroupItem>
+              </ButtonGroup>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="w-full px-2 focus:bg-transparent"
+              onSelect={(event) => event.preventDefault()}
+            >
+              <span>Indicator style</span>
+              <ButtonGroup
+                className="ml-auto"
+                value={indicatorStyle}
+                onValueChange={(value) =>
+                  setIndicatorStyle(value as 'bars' | 'classic' | 'none')
+                }
+              >
+                <ButtonGroupItem value="bars" className="size-7 p-0">
+                  <IconCodeStyleBars size="12" />
+                </ButtonGroupItem>
+                <ButtonGroupItem value="classic" className="size-7 p-0">
+                  <IconSymbolDiffstat size="12" />
+                </ButtonGroupItem>
+                <ButtonGroupItem value="none" className="size-7 p-0">
+                  <IconEyeSlash size="12" />
+                </ButtonGroupItem>
+              </ButtonGroup>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <div className="bg-border mx-1 hidden h-5 w-px md:block" />
+        <Button asChild className="ml-auto md:ml-0" variant="muted">
+          <Link href="/">New…</Link>
+        </Button>
+      </div>
+      <hr className="border-border/80 w-full md:hidden" />
     </div>
   );
 });

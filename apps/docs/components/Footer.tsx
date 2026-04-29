@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { getExternalUrl, PRODUCTS } from '@/lib/product-config';
 
 const siteProduct = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
+const isDiffs = siteProduct === 'diffs';
 const isTrees = siteProduct === 'trees';
+const isDiffshub = siteProduct === 'diffshub';
 
 const linkClass =
   'text-muted-foreground hover:text-foreground text-sm transition-colors';
@@ -13,10 +15,11 @@ const linkClass =
 export default function Footer() {
   const diffsExternal = getExternalUrl('diffs');
   const treesExternal = getExternalUrl('trees');
+  const diffshubExternal = getExternalUrl('diffshub');
 
   return (
     <footer className="pt-12 pb-12">
-      <div className="grid-cols- grid gap-3 md:grid-cols-5 md:justify-between">
+      <div className="grid-cols- grid gap-3 md:grid-cols-6 md:justify-between">
         <div className="text-muted-foreground text-sm">
           &copy; {new Date().getFullYear()} The Pierre Computer Co.
         </div>
@@ -24,22 +27,7 @@ export default function Footer() {
         <div>
           <h4 className="mb-2 text-sm font-medium">Diffs</h4>
           <nav className="flex flex-col gap-1">
-            {isTrees ? (
-              <>
-                <a href={diffsExternal} className={linkClass}>
-                  Home
-                </a>
-                <a href={`${diffsExternal}/docs`} className={linkClass}>
-                  Docs
-                </a>
-                <a href={`${diffsExternal}/playground`} className={linkClass}>
-                  Playground
-                </a>
-                <a href={`${diffsExternal}/theme`} className={linkClass}>
-                  Theme
-                </a>
-              </>
-            ) : (
+            {isDiffs ? (
               <>
                 <Link href="/" className={linkClass}>
                   Home
@@ -53,6 +41,21 @@ export default function Footer() {
                 <Link href="/theme" className={linkClass}>
                   Theme
                 </Link>
+              </>
+            ) : (
+              <>
+                <a href={diffsExternal} className={linkClass}>
+                  Home
+                </a>
+                <a href={`${diffsExternal}/docs`} className={linkClass}>
+                  Docs
+                </a>
+                <a href={`${diffsExternal}/playground`} className={linkClass}>
+                  Playground
+                </a>
+                <a href={`${diffsExternal}/theme`} className={linkClass}>
+                  Theme
+                </a>
               </>
             )}
           </nav>
@@ -85,6 +88,20 @@ export default function Footer() {
                   Docs
                 </a>
               </>
+            )}
+          </nav>
+        </div>
+        <div>
+          <h4 className="mb-2 text-sm font-medium">Diffshub</h4>
+          <nav className="flex flex-col gap-1">
+            {isDiffshub ? (
+              <Link href="/" className={linkClass}>
+                Home
+              </Link>
+            ) : (
+              <a href={diffshubExternal} className={linkClass}>
+                Home
+              </a>
             )}
           </nav>
         </div>
