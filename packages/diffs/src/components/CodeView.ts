@@ -855,7 +855,8 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   public instanceChanged(
-    instance: VirtualizedFile<LAnnotation> | VirtualizedFileDiff<LAnnotation>
+    instance: VirtualizedFile<LAnnotation> | VirtualizedFileDiff<LAnnotation>,
+    layoutDirty: boolean
   ): void {
     // NOTE(amadeus): This is technically broken at the moment. What we
     // probably SHOULD do to fix is, it push the instance to some sort of
@@ -867,7 +868,9 @@ export class CodeView<LAnnotation = undefined> {
         'CodeView.instanceChanged: An instance has changed that is not registered'
       );
     }
-    this.markItemLayoutDirty(item);
+    if (layoutDirty) {
+      this.markItemLayoutDirty(item);
+    }
     this.render();
   }
 

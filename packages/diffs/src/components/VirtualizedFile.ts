@@ -89,7 +89,7 @@ export class VirtualizedFile<
     }
     // CodeView will mark dirty for us
     if (this.isSimpleMode()) {
-      this.virtualizer.instanceChanged(this);
+      this.virtualizer.instanceChanged(this, true);
     }
   }
 
@@ -425,7 +425,7 @@ export class VirtualizedFile<
       return;
     }
     this.forceRenderOverride = true;
-    this.virtualizer.instanceChanged(this);
+    this.virtualizer.instanceChanged(this, false);
   }
 
   override render({

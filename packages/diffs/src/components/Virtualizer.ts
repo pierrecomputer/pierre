@@ -116,9 +116,11 @@ export class Virtualizer {
     queueRender(this.computeRenderRangeAndEmit);
   }
 
-  instanceChanged(instance: SubscribedInstance): void {
+  instanceChanged(instance: SubscribedInstance, domDirty: boolean): void {
     this.instancesChanged.add(instance);
-    this.markDOMDirty();
+    if (domDirty) {
+      this.markDOMDirty();
+    }
     queueRender(this.computeRenderRangeAndEmit);
   }
 

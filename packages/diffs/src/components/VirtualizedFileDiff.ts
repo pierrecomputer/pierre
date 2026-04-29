@@ -120,7 +120,7 @@ export class VirtualizedFileDiff<
     }
     // CodeView will mark dirty for us
     if (this.isSimpleMode()) {
-      this.virtualizer.instanceChanged(this);
+      this.virtualizer.instanceChanged(this, true);
     }
   }
 
@@ -488,7 +488,7 @@ export class VirtualizedFileDiff<
     );
     this.computeApproximateSize();
     this.renderRange = undefined;
-    this.virtualizer.instanceChanged(this);
+    this.virtualizer.instanceChanged(this, true);
   };
 
   public setVisibility(visible: boolean): void {
@@ -515,7 +515,7 @@ export class VirtualizedFileDiff<
       return;
     }
     this.forceRenderOverride = true;
-    this.virtualizer.instanceChanged(this);
+    this.virtualizer.instanceChanged(this, false);
   }
 
   // Compute the approximate size of the file using cached line heights.
