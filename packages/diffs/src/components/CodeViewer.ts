@@ -482,7 +482,7 @@ export class CodeViewer<LAnnotation = undefined> {
     this.stickyOffset.style.contain = 'layout size';
     this.stickyContainer.style.position = 'sticky';
     this.stickyContainer.style.width = '100%';
-    this.stickyContainer.style.contain = 'layout style contents';
+    this.stickyContainer.style.contain = 'layout style inline-size';
     this.stickyContainer.style.isolation = 'isolate';
     this.stickyContainer.style.display = 'flex';
     this.stickyContainer.style.flexDirection = 'column';
@@ -549,7 +549,7 @@ export class CodeViewer<LAnnotation = undefined> {
     }
     this.root = root;
     this.container ??= document.createElement('div');
-    this.container.style.contain = 'layout size style contents';
+    this.container.style.contain = 'layout size style';
     this.syncViewerMetrics();
     this.container.appendChild(this.stickyOffset);
     this.container.appendChild(this.stickyContainer);
