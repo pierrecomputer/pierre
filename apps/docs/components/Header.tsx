@@ -13,7 +13,12 @@ import { useEffect, useState } from 'react';
 
 import { HeaderMobileMenu } from './HeaderMobileMenu';
 import { Button } from './ui/button';
-import { getProductFromPathname } from '@/lib/product-config';
+import {
+  getExternalUrl,
+  getProductFromPathname,
+  type ProductId,
+  PRODUCTS,
+} from '@/lib/product-config';
 import { cn } from '@/lib/utils';
 
 export interface HeaderProps {
@@ -53,6 +58,11 @@ function NavLink({ href, basePath, children }: NavLinkProps) {
     </Button>
   );
 }
+
+// Order in which we render cross-site links in the desktop nav. Diffshub is
+// intentionally last so the long-standing Diffs↔Trees pair stays first when
+// viewed from either of those two sites.
+const OTHER_PRODUCT_IDS: ProductId[] = ['diffs', 'trees', 'diffshub'];
 
 interface IconLinkProps {
   href: string;
@@ -157,42 +167,29 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
           <NavLink href="/" basePath={product.basePath}>
             Home
           </NavLink>
-          <NavLink href="/docs" basePath={product.basePath}>
-            Docs
-          </NavLink>
-          {product.id === 'diffs' ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className="text-muted-foreground gap-0.5 px-2 font-normal"
-            >
-              <Link
-                href="https://trees.software"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Trees
-                <IconArrowUpRight />
-              </Link>
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className="text-muted-foreground gap-0.5 px-2 font-normal"
-            >
-              <Link
-                href="https://diffs.com"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Diffs
-                <IconArrowUpRight />
-              </Link>
-            </Button>
+          {product.id !== 'diffshub' && (
+            <NavLink href="/docs" basePath={product.basePath}>
+              Docs
+            </NavLink>
           )}
+          {OTHER_PRODUCT_IDS.filter((id) => id !== product.id).map((id) => (
+            <Button
+              key={id}
+              variant="ghost"
+              size="sm"
+              asChild
+              className="text-muted-foreground gap-0.5 px-2 font-normal"
+            >
+              <Link
+                href={getExternalUrl(id)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {PRODUCTS[id].name}
+                <IconArrowUpRight />
+              </Link>
+            </Button>
+          ))}
 
           <div className="border-border mx-2 h-5 w-px border-l" />
         </div>

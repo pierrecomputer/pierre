@@ -144,7 +144,7 @@ const EXCLUDED_CONSTANTS = new Set([
   'THEMING_PALETTE_DARK',
 ]);
 
-const SEE_ALSO: Record<ProductId, Product['seeAlso']> = {
+const SEE_ALSO: Record<Exclude<ProductId, 'diffshub'>, Product['seeAlso']> = {
   diffs: [
     {
       label: '@pierre/trees',
@@ -493,22 +493,27 @@ function generateLlmsFullTxt(product: Product): string {
 
 // ── Main ────────────────────────────────────────────────────────────────────
 
-const PRODUCT_SECTIONS: Record<ProductId, readonly string[]> = {
+// Only the products that actually ship docs need llms.txt output. Stub
+// microsites (e.g. `diffshub`) have nothing to generate and intentionally
+// don't appear in these records or the SEE_ALSO map above.
+type LlmsProductId = Exclude<ProductId, 'diffshub'>;
+
+const PRODUCT_SECTIONS: Record<LlmsProductId, readonly string[]> = {
   diffs: DIFFS_SECTIONS,
   trees: TREES_SECTIONS,
 };
 
-const DOCS_PREFIX: Record<ProductId, string> = {
+const DOCS_PREFIX: Record<LlmsProductId, string> = {
   diffs: '(diffs)/docs',
   trees: '(trees)/docs',
 };
 
-const LLMS_DOCS_URL: Record<ProductId, string> = {
+const LLMS_DOCS_URL: Record<LlmsProductId, string> = {
   diffs: 'https://diffs.com/docs',
   trees: 'https://trees.software/docs',
 };
 
-function resolveProductId(): ProductId {
+function resolveProductId(): LlmsProductId {
   const site = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
   if (site !== 'diffs' && site !== 'trees') {
     throw new Error(

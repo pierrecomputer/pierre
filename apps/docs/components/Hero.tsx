@@ -21,8 +21,15 @@ export interface HeroProps {
 export function Hero({ productId }: HeroProps) {
   const [copied, setCopied] = useState(false);
   const product = getProductConfig(productId);
+  // Diffshub has no published package, so there's no version line to render.
+  // Diffs and Trees each ship their own package; pick the matching one.
   const packageJson =
-    productId === 'diffs' ? diffsPackageJson : treesPackageJson;
+    productId === 'diffs'
+      ? diffsPackageJson
+      : productId === 'trees'
+        ? treesPackageJson
+        : null;
+  const hasInstallCommand = product.installCommand !== '';
 
   const copyToClipboard = async () => {
     try {
@@ -42,9 +49,17 @@ export function Hero({ productId }: HeroProps) {
         {product.tagline}
       </h1>
       <p className="text-md text-muted-foreground mb-2 max-w-[740px] text-pretty md:text-lg lg:text-xl">
-        <code>{product.packageName}</code>{' '}
-        {product.description.replace(`${product.packageName} is `, 'is ')} Made
-        with love by{' '}
+        {product.packageName !== '' && (
+          <>
+            <code>{product.packageName}</code>{' '}
+            {product.description.replace(
+              `${product.packageName} is `,
+              'is '
+            )}{' '}
+          </>
+        )}
+        {product.packageName === '' && <>{product.description} </>}
+        Made with love by{' '}
         <Link
           target="_blank"
           href="https://pierre.computer"
@@ -55,39 +70,43 @@ export function Hero({ productId }: HeroProps) {
         .
       </p>
 
-      <div className="flex flex-col gap-3 min-[460px]:flex-row min-[460px]:items-center">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => void copyToClipboard()}
-              className="inline-flex items-center gap-4 rounded-lg bg-neutral-900 px-5 py-3 font-mono text-sm tracking-tight text-white transition-colors hover:bg-neutral-800 md:text-base dark:border dark:border-white/20 dark:bg-black dark:hover:border-white/30"
-            >
-              <div className="size-4 min-[460px]:hidden" />
-              <span className="mx-auto text-[95%] min-[460px]:mx-0">
-                {product.installCommand}
-              </span>
-              {copied ? <IconCheck /> : <IconCopyFill />}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{'Copy to clipboard'}</p>
-          </TooltipContent>
-        </Tooltip>
-        <Button
-          variant="secondary"
-          asChild
-          size="xl"
-          className="h-11 rounded-lg px-5 text-sm md:h-12 md:text-base"
-        >
-          <Link href={product.docsPath}>
-            <IconBook />
-            Documentation
-          </Link>
-        </Button>
-      </div>
-      <p className="text-muted-foreground mt-2 text-sm">
-        Currently v{packageJson.version}
-      </p>
+      {hasInstallCommand && (
+        <div className="flex flex-col gap-3 min-[460px]:flex-row min-[460px]:items-center">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => void copyToClipboard()}
+                className="inline-flex items-center gap-4 rounded-lg bg-neutral-900 px-5 py-3 font-mono text-sm tracking-tight text-white transition-colors hover:bg-neutral-800 md:text-base dark:border dark:border-white/20 dark:bg-black dark:hover:border-white/30"
+              >
+                <div className="size-4 min-[460px]:hidden" />
+                <span className="mx-auto text-[95%] min-[460px]:mx-0">
+                  {product.installCommand}
+                </span>
+                {copied ? <IconCheck /> : <IconCopyFill />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{'Copy to clipboard'}</p>
+            </TooltipContent>
+          </Tooltip>
+          <Button
+            variant="secondary"
+            asChild
+            size="xl"
+            className="h-11 rounded-lg px-5 text-sm md:h-12 md:text-base"
+          >
+            <Link href={product.docsPath}>
+              <IconBook />
+              Documentation
+            </Link>
+          </Button>
+        </div>
+      )}
+      {packageJson != null && (
+        <p className="text-muted-foreground mt-2 text-sm">
+          Currently v{packageJson.version}
+        </p>
+      )}
     </section>
   );
 }
@@ -138,6 +157,15 @@ function TreesIcon() {
   );
 }
 
+// Placeholder hero icon for the diffshub stub microsite. Reuses the diffs
+// glyph so the brand looks coherent until we ship real artwork. Swap this
+// out once design lands.
+function DiffshubIcon() {
+  return <DiffsIcon />;
+}
+
 function HeroIcon({ productId }: { productId: ProductId }) {
-  return productId === 'diffs' ? <DiffsIcon /> : <TreesIcon />;
+  if (productId === 'trees') return <TreesIcon />;
+  if (productId === 'diffshub') return <DiffshubIcon />;
+  return <DiffsIcon />;
 }

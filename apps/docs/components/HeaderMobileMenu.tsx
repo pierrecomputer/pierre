@@ -7,11 +7,16 @@ import {
   DIFFS_THEME_PATH,
   getExternalUrl,
   type ProductConfig,
+  type ProductId,
   PRODUCTS,
 } from '@/lib/product-config';
 
 const siteProduct = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
-const isTrees = siteProduct === 'trees';
+const isDiffs = siteProduct === 'diffs';
+
+// Order matches Header.tsx so the desktop and mobile navs render the same
+// list of cross-site links.
+const OTHER_PRODUCT_IDS: ProductId[] = ['diffs', 'trees', 'diffshub'];
 
 export interface HeaderMobileMenuProps {
   isOpen: boolean;
@@ -57,36 +62,28 @@ export function HeaderMobileMenu({
         <MobileNavLink href={product.basePath !== '' ? product.basePath : '/'}>
           Home
         </MobileNavLink>
-        <MobileNavLink href={product.docsPath}>Docs</MobileNavLink>
+        {product.id !== 'diffshub' && (
+          <MobileNavLink href={product.docsPath}>Docs</MobileNavLink>
+        )}
         {product.themePath != null && (
           <MobileNavLink href={product.themePath}>Theme</MobileNavLink>
         )}
-        {product.id === 'diffs' && (
+        {OTHER_PRODUCT_IDS.filter((id) => id !== product.id).map((id) => (
+          <MobileNavLink key={id} href={getExternalUrl(id)} external>
+            {PRODUCTS[id].name}
+          </MobileNavLink>
+        ))}
+        {/* Theme lives only on the diffs site. From any other site, link out
+            to it; on the diffs site itself we already rendered it above via
+            `product.themePath`. */}
+        {!isDiffs && (
           <MobileNavLink
-            href={isTrees ? PRODUCTS.trees.basePath : getExternalUrl('trees')}
-            external={!isTrees}
+            href={`${getExternalUrl('diffs')}${DIFFS_THEME_PATH}`}
+            external
           >
-            Trees
+            Theme
           </MobileNavLink>
         )}
-        {product.id === 'trees' && (
-          <MobileNavLink
-            href={isTrees ? getExternalUrl('diffs') : '/'}
-            external={isTrees}
-          >
-            Diffs
-          </MobileNavLink>
-        )}
-        <MobileNavLink
-          href={
-            isTrees
-              ? `${getExternalUrl('diffs')}${DIFFS_THEME_PATH}`
-              : DIFFS_THEME_PATH
-          }
-          external={isTrees}
-        >
-          Theme
-        </MobileNavLink>
       </nav>
     </>
   );
