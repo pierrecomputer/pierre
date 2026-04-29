@@ -844,6 +844,7 @@ export interface ProcessFileConflictData {
 }
 
 export interface AppliedThemeStyleCache {
+  theme: DiffsThemeNames | ThemesType;
   themeStyles: string;
   themeType: ThemeTypes;
   baseThemeType: 'light' | 'dark' | undefined;

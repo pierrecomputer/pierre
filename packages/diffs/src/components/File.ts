@@ -36,6 +36,7 @@ import { areFilesEqual } from '../utils/areFilesEqual';
 import { areLineAnnotationsEqual } from '../utils/areLineAnnotationsEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
+import { areThemesEqual } from '../utils/areThemesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
@@ -194,18 +195,37 @@ export class File<LAnnotation = undefined> {
       return;
     }
     this.mergeOptions({ themeType });
+    this.applyCachedThemeState(themeType);
+  }
+
+  private applyCachedThemeState(themeType: ThemeTypes): boolean {
     if (
       typeof this.options.theme === 'string' ||
       this.fileContainer == null ||
       this.appliedThemeCSS == null
     ) {
-      return;
+      return false;
+    }
+    const effectiveThemeType = this.appliedThemeCSS.baseThemeType ?? themeType;
+    if (this.appliedThemeCSS.themeType === effectiveThemeType) {
+      return false;
     }
     this.applyThemeState(
       this.fileContainer,
       this.appliedThemeCSS.themeStyles,
       themeType,
       this.appliedThemeCSS.baseThemeType
+    );
+    return true;
+  }
+
+  private hasThemeChanged(): boolean {
+    return (
+      this.appliedThemeCSS != null &&
+      !areThemesEqual(
+        this.appliedThemeCSS.theme,
+        this.options.theme ?? DEFAULT_THEMES
+      )
     );
   }
 
@@ -408,6 +428,7 @@ export class File<LAnnotation = undefined> {
     }
     const nextRenderRange = collapsed ? undefined : renderRange;
     const previousRenderRange = this.renderRange;
+    const themeChanged = this.hasThemeChanged();
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
@@ -419,9 +440,10 @@ export class File<LAnnotation = undefined> {
       !forceRender &&
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !didFileChange &&
-      !annotationsChanged
+      !annotationsChanged &&
+      !themeChanged
     ) {
-      return false;
+      return this.applyCachedThemeState(themeType);
     }
 
     this.renderRange = nextRenderRange;
@@ -452,6 +474,7 @@ export class File<LAnnotation = undefined> {
       fileContainer,
       containerWrapper
     );
+    this.applyCachedThemeState(themeType);
 
     if (collapsed) {
       this.removeRenderedCode();
@@ -495,7 +518,7 @@ export class File<LAnnotation = undefined> {
         !this.canPartiallyRender(
           forceRender,
           annotationsChanged,
-          didFileChange
+          didFileChange || themeChanged
         ) ||
         !this.applyPartialRender(previousRenderRange, nextRenderRange)
       ) {
@@ -750,11 +773,15 @@ export class File<LAnnotation = undefined> {
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const effectiveThemeType = baseThemeType ?? themeType;
+    const currentTheme = this.options.theme ?? DEFAULT_THEMES;
+    const theme =
+      typeof currentTheme === 'string' ? currentTheme : { ...currentTheme };
     if (
       this.themeCSSStyle?.parentNode === shadowRoot &&
       this.appliedThemeCSS?.themeStyles === themeStyles &&
       this.appliedThemeCSS.themeType === effectiveThemeType
     ) {
+      this.appliedThemeCSS.theme = theme;
       return;
     }
     this.themeCSSStyle = upsertHostThemeStyle({
@@ -765,6 +792,7 @@ export class File<LAnnotation = undefined> {
     this.appliedThemeCSS =
       this.themeCSSStyle != null
         ? {
+            theme,
             themeStyles,
             themeType: effectiveThemeType,
             baseThemeType,

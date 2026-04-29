@@ -50,6 +50,7 @@ import { areFilesEqual } from '../utils/areFilesEqual';
 import { areHunkDataEqual } from '../utils/areHunkDataEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
+import { areThemesEqual } from '../utils/areThemesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
@@ -371,18 +372,37 @@ export class FileDiff<LAnnotation = undefined> {
       return;
     }
     this.mergeOptions({ themeType });
+    this.applyCachedThemeState(themeType);
+  }
+
+  private applyCachedThemeState(themeType: ThemeTypes): boolean {
     if (
       typeof this.options.theme === 'string' ||
       this.fileContainer == null ||
       this.appliedThemeCSS == null
     ) {
-      return;
+      return false;
+    }
+    const effectiveThemeType = this.appliedThemeCSS.baseThemeType ?? themeType;
+    if (this.appliedThemeCSS.themeType === effectiveThemeType) {
+      return false;
     }
     this.applyThemeState(
       this.fileContainer,
       this.appliedThemeCSS.themeStyles,
       themeType,
       this.appliedThemeCSS.baseThemeType
+    );
+    return true;
+  }
+
+  private hasThemeChanged(): boolean {
+    return (
+      this.appliedThemeCSS != null &&
+      !areThemesEqual(
+        this.appliedThemeCSS.theme,
+        this.options.theme ?? DEFAULT_THEMES
+      )
     );
   }
 
@@ -682,8 +702,9 @@ export class FileDiff<LAnnotation = undefined> {
         'FileDiff.render: attempting to call render after cleaned up'
       );
     }
-    const { collapsed = false } = this.options;
+    const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
+    const themeChanged = this.hasThemeChanged();
     const filesDidChange =
       oldFile != null &&
       newFile != null &&
@@ -701,6 +722,7 @@ export class FileDiff<LAnnotation = undefined> {
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !forceRender &&
       !annotationsChanged &&
+      !themeChanged &&
       // If using the fileDiff API, lets check to see if they are equal to
       // avoid doing work
       ((fileDiff != null && fileDiff === this.fileDiff) ||
@@ -708,7 +730,7 @@ export class FileDiff<LAnnotation = undefined> {
         // equal
         (fileDiff == null && !filesDidChange))
     ) {
-      return false;
+      return this.applyCachedThemeState(themeType);
     }
 
     const { renderRange: previousRenderRange } = this;
@@ -737,11 +759,8 @@ export class FileDiff<LAnnotation = undefined> {
 
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
 
-    const {
-      disableErrorHandling = false,
-      disableFileHeader = false,
-      themeType = 'system',
-    } = this.options;
+    const { disableErrorHandling = false, disableFileHeader = false } =
+      this.options;
 
     if (disableFileHeader) {
       // Remove existing header from DOM
@@ -756,6 +775,7 @@ export class FileDiff<LAnnotation = undefined> {
       fileContainer,
       containerWrapper
     );
+    this.applyCachedThemeState(themeType);
 
     if (collapsed) {
       this.removeRenderedCode();
@@ -802,7 +822,7 @@ export class FileDiff<LAnnotation = undefined> {
         this.canPartiallyRender(
           forceRender,
           annotationsChanged,
-          filesDidChange || diffDidChange
+          filesDidChange || diffDidChange || themeChanged
         ) &&
         this.applyPartialRender({
           previousRenderRange,
@@ -1310,11 +1330,15 @@ export class FileDiff<LAnnotation = undefined> {
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const effectiveThemeType = baseThemeType ?? themeType;
+    const currentTheme = this.options.theme ?? DEFAULT_THEMES;
+    const theme =
+      typeof currentTheme === 'string' ? currentTheme : { ...currentTheme };
     if (
       this.themeCSSStyle?.parentNode === shadowRoot &&
       this.appliedThemeCSS?.themeStyles === themeStyles &&
       this.appliedThemeCSS.themeType === effectiveThemeType
     ) {
+      this.appliedThemeCSS.theme = theme;
       return;
     }
     this.themeCSSStyle = upsertHostThemeStyle({
@@ -1325,6 +1349,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.appliedThemeCSS =
       this.themeCSSStyle != null
         ? {
+            theme,
             themeStyles,
             themeType: effectiveThemeType,
             baseThemeType,
