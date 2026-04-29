@@ -1692,6 +1692,7 @@ export class CodeViewer<LAnnotation = undefined> {
     }
     const height = this.getHeight();
     let currentScrollTop = this.getScrollTop();
+    const currentRootScrollTop = currentScrollTop;
     // This boolean tracks whether we are expecting some sort of major layout
     // change, which means we need to re-calculate our window from a new
     // anchor computed position after we re-compute the layout
@@ -1723,6 +1724,11 @@ export class CodeViewer<LAnnotation = undefined> {
         }
       }
     }
+    // Recomputing layout can shrink the scroll range, for example when items
+    // collapse, so clamp before deriving the render window for this frame.
+    if (recomputeScrollTop) {
+      currentScrollTop = this.clampScrollTop(currentScrollTop);
+    }
 
     // From our currentScrollTop, we should compute where we might be headed
     // towards, if we have a pending scroll target and/or animation in progress
@@ -1741,6 +1747,18 @@ export class CodeViewer<LAnnotation = undefined> {
       (this.renderState.scrollTop === -1 ||
         Math.abs(frameScrollTop - this.renderState.scrollTop) >
           height + this.config.overscrollSize * 2);
+
+    let appliedScrollTop = currentRootScrollTop;
+    if (
+      this.pendingScrollTarget != null &&
+      frameScrollTop !== appliedScrollTop
+    ) {
+      // Programmatic scrolls render the target window. Apply the target scroll
+      // before DOM window mutations so the browser does not have to reconcile
+      // a large virtualized DOM change against an old scrollTop.
+      this.applyScrollFix(frameScrollTop, appliedScrollTop);
+      appliedScrollTop = frameScrollTop;
+    }
 
     // If we are doing a fitPerfectly render than we should not attempt to anchor
     if (fitPerfectly) {
@@ -1840,17 +1858,19 @@ export class CodeViewer<LAnnotation = undefined> {
       anchoredScrollTop != null ? anchoredScrollTop - currentScrollTop : 0;
 
     let renderedScrollTop = frameScrollTop;
-    if (this.pendingScrollTarget == null && anchoredScrollTop != null) {
-      this.applyScrollFix(anchoredScrollTop);
-      renderedScrollTop = anchoredScrollTop;
+    if (this.pendingScrollTarget == null) {
+      renderedScrollTop = anchoredScrollTop ?? frameScrollTop;
+      if (renderedScrollTop !== appliedScrollTop) {
+        this.applyScrollFix(renderedScrollTop, appliedScrollTop);
+      }
     } else if (this.pendingScrollTarget != null) {
       const targetScrollTop = this.advanceScrollAnimation(
         timestamp,
         anchorScrollDelta
       );
       if (targetScrollTop != null) {
-        if (targetScrollTop !== currentScrollTop) {
-          this.applyScrollFix(targetScrollTop);
+        if (targetScrollTop !== appliedScrollTop) {
+          this.applyScrollFix(targetScrollTop, appliedScrollTop);
         }
         renderedScrollTop = targetScrollTop;
         if (
@@ -2021,7 +2041,7 @@ export class CodeViewer<LAnnotation = undefined> {
             anchor != null ? this.resolveAnchoredScrollTop(anchor) : undefined;
           if (anchoredScrollTop != null) {
             const resizeAnchorDelta = anchoredScrollTop - currentScrollTop;
-            this.applyScrollFix(anchoredScrollTop);
+            this.applyScrollFix(anchoredScrollTop, currentScrollTop);
             if (this.scrollAnimation != null) {
               // if we had to apply a scroll fix then we should make sure to
               // match the scroll fix delta to the scrollAnimation position to
@@ -2167,19 +2187,29 @@ export class CodeViewer<LAnnotation = undefined> {
    * Apply a device-pixel-rounded scroll position if it differs from the last
    * rendered/applied scrollTop we've already recorded in renderState.
    */
-  private applyScrollFix(target: number): void {
+  private applyScrollFix(target: number, currentScrollTop?: number): void {
     if (this.root == null) {
       return;
     }
-    const rounded = roundToDevicePixel(target);
-    if (rounded === this.renderState.scrollTop) {
+    const rounded = roundToDevicePixel(this.clampScrollTop(target));
+    const roundedCurrentScrollTop = roundToDevicePixel(
+      currentScrollTop ?? this.scrollTop
+    );
+    if (
+      rounded === this.renderState.scrollTop &&
+      rounded === roundedCurrentScrollTop
+    ) {
       return;
     }
     this.suspendPointerEvents();
-    this.root.scrollTo({ top: rounded, behavior: 'instant' });
+    if (rounded !== roundedCurrentScrollTop) {
+      this.root.scrollTo({ top: rounded, behavior: 'instant' });
+    }
+    // Keep cached scroll state in sync with writes we performed ourselves, so
+    // later reads do not need to touch layout just to discover the same value.
     this.renderState.scrollTop = rounded;
-    this.scrollDirty = true;
-    this.heightDirty = true;
+    this.scrollTop = rounded;
+    this.scrollDirty = false;
   }
 
   /**
