@@ -1,5 +1,6 @@
-import { describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
+import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { diffPatch, finalBlankLinePatch, malformedPatch } from './mocks';
@@ -9,6 +10,10 @@ import {
   countSplitRows,
   verifyPatchHunkValues,
 } from './testUtils';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 describe('parsePatchFiles', () => {
   const result = parsePatchFiles(diffPatch);
