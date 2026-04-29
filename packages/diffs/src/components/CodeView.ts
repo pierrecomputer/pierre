@@ -1,6 +1,6 @@
 import {
   DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS,
-  DEFAULT_CODE_VIEWER_METRICS,
+  DEFAULT_CODE_VIEW_METRICS,
   DEFAULT_SMOOTH_SCROLL_SETTINGS,
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
@@ -14,16 +14,16 @@ import {
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
-  CodeViewerDiffItem,
-  CodeViewerFileItem,
-  CodeViewerItem,
-  CodeViewerItemScrollTarget,
-  CodeViewerItemVersion,
-  CodeViewerLineScrollTarget,
-  CodeViewerMetrics,
-  CodeViewerPositionScrollTarget,
-  CodeViewerScrollBehavior,
-  CodeViewerScrollTarget,
+  CodeViewDiffItem,
+  CodeViewFileItem,
+  CodeViewItem,
+  CodeViewItemScrollTarget,
+  CodeViewItemVersion,
+  CodeViewLineScrollTarget,
+  CodeViewMetrics,
+  CodeViewPositionScrollTarget,
+  CodeViewScrollBehavior,
+  CodeViewScrollTarget,
   HunkSeparators,
   SelectionSide,
   SmoothScrollSettings,
@@ -79,72 +79,72 @@ interface AdvancedVirtualizedBaseItem {
    * when rendered. */
   element: HTMLElement | undefined;
   /** Last controlled version observed for this record. */
-  version: CodeViewerItemVersion | undefined;
+  version: CodeViewItemVersion | undefined;
 }
 
-interface CodeViewerDiffItemContext<
+interface CodeViewDiffItemContext<
   LAnnotation,
 > extends AdvancedVirtualizedBaseItem {
   type: 'diff';
   /** Latest item snapshot for this record. Controlled updates can replace it. */
-  item: CodeViewerDiffItem<LAnnotation>;
+  item: CodeViewDiffItem<LAnnotation>;
   /** Virtualized diff instance responsible for rendering this item. */
   instance: VirtualizedFileDiff<LAnnotation>;
 }
 
-interface CodeViewerFileItemContext<
+interface CodeViewFileItemContext<
   LAnnotation,
 > extends AdvancedVirtualizedBaseItem {
   type: 'file';
   /** Latest item snapshot for this record. Controlled updates can replace it. */
-  item: CodeViewerFileItem<LAnnotation>;
+  item: CodeViewFileItem<LAnnotation>;
   /** Virtualized file instance responsible for rendering this item. */
   instance: VirtualizedFile<LAnnotation>;
 }
 
-type CodeViewerContextItem<LAnnotation> =
-  | CodeViewerDiffItemContext<LAnnotation>
-  | CodeViewerFileItemContext<LAnnotation>;
+type CodeViewContextItem<LAnnotation> =
+  | CodeViewDiffItemContext<LAnnotation>
+  | CodeViewFileItemContext<LAnnotation>;
 
-export interface CodeViewerRenderedDiffItem<LAnnotation> {
+export interface CodeViewRenderedDiffItem<LAnnotation> {
   id: string;
   type: 'diff';
-  item: CodeViewerDiffItem<LAnnotation>;
-  version: CodeViewerItemVersion | undefined;
+  item: CodeViewDiffItem<LAnnotation>;
+  version: CodeViewItemVersion | undefined;
   element: HTMLElement;
   instance: VirtualizedFileDiff<LAnnotation>;
 }
 
-export interface CodeViewerRenderedFileItem<LAnnotation> {
+export interface CodeViewRenderedFileItem<LAnnotation> {
   id: string;
   type: 'file';
-  item: CodeViewerFileItem<LAnnotation>;
-  version: CodeViewerItemVersion | undefined;
+  item: CodeViewFileItem<LAnnotation>;
+  version: CodeViewItemVersion | undefined;
   element: HTMLElement;
   instance: VirtualizedFile<LAnnotation>;
 }
 
-export type CodeViewerRenderedItem<LAnnotation> =
-  | CodeViewerRenderedDiffItem<LAnnotation>
-  | CodeViewerRenderedFileItem<LAnnotation>;
+export type CodeViewRenderedItem<LAnnotation> =
+  | CodeViewRenderedDiffItem<LAnnotation>
+  | CodeViewRenderedFileItem<LAnnotation>;
 
-export interface CodeViewerLineSelection {
+export interface CodeViewLineSelection {
   id: string;
   range: SelectedLineRange;
 }
 
-export interface CodeViewerCoordinator<LAnnotation> {
+export interface CodeViewCoordinator<LAnnotation> {
   hasHeaderRenderers: boolean;
   hasAnnotationRenderer: boolean;
   hasGutterRenderer: boolean;
   onSnapshotChange(
-    snapshot: CodeViewerRenderedItem<LAnnotation>[] | undefined
+    snapshot: CodeViewRenderedItem<LAnnotation>[] | undefined
   ): void;
 }
 
-export type CodeViewerScrollListener<LAnnotation> = (
+export type CodeViewScrollListener<LAnnotation> = (
   scrollTop: number,
-  viewer: CodeViewer<LAnnotation>
+  viewer: CodeView<LAnnotation>
 ) => void;
 
 type OverloadCallbackArgs<TCallback> = TCallback extends (
@@ -169,27 +169,27 @@ type OverloadDiffCallbackArgs<
   TKey extends keyof FileDiffOptions<LAnnotation>,
 > = OverloadCallbackArgs<NonNullable<FileDiffOptions<LAnnotation>[TKey]>>;
 
-type CodeViewerFileOptionCallback<
+type CodeViewFileOptionCallback<
   LAnnotation,
   TKey extends keyof FileOptions<LAnnotation>,
 > = (
   ...args: [
     ...OverloadFileCallbackArgs<LAnnotation, TKey>,
-    context: CodeViewerFileItemContext<LAnnotation>,
+    context: CodeViewFileItemContext<LAnnotation>,
   ]
 ) => CallbackReturn<NonNullable<FileOptions<LAnnotation>[TKey]>>;
 
-type CodeViewerDiffOptionCallback<
+type CodeViewDiffOptionCallback<
   LAnnotation,
   TKey extends keyof FileDiffOptions<LAnnotation>,
 > = (
   ...args: [
     ...OverloadDiffCallbackArgs<LAnnotation, TKey>,
-    context: CodeViewerDiffItemContext<LAnnotation>,
+    context: CodeViewDiffItemContext<LAnnotation>,
   ]
 ) => CallbackReturn<NonNullable<FileDiffOptions<LAnnotation>[TKey]>>;
 
-type CodeViewerOptionCallback<
+type CodeViewOptionCallback<
   LAnnotation,
   TKey extends keyof FileOptions<LAnnotation> &
     keyof FileDiffOptions<LAnnotation>,
@@ -197,18 +197,18 @@ type CodeViewerOptionCallback<
   (
     ...args: [
       ...OverloadFileCallbackArgs<LAnnotation, TKey>,
-      context: CodeViewerFileItemContext<LAnnotation>,
+      context: CodeViewFileItemContext<LAnnotation>,
     ]
   ): CallbackReturn<NonNullable<FileOptions<LAnnotation>[TKey]>>;
   (
     ...args: [
       ...OverloadDiffCallbackArgs<LAnnotation, TKey>,
-      context: CodeViewerDiffItemContext<LAnnotation>,
+      context: CodeViewDiffItemContext<LAnnotation>,
     ]
   ): CallbackReturn<NonNullable<FileDiffOptions<LAnnotation>[TKey]>>;
 };
 
-const CODE_VIEWER_DIFF_OPTION_KEYS = [
+const CODE_VIEW_DIFF_OPTION_KEYS = [
   'theme',
   'disableLineNumbers',
   'overflow',
@@ -238,9 +238,9 @@ const CODE_VIEWER_DIFF_OPTION_KEYS = [
   'disableErrorHandling',
 ] as const;
 
-type CodeViewerDiffOptionKeys = (typeof CODE_VIEWER_DIFF_OPTION_KEYS)[number];
+type CodeViewDiffOptionKeys = (typeof CODE_VIEW_DIFF_OPTION_KEYS)[number];
 
-const CODE_VIEWER_FILE_OPTION_KEYS = [
+const CODE_VIEW_FILE_OPTION_KEYS = [
   'theme',
   'disableLineNumbers',
   'overflow',
@@ -262,51 +262,49 @@ const CODE_VIEWER_FILE_OPTION_KEYS = [
   'disableErrorHandling',
 ] as const;
 
-type CodeViewerPassThroughOptions<LAnnotation> = Pick<
+type CodeViewPassThroughOptions<LAnnotation> = Pick<
   FileDiffOptions<LAnnotation>,
-  CodeViewerDiffOptionKeys
+  CodeViewDiffOptionKeys
 >;
 
-type CodeViewerMode = 'file' | 'diff';
+type CodeViewMode = 'file' | 'diff';
 
-type CodeViewerModeItemContext<
+type CodeViewModeItemContext<
   LAnnotation,
-  TMode extends CodeViewerMode,
+  TMode extends CodeViewMode,
 > = TMode extends 'file'
-  ? CodeViewerFileItemContext<LAnnotation>
-  : CodeViewerDiffItemContext<LAnnotation>;
+  ? CodeViewFileItemContext<LAnnotation>
+  : CodeViewDiffItemContext<LAnnotation>;
 
-type CodeViewerModeOptionCallback<
+type CodeViewModeOptionCallback<
   LAnnotation,
-  TMode extends CodeViewerMode,
-  TKey extends CodeViewerSharedCallbackKeys | CodeViewerSelectionCallbackKeys,
+  TMode extends CodeViewMode,
+  TKey extends CodeViewSharedCallbackKeys | CodeViewSelectionCallbackKeys,
 > = TMode extends 'file'
-  ? CodeViewerFileOptionCallback<LAnnotation, TKey>
-  : CodeViewerDiffOptionCallback<LAnnotation, TKey>;
+  ? CodeViewFileOptionCallback<LAnnotation, TKey>
+  : CodeViewDiffOptionCallback<LAnnotation, TKey>;
 
-type CodeViewerModeInternalOptionCallback<
+type CodeViewModeInternalOptionCallback<
   LAnnotation,
-  TMode extends CodeViewerMode,
-  TKey extends CodeViewerSharedCallbackKeys | CodeViewerSelectionCallbackKeys,
+  TMode extends CodeViewMode,
+  TKey extends CodeViewSharedCallbackKeys | CodeViewSelectionCallbackKeys,
 > = (
   ...args: [
     ...OverloadCallbackArgs<
-      NonNullable<CodeViewerModeOptions<LAnnotation, TMode>[TKey]>
+      NonNullable<CodeViewModeOptions<LAnnotation, TMode>[TKey]>
     >,
-    CodeViewerModeItemContext<LAnnotation, TMode>,
+    CodeViewModeItemContext<LAnnotation, TMode>,
   ]
-) => CallbackReturn<
-  NonNullable<CodeViewerModeOptions<LAnnotation, TMode>[TKey]>
->;
+) => CallbackReturn<NonNullable<CodeViewModeOptions<LAnnotation, TMode>[TKey]>>;
 
-type CodeViewerModeOptions<
+type CodeViewModeOptions<
   LAnnotation,
-  TMode extends CodeViewerMode,
+  TMode extends CodeViewMode,
 > = TMode extends 'file'
   ? FileOptions<LAnnotation>
   : FileDiffOptions<LAnnotation>;
 
-const CODE_VIEWER_SHARED_CALLBACK_KEYS = [
+const CODE_VIEW_SHARED_CALLBACK_KEYS = [
   'renderCustomHeader',
   'renderHeaderPrefix',
   'renderHeaderMetadata',
@@ -323,46 +321,46 @@ const CODE_VIEWER_SHARED_CALLBACK_KEYS = [
   'onTokenLeave',
 ] as const;
 
-const CODE_VIEWER_SELECTION_CALLBACK_KEYS = [
+const CODE_VIEW_SELECTION_CALLBACK_KEYS = [
   'onLineSelected',
   'onLineSelectionStart',
   'onLineSelectionChange',
   'onLineSelectionEnd',
 ] as const;
 
-type CodeViewerSharedCallbackKeys =
-  (typeof CODE_VIEWER_SHARED_CALLBACK_KEYS)[number];
+type CodeViewSharedCallbackKeys =
+  (typeof CODE_VIEW_SHARED_CALLBACK_KEYS)[number];
 
-type CodeViewerSelectionCallbackKeys =
-  (typeof CODE_VIEWER_SELECTION_CALLBACK_KEYS)[number];
+type CodeViewSelectionCallbackKeys =
+  (typeof CODE_VIEW_SELECTION_CALLBACK_KEYS)[number];
 
-type CodeViewerSharedCallbackOptions<LAnnotation> = {
-  [TKey in CodeViewerSharedCallbackKeys]?: CodeViewerOptionCallback<
+type CodeViewSharedCallbackOptions<LAnnotation> = {
+  [TKey in CodeViewSharedCallbackKeys]?: CodeViewOptionCallback<
     LAnnotation,
     TKey
   >;
 };
 
-type CodeViewerSelectionCallbackOptions<LAnnotation> = {
-  [TKey in CodeViewerSelectionCallbackKeys]?: CodeViewerOptionCallback<
+type CodeViewSelectionCallbackOptions<LAnnotation> = {
+  [TKey in CodeViewSelectionCallbackKeys]?: CodeViewOptionCallback<
     LAnnotation,
     TKey
   >;
 };
 
-export interface CodeViewerOptions<LAnnotation>
+export interface CodeViewOptions<LAnnotation>
   extends
-    CodeViewerPassThroughOptions<LAnnotation>,
-    CodeViewerSharedCallbackOptions<LAnnotation>,
-    CodeViewerSelectionCallbackOptions<LAnnotation> {
+    CodeViewPassThroughOptions<LAnnotation>,
+    CodeViewSharedCallbackOptions<LAnnotation>,
+    CodeViewSelectionCallbackOptions<LAnnotation> {
   hunkSeparators?: Exclude<HunkSeparators, 'custom'>;
   itemMetrics?: VirtualFileMetrics;
   pointerEventsOnScroll?: boolean;
   smoothScrollSettings?: SmoothScrollSettings;
   stickyHeaders?: boolean;
   controlledSelection?: boolean;
-  onSelectedLinesChange?(selection: CodeViewerLineSelection | null): void;
-  viewerMetrics?: CodeViewerMetrics;
+  onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
+  viewerMetrics?: CodeViewMetrics;
 }
 
 const DEFAULT_POINTER_EVENTS_RESTORE_DELAY_MS = 120;
@@ -378,25 +376,22 @@ interface SpringStepResult {
   velocity: number;
 }
 
-type PendingAlignTypes = Exclude<
-  CodeViewerLineScrollTarget['align'],
-  'nearest'
->;
+type PendingAlignTypes = Exclude<CodeViewLineScrollTarget['align'], 'nearest'>;
 
-interface PendingLineTarget extends Omit<CodeViewerLineScrollTarget, 'align'> {
+interface PendingLineTarget extends Omit<CodeViewLineScrollTarget, 'align'> {
   align?: PendingAlignTypes;
 }
 
-interface PendingItemTarget extends Omit<CodeViewerItemScrollTarget, 'align'> {
+interface PendingItemTarget extends Omit<CodeViewItemScrollTarget, 'align'> {
   align?: PendingAlignTypes;
 }
 
 type PendingScrollTarget =
-  | CodeViewerPositionScrollTarget
+  | CodeViewPositionScrollTarget
   | PendingLineTarget
   | PendingItemTarget;
 
-export class CodeViewer<LAnnotation = undefined> {
+export class CodeView<LAnnotation = undefined> {
   static __STOP = false;
   static __lastScrollPosition = 0;
 
@@ -406,20 +401,19 @@ export class CodeViewer<LAnnotation = undefined> {
     intersectionObserverMargin: 0,
     resizeDebugging: false,
   };
-  private items: CodeViewerContextItem<LAnnotation>[] = [];
-  private idToItem: Map<string, CodeViewerContextItem<LAnnotation>> = new Map();
-  private selectedLines: CodeViewerLineSelection | null = null;
+  private items: CodeViewContextItem<LAnnotation>[] = [];
+  private idToItem: Map<string, CodeViewContextItem<LAnnotation>> = new Map();
+  private selectedLines: CodeViewLineSelection | null = null;
   // NOTE(amadeus): We should probably attach an id to instances and use that
   // for lookups, instead of maintaining this map...
   private instanceToItem: Map<
     VirtualizedFileDiff<LAnnotation> | VirtualizedFile<LAnnotation>,
-    CodeViewerContextItem<LAnnotation>
+    CodeViewContextItem<LAnnotation>
   > = new Map();
   private layoutDirtyIndex: number | undefined;
-  private slotCoordinator: CodeViewerCoordinator<LAnnotation> | undefined;
-  private slotSnapshot: CodeViewerRenderedItem<LAnnotation>[] | undefined;
-  private scrollListeners: Set<CodeViewerScrollListener<LAnnotation>> =
-    new Set();
+  private slotCoordinator: CodeViewCoordinator<LAnnotation> | undefined;
+  private slotSnapshot: CodeViewRenderedItem<LAnnotation>[] | undefined;
+  private scrollListeners: Set<CodeViewScrollListener<LAnnotation>> = new Set();
   private scrollHeight = 0;
   private lastContainerHeight = -1;
   private scrollTop: number = 0;
@@ -466,12 +460,12 @@ export class CodeViewer<LAnnotation = undefined> {
   private container: HTMLDivElement | undefined = document.createElement('div');
   private stickyContainer = document.createElement('div');
   private stickyOffset = document.createElement('div');
-  private options: CodeViewerOptions<LAnnotation>;
+  private options: CodeViewOptions<LAnnotation>;
   private workerManager: WorkerPoolManager | undefined;
   private isContainerManaged: boolean;
 
   constructor(
-    options: CodeViewerOptions<LAnnotation> = { theme: DEFAULT_THEMES },
+    options: CodeViewOptions<LAnnotation> = { theme: DEFAULT_THEMES },
     workerManager?: WorkerPoolManager | undefined,
     isContainerManaged = false
   ) {
@@ -488,8 +482,8 @@ export class CodeViewer<LAnnotation = undefined> {
     this.stickyContainer.style.flexDirection = 'column';
   }
 
-  private getViewerMetrics(): CodeViewerMetrics {
-    return this.options.viewerMetrics ?? DEFAULT_CODE_VIEWER_METRICS;
+  private getViewerMetrics(): CodeViewMetrics {
+    return this.options.viewerMetrics ?? DEFAULT_CODE_VIEW_METRICS;
   }
 
   private getItemMetrics(): VirtualFileMetrics {
@@ -545,7 +539,7 @@ export class CodeViewer<LAnnotation = undefined> {
 
   public setup(root: HTMLElement): void {
     if (this.root != null) {
-      throw new Error('CodeViewer.setup: already setup');
+      throw new Error('CodeView.setup: already setup');
     }
     this.root = root;
     this.container ??= document.createElement('div');
@@ -583,16 +577,16 @@ export class CodeViewer<LAnnotation = undefined> {
     // FIXME(amadeus): Remove me before release
     window.__INSTANCE = this;
     window.__TOGGLE = () => {
-      if (CodeViewer.__STOP) {
-        CodeViewer.__STOP = false;
+      if (CodeView.__STOP) {
+        CodeView.__STOP = false;
         this.scrollTo({
           type: 'position',
-          position: CodeViewer.__lastScrollPosition,
+          position: CodeView.__lastScrollPosition,
           behavior: 'instant',
         });
       } else {
-        CodeViewer.__lastScrollPosition = this.getScrollTop();
-        CodeViewer.__STOP = true;
+        CodeView.__lastScrollPosition = this.getScrollTop();
+        CodeView.__STOP = true;
       }
     };
   }
@@ -616,7 +610,7 @@ export class CodeViewer<LAnnotation = undefined> {
     this.scrollDirty = true;
     this.heightDirty = true;
     this.resetRenderState();
-    // NOTE(amadeus): Container managed CodeViewer controls when flushing
+    // NOTE(amadeus): Container managed CodeView controls when flushing
     // occurs. This is mostly to make imperative vanilla js api easier to work
     // with
     if (!this.isContainerManaged) {
@@ -654,7 +648,7 @@ export class CodeViewer<LAnnotation = undefined> {
       const item = this.items[index];
       if (item == null) {
         throw new Error(
-          `CodeViewer.cleanAllRenderedItems: Item does not exist at index: ${index}`
+          `CodeView.cleanAllRenderedItems: Item does not exist at index: ${index}`
         );
       }
       cleanRenderedItem(item);
@@ -662,9 +656,9 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private resolveEffectiveScrollBehavior(
-    target: CodeViewerScrollTarget,
+    target: CodeViewScrollTarget,
     destination: number
-  ): Exclude<CodeViewerScrollBehavior, 'smooth-auto'> {
+  ): Exclude<CodeViewScrollBehavior, 'smooth-auto'> {
     if (target.behavior !== 'smooth-auto') {
       return target.behavior ?? 'instant';
     }
@@ -674,7 +668,7 @@ export class CodeViewer<LAnnotation = undefined> {
       : 'instant';
   }
 
-  public scrollTo(target: CodeViewerScrollTarget): void {
+  public scrollTo(target: CodeViewScrollTarget): void {
     if (this.root == null) {
       return;
     }
@@ -716,13 +710,13 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   public setSelectedLines(
-    selection: CodeViewerLineSelection | null,
+    selection: CodeViewLineSelection | null,
     options?: SelectionWriteOptions
   ): void {
     this.applySelectedLines(selection, options);
   }
 
-  public getSelectedLines(): CodeViewerLineSelection | null {
+  public getSelectedLines(): CodeViewLineSelection | null {
     return this.selectedLines;
   }
 
@@ -730,17 +724,17 @@ export class CodeViewer<LAnnotation = undefined> {
     this.applySelectedLines(null, options);
   }
 
-  public addItem(input: CodeViewerItem<LAnnotation>): void {
+  public addItem(input: CodeViewItem<LAnnotation>): void {
     this.addItems([input]);
     this.syncSelection();
   }
 
-  public addItems(inputs: readonly CodeViewerItem<LAnnotation>[]): void {
+  public addItems(inputs: readonly CodeViewItem<LAnnotation>[]): void {
     this.appendItemsInternal(inputs);
     this.syncSelection();
   }
 
-  public setItems(items: readonly CodeViewerItem<LAnnotation>[]): void {
+  public setItems(items: readonly CodeViewItem<LAnnotation>[]): void {
     if (items.length === 0) {
       this.reset();
     } else if (this.items.length === 0) {
@@ -758,7 +752,7 @@ export class CodeViewer<LAnnotation = undefined> {
    * once at the end.
    */
   private appendItemsInternal(
-    inputs: readonly CodeViewerItem<LAnnotation>[],
+    inputs: readonly CodeViewItem<LAnnotation>[],
     render = true
   ): void {
     if (inputs.length === 0) {
@@ -771,10 +765,10 @@ export class CodeViewer<LAnnotation = undefined> {
     for (let index = 0; index < inputs.length; index++) {
       const input = inputs[index];
       if (input == null) {
-        throw new Error('CodeViewer.appendItemsInternal: missing input item');
+        throw new Error('CodeView.appendItemsInternal: missing input item');
       }
       if (this.idToItem.has(input.id)) {
-        throw new Error(`CodeViewer.addItem: duplicate id "${input.id}"`);
+        throw new Error(`CodeView.addItem: duplicate id "${input.id}"`);
       }
 
       const item = this.createItem(input, this.items.length, nextTop);
@@ -792,7 +786,7 @@ export class CodeViewer<LAnnotation = undefined> {
     }
   }
 
-  public setOptions(options: CodeViewerOptions<LAnnotation> | undefined): void {
+  public setOptions(options: CodeViewOptions<LAnnotation> | undefined): void {
     if (options == null) {
       return;
     }
@@ -816,7 +810,7 @@ export class CodeViewer<LAnnotation = undefined> {
     for (let index = 0; index < this.items.length; index++) {
       const item = this.items[index];
       if (item == null) {
-        throw new Error('CodeViewer.setOptions: invalid item index');
+        throw new Error('CodeView.setOptions: invalid item index');
       }
 
       if (itemMetricsChanged) {
@@ -849,7 +843,7 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   public render(immediate = false): void {
-    if (CodeViewer.__STOP) {
+    if (CodeView.__STOP) {
       return;
     }
     if (immediate) {
@@ -870,7 +864,7 @@ export class CodeViewer<LAnnotation = undefined> {
     const item = this.instanceToItem.get(instance);
     if (item == null) {
       throw new Error(
-        'CodeViewer.instanceChanged: An instance has changed that is not registered'
+        'CodeView.instanceChanged: An instance has changed that is not registered'
       );
     }
     this.markItemLayoutDirty(item);
@@ -885,13 +879,13 @@ export class CodeViewer<LAnnotation = undefined> {
     return this.root;
   }
 
-  public getRenderedItems(): CodeViewerRenderedItem<LAnnotation>[] {
+  public getRenderedItems(): CodeViewRenderedItem<LAnnotation>[] {
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex === -1 || lastIndex === -1 || lastIndex < firstIndex) {
       return [];
     }
 
-    const renderedItems: CodeViewerRenderedItem<LAnnotation>[] = [];
+    const renderedItems: CodeViewRenderedItem<LAnnotation>[] = [];
 
     for (let index = firstIndex; index <= lastIndex; index++) {
       const item = this.items[index];
@@ -924,7 +918,7 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   public setSlotCoordinator(
-    coordinator?: CodeViewerCoordinator<LAnnotation>
+    coordinator?: CodeViewCoordinator<LAnnotation>
   ): boolean {
     if (coordinator === this.slotCoordinator) {
       return false;
@@ -935,13 +929,13 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   public getSlotSnapshot(
-    coordinator: CodeViewerCoordinator<LAnnotation>
-  ): CodeViewerRenderedItem<LAnnotation>[] | undefined {
+    coordinator: CodeViewCoordinator<LAnnotation>
+  ): CodeViewRenderedItem<LAnnotation>[] | undefined {
     return getSlotSnapshot(this.getRenderedItems(), coordinator);
   }
 
   public subscribeToScroll(
-    listener: CodeViewerScrollListener<LAnnotation>
+    listener: CodeViewScrollListener<LAnnotation>
   ): () => void {
     this.scrollListeners.add(listener);
     return () => {
@@ -955,7 +949,7 @@ export class CodeViewer<LAnnotation = undefined> {
     const item = this.instanceToItem.get(instance);
     if (item == null) {
       throw new Error(
-        'CodeViewer.getTopForInstance: unknown virtualized instance'
+        'CodeView.getTopForInstance: unknown virtualized instance'
       );
     }
     return item.top;
@@ -970,10 +964,10 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private createItem(
-    input: CodeViewerItem<LAnnotation>,
+    input: CodeViewItem<LAnnotation>,
     index: number,
     top: number
-  ): CodeViewerContextItem<LAnnotation> {
+  ): CodeViewContextItem<LAnnotation> {
     const itemMetrics = this.getItemMetrics();
     if (input.type === 'diff') {
       return {
@@ -991,7 +985,7 @@ export class CodeViewer<LAnnotation = undefined> {
         top,
         height: 0,
         element: undefined,
-      } satisfies CodeViewerDiffItemContext<LAnnotation>;
+      } satisfies CodeViewDiffItemContext<LAnnotation>;
     }
 
     return {
@@ -1009,38 +1003,38 @@ export class CodeViewer<LAnnotation = undefined> {
       top,
       height: 0,
       element: undefined,
-    } satisfies CodeViewerFileItemContext<LAnnotation>;
+    } satisfies CodeViewFileItemContext<LAnnotation>;
   }
 
   private getItemById(
     itemId: string
-  ): CodeViewerContextItem<LAnnotation> | undefined {
+  ): CodeViewContextItem<LAnnotation> | undefined {
     const item = this.idToItem.get(itemId);
     if (item == null) {
-      console.error(`CodeViewer.getItemById: unknown item id "${itemId}"`);
+      console.error(`CodeView.getItemById: unknown item id "${itemId}"`);
     }
     return item;
   }
 
-  private getItemByMode<TMode extends CodeViewerMode>(
+  private getItemByMode<TMode extends CodeViewMode>(
     itemId: string,
     mode: TMode
-  ): CodeViewerModeItemContext<LAnnotation, TMode> | undefined {
+  ): CodeViewModeItemContext<LAnnotation, TMode> | undefined {
     const item = this.getItemById(itemId);
     if (item == null) {
       return undefined;
     }
     if (item.type !== mode) {
       console.error(
-        `CodeViewer.getItemByMode: item id "${itemId}" is not a ${mode}`
+        `CodeView.getItemByMode: item id "${itemId}" is not a ${mode}`
       );
       return undefined;
     }
-    return item as CodeViewerModeItemContext<LAnnotation, TMode>;
+    return item as CodeViewModeItemContext<LAnnotation, TMode>;
   }
 
   private applySelectedLines(
-    selection: CodeViewerLineSelection | null,
+    selection: CodeViewLineSelection | null,
     options?: SelectionWriteOptions
   ): void {
     const { selectedLines: prevSelection } = this;
@@ -1083,14 +1077,14 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private wrapCallbackWithContext<
-    TMode extends CodeViewerMode,
+    TMode extends CodeViewMode,
     TArgs extends unknown[],
     TResult,
   >(
     mode: TMode,
     itemId: string,
     callback: (
-      ...args: [...TArgs, CodeViewerModeItemContext<LAnnotation, TMode>]
+      ...args: [...TArgs, CodeViewModeItemContext<LAnnotation, TMode>]
     ) => TResult
   ): (...args: TArgs) => TResult | undefined {
     return (...args: TArgs) => {
@@ -1103,15 +1097,15 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private getWrappedOptionCallback<
-    TMode extends CodeViewerMode,
-    TKey extends CodeViewerSharedCallbackKeys,
+    TMode extends CodeViewMode,
+    TKey extends CodeViewSharedCallbackKeys,
   >(
     mode: TMode,
     key: TKey,
     itemId: string
-  ): CodeViewerModeOptions<LAnnotation, TMode>[TKey] | undefined {
+  ): CodeViewModeOptions<LAnnotation, TMode>[TKey] | undefined {
     const callback = this.options[key] as
-      | CodeViewerModeOptionCallback<LAnnotation, TMode, TKey>
+      | CodeViewModeOptionCallback<LAnnotation, TMode, TKey>
       | undefined;
     if (callback == null) {
       return undefined;
@@ -1119,25 +1113,25 @@ export class CodeViewer<LAnnotation = undefined> {
     return this.wrapCallbackWithContext(
       mode,
       itemId,
-      callback as CodeViewerModeInternalOptionCallback<LAnnotation, TMode, TKey>
-    ) as CodeViewerModeOptions<LAnnotation, TMode>[TKey] | undefined;
+      callback as CodeViewModeInternalOptionCallback<LAnnotation, TMode, TKey>
+    ) as CodeViewModeOptions<LAnnotation, TMode>[TKey] | undefined;
   }
 
   private getWrappedSelectionOptionCallback<
-    TMode extends CodeViewerMode,
-    TKey extends CodeViewerSelectionCallbackKeys,
+    TMode extends CodeViewMode,
+    TKey extends CodeViewSelectionCallbackKeys,
   >(
     mode: TMode,
     key: TKey,
     itemId: string
-  ): CodeViewerModeOptions<LAnnotation, TMode>[TKey] | undefined {
+  ): CodeViewModeOptions<LAnnotation, TMode>[TKey] | undefined {
     if (this.options.enableLineSelection !== true) {
       return undefined;
     }
     const callback = this.options[key] as
       | ((
           range: SelectedLineRange | null,
-          context: CodeViewerModeItemContext<LAnnotation, TMode>
+          context: CodeViewModeItemContext<LAnnotation, TMode>
         ) => unknown)
       | undefined;
     return ((range: SelectedLineRange | null) => {
@@ -1153,17 +1147,17 @@ export class CodeViewer<LAnnotation = undefined> {
       }
       this.options.onSelectedLinesChange?.(selection);
       return callback?.(range, item);
-    }) as CodeViewerModeOptions<LAnnotation, TMode>[TKey] | undefined;
+    }) as CodeViewModeOptions<LAnnotation, TMode>[TKey] | undefined;
   }
 
   private createOptions(
-    item: CodeViewerFileItem<LAnnotation>
+    item: CodeViewFileItem<LAnnotation>
   ): FileOptions<LAnnotation>;
   private createOptions(
-    item: CodeViewerDiffItem<LAnnotation>
+    item: CodeViewDiffItem<LAnnotation>
   ): FileDiffOptions<LAnnotation>;
   private createOptions(
-    item: CodeViewerItem<LAnnotation>
+    item: CodeViewItem<LAnnotation>
   ): FileOptions<LAnnotation> | FileDiffOptions<LAnnotation> {
     const { id: itemId, type: mode } = item;
     const options =
@@ -1178,9 +1172,7 @@ export class CodeViewer<LAnnotation = undefined> {
     // NOTE(amadeus): Hacks on hacks...
     const target = options as Record<string, unknown>;
     const passThroughKeys =
-      mode === 'file'
-        ? CODE_VIEWER_FILE_OPTION_KEYS
-        : CODE_VIEWER_DIFF_OPTION_KEYS;
+      mode === 'file' ? CODE_VIEW_FILE_OPTION_KEYS : CODE_VIEW_DIFF_OPTION_KEYS;
 
     for (const key of passThroughKeys) {
       const value = this.options[key];
@@ -1190,14 +1182,14 @@ export class CodeViewer<LAnnotation = undefined> {
     }
     target.collapsed = item.collapsed === true;
 
-    for (const key of CODE_VIEWER_SHARED_CALLBACK_KEYS) {
+    for (const key of CODE_VIEW_SHARED_CALLBACK_KEYS) {
       const callback = this.getWrappedOptionCallback(mode, key, itemId);
       if (callback !== undefined) {
         target[key] = callback;
       }
     }
 
-    for (const key of CODE_VIEWER_SELECTION_CALLBACK_KEYS) {
+    for (const key of CODE_VIEW_SELECTION_CALLBACK_KEYS) {
       const callback = this.getWrappedSelectionOptionCallback(
         mode,
         key,
@@ -1225,10 +1217,10 @@ export class CodeViewer<LAnnotation = undefined> {
    * Each record carries its current array index so this stays O(1) even when
    * the viewer holds a very large number of items.
    */
-  private markItemLayoutDirty(item: CodeViewerContextItem<LAnnotation>): void {
+  private markItemLayoutDirty(item: CodeViewContextItem<LAnnotation>): void {
     if (this.items[item.index] !== item) {
       throw new Error(
-        `CodeViewer.markItemLayoutDirty: unknown item id "${item.item.id}"`
+        `CodeView.markItemLayoutDirty: unknown item id "${item.item.id}"`
       );
     }
 
@@ -1241,9 +1233,7 @@ export class CodeViewer<LAnnotation = undefined> {
    * record in place, sync any versioned payload changes, and append only the new
    * tail instead of rebuilding the whole list.
    */
-  private tryAppendItems(
-    items: readonly CodeViewerItem<LAnnotation>[]
-  ): boolean {
+  private tryAppendItems(items: readonly CodeViewItem<LAnnotation>[]): boolean {
     if (items.length <= this.items.length) {
       return false;
     }
@@ -1251,7 +1241,7 @@ export class CodeViewer<LAnnotation = undefined> {
     for (let index = 0; index < this.items.length; index++) {
       const existingItem = this.items[index];
       if (existingItem == null) {
-        throw new Error('CodeViewer.tryAppendItems: missing existing item');
+        throw new Error('CodeView.tryAppendItems: missing existing item');
       }
       const nextItem = items[index];
       if (
@@ -1266,12 +1256,12 @@ export class CodeViewer<LAnnotation = undefined> {
     for (let index = 0; index < this.items.length; index++) {
       const existingItem = this.items[index];
       if (existingItem == null) {
-        throw new Error('CodeViewer.tryAppendItems: missing existing item');
+        throw new Error('CodeView.tryAppendItems: missing existing item');
       }
       const nextItem = items[index];
       if (nextItem == null) {
         throw new Error(
-          'CodeViewer.tryAppendItems: append candidate missing prefix item'
+          'CodeView.tryAppendItems: append candidate missing prefix item'
         );
       }
       if (this.syncItemRecord(existingItem, nextItem)) {
@@ -1291,27 +1281,27 @@ export class CodeViewer<LAnnotation = undefined> {
    * records, rebuilds the lookup maps, and marks layout dirty whenever order,
    * membership, or versioned item data changes.
    */
-  private reconcileItems(items: readonly CodeViewerItem<LAnnotation>[]): void {
+  private reconcileItems(items: readonly CodeViewItem<LAnnotation>[]): void {
     const { items: previousItems, idToItem: previousById } = this;
     const removedItems = new Set(previousItems);
-    const nextItems: CodeViewerContextItem<LAnnotation>[] = [];
+    const nextItems: CodeViewContextItem<LAnnotation>[] = [];
     const nextIdToItem: Map<
       string,
-      CodeViewerContextItem<LAnnotation>
+      CodeViewContextItem<LAnnotation>
     > = new Map();
     const nextInstanceToItem: Map<
       VirtualizedFileDiff<LAnnotation> | VirtualizedFile<LAnnotation>,
-      CodeViewerContextItem<LAnnotation>
+      CodeViewContextItem<LAnnotation>
     > = new Map();
     let firstDirtyIndex: number | undefined;
 
     for (let index = 0; index < items.length; index++) {
       const input = items[index];
       if (input == null) {
-        throw new Error('CodeViewer.reconcileItems: missing input item');
+        throw new Error('CodeView.reconcileItems: missing input item');
       }
       if (nextIdToItem.has(input.id)) {
-        throw new Error(`CodeViewer.setItems: duplicate id "${input.id}"`);
+        throw new Error(`CodeView.setItems: duplicate id "${input.id}"`);
       }
 
       const previousItem = previousById.get(input.id);
@@ -1371,17 +1361,17 @@ export class CodeViewer<LAnnotation = undefined> {
 
   /**
    * Update a reused record from the latest controlled item only when its item
-   * version changes. Matching versions mean CodeViewer keeps the current record
+   * version changes. Matching versions mean CodeView keeps the current record
    * snapshot, which lets imperative updates remain in place until the caller
    * intentionally publishes a newer version.
    */
   private syncItemRecord(
-    item: CodeViewerContextItem<LAnnotation>,
-    nextItem: CodeViewerItem<LAnnotation>
+    item: CodeViewContextItem<LAnnotation>,
+    nextItem: CodeViewItem<LAnnotation>
   ): boolean {
     if (item.type !== nextItem.type) {
       throw new Error(
-        `CodeViewer.syncItemRecord: type mismatch for id "${nextItem.id}"`
+        `CodeView.syncItemRecord: type mismatch for id "${nextItem.id}"`
       );
     }
 
@@ -1420,11 +1410,11 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private getScrollTargetRect(
-    target: CodeViewerItemScrollTarget | CodeViewerLineScrollTarget
+    target: CodeViewItemScrollTarget | CodeViewLineScrollTarget
   ): { top: number; height: number } | undefined {
     const item = this.idToItem.get(target.id);
     if (item == null) {
-      console.warn(`CodeViewer.scrollTo: unknown item id "${target.id}"`);
+      console.warn(`CodeView.scrollTo: unknown item id "${target.id}"`);
       return undefined;
     }
 
@@ -1435,7 +1425,7 @@ export class CodeViewer<LAnnotation = undefined> {
     const linePosition = this.getLineScrollPosition(item, target);
     if (linePosition == null) {
       console.warn(
-        `CodeViewer.scrollTo: unable to resolve line ${target.lineNumber} for item "${target.id}"`
+        `CodeView.scrollTo: unable to resolve line ${target.lineNumber} for item "${target.id}"`
       );
       return undefined;
     }
@@ -1447,7 +1437,7 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private normalizeScrollTarget(
-    target: CodeViewerScrollTarget
+    target: CodeViewScrollTarget
   ): PendingScrollTarget | undefined {
     if (target.type === 'position' || target.align !== 'nearest') {
       return target as PendingScrollTarget;
@@ -1509,7 +1499,7 @@ export class CodeViewer<LAnnotation = undefined> {
 
     const item = this.idToItem.get(target.id);
     if (item == null) {
-      console.warn(`CodeViewer.scrollTo: unknown item id "${target.id}"`);
+      console.warn(`CodeView.scrollTo: unknown item id "${target.id}"`);
       return undefined;
     }
 
@@ -1527,7 +1517,7 @@ export class CodeViewer<LAnnotation = undefined> {
     const linePosition = this.getLineScrollPosition(item, target);
     if (linePosition == null) {
       console.warn(
-        `CodeViewer.scrollTo: unable to resolve line ${target.lineNumber} for item "${target.id}"`
+        `CodeView.scrollTo: unable to resolve line ${target.lineNumber} for item "${target.id}"`
       );
       return undefined;
     }
@@ -1572,8 +1562,8 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private getLineScrollPosition(
-    item: CodeViewerContextItem<LAnnotation>,
-    target: CodeViewerLineScrollTarget
+    item: CodeViewContextItem<LAnnotation>,
+    target: CodeViewLineScrollTarget
   ): LineScrollPosition | undefined {
     if (item.type === 'diff') {
       return item.instance.getLinePosition(target.lineNumber, target.side);
@@ -1687,7 +1677,7 @@ export class CodeViewer<LAnnotation = undefined> {
   private computeRenderRangeAndEmit = (
     timestamp: number = performance.now()
   ): void => {
-    if (CodeViewer.__STOP || this.container == null) {
+    if (CodeView.__STOP || this.container == null) {
       return;
     }
     const height = this.getHeight();
@@ -1781,7 +1771,7 @@ export class CodeViewer<LAnnotation = undefined> {
         const item = this.items[index];
         if (item == null) {
           throw new Error(
-            `CodeViewer.computeRenderRangeAndEmit: No item at index: ${index}`
+            `CodeView.computeRenderRangeAndEmit: No item at index: ${index}`
           );
         }
         const renderedTop = item.top;
@@ -1794,7 +1784,7 @@ export class CodeViewer<LAnnotation = undefined> {
     }
 
     let prevElement: HTMLElement | undefined;
-    const updatedItems = new Set<CodeViewerContextItem<LAnnotation>>();
+    const updatedItems = new Set<CodeViewContextItem<LAnnotation>>();
     const startingIndex = this.findFirstVisibleIndex(top);
     const lastRenderedIndex = this.findLastVisibleIndex(bottom);
 
@@ -1805,7 +1795,7 @@ export class CodeViewer<LAnnotation = undefined> {
     ) {
       const item = this.items[itemIndex];
       if (item == null) {
-        throw new Error(`CodeViewer.computeRenderRangeAndEmit: missing item`);
+        throw new Error(`CodeView.computeRenderRangeAndEmit: missing item`);
       }
       const { instance } = item;
       // If the item isn't rendered yet, we need to create a wrapper element
@@ -1906,7 +1896,7 @@ export class CodeViewer<LAnnotation = undefined> {
   };
 
   private flushManagers(
-    updatedItems: Set<CodeViewerContextItem<LAnnotation>>
+    updatedItems: Set<CodeViewContextItem<LAnnotation>>
   ): void {
     for (const item of updatedItems) {
       item.instance.flushManagers();
@@ -1914,7 +1904,7 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private reconcileRenderedItems(
-    updatedItems?: Set<CodeViewerContextItem<LAnnotation>>
+    updatedItems?: Set<CodeViewContextItem<LAnnotation>>
   ): void {
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex === -1) {
@@ -1933,7 +1923,7 @@ export class CodeViewer<LAnnotation = undefined> {
       }
       const item = this.items[index];
       if (item == null) {
-        throw new Error('CodeViewer.reconcileRenderedItems: Invalid item');
+        throw new Error('CodeView.reconcileRenderedItems: Invalid item');
       }
       if (currentTop === -1) {
         currentTop = item.top;
@@ -2002,7 +1992,7 @@ export class CodeViewer<LAnnotation = undefined> {
   }
 
   private handleScroll = (): void => {
-    if (CodeViewer.__STOP) {
+    if (CodeView.__STOP) {
       return;
     }
     this.suspendPointerEvents();
@@ -2290,7 +2280,7 @@ export class CodeViewer<LAnnotation = undefined> {
       const mid = (low + high) >> 1;
       const item = this.items[mid];
       if (item == null) {
-        throw new Error('CodeViewer.findFirstVisibleIndex: invalid item index');
+        throw new Error('CodeView.findFirstVisibleIndex: invalid item index');
       }
 
       if (item.top + item.height > top) {
@@ -2318,7 +2308,7 @@ export class CodeViewer<LAnnotation = undefined> {
       const mid = (low + high) >> 1;
       const item = this.items[mid];
       if (item == null) {
-        throw new Error('CodeViewer.findLastVisibleIndex: invalid item index');
+        throw new Error('CodeView.findLastVisibleIndex: invalid item index');
       }
 
       if (item.top <= bottom) {
@@ -2349,7 +2339,7 @@ export class CodeViewer<LAnnotation = undefined> {
     if (startIndex > 0) {
       const previousItem = this.items[startIndex - 1];
       if (previousItem == null) {
-        throw new Error('CodeViewer.recomputeLayout: invalid dirty index');
+        throw new Error('CodeView.recomputeLayout: invalid dirty index');
       }
       runningTop = previousItem.top + previousItem.height + viewerMetrics.gap;
     }
@@ -2357,7 +2347,7 @@ export class CodeViewer<LAnnotation = undefined> {
     for (let index = startIndex; index < this.items.length; index++) {
       const item = this.items[index];
       if (item == null) {
-        throw new Error('CodeViewer.recomputeLayout: invalid item index');
+        throw new Error('CodeView.recomputeLayout: invalid item index');
       }
       item.top = runningTop;
       if (item.type === 'diff') {
@@ -2397,7 +2387,7 @@ export class CodeViewer<LAnnotation = undefined> {
 }
 
 function cleanRenderedItem<LAnnotation>(
-  item: CodeViewerContextItem<LAnnotation>
+  item: CodeViewContextItem<LAnnotation>
 ) {
   item.instance.cleanUp(true);
   item.element?.remove();
@@ -2405,7 +2395,7 @@ function cleanRenderedItem<LAnnotation>(
 }
 
 function prepareItemInstance<LAnnotation>(
-  item: CodeViewerContextItem<LAnnotation>
+  item: CodeViewContextItem<LAnnotation>
 ): number {
   item.instance.cleanUp(true);
   if (item.type === 'diff') {
@@ -2416,7 +2406,7 @@ function prepareItemInstance<LAnnotation>(
 }
 
 function renderItem<LAnnotation>(
-  item: CodeViewerContextItem<LAnnotation>,
+  item: CodeViewContextItem<LAnnotation>,
   fileContainer?: HTMLElement
 ): boolean {
   if (item.type === 'diff') {
@@ -2459,20 +2449,18 @@ function syncRenderedItemOrder(
   }
 }
 
-function hasAnnotations<LAnnotation>(
-  item: CodeViewerItem<LAnnotation>
-): boolean {
+function hasAnnotations<LAnnotation>(item: CodeViewItem<LAnnotation>): boolean {
   return (item.annotations?.length ?? 0) > 0;
 }
 
 function getSlotSnapshot<LAnnotation>(
-  renderedItems: CodeViewerRenderedItem<LAnnotation>[],
+  renderedItems: CodeViewRenderedItem<LAnnotation>[],
   {
     hasHeaderRenderers,
     hasAnnotationRenderer,
     hasGutterRenderer,
-  }: CodeViewerCoordinator<LAnnotation>
-): CodeViewerRenderedItem<LAnnotation>[] | undefined {
+  }: CodeViewCoordinator<LAnnotation>
+): CodeViewRenderedItem<LAnnotation>[] | undefined {
   if (renderedItems.length === 0) {
     return undefined;
   }
@@ -2485,7 +2473,7 @@ function getSlotSnapshot<LAnnotation>(
     return undefined;
   }
 
-  const slotSnapshot: CodeViewerRenderedItem<LAnnotation>[] = [];
+  const slotSnapshot: CodeViewRenderedItem<LAnnotation>[] = [];
 
   for (const renderedItem of renderedItems) {
     if (hasAnnotations(renderedItem.item)) {
@@ -2497,8 +2485,8 @@ function getSlotSnapshot<LAnnotation>(
 }
 
 function areSlotSnapshotsEqual<LAnnotation>(
-  previous: CodeViewerRenderedItem<LAnnotation>[] | undefined,
-  next: CodeViewerRenderedItem<LAnnotation>[] | undefined
+  previous: CodeViewRenderedItem<LAnnotation>[] | undefined,
+  next: CodeViewRenderedItem<LAnnotation>[] | undefined
 ): boolean {
   if (previous == null || next == null) {
     return previous === next;

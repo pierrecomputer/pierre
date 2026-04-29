@@ -18,7 +18,7 @@ import {
   resolveVirtualFileMetrics,
 } from '../utils/resolveVirtualFileMetrics';
 import type { WorkerPoolManager } from '../worker';
-import type { CodeViewer } from './CodeViewer';
+import type { CodeView } from './CodeView';
 import {
   FileDiff,
   type FileDiffOptions,
@@ -48,12 +48,12 @@ export class VirtualizedFileDiff<
   private heightCache: Map<number, number> = new Map();
   private isVisible: boolean = false;
   private isSetup: boolean = false;
-  private virtualizer: Virtualizer | CodeViewer<LAnnotation>;
+  private virtualizer: Virtualizer | CodeView<LAnnotation>;
   private forceRenderOverride: true | undefined;
 
   constructor(
     options: FileDiffOptions<LAnnotation> | undefined,
-    virtualizer: Virtualizer | CodeViewer<LAnnotation>,
+    virtualizer: Virtualizer | CodeView<LAnnotation>,
     metrics?: Partial<VirtualFileMetrics>,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
@@ -111,14 +111,14 @@ export class VirtualizedFileDiff<
       previousCollapsed !== this.options.collapsed
     ) {
       this.heightCache.clear();
-      // NOTE(amadeus): In CodeViewer we intentionally batch computes to all
+      // NOTE(amadeus): In CodeView we intentionally batch computes to all
       // happen at the same time, so we shouldn't trigger this here
       if (this.isSimpleMode()) {
         this.computeApproximateSize();
       }
       this.renderRange = undefined;
     }
-    // CodeViewer will mark dirty for us
+    // CodeView will mark dirty for us
     if (this.isSimpleMode()) {
       this.virtualizer.instanceChanged(this);
     }

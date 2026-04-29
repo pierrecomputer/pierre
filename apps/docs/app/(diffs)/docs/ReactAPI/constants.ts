@@ -616,14 +616,14 @@ export function MergeConflictPreview() {
   options,
 };
 
-export const REACT_API_CODE_VIEWER: PreloadFileOptions<undefined> = {
+export const REACT_API_CODE_VIEW: PreloadFileOptions<undefined> = {
   file: {
-    name: 'code_viewer.tsx',
+    name: 'code_view.tsx',
     contents: `import {
   parseDiffFromFile,
-  type CodeViewerItem,
+  type CodeViewItem,
 } from '@pierre/diffs';
-import { CodeViewer } from '@pierre/diffs/react';
+import { CodeView } from '@pierre/diffs/react';
 import { useMemo } from 'react';
 
 const oldAppFile = {
@@ -643,7 +643,7 @@ const readmeFile = {
 };
 
 export function ReviewSurface() {
-  const items = useMemo<CodeViewerItem[]>(
+  const items = useMemo<CodeViewItem[]>(
     () => [
       {
         id: 'diff:src/app.ts',
@@ -661,7 +661,7 @@ export function ReviewSurface() {
   );
 
   return (
-    <CodeViewer
+    <CodeView
       items={items}
       style={{ height: 600, overflow: 'auto' }}
       options={{

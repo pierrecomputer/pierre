@@ -1,6 +1,6 @@
 import type { CreatePatchOptionsNonabortable } from 'diff';
 
-import type { CodeViewerOptions } from '../components/CodeViewer';
+import type { CodeViewOptions } from '../components/CodeView';
 import type { FileDiffOptions } from '../components/FileDiff';
 import { DEFAULT_THEMES } from '../constants';
 import type { FileOptions } from '../react';
@@ -8,7 +8,7 @@ import { areObjectsEqual } from './areObjectsEqual';
 import { areThemesEqual } from './areThemesEqual';
 
 type AnyOptions<L> =
-  | CodeViewerOptions<L>
+  | CodeViewOptions<L>
   | FileOptions<L>
   | FileDiffOptions<L>
   | undefined;

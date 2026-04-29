@@ -1,7 +1,4 @@
-import type {
-  CodeViewerLineSelection,
-  DiffLineAnnotation,
-} from '@pierre/diffs';
+import type { CodeViewLineSelection, DiffLineAnnotation } from '@pierre/diffs';
 import { memo } from 'react';
 
 import type { SavedCommentMetadata } from './types';
@@ -10,7 +7,7 @@ interface ExampleAnnotationProps {
   annotation: DiffLineAnnotation<SavedCommentMetadata>;
   itemId: string;
   onDelete(itemId: string, key: string): void;
-  onToggleSelection(selection: CodeViewerLineSelection): void;
+  onToggleSelection(selection: CodeViewLineSelection): void;
 }
 
 export const ExampleAnnotation = memo(function ExampleAnnotation({

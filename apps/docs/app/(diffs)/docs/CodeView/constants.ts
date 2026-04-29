@@ -8,15 +8,15 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-export const CODE_VIEWER_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
+export const CODE_VIEW_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
-    name: 'code_viewer_react.tsx',
+    name: 'code_view_react.tsx',
     contents: `import {
   parseDiffFromFile,
-  type CodeViewerItem,
-  type CodeViewerLineSelection,
+  type CodeViewItem,
+  type CodeViewLineSelection,
 } from '@pierre/diffs';
-import { CodeViewer, type CodeViewerHandle } from '@pierre/diffs/react';
+import { CodeView, type CodeViewHandle } from '@pierre/diffs/react';
 import { useMemo, useRef, useState } from 'react';
 
 const oldAppFile = {
@@ -36,11 +36,11 @@ const readmeFile = {
 };
 
 export function ReviewSurface() {
-  const viewerRef = useRef<CodeViewerHandle | null>(null);
+  const viewerRef = useRef<CodeViewHandle | null>(null);
   const [selectedLines, setSelectedLines] =
-    useState<CodeViewerLineSelection | null>(null);
+    useState<CodeViewLineSelection | null>(null);
 
-  const items = useMemo<CodeViewerItem[]>(
+  const items = useMemo<CodeViewItem[]>(
     () => [
       {
         id: 'diff:src/app.ts',
@@ -74,7 +74,7 @@ export function ReviewSurface() {
         Jump to change
       </button>
 
-      <CodeViewer
+      <CodeView
         ref={viewerRef}
         items={items}
         style={{ height: 600, overflow: 'auto' }}
@@ -114,13 +114,13 @@ export function ReviewSurface() {
   options,
 };
 
-export const CODE_VIEWER_VANILLA_EXAMPLE: PreloadFileOptions<undefined> = {
+export const CODE_VIEW_VANILLA_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
-    name: 'code_viewer_vanilla.ts',
+    name: 'code_view_vanilla.ts',
     contents: `import {
-  CodeViewer,
+  CodeView,
   parseDiffFromFile,
-  type CodeViewerItem,
+  type CodeViewItem,
 } from '@pierre/diffs';
 
 const root = document.getElementById('review-root');
@@ -131,7 +131,7 @@ if (root == null) {
 root.style.height = '600px';
 root.style.overflow = 'auto';
 
-const viewer = new CodeViewer({
+const viewer = new CodeView({
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
   stickyHeaders: true,
   enableLineSelection: true,
@@ -158,7 +158,7 @@ const viewer = new CodeViewer({
 
 viewer.setup(root);
 
-const items: CodeViewerItem[] = [
+const items: CodeViewItem[] = [
   {
     id: 'diff:src/app.ts',
     type: 'diff',

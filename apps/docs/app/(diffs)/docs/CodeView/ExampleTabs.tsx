@@ -6,24 +6,24 @@ import { useState } from 'react';
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
-type CodeViewerExampleMode = 'react' | 'vanilla';
+type CodeViewExampleMode = 'react' | 'vanilla';
 
-interface CodeViewerExampleTabsProps {
+interface CodeViewExampleTabsProps {
   reactExample: PreloadedFileResult<undefined>;
   vanillaExample: PreloadedFileResult<undefined>;
 }
 
-export function CodeViewerExampleTabs({
+export function CodeViewExampleTabs({
   reactExample,
   vanillaExample,
-}: CodeViewerExampleTabsProps) {
-  const [mode, setMode] = useState<CodeViewerExampleMode>('react');
+}: CodeViewExampleTabsProps) {
+  const [mode, setMode] = useState<CodeViewExampleMode>('react');
 
   return (
     <>
       <ButtonGroup
         value={mode}
-        onValueChange={(value) => setMode(value as CodeViewerExampleMode)}
+        onValueChange={(value) => setMode(value as CodeViewExampleMode)}
       >
         <ButtonGroupItem value="react">React</ButtonGroupItem>
         <ButtonGroupItem value="vanilla">Vanilla JS</ButtonGroupItem>

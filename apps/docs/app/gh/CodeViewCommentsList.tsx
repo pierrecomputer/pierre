@@ -4,15 +4,15 @@ import type { AnnotationSide } from '@pierre/diffs';
 import { memo } from 'react';
 
 import type {
-  CodeViewerSavedCommentEntry,
-  CodeViewerSavedCommentItem,
+  CodeViewSavedCommentEntry,
+  CodeViewSavedCommentItem,
 } from './types';
 import { cn } from '@/lib/utils';
 
-interface CodeViewerCommentsListProps {
+interface CodeViewCommentsListProps {
   className?: string;
-  commentSections: readonly CodeViewerSavedCommentItem[];
-  onSelectComment?(comment: CodeViewerSavedCommentEntry): void;
+  commentSections: readonly CodeViewSavedCommentItem[];
+  onSelectComment?(comment: CodeViewSavedCommentEntry): void;
 }
 
 function getCommentSideLabel(side: AnnotationSide): string {
@@ -25,11 +25,11 @@ function getCommentSideClassName(side: AnnotationSide): string {
     : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300';
 }
 
-export const CodeViewerCommentsList = memo(function CodeViewerCommentsList({
+export const CodeViewCommentsList = memo(function CodeViewCommentsList({
   className,
   commentSections,
   onSelectComment,
-}: CodeViewerCommentsListProps) {
+}: CodeViewCommentsListProps) {
   if (commentSections.length === 0) {
     return (
       <div

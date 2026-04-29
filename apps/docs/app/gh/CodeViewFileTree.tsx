@@ -6,7 +6,7 @@ import { type CSSProperties, memo, useRef } from 'react';
 
 import type { FileTreePublicId } from '../../../../packages/trees/dist/model/publicTypes';
 import { BASE_FILE_TREE_OPTIONS } from './constants';
-import type { CodeViewerFileTreeSource } from './types';
+import type { CodeViewFileTreeSource } from './types';
 import { cn } from '@/lib/utils';
 
 const DENSITY_OVERRIDE_STYLES = {
@@ -14,18 +14,18 @@ const DENSITY_OVERRIDE_STYLES = {
   '--trees-row-height-override': '24px',
 } as CSSProperties;
 
-interface CodeViewerFileTreeProps {
+interface CodeViewFileTreeProps {
   className?: string;
   onSelectItem?(itemId: string): void;
-  source: CodeViewerFileTreeSource | null;
+  source: CodeViewFileTreeSource | null;
 }
 
-export const CodeViewerFileTree = memo(function CodeViewerFileTree({
+export const CodeViewFileTree = memo(function CodeViewFileTree({
   className,
   onSelectItem,
   source,
-}: CodeViewerFileTreeProps) {
-  const previousSourceRef = useRef<CodeViewerFileTreeSource | null>(null);
+}: CodeViewFileTreeProps) {
+  const previousSourceRef = useRef<CodeViewFileTreeSource | null>(null);
   const sourceVersionRef = useRef(0);
 
   if (source == null) {
@@ -39,7 +39,7 @@ export const CodeViewerFileTree = memo(function CodeViewerFileTree({
   }
 
   return (
-    <CodeViewerFileTreeContent
+    <CodeViewFileTreeContent
       key={sourceVersionRef.current}
       className={className}
       onSelectItem={onSelectItem}
@@ -48,18 +48,18 @@ export const CodeViewerFileTree = memo(function CodeViewerFileTree({
   );
 });
 
-interface CodeViewerFileTreeContentProps extends Omit<
-  CodeViewerFileTreeProps,
+interface CodeViewFileTreeContentProps extends Omit<
+  CodeViewFileTreeProps,
   'source'
 > {
-  source: CodeViewerFileTreeSource;
+  source: CodeViewFileTreeSource;
 }
 
-function CodeViewerFileTreeContent({
+function CodeViewFileTreeContent({
   className,
   onSelectItem,
   source,
-}: CodeViewerFileTreeContentProps) {
+}: CodeViewFileTreeContentProps) {
   const onSelectionChange = useStableCallback(
     (selectedPaths: readonly FileTreePublicId[]) => {
       if (selectedPaths.length !== 1 || onSelectItem == null) {

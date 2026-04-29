@@ -1,19 +1,19 @@
 import type {
   ChangeTypes,
-  CodeViewerDiffItem,
-  CodeViewerItem,
+  CodeViewDiffItem,
+  CodeViewItem,
   DiffLineAnnotation,
 } from '@pierre/diffs';
 import type { GitStatus, GitStatusEntry } from '@pierre/trees';
 
 import type {
-  CodeViewerCommentFileByItemId,
-  CodeViewerDeletedCommentEvent,
-  CodeViewerFileTreeSort,
-  CodeViewerFileTreeSource,
-  CodeViewerSavedCommentEntry,
-  CodeViewerSavedCommentEvent,
-  CodeViewerSavedCommentItem,
+  CodeViewCommentFileByItemId,
+  CodeViewDeletedCommentEvent,
+  CodeViewFileTreeSort,
+  CodeViewFileTreeSource,
+  CodeViewSavedCommentEntry,
+  CodeViewSavedCommentEvent,
+  CodeViewSavedCommentItem,
   CommentMetadata,
   DraftCommentMetadata,
   SavedCommentMetadata,
@@ -21,13 +21,13 @@ import type {
 
 const PATCH_ORDER_FALLBACK_RANK = Number.MAX_SAFE_INTEGER;
 
-export function incrementItemVersion(item: CodeViewerItem<CommentMetadata>) {
+export function incrementItemVersion(item: CodeViewItem<CommentMetadata>) {
   item.version = typeof item.version === 'number' ? item.version + 1 : 1;
 }
 
 export function isDiffItem(
-  item: CodeViewerItem<CommentMetadata>
-): item is CodeViewerDiffItem<CommentMetadata> {
+  item: CodeViewItem<CommentMetadata>
+): item is CodeViewDiffItem<CommentMetadata> {
   return item.type === 'diff';
 }
 
@@ -87,9 +87,7 @@ export function mapChangeTypeToGitStatus(type: ChangeTypes): GitStatus {
   }
 }
 
-function createPatchOrderSort(
-  paths: readonly string[]
-): CodeViewerFileTreeSort {
+function createPatchOrderSort(paths: readonly string[]): CodeViewFileTreeSort {
   const rankByPath = new Map<string, number>();
   for (let index = 0; index < paths.length; index++) {
     const path = paths[index];
@@ -138,11 +136,11 @@ function createPatchOrderSort(
 // populate paths, pathToItemId, and gitStatus in the same pass that builds
 // the viewer items so the tree data structure does not require its own walk
 // over items.
-export function createCodeViewerFileTreeSource(
+export function createCodeViewFileTreeSource(
   paths: readonly string[],
   pathToItemId: ReadonlyMap<string, string>,
   gitStatus: readonly GitStatusEntry[]
-): CodeViewerFileTreeSource {
+): CodeViewFileTreeSource {
   const sort = createPatchOrderSort(paths);
   return {
     gitStatus,
@@ -153,9 +151,9 @@ export function createCodeViewerFileTreeSource(
 }
 
 function insertCommentInLineOrder(
-  comments: readonly CodeViewerSavedCommentEntry[],
-  entry: CodeViewerSavedCommentEntry
-): CodeViewerSavedCommentEntry[] {
+  comments: readonly CodeViewSavedCommentEntry[],
+  entry: CodeViewSavedCommentEntry
+): CodeViewSavedCommentEntry[] {
   let existingIndex = -1;
   for (let index = 0; index < comments.length; index++) {
     if (comments[index]?.key === entry.key) {
@@ -183,16 +181,16 @@ function insertCommentInLineOrder(
 }
 
 export function upsertSavedCommentSidebarEntry(
-  sections: readonly CodeViewerSavedCommentItem[],
-  commentFileByItemId: CodeViewerCommentFileByItemId | null,
-  entry: CodeViewerSavedCommentEvent
-): CodeViewerSavedCommentItem[] {
+  sections: readonly CodeViewSavedCommentItem[],
+  commentFileByItemId: CodeViewCommentFileByItemId | null,
+  entry: CodeViewSavedCommentEvent
+): CodeViewSavedCommentItem[] {
   const file = commentFileByItemId?.get(entry.itemId);
   if (file == null) {
     return [...sections];
   }
 
-  const nextEntry: CodeViewerSavedCommentEntry = {
+  const nextEntry: CodeViewSavedCommentEntry = {
     author: entry.author,
     itemId: entry.itemId,
     key: entry.key,
@@ -212,7 +210,7 @@ export function upsertSavedCommentSidebarEntry(
   }
 
   if (sectionIndex === -1) {
-    const nextSection: CodeViewerSavedCommentItem = {
+    const nextSection: CodeViewSavedCommentItem = {
       comments: [nextEntry],
       fileOrder: file.fileOrder,
       itemId: entry.itemId,
@@ -245,9 +243,9 @@ export function upsertSavedCommentSidebarEntry(
 }
 
 export function removeSavedCommentSidebarEntry(
-  sections: readonly CodeViewerSavedCommentItem[],
-  entry: CodeViewerDeletedCommentEvent
-): CodeViewerSavedCommentItem[] {
+  sections: readonly CodeViewSavedCommentItem[],
+  entry: CodeViewDeletedCommentEvent
+): CodeViewSavedCommentItem[] {
   let sectionIndex = -1;
   for (let index = 0; index < sections.length; index++) {
     if (sections[index]?.itemId === entry.itemId) {

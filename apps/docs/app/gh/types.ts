@@ -3,7 +3,7 @@ import type { FileTreeOptions, GitStatusEntry } from '@pierre/trees';
 
 type FileTreeInputSort = NonNullable<FileTreeOptions['sort']>;
 
-export type CodeViewerFileTreeSort = Exclude<FileTreeInputSort, 'default'>;
+export type CodeViewFileTreeSort = Exclude<FileTreeInputSort, 'default'>;
 
 export interface SavedCommentMetadata {
   kind: 'saved';
@@ -22,17 +22,17 @@ export interface DraftCommentMetadata {
 
 export type CommentMetadata = SavedCommentMetadata | DraftCommentMetadata;
 
-export interface CodeViewerCommentSidebarFile {
+export interface CodeViewCommentSidebarFile {
   fileOrder: number;
   path: string;
 }
 
-export type CodeViewerCommentFileByItemId = ReadonlyMap<
+export type CodeViewCommentFileByItemId = ReadonlyMap<
   string,
-  CodeViewerCommentSidebarFile
+  CodeViewCommentSidebarFile
 >;
 
-export interface CodeViewerSavedCommentEvent {
+export interface CodeViewSavedCommentEvent {
   author: string;
   itemId: string;
   key: string;
@@ -42,12 +42,12 @@ export interface CodeViewerSavedCommentEvent {
   side: AnnotationSide;
 }
 
-export interface CodeViewerDeletedCommentEvent {
+export interface CodeViewDeletedCommentEvent {
   itemId: string;
   key: string;
 }
 
-export interface CodeViewerSavedCommentEntry {
+export interface CodeViewSavedCommentEntry {
   author: string;
   itemId: string;
   key: string;
@@ -57,20 +57,20 @@ export interface CodeViewerSavedCommentEntry {
   side: AnnotationSide;
 }
 
-export interface CodeViewerSavedCommentItem {
-  comments: CodeViewerSavedCommentEntry[];
+export interface CodeViewSavedCommentItem {
+  comments: CodeViewSavedCommentEntry[];
   fileOrder: number;
   itemId: string;
   path: string;
 }
 
 // The fully pre-computed input this tree needs for a given fetch. It is built
-// once at fetch time by createCodeViewerFileTreeSource and stored alongside
+// once at fetch time by createCodeViewFileTreeSource and stored alongside
 // the viewer items, so later per-item annotation updates do not feed into the
 // tree and do not cause it to rebuild.
-export interface CodeViewerFileTreeSource {
+export interface CodeViewFileTreeSource {
   gitStatus: readonly GitStatusEntry[];
   paths: readonly string[];
   pathToItemId: ReadonlyMap<string, string>;
-  sort: CodeViewerFileTreeSort;
+  sort: CodeViewFileTreeSort;
 }

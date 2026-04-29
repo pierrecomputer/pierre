@@ -1,5 +1,5 @@
-import { type CodeViewerItem, parsePatchFiles } from '@pierre/diffs';
-import { type CodeViewerHandle, useStableCallback } from '@pierre/diffs/react';
+import { type CodeViewItem, parsePatchFiles } from '@pierre/diffs';
+import { type CodeViewHandle, useStableCallback } from '@pierre/diffs/react';
 import {
   IconDiffSplit,
   IconDiffUnified,
@@ -20,14 +20,14 @@ import {
 
 import { DEFAULT_PR_URL } from './constants';
 import type {
-  CodeViewerCommentFileByItemId,
-  CodeViewerCommentSidebarFile,
-  CodeViewerFileTreeSource,
-  CodeViewerSavedCommentItem,
+  CodeViewCommentFileByItemId,
+  CodeViewCommentSidebarFile,
+  CodeViewFileTreeSource,
+  CodeViewSavedCommentItem,
   CommentMetadata,
 } from './types';
 import {
-  createCodeViewerFileTreeSource,
+  createCodeViewFileTreeSource,
   getPullRequestPath,
   mapChangeTypeToGitStatus,
 } from './utils';
@@ -54,19 +54,19 @@ interface HeaderProps {
   fileTreeOverlayOpen: boolean;
   onToggleFileTreeOverlay(): void;
   setDiffStyle: Dispatch<SetStateAction<'split' | 'unified'>>;
-  setCommentSections: Dispatch<SetStateAction<CodeViewerSavedCommentItem[]>>;
+  setCommentSections: Dispatch<SetStateAction<CodeViewSavedCommentItem[]>>;
   setCommentFileByItemId: Dispatch<
-    SetStateAction<CodeViewerCommentFileByItemId | null>
+    SetStateAction<CodeViewCommentFileByItemId | null>
   >;
-  setItems: Dispatch<SetStateAction<CodeViewerItem<CommentMetadata>[]>>;
-  setTreeSource: Dispatch<SetStateAction<CodeViewerFileTreeSource | null>>;
+  setItems: Dispatch<SetStateAction<CodeViewItem<CommentMetadata>[]>>;
+  setTreeSource: Dispatch<SetStateAction<CodeViewFileTreeSource | null>>;
   overflow: 'wrap' | 'scroll';
   setOverflow: Dispatch<SetStateAction<'wrap' | 'scroll'>>;
   setKey: Dispatch<SetStateAction<number>>;
-  viewerRef: RefObject<CodeViewerHandle<CommentMetadata> | null>;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
 }
 
-export const CodeViewerHeader = memo(function CodeViewerHeader({
+export const CodeViewHeader = memo(function CodeViewHeader({
   className,
   diffStyle,
   fileTreeAvailable,
@@ -124,13 +124,13 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
 
       console.time('-- computing layout');
       let fileIndex = 0;
-      const items: CodeViewerItem<CommentMetadata>[] = [];
+      const items: CodeViewItem<CommentMetadata>[] = [];
       // Build the tree's path list, id map, and git-status entries in the
       // same pass that constructs items so large patches (thousands of files)
       // do not pay for a second walk when we finalize the tree source below.
       const paths: string[] = [];
       const pathToItemId = new Map<string, string>();
-      const itemIdToFile = new Map<string, CodeViewerCommentSidebarFile>();
+      const itemIdToFile = new Map<string, CodeViewCommentSidebarFile>();
       const gitStatus: GitStatusEntry[] = [];
       for (const [patchIndex, patch] of parsedPatches.entries()) {
         const treePathPrefix = getPatchTreePathPrefix(
@@ -175,7 +175,7 @@ export const CodeViewerHeader = memo(function CodeViewerHeader({
       // Pre-compute the stable tree source here so later annotation-driven
       // items updates never feed back into the file tree component.
       setTreeSource(
-        createCodeViewerFileTreeSource(paths, pathToItemId, gitStatus)
+        createCodeViewFileTreeSource(paths, pathToItemId, gitStatus)
       );
       setCommentFileByItemId(itemIdToFile);
       setCommentSections([]);

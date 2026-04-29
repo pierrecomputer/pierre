@@ -118,7 +118,7 @@ function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
       <div className="border-border mb-3 flex items-center justify-between gap-2 border-b pb-2">
         <div className="flex items-center gap-2">
           <div className={`h-2 w-2 rounded-full ${getStatusColor()}`}></div>
-          <span className="text-foreground font-medium">CodeViewer Status</span>
+          <span className="text-foreground font-medium">CodeView Status</span>
         </div>
         <div className="flex items-center gap-2">
           <button

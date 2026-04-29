@@ -240,13 +240,13 @@ workerAPI.terminate();`,
 
 export const WORKER_POOL_REACT_COMPONENT: PreloadFileOptions<undefined> = {
   file: {
-    name: 'CodeViewer.tsx',
+    name: 'CodeView.tsx',
     contents: `'use client';
 
 import { createWorkerAPI } from '@/utils/createWorkerAPI';
 import { useEffect, useState } from 'react';
 
-export function CodeViewer() {
+export function CodeView() {
   const [workerAPI] = useState(() =>
     createWorkerAPI({
       poolSize: 8,

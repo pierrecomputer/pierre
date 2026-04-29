@@ -6,7 +6,7 @@ export const DEFAULT_PR_URL = 'https://github.com/nodejs/node/pull/59805';
 // reference stays stable and useFileTree() never churns its initial snapshot.
 export const BASE_FILE_TREE_OPTIONS = {
   flattenEmptyDirectories: true,
-  id: 'gh-code-viewer-tree',
+  id: 'gh-code-view-tree',
   initialExpansion: 'open',
   search: true,
   stickyFolders: true,

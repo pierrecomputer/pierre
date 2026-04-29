@@ -14,7 +14,7 @@ import {
   getVirtualFilePaddingBottom,
 } from '../utils/resolveVirtualFileMetrics';
 import type { WorkerPoolManager } from '../worker';
-import type { CodeViewer } from './CodeViewer';
+import type { CodeView } from './CodeView';
 import { File, type FileOptions, type FileRenderProps } from './File';
 import type { Virtualizer } from './Virtualizer';
 
@@ -37,7 +37,7 @@ export class VirtualizedFile<
 
   constructor(
     options: FileOptions<LAnnotation> | undefined,
-    private virtualizer: Virtualizer | CodeViewer<LAnnotation>,
+    private virtualizer: Virtualizer | CodeView<LAnnotation>,
     private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
@@ -80,14 +80,14 @@ export class VirtualizedFile<
       previousCollapsed !== this.options.collapsed
     ) {
       this.heightCache.clear();
-      // NOTE(amadeus): In CodeViewer we intentionally batch computes to all
+      // NOTE(amadeus): In CodeView we intentionally batch computes to all
       // happen at the same time, so we shouldn't trigger this here
       if (this.isSimpleMode()) {
         this.computeApproximateSize();
       }
       this.renderRange = undefined;
     }
-    // CodeViewer will mark dirty for us
+    // CodeView will mark dirty for us
     if (this.isSimpleMode()) {
       this.virtualizer.instanceChanged(this);
     }

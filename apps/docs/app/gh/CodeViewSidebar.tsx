@@ -3,27 +3,27 @@
 import { IconX } from '@pierre/icons';
 import { memo, type RefObject, useId, useState } from 'react';
 
-import { CodeViewerCommentsList } from './CodeViewerCommentsList';
-import { CodeViewerFileTree } from './CodeViewerFileTree';
+import { CodeViewCommentsList } from './CodeViewCommentsList';
+import { CodeViewFileTree } from './CodeViewFileTree';
 import type {
-  CodeViewerFileTreeSource,
-  CodeViewerSavedCommentEntry,
-  CodeViewerSavedCommentItem,
+  CodeViewFileTreeSource,
+  CodeViewSavedCommentEntry,
+  CodeViewSavedCommentItem,
 } from './types';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { cn } from '@/lib/utils';
 
 type SidebarTab = 'files' | 'comments';
 
-interface CodeViewerSidebarProps {
+interface CodeViewSidebarProps {
   className?: string;
-  commentSections: readonly CodeViewerSavedCommentItem[];
+  commentSections: readonly CodeViewSavedCommentItem[];
   mobileOverlayOpen?: boolean;
   onMobileClose?(): void;
-  onSelectComment?(comment: CodeViewerSavedCommentEntry): void;
+  onSelectComment?(comment: CodeViewSavedCommentEntry): void;
   onSelectItem?(itemId: string): void;
   scrollRef: RefObject<HTMLDivElement | null>;
-  source: CodeViewerFileTreeSource | null;
+  source: CodeViewFileTreeSource | null;
 }
 
 function getTabClassName(active: boolean): string {
@@ -35,7 +35,7 @@ function getTabClassName(active: boolean): string {
   );
 }
 
-export const CodeViewerSidebar = memo(function CodeViewerSidebar({
+export const CodeViewSidebar = memo(function CodeViewSidebar({
   className,
   commentSections,
   mobileOverlayOpen = false,
@@ -44,7 +44,7 @@ export const CodeViewerSidebar = memo(function CodeViewerSidebar({
   onSelectItem,
   scrollRef,
   source,
-}: CodeViewerSidebarProps) {
+}: CodeViewSidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
   const filesTabId = useId();
   const commentsTabId = useId();
@@ -127,7 +127,7 @@ export const CodeViewerSidebar = memo(function CodeViewerSidebar({
             hidden={activeTab !== 'files'}
             className="h-full min-h-0"
           >
-            <CodeViewerFileTree
+            <CodeViewFileTree
               className="h-full min-h-0"
               source={source}
               onSelectItem={onSelectItem}
@@ -140,7 +140,7 @@ export const CodeViewerSidebar = memo(function CodeViewerSidebar({
             hidden={activeTab !== 'comments'}
             className="h-full min-h-0"
           >
-            <CodeViewerCommentsList
+            <CodeViewCommentsList
               commentSections={commentSections}
               onSelectComment={onSelectComment}
             />

@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
-import { CodeViewer } from '../src/components/CodeViewer';
-import type { CodeViewerItem, FileContents } from '../src/types';
+import { CodeView } from '../src/components/CodeView';
+import type { CodeViewItem, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 
 function installDom() {
@@ -127,8 +127,8 @@ function makeFile(name: string, lineCount = 20): FileContents {
 function makeDiffItem(
   id: string,
   collapsed?: boolean
-): CodeViewerItem<undefined> {
-  const item: CodeViewerItem<undefined> = {
+): CodeViewItem<undefined> {
+  const item: CodeViewItem<undefined> = {
     id,
     type: 'diff',
     fileDiff: parseDiffFromFile(
@@ -153,18 +153,18 @@ function hasRenderedCode(item: { element: HTMLElement }): boolean {
 }
 
 async function renderItems(
-  viewer: CodeViewer,
-  items: readonly CodeViewerItem[]
+  viewer: CodeView,
+  items: readonly CodeViewItem[]
 ): Promise<void> {
   viewer.setItems(items);
   viewer.render(true);
   await wait(0);
 }
 
-describe('CodeViewer item collapsed state', () => {
+describe('CodeView item collapsed state', () => {
   test('mounts mixed initially collapsed and expanded items', async () => {
     const { cleanup } = installDom();
-    const viewer = new CodeViewer();
+    const viewer = new CodeView();
     try {
       viewer.setup(createRoot());
       await renderItems(viewer, [
@@ -198,8 +198,8 @@ describe('CodeViewer item collapsed state', () => {
 
   test('collapses an item when its versioned snapshot changes', async () => {
     const { cleanup } = installDom();
-    const viewer = new CodeViewer();
-    const item: CodeViewerItem = {
+    const viewer = new CodeView();
+    const item: CodeViewItem = {
       id: 'file:example.txt',
       type: 'file',
       file: makeFile('example.txt'),
@@ -231,8 +231,8 @@ describe('CodeViewer item collapsed state', () => {
 
   test('ignores same-version collapsed changes', async () => {
     const { cleanup } = installDom();
-    const viewer = new CodeViewer();
-    const item: CodeViewerItem = {
+    const viewer = new CodeView();
+    const item: CodeViewItem = {
       id: 'file:example.txt',
       type: 'file',
       file: makeFile('example.txt'),
@@ -256,8 +256,8 @@ describe('CodeViewer item collapsed state', () => {
 
   test('keeps rendering after many collapsed items shrink the layout', async () => {
     const { cleanup } = installDom();
-    const viewer = new CodeViewer();
-    const items: CodeViewerItem[] = Array.from({ length: 40 }, (_, index) => ({
+    const viewer = new CodeView();
+    const items: CodeViewItem[] = Array.from({ length: 40 }, (_, index) => ({
       id: `file:${index}`,
       type: 'file',
       file: makeFile(`example-${index}.txt`, 30),
@@ -293,7 +293,7 @@ describe('CodeViewer item collapsed state', () => {
 
   test('collapsed rendered items keep sticky specs available', async () => {
     const { cleanup } = installDom();
-    const viewer = new CodeViewer({ stickyHeaders: true });
+    const viewer = new CodeView({ stickyHeaders: true });
     try {
       viewer.setup(createRoot());
       await renderItems(viewer, [

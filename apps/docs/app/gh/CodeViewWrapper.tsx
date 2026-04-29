@@ -1,9 +1,9 @@
 import {
   areSelectionsEqual,
-  type CodeViewerDiffItem,
-  type CodeViewerItem,
-  type CodeViewerLineSelection,
-  type CodeViewerOptions,
+  type CodeViewDiffItem,
+  type CodeViewItem,
+  type CodeViewLineSelection,
+  type CodeViewOptions,
   DEFAULT_THEMES,
   DEFAULT_VIRTUAL_FILE_METRICS,
   type DiffLineAnnotation,
@@ -11,8 +11,8 @@ import {
   type SelectedLineRange,
 } from '@pierre/diffs';
 import {
-  CodeViewer,
-  type CodeViewerHandle,
+  CodeView,
+  type CodeViewHandle,
   useStableCallback,
 } from '@pierre/diffs/react';
 import { IconChevronSm } from '@pierre/icons';
@@ -29,8 +29,8 @@ import {
 import { DraftAnnotation } from './DraftAnnotation';
 import { ExampleAnnotation } from './ExampleAnnotation';
 import type {
-  CodeViewerDeletedCommentEvent,
-  CodeViewerSavedCommentEvent,
+  CodeViewDeletedCommentEvent,
+  CodeViewSavedCommentEvent,
   CommentMetadata,
 } from './types';
 import {
@@ -60,19 +60,19 @@ const unsafeCSS = `[data-diffs-header] {
 
 const VIEWER_METRICS = { gap: 12, paddingBottom: 20, paddingTop: 20 };
 
-interface CodeViewerWrapperProps {
+interface CodeViewWrapperProps {
   className?: string;
   diffStyle: 'split' | 'unified';
-  onCommentDeleted?(comment: CodeViewerDeletedCommentEvent): void;
-  onCommentSaved?(comment: CodeViewerSavedCommentEvent): void;
+  onCommentDeleted?(comment: CodeViewDeletedCommentEvent): void;
+  onCommentSaved?(comment: CodeViewSavedCommentEvent): void;
   overflow: 'wrap' | 'scroll';
   scrollRef: RefObject<HTMLDivElement | null>;
-  viewerRef: RefObject<CodeViewerHandle<CommentMetadata> | null>;
-  items: CodeViewerItem<CommentMetadata>[];
-  setItems: Dispatch<SetStateAction<CodeViewerItem<CommentMetadata>[]>>;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
+  items: CodeViewItem<CommentMetadata>[];
+  setItems: Dispatch<SetStateAction<CodeViewItem<CommentMetadata>[]>>;
 }
 
-export const CodeViewerWrapper = memo(function CodeViewerWrapper({
+export const CodeViewWrapper = memo(function CodeViewWrapper({
   className,
   diffStyle,
   onCommentDeleted,
@@ -82,19 +82,19 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
   viewerRef,
   items,
   setItems,
-}: CodeViewerWrapperProps) {
+}: CodeViewWrapperProps) {
   const nextCommentKeyRef = useRef(0);
   const [selectedLines, setSelectedLines] =
-    useState<CodeViewerLineSelection | null>(null);
+    useState<CodeViewLineSelection | null>(null);
 
   const handleSetSelection = useStableCallback(
-    (selection: CodeViewerLineSelection | null) => {
+    (selection: CodeViewLineSelection | null) => {
       setSelectedLines(selection);
     }
   );
 
   const handleToggleCommentSelection = useStableCallback(
-    (selection: CodeViewerLineSelection) => {
+    (selection: CodeViewLineSelection) => {
       setSelectedLines((prev) =>
         prev?.id === selection.id &&
         areSelectionsEqual(prev.range, selection.range)
@@ -136,7 +136,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
         }
 
         const item = next.find(
-          (candidate): candidate is CodeViewerDiffItem<CommentMetadata> =>
+          (candidate): candidate is CodeViewDiffItem<CommentMetadata> =>
             candidate.id === itemId && isDiffItem(candidate)
         );
 
@@ -165,7 +165,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
   const handleRemoveComment = useStableCallback(
     (itemId: string, key: string) => {
       const item = items.find(
-        (candidate): candidate is CodeViewerDiffItem<CommentMetadata> =>
+        (candidate): candidate is CodeViewDiffItem<CommentMetadata> =>
           candidate.id === itemId && isDiffItem(candidate)
       );
       const removedAnnotation = item?.annotations?.find(
@@ -175,7 +175,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
       setItems((prev) => {
         const next = [...prev];
         const item = next.find(
-          (candidate): candidate is CodeViewerDiffItem<CommentMetadata> =>
+          (candidate): candidate is CodeViewDiffItem<CommentMetadata> =>
             candidate.id === itemId && isDiffItem(candidate)
         );
 
@@ -211,7 +211,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
       }
 
       const item = items.find(
-        (candidate): candidate is CodeViewerDiffItem<CommentMetadata> =>
+        (candidate): candidate is CodeViewDiffItem<CommentMetadata> =>
           candidate.id === itemId && isDiffItem(candidate)
       );
       const draftAnnotation = item?.annotations?.find(
@@ -224,7 +224,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
       setItems((prev) => {
         const next = [...prev];
         const item = next.find(
-          (candidate): candidate is CodeViewerDiffItem<CommentMetadata> =>
+          (candidate): candidate is CodeViewDiffItem<CommentMetadata> =>
             candidate.id === itemId && isDiffItem(candidate)
         );
 
@@ -316,7 +316,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
       annotation:
         | DiffLineAnnotation<CommentMetadata>
         | LineAnnotation<CommentMetadata>,
-      item: CodeViewerItem<CommentMetadata>
+      item: CodeViewItem<CommentMetadata>
     ) => {
       if (!('side' in annotation) || item.type !== 'diff') {
         return null;
@@ -349,7 +349,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
   );
 
   const renderHeaderPrefix = useStableCallback(
-    (item: CodeViewerItem<CommentMetadata>) => {
+    (item: CodeViewItem<CommentMetadata>) => {
       if (item.type !== 'diff') {
         return null;
       }
@@ -365,7 +365,7 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
 
   // NOTE(amadeus): For some insane reason, the react compiler did not know how
   // to properly memoize this, so we pulled it into a `useMemo` for safety...
-  const options: CodeViewerOptions<CommentMetadata> = useMemo(
+  const options: CodeViewOptions<CommentMetadata> = useMemo(
     () =>
       ({
         viewerMetrics: VIEWER_METRICS,
@@ -385,11 +385,11 @@ export const CodeViewerWrapper = memo(function CodeViewerWrapper({
           }
           handleCreateDraftComment(range, context.item.id);
         },
-      }) satisfies CodeViewerOptions<CommentMetadata>,
+      }) satisfies CodeViewOptions<CommentMetadata>,
     [diffStyle, handleCreateDraftComment, overflow]
   );
   return (
-    <CodeViewer<CommentMetadata>
+    <CodeView<CommentMetadata>
       ref={viewerRef}
       containerRef={scrollRef}
       items={items}
@@ -440,7 +440,7 @@ export const CUSTOM_HEADER_METRICS = {
   diffHeaderHeight: 20,
 };
 
-export function renderHeader(item: CodeViewerItem<CommentMetadata>) {
+export function renderHeader(item: CodeViewItem<CommentMetadata>) {
   if (item.type === 'diff') {
     return <div>{item.fileDiff.name}</div>;
   }

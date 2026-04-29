@@ -1,8 +1,8 @@
-import type { CodeViewerRenderedItem } from '../components/CodeViewer';
+import type { CodeViewRenderedItem } from '../components/CodeView';
 
 export function areManagedSnapshotsEqual<LAnnotation>(
-  previous: CodeViewerRenderedItem<LAnnotation>[] | undefined,
-  next: CodeViewerRenderedItem<LAnnotation>[] | undefined
+  previous: CodeViewRenderedItem<LAnnotation>[] | undefined,
+  next: CodeViewRenderedItem<LAnnotation>[] | undefined
 ): boolean {
   if (previous == null || next == null) {
     return previous === next;

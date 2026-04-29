@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
-import { CodeViewer } from '../src/components/CodeViewer';
+import { CodeView } from '../src/components/CodeView';
 
 function installDom() {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
@@ -76,11 +76,11 @@ function installDom() {
 function getPointerEventsTarget(root: HTMLElement): HTMLDivElement {
   const container = root.firstElementChild;
   if (!(container instanceof HTMLDivElement)) {
-    throw new Error('missing CodeViewer content container');
+    throw new Error('missing CodeView content container');
   }
   const stickyContainer = container.lastElementChild;
   if (!(stickyContainer instanceof HTMLDivElement)) {
-    throw new Error('missing CodeViewer sticky container');
+    throw new Error('missing CodeView sticky container');
   }
   return stickyContainer;
 }
@@ -93,10 +93,10 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-describe('CodeViewer pointer events while scrolling', () => {
+describe('CodeView pointer events while scrolling', () => {
   test('disables pointer events by default during scroll and restores after delay', async () => {
     const { cleanup } = installDom();
-    const viewer = new CodeViewer();
+    const viewer = new CodeView();
     try {
       const root = document.createElement('div');
       viewer.setup(root);
@@ -116,7 +116,7 @@ describe('CodeViewer pointer events while scrolling', () => {
 
   test('keeps pointer events enabled when opted out', async () => {
     const { cleanup } = installDom();
-    const viewer = new CodeViewer({
+    const viewer = new CodeView({
       pointerEventsOnScroll: true,
     });
     try {
@@ -137,7 +137,7 @@ describe('CodeViewer pointer events while scrolling', () => {
 
   test('cleanUp restores pointer events and cancels pending restore work', async () => {
     const { cleanup } = installDom();
-    const viewer = new CodeViewer();
+    const viewer = new CodeView();
     try {
       const root = document.createElement('div');
       viewer.setup(root);
@@ -160,7 +160,7 @@ describe('CodeViewer pointer events while scrolling', () => {
 
   test('setOptions preserves the pending pointer events restore timer', async () => {
     const { cleanup } = installDom();
-    const viewer = new CodeViewer();
+    const viewer = new CodeView();
     try {
       const root = document.createElement('div');
       viewer.setup(root);

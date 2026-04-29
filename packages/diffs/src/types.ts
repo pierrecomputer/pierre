@@ -14,7 +14,7 @@ import type {
 
 export type { CreatePatchOptionsNonabortable };
 
-export type CodeViewerScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
+export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
 
 /**
  * Represents a file's contents for generating diffs via `parseDiffFromFile` or
@@ -465,44 +465,44 @@ export type DiffLineAnnotation<T = undefined> = {
   lineNumber: number;
 } & OptionalMetadata<T>;
 
-export type CodeViewerItemVersion = string | number;
+export type CodeViewItemVersion = string | number;
 
-export type CodeViewerFileItem<T = undefined> = {
+export type CodeViewFileItem<T = undefined> = {
   id: string;
   type: 'file';
   file: FileContents;
   annotations?: LineAnnotation<T>[];
-  version?: CodeViewerItemVersion;
+  version?: CodeViewItemVersion;
   collapsed?: boolean;
 };
 
-export type CodeViewerDiffItem<T = undefined> = {
+export type CodeViewDiffItem<T = undefined> = {
   id: string;
   type: 'diff';
   fileDiff: FileDiffMetadata;
   annotations?: DiffLineAnnotation<T>[];
-  version?: CodeViewerItemVersion;
+  version?: CodeViewItemVersion;
   collapsed?: boolean;
 };
 
-export type CodeViewerItem<T = undefined> =
-  | CodeViewerFileItem<T>
-  | CodeViewerDiffItem<T>;
+export type CodeViewItem<T = undefined> =
+  | CodeViewFileItem<T>
+  | CodeViewDiffItem<T>;
 
-export interface CodeViewerPositionScrollTarget {
+export interface CodeViewPositionScrollTarget {
   type: 'position';
   position: number;
-  behavior?: CodeViewerScrollBehavior;
+  behavior?: CodeViewScrollBehavior;
 }
 
-export interface CodeViewerLineScrollTarget {
+export interface CodeViewLineScrollTarget {
   type: 'line';
   id: string;
   lineNumber: number;
   side?: SelectionSide;
   align?: 'start' | 'center' | 'end' | 'nearest';
   offset?: number;
-  behavior?: CodeViewerScrollBehavior;
+  behavior?: CodeViewScrollBehavior;
 }
 
 export interface NumericScrollLineAnchor {
@@ -511,18 +511,18 @@ export interface NumericScrollLineAnchor {
   side?: SelectionSide;
 }
 
-export interface CodeViewerItemScrollTarget {
+export interface CodeViewItemScrollTarget {
   type: 'item';
   id: string;
   align?: 'start' | 'center' | 'end' | 'nearest';
   offset?: number;
-  behavior?: CodeViewerScrollBehavior;
+  behavior?: CodeViewScrollBehavior;
 }
 
-export type CodeViewerScrollTarget =
-  | CodeViewerPositionScrollTarget
-  | CodeViewerLineScrollTarget
-  | CodeViewerItemScrollTarget;
+export type CodeViewScrollTarget =
+  | CodeViewPositionScrollTarget
+  | CodeViewLineScrollTarget
+  | CodeViewItemScrollTarget;
 
 export type MergeConflictResolution = 'current' | 'incoming' | 'both';
 
@@ -769,7 +769,7 @@ export interface VirtualFileMetrics {
   paddingBottom?: number;
 }
 
-export interface CodeViewerMetrics {
+export interface CodeViewMetrics {
   /** Top padding applied to the viewer's sticky container offset. */
   paddingTop: number;
   /** Bottom padding added after the final rendered item in the viewer. */

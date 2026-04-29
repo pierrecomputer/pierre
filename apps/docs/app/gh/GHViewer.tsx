@@ -1,19 +1,19 @@
 'use client';
 
-import { type CodeViewerItem } from '@pierre/diffs';
-import { type CodeViewerHandle } from '@pierre/diffs/react';
+import { type CodeViewItem } from '@pierre/diffs';
+import { type CodeViewHandle } from '@pierre/diffs/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { CodeViewerHeader } from './CodeViewerHeader';
-import { CodeViewerSidebar } from './CodeViewerSidebar';
-import { CodeViewerWrapper } from './CodeViewerWrapper';
+import { CodeViewHeader } from './CodeViewHeader';
+import { CodeViewSidebar } from './CodeViewSidebar';
+import { CodeViewWrapper } from './CodeViewWrapper';
 import type {
-  CodeViewerCommentFileByItemId,
-  CodeViewerDeletedCommentEvent,
-  CodeViewerFileTreeSource,
-  CodeViewerSavedCommentEntry,
-  CodeViewerSavedCommentEvent,
-  CodeViewerSavedCommentItem,
+  CodeViewCommentFileByItemId,
+  CodeViewDeletedCommentEvent,
+  CodeViewFileTreeSource,
+  CodeViewSavedCommentEntry,
+  CodeViewSavedCommentEvent,
+  CodeViewSavedCommentItem,
   CommentMetadata,
 } from './types';
 import {
@@ -24,22 +24,22 @@ import {
 export function GHViewer() {
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [key, setKey] = useState(0);
-  const [items, setItems] = useState<CodeViewerItem<CommentMetadata>[]>([]);
+  const [items, setItems] = useState<CodeViewItem<CommentMetadata>[]>([]);
   // Tree data is intentionally stored separately from items so annotation
   // updates do not cascade into the file tree and trigger needless rebuilds.
-  // It is rebuilt once per fetch inside CodeViewerHeader.
-  const [treeSource, setTreeSource] = useState<CodeViewerFileTreeSource | null>(
+  // It is rebuilt once per fetch inside CodeViewHeader.
+  const [treeSource, setTreeSource] = useState<CodeViewFileTreeSource | null>(
     null
   );
   const [commentFileByItemId, setCommentFileByItemId] =
-    useState<CodeViewerCommentFileByItemId | null>(null);
+    useState<CodeViewCommentFileByItemId | null>(null);
   const [commentSections, setCommentSections] = useState<
-    CodeViewerSavedCommentItem[]
+    CodeViewSavedCommentItem[]
   >([]);
   const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
   const scrollRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<CodeViewerHandle<CommentMetadata> | null>(null);
+  const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)');
     const updateDiffStyle = (matches: boolean) => {
@@ -64,7 +64,7 @@ export function GHViewer() {
     });
   }, []);
   const handleCommentSaved = useCallback(
-    (comment: CodeViewerSavedCommentEvent) => {
+    (comment: CodeViewSavedCommentEvent) => {
       setCommentSections((prev) =>
         upsertSavedCommentSidebarEntry(prev, commentFileByItemId, comment)
       );
@@ -72,7 +72,7 @@ export function GHViewer() {
     [commentFileByItemId]
   );
   const handleCommentDeleted = useCallback(
-    (comment: CodeViewerDeletedCommentEvent) => {
+    (comment: CodeViewDeletedCommentEvent) => {
       setCommentSections((prev) =>
         removeSavedCommentSidebarEntry(prev, comment)
       );
@@ -86,7 +86,7 @@ export function GHViewer() {
     setFileTreeOverlayOpen(false);
   }, []);
   const handleSelectComment = useCallback(
-    (comment: CodeViewerSavedCommentEntry) => {
+    (comment: CodeViewSavedCommentEntry) => {
       setFileTreeOverlayOpen(false);
       viewerRef.current?.setSelectedLines({
         id: comment.itemId,
@@ -106,7 +106,7 @@ export function GHViewer() {
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] contain-strict [grid-template-areas:'header''viewer'] md:grid-cols-[320px_minmax(0,1fr)] md:[grid-template-areas:'header_header''tree_viewer']">
-      <CodeViewerHeader
+      <CodeViewHeader
         className="contain-layout contain-paint [grid-area:header]"
         diffStyle={diffStyle}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
@@ -122,7 +122,7 @@ export function GHViewer() {
         setTreeSource={setTreeSource}
         viewerRef={viewerRef}
       />
-      <CodeViewerSidebar
+      <CodeViewSidebar
         commentSections={commentSections}
         mobileOverlayOpen={fileTreeOverlayOpen}
         onMobileClose={handleCloseFileTreeOverlay}
@@ -131,7 +131,7 @@ export function GHViewer() {
         source={treeSource}
         onSelectItem={handleSelectTreeItem}
       />
-      <CodeViewerWrapper
+      <CodeViewWrapper
         className="contain-strict [grid-area:viewer]"
         key={key}
         diffStyle={diffStyle}

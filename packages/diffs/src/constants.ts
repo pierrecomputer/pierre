@@ -1,5 +1,5 @@
 import type {
-  CodeViewerMetrics,
+  CodeViewMetrics,
   HunkExpansionRegion,
   RenderRange,
   SmoothScrollSettings,
@@ -58,7 +58,7 @@ export const DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
   hunkLineCount: 1,
 };
 
-export const DEFAULT_CODE_VIEWER_METRICS: CodeViewerMetrics = {
+export const DEFAULT_CODE_VIEW_METRICS: CodeViewMetrics = {
   paddingTop: 8,
   paddingBottom: 8,
   gap: 8,

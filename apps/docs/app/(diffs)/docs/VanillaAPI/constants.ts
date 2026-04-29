@@ -134,13 +134,13 @@ instance.render({ file, containerWrapper: container });`,
     options,
   };
 
-export const VANILLA_API_CODE_VIEWER_EXAMPLE: PreloadFileOptions<undefined> = {
+export const VANILLA_API_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
-    name: 'code_viewer_example.ts',
+    name: 'code_view_example.ts',
     contents: `import {
-  CodeViewer,
+  CodeView,
   parseDiffFromFile,
-  type CodeViewerItem,
+  type CodeViewItem,
 } from '@pierre/diffs';
 
 const root = document.getElementById('review-root');
@@ -151,7 +151,7 @@ if (root == null) {
 root.style.height = '600px';
 root.style.overflow = 'auto';
 
-const viewer = new CodeViewer({
+const viewer = new CodeView({
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
   stickyHeaders: true,
   viewerMetrics: { paddingTop: 16, paddingBottom: 24, gap: 12 },
@@ -159,7 +159,7 @@ const viewer = new CodeViewer({
 
 viewer.setup(root);
 
-const items: CodeViewerItem[] = [
+const items: CodeViewItem[] = [
   {
     id: 'diff:src/app.ts',
     type: 'diff',

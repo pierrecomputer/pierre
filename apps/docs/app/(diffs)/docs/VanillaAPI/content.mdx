@@ -7,7 +7,7 @@
 
 ### Components
 
-The Vanilla JS API exposes four core components: `CodeViewer` (render a mixed,
+The Vanilla JS API exposes four core components: `CodeView` (render a mixed,
 virtualized list of files and diffs in one scroll container), `FileDiff`
 (compare two file versions or render a pre-parsed `FileDiffMetadata`), `File`
 (render a single code file without diff), and `UnresolvedFile` (render merge
@@ -16,7 +16,7 @@ with these as they'll handle the complicated aspects of syntax highlighting,
 theming, and interactivity for you.
 
 <VanillaComponentTabs
-  codeViewerExample={codeViewerExample}
+  codeViewExample={codeViewExample}
   fileDiffExample={fileDiffExample}
   fileExample={fileExample}
   unresolvedFileExample={unresolvedFileExample}
@@ -28,9 +28,9 @@ theming, and interactivity for you.
 `UnresolvedFile` in vanilla supports both uncontrolled and controlled callbacks
 (`onMergeConflictResolve` / `onMergeConflictAction`).
 
-The `CodeViewer` tab above is the quick-start version. For the deeper guide on
+The `CodeView` tab above is the quick-start version. For the deeper guide on
 `setup`, `setItems`, `version`, selection, and `scrollTo`, see
-[CodeViewer](#code-viewer).
+[CodeView](#code-view).
 
 ### Props
 
@@ -38,10 +38,10 @@ Both `FileDiff` and `File` accept an options object in their constructor. The
 `File` component has similar options, but excludes diff-specific settings and
 uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
 
-`CodeViewer` forwards many of those same options to each rendered item, while
+`CodeView` forwards many of those same options to each rendered item, while
 adding viewer-specific controls like `viewerMetrics`, `itemMetrics`,
 `stickyHeaders`, `pointerEventsOnScroll`, and `smoothScrollSettings`. See
-[CodeViewer](#code-viewer) for the dedicated guide.
+[CodeView](#code-view) for the dedicated guide.
 
 Header customization and collapsing behavior:
 

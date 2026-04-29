@@ -19,13 +19,13 @@ import { createPortal, flushSync } from 'react-dom';
 
 import {
   areOptionsEqual,
-  CodeViewer as CodeViewerClass,
-  type CodeViewerCoordinator,
-  type CodeViewerItem,
-  type CodeViewerLineSelection,
-  type CodeViewerOptions,
-  type CodeViewerRenderedItem,
-  type CodeViewerScrollTarget,
+  CodeView as CodeViewClass,
+  type CodeViewCoordinator,
+  type CodeViewItem,
+  type CodeViewLineSelection,
+  type CodeViewOptions,
+  type CodeViewRenderedItem,
+  type CodeViewScrollTarget,
   type DiffLineAnnotation,
   type GetHoveredLineResult,
   type LineAnnotation,
@@ -39,64 +39,64 @@ import { WorkerPoolContext } from './WorkerPoolContext';
 const useIsometricEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-type CodeViewerGutterUtilityGetter =
+type CodeViewGutterUtilityGetter =
   | (() => GetHoveredLineResult<'file'> | undefined)
   | (() => GetHoveredLineResult<'diff'> | undefined);
 
-interface CodeViewerBaseProps<LAnnotation> {
-  options?: CodeViewerOptions<LAnnotation>;
+interface CodeViewBaseProps<LAnnotation> {
+  options?: CodeViewOptions<LAnnotation>;
   className?: string;
   style?: CSSProperties;
   containerRef?: Ref<HTMLDivElement>;
   disableWorkerPool?: boolean;
-  selectedLines?: CodeViewerLineSelection | null;
-  onSelectedLinesChange?(selection: CodeViewerLineSelection | null): void;
-  onScroll?(scrollTop: number, viewer: CodeViewerClass<LAnnotation>): void;
-  renderCustomHeader?(item: CodeViewerItem<LAnnotation>): ReactNode;
-  renderHeaderPrefix?(item: CodeViewerItem<LAnnotation>): ReactNode;
-  renderHeaderMetadata?(item: CodeViewerItem<LAnnotation>): ReactNode;
+  selectedLines?: CodeViewLineSelection | null;
+  onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
+  onScroll?(scrollTop: number, viewer: CodeViewClass<LAnnotation>): void;
+  renderCustomHeader?(item: CodeViewItem<LAnnotation>): ReactNode;
+  renderHeaderPrefix?(item: CodeViewItem<LAnnotation>): ReactNode;
+  renderHeaderMetadata?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation> | DiffLineAnnotation<LAnnotation>,
-    item: CodeViewerItem<LAnnotation>
+    item: CodeViewItem<LAnnotation>
   ): ReactNode;
   renderGutterUtility?(
-    getHoveredLine: CodeViewerGutterUtilityGetter,
-    item: CodeViewerItem<LAnnotation>
+    getHoveredLine: CodeViewGutterUtilityGetter,
+    item: CodeViewItem<LAnnotation>
   ): ReactNode;
 }
 
-export interface ControlledCodeViewerProps<
+export interface ControlledCodeViewProps<
   LAnnotation,
-> extends CodeViewerBaseProps<LAnnotation> {
-  items: readonly CodeViewerItem<LAnnotation>[];
+> extends CodeViewBaseProps<LAnnotation> {
+  items: readonly CodeViewItem<LAnnotation>[];
   initialItems?: never;
 }
 
-export interface UncontrolledCodeViewerProps<
+export interface UncontrolledCodeViewProps<
   LAnnotation,
-> extends CodeViewerBaseProps<LAnnotation> {
+> extends CodeViewBaseProps<LAnnotation> {
   // FIXME(amadeus): Replace this with a data structure that can do
   // mutation-like changes for super massive diffs
-  // initialItems?: readonly CodeViewerItem<LAnnotation>[];
+  // initialItems?: readonly CodeViewItem<LAnnotation>[];
   // items?: never;
-  items: readonly CodeViewerItem<LAnnotation>[];
+  items: readonly CodeViewItem<LAnnotation>[];
 }
 
-export type CodeViewerProps<LAnnotation = undefined> =
-  | ControlledCodeViewerProps<LAnnotation>
-  | UncontrolledCodeViewerProps<LAnnotation>;
+export type CodeViewProps<LAnnotation = undefined> =
+  | ControlledCodeViewProps<LAnnotation>
+  | UncontrolledCodeViewProps<LAnnotation>;
 
-export interface CodeViewerHandle<LAnnotation> {
-  scrollTo(target: CodeViewerScrollTarget): void;
-  setSelectedLines(selection: CodeViewerLineSelection | null): void;
-  getSelectedLines(): CodeViewerLineSelection | null;
+export interface CodeViewHandle<LAnnotation> {
+  scrollTo(target: CodeViewScrollTarget): void;
+  setSelectedLines(selection: CodeViewLineSelection | null): void;
+  getSelectedLines(): CodeViewLineSelection | null;
   clearSelectedLines(): void;
-  getInstance(): CodeViewerClass<LAnnotation> | undefined;
+  getInstance(): CodeViewClass<LAnnotation> | undefined;
 }
 
-type CodeViewerComponent = <LAnnotation = undefined>(
-  props: CodeViewerProps<LAnnotation> & {
-    ref?: React.Ref<CodeViewerHandle<LAnnotation>>;
+type CodeViewComponent = <LAnnotation = undefined>(
+  props: CodeViewProps<LAnnotation> & {
+    ref?: React.Ref<CodeViewHandle<LAnnotation>>;
   }
 ) => React.JSX.Element;
 
@@ -105,17 +105,17 @@ type SlotPortalsComponent = <LAnnotation = undefined>(
 ) => React.JSX.Element;
 
 interface ManagedContentStore<LAnnotation> {
-  getSnapshot(): CodeViewerRenderedItem<LAnnotation>[] | undefined;
-  publish(snapshot: CodeViewerRenderedItem<LAnnotation>[] | undefined): void;
+  getSnapshot(): CodeViewRenderedItem<LAnnotation>[] | undefined;
+  publish(snapshot: CodeViewRenderedItem<LAnnotation>[] | undefined): void;
   subscribe(listener: () => void): () => void;
 }
 
 interface CachedDataRef<LAnnotation> {
-  instance: CodeViewerClass<LAnnotation> | undefined;
-  items: readonly CodeViewerItem<LAnnotation>[] | undefined;
-  managedOptions: CodeViewerOptions<LAnnotation> | undefined;
+  instance: CodeViewClass<LAnnotation> | undefined;
+  items: readonly CodeViewItem<LAnnotation>[] | undefined;
+  managedOptions: CodeViewOptions<LAnnotation> | undefined;
   disableFlushSync: boolean;
-  slotCoordinator: CodeViewerCoordinator<LAnnotation> | undefined;
+  slotCoordinator: CodeViewCoordinator<LAnnotation> | undefined;
 }
 
 const DEFAULT_CACHE = {
@@ -126,7 +126,7 @@ const DEFAULT_CACHE = {
   slotCoordinator: undefined,
 } as const;
 
-function CodeViewerInner<LAnnotation = undefined>(
+function CodeViewInner<LAnnotation = undefined>(
   {
     className,
     containerRef,
@@ -142,8 +142,8 @@ function CodeViewerInner<LAnnotation = undefined>(
     renderHeaderPrefix,
     selectedLines,
     style,
-  }: CodeViewerProps<LAnnotation>,
-  ref: React.ForwardedRef<CodeViewerHandle<LAnnotation>>
+  }: CodeViewProps<LAnnotation>,
+  ref: React.ForwardedRef<CodeViewHandle<LAnnotation>>
 ): React.JSX.Element {
   const poolManager = useContext(WorkerPoolContext);
   const cachedDataRef = useRef<CachedDataRef<LAnnotation>>({
@@ -159,7 +159,7 @@ function CodeViewerInner<LAnnotation = undefined>(
   const hasRenderers =
     hasHeaderRenderers || hasAnnotationRenderer || hasGutterRenderer;
   const emitSelectedLinesChange = useStableCallback(
-    (selection: CodeViewerLineSelection | null) => {
+    (selection: CodeViewLineSelection | null) => {
       onSelectedLinesChange?.(selection);
     }
   );
@@ -167,7 +167,7 @@ function CodeViewerInner<LAnnotation = undefined>(
 
   const managedOptions = useMemo(
     () =>
-      createManagedCodeViewerOptions({
+      createManagedCodeViewOptions({
         options,
         hasCustomHeader,
         hasGutterRenderer,
@@ -212,7 +212,7 @@ function CodeViewerInner<LAnnotation = undefined>(
       node != null &&
       node !== cachedDataRef.current.instance?.getContainerElement()
     ) {
-      cachedDataRef.current.instance = new CodeViewerClass<LAnnotation>(
+      cachedDataRef.current.instance = new CodeViewClass<LAnnotation>(
         managedOptions,
         !disableWorkerPool ? poolManager : undefined,
         true
@@ -228,7 +228,7 @@ function CodeViewerInner<LAnnotation = undefined>(
   });
 
   const onSnapshotChange = useStableCallback(
-    (snapshot: CodeViewerRenderedItem<LAnnotation>[] | undefined) => {
+    (snapshot: CodeViewRenderedItem<LAnnotation>[] | undefined) => {
       if (cachedDataRef.current.disableFlushSync) {
         slotContentStore.publish(snapshot);
       } else {
@@ -239,7 +239,7 @@ function CodeViewerInner<LAnnotation = undefined>(
     }
   );
 
-  const slotCoordinator: CodeViewerCoordinator<LAnnotation> | undefined =
+  const slotCoordinator: CodeViewCoordinator<LAnnotation> | undefined =
     useMemo(() => {
       if (!hasHeaderRenderers && !hasAnnotationRenderer && !hasGutterRenderer) {
         return undefined;
@@ -327,12 +327,12 @@ function CodeViewerInner<LAnnotation = undefined>(
   // Setup the ref handler
   useImperativeHandle(
     ref,
-    (): CodeViewerHandle<LAnnotation> => ({
+    (): CodeViewHandle<LAnnotation> => ({
       scrollTo(target) {
         const { instance } = cachedDataRef.current;
         if (instance == null) {
           console.error(
-            'CodeViewer.scrollTo: no valid instance to scroll with',
+            'CodeView.scrollTo: no valid instance to scroll with',
             target
           );
         } else {
@@ -343,7 +343,7 @@ function CodeViewerInner<LAnnotation = undefined>(
         const { instance } = cachedDataRef.current;
         if (instance == null) {
           console.error(
-            'CodeViewer.setSelectedLines: no valid instance to update selection with',
+            'CodeView.setSelectedLines: no valid instance to update selection with',
             selection
           );
         } else {
@@ -354,9 +354,7 @@ function CodeViewerInner<LAnnotation = undefined>(
       getSelectedLines() {
         const { instance } = cachedDataRef.current;
         if (instance == null) {
-          console.error(
-            'CodeViewer.getSelectedLines: no valid instance exists'
-          );
+          console.error('CodeView.getSelectedLines: no valid instance exists');
           return null;
         } else {
           return instance.getSelectedLines();
@@ -366,7 +364,7 @@ function CodeViewerInner<LAnnotation = undefined>(
         const { instance } = cachedDataRef.current;
         if (instance == null) {
           console.error(
-            'CodeViewer.clearSelectedLines: no valid instance to update selection with'
+            'CodeView.clearSelectedLines: no valid instance to update selection with'
           );
         } else {
           instance.clearSelectedLines({ notify: false });
@@ -398,12 +396,12 @@ function CodeViewerInner<LAnnotation = undefined>(
 }
 
 // React was a mistake
-export const CodeViewer = forwardRef(CodeViewerInner) as CodeViewerComponent;
+export const CodeView = forwardRef(CodeViewInner) as CodeViewComponent;
 
 function createSlotContentStore<
   LAnnotation,
 >(): ManagedContentStore<LAnnotation> {
-  let snapshot: CodeViewerRenderedItem<LAnnotation>[] | undefined;
+  let snapshot: CodeViewRenderedItem<LAnnotation>[] | undefined;
   const listeners = new Set<() => void>();
 
   return {
@@ -429,22 +427,22 @@ function createSlotContentStore<
   };
 }
 
-interface CreateManagedCodeViewerOptionsProps<LAnnotation> {
-  options: CodeViewerOptions<LAnnotation> | undefined;
+interface CreateManagedCodeViewOptionsProps<LAnnotation> {
+  options: CodeViewOptions<LAnnotation> | undefined;
   hasCustomHeader: boolean;
   hasGutterRenderer: boolean;
-  onSelectedLinesChange?(selection: CodeViewerLineSelection | null): void;
+  onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   controlledSelection: boolean;
 }
 
-function createManagedCodeViewerOptions<LAnnotation>({
+function createManagedCodeViewOptions<LAnnotation>({
   options,
   hasCustomHeader,
   hasGutterRenderer,
   onSelectedLinesChange,
   controlledSelection,
-}: CreateManagedCodeViewerOptionsProps<LAnnotation>):
-  | CodeViewerOptions<LAnnotation>
+}: CreateManagedCodeViewOptionsProps<LAnnotation>):
+  | CodeViewOptions<LAnnotation>
   | undefined {
   if (
     !hasCustomHeader &&
@@ -456,7 +454,7 @@ function createManagedCodeViewerOptions<LAnnotation>({
   }
   options = { ...options, controlledSelection, onSelectedLinesChange };
 
-  // The imperative CodeViewer adapters use this callback's presence to
+  // The imperative CodeView adapters use this callback's presence to
   // switch file and diff headers into custom-slot mode. React portals
   // provide the actual header content, so this placeholder
   // intentionally returns nothing.
@@ -464,7 +462,7 @@ function createManagedCodeViewerOptions<LAnnotation>({
     options.renderCustomHeader = noopRender;
   }
 
-  // The imperative CodeViewer adapters use this callback's presence to
+  // The imperative CodeView adapters use this callback's presence to
   // create the custom gutter utility slot. React portals provide the
   // actual content, so this placeholder intentionally returns nothing.
   if (hasGutterRenderer) {
@@ -474,22 +472,22 @@ function createManagedCodeViewerOptions<LAnnotation>({
   return options;
 }
 
-interface RenderCodeViewerItemChildrenProps<LAnnotation> {
-  renderedItem: CodeViewerRenderedItem<LAnnotation>;
-  renderCustomHeader: CodeViewerBaseProps<LAnnotation>['renderCustomHeader'];
-  renderHeaderPrefix: CodeViewerBaseProps<LAnnotation>['renderHeaderPrefix'];
-  renderHeaderMetadata: CodeViewerBaseProps<LAnnotation>['renderHeaderMetadata'];
-  renderAnnotation: CodeViewerBaseProps<LAnnotation>['renderAnnotation'];
-  renderGutterUtility: CodeViewerBaseProps<LAnnotation>['renderGutterUtility'];
+interface RenderCodeViewItemChildrenProps<LAnnotation> {
+  renderedItem: CodeViewRenderedItem<LAnnotation>;
+  renderCustomHeader: CodeViewBaseProps<LAnnotation>['renderCustomHeader'];
+  renderHeaderPrefix: CodeViewBaseProps<LAnnotation>['renderHeaderPrefix'];
+  renderHeaderMetadata: CodeViewBaseProps<LAnnotation>['renderHeaderMetadata'];
+  renderAnnotation: CodeViewBaseProps<LAnnotation>['renderAnnotation'];
+  renderGutterUtility: CodeViewBaseProps<LAnnotation>['renderGutterUtility'];
 }
 
 interface SlotPortalsProps<LAnnotation> {
   managedContentStore: ManagedContentStore<LAnnotation>;
-  renderCustomHeader: CodeViewerBaseProps<LAnnotation>['renderCustomHeader'];
-  renderHeaderPrefix: CodeViewerBaseProps<LAnnotation>['renderHeaderPrefix'];
-  renderHeaderMetadata: CodeViewerBaseProps<LAnnotation>['renderHeaderMetadata'];
-  renderAnnotation: CodeViewerBaseProps<LAnnotation>['renderAnnotation'];
-  renderGutterUtility: CodeViewerBaseProps<LAnnotation>['renderGutterUtility'];
+  renderCustomHeader: CodeViewBaseProps<LAnnotation>['renderCustomHeader'];
+  renderHeaderPrefix: CodeViewBaseProps<LAnnotation>['renderHeaderPrefix'];
+  renderHeaderMetadata: CodeViewBaseProps<LAnnotation>['renderHeaderMetadata'];
+  renderAnnotation: CodeViewBaseProps<LAnnotation>['renderAnnotation'];
+  renderGutterUtility: CodeViewBaseProps<LAnnotation>['renderGutterUtility'];
 }
 
 const SlotPortals = memo(function SlotPortals<LAnnotation>({
@@ -507,11 +505,11 @@ const SlotPortals = memo(function SlotPortals<LAnnotation>({
     managedContentStore.getSnapshot()
   );
   const renderedItems = useSyncExternalStore<
-    CodeViewerRenderedItem<LAnnotation>[] | undefined
+    CodeViewRenderedItem<LAnnotation>[] | undefined
   >(subscribe, getSnapshot, getSnapshot);
   return renderedItems?.map((renderedItem) => {
     return createPortal(
-      renderCodeViewerItemChildren({
+      renderCodeViewItemChildren({
         renderedItem,
         renderCustomHeader,
         renderHeaderPrefix,
@@ -525,14 +523,14 @@ const SlotPortals = memo(function SlotPortals<LAnnotation>({
   });
 }) as SlotPortalsComponent;
 
-function renderCodeViewerItemChildren<LAnnotation>({
+function renderCodeViewItemChildren<LAnnotation>({
   renderedItem,
   renderCustomHeader,
   renderHeaderPrefix,
   renderHeaderMetadata,
   renderAnnotation,
   renderGutterUtility,
-}: RenderCodeViewerItemChildrenProps<LAnnotation>): ReactNode {
+}: RenderCodeViewItemChildrenProps<LAnnotation>): ReactNode {
   if (renderedItem.type === 'diff') {
     const { item, instance } = renderedItem;
     return renderDiffChildren({
