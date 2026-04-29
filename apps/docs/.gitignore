@@ -43,6 +43,12 @@ yarn-error.log*
 # we want to just build this on the build commmand
 public/r/**/*.json
 
+# llms.txt is generated per-site by `scripts/generate-llms-txt.ts` (driven by
+# NEXT_PUBLIC_SITE) and recreated on every build; tracking it would let local
+# diffs/trees builds clobber each other in git.
+/public/llms.txt
+/public/llms-full.txt
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
