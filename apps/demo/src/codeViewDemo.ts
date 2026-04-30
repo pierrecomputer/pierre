@@ -70,10 +70,7 @@ export function cleanupCodeView(container: HTMLElement) {
   }
   codeViewInstances.length = 0;
   delete container.dataset.codeView;
-  container.style.removeProperty('contain');
-  container.style.removeProperty('height');
-  container.style.removeProperty('overflow');
-  container.style.removeProperty('overscroll-behavior');
+  setRootCodeViewState(container, false);
 }
 
 export function renderDemoCodeView(
@@ -145,11 +142,19 @@ export function setCodeViewThemeType(themeType: CodeViewThemeType) {
 
 function setupCodeViewWrapper(wrapper: HTMLElement) {
   wrapper.dataset.codeView = '';
-  const top = wrapper.getBoundingClientRect().top;
-  wrapper.style.height = `${Math.max(window.innerHeight - top, 240)}px`;
-  wrapper.style.overflow = 'auto';
-  wrapper.style.overscrollBehavior = 'contain';
-  wrapper.style.contain = 'strict';
+  setRootCodeViewState(wrapper, true);
+}
+
+function setRootCodeViewState(element: HTMLElement, active: boolean) {
+  const root = element.ownerDocument.getElementById('root');
+  if (root == null) {
+    return;
+  }
+  if (active) {
+    root.dataset.codeView = '';
+  } else {
+    delete root.dataset.codeView;
+  }
 }
 
 function createCodeViewItems(
