@@ -1,6 +1,6 @@
 {
   "name": "@pierre/diffs",
-  "version": "1.1.22",
+  "version": "1.2.0-beta.0",
   "license": "apache-2.0",
   "files": [
     "dist",
@@ -52,6 +52,10 @@
       "types": "./dist/worker/worker-portable.d.ts",
       "import": "./dist/worker/worker-portable.js"
     }
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
   },
   "scripts": {
     "build": "tsdown --clean",
