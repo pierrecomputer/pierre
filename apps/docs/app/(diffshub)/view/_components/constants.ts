@@ -1,7 +1,5 @@
 import type { FileTreeOptions } from '@pierre/trees';
 
-export const DEFAULT_PR_URL = 'https://github.com/nodejs/node/pull/59805';
-
 // Hide the built-in search input until the user opts into search via the
 // sidebar toggle. The trees library always mounts the input when
 // `search: true`, but reflects open/closed state on the container's

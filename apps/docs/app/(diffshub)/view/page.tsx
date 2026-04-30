@@ -1,28 +1,27 @@
-import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 
-import { ViewHeader } from './_components/ViewHeader';
+import { getPullRequestPath } from './_components/utils';
 
-export const metadata: Metadata = {
-  title: 'View',
-};
-
-// Placeholder PR until the form on `/` actually wires through to a route
-// param or query string. Lifted to a constant so it's obvious this is the
-// thing to swap out next.
-const PLACEHOLDER_URL = 'https://github.com/linux/linux/pulls/123456';
-
-export default function DiffshubViewPage() {
-  return (
-    <div className="flex min-h-screen min-w-screen flex-col gap-2 bg-neutral-50 p-2">
-      <ViewHeader url={PLACEHOLDER_URL} />
-      {/* Sidebar pinned at 240px on desktop, code view fills the rest. On
-          mobile we collapse to a single stacked column. */}
-      <main className="grid grid-cols-1 gap-2 md:grid-cols-[280px_auto]">
-        <div className="p-3">sidebar</div>
-        <div className="bg-background border-border rounded-lg border p-16">
-          codeview
-        </div>
-      </main>
-    </div>
-  );
+// JS-off fallback for the DiffsHub home form. The form posts here as
+// `/view?url=<encoded>`; we validate the URL and 307 the user to the
+// pretty path-style route (`/view/owner/repo/pull/number`) so the address
+// bar never settles on the percent-encoded query form. Bad/missing URLs
+// bounce to `/` where the form lives.
+export default async function DiffshubViewRedirectPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ url?: string | string[] }>;
+}) {
+  const { url: rawUrl } = await searchParams;
+  const candidate = Array.isArray(rawUrl) ? rawUrl[0] : rawUrl;
+  const trimmed = candidate?.trim();
+  const prPath = trimmed != null ? getPullRequestPath(trimmed) : undefined;
+  if (prPath == null) {
+    redirect('/');
+  }
+  // `getPullRequestPath` returns the URL pathname (e.g. "/twbs/bootstrap/pull/42369"),
+  // which is exactly the suffix the path-style route expects under `/view`.
+  // Strip a trailing `.patch` since the dynamic segment is just the PR number.
+  const cleanPrPath = prPath.replace(/\.patch$/, '');
+  redirect(`/view${cleanPrPath}`);
 }

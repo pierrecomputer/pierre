@@ -6,15 +6,15 @@ import {
 } from '@pierre/icons';
 import Link from 'next/link';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { HomeFetchForm } from './HomeFetchForm';
 
 // Each Q&A on the landing page is a native <details> element so the markup
 // stays minimal and the page works with JS off. The chevron sits to the
 // left of the question and rotates from "pointing right" (closed) to
 // "pointing down" (open). `IconChevronSm` ships pointing down, so we
 // rotate -90deg in the closed state and back to 0 when the parent
-// <details> is open.
+// <details> is open. The `faq-item` class hooks into CSS that animates
+// the expand/collapse via `::details-content` in supporting browsers.
 function FaqItem({
   question,
   children,
@@ -23,7 +23,7 @@ function FaqItem({
   children: React.ReactNode;
 }) {
   return (
-    <details className="group py-3">
+    <details className="faq-item group py-2">
       <summary className="text-foreground hover:text-foreground/80 flex cursor-pointer list-none items-center gap-2 font-medium transition-colors marker:hidden [&::-webkit-details-marker]:hidden">
         <IconChevronSm
           aria-hidden
@@ -31,7 +31,7 @@ function FaqItem({
         />
         {question}
       </summary>
-      <div className="text-muted-foreground mt-2 ml-4.5 max-w-2xl text-pretty">
+      <div className="text-muted-foreground mt-2 ml-4.5 max-w-2xl text-sm text-pretty">
         {children}
       </div>
     </details>
@@ -58,7 +58,7 @@ const SOCIAL_LINKS = [
 
 export default function DiffshubHome() {
   return (
-    <div className="grid min-h-screen min-w-screen place-items-center justify-center">
+    <div className="grid min-h-screen min-w-screen place-items-center justify-center bg-neutral-50 dark:bg-neutral-900">
       <section className="mb-16 max-w-xl space-y-4">
         <h2 className="text-2xl font-semibold tracking-tight">DiffsHub</h2>
         <p className="text-muted-foreground mr-12 text-pretty">
@@ -66,19 +66,7 @@ export default function DiffshubHome() {
           request super-freaking-fast. Built by The Pierre Computer Company with
           @pierre/diffs and @pierre/trees.
         </p>
-        <form className="flex max-w-2xl flex-col gap-2 sm:flex-row">
-          <Input
-            type="url"
-            name="url"
-            inputSize="lg"
-            placeholder="Enter a GitHub pull request URL"
-            defaultValue="https://github.com/twbs/bootstrap/pull/42369"
-            className="text-md h-11 rounded-lg sm:flex-1"
-          />
-          <Button asChild size="lg" className="text-md h-11 rounded-lg">
-            <Link href="/view">Fetch</Link>
-          </Button>
-        </form>
+        <HomeFetchForm />
         <div className="max-w-2xl">
           <FaqItem question="What’s DiffsHub?">
             DiffsHub is a demo app from{' '}
