@@ -1,10 +1,15 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
+import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { assertDefined } from './testUtils';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 // NOTE(amadeus): This was a known tricky patch that our renderer would break
 // on at one point

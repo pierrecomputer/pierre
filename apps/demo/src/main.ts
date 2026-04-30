@@ -24,6 +24,13 @@ import {
 import type { WorkerPoolManager } from '@pierre/diffs/worker';
 
 import {
+  cleanupCodeView,
+  renderDemoCodeView,
+  setCodeViewDiffStyle,
+  setCodeViewOverflow,
+  setCodeViewThemeType,
+} from './codeViewDemo';
+import {
   FAKE_DIFF_LINE_ANNOTATIONS,
   FAKE_LINE_ANNOTATIONS,
   FILE_CONFLICT,
@@ -97,7 +104,8 @@ function cleanupInstances(container: HTMLElement) {
     }
     instances.length = 0;
   }
-  container.innerHTML = '';
+  cleanupCodeView(container);
+  container.textContent = '';
   delete container.dataset.diff;
 }
 
@@ -401,6 +409,20 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
   // window.scrollTo({ top: 70747 });
 }
 
+function renderCodeView(parsedPatches: ParsedPatch[]) {
+  const wrapper = document.getElementById('wrapper');
+  if (wrapper == null) return;
+  window.scrollTo({ top: 0 });
+  cleanupInstances(wrapper);
+  renderDemoCodeView(wrapper, parsedPatches, {
+    theme: DEMO_THEME,
+    themeType: getThemeType(),
+    diffStyle: getUnified() ? 'unified' : 'split',
+    overflow: getWrapped() ? 'wrap' : 'scroll',
+    workerManager: poolManager,
+  });
+}
+
 function createFileMetadata(patchMetadata: string) {
   const metadata = document.createElement('div');
   metadata.dataset.commitMetadata = '';
@@ -486,6 +508,23 @@ if (loadDiff != null) {
   loadDiff.addEventListener('pointerenter', () => void handlePreloadDiff());
 }
 
+const renderCodeViewButton = document.getElementById('render-code-view');
+if (renderCodeViewButton != null) {
+  renderCodeViewButton.addEventListener('click', () => {
+    void (async () => {
+      parsedPatches ??= parsePatchFiles(
+        await loadPatchContent(),
+        'parsed-patch'
+      );
+      renderCodeView(parsedPatches);
+    })();
+  });
+  renderCodeViewButton.addEventListener(
+    'pointerenter',
+    () => void handlePreloadDiff()
+  );
+}
+
 const wrapCheckbox = document.getElementById('wrap-lines');
 function getWrapped(): boolean {
   return wrapCheckbox instanceof HTMLInputElement
@@ -514,6 +553,7 @@ if (wrapCheckbox != null) {
       });
       void instance.rerender();
     }
+    setCodeViewOverflow(checked ? 'wrap' : 'scroll');
   });
 }
 
@@ -535,6 +575,7 @@ if (unifiedCheckbox instanceof HTMLInputElement) {
         void instance.rerender();
       }
     }
+    setCodeViewDiffStyle(checked ? 'unified' : 'split');
   });
 }
 
@@ -620,9 +661,9 @@ function toggleTheme() {
     (document.documentElement.dataset.themeType ?? systemTheme) === 'dark'
       ? 'dark'
       : 'light';
+  const nextTheme = pageTheme === 'dark' ? 'light' : 'dark';
 
-  document.documentElement.dataset.themeType =
-    pageTheme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.themeType = nextTheme;
 
   for (const instances of [
     diffInstances,
@@ -631,11 +672,10 @@ function toggleTheme() {
     conflictInstances,
   ]) {
     for (const instance of instances) {
-      const themeSetting = instance.options.themeType ?? 'system';
-      const currentMode = themeSetting === 'system' ? pageTheme : themeSetting;
-      instance.setThemeType(currentMode === 'light' ? 'dark' : 'light');
+      instance.setThemeType(nextTheme);
     }
   }
+  setCodeViewThemeType(nextTheme);
 }
 
 const fileExample: FileContents | Promise<FileContents> = (() => {
@@ -683,7 +723,7 @@ if (renderFileButton != null) {
       theme: DEMO_THEME,
       themeType: getThemeType(),
       renderAnnotation,
-      renderCustomMetadata() {
+      renderHeaderMetadata() {
         return createCollapsedToggle(
           instance?.options.collapsed ?? false,
           (checked) => {

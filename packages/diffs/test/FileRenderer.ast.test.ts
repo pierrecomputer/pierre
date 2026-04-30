@@ -1,9 +1,14 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import type { Element, ElementContent } from 'hast';
 
+import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import { mockFiles } from './mocks';
 import { assertDefined } from './testUtils';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 describe('FileRenderer AST Structure', () => {
   test('should generate correct AST structure for JavaScript file', async () => {

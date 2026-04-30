@@ -1,36 +1,37 @@
 type Callback = (time: number) => unknown;
 
-const queuedCallbacks = new Set<Callback>();
 let callbacks = new Set<Callback>();
 let frameId: null | number = null;
-let isRendering = false;
 
 // TODO(amadeus): Figure out a proper name for this module...
 export function queueRender(callback: Callback): void {
-  if (isRendering) {
-    queuedCallbacks.add(callback);
-    return;
-  }
   callbacks.add(callback);
   frameId ??= requestAnimationFrame(render);
 }
 
+export function dequeueRender(callback: Callback): void {
+  callbacks.delete(callback);
+  if (callbacks.size === 0 && frameId != null) {
+    cancelAnimationFrame(frameId);
+    frameId = null;
+  }
+}
+
 function render(time: number): void {
-  isRendering = true;
-  for (const callback of callbacks) {
+  const toIterate = new Set(callbacks);
+  callbacks.clear();
+  for (const callback of toIterate) {
     try {
       callback(time);
     } catch (error) {
       console.error(error);
     }
   }
-  callbacks.clear();
-  if (queuedCallbacks.size > 0) {
-    callbacks = new Set(queuedCallbacks);
-    queuedCallbacks.clear();
+  // If render picked up any new callbacks, lets trigger a new
+  // requestAnimationFrame
+  if (callbacks.size > 0) {
     frameId = requestAnimationFrame(render);
   } else {
     frameId = null;
   }
-  isRendering = false;
 }

@@ -2682,6 +2682,7 @@ exports[`file.patch fixture parses and renders the patch file: rendered patch 1`
     "properties": {
       "data-change-type": "change",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",

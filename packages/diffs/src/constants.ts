@@ -1,6 +1,8 @@
 import type {
+  CodeViewMetrics,
   HunkExpansionRegion,
   RenderRange,
+  SmoothScrollSettings,
   ThemesType,
   VirtualFileMetrics,
 } from './types';
@@ -42,12 +44,30 @@ export const UNSAFE_CSS_ATTRIBUTE = 'data-unsafe-css';
 export const CORE_CSS_ATTRIBUTE = 'data-core-css';
 
 export const DEFAULT_COLLAPSED_CONTEXT_THRESHOLD = 1;
+export const DEFAULT_TOKENIZE_MAX_LENGTH = 100_000;
 export const DEFAULT_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
   hunkLineCount: 50,
   lineHeight: 20,
   diffHeaderHeight: 44,
   hunkSeparatorHeight: 32,
-  fileGap: 8,
+  spacing: 8,
+};
+
+export const DEFAULT_CODE_VIEW_FILE_METRICS: VirtualFileMetrics = {
+  ...DEFAULT_VIRTUAL_FILE_METRICS,
+  hunkLineCount: 1,
+};
+
+export const DEFAULT_CODE_VIEW_METRICS: CodeViewMetrics = {
+  paddingTop: 8,
+  paddingBottom: 8,
+  gap: 8,
+};
+
+export const DEFAULT_SMOOTH_SCROLL_SETTINGS: SmoothScrollSettings = {
+  omega: 0.015,
+  positionEpsilon: 0.5,
+  velocityEpsilon: 0.05,
 };
 
 export const DEFAULT_EXPANDED_REGION: HunkExpansionRegion = Object.freeze({

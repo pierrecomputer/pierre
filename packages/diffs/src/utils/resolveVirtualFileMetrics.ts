@@ -16,6 +16,27 @@ export function resolveVirtualFileMetrics(
   return metrics;
 }
 
+export function getVirtualFileHeaderRegion(
+  metrics: VirtualFileMetrics,
+  disableFileHeader: boolean
+): number {
+  const paddingTop = getVirtualFilePaddingTop(metrics, disableFileHeader);
+  return disableFileHeader ? paddingTop : metrics.diffHeaderHeight + paddingTop;
+}
+
+export function getVirtualFilePaddingTop(
+  metrics: VirtualFileMetrics,
+  disableFileHeader: boolean
+): number {
+  return metrics.paddingTop ?? (disableFileHeader ? metrics.spacing : 0);
+}
+
+export function getVirtualFilePaddingBottom(
+  metrics: VirtualFileMetrics
+): number {
+  return metrics.paddingBottom ?? metrics.spacing;
+}
+
 function getHunkSeparatorHeight(
   type: HunkSeparators,
   customHeight: number | undefined

@@ -21,16 +21,19 @@ import {
 export interface CreateFileHeaderElementProps {
   fileOrDiff: FileDiffMetadata | FileContents;
   mode: FileHeaderRenderMode;
+  stickyHeader: boolean;
 }
 
 export function createFileHeaderElement({
   fileOrDiff,
   mode,
+  stickyHeader,
 }: CreateFileHeaderElementProps): HASTElement {
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {
     'data-diffs-header': mode,
     'data-change-type': fileDiff?.type,
+    'data-sticky': stickyHeader ? '' : undefined,
   };
 
   return createHastElement({

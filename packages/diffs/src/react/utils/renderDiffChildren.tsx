@@ -24,7 +24,6 @@ interface RenderDiffChildrenProps<LAnnotation, T> {
   renderHeaderMetadata: DiffBasePropsReact<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: DiffBasePropsReact<LAnnotation>['renderAnnotation'];
   renderGutterUtility: DiffBasePropsReact<LAnnotation>['renderGutterUtility'];
-  renderHoverUtility: DiffBasePropsReact<LAnnotation>['renderHoverUtility'];
   renderMergeConflictUtility?(
     action: MergeConflictDiffAction,
     getInstance: () => T | undefined
@@ -42,13 +41,11 @@ export function renderDiffChildren<LAnnotation, T>({
   renderHeaderMetadata,
   renderAnnotation,
   renderGutterUtility,
-  renderHoverUtility,
   renderMergeConflictUtility,
   lineAnnotations,
   getHoveredLine,
   getInstance,
 }: RenderDiffChildrenProps<LAnnotation, T>): ReactNode {
-  const gutterUtility = renderGutterUtility ?? renderHoverUtility;
   const customHeader = renderCustomHeader?.(fileDiff);
   const prefix = renderHeaderPrefix?.(fileDiff);
   const metadata = renderHeaderMetadata?.(fileDiff);
@@ -84,9 +81,9 @@ export function renderDiffChildren<LAnnotation, T>({
             </div>
           );
         })}
-      {gutterUtility != null && (
+      {renderGutterUtility != null && (
         <div slot="gutter-utility-slot" style={GutterUtilitySlotStyles}>
-          {gutterUtility(getHoveredLine)}
+          {renderGutterUtility(getHoveredLine)}
         </div>
       )}
     </>

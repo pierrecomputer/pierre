@@ -1,7 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import type { ElementContent, Element as HASTElement } from 'hast';
 
-import { DiffHunksRenderer, parseDiffFromFile } from '../src';
+import {
+  DiffHunksRenderer,
+  disposeHighlighter,
+  parseDiffFromFile,
+} from '../src';
 import type { DiffLineAnnotation, LineTypes } from '../src/types';
 import { fileNew, fileOld } from './mocks';
 import {
@@ -16,6 +20,10 @@ import {
   isHastElement,
   isHastLineElement,
 } from './testUtils';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 const oldFile = { name: 'DiffRenderer.ts', contents: fileOld };
 const newFile = { name: 'DiffRenderer.ts', contents: fileNew };

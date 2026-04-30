@@ -116,6 +116,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.2: Part
     "properties": {
       "data-change-type": "change",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",
@@ -29504,6 +29505,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.3: Part
     "properties": {
       "data-change-type": "change",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",
@@ -58657,6 +58659,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.4: Part
     "properties": {
       "data-change-type": "change",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",
@@ -88237,6 +88240,7 @@ exports[`DiffHunksRenderer - Virtualization expanded collapsed regions 3.5: Wind
     "properties": {
       "data-change-type": "change",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",
@@ -91070,6 +91074,7 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.1: Rendered
     "properties": {
       "data-change-type": "change",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",
@@ -92323,6 +92328,7 @@ exports[`DiffHunksRenderer - Virtualization correct lines rendered 6.2: Rendered
     "properties": {
       "data-change-type": "change",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",

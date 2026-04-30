@@ -10,8 +10,10 @@ similar types of props, which you can find documented in
 
 ### Components
 
-The React API exposes five main components:
+The React API exposes six main components:
 
+- `CodeView` renders a mixed, virtualized list of files and diffs inside one
+  scroll container
 - `MultiFileDiff` compares two file versions
 - `PatchDiff` renders from a patch string
 - `FileDiff` renders a pre-parsed `FileDiffMetadata`
@@ -20,6 +22,7 @@ The React API exposes five main components:
   - _Currently in beta/experimental and may change in future releases._
 
 <ComponentTabs
+  reactAPICodeView={reactAPICodeView}
   reactAPIMultiFileDiff={reactAPIMultiFileDiff}
   reactAPIFileDiff={reactAPIFileDiff}
   reactAPIPatch={reactAPIPatch}
@@ -30,12 +33,19 @@ The React API exposes five main components:
 `UnresolvedFile` is intentionally uncontrolled in React. Treat `file` as initial
 input and remount (for example, with a changing `key`) when you want to reset.
 
+The `CodeView` tab above is the quick-start version. For the full guide on
+items, ids, `version`, selection, and `scrollTo`, see [CodeView](#code-view).
+
 ### Shared Props
 
 The three diff components (`MultiFileDiff`, `PatchDiff`, and `FileDiff`) share a
 common set of props for configuration, annotations, and styling. The `File`
 component has similar props, but uses `LineAnnotation` instead of
 `DiffLineAnnotation` (no `side` property).
+
+`CodeView` reuses many of the same option names internally, but it has its own
+`items`, viewer ref, and mixed-item render props. See [CodeView](#code-view) for
+the dedicated guide.
 
 Header customization and collapsing behavior:
 
