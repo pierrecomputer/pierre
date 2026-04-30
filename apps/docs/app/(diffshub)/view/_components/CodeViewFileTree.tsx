@@ -5,7 +5,7 @@ import type { FileTree as FileTreeModel } from '@pierre/trees';
 import { FileTree, useFileTree } from '@pierre/trees/react';
 import { type CSSProperties, memo, useEffect, useRef } from 'react';
 
-import type { FileTreePublicId } from '../../../../packages/trees/dist/model/publicTypes';
+import type { FileTreePublicId } from '../../../../../../packages/trees/dist/model/publicTypes';
 import { BASE_FILE_TREE_OPTIONS } from './constants';
 import type { CodeViewFileTreeSource } from './types';
 import { cn } from '@/lib/utils';
