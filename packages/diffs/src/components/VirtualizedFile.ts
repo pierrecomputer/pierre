@@ -18,6 +18,22 @@ import type { CodeView } from './CodeView';
 import { File, type FileOptions, type FileRenderProps } from './File';
 import type { Virtualizer } from './Virtualizer';
 
+interface FileLayoutCheckpoint {
+  lineIndex: number;
+  top: number;
+}
+
+interface FileLayoutCache {
+  // Sparse map: line index -> measured height. Only stores lines that differ
+  // from what is returned by `getLineHeight`.
+  heights: Map<number, number>;
+  // Sparse measured positions used to resume deep geometry scans near a target
+  // line or scroll offset instead of replaying layout from the start.
+  checkpoints: FileLayoutCheckpoint[];
+}
+
+const LAYOUT_CHECKPOINT_INTERVAL = 5_000;
+
 let instanceId = -1;
 
 export class VirtualizedFile<
@@ -27,10 +43,7 @@ export class VirtualizedFile<
 
   public top: number | undefined;
   public height: number = 0;
-  // Sparse map: line index -> measured height
-  // Only stores lines that differ from what is returned from default line
-  // height
-  private heightCache: Map<number, number> = new Map();
+  private cache: FileLayoutCache = { heights: new Map(), checkpoints: [] };
   private isVisible: boolean = false;
   private isSetup: boolean = false;
   private forceRenderOverride: true | undefined;
@@ -51,7 +64,8 @@ export class VirtualizedFile<
     }
 
     this.metrics = metrics;
-    this.heightCache.clear();
+    this.cache.heights.clear();
+    this.cache.checkpoints = [];
     this.renderRange = undefined;
   }
 
@@ -59,7 +73,7 @@ export class VirtualizedFile<
   // If not cached and hasMetadataLine is true, adds lineHeight for the
   // metadata.
   public getLineHeight(lineIndex: number, hasMetadataLine = false): number {
-    const cached = this.heightCache.get(lineIndex);
+    const cached = this.cache.heights.get(lineIndex);
     if (cached != null) {
       return cached;
     }
@@ -79,7 +93,8 @@ export class VirtualizedFile<
       previousOverflow !== this.options.overflow ||
       previousCollapsed !== this.options.collapsed
     ) {
-      this.heightCache.clear();
+      this.cache.heights.clear();
+      this.cache.checkpoints = [];
       // NOTE(amadeus): In CodeView we intentionally batch computes to all
       // happen at the same time, so we shouldn't trigger this here
       if (this.isSimpleMode()) {
@@ -159,11 +174,11 @@ export class VirtualizedFile<
       // Line is back to standard height (e.g., after window resize)
       // Remove from cache
       if (measuredHeight === this.metrics.lineHeight * (hasMetadata ? 2 : 1)) {
-        this.heightCache.delete(lineIndex);
+        this.cache.heights.delete(lineIndex);
       }
       // Non-standard height, cache it
       else {
-        this.heightCache.set(lineIndex, measuredHeight);
+        this.cache.heights.set(lineIndex, measuredHeight);
       }
     }
 
@@ -220,7 +235,14 @@ export class VirtualizedFile<
       };
     }
 
-    for (let lineIndex = 0; lineIndex < clampedLineIndex; lineIndex++) {
+    const checkpoint =
+      this.getLayoutCheckpointBeforeLineIndex(clampedLineIndex);
+    top = checkpoint?.top ?? top;
+    for (
+      let lineIndex = checkpoint?.lineIndex ?? 0;
+      lineIndex < clampedLineIndex;
+      lineIndex++
+    ) {
       top += this.getLineHeight(lineIndex, false);
     }
 
@@ -347,6 +369,7 @@ export class VirtualizedFile<
   private computeApproximateSize(): void {
     const isFirstCompute = this.height === 0;
     this.height = 0;
+    this.cache.checkpoints = [];
     if (this.file == null) {
       return;
     }
@@ -375,6 +398,7 @@ export class VirtualizedFile<
       iterateOverFile({
         lines,
         callback: ({ lineIndex }) => {
+          this.addLayoutCheckpoint(lineIndex, this.height);
           this.height += this.getLineHeight(lineIndex, false);
         },
       });
@@ -507,6 +531,89 @@ export class VirtualizedFile<
     return this.virtualizer.type === 'advanced';
   }
 
+  private addLayoutCheckpoint(lineIndex: number, top: number): void {
+    if (lineIndex % LAYOUT_CHECKPOINT_INTERVAL !== 0) {
+      return;
+    }
+    this.cache.checkpoints.push({ lineIndex, top });
+  }
+
+  // Find the nearest sparse layout checkpoint at or before a raw file line.
+  // Checkpoints store measured `top` offsets every few thousand lines, so a
+  // binary search lets deep line-position lookups resume from that checkpoint
+  // instead of replaying layout from the start of the file.
+  private getLayoutCheckpointBeforeLineIndex(
+    lineIndex: number
+  ): FileLayoutCheckpoint | undefined {
+    if (lineIndex <= 0 || this.cache.checkpoints.length === 0) {
+      return undefined;
+    }
+
+    let low = 0;
+    let high = this.cache.checkpoints.length - 1;
+    let result: FileLayoutCheckpoint | undefined;
+
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      const checkpoint = this.cache.checkpoints[mid];
+      if (checkpoint == null) {
+        throw new Error('VirtualizedFile: invalid checkpoint index');
+      }
+      if (checkpoint.lineIndex <= lineIndex) {
+        result = checkpoint;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    return result;
+  }
+
+  // Find the nearest sparse layout checkpoint at or before a scroll offset.
+  // Render-range scans start from this checkpoint so variable-height files
+  // only replay the nearby measured rows. When `hunkLineCount` is provided,
+  // step backward to a hunk boundary so hooks that depend on grouped lines
+  // still see a complete hunk.
+  private getLayoutCheckpointBeforeTop(
+    top: number,
+    hunkLineCount?: number
+  ): FileLayoutCheckpoint | undefined {
+    let low = 0;
+    let high = this.cache.checkpoints.length - 1;
+    let resultIndex = -1;
+
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      const checkpoint = this.cache.checkpoints[mid];
+      if (checkpoint == null) {
+        throw new Error('VirtualizedFile: invalid checkpoint index');
+      }
+      if (checkpoint.top <= top) {
+        resultIndex = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    if (hunkLineCount == null) {
+      return resultIndex >= 0 ? this.cache.checkpoints[resultIndex] : undefined;
+    }
+
+    for (let index = resultIndex; index >= 0; index--) {
+      const checkpoint = this.cache.checkpoints[index];
+      if (checkpoint == null) {
+        throw new Error('VirtualizedFile: invalid checkpoint index');
+      }
+      if (checkpoint.lineIndex % hunkLineCount === 0) {
+        return checkpoint;
+      }
+    }
+
+    return undefined;
+  }
+
   private getVirtualizedTop(): number {
     if (this.virtualizer.type === 'advanced') {
       return this.virtualizer.getTopForInstance(this);
@@ -611,20 +718,29 @@ export class VirtualizedFile<
     // Complex case: need to account for line annotations or wrap overflow
     const overflowHunks = totalHunks;
     const hunkOffsets: number[] = [];
+    // Start the scan before the viewport so we collect hunk offsets that may be
+    // needed for bufferBefore. This only chooses the scan origin; the returned
+    // render range is still computed from the visible window below.
+    const checkpoint = this.getLayoutCheckpointBeforeTop(
+      Math.max(0, top - fileTop - totalLines * lineHeight * 2),
+      hunkLineCount
+    );
 
-    let absoluteLineTop = fileTop + headerRegion;
-    let currentLine = 0;
+    let absoluteLineTop = fileTop + (checkpoint?.top ?? headerRegion);
+    let currentLine = checkpoint?.lineIndex ?? 0;
     let firstVisibleHunk: number | undefined;
     let centerHunk: number | undefined;
     let overflowCounter: number | undefined;
 
     iterateOverFile({
       lines,
+      startingLine: checkpoint?.lineIndex ?? 0,
       callback: ({ lineIndex }) => {
         const isAtHunkBoundary = currentLine % hunkLineCount === 0;
+        const currentHunk = Math.floor(currentLine / hunkLineCount);
 
         if (isAtHunkBoundary) {
-          hunkOffsets.push(absoluteLineTop - (fileTop + headerRegion));
+          hunkOffsets[currentHunk] = absoluteLineTop - (fileTop + headerRegion);
 
           if (overflowCounter != null) {
             if (overflowCounter <= 0) {
@@ -635,7 +751,6 @@ export class VirtualizedFile<
         }
 
         const lineHeight = this.getLineHeight(lineIndex, false);
-        const currentHunk = Math.floor(currentLine / hunkLineCount);
 
         // Track visible region
         if (absoluteLineTop > top - lineHeight && absoluteLineTop < bottom) {
@@ -674,12 +789,15 @@ export class VirtualizedFile<
     }
 
     // Calculate balanced startingLine centered around the viewport center
-    const collectedHunks = hunkOffsets.length;
     centerHunk ??= firstVisibleHunk;
     const idealStartHunk = Math.round(centerHunk - totalHunks / 2);
 
-    // Clamp startHunk: at the beginning, reduce totalLines; at the end, shift startHunk back
-    const maxStartHunk = Math.max(0, collectedHunks - totalHunks);
+    // Clamp startHunk: at the beginning, reduce totalLines; at the end, shift
+    // startHunk back
+    const maxStartHunk = Math.max(
+      0,
+      Math.ceil(lineCount / hunkLineCount) - totalHunks
+    );
     const startHunk = Math.max(0, Math.min(idealStartHunk, maxStartHunk));
     const startingLine = startHunk * hunkLineCount;
 

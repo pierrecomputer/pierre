@@ -53,7 +53,7 @@ export const DEFAULT_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
   spacing: 8,
 };
 
-export const DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
+export const DEFAULT_CODE_VIEW_FILE_METRICS: VirtualFileMetrics = {
   ...DEFAULT_VIRTUAL_FILE_METRICS,
   hunkLineCount: 1,
 };

@@ -1,6 +1,10 @@
 'use client';
 
-import { areWorkerStatsEqual, queueRender } from '@pierre/diffs';
+import {
+  areWorkerStatsEqual,
+  DEFAULT_CODE_VIEW_FILE_METRICS,
+  queueRender,
+} from '@pierre/diffs';
 import { useWorkerPool } from '@pierre/diffs/react';
 import type { WorkerStats } from '@pierre/diffs/worker';
 import { memo, type RefObject, useEffect, useState } from 'react';
@@ -30,7 +34,10 @@ class AutoScrollTester {
       this.direction *= -1;
     }
     this.scrollRef.current.scrollTo({
-      top: scrollTop + AutoScrollTester.SPEED * this.direction,
+      top:
+        scrollTop +
+        AutoScrollTester.SPEED * this.direction +
+        Math.random() * DEFAULT_CODE_VIEW_FILE_METRICS.lineHeight,
     });
     queueRender(this.render);
   };

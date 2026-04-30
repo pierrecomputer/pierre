@@ -1,5 +1,5 @@
 import {
-  DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS,
+  DEFAULT_CODE_VIEW_FILE_METRICS,
   DEFAULT_CODE_VIEW_METRICS,
   DEFAULT_SMOOTH_SCROLL_SETTINGS,
   DEFAULT_THEMES,
@@ -487,7 +487,7 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   private getItemMetrics(): VirtualFileMetrics {
-    return this.options.itemMetrics ?? DEFAULT_ADVANCED_VIRTUAL_FILE_METRICS;
+    return this.options.itemMetrics ?? DEFAULT_CODE_VIEW_FILE_METRICS;
   }
 
   private getSmoothScrollSettings(): SmoothScrollSettings {
