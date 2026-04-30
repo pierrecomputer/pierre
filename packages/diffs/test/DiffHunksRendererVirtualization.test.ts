@@ -1,6 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 
-import { DiffHunksRenderer, parseDiffFromFile } from '../src';
+import {
+  DiffHunksRenderer,
+  disposeHighlighter,
+  parseDiffFromFile,
+} from '../src';
 import { fileNew, fileOld } from './mocks';
 import {
   assertDefined,
@@ -8,6 +12,10 @@ import {
   extractLineNumbers,
   findBufferElements,
 } from './testUtils';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 describe('DiffHunksRenderer - Virtualization', () => {
   // Shared instances across tests for efficiency

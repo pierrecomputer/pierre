@@ -14,6 +14,8 @@ import type {
 
 export type { CreatePatchOptionsNonabortable };
 
+export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
+
 /**
  * Represents a file's contents for generating diffs via `parseDiffFromFile` or
  * for when rendering a file directly using the File components
@@ -371,12 +373,14 @@ export interface BaseCodeOptions {
   collapsed?: boolean;
   disableFileHeader?: boolean;
   disableVirtualizationBuffers?: boolean;
+  stickyHeader?: boolean;
 
   // Shiki config options, ignored if you're using a WorkerPoolManager
   preferredHighlighter?: HighlighterTypes;
   useCSSClasses?: boolean;
   useTokenTransformer?: boolean;
   tokenizeMaxLineLength?: number;
+  tokenizeMaxLength?: number;
 
   // Custom CSS injection
   unsafeCSS?: string;
@@ -460,6 +464,65 @@ export type DiffLineAnnotation<T = undefined> = {
   side: AnnotationSide;
   lineNumber: number;
 } & OptionalMetadata<T>;
+
+export type CodeViewItemVersion = string | number;
+
+export type CodeViewFileItem<T = undefined> = {
+  id: string;
+  type: 'file';
+  file: FileContents;
+  annotations?: LineAnnotation<T>[];
+  version?: CodeViewItemVersion;
+  collapsed?: boolean;
+};
+
+export type CodeViewDiffItem<T = undefined> = {
+  id: string;
+  type: 'diff';
+  fileDiff: FileDiffMetadata;
+  annotations?: DiffLineAnnotation<T>[];
+  version?: CodeViewItemVersion;
+  collapsed?: boolean;
+};
+
+export type CodeViewItem<T = undefined> =
+  | CodeViewFileItem<T>
+  | CodeViewDiffItem<T>;
+
+export interface CodeViewPositionScrollTarget {
+  type: 'position';
+  position: number;
+  behavior?: CodeViewScrollBehavior;
+}
+
+export interface CodeViewLineScrollTarget {
+  type: 'line';
+  id: string;
+  lineNumber: number;
+  side?: SelectionSide;
+  align?: 'start' | 'center' | 'end' | 'nearest';
+  offset?: number;
+  behavior?: CodeViewScrollBehavior;
+}
+
+export interface NumericScrollLineAnchor {
+  lineNumber: number;
+  top: number;
+  side?: SelectionSide;
+}
+
+export interface CodeViewItemScrollTarget {
+  type: 'item';
+  id: string;
+  align?: 'start' | 'center' | 'end' | 'nearest';
+  offset?: number;
+  behavior?: CodeViewScrollBehavior;
+}
+
+export type CodeViewScrollTarget =
+  | CodeViewPositionScrollTarget
+  | CodeViewLineScrollTarget
+  | CodeViewItemScrollTarget;
 
 export type MergeConflictResolution = 'current' | 'incoming' | 'both';
 
@@ -679,16 +742,61 @@ export interface RenderWindow {
 }
 
 export interface VirtualWindowSpecs {
+  /** Absolute top edge of the active virtual window in scroll-space pixels. */
   top: number;
+  /** Absolute bottom edge of the active virtual window in scroll-space pixels. */
   bottom: number;
 }
 
 export interface VirtualFileMetrics {
+  /** Number of rendered lines per hunk chunk when virtualization batches line rendering. */
   hunkLineCount: number;
+  /** Estimated single-line row height used before a line is measured. */
   lineHeight: number;
+  /** Height reserved for the file or diff header region. */
   diffHeaderHeight: number;
+  /** Height reserved for each collapsed-context separator row. */
   hunkSeparatorHeight: number;
-  fileGap: number;
+  /** Vertical spacing used around hunks and file-level padding. You should not
+   * change this from the default if you aren't applying custom CSS */
+  spacing: number;
+  /** Optional top padding applied after the file header, or before content
+   * when the header is disabled. Defaults to 0 with a header, otherwise
+   * defaults to spacing if header is disabled */
+  paddingTop?: number;
+  /** Optional bottom padding applied after file content, and only if there is
+   * code for the diff. Defaults to spacing if none provided */
+  paddingBottom?: number;
+}
+
+export interface CodeViewMetrics {
+  /** Top padding applied to the viewer's sticky container offset. */
+  paddingTop: number;
+  /** Bottom padding added after the final rendered item in the viewer. */
+  paddingBottom: number;
+  /** Vertical gap between virtualized items in the viewer. */
+  gap: number;
+}
+
+export interface SmoothScrollSettings {
+  /**
+   * Natural frequency of the critically-damped spring, in rad/ms. 99% settle
+   * takes roughly `6.6 / omega`; 0.015 gives ~440ms. Raise for a snappier
+   * animation; lower for a longer glide.
+   */
+  omega: number;
+  /**
+   * Distance from destination (in CSS pixels) below which the spring is
+   * considered settled. Must also clear `velocityEpsilon` before the
+   * animation actually stops and snaps to destination.
+   */
+  positionEpsilon: number;
+  /**
+   * Velocity magnitude (in CSS pixels per millisecond) below which the
+   * spring is considered effectively stationary. Pairs with
+   * `positionEpsilon` to gate the settle transition.
+   */
+  velocityEpsilon: number;
 }
 
 export interface SelectionPoint {
@@ -736,7 +844,13 @@ export interface ProcessFileConflictData {
 }
 
 export interface AppliedThemeStyleCache {
+  theme: DiffsThemeNames | ThemesType;
   themeStyles: string;
   themeType: ThemeTypes;
   baseThemeType: 'light' | 'dark' | undefined;
+}
+
+export interface StickySpecs {
+  topOffset: number;
+  height: number;
 }

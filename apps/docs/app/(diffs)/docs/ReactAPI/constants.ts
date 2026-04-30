@@ -184,8 +184,6 @@ interface DiffOptions {
 
   // Must be true to enable renderGutterUtility prop
   enableGutterUtility: false,
-  // Deprecated alias: enableHoverUtility
-  // This boolean controls visibility for both built-in and custom gutter utility UI.
 
   // Callbacks for mouse events on diff lines
   onLineClick({ lineNumber, side, event }) {
@@ -618,6 +616,66 @@ export function MergeConflictPreview() {
   options,
 };
 
+export const REACT_API_CODE_VIEW: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'code_view.tsx',
+    contents: `import {
+  parseDiffFromFile,
+  type CodeViewItem,
+} from '@pierre/diffs';
+import { CodeView } from '@pierre/diffs/react';
+import { useMemo } from 'react';
+
+const oldAppFile = {
+  name: 'src/app.ts',
+  contents: 'export function greet() {\n  return "hello";\n}',
+};
+
+const newAppFile = {
+  name: 'src/app.ts',
+  contents:
+    'export function greet(name: string) {\n  return "hello " + name;\n}',
+};
+
+const readmeFile = {
+  name: 'README.md',
+  contents: '# Docs\n\nThis file is rendered inline with the diff list.',
+};
+
+export function ReviewSurface() {
+  const items = useMemo<CodeViewItem[]>(
+    () => [
+      {
+        id: 'diff:src/app.ts',
+        type: 'diff',
+        fileDiff: parseDiffFromFile(oldAppFile, newAppFile),
+        annotations: [{ side: 'additions', lineNumber: 2 }],
+      },
+      {
+        id: 'file:README.md',
+        type: 'file',
+        file: readmeFile,
+      },
+    ],
+    []
+  );
+
+  return (
+    <CodeView
+      items={items}
+      style={{ height: 600, overflow: 'auto' }}
+      options={{
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        stickyHeaders: true,
+        viewerMetrics: { paddingTop: 16, paddingBottom: 24, gap: 12 },
+      }}
+    />
+  );
+}`,
+  },
+  options,
+};
+
 export const REACT_API_SHARED_FILE_OPTIONS: PreloadFileOptions<undefined> = {
   file: {
     name: 'shared_file_options.tsx',
@@ -724,9 +782,6 @@ interface FileOptions {
 
   // Must be true to enable renderGutterUtility prop
   enableGutterUtility: false,
-  // Deprecated alias: enableHoverUtility
-  // This boolean controls visibility for both built-in and custom gutter
-  // utility UI.
 
   // Callbacks for mouse events on file lines
   onLineClick({ lineNumber, event }) {

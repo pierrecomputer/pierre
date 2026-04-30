@@ -55,6 +55,7 @@ export function useFileInstance<LAnnotation>({
   disableWorkerPool,
 }: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
+  const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
   const instanceRef = useRef<
     File<LAnnotation> | VirtualizedFile<LAnnotation> | null
@@ -69,6 +70,7 @@ export function useFileInstance<LAnnotation>({
       if (simpleVirtualizer != null) {
         instanceRef.current = new VirtualizedFile(
           mergeFileOptions({
+            controlledSelection,
             hasCustomHeader,
             hasGutterRenderUtility,
             options,
@@ -81,6 +83,7 @@ export function useFileInstance<LAnnotation>({
       } else {
         instanceRef.current = new File(
           mergeFileOptions({
+            controlledSelection,
             hasCustomHeader,
             hasGutterRenderUtility,
             options,
@@ -107,6 +110,7 @@ export function useFileInstance<LAnnotation>({
   useIsometricEffect(() => {
     if (instanceRef.current == null) return;
     const newOptions = mergeFileOptions({
+      controlledSelection,
       hasCustomHeader,
       hasGutterRenderUtility,
       options,
@@ -132,21 +136,28 @@ export function useFileInstance<LAnnotation>({
 
 interface MergeFileOptionsProps<LAnnotation> {
   options: FileOptions<LAnnotation> | undefined;
+  controlledSelection: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
 }
 
 function mergeFileOptions<LAnnotation>({
   options,
+  controlledSelection,
   hasCustomHeader,
   hasGutterRenderUtility,
 }: MergeFileOptionsProps<LAnnotation>): FileOptions<LAnnotation> | undefined {
-  if (hasGutterRenderUtility || hasCustomHeader) {
-    return {
-      ...options,
-      renderCustomHeader: hasCustomHeader ? noopRender : undefined,
-      renderGutterUtility: hasGutterRenderUtility ? noopRender : undefined,
-    };
+  if (!controlledSelection && !hasGutterRenderUtility && !hasCustomHeader) {
+    return options;
   }
-  return options;
+  return {
+    ...options,
+    controlledSelection,
+    renderCustomHeader: hasCustomHeader
+      ? noopRender
+      : options?.renderCustomHeader,
+    renderGutterUtility: hasGutterRenderUtility
+      ? noopRender
+      : options?.renderGutterUtility,
+  };
 }

@@ -10,6 +10,7 @@ describe('createFileHeaderElement', () => {
         contents: 'export {}\n',
       },
       mode: 'default',
+      stickyHeader: false,
     });
 
     expect(header).toMatchSnapshot();
@@ -23,6 +24,7 @@ describe('createFileHeaderElement', () => {
         contents: 'export {}\n',
       },
       mode: 'default',
+      stickyHeader: false,
     });
 
     expect(header).toMatchSnapshot();
@@ -35,8 +37,23 @@ describe('createFileHeaderElement', () => {
         contents: 'export {}\n',
       },
       mode: 'custom',
+      stickyHeader: false,
     });
 
+    expect(header).toMatchSnapshot();
+  });
+
+  test('renders sticky file header AST', () => {
+    const header = createFileHeaderElement({
+      fileOrDiff: {
+        name: 'src/index.ts',
+        contents: 'export {}\n',
+      },
+      mode: 'default',
+      stickyHeader: true,
+    });
+
+    expect(header.properties?.['data-sticky']).toBe('');
     expect(header).toMatchSnapshot();
   });
 });

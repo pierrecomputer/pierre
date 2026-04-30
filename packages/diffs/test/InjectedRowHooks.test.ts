@@ -1,8 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import type { ElementContent } from 'hast';
 
 import {
   DiffHunksRenderer,
+  disposeHighlighter,
   type InjectedRow,
   parseDiffFromFile,
   type RenderedLineContext,
@@ -13,6 +14,10 @@ import { UnresolvedFileHunksRenderer } from '../src/renderers/UnresolvedFileHunk
 import { createGutterGap, createHastElement } from '../src/utils/hast_utils';
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
 import { assertDefined, isHastElement } from './testUtils';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 const inlineGutter = () => createGutterGap(undefined, 'annotation', 1);
 

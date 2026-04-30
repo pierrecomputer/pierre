@@ -246,6 +246,13 @@
     );
   }
 
+  [data-diffs-header][data-sticky] {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: var(--diffs-bg);
+  }
+
   [data-file-info] {
     padding: 10px;
     font-weight: 700;
@@ -878,6 +885,20 @@
     min-height: 1lh;
   }
 
+  [data-gutter-buffer] {
+    padding-left: 2ch;
+    padding-right: 1ch;
+
+    &::before {
+      content: '';
+      display: block;
+      min-width: var(
+        --diffs-min-number-column-width,
+        var(--diffs-min-number-column-width-default, 3ch)
+      );
+    }
+  }
+
   [data-gutter-buffer='annotation'] {
     --diffs-annotation-bg: var(--diffs-bg-context-gutter);
     min-height: 0;
@@ -1413,10 +1434,6 @@
       min-width: 0;
       border-right: 0;
     }
-  }
-
-  [data-interactive-line-numbers] [data-column-number] {
-    cursor: pointer;
   }
 
   [data-diff-span] {

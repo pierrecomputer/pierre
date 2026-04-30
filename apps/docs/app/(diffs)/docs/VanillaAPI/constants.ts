@@ -134,6 +134,67 @@ instance.render({ file, containerWrapper: container });`,
     options,
   };
 
+export const VANILLA_API_CODE_VIEW_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'code_view_example.ts',
+    contents: `import {
+  CodeView,
+  parseDiffFromFile,
+  type CodeViewItem,
+} from '@pierre/diffs';
+
+const root = document.getElementById('review-root');
+if (root == null) {
+  throw new Error('Expected #review-root to exist');
+}
+
+root.style.height = '600px';
+root.style.overflow = 'auto';
+
+const viewer = new CodeView({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  stickyHeaders: true,
+  viewerMetrics: { paddingTop: 16, paddingBottom: 24, gap: 12 },
+});
+
+viewer.setup(root);
+
+const items: CodeViewItem[] = [
+  {
+    id: 'diff:src/app.ts',
+    type: 'diff',
+    fileDiff: parseDiffFromFile(
+      {
+        name: 'src/app.ts',
+        contents: 'export function greet() {\\n  return "hello";\\n}',
+      },
+      {
+        name: 'src/app.ts',
+        contents:
+          'export function greet(name: string) {\\n  return "hello " + name;\\n}',
+      }
+    ),
+    annotations: [{ side: 'additions', lineNumber: 2 }],
+  },
+  {
+    id: 'file:README.md',
+    type: 'file',
+    file: {
+      name: 'README.md',
+      contents: '# Docs\\n\\nThis file is rendered inline with the diff list.',
+    },
+  },
+];
+
+viewer.setItems(items);
+
+window.addEventListener('beforeunload', () => {
+  viewer.cleanUp();
+});`,
+  },
+  options,
+};
+
 // =============================================================================
 // FILEDIFF PROPS
 // =============================================================================
@@ -295,9 +356,6 @@ const instance = new FileDiff({
 
   // Must be true to enable renderGutterUtility
   enableGutterUtility: false,
-  // Deprecated alias: enableHoverUtility
-  // This boolean controls visibility for both built-in and 
-  // custom gutter utility UI.
 
   // Fires when clicking anywhere on a line
   onLineClick({ lineNumber, side, event }) {},
@@ -550,9 +608,6 @@ const instance = new File({
 
   // Must be true to enable renderGutterUtility
   enableGutterUtility: false,
-  // Deprecated alias: enableHoverUtility
-  // This boolean controls visibility for both built-in and 
-  // custom gutter utility UI.
 
   // Fires when clicking anywhere on a line
   onLineClick({ lineNumber, event }) {},
@@ -615,7 +670,7 @@ const instance = new File({
   // ─────────────────────────────────────────────────────────────
 
   // Render custom content in the file header
-  renderCustomMetadata(file) {
+  renderHeaderMetadata(file) {
     const span = document.createElement('span');
     span.textContent = file.name;
     return span;

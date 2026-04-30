@@ -18,6 +18,7 @@ import {
   type InteractionManagerBaseOptions,
   pluckInteractionOptions,
   type SelectedLineRange,
+  type SelectionWriteOptions,
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
 import { ScrollSyncManager } from '../managers/ScrollSyncManager';
@@ -49,6 +50,7 @@ import { areFilesEqual } from '../utils/areFilesEqual';
 import { areHunkDataEqual } from '../utils/areHunkDataEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
+import { areThemesEqual } from '../utils/areThemesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
@@ -66,6 +68,7 @@ export interface FileDiffRenderProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   oldFile?: FileContents;
   newFile?: FileContents;
+  deferManagers?: boolean;
   forceRender?: boolean;
   preventEmit?: boolean;
   fileContainer?: HTMLElement;
@@ -96,10 +99,6 @@ export interface FileDiffOptions<LAnnotation>
         instance: FileDiff<LAnnotation>
       ) => HTMLElement | DocumentFragment | null | undefined);
   disableFileHeader?: boolean;
-  /**
-   * @deprecated Use `enableGutterUtility` instead.
-   */
-  enableHoverUtility?: boolean;
   renderHeaderPrefix?: RenderHeaderPrefixCallback;
   renderHeaderMetadata?: RenderHeaderMetadataCallback;
   renderCustomHeader?: RenderHeaderMetadataCallback;
@@ -113,12 +112,6 @@ export interface FileDiffOptions<LAnnotation>
     annotation: DiffLineAnnotation<LAnnotation>
   ): HTMLElement | undefined;
   renderGutterUtility?(
-    getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
-  ): HTMLElement | null | undefined;
-  /**
-   * @deprecated Use `renderGutterUtility` instead.
-   */
-  renderHoverUtility?(
     getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
   ): HTMLElement | null | undefined;
 
@@ -203,6 +196,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
     new Map();
   protected lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
+  protected managersDirty = false;
 
   protected deletionFile: FileContents | undefined;
   protected additionFile: FileContents | undefined;
@@ -378,18 +372,37 @@ export class FileDiff<LAnnotation = undefined> {
       return;
     }
     this.mergeOptions({ themeType });
+    this.applyCachedThemeState(themeType);
+  }
+
+  private applyCachedThemeState(themeType: ThemeTypes): boolean {
     if (
       typeof this.options.theme === 'string' ||
       this.fileContainer == null ||
       this.appliedThemeCSS == null
     ) {
-      return;
+      return false;
+    }
+    const effectiveThemeType = this.appliedThemeCSS.baseThemeType ?? themeType;
+    if (this.appliedThemeCSS.themeType === effectiveThemeType) {
+      return false;
     }
     this.applyThemeState(
       this.fileContainer,
       this.appliedThemeCSS.themeStyles,
       themeType,
       this.appliedThemeCSS.baseThemeType
+    );
+    return true;
+  }
+
+  private hasThemeChanged(): boolean {
+    return (
+      this.appliedThemeCSS != null &&
+      !areThemesEqual(
+        this.appliedThemeCSS.theme,
+        this.options.theme ?? DEFAULT_THEMES
+      )
     );
   }
 
@@ -419,14 +432,39 @@ export class FileDiff<LAnnotation = undefined> {
     return true;
   }
 
-  public setSelectedLines(range: SelectedLineRange | null): void {
-    this.interactionManager.setSelection(range);
+  public setSelectedLines(
+    range: SelectedLineRange | null,
+    options?: SelectionWriteOptions
+  ): void {
+    this.interactionManager.setSelection(range, options);
+  }
+
+  public flushManagers(): void {
+    if (!this.managersDirty || this.pre == null) {
+      this.managersDirty = false;
+      return;
+    }
+
+    const { diffStyle = 'split', overflow = 'scroll' } = this.options;
+    this.interactionManager.setup(this.pre);
+    this.resizeManager.setup(this.pre, overflow === 'wrap');
+    if (overflow === 'scroll' && diffStyle === 'split') {
+      this.scrollSyncManager.setup(
+        this.pre,
+        this.codeDeletions,
+        this.codeAdditions
+      );
+    } else {
+      this.scrollSyncManager.cleanUp();
+    }
+    this.managersDirty = false;
   }
 
   public cleanUp(recycle: boolean = false): void {
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
     this.scrollSyncManager.cleanUp();
+    this.managersDirty = false;
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.renderRange = undefined;
 
@@ -434,16 +472,10 @@ export class FileDiff<LAnnotation = undefined> {
     if (!this.isContainerManaged) {
       this.fileContainer?.remove();
     }
-    if (this.fileContainer?.shadowRoot != null) {
-      // Manually help garbage collection
-      this.fileContainer.shadowRoot.innerHTML = '';
-    }
     this.fileContainer = undefined;
-    // Manually help garbage collection
-    if (this.pre != null) {
-      this.pre.innerHTML = '';
-      this.pre = undefined;
-    }
+    this.lineAnnotations = [];
+    this.annotationCache.clear();
+    this.pre = undefined;
     this.codeUnified = undefined;
     this.codeDeletions = undefined;
     this.codeAdditions = undefined;
@@ -590,7 +622,6 @@ export class FileDiff<LAnnotation = undefined> {
   }: HydrationSetup<LAnnotation>): void {
     // It's possible we are hydrating a pure-rename and therefore there will be
     // no pre element
-    const { diffStyle = 'split', overflow = 'scroll' } = this.options;
     this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
     this.additionFile = newFile;
     this.deletionFile = oldFile;
@@ -610,15 +641,8 @@ export class FileDiff<LAnnotation = undefined> {
     this.renderAnnotations();
     this.renderGutterUtility();
     this.injectUnsafeCSS();
-    this.interactionManager.setup(this.pre);
-    this.resizeManager.setup(this.pre, overflow === 'wrap');
-    if (overflow === 'scroll' && diffStyle === 'split') {
-      this.scrollSyncManager.setup(
-        this.pre,
-        this.codeDeletions,
-        this.codeAdditions
-      );
-    }
+    this.managersDirty = true;
+    this.flushManagers();
   }
 
   public rerender(): void {
@@ -663,6 +687,7 @@ export class FileDiff<LAnnotation = undefined> {
     oldFile,
     newFile,
     fileDiff,
+    deferManagers = false,
     forceRender = false,
     preventEmit = false,
     lineAnnotations,
@@ -677,8 +702,9 @@ export class FileDiff<LAnnotation = undefined> {
         'FileDiff.render: attempting to call render after cleaned up'
       );
     }
-    const { collapsed = false } = this.options;
+    const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
+    const themeChanged = this.hasThemeChanged();
     const filesDidChange =
       oldFile != null &&
       newFile != null &&
@@ -696,6 +722,7 @@ export class FileDiff<LAnnotation = undefined> {
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !forceRender &&
       !annotationsChanged &&
+      !themeChanged &&
       // If using the fileDiff API, lets check to see if they are equal to
       // avoid doing work
       ((fileDiff != null && fileDiff === this.fileDiff) ||
@@ -703,7 +730,7 @@ export class FileDiff<LAnnotation = undefined> {
         // equal
         (fileDiff == null && !filesDidChange))
     ) {
-      return false;
+      return this.applyCachedThemeState(themeType);
     }
 
     const { renderRange: previousRenderRange } = this;
@@ -732,13 +759,8 @@ export class FileDiff<LAnnotation = undefined> {
 
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
 
-    const {
-      diffStyle = 'split',
-      disableErrorHandling = false,
-      disableFileHeader = false,
-      overflow = 'scroll',
-      themeType = 'system',
-    } = this.options;
+    const { disableErrorHandling = false, disableFileHeader = false } =
+      this.options;
 
     if (disableFileHeader) {
       // Remove existing header from DOM
@@ -753,6 +775,7 @@ export class FileDiff<LAnnotation = undefined> {
       fileContainer,
       containerWrapper
     );
+    this.applyCachedThemeState(themeType);
 
     if (collapsed) {
       this.removeRenderedCode();
@@ -799,7 +822,7 @@ export class FileDiff<LAnnotation = undefined> {
         this.canPartiallyRender(
           forceRender,
           annotationsChanged,
-          filesDidChange || diffDidChange
+          filesDidChange || diffDidChange || themeChanged
         ) &&
         this.applyPartialRender({
           previousRenderRange,
@@ -849,16 +872,9 @@ export class FileDiff<LAnnotation = undefined> {
       this.renderAnnotations();
       this.renderGutterUtility();
 
-      this.interactionManager.setup(pre);
-      this.resizeManager.setup(pre, overflow === 'wrap');
-      if (overflow === 'scroll' && diffStyle === 'split') {
-        this.scrollSyncManager.setup(
-          pre,
-          this.codeDeletions,
-          this.codeAdditions
-        );
-      } else {
-        this.scrollSyncManager.cleanUp();
+      this.managersDirty = true;
+      if (!deferManagers) {
+        this.flushManagers();
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {
@@ -1064,8 +1080,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   protected renderGutterUtility(): void {
-    const renderGutterUtility =
-      this.options.renderGutterUtility ?? this.options.renderHoverUtility;
+    const { renderGutterUtility } = this.options;
     if (this.fileContainer == null || renderGutterUtility == null) {
       this.gutterUtilityContent?.remove();
       this.gutterUtilityContent = undefined;
@@ -1315,11 +1330,15 @@ export class FileDiff<LAnnotation = undefined> {
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const effectiveThemeType = baseThemeType ?? themeType;
+    const currentTheme = this.options.theme ?? DEFAULT_THEMES;
+    const theme =
+      typeof currentTheme === 'string' ? currentTheme : { ...currentTheme };
     if (
       this.themeCSSStyle?.parentNode === shadowRoot &&
       this.appliedThemeCSS?.themeStyles === themeStyles &&
       this.appliedThemeCSS.themeType === effectiveThemeType
     ) {
+      this.appliedThemeCSS.theme = theme;
       return;
     }
     this.themeCSSStyle = upsertHostThemeStyle({
@@ -1330,6 +1349,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.appliedThemeCSS =
       this.themeCSSStyle != null
         ? {
+            theme,
             themeStyles,
             themeType: effectiveThemeType,
             baseThemeType,
@@ -1859,6 +1879,9 @@ export class FileDiff<LAnnotation = undefined> {
             rowCount += totalRows;
           }
           preTrimCount -= rowsToRemove;
+          if (preTrimCount === 0 && newSize === 0) {
+            pendingMetadataTrim = true;
+          }
         }
         // If we are in a post clip era...
         else if (hasPostTrim) {
@@ -2000,8 +2023,7 @@ export class FileDiff<LAnnotation = undefined> {
     pre: HTMLPreElement,
     renderRange: RenderRange | undefined
   ) {
-    const { disableVirtualizationBuffers = false } = this.options;
-    if (disableVirtualizationBuffers || renderRange == null) {
+    if (renderRange == null || this.shouldDisableVirtualizationBuffers()) {
       if (this.bufferBefore != null) {
         this.bufferBefore.remove();
         this.bufferBefore = undefined;
@@ -2047,6 +2069,10 @@ export class FileDiff<LAnnotation = undefined> {
     }
   }
 
+  protected shouldDisableVirtualizationBuffers(): boolean {
+    return this.options.disableVirtualizationBuffers ?? false;
+  }
+
   protected applyPreNodeAttributes(
     pre: HTMLPreElement,
     { additionsContentAST, deletionsContentAST, totalLines }: HunksRenderResult,
@@ -2081,16 +2107,14 @@ export class FileDiff<LAnnotation = undefined> {
 
   private applyErrorToDOM(error: Error, container: HTMLElement) {
     this.cleanupErrorWrapper();
-    const pre = this.getOrCreatePreNode(container);
-    pre.innerHTML = '';
-    pre.remove();
+    this.pre?.remove();
     this.pre = undefined;
     this.appliedPreAttributes = undefined;
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     this.errorWrapper ??= document.createElement('div');
     this.errorWrapper.dataset.errorWrapper = '';
-    this.errorWrapper.innerHTML = '';
+    this.errorWrapper.textContent = '';
     shadowRoot.appendChild(this.errorWrapper);
     const errorMessage = document.createElement('div');
     errorMessage.dataset.errorMessage = '';

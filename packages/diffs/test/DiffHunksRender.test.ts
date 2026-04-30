@@ -1,8 +1,16 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 
-import { DiffHunksRenderer, parseDiffFromFile } from '../src';
+import {
+  DiffHunksRenderer,
+  disposeHighlighter,
+  parseDiffFromFile,
+} from '../src';
 import { mockDiffs } from './mocks';
 import { assertDefined, collectAllElements, countSplitRows } from './testUtils';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 function countInlineDiffSpans(
   result: Awaited<ReturnType<DiffHunksRenderer['asyncRender']>>
