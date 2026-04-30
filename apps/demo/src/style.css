@@ -166,6 +166,7 @@ code {
 .wrapper[data-code-view] {
   overflow: auto;
   overscroll-behavior: contain;
+  contain: layout style paint;
 }
 
 .wrapper[data-diff] {
