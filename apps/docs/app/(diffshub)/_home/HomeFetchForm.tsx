@@ -3,21 +3,18 @@
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 
-import { setCachedPatchText } from '../view/_components/patchCache';
-import { getPullRequestPath } from '../view/_components/utils';
+import { setCachedPatchText } from '../(view)/_components/patchCache';
+import { getPullRequestPath } from '../(view)/_components/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 const DEFAULT_PR_URL = 'https://github.com/twbs/bootstrap/pull/42369';
 
 // Submitting the home form runs the patch fetch up front so users see a
-// "Fetching..." state on `/` instead of an empty viewer shell on `/view`.
+// "Fetching..." state on `/` instead of an empty viewer shell on the diff page.
 // Once the patch text is in hand we stash it in the in-memory cache and
-// navigate; CodeViewHeader on `/view` reuses the cached text so the diff
-// renders without a second round trip.
-//
-// We keep the form's `action` and `method` attributes so a JS-disabled
-// submit still GETs `/view?url=<encoded>` and falls back to fetching there.
+// navigate; CodeViewHeader reuses the cached text so the diff renders without
+// a second round trip.
 export function HomeFetchForm() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -54,7 +51,7 @@ export function HomeFetchForm() {
       // viewer route expects. Strip `.patch` because the route's dynamic
       // segment is just the PR number.
       const cleanPrPath = prPath.replace(/\.patch$/, '');
-      router.push(`/view${cleanPrPath}`);
+      router.push(cleanPrPath);
     } catch (error) {
       setSubmitting(false);
       setErrorMessage(
@@ -66,8 +63,6 @@ export function HomeFetchForm() {
   return (
     <div className="space-y-2">
       <form
-        action="/view"
-        method="get"
         onSubmit={(event) => {
           void handleSubmit(event);
         }}
