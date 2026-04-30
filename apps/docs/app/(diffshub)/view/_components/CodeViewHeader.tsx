@@ -18,13 +18,14 @@ import {
   type RefObject,
   type SetStateAction,
   type SyntheticEvent,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
 } from 'react';
 
-import { DEFAULT_PR_URL } from './constants';
 import { DiffsHubLogo } from './DiffsHubLogo';
+import { getCachedPatchText, setCachedPatchText } from './patchCache';
 import type {
   CodeViewCommentFileByItemId,
   CodeViewCommentSidebarFile,
@@ -70,6 +71,7 @@ interface HeaderProps {
   diffStyle: 'split' | 'unified';
   fileTreeAvailable: boolean;
   fileTreeOverlayOpen: boolean;
+  initialUrl: string;
   onToggleFileTreeOverlay(): void;
   setDiffStyle: Dispatch<SetStateAction<'split' | 'unified'>>;
   setCommentSections: Dispatch<SetStateAction<CodeViewSavedCommentItem[]>>;
@@ -89,6 +91,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   diffStyle,
   fileTreeAvailable,
   fileTreeOverlayOpen,
+  initialUrl,
   onToggleFileTreeOverlay,
   overflow,
   setCommentSections,
@@ -107,7 +110,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
     'bars' | 'classic' | 'none'
   >('bars');
   const lastLoadedURLRef = useRef<string | null>(null);
-  const [url, setURL] = useState(DEFAULT_PR_URL);
+  const [url, setURL] = useState(initialUrl);
   /** Radix `align` is not CSS-breakpoint aware; mirror Tailwind `md` (768px). */
   const [viewOptionsMenuAlign, setViewOptionsMenuAlign] = useState<
     'start' | 'end'
@@ -131,21 +134,25 @@ export const CodeViewHeader = memo(function CodeViewHeader({
     lastLoadedURLRef.current = normalizedURL;
 
     try {
-      console.time('--     request time');
-      const response = await fetch(
-        `/api/fetch-pr-patch?path=${encodeURIComponent(prPath)}`
-      );
-      console.timeEnd('--     request time');
+      let patchContent = getCachedPatchText(prPath);
+      if (patchContent == null) {
+        console.time('--     request time');
+        const response = await fetch(
+          `/api/fetch-pr-patch?path=${encodeURIComponent(prPath)}`
+        );
+        console.timeEnd('--     request time');
 
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('Failed to fetch patch:', error);
-        return undefined;
+        if (!response.ok) {
+          const error = await response.text();
+          console.error('Failed to fetch patch:', error);
+          return undefined;
+        }
+
+        console.time('--     reading patch');
+        patchContent = await response.text();
+        console.timeEnd('--     reading patch');
+        setCachedPatchText(prPath, patchContent);
       }
-
-      console.time('--     reading patch');
-      const patchContent = await response.text();
-      console.timeEnd('--     reading patch');
 
       console.time('--  parsing patches');
       const parsedPatches = parsePatchFiles(
@@ -236,6 +243,15 @@ export const CodeViewHeader = memo(function CodeViewHeader({
       setURL(normalizedURL);
     }
   );
+  // Auto-fetch the PR the user came in with. The page-level server component
+  // has already validated `initialUrl` via `getPullRequestPath`, so we trust
+  // it and fire once on mount. `renderPullRequest` is stable (useStableCallback)
+  // and its `hasFetched` ref guards against the first fetch bumping the viewer
+  // key, matching the behavior we had before this prop existed.
+  useEffect(() => {
+    void renderPullRequest(initialUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <div
       className={cn(

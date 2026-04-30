@@ -266,6 +266,35 @@
   }
 }
 
+/* FAQ accordion: animate expand/collapse using the ::details-content pseudo-element
+   (Chrome 131+, Firefox 143+, Safari 18.4+). In older browsers the items still
+   work — they just open instantly. height animates to `auto` via interpolate-size
+   when supported; falls back to a fixed cap with scroll otherwise. */
+@supports selector(::details-content) {
+  .faq-item {
+    interpolate-size: allow-keywords;
+  }
+
+  .faq-item::details-content {
+    overflow: clip;
+    height: 0;
+    transition:
+      height 0.2s ease,
+      content-visibility 0.2s ease allow-discrete;
+  }
+
+  .faq-item[open]::details-content {
+    height: auto;
+  }
+
+  @supports not (interpolate-size: allow-keywords) {
+    .faq-item[open]::details-content {
+      height: 200px;
+      overflow-y: auto;
+    }
+  }
+}
+
 /* Docs sidebar: shares mobile popover styles, adds desktop sticky overrides */
 .docs-sidebar {
   /* Desktop sticky sidebar */

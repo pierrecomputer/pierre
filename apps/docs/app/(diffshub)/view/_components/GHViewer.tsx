@@ -21,7 +21,11 @@ import {
   upsertSavedCommentSidebarEntry,
 } from './utils';
 
-export function GHViewer() {
+interface GHViewerProps {
+  initialUrl: string;
+}
+
+export function GHViewer({ initialUrl }: GHViewerProps) {
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [key, setKey] = useState(0);
   const [items, setItems] = useState<CodeViewItem<CommentMetadata>[]>([]);
@@ -109,6 +113,7 @@ export function GHViewer() {
       <CodeViewHeader
         className="contain-layout contain-paint [grid-area:header]"
         diffStyle={diffStyle}
+        initialUrl={initialUrl}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
         fileTreeAvailable={treeSource != null}
         overflow={overflow}
