@@ -70,39 +70,41 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
           className
         )}
       >
-        <div className="">
-          <div className="flex items-center gap-1">
-            <ButtonGroup
-              aria-label="Sidebar sections"
-              className="mr-auto flex min-w-0"
-              value={activeTab}
-              onValueChange={(value) => setActiveTab(value as SidebarTab)}
-            >
-              <ButtonGroupItem value="files" className="size-9 p-0">
-                <IconFileTree />
-                <span className="sr-only">Files</span>
-              </ButtonGroupItem>
-              <ButtonGroupItem value="comments" className="size-9 p-0">
-                <IconComment />
-                <span className="sr-only">Comments</span>
-              </ButtonGroupItem>
-            </ButtonGroup>
-            {activeTab === 'files' && fileTreeModel != null && (
-              <FileTreeSearchToggle model={fileTreeModel} />
-            )}
-            {onMobileClose != null && (
-              <Button
-                variant="muted"
-                size="icon"
-                className="md:hidden"
-                aria-label="Close file tree"
-                onClick={onMobileClose}
+        {source != null && (
+          <div className="">
+            <div className="flex items-center gap-1">
+              <ButtonGroup
+                aria-label="Sidebar sections"
+                className="mr-auto flex min-w-0"
+                value={activeTab}
+                onValueChange={(value) => setActiveTab(value as SidebarTab)}
               >
-                <IconX className="size-4" />
-              </Button>
-            )}
+                <ButtonGroupItem value="files" className="size-9 p-0">
+                  <IconFileTree />
+                  <span className="sr-only">Files</span>
+                </ButtonGroupItem>
+                <ButtonGroupItem value="comments" className="size-9 p-0">
+                  <IconComment />
+                  <span className="sr-only">Comments</span>
+                </ButtonGroupItem>
+              </ButtonGroup>
+              {activeTab === 'files' && fileTreeModel != null && (
+                <FileTreeSearchToggle model={fileTreeModel} />
+              )}
+              {onMobileClose != null && (
+                <Button
+                  variant="muted"
+                  size="icon"
+                  className="md:hidden"
+                  aria-label="Close file tree"
+                  onClick={onMobileClose}
+                >
+                  <IconX className="size-4" />
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         <div className="min-h-0 flex-1">
           <div
             role="region"
@@ -129,7 +131,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             />
           </div>
         </div>
-        <WorkerPoolStatus scrollRef={scrollRef} />
+        {source != null && <WorkerPoolStatus scrollRef={scrollRef} />}
       </div>
     </>
   );

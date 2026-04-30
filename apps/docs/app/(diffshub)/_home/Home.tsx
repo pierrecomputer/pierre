@@ -6,8 +6,8 @@ import {
 } from '@pierre/icons';
 import Link from 'next/link';
 
+import { DiffsHubLogo } from '../(view)/_components/DiffsHubLogo';
 import { HomeFetchForm } from './HomeFetchForm';
-
 // Each Q&A on the landing page is a native <details> element so the markup
 // stays minimal and the page works with JS off. The chevron sits to the
 // left of the question and rotates from "pointing right" (closed) to
@@ -60,11 +60,44 @@ export default function DiffshubHome() {
   return (
     <div className="grid min-h-screen min-w-screen place-items-center justify-center bg-neutral-50 dark:bg-neutral-900">
       <section className="mb-16 max-w-xl space-y-4">
-        <h2 className="text-2xl font-semibold tracking-tight">DiffsHub</h2>
+        <h2 className="flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
+          <DiffsHubLogo />
+          DiffsHub
+        </h2>
         <p className="text-muted-foreground mr-12 text-pretty">
-          Diffs.fast lets anyone view code changes for any public GitHub pull
-          request super-freaking-fast. Built by The Pierre Computer Company with
-          @pierre/diffs and @pierre/trees.
+          View code changes from any public GitHub pull request with a
+          super-freaking-fast, beautiful, and virtualized interface. Built by{' '}
+          <Link
+            href="https://pierre.computer"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-link"
+          >
+            The Pierre Computer Company
+          </Link>{' '}
+          with{' '}
+          <Link
+            href="https://diffs.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-link no-underline"
+          >
+            <code className="text-foreground/75">
+              @<code className="underline">pierre/diffs</code>
+            </code>
+          </Link>{' '}
+          and{' '}
+          <Link
+            href="https://trees.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-link no-underline"
+          >
+            <code className="text-foreground/75">
+              @<code className="underline">pierre/trees</code>
+            </code>
+          </Link>
+          .
         </p>
         <HomeFetchForm />
         <div className="max-w-2xl">
@@ -83,18 +116,22 @@ export default function DiffshubHome() {
               href="https://diffs.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-link"
+              className="inline-link no-underline"
             >
-              <code>@pierre/diffs</code>
+              <code className="text-foreground/75">
+                @<code className="underline">pierre/diffs</code>
+              </code>
             </Link>{' '}
             and{' '}
             <Link
               href="https://trees.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-link"
+              className="inline-link no-underline"
             >
-              <code>@pierre/trees</code>
+              <code className="text-foreground/75">
+                @<code className="underline">pierre/trees</code>
+              </code>
             </Link>{' '}
             source libraries. It's enhanced by our new{' '}
             <Link
@@ -123,9 +160,12 @@ export default function DiffshubHome() {
             </Link>
             .
           </FaqItem>
-          <FaqItem question="Who’s The Pierre Computer Company?">
+          <FaqItem question="What is The Pierre Computer Company?">
             We&rsquo;re a small team building developer tools for today’s teams
-            and their AI-first products.
+            and their AI-first products. Collectively, our team brings over 150
+            years of expertise designing, building, and scaling the world’s
+            largest distributed systems at Cloudflare, Coinbase, Discord,
+            GitHub, Reddit, Stripe, X, and others.
           </FaqItem>
         </div>
         <hr className="my-8 max-w-[120px]" />
