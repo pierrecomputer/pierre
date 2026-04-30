@@ -86,6 +86,13 @@ textarea {
   grid-template-rows: auto 1fr;
 }
 
+#root[data-code-view] {
+  height: 100vh;
+  height: 100dvh;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 a {
   font-weight: 500;
   color: #646cff;
@@ -154,6 +161,12 @@ code {
   min-height: 0;
   overflow-anchor: none;
   background-color: light-dark(white, black);
+}
+
+.wrapper[data-code-view] {
+  overflow: auto;
+  overscroll-behavior: contain;
+  contain: layout style paint;
 }
 
 .wrapper[data-diff] {
