@@ -165,6 +165,7 @@ function createVirtualizer() {
   let connectCalls = 0;
   const virtualizer = {
     config: { resizeDebugging: false },
+    type: 'simple',
     connect() {
       connectCalls += 1;
       return () => {};

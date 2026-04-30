@@ -1,12 +1,17 @@
 import type { CreatePatchOptionsNonabortable } from 'diff';
 
+import type { CodeViewOptions } from '../components/CodeView';
 import type { FileDiffOptions } from '../components/FileDiff';
 import { DEFAULT_THEMES } from '../constants';
 import type { FileOptions } from '../react';
 import { areObjectsEqual } from './areObjectsEqual';
 import { areThemesEqual } from './areThemesEqual';
 
-type AnyOptions<L> = FileOptions<L> | FileDiffOptions<L> | undefined;
+type AnyOptions<L> =
+  | CodeViewOptions<L>
+  | FileOptions<L>
+  | FileDiffOptions<L>
+  | undefined;
 
 export function areOptionsEqual<LAnnotation>(
   optionsA: AnyOptions<LAnnotation>,

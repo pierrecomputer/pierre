@@ -7,12 +7,37 @@ import {
 } from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 
+function isMobileBrowser(): boolean {
+  const navigator = global.navigator;
+  if (navigator == null) {
+    return false;
+  }
+
+  return (
+    navigator.maxTouchPoints > 0 &&
+    global.matchMedia?.('(max-width: 767px), (pointer: coarse)').matches ===
+      true
+  );
+}
+
+function getWorkerResourceLimits(): Pick<
+  Required<WorkerPoolOptions>,
+  'poolSize' | 'totalASTLRUCacheSize'
+> {
+  return isMobileBrowser()
+    ? { poolSize: 1, totalASTLRUCacheSize: 10 }
+    : { poolSize: 3, totalASTLRUCacheSize: 100 };
+}
+
+const WorkerResourceLimits = getWorkerResourceLimits();
+
 const PoolOptions: WorkerPoolOptions = {
   // We really shouldn't let the pool get too big...
   poolSize: Math.min(
     Math.max(1, (global.navigator?.hardwareConcurrency ?? 1) - 1),
-    3
+    WorkerResourceLimits.poolSize
   ),
+  totalASTLRUCacheSize: WorkerResourceLimits.totalASTLRUCacheSize,
   workerFactory() {
     return new Worker(
       new URL('@pierre/diffs/worker/worker.js', import.meta.url)
@@ -34,6 +59,7 @@ const HighlighterOptions: WorkerInitializationRenderOptions = {
     'typescript',
     'zig',
   ],
+  preferredHighlighter: 'shiki-wasm',
 };
 
 interface WorkerPoolProps {

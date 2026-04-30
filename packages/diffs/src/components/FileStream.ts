@@ -140,7 +140,7 @@ export class FileStream {
       split: false,
       totalLines: 0,
     });
-    pre.innerHTML = '';
+    pre.textContent = '';
 
     this.pre = pre;
     this.code = getOrCreateCodeNode({ code: this.code, pre });
@@ -343,6 +343,9 @@ export class FileStream {
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const effectiveThemeType = baseThemeType ?? themeType;
+    const currentTheme = this.options.theme ?? DEFAULT_THEMES;
+    const theme =
+      typeof currentTheme === 'string' ? currentTheme : { ...currentTheme };
     const scrollbarGutter = getMeasuredScrollbarGutter(shadowRoot);
     if (
       this.themeCSSStyle?.parentNode === shadowRoot &&
@@ -350,6 +353,7 @@ export class FileStream {
       this.appliedThemeCSS.themeType === effectiveThemeType &&
       this.appliedThemeCSS.scrollbarGutter === scrollbarGutter
     ) {
+      this.appliedThemeCSS.theme = theme;
       return;
     }
     this.themeCSSStyle = upsertHostThemeStyle({
@@ -360,6 +364,7 @@ export class FileStream {
     this.appliedThemeCSS =
       this.themeCSSStyle != null
         ? {
+            theme,
             themeStyles,
             themeType: effectiveThemeType,
             baseThemeType,

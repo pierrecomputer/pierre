@@ -7,14 +7,16 @@
 
 ### Components
 
-The Vanilla JS API exposes three core components: `FileDiff` (compare two file
-versions or render a pre-parsed `FileDiffMetadata`), `File` (render a single
-code file without diff), and `UnresolvedFile` (render merge conflicts with
-built-in resolution controls). Typically you'll want to interface with these as
-they'll handle all the complicated aspects of syntax highlighting, theming, and
-full interactivity for you.
+The Vanilla JS API exposes four core components: `CodeView` (render a mixed,
+virtualized list of files and diffs in one scroll container), `FileDiff`
+(compare two file versions or render a pre-parsed `FileDiffMetadata`), `File`
+(render a single code file without diff), and `UnresolvedFile` (render merge
+conflicts with built-in resolution controls). Typically you'll want to interface
+with these as they'll handle the complicated aspects of syntax highlighting,
+theming, and interactivity for you.
 
 <VanillaComponentTabs
+  codeViewExample={codeViewExample}
   fileDiffExample={fileDiffExample}
   fileExample={fileExample}
   unresolvedFileExample={unresolvedFileExample}
@@ -26,11 +28,20 @@ full interactivity for you.
 `UnresolvedFile` in vanilla supports both uncontrolled and controlled callbacks
 (`onMergeConflictResolve` / `onMergeConflictAction`).
 
+The `CodeView` tab above is the quick-start version. For the deeper guide on
+`setup`, `setItems`, `version`, selection, and `scrollTo`, see
+[CodeView](#code-view).
+
 ### Props
 
 Both `FileDiff` and `File` accept an options object in their constructor. The
 `File` component has similar options, but excludes diff-specific settings and
 uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
+
+`CodeView` forwards many of those same options to each rendered item, while
+adding viewer-specific controls like `viewerMetrics`, `itemMetrics`,
+`stickyHeaders`, `pointerEventsOnScroll`, and `smoothScrollSettings`. See
+[CodeView](#code-view) for the dedicated guide.
 
 Header customization and collapsing behavior:
 

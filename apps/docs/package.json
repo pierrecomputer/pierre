@@ -5,7 +5,7 @@
   "scripts": {
     "build": "bun run build:deps && bun run generate-llms-txt && bun run build:next",
     "build:next": "next build",
-    "build:deps": "bun run build:deps:diffs && bun run build:deps:tree && bun run build:deps:truncate",
+    "build:deps": "bun run build:deps:diffs && bun run build:deps:truncate && bun run build:deps:tree",
     "build:deps:diffs": "output=$(cd ../../packages/diffs && bun run build 2>&1) && echo '[diffs] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
     "build:deps:tree": "output=$(cd ../../packages/trees && bun run build 2>&1) && echo '[trees] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
     "build:deps:truncate": "output=$(cd ../../packages/truncate && bun run build 2>&1) && echo '[truncate] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",

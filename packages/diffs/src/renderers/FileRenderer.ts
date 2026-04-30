@@ -1,7 +1,11 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-import { DEFAULT_RENDER_RANGE, DEFAULT_THEMES } from '../constants';
+import {
+  DEFAULT_RENDER_RANGE,
+  DEFAULT_THEMES,
+  DEFAULT_TOKENIZE_MAX_LENGTH,
+} from '../constants';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
   getHighlighterIfLoaded,
@@ -130,6 +134,11 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public hydrate(file: FileContents): void {
     const { options } = this.getRenderOptions(file);
+    const lines = this.getOrCreateLineCache(file);
+    const massiveFile = isFileMassive(
+      lines.length,
+      this.getTokenizeMaxLength()
+    );
     let cache = this.workerManager?.getFileResultCache(file);
     if (cache != null && !areRenderOptionsEqual(options, cache.options)) {
       cache = undefined;
@@ -137,13 +146,13 @@ export class FileRenderer<LAnnotation = undefined> {
     this.renderCache ??= {
       file,
       options,
-      highlighted: !isFilePlainText(file),
-      result: cache?.result,
+      highlighted: !massiveFile && !isFilePlainText(file),
+      result: massiveFile ? undefined : cache?.result,
       // FIXME(amadeus): Add support for renderRanges
       renderRange: undefined,
     };
     if (this.workerManager?.isWorkingPool() === true) {
-      if (this.renderCache.result == null) {
+      if (this.renderCache.result == null && !massiveFile) {
         // We should only kick off a preload of the AST if we have a WorkerPool
         this.workerManager.highlightFileAST(this, file);
       }
@@ -217,6 +226,11 @@ export class FileRenderer<LAnnotation = undefined> {
       };
     }
     const { options, forceRender } = this.getRenderOptions(file);
+    const lines = this.getOrCreateLineCache(file);
+    const forcePlainText = isFileMassive(
+      lines.length,
+      this.getTokenizeMaxLength()
+    );
     this.renderCache ??= {
       file,
       highlighted: false,
@@ -228,16 +242,19 @@ export class FileRenderer<LAnnotation = undefined> {
       // Cache invalidation based on renderRange comparison
       if (
         this.renderCache.result == null ||
+        forcePlainText ||
         (!this.renderCache.highlighted &&
           (file !== this.renderCache.file ||
             !areRenderRangesEqual(this.renderCache.renderRange, renderRange)))
       ) {
         this.renderCache.file = file;
+        this.renderCache.options = options;
+        this.renderCache.highlighted = false;
         this.renderCache.result = this.workerManager.getPlainFileAST(
           file,
           renderRange.startingLine,
           renderRange.totalLines,
-          this.getOrCreateLineCache(file)
+          lines
         );
         this.renderCache.renderRange = renderRange;
       }
@@ -246,6 +263,7 @@ export class FileRenderer<LAnnotation = undefined> {
         // We should only attempt to kick off the worker highlighter if there
         // are lines to render
         renderRange.totalLines > 0 &&
+        !forcePlainText &&
         (!this.renderCache.highlighted || forceRender)
       ) {
         this.workerManager.highlightFileAST(this, file);
@@ -256,6 +274,7 @@ export class FileRenderer<LAnnotation = undefined> {
         this.highlighter != null && areThemesAttached(options.theme);
       const hasLangs =
         this.highlighter != null && areLanguagesAttached(this.computedLang);
+      const canHighlight = !forcePlainText && hasLangs;
 
       // If we have any semblance of a highlighter with the correct theme(s)
       // attached, we can kick off some form of rendering.  If we don't have
@@ -265,18 +284,19 @@ export class FileRenderer<LAnnotation = undefined> {
         this.highlighter != null &&
         hasThemes &&
         (forceRender ||
-          (!this.renderCache.highlighted && hasLangs) ||
+          forcePlainText ||
+          (!this.renderCache.highlighted && canHighlight) ||
           this.renderCache.result == null)
       ) {
         const { result, options } = this.renderFileWithHighlighter(
           file,
           this.highlighter,
-          !hasLangs
+          forcePlainText || !hasLangs
         );
         this.renderCache = {
           file,
           options,
-          highlighted: hasLangs,
+          highlighted: canHighlight,
           result,
           renderRange: undefined,
         };
@@ -285,14 +305,14 @@ export class FileRenderer<LAnnotation = undefined> {
       // If we get in here it means we'll have to kick off an async highlight
       // process which will involve initializing the highlighter with new themes
       // and languages
-      if (!hasThemes || !hasLangs) {
+      if (!hasThemes || (!forcePlainText && !hasLangs)) {
         void this.asyncHighlight(file).then(({ result, options }) => {
           // In this case we need to force a re-render, so we can do that by
           // reaching into renderCache
           if (this.renderCache != null) {
             this.renderCache.highlighted = false;
           }
-          this.onHighlightSuccess(file, result, options);
+          this.onHighlightSuccess(file, result, options, !forcePlainText);
         });
       }
     }
@@ -315,18 +335,30 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   private async asyncHighlight(file: FileContents): Promise<RenderFileResult> {
-    this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+    const lines = this.getOrCreateLineCache(file);
+    const forcePlainText = isFileMassive(
+      lines.length,
+      this.getTokenizeMaxLength()
+    );
+    this.computedLang = forcePlainText
+      ? 'text'
+      : (file.lang ?? getFiletypeFromFileName(file.name));
     const hasThemes =
       this.highlighter != null &&
       hasResolvedThemes(getThemes(this.options.theme));
     const hasLangs =
-      this.highlighter != null && areLanguagesAttached(this.computedLang);
+      forcePlainText ||
+      (this.highlighter != null && areLanguagesAttached(this.computedLang));
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
     if (this.highlighter == null || !hasThemes || !hasLangs) {
       this.highlighter = await this.initializeHighlighter();
     }
-    return this.renderFileWithHighlighter(file, this.highlighter);
+    return this.renderFileWithHighlighter(
+      file,
+      this.highlighter,
+      forcePlainText
+    );
   }
 
   private renderFileWithHighlighter(
@@ -416,10 +448,11 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   private renderHeader(file: FileContents) {
-    const { headerRenderMode = 'default' } = this.options;
+    const { headerRenderMode = 'default', stickyHeader = false } = this.options;
     return createFileHeaderElement({
       fileOrDiff: file,
       mode: headerRenderMode,
+      stickyHeader,
     });
   }
 
@@ -478,7 +511,8 @@ export class FileRenderer<LAnnotation = undefined> {
   public onHighlightSuccess(
     file: FileContents,
     result: ThemedFileResult,
-    options: RenderFileOptions
+    options: RenderFileOptions,
+    highlighted = true
   ): void {
     if (this.renderCache == null) {
       return;
@@ -491,7 +525,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.renderCache = {
       file,
       options,
-      highlighted: true,
+      highlighted,
       result,
       renderRange: undefined,
     };
@@ -503,6 +537,10 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public onHighlightError(error: unknown): void {
     console.error(error);
+  }
+
+  private getTokenizeMaxLength(): number {
+    return this.options.tokenizeMaxLength ?? DEFAULT_TOKENIZE_MAX_LENGTH;
   }
 
   private createPreElement(totalLines: number): HASTElement {
@@ -528,4 +566,8 @@ function areRenderOptionsEqual(
     optionsA.useTokenTransformer === optionsB.useTokenTransformer &&
     optionsA.tokenizeMaxLineLength === optionsB.tokenizeMaxLineLength
   );
+}
+
+function isFileMassive(lineCount: number, tokenizeMaxLength: number): boolean {
+  return lineCount > tokenizeMaxLength;
 }

@@ -2456,6 +2456,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
     "properties": {
       "data-change-type": "change",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",
@@ -4941,6 +4942,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
     "properties": {
       "data-change-type": "change",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",
@@ -5280,6 +5282,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
     "properties": {
       "data-change-type": "change",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",
@@ -7973,6 +7976,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
     "properties": {
       "data-change-type": "new",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",
@@ -9123,6 +9127,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
     "properties": {
       "data-change-type": "deleted",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",
@@ -9474,6 +9479,7 @@ exports[`DiffHunksRenderer skips inline diff decorations for changed lines above
     "properties": {
       "data-change-type": "change",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",
@@ -9871,6 +9877,7 @@ exports[`DiffHunksRenderer keeps inline diff decorations for changed lines below
     "properties": {
       "data-change-type": "change",
       "data-diffs-header": "default",
+      "data-sticky": undefined,
     },
     "tagName": "div",
     "type": "element",

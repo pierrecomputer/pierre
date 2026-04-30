@@ -5,10 +5,10 @@ import {
   type DiffLineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
-import { MultiFileDiff } from '@pierre/diffs/react';
+import { MultiFileDiff, useStableCallback } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { IconArrowDownRight } from '@pierre/icons';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { type AnnotationMetadata } from './constants';
 import { FeatureHeader } from '@/components/FeatureHeader';
@@ -24,7 +24,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     DiffLineAnnotation<AnnotationMetadata>[]
   >(prerenderedDiff.annotations ?? []);
 
-  const addCommentAtLine = useCallback(
+  const addCommentAtLine = useStableCallback(
     (side: AnnotationSide, lineNumber: number) => {
       setAnnotations((prev) => {
         const hasAnnotation = prev.some(
@@ -45,8 +45,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
           },
         ];
       });
-    },
-    []
+    }
   );
 
   const hasOpenCommentForm = annotations.some(
@@ -56,7 +55,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
     null
   );
 
-  const handleLineSelectionEnd = useCallback(
+  const handleLineSelectionEnd = useStableCallback(
     (range: SelectedLineRange | null) => {
       setSelectedRange(range);
       if (range == null) return;
@@ -64,19 +63,23 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
       const side: AnnotationSide =
         derivedSide === 'deletions' ? 'deletions' : 'additions';
       addCommentAtLine(side, Math.max(range.end, range.start));
-    },
-    [addCommentAtLine]
+    }
   );
 
-  const handleSubmitComment = useCallback(
+  const handleLineSelectionChange = useStableCallback(
+    (range: SelectedLineRange | null) => {
+      setSelectedRange(range);
+    }
+  );
+
+  const handleSubmitComment = useStableCallback(
     (side: AnnotationSide, lineNumber: number) => {
       // TODO: Implement
       console.log('submit comment', side, lineNumber);
-    },
-    []
+    }
   );
 
-  const handleCancelComment = useCallback(
+  const handleCancelComment = useStableCallback(
     (side: AnnotationSide, lineNumber: number) => {
       setAnnotations((prev) =>
         prev.filter(
@@ -84,8 +87,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         )
       );
       setSelectedRange(null);
-    },
-    []
+    }
   );
 
   return (
@@ -106,12 +108,21 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
         {...prerenderedDiff}
         className="diff-container"
         selectedLines={selectedRange}
-        options={{
-          ...prerenderedDiff.options,
-          enableLineSelection: !hasOpenCommentForm,
-          enableGutterUtility: !hasOpenCommentForm,
-          onLineSelectionEnd: handleLineSelectionEnd,
-        }}
+        options={useMemo(
+          () => ({
+            ...prerenderedDiff.options,
+            enableLineSelection: !hasOpenCommentForm,
+            enableGutterUtility: !hasOpenCommentForm,
+            onLineSelectionEnd: handleLineSelectionEnd,
+            onLineSelectionChange: handleLineSelectionChange,
+          }),
+          [
+            prerenderedDiff.options,
+            hasOpenCommentForm,
+            handleLineSelectionEnd,
+            handleLineSelectionChange,
+          ]
+        )}
         lineAnnotations={annotations}
         renderAnnotation={(annotation) =>
           annotation.metadata.isThread === true ? (
@@ -149,13 +160,13 @@ function CommentForm({
     }, 0);
   }, []);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useStableCallback(() => {
     onSubmit(side, lineNumber);
-  }, [side, lineNumber, onSubmit]);
+  });
 
-  const handleCancel = useCallback(() => {
+  const handleCancel = useStableCallback(() => {
     onCancel(side, lineNumber);
-  }, [side, lineNumber, onCancel]);
+  });
 
   return (
     <div

@@ -31,7 +31,6 @@ export function PatchDiff<LAnnotation = undefined>({
   renderHeaderPrefix,
   renderHeaderMetadata,
   renderGutterUtility,
-  renderHoverUtility,
   disableWorkerPool = false,
 }: PatchDiffProps<LAnnotation>): React.JSX.Element {
   const fileDiff = usePatch(patch);
@@ -42,8 +41,7 @@ export function PatchDiff<LAnnotation = undefined>({
     lineAnnotations,
     selectedLines,
     prerenderedHTML,
-    hasGutterRenderUtility:
-      renderGutterUtility != null || renderHoverUtility != null,
+    hasGutterRenderUtility: renderGutterUtility != null,
     hasCustomHeader: renderCustomHeader != null,
     disableWorkerPool,
   });
@@ -55,7 +53,6 @@ export function PatchDiff<LAnnotation = undefined>({
     renderAnnotation,
     lineAnnotations,
     renderGutterUtility,
-    renderHoverUtility,
     getHoveredLine,
   });
   return (

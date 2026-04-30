@@ -35,7 +35,6 @@ export function MultiFileDiff<LAnnotation = undefined>({
   renderHeaderPrefix,
   renderHeaderMetadata,
   renderGutterUtility,
-  renderHoverUtility,
   disableWorkerPool = false,
 }: MultiFileDiffProps<LAnnotation>): React.JSX.Element {
   const fileDiff = useMemo(() => {
@@ -48,8 +47,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
     lineAnnotations,
     selectedLines,
     prerenderedHTML,
-    hasGutterRenderUtility:
-      renderGutterUtility != null || renderHoverUtility != null,
+    hasGutterRenderUtility: renderGutterUtility != null,
     hasCustomHeader: renderCustomHeader != null,
     disableWorkerPool,
   });
@@ -61,7 +59,6 @@ export function MultiFileDiff<LAnnotation = undefined>({
     renderAnnotation,
     lineAnnotations,
     renderGutterUtility,
-    renderHoverUtility,
     getHoveredLine,
   });
   return (

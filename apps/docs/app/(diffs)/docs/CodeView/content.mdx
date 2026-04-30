@@ -1,0 +1,109 @@
+## CodeView
+
+<Notice icon={<IconInfoFill />}>
+  `CodeView` is the high-level API for rendering one large scroll region that
+  can contain files, diffs, or a mix of both.
+</Notice>
+
+`CodeView` takes an ordered `CodeViewItem[]` list and manages the hard parts for
+you: virtualization, measured layout reconciliation, sticky headers, selection
+across items, and `scrollTo` targeting by item, line, or absolute position.
+
+Use it when the amount of content is large, unbounded, or hard to predict. It is
+meant to handle anything from a single file up to very large multi-file diff
+surfaces without you wiring together the lower-level virtualization primitives
+yourself.
+
+### What It Gives You
+
+- One scroll container for the whole surface instead of one scroller per file.
+- A mixed list of `file` and `diff` items in one ordered stream.
+- Built-in virtualization for large amounts of content.
+- `scrollTo` APIs for item ids, line targets, and raw scroll positions.
+- Shared selection, annotations, custom headers, and gutter utilities across the
+  full viewer.
+
+### Core Model
+
+- Every item needs a stable unique `id`. That id is how `scrollTo`, selection,
+  and reconciliation find the correct record.
+- Items are either `{ type: 'file', file }` or `{ type: 'diff', fileDiff }`.
+- If you keep the same item id but change its content or annotations, publish a
+  new `version` so `CodeView` refreshes that item in place without rebuilding
+  the whole surface.
+- Selection is viewer-wide, so the payload shape is `{ id, range }` instead of
+  only a line range.
+- Set `collapsed: true` on an item to mount that file or diff as header-only.
+  Collapse state is part of the item snapshot, so publish a new `version` when
+  changing it for an existing item id.
+- Viewer-level options such as `viewerMetrics`, `itemMetrics`, `stickyHeaders`,
+  `pointerEventsOnScroll`, and `smoothScrollSettings` tune the outer
+  orchestrator. Most of the regular `File` / `FileDiff` options are still
+  forwarded to each item, but `collapsed` is item-owned in `CodeView`.
+
+### Examples
+
+<CodeViewExampleTabs
+  reactExample={codeViewReactExample}
+  vanillaExample={codeViewVanillaExample}
+/>
+
+### Usage Notes
+
+- In React, `CodeView` is controlled through props plus an imperative ref.
+- In React, use `selectedLines` and `onSelectedLinesChange` when selection needs
+  to live in component state.
+- In React, use the ref for `scrollTo`, `setSelectedLines`,
+  `clearSelectedLines`, and `getWindowSpecs`.
+- `renderCustomHeader`, `renderHeaderPrefix`, `renderHeaderMetadata`,
+  `renderAnnotation`, and `renderGutterUtility` receive the whole
+  `CodeViewItem`, which makes it easy to branch on `item.type`.
+- In Vanilla JS, `CodeView` owns a scrollable root that you set up once and
+  update over time.
+- In Vanilla JS, call `setup(root)` once with the scrollable container.
+- In Vanilla JS, use `setItems`, `addItem`, or `addItems` to populate the
+  viewer.
+- Shared callbacks receive the normal file/diff payload plus a `context`
+  argument containing the current viewer item and instance.
+- By default, `CodeView` temporarily disables pointer events on rendered content
+  while scrolling for smoother scroll performance. Set
+  `pointerEventsOnScroll: true` only when pointer interactions must remain
+  active during scroll.
+- In Vanilla JS, call `cleanUp()` when the viewer is removed so observers,
+  timers, and DOM state are released.
+
+### Scroll Targets
+
+`scrollTo` supports three target shapes:
+
+```ts
+viewer.scrollTo({ type: 'item', id: 'diff:src/app.ts', align: 'start' });
+
+viewer.scrollTo({
+  type: 'line',
+  id: 'diff:src/app.ts',
+  lineNumber: 42,
+  side: 'additions',
+  align: 'center',
+  behavior: 'smooth-auto',
+});
+
+viewer.scrollTo({ type: 'position', position: 0 });
+```
+
+Line and item targets resolve against live measured layout, so they continue to
+work even when wrapped lines or annotations change the rendered heights after
+initial paint.
+
+### Relationship To Virtualization
+
+If your scrollable region is only code, `CodeView` should usually be your
+starting point. It is heavily optimized for that case: it owns the whole code
+surface, only renders what is visible, and is generally more performant and less
+prone to blanking than the lower-level virtualization APIs.
+
+Drop down to [Virtualization](#virtualization) when you need a more flexible,
+mixed-content layout that `CodeView` cannot own directly. That flexibility comes
+with tradeoffs: the lower-level virtualizer always mounts every top-level file
+or diff container, is easier to blank during aggressive scroll, and is usually
+less performant than `CodeView`.

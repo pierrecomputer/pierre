@@ -19,7 +19,6 @@ interface RenderFileChildrenProps<LAnnotation> {
   renderAnnotation: FileProps<LAnnotation>['renderAnnotation'];
   lineAnnotations: FileProps<LAnnotation>['lineAnnotations'];
   renderGutterUtility: FileProps<LAnnotation>['renderGutterUtility'];
-  renderHoverUtility: FileProps<LAnnotation>['renderHoverUtility'];
   getHoveredLine(): GetHoveredLineResult<'file'> | undefined;
 }
 
@@ -31,10 +30,8 @@ export function renderFileChildren<LAnnotation>({
   renderAnnotation,
   lineAnnotations,
   renderGutterUtility,
-  renderHoverUtility,
   getHoveredLine,
 }: RenderFileChildrenProps<LAnnotation>): ReactNode {
-  const gutterUtility = renderGutterUtility ?? renderHoverUtility;
   const customHeader = renderCustomHeader?.(file);
   const prefix = renderHeaderPrefix?.(file);
   const metadata = renderHeaderMetadata?.(file);
@@ -56,9 +53,9 @@ export function renderFileChildren<LAnnotation>({
             {renderAnnotation(annotation)}
           </div>
         ))}
-      {gutterUtility != null && (
+      {renderGutterUtility != null && (
         <div slot="gutter-utility-slot" style={GutterUtilitySlotStyles}>
-          {gutterUtility(getHoveredLine)}
+          {renderGutterUtility(getHoveredLine)}
         </div>
       )}
     </>

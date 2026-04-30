@@ -9,6 +9,16 @@ Virtualization in Diffs uses estimated line and file heights to keep large
 renders fast. It renders placeholders and spacer buffers for off-screen content,
 then renders visible lines in hunk-sized batches as you scroll.
 
+If your scrollable region is only code, start with `CodeView` instead. It is the
+more optimized path: it owns the entire code surface, only renders what you can
+actually see, and is generally more performant and less prone to blanking.
+
+Use the lower-level virtualization APIs when you need a more flexible,
+mixed-content layout where the code has to live alongside other DOM that is
+harder for `CodeView` to control. That flexibility comes with tradeoffs: every
+top-level file or diff container stays mounted, and the experience is more
+likely to blank during fast scroll.
+
 Internally, the virtualizer listens to scroll and resize updates, computes a
 window with overscan, and reconciles measured DOM heights after render. This
 keeps scroll position stable even when line heights change because of wrapped
@@ -61,7 +71,7 @@ You can tune virtualization behavior with the `config` prop.
 - `className` / `style`: applied to the outer scroll root
 - `contentClassName` / `contentStyle`: applied to the inner content wrapper
 
-### Vanilla JavaScript
+### Vanilla JS
 
 In vanilla JS, create a `Virtualizer` instance and pass it into
 `VirtualizedFileDiff` or `VirtualizedFile`.
