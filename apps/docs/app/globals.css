@@ -216,7 +216,7 @@
   }
 
   .inline-link {
-    @apply text-foreground hover:text-foreground decoration-muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-3 transition-colors;
+    @apply text-foreground hover:text-foreground decoration-muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-3 transition-[color,text-decoration-color,text-underline-offset];
   }
 
   .no-scrollbar::-webkit-scrollbar {
