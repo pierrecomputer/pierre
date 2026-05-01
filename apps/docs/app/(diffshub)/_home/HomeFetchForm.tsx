@@ -1,5 +1,6 @@
 'use client';
 
+import { IconArrow, IconRefresh } from '@pierre/icons';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 
@@ -80,11 +81,16 @@ export function HomeFetchForm() {
         />
         <Button
           type="submit"
+          variant="default"
           size="lg"
+          className="size-11"
           disabled={submitting}
-          className="text-md h-11 rounded-lg"
         >
-          {submitting ? 'Fetching…' : 'Fetch'}
+          {submitting ? (
+            <IconRefresh className="size-4 animate-spin" />
+          ) : (
+            <IconArrow className="size-4 rotate-180" />
+          )}
         </Button>
       </form>
       {errorMessage != null && (
