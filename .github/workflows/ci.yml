@@ -36,6 +36,9 @@ jobs:
       - name: Build docs (generates .source)
         run: bun ws docs build
 
+      - name: Build docs (diffshub)
+        run: NEXT_PUBLIC_SITE=diffshub bun ws docs build
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
