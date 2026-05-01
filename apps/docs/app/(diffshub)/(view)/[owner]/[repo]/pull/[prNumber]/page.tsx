@@ -1,4 +1,3 @@
-import { WorkerPoolContext } from '@diffs/_components/WorkerPoolContext';
 import { redirect } from 'next/navigation';
 
 import { GHViewer } from '../../../../_components/GHViewer';
@@ -19,10 +18,8 @@ export default async function DiffshubViewByPathPage({
   const url = `https://github.com/${owner}/${repo}/pull/${prNumber}`;
 
   return (
-    <WorkerPoolContext>
-      <div className="flex h-dvh flex-col gap-2 bg-neutral-50 dark:bg-neutral-900">
-        <GHViewer initialUrl={url} />
-      </div>
-    </WorkerPoolContext>
+    <div className="flex h-dvh flex-col gap-2 bg-neutral-50 dark:bg-neutral-900">
+      <GHViewer initialUrl={url} />
+    </div>
   );
 }

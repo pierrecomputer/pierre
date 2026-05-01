@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CodeViewHeader } from './CodeViewHeader';
 import { CodeViewSidebar } from './CodeViewSidebar';
 import { CodeViewWrapper } from './CodeViewWrapper';
+import { CODE_VIEW_MARGIN_OFFSET, CODE_VIEW_PADDING_BLOCK } from './constants';
 import type {
   CodeViewCommentFileByItemId,
   CodeViewDeletedCommentEvent,
@@ -63,7 +64,7 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
       type: 'item',
       id: itemId,
       align: 'start',
-      offset: 20,
+      offset: CODE_VIEW_PADDING_BLOCK + CODE_VIEW_MARGIN_OFFSET,
       behavior: 'smooth',
     });
   }, []);
@@ -109,9 +110,9 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
   );
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-2 p-2 pb-0 contain-strict [grid-template-areas:'header''viewer'] md:grid-cols-[320px_minmax(0,1fr)] md:[grid-template-areas:'header_header''tree_viewer']">
+    <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] contain-strict [grid-template-areas:'header''viewer'] md:grid-cols-[320px_minmax(0,1fr)] md:[grid-template-areas:'header_header''tree_viewer']">
       <CodeViewHeader
-        className="contain-layout contain-paint [grid-area:header]"
+        className="z-10 m-2 mb-0 contain-layout contain-paint [grid-area:header]"
         diffStyle={diffStyle}
         initialUrl={initialUrl}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
@@ -137,7 +138,7 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
         onSelectItem={handleSelectTreeItem}
       />
       <CodeViewWrapper
-        className="contain-strict [grid-area:viewer]"
+        className="gh-code-view-scrollbar-y mt-[-12px] h-[calc(100%_+_12px)] pr-[3px] contain-strict [grid-area:viewer]"
         key={key}
         diffStyle={diffStyle}
         overflow={overflow}
