@@ -120,22 +120,27 @@ export class VirtualizedFileDiff<
     return this.metrics.lineHeight * multiplier;
   }
 
-  // Override setOptions to clear height cache when diffStyle changes, and to
-  // force a re-render when visual-only options like disableBackground change
-  // (those don't affect layout, but the DOM attribute must still be updated).
+  // Override setOptions to clear height cache when layout-affecting options
+  // change, and to force a re-render when visual-only options change (those
+  // don't affect layout, but the DOM attribute must still be updated).
+  // disableLineNumbers is treated as layout-affecting because hiding the number
+  // columns widens the code column, which can shift wrap points in overflow:wrap
+  // mode and invalidate measured row heights.
   override setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     const previousDiffStyle = this.options.diffStyle;
     const previousOverflow = this.options.overflow;
     const previousCollapsed = this.options.collapsed;
     const previousDisableBackground = this.options.disableBackground;
+    const previousDisableLineNumbers = this.options.disableLineNumbers;
 
     super.setOptions(options);
 
     if (
       previousDiffStyle !== this.options.diffStyle ||
       previousOverflow !== this.options.overflow ||
-      previousCollapsed !== this.options.collapsed
+      previousCollapsed !== this.options.collapsed ||
+      previousDisableLineNumbers !== this.options.disableLineNumbers
     ) {
       this.cache.heights.clear();
       this.cache.checkpoints = [];
@@ -147,10 +152,12 @@ export class VirtualizedFileDiff<
       }
       this.renderRange = undefined;
     }
-    // Visual-only options don't affect layout, but the pre-element attributes
-    // need to be updated. Setting forceRenderOverride bypasses FileDiff.render's
-    // early-return guard so applyPreNodeAttributes is called on the next render.
-    if (previousDisableBackground !== this.options.disableBackground) {
+    // Visual-only and layout-affecting options both need forceRenderOverride so
+    // FileDiff.render's early-return guard doesn't skip applyPreNodeAttributes.
+    if (
+      previousDisableBackground !== this.options.disableBackground ||
+      previousDisableLineNumbers !== this.options.disableLineNumbers
+    ) {
       this.forceRenderOverride = true;
     }
     // CodeView will mark dirty for us

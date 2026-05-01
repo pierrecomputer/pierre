@@ -59,6 +59,7 @@ interface CodeViewWrapperProps {
   onCommentSaved?(comment: CodeViewSavedCommentEvent): void;
   overflow: 'wrap' | 'scroll';
   showBackgrounds: boolean;
+  lineNumbers: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
   items: CodeViewItem<CommentMetadata>[];
@@ -72,6 +73,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   onCommentSaved,
   overflow,
   showBackgrounds,
+  lineNumbers,
   scrollRef,
   viewerRef,
   items,
@@ -375,6 +377,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         diffStyle,
         overflow,
         disableBackground: !showBackgrounds,
+        disableLineNumbers: !lineNumbers,
         lineHoverHighlight: 'number',
         // hunkSeparators: 'line-info-basic',
         // FIXME(amadeus): We need to optimize this...
@@ -389,7 +392,13 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
           handleCreateDraftComment(range, context.item.id);
         },
       }) satisfies CodeViewOptions<CommentMetadata>,
-    [diffStyle, handleCreateDraftComment, overflow, showBackgrounds]
+    [
+      diffStyle,
+      handleCreateDraftComment,
+      lineNumbers,
+      overflow,
+      showBackgrounds,
+    ]
   );
   return (
     <CodeView<CommentMetadata>

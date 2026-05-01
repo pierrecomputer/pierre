@@ -44,6 +44,7 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
   const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
   const [showBackgrounds, setShowBackgrounds] = useState(true);
+  const [lineNumbers, setLineNumbers] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
   useEffect(() => {
@@ -126,6 +127,8 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
         setOverflow={setOverflow}
         showBackgrounds={showBackgrounds}
         setShowBackgrounds={setShowBackgrounds}
+        lineNumbers={lineNumbers}
+        setLineNumbers={setLineNumbers}
         setDiffStyle={setDiffStyle}
         setKey={setKey}
         setTreeSource={setTreeSource}
@@ -147,6 +150,7 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
         diffStyle={diffStyle}
         overflow={overflow}
         showBackgrounds={showBackgrounds}
+        lineNumbers={lineNumbers}
         scrollRef={scrollRef}
         viewerRef={viewerRef}
         items={items}
