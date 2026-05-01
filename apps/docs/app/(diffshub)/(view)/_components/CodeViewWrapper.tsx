@@ -5,7 +5,6 @@ import {
   type CodeViewLineSelection,
   type CodeViewOptions,
   DEFAULT_THEMES,
-  DEFAULT_VIRTUAL_FILE_METRICS,
   type DiffLineAnnotation,
   type LineAnnotation,
   type SelectedLineRange,
@@ -26,6 +25,11 @@ import {
   useState,
 } from 'react';
 
+import {
+  CODE_VIEW_CUSTOM_CSS,
+  CODE_VIEW_MARGIN_OFFSET,
+  CODE_VIEW_PADDING_BLOCK,
+} from './constants';
 import { DraftAnnotation } from './DraftAnnotation';
 import { ExampleAnnotation } from './ExampleAnnotation';
 import type {
@@ -42,23 +46,11 @@ import {
 } from './utils';
 import { cn } from '@/lib/utils';
 
-const unsafeCSS = `[data-diffs-header] {
-  container-type: scroll-state;
-  container-name: sticky-header;
-}
-@container sticky-header scroll-state(stuck: top) {
-  [data-diffs-header]::after {
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    width: 100%;
-    height: 1px;
-    content: '';
-    background-color: var(--color-border);
-  }
-}`;
-
-const VIEWER_METRICS = { gap: 12, paddingBottom: 20, paddingTop: 20 };
+const VIEWER_METRICS = {
+  gap: 12,
+  paddingBottom: CODE_VIEW_PADDING_BLOCK,
+  paddingTop: CODE_VIEW_PADDING_BLOCK + CODE_VIEW_MARGIN_OFFSET,
+};
 
 interface CodeViewWrapperProps {
   className?: string;
@@ -304,8 +296,16 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       // we'll want to apply a scroll fix on the next render to ensure we
       // keep the collapsed file in view and anchored
       const itemTop = viewer.getTopForItem(itemId);
-      if (itemTop != null && itemTop < viewer.getScrollTop()) {
-        viewer.scrollTo({ type: 'item', id: item.id, align: 'start' });
+      if (
+        itemTop != null &&
+        itemTop < viewer.getScrollTop() + CODE_VIEW_MARGIN_OFFSET
+      ) {
+        viewer.scrollTo({
+          type: 'item',
+          id: item.id,
+          align: 'start',
+          offset: CODE_VIEW_MARGIN_OFFSET,
+        });
       }
       return next;
     });
@@ -378,7 +378,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         enableLineSelection: true,
         enableGutterUtility: true,
         stickyHeaders: true,
-        unsafeCSS,
+        unsafeCSS: CODE_VIEW_CUSTOM_CSS,
         onGutterUtilityClick(range, context) {
           if (context.item.type !== 'diff') {
             return;
@@ -403,8 +403,6 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       // To test annotations and headers and stuff...
       renderAnnotation={renderCommentAnnotation}
       renderHeaderPrefix={renderHeaderPrefix}
-      // metrics={CUSTOM_HEADER_METRICS}
-      // renderCustomHeader={renderHeader}
     />
   );
 });
@@ -433,16 +431,4 @@ function CollapseDiffButton({ collapsed, onToggle }: CollapseDiffButtonProps) {
       />
     </button>
   );
-}
-
-export const CUSTOM_HEADER_METRICS = {
-  ...DEFAULT_VIRTUAL_FILE_METRICS,
-  diffHeaderHeight: 20,
-};
-
-export function renderHeader(item: CodeViewItem<CommentMetadata>) {
-  if (item.type === 'diff') {
-    return <div>{item.fileDiff.name}</div>;
-  }
-  return null;
 }
