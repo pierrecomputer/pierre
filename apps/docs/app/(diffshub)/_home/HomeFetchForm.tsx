@@ -85,6 +85,7 @@ export function HomeFetchForm() {
           size="lg"
           className="size-11"
           disabled={submitting}
+          aria-label={submitting ? 'Fetching…' : 'Fetch'}
         >
           {submitting ? (
             <IconRefresh className="size-4 animate-spin" />
