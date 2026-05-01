@@ -524,6 +524,13 @@ function resolveProductId(): LlmsProductId {
 }
 
 async function main() {
+  // Diffshub is a stub microsite with no MDX docs, so there is nothing to
+  // generate. Exit cleanly so the build pipeline succeeds for that site.
+  if ((process.env.NEXT_PUBLIC_SITE ?? 'diffs') === 'diffshub') {
+    console.log('diffshub has no docs; skipping llms.txt generation.');
+    return;
+  }
+
   // Each Vercel deployment (diffs.com vs trees.software) builds from the same
   // codebase with NEXT_PUBLIC_SITE selecting the active product. Both sites
   // share `public/`, so we generate exactly one product's files per build and
