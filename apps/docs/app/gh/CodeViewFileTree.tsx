@@ -1,9 +1,8 @@
 'use client';
 
 import { useStableCallback } from '@pierre/diffs/react';
-import type { FileTree as FileTreeModel } from '@pierre/trees';
 import { FileTree, useFileTree } from '@pierre/trees/react';
-import { type CSSProperties, memo, useEffect, useRef } from 'react';
+import { type CSSProperties, memo, useRef } from 'react';
 
 import type { FileTreePublicId } from '../../../../packages/trees/dist/model/publicTypes';
 import { BASE_FILE_TREE_OPTIONS } from './constants';
@@ -11,24 +10,18 @@ import type { CodeViewFileTreeSource } from './types';
 import { cn } from '@/lib/utils';
 
 const DENSITY_OVERRIDE_STYLES = {
-  '--trees-bg-override': 'light-dark(oklch(98.5% 0 0), oklch(20.5% 0 0))',
   '--trees-density-override': 0.8,
-  // '--trees-row-height-override': '24px',
+  '--trees-row-height-override': '24px',
 } as CSSProperties;
 
 interface CodeViewFileTreeProps {
   className?: string;
-  // Callback invoked with the underlying tree model once it's mounted, and
-  // again with `null` on unmount. Lets parents drive imperative APIs like
-  // search open/close without owning the model creation.
-  onModelReady?(model: FileTreeModel | null): void;
   onSelectItem?(itemId: string): void;
   source: CodeViewFileTreeSource | null;
 }
 
 export const CodeViewFileTree = memo(function CodeViewFileTree({
   className,
-  onModelReady,
   onSelectItem,
   source,
 }: CodeViewFileTreeProps) {
@@ -49,7 +42,6 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
     <CodeViewFileTreeContent
       key={sourceVersionRef.current}
       className={className}
-      onModelReady={onModelReady}
       onSelectItem={onSelectItem}
       source={source}
     />
@@ -65,7 +57,6 @@ interface CodeViewFileTreeContentProps extends Omit<
 
 function CodeViewFileTreeContent({
   className,
-  onModelReady,
   onSelectItem,
   source,
 }: CodeViewFileTreeContentProps) {
@@ -91,17 +82,10 @@ function CodeViewFileTreeContent({
     itemHeight: 24,
   });
 
-  useEffect(() => {
-    onModelReady?.(model);
-    return () => {
-      onModelReady?.(null);
-    };
-  }, [model, onModelReady]);
-
   return (
     <FileTree
       className={cn(
-        'h-full min-h-0 overflow-auto overscroll-contain pt-2 bg-transparent',
+        'h-full min-h-0 overflow-auto overscroll-contain pt-[19px]',
         className
       )}
       model={model}
