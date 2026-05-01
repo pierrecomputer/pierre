@@ -64,7 +64,7 @@ function updateViewerDiffItem(
   }
 
   item.version = getNextItemVersion(item);
-  return viewer.updateItem(item) ? item : undefined;
+  return viewer.updateItem(item) === true ? item : undefined;
 }
 
 interface ActiveDraftComment {
@@ -345,7 +345,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
     const itemTop = viewer.getTopForItem(itemId);
     item.collapsed = item.collapsed !== true;
     item.version = getNextItemVersion(item);
-    if (!viewerHandle.updateItem(item)) {
+    if (viewerHandle.updateItem(item) !== true) {
       return;
     }
 

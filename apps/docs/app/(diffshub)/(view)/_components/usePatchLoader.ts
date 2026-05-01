@@ -439,7 +439,7 @@ function applyCodeViewLineHashTarget(
   if (item.collapsed === true) {
     item.collapsed = false;
     item.version = getNextItemVersion(item);
-    if (!viewer.updateItem(item)) {
+    if (viewer.updateItem(item) !== true) {
       return false;
     }
     viewer.getInstance()?.render(true);

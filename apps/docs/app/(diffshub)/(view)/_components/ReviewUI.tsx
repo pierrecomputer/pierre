@@ -158,7 +158,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
       {viewerAvailable ? (
         <>
           <CodeViewSidebar
-            className="[grid-area:viewer] md:[grid-area:tree]"
+            className="diffshub-mount-slide-up [grid-area:viewer] md:[grid-area:tree]"
             commentSections={commentSections}
             diffStats={diffStats}
             mobileOverlayOpen={fileTreeOverlayOpen}
@@ -171,7 +171,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
           />
           <CodeViewWrapper
             key={viewerKey}
-            className="[grid-area:viewer]"
+            className="diffshub-mount-slide-up [grid-area:viewer]"
             diffStyle={diffStyle}
             overflow={overflow}
             showBackgrounds={showBackgrounds}

@@ -8,6 +8,7 @@ import {
   useCallback,
   useState,
   useTransition,
+  ViewTransition,
 } from 'react';
 
 import { getPatchViewerHref } from '../(view)/_components/utils';
@@ -43,29 +44,33 @@ export const HomeFetchForm = memo(function HomeFetchForm() {
   return (
     <div className="my-5 space-y-2">
       <form onSubmit={handleSubmit} className="flex max-w-2xl gap-2">
-        <Input
-          type="url"
-          name="url"
-          inputSize="lg"
-          placeholder="Enter any GitHub URL…"
-          required
-          disabled={isPending}
-          className="text-md bg-background h-11 rounded-lg sm:flex-1"
-        />
-        <Button
-          type="submit"
-          variant="default"
-          size="icon"
-          className="size-11 rounded-lg"
-          disabled={isPending}
-          aria-label={isPending ? 'Opening…' : 'Fetch'}
-        >
-          {isPending ? (
-            <IconRefresh className="size-4 animate-spin" />
-          ) : (
-            <IconArrow className="size-4 rotate-180" />
-          )}
-        </Button>
+        <ViewTransition name="input">
+          <Input
+            type="url"
+            name="url"
+            inputSize="lg"
+            placeholder="Enter any GitHub URL…"
+            required
+            disabled={isPending}
+            className="text-md bg-background h-11 rounded-lg sm:flex-1"
+          />
+        </ViewTransition>
+        <ViewTransition name="button">
+          <Button
+            type="submit"
+            variant="default"
+            size="icon"
+            className="size-11 rounded-lg"
+            disabled={isPending}
+            aria-label={isPending ? 'Opening…' : 'Fetch'}
+          >
+            {isPending ? (
+              <IconRefresh className="size-4 animate-spin" />
+            ) : (
+              <IconArrow className="size-4 rotate-180" />
+            )}
+          </Button>
+        </ViewTransition>
       </form>
       {errorMessage != null && (
         <p className="text-destructive text-sm" role="alert">

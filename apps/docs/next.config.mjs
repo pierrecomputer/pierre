@@ -38,6 +38,7 @@ const nextConfig = {
   devIndicators: false,
   experimental: {
     cssChunking: 'strict',
+    viewTransition: true,
   },
   // allowedDevOrigins: [],
   // Resolve and transpile workspace packages so subpath exports (e.g. @pierre/trees/react)
