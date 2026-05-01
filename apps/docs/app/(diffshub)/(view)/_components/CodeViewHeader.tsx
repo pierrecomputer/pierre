@@ -259,7 +259,12 @@ export const CodeViewHeader = memo(function CodeViewHeader({
         className
       )}
     >
-      <DiffsHubLogo className="absolute top-3 left-[50%] -translate-x-1/2 md:static md:translate-x-0" />
+      <Link
+        href="/"
+        className="absolute top-3 left-[50%] inline-flex -translate-x-1/2 transition-transform duration-200 hover:scale-110 md:static md:translate-x-0"
+      >
+        <DiffsHubLogo />
+      </Link>
       <span className="text-md hidden text-neutral-300 md:-mr-2 md:inline-flex">
         /
       </span>
@@ -410,10 +415,6 @@ export const CodeViewHeader = memo(function CodeViewHeader({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <div className="bg-border mx-1 hidden h-5 w-px md:block" />
-        <Button asChild className="ml-auto md:ml-0" variant="muted">
-          <Link href="/">New…</Link>
-        </Button>
       </div>
       <hr className="border-border/80 w-full md:hidden" />
     </div>

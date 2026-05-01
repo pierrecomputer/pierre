@@ -11,6 +11,9 @@ import {
 import localFont from 'next/font/local';
 
 import './globals.css';
+import { Fragment } from 'react';
+
+import { WorkerPoolContext } from './(diffs)/_components/WorkerPoolContext';
 import { PreloadHighlighter } from '@/components/PreloadHighlighter';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
@@ -197,6 +200,8 @@ export const metadata: Metadata = {
   },
 };
 
+const WrapperContext = SITE === 'diffshub' ? WorkerPoolContext : Fragment;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -215,20 +220,22 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
-          <Toaster />
-          <div
-            id="dark-mode-portal-container"
-            className="dark"
-            data-theme="dark"
-          ></div>
-          <div
-            id="light-mode-portal-container"
-            className="light"
-            data-theme="light"
-          ></div>
-        </ThemeProvider>
+        <WrapperContext>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            {children}
+            <Toaster />
+            <div
+              id="dark-mode-portal-container"
+              className="dark"
+              data-theme="dark"
+            ></div>
+            <div
+              id="light-mode-portal-container"
+              className="light"
+              data-theme="light"
+            ></div>
+          </ThemeProvider>
+        </WrapperContext>
         <PreloadHighlighter />
       </body>
     </html>

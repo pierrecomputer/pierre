@@ -1,5 +1,40 @@
 import type { FileTreeOptions } from '@pierre/trees';
 
+export const CODE_VIEW_MARGIN_OFFSET = 12;
+
+export const CODE_VIEW_PADDING_BLOCK = 17;
+
+export const CODE_VIEW_CUSTOM_CSS = `
+[data-diffs-header] {
+  container-type: scroll-state;
+  container-name: sticky-header;
+  top: 12px;
+
+  &::before {
+    position: absolute;
+    top: -12px;
+    left: 0;
+    right: 0;
+    height: 12px;
+    width: 100%;
+    content: '';
+    background-color: var(--diffs-bg);
+  }
+}
+
+@container sticky-header scroll-state(stuck: top) {
+  [data-diffs-header]::after {
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    content: '';
+    background-color: var(--color-border);
+  }
+}
+`;
+
 // Hide the built-in search input until the user opts into search via the
 // sidebar toggle. The trees library always mounts the input when
 // `search: true`, but reflects open/closed state on the container's
@@ -8,6 +43,9 @@ import type { FileTreeOptions } from '@pierre/trees';
 const HIDDEN_SEARCH_UNSAFE_CSS = `
   [data-file-tree-search-container][data-open='false'] {
     display: none;
+  }
+  [data-file-tree-search-container] {
+    margin-bottom: 16px;
   }
 `;
 
