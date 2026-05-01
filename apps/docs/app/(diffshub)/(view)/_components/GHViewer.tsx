@@ -43,6 +43,7 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
   >([]);
   const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
+  const [showBackgrounds, setShowBackgrounds] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
   useEffect(() => {
@@ -123,6 +124,8 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
         setCommentFileByItemId={setCommentFileByItemId}
         setItems={setItems}
         setOverflow={setOverflow}
+        showBackgrounds={showBackgrounds}
+        setShowBackgrounds={setShowBackgrounds}
         setDiffStyle={setDiffStyle}
         setKey={setKey}
         setTreeSource={setTreeSource}
@@ -143,6 +146,7 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
         key={key}
         diffStyle={diffStyle}
         overflow={overflow}
+        showBackgrounds={showBackgrounds}
         scrollRef={scrollRef}
         viewerRef={viewerRef}
         items={items}

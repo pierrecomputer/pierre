@@ -120,12 +120,15 @@ export class VirtualizedFileDiff<
     return this.metrics.lineHeight * multiplier;
   }
 
-  // Override setOptions to clear height cache when diffStyle changes
+  // Override setOptions to clear height cache when diffStyle changes, and to
+  // force a re-render when visual-only options like disableBackground change
+  // (those don't affect layout, but the DOM attribute must still be updated).
   override setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     const previousDiffStyle = this.options.diffStyle;
     const previousOverflow = this.options.overflow;
     const previousCollapsed = this.options.collapsed;
+    const previousDisableBackground = this.options.disableBackground;
 
     super.setOptions(options);
 
@@ -143,6 +146,12 @@ export class VirtualizedFileDiff<
         this.computeApproximateSize();
       }
       this.renderRange = undefined;
+    }
+    // Visual-only options don't affect layout, but the pre-element attributes
+    // need to be updated. Setting forceRenderOverride bypasses FileDiff.render's
+    // early-return guard so applyPreNodeAttributes is called on the next render.
+    if (previousDisableBackground !== this.options.disableBackground) {
+      this.forceRenderOverride = true;
     }
     // CodeView will mark dirty for us
     if (this.isSimpleMode()) {

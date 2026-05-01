@@ -81,6 +81,8 @@ interface HeaderProps {
   setTreeSource: Dispatch<SetStateAction<CodeViewFileTreeSource | null>>;
   overflow: 'wrap' | 'scroll';
   setOverflow: Dispatch<SetStateAction<'wrap' | 'scroll'>>;
+  showBackgrounds: boolean;
+  setShowBackgrounds: Dispatch<SetStateAction<boolean>>;
   setKey: Dispatch<SetStateAction<number>>;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
 }
@@ -97,13 +99,14 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   setCommentFileByItemId,
   setItems,
   setOverflow,
+  showBackgrounds,
+  setShowBackgrounds,
   setDiffStyle,
   setKey,
   setTreeSource,
 }: HeaderProps) {
   const hasFetched = useRef(false);
   /** Placeholder toggles for the settings menu; not wired to the viewer yet. */
-  const [showBackgrounds, setShowBackgrounds] = useState(true);
   const [lineNumbers, setLineNumbers] = useState(true);
   const [indicatorStyle, setIndicatorStyle] = useState<
     'bars' | 'classic' | 'none'
