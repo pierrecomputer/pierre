@@ -112,7 +112,7 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] contain-strict [grid-template-areas:'header''viewer'] md:grid-cols-[320px_minmax(0,1fr)] md:[grid-template-areas:'header_header''tree_viewer']">
       <CodeViewHeader
-        className="z-10 m-2 mb-0 contain-layout contain-paint [grid-area:header]"
+        className="[grid-area:header]"
         diffStyle={diffStyle}
         initialUrl={initialUrl}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
@@ -129,6 +129,7 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
         viewerRef={viewerRef}
       />
       <CodeViewSidebar
+        className="[grid-area:viewer] md:[grid-area:tree]"
         commentSections={commentSections}
         mobileOverlayOpen={fileTreeOverlayOpen}
         onMobileClose={handleCloseFileTreeOverlay}
@@ -138,7 +139,7 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
         onSelectItem={handleSelectTreeItem}
       />
       <CodeViewWrapper
-        className="gh-code-view-scrollbar-y mt-[-12px] h-[calc(100%_+_12px)] pr-[3px] contain-strict [grid-area:viewer]"
+        className="[grid-area:viewer]"
         key={key}
         diffStyle={diffStyle}
         overflow={overflow}
