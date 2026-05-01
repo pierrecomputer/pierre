@@ -874,17 +874,7 @@
   }
 
   [data-gutter-buffer='buffer'] {
-    background-size: 8px 8px;
-    background-position: 0 0;
-    background-origin: border-box;
-    /* This is incredibly expensive... */
-    background-image: repeating-linear-gradient(
-      -45deg,
-      transparent,
-      transparent calc(3px * 1.414),
-      rgb(from var(--diffs-bg-buffer) r g b / 0.8) calc(3px * 1.414),
-      rgb(from var(--diffs-bg-buffer) r g b / 0.8) calc(4px * 1.414)
-    );
+    background-color: var(--diffs-bg-context);
   }
 
   [data-content-buffer] {
@@ -957,6 +947,10 @@
 
   [data-separator='line-info'] {
     margin-block: var(--diffs-gap-block, var(--diffs-gap-fallback));
+
+    [data-separator-wrapper] {
+      min-width: 16px;
+    }
   }
 
   [data-separator='line-info-basic'],
@@ -1377,9 +1371,14 @@
   }
 
   [data-disable-line-numbers] {
+    [data-gutter-buffer],
     [data-column-number] {
       min-width: 4px;
       padding: 0;
+
+      &::before {
+        min-width: 0;
+      }
     }
 
     [data-line-number-content] {
@@ -1393,8 +1392,8 @@
     }
 
     &[data-indicators='bars'] [data-gutter-utility-slot] {
-      /* Using 5px here because theres a 1px separator after the bar */
-      left: 5px;
+      /* Using 5px here because theres a 2px separator after the bar */
+      left: 6px;
     }
   }
 
