@@ -1,9 +1,7 @@
 'use client';
 
-import { IconComment, IconFileTree, IconSearch, IconX } from '@pierre/icons';
-import { FileTree } from '@pierre/trees';
-import { useFileTreeSearch } from '@pierre/trees/react';
-import { memo, type RefObject, useCallback, useState } from 'react';
+import { IconX } from '@pierre/icons';
+import { memo, type RefObject, useId, useState } from 'react';
 
 import { CodeViewCommentsList } from './CodeViewCommentsList';
 import { CodeViewFileTree } from './CodeViewFileTree';
@@ -13,8 +11,6 @@ import type {
   CodeViewSavedCommentItem,
 } from './types';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { cn } from '@/lib/utils';
 
 type SidebarTab = 'files' | 'comments';
@@ -30,6 +26,15 @@ interface CodeViewSidebarProps {
   source: CodeViewFileTreeSource | null;
 }
 
+function getTabClassName(active: boolean): string {
+  return cn(
+    'inline-flex flex-1 items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors outline-none',
+    active
+      ? 'bg-background text-foreground shadow-xs'
+      : 'text-muted-foreground hover:text-foreground cursor-pointer'
+  );
+}
+
 export const CodeViewSidebar = memo(function CodeViewSidebar({
   className,
   commentSections,
@@ -41,10 +46,10 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   source,
 }: CodeViewSidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
-  const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
-  const handleModelReady = useCallback((model: FileTree | null) => {
-    setFileTreeModel(model);
-  }, []);
+  const filesTabId = useId();
+  const commentsTabId = useId();
+  const filesPanelId = useId();
+  const commentsPanelId = useId();
 
   return (
     <>
@@ -54,7 +59,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
         aria-label="Close file tree"
         tabIndex={mobileOverlayOpen ? 0 : -1}
         className={cn(
-          'z-20 cursor-default bg-background/60 backdrop-blur-xs transition-opacity [grid-column:1/-1] [grid-row:1/-1] md:hidden',
+          'z-20 cursor-default bg-background/40 transition-opacity [grid-column:1/-1] [grid-row:1/-1] md:hidden',
           mobileOverlayOpen
             ? 'pointer-events-auto opacity-100'
             : 'pointer-events-none opacity-0'
@@ -63,63 +68,75 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
       />
       <div
         className={cn(
-          'contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-200 ease-out will-change-transform [grid-area:viewer] motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto md:[grid-area:tree]',
+          'bg-background contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-200 ease-out will-change-transform [grid-area:viewer] motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto md:[grid-area:tree]',
           mobileOverlayOpen
-            ? 'bg-neutral-50 dark:bg-neutral-900 p-3 border-border pointer-events-auto m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-0 overflow-hidden rounded-xl border shadow-2xl md:m-0 md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
-            : 'pointer-events-none m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl border border-transparent md:pointer-events-auto md:m-0 md:h-full md:overflow-visible md:rounded-none md:border-0 p-2',
+            ? 'border-border pointer-events-auto m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-0 overflow-hidden rounded-xl border shadow-2xl md:m-0 md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
+            : 'pointer-events-none m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl border border-transparent md:pointer-events-auto md:m-0 md:h-full md:overflow-visible md:rounded-none md:border-0',
           className
         )}
       >
-        <div className="">
-          <div className="flex items-center gap-1">
-            <ButtonGroup
+        <div className="border-border border-b p-2">
+          <div className="flex items-center gap-2">
+            <div
+              role="tablist"
               aria-label="Sidebar sections"
-              className="mr-auto flex min-w-0"
-              value={activeTab}
-              onValueChange={(value) => setActiveTab(value as SidebarTab)}
+              className="bg-muted flex min-w-0 flex-1 rounded-lg p-1"
             >
-              <ButtonGroupItem value="files" className="size-9 p-0">
-                <IconFileTree />
-                <span className="sr-only">Files</span>
-              </ButtonGroupItem>
-              <ButtonGroupItem value="comments" className="size-9 p-0">
-                <IconComment />
-                <span className="sr-only">Comments</span>
-              </ButtonGroupItem>
-            </ButtonGroup>
-            {activeTab === 'files' && fileTreeModel != null && (
-              <FileTreeSearchToggle model={fileTreeModel} />
-            )}
+              <button
+                id={filesTabId}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'files'}
+                aria-controls={filesPanelId}
+                tabIndex={activeTab === 'files' ? 0 : -1}
+                className={getTabClassName(activeTab === 'files')}
+                onClick={() => setActiveTab('files')}
+              >
+                Files
+              </button>
+              <button
+                id={commentsTabId}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'comments'}
+                aria-controls={commentsPanelId}
+                tabIndex={activeTab === 'comments' ? 0 : -1}
+                className={getTabClassName(activeTab === 'comments')}
+                onClick={() => setActiveTab('comments')}
+              >
+                Comments
+              </button>
+            </div>
             {onMobileClose != null && (
-              <Button
-                variant="muted"
-                size="icon"
-                className="md:hidden"
+              <button
+                type="button"
                 aria-label="Close file tree"
+                className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg transition-colors outline-none focus-visible:ring-2 md:hidden"
                 onClick={onMobileClose}
               >
                 <IconX className="size-4" />
-              </Button>
+              </button>
             )}
           </div>
         </div>
         <div className="min-h-0 flex-1">
           <div
-            role="region"
-            aria-label="Files"
+            id={filesPanelId}
+            role="tabpanel"
+            aria-labelledby={filesTabId}
             hidden={activeTab !== 'files'}
             className="h-full min-h-0"
           >
             <CodeViewFileTree
               className="h-full min-h-0"
               source={source}
-              onModelReady={handleModelReady}
               onSelectItem={onSelectItem}
             />
           </div>
           <div
-            role="region"
-            aria-label="Comments"
+            id={commentsPanelId}
+            role="tabpanel"
+            aria-labelledby={commentsTabId}
             hidden={activeTab !== 'comments'}
             className="h-full min-h-0"
           >
@@ -134,31 +151,3 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
     </>
   );
 });
-
-// Lives in its own component so we can call useFileTreeSearch only once we
-// actually have a model; conditional hook calls aren't allowed in the parent.
-function FileTreeSearchToggle({ model }: { model: FileTree }) {
-  const search = useFileTreeSearch(model);
-  return (
-    <Button
-      type="button"
-      variant={search.isOpen ? 'outline' : 'muted'}
-      size="icon"
-      aria-label={search.isOpen ? 'Hide file search' : 'Show file search'}
-      aria-pressed={search.isOpen}
-      // Avoid focus moving to this button before click: the tree search input
-      // closes on blur, so without preventDefault the blur runs first, then
-      // click sees isOpen false and calls open() again.
-      onPointerDown={(event) => event.preventDefault()}
-      onClick={() => {
-        if (search.isOpen) {
-          search.close();
-        } else {
-          search.open();
-        }
-      }}
-    >
-      <IconSearch className="size-4" />
-    </Button>
-  );
-}
