@@ -629,6 +629,7 @@ export class CodeView<LAnnotation = undefined> {
     this.root?.removeEventListener('touchstart', this.clearPendingScroll);
     this.root?.removeEventListener('pointerdown', this.clearPendingScroll);
     this.root?.removeEventListener('keydown', this.clearPendingScroll);
+    this.root?.style.removeProperty('overflow-anchor');
     this.container?.remove();
     this.stickyOffset.remove();
     this.stickyContainer.remove();
