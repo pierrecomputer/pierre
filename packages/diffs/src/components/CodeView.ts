@@ -415,7 +415,7 @@ export class CodeView<LAnnotation = undefined> {
   private slotSnapshot: CodeViewRenderedItem<LAnnotation>[] | undefined;
   private scrollListeners: Set<CodeViewScrollListener<LAnnotation>> = new Set();
   private scrollHeight = 0;
-  private lastContainerHeight = -1;
+  private containerHeight = -1;
   private scrollTop: number = 0;
   private scrollDirty = true;
   private pointerEventsRestoreTimer: ReturnType<typeof setTimeout> | undefined;
@@ -542,6 +542,7 @@ export class CodeView<LAnnotation = undefined> {
       throw new Error('CodeView.setup: already setup');
     }
     this.root = root;
+    this.root.style.overflowAnchor = 'none';
     this.container ??= document.createElement('div');
     this.container.style.contain = 'layout size style';
     this.syncViewerMetrics();
@@ -628,6 +629,7 @@ export class CodeView<LAnnotation = undefined> {
     this.root?.removeEventListener('touchstart', this.clearPendingScroll);
     this.root?.removeEventListener('pointerdown', this.clearPendingScroll);
     this.root?.removeEventListener('keydown', this.clearPendingScroll);
+    this.root?.style.removeProperty('overflow-anchor');
     this.container?.remove();
     this.stickyOffset.remove();
     this.stickyContainer.remove();
@@ -1721,6 +1723,7 @@ export class CodeView<LAnnotation = undefined> {
     // collapse, so clamp before deriving the render window for this frame.
     if (recomputeScrollTop) {
       currentScrollTop = this.clampScrollTop(currentScrollTop);
+      this.syncContainerHeight();
     }
 
     // From our currentScrollTop, we should compute where we might be headed
@@ -1828,6 +1831,7 @@ export class CodeView<LAnnotation = undefined> {
 
     this.flushSlotCoordinator();
     this.reconcileRenderedItems(updatedItems);
+    this.syncContainerHeight();
     this.updateStickyPositioning();
 
     // Now that the dom has been flushed and we've computed our updated
@@ -1883,11 +1887,6 @@ export class CodeView<LAnnotation = undefined> {
     }
     this.renderState.scrollTop = roundToDevicePixel(renderedScrollTop);
 
-    const totalScrollHeight = this.getScrollHeight();
-    if (this.lastContainerHeight !== totalScrollHeight) {
-      this.container.style.height = `${totalScrollHeight}px`;
-      this.lastContainerHeight = totalScrollHeight;
-    }
     this.flushManagers(updatedItems);
 
     // If we are hitting a fitPerfectly heuristic, we should queue up another
@@ -1904,6 +1903,16 @@ export class CodeView<LAnnotation = undefined> {
     for (const item of updatedItems) {
       item.instance.flushManagers();
     }
+  }
+
+  private syncContainerHeight(): void {
+    const totalScrollHeight = this.getScrollHeight();
+    if (this.container == null || this.containerHeight === totalScrollHeight) {
+      return;
+    }
+
+    this.container.style.height = `${totalScrollHeight}px`;
+    this.containerHeight = totalScrollHeight;
   }
 
   private reconcileRenderedItems(
