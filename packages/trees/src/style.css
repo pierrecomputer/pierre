@@ -594,8 +594,13 @@
 
   [data-file-tree-virtualized-scroll='true'],
   [data-file-tree-scrollbar-measure='true'] {
+    --trees-scrollbar-thumb-current: transparent;
     overflow-y: auto;
     scrollbar-gutter: stable;
+
+    &:hover {
+      --trees-scrollbar-thumb-current: var(--trees-scrollbar-thumb);
+    }
 
     &::-webkit-scrollbar {
       width: var(--trees-scrollbar-gutter);
@@ -607,7 +612,7 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background-color: var(--trees-scrollbar-thumb);
+      background-color: var(--trees-scrollbar-thumb-current);
       border: 1px solid transparent;
       background-clip: content-box;
       border-radius: calc(var(--trees-scrollbar-gutter) / 2);
@@ -636,7 +641,7 @@
     [data-file-tree-virtualized-scroll='true'],
     [data-file-tree-scrollbar-measure='true'] {
       scrollbar-width: thin;
-      scrollbar-color: var(--trees-scrollbar-thumb) transparent;
+      scrollbar-color: var(--trees-scrollbar-thumb-current) transparent;
     }
   }
 
