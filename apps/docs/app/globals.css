@@ -243,6 +243,38 @@
   @apply overflow-hidden rounded-lg border border-transparent dark:border-neutral-800;
 }
 
+.gh-code-view-scrollbar-y {
+  --gh-code-view-scrollbar-thumb: light-dark(
+    color-mix(in lab, var(--background) 85%, black),
+    color-mix(in lab, var(--background) 80%, white)
+  );
+
+  overflow: hidden auto;
+}
+
+.gh-code-view-scrollbar-y::-webkit-scrollbar {
+  width: 6px;
+}
+
+.gh-code-view-scrollbar-y::-webkit-scrollbar-track {
+  background: transparent;
+  margin-top: 12px;
+}
+
+.gh-code-view-scrollbar-y::-webkit-scrollbar-thumb {
+  background-color: var(--gh-code-view-scrollbar-thumb);
+  background-clip: content-box;
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+
+@supports (-moz-appearance: none) {
+  .gh-code-view-scrollbar-y {
+    scrollbar-color: var(--gh-code-view-scrollbar-thumb) transparent;
+    scrollbar-width: thin;
+  }
+}
+
 [data-slot='header'] {
   @apply border-b border-transparent transition-[border-color] duration-200;
 }

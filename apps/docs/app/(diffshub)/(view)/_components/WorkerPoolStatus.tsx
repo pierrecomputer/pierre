@@ -150,7 +150,7 @@ interface StatusRowProps {
 
 function StatusRow({ icon: Icon, children }: StatusRowProps) {
   return (
-    <div className="text-muted-foreground border-border flex items-center gap-2 border-t py-2">
+    <div className="text-muted-foreground border-border mx-2 flex items-center gap-2 border-t p-2">
       <Icon className="size-3 opacity-50" />
       {children}
     </div>
@@ -180,7 +180,41 @@ function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
   const { Icon: StatusIcon, className: statusIconClass } = getStatusIcon(stats);
 
   return (
-    <div className="shrink-0 px-3 py-2 text-sm">
+    <div className="shrink-0 text-sm">
+      <StatusRow icon={showStats ? IconEyeSlash : IconEye}>
+        <button
+          type="button"
+          onClick={() => setShowStats((prev) => !prev)}
+          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1"
+          aria-expanded={showStats}
+        >
+          {showStats ? 'Hide' : 'Show'} System Monitor
+          <span className="text-muted-foreground/50">(F3)</span>
+        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <StatusIcon className={`size-2 ${statusIconClass}`} />
+        </div>
+      </StatusRow>
+      {showStats && (
+        <div className="m-2 grid grid-cols-2 gap-2 rounded-lg bg-neutral-100 p-2 px-2.5">
+          <StatItem
+            label="Busy Workers"
+            value={`${stats.busyWorkers}/${stats.totalWorkers}`}
+          />
+          <StatItem label="Task Queue" value={stats.queuedTasks} />
+          <StatItem label="Rendered Diffs" value={stats.themeSubscribers} />
+          <StatItem label="Diff Cache" value={stats.diffCacheSize} />
+        </div>
+      )}
+      <StatusRow icon={IconFire}>
+        <button
+          onClick={scrollTester.toggleState}
+          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center"
+          title={isBrrt ? 'Pause autoscroll' : 'Start autoscroll'}
+        >
+          {isBrrt ? 'No' : 'Go'} brrrt
+        </button>
+      </StatusRow>
       <StatusRow icon={IconInfoFill}>
         <div className="text-muted-foreground/75">
           Powered by{' '}
@@ -203,40 +237,6 @@ function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
           </Link>
         </div>
       </StatusRow>
-      <StatusRow icon={showStats ? IconEyeSlash : IconEye}>
-        <button
-          type="button"
-          onClick={() => setShowStats((prev) => !prev)}
-          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1"
-          aria-expanded={showStats}
-        >
-          {showStats ? 'Hide' : 'Show'} System Monitor
-          <span className="text-muted-foreground/50">(F3)</span>
-        </button>
-        <div className="ml-auto flex items-center gap-1">
-          <StatusIcon className={`size-2 ${statusIconClass}`} />
-        </div>
-      </StatusRow>
-      <StatusRow icon={IconFire}>
-        <button
-          onClick={scrollTester.toggleState}
-          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center"
-          title={isBrrt ? 'Pause autoscroll' : 'Start autoscroll'}
-        >
-          {isBrrt ? 'No' : 'Go'} brrrt
-        </button>
-      </StatusRow>
-      {showStats && (
-        <div className="grid grid-cols-2 gap-2 rounded-lg bg-neutral-100 p-2 px-2.5">
-          <StatItem
-            label="Busy Workers"
-            value={`${stats.busyWorkers}/${stats.totalWorkers}`}
-          />
-          <StatItem label="Task Queue" value={stats.queuedTasks} />
-          <StatItem label="Rendered Diffs" value={stats.themeSubscribers} />
-          <StatItem label="Diff Cache" value={stats.diffCacheSize} />
-        </div>
-      )}
     </div>
   );
 }
