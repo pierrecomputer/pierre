@@ -284,6 +284,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           variant="default"
           size="icon"
           className="hidden md:flex"
+          aria-label="Submit"
         >
           <IconArrow className="size-4 rotate-180" />
         </Button>
