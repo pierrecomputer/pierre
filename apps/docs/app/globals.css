@@ -248,12 +248,12 @@
     color-mix(in lab, var(--background) 85%, black),
     color-mix(in lab, var(--background) 80%, white)
   );
-
-  overflow: hidden auto;
+  scrollbar-gutter: stable;
 }
 
 .gh-code-view-scrollbar-y::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 .gh-code-view-scrollbar-y::-webkit-scrollbar-track {
@@ -262,7 +262,7 @@
 }
 
 .gh-code-view-scrollbar-y::-webkit-scrollbar-thumb {
-  background-color: var(--gh-code-view-scrollbar-thumb);
+  background-color: var(--gh-code-view-scrollbar-thumb, transparent);
   background-clip: content-box;
   border: 1px solid transparent;
   border-radius: 4px;
