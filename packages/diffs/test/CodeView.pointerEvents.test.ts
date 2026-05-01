@@ -158,6 +158,26 @@ describe('CodeView pointer events while scrolling', () => {
     }
   });
 
+  test('cleanUp unsets the root overflow anchor style', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    try {
+      const root = document.createElement('div');
+      root.style.overflowAnchor = 'auto';
+
+      viewer.setup(root);
+      expect(root.style.overflowAnchor).toBe('none');
+
+      viewer.cleanUp();
+
+      expect(root.style.overflowAnchor).toBe('');
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('setOptions preserves the pending pointer events restore timer', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();

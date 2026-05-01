@@ -178,7 +178,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           patchIndex
         );
         for (const fileDiff of patch.files) {
-          const id = `${fileIndex++}`;
+          const id = `${fileIndex++}:${fileDiff.name}`;
           const fileOrder = items.length;
 
           items.push({
