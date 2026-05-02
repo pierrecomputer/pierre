@@ -63,7 +63,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
       />
       <div
         className={cn(
-          'contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-200 ease-out will-change-transform [grid-area:viewer] motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto md:[grid-area:tree]',
+          'contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-200 ease-out will-change-transform  motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
           mobileOverlayOpen
             ? 'bg-neutral-50 dark:bg-neutral-900 p-3 border-border pointer-events-auto m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-0 overflow-hidden rounded-xl border shadow-2xl md:m-0 md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
             : 'pointer-events-none m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl border border-transparent md:pointer-events-auto md:m-0 md:h-full md:overflow-visible md:rounded-none md:border-0 p-0 pt-4',
