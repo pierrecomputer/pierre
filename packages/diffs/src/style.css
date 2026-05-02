@@ -24,6 +24,7 @@
     --diffs-bg-buffer-override
     --diffs-bg-hover-override
     --diffs-bg-context-override
+    --diffs-bg-context-gutter-override
     --diffs-bg-separator-override
 
     --diffs-fg-number-override
@@ -91,6 +92,13 @@
       light-dark(
         color-mix(in lab, var(--diffs-bg) 98.5%, var(--diffs-mixer)),
         color-mix(in lab, var(--diffs-bg) 92.5%, var(--diffs-mixer))
+      )
+    );
+    --diffs-bg-context-gutter: var(
+      --diffs-bg-context-gutter-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-bg-context) 90%, var(--diffs-bg)),
+        color-mix(in lab, var(--diffs-bg-context) 45%, var(--diffs-bg))
       )
     );
     --diffs-bg-separator: var(
@@ -382,10 +390,11 @@
 
   [data-line-annotation],
   [data-gutter-buffer='annotation'] {
-    --diffs-computed-decoration-bg: var(--diffs-bg-context);
-    --diffs-computed-diff-line-bg: var(--diffs-bg-context);
-    --diffs-computed-selected-line-bg: var(--diffs-bg-context);
-    --diffs-line-bg: var(--diffs-bg-context);
+    --diffs-annotation-bg: var(--diffs-bg-context);
+    --diffs-computed-decoration-bg: var(--diffs-annotation-bg);
+    --diffs-computed-diff-line-bg: var(--diffs-annotation-bg);
+    --diffs-computed-selected-line-bg: var(--diffs-annotation-bg);
+    --diffs-line-bg: var(--diffs-annotation-bg);
   }
 
   [data-merge-conflict-actions],
@@ -870,11 +879,12 @@
   }
 
   [data-gutter-buffer='annotation'] {
+    --diffs-annotation-bg: var(--diffs-bg-context-gutter);
     min-height: 0;
   }
 
   [data-gutter-buffer='buffer'] {
-    background-color: var(--diffs-bg-context);
+    --diffs-line-bg: var(--diffs-bg-context-gutter);
   }
 
   [data-content-buffer] {
