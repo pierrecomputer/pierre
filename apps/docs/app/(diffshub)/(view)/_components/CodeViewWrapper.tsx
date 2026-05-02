@@ -394,7 +394,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       containerRef={scrollRef}
       items={items}
       className={cn(
-        'relative h-full min-h-0 min-w-0 flex-1 px-[1px] overflow-auto overscroll-contain w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] [&_diffs-container]:overflow-clip [&_diffs-container]:rounded-lg [&_diffs-container]:shadow-[0_0_0_1px_var(--color-border)] [&_diffs-container]:[contain:layout_paint_style]',
+        'gh-code-view-scrollbar-y mt-[-12px] h-[calc(100%_+_12px)] pr-[1px] relative min-h-0 min-w-0 flex-1 px-[1px] overflow-auto overscroll-contain w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] [&_diffs-container]:overflow-clip [&_diffs-container]:rounded-lg [&_diffs-container]:shadow-[0_0_0_1px_var(--color-border)] [&_diffs-container]:[contain:layout_paint_style]',
         className
       )}
       options={options}

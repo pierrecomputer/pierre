@@ -45,7 +45,7 @@ const HIDDEN_SEARCH_UNSAFE_CSS = `
     display: none;
   }
   [data-file-tree-search-container] {
-    margin-bottom: 16px;
+    margin-bottom: 8px;
   }
 `;
 

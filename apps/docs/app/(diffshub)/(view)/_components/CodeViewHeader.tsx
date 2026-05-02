@@ -255,7 +255,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   return (
     <div
       className={cn(
-        'flex flex-wrap md:flex-nowrap border-border bg-background items-center gap-2.5 rounded-xl border p-3 md:py-2 shadow-xs',
+        'z-10 m-2 mb-0 contain-layout contain-paint flex flex-wrap md:flex-nowrap border-border bg-background items-center gap-2.5 rounded-xl border p-3 md:py-2 shadow-xs',
         className
       )}
     >
