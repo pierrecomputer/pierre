@@ -562,7 +562,9 @@ export class CodeView<LAnnotation = undefined> {
     this.root = root;
     this.root.style.overflowAnchor = 'none';
     this.container ??= document.createElement('div');
-    this.container.style.contain = 'layout size style';
+    // NOTE(amadeus): We can't put `size` in here or it breaks
+    // Firefox's sticky headers
+    this.container.style.contain = 'layout style';
     this.syncViewerMetrics();
     this.container.appendChild(this.stickyOffset);
     this.container.appendChild(this.stickyContainer);
