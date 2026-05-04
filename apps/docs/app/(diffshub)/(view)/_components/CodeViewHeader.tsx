@@ -35,7 +35,7 @@ import type {
 } from './types';
 import {
   createCodeViewFileTreeSource,
-  getPullRequestPath,
+  getGitHubPath,
   mapChangeTypeToGitStatus,
 } from './utils';
 import { Button } from '@/components/ui/button';
@@ -130,8 +130,8 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
   const renderPullRequest = useStableCallback(async (input: string) => {
     const normalizedURL = input.trim();
-    const prPath = getPullRequestPath(normalizedURL);
-    if (prPath == null) {
+    const githubPath = getGitHubPath(normalizedURL);
+    if (githubPath == null) {
       console.error('Invalid URL', normalizedURL);
       return undefined;
     }
@@ -139,11 +139,11 @@ export const CodeViewHeader = memo(function CodeViewHeader({
     lastLoadedURLRef.current = normalizedURL;
 
     try {
-      let patchContent = getCachedPatchText(prPath);
+      let patchContent = getCachedPatchText(githubPath);
       if (patchContent == null) {
         console.time('--     request time');
         const response = await fetch(
-          `/api/fetch-pr-patch?path=${encodeURIComponent(prPath)}`
+          `/api/fetch-pr-patch?path=${encodeURIComponent(githubPath)}`
         );
         console.timeEnd('--     request time');
 
@@ -156,14 +156,14 @@ export const CodeViewHeader = memo(function CodeViewHeader({
         console.time('--     reading patch');
         patchContent = await response.text();
         console.timeEnd('--     reading patch');
-        setCachedPatchText(prPath, patchContent);
+        setCachedPatchText(githubPath, patchContent);
       }
 
       console.time('--  parsing patches');
       const parsedPatches = parsePatchFiles(
         patchContent,
         // Use the url as a cache key
-        encodeURIComponent(prPath)
+        encodeURIComponent(githubPath)
       );
       console.timeEnd('--  parsing patches');
 
@@ -248,7 +248,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
     }
   );
   // Auto-fetch the PR the user came in with. The page-level server component
-  // has already validated `initialUrl` via `getPullRequestPath`, so we trust
+  // has already validated `initialUrl` via `getGitHubPath`, so we trust
   // it and fire once on mount. `renderPullRequest` is stable (useStableCallback)
   // and its `hasFetched` ref guards against the first fetch bumping the viewer
   // key, matching the behavior we had before this prop existed.
@@ -281,7 +281,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           className="text-md focus:bg-accent block h-8 w-full min-w-[220px] rounded-md px-2 text-center focus-visible:outline-none md:h-9 md:text-left"
           value={url}
           onChange={({ currentTarget }) => setURL(currentTarget.value)}
-          placeholder="e.g. https://github.com/twbs/bootstrap/pull/42139"
+          placeholder="e.g. https://github.com/nodejs/node/pull/59805"
         />
         <Button
           type="submit"

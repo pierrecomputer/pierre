@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 
 import { setCachedPatchText } from '../(view)/_components/patchCache';
-import { getPullRequestPath } from '../(view)/_components/utils';
+import { getGitHubPath } from '../(view)/_components/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -28,16 +28,16 @@ export function HomeFetchForm() {
     const formData = new FormData(event.currentTarget);
     const urlField = formData.get('url');
     const rawUrl = typeof urlField === 'string' ? urlField.trim() : '';
-    const prPath = getPullRequestPath(rawUrl);
-    if (prPath == null) {
-      setErrorMessage('Enter a valid GitHub pull request URL.');
+    const githubPath = getGitHubPath(rawUrl);
+    if (githubPath == null) {
+      setErrorMessage('Enter a valid GitHub URL.');
       return;
     }
 
     setSubmitting(true);
     try {
       const response = await fetch(
-        `/api/fetch-pr-patch?path=${encodeURIComponent(prPath)}`
+        `/api/fetch-pr-patch?path=${encodeURIComponent(githubPath)}`
       );
       if (!response.ok) {
         const detail = (await response.text()).trim();
@@ -46,13 +46,8 @@ export function HomeFetchForm() {
         );
       }
       const patchText = await response.text();
-      setCachedPatchText(prPath, patchText);
-      // `prPath` is shaped like `/owner/repo/pull/<number>` (or with a
-      // trailing `.patch`), which is exactly the suffix the path-style
-      // viewer route expects. Strip `.patch` because the route's dynamic
-      // segment is just the PR number.
-      const cleanPrPath = prPath.replace(/\.patch$/, '');
-      router.push(cleanPrPath);
+      setCachedPatchText(githubPath, patchText);
+      router.push(githubPath);
     } catch (error) {
       setSubmitting(false);
       setErrorMessage(
@@ -73,7 +68,7 @@ export function HomeFetchForm() {
           type="url"
           name="url"
           inputSize="lg"
-          placeholder="Enter a GitHub pull request URL"
+          placeholder="Enter a GitHub URL"
           defaultValue={DEFAULT_PR_URL}
           required
           disabled={submitting}

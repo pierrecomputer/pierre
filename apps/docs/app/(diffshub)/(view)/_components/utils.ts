@@ -49,18 +49,13 @@ export function isSavedAnnotation(
   return annotation.metadata.kind === 'saved';
 }
 
-export function getPullRequestPath(input: string): string | undefined {
+export function getGitHubPath(input: string): string | undefined {
   try {
     const parsedURL = new URL(input);
     if (parsedURL.hostname !== 'github.com') {
       return undefined;
     }
-    const [finalSegment, pullSegment] = parsedURL.pathname.split('/').reverse();
-    if (
-      finalSegment == null ||
-      !/^\d+(\.patch)?$/.test(finalSegment) ||
-      pullSegment !== 'pull'
-    ) {
+    if (parsedURL.pathname === '/') {
       return undefined;
     }
     return parsedURL.pathname;

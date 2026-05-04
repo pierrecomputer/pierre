@@ -30,18 +30,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Validate the path format (should be /org/repo/pull/{number})
-    const pathSegments = path.split('/').filter(Boolean);
-    if (pathSegments.length < 4 || pathSegments[2] !== 'pull') {
-      return createTextResponse('Invalid GitHub PR path format', {
+    // The client sends only the GitHub-relative path. Always proxy through
+    // github.com so this route cannot be used as a general-purpose URL fetcher.
+    if (!path.startsWith('/') || path === '/') {
+      return createTextResponse('Invalid GitHub path format', {
         status: 400,
       });
     }
 
-    // Ensure the path ends with .patch
+    // Prefer GitHub's raw diff endpoint unless the caller explicitly requests a patch.
     let patchPath = path;
-    if (!patchPath.endsWith('.patch')) {
-      patchPath += '.patch';
+    if (!patchPath.endsWith('.patch') && !patchPath.endsWith('.diff')) {
+      patchPath += '.diff';
     }
 
     // Construct the full GitHub URL server-side

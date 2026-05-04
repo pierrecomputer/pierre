@@ -1,4 +1,4 @@
-// Tiny in-memory cache of fetched patch text, keyed by GitHub PR path
+// Tiny in-memory cache of fetched patch text, keyed by GitHub path
 // (e.g. "/nodejs/node/pull/59805"). Lives at module scope so it survives
 // client-side navigations between `/` and the diff viewer but resets on a full reload.
 //
@@ -9,12 +9,15 @@
 // round trip (the API sets `Cache-Control: no-store`, so the browser cache
 // would not help us).
 
-const patchTextByPrPath = new Map<string, string>();
+const patchTextByGitHubPath = new Map<string, string>();
 
-export function getCachedPatchText(prPath: string): string | undefined {
-  return patchTextByPrPath.get(prPath);
+export function getCachedPatchText(githubPath: string): string | undefined {
+  return patchTextByGitHubPath.get(githubPath);
 }
 
-export function setCachedPatchText(prPath: string, patchText: string): void {
-  patchTextByPrPath.set(prPath, patchText);
+export function setCachedPatchText(
+  githubPath: string,
+  patchText: string
+): void {
+  patchTextByGitHubPath.set(githubPath, patchText);
 }

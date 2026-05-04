@@ -28,7 +28,7 @@ import type {
 } from './types';
 import {
   createCodeViewFileTreeSource,
-  getPullRequestPath,
+  getGitHubPath,
   mapChangeTypeToGitStatus,
 } from './utils';
 import { Button } from '@/components/ui/button';
@@ -87,8 +87,8 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   const [url, setURL] = useState(DEFAULT_PR_URL);
   const renderPullRequest = useStableCallback(async (input: string) => {
     const normalizedURL = input.trim();
-    const prPath = getPullRequestPath(normalizedURL);
-    if (prPath == null) {
+    const githubPath = getGitHubPath(normalizedURL);
+    if (githubPath == null) {
       console.error('Invalid URL', normalizedURL);
       return undefined;
     }
@@ -99,7 +99,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
     try {
       console.time('--     request time');
       const response = await fetch(
-        `/api/fetch-pr-patch?path=${encodeURIComponent(prPath)}`
+        `/api/fetch-pr-patch?path=${encodeURIComponent(githubPath)}`
       );
       console.timeEnd('--     request time');
 
@@ -117,7 +117,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
       const parsedPatches = parsePatchFiles(
         patchContent,
         // Use the url as a cache key
-        encodeURIComponent(prPath)
+        encodeURIComponent(githubPath)
       );
       console.timeEnd('--  parsing patches');
 

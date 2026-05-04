@@ -65,7 +65,7 @@ export default function DiffshubHome() {
           DiffsHub
         </h2>
         <p className="text-muted-foreground text-pretty md:max-w-lg">
-          View code changes from any public GitHub pull request with a
+          View code changes from public GitHub diff and patch URLs with a
           super-freaking-fast, beautiful, and virtualized interface. Built by{' '}
           <Link
             href="https://pierre.computer"
@@ -147,7 +147,7 @@ export default function DiffshubHome() {
           </FaqItem>
           <FaqItem question="Can you host my code, too?">
             <strong className="font-medium">Not yet.</strong> DiffsHub is only a
-            demo app that fetches and renders public GitHub pull requests.
+            demo app that fetches and renders public GitHub diffs and patches.
             However, if your team is looking for Git infrastructure that scales
             with your AI-first products, consider using{' '}
             <Link
