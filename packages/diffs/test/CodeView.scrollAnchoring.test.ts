@@ -136,6 +136,13 @@ function dispatchScroll(root: HTMLElement): void {
   root.dispatchEvent(new window.Event('scroll'));
 }
 
+function getScrollToTop(
+  options?: ScrollToOptions | number,
+  y?: number
+): number {
+  return typeof options === 'number' ? (y ?? 0) : (options?.top ?? 0);
+}
+
 function makeFile(name: string, lineCount: number): FileContents {
   return {
     name,
@@ -143,6 +150,14 @@ function makeFile(name: string, lineCount: number): FileContents {
       { length: lineCount },
       (_, index) => `line ${index + 1}`
     ).join('\n'),
+  };
+}
+
+function makeFileItem(id: string, lineCount: number): CodeViewItem<undefined> {
+  return {
+    id,
+    type: 'file',
+    file: makeFile(`${id}.ts`, lineCount),
   };
 }
 
@@ -209,6 +224,157 @@ describe('CodeView scroll anchoring', () => {
         (viewer.getTopForItem(anchorItem.id) ?? 0);
       expect(unifiedAnchorTop).toBeGreaterThan(splitMaxScrollTop);
       expect(root.scrollTop).toBe(unifiedAnchorTop);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('rebases the DOM scroll position while preserving logical scroll progress', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView({
+      viewerMetrics: {
+        ...DEFAULT_CODE_VIEW_METRICS,
+        gap: 1_000_000,
+      },
+    });
+    const root = createClampingRoot();
+    const items = Array.from({ length: 40 }, (_, index) =>
+      makeFileItem(`file:${index}`, 1)
+    );
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, items);
+
+      expect(viewer.getScrollHeight()).toBeGreaterThan(20_000_000);
+      expect(getRootMaxScrollTop(root)).toBeLessThan(12_000_000);
+
+      root.scrollTop = 11_100_000;
+      dispatchScroll(root);
+      viewer.render(true);
+
+      expect(viewer.getScrollTop()).toBe(11_100_000);
+      expect(root.scrollTop).toBe(2_000_000);
+
+      root.scrollTop = 3_000_000;
+      dispatchScroll(root);
+      viewer.render(true);
+
+      expect(viewer.getScrollTop()).toBe(12_100_000);
+
+      viewer.scrollTo({
+        type: 'item',
+        id: 'file:39',
+        align: 'start',
+        behavior: 'instant',
+      });
+      viewer.render(true);
+
+      const finalFileTop =
+        DEFAULT_CODE_VIEW_METRICS.paddingTop +
+        (viewer.getTopForItem('file:39') ?? 0);
+      expect(viewer.getScrollTop()).toBeGreaterThan(finalFileTop - ROOT_HEIGHT);
+      expect(viewer.getScrollTop()).toBeLessThanOrEqual(finalFileTop);
+      expect(root.scrollTop).toBeLessThanOrEqual(getRootMaxScrollTop(root));
+      expect(
+        viewer.getRenderedItems().some((item) => item.id === 'file:39')
+      ).toBe(true);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('restores the paged scroll height after clearing and reusing the viewer', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView({
+      viewerMetrics: {
+        ...DEFAULT_CODE_VIEW_METRICS,
+        gap: 1_000_000,
+      },
+    });
+    const root = createClampingRoot();
+    const firstItems = Array.from({ length: 40 }, (_, index) =>
+      makeFileItem(`first:${index}`, 1)
+    );
+    const secondItems = Array.from({ length: 40 }, (_, index) =>
+      makeFileItem(`second:${index}`, 1)
+    );
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, firstItems);
+
+      const container = root.firstElementChild;
+      expect(container).toBeInstanceOf(HTMLElement);
+      expect((container as HTMLElement).style.height).toBe('12000000px');
+
+      viewer.setItems([]);
+      expect((container as HTMLElement).style.height).toBe('');
+
+      await renderItems(viewer, secondItems);
+
+      expect(viewer.getScrollHeight()).toBeGreaterThan(20_000_000);
+      expect((container as HTMLElement).style.height).toBe('12000000px');
+      expect(getRootMaxScrollTop(root)).toBeGreaterThan(11_000_000);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('moves the physical spacer before applying a programmatic rebase jump', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView({
+      viewerMetrics: {
+        ...DEFAULT_CODE_VIEW_METRICS,
+        gap: 1_000_000,
+      },
+    });
+    const root = createClampingRoot();
+    const scrollWrites: { top: number; spacerHeight: number }[] = [];
+    const originalScrollTo = root.scrollTo.bind(root);
+    root.scrollTo = (options?: ScrollToOptions | number, y?: number) => {
+      const container = root.firstElementChild;
+      const spacer = container?.firstElementChild;
+      scrollWrites.push({
+        top: getScrollToTop(options, y),
+        spacerHeight:
+          spacer instanceof HTMLElement
+            ? Number.parseFloat(
+                spacer.style.height !== '' ? spacer.style.height : '0'
+              )
+            : 0,
+      });
+      if (typeof options === 'number') {
+        originalScrollTo(options, y ?? 0);
+      } else {
+        originalScrollTo(options);
+      }
+    };
+    const items = Array.from({ length: 40 }, (_, index) =>
+      makeFileItem(`file:${index}`, 1)
+    );
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, items);
+
+      viewer.scrollTo({
+        type: 'position',
+        position: 11_100_000,
+        behavior: 'instant',
+      });
+      viewer.render(true);
+
+      const rebaseWrite = scrollWrites.find((write) => write.top === 2_000_000);
+      expect(rebaseWrite).toBeDefined();
+      expect(rebaseWrite?.spacerHeight).toBeGreaterThan(1_900_000);
+      expect(rebaseWrite?.spacerHeight).toBeLessThan(2_100_000);
     } finally {
       viewer.cleanUp();
       await wait(0);
