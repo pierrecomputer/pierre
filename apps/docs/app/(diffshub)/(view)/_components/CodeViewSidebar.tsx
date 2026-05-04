@@ -6,8 +6,10 @@ import { useFileTreeSearch } from '@pierre/trees/react';
 import { memo, type RefObject, useCallback, useState } from 'react';
 
 import { CodeViewCommentsList } from './CodeViewCommentsList';
+import { CodeViewDiffStats } from './CodeViewDiffStats';
 import { CodeViewFileTree } from './CodeViewFileTree';
 import type {
+  CodeViewDiffStats as CodeViewDiffStatsData,
   CodeViewFileTreeSource,
   CodeViewSavedCommentEntry,
   CodeViewSavedCommentItem,
@@ -22,6 +24,7 @@ type SidebarTab = 'files' | 'comments';
 interface CodeViewSidebarProps {
   className?: string;
   commentSections: readonly CodeViewSavedCommentItem[];
+  diffStats: CodeViewDiffStatsData | null;
   mobileOverlayOpen?: boolean;
   onMobileClose?(): void;
   onSelectComment?(comment: CodeViewSavedCommentEntry): void;
@@ -33,6 +36,7 @@ interface CodeViewSidebarProps {
 export const CodeViewSidebar = memo(function CodeViewSidebar({
   className,
   commentSections,
+  diffStats,
   mobileOverlayOpen = false,
   onMobileClose,
   onSelectComment,
@@ -131,6 +135,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             />
           </div>
         </div>
+        {source != null && <CodeViewDiffStats stats={diffStats} />}
         {source != null && <WorkerPoolStatus scrollRef={scrollRef} />}
       </div>
     </>

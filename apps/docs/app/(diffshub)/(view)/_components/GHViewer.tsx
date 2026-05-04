@@ -11,6 +11,7 @@ import { CODE_VIEW_MARGIN_OFFSET, CODE_VIEW_PADDING_BLOCK } from './constants';
 import type {
   CodeViewCommentFileByItemId,
   CodeViewDeletedCommentEvent,
+  CodeViewDiffStats,
   CodeViewFileTreeSource,
   CodeViewSavedCommentEntry,
   CodeViewSavedCommentEvent,
@@ -36,6 +37,7 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
   const [treeSource, setTreeSource] = useState<CodeViewFileTreeSource | null>(
     null
   );
+  const [diffStats, setDiffStats] = useState<CodeViewDiffStats | null>(null);
   const [commentFileByItemId, setCommentFileByItemId] =
     useState<CodeViewCommentFileByItemId | null>(null);
   const [commentSections, setCommentSections] = useState<
@@ -123,6 +125,7 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
         onToggleFileTreeOverlay={handleToggleFileTreeOverlay}
         setCommentSections={setCommentSections}
         setCommentFileByItemId={setCommentFileByItemId}
+        setDiffStats={setDiffStats}
         setItems={setItems}
         setOverflow={setOverflow}
         showBackgrounds={showBackgrounds}
@@ -137,6 +140,7 @@ export function GHViewer({ initialUrl }: GHViewerProps) {
       <CodeViewSidebar
         className="[grid-area:viewer] md:[grid-area:tree]"
         commentSections={commentSections}
+        diffStats={diffStats}
         mobileOverlayOpen={fileTreeOverlayOpen}
         onMobileClose={handleCloseFileTreeOverlay}
         onSelectComment={handleSelectComment}

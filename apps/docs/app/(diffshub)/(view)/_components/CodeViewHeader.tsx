@@ -29,6 +29,7 @@ import { getCachedPatchText, setCachedPatchText } from './patchCache';
 import type {
   CodeViewCommentFileByItemId,
   CodeViewCommentSidebarFile,
+  CodeViewDiffStats,
   CodeViewFileTreeSource,
   CodeViewSavedCommentItem,
   CommentMetadata,
@@ -78,6 +79,7 @@ interface HeaderProps {
     SetStateAction<CodeViewCommentFileByItemId | null>
   >;
   setItems: Dispatch<SetStateAction<CodeViewItem<CommentMetadata>[]>>;
+  setDiffStats: Dispatch<SetStateAction<CodeViewDiffStats | null>>;
   setTreeSource: Dispatch<SetStateAction<CodeViewFileTreeSource | null>>;
   overflow: 'wrap' | 'scroll';
   setOverflow: Dispatch<SetStateAction<'wrap' | 'scroll'>>;
@@ -99,6 +101,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   overflow,
   setCommentSections,
   setCommentFileByItemId,
+  setDiffStats,
   setItems,
   setOverflow,
   showBackgrounds,
@@ -177,12 +180,25 @@ export const CodeViewHeader = memo(function CodeViewHeader({
       const pathToItemId = new Map<string, string>();
       const itemIdToFile = new Map<string, CodeViewCommentSidebarFile>();
       const gitStatus: GitStatusEntry[] = [];
+      const diffStats: CodeViewDiffStats = {
+        addedLines: 0,
+        deletedLines: 0,
+        fileCount: 0,
+        totalLinesOfCode: 0,
+      };
       const shouldPrefixTreePaths = parsedPatches.length > 1;
       for (const [patchIndex, patch] of parsedPatches.entries()) {
         const treePathPrefix = shouldPrefixTreePaths
           ? getPatchTreePathPrefix(patch.patchMetadata, patchIndex)
           : undefined;
         for (const fileDiff of patch.files) {
+          diffStats.fileCount++;
+          diffStats.totalLinesOfCode += fileDiff.unifiedLineCount;
+          for (const hunk of fileDiff.hunks) {
+            diffStats.addedLines += hunk.additionLines;
+            diffStats.deletedLines += hunk.deletionLines;
+          }
+
           const id = `${fileIndex++}:${fileDiff.name}`;
           const fileOrder = items.length;
 
@@ -223,6 +239,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
       );
       setCommentFileByItemId(itemIdToFile);
       setCommentSections([]);
+      setDiffStats(diffStats);
       setItems(items);
       console.timeEnd('-- computing layout');
       // DEBUG AREA
