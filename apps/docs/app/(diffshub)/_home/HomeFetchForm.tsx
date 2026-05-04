@@ -9,7 +9,7 @@ import { getPullRequestPath } from '../(view)/_components/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-const DEFAULT_PR_URL = 'https://github.com/twbs/bootstrap/pull/42369';
+const DEFAULT_PR_URL = 'https://github.com/nodejs/node/pull/59805';
 
 // Submitting the home form runs the patch fetch up front so users see a
 // "Fetching..." state on `/` instead of an empty viewer shell on the diff page.

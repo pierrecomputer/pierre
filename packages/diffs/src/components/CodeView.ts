@@ -68,6 +68,16 @@ interface LineScrollPosition {
   height: number;
 }
 
+interface StickyBounds {
+  stickyTop: number;
+  stickyBottom: number;
+}
+
+interface PagedScrollPosition {
+  pagedScrollTop: number;
+  scrollPageOffset: number;
+}
+
 interface AdvancedVirtualizedBaseItem {
   /** Current index of this record in the ordered items array. */
   index: number;
@@ -364,6 +374,13 @@ export interface CodeViewOptions<LAnnotation>
 }
 
 const DEFAULT_POINTER_EVENTS_RESTORE_DELAY_MS = 120;
+const SCROLL_REBASE_CONTAINER_HEIGHT = 12_000_000;
+const SCROLL_REBASE_TRIGGER_TOP = 1_000_000;
+const SCROLL_REBASE_TARGET_TOP = 2_000_000;
+const SCROLL_REBASE_TARGET_BOTTOM =
+  SCROLL_REBASE_CONTAINER_HEIGHT - SCROLL_REBASE_TARGET_TOP;
+const SCROLL_REBASE_THRESHOLD =
+  SCROLL_REBASE_CONTAINER_HEIGHT - SCROLL_REBASE_TRIGGER_TOP;
 
 interface ScrollToAnimation {
   position: number;
@@ -417,6 +434,7 @@ export class CodeView<LAnnotation = undefined> {
   private scrollHeight = 0;
   private containerHeight = -1;
   private scrollTop: number = 0;
+  private scrollPageOffset: number = 0;
   private scrollDirty = true;
   private pointerEventsRestoreTimer: ReturnType<typeof setTimeout> | undefined;
   private pointerEventsDisabled = false;
@@ -544,7 +562,9 @@ export class CodeView<LAnnotation = undefined> {
     this.root = root;
     this.root.style.overflowAnchor = 'none';
     this.container ??= document.createElement('div');
-    this.container.style.contain = 'layout size style';
+    // NOTE(amadeus): We can't put `size` in here or it breaks
+    // Firefox's sticky headers
+    this.container.style.contain = 'layout style';
     this.syncViewerMetrics();
     this.container.appendChild(this.stickyOffset);
     this.container.appendChild(this.stickyContainer);
@@ -577,6 +597,17 @@ export class CodeView<LAnnotation = undefined> {
 
     // FIXME(amadeus): Remove me before release
     window.__INSTANCE = this;
+    // Test code to bring back in if needed
+    // window.__CODE_VIEW_SCROLL_BEFORE_REBASE = (pixelsBefore = 1_000) => {
+    //   const target = this.clampScrollTop(
+    //     this.scrollPageOffset + SCROLL_REBASE_THRESHOLD - pixelsBefore
+    //   );
+    //   this.scrollTo({
+    //     type: 'position',
+    //     position: target,
+    //     behavior: 'instant',
+    //   });
+    // };
     window.__TOGGLE = () => {
       if (CodeView.__STOP) {
         CodeView.__STOP = false;
@@ -603,10 +634,12 @@ export class CodeView<LAnnotation = undefined> {
     this.stickyContainer.textContent = '';
     this.stickyOffset.style.height = '';
     this.container?.style.removeProperty('height');
+    this.containerHeight = -1;
     this.windowSpecs = { top: 0, bottom: 0 };
     this.pendingLayoutAnchor = undefined;
     this.height = 0;
     this.scrollTop = 0;
+    this.scrollPageOffset = 0;
     this.scrollHeight = 0;
     this.scrollDirty = true;
     this.heightDirty = true;
@@ -1394,17 +1427,135 @@ export class CodeView<LAnnotation = undefined> {
     return true;
   }
 
-  /**
-   * Clamps a scroll position to the min/max allowable scroll range based on
-   * the computed total height
-   */
-  private clampScrollTop(value: number): number {
+  private getMaxScrollTopForHeight(scrollHeight: number): number {
     const { paddingBottom, paddingTop } = this.getViewerMetrics();
-    const maxScroll = Math.max(
-      paddingTop + this.getScrollHeight() + paddingBottom - this.getHeight(),
+    return Math.max(
+      paddingTop + scrollHeight + paddingBottom - this.getHeight(),
       0
     );
+  }
+
+  private getMaxScrollTop(): number {
+    return this.getMaxScrollTopForHeight(this.getScrollHeight());
+  }
+
+  private shouldRebaseScroll(): boolean {
+    return this.getMaxScrollTop() > SCROLL_REBASE_THRESHOLD;
+  }
+
+  private getPagedScrollHeight(): number {
+    return this.shouldRebaseScroll()
+      ? Math.min(this.getScrollHeight(), SCROLL_REBASE_CONTAINER_HEIGHT)
+      : this.getScrollHeight();
+  }
+
+  private getMaxPagedScrollTop(): number {
+    return this.getMaxScrollTopForHeight(this.getPagedScrollHeight());
+  }
+
+  private clampPagedScrollTop(value: number): number {
+    const maxScroll = this.getMaxPagedScrollTop();
     return Math.max(0, Math.min(value, maxScroll));
+  }
+
+  /**
+   * Clamps a logical scroll position to the min/max allowable scroll range
+   * based on the full computed content height.
+   */
+  private clampScrollTop(value: number): number {
+    const maxScroll = this.getMaxScrollTop();
+    return Math.max(0, Math.min(value, maxScroll));
+  }
+
+  private getMaxScrollPageOffset(): number {
+    return Math.max(this.getMaxScrollTop() - this.getMaxPagedScrollTop(), 0);
+  }
+
+  private clampScrollPageOffset(value: number): number {
+    const maxOffset = this.getMaxScrollPageOffset();
+    return Math.max(0, Math.min(value, maxOffset));
+  }
+
+  private resolveScrollPageWindow(
+    scrollTop: number,
+    preferredPagedScrollTop: number
+  ): { pagedScrollTop: number; scrollPageOffset: number } {
+    let pagedScrollTop = roundToDevicePixel(
+      this.clampPagedScrollTop(preferredPagedScrollTop)
+    );
+    let scrollPageOffset = this.clampScrollPageOffset(
+      scrollTop - pagedScrollTop
+    );
+
+    pagedScrollTop = roundToDevicePixel(
+      this.clampPagedScrollTop(scrollTop - scrollPageOffset)
+    );
+    scrollPageOffset = this.clampScrollPageOffset(scrollTop - pagedScrollTop);
+    return { pagedScrollTop, scrollPageOffset };
+  }
+
+  /**
+   * Resolve how a logical scrollTop maps onto the reusable paged scroll window
+   * without mutating the current page offset.
+   */
+  private resolvePagedScrollPosition(
+    logicalScrollTop: number
+  ): PagedScrollPosition {
+    if (!this.shouldRebaseScroll()) {
+      return {
+        pagedScrollTop: this.clampPagedScrollTop(logicalScrollTop),
+        scrollPageOffset: 0,
+      };
+    }
+
+    const currentPageOffset = this.clampScrollPageOffset(this.scrollPageOffset);
+
+    const pagedScrollTop = logicalScrollTop - currentPageOffset;
+    const pagedMaxScrollTop = this.getMaxPagedScrollTop();
+    const maxRebaseOffset = this.getMaxScrollPageOffset();
+    const shouldMoveDown =
+      pagedScrollTop > SCROLL_REBASE_THRESHOLD &&
+      currentPageOffset < maxRebaseOffset;
+    const shouldMoveUp =
+      pagedScrollTop < SCROLL_REBASE_TRIGGER_TOP && currentPageOffset > 0;
+
+    if (
+      pagedScrollTop < 0 ||
+      pagedScrollTop > pagedMaxScrollTop ||
+      shouldMoveDown ||
+      shouldMoveUp
+    ) {
+      const nextWindow = this.resolveScrollPageWindow(
+        logicalScrollTop,
+        shouldMoveUp
+          ? Math.min(SCROLL_REBASE_TARGET_BOTTOM, pagedMaxScrollTop)
+          : SCROLL_REBASE_TARGET_TOP
+      );
+      return nextWindow;
+    }
+
+    return {
+      pagedScrollTop: roundToDevicePixel(
+        this.clampPagedScrollTop(pagedScrollTop)
+      ),
+      scrollPageOffset: currentPageOffset,
+    };
+  }
+
+  private needsScrollPageUpdate(logicalScrollTop: number): boolean {
+    const roundedScrollTop = roundToDevicePixel(
+      this.clampScrollTop(logicalScrollTop)
+    );
+    const { scrollPageOffset } =
+      this.resolvePagedScrollPosition(roundedScrollTop);
+    return scrollPageOffset !== this.scrollPageOffset;
+  }
+
+  private getPagedLayoutTop(logicalTop: number): number {
+    if (!this.shouldRebaseScroll()) {
+      return logicalTop;
+    }
+    return Math.max(logicalTop - this.scrollPageOffset, 0);
   }
 
   private getStickyHeaderOffset(): number {
@@ -1587,7 +1738,7 @@ export class CodeView<LAnnotation = undefined> {
    * smooth scroll animation or not. If not just return the destination, or
    * compute next position given the smooth scroll spring physics
    */
-  private computeFrameScrollTop(
+  private computeTargetScrollTopForFrame(
     scrollTop: number,
     frameTimestamp: number
   ): number {
@@ -1685,91 +1836,106 @@ export class CodeView<LAnnotation = undefined> {
     if (CodeView.__STOP || this.container == null) {
       return;
     }
-    const height = this.getHeight();
-    let currentScrollTop = this.getScrollTop();
-    const currentRootScrollTop = currentScrollTop;
-    // This boolean tracks whether we are expecting some sort of major layout
-    // change, which means we need to re-calculate our window from a new
-    // anchor computed position after we re-compute the layout
-    let recomputeScrollTop = this.pendingLayoutAnchor != null;
-    // We need to grab the anchor before we re-compute any layout updates, or
-    // else we'll get invalid anchor reference data
-    let anchor = this.getScrollAnchor(currentScrollTop);
 
-    // If any part of the layout is dirty, we should re-compute everything and
-    // force a contextualization
+    // Read the current viewport and logical scroll position before making DOM
+    // mutations, then capture an anchor that can survive layout recalculation.
+    const viewportHeight = this.getHeight();
+    const initialScrollTop = this.getScrollTop();
+    let scrollTopAfterLayout = initialScrollTop;
+    // Typically a pendingLayoutAnchor will be created from a setOptions call,
+    // that will force us to attempt to fit to a new scroll position to not
+    // allow the viewport to jump around on us. This can also be triggered
+    // later on if a particular item marks itself as dirty
+    let computeScrollCorrection = this.pendingLayoutAnchor != null;
+    // We need to grab the anchor before we re-compute any layout updates, or
+    // else we'll get invalid anchor reference data.  If we have a
+    // pendingLayoutAnchor it will just grab that for us instead of attempting
+    // to compute one
+    let scrollAnchor = this.getScrollAnchor(scrollTopAfterLayout);
+
+    // If any item marked itself as difty, we should re-compute everything
+    // after it and then force a new scroll top correction if we aren't already
     if (this.layoutDirtyIndex != null) {
       this.recomputeLayout(this.layoutDirtyIndex);
       this.layoutDirtyIndex = undefined;
-      recomputeScrollTop = true;
+      computeScrollCorrection = true;
     }
 
-    // If we have an anchor and are expecting some sort of layout shift, let's
-    // compute a new current window position from that estimated layout change
-    if (recomputeScrollTop && anchor != null) {
-      const newScrollTop = this.resolveAnchoredScrollTop(anchor);
-      if (newScrollTop != null) {
-        const delta = newScrollTop - currentScrollTop;
-        currentScrollTop = newScrollTop;
+    // If layout shifted, resolve the logical scrollTop that keeps the captured
+    // anchor in the same viewport position.
+    if (computeScrollCorrection && scrollAnchor != null) {
+      const anchoredScrollTopAfterLayout =
+        this.resolveAnchoredScrollTop(scrollAnchor);
+      if (anchoredScrollTopAfterLayout != null) {
+        const layoutAnchorDelta =
+          anchoredScrollTopAfterLayout - scrollTopAfterLayout;
+        scrollTopAfterLayout = anchoredScrollTopAfterLayout;
         if (this.scrollAnimation != null) {
           // If we have a delta measurement adjustment, we have to pass that
           // change onto the scroll animation to ensure the animation remains
           // stable, later on
-          this.scrollAnimation.position += delta;
+          this.scrollAnimation.position += layoutAnchorDelta;
         }
       }
     }
     // Recomputing layout can shrink the scroll range, for example when items
-    // collapse, so clamp before deriving the render window for this frame.
-    if (recomputeScrollTop) {
-      currentScrollTop = this.clampScrollTop(currentScrollTop);
+    // collapse, so clamp current scroll position and update DOM so scroll
+    // changes are valid before deriving the render window for this frame.
+    if (computeScrollCorrection) {
+      scrollTopAfterLayout = this.clampScrollTop(scrollTopAfterLayout);
       this.syncContainerHeight();
     }
 
-    // From our currentScrollTop, we should compute where we might be headed
-    // towards, if we have a pending scroll target and/or animation in progress
-    const frameScrollTop = this.computeFrameScrollTop(
-      currentScrollTop,
+    // Resolve the logical scrollTop this render frame should target. The paged
+    // root scrollTop is derived later only if the scaffold needs to move.
+    const targetScrollTop = this.computeTargetScrollTopForFrame(
+      scrollTopAfterLayout,
       timestamp
     );
 
     // When performing very large scroll jumps, we should attempt to render the
-    // bare minimum to ensure we can paint quickly. We'll queue up a another
+    // bare minimum to ensure we can paint quickly. We'll queue up another
     // render at the end to fill things out on the next tick. If we had to
-    // recomputeScrollTop then we should not fitPerfectly because there's
-    // a good chance we'll be re-rendering everything again
+    // correct layout-adjusted scroll state then we should not fitPerfectly
+    // because there's a good chance we'll be re-rendering the same elements
+    // again
     const fitPerfectly =
-      !recomputeScrollTop &&
+      !computeScrollCorrection &&
       (this.renderState.scrollTop === -1 ||
-        Math.abs(frameScrollTop - this.renderState.scrollTop) >
-          height + this.config.overscrollSize * 2);
+        Math.abs(targetScrollTop - this.renderState.scrollTop) >
+          viewportHeight + this.config.overscrollSize * 2);
 
-    let appliedScrollTop = currentRootScrollTop;
-    if (
-      this.pendingScrollTarget != null &&
-      frameScrollTop !== appliedScrollTop
-    ) {
-      // Programmatic scrolls render the target window. Apply the target scroll
-      // before DOM window mutations so the browser does not have to reconcile
-      // a large virtualized DOM change against an old scrollTop.
-      this.applyScrollFix(frameScrollTop, appliedScrollTop);
-      appliedScrollTop = frameScrollTop;
-    }
-
-    // If we are doing a fitPerfectly render than we should not attempt to anchor
+    // If we are doing a `fitPerfectly` render it means we are rendering
+    // completely new content which means no need to scroll fix anything
     if (fitPerfectly) {
-      anchor = undefined;
+      scrollAnchor = undefined;
     }
 
+    // Compute the projected logical window, then synchronize the paged scroll
+    // scaffold before mutating rendered items.
     this.windowSpecs = createWindowFromScrollPosition({
-      scrollTop: frameScrollTop,
-      height,
+      scrollTop: targetScrollTop,
+      height: viewportHeight,
       scrollHeight: this.getScrollHeight(),
       fitPerfectly,
       fitPerfectlyOverscroll: this.getFitPerfectlyOverscroll(),
       overscrollSize: this.config.overscrollSize,
     });
+    let syncedScrollTop = initialScrollTop;
+    if (
+      (this.pendingScrollTarget != null &&
+        targetScrollTop !== syncedScrollTop) ||
+      this.needsScrollPageUpdate(targetScrollTop)
+    ) {
+      // Apply programmatic scrolls and user-driven page rebases before DOM
+      // mutations so the browser reconciles the render against the right
+      // paged scroll position.
+      this.applyScrollFix(targetScrollTop, syncedScrollTop, this.windowSpecs);
+      syncedScrollTop = targetScrollTop;
+    }
 
+    // Reconcile the currently mounted DOM against the new projected render
+    // window, cleaning up any elements that are no longer visible.
     const { top, bottom } = this.windowSpecs;
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex >= 0) {
@@ -1780,10 +1946,12 @@ export class CodeView<LAnnotation = undefined> {
             `CodeView.computeRenderRangeAndEmit: No item at index: ${index}`
           );
         }
-        const renderedTop = item.top;
-        const renderedHeight = item.height;
-        // If not visible, we should unmount it
-        if (!(renderedTop > top - renderedHeight && renderedTop <= bottom)) {
+        const isVisible = item.top > top - item.height && item.top <= bottom;
+        // If not visible, we should unmount it and clean it up
+        if (!isVisible) {
+          // TODO(amadeus): Should probably experiment with dom element
+          // recycling here (since things like the css files and svg stuff is
+          // probably some level of cost that we shouldn't need to pay...)
           cleanRenderedItem(item);
         }
       }
@@ -1836,62 +2004,74 @@ export class CodeView<LAnnotation = undefined> {
 
     // Now that the dom has been flushed and we've computed our updated
     // item/line metrics, we should attempt to resolve any scroll anchors and
-    // scroll animations
+    // scroll animation data.  We have already applied the desired scroll
+    // position before rendering, so the only scroll changes should be to
+    // scrollFix from lines that did not match their computed state.
     //
-    // - No pending target → resolve the captured anchor and apply
-    //   the absolute anchored scrollTop directly if needed (idle / user-driven
-    //   layout settling, e.g. annotations finishing measurement).
-    // - Instant pending target → apply the post-reconcile resolved
-    //   destination that we've rendered.
-    // - Smooth pending target → rebase the spring to the anchored scrollTop
-    //   and update the spring based on frameTime as needed
-    const anchoredScrollTop =
-      anchor != null ? this.resolveAnchoredScrollTop(anchor) : undefined;
-    if (anchor === this.pendingLayoutAnchor) {
+    // - No pending scrollTo target → Only attempt to scrollFix if there's a
+    //   mismatch
+    // - Instant pending scrollTo target → Resolve target anchor position and
+    //   apply any necessary scroll fixes
+    // - Smooth pending scrollTo target → Apply necessary scrollFix if
+    //   necessary and rebase/update the outstanding spring animation values.
+    const anchoredScrollTopAfterRender =
+      scrollAnchor != null
+        ? this.resolveAnchoredScrollTop(scrollAnchor)
+        : undefined;
+    if (scrollAnchor === this.pendingLayoutAnchor) {
       this.pendingLayoutAnchor = undefined;
     }
     // The amount of computed layout shift from the render
-    const anchorScrollDelta =
-      anchoredScrollTop != null ? anchoredScrollTop - currentScrollTop : 0;
+    const postRenderAnchorDelta =
+      anchoredScrollTopAfterRender != null
+        ? anchoredScrollTopAfterRender - scrollTopAfterLayout
+        : 0;
 
-    let renderedScrollTop = frameScrollTop;
-    if (this.pendingScrollTarget == null) {
-      renderedScrollTop = anchoredScrollTop ?? frameScrollTop;
-      if (renderedScrollTop !== appliedScrollTop) {
-        this.applyScrollFix(renderedScrollTop, appliedScrollTop);
-      }
-    } else if (this.pendingScrollTarget != null) {
-      const targetScrollTop = this.advanceScrollAnimation(
+    let postRenderScrollTop = targetScrollTop;
+    let shouldCheckPendingTargetSettled = false;
+    if (this.pendingScrollTarget != null) {
+      const pendingTargetScrollTop = this.advanceScrollAnimation(
         timestamp,
-        anchorScrollDelta
+        postRenderAnchorDelta
       );
-      if (targetScrollTop != null) {
-        if (targetScrollTop !== appliedScrollTop) {
-          this.applyScrollFix(targetScrollTop, appliedScrollTop);
-        }
-        renderedScrollTop = targetScrollTop;
-        if (
-          this.pendingScrollTarget != null &&
-          this.isPendingTargetSettled(this.pendingScrollTarget)
-        ) {
-          this.pendingScrollTarget = undefined;
-          this.scrollAnimation = undefined;
-        }
+      if (pendingTargetScrollTop != null) {
+        postRenderScrollTop = pendingTargetScrollTop;
+        shouldCheckPendingTargetSettled = true;
       }
       // If something bad happened with our pending scroll target, then we'd
       // fall back here. Unlikely to happen in practice, but we need to reset
       // the scrollTop if so
       else {
-        renderedScrollTop = currentScrollTop;
+        postRenderScrollTop = scrollTopAfterLayout;
       }
+    } else {
+      postRenderScrollTop = anchoredScrollTopAfterRender ?? targetScrollTop;
     }
-    this.renderState.scrollTop = roundToDevicePixel(renderedScrollTop);
+    // If the new intended scroll position has changed, we should apply that
+    // now to bring everything in line
+    if (postRenderScrollTop !== syncedScrollTop) {
+      this.applyScrollFix(
+        postRenderScrollTop,
+        syncedScrollTop,
+        this.windowSpecs
+      );
+      syncedScrollTop = postRenderScrollTop;
+    }
+    if (
+      shouldCheckPendingTargetSettled &&
+      this.pendingScrollTarget != null &&
+      this.isPendingTargetSettled(this.pendingScrollTarget)
+    ) {
+      this.pendingScrollTarget = undefined;
+      this.scrollAnimation = undefined;
+    }
+    this.renderState.scrollTop = roundToDevicePixel(syncedScrollTop);
 
     this.flushManagers(updatedItems);
 
     // If we are hitting a fitPerfectly heuristic, we should queue up another
-    // render to fill out content.  If we are performing a scroll animation
-    // we'll need another render to continue
+    // render to fill out content. If we are performing a scroll animation we'll
+    // need another render to continue.
     if (fitPerfectly || this.scrollAnimation != null) {
       this.render();
     }
@@ -1906,13 +2086,78 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   private syncContainerHeight(): void {
-    const totalScrollHeight = this.getScrollHeight();
-    if (this.container == null || this.containerHeight === totalScrollHeight) {
+    const pagedScrollHeight = this.getPagedScrollHeight();
+    if (this.container == null || this.containerHeight === pagedScrollHeight) {
       return;
     }
 
-    this.container.style.height = `${totalScrollHeight}px`;
-    this.containerHeight = totalScrollHeight;
+    this.container.style.height = `${pagedScrollHeight}px`;
+    this.containerHeight = pagedScrollHeight;
+  }
+
+  private getStickyBounds(
+    windowSpecs?: VirtualWindowSpecs
+  ): StickyBounds | undefined {
+    const { firstIndex, lastIndex } =
+      windowSpecs != null
+        ? {
+            firstIndex: this.findFirstVisibleIndex(windowSpecs.top),
+            lastIndex: this.findLastVisibleIndex(windowSpecs.bottom),
+          }
+        : this.renderState;
+
+    if (firstIndex === -1 || lastIndex === -1 || firstIndex > lastIndex) {
+      return undefined;
+    }
+    const firstStickySpecs =
+      this.items[firstIndex]?.instance.getAdvancedStickySpecs(windowSpecs);
+    const lastStickySpecs =
+      this.items[lastIndex]?.instance.getAdvancedStickySpecs(windowSpecs);
+
+    if (firstStickySpecs == null || lastStickySpecs == null) {
+      return undefined;
+    }
+
+    return {
+      stickyTop: this.getPagedLayoutTop(
+        Math.max(firstStickySpecs.topOffset, 0)
+      ),
+      stickyBottom: this.getPagedLayoutTop(
+        lastStickySpecs.topOffset + lastStickySpecs.height
+      ),
+    };
+  }
+
+  private applyStickyPositioning({
+    stickyTop,
+    stickyBottom,
+  }: StickyBounds): void {
+    const height = this.getHeight();
+    const itemMetrics = this.getItemMetrics();
+    const stickyContainerHeight = stickyBottom - stickyTop;
+
+    this.renderState.stickyHeight = stickyContainerHeight;
+    this.renderState.stickyTop = stickyTop;
+    this.renderState.stickyBottom = stickyBottom;
+
+    this.stickyOffset.style.height = `${stickyTop}px`;
+    // NOTE(amadeus): Wee polish lad -- when dragging the scrollbar up or
+    // down quickly, this prevents the laggy scroll view from lining up with
+    // the numbers exactly
+    const randomOffset = ((Math.random() * itemMetrics.lineHeight) >> 0) * -1;
+    const stickyJitter =
+      -Math.max(stickyContainerHeight + randomOffset, 0) + height;
+    this.stickyContainer.style.top = `${stickyJitter}px`;
+    this.stickyContainer.style.bottom = `${stickyJitter + itemMetrics.diffHeaderHeight}px`;
+  }
+
+  private syncPagedScrollScaffolding(windowSpecs: VirtualWindowSpecs): void {
+    this.syncContainerHeight();
+    const stickyBounds = this.getStickyBounds(windowSpecs);
+    if (stickyBounds == null) {
+      return;
+    }
+    this.applyStickyPositioning(stickyBounds);
   }
 
   private reconcileRenderedItems(
@@ -1965,19 +2210,11 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   private updateStickyPositioning(): void {
-    const { firstIndex, lastIndex } = this.renderState;
-    const firstStickySpecs =
-      this.items[firstIndex]?.instance.getAdvancedStickySpecs();
-    const lastStickySpecs =
-      this.items[lastIndex]?.instance.getAdvancedStickySpecs();
-    if (firstStickySpecs == null || lastStickySpecs == null) {
+    const stickyBounds = this.getStickyBounds();
+    if (stickyBounds == null) {
       return;
     }
-
-    const height = this.getHeight();
-    const itemMetrics = this.getItemMetrics();
-    const stickyTop = Math.max(firstStickySpecs.topOffset, 0);
-    const stickyBottom = lastStickySpecs.topOffset + lastStickySpecs.height;
+    const { stickyTop, stickyBottom } = stickyBounds;
     const stickyContainerHeight = stickyBottom - stickyTop;
 
     if (
@@ -1988,19 +2225,7 @@ export class CodeView<LAnnotation = undefined> {
       return;
     }
 
-    this.renderState.stickyHeight = stickyContainerHeight;
-    this.renderState.stickyTop = stickyTop;
-    this.renderState.stickyBottom = stickyBottom;
-
-    this.stickyOffset.style.height = `${stickyTop}px`;
-    // NOTE(amadeus): Wee polish lad -- when dragging the scrollbar up or
-    // down quickly, this prevents the laggy scroll view from lining up with
-    // the numbers exactly
-    const randomOffset = ((Math.random() * itemMetrics.lineHeight) >> 0) * -1;
-    const stickyJitter =
-      -Math.max(stickyContainerHeight + randomOffset, 0) + height;
-    this.stickyContainer.style.top = `${stickyJitter}px`;
-    this.stickyContainer.style.bottom = `${stickyJitter + itemMetrics.diffHeaderHeight}px`;
+    this.applyStickyPositioning(stickyBounds);
   }
 
   private handleScroll = (): void => {
@@ -2043,7 +2268,11 @@ export class CodeView<LAnnotation = undefined> {
             anchor != null ? this.resolveAnchoredScrollTop(anchor) : undefined;
           if (anchoredScrollTop != null) {
             const resizeAnchorDelta = anchoredScrollTop - currentScrollTop;
-            this.applyScrollFix(anchoredScrollTop, currentScrollTop);
+            this.applyScrollFix(
+              anchoredScrollTop,
+              currentScrollTop,
+              this.windowSpecs
+            );
             if (this.scrollAnimation != null) {
               // if we had to apply a scroll fix then we should make sure to
               // match the scroll fix delta to the scrollAnimation position to
@@ -2187,30 +2416,50 @@ export class CodeView<LAnnotation = undefined> {
 
   /**
    * Apply a device-pixel-rounded scroll position if it differs from the last
-   * rendered/applied scrollTop we've already recorded in renderState.
+   * logical scrollTop synchronized into the paged scroll scaffold.
    */
-  private applyScrollFix(target: number, currentScrollTop?: number): void {
+  private applyScrollFix(
+    targetScrollTop: number,
+    syncedScrollTop: number,
+    windowSpecs: VirtualWindowSpecs
+  ): void {
     if (this.root == null) {
       return;
     }
-    const rounded = roundToDevicePixel(this.clampScrollTop(target));
-    const roundedCurrentScrollTop = roundToDevicePixel(
-      currentScrollTop ?? this.scrollTop
+    const roundedTargetScrollTop = roundToDevicePixel(
+      this.clampScrollTop(targetScrollTop)
     );
+    const roundedSyncedScrollTop = roundToDevicePixel(syncedScrollTop);
+
+    const { scrollPageOffset: previousPageOffset } = this;
+    const syncedPagedScrollTop = roundToDevicePixel(
+      this.clampPagedScrollTop(roundedSyncedScrollTop - previousPageOffset)
+    );
+    const { pagedScrollTop, scrollPageOffset } =
+      this.resolvePagedScrollPosition(roundedTargetScrollTop);
+    const targetPagedScrollTop = pagedScrollTop;
+
+    const rebaseChanged = previousPageOffset !== scrollPageOffset;
     if (
-      rounded === this.renderState.scrollTop &&
-      rounded === roundedCurrentScrollTop
+      roundedTargetScrollTop === this.renderState.scrollTop &&
+      roundedTargetScrollTop === roundedSyncedScrollTop &&
+      targetPagedScrollTop === syncedPagedScrollTop &&
+      !rebaseChanged
     ) {
       return;
     }
     this.suspendPointerEvents();
-    if (rounded !== roundedCurrentScrollTop) {
-      this.root.scrollTo({ top: rounded, behavior: 'instant' });
+    if (targetPagedScrollTop !== syncedPagedScrollTop || rebaseChanged) {
+      this.scrollPageOffset = scrollPageOffset;
+      this.syncPagedScrollScaffolding(windowSpecs);
+    }
+    if (targetPagedScrollTop !== syncedPagedScrollTop) {
+      this.root.scrollTo({ top: targetPagedScrollTop, behavior: 'instant' });
     }
     // Keep cached scroll state in sync with writes we performed ourselves, so
     // later reads do not need to touch layout just to discover the same value.
-    this.renderState.scrollTop = rounded;
-    this.scrollTop = rounded;
+    this.renderState.scrollTop = roundedTargetScrollTop;
+    this.scrollTop = roundedTargetScrollTop;
     this.scrollDirty = false;
   }
 
@@ -2231,7 +2480,8 @@ export class CodeView<LAnnotation = undefined> {
       return this.scrollTop;
     }
     this.scrollDirty = false;
-    this.scrollTop = this.clampScrollTop(this.root?.scrollTop ?? 0);
+    const rootScrollTop = this.root?.scrollTop ?? 0;
+    this.scrollTop = this.clampScrollTop(rootScrollTop + this.scrollPageOffset);
     return this.scrollTop;
   }
 
