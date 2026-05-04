@@ -50,7 +50,6 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
 const COMMIT_HASH_METADATA_PATTERN = /^From\s+([a-f0-9]+)\s/im;
-const INITIAL_COLLAPSED_DIFF_LINE_THRESHOLD = 200_000;
 
 /** Full-row hit target: native label activates the nested switch when the caption is clicked. */
 const VIEW_OPTION_LABEL_CLASS =
@@ -184,10 +183,6 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           items.push({
             id,
             type: 'diff',
-            collapsed:
-              fileDiff.type === 'deleted' ||
-              Math.max(fileDiff.splitLineCount, fileDiff.unifiedLineCount) >
-                INITIAL_COLLAPSED_DIFF_LINE_THRESHOLD,
             fileDiff,
             version: 0,
           });

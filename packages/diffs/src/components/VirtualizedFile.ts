@@ -333,23 +333,23 @@ export class VirtualizedFile<
     return this.height;
   }
 
-  public getAdvancedStickySpecs(): StickySpecs | undefined {
-    if (this.top == null) {
+  public getAdvancedStickySpecs(
+    windowSpecs?: RenderWindow
+  ): StickySpecs | undefined {
+    if (this.top == null || this.file == null) {
       return undefined;
     }
-
     if (this.options.collapsed === true) {
-      return {
-        topOffset: this.top,
-        height: this.height,
-      };
+      return { topOffset: this.top, height: this.height };
     }
-
-    if (this.renderRange == null) {
+    const renderRange =
+      windowSpecs != null
+        ? this.computeRenderRangeFromWindow(this.file, this.top, windowSpecs)
+        : this.renderRange;
+    if (renderRange == null) {
       return undefined;
     }
-
-    const { bufferBefore, bufferAfter, totalLines } = this.renderRange;
+    const { bufferBefore, bufferAfter, totalLines } = renderRange;
     return {
       topOffset: this.top + bufferBefore + (totalLines === 0 ? bufferAfter : 0),
       height: this.height - (bufferBefore + bufferAfter),
