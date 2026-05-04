@@ -177,11 +177,11 @@ export const CodeViewHeader = memo(function CodeViewHeader({
       const pathToItemId = new Map<string, string>();
       const itemIdToFile = new Map<string, CodeViewCommentSidebarFile>();
       const gitStatus: GitStatusEntry[] = [];
+      const shouldPrefixTreePaths = parsedPatches.length > 1;
       for (const [patchIndex, patch] of parsedPatches.entries()) {
-        const treePathPrefix = getPatchTreePathPrefix(
-          patch.patchMetadata,
-          patchIndex
-        );
+        const treePathPrefix = shouldPrefixTreePaths
+          ? getPatchTreePathPrefix(patch.patchMetadata, patchIndex)
+          : undefined;
         for (const fileDiff of patch.files) {
           const id = `${fileIndex++}:${fileDiff.name}`;
           const fileOrder = items.length;
@@ -195,7 +195,8 @@ export const CodeViewHeader = memo(function CodeViewHeader({
 
           const path = fileDiff.name;
           itemIdToFile.set(id, { fileOrder, path });
-          const treePath = `${treePathPrefix}/${path}`;
+          const treePath =
+            treePathPrefix == null ? path : `${treePathPrefix}/${path}`;
           if (path.length === 0 || pathToItemId.has(treePath)) {
             continue;
           }
