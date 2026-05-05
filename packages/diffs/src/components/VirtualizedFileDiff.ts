@@ -763,7 +763,7 @@ export class VirtualizedFileDiff<
 
   private getVirtualizedTop(): number | undefined {
     if (this.virtualizer.type === 'advanced') {
-      return this.virtualizer.getTopForInstance(this);
+      return this.virtualizer.getLocalTopForInstance(this);
     }
     return this.fileContainer != null
       ? this.virtualizer.getOffsetInScrollContainer(this.fileContainer)
