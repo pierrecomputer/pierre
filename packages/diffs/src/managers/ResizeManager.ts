@@ -8,12 +8,19 @@ export class ResizeManager {
     ObservedAnnotationNodes | ObservedGridNodes
   >();
   private queuedUpdates: Map<ObservedGridNodes, CodeColumnUpdate[]> = new Map();
+  private queuedAnnotationItems = new Set<ObservedAnnotationNodes>();
+  private pendingApplyFrame: number | undefined;
 
   cleanUp(): void {
     // Disconnect any existing observer
     this.resizeObserver?.disconnect();
     this.observedNodes.clear();
     this.queuedUpdates.clear();
+    this.queuedAnnotationItems.clear();
+    if (this.pendingApplyFrame != null) {
+      cancelAnimationFrame(this.pendingApplyFrame);
+      this.pendingApplyFrame = undefined;
+    }
   }
 
   private resizeObserver: ResizeObserver | undefined;
@@ -144,10 +151,7 @@ export class ResizeManager {
           currentHeight: 'auto',
         };
 
-        const newHeight = Math.max(
-          item.column1.childHeight,
-          item.column2.childHeight
-        );
+        const newHeight = this.getAnnotationHeight(item);
         this.applyNewHeight(item, newHeight);
 
         this.observedNodes.set(child1, item);
@@ -174,6 +178,8 @@ export class ResizeManager {
   }
 
   private handleResizeObserver = (entries: ResizeObserverEntry[]) => {
+    let needsApply = false;
+
     for (const entry of entries) {
       const { target, borderBoxSize, contentBoxSize } = entry;
       if (!(target instanceof HTMLElement)) {
@@ -210,21 +216,47 @@ export class ResizeManager {
           continue;
         }
 
+        // Read-only update of the cached child height. The matching
+        // applyNewHeight write happens later in the rAF apply pass.
         column.childHeight = borderBoxSize[0].blockSize;
-        const newHeight = Math.max(
-          item.column1.childHeight,
-          item.column2.childHeight
-        );
-        this.applyNewHeight(item, newHeight);
+        this.queuedAnnotationItems.add(item);
+        needsApply = true;
       } else if (item.type === 'code') {
         const update: CodeColumnUpdate = [target, contentBoxSize[0].inlineSize];
         const updates = this.queuedUpdates.get(item) ?? [];
         updates.push(update);
         this.queuedUpdates.set(item, updates);
+        needsApply = true;
       }
     }
-    this.handleColumnChange();
+
+    if (needsApply) {
+      this.scheduleApply();
+    }
   };
+
+  private scheduleApply(): void {
+    if (this.pendingApplyFrame != null) {
+      return;
+    }
+    this.pendingApplyFrame = requestAnimationFrame(() => {
+      this.pendingApplyFrame = undefined;
+      this.applyQueuedAnnotationHeights();
+      this.handleColumnChange();
+    });
+  }
+
+  private applyQueuedAnnotationHeights(): void {
+    for (const item of this.queuedAnnotationItems) {
+      const newHeight = this.getAnnotationHeight(item);
+      this.applyNewHeight(item, newHeight);
+    }
+    this.queuedAnnotationItems.clear();
+  }
+
+  private getAnnotationHeight(item: ObservedAnnotationNodes): number {
+    return Math.max(item.column1.childHeight, item.column2.childHeight);
+  }
 
   private handleColumnChange = () => {
     for (const [item, updates] of this.queuedUpdates) {
