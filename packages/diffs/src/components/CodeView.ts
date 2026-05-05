@@ -981,13 +981,13 @@ export class CodeView<LAnnotation = undefined> {
     };
   }
 
-  public getTopForInstance(
+  public getLocalTopForInstance(
     instance: VirtualizedFile<LAnnotation> | VirtualizedFileDiff<LAnnotation>
   ): number {
     const item = this.instanceToItem.get(instance);
     if (item == null) {
       throw new Error(
-        'CodeView.getTopForInstance: unknown virtualized instance'
+        'CodeView.getLocalTopForInstance: unknown virtualized instance'
       );
     }
     return item.top;
@@ -998,7 +998,7 @@ export class CodeView<LAnnotation = undefined> {
     if (item == null) {
       return undefined;
     }
-    return item.top;
+    return item.top + this.getViewerMetrics().paddingTop;
   }
 
   private createItem(
