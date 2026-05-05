@@ -201,10 +201,12 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           }
           paths.push(treePath);
           pathToItemId.set(treePath, id);
-          gitStatus.push({
-            path: treePath,
-            status: mapChangeTypeToGitStatus(fileDiff.type),
-          });
+          // Modified files are excluded so they render as the visual default.
+          // Only added, deleted, and renamed files retain status indicators.
+          const gitStatusEntry = mapChangeTypeToGitStatus(fileDiff.type);
+          if (gitStatusEntry !== 'modified') {
+            gitStatus.push({ path: treePath, status: gitStatusEntry });
+          }
         }
       }
       // Don't key on the first fetch... for testing purposes
