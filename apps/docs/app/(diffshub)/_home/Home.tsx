@@ -23,15 +23,15 @@ function FaqItem({
   children: React.ReactNode;
 }) {
   return (
-    <details className="faq-item group py-2">
-      <summary className="text-foreground hover:text-foreground/80 flex cursor-pointer list-none items-center gap-2 font-medium transition-colors marker:hidden [&::-webkit-details-marker]:hidden">
+    <details className="faq-item group my-2">
+      <summary className="text-foreground hover:text-foreground/80 inline-flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1 font-medium transition-colors marker:hidden [&::-webkit-details-marker]:hidden">
         <IconChevronSm
           aria-hidden
-          className="text-muted-foreground -rotate-90 transition-transform duration-150 group-open:rotate-0"
+          className="text-muted-foreground transform-origin-center -rotate-90 transition-transform duration-150 group-open:rotate-0"
         />
         {question}
       </summary>
-      <div className="text-muted-foreground mt-2 ml-4.5 max-w-2xl text-sm text-pretty">
+      <div className="text-muted-foreground -mt-0.5 mb-2 ml-6.5 max-w-2xl text-sm text-pretty">
         {children}
       </div>
     </details>
@@ -59,12 +59,12 @@ const SOCIAL_LINKS = [
 export default function DiffshubHome() {
   return (
     <div className="grid min-h-screen min-w-screen place-items-center justify-center bg-neutral-50 dark:bg-neutral-900">
-      <section className="mb-16 max-w-xl space-y-4">
+      <section className="w-2xl max-w-[100vw] space-y-4 px-5">
         <h2 className="flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
           <DiffsHubLogo />
           DiffsHub
         </h2>
-        <p className="text-muted-foreground mr-12 text-pretty">
+        <p className="text-muted-foreground text-pretty md:max-w-lg">
           View code changes from any public GitHub pull request with a
           super-freaking-fast, beautiful, and virtualized interface. Built by{' '}
           <Link
@@ -162,14 +162,14 @@ export default function DiffshubHome() {
           </FaqItem>
           <FaqItem question="What is The Pierre Computer Company?">
             We&rsquo;re a small team building developer tools for today’s teams
-            and their AI-first products. Collectively, our team brings over 150
+            and their AI-first products. Collectively, our team brings many many
             years of expertise designing, building, and scaling the world’s
             largest distributed systems at Cloudflare, Coinbase, Discord,
             GitHub, Reddit, Stripe, X, and others.
           </FaqItem>
         </div>
         <hr className="my-8 max-w-[120px]" />
-        <nav aria-label="Social links" className="flex items-center gap-4 pt-2">
+        <nav aria-label="Social links" className="flex items-center gap-2 pt-2">
           {SOCIAL_LINKS.map(({ label, href, Icon }) => (
             <a
               key={label}
@@ -177,7 +177,7 @@ export default function DiffshubHome() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label={label}
-              className="text-muted-foreground hover:text-foreground transition-colors"
+              className="text-muted-foreground hover:text-foreground rounded-md p-2 transition-colors"
             >
               <Icon />
             </a>

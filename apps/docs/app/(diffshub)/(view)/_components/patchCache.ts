@@ -1,5 +1,5 @@
 // Tiny in-memory cache of fetched patch text, keyed by GitHub PR path
-// (e.g. "/twbs/bootstrap/pull/42369"). Lives at module scope so it survives
+// (e.g. "/nodejs/node/pull/59805"). Lives at module scope so it survives
 // client-side navigations between `/` and the diff viewer but resets on a full reload.
 //
 // Why this exists: the home page form pre-fetches the patch so the user sees

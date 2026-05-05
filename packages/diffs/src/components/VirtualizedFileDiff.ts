@@ -120,19 +120,24 @@ export class VirtualizedFileDiff<
     return this.metrics.lineHeight * multiplier;
   }
 
-  // Override setOptions to clear height cache when diffStyle changes
   override setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     const previousDiffStyle = this.options.diffStyle;
     const previousOverflow = this.options.overflow;
     const previousCollapsed = this.options.collapsed;
+    const previousDisableBackground = this.options.disableBackground;
+    const previousDisableLineNumbers = this.options.disableLineNumbers;
 
     super.setOptions(options);
 
+    // Layout-affecting options change row heights or column widths. disableLineNumbers
+    // is included here because hiding the number columns widens the code column, which
+    // can shift wrap points in overflow:wrap mode and invalidate measured row heights.
     if (
       previousDiffStyle !== this.options.diffStyle ||
       previousOverflow !== this.options.overflow ||
-      previousCollapsed !== this.options.collapsed
+      previousCollapsed !== this.options.collapsed ||
+      previousDisableLineNumbers !== this.options.disableLineNumbers
     ) {
       this.cache.heights.clear();
       this.cache.checkpoints = [];
@@ -143,6 +148,14 @@ export class VirtualizedFileDiff<
         this.computeApproximateSize();
       }
       this.renderRange = undefined;
+    }
+    // Visual-only and layout-affecting options both need forceRenderOverride so
+    // FileDiff.render's early-return guard doesn't skip applyPreNodeAttributes.
+    if (
+      previousDisableBackground !== this.options.disableBackground ||
+      previousDisableLineNumbers !== this.options.disableLineNumbers
+    ) {
+      this.forceRenderOverride = true;
     }
     // CodeView will mark dirty for us
     if (this.isSimpleMode()) {

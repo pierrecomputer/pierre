@@ -108,7 +108,7 @@ interface StatItemProps {
 function StatItem({ label, value }: StatItemProps) {
   const isZero = value === 0 || value === '0';
   return (
-    <div className="text-muted-foreground flex justify-between">
+    <div className="text-muted-foreground flex justify-between text-sm">
       <span className="font-medium">{label}</span>
       <span
         className="min-w-[3c] pl-[1ch] text-right tabular-nums"

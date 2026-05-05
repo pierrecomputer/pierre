@@ -135,7 +135,8 @@ function createPatchOrderSort(paths: readonly string[]): CodeViewFileTreeSort {
 // Finalizes the stable tree input from a fresh fetch. Callers are expected to
 // populate paths, pathToItemId, and gitStatus in the same pass that builds
 // the viewer items so the tree data structure does not require its own walk
-// over items.
+// over items. Modified-status entries should be excluded from gitStatus before
+// calling here so the tree renders them as the visual default (no tint or badge).
 export function createCodeViewFileTreeSource(
   paths: readonly string[],
   pathToItemId: ReadonlyMap<string, string>,

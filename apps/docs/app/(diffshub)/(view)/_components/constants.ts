@@ -59,6 +59,14 @@ const SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS = `
   }
 `;
 
+// In this view everything is assumed to be changing, so the folder dot that
+// signals "contains a git change" is superfluous and is hidden globally.
+const SUPPRESS_FOLDER_DOT_UNSAFE_CSS = `
+  [data-item-contains-git-change='true'] > [data-item-section='git'] {
+    display: none;
+  }
+`;
+
 // Options shared across all mounts of this tree. Lives at module scope so the
 // reference stays stable and useFileTree() never churns its initial snapshot.
 export const BASE_FILE_TREE_OPTIONS = {
@@ -67,5 +75,5 @@ export const BASE_FILE_TREE_OPTIONS = {
   initialExpansion: 'open',
   search: true,
   stickyFolders: true,
-  unsafeCSS: `${HIDDEN_SEARCH_UNSAFE_CSS}\n${SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS}`,
+  unsafeCSS: `${HIDDEN_SEARCH_UNSAFE_CSS}\n${SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS}\n${SUPPRESS_FOLDER_DOT_UNSAFE_CSS}`,
 } as const satisfies Omit<FileTreeOptions, 'paths' | 'preparedInput'>;
