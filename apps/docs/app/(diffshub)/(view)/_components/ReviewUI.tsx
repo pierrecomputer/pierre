@@ -48,11 +48,11 @@ interface LoadedCodeViewData {
   treeSource: CodeViewFileTreeSource;
 }
 
-interface GHViewerProps {
+interface ReviewUIProps {
   initialUrl: string;
 }
 
-export function GHViewer({ initialUrl }: GHViewerProps) {
+export function ReviewUI({ initialUrl }: ReviewUIProps) {
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [items, setItems] = useState<CodeViewItem<CommentMetadata>[]>([]);
   // Tree data is intentionally stored separately from items so annotation
