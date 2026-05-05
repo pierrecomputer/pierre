@@ -23,11 +23,11 @@ function FaqItem({
   children: React.ReactNode;
 }) {
   return (
-    <details className="faq-item group flex flex-col items-start gap-2">
+    <details className="faq-item group my-2">
       <summary className="text-foreground hover:text-foreground/80 inline-flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1 font-medium transition-colors marker:hidden [&::-webkit-details-marker]:hidden">
         <IconChevronSm
           aria-hidden
-          className="text-muted-foreground -rotate-90 transition-transform duration-150 group-open:rotate-0"
+          className="text-muted-foreground transform-origin-center -rotate-90 transition-transform duration-150 group-open:rotate-0"
         />
         {question}
       </summary>
