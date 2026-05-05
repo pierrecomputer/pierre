@@ -616,7 +616,7 @@ export class VirtualizedFile<
 
   private getVirtualizedTop(): number {
     if (this.virtualizer.type === 'advanced') {
-      return this.virtualizer.getTopForInstance(this);
+      return this.virtualizer.getLocalTopForInstance(this);
     }
     return this.fileContainer != null
       ? this.virtualizer.getOffsetInScrollContainer(this.fileContainer)
