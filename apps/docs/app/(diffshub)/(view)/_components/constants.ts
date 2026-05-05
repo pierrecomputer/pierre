@@ -59,6 +59,23 @@ const SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS = `
   }
 `;
 
+// Suppresses the visual "modified" state so plain edits look like the default.
+// Only added (A), deleted (D), and renamed (R) files retain their own badges.
+// Limitation: folders whose only changed children are modified files still
+// receive a faint dot via `data-item-contains-git-change`, because CSS alone
+// cannot distinguish "contains only modified" from "contains added/renamed".
+const SUPPRESS_MODIFIED_UNSAFE_CSS = `
+  [data-item-git-status='modified'] > [data-item-section='git'] {
+    display: none;
+  }
+  [data-item-git-status='modified'] > [data-item-section='content'],
+  [data-item-git-status='modified']
+    > [data-item-section='icon']
+    > :not([data-icon-name='file-tree-icon-chevron']) {
+    color: inherit;
+  }
+`;
+
 // Options shared across all mounts of this tree. Lives at module scope so the
 // reference stays stable and useFileTree() never churns its initial snapshot.
 export const BASE_FILE_TREE_OPTIONS = {
@@ -67,5 +84,5 @@ export const BASE_FILE_TREE_OPTIONS = {
   initialExpansion: 'open',
   search: true,
   stickyFolders: true,
-  unsafeCSS: `${HIDDEN_SEARCH_UNSAFE_CSS}\n${SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS}`,
+  unsafeCSS: `${HIDDEN_SEARCH_UNSAFE_CSS}\n${SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS}\n${SUPPRESS_MODIFIED_UNSAFE_CSS}`,
 } as const satisfies Omit<FileTreeOptions, 'paths' | 'preparedInput'>;
