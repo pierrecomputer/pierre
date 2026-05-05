@@ -39,7 +39,7 @@ export const CodeViewDiffStats = memo(function CodeViewDiffStats({
           className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1 text-sm focus:outline-none"
           aria-expanded={showStats}
         >
-          {showStats ? 'Hide' : 'Show'} Diff Stats
+          Diff Stats
           <span className="text-muted-foreground/50">(F2)</span>
         </button>
       </StatusRow>
@@ -51,11 +51,6 @@ export const CodeViewDiffStats = memo(function CodeViewDiffStats({
             valueClassName="text-foreground font-semibold"
           />
           <StatItem
-            label="Lines"
-            value={stats.totalLinesOfCode}
-            valueClassName="text-foreground font-semibold"
-          />
-          <StatItem
             label="Additions"
             value={stats.addedLines}
             valueClassName="text-green-600 dark:text-green-400 font-semibold"
@@ -64,6 +59,11 @@ export const CodeViewDiffStats = memo(function CodeViewDiffStats({
             label="Deletions"
             value={stats.deletedLines}
             valueClassName="text-red-600 dark:text-red-400 font-semibold"
+          />
+          <StatItem
+            label="Lines"
+            value={stats.totalLinesOfCode}
+            valueClassName="text-foreground font-semibold"
           />
         </div>
       )}
