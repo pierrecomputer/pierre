@@ -224,7 +224,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
             className="block w-full text-sm focus-visible:outline-none"
             value={url}
             onChange={({ currentTarget }) => setURL(currentTarget.value)}
-            placeholder="e.g. https://github.com/twbs/bootstrap/pull/42139"
+            placeholder="e.g. https://github.com/nodejs/node/pull/59805"
           />
         </div>
         <div className="flex w-full gap-2 md:w-auto">

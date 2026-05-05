@@ -14,6 +14,7 @@ const DENSITY_OVERRIDE_STYLES = {
   '--trees-bg-override': 'light-dark(oklch(98.5% 0 0), oklch(20.5% 0 0))',
   '--trees-density-override': 0.8,
   // '--trees-row-height-override': '24px',
+  '--trees-selected-fg-override': 'light-dark(#1c1c1e, #f0f0f2)',
 } as CSSProperties;
 
 interface CodeViewFileTreeProps {
