@@ -65,8 +65,10 @@ export default function DiffshubHome() {
           DiffsHub
         </h2>
         <p className="text-muted-foreground text-pretty md:max-w-lg">
-          View code changes from public GitHub diff and patch URLs with a
-          super-freaking-fast, beautiful, and virtualized interface. Built by{' '}
+          View code changes from any public GitHub diff or patch URL with a
+          super-freaking-fast, beautiful, and virtualized interface. <br />
+          <br />
+          Built by{' '}
           <Link
             href="https://pierre.computer"
             target="_blank"
@@ -75,7 +77,7 @@ export default function DiffshubHome() {
           >
             The Pierre Computer Company
           </Link>{' '}
-          with{' '}
+          using{' '}
           <Link
             href="https://diffs.com"
             target="_blank"
