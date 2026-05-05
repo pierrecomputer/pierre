@@ -1,3 +1,4 @@
+import type { DiffIndicators } from '@pierre/diffs';
 import { useStableCallback } from '@pierre/diffs/react';
 import {
   IconArrow,
@@ -53,6 +54,8 @@ interface HeaderProps {
   setOverflow: Dispatch<SetStateAction<'wrap' | 'scroll'>>;
   showBackgrounds: boolean;
   setShowBackgrounds: Dispatch<SetStateAction<boolean>>;
+  diffIndicators: DiffIndicators;
+  setDiffIndicators: Dispatch<SetStateAction<DiffIndicators>>;
   lineNumbers: boolean;
   setLineNumbers: Dispatch<SetStateAction<boolean>>;
 }
@@ -69,16 +72,14 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   setOverflow,
   showBackgrounds,
   setShowBackgrounds,
+  diffIndicators,
+  setDiffIndicators,
   lineNumbers,
   setLineNumbers,
   setDiffStyle,
 }: HeaderProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  /** Placeholder toggles for the settings menu; not wired to the viewer yet. */
-  const [indicatorStyle, setIndicatorStyle] = useState<
-    'bars' | 'classic' | 'none'
-  >('bars');
   const [url, setURL] = useState(initialUrl);
   const busy = isPending || loading;
   /** Radix `align` is not CSS-breakpoint aware; mirror Tailwind `md` (768px). */
@@ -265,9 +266,9 @@ export const CodeViewHeader = memo(function CodeViewHeader({
               <span>Indicator style</span>
               <ButtonGroup
                 className="ml-auto"
-                value={indicatorStyle}
+                value={diffIndicators}
                 onValueChange={(value) =>
-                  setIndicatorStyle(value as 'bars' | 'classic' | 'none')
+                  setDiffIndicators(value as DiffIndicators)
                 }
               >
                 <ButtonGroupItem value="bars" className="size-7 p-0">

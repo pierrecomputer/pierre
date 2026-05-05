@@ -1,6 +1,10 @@
 'use client';
 
-import { type CodeViewItem, parsePatchFiles } from '@pierre/diffs';
+import {
+  type CodeViewItem,
+  type DiffIndicators,
+  parsePatchFiles,
+} from '@pierre/diffs';
 import { type CodeViewHandle } from '@pierre/diffs/react';
 import type { GitStatusEntry } from '@pierre/trees';
 import {
@@ -73,6 +77,7 @@ export function ReviewUI({ initialUrl }: ReviewUIProps) {
   const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
   const [showBackgrounds, setShowBackgrounds] = useState(true);
+  const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
   const [lineNumbers, setLineNumbers] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
@@ -244,6 +249,8 @@ export function ReviewUI({ initialUrl }: ReviewUIProps) {
         setOverflow={setOverflow}
         showBackgrounds={showBackgrounds}
         setShowBackgrounds={setShowBackgrounds}
+        diffIndicators={diffIndicators}
+        setDiffIndicators={setDiffIndicators}
         lineNumbers={lineNumbers}
         setLineNumbers={setLineNumbers}
         setDiffStyle={setDiffStyle}
@@ -266,6 +273,7 @@ export function ReviewUI({ initialUrl }: ReviewUIProps) {
             diffStyle={diffStyle}
             overflow={overflow}
             showBackgrounds={showBackgrounds}
+            diffIndicators={diffIndicators}
             lineNumbers={lineNumbers}
             scrollRef={scrollRef}
             viewerRef={viewerRef}

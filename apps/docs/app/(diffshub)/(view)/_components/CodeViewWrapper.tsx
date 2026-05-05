@@ -5,6 +5,7 @@ import {
   type CodeViewLineSelection,
   type CodeViewOptions,
   DEFAULT_THEMES,
+  type DiffIndicators,
   type DiffLineAnnotation,
   type LineAnnotation,
   type SelectedLineRange,
@@ -59,6 +60,7 @@ interface CodeViewWrapperProps {
   onCommentSaved?(comment: CodeViewSavedCommentEvent): void;
   overflow: 'wrap' | 'scroll';
   showBackgrounds: boolean;
+  diffIndicators: DiffIndicators;
   lineNumbers: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
@@ -73,6 +75,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   onCommentSaved,
   overflow,
   showBackgrounds,
+  diffIndicators,
   lineNumbers,
   scrollRef,
   viewerRef,
@@ -375,6 +378,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         viewerMetrics: VIEWER_METRICS,
         theme: DEFAULT_THEMES,
         diffStyle,
+        diffIndicators,
         overflow,
         disableBackground: !showBackgrounds,
         disableLineNumbers: !lineNumbers,
@@ -395,6 +399,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
     [
       diffStyle,
       handleCreateDraftComment,
+      diffIndicators,
       lineNumbers,
       overflow,
       showBackgrounds,
