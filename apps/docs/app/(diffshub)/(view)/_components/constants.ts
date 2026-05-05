@@ -69,6 +69,15 @@ const SUPPRESS_FOLDER_DOT_UNSAFE_CSS = `
   }
 `;
 
+// Folders get higher contrast and medium weight to stand out from regular file
+// entries, which use the default muted tree fg color.
+const FOLDER_LABEL_UNSAFE_CSS = `
+  [data-item-type='folder'] {
+    color: color-mix(in lab, light-dark(#000, #fff) 25%, var(--trees-fg));
+    font-weight: 500;
+  }
+`;
+
 // Options shared across all mounts of this tree. Lives at module scope so the
 // reference stays stable and useFileTree() never churns its initial snapshot.
 export const BASE_FILE_TREE_OPTIONS = {
@@ -77,5 +86,5 @@ export const BASE_FILE_TREE_OPTIONS = {
   initialExpansion: 'open',
   search: true,
   stickyFolders: true,
-  unsafeCSS: `${HIDDEN_SEARCH_UNSAFE_CSS}\n${SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS}\n${SUPPRESS_FOLDER_DOT_UNSAFE_CSS}`,
+  unsafeCSS: `${HIDDEN_SEARCH_UNSAFE_CSS}\n${SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS}\n${SUPPRESS_FOLDER_DOT_UNSAFE_CSS}\n${FOLDER_LABEL_UNSAFE_CSS}`,
 } as const satisfies Omit<FileTreeOptions, 'paths' | 'preparedInput'>;
