@@ -59,12 +59,12 @@ const SOCIAL_LINKS = [
 export default function DiffshubHome() {
   return (
     <div className="grid min-h-screen min-w-screen place-items-center justify-center bg-neutral-50 dark:bg-neutral-900">
-      <section className="mb-16 max-w-xl space-y-4">
+      <section className="w-2xl max-w-[100vw] space-y-4 px-5">
         <h2 className="flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
           <DiffsHubLogo />
           DiffsHub
         </h2>
-        <p className="text-muted-foreground mr-12 text-pretty">
+        <p className="text-muted-foreground text-pretty md:max-w-lg">
           View code changes from any public GitHub pull request with a
           super-freaking-fast, beautiful, and virtualized interface. Built by{' '}
           <Link

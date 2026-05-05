@@ -62,12 +62,12 @@ export function HomeFetchForm() {
   }
 
   return (
-    <div className="my-3 space-y-2">
+    <div className="my-5 space-y-2">
       <form
         onSubmit={(event) => {
           void handleSubmit(event);
         }}
-        className="flex max-w-2xl flex-col gap-2 sm:flex-row"
+        className="flex max-w-2xl gap-2"
       >
         <Input
           type="url"
