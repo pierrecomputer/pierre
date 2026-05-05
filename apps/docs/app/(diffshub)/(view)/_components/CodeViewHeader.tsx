@@ -81,6 +81,10 @@ interface HeaderProps {
   setTreeSource: Dispatch<SetStateAction<CodeViewFileTreeSource | null>>;
   overflow: 'wrap' | 'scroll';
   setOverflow: Dispatch<SetStateAction<'wrap' | 'scroll'>>;
+  showBackgrounds: boolean;
+  setShowBackgrounds: Dispatch<SetStateAction<boolean>>;
+  lineNumbers: boolean;
+  setLineNumbers: Dispatch<SetStateAction<boolean>>;
   setKey: Dispatch<SetStateAction<number>>;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
 }
@@ -97,14 +101,16 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   setCommentFileByItemId,
   setItems,
   setOverflow,
+  showBackgrounds,
+  setShowBackgrounds,
+  lineNumbers,
+  setLineNumbers,
   setDiffStyle,
   setKey,
   setTreeSource,
 }: HeaderProps) {
   const hasFetched = useRef(false);
   /** Placeholder toggles for the settings menu; not wired to the viewer yet. */
-  const [showBackgrounds, setShowBackgrounds] = useState(true);
-  const [lineNumbers, setLineNumbers] = useState(true);
   const [indicatorStyle, setIndicatorStyle] = useState<
     'bars' | 'classic' | 'none'
   >('bars');
@@ -195,10 +201,12 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           }
           paths.push(treePath);
           pathToItemId.set(treePath, id);
-          gitStatus.push({
-            path: treePath,
-            status: mapChangeTypeToGitStatus(fileDiff.type),
-          });
+          // Modified files are excluded so they render as the visual default.
+          // Only added, deleted, and renamed files retain status indicators.
+          const gitStatusEntry = mapChangeTypeToGitStatus(fileDiff.type);
+          if (gitStatusEntry !== 'modified') {
+            gitStatus.push({ path: treePath, status: gitStatusEntry });
+          }
         }
       }
       // Don't key on the first fetch... for testing purposes

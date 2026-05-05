@@ -308,22 +308,15 @@
   }
 
   .faq-item::details-content {
-    overflow: clip;
-    height: 0;
+    block-size: 0;
+    overflow-y: clip;
     transition:
-      height 0.2s ease,
-      content-visibility 0.2s ease allow-discrete;
+      content-visibility 0.2s ease allow-discrete,
+      block-size 0.2s;
   }
 
   .faq-item[open]::details-content {
-    height: auto;
-  }
-
-  @supports not (interpolate-size: allow-keywords) {
-    .faq-item[open]::details-content {
-      height: 200px;
-      overflow-y: auto;
-    }
+    block-size: auto;
   }
 }
 

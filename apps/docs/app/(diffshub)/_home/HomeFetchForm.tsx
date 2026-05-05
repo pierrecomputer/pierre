@@ -62,12 +62,12 @@ export function HomeFetchForm() {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="my-5 space-y-2">
       <form
         onSubmit={(event) => {
           void handleSubmit(event);
         }}
-        className="flex max-w-2xl flex-col gap-2 sm:flex-row"
+        className="flex max-w-2xl gap-2"
       >
         <Input
           type="url"
@@ -83,7 +83,7 @@ export function HomeFetchForm() {
           type="submit"
           variant="default"
           size="lg"
-          className="size-11"
+          className="size-11 rounded-lg"
           disabled={submitting}
           aria-label={submitting ? 'Fetching…' : 'Fetch'}
         >
