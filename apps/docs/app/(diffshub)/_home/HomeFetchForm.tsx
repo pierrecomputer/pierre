@@ -62,7 +62,7 @@ export function HomeFetchForm() {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="my-3 space-y-2">
       <form
         onSubmit={(event) => {
           void handleSubmit(event);

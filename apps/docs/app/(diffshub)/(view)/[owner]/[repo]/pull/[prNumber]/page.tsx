@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { GHViewer } from '../../../../_components/GHViewer';
 
 // Viewer route that mirrors GitHub's URL shape, e.g.
-// `/twbs/bootstrap/pull/42369`. Reaching this page means the URL was
+// `/nodejs/node/pull/59805`. Reaching this page means the URL was
 // already shaped like a real PR; we still defend against weird `prNumber`
 // values (anything that isn't a positive integer) by bouncing home.
 export default async function DiffshubViewByPathPage({
