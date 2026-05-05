@@ -16,7 +16,7 @@ const metrics: VirtualFileMetrics = {
   spacing: 4,
 };
 
-const virtualizer = {
+const virtualizerBase = {
   type: 'simple',
   config: {},
   connect() {},
@@ -31,7 +31,18 @@ const virtualizer = {
   isInstanceVisible() {
     return true;
   },
-} as never;
+};
+
+const virtualizer = virtualizerBase as never;
+
+function createTrackingVirtualizer(layoutDirtyCalls: boolean[]) {
+  return {
+    ...virtualizerBase,
+    instanceChanged(_instance: unknown, layoutDirty: boolean) {
+      layoutDirtyCalls.push(layoutDirty);
+    },
+  } as never;
+}
 
 function createLargeFile(name = 'large.txt'): FileContents {
   return {
@@ -160,5 +171,41 @@ describe('sparse layout checkpoints', () => {
         metrics.spacing,
       height: metrics.hunkSeparatorHeight,
     });
+  });
+
+  test('VirtualizedFile renders option changes without marking visual-only changes as layout dirty', () => {
+    const layoutDirtyCalls: boolean[] = [];
+    const instance = new VirtualizedFile(
+      {},
+      createTrackingVirtualizer(layoutDirtyCalls),
+      metrics
+    );
+
+    instance.prepareVirtualizedItem(createLargeFile());
+    instance.setOptions({ disableVirtualizationBuffers: true });
+
+    expect(layoutDirtyCalls).toEqual([false]);
+  });
+
+  test('VirtualizedFileDiff marks diff indicator changes as layout dirty', () => {
+    const oldFile: FileContents = {
+      name: 'indicators.txt',
+      contents: 'one\ntwo\nthree',
+    };
+    const newFile: FileContents = {
+      ...oldFile,
+      contents: 'one\nchanged\nthree',
+    };
+    const layoutDirtyCalls: boolean[] = [];
+    const instance = new VirtualizedFileDiff(
+      { diffIndicators: 'bars' },
+      createTrackingVirtualizer(layoutDirtyCalls),
+      metrics
+    );
+
+    instance.prepareVirtualizedItem(parseDiffFromFile(oldFile, newFile));
+    instance.setOptions({ diffIndicators: 'classic' });
+
+    expect(layoutDirtyCalls).toEqual([true]);
   });
 });
