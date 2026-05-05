@@ -59,20 +59,11 @@ const SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS = `
   }
 `;
 
-// Suppresses the visual "modified" state so plain edits look like the default.
-// Only added (A), deleted (D), and renamed (R) files retain their own badges.
-// Limitation: folders whose only changed children are modified files still
-// receive a faint dot via `data-item-contains-git-change`, because CSS alone
-// cannot distinguish "contains only modified" from "contains added/renamed".
-const SUPPRESS_MODIFIED_UNSAFE_CSS = `
-  [data-item-git-status='modified'] > [data-item-section='git'] {
+// In this view everything is assumed to be changing, so the folder dot that
+// signals "contains a git change" is superfluous and is hidden globally.
+const SUPPRESS_FOLDER_DOT_UNSAFE_CSS = `
+  [data-item-contains-git-change='true'] > [data-item-section='git'] {
     display: none;
-  }
-  [data-item-git-status='modified'] > [data-item-section='content'],
-  [data-item-git-status='modified']
-    > [data-item-section='icon']
-    > :not([data-icon-name='file-tree-icon-chevron']) {
-    color: inherit;
   }
 `;
 
@@ -84,5 +75,5 @@ export const BASE_FILE_TREE_OPTIONS = {
   initialExpansion: 'open',
   search: true,
   stickyFolders: true,
-  unsafeCSS: `${HIDDEN_SEARCH_UNSAFE_CSS}\n${SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS}\n${SUPPRESS_MODIFIED_UNSAFE_CSS}`,
+  unsafeCSS: `${HIDDEN_SEARCH_UNSAFE_CSS}\n${SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS}\n${SUPPRESS_FOLDER_DOT_UNSAFE_CSS}`,
 } as const satisfies Omit<FileTreeOptions, 'paths' | 'preparedInput'>;

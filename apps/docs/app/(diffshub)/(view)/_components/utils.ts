@@ -136,6 +136,12 @@ function createPatchOrderSort(paths: readonly string[]): CodeViewFileTreeSort {
 // populate paths, pathToItemId, and gitStatus in the same pass that builds
 // the viewer items so the tree data structure does not require its own walk
 // over items.
+//
+// Modified files are filtered out so they render as the visual default — no
+// blue tint, no "M" badge. Only added, deleted, and renamed files retain their
+// own status indicators. Filtering here also prevents the folder dot from
+// appearing on directories whose only changed children are modified files;
+// dots on folders with added/renamed/deleted children are suppressed via CSS.
 export function createCodeViewFileTreeSource(
   paths: readonly string[],
   pathToItemId: ReadonlyMap<string, string>,
@@ -143,7 +149,7 @@ export function createCodeViewFileTreeSource(
 ): CodeViewFileTreeSource {
   const sort = createPatchOrderSort(paths);
   return {
-    gitStatus,
+    gitStatus: gitStatus.filter((e) => e.status !== 'modified'),
     paths,
     pathToItemId,
     sort,
