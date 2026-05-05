@@ -1,4 +1,5 @@
 import {
+  IconArrowRightShort,
   IconBrandDiscord,
   IconBrandGithub,
   IconBrandTwitterX,
@@ -7,14 +8,17 @@ import {
 import Link from 'next/link';
 
 import { DiffsHubLogo } from '../(view)/_components/DiffsHubLogo';
+import { getGitHubPath } from '../(view)/_components/utils';
 import { HomeFetchForm } from './HomeFetchForm';
-// Each Q&A on the landing page is a native <details> element so the markup
-// stays minimal and the page works with JS off. The chevron sits to the
-// left of the question and rotates from "pointing right" (closed) to
-// "pointing down" (open). `IconChevronSm` ships pointing down, so we
-// rotate -90deg in the closed state and back to 0 when the parent
-// <details> is open. The `faq-item` class hooks into CSS that animates
-// the expand/collapse via `::details-content` in supporting browsers.
+
+const EXAMPLE_URLS = [
+  'https://github.com/torvalds/linux/compare/v6.0...v7.0',
+  'https://github.com/pierrecomputer/pierre/commit/e160b7e093e908e6cef11f82f4c567aea5c68868',
+  'https://github.com/pierrecomputer/pierre/pull/615',
+  'https://github.com/pierrecomputer/pierre/pull/615.patch',
+  'https://github.com/pierrecomputer/pierre/pull/615.diff',
+] as const;
+
 function FaqItem({
   question,
   children,
@@ -146,6 +150,27 @@ export default function DiffshubHome() {
             </Link>{' '}
             component, which aids developers in rendering, scrolling,
             navigating, and annotating code or changes across files.
+          </FaqItem>
+          <FaqItem question="What kind of changes can I view?">
+            Most commonly, you can view any public GitHub pull request. But you
+            can also use comparisons between tags and commits, commits, patch
+            files, and diff files.
+            <ul className="my-2 flex flex-col gap-1 text-sm">
+              {EXAMPLE_URLS.map((url) => (
+                <li
+                  key={url}
+                  className="flex items-center justify-start gap-1 truncate"
+                >
+                  <IconArrowRightShort className="flex-shrink-0 opacity-50" />
+                  <Link
+                    href={getGitHubPath(url) ?? '/'}
+                    className="inline-link"
+                  >
+                    {url}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </FaqItem>
           <FaqItem question="Can you host my code, too?">
             <strong className="font-medium">Not yet.</strong> DiffsHub is only a
