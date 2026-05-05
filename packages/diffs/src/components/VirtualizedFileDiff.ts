@@ -120,12 +120,6 @@ export class VirtualizedFileDiff<
     return this.metrics.lineHeight * multiplier;
   }
 
-  // Override setOptions to clear height cache when layout-affecting options
-  // change, and to force a re-render when visual-only options change (those
-  // don't affect layout, but the DOM attribute must still be updated).
-  // disableLineNumbers is treated as layout-affecting because hiding the number
-  // columns widens the code column, which can shift wrap points in overflow:wrap
-  // mode and invalidate measured row heights.
   override setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     const previousDiffStyle = this.options.diffStyle;
@@ -136,6 +130,9 @@ export class VirtualizedFileDiff<
 
     super.setOptions(options);
 
+    // Layout-affecting options change row heights or column widths. disableLineNumbers
+    // is included here because hiding the number columns widens the code column, which
+    // can shift wrap points in overflow:wrap mode and invalidate measured row heights.
     if (
       previousDiffStyle !== this.options.diffStyle ||
       previousOverflow !== this.options.overflow ||

@@ -81,17 +81,21 @@ export class VirtualizedFile<
     return this.metrics.lineHeight * multiplier;
   }
 
-  // Override setOptions to clear height cache when overflow changes
   override setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     const previousOverflow = this.options.overflow;
     const previousCollapsed = this.options.collapsed;
+    const previousDisableLineNumbers = this.options.disableLineNumbers;
 
     super.setOptions(options);
 
+    // Layout-affecting options change row heights or column widths. disableLineNumbers
+    // is included here because hiding the number columns widens the code column, which
+    // can shift wrap points in overflow:wrap mode and invalidate measured row heights.
     if (
       previousOverflow !== this.options.overflow ||
-      previousCollapsed !== this.options.collapsed
+      previousCollapsed !== this.options.collapsed ||
+      previousDisableLineNumbers !== this.options.disableLineNumbers
     ) {
       this.cache.heights.clear();
       this.cache.checkpoints = [];
@@ -101,6 +105,11 @@ export class VirtualizedFile<
         this.computeApproximateSize();
       }
       this.renderRange = undefined;
+    }
+    // Layout-affecting options need forceRenderOverride so File.render's
+    // early-return guard doesn't skip applyPreNodeAttributes.
+    if (previousDisableLineNumbers !== this.options.disableLineNumbers) {
+      this.forceRenderOverride = true;
     }
     // CodeView will mark dirty for us
     if (this.isSimpleMode()) {
