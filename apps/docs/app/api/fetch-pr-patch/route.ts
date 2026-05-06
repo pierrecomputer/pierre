@@ -86,9 +86,9 @@ function createPatchTextResponse(
   return createTextResponse(patchText, options);
 }
 
-// Creates the client-facing stream and pumps GitHub data into it
-// asynchronously so the browser can render each completed file as soon as
-// GitHub sends bytes.
+// Opens the client-facing stream immediately. For this private transport, a
+// 200 response means the local stream was accepted; upstream GitHub failures
+// are reported later by erroring the response body while the client reads it.
 function createPatchStreamResponse(
   patchURL: string,
   requestSignal: AbortSignal,
@@ -133,7 +133,9 @@ async function pumpPatchURL(
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch patch: ${response.statusText}`);
+      throw new Error(
+        `Failed to fetch patch: ${response.status} ${response.statusText}`
+      );
     }
 
     const contentType = response.headers.get('Content-Type');

@@ -150,6 +150,9 @@ export function usePatchLoader({
         );
         console.timeEnd('--     request time');
 
+        // This only catches route setup errors. GitHub fetch failures are
+        // delivered while consuming the stream so the UI can enter the
+        // streaming state as soon as the local transport opens.
         if (!response.ok) {
           const detail = (await response.text()).trim();
           throw new Error(

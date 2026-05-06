@@ -102,6 +102,9 @@ export const CodeViewHeader = memo(function CodeViewHeader({
       );
       console.timeEnd('--     request time');
 
+      // This endpoint opens a local stream before GitHub responds, so this
+      // check only covers route setup errors. Upstream failures surface
+      // while reading the response body below.
       if (!response.ok) {
         const error = await response.text();
         console.error('Failed to fetch patch:', error);
