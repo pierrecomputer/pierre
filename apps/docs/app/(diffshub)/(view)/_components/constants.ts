@@ -1,6 +1,11 @@
 import type { FileTreeOptions } from '@pierre/trees';
 
-export type ViewerLoadState = 'fetching' | 'parsing' | 'ready' | 'error';
+export type ViewerLoadState =
+  | 'fetching'
+  | 'streaming'
+  | 'parsing'
+  | 'ready'
+  | 'error';
 
 export const CODE_VIEW_MARGIN_OFFSET = 12;
 
