@@ -87,6 +87,7 @@ export type CodeViewProps<LAnnotation = undefined> =
   | UncontrolledCodeViewProps<LAnnotation>;
 
 export interface CodeViewHandle<LAnnotation> {
+  addItems(items: readonly CodeViewItem<LAnnotation>[]): void;
   scrollTo(target: CodeViewScrollTarget): void;
   setSelectedLines(selection: CodeViewLineSelection | null): void;
   getSelectedLines(): CodeViewLineSelection | null;
@@ -286,9 +287,16 @@ function CodeViewInner<LAnnotation = undefined>(
       }
 
       if (items !== prevItems) {
-        cachedDataRef.current.items = items;
-        instance.setItems(items);
-        shouldRender = true;
+        if (areItemListsEqual(prevItems, items)) {
+          cachedDataRef.current.items = items;
+        } else if (isAppendOnlyItemUpdate(prevItems, items)) {
+          cachedDataRef.current.items = items;
+          instance.addItems(items.slice(prevItems.length));
+        } else {
+          cachedDataRef.current.items = items;
+          instance.setItems(items);
+          shouldRender = true;
+        }
       }
 
       if (selectedLines !== undefined) {
@@ -328,6 +336,18 @@ function CodeViewInner<LAnnotation = undefined>(
   useImperativeHandle(
     ref,
     (): CodeViewHandle<LAnnotation> => ({
+      addItems(items) {
+        const { instance, items: previousItems } = cachedDataRef.current;
+        if (instance == null) {
+          console.error(
+            'CodeView.addItems: no valid instance to append items with',
+            items
+          );
+        } else {
+          instance.addItems(items);
+          cachedDataRef.current.items = [...(previousItems ?? []), ...items];
+        }
+      },
       scrollTo(target) {
         const { instance } = cachedDataRef.current;
         if (instance == null) {
@@ -397,6 +417,44 @@ function CodeViewInner<LAnnotation = undefined>(
 
 // React was a mistake
 export const CodeView = forwardRef(CodeViewInner) as CodeViewComponent;
+
+function isAppendOnlyItemUpdate<LAnnotation>(
+  previousItems: readonly CodeViewItem<LAnnotation>[] | undefined,
+  nextItems: readonly CodeViewItem<LAnnotation>[]
+): previousItems is readonly CodeViewItem<LAnnotation>[] {
+  if (previousItems == null || nextItems.length <= previousItems.length) {
+    return false;
+  }
+
+  if (previousItems.length === 0) {
+    return true;
+  }
+
+  for (let index = 0; index < previousItems.length; index++) {
+    if (nextItems[index] !== previousItems[index]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areItemListsEqual<LAnnotation>(
+  previousItems: readonly CodeViewItem<LAnnotation>[] | undefined,
+  nextItems: readonly CodeViewItem<LAnnotation>[]
+): boolean {
+  if (previousItems == null || previousItems.length !== nextItems.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousItems.length; index++) {
+    if (previousItems[index] !== nextItems[index]) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 function createSlotContentStore<
   LAnnotation,

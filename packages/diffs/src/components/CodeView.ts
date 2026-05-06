@@ -797,6 +797,7 @@ export class CodeView<LAnnotation = undefined> {
     const viewerMetrics = this.getViewerMetrics();
     let nextTop =
       this.items.length === 0 ? 0 : this.scrollHeight + viewerMetrics.gap;
+    const appendedTop = nextTop;
     for (let index = 0; index < inputs.length; index++) {
       const input = inputs[index];
       if (input == null) {
@@ -817,8 +818,23 @@ export class CodeView<LAnnotation = undefined> {
     this.scrollHeight = nextTop - viewerMetrics.gap;
     this.scrollDirty = true;
     if (render) {
-      this.render();
+      if (this.canSkipRenderForAppend(appendedTop)) {
+        this.syncContainerHeight();
+      } else {
+        this.render();
+      }
     }
+  }
+
+  private canSkipRenderForAppend(appendedTop: number): boolean {
+    return (
+      this.container != null &&
+      this.renderState.firstIndex !== -1 &&
+      this.pendingScrollTarget == null &&
+      this.scrollAnimation == null &&
+      this.layoutDirtyIndex == null &&
+      appendedTop > this.windowSpecs.bottom
+    );
   }
 
   public setOptions(options: CodeViewOptions<LAnnotation> | undefined): void {
