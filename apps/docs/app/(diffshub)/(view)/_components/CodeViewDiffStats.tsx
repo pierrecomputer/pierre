@@ -8,10 +8,12 @@ import { StatItem, StatusRow } from './WorkerPoolStatus';
 
 interface CodeViewDiffStatsProps {
   stats: CodeViewDiffStatsData | null;
+  streaming: boolean;
 }
 
 export const CodeViewDiffStats = memo(function CodeViewDiffStats({
   stats,
+  streaming,
 }: CodeViewDiffStatsProps) {
   const [showStats, setShowStats] = useState(true);
 
@@ -40,6 +42,7 @@ export const CodeViewDiffStats = memo(function CodeViewDiffStats({
           aria-expanded={showStats}
         >
           Diff Stats
+          {streaming && <StreamingIndicator />}
           <span className="text-muted-foreground/50">(F2)</span>
         </button>
       </StatusRow>
@@ -70,3 +73,11 @@ export const CodeViewDiffStats = memo(function CodeViewDiffStats({
     </>
   );
 });
+
+function StreamingIndicator() {
+  return (
+    <span className="rounded-full border border-yellow-500/40 bg-yellow-500/10 px-1.5 py-0.5 text-[10px] leading-none font-medium tracking-wide text-yellow-700 uppercase dark:text-yellow-300">
+      streaming
+    </span>
+  );
+}

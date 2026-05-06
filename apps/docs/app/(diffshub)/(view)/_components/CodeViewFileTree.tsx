@@ -22,9 +22,9 @@ interface CodeViewFileTreeProps {
   // Callback invoked with the underlying tree model once it's mounted, and
   // again with `null` on unmount. Lets parents drive imperative APIs like
   // search open/close without owning the model creation.
-  onModelReady?(model: FileTreeModel | null): void;
-  onSelectItem?(itemId: string): void;
-  source: CodeViewFileTreeSource | null;
+  onModelReady(model: FileTreeModel | null): void;
+  onSelectItem(itemId: string): void;
+  source: CodeViewFileTreeSource;
 }
 
 export const CodeViewFileTree = memo(function CodeViewFileTree({
@@ -33,43 +33,12 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
   onSelectItem,
   source,
 }: CodeViewFileTreeProps) {
-  const previousSourceRef = useRef<CodeViewFileTreeSource | null>(null);
-  const sourceVersionRef = useRef(0);
-
-  if (source == null) {
-    previousSourceRef.current = null;
-    return null;
-  }
-
-  if (source !== previousSourceRef.current) {
-    previousSourceRef.current = source;
-    sourceVersionRef.current += 1;
-  }
-
-  return (
-    <CodeViewFileTreeContent
-      key={sourceVersionRef.current}
-      className={className}
-      onModelReady={onModelReady}
-      onSelectItem={onSelectItem}
-      source={source}
-    />
+  const sourceRef = useRef(source);
+  const previousSourceRef = useRef(source);
+  sourceRef.current = source;
+  const sort = useStableCallback<CodeViewFileTreeSource['sort']>(
+    (left, right) => sourceRef.current.sort(left, right)
   );
-});
-
-interface CodeViewFileTreeContentProps extends Omit<
-  CodeViewFileTreeProps,
-  'source'
-> {
-  source: CodeViewFileTreeSource;
-}
-
-function CodeViewFileTreeContent({
-  className,
-  onModelReady,
-  onSelectItem,
-  source,
-}: CodeViewFileTreeContentProps) {
   const onSelectionChange = useStableCallback(
     (selectedPaths: readonly FileTreePublicId[]) => {
       if (selectedPaths.length !== 1 || onSelectItem == null) {
@@ -87,10 +56,20 @@ function CodeViewFileTreeContent({
     ...BASE_FILE_TREE_OPTIONS,
     gitStatus: source.gitStatus,
     paths: source.paths,
-    sort: source.sort,
+    sort,
     onSelectionChange,
     itemHeight: 24,
   });
+
+  useEffect(() => {
+    if (previousSourceRef.current === source) {
+      return;
+    }
+
+    previousSourceRef.current = source;
+    model.resetPaths(source.paths);
+    model.setGitStatus(source.gitStatus);
+  }, [model, source]);
 
   useEffect(() => {
     onModelReady?.(model);
@@ -109,4 +88,4 @@ function CodeViewFileTreeContent({
       style={DENSITY_OVERRIDE_STYLES}
     />
   );
-}
+});

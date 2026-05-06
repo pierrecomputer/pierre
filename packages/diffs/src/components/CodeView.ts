@@ -759,6 +759,28 @@ export class CodeView<LAnnotation = undefined> {
     this.applySelectedLines(null, options);
   }
 
+  public getItem(itemId: string): CodeViewItem<LAnnotation> | undefined {
+    return this.idToItem.get(itemId)?.item;
+  }
+
+  public updateItem(input: CodeViewItem<LAnnotation>): boolean {
+    const item = this.idToItem.get(input.id);
+    if (item == null) {
+      console.error(`CodeView.updateItem: unknown item id "${input.id}"`);
+      return false;
+    }
+
+    if (!this.syncItemRecord(item, input)) {
+      return false;
+    }
+
+    this.markItemLayoutDirty(item);
+    this.scrollDirty = true;
+    this.render();
+    this.syncSelection();
+    return true;
+  }
+
   public addItem(input: CodeViewItem<LAnnotation>): void {
     this.addItems([input]);
     this.syncSelection();
@@ -797,6 +819,7 @@ export class CodeView<LAnnotation = undefined> {
     const viewerMetrics = this.getViewerMetrics();
     let nextTop =
       this.items.length === 0 ? 0 : this.scrollHeight + viewerMetrics.gap;
+    const appendedTop = nextTop;
     for (let index = 0; index < inputs.length; index++) {
       const input = inputs[index];
       if (input == null) {
@@ -817,8 +840,23 @@ export class CodeView<LAnnotation = undefined> {
     this.scrollHeight = nextTop - viewerMetrics.gap;
     this.scrollDirty = true;
     if (render) {
-      this.render();
+      if (this.canSkipRenderForAppend(appendedTop)) {
+        this.syncContainerHeight();
+      } else {
+        this.render();
+      }
     }
+  }
+
+  private canSkipRenderForAppend(appendedTop: number): boolean {
+    return (
+      this.container != null &&
+      this.renderState.firstIndex !== -1 &&
+      this.pendingScrollTarget == null &&
+      this.scrollAnimation == null &&
+      this.layoutDirtyIndex == null &&
+      appendedTop > this.windowSpecs.bottom
+    );
   }
 
   public setOptions(options: CodeViewOptions<LAnnotation> | undefined): void {

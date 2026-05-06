@@ -19,12 +19,16 @@ export function CodeViewStatusPanel({
     ? 'Couldn’t load diff'
     : state === 'parsing'
       ? 'Preparing diff'
-      : 'Fetching diff';
+      : state === 'streaming'
+        ? 'Streaming diff'
+        : 'Fetching diff';
   const message = isError
     ? (errorMessage ?? 'Failed to fetch the diff, please try again.')
     : state === 'parsing'
       ? 'Parsing the patch and building the file tree…'
-      : 'Fetching the patch from GitHub…';
+      : state === 'streaming'
+        ? 'Reading the patch and showing files as they arrive…'
+        : 'Fetching the patch from GitHub…';
 
   return (
     <div className="col-span-full row-start-2 row-end-3 flex min-h-0 items-center justify-center p-6">

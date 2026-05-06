@@ -254,6 +254,58 @@ describe('CodeView item collapsed state', () => {
     }
   });
 
+  test('updates one item without changing item order', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    const items: CodeViewItem[] = [
+      {
+        id: 'file:first.txt',
+        type: 'file',
+        file: makeFile('first.txt'),
+        version: 0,
+      },
+      {
+        id: 'file:middle.txt',
+        type: 'file',
+        file: makeFile('middle.txt'),
+        version: 0,
+      },
+      {
+        id: 'file:last.txt',
+        type: 'file',
+        file: makeFile('last.txt'),
+        version: 0,
+      },
+    ];
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, items);
+
+      const middleItem = viewer.getItem('file:middle.txt');
+      expect(middleItem).toBeDefined();
+      middleItem!.collapsed = true;
+      middleItem!.version = 1;
+
+      expect(viewer.updateItem(middleItem!)).toBe(true);
+      viewer.render(true);
+      await wait(0);
+
+      const renderedItems = viewer.getRenderedItems();
+      expect(renderedItems.map((item) => item.id)).toEqual([
+        'file:first.txt',
+        'file:middle.txt',
+        'file:last.txt',
+      ]);
+      const renderedMiddleItem = renderedItems[1];
+      expect(renderedMiddleItem).toBeDefined();
+      expect(hasRenderedCode(renderedMiddleItem)).toBe(false);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('keeps rendering after many collapsed items shrink the layout', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();
