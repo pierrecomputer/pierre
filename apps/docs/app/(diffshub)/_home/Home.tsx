@@ -13,10 +13,8 @@ import { HomeFetchForm } from './HomeFetchForm';
 
 const EXAMPLE_URLS = [
   'https://github.com/torvalds/linux/compare/v6.0...v7.0',
-  'https://github.com/pierrecomputer/pierre/commit/e160b7e093e908e6cef11f82f4c567aea5c68868',
-  'https://github.com/pierrecomputer/pierre/pull/615',
-  'https://github.com/pierrecomputer/pierre/pull/615.patch',
-  'https://github.com/pierrecomputer/pierre/pull/615.diff',
+  'https://github.com/ghostty-org/ghostty/pull/12291',
+  'https://github.com/pierrecomputer/pierre/commit/0800fb',
 ] as const;
 
 function FaqItem({
