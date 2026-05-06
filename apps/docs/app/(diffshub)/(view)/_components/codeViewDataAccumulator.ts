@@ -18,8 +18,6 @@ import {
   mapChangeTypeToGitStatus,
 } from './utils';
 
-const INITIAL_COLLAPSED_DIFF_LINE_THRESHOLD = 200_000;
-
 export interface CodeViewDataAccumulator {
   fileIndex: number;
   gitStatus: GitStatusEntry[];
@@ -75,10 +73,7 @@ export function appendFileDiffToCodeViewData(
   const item: CodeViewItem<CommentMetadata> = {
     id,
     type: 'diff',
-    collapsed:
-      fileDiff.type === 'deleted' ||
-      Math.max(fileDiff.splitLineCount, fileDiff.unifiedLineCount) >
-        INITIAL_COLLAPSED_DIFF_LINE_THRESHOLD,
+    collapsed: fileDiff.type === 'deleted',
     fileDiff,
     version: 0,
   };

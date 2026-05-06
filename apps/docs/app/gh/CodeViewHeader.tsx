@@ -35,7 +35,6 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const COMMIT_HASH_METADATA_PATTERN = /^From\s+([a-f0-9]+)\s/im;
-const INITIAL_COLLAPSED_DIFF_LINE_THRESHOLD = 200_000;
 
 function getPatchTreePathPrefix(
   patchMetadata: string | undefined,
@@ -143,10 +142,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           items.push({
             id,
             type: 'diff',
-            collapsed:
-              fileDiff.type === 'deleted' ||
-              Math.max(fileDiff.splitLineCount, fileDiff.unifiedLineCount) >
-                INITIAL_COLLAPSED_DIFF_LINE_THRESHOLD,
+            collapsed: fileDiff.type === 'deleted',
             fileDiff,
             version: 0,
           });
