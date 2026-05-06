@@ -4,8 +4,12 @@ import { join } from 'path';
 
 const CACHE_CONTROL = 'no-store';
 const EMPTY_PATCH_MESSAGE = 'GitHub returned an empty diff.';
+const GITHUB_HOST = 'github.com';
+const GITHUB_RAW_DIFF_HOST = 'patch-diff.githubusercontent.com';
 const NON_DIFF_RESPONSE_MESSAGE = 'GitHub did not return a diff for this URL.';
 const NON_WHITESPACE_PATTERN = /\S/;
+const RAW_GITHUB_DIFF_PATH_PATTERN =
+  /^\/raw\/[^/]+\/[^/]+\/pull\/[^/]+\.(?:diff|patch)$/;
 
 // Validates the GitHub-relative path, normalizes it to a raw diff URL, and
 // returns a streaming proxy response so the client can render files as they
@@ -39,22 +43,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // The client sends only the GitHub-relative path. Always proxy through
-    // github.com so this route cannot be used as a general-purpose URL fetcher.
-    if (!path.startsWith('/') || path === '/') {
-      return createTextResponse('Invalid GitHub path format', {
+    // The client normally sends only the GitHub-relative path, but GitHub also
+    // exposes raw PR diffs through patch-diff.githubusercontent.com. Keep this
+    // as a narrow allowlist so the route cannot become a general URL fetcher.
+    const patchURL = resolvePatchURL(path);
+    if (patchURL == null) {
+      return createTextResponse('Invalid GitHub patch URL format', {
         status: 400,
       });
     }
-
-    // Prefer GitHub's raw diff endpoint unless the caller explicitly requests a patch.
-    let patchPath = path;
-    if (!patchPath.endsWith('.patch') && !patchPath.endsWith('.diff')) {
-      patchPath += '.diff';
-    }
-
-    // Construct the full GitHub URL server-side
-    const patchURL = `https://github.com${patchPath}`;
 
     return createPatchStreamResponse(patchURL, request.signal, {
       sourceURL: patchURL,
@@ -65,6 +62,62 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Resolves the accepted GitHub URL shapes to the exact upstream URL to fetch.
+// Most callers send a GitHub-relative path, but this also permits GitHub's raw
+// PR diff host without opening the route up to arbitrary domains.
+function resolvePatchURL(input: string): string | undefined {
+  if (input.startsWith('/')) {
+    return resolveGitHubPath(input);
+  }
+
+  let parsedURL: URL;
+  try {
+    parsedURL = new URL(input);
+  } catch {
+    return undefined;
+  }
+
+  if (!isAllowedHTTPSURL(parsedURL)) {
+    return undefined;
+  }
+
+  if (parsedURL.hostname === GITHUB_HOST) {
+    return resolveGitHubPath(parsedURL.pathname);
+  }
+
+  if (
+    parsedURL.hostname === GITHUB_RAW_DIFF_HOST &&
+    RAW_GITHUB_DIFF_PATH_PATTERN.test(parsedURL.pathname)
+  ) {
+    return parsedURL.href;
+  }
+
+  return undefined;
+}
+
+function resolveGitHubPath(path: string): string | undefined {
+  if (path === '/') {
+    return undefined;
+  }
+
+  // Prefer GitHub's raw diff endpoint unless the caller explicitly requests a patch.
+  let patchPath = path;
+  if (!patchPath.endsWith('.patch') && !patchPath.endsWith('.diff')) {
+    patchPath += '.diff';
+  }
+
+  return `https://${GITHUB_HOST}${patchPath}`;
+}
+
+function isAllowedHTTPSURL(url: URL): boolean {
+  return (
+    url.protocol === 'https:' &&
+    url.port === '' &&
+    url.username === '' &&
+    url.password === ''
+  );
 }
 
 interface TextResponseOptions {
