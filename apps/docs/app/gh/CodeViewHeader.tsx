@@ -98,7 +98,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
     try {
       console.time('--     request time');
       const response = await fetch(
-        `/api/fetch-pr-patch?path=${encodeURIComponent(githubPath)}`
+        `/api/gh/diff?path=${encodeURIComponent(githubPath)}`
       );
       console.timeEnd('--     request time');
 

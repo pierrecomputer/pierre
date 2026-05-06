@@ -145,7 +145,7 @@ export function usePatchLoader({
 
         console.time('--     request time');
         const response = await fetch(
-          `/api/fetch-pr-patch?path=${encodeURIComponent(resolvedGitHubPath)}`,
+          `/api/gh/diff?path=${encodeURIComponent(resolvedGitHubPath)}`,
           { cache: 'no-store', signal: controller.signal }
         );
         console.timeEnd('--     request time');

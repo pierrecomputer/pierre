@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     try {
       const localPatchPath = join(
         process.cwd(),
-        'app/api/fetch-pr-patch',
+        'app/api/gh/diff',
         'larg.patch'
         // 'smol.patch'
       );
