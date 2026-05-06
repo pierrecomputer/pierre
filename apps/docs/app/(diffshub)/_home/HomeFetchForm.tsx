@@ -82,7 +82,7 @@ export function HomeFetchForm() {
         <Button
           type="submit"
           variant="default"
-          size="lg"
+          size="icon"
           className="size-11 rounded-lg"
           disabled={submitting}
           aria-label={submitting ? 'Fetching…' : 'Fetch'}
