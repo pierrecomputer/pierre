@@ -51,12 +51,12 @@ interface UsePatchLoaderResult {
   commentSections: CodeViewSavedCommentItem[];
   diffStats: CodeViewDiffStats | null;
   errorMessage: string | null;
-  items: CodeViewItem<CommentMetadata>[];
+  initialItems: CodeViewItem<CommentMetadata>[];
   loadState: ViewerLoadState;
   retryLoad(): void;
   setCommentSections: Dispatch<SetStateAction<CodeViewSavedCommentItem[]>>;
-  setItems: Dispatch<SetStateAction<CodeViewItem<CommentMetadata>[]>>;
   treeSource: CodeViewFileTreeSource | null;
+  viewerKey: number;
 }
 
 export function usePatchLoader({
@@ -64,7 +64,9 @@ export function usePatchLoader({
   onLoadStart,
   viewerRef,
 }: UsePatchLoaderOptions): UsePatchLoaderResult {
-  const [items, setItems] = useState<CodeViewItem<CommentMetadata>[]>([]);
+  const [initialItems, setInitialItems] = useState<
+    CodeViewItem<CommentMetadata>[]
+  >([]);
   // Tree data is intentionally stored separately from items so annotation
   // updates do not cascade into the file tree and trigger needless rebuilds.
   // It is updated by fetch/stream batches in this viewer route.
@@ -80,12 +82,13 @@ export function usePatchLoader({
   const [loadState, setLoadState] = useState<ViewerLoadState>('fetching');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [viewerKey, setViewerKey] = useState(0);
   const requestIdRef = useRef(0);
 
   useEffect(() => {
     const githubPath = getGitHubPath(initialUrl);
     if (githubPath == null) {
-      setItems([]);
+      setInitialItems([]);
       setTreeSource(null);
       setDiffStats(null);
       setCommentFileByItemId(null);
@@ -101,7 +104,8 @@ export function usePatchLoader({
     const isCurrentRequest = () =>
       requestIdRef.current === requestId && !controller.signal.aborted;
 
-    setItems([]);
+    setViewerKey(requestId);
+    setInitialItems([]);
     setTreeSource(null);
     setDiffStats(null);
     setCommentFileByItemId(null);
@@ -135,7 +139,7 @@ export function usePatchLoader({
           setCommentFileByItemId(loadedData.itemIdToFile);
           setCommentSections([]);
           setDiffStats(loadedData.diffStats);
-          setItems(loadedData.items);
+          setInitialItems(loadedData.items);
           setLoadState('ready');
         }
 
@@ -190,11 +194,13 @@ export function usePatchLoader({
           lastPublishTime = performance.now();
           const pendingItems = takePendingCodeViewItems(accumulator);
           const viewer = viewerRef.current;
-          if (viewer != null && hasPublishedInitialItems) {
+          if (!hasPublishedInitialItems) {
+            hasPublishedInitialItems = true;
+            setInitialItems(pendingItems);
+          } else if (viewer != null) {
             viewer.addItems(pendingItems);
           } else {
-            hasPublishedInitialItems = true;
-            setItems(pendingItems);
+            setInitialItems((prev) => [...prev, ...pendingItems]);
           }
           await yieldToBrowser();
           lastWorkYieldTime = performance.now();
@@ -302,7 +308,6 @@ export function usePatchLoader({
 
         setCommentFileByItemId(new Map(accumulator.itemIdToFile));
         setDiffStats({ ...accumulator.diffStats });
-        setItems(accumulator.items.slice());
         setLoadState('ready');
       } catch (error) {
         if (!isCurrentRequest()) {
@@ -331,12 +336,12 @@ export function usePatchLoader({
     commentSections,
     diffStats,
     errorMessage,
-    items,
+    initialItems,
     loadState,
     retryLoad,
     setCommentSections,
-    setItems,
     treeSource,
+    viewerKey,
   };
 }
 

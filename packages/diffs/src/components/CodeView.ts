@@ -759,6 +759,28 @@ export class CodeView<LAnnotation = undefined> {
     this.applySelectedLines(null, options);
   }
 
+  public getItem(itemId: string): CodeViewItem<LAnnotation> | undefined {
+    return this.idToItem.get(itemId)?.item;
+  }
+
+  public updateItem(input: CodeViewItem<LAnnotation>): boolean {
+    const item = this.idToItem.get(input.id);
+    if (item == null) {
+      console.error(`CodeView.updateItem: unknown item id "${input.id}"`);
+      return false;
+    }
+
+    if (!this.syncItemRecord(item, input)) {
+      return false;
+    }
+
+    this.markItemLayoutDirty(item);
+    this.scrollDirty = true;
+    this.render();
+    this.syncSelection();
+    return true;
+  }
+
   public addItem(input: CodeViewItem<LAnnotation>): void {
     this.addItems([input]);
     this.syncSelection();

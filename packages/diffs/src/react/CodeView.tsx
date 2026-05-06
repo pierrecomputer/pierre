@@ -75,11 +75,10 @@ export interface ControlledCodeViewProps<
 export interface UncontrolledCodeViewProps<
   LAnnotation,
 > extends CodeViewBaseProps<LAnnotation> {
-  // FIXME(amadeus): Replace this with a data structure that can do
-  // mutation-like changes for super massive diffs
-  // initialItems?: readonly CodeViewItem<LAnnotation>[];
-  // items?: never;
-  items: readonly CodeViewItem<LAnnotation>[];
+  // Seeds the imperative CodeView instance once. Later item changes should go
+  // through the ref API instead of being reconciled from React props.
+  initialItems?: readonly CodeViewItem<LAnnotation>[];
+  items?: never;
 }
 
 export type CodeViewProps<LAnnotation = undefined> =
@@ -88,6 +87,8 @@ export type CodeViewProps<LAnnotation = undefined> =
 
 export interface CodeViewHandle<LAnnotation> {
   addItems(items: readonly CodeViewItem<LAnnotation>[]): void;
+  getItem(id: string): CodeViewItem<LAnnotation> | undefined;
+  updateItem(item: CodeViewItem<LAnnotation>): boolean;
   scrollTo(target: CodeViewScrollTarget): void;
   setSelectedLines(selection: CodeViewLineSelection | null): void;
   getSelectedLines(): CodeViewLineSelection | null;
@@ -114,25 +115,35 @@ interface ManagedContentStore<LAnnotation> {
 interface CachedDataRef<LAnnotation> {
   instance: CodeViewClass<LAnnotation> | undefined;
   items: readonly CodeViewItem<LAnnotation>[] | undefined;
+  controlled: boolean;
   managedOptions: CodeViewOptions<LAnnotation> | undefined;
   disableFlushSync: boolean;
   slotCoordinator: CodeViewCoordinator<LAnnotation> | undefined;
 }
 
-const DEFAULT_CACHE = {
-  instance: undefined,
-  items: undefined,
-  managedOptions: undefined,
-  disableFlushSync: false,
-  slotCoordinator: undefined,
-} as const;
+function createDefaultCache<LAnnotation>(
+  controlled: boolean
+): CachedDataRef<LAnnotation> {
+  return {
+    instance: undefined,
+    items: undefined,
+    controlled,
+    managedOptions: undefined,
+    disableFlushSync: false,
+    slotCoordinator: undefined,
+  };
+}
 
 function CodeViewInner<LAnnotation = undefined>(
-  {
+  props: CodeViewProps<LAnnotation>,
+  ref: React.ForwardedRef<CodeViewHandle<LAnnotation>>
+): React.JSX.Element {
+  const {
     className,
     containerRef,
     disableWorkerPool = false,
-    items,
+    initialItems,
+    items: controlledItems,
     onScroll,
     onSelectedLinesChange,
     options,
@@ -143,13 +154,12 @@ function CodeViewInner<LAnnotation = undefined>(
     renderHeaderPrefix,
     selectedLines,
     style,
-  }: CodeViewProps<LAnnotation>,
-  ref: React.ForwardedRef<CodeViewHandle<LAnnotation>>
-): React.JSX.Element {
+  } = props;
+  const controlled = controlledItems !== undefined;
   const poolManager = useContext(WorkerPoolContext);
-  const cachedDataRef = useRef<CachedDataRef<LAnnotation>>({
-    ...DEFAULT_CACHE,
-  });
+  const cachedDataRef = useRef<CachedDataRef<LAnnotation>>(
+    createDefaultCache<LAnnotation>(controlled)
+  );
   const hasCustomHeader = renderCustomHeader != null;
   const hasAnnotationRenderer = renderAnnotation != null;
   const hasGutterRenderer = renderGutterUtility != null;
@@ -202,7 +212,7 @@ function CodeViewInner<LAnnotation = undefined>(
     ) {
       cachedDataRef.current.instance.cleanUp();
       slotContentStore.publish(undefined);
-      cachedDataRef.current = { ...DEFAULT_CACHE };
+      cachedDataRef.current = createDefaultCache<LAnnotation>(controlled);
     }
 
     // If our node matches the existing node then we should not attempt to
@@ -268,6 +278,7 @@ function CodeViewInner<LAnnotation = undefined>(
   useIsometricEffect(() => {
     const {
       instance,
+      controlled: prevControlled,
       items: prevItems,
       managedOptions: prevManagedOptions,
       slotCoordinator: prevSlotCoordinator,
@@ -286,15 +297,34 @@ function CodeViewInner<LAnnotation = undefined>(
         shouldRender = true;
       }
 
-      if (items !== prevItems) {
-        if (areItemListsEqual(prevItems, items)) {
-          cachedDataRef.current.items = items;
-        } else if (isAppendOnlyItemUpdate(prevItems, items)) {
-          cachedDataRef.current.items = items;
-          instance.addItems(items.slice(prevItems.length));
-        } else {
-          cachedDataRef.current.items = items;
-          instance.setItems(items);
+      if (prevControlled !== controlled) {
+        console.error(
+          'CodeView: cannot switch between controlled and uncontrolled modes. Remount with a new key instead.'
+        );
+        return;
+      }
+
+      if (controlled) {
+        if (controlledItems !== prevItems) {
+          if (areItemListsEqual(prevItems, controlledItems)) {
+            cachedDataRef.current.items = controlledItems;
+          } else if (isAppendOnlyItemUpdate(prevItems, controlledItems)) {
+            cachedDataRef.current.items = controlledItems;
+            instance.addItems(controlledItems.slice(prevItems.length));
+          } else {
+            cachedDataRef.current.items = controlledItems;
+            instance.setItems(controlledItems);
+            shouldRender = true;
+          }
+        }
+      }
+      // If uncontrolled, we should only ever set items once, and just depend
+      // on imperative instance changes going forward
+      else if (prevItems == null) {
+        const seedItems = initialItems ?? [];
+        cachedDataRef.current.items = seedItems;
+        if (seedItems.length > 0) {
+          instance.setItems(seedItems);
           shouldRender = true;
         }
       }
@@ -337,7 +367,8 @@ function CodeViewInner<LAnnotation = undefined>(
     ref,
     (): CodeViewHandle<LAnnotation> => ({
       addItems(items) {
-        const { instance, items: previousItems } = cachedDataRef.current;
+        const { controlled, instance } = cachedDataRef.current;
+        assertUncontrolledCodeViewAction(controlled, 'addItems');
         if (instance == null) {
           console.error(
             'CodeView.addItems: no valid instance to append items with',
@@ -345,8 +376,29 @@ function CodeViewInner<LAnnotation = undefined>(
           );
         } else {
           instance.addItems(items);
-          cachedDataRef.current.items = [...(previousItems ?? []), ...items];
         }
+      },
+      getItem(id) {
+        const { instance } = cachedDataRef.current;
+        if (instance == null) {
+          console.error('CodeView.getItem: no valid instance exists', id);
+          return undefined;
+        } else {
+          return instance.getItem(id);
+        }
+      },
+      updateItem(item) {
+        const { controlled, instance } = cachedDataRef.current;
+        assertUncontrolledCodeViewAction(controlled, 'updateItem');
+        if (instance == null) {
+          console.error(
+            'CodeView.updateItem: no valid instance to update item with',
+            item
+          );
+          return false;
+        }
+
+        return instance.updateItem(item);
       },
       scrollTo(target) {
         const { instance } = cachedDataRef.current;
@@ -454,6 +506,19 @@ function areItemListsEqual<LAnnotation>(
   }
 
   return true;
+}
+
+function assertUncontrolledCodeViewAction(
+  controlled: boolean,
+  action: string
+): void {
+  if (!controlled) {
+    return;
+  }
+
+  throw new Error(
+    `CodeView.${action} cannot be used when CodeView is controlled. Use initialItems for imperative item updates.`
+  );
 }
 
 function createSlotContentStore<

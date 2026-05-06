@@ -48,12 +48,12 @@ export function ReviewUI({ initialUrl }: ReviewUIProps) {
     commentSections,
     diffStats,
     errorMessage,
-    items,
+    initialItems,
     loadState,
     retryLoad,
     setCommentSections,
-    setItems,
     treeSource,
+    viewerKey,
   } = usePatchLoader({
     initialUrl,
     onLoadStart: handlePatchLoadStart,
@@ -124,7 +124,8 @@ export function ReviewUI({ initialUrl }: ReviewUIProps) {
     []
   );
   const viewerAvailable =
-    loadState === 'ready' || (loadState === 'streaming' && items.length > 0);
+    loadState === 'ready' ||
+    (loadState === 'streaming' && initialItems.length > 0);
 
   return (
     <ReviewGrid>
@@ -161,6 +162,7 @@ export function ReviewUI({ initialUrl }: ReviewUIProps) {
             onSelectItem={handleSelectTreeItem}
           />
           <CodeViewWrapper
+            key={viewerKey}
             className="[grid-area:viewer]"
             diffStyle={diffStyle}
             overflow={overflow}
@@ -169,10 +171,9 @@ export function ReviewUI({ initialUrl }: ReviewUIProps) {
             lineNumbers={lineNumbers}
             scrollRef={scrollRef}
             viewerRef={viewerRef}
-            items={items}
+            initialItems={initialItems}
             onCommentDeleted={handleCommentDeleted}
             onCommentSaved={handleCommentSaved}
-            setItems={setItems}
           />
         </>
       ) : (
