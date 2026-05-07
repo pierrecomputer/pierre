@@ -17,7 +17,6 @@ import {
   InteractionManager,
   type InteractionManagerBaseOptions,
   pluckInteractionOptions,
-  type SelectedLineRange,
   type SelectionWriteOptions,
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
@@ -42,6 +41,7 @@ import type {
   RenderHeaderMetadataCallback,
   RenderHeaderPrefixCallback,
   RenderRange,
+  SelectedLineRange,
   SelectionSide,
   ThemeTypes,
 } from '../types';

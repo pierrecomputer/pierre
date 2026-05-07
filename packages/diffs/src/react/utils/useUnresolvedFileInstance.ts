@@ -12,16 +12,14 @@ import {
   UnresolvedFile as UnresolvedFileClass,
   type UnresolvedFileOptions,
 } from '../../components/UnresolvedFile';
-import type {
-  GetHoveredLineResult,
-  SelectedLineRange,
-} from '../../managers/InteractionManager';
+import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
   MergeConflictActionPayload,
   MergeConflictMarkerRow,
+  SelectedLineRange,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
 import {

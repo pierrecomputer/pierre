@@ -8,13 +8,11 @@ import {
 
 import { FileDiff, type FileDiffOptions } from '../../components/FileDiff';
 import { VirtualizedFileDiff } from '../../components/VirtualizedFileDiff';
-import type {
-  GetHoveredLineResult,
-  SelectedLineRange,
-} from '../../managers/InteractionManager';
+import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
   FileDiffMetadata,
+  SelectedLineRange,
   VirtualFileMetrics,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';

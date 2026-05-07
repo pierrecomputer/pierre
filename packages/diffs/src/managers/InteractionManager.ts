@@ -8,6 +8,7 @@ import type {
   LineEventBaseProps,
   LineTypes,
   MergeConflictResolution,
+  SelectedLineRange,
   SelectionPoint,
   SelectionSide,
   TokenEventBase,
@@ -47,13 +48,6 @@ export interface OnDiffLineClickProps extends DiffLineEventBaseProps {
 
 export interface OnDiffLineEnterLeaveProps extends DiffLineEventBaseProps {
   event: PointerEvent;
-}
-
-export interface SelectedLineRange {
-  start: number;
-  side?: SelectionSide;
-  end: number;
-  endSide?: SelectionSide;
 }
 
 export interface SelectionWriteOptions {

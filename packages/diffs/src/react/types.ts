@@ -2,15 +2,13 @@ import { type CSSProperties, type ReactNode } from 'react';
 
 import type { FileOptions } from '../components/File';
 import type { FileDiffOptions } from '../components/FileDiff';
-import type {
-  GetHoveredLineResult,
-  SelectedLineRange,
-} from '../managers/InteractionManager';
+import type { GetHoveredLineResult } from '../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
   LineAnnotation,
+  SelectedLineRange,
   VirtualFileMetrics,
 } from '../types';
 

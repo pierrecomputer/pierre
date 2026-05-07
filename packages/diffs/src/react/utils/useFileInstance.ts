@@ -8,13 +8,11 @@ import {
 
 import { File, type FileOptions } from '../../components/File';
 import { VirtualizedFile } from '../../components/VirtualizedFile';
-import type {
-  GetHoveredLineResult,
-  SelectedLineRange,
-} from '../../managers/InteractionManager';
+import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   FileContents,
   LineAnnotation,
+  SelectedLineRange,
   VirtualFileMetrics,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
