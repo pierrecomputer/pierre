@@ -295,7 +295,21 @@ export function processFile(
     }
 
     // Now we process each line of the hunk
+    let parsedAdditionLines = 0;
+    let parsedDeletionLines = 0;
     for (const rawLine of lines) {
+      if (
+        isHunkBodyComplete({
+          additionCount: hunkData.additionCount,
+          parsedAdditionLines,
+          deletionCount: hunkData.deletionCount,
+          parsedDeletionLines,
+        }) &&
+        !rawLine.startsWith('\\')
+      ) {
+        break;
+      }
+
       const parsedLine = parseLineType(rawLine);
       // If we can't properly process the line, well, lets just try to salvage
       // things and continue... It's possible an AI generated diff might have
@@ -316,6 +330,7 @@ export function processFile(
           hunkData.hunkContent.push(currentContent);
         }
         additionLineIndex++;
+        parsedAdditionLines++;
         if (isPartial) {
           currentFile.additionLines.push(line);
         }
@@ -332,6 +347,7 @@ export function processFile(
           hunkData.hunkContent.push(currentContent);
         }
         deletionLineIndex++;
+        parsedDeletionLines++;
         if (isPartial) {
           currentFile.deletionLines.push(line);
         }
@@ -349,6 +365,8 @@ export function processFile(
         }
         additionLineIndex++;
         deletionLineIndex++;
+        parsedAdditionLines++;
+        parsedDeletionLines++;
         if (isPartial) {
           currentFile.deletionLines.push(line);
           currentFile.additionLines.push(line);
@@ -477,6 +495,27 @@ export function processFile(
     currentFile.prevName = undefined;
   }
   return currentFile;
+}
+
+interface isHunkBodyCompleteProps {
+  additionCount: number;
+  parsedAdditionLines: number;
+  deletionCount: number;
+  parsedDeletionLines: number;
+}
+
+// Git format-patch trailers follow the final hunk without a new diff marker.
+// Once both header-declared line counts are satisfied, the next non-metadata
+// line belongs to the surrounding patch file rather than the hunk body.
+function isHunkBodyComplete({
+  additionCount,
+  parsedAdditionLines,
+  deletionCount,
+  parsedDeletionLines,
+}: isHunkBodyCompleteProps): boolean {
+  return (
+    parsedAdditionLines >= additionCount && parsedDeletionLines >= deletionCount
+  );
 }
 
 /**

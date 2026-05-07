@@ -18,6 +18,28 @@ export const diffPatch: string = readFileSync(
   'utf-8'
 );
 
+export const formatPatchWithVersionTrailer = `From 02a2e4e6806f7e8f3adf685fde57cc773196f206 Mon Sep 17 00:00:00 2001
+From: "Patch Fixture" <patch.fixture@example.invalid>
+Date: Tue, 5 May 2026 15:45:50 -0600
+Subject: [PATCH] example patch with version trailer
+
+---
+ file.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/file.txt b/file.txt
+index 626799f..8c1202a 100644
+--- a/file.txt
++++ b/file.txt
+@@ -1,2 +1,3 @@
+ line one
++line two
+ line three
+-- 
+2.52.0
+
+`;
+
 export const mockFiles: Record<string, FileContents> = {
   file1: {
     name: 'file1.ts',

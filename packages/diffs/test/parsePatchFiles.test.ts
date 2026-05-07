@@ -2,7 +2,12 @@ import { describe, expect, spyOn, test } from 'bun:test';
 
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
-import { diffPatch, finalBlankLinePatch, malformedPatch } from './mocks';
+import {
+  diffPatch,
+  finalBlankLinePatch,
+  formatPatchWithVersionTrailer,
+  malformedPatch,
+} from './mocks';
 import {
   assertDefined,
   countRenderedLines,
@@ -35,18 +40,40 @@ describe('parsePatchFiles', () => {
         console.log('  * test expected console.error:', args);
       }
     );
-    const result = parsePatchFiles(malformedPatch);
+    try {
+      const result = parsePatchFiles(malformedPatch);
 
-    // Should have logged an error for the invalid line, but should still try
-    // to do its best to parse things out
-    expect(consoleError).toHaveBeenCalled();
-    expect(consoleError.mock.calls[0][0]).toContain('Invalid firstChar');
+      // Should have logged an error for the invalid line, but should still try
+      // to do its best to parse things out
+      expect(consoleError).toHaveBeenCalled();
+      expect(consoleError.mock.calls[0][0]).toContain('Invalid firstChar');
 
-    // The hunk counts should be off by 1 due to the missing line
-    const hunk = result[0].files[0].hunks[0];
-    expect(hunk.deletionCount).toBe(87);
-    expect(hunk.deletionLines).toBe(86);
-    expect(result).toMatchSnapshot('malformed patch');
+      // The hunk counts should be off by 1 due to the missing line
+      const hunk = result[0].files[0].hunks[0];
+      expect(hunk.deletionCount).toBe(87);
+      expect(hunk.deletionLines).toBe(86);
+      expect(result).toMatchSnapshot('malformed patch');
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  test('ignores format-patch version trailers after the final hunk', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const result = parsePatchFiles(formatPatchWithVersionTrailer);
+      const { valid, errors } = verifyPatchHunkValues(result);
+      if (!valid) {
+        console.error('Hunk line value errors:', errors);
+      }
+
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(valid).toBe(true);
+      expect(result[0].files[0].hunks[0].additionLines).toBe(1);
+      expect(result[0].files[0].hunks[0].deletionLines).toBe(0);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   test(
