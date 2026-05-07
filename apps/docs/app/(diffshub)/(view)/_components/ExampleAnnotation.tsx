@@ -1,7 +1,11 @@
 import type { CodeViewLineSelection, DiffLineAnnotation } from '@pierre/diffs';
+import { IconX } from '@pierre/icons';
 import { memo } from 'react';
 
+import { annotationCardBase, CommentAuthorAvatar } from './annotation-shared';
 import type { SavedCommentMetadata } from './types';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface ExampleAnnotationProps {
   annotation: DiffLineAnnotation<SavedCommentMetadata>;
@@ -21,7 +25,10 @@ export const ExampleAnnotation = memo(function ExampleAnnotation({
     <div
       role="button"
       tabIndex={0}
-      className="group relative m-2 max-w-[600px] cursor-pointer overflow-visible rounded-sm border border-[var(--color-border)] bg-[var(--color-muted)] p-2"
+      className={cn(
+        annotationCardBase,
+        'group relative cursor-pointer hover:border-[rgb(0_0_0_/_0.15)]'
+      )}
       onClick={() => onToggleSelection(selection)}
       onKeyDown={(event) => {
         if (event.key !== 'Enter' && event.key !== ' ') {
@@ -31,23 +38,27 @@ export const ExampleAnnotation = memo(function ExampleAnnotation({
         onToggleSelection(selection);
       }}
     >
-      <button
-        type="button"
+      <CommentAuthorAvatar seed={annotation.metadata.author} />
+      <Button
+        variant="default"
+        size="icon-sm"
         aria-label="Delete comment"
         onClick={(event) => {
           event.stopPropagation();
           onDelete(itemId, annotation.metadata.key);
         }}
-        className="pointer-events-none absolute top-0 right-0 z-1 inline-flex h-[22px] w-[22px] translate-x-[35%] -translate-y-[35%] cursor-pointer items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-background)] pb-0.5 text-[22px] leading-4 text-[var(--color-foreground)] opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100"
+        className="pointer-events-none absolute top-0 right-0 z-1 inline-flex translate-x-[35%] -translate-y-[35%] cursor-pointer items-center justify-center rounded-full bg-neutral-500 opacity-0 shadow-[inherit] transition-opacity duration-100 group-hover:pointer-events-auto group-hover:opacity-100"
       >
-        ×
-      </button>
-      <strong className="mb-1 block text-[13px]">
-        {annotation.metadata.author}
-      </strong>
-      <p className="m-0 text-[13px] whitespace-normal">
-        {annotation.metadata.message}
-      </p>
+        <IconX size={12} />
+      </Button>
+      <div className="flex flex-col">
+        <strong className="mt-1 block text-[14px]">
+          {annotation.metadata.author}
+        </strong>
+        <p className="m-0 text-[14px] whitespace-normal">
+          {annotation.metadata.message}
+        </p>
+      </div>
     </div>
   );
 });

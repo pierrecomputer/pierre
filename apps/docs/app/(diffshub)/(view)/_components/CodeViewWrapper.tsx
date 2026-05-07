@@ -18,6 +18,7 @@ import {
 import { IconChevronSm } from '@pierre/icons';
 import { memo, type RefObject, useMemo, useRef, useState } from 'react';
 
+import type { AvatarName } from './annotation-shared';
 import {
   CODE_VIEW_CUSTOM_CSS,
   CODE_VIEW_MARGIN_OFFSET,
@@ -246,7 +247,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   );
 
   const handleSaveDraftComment = useStableCallback(
-    (itemId: string, key: string, message: string) => {
+    (itemId: string, key: string, message: string, author: AvatarName) => {
       const trimmedMessage = message.trim();
       const { current: viewer } = viewerRef;
       if (trimmedMessage.length === 0 || viewer == null) {
@@ -284,7 +285,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
               metadata: {
                 kind: 'saved',
                 key,
-                author: 'you',
+                author,
                 message: trimmedMessage,
                 range: annotation.metadata.range,
               },
@@ -319,7 +320,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       setSelectedLines(null);
       onLineLinkChange(null);
       onCommentSaved({
-        author: 'you',
+        author,
         itemId,
         key,
         lineNumber: draftAnnotation.lineNumber,
