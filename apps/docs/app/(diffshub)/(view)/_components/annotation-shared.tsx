@@ -25,13 +25,20 @@ const AVATAR_NAMES = [
   'zac',
 ] as const;
 
-function buildPersona(name: string): { name: string; avatarSrc: string } {
+export type AvatarName = (typeof AVATAR_NAMES)[number];
+
+export interface Persona {
+  name: AvatarName;
+  avatarSrc: string;
+}
+
+function buildPersona(name: AvatarName): Persona {
   return { name, avatarSrc: `/diffshub-avatars/${name}.png` };
 }
 
 // Picks a random persona from the avatar list. Intended for use as a useState
 // lazy initializer so each new draft form gets a fresh identity on mount.
-export function getRandomPersona(): { name: string; avatarSrc: string } {
+export function getRandomPersona(): Persona {
   const name = AVATAR_NAMES[Math.floor(Math.random() * AVATAR_NAMES.length)];
   return buildPersona(name);
 }
@@ -40,12 +47,9 @@ export function getRandomPersona(): { name: string; avatarSrc: string } {
 // name (i.e. it was stored directly from getRandomPersona), returns that persona
 // directly so draft and saved annotations stay in sync. Otherwise falls back to
 // a djb2 hash to spread arbitrary comment keys across the avatar list.
-export function getCommentPersona(seed: string): {
-  name: string;
-  avatarSrc: string;
-} {
-  if (AVATAR_NAMES.includes(seed as (typeof AVATAR_NAMES)[number])) {
-    return buildPersona(seed);
+export function getCommentPersona(seed: string): Persona {
+  if (AVATAR_NAMES.includes(seed as AvatarName)) {
+    return buildPersona(seed as AvatarName);
   }
   let hash = 5381;
   for (let i = 0; i < seed.length; i++) {

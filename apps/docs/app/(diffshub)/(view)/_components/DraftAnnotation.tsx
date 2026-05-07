@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import {
   annotationCardBase,
+  type AvatarName,
   CommentAuthorAvatar,
   getRandomPersona,
 } from './annotation-shared';
@@ -14,7 +15,12 @@ interface DraftAnnotationProps {
   annotation: DiffLineAnnotation<DraftCommentMetadata>;
   itemId: string;
   onCancel(itemId: string, key: string): void;
-  onSave(itemId: string, key: string, message: string, author: string): void;
+  onSave(
+    itemId: string,
+    key: string,
+    message: string,
+    author: AvatarName
+  ): void;
 }
 
 export function DraftAnnotation({
