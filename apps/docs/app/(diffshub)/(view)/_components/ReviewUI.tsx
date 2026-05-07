@@ -1,7 +1,7 @@
 'use client';
 
 import { type DiffIndicators } from '@pierre/diffs';
-import { type CodeViewHandle } from '@pierre/diffs/react';
+import { type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
 import {
   type ReactNode,
   useCallback,
@@ -123,9 +123,11 @@ export function ReviewUI({ initialUrl }: ReviewUIProps) {
     },
     []
   );
+  const workerPool = useWorkerPool();
   const viewerAvailable =
-    loadState === 'ready' ||
-    (loadState === 'streaming' && initialItems.length > 0);
+    (workerPool == null || workerPool.isInitialized()) &&
+    (loadState === 'ready' ||
+      (loadState === 'streaming' && initialItems.length > 0));
 
   return (
     <ReviewGrid>
