@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 interface CodeViewStatusPanelProps {
   errorMessage: string | null;
   onRetry(): void;
-  state: Exclude<ViewerLoadState, 'ready'>;
+  state: ViewerLoadState;
 }
 
 export function CodeViewStatusPanel({
@@ -19,16 +19,17 @@ export function CodeViewStatusPanel({
     ? 'Couldn’t load diff'
     : state === 'parsing'
       ? 'Preparing diff'
-      : state === 'streaming'
-        ? 'Streaming diff'
-        : 'Fetching diff';
+      : state === 'fetching'
+        ? 'Fetching diff'
+        : 'Streaming diff';
+
   const message = isError
     ? (errorMessage ?? 'Failed to fetch the diff, please try again.')
     : state === 'parsing'
       ? 'Parsing the patch and building the file tree…'
-      : state === 'streaming'
-        ? 'Reading the patch and showing files as they arrive…'
-        : 'Fetching the patch from GitHub…';
+      : state === 'fetching'
+        ? 'Fetching the patch from GitHub…'
+        : 'Reading the patch and showing files as they arrive…';
 
   return (
     <div className="col-span-full row-start-2 row-end-3 flex min-h-0 items-center justify-center p-6">
