@@ -219,7 +219,11 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
         />
       </head>
-      <body>
+      <body
+      // className={
+      //   SITE === 'diffshub' ? 'bg-neutral-50 dark:bg-neutral-900' : undefined
+      // }
+      >
         <WrapperContext>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             {children}

@@ -14,8 +14,6 @@ import { getPatchViewerHref } from '../(view)/_components/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-const DEFAULT_PR_URL = 'https://github.com/nodejs/node/pull/59805';
-
 // Submitting the home form should move to the shareable viewer URL first. The
 // viewer route owns fetching and renders its own loading state there.
 export const HomeFetchForm = memo(function HomeFetchForm() {
@@ -44,16 +42,12 @@ export const HomeFetchForm = memo(function HomeFetchForm() {
 
   return (
     <div className="my-5 space-y-2">
-      <form
-        onSubmit={handleSubmit}
-        className="flex max-w-2xl flex-col gap-2 sm:flex-row"
-      >
+      <form onSubmit={handleSubmit} className="flex max-w-2xl gap-2">
         <Input
           type="url"
           name="url"
           inputSize="lg"
-          placeholder="Enter a GitHub URL"
-          defaultValue={DEFAULT_PR_URL}
+          placeholder="Enter any GitHub URL…"
           required
           disabled={isPending}
           className="text-md bg-background h-11 rounded-lg sm:flex-1"
