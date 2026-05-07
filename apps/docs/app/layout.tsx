@@ -60,6 +60,7 @@ const geistMono = Geist_Mono({
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  ...(process.env.NEXT_PUBLIC_SITE === 'diffshub' && { viewportFit: 'cover' }),
 };
 
 // When running in a worktree, prefix the title with a stable emoji + slug so
@@ -219,7 +220,11 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
         />
       </head>
-      <body>
+      <body
+      // className={
+      //   SITE === 'diffshub' ? 'bg-neutral-50 dark:bg-neutral-900' : undefined
+      // }
+      >
         <WrapperContext>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             {children}

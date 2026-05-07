@@ -52,10 +52,12 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
   // placeholder until we figure out what diffshub.com actually is.
   diffshub: {
     id: 'diffshub',
-    name: 'Diffshub',
-    tagline: 'Coming soon',
-    description: 'A focused microsite from The Pierre Computer Co.',
-    llmsDescription: 'Diffshub is a microsite from The Pierre Computer Co.',
+    name: 'DiffsHub',
+    tagline: 'Faster diffs for GitHub URLs',
+    description:
+      'View code changes from any public GitHub diff or patch URL with a super-freaking-fast, beautiful, and virtualized interface.',
+    llmsDescription:
+      'A demo app from The Pierre Computer Company, built with @pierre/diffs and @pierre/trees and enhanced by the new CodeView component.',
     basePath: '',
     docsPath: '/',
     packageName: '',

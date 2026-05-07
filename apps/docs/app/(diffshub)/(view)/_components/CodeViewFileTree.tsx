@@ -11,7 +11,7 @@ import type { CodeViewFileTreeSource } from './types';
 import { cn } from '@/lib/utils';
 
 const DENSITY_OVERRIDE_STYLES = {
-  '--trees-bg-override': 'light-dark(oklch(98.5% 0 0), oklch(20.5% 0 0))',
+  '--trees-bg-override': 'var(--diffshub-sidebar-bg)',
   '--trees-density-override': 0.8,
   // '--trees-row-height-override': '24px',
   '--trees-selected-fg-override': 'light-dark(#1c1c1e, #f0f0f2)',
@@ -81,7 +81,7 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
   return (
     <FileTree
       className={cn(
-        'h-full min-h-0 overflow-auto overscroll-contain pt-2 bg-transparent',
+        'h-full min-h-0 overflow-auto overscroll-contain pt-2',
         className
       )}
       model={model}

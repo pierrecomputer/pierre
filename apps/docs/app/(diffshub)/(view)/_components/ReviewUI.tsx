@@ -68,6 +68,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
     const mediaQuery = window.matchMedia('(max-width: 767px)');
     const updateDiffStyle = (matches: boolean) => {
       setDiffStyle(matches ? 'unified' : 'split');
+      if (!matches) setFileTreeOverlayOpen(false);
     };
     const handleChange = (event: MediaQueryListEvent) => {
       updateDiffStyle(event.matches);

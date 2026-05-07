@@ -73,7 +73,7 @@ const nextConfig = {
       ];
     }
     if (isDiffshub) {
-      // Diffshub is a focused stub microsite; no legacy URLs to bounce yet.
+      // DiffsHub is a focused stub microsite; no legacy URLs to bounce yet.
       return [];
     }
     if (isDiffs) {

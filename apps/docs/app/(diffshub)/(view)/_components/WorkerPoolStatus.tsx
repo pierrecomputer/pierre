@@ -195,7 +195,7 @@ function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
           className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1 text-sm focus:outline-none"
           aria-expanded={showStats}
         >
-          {showStats ? 'Hide' : 'Show'} System Monitor
+          System Monitor
           <span className="text-muted-foreground/50">(F3)</span>
         </button>
         <div className="ml-auto flex items-center gap-1">
