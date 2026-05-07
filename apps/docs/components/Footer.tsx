@@ -92,7 +92,7 @@ export default function Footer() {
           </nav>
         </div>
         <div>
-          <h4 className="mb-2 text-sm font-medium">Diffshub</h4>
+          <h4 className="mb-2 text-sm font-medium">DiffsHub</h4>
           <nav className="flex flex-col gap-1">
             {isDiffshub ? (
               <Link href="/" className={linkClass}>

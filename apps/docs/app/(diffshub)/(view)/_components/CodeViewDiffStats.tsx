@@ -38,12 +38,12 @@ export const CodeViewDiffStats = memo(function CodeViewDiffStats({
         <button
           type="button"
           onClick={() => setShowStats((prev) => !prev)}
-          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1 text-sm focus:outline-none"
+          className="text-muted-foreground hover:text-foreground flex w-full cursor-pointer items-center gap-1 text-sm focus:outline-none"
           aria-expanded={showStats}
         >
           Diff Stats
-          {streaming && <StreamingIndicator />}
           <span className="text-muted-foreground/50">(F2)</span>
+          {streaming && <StreamingIndicator />}
         </button>
       </StatusRow>
       {showStats && (
@@ -76,7 +76,7 @@ export const CodeViewDiffStats = memo(function CodeViewDiffStats({
 
 function StreamingIndicator() {
   return (
-    <span className="rounded-full border border-yellow-500/40 bg-yellow-500/10 px-1.5 py-0.5 text-[10px] leading-none font-medium tracking-wide text-yellow-700 uppercase dark:text-yellow-300">
+    <span className="-mr-2 ml-auto rounded-full border border-yellow-500/40 bg-yellow-500/10 px-1.5 py-0.5 text-[10px] leading-none font-medium tracking-wide text-yellow-700 uppercase dark:text-yellow-300">
       streaming
     </span>
   );

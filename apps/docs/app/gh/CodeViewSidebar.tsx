@@ -127,6 +127,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             hidden={activeTab !== 'files'}
             className="h-full min-h-0"
           >
+            {/* <style>{`@media (min-width: 768px) { #${filesPanelId.replace(/:/g, '\\:')} { --color-background: light-dark(oklch(98.5% 0 0), oklch(20.5% 0 0)) } }`}</style> */}
             <CodeViewFileTree
               className="h-full min-h-0"
               source={source}
