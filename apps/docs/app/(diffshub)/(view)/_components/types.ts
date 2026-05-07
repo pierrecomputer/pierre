@@ -74,3 +74,10 @@ export interface CodeViewFileTreeSource {
   pathToItemId: ReadonlyMap<string, string>;
   sort: CodeViewFileTreeSort;
 }
+
+export interface CodeViewDiffStats {
+  addedLines: number;
+  deletedLines: number;
+  fileCount: number;
+  totalLinesOfCode: number;
+}

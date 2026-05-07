@@ -1,4 +1,5 @@
 import {
+  IconArrowRightShort,
   IconBrandDiscord,
   IconBrandGithub,
   IconBrandTwitterX,
@@ -7,14 +8,15 @@ import {
 import Link from 'next/link';
 
 import { DiffsHubLogo } from '../(view)/_components/DiffsHubLogo';
+import { getGitHubPath } from '../(view)/_components/utils';
 import { HomeFetchForm } from './HomeFetchForm';
-// Each Q&A on the landing page is a native <details> element so the markup
-// stays minimal and the page works with JS off. The chevron sits to the
-// left of the question and rotates from "pointing right" (closed) to
-// "pointing down" (open). `IconChevronSm` ships pointing down, so we
-// rotate -90deg in the closed state and back to 0 when the parent
-// <details> is open. The `faq-item` class hooks into CSS that animates
-// the expand/collapse via `::details-content` in supporting browsers.
+
+const EXAMPLE_URLS = [
+  'https://github.com/torvalds/linux/compare/v6.0...v7.0',
+  'https://github.com/ghostty-org/ghostty/pull/12291',
+  'https://github.com/pierrecomputer/pierre/commit/0800fb',
+] as const;
+
 function FaqItem({
   question,
   children,
@@ -65,8 +67,10 @@ export default function DiffshubHome() {
           DiffsHub
         </h2>
         <p className="text-muted-foreground text-pretty md:max-w-lg">
-          View code changes from any public GitHub pull request with a
-          super-freaking-fast, beautiful, and virtualized interface. Built by{' '}
+          View code changes from any public GitHub diff or patch URL with a
+          super-freaking-fast, beautiful, and virtualized interface. <br />
+          <br />
+          Built by{' '}
           <Link
             href="https://pierre.computer"
             target="_blank"
@@ -75,7 +79,7 @@ export default function DiffshubHome() {
           >
             The Pierre Computer Company
           </Link>{' '}
-          with{' '}
+          using{' '}
           <Link
             href="https://diffs.com"
             target="_blank"
@@ -145,9 +149,30 @@ export default function DiffshubHome() {
             component, which aids developers in rendering, scrolling,
             navigating, and annotating code or changes across files.
           </FaqItem>
+          <FaqItem question="What kind of changes can I view?">
+            Most commonly, you can view any public GitHub pull request. But you
+            can also use comparisons between tags and commits, commits, patch
+            files, and diff files.
+            <ul className="my-2 flex flex-col gap-1 text-sm">
+              {EXAMPLE_URLS.map((url) => (
+                <li
+                  key={url}
+                  className="flex items-center justify-start gap-1 truncate"
+                >
+                  <IconArrowRightShort className="flex-shrink-0 opacity-50" />
+                  <Link
+                    href={getGitHubPath(url) ?? '/'}
+                    className="inline-link"
+                  >
+                    {url}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </FaqItem>
           <FaqItem question="Can you host my code, too?">
             <strong className="font-medium">Not yet.</strong> DiffsHub is only a
-            demo app that fetches and renders public GitHub pull requests.
+            demo app that fetches and renders public GitHub diffs and patches.
             However, if your team is looking for Git infrastructure that scales
             with your AI-first products, consider using{' '}
             <Link

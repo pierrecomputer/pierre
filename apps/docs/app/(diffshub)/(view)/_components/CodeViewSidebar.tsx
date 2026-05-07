@@ -6,8 +6,10 @@ import { useFileTreeSearch } from '@pierre/trees/react';
 import { memo, type RefObject, useCallback, useState } from 'react';
 
 import { CodeViewCommentsList } from './CodeViewCommentsList';
+import { CodeViewDiffStats } from './CodeViewDiffStats';
 import { CodeViewFileTree } from './CodeViewFileTree';
 import type {
+  CodeViewDiffStats as CodeViewDiffStatsData,
   CodeViewFileTreeSource,
   CodeViewSavedCommentEntry,
   CodeViewSavedCommentItem,
@@ -22,23 +24,27 @@ type SidebarTab = 'files' | 'comments';
 interface CodeViewSidebarProps {
   className?: string;
   commentSections: readonly CodeViewSavedCommentItem[];
+  diffStats: CodeViewDiffStatsData | null;
   mobileOverlayOpen?: boolean;
-  onMobileClose?(): void;
-  onSelectComment?(comment: CodeViewSavedCommentEntry): void;
-  onSelectItem?(itemId: string): void;
+  onMobileClose(): void;
+  onSelectComment(comment: CodeViewSavedCommentEntry): void;
+  onSelectItem(itemId: string): void;
   scrollRef: RefObject<HTMLDivElement | null>;
   source: CodeViewFileTreeSource | null;
+  streaming: boolean;
 }
 
 export const CodeViewSidebar = memo(function CodeViewSidebar({
   className,
   commentSections,
+  diffStats,
   mobileOverlayOpen = false,
   onMobileClose,
   onSelectComment,
   onSelectItem,
   scrollRef,
   source,
+  streaming,
 }: CodeViewSidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
@@ -112,12 +118,14 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             hidden={activeTab !== 'files'}
             className="h-full min-h-0"
           >
-            <CodeViewFileTree
-              className="h-full min-h-0 pl-2"
-              source={source}
-              onModelReady={handleModelReady}
-              onSelectItem={onSelectItem}
-            />
+            {source != null && (
+              <CodeViewFileTree
+                className="h-full min-h-0 pl-2"
+                source={source}
+                onModelReady={handleModelReady}
+                onSelectItem={onSelectItem}
+              />
+            )}
           </div>
           <div
             role="region"
@@ -131,6 +139,9 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             />
           </div>
         </div>
+        {source != null && (
+          <CodeViewDiffStats stats={diffStats} streaming={streaming} />
+        )}
         {source != null && <WorkerPoolStatus scrollRef={scrollRef} />}
       </div>
     </>

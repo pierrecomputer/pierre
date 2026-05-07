@@ -31,6 +31,9 @@ const nextConfig = {
   ...(process.env.NODE_ENV === 'development' && {
     distDir: `.next/${site}`,
   }),
+  // Lets just disable strict mode in the diffshub project to avoid github
+  // request thrash in dev...
+  reactStrictMode: !isDiffshub,
   reactCompiler: true,
   devIndicators: false,
   experimental: {
