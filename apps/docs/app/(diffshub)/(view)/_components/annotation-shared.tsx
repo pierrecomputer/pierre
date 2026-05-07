@@ -32,6 +32,15 @@ export interface Persona {
   avatarSrc: string;
 }
 
+// Triggers browser fetches for all avatar images so they are in the cache
+// before the comment form opens. Call once on mount of the top-level UI component.
+export function preloadAvatars(): void {
+  for (const name of AVATAR_NAMES) {
+    const img = new Image();
+    img.src = `/diffshub-avatars/${name}.png`;
+  }
+}
+
 function buildPersona(name: AvatarName): Persona {
   return { name, avatarSrc: `/diffshub-avatars/${name}.png` };
 }
