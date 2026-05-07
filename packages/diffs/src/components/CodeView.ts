@@ -5,10 +5,7 @@ import {
   DEFAULT_THEMES,
   DIFFS_TAG_NAME,
 } from '../constants';
-import type {
-  SelectedLineRange,
-  SelectionWriteOptions,
-} from '../managers/InteractionManager';
+import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
   queueRender,
@@ -22,9 +19,11 @@ import type {
   CodeViewLineScrollTarget,
   CodeViewMetrics,
   CodeViewPositionScrollTarget,
+  CodeViewRangeScrollTarget,
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
   HunkSeparators,
+  SelectedLineRange,
   SelectionSide,
   SmoothScrollSettings,
   VirtualFileMetrics,
@@ -399,6 +398,10 @@ interface PendingLineTarget extends Omit<CodeViewLineScrollTarget, 'align'> {
   align?: PendingAlignTypes;
 }
 
+interface PendingRangeTarget extends Omit<CodeViewRangeScrollTarget, 'align'> {
+  align?: PendingAlignTypes;
+}
+
 interface PendingItemTarget extends Omit<CodeViewItemScrollTarget, 'align'> {
   align?: PendingAlignTypes;
 }
@@ -406,6 +409,7 @@ interface PendingItemTarget extends Omit<CodeViewItemScrollTarget, 'align'> {
 type PendingScrollTarget =
   | CodeViewPositionScrollTarget
   | PendingLineTarget
+  | PendingRangeTarget
   | PendingItemTarget;
 
 export class CodeView<LAnnotation = undefined> {
@@ -1604,7 +1608,10 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   private getScrollTargetRect(
-    target: CodeViewItemScrollTarget | CodeViewLineScrollTarget
+    target:
+      | CodeViewItemScrollTarget
+      | CodeViewLineScrollTarget
+      | CodeViewRangeScrollTarget
   ): { top: number; height: number } | undefined {
     const item = this.idToItem.get(target.id);
     if (item == null) {
@@ -1614,6 +1621,21 @@ export class CodeView<LAnnotation = undefined> {
 
     if (target.type === 'item') {
       return { top: item.top, height: item.height };
+    }
+
+    if (target.type === 'range') {
+      const rangePosition = this.getRangeScrollPosition(item, target);
+      if (rangePosition == null) {
+        console.warn(
+          `CodeView.scrollTo: unable to resolve range ${formatSelectedLineRange(target.range)} for item "${target.id}"`
+        );
+        return undefined;
+      }
+
+      return {
+        top: item.top + rangePosition.top,
+        height: rangePosition.height,
+      };
     }
 
     const linePosition = this.getLineScrollPosition(item, target);
@@ -1649,7 +1671,10 @@ export class CodeView<LAnnotation = undefined> {
     const targetBottom = targetTop + rect.height;
     const currentTop = this.getScrollTop();
     const visibleTop =
-      currentTop + (target.type === 'line' ? this.getStickyHeaderOffset() : 0);
+      currentTop +
+      (target.type === 'line' || target.type === 'range'
+        ? this.getStickyHeaderOffset()
+        : 0);
     const visibleBottom = currentTop + this.getHeight();
 
     // If the item is spanning beyond the full viewport,
@@ -1704,6 +1729,26 @@ export class CodeView<LAnnotation = undefined> {
           item.height,
           target.align,
           target.offset
+        )
+      );
+    }
+
+    if (target.type === 'range') {
+      const rangePosition = this.getRangeScrollPosition(item, target);
+      if (rangePosition == null) {
+        console.warn(
+          `CodeView.scrollTo: unable to resolve range ${formatSelectedLineRange(target.range)} for item "${target.id}"`
+        );
+        return undefined;
+      }
+
+      return this.clampScrollTop(
+        this.resolveAlignedScrollPosition(
+          item.top + rangePosition.top,
+          rangePosition.height,
+          target.align,
+          target.offset,
+          this.getStickyHeaderOffset()
         )
       );
     }
@@ -1764,6 +1809,36 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     return item.instance.getLinePosition(target.lineNumber);
+  }
+
+  private getRangeScrollPosition(
+    item: CodeViewContextItem<LAnnotation>,
+    target: CodeViewRangeScrollTarget
+  ): LineScrollPosition | undefined {
+    const { range } = target;
+    const startPosition = this.getLineScrollPosition(item, {
+      type: 'line',
+      id: target.id,
+      lineNumber: range.start,
+      side: range.side,
+    });
+    const endPosition = this.getLineScrollPosition(item, {
+      type: 'line',
+      id: target.id,
+      lineNumber: range.end,
+      side: range.endSide ?? range.side,
+    });
+    if (startPosition == null || endPosition == null) {
+      return undefined;
+    }
+
+    const startTop = startPosition.top;
+    const startBottom = startTop + startPosition.height;
+    const endTop = endPosition.top;
+    const endBottom = endTop + endPosition.height;
+    const top = Math.min(startTop, endTop);
+    const bottom = Math.max(startBottom, endBottom);
+    return { top, height: bottom - top };
   }
 
   /**
@@ -2703,6 +2778,23 @@ function prepareItemInstance<LAnnotation>(
   } else {
     return item.instance.prepareVirtualizedItem(item.item.file);
   }
+}
+
+function formatSelectedLineRange(range: SelectedLineRange): string {
+  const start = formatSelectedLinePoint(range.start, range.side);
+  const end = formatSelectedLinePoint(range.end, range.endSide ?? range.side);
+  return start === end ? start : `${start}-${end}`;
+}
+
+function formatSelectedLinePoint(
+  lineNumber: number,
+  side: SelectionSide | undefined
+): string {
+  if (side == null) {
+    return `${lineNumber}`;
+  }
+
+  return `${side === 'deletions' ? 'D' : 'A'}${lineNumber}`;
 }
 
 function renderItem<LAnnotation>(

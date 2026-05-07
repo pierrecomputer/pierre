@@ -53,6 +53,8 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
     errorMessage,
     initialItems,
     loadState,
+    onLineLinkChange,
+    onViewerReady,
     retryLoad,
     setCommentSections,
     treeSource,
@@ -180,6 +182,8 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
             initialItems={initialItems}
             onCommentDeleted={handleCommentDeleted}
             onCommentSaved={handleCommentSaved}
+            onLineLinkChange={onLineLinkChange}
+            onViewerReady={onViewerReady}
           />
         </>
       ) : (
