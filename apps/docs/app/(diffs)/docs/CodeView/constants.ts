@@ -35,12 +35,17 @@ const readmeFile = {
   contents: '# Docs\n\nThis file is rendered inline with the diff list.',
 };
 
+const changelogFile = {
+  name: 'CHANGELOG.md',
+  contents: '# Changelog\n\n- Added personalized greetings.',
+};
+
 export function ReviewSurface() {
   const viewerRef = useRef<CodeViewHandle | null>(null);
   const [selectedLines, setSelectedLines] =
     useState<CodeViewLineSelection | null>(null);
 
-  const items = useMemo<CodeViewItem[]>(
+  const initialItems = useMemo<CodeViewItem[]>(
     () => [
       {
         id: 'diff:src/app.ts',
@@ -74,9 +79,48 @@ export function ReviewSurface() {
         Jump to change
       </button>
 
+      <button
+        type="button"
+        onClick={() => {
+          const viewer = viewerRef.current;
+          const item = viewer?.getItem('diff:src/app.ts');
+          if (item?.type !== 'diff') {
+            return;
+          }
+
+          viewer.updateItem({
+            ...item,
+            version: typeof item.version === 'number' ? item.version + 1 : 1,
+            collapsed: !item.collapsed,
+          });
+        }}
+      >
+        Toggle app diff
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          const viewer = viewerRef.current;
+          if (viewer?.getItem('file:CHANGELOG.md') != null) {
+            return;
+          }
+
+          viewer?.addItems([
+            {
+              id: 'file:CHANGELOG.md',
+              type: 'file',
+              file: changelogFile,
+            },
+          ]);
+        }}
+      >
+        Append changelog
+      </button>
+
       <CodeView
         ref={viewerRef}
-        items={items}
+        initialItems={initialItems}
         style={{ height: 600, overflow: 'auto' }}
         options={{
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -195,17 +239,25 @@ viewer.scrollTo({
   behavior: 'smooth-auto',
 });
 
-const nextItems = items.map((item) =>
-  item.id === 'diff:src/app.ts' && item.type === 'diff'
-    ? {
-        ...item,
-        version: 2,
-        annotations: [{ side: 'additions', lineNumber: 2 }],
-      }
-    : item
-);
+const appItem = viewer.getItem('diff:src/app.ts');
+if (appItem?.type === 'diff') {
+  viewer.updateItem({
+    ...appItem,
+    version: 2,
+    annotations: [{ side: 'additions', lineNumber: 2 }],
+  });
+}
 
-viewer.setItems(nextItems);
+viewer.addItems([
+  {
+    id: 'file:CHANGELOG.md',
+    type: 'file',
+    file: {
+      name: 'CHANGELOG.md',
+      contents: '# Changelog\n\n- Added personalized greetings.',
+    },
+  },
+]);
 
 window.addEventListener('beforeunload', () => {
   viewer.cleanUp();

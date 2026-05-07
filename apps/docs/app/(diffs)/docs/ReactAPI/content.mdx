@@ -34,7 +34,8 @@ The React API exposes six main components:
 input and remount (for example, with a changing `key`) when you want to reset.
 
 The `CodeView` tab above is the quick-start version. For the full guide on
-items, ids, `version`, selection, and `scrollTo`, see [CodeView](#code-view).
+controlled `items`, imperative `initialItems`, ids, `version`, selection, and
+`scrollTo`, see [CodeView](#code-view).
 
 ### Shared Props
 
@@ -44,8 +45,9 @@ component has similar props, but uses `LineAnnotation` instead of
 `DiffLineAnnotation` (no `side` property).
 
 `CodeView` reuses many of the same option names internally, but it has its own
-`items`, viewer ref, and mixed-item render props. See [CodeView](#code-view) for
-the dedicated guide.
+controlled `items` mode, imperative mode with optional `initialItems`, viewer
+ref, and mixed-item render props. See [CodeView](#code-view) for the dedicated
+guide.
 
 Header customization and collapsing behavior:
 

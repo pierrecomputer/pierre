@@ -1,5 +1,6 @@
 'use client';
 
+import type { DiffIndicators } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import {
@@ -56,9 +57,7 @@ interface DiffStylesProps {
 export function DiffStyles({
   prerenderedDiff: { options, ...props },
 }: DiffStylesProps) {
-  const [diffIndicators, setDiffStyle] = useState<'classic' | 'bars' | 'none'>(
-    'bars'
-  );
+  const [diffIndicators, setDiffStyle] = useState<DiffIndicators>('bars');
   const [lineDiffType, setLineDiffType] = useState<
     'word-alt' | 'word' | 'char' | 'none'
   >('word-alt');
@@ -81,9 +80,7 @@ export function DiffStyles({
         <div className="grid grid-cols-2 gap-3 md:flex md:flex-wrap md:items-center">
           <ButtonGroup
             value={diffIndicators}
-            onValueChange={(value) =>
-              setDiffStyle(value as 'bars' | 'classic' | 'none')
-            }
+            onValueChange={(value) => setDiffStyle(value as DiffIndicators)}
             className="col-span-full"
           >
             {['bars', 'classic', 'none'].map((value) => (

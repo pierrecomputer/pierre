@@ -10,6 +10,7 @@ import type {
   VirtualFileMetrics,
 } from '../types';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
+import { areOptionsEqual } from '../utils/areOptionsEqual';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import {
@@ -103,10 +104,7 @@ export class VirtualizedFileDiff<
     }
 
     this.metrics = nextMetrics;
-    this.cache.heights.clear();
-    this.cache.checkpoints = [];
-    this.cache.totalLines = 0;
-    this.renderRange = undefined;
+    this.resetLayoutCache();
   }
 
   // Get the height for a line, using cached value if available.
@@ -122,44 +120,35 @@ export class VirtualizedFileDiff<
 
   override setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
     if (options == null) return;
-    const previousDiffStyle = this.options.diffStyle;
-    const previousOverflow = this.options.overflow;
-    const previousCollapsed = this.options.collapsed;
-    const previousDisableBackground = this.options.disableBackground;
-    const previousDisableLineNumbers = this.options.disableLineNumbers;
+    const { options: previousOptions } = this;
+    const optionsChanged = !areOptionsEqual(previousOptions, options);
+    const layoutChanged =
+      optionsChanged && hasDiffLayoutOptionChanged(previousOptions, options);
 
     super.setOptions(options);
 
-    // Layout-affecting options change row heights or column widths. disableLineNumbers
-    // is included here because hiding the number columns widens the code column, which
-    // can shift wrap points in overflow:wrap mode and invalidate measured row heights.
-    if (
-      previousDiffStyle !== this.options.diffStyle ||
-      previousOverflow !== this.options.overflow ||
-      previousCollapsed !== this.options.collapsed ||
-      previousDisableLineNumbers !== this.options.disableLineNumbers
-    ) {
-      this.cache.heights.clear();
-      this.cache.checkpoints = [];
-      this.cache.totalLines = 0;
-      // NOTE(amadeus): In CodeView we intentionally batch computes to all
-      // happen at the same time, so we shouldn't trigger this here
-      if (this.isSimpleMode()) {
-        this.computeApproximateSize();
-      }
-      this.renderRange = undefined;
+    if (layoutChanged) {
+      this.resetLayoutCache(true);
     }
-    // Visual-only and layout-affecting options both need forceRenderOverride so
-    // FileDiff.render's early-return guard doesn't skip applyPreNodeAttributes.
-    if (
-      previousDisableBackground !== this.options.disableBackground ||
-      previousDisableLineNumbers !== this.options.disableLineNumbers
-    ) {
+    // Any option can affect rendered DOM; only layout-affecting options clear
+    // the measured height cache above.
+    if (optionsChanged) {
       this.forceRenderOverride = true;
     }
-    // CodeView will mark dirty for us
-    if (this.isSimpleMode()) {
-      this.virtualizer.instanceChanged(this, true);
+    if (optionsChanged && this.isSimpleMode()) {
+      this.virtualizer.instanceChanged(this, layoutChanged);
+    }
+  }
+
+  private resetLayoutCache(recompute = false): void {
+    this.cache.heights.clear();
+    this.cache.checkpoints = [];
+    this.cache.totalLines = 0;
+    this.renderRange = undefined;
+    // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
+    // at the same time, so we shouldn't trigger this there.
+    if (recompute && this.isSimpleMode()) {
+      this.computeApproximateSize();
     }
   }
 
@@ -1201,6 +1190,34 @@ export class VirtualizedFileDiff<
       bufferAfter,
     };
   }
+}
+
+function hasDiffLayoutOptionChanged<LAnnotation>(
+  previousOptions: FileDiffOptions<LAnnotation>,
+  nextOptions: FileDiffOptions<LAnnotation>
+): boolean {
+  return (
+    (previousOptions.diffStyle ?? 'split') !==
+      (nextOptions.diffStyle ?? 'split') ||
+    (previousOptions.overflow ?? 'scroll') !==
+      (nextOptions.overflow ?? 'scroll') ||
+    (previousOptions.collapsed ?? false) !== (nextOptions.collapsed ?? false) ||
+    (previousOptions.disableLineNumbers ?? false) !==
+      (nextOptions.disableLineNumbers ?? false) ||
+    (previousOptions.disableFileHeader ?? false) !==
+      (nextOptions.disableFileHeader ?? false) ||
+    (previousOptions.diffIndicators ?? 'bars') !==
+      (nextOptions.diffIndicators ?? 'bars') ||
+    (previousOptions.hunkSeparators ?? 'line-info') !==
+      (nextOptions.hunkSeparators ?? 'line-info') ||
+    (previousOptions.expandUnchanged ?? false) !==
+      (nextOptions.expandUnchanged ?? false) ||
+    (previousOptions.collapsedContextThreshold ??
+      DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) !==
+      (nextOptions.collapsedContextThreshold ??
+        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) ||
+    previousOptions.unsafeCSS !== nextOptions.unsafeCSS
+  );
 }
 
 function hasFinalHunk(fileDiff: FileDiffMetadata): boolean {

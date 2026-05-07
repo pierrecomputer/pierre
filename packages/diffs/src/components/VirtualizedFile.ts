@@ -8,6 +8,7 @@ import type {
   VirtualFileMetrics,
 } from '../types';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
+import { areOptionsEqual } from '../utils/areOptionsEqual';
 import { iterateOverFile } from '../utils/iterateOverFile';
 import {
   getVirtualFileHeaderRegion,
@@ -35,6 +36,22 @@ interface FileLayoutCache {
 const LAYOUT_CHECKPOINT_INTERVAL = 5_000;
 
 let instanceId = -1;
+
+function hasFileLayoutOptionChanged<LAnnotation>(
+  previousOptions: FileOptions<LAnnotation>,
+  nextOptions: FileOptions<LAnnotation>
+): boolean {
+  return (
+    (previousOptions.overflow ?? 'scroll') !==
+      (nextOptions.overflow ?? 'scroll') ||
+    (previousOptions.collapsed ?? false) !== (nextOptions.collapsed ?? false) ||
+    (previousOptions.disableLineNumbers ?? false) !==
+      (nextOptions.disableLineNumbers ?? false) ||
+    (previousOptions.disableFileHeader ?? false) !==
+      (nextOptions.disableFileHeader ?? false) ||
+    previousOptions.unsafeCSS !== nextOptions.unsafeCSS
+  );
+}
 
 export class VirtualizedFile<
   LAnnotation = undefined,
@@ -64,9 +81,7 @@ export class VirtualizedFile<
     }
 
     this.metrics = metrics;
-    this.cache.heights.clear();
-    this.cache.checkpoints = [];
-    this.renderRange = undefined;
+    this.resetLayoutCache();
   }
 
   // Get the height for a line, using cached value if available.
@@ -83,37 +98,33 @@ export class VirtualizedFile<
 
   override setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
-    const previousOverflow = this.options.overflow;
-    const previousCollapsed = this.options.collapsed;
-    const previousDisableLineNumbers = this.options.disableLineNumbers;
+    const { options: previousOptions } = this;
+    const optionsChanged = !areOptionsEqual(previousOptions, options);
+    const layoutChanged = hasFileLayoutOptionChanged(previousOptions, options);
 
     super.setOptions(options);
 
-    // Layout-affecting options change row heights or column widths. disableLineNumbers
-    // is included here because hiding the number columns widens the code column, which
-    // can shift wrap points in overflow:wrap mode and invalidate measured row heights.
-    if (
-      previousOverflow !== this.options.overflow ||
-      previousCollapsed !== this.options.collapsed ||
-      previousDisableLineNumbers !== this.options.disableLineNumbers
-    ) {
-      this.cache.heights.clear();
-      this.cache.checkpoints = [];
-      // NOTE(amadeus): In CodeView we intentionally batch computes to all
-      // happen at the same time, so we shouldn't trigger this here
-      if (this.isSimpleMode()) {
-        this.computeApproximateSize();
-      }
-      this.renderRange = undefined;
+    if (layoutChanged) {
+      this.resetLayoutCache(true);
     }
-    // Layout-affecting options need forceRenderOverride so File.render's
-    // early-return guard doesn't skip applyPreNodeAttributes.
-    if (previousDisableLineNumbers !== this.options.disableLineNumbers) {
+    // Any option can affect rendered DOM; only layout-affecting options clear
+    // the measured height cache above.
+    if (optionsChanged) {
       this.forceRenderOverride = true;
     }
-    // CodeView will mark dirty for us
-    if (this.isSimpleMode()) {
-      this.virtualizer.instanceChanged(this, true);
+    if (optionsChanged && this.isSimpleMode()) {
+      this.virtualizer.instanceChanged(this, layoutChanged);
+    }
+  }
+
+  private resetLayoutCache(recompute = false): void {
+    this.cache.heights.clear();
+    this.cache.checkpoints = [];
+    this.renderRange = undefined;
+    // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
+    // at the same time, so we shouldn't trigger this there.
+    if (recompute && this.isSimpleMode()) {
+      this.computeApproximateSize();
     }
   }
 

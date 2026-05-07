@@ -2,6 +2,7 @@
 
 import type {
   AnnotationSide,
+  DiffIndicators,
   DiffLineAnnotation,
   SelectedLineRange,
 } from '@pierre/diffs';
@@ -109,8 +110,8 @@ interface PlaygroundControlsContentProps {
   setSelectedLightTheme: (v: (typeof LIGHT_THEMES)[number]) => void;
   selectedDarkTheme: (typeof DARK_THEMES)[number];
   setSelectedDarkTheme: (v: (typeof DARK_THEMES)[number]) => void;
-  diffIndicators: 'bars' | 'classic' | 'none';
-  setDiffIndicators: (v: 'bars' | 'classic' | 'none') => void;
+  diffIndicators: DiffIndicators;
+  setDiffIndicators: (v: DiffIndicators) => void;
   lineDiffType: 'word-alt' | 'word' | 'char' | 'none';
   setLineDiffType: (v: 'word-alt' | 'word' | 'char' | 'none') => void;
   hunkSeparators: HunkSeparatorValue;
@@ -283,9 +284,7 @@ function PlaygroundControlsContent({
 
         <ButtonGroup
           value={diffIndicators}
-          onValueChange={(value) =>
-            setDiffIndicators(value as 'bars' | 'classic' | 'none')
-          }
+          onValueChange={(value) => setDiffIndicators(value as DiffIndicators)}
         >
           <ButtonGroupItem value="bars">
             <IconCodeStyleBars />
@@ -495,13 +494,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     (typeof DARK_THEMES)[number]
   >(getParam('dark', DEFAULTS.darkTheme) as (typeof DARK_THEMES)[number]);
 
-  const [diffIndicators, setDiffIndicators] = useState<
-    'bars' | 'classic' | 'none'
-  >(
-    getParam('indicators', DEFAULTS.diffIndicators) as
-      | 'bars'
-      | 'classic'
-      | 'none'
+  const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>(
+    getParam('indicators', DEFAULTS.diffIndicators) as DiffIndicators
   );
 
   const [lineDiffType, setLineDiffType] = useState<

@@ -643,6 +643,9 @@ const readmeFile = {
 };
 
 export function ReviewSurface() {
+  // Pass \`items\` when React owns the full item list. Use \`initialItems\` plus a
+  // ref instead when item updates should be imperative; omit both item props to
+  // start empty and append later.
   const items = useMemo<CodeViewItem[]>(
     () => [
       {

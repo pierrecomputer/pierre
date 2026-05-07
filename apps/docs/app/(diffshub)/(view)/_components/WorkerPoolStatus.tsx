@@ -26,6 +26,10 @@ import {
   useState,
 } from 'react';
 
+import { cn } from '@/lib/utils';
+
+const NUMBER_FORMATTER = new Intl.NumberFormat('en-US');
+
 class AutoScrollTester {
   static SPEED = 1000;
 
@@ -100,24 +104,27 @@ export const WorkerPoolStatus = memo(function WorkerPoolStatus({
   return stats != null && <StatsDisplay stats={stats} scrollRef={scrollRef} />;
 });
 
-interface StatItemProps {
+export interface StatItemProps {
   label: string;
   value: string | number;
+  valueClassName?: string;
 }
 
-function StatItem({ label, value }: StatItemProps) {
+export function StatItem({ label, value, valueClassName }: StatItemProps) {
   const isZero = value === 0 || value === '0';
+  const formatted =
+    typeof value === 'number' ? NUMBER_FORMATTER.format(value) : value;
   return (
-    <div className="text-muted-foreground flex justify-between text-sm">
-      <span className="font-medium">{label}</span>
+    <div className="border-border/75 flex items-center justify-between border-t py-1 text-[12px]">
+      <div className="text-muted-foreground">{label}</div>
       <span
-        className="min-w-[3c] pl-[1ch] text-right tabular-nums"
+        className={cn('pl-[1ch] text-right tabular-nums', valueClassName)}
         style={{
           fontFamily: 'var(--font-berkeley-mono)',
           opacity: isZero ? 0.5 : 1,
         }}
       >
-        {value}
+        {formatted}
       </span>
     </div>
   );
@@ -143,12 +150,12 @@ function getStatusIcon(stats: WorkerStats) {
   return { Icon: IconCircleFill, className: 'text-muted-foreground' };
 }
 
-interface StatusRowProps {
+export interface StatusRowProps {
   icon: ComponentType<{ className?: string }>;
   children: ReactNode;
 }
 
-function StatusRow({ icon: Icon, children }: StatusRowProps) {
+export function StatusRow({ icon: Icon, children }: StatusRowProps) {
   return (
     <div className="text-muted-foreground border-border mx-2 flex items-center gap-2 border-t p-2">
       <Icon className="size-3 opacity-50" />
@@ -185,7 +192,7 @@ function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
         <button
           type="button"
           onClick={() => setShowStats((prev) => !prev)}
-          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1"
+          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1 text-sm focus:outline-none"
           aria-expanded={showStats}
         >
           {showStats ? 'Hide' : 'Show'} System Monitor
@@ -196,7 +203,7 @@ function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
         </div>
       </StatusRow>
       {showStats && (
-        <div className="m-2 grid grid-cols-2 gap-2 rounded-lg bg-neutral-100 p-2 px-2.5">
+        <div className="mr-2 mb-2 ml-9">
           <StatItem
             label="Busy Workers"
             value={`${stats.busyWorkers}/${stats.totalWorkers}`}

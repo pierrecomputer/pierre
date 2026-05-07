@@ -188,6 +188,26 @@ const items: CodeViewItem[] = [
 
 viewer.setItems(items);
 
+const appItem = viewer.getItem('diff:src/app.ts');
+if (appItem?.type === 'diff') {
+  viewer.updateItem({
+    ...appItem,
+    version: 2,
+    annotations: [{ side: 'additions', lineNumber: 2 }],
+  });
+}
+
+viewer.addItems([
+  {
+    id: 'file:CHANGELOG.md',
+    type: 'file',
+    file: {
+      name: 'CHANGELOG.md',
+      contents: '# Changelog\n\n- Added personalized greetings.',
+    },
+  },
+]);
+
 window.addEventListener('beforeunload', () => {
   viewer.cleanUp();
 });`,

@@ -28,14 +28,13 @@ import type {
 } from './types';
 import {
   createCodeViewFileTreeSource,
-  getPullRequestPath,
+  getGitHubPath,
   mapChangeTypeToGitStatus,
 } from './utils';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const COMMIT_HASH_METADATA_PATTERN = /^From\s+([a-f0-9]+)\s/im;
-const INITIAL_COLLAPSED_DIFF_LINE_THRESHOLD = 200_000;
 
 function getPatchTreePathPrefix(
   patchMetadata: string | undefined,
@@ -87,8 +86,8 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   const [url, setURL] = useState(DEFAULT_PR_URL);
   const renderPullRequest = useStableCallback(async (input: string) => {
     const normalizedURL = input.trim();
-    const prPath = getPullRequestPath(normalizedURL);
-    if (prPath == null) {
+    const githubPath = getGitHubPath(normalizedURL);
+    if (githubPath == null) {
       console.error('Invalid URL', normalizedURL);
       return undefined;
     }
@@ -99,10 +98,13 @@ export const CodeViewHeader = memo(function CodeViewHeader({
     try {
       console.time('--     request time');
       const response = await fetch(
-        `/api/fetch-pr-patch?path=${encodeURIComponent(prPath)}`
+        `/api/gh/diff?path=${encodeURIComponent(githubPath)}`
       );
       console.timeEnd('--     request time');
 
+      // This endpoint opens a local stream before GitHub responds, so this
+      // check only covers route setup errors. Upstream failures surface
+      // while reading the response body below.
       if (!response.ok) {
         const error = await response.text();
         console.error('Failed to fetch patch:', error);
@@ -117,7 +119,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
       const parsedPatches = parsePatchFiles(
         patchContent,
         // Use the url as a cache key
-        encodeURIComponent(prPath)
+        encodeURIComponent(githubPath)
       );
       console.timeEnd('--  parsing patches');
 
@@ -131,11 +133,11 @@ export const CodeViewHeader = memo(function CodeViewHeader({
       const pathToItemId = new Map<string, string>();
       const itemIdToFile = new Map<string, CodeViewCommentSidebarFile>();
       const gitStatus: GitStatusEntry[] = [];
+      const shouldPrefixTreePaths = parsedPatches.length > 1;
       for (const [patchIndex, patch] of parsedPatches.entries()) {
-        const treePathPrefix = getPatchTreePathPrefix(
-          patch.patchMetadata,
-          patchIndex
-        );
+        const treePathPrefix = shouldPrefixTreePaths
+          ? getPatchTreePathPrefix(patch.patchMetadata, patchIndex)
+          : undefined;
         for (const fileDiff of patch.files) {
           const id = `${fileIndex++}`;
           const fileOrder = items.length;
@@ -143,17 +145,15 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           items.push({
             id,
             type: 'diff',
-            collapsed:
-              fileDiff.type === 'deleted' ||
-              Math.max(fileDiff.splitLineCount, fileDiff.unifiedLineCount) >
-                INITIAL_COLLAPSED_DIFF_LINE_THRESHOLD,
+            collapsed: fileDiff.type === 'deleted',
             fileDiff,
             version: 0,
           });
 
           const path = fileDiff.name;
           itemIdToFile.set(id, { fileOrder, path });
-          const treePath = `${treePathPrefix}/${path}`;
+          const treePath =
+            treePathPrefix == null ? path : `${treePathPrefix}/${path}`;
           if (path.length === 0 || pathToItemId.has(treePath)) {
             continue;
           }
