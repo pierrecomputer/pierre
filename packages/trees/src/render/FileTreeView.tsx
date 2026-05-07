@@ -3293,13 +3293,16 @@ export function FileTreeView({
   // behind a fast scroll in either direction, which is what keeps the list
   // from blanking mid-flick.
   //
-  // The `stickyOverlayHeight` subtraction matters when sticky folders are
-  // enabled: the layout bumps `windowStart` past the rows that sit behind
-  // the overlay, so `windowOffsetTop` can exceed `scrollTop` by up to the
-  // overlay's height. Without accounting for that gap, the bottom constraint
-  // would activate every frame and lock the element in place, stalling the
-  // per-pixel scroll.
-  const windowStickyInset = Math.min(
+  // The bottom edge gets the `stickyOverlayHeight` allowance because sticky
+  // folders can bump `windowOffsetTop` below `scrollTop`; loosening only that
+  // edge keeps the synced window from being pulled upward. The top edge stays
+  // tied to the viewport bottom so a lagging window still fills the view while
+  // the user scrolls quickly downward.
+  const windowStickyTopInset = Math.min(
+    0,
+    resolvedViewportHeight - windowHeight
+  );
+  const windowStickyBottomInset = Math.min(
     0,
     resolvedViewportHeight - windowHeight - stickyOverlayHeight
   );
@@ -3676,8 +3679,8 @@ export function FileTreeView({
             data-file-tree-virtualized-sticky="true"
             style={{
               height: `${windowHeight}px`,
-              top: `${windowStickyInset}px`,
-              bottom: `${windowStickyInset}px`,
+              top: `${windowStickyTopInset}px`,
+              bottom: `${windowStickyBottomInset}px`,
             }}
           >
             {renderRangeChildren(flowRowFrame, range, stickyRowPathSet)}

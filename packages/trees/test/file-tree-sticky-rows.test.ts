@@ -435,6 +435,64 @@ describe('file-tree sticky rows', () => {
     }
   });
 
+  test('sticky virtual window keeps bottom coverage during fast downward scrolls', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const paths = [
+        ...Array.from(
+          { length: 24 },
+          (_, index) => `src/lib/deep/file${String(index).padStart(2, '0')}.ts`
+        ),
+        ...Array.from(
+          { length: 12 },
+          (_, index) => `z${String(index).padStart(2, '0')}.ts`
+        ),
+      ];
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialExpandedPaths: ['src/lib/deep/'],
+        paths,
+        stickyFolders: true,
+        initialVisibleRowCount: 180 / FILE_TREE_DEFAULT_ITEM_HEIGHT,
+      });
+
+      fileTree.render({ containerWrapper });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      scrollElement.scrollTop = 90;
+      scrollElement.dispatchEvent(new dom.window.Event('scroll'));
+      await flushDom();
+
+      const stickyWindow = getVirtualStickyWindow(shadowRoot, dom);
+      const stickyOverlayHeight =
+        getStickyRowPaths(shadowRoot, dom).length *
+        FILE_TREE_DEFAULT_ITEM_HEIGHT;
+      const windowHeight = getPixelStyleValue(stickyWindow, 'height');
+      const topInset = getPixelStyleValue(stickyWindow, 'top');
+      const bottomInset = getPixelStyleValue(stickyWindow, 'bottom');
+
+      expect(stickyOverlayHeight).toBeGreaterThan(0);
+      expect(windowHeight + topInset).toBe(180);
+      expect(bottomInset).toBe(topInset - stickyOverlayHeight);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('keyboard focus scrolling respects sticky overlay height', async () => {
     const { cleanup, dom } = installDom();
     try {
