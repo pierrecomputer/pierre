@@ -10,7 +10,7 @@ import {
   useTransition,
 } from 'react';
 
-import { getGitHubPath } from '../(view)/_components/utils';
+import { getPatchViewerHref } from '../(view)/_components/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -31,13 +31,13 @@ export const HomeFetchForm = memo(function HomeFetchForm() {
       const formData = new FormData(event.currentTarget);
       const urlField = formData.get('url');
       const rawUrl = typeof urlField === 'string' ? urlField.trim() : '';
-      const githubPath = getGitHubPath(rawUrl);
-      if (githubPath == null) {
+      const viewerHref = getPatchViewerHref(rawUrl);
+      if (viewerHref == null) {
         setErrorMessage('Enter a valid GitHub URL.');
         return;
       }
 
-      startTransition(() => router.push(githubPath));
+      startTransition(() => router.push(viewerHref));
     },
     [router]
   );

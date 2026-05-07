@@ -56,33 +56,37 @@ export function isSavedAnnotation(
 export function getGitHubPath(input: string): string | undefined {
   try {
     const parsedURL = new URL(input);
-    if (parsedURL.hostname === GITHUB_HOST) {
-      if (parsedURL.pathname === '/') {
-        return undefined;
-      }
-      return parsedURL.pathname;
-    }
-
-    if (parsedURL.hostname !== GITHUB_RAW_DIFF_HOST) {
-      return undefined;
-    }
-
-    const rawDiffMatch = RAW_GITHUB_DIFF_PATH_PATTERN.exec(parsedURL.pathname);
-    if (rawDiffMatch == null) {
-      return undefined;
-    }
-
-    const owner = rawDiffMatch[1];
-    const repo = rawDiffMatch[2];
-    const pullFile = rawDiffMatch[3];
-    if (owner == null || repo == null || pullFile == null) {
-      return undefined;
-    }
-
-    return `/${owner}/${repo}/pull/${pullFile}`;
+    return getGitHubPathFromURL(parsedURL);
   } catch {
     return undefined;
   }
+}
+
+function getGitHubPathFromURL(parsedURL: URL): string | undefined {
+  if (parsedURL.hostname === GITHUB_HOST) {
+    if (parsedURL.pathname === '/') {
+      return undefined;
+    }
+    return parsedURL.pathname;
+  }
+
+  if (parsedURL.hostname !== GITHUB_RAW_DIFF_HOST) {
+    return undefined;
+  }
+
+  const rawDiffMatch = RAW_GITHUB_DIFF_PATH_PATTERN.exec(parsedURL.pathname);
+  if (rawDiffMatch == null) {
+    return undefined;
+  }
+
+  const owner = rawDiffMatch[1];
+  const repo = rawDiffMatch[2];
+  const pullFile = rawDiffMatch[3];
+  if (owner == null || repo == null || pullFile == null) {
+    return undefined;
+  }
+
+  return `/${owner}/${repo}/pull/${pullFile}`;
 }
 
 // Translates the diff-level change type surfaced by @pierre/diffs into the

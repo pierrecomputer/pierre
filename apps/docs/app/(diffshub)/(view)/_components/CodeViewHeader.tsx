@@ -25,7 +25,7 @@ import {
 } from 'react';
 
 import { DiffsHubLogo } from './DiffsHubLogo';
-import { getGitHubPath } from './utils';
+import { getPatchViewerHref } from './utils';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -103,15 +103,15 @@ export const CodeViewHeader = memo(function CodeViewHeader({
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       const normalizedURL = url.trim();
-      const githubPath = getGitHubPath(normalizedURL);
-      if (githubPath == null) {
+      const viewerHref = getPatchViewerHref(normalizedURL);
+      if (viewerHref == null) {
         console.error('Invalid URL', normalizedURL);
         return;
       }
 
       setURL(normalizedURL);
       startTransition(() => {
-        router.push(githubPath);
+        router.push(viewerHref);
       });
     }
   );
