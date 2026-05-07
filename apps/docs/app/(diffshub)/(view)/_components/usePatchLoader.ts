@@ -179,7 +179,6 @@ export function usePatchLoader({
         let streamTreePathPrefix: string | undefined;
         let pendingPublishFileCount = 0;
         let pendingTreePublishFileCount = 0;
-        let hasPublishedItems = false;
         let hasPublishedTree = false;
         let hasPublishedInitialItems = false;
         let hasReceivedFirstStreamedFile = false;
@@ -187,23 +186,38 @@ export function usePatchLoader({
         let lastWorkYieldTime = lastPublishTime;
         let lastTreePublishTime = lastPublishTime;
 
+        const publishTreeSource = () => {
+          if (pendingTreePublishFileCount === 0 || !isCurrentRequest()) {
+            return;
+          }
+
+          pendingTreePublishFileCount = 0;
+          hasPublishedTree = true;
+          lastTreePublishTime = performance.now();
+          setCommentFileByItemId(accumulator.itemIdToFile);
+          setDiffStats({ ...accumulator.diffStats });
+          setTreeSource(snapshotCodeViewTreeSource(accumulator));
+        };
+
         const publishPendingData = async () => {
           if (pendingPublishFileCount === 0 || !isCurrentRequest()) {
             return;
           }
 
           pendingPublishFileCount = 0;
-          hasPublishedItems = true;
           lastPublishTime = performance.now();
           const pendingItems = takePendingCodeViewItems(accumulator);
-          const viewer = viewerRef.current;
           if (!hasPublishedInitialItems) {
             hasPublishedInitialItems = true;
+            publishTreeSource();
             setInitialItems(pendingItems);
-          } else if (viewer != null) {
-            viewer.addItems(pendingItems);
           } else {
-            setInitialItems((prev) => [...prev, ...pendingItems]);
+            const viewer = viewerRef.current;
+            if (viewer != null) {
+              viewer.addItems(pendingItems);
+            } else {
+              setInitialItems((prev) => [...prev, ...pendingItems]);
+            }
           }
           await yieldToBrowser();
           lastWorkYieldTime = performance.now();
@@ -216,7 +230,6 @@ export function usePatchLoader({
 
           const elapsed = performance.now() - lastPublishTime;
           if (
-            hasPublishedItems &&
             pendingPublishFileCount < STREAM_PUBLISH_FILE_BATCH_SIZE &&
             elapsed < STREAM_PUBLISH_INTERVAL_MS
           ) {
@@ -224,18 +237,6 @@ export function usePatchLoader({
           }
 
           await publishPendingData();
-        };
-        const publishTreeSource = () => {
-          if (pendingTreePublishFileCount === 0 || !isCurrentRequest()) {
-            return;
-          }
-
-          pendingTreePublishFileCount = 0;
-          hasPublishedTree = true;
-          lastTreePublishTime = performance.now();
-          setCommentFileByItemId(accumulator.itemIdToFile);
-          setDiffStats({ ...accumulator.diffStats });
-          setTreeSource(snapshotCodeViewTreeSource(accumulator));
         };
         const publishTreeSourceIfNeeded = () => {
           if (pendingTreePublishFileCount === 0) {
