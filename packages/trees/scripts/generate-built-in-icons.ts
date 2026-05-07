@@ -38,6 +38,7 @@ const TOKEN_DEFS: Record<string, TokenDef> = {
   database: { icon: 'server-duo', tier: 'standard' },
   default: { icon: 'file-duo', tier: 'standard' },
   bash: { icon: 'bash-duo', tier: 'standard' },
+  c: { icon: 'lang-c', tier: 'standard' },
   css: { icon: 'lang-css-duo', tier: 'standard' },
   font: { icon: 'font', tier: 'standard' },
   git: { icon: 'git', tier: 'standard' },

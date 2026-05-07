@@ -5,7 +5,7 @@
     "": {
       "name": "@pierre/js",
       "dependencies": {
-        "@pierre/vscode-icons": "^0.0.7",
+        "@pierre/vscode-icons": "^0.0.8",
       },
       "devDependencies": {
         "@pierre/icons": "^0.4.0",
@@ -104,7 +104,7 @@
     },
     "packages/diffs": {
       "name": "@pierre/diffs",
-      "version": "1.1.19",
+      "version": "1.1.20",
       "dependencies": {
         "@pierre/theme": "catalog:",
         "@shikijs/transformers": "^3.0.0",
@@ -261,7 +261,7 @@
     "@pierre/icons": "0.4.0",
     "@pierre/storage": "0.0.10",
     "@pierre/theme": "0.0.28",
-    "@pierre/vscode-icons": "0.0.7",
+    "@pierre/vscode-icons": "0.0.8",
     "@playwright/test": "1.51.1",
     "@radix-ui/react-avatar": "1.1.10",
     "@radix-ui/react-dialog": "1.1.15",
@@ -655,7 +655,7 @@
 
     "@pierre/truncate": ["@pierre/truncate@workspace:packages/truncate"],
 
-    "@pierre/vscode-icons": ["@pierre/vscode-icons@0.0.7", "", {}, "sha512-mBwKgEUFKH6HtBMUuouor2CMWcY+EwVCkXKYHN5BehjbnUbAuqi9LVhq9xWpn6odZ4m3UgpDhjB/H8p8dWSugg=="],
+    "@pierre/vscode-icons": ["@pierre/vscode-icons@0.0.8", "", {}, "sha512-wkPLLtyL8GkKxEpS07EOsp+f0WkRcJVj8nFt3kx6J6Ws8BvliKfmzmPqFvCWItXSTVrc+MAnlObtexJKmuuGvg=="],
 
     "@playwright/test": ["@playwright/test@1.51.1", "", { "dependencies": { "playwright": "1.51.1" }, "bin": { "playwright": "cli.js" } }, "sha512-nM+kEaTSAoVlXmMPH10017vn3FSiFqr/bh4fKg9vmAdMfd9SDqRZNvPSiAHADc/itWak+qPvMPZQOPwCBW7k7Q=="],
 

@@ -58,6 +58,7 @@
       --trees-file-icon-color-bootstrap
       --trees-file-icon-color-browserslist
       --trees-file-icon-color-bun
+      --trees-file-icon-color-c
       --trees-file-icon-color-claude
       --trees-file-icon-color-css
       --trees-file-icon-color-database
@@ -357,6 +358,10 @@
     --trees-file-icon-color-bun: var(
       --trees-file-icon-color,
       var(--trees-icon-mauve)
+    );
+    --trees-file-icon-color-c: var(
+      --trees-file-icon-color,
+      var(--trees-icon-blue)
     );
     --trees-file-icon-color-claude: var(
       --trees-file-icon-color,
@@ -966,6 +971,9 @@
     }
     [data-icon-token='bun'] {
       color: var(--trees-file-icon-color-bun);
+    }
+    [data-icon-token='c'] {
+      color: var(--trees-file-icon-color-c);
     }
     [data-icon-token='claude'] {
       color: var(--trees-file-icon-color-claude);

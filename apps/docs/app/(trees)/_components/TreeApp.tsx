@@ -18,7 +18,6 @@ import type {
 } from '@pierre/trees';
 import {
   createFileTreeIconResolver,
-  getBuiltInFileIconColor,
   getBuiltInSpriteSheet,
 } from '@pierre/trees';
 import {
@@ -976,14 +975,10 @@ function TreeAppTabIcon({
   const viewBox =
     icon.viewBox ??
     `0 0 ${String(icon.width ?? 16)} ${String(icon.height ?? 16)}`;
-  const builtInColor =
-    icon.token != null ? getBuiltInFileIconColor(icon.token) : undefined;
   const colorStyle =
     colored && icon.token != null
       ? {
-          color:
-            builtInColor ??
-            'var(--trees-fg-muted, light-dark(#84848a, #adadb1))',
+          color: `var(--trees-file-icon-color-${icon.token}, var(--trees-file-icon-color))`,
         }
       : undefined;
 
