@@ -32,6 +32,7 @@ interface ReviewUIProps {
 }
 
 export function ReviewUI({ initialUrl }: ReviewUIProps) {
+  const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
@@ -123,9 +124,8 @@ export function ReviewUI({ initialUrl }: ReviewUIProps) {
     },
     []
   );
-  const workerPool = useWorkerPool();
   const viewerAvailable =
-    (workerPool == null || workerPool.isInitialized()) &&
+    isWorkerPoolReadyOrDisable &&
     (loadState === 'ready' ||
       (loadState === 'streaming' && initialItems.length > 0));
 
@@ -187,6 +187,26 @@ export function ReviewUI({ initialUrl }: ReviewUIProps) {
       )}
     </ReviewGrid>
   );
+}
+
+function useIsWorkerPoolReadyOrDisabled() {
+  const workerPool = useWorkerPool();
+  const [isReady, setIsReady] = useState(
+    () => workerPool?.isInitialized() ?? true
+  );
+  const isReadyRef = useRef(isReady);
+  useEffect(() => {
+    // The callback will always be fired immediately with the new state, so we
+    // don't need to check for it in the effect
+    return workerPool?.subscribeToStatChanges((stats) => {
+      const isReady = stats.managerState === 'initialized';
+      if (isReady !== isReadyRef.current) {
+        setIsReady(isReady);
+        isReadyRef.current = isReady;
+      }
+    });
+  }, [workerPool]);
+  return isReady;
 }
 
 interface ReviewGridProps {
