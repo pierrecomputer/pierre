@@ -10,51 +10,69 @@ const NON_DIFF_RESPONSE_MESSAGE = 'GitHub did not return a diff for this URL.';
 const NON_WHITESPACE_PATTERN = /\S/;
 const RAW_GITHUB_DIFF_PATH_PATTERN =
   /^\/raw\/[^/]+\/[^/]+\/pull\/[^/]+\.(?:diff|patch)$/;
+const LOCAL_PATCH_GITHUB_PATH = '/nodejs/node/pull/59805';
+const LOCAL_PATCH_FIXTURE = 'larg.patch';
+// 'smol.patch'
+const HIDDEN_PATCH_DOMAIN_RULES = [
+  { domainRoot: 'tangled.org', defaultExtension: '.patch' },
+] as const;
 
-// Validates the GitHub-relative path, normalizes it to a raw diff URL, and
+interface ResolvedPatchRequest {
+  fixture?: string;
+  patchURL: string;
+  sourceURL?: string;
+}
+
+// Validates the accepted path or URL, normalizes it to a raw diff URL, and
 // returns a streaming proxy response so the client can render files as they
 // arrive instead of waiting for the full patch text.
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const path = searchParams.get('path');
+  const domain = searchParams.get('domain');
+  const url = searchParams.get('url');
 
-  if (!path) {
-    return createTextResponse('Path parameter is required', { status: 400 });
-  }
-
-  // Override to fetch default patch without requiring GitHub, to help avoid
-  // abuse and potential rate limits
-  if (path === '/nodejs/node/pull/59805') {
-    try {
-      const localPatchPath = join(
-        process.cwd(),
-        'app/api/gh/diff',
-        'larg.patch'
-        // 'smol.patch'
-      );
-      const patchContent = await readFile(localPatchPath, 'utf-8');
-      return createPatchTextResponse(patchContent, { sourceURL: 'local' });
-    } catch (error) {
-      return createTextResponse(
-        `Failed to read local patch: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        { status: 500 }
-      );
-    }
+  if (path == null && url == null) {
+    return createTextResponse('Path or URL parameter is required', {
+      status: 400,
+    });
   }
 
   try {
     // The client normally sends only the GitHub-relative path, but GitHub also
-    // exposes raw PR diffs through patch-diff.githubusercontent.com. Keep this
-    // as a narrow allowlist so the route cannot become a general URL fetcher.
-    const patchURL = resolvePatchURL(path);
-    if (patchURL == null) {
+    // exposes raw PR diffs through patch-diff.githubusercontent.com. Tangled
+    // paths use an explicit domain query parameter and are normalized to their
+    // patch endpoint.
+    const patchRequest = resolvePatchRequest(path, domain, url);
+    if (patchRequest == null) {
       return createTextResponse('Invalid GitHub patch URL format', {
         status: 400,
       });
     }
 
-    return createPatchStreamResponse(patchURL, request.signal, {
-      sourceURL: patchURL,
+    // Override to fetch default patch without requiring GitHub, to help avoid
+    // abuse and potential rate limits.
+    if (patchRequest.fixture != null) {
+      try {
+        const localPatchPath = join(
+          process.cwd(),
+          'app/api/diff',
+          patchRequest.fixture
+        );
+        const patchContent = await readFile(localPatchPath, 'utf-8');
+        return createPatchTextResponse(patchContent, {
+          sourceURL: patchRequest.sourceURL ?? patchRequest.patchURL,
+        });
+      } catch (error) {
+        return createTextResponse(
+          `Failed to read local patch: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          { status: 500 }
+        );
+      }
+    }
+
+    return createPatchStreamResponse(patchRequest.patchURL, request.signal, {
+      sourceURL: patchRequest.sourceURL ?? patchRequest.patchURL,
     });
   } catch (error) {
     return createTextResponse(
@@ -64,12 +82,33 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Resolves the accepted GitHub URL shapes to the exact upstream URL to fetch.
-// Most callers send a GitHub-relative path, but this also permits GitHub's raw
-// PR diff host without opening the route up to arbitrary domains.
-function resolvePatchURL(input: string): string | undefined {
+// Resolves the accepted URL shapes to the exact upstream URL to fetch. Most
+// callers send a GitHub-relative path, but this also permits GitHub's raw PR
+// diff host and Tangled patch URLs without becoming a general URL fetcher.
+function resolvePatchRequest(
+  path: string | null,
+  domain: string | null,
+  url: string | null
+): ResolvedPatchRequest | undefined {
+  if (url != null) {
+    return resolvePatchURLInput(url);
+  }
+
+  if (path == null) {
+    return undefined;
+  }
+
+  if (domain != null) {
+    const patchURL = resolveDomainPatchURL(domain, path);
+    return patchURL == null ? undefined : { patchURL };
+  }
+
+  return resolvePatchURLInput(path);
+}
+
+function resolvePatchURLInput(input: string): ResolvedPatchRequest | undefined {
   if (input.startsWith('/')) {
-    return resolveGitHubPath(input);
+    return resolveGitHubPatchRequest(input);
   }
 
   let parsedURL: URL;
@@ -84,14 +123,75 @@ function resolvePatchURL(input: string): string | undefined {
   }
 
   if (parsedURL.hostname === GITHUB_HOST) {
-    return resolveGitHubPath(parsedURL.pathname);
+    return resolveGitHubPatchRequest(parsedURL.pathname);
   }
 
   if (
     parsedURL.hostname === GITHUB_RAW_DIFF_HOST &&
     RAW_GITHUB_DIFF_PATH_PATTERN.test(parsedURL.pathname)
   ) {
-    return parsedURL.href;
+    return { patchURL: parsedURL.href };
+  }
+
+  const domainPatchURL = resolveDomainPatchURL(
+    parsedURL.hostname,
+    parsedURL.pathname
+  );
+  return domainPatchURL == null ? undefined : { patchURL: domainPatchURL };
+}
+
+function resolveGitHubPatchRequest(
+  path: string
+): ResolvedPatchRequest | undefined {
+  if (path === LOCAL_PATCH_GITHUB_PATH) {
+    return {
+      fixture: LOCAL_PATCH_FIXTURE,
+      patchURL: 'local',
+      sourceURL: 'local',
+    };
+  }
+
+  const patchURL = resolveGitHubPath(path);
+  return patchURL == null ? undefined : { patchURL };
+}
+
+function resolveDomainPatchURL(
+  domain: string,
+  path: string
+): string | undefined {
+  const domainRule = getHiddenPatchDomainRule(domain);
+  if (domainRule == null) {
+    return undefined;
+  }
+
+  const pathWithLeadingSlash = path.startsWith('/') ? path : `/${path}`;
+  const url = new URL(`https://${domainRule.hostname}`);
+  const normalizedPath = pathWithLeadingSlash.replace(/\/+$/, '');
+  url.pathname = normalizedPath === '' ? '/' : normalizedPath;
+  if (!url.pathname.endsWith(domainRule.defaultExtension)) {
+    url.pathname += domainRule.defaultExtension;
+  }
+
+  return url.href;
+}
+
+function getHiddenPatchDomainRule(
+  domain: string
+): { defaultExtension: string; hostname: string } | undefined {
+  let hostname: string;
+  try {
+    hostname = new URL(`https://${domain}`).hostname;
+  } catch {
+    return undefined;
+  }
+
+  for (const domainRule of HIDDEN_PATCH_DOMAIN_RULES) {
+    if (
+      hostname === domainRule.domainRoot ||
+      hostname.endsWith(`.${domainRule.domainRoot}`)
+    ) {
+      return { defaultExtension: domainRule.defaultExtension, hostname };
+    }
   }
 
   return undefined;
