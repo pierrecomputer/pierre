@@ -32,7 +32,6 @@ import type {
   CodeViewSavedCommentItem,
   CommentMetadata,
 } from './types';
-import { getGitHubPath } from './utils';
 
 const STREAM_PUBLISH_FILE_BATCH_SIZE = 25;
 const STREAM_PUBLISH_INTERVAL_MS = 100;
@@ -41,8 +40,9 @@ const STREAM_TREE_PUBLISH_FILE_BATCH_SIZE = 1_000;
 const STREAM_TREE_PUBLISH_INTERVAL_MS = 1_000;
 
 interface UsePatchLoaderOptions {
-  initialUrl: string;
+  domain?: string;
   onLoadStart?(): void;
+  path: string;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
 }
 
@@ -60,8 +60,9 @@ interface UsePatchLoaderResult {
 }
 
 export function usePatchLoader({
-  initialUrl,
+  domain,
   onLoadStart,
+  path,
   viewerRef,
 }: UsePatchLoaderOptions): UsePatchLoaderResult {
   const [initialItems, setInitialItems] = useState<
@@ -86,18 +87,12 @@ export function usePatchLoader({
   const requestIdRef = useRef(0);
 
   useEffect(() => {
-    const githubPath = getGitHubPath(initialUrl);
-    if (githubPath == null) {
-      setInitialItems([]);
-      setTreeSource(null);
-      setDiffStats(null);
-      setCommentFileByItemId(null);
-      setCommentSections([]);
-      setErrorMessage('Enter a valid GitHub URL.');
-      setLoadState('error');
-      return;
+    const patchRequestKey =
+      domain == null || domain === '' ? path : `${domain}${path}`;
+    const patchSearchParams = new URLSearchParams({ path });
+    if (domain != null && domain !== '') {
+      patchSearchParams.set('domain', domain);
     }
-    const resolvedGitHubPath = githubPath;
 
     const controller = new AbortController();
     const requestId = ++requestIdRef.current;
@@ -116,7 +111,7 @@ export function usePatchLoader({
 
     async function loadPatch() {
       try {
-        const cacheKeyPrefix = encodeURIComponent(resolvedGitHubPath);
+        const cacheKeyPrefix = encodeURIComponent(patchRequestKey);
         async function commitFullPatch(patchContent: string) {
           if (!isCurrentRequest()) {
             return;
@@ -127,10 +122,7 @@ export function usePatchLoader({
           if (!isCurrentRequest()) {
             return;
           }
-          const loadedData = buildCodeViewData(
-            patchContent,
-            resolvedGitHubPath
-          );
+          const loadedData = buildCodeViewData(patchContent, patchRequestKey);
           if (!isCurrentRequest()) {
             return;
           }
@@ -144,10 +136,10 @@ export function usePatchLoader({
         }
 
         console.time('--     request time');
-        const response = await fetch(
-          `/api/gh/diff?path=${encodeURIComponent(resolvedGitHubPath)}`,
-          { cache: 'no-store', signal: controller.signal }
-        );
+        const response = await fetch(`/api/diff?${patchSearchParams}`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        });
         console.timeEnd('--     request time');
 
         // This only catches route setup errors. GitHub fetch failures are
@@ -329,7 +321,7 @@ export function usePatchLoader({
     return () => {
       controller.abort();
     };
-  }, [initialUrl, loadAttempt, onLoadStart, viewerRef]);
+  }, [domain, loadAttempt, onLoadStart, path, viewerRef]);
 
   const retryLoad = useCallback(() => {
     setLoadAttempt((attempt) => attempt + 1);

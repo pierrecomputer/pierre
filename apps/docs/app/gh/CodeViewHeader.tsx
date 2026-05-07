@@ -28,7 +28,6 @@ import type {
 } from './types';
 import {
   createCodeViewFileTreeSource,
-  getGitHubPath,
   mapChangeTypeToGitStatus,
 } from './utils';
 import { Button } from '@/components/ui/button';
@@ -86,20 +85,18 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   const [url, setURL] = useState(DEFAULT_PR_URL);
   const renderPullRequest = useStableCallback(async (input: string) => {
     const normalizedURL = input.trim();
-    const githubPath = getGitHubPath(normalizedURL);
-    if (githubPath == null) {
+    if (normalizedURL.length === 0) {
       console.error('Invalid URL', normalizedURL);
       return undefined;
     }
+    const patchSearchParams = new URLSearchParams({ url: normalizedURL });
 
     setFetching(true);
     lastLoadedURLRef.current = normalizedURL;
 
     try {
       console.time('--     request time');
-      const response = await fetch(
-        `/api/gh/diff?path=${encodeURIComponent(githubPath)}`
-      );
+      const response = await fetch(`/api/diff?${patchSearchParams}`);
       console.timeEnd('--     request time');
 
       // This endpoint opens a local stream before GitHub responds, so this
@@ -119,7 +116,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
       const parsedPatches = parsePatchFiles(
         patchContent,
         // Use the url as a cache key
-        encodeURIComponent(githubPath)
+        encodeURIComponent(normalizedURL)
       );
       console.timeEnd('--  parsing patches');
 
