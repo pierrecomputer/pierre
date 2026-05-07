@@ -19,7 +19,6 @@ import {
   memo,
   type SetStateAction,
   useEffect,
-  useLayoutEffect,
   useState,
   useTransition,
 } from 'react';
@@ -82,17 +81,6 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   const [isPending, startTransition] = useTransition();
   const [url, setURL] = useState(initialUrl);
   const busy = isPending || loading;
-  /** Radix `align` is not CSS-breakpoint aware; mirror Tailwind `md` (768px). */
-  const [viewOptionsMenuAlign, setViewOptionsMenuAlign] = useState<
-    'start' | 'end'
-  >('start');
-  useLayoutEffect(() => {
-    const media = window.matchMedia('(min-width: 768px)');
-    const sync = () => setViewOptionsMenuAlign(media.matches ? 'end' : 'start');
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
 
   useEffect(() => {
@@ -119,7 +107,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   return (
     <div
       className={cn(
-        'z-10 m-2 mb-0 contain-layout contain-paint flex flex-wrap md:flex-nowrap border-border bg-background items-center gap-2.5 rounded-xl border p-3 md:py-2 shadow-xs',
+        'z-10 md:m-2 md:mb-0 contain-layout contain-paint flex flex-wrap md:flex-nowrap border-[rgb(0_0_0_/0.1)] bg-background bg-clip-padding items-center gap-2.5 md:rounded-xl border-b md:border p-3 md:py-2 shadow-xs',
         className
       )}
     >
@@ -133,11 +121,11 @@ export const CodeViewHeader = memo(function CodeViewHeader({
         /
       </span>
       <form
-        className="order-last flex w-full flex-col gap-2 md:order-none md:flex-row md:gap-2"
+        className="order-last flex w-full gap-2 md:order-none md:gap-2"
         onSubmit={handleSubmit}
       >
         <input
-          className="text-md focus:bg-accent block h-8 w-full min-w-[220px] rounded-md px-2 text-center focus-visible:outline-none md:h-9 md:text-left"
+          className="text-md focus:bg-accent block h-9 w-full min-w-[220px] rounded-md px-2 text-center focus-visible:outline-none md:text-left"
           value={url}
           onChange={({ currentTarget }) => setURL(currentTarget.value)}
           placeholder="e.g. https://github.com/nodejs/node/pull/59805"
@@ -146,7 +134,6 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           type="submit"
           variant="default"
           size="icon"
-          className="hidden md:flex"
           aria-busy={busy || undefined}
           aria-label={busy ? 'Loading diff' : 'Submit'}
         >
@@ -158,7 +145,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
         </Button>
       </form>
       <div className="bg-border mx-1 hidden h-5 w-px md:block" />
-      <div className="flex w-full items-center gap-2 md:w-auto">
+      <div className="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end">
         <Button
           type="button"
           variant="muted"
@@ -197,7 +184,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
               <IconGearFill className="size-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align={viewOptionsMenuAlign} className="w-56">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem
               className="cursor-default p-0"
               onSelect={(event) => event.preventDefault()}

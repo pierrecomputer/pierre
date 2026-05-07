@@ -59,7 +59,7 @@ function NavLink({ href, basePath, children }: NavLinkProps) {
   );
 }
 
-// Order in which we render cross-site links in the desktop nav. Diffshub is
+// Order in which we render cross-site links in the desktop nav. DiffsHub is
 // intentionally last so the long-standing Diffs↔Trees pair stays first when
 // viewed from either of those two sites.
 const OTHER_PRODUCT_IDS: ProductId[] = ['diffs', 'trees', 'diffshub'];
