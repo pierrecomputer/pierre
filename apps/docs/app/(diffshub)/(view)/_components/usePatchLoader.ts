@@ -1,7 +1,12 @@
 'use client';
 
-import { type CodeViewItem, processFile } from '@pierre/diffs';
-import type { CodeViewHandle } from '@pierre/diffs/react';
+import {
+  areSelectionsEqual,
+  type CodeViewItem,
+  type CodeViewLineSelection,
+  processFile,
+} from '@pierre/diffs';
+import { type CodeViewHandle, useStableCallback } from '@pierre/diffs/react';
 import {
   type Dispatch,
   type RefObject,
@@ -22,6 +27,11 @@ import {
 import type { ViewerLoadState } from './constants';
 import { getPatchTreePathPrefix } from './gitPatchMetadata';
 import {
+  type CodeViewLineHashTarget,
+  formatCodeViewLineHash,
+  parseCodeViewLineHash,
+} from './lineHash';
+import {
   getStreamedPatchMetadata,
   streamGitPatchFiles,
 } from './streamGitPatchFiles';
@@ -41,7 +51,7 @@ const STREAM_TREE_PUBLISH_INTERVAL_MS = 1_000;
 
 interface UsePatchLoaderOptions {
   domain?: string;
-  onLoadStart?(): void;
+  onLoadStart(): void;
   path: string;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
 }
@@ -53,6 +63,8 @@ interface UsePatchLoaderResult {
   errorMessage: string | null;
   initialItems: CodeViewItem<CommentMetadata>[];
   loadState: ViewerLoadState;
+  onLineLinkChange(selection: CodeViewLineSelection | null): void;
+  onViewerReady(): void;
   retryLoad(): void;
   setCommentSections: Dispatch<SetStateAction<CodeViewSavedCommentItem[]>>;
   treeSource: CodeViewFileTreeSource | null;
@@ -85,6 +97,42 @@ export function usePatchLoader({
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [viewerKey, setViewerKey] = useState(0);
   const requestIdRef = useRef(0);
+  const appliedLineHashKeyRef = useRef<string | null>(null);
+  const viewerKeyRef = useRef(0);
+
+  const tryApplyLineHashTarget = useStableCallback(() => {
+    const { hash } = window.location;
+    const target = parseCodeViewLineHash(hash);
+    if (target == null) {
+      return;
+    }
+
+    const applyKey = getLineHashApplyKey(viewerKeyRef.current, hash);
+    if (appliedLineHashKeyRef.current === applyKey) {
+      return;
+    }
+
+    const viewer = viewerRef.current;
+    if (viewer == null) {
+      return;
+    }
+
+    if (applyCodeViewLineHashTarget(viewer, target)) {
+      appliedLineHashKeyRef.current = applyKey;
+    }
+  });
+
+  const handleLineLinkChange = useStableCallback(
+    (selection: CodeViewLineSelection | null) => {
+      const nextHash =
+        selection == null ? null : formatCodeViewLineHash(selection);
+      appliedLineHashKeyRef.current =
+        nextHash == null
+          ? null
+          : getLineHashApplyKey(viewerKeyRef.current, nextHash);
+      replaceLocationHash(nextHash);
+    }
+  );
 
   useEffect(() => {
     const patchRequestKey =
@@ -99,13 +147,15 @@ export function usePatchLoader({
     const isCurrentRequest = () =>
       requestIdRef.current === requestId && !controller.signal.aborted;
 
+    viewerKeyRef.current = requestId;
+    appliedLineHashKeyRef.current = null;
     setViewerKey(requestId);
     setInitialItems([]);
     setTreeSource(null);
     setDiffStats(null);
     setCommentFileByItemId(null);
     setCommentSections([]);
-    onLoadStart?.();
+    onLoadStart();
     setErrorMessage(null);
     setLoadState('fetching');
 
@@ -133,6 +183,10 @@ export function usePatchLoader({
           setDiffStats(loadedData.diffStats);
           setInitialItems(loadedData.items);
           setLoadState('ready');
+          await yieldToBrowser();
+          if (isCurrentRequest()) {
+            tryApplyLineHashTarget();
+          }
         }
 
         console.time('--     request time');
@@ -212,6 +266,9 @@ export function usePatchLoader({
             }
           }
           await yieldToBrowser();
+          if (isCurrentRequest()) {
+            tryApplyLineHashTarget();
+          }
           lastWorkYieldTime = performance.now();
         };
 
@@ -321,7 +378,22 @@ export function usePatchLoader({
     return () => {
       controller.abort();
     };
-  }, [domain, loadAttempt, onLoadStart, path, viewerRef]);
+  }, [
+    domain,
+    loadAttempt,
+    onLoadStart,
+    path,
+    tryApplyLineHashTarget,
+    viewerRef,
+  ]);
+
+  useEffect(() => {
+    window.addEventListener('hashchange', tryApplyLineHashTarget);
+    tryApplyLineHashTarget();
+    return () => {
+      window.removeEventListener('hashchange', tryApplyLineHashTarget);
+    };
+  }, [tryApplyLineHashTarget]);
 
   const retryLoad = useCallback(() => {
     setLoadAttempt((attempt) => attempt + 1);
@@ -334,11 +406,72 @@ export function usePatchLoader({
     errorMessage,
     initialItems,
     loadState,
+    onLineLinkChange: handleLineLinkChange,
+    onViewerReady: tryApplyLineHashTarget,
     retryLoad,
     setCommentSections,
     treeSource,
     viewerKey,
   };
+}
+
+function getLineHashApplyKey(viewerKey: number, hash: string): string {
+  return `${viewerKey}:${hash}`;
+}
+
+function applyCodeViewLineHashTarget(
+  viewer: CodeViewHandle<CommentMetadata>,
+  target: CodeViewLineHashTarget
+): boolean {
+  const item = viewer.getItem(target.itemId);
+  if (item == null) {
+    return false;
+  }
+
+  const selectedLines = viewer.getSelectedLines();
+  if (
+    selectedLines?.id === target.itemId &&
+    areSelectionsEqual(selectedLines.range, target.range)
+  ) {
+    return true;
+  }
+
+  if (item.collapsed === true) {
+    item.collapsed = false;
+    item.version = getNextItemVersion(item);
+    if (!viewer.updateItem(item)) {
+      return false;
+    }
+    viewer.getInstance()?.render(true);
+  }
+
+  viewer.setSelectedLines({ id: target.itemId, range: target.range });
+  viewer.scrollTo({
+    type: 'range',
+    id: target.itemId,
+    range: target.range,
+    align: 'center',
+    behavior: 'instant',
+  });
+  return true;
+}
+
+function getNextItemVersion(item: { version?: string | number }): number {
+  return typeof item.version === 'number' ? item.version + 1 : 1;
+}
+
+function replaceLocationHash(hash: string | null): void {
+  const { pathname, search } = window.location;
+  const nextHash = hash ?? '';
+  if (window.location.hash === nextHash) {
+    return;
+  }
+
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${pathname}${search}${nextHash}`
+  );
 }
 
 function yieldToBrowser(): Promise<void> {

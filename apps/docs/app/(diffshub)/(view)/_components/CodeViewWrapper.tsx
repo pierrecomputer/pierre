@@ -84,6 +84,7 @@ interface CodeViewWrapperProps {
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
   initialItems: CodeViewItem<CommentMetadata>[];
   onLineLinkChange(selection: CodeViewLineSelection | null): void;
+  onViewerReady(): void;
 }
 
 export const CodeViewWrapper = memo(function CodeViewWrapper({
@@ -99,6 +100,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   viewerRef,
   initialItems,
   onLineLinkChange,
+  onViewerReady,
 }: CodeViewWrapperProps) {
   const nextCommentKeyRef = useRef(0);
   const activeDraftRef = useRef<ActiveDraftComment | null>(null);
@@ -128,6 +130,15 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         onLineLinkChange(null);
       } else {
         onLineLinkChange({ id: item.id, range });
+      }
+    }
+  );
+
+  const handleViewerRef = useStableCallback(
+    (viewer: CodeViewHandle<CommentMetadata> | null) => {
+      viewerRef.current = viewer;
+      if (viewer != null) {
+        onViewerReady();
       }
     }
   );
@@ -441,7 +452,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   );
   return (
     <CodeView<CommentMetadata>
-      ref={viewerRef}
+      ref={handleViewerRef}
       containerRef={scrollRef}
       initialItems={initialItems}
       className={cn(
