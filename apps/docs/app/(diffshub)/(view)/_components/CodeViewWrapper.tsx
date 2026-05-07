@@ -238,6 +238,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       }
 
       setSelectedLines(null);
+      onLineLinkChange(null);
       if (removedAnnotation != null && isSavedAnnotation(removedAnnotation)) {
         onCommentDeleted({ itemId, key });
       }
@@ -316,6 +317,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       }
 
       setSelectedLines(null);
+      onLineLinkChange(null);
       onCommentSaved({
         author: 'you',
         itemId,
