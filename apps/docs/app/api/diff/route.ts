@@ -166,7 +166,8 @@ function resolveDomainPatchURL(
 
   const pathWithLeadingSlash = path.startsWith('/') ? path : `/${path}`;
   const url = new URL(`https://${domainRule.hostname}`);
-  url.pathname = pathWithLeadingSlash;
+  const normalizedPath = pathWithLeadingSlash.replace(/\/+$/, '');
+  url.pathname = normalizedPath === '' ? '/' : normalizedPath;
   if (!url.pathname.endsWith(domainRule.defaultExtension)) {
     url.pathname += domainRule.defaultExtension;
   }

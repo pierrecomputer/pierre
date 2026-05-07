@@ -102,7 +102,9 @@ bun run format
 ```
 
 **Important:** Always run `bun run format` from the monorepo root after making
-changes to ensure consistent formatting.
+changes to ensure consistent formatting. For code changes, verification is not
+complete until you have also run `bun run lint` from the monorepo root and the
+relevant `bun run tsc` typecheck.
 
 - Always preserve trailing newlines at the end of files.
 
