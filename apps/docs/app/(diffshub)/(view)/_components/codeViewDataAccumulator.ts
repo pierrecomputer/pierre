@@ -67,7 +67,10 @@ export function appendFileDiffToCodeViewData(
     diffStats.deletedLines += hunk.deletionLines;
   }
 
-  const id = `${accumulator.fileIndex++}:${fileDiff.name}`;
+  const id = `${treePathPrefix != null ? treePathPrefix + '/' : ''}${fileDiff.name}`;
+  // Streaming cache keys read fileIndex before this append, so keep advancing
+  // it even though item ids are now path-based.
+  accumulator.fileIndex++;
   const fileOrder = accumulator.items.length;
 
   const item: CodeViewItem<CommentMetadata> = {

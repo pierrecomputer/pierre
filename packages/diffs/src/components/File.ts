@@ -16,7 +16,6 @@ import {
   InteractionManager,
   type InteractionManagerBaseOptions,
   pluckInteractionOptions,
-  type SelectedLineRange,
   type SelectionWriteOptions,
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
@@ -30,6 +29,7 @@ import type {
   PrePropertiesConfig,
   RenderFileMetadata,
   RenderRange,
+  SelectedLineRange,
   ThemeTypes,
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';

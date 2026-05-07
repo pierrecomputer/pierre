@@ -454,6 +454,13 @@ export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;
 export type AnnotationSide = 'deletions' | 'additions';
 export type SelectionSide = 'deletions' | 'additions';
 
+export interface SelectedLineRange {
+  start: number;
+  side?: SelectionSide;
+  end: number;
+  endSide?: SelectionSide;
+}
+
 type OptionalMetadata<T> = T extends undefined
   ? { metadata?: undefined }
   : { metadata: T };
@@ -507,6 +514,15 @@ export interface CodeViewLineScrollTarget {
   behavior?: CodeViewScrollBehavior;
 }
 
+export interface CodeViewRangeScrollTarget {
+  type: 'range';
+  id: string;
+  range: SelectedLineRange;
+  align?: 'start' | 'center' | 'end' | 'nearest';
+  offset?: number;
+  behavior?: CodeViewScrollBehavior;
+}
+
 export interface NumericScrollLineAnchor {
   lineNumber: number;
   top: number;
@@ -524,6 +540,7 @@ export interface CodeViewItemScrollTarget {
 export type CodeViewScrollTarget =
   | CodeViewPositionScrollTarget
   | CodeViewLineScrollTarget
+  | CodeViewRangeScrollTarget
   | CodeViewItemScrollTarget;
 
 export type MergeConflictResolution = 'current' | 'incoming' | 'both';
