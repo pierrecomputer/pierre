@@ -2,81 +2,60 @@
 
 import { IconArrow, IconRefresh } from '@pierre/icons';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useState } from 'react';
+import {
+  type FormEvent,
+  memo,
+  useCallback,
+  useState,
+  useTransition,
+} from 'react';
 
-import { setCachedPatchText } from '../(view)/_components/patchCache';
-import { getPullRequestPath } from '../(view)/_components/utils';
+import { getGitHubPath } from '../(view)/_components/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 const DEFAULT_PR_URL = 'https://github.com/nodejs/node/pull/59805';
 
-// Submitting the home form runs the patch fetch up front so users see a
-// "Fetching..." state on `/` instead of an empty viewer shell on the diff page.
-// Once the patch text is in hand we stash it in the in-memory cache and
-// navigate; CodeViewHeader reuses the cached text so the diff renders without
-// a second round trip.
-export function HomeFetchForm() {
+// Submitting the home form should move to the shareable viewer URL first. The
+// viewer route owns fetching and renders its own loading state there.
+export const HomeFetchForm = memo(function HomeFetchForm() {
   const router = useRouter();
-  const [submitting, setSubmitting] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setErrorMessage(null);
+  const handleSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setErrorMessage(null);
 
-    const formData = new FormData(event.currentTarget);
-    const urlField = formData.get('url');
-    const rawUrl = typeof urlField === 'string' ? urlField.trim() : '';
-    const prPath = getPullRequestPath(rawUrl);
-    if (prPath == null) {
-      setErrorMessage('Enter a valid GitHub pull request URL.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const response = await fetch(
-        `/api/fetch-pr-patch?path=${encodeURIComponent(prPath)}`
-      );
-      if (!response.ok) {
-        const detail = (await response.text()).trim();
-        throw new Error(
-          detail.length > 0 ? detail : `Request failed (${response.status}).`
-        );
+      const formData = new FormData(event.currentTarget);
+      const urlField = formData.get('url');
+      const rawUrl = typeof urlField === 'string' ? urlField.trim() : '';
+      const githubPath = getGitHubPath(rawUrl);
+      if (githubPath == null) {
+        setErrorMessage('Enter a valid GitHub URL.');
+        return;
       }
-      const patchText = await response.text();
-      setCachedPatchText(prPath, patchText);
-      // `prPath` is shaped like `/owner/repo/pull/<number>` (or with a
-      // trailing `.patch`), which is exactly the suffix the path-style
-      // viewer route expects. Strip `.patch` because the route's dynamic
-      // segment is just the PR number.
-      const cleanPrPath = prPath.replace(/\.patch$/, '');
-      router.push(cleanPrPath);
-    } catch (error) {
-      setSubmitting(false);
-      setErrorMessage(
-        error instanceof Error ? error.message : 'Failed to fetch the diff.'
-      );
-    }
-  }
+
+      startTransition(() => router.push(githubPath));
+    },
+    [router]
+  );
 
   return (
     <div className="my-5 space-y-2">
       <form
-        onSubmit={(event) => {
-          void handleSubmit(event);
-        }}
-        className="flex max-w-2xl gap-2"
+        onSubmit={handleSubmit}
+        className="flex max-w-2xl flex-col gap-2 sm:flex-row"
       >
         <Input
           type="url"
           name="url"
           inputSize="lg"
-          placeholder="Enter a GitHub pull request URL"
+          placeholder="Enter a GitHub URL"
           defaultValue={DEFAULT_PR_URL}
           required
-          disabled={submitting}
+          disabled={isPending}
           className="text-md bg-background h-11 rounded-lg sm:flex-1"
         />
         <Button
@@ -84,10 +63,10 @@ export function HomeFetchForm() {
           variant="default"
           size="icon"
           className="size-11 rounded-lg"
-          disabled={submitting}
-          aria-label={submitting ? 'Fetching…' : 'Fetch'}
+          disabled={isPending}
+          aria-label={isPending ? 'Opening…' : 'Fetch'}
         >
-          {submitting ? (
+          {isPending ? (
             <IconRefresh className="size-4 animate-spin" />
           ) : (
             <IconArrow className="size-4 rotate-180" />
@@ -101,4 +80,4 @@ export function HomeFetchForm() {
       )}
     </div>
   );
-}
+});

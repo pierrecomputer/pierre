@@ -29,8 +29,8 @@ theming, and interactivity for you.
 (`onMergeConflictResolve` / `onMergeConflictAction`).
 
 The `CodeView` tab above is the quick-start version. For the deeper guide on
-`setup`, `setItems`, `version`, selection, and `scrollTo`, see
-[CodeView](#code-view).
+`setup`, `setItems`, `addItems`, `getItem`, `updateItem`, selection, and
+`scrollTo`, see [CodeView](#code-view).
 
 ### Props
 
@@ -40,8 +40,9 @@ uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
 
 `CodeView` forwards many of those same options to each rendered item, while
 adding viewer-specific controls like `viewerMetrics`, `itemMetrics`,
-`stickyHeaders`, `pointerEventsOnScroll`, and `smoothScrollSettings`. See
-[CodeView](#code-view) for the dedicated guide.
+`stickyHeaders`, `pointerEventsOnScroll`, and `smoothScrollSettings`. Its class
+instance also exposes item-level methods such as `addItems`, `getItem`, and
+`updateItem`. See [CodeView](#code-view) for the dedicated guide.
 
 Header customization and collapsing behavior:
 

@@ -365,6 +365,8 @@ export type HunkSeparators =
 
 export type LineDiffTypes = 'word-alt' | 'word' | 'char' | 'none';
 
+export type DiffIndicators = 'classic' | 'bars' | 'none';
+
 export interface BaseCodeOptions {
   theme?: DiffsThemeNames | ThemesType;
   disableLineNumbers?: boolean;
@@ -388,7 +390,7 @@ export interface BaseCodeOptions {
 
 export interface BaseDiffOptions extends BaseCodeOptions {
   diffStyle?: 'unified' | 'split'; // split is default
-  diffIndicators?: 'classic' | 'bars' | 'none'; // bars is default
+  diffIndicators?: DiffIndicators; // bars is default
   disableBackground?: boolean;
   hunkSeparators?: HunkSeparators; // line-info is default
   expandUnchanged?: boolean; // false is default

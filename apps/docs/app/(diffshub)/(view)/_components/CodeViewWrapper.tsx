@@ -5,6 +5,7 @@ import {
   type CodeViewLineSelection,
   type CodeViewOptions,
   DEFAULT_THEMES,
+  type DiffIndicators,
   type DiffLineAnnotation,
   type LineAnnotation,
   type SelectedLineRange,
@@ -15,15 +16,7 @@ import {
   useStableCallback,
 } from '@pierre/diffs/react';
 import { IconChevronSm } from '@pierre/icons';
-import {
-  type Dispatch,
-  memo,
-  type RefObject,
-  type SetStateAction,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { memo, type RefObject, useMemo, useRef, useState } from 'react';
 
 import {
   CODE_VIEW_CUSTOM_CSS,
@@ -38,7 +31,6 @@ import type {
   CommentMetadata,
 } from './types';
 import {
-  incrementItemVersion,
   isDiffItem,
   isDraftAnnotation,
   isDraftMetadata,
@@ -52,6 +44,33 @@ const VIEWER_METRICS = {
   paddingTop: CODE_VIEW_PADDING_BLOCK + CODE_VIEW_MARGIN_OFFSET,
 };
 
+function getNextItemVersion(item: CodeViewItem<CommentMetadata>): number {
+  return typeof item.version === 'number' ? item.version + 1 : 1;
+}
+
+function updateViewerDiffItem(
+  viewer: CodeViewHandle<CommentMetadata>,
+  itemId: string,
+  updateItem: (item: CodeViewDiffItem<CommentMetadata>) => boolean
+): CodeViewDiffItem<CommentMetadata> | undefined {
+  const item = viewer.getItem(itemId);
+  if (item == null || !isDiffItem(item)) {
+    return undefined;
+  }
+
+  if (!updateItem(item)) {
+    return undefined;
+  }
+
+  item.version = getNextItemVersion(item);
+  return viewer.updateItem(item) ? item : undefined;
+}
+
+interface ActiveDraftComment {
+  itemId: string;
+  key: string;
+}
+
 interface CodeViewWrapperProps {
   className?: string;
   diffStyle: 'split' | 'unified';
@@ -59,11 +78,11 @@ interface CodeViewWrapperProps {
   onCommentSaved?(comment: CodeViewSavedCommentEvent): void;
   overflow: 'wrap' | 'scroll';
   showBackgrounds: boolean;
+  diffIndicators: DiffIndicators;
   lineNumbers: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
-  items: CodeViewItem<CommentMetadata>[];
-  setItems: Dispatch<SetStateAction<CodeViewItem<CommentMetadata>[]>>;
+  initialItems: CodeViewItem<CommentMetadata>[];
 }
 
 export const CodeViewWrapper = memo(function CodeViewWrapper({
@@ -73,13 +92,14 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   onCommentSaved,
   overflow,
   showBackgrounds,
+  diffIndicators,
   lineNumbers,
   scrollRef,
   viewerRef,
-  items,
-  setItems,
+  initialItems,
 }: CodeViewWrapperProps) {
   const nextCommentKeyRef = useRef(0);
+  const activeDraftRef = useRef<ActiveDraftComment | null>(null);
   const [selectedLines, setSelectedLines] =
     useState<CodeViewLineSelection | null>(null);
 
@@ -109,74 +129,72 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
 
       const lineNumber = range.end;
       const commentKey = `draft-${nextCommentKeyRef.current++}`;
-      setItems((prev) => {
-        const next = [...prev];
-        let changed = false;
+      const { current: viewer } = viewerRef;
+      if (viewer == null) {
+        return;
+      }
 
-        for (const item of next) {
-          if (item.type !== 'diff' || item.annotations == null) {
-            continue;
+      const draftAnnotation: DiffLineAnnotation<CommentMetadata> = {
+        side,
+        lineNumber,
+        metadata: {
+          kind: 'draft',
+          key: commentKey,
+          message: '',
+          range,
+        },
+      };
+
+      const { current: activeDraft } = activeDraftRef;
+      if (activeDraft != null && activeDraft.itemId !== itemId) {
+        updateViewerDiffItem(viewer, activeDraft.itemId, (item) => {
+          if (item.annotations == null) {
+            return false;
           }
 
           const nextAnnotations = item.annotations.filter(
-            (annotation) => !isDraftMetadata(annotation.metadata)
+            (annotation) => annotation.metadata.key !== activeDraft.key
           );
-
           if (nextAnnotations.length === item.annotations.length) {
-            continue;
+            return false;
           }
 
           item.annotations = nextAnnotations;
-          incrementItemVersion(item);
-          changed = true;
-        }
-
-        const item = next.find(
-          (candidate): candidate is CodeViewDiffItem<CommentMetadata> =>
-            candidate.id === itemId && isDiffItem(candidate)
-        );
-
-        if (item == null) {
-          return changed ? next : prev;
-        }
-
-        const nextAnnotations = [...(item.annotations ?? [])];
-        nextAnnotations.push({
-          side,
-          lineNumber,
-          metadata: {
-            kind: 'draft',
-            key: commentKey,
-            message: '',
-            range,
-          },
+          return true;
         });
-        item.annotations = nextAnnotations;
-        incrementItemVersion(item);
-        return next;
+      }
+
+      const updatedItem = updateViewerDiffItem(viewer, itemId, (item) => {
+        const nonDraftAnnotations = (item.annotations ?? []).filter(
+          (annotation) => !isDraftMetadata(annotation.metadata)
+        );
+        item.annotations = [...nonDraftAnnotations, draftAnnotation];
+        return true;
       });
+
+      if (updatedItem != null) {
+        activeDraftRef.current = { itemId, key: commentKey };
+      }
     }
   );
 
   const handleRemoveComment = useStableCallback(
     (itemId: string, key: string) => {
-      const item = items.find(
-        (candidate): candidate is CodeViewDiffItem<CommentMetadata> =>
-          candidate.id === itemId && isDiffItem(candidate)
-      );
-      const removedAnnotation = item?.annotations?.find(
-        (annotation) => annotation.metadata.key === key
-      );
+      const { current: viewer } = viewerRef;
+      if (viewer == null) {
+        return;
+      }
+      const item = viewer.getItem(itemId);
+      const removedAnnotation =
+        item != null && isDiffItem(item)
+          ? item.annotations?.find(
+              (annotation) => annotation.metadata.key === key
+            )
+          : undefined;
 
-      setItems((prev) => {
-        const next = [...prev];
-        const item = next.find(
-          (candidate): candidate is CodeViewDiffItem<CommentMetadata> =>
-            candidate.id === itemId && isDiffItem(candidate)
-        );
-
-        if (item == null || item.annotations == null) {
-          return prev;
+      updateViewerDiffItem(viewer, itemId, (item) => {
+        if (item.annotations == null) {
+          return false;
         }
 
         const nextAnnotations = item.annotations.filter(
@@ -184,13 +202,17 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         );
 
         if (nextAnnotations.length === item.annotations.length) {
-          return prev;
+          return false;
         }
 
         item.annotations = nextAnnotations;
-        incrementItemVersion(item);
-        return next;
+        return true;
       });
+
+      const { current: activeDraft } = activeDraftRef;
+      if (activeDraft?.itemId === itemId && activeDraft.key === key) {
+        activeDraftRef.current = null;
+      }
 
       setSelectedLines(null);
       if (removedAnnotation != null && isSavedAnnotation(removedAnnotation)) {
@@ -202,14 +224,16 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   const handleSaveDraftComment = useStableCallback(
     (itemId: string, key: string, message: string) => {
       const trimmedMessage = message.trim();
-      if (trimmedMessage.length === 0) {
+      const { current: viewer } = viewerRef;
+      if (trimmedMessage.length === 0 || viewer == null) {
         return;
       }
 
-      const item = items.find(
-        (candidate): candidate is CodeViewDiffItem<CommentMetadata> =>
-          candidate.id === itemId && isDiffItem(candidate)
-      );
+      const item = viewer.getItem(itemId);
+      if (item == null || !isDiffItem(item)) {
+        return;
+      }
+
       const draftAnnotation = item?.annotations?.find(
         (annotation) => annotation.metadata.key === key
       );
@@ -217,15 +241,9 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         return;
       }
 
-      setItems((prev) => {
-        const next = [...prev];
-        const item = next.find(
-          (candidate): candidate is CodeViewDiffItem<CommentMetadata> =>
-            candidate.id === itemId && isDiffItem(candidate)
-        );
-
-        if (item == null || item.annotations == null) {
-          return prev;
+      const updatedItem = updateViewerDiffItem(viewer, itemId, (item) => {
+        if (item.annotations == null) {
+          return false;
         }
 
         const nextAnnotations: DiffLineAnnotation<CommentMetadata>[] =
@@ -258,13 +276,21 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         }
 
         if (!didChange) {
-          return prev;
+          return false;
         }
 
         item.annotations = nextAnnotations;
-        incrementItemVersion(item);
-        return next;
+        return true;
       });
+
+      if (updatedItem == null) {
+        return;
+      }
+
+      const { current: activeDraft } = activeDraftRef;
+      if (activeDraft?.itemId === itemId && activeDraft.key === key) {
+        activeDraftRef.current = null;
+      }
 
       setSelectedLines(null);
       onCommentSaved?.({
@@ -280,39 +306,34 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   );
 
   const handleToggleItemCollapsed = useStableCallback((itemId: string) => {
-    setItems((prev) => {
-      const viewer = viewerRef.current?.getInstance();
-      const itemIndex = prev.findIndex(
-        (candidate) => candidate.id === itemId && isDiffItem(candidate)
-      );
-      const item = prev[itemIndex];
-      if (item == null || viewer == null) {
-        return prev;
-      }
+    const { current: viewerHandle } = viewerRef;
+    const viewer = viewerHandle?.getInstance();
+    const item = viewerHandle?.getItem(itemId);
+    if (viewerHandle == null || viewer == null || item == null) {
+      return;
+    }
 
-      const next = [...prev];
-      next[itemIndex] = {
-        ...item,
-        collapsed: item.collapsed !== true,
-        version: typeof item.version === 'number' ? item.version + 1 : 1,
-      };
-      // NOTE(amadeus): If the top of the item is before the scrollTop, then
-      // we'll want to apply a scroll fix on the next render to ensure we
-      // keep the collapsed file in view and anchored
-      const itemTop = viewer.getTopForItem(itemId);
-      if (
-        itemTop != null &&
-        itemTop < viewer.getScrollTop() + CODE_VIEW_MARGIN_OFFSET
-      ) {
-        viewer.scrollTo({
-          type: 'item',
-          id: item.id,
-          align: 'start',
-          offset: CODE_VIEW_MARGIN_OFFSET,
-        });
-      }
-      return next;
-    });
+    // NOTE(amadeus): If the top of the item is before the scrollTop, then
+    // we'll want to apply a scroll fix on the next render to ensure we
+    // keep the collapsed file in view and anchored.
+    const itemTop = viewer.getTopForItem(itemId);
+    item.collapsed = item.collapsed !== true;
+    item.version = getNextItemVersion(item);
+    if (!viewerHandle.updateItem(item)) {
+      return;
+    }
+
+    if (
+      itemTop != null &&
+      itemTop < viewer.getScrollTop() + CODE_VIEW_MARGIN_OFFSET
+    ) {
+      viewer.scrollTo({
+        type: 'item',
+        id: item.id,
+        align: 'start',
+        offset: CODE_VIEW_MARGIN_OFFSET,
+      });
+    }
   });
 
   const renderCommentAnnotation = useStableCallback(
@@ -375,6 +396,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         viewerMetrics: VIEWER_METRICS,
         theme: DEFAULT_THEMES,
         diffStyle,
+        diffIndicators,
         overflow,
         disableBackground: !showBackgrounds,
         disableLineNumbers: !lineNumbers,
@@ -395,6 +417,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
     [
       diffStyle,
       handleCreateDraftComment,
+      diffIndicators,
       lineNumbers,
       overflow,
       showBackgrounds,
@@ -404,7 +427,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
     <CodeView<CommentMetadata>
       ref={viewerRef}
       containerRef={scrollRef}
-      items={items}
+      initialItems={initialItems}
       className={cn(
         'gh-code-view-scrollbar-y mt-[-12px] h-[calc(100%_+_12px)] pr-[1px] relative min-h-0 min-w-0 flex-1 px-[1px] overflow-auto overscroll-contain w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] [&_diffs-container]:overflow-clip [&_diffs-container]:rounded-lg [&_diffs-container]:shadow-[0_0_0_1px_var(--color-border)] [&_diffs-container]:[contain:layout_paint_style]',
         className

@@ -5,9 +5,10 @@
   can contain files, diffs, or a mix of both.
 </Notice>
 
-`CodeView` takes an ordered `CodeViewItem[]` list and manages the hard parts for
-you: virtualization, measured layout reconciliation, sticky headers, selection
-across items, and `scrollTo` targeting by item, line, or absolute position.
+`CodeView` renders an ordered `CodeViewItem[]` list and manages the hard parts
+for you: virtualization, measured layout reconciliation, sticky headers,
+selection across items, and `scrollTo` targeting by item, line, or absolute
+position.
 
 Use it when the amount of content is large, unbounded, or hard to predict. It is
 meant to handle anything from a single file up to very large multi-file diff
@@ -26,7 +27,7 @@ yourself.
 ### Core Model
 
 - Every item needs a stable unique `id`. That id is how `scrollTo`, selection,
-  and reconciliation find the correct record.
+  `getItem`, `updateItem`, and reconciliation find the correct record.
 - Items are either `{ type: 'file', file }` or `{ type: 'diff', fileDiff }`.
 - If you keep the same item id but change its content or annotations, publish a
   new `version` so `CodeView` refreshes that item in place without rebuilding
@@ -48,13 +49,35 @@ yourself.
   vanillaExample={codeViewVanillaExample}
 />
 
+### React Item Ownership
+
+React `CodeView` supports two item ownership models. Use one per mounted viewer;
+do not switch between them without remounting with a new `key`.
+
+| Mode       | Use                                                | Item prop               | Item updates                                                                                      |
+| ---------- | -------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------- |
+| Controlled | React state owns the complete item list            | `items`                 | Publish a new `items` array. Append-only changes are optimized; other changes reconcile the list. |
+| Imperative | The viewer instance owns the item list after mount | optional `initialItems` | Use the ref APIs: `addItems`, `getItem`, and `updateItem`.                                        |
+
+Use controlled mode when item data already lives naturally in React state and
+the list is small enough that mutating arrays or items is cheap. Use imperative
+mode for very large or streaming surfaces where routing every item update
+through React would be expensive. In imperative mode, omit `items`, optionally
+seed the viewer with `initialItems`, and use the `CodeViewHandle` to add new
+items or update existing ones.
+
 ### Usage Notes
 
-- In React, `CodeView` is controlled through props plus an imperative ref.
+- In React, pass `items` for controlled item ownership.
+- In React, pass `initialItems` instead of `items` for imperative item
+  ownership. `initialItems` seeds the viewer once; later item changes should go
+  through the ref.
+- In React, `addItems` and `updateItem` require imperative item ownership and
+  throw if the viewer is controlled with `items`.
 - In React, use `selectedLines` and `onSelectedLinesChange` when selection needs
   to live in component state.
-- In React, use the ref for `scrollTo`, `setSelectedLines`,
-  `clearSelectedLines`, and `getWindowSpecs`.
+- In React, use the ref for `scrollTo`, `setSelectedLines`, `getSelectedLines`,
+  `clearSelectedLines`, `getItem`, `updateItem`, `addItems`, and `getInstance`.
 - `renderCustomHeader`, `renderHeaderPrefix`, `renderHeaderMetadata`,
   `renderAnnotation`, and `renderGutterUtility` receive the whole
   `CodeViewItem`, which makes it easy to branch on `item.type`.
@@ -62,7 +85,7 @@ yourself.
   update over time.
 - In Vanilla JS, call `setup(root)` once with the scrollable container.
 - In Vanilla JS, use `setItems`, `addItem`, or `addItems` to populate the
-  viewer.
+  viewer, and `getItem` / `updateItem` for item-level imperative changes.
 - Shared callbacks receive the normal file/diff payload plus a `context`
   argument containing the current viewer item and instance.
 - By default, `CodeView` temporarily disables pointer events on rendered content

@@ -20,6 +20,10 @@ import type {
 } from './types';
 
 const PATCH_ORDER_FALLBACK_RANK = Number.MAX_SAFE_INTEGER;
+const GITHUB_HOST = 'github.com';
+const GITHUB_RAW_DIFF_HOST = 'patch-diff.githubusercontent.com';
+const RAW_GITHUB_DIFF_PATH_PATTERN =
+  /^\/raw\/([^/]+)\/([^/]+)\/pull\/([^/]+\.(?:diff|patch))$/;
 
 export function incrementItemVersion(item: CodeViewItem<CommentMetadata>) {
   item.version = typeof item.version === 'number' ? item.version + 1 : 1;
@@ -49,21 +53,33 @@ export function isSavedAnnotation(
   return annotation.metadata.kind === 'saved';
 }
 
-export function getPullRequestPath(input: string): string | undefined {
+export function getGitHubPath(input: string): string | undefined {
   try {
     const parsedURL = new URL(input);
-    if (parsedURL.hostname !== 'github.com') {
+    if (parsedURL.hostname === GITHUB_HOST) {
+      if (parsedURL.pathname === '/') {
+        return undefined;
+      }
+      return parsedURL.pathname;
+    }
+
+    if (parsedURL.hostname !== GITHUB_RAW_DIFF_HOST) {
       return undefined;
     }
-    const [finalSegment, pullSegment] = parsedURL.pathname.split('/').reverse();
-    if (
-      finalSegment == null ||
-      !/^\d+(\.patch)?$/.test(finalSegment) ||
-      pullSegment !== 'pull'
-    ) {
+
+    const rawDiffMatch = RAW_GITHUB_DIFF_PATH_PATTERN.exec(parsedURL.pathname);
+    if (rawDiffMatch == null) {
       return undefined;
     }
-    return parsedURL.pathname;
+
+    const owner = rawDiffMatch[1];
+    const repo = rawDiffMatch[2];
+    const pullFile = rawDiffMatch[3];
+    if (owner == null || repo == null || pullFile == null) {
+      return undefined;
+    }
+
+    return `/${owner}/${repo}/pull/${pullFile}`;
   } catch {
     return undefined;
   }
