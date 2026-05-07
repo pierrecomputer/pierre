@@ -11,6 +11,10 @@ import { DiffsHubLogo } from '../(view)/_components/DiffsHubLogo';
 import { getGitHubPath } from '../(view)/_components/utils';
 import { HomeFetchForm } from './HomeFetchForm';
 
+function Divider() {
+  return <hr className="my-8 w-full md:max-w-[80px]" />;
+}
+
 const EXAMPLE_URLS = [
   'https://github.com/nodejs/node/pull/59805',
   'https://github.com/torvalds/linux/compare/v6.0...v7.0',
@@ -61,8 +65,8 @@ const SOCIAL_LINKS = [
 
 export default function DiffshubHome() {
   return (
-    <div className="grid min-h-screen min-w-screen place-items-center justify-center bg-neutral-50 pt-32 pb-8 md:py-0 dark:bg-neutral-900">
-      <section className="w-2xl max-w-[100vw] space-y-4 px-5">
+    <div className="flex min-h-screen min-w-screen flex-col items-center justify-center pb-8 md:bg-neutral-50 md:py-0 md:dark:bg-neutral-900">
+      <section className="flex min-h-screen w-2xl max-w-[100vw] flex-col justify-center space-y-4 px-5 pb-4 md:block md:min-h-0 md:pb-0">
         <h2 className="flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
           <DiffsHubLogo />
           DiffsHub
@@ -121,7 +125,9 @@ export default function DiffshubHome() {
             ))}
           </ul>
         </div>
-        <hr className="my-8 max-w-[120px]" />
+      </section>
+      <section className="w-2xl max-w-[100vw] space-y-4 px-5">
+        <Divider />
         <div className="max-w-2xl">
           <FaqItem question="What’s DiffsHub?">
             DiffsHub is a demo app from{' '}
@@ -195,7 +201,7 @@ export default function DiffshubHome() {
             GitHub, Reddit, Stripe, X, and others.
           </FaqItem>
         </div>
-        <hr className="my-8 max-w-[120px]" />
+        <Divider />
         <nav aria-label="Social links" className="flex items-center gap-2 pt-2">
           {SOCIAL_LINKS.map(({ label, href, Icon }) => (
             <a

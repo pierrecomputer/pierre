@@ -60,6 +60,7 @@ const geistMono = Geist_Mono({
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  ...(process.env.NEXT_PUBLIC_SITE === 'diffshub' && { viewportFit: 'cover' }),
 };
 
 // When running in a worktree, prefix the title with a stable emoji + slug so
