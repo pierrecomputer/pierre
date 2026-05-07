@@ -62,14 +62,15 @@ export function formatCodeViewLineHash(
     return null;
   }
 
-  const params = new URLSearchParams();
-  params.set('target', selection.id);
-  params.set('start', formatLineHashPoint(startPoint));
+  const params = [
+    `target=${encodeHashValue(selection.id)}`,
+    `start=${formatLineHashPoint(startPoint)}`,
+  ];
   if (!areLineHashPointsEqual(startPoint, endPoint)) {
-    params.set('end', formatLineHashPoint(endPoint));
+    params.push(`end=${formatLineHashPoint(endPoint)}`);
   }
 
-  return `#${params.toString()}`;
+  return `#${params.join('&')}`;
 }
 
 function parseLineHashPoint(value: string | null): LineHashPoint | null {
@@ -127,6 +128,10 @@ function createLineHashPoint(
 
 function formatLineHashPoint(point: LineHashPoint): string {
   return `${point.side === 'deletions' ? 'D' : 'A'}${point.lineNumber}`;
+}
+
+function encodeHashValue(value: string): string {
+  return encodeURIComponent(value).replaceAll('%2F', '/');
 }
 
 function areLineHashPointsEqual(
