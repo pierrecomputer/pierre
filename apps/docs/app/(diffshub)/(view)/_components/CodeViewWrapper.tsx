@@ -404,7 +404,11 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
 
       return (
         <CollapseDiffButton
-          collapsed={item.collapsed === true}
+          disabled={
+            item.fileDiff.splitLineCount === 0 &&
+            item.fileDiff.unifiedLineCount === 0
+          }
+          collapsed={item.collapsed}
           onToggle={() => handleToggleItemCollapsed(item.id)}
         />
       );
@@ -470,17 +474,26 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
 });
 
 interface CollapseDiffButtonProps {
-  collapsed: boolean;
+  disabled?: boolean;
+  collapsed?: boolean;
   onToggle(): void;
 }
 
-function CollapseDiffButton({ collapsed, onToggle }: CollapseDiffButtonProps) {
+function CollapseDiffButton({
+  disabled = false,
+  collapsed = false,
+  onToggle,
+}: CollapseDiffButtonProps) {
   return (
     <button
       type="button"
-      aria-expanded={!collapsed}
-      aria-label={collapsed ? 'Expand diff' : 'Collapse diff'}
-      className="text-muted-foreground hover:bg-muted hover:text-foreground ml-[-8px] inline-flex size-6 cursor-pointer items-center justify-center rounded-md transition"
+      disabled={disabled}
+      aria-expanded={!disabled && !collapsed}
+      aria-hidden={disabled}
+      aria-label={
+        disabled ? undefined : collapsed ? 'Expand diff' : 'Collapse diff'
+      }
+      className="text-muted-foreground hover:bg-muted hover:text-foreground ml-[-8px] inline-flex size-6 cursor-pointer items-center justify-center rounded-md transition disabled:pointer-events-none disabled:opacity-50"
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -489,7 +502,10 @@ function CollapseDiffButton({ collapsed, onToggle }: CollapseDiffButtonProps) {
     >
       <IconChevronSm
         aria-hidden="true"
-        className={cn('size-4 transition-transform', collapsed && '-rotate-90')}
+        className={cn(
+          'size-4 transition-transform',
+          (disabled || collapsed) && '-rotate-90'
+        )}
       />
     </button>
   );
