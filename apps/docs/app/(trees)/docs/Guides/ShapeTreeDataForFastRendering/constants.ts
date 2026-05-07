@@ -28,6 +28,24 @@ export function ReactTree({
 }`
 );
 
+export const SHAPE_TREE_DATA_VUE_TREE = docsCodeSnippet(
+  'vue-tree.vue',
+  `<script setup lang="ts">
+import { FileTree, useFileTree } from '@pierre/trees/vue';
+import type { FileTreePreparedInput } from '@pierre/trees';
+
+const props = defineProps<{
+  preparedInput: FileTreePreparedInput;
+}>();
+
+const { model } = useFileTree({ preparedInput: props.preparedInput });
+</script>
+
+<template>
+  <FileTree :model="model" style="height: 320px" />
+</template>`
+);
+
 export const SHAPE_TREE_DATA_VANILLA_MOUNT = docsCodeSnippet(
   'mount-vanilla-tree.ts',
   `import { FileTree, type FileTreePreparedInput } from '@pierre/trees';

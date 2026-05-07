@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>file-tree Vue fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+
+      [data-file-tree-vue-shell] {
+        display: grid;
+        gap: 12px;
+        max-width: 420px;
+      }
+
+      [data-file-tree-vue-toolbar] {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      [data-file-tree-vue-mount] {
+        height: 280px;
+        border: 1px solid #ccc;
+      }
+
+      [data-file-tree-vue-state] {
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-file-tree-vue-shell>
+      <div id="app" data-file-tree-vue-mount></div>
+    </div>
+    <script type="module" src="./file-tree-vue-main.ts"></script>
+  </body>
+</html>

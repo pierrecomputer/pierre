@@ -1,6 +1,7 @@
-`@pierre/trees` exposes one path-first model and two primary runtime entries: a
-thin React layer in [`@pierre/trees/react`](#get-started-with-react) and the
-vanilla class in [`@pierre/trees`](#get-started-with-vanilla).
+`@pierre/trees` exposes one path-first model and three primary runtime entries:
+a thin React layer in [`@pierre/trees/react`](#get-started-with-react), a Vue 3
+layer in [`@pierre/trees/vue`](#get-started-with-vue), and the vanilla class in
+[`@pierre/trees`](#get-started-with-vanilla).
 
 ### Choose your integration
 
@@ -14,7 +15,7 @@ and the target you rename or move later.
 For the shared vocabulary behind that rule, jump to
 [Shared concepts](#shared-concepts).
 
-#### 2. React vs Vanilla JS
+#### 2. React, Vue, or Vanilla JS
 
 Pick the React entry point when the surrounding UI already lives in React. Jump
 to the [getting started with React](#get-started-with-react) guide for more
@@ -22,7 +23,12 @@ info.
 
 <DocsCodeExample {...CHOOSE_INTEGRATION_REACT_EXAMPLE} />
 
-Pick the vanilla class when your app is not React-based, or when another
+Pick the Vue entry point when the surrounding UI already lives in Vue 3. Jump to
+the [getting started with Vue](#get-started-with-vue) guide for more.
+
+<DocsCodeExample {...CHOOSE_INTEGRATION_VUE_EXAMPLE} />
+
+Pick the vanilla class when your app is not React- or Vue-based, or when another
 framework will own lifecycle around an imperative model. Jump to the
 [getting started with vanilla JS](#get-started-with-vanilla) for more.
 
@@ -30,9 +36,8 @@ framework will own lifecycle around an imperative model. Jump to the
 
 #### 3. Understand tree-shape
 
-Both runtimes consume the same tree data. Small examples can start with raw
+All runtimes consume the same tree data. Small examples can start with raw
 `paths`, but real application trees should move to prepared input before the
-client pays that shaping work on every load. Regardless of your runtime being
-React or vanilla JS, be sure to read
+client pays that shaping work on every load. Regardless of your runtime, read
 [Shape tree data for fast rendering](#shape-tree-data-for-fast-rendering) after
 your runtime quickstart.

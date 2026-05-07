@@ -54,6 +54,7 @@ const DIFFS_SECTIONS = [
 const TREES_SECTIONS = [
   'Guides/ChooseYourIntegration',
   'Guides/GetStartedWithReact',
+  'Guides/GetStartedWithVue',
   'Guides/GetStartedWithVanilla',
   'Guides/ShapeTreeDataForFastRendering',
   'Guides/NavigateSelectionFocusAndSearch',
@@ -65,6 +66,7 @@ const TREES_SECTIONS = [
   'Guides/SSR',
   'Reference/SharedConcepts',
   'Reference/ReactAPI',
+  'Reference/VueAPI',
   'Reference/VanillaAPI',
   'Reference/SSRAPI',
   'Reference/StylingAndTheming',
@@ -95,9 +97,11 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
   },
   trees: {
     'Guides/ChooseYourIntegration':
-      'Choosing between React and vanilla, with the shared path-first model',
+      'Choosing between React, Vue, and vanilla, with the shared path-first model',
     'Guides/GetStartedWithReact':
       'React quickstart with useFileTree, FileTree, selectors, and prepared input',
+    'Guides/GetStartedWithVue':
+      'Vue quickstart with useFileTree, FileTree, selectors, and prepared input',
     'Guides/GetStartedWithVanilla':
       'Vanilla quickstart with new FileTree, render, model methods, and prepared input',
     'Guides/ShapeTreeDataForFastRendering':
@@ -115,11 +119,13 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     'Guides/HandleLargeTreesEfficiently':
       'Prepared input, virtualization settings, and SSR guidance for large trees',
     'Guides/SSR':
-      'Server preload, React and vanilla hydration, and opaque SSR handoff guidance',
+      'Server preload, React, Vue, and vanilla hydration, and opaque SSR handoff guidance',
     'Reference/SharedConcepts':
       'Path-first identity, shared options, search modes, mutation vocabulary, and SSR framing',
     'Reference/ReactAPI':
       'useFileTree, FileTree, selector hooks, and React-specific composition lookup',
+    'Reference/VueAPI':
+      'useFileTree, FileTree, selector composables, and Vue-specific slots',
     'Reference/VanillaAPI':
       'FileTree construction, lifecycle, imperative methods, and subscriptions',
     'Reference/SSRAPI':
@@ -178,6 +184,7 @@ function extToLang(filename: string): string {
   const map: Record<string, string> = {
     '.ts': 'typescript',
     '.tsx': 'tsx',
+    '.vue': 'vue',
     '.js': 'javascript',
     '.jsx': 'jsx',
     '.css': 'css',

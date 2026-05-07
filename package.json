@@ -46,6 +46,8 @@
       "@typescript/native-preview": "7.0.0-dev.20260128.1",
       "@vscode/web-custom-data": "0.6.3",
       "@vitejs/plugin-react": "5.0.3",
+      "@vitejs/plugin-vue": "6.0.6",
+      "@vue/server-renderer": "3.5.33",
       "autoprefixer": "10.4.22",
       "babel-plugin-react-compiler": "1.0.0",
       "baseline-browser-mapping": "^2.9.14",
@@ -93,6 +95,7 @@
       "typescript": "5.9.2",
       "unist-util-visit": "5.0.0",
       "vite": "npm:rolldown-vite@7.1.12",
+      "vue": "3.5.33",
       "zod": "4.1.11"
     }
   },

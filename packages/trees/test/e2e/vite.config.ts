@@ -1,3 +1,4 @@
+import vue from '@vitejs/plugin-vue';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
@@ -6,6 +7,7 @@ const portFromEnv = Number(process.env.FILE_TREE_E2E_PORT);
 const port = Number.isFinite(portFromEnv) ? portFromEnv : defaultPort;
 
 export default defineConfig({
+  plugins: [vue()],
   publicDir: resolve(
     import.meta.dirname,
     '..',

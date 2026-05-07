@@ -42,6 +42,7 @@ integration surface.
 Docs can name the runtime touchpoints that consume it:
 
 - React passes the payload as `preloadedData`
+- Vue passes the payload as `preloadedData`
 - Vanilla hydrates the server-rendered tree already in the page with
   `hydrate({ fileTreeContainer })`
 
@@ -78,6 +79,14 @@ to `<FileTree model={model} preloadedData={payload} />`.
 
 For the full runtime surface, read [React API](#react-api). For the workflow
 guide, read [SSR](#ssr).
+
+#### Vue handoff
+
+Vue still creates the model with `useFileTree(...)`, then passes the payload to
+`<FileTree :model="model" :preloaded-data="payload" />`.
+
+For the full runtime surface, read [Vue API](#vue-api). For the workflow guide,
+read [SSR](#ssr).
 
 #### Vanilla handoff
 

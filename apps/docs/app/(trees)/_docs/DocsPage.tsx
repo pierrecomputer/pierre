@@ -8,6 +8,7 @@ import * as chooseYourIntegrationConstants from '../docs/Guides/ChooseYourIntegr
 import * as customizeIconsConstants from '../docs/Guides/CustomizeIcons/constants';
 import * as getStartedWithReactConstants from '../docs/Guides/GetStartedWithReact/constants';
 import * as getStartedWithVanillaConstants from '../docs/Guides/GetStartedWithVanilla/constants';
+import * as getStartedWithVueConstants from '../docs/Guides/GetStartedWithVue/constants';
 import * as handleLargeTreesEfficientlyConstants from '../docs/Guides/HandleLargeTreesEfficiently/constants';
 import * as navigateSelectionFocusAndSearchConstants from '../docs/Guides/NavigateSelectionFocusAndSearch/constants';
 import * as renameDragAndTriggerItemActionsConstants from '../docs/Guides/RenameDragAndTriggerItemActions/constants';
@@ -24,6 +25,7 @@ import * as reactApiConstants from '../docs/Reference/ReactAPI/constants';
 import * as ssrApiConstants from '../docs/Reference/SSRAPI/constants';
 import * as stylingAndThemingConstants from '../docs/Reference/StylingAndTheming/constants';
 import * as vanillaApiConstants from '../docs/Reference/VanillaAPI/constants';
+import * as vueApiConstants from '../docs/Reference/VueAPI/constants';
 import { DocsLayout } from '@/components/docs/DocsLayout';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import { ProseWrapper } from '@/components/docs/ProseWrapper';
@@ -44,6 +46,10 @@ const GUIDE_SECTIONS: readonly DocsSection[] = [
   {
     filePath: '(trees)/docs/Guides/GetStartedWithReact/content.mdx',
     constants: getStartedWithReactConstants,
+  },
+  {
+    filePath: '(trees)/docs/Guides/GetStartedWithVue/content.mdx',
+    constants: getStartedWithVueConstants,
   },
   {
     filePath: '(trees)/docs/Guides/GetStartedWithVanilla/content.mdx',
@@ -90,6 +96,10 @@ const REFERENCE_SECTIONS: readonly DocsSection[] = [
     constants: reactApiConstants,
   },
   {
+    filePath: '(trees)/docs/Reference/VueAPI/content.mdx',
+    constants: vueApiConstants,
+  },
+  {
     filePath: '(trees)/docs/Reference/VanillaAPI/content.mdx',
     constants: vanillaApiConstants,
   },
@@ -106,7 +116,7 @@ const REFERENCE_SECTIONS: readonly DocsSection[] = [
 
 const treesDocsTitle = 'Trees, from Pierre';
 const treesDocsDescription =
-  'Guide-first documentation for @pierre/trees, covering React, vanilla, prepared input, styling, icons, Git status, large trees, and SSR hydration.';
+  'Guide-first documentation for @pierre/trees, covering React, Vue, vanilla, prepared input, styling, icons, Git status, large trees, and SSR hydration.';
 
 // Next.js replaces (does not deep-merge) nested metadata objects like
 // `openGraph` and `twitter` from parent segments. Re-declare `images` here

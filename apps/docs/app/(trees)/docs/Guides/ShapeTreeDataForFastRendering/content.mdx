@@ -17,9 +17,11 @@ preparation step moves earlier.
 
 #### Pass `preparedInput` into the runtime
 
-Both primary runtimes consume the same prepared payload shape.
+All primary runtimes consume the same prepared payload shape.
 
 <DocsCodeExample {...SHAPE_TREE_DATA_REACT_TREE} />
+
+<DocsCodeExample {...SHAPE_TREE_DATA_VUE_TREE} />
 
 <DocsCodeExample {...SHAPE_TREE_DATA_VANILLA_MOUNT} />
 
@@ -51,7 +53,7 @@ The recommended split is simple:
 
 1. Load canonical paths outside the UI.
 2. Prepare the input once.
-3. Pass `preparedInput` into React, vanilla, or SSR hydration.
+3. Pass `preparedInput` into React, Vue, vanilla, or SSR hydration.
 
 That reduces client CPU work, makes startup cost more predictable, and lets the
 same prepared payload feed every runtime.

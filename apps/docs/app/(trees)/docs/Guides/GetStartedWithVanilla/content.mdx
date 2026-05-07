@@ -1,7 +1,7 @@
 ### Get started with vanilla
 
-Use the vanilla runtime when your app is not React-based, or when another
-framework will own lifecycle around an imperative tree model.
+Use the vanilla runtime when your app is not React- or Vue-based, or when
+another framework will own lifecycle around an imperative tree model.
 `new FileTree(...)` creates the model, and `render(...)` or `hydrate(...)`
 attaches it to the DOM.
 
@@ -72,5 +72,5 @@ the same:
 - mount or unmount around the instance
 - keep all tree reads and writes on the model itself
 
-That keeps React as the only first-class wrapper surface without changing how
-the underlying model works.
+That keeps framework wrappers thin without changing how the underlying model
+works.

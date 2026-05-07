@@ -2,11 +2,12 @@
 
 Path-first file tree UI for the web.
 
-`@pierre/trees` ships one implementation through four public entry points:
+`@pierre/trees` ships one implementation through five public entry points:
 
 - `@pierre/trees` — vanilla model, mounting API, prepared input helpers, icons,
   theming, and core types
 - `@pierre/trees/react` — React hooks and `<FileTree model={...} />`
+- `@pierre/trees/vue` — Vue 3 component and composables
 - `@pierre/trees/ssr` — preload helpers for declarative-shadow-DOM SSR
 - `@pierre/trees/web-components` — custom-element registration side effect
 
@@ -90,6 +91,35 @@ export function Example({ paths }: { paths: string[] }) {
 
 `@pierre/trees/react` exports `FileTree`, `useFileTree`, `useFileTreeSearch`,
 `useFileTreeSelection`, and `useFileTreeSelector`.
+
+## Vue usage
+
+```vue
+<script setup lang="ts">
+import { FileTree, useFileTree } from '@pierre/trees/vue';
+
+const { model } = useFileTree({
+  initialExpansion: 'open',
+  paths: ['README.md', 'src/index.ts'],
+  search: true,
+});
+</script>
+
+<template>
+  <FileTree :model="model" style="height: 320px">
+    <template #header>
+      <strong>Project files</strong>
+    </template>
+    <template #context-menu="{ item }">
+      <div>Menu for {{ item.path }}</div>
+    </template>
+  </FileTree>
+</template>
+```
+
+`@pierre/trees/vue` exports `FileTree`, `useFileTree`, `useFileTreeSearch`,
+`useFileTreeSelection`, and `useFileTreeSelector`. The composables return Vue
+refs for reactive state while tree actions stay on the `FileTree` instance.
 
 ## SSR
 

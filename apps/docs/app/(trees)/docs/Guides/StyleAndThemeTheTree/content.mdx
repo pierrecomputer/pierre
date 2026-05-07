@@ -52,7 +52,7 @@ Pass `density` to `useFileTree` (or `preloadFileTree`, or the vanilla `FileTree`
 constructor) to bundle row height and spacing into one option. The keyword form
 (`'compact'`, `'default'`, `'relaxed'`) resolves both at once; a numeric form
 keeps the default row height and supplies a custom spacing factor. Every runtime
-— vanilla CSR, vanilla SSR, React CSR, and React SSR — paints
+— vanilla CSR, vanilla SSR, React CSR, React SSR, Vue CSR, and Vue SSR — paints
 `--trees-item-height` and `--trees-density-override` onto the host from the
 resolved density so the virtualized and painted row heights stay aligned.
 Caller-set inline values on the host still win, so you can override either

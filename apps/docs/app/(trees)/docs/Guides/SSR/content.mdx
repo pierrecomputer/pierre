@@ -2,7 +2,8 @@
 
 Use SSR when you want the tree to arrive from the server with a fast first
 paint, then become interactive on the client. This is not a third primary
-runtime. It is a preload-and-hydrate layer over the same React or vanilla model.
+runtime. It is a preload-and-hydrate layer over the same React, Vue, or vanilla
+model.
 
 #### Start with the server step
 
@@ -36,6 +37,15 @@ the wrapper receives the opaque handoff object as `preloadedData`.
 
 The model stays primary. `preloadedData` only activates hydration.
 
+#### Vue flow
+
+Vue still creates the model with `useFileTree(...)`. The difference is that the
+component receives the opaque handoff object as `preloadedData`.
+
+<DocsCodeExample {...SSR_GUIDE_VUE_HYDRATION} />
+
+The model stays primary. `preloadedData` only activates hydration.
+
 #### Vanilla flow
 
 Vanilla uses the same preload step, but the client hydrates the server-rendered
@@ -49,9 +59,9 @@ hydrating.
 #### Keep the payload opaque
 
 In docs and application code, refer to the preload result as an SSR payload or
-handoff object. React consumes it as `preloadedData`. Vanilla hydrates existing
-server markup. Both flows reuse the same server work without teaching payload
-internals as the main story.
+handoff object. React and Vue consume it as `preloadedData`. Vanilla hydrates
+existing server markup. Every flow reuses the same server work without teaching
+payload internals as the main story.
 
 #### Pair SSR with prepared input for large trees
 
@@ -61,8 +71,8 @@ client hydrate that same result.
 
 #### Advanced note: declarative shadow DOM
 
-The preloaded path uses declarative shadow DOM under the hood. In React, the
-packaged wrapper already handles the host ownership details it needs for
+The preloaded path uses declarative shadow DOM under the hood. In React and Vue,
+the packaged wrappers already handle the host ownership details they need for
 hydration. Use the runtime behavior instead of inventing custom DOM diffing or
 raw payload plumbing.
 

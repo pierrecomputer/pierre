@@ -1,0 +1,132 @@
+### Vue API
+
+The Vue entry point lives in `@pierre/trees/vue`. It is a thin Vue integration
+layer over the same imperative model the vanilla runtime uses.
+
+#### Vue model-first story
+
+Start with `useFileTree(options)`, not with a giant controlled component. The
+composable creates one stable model for the component lifetime. Later option
+changes are not a controlled reconfiguration path. Update the model through
+model methods instead.
+
+<DocsCodeExample {...VUE_API_EXAMPLE} />
+
+For the shared option meanings behind that call, read
+[Shared concepts](#shared-concepts-shared-option-groups).
+
+#### `useFileTree(...)`
+
+`useFileTree(...)`:
+
+- accepts the shared tree options surface
+- creates the model exactly once
+- cleans the model up when the Vue owner unmounts
+- returns `UseFileTreeResult`, which currently exposes `model`
+
+Keep using model methods such as `resetPaths(...)`, `setComposition(...)`,
+`setGitStatus(...)`, `setIcons(...)`, and the search or mutation methods when
+the tree changes after mount.
+
+#### `<FileTree />`
+
+The Vue component mounts the model into a host element.
+
+Primary props:
+
+- `model`
+- normal host attributes such as `class`, `style`, and `id`
+
+Vue-only props and slots:
+
+- `preloadedData`
+- `#header`
+- `#context-menu="{ item, context }"`
+
+Behavior notes:
+
+- it renders the model into the host element
+- it hydrates instead of rendering fresh when matching preloaded content is
+  already present
+- it uses `id ?? preloadedData?.id` for host identity when hydration is involved
+- `#header` and `#context-menu` layer Vue rendering onto the model's composition
+  surface
+
+#### Reading tree state from Vue
+
+Vue components read from the model through composables and write back through
+model methods.
+
+Common read patterns include:
+
+- selected paths for sibling panels or action bars
+- search state for search inputs and result counts
+- custom derived snapshots such as "is this path focused?"
+
+#### Selector composables
+
+`useFileTreeSelector(model, selector, equality?)`
+
+- generic bridge from the imperative model into Vue
+- returns a `ShallowRef` selected from the current model
+- accepts an optional equality function when the selected value needs custom
+  comparison
+
+`useFileTreeSelection(model)`
+
+- convenience composable for a `ShallowRef<readonly string[]>` of selected paths
+
+`useFileTreeSearch(model)`
+
+- returns computed search refs plus model-backed actions
+- refs: `isOpen`, `matchingPaths`, `value`
+- actions: `open(initialValue?)`, `close()`, `setValue(value)`,
+  `focusNextMatch()`, `focusPreviousMatch()`
+
+<DocsCodeExample {...VUE_API_SELECTOR_COMPOSABLES} />
+
+#### Writing to the model from Vue
+
+Vue writes through the same imperative model methods the vanilla runtime
+exposes.
+
+Typical write paths are:
+
+- focus and selection methods on the model or item handles
+- search methods such as `setSearch(...)` and `openSearch(...)`
+- mutation methods such as `add(...)`, `remove(...)`, `move(...)`, `batch(...)`,
+  and `resetPaths(...)`
+- runtime reconfiguration methods such as `setComposition(...)`,
+  `setGitStatus(...)`, and `setIcons(...)`
+
+#### Vue-specific composition surface
+
+Vue adds two high-level slots on top of the model:
+
+- `#header` for Vue-rendered header content
+- `#context-menu="{ item, context }"` for Vue-rendered context menus
+
+Use them when the menu or header belongs in Vue. The shared meaning of the
+underlying composition options still lives in
+[Shared concepts](#shared-concepts-interaction-and-editing-options).
+
+#### Mutation and subscriptions from Vue
+
+Use composables when Vue UI needs reactive reads. Use `model.onMutation(...)`
+when you need semantic side effects such as persistence, logging, or analytics
+around add, remove, move, reset, or batch operations.
+
+#### Hydration boundary
+
+The Vue runtime consumes server preload through `preloadedData` on
+`<FileTree />`. The model still comes from `useFileTree(...)`, and the client
+must use matching tree-defining options.
+
+For the preload contract, read [SSR API](#ssr-api). For workflow guidance, read
+[SSR](#ssr).
+
+#### Appearance boundary
+
+Style the Vue host with normal host attributes such as `class` and `style`. For
+deeper lookup, use [Styling and theming](#styling-and-theming) and
+[Icons](#icons).

@@ -38,6 +38,32 @@ export function ProjectTreeClient({
 }`
 );
 
+export const SSR_GUIDE_VUE_HYDRATION = docsCodeSnippet(
+  'project-tree-client.vue',
+  `<script setup lang="ts">
+import { FileTree, useFileTree } from '@pierre/trees/vue';
+import type { FileTreePreparedInput } from '@pierre/trees';
+import type { FileTreeSsrPayload } from '@pierre/trees/ssr';
+
+const props = defineProps<{
+  preparedInput: FileTreePreparedInput;
+  preloadedData: FileTreeSsrPayload;
+}>();
+
+const { model } = useFileTree({
+  preparedInput: props.preparedInput,
+  id: props.preloadedData.id,
+  initialExpandedPaths: ['src'],
+  search: true,
+  initialVisibleRowCount: 11,
+});
+</script>
+
+<template>
+  <FileTree :model="model" :preloaded-data="props.preloadedData" />
+</template>`
+);
+
 export const SSR_GUIDE_VANILLA_HYDRATION = docsCodeSnippet(
   'vanilla-hydrate.ts',
   `import { FileTree } from '@pierre/trees';

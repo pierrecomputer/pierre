@@ -9,6 +9,8 @@ Host styling comes first.
 
 - React: use normal host `className` and `style` props on
   `<FileTree model={...} />`
+- Vue: use normal host `class` and `style` attributes on
+  `<FileTree :model="..." />`
 - Vanilla: style the mounted host returned by `getFileTreeContainer()`
 
 Host styles own width, height, borders, background, and panel placement. CSS
@@ -51,7 +53,8 @@ Input shape:
 Output shape:
 
 - `TreeThemeStyles`
-- compatible with React inline styles and vanilla host-style assignment
+- compatible with React inline styles, Vue style bindings, and vanilla
+  host-style assignment
 
 <DocsCodeExample {...STYLING_THEMING_REFERENCE_EXAMPLE} />
 
@@ -64,6 +67,12 @@ React:
 
 - styling stays on the host element through normal `className` and `style` props
 - there is no separate React-only styling API beyond shared tree options
+
+Vue:
+
+- styling stays on the host element through normal `class` and `style`
+  attributes
+- there is no separate Vue-only styling API beyond shared tree options
 
 Vanilla:
 

@@ -62,6 +62,7 @@ not mask packaging bugs. Do this against a beta publish (step 4 with
 
 - React `18.3.1`
 - React `19`
+- Vue `3.5`
 
 In each:
 
@@ -71,7 +72,7 @@ In each:
 4. Run a production build.
 5. Render a simple tree in a real browser.
 6. Exercise each subpath: `@pierre/trees`, `@pierre/trees/react`,
-   `@pierre/trees/ssr`, `@pierre/trees/web-components`.
+   `@pierre/trees/vue`, `@pierre/trees/ssr`, `@pierre/trees/web-components`.
 
 **Bun note.** Bun's `minimum-release-age` protection can block fresh installs
 right after a publish. Use:

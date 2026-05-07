@@ -11,6 +11,20 @@ export function ProjectTree({ paths }: { paths: readonly string[] }) {
 }`
 );
 
+export const CHOOSE_INTEGRATION_VUE_EXAMPLE = docsCodeSnippet(
+  'project-tree.vue',
+  `<script setup lang="ts">
+import { FileTree, useFileTree } from '@pierre/trees/vue';
+
+const props = defineProps<{ paths: readonly string[] }>();
+const { model } = useFileTree({ paths: props.paths, search: true });
+</script>
+
+<template>
+  <FileTree :model="model" class="h-96 rounded-lg border" />
+</template>`
+);
+
 export const CHOOSE_INTEGRATION_VANILLA_EXAMPLE = docsCodeSnippet(
   'mount-tree.ts',
   `import { FileTree } from '@pierre/trees';

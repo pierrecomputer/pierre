@@ -20,6 +20,9 @@
       "react": [
         "dist/react/index.d.ts"
       ],
+      "vue": [
+        "dist/vue/index.d.ts"
+      ],
       "ssr": [
         "dist/ssr/index.d.ts"
       ],
@@ -40,6 +43,10 @@
     "./react": {
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js"
+    },
+    "./vue": {
+      "types": "./dist/vue/index.d.ts",
+      "import": "./dist/vue/index.js"
     },
     "./ssr": {
       "types": "./dist/ssr/index.d.ts",
@@ -83,6 +90,8 @@
     "@types/jsdom": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
+    "@vue/server-renderer": "catalog:",
     "autoprefixer": "catalog:",
     "jsdom": "catalog:",
     "postcss": "catalog:",
@@ -90,10 +99,23 @@
     "react-dom": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vue": "catalog:"
   },
   "peerDependencies": {
     "react": "^18.3.1 || ^19.0.0",
-    "react-dom": "^18.3.1 || ^19.0.0"
+    "react-dom": "^18.3.1 || ^19.0.0",
+    "vue": "^3.5.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
   }
 }
