@@ -38,7 +38,7 @@ export const ExampleAnnotation = memo(function ExampleAnnotation({
         onToggleSelection(selection);
       }}
     >
-      <CommentAuthorAvatar author={annotation.metadata.author} />
+      <CommentAuthorAvatar seed={annotation.metadata.author} />
       <Button
         variant="default"
         size="icon-sm"

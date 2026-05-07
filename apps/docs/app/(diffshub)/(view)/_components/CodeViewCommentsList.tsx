@@ -73,15 +73,11 @@ export const CodeViewCommentsList = memo(function CodeViewCommentsList({
                 className="focus-visible:ring-ring hover:bg-muted bg-card flex w-full cursor-pointer items-start gap-2 border-b border-[rgb(0_0_0_/_0.1)] p-3 text-left text-sm transition-colors outline-none first:rounded-t-lg last:rounded-b-lg last:border-b-0 focus-visible:ring-2 dark:border-[rgb(255_255_255_/_0.15)] dark:bg-neutral-800 dark:hover:bg-neutral-900"
                 onClick={() => onSelectComment?.(comment)}
               >
-                <CommentAuthorAvatar
-                  author={comment.author}
-                  className="size-5 text-xs"
-                />
+                <CommentAuthorAvatar seed={comment.author} className="size-5" />
                 <div className="flex flex-col items-center gap-0.5">
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">
-                      <span className="capitalize">{comment.author}</span>{' '}
-                      commented on{' '}
+                      {comment.author} commented on{' '}
                       <span
                         className={cn(
                           getCommentLineClassName(comment.side),

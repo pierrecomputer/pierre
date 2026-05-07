@@ -246,7 +246,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   );
 
   const handleSaveDraftComment = useStableCallback(
-    (itemId: string, key: string, message: string) => {
+    (itemId: string, key: string, message: string, author: string) => {
       const trimmedMessage = message.trim();
       const { current: viewer } = viewerRef;
       if (trimmedMessage.length === 0 || viewer == null) {
@@ -284,7 +284,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
               metadata: {
                 kind: 'saved',
                 key,
-                author: 'you',
+                author,
                 message: trimmedMessage,
                 range: annotation.metadata.range,
               },
@@ -319,7 +319,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       setSelectedLines(null);
       onLineLinkChange(null);
       onCommentSaved({
-        author: 'you',
+        author,
         itemId,
         key,
         lineNumber: draftAnnotation.lineNumber,

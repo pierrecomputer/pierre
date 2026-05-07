@@ -2,7 +2,11 @@ import type { DiffLineAnnotation } from '@pierre/diffs';
 import { IconArrowRight } from '@pierre/icons';
 import { useEffect, useRef, useState } from 'react';
 
-import { annotationCardBase, CommentAuthorAvatar } from './annotation-shared';
+import {
+  annotationCardBase,
+  CommentAuthorAvatar,
+  getRandomPersona,
+} from './annotation-shared';
 import type { DraftCommentMetadata } from './types';
 import { Button } from '@/components/ui/button';
 
@@ -10,7 +14,7 @@ interface DraftAnnotationProps {
   annotation: DiffLineAnnotation<DraftCommentMetadata>;
   itemId: string;
   onCancel(itemId: string, key: string): void;
-  onSave(itemId: string, key: string, message: string): void;
+  onSave(itemId: string, key: string, message: string, author: string): void;
 }
 
 export function DraftAnnotation({
@@ -20,8 +24,16 @@ export function DraftAnnotation({
   onSave,
 }: DraftAnnotationProps) {
   const [message, setMessage] = useState(annotation.metadata.message);
+  const [persona] = useState(getRandomPersona);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const trimmedMessage = message.trim();
+
+  function handleSave() {
+    if (trimmedMessage.length === 0) {
+      return;
+    }
+    onSave(itemId, annotation.metadata.key, trimmedMessage, persona.name);
+  }
 
   function tryCancel() {
     if (trimmedMessage.length > 0 && !window.confirm('Discard this comment?')) {
@@ -46,13 +58,10 @@ export function DraftAnnotation({
       className={annotationCardBase}
       onSubmit={(event) => {
         event.preventDefault();
-        if (trimmedMessage.length === 0) {
-          return;
-        }
-        onSave(itemId, annotation.metadata.key, trimmedMessage);
+        handleSave();
       }}
     >
-      <CommentAuthorAvatar author="M" />
+      <CommentAuthorAvatar seed={persona.name} />
       <textarea
         ref={textareaRef}
         value={message}
@@ -69,11 +78,7 @@ export function DraftAnnotation({
           }
 
           event.preventDefault();
-          if (trimmedMessage.length === 0) {
-            return;
-          }
-
-          onSave(itemId, annotation.metadata.key, trimmedMessage);
+          handleSave();
         }}
         placeholder="Add a comment…"
         rows={2}
