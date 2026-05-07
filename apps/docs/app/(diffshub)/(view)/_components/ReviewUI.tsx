@@ -1,6 +1,6 @@
 'use client';
 
-import { type DiffIndicators } from '@pierre/diffs';
+import { type CodeViewLineSelection, type DiffIndicators } from '@pierre/diffs';
 import { type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
 import {
   type ReactNode,
@@ -15,6 +15,7 @@ import { CodeViewSidebar } from './CodeViewSidebar';
 import { CodeViewStatusPanel } from './CodeViewStatusPanel';
 import { CodeViewWrapper } from './CodeViewWrapper';
 import { CODE_VIEW_MARGIN_OFFSET, CODE_VIEW_PADDING_BLOCK } from './constants';
+import { formatCodeViewLineHash } from './lineHash';
 import type {
   CodeViewDeletedCommentEvent,
   CodeViewSavedCommentEntry,
@@ -180,6 +181,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
             initialItems={initialItems}
             onCommentDeleted={handleCommentDeleted}
             onCommentSaved={handleCommentSaved}
+            onLineLinkChange={handleLineLinkChange}
           />
         </>
       ) : (
@@ -190,6 +192,25 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
         />
       )}
     </ReviewGrid>
+  );
+}
+
+function handleLineLinkChange(selection: CodeViewLineSelection | null): void {
+  const nextHash = selection == null ? null : formatCodeViewLineHash(selection);
+  replaceLocationHash(nextHash);
+}
+
+function replaceLocationHash(hash: string | null): void {
+  const { pathname, search } = window.location;
+  const nextHash = hash ?? '';
+  if (window.location.hash === nextHash) {
+    return;
+  }
+
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${pathname}${search}${nextHash}`
   );
 }
 

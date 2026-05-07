@@ -74,8 +74,8 @@ interface ActiveDraftComment {
 interface CodeViewWrapperProps {
   className?: string;
   diffStyle: 'split' | 'unified';
-  onCommentDeleted?(comment: CodeViewDeletedCommentEvent): void;
-  onCommentSaved?(comment: CodeViewSavedCommentEvent): void;
+  onCommentDeleted(comment: CodeViewDeletedCommentEvent): void;
+  onCommentSaved(comment: CodeViewSavedCommentEvent): void;
   overflow: 'wrap' | 'scroll';
   showBackgrounds: boolean;
   diffIndicators: DiffIndicators;
@@ -83,6 +83,7 @@ interface CodeViewWrapperProps {
   scrollRef: RefObject<HTMLDivElement | null>;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
   initialItems: CodeViewItem<CommentMetadata>[];
+  onLineLinkChange(selection: CodeViewLineSelection | null): void;
 }
 
 export const CodeViewWrapper = memo(function CodeViewWrapper({
@@ -97,6 +98,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   scrollRef,
   viewerRef,
   initialItems,
+  onLineLinkChange,
 }: CodeViewWrapperProps) {
   const nextCommentKeyRef = useRef(0);
   const activeDraftRef = useRef<ActiveDraftComment | null>(null);
@@ -117,6 +119,16 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
           ? null
           : selection
       );
+    }
+  );
+
+  const handleLineSelectionEnd = useStableCallback(
+    (range: SelectedLineRange | null, item: CodeViewItem<CommentMetadata>) => {
+      if (range == null || item.type !== 'diff') {
+        onLineLinkChange(null);
+      } else {
+        onLineLinkChange({ id: item.id, range });
+      }
     }
   );
 
@@ -216,7 +228,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
 
       setSelectedLines(null);
       if (removedAnnotation != null && isSavedAnnotation(removedAnnotation)) {
-        onCommentDeleted?.({ itemId, key });
+        onCommentDeleted({ itemId, key });
       }
     }
   );
@@ -293,7 +305,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       }
 
       setSelectedLines(null);
-      onCommentSaved?.({
+      onCommentSaved({
         author: 'you',
         itemId,
         key,
@@ -413,10 +425,14 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
           }
           handleCreateDraftComment(range, context.item.id);
         },
+        onLineSelectionEnd(range, context) {
+          handleLineSelectionEnd(range, context.item);
+        },
       }) satisfies CodeViewOptions<CommentMetadata>,
     [
       diffStyle,
       handleCreateDraftComment,
+      handleLineSelectionEnd,
       diffIndicators,
       lineNumbers,
       overflow,
