@@ -102,8 +102,11 @@ function resolveGitHubPath(path: string): string | undefined {
     return undefined;
   }
 
-  // Prefer GitHub's raw diff endpoint unless the caller explicitly requests a patch.
-  let patchPath = path;
+  let patchPath = path.replace(/\/+$/, '');
+  if (patchPath === '') {
+    return undefined;
+  }
+
   if (!patchPath.endsWith('.patch') && !patchPath.endsWith('.diff')) {
     patchPath += '.diff';
   }
