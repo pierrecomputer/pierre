@@ -28,10 +28,12 @@ import {
 } from './utils';
 
 interface ReviewUIProps {
+  domain?: string;
   initialUrl: string;
+  path: string;
 }
 
-export function ReviewUI({ initialUrl }: ReviewUIProps) {
+export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
@@ -56,8 +58,9 @@ export function ReviewUI({ initialUrl }: ReviewUIProps) {
     treeSource,
     viewerKey,
   } = usePatchLoader({
-    initialUrl,
+    domain,
     onLoadStart: handlePatchLoadStart,
+    path,
     viewerRef,
   });
 
