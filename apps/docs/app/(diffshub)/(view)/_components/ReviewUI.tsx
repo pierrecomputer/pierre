@@ -14,7 +14,7 @@ import { CodeViewHeader } from './CodeViewHeader';
 import { CodeViewSidebar } from './CodeViewSidebar';
 import { CodeViewStatusPanel } from './CodeViewStatusPanel';
 import { CodeViewWrapper } from './CodeViewWrapper';
-import { CODE_VIEW_MARGIN_OFFSET, CODE_VIEW_PADDING_BLOCK } from './constants';
+import { getCodeViewPaddingTop } from './constants';
 import type {
   CodeViewDeletedCommentEvent,
   CodeViewSavedCommentEntry,
@@ -37,6 +37,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
   const [showBackgrounds, setShowBackgrounds] = useState(true);
   const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
@@ -68,28 +69,32 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)');
-    const updateDiffStyle = (matches: boolean) => {
+    const updateMobileState = (matches: boolean) => {
+      setIsMobile(matches);
       setDiffStyle(matches ? 'unified' : 'split');
       if (!matches) setFileTreeOverlayOpen(false);
     };
     const handleChange = (event: MediaQueryListEvent) => {
-      updateDiffStyle(event.matches);
+      updateMobileState(event.matches);
     };
 
-    updateDiffStyle(mediaQuery.matches);
+    updateMobileState(mediaQuery.matches);
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
-  const handleSelectTreeItem = useCallback((itemId: string) => {
-    setFileTreeOverlayOpen(false);
-    viewerRef.current?.scrollTo({
-      type: 'item',
-      id: itemId,
-      align: 'start',
-      offset: CODE_VIEW_PADDING_BLOCK + CODE_VIEW_MARGIN_OFFSET,
-      behavior: 'smooth',
-    });
-  }, []);
+  const handleSelectTreeItem = useCallback(
+    (itemId: string) => {
+      setFileTreeOverlayOpen(false);
+      viewerRef.current?.scrollTo({
+        type: 'item',
+        id: itemId,
+        align: 'start',
+        offset: getCodeViewPaddingTop(isMobile),
+        behavior: 'smooth',
+      });
+    },
+    [isMobile]
+  );
   const handleCommentSaved = useCallback(
     (comment: CodeViewSavedCommentEvent) => {
       setCommentSections((prev) =>
@@ -176,6 +181,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
             overflow={overflow}
             showBackgrounds={showBackgrounds}
             diffIndicators={diffIndicators}
+            isMobile={isMobile}
             lineNumbers={lineNumbers}
             scrollRef={scrollRef}
             viewerRef={viewerRef}

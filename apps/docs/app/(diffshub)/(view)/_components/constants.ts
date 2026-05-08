@@ -11,21 +11,34 @@ export const CODE_VIEW_MARGIN_OFFSET = 12;
 
 export const CODE_VIEW_PADDING_BLOCK = 13;
 
+export function getCodeViewMarginOffset(isMobile: boolean): number {
+  return isMobile ? 0 : CODE_VIEW_MARGIN_OFFSET;
+}
+
+export function getCodeViewPaddingTop(isMobile: boolean): number {
+  return CODE_VIEW_PADDING_BLOCK + getCodeViewMarginOffset(isMobile);
+}
+
 export const CODE_VIEW_CUSTOM_CSS = `
 [data-diffs-header] {
   container-type: scroll-state;
   container-name: sticky-header;
-  top: 12px;
+}
 
-  &::before {
-    position: absolute;
-    top: -12px;
-    left: 0;
-    right: 0;
-    height: 12px;
-    width: 100%;
-    content: '';
-    background-color: var(--diffs-bg);
+@media (min-width: 768px) {
+  [data-diffs-header] {
+    top: 12px;
+
+    &::before {
+      position: absolute;
+      top: -12px;
+      left: 0;
+      right: 0;
+      height: 12px;
+      width: 100%;
+      content: '';
+      background-color: var(--diffs-bg);
+    }
   }
 }
 
