@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 
+import { preloadAvatars } from './annotation-shared';
 import { CodeViewHeader } from './CodeViewHeader';
 import { CodeViewSidebar } from './CodeViewSidebar';
 import { CodeViewStatusPanel } from './CodeViewStatusPanel';
@@ -34,6 +35,8 @@ interface ReviewUIProps {
 }
 
 export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
+  useEffect(preloadAvatars, []);
+
   const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
