@@ -270,7 +270,7 @@
 
 .cv-scrollbar::-webkit-scrollbar-track {
   background: transparent;
-  margin-top: 22px;
+  margin-top: 26px;
 }
 
 .cv-scrollbar::-webkit-scrollbar-thumb {
@@ -278,6 +278,13 @@
   background-clip: content-box;
   border: 2px solid transparent;
   border-radius: 6px;
+}
+
+@media (width <= 767px) {
+  .cv-scrollbar::-webkit-scrollbar-track {
+    margin-top: 0;
+    border-left: 1px solid var(--color-border);
+  }
 }
 
 @supports (-moz-appearance: none) {
