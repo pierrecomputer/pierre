@@ -39,6 +39,7 @@ const TOKEN_DEFS: Record<string, TokenDef> = {
   default: { icon: 'file-duo', tier: 'standard' },
   bash: { icon: 'bash-duo', tier: 'standard' },
   c: { icon: 'lang-c', tier: 'standard' },
+  cpp: { icon: 'lang-c', tier: 'standard' },
   css: { icon: 'lang-css-duo', tier: 'standard' },
   font: { icon: 'font', tier: 'standard' },
   git: { icon: 'git', tier: 'standard' },
@@ -102,12 +103,24 @@ for (const [token, def] of Object.entries(TOKEN_DEFS)) {
 ICON_TO_TOKEN['file-zip-duo'] = 'zip';
 // Theme uses bun-duo for filenames, but we render with the plain bun icon
 ICON_TO_TOKEN['bun-duo'] = 'bun';
+// lang-c is shared between the c and cpp tokens; keep c as the primary so
+// that theme data entries for this icon (plain .c, .h files) resolve to c.
+// C++ extensions are assigned to cpp via MANUAL_EXTENSION_TOKENS below.
+ICON_TO_TOKEN['lang-c'] = 'c';
 
 // Manual additions not covered by the theme data
 const MANUAL_EXTENSION_TOKENS: Record<string, string> = {
+  cc: 'cpp',
+  cpp: 'cpp',
+  cxx: 'cpp',
+  hh: 'cpp',
+  hpp: 'cpp',
+  hxx: 'cpp',
+  inl: 'cpp',
   log: 'text',
   mcp: 'mcp',
   'mdx.tsx': 'markdown',
+  mm: 'cpp',
   txt: 'text',
 };
 

@@ -11,6 +11,7 @@ export type BuiltInFileIconToken =
   | 'bun'
   | 'c'
   | 'claude'
+  | 'cpp'
   | 'css'
   | 'database'
   | 'default'
@@ -113,6 +114,10 @@ const sym_c = `<symbol id="file-tree-builtin-c" viewBox="0 0 16 16">
 
 const sym_claude = `<symbol id="file-tree-builtin-claude" viewBox="0 0 16 16">
   <path fill="currentColor" d="M3.75 10.31 6.5 8.77l.04-.14-.04-.07h-.14l-.46-.03-1.57-.04-1.38-.07-1.33-.07-.34-.07L1 7.86l.03-.21.28-.18.4.03.89.07 1.33.08.97.06 1.43.16h.22l.03-.1-.07-.05-.06-.06-1.39-.92-1.48-.98-.79-.57-.42-.28-.2-.28-.1-.6.39-.41.52.04.12.03.52.4 1.12.86L6.2 6.04l.2.17.09-.06.01-.04-.1-.15-.76-1.46-.85-1.46-.37-.6-.1-.36a1 1 0 0 1-.06-.42l.42-.59.25-.07.6.08.22.2.36.84.58 1.3.9 1.77.29.53.14.47.04.14h.1v-.07l.07-1 .14-1.22.14-1.57.04-.45.23-.53.42-.28.36.15.28.41-.04.25-.16 1.08-.36 1.7-.21 1.14h.12l.14-.15.58-.76.97-1.2.42-.5.5-.51.32-.25h.6l.44.66-.2.68-.61.79-.52.65-.74 1-.45.8.04.05h.1l1.68-.36.9-.16 1.06-.18.5.23.05.22-.2.48-1.15.28-1.34.28-2 .46-.04.01.03.04.9.09.4.03h.94l1.77.14.46.28.27.37-.04.28-.72.37-.95-.23-2.24-.53-.76-.18h-.11v.06l.64.63L12 10.86l1.48 1.35.07.34-.18.28-.2-.03-1.29-.98-.5-.42-1.12-.95h-.07v.1l.25.38 1.37 2.05.07.63-.1.2-.36.14-.38-.08-.8-1.12-.85-1.26-.66-1.15-.07.05-.4 4.23-.19.21-.42.17-.35-.28-.2-.42.2-.87.23-1.12.18-.9.17-1.1.1-.36v-.03h-.1l-.84 1.16-1.27 1.72-1 1.07-.24.1-.42-.22.04-.39.22-.32 1.4-1.8.84-1.1.57-.64-.02-.07h-.04l-3.7 2.4-.66.09-.28-.28.03-.42.14-.14 1.12-.77z"/>
+</symbol>`;
+
+const sym_cpp = `<symbol id="file-tree-builtin-cpp" viewBox="0 0 16 16">
+  <path fill="currentColor" fill-rule="evenodd" d="M8 1q.084 0 .166.021.098.023.186.075c1.055.624 4.22 2.486 5.277 3.11.085.05.15.112.209.192h-.002l.028.037a.5.5 0 0 1 .103.21q.031.102.033.21v6.29a.71.71 0 0 1-.347.616l-5.307 3.144a.68.68 0 0 1-.693 0l-5.307-3.144A.72.72 0 0 1 2 11.145V4.832a.71.71 0 0 1 .346-.612l5.288-3.126A.7.7 0 0 1 7.992 1zm2.901 4.349a3.75 3.75 0 1 0 0 5.302l-1.06-1.06a2.25 2.25 0 1 1 0-3.182z" clip-rule="evenodd"/>
 </symbol>`;
 
 const sym_css = `<symbol id="file-tree-builtin-css" viewBox="0 0 16 16">
@@ -328,6 +333,7 @@ const sym_zip = `<symbol id="file-tree-builtin-zip" viewBox="0 0 16 16">
 const standardTierSymbols = [
   sym_bash,
   sym_c,
+  sym_cpp,
   sym_css,
   sym_database,
   sym_default,
@@ -518,20 +524,19 @@ const BUILT_IN_FILE_EXTENSION_TOKENS: Partial<
   bmp: 'image',
   bz2: 'zip',
   c: 'c',
-  cc: 'c',
+  cc: 'cpp',
   cfg: 'text',
   CHANGELOG: 'text',
   cjs: 'javascript',
   'code-workspace': 'vscode',
   conf: 'text',
   CONTRIBUTORS: 'text',
-  cpp: 'c',
-  cs: 'c',
+  cpp: 'cpp',
   csh: 'bash',
   css: 'css',
   csv: 'table',
   cts: 'typescript',
-  cxx: 'c',
+  cxx: 'cpp',
   db: 'database',
   editorconfig: 'text',
   env: 'text',
@@ -548,15 +553,15 @@ const BUILT_IN_FILE_EXTENSION_TOKENS: Partial<
   graphql: 'graphql',
   gz: 'zip',
   h: 'c',
-  hh: 'c',
-  hpp: 'c',
+  hh: 'cpp',
+  hpp: 'cpp',
   htm: 'html',
   html: 'html',
-  hxx: 'c',
+  hxx: 'cpp',
   icns: 'image',
   ico: 'image',
   ini: 'text',
-  inl: 'c',
+  inl: 'cpp',
   jar: 'zip',
   jpeg: 'image',
   jpg: 'image',
@@ -570,14 +575,13 @@ const BUILT_IN_FILE_EXTENSION_TOKENS: Partial<
   less: 'css',
   LICENSE: 'text',
   log: 'text',
-  m: 'c',
   markdown: 'markdown',
   mcp: 'mcp',
   md: 'markdown',
   mdx: 'markdown',
   'mdx.tsx': 'markdown',
   mjs: 'javascript',
-  mm: 'c',
+  mm: 'cpp',
   mts: 'typescript',
   ods: 'table',
   otf: 'font',
@@ -646,6 +650,7 @@ const COMPLETE_EXTENSION_OVERRIDES: Partial<
 const STANDARD_TIER_TOKENS = new Set<BuiltInFileIconToken>([
   'bash',
   'c',
+  'cpp',
   'css',
   'database',
   'default',

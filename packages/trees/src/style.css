@@ -59,6 +59,7 @@
       --trees-file-icon-color-browserslist
       --trees-file-icon-color-bun
       --trees-file-icon-color-c
+      --trees-file-icon-color-cpp
       --trees-file-icon-color-claude
       --trees-file-icon-color-css
       --trees-file-icon-color-database
@@ -360,6 +361,10 @@
       var(--trees-icon-mauve)
     );
     --trees-file-icon-color-c: var(
+      --trees-file-icon-color,
+      var(--trees-icon-blue)
+    );
+    --trees-file-icon-color-cpp: var(
       --trees-file-icon-color,
       var(--trees-icon-blue)
     );
@@ -974,6 +979,9 @@
     }
     [data-icon-token='c'] {
       color: var(--trees-file-icon-color-c);
+    }
+    [data-icon-token='cpp'] {
+      color: var(--trees-file-icon-color-cpp);
     }
     [data-icon-token='claude'] {
       color: var(--trees-file-icon-color-claude);
