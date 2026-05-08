@@ -15,6 +15,7 @@ import { Fragment } from 'react';
 
 import { WorkerPoolContext } from './(diffs)/_components/WorkerPoolContext';
 import { PreloadHighlighter } from '@/components/PreloadHighlighter';
+import { ScrollbarGutterVariables } from '@/components/ScrollbarGutterVariables';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { type ProductId, PRODUCTS } from '@/lib/product-config';
@@ -220,11 +221,8 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
         />
       </head>
-      <body
-      // className={
-      //   SITE === 'diffshub' ? 'bg-neutral-50 dark:bg-neutral-900' : undefined
-      // }
-      >
+      <body>
+        <ScrollbarGutterVariables />
         <WrapperContext>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             {children}

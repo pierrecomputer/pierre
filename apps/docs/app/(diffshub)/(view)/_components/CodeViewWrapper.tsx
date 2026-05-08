@@ -40,7 +40,7 @@ import {
 import { cn } from '@/lib/utils';
 
 const VIEWER_METRICS = {
-  gap: 12,
+  gap: 8,
   paddingBottom: CODE_VIEW_PADDING_BLOCK,
   paddingTop: CODE_VIEW_PADDING_BLOCK + CODE_VIEW_MARGIN_OFFSET,
 };
@@ -463,7 +463,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       containerRef={scrollRef}
       initialItems={initialItems}
       className={cn(
-        'gh-code-view-scrollbar-y mt-[-12px] h-[calc(100%_+_12px)] relative min-h-0 min-w-0 flex-1 md:px-[1px] overflow-auto overscroll-contain w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] [&_diffs-container]:overflow-clip md:[&_diffs-container]:rounded-lg [&_diffs-container]:shadow-[0_0_0_1px_var(--color-border)] [&_diffs-container]:[contain:layout_paint_style]',
+        'cv-scrollbar mt-[-12px] h-[calc(100%_+_12px)] relative min-h-0 min-w-0 flex-1 border-b border-border md:border-b-0 md:pl-[1px] md:pr-[max(0px,calc(13px-var(--cv-gutter-vertical)))] overflow-auto overscroll-contain w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] [&_diffs-container]:overflow-clip md:[&_diffs-container]:rounded-lg md:[&_diffs-container]:shadow-[0_0_0_1px_var(--color-border)] [&_diffs-container]:[contain:layout_paint_style]',
         className
       )}
       options={options}

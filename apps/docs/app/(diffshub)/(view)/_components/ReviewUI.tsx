@@ -155,7 +155,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
         setLineNumbers={setLineNumbers}
         setDiffStyle={setDiffStyle}
       />
-      {viewerAvailable ? (
+      {viewerAvailable && treeSource != null ? (
         <>
           <CodeViewSidebar
             className="[grid-area:viewer] md:[grid-area:tree]"

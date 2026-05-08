@@ -157,7 +157,7 @@ export interface StatusRowProps {
 
 export function StatusRow({ icon: Icon, children }: StatusRowProps) {
   return (
-    <div className="text-muted-foreground border-border mx-2 flex items-center gap-2 border-t p-2">
+    <div className="text-muted-foreground border-border mr-2 ml-3 flex items-center gap-2 border-t p-2">
       <Icon className="size-3 opacity-50" />
       {children}
     </div>
