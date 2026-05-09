@@ -57,6 +57,7 @@ export function CustomHunkSeparators({
       )}
 
       <ButtonGroup
+        className="max-w-full flex-wrap gap-1"
         value={hunkSeparators}
         onValueChange={(value) => {
           if (isHunkSeparatorOption(value)) {
