@@ -52,7 +52,3 @@ export function createMeasuredScrollbarGutterDeclaration(
       : `${scrollbarGutter}px`;
   return `${DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY}: ${value};`;
 }
-
-export function resetMeasuredScrollbarGutterForTests(): void {
-  measuredScrollbarGutter = undefined;
-}
