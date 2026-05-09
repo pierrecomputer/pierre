@@ -739,4 +739,5 @@ export interface AppliedThemeStyleCache {
   themeStyles: string;
   themeType: ThemeTypes;
   baseThemeType: 'light' | 'dark' | undefined;
+  scrollbarGutter: number | undefined;
 }

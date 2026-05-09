@@ -11,6 +11,14 @@
 
     --diffs-mixer: light-dark(black, white);
     --diffs-gap-fallback: 8px;
+    --diffs-scrollbar-gutter-fallback: 6px;
+    --diffs-scrollbar-gutter: var(
+      --diffs-scrollbar-gutter-override,
+      var(
+        --diffs-scrollbar-gutter-measured,
+        var(--diffs-scrollbar-gutter-fallback)
+      )
+    );
 
     --diffs-added-light: #0dbe4e;
     --diffs-added-dark: #5ecc71;
@@ -60,6 +68,7 @@
     --diffs-gap-inline
     --diffs-gap-block
     --diffs-gap-style
+    --diffs-scrollbar-gutter-override
     --diffs-tab-size
     */
 
@@ -269,6 +278,14 @@
 
     &:hover [data-code]::-webkit-scrollbar-thumb {
       background-color: var(--diffs-bg-context);
+    }
+  }
+
+  /* iOS WebKit uses overlay scrollbars, so unmeasured layout compensation
+   * should start at zero rather than the desktop custom-scrollbar fallback. */
+  @supports (-webkit-touch-callout: none) {
+    :host {
+      --diffs-scrollbar-gutter-fallback: 0px;
     }
   }
 
@@ -756,8 +773,25 @@
     padding-top: var(--diffs-gap-block, var(--diffs-gap-fallback));
     padding-bottom: max(
       0px,
-      calc(var(--diffs-gap-block, var(--diffs-gap-fallback)) - 6px)
+      calc(
+        var(--diffs-gap-block, var(--diffs-gap-fallback)) -
+          var(--diffs-scrollbar-gutter)
+      )
     );
+    scrollbar-gutter: stable;
+  }
+
+  [data-diffs-scrollbar-measure] {
+    position: absolute;
+    top: -200px;
+    left: -200px;
+    opacity: 0;
+    pointer-events: none;
+    width: 100px;
+    height: 100px;
+    padding: 0;
+    grid-template-columns: none;
+    scrollbar-gutter: auto;
   }
 
   [data-container-size] {
@@ -766,7 +800,7 @@
 
   [data-code]::-webkit-scrollbar {
     width: 0;
-    height: 6px;
+    height: var(--diffs-scrollbar-gutter);
   }
 
   [data-code]::-webkit-scrollbar-track {

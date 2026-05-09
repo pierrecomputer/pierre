@@ -40,6 +40,9 @@ export const DEFAULT_THEMES: ThemesType = {
 export const THEME_CSS_ATTRIBUTE = 'data-theme-css';
 export const UNSAFE_CSS_ATTRIBUTE = 'data-unsafe-css';
 export const CORE_CSS_ATTRIBUTE = 'data-core-css';
+export const DIFFS_SCROLLBAR_MEASURE_ATTRIBUTE = 'data-diffs-scrollbar-measure';
+export const DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY =
+  '--diffs-scrollbar-gutter-measured';
 
 export const DEFAULT_COLLAPSED_CONTEXT_THRESHOLD = 1;
 export const DEFAULT_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {

@@ -17,6 +17,7 @@ import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
+import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 
 export interface FileStreamOptions extends BaseCodeOptions {
@@ -339,17 +340,19 @@ export class FileStream {
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const effectiveThemeType = baseThemeType ?? themeType;
+    const scrollbarGutter = getMeasuredScrollbarGutter(shadowRoot);
     if (
       this.themeCSSStyle?.parentNode === shadowRoot &&
       this.appliedThemeCSS?.themeStyles === themeStyles &&
-      this.appliedThemeCSS.themeType === effectiveThemeType
+      this.appliedThemeCSS.themeType === effectiveThemeType &&
+      this.appliedThemeCSS.scrollbarGutter === scrollbarGutter
     ) {
       return;
     }
     this.themeCSSStyle = upsertHostThemeStyle({
       shadowRoot,
       currentNode: this.themeCSSStyle,
-      themeCSS: wrapThemeCSS(themeStyles, effectiveThemeType),
+      themeCSS: wrapThemeCSS(themeStyles, effectiveThemeType, scrollbarGutter),
     });
     this.appliedThemeCSS =
       this.themeCSSStyle != null
@@ -357,6 +360,7 @@ export class FileStream {
             themeStyles,
             themeType: effectiveThemeType,
             baseThemeType,
+            scrollbarGutter,
           }
         : undefined;
   }

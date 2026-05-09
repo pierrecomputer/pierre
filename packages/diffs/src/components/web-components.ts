@@ -1,5 +1,6 @@
 import { DIFFS_TAG_NAME } from '../constants';
 import styles from '../style.css';
+import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 
 // If HTMLElement is undefined it usually means we are in a server environment
 // so best to just not do anything
@@ -24,10 +25,11 @@ if (
       }
       shadowRoot.adoptedStyleSheets = [sheet];
     }
-    // Not sure if we need to do anything here yet...
-    // connectedCallback() {
-    //   this.dataset.diffsContainer = '';
-    // }
+
+    connectedCallback() {
+      const shadowRoot = this.shadowRoot ?? this.attachShadow({ mode: 'open' });
+      getMeasuredScrollbarGutter(shadowRoot);
+    }
   }
 
   customElements.define(DIFFS_TAG_NAME, FileDiffContainer);

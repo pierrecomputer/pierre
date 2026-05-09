@@ -38,11 +38,16 @@ import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
-import { wrapThemeCSS, wrapUnsafeCSS } from '../utils/cssWrappers';
+import {
+  patchScrollbarGutterSize,
+  wrapThemeCSS,
+  wrapUnsafeCSS,
+} from '../utils/cssWrappers';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
+import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
@@ -340,6 +345,7 @@ export class File<LAnnotation = undefined> {
       this.pre.removeAttribute('data-dehydrated');
     }
     this.fileContainer = fileContainer;
+    this.hydrateMeasuredScrollbar();
   }
 
   protected hydrationSetup({
@@ -729,17 +735,19 @@ export class File<LAnnotation = undefined> {
     const shadowRoot =
       container.shadowRoot ?? container.attachShadow({ mode: 'open' });
     const effectiveThemeType = baseThemeType ?? themeType;
+    const scrollbarGutter = getMeasuredScrollbarGutter(shadowRoot);
     if (
       this.themeCSSStyle?.parentNode === shadowRoot &&
       this.appliedThemeCSS?.themeStyles === themeStyles &&
-      this.appliedThemeCSS.themeType === effectiveThemeType
+      this.appliedThemeCSS.themeType === effectiveThemeType &&
+      this.appliedThemeCSS.scrollbarGutter === scrollbarGutter
     ) {
       return;
     }
     this.themeCSSStyle = upsertHostThemeStyle({
       shadowRoot,
       currentNode: this.themeCSSStyle,
-      themeCSS: wrapThemeCSS(themeStyles, effectiveThemeType),
+      themeCSS: wrapThemeCSS(themeStyles, effectiveThemeType, scrollbarGutter),
     });
     this.appliedThemeCSS =
       this.themeCSSStyle != null
@@ -747,8 +755,20 @@ export class File<LAnnotation = undefined> {
             themeStyles,
             themeType: effectiveThemeType,
             baseThemeType,
+            scrollbarGutter,
           }
         : undefined;
+  }
+
+  private hydrateMeasuredScrollbar(): void {
+    const shadowRoot = this.fileContainer?.shadowRoot;
+    if (shadowRoot == null || this.themeCSSStyle == null) {
+      return;
+    }
+    this.themeCSSStyle.textContent = patchScrollbarGutterSize(
+      this.themeCSSStyle.textContent ?? '',
+      getMeasuredScrollbarGutter(shadowRoot)
+    );
   }
 
   private applyFullRender(result: FileRenderResult, pre: HTMLPreElement): void {
