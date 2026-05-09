@@ -17,7 +17,7 @@ function Divider() {
 
 const EXAMPLE_URLS = [
   'nodejs/node/pull/59805',
-  'torvalds/linux/compare/v6.0...v7.0',
+  // 'torvalds/linux/compare/v6.0...v7.0',
   'ghostty-org/ghostty/pull/12291',
   'pierrecomputer/pierre/commit/0800fb',
 ] as const;
