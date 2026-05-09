@@ -77,10 +77,14 @@ class AutoScrollTester {
 }
 
 interface WorkerPoolStatusProps {
+  expanded: boolean;
+  onToggle(): void;
   scrollRef: RefObject<HTMLDivElement | null>;
 }
 
 export const WorkerPoolStatus = memo(function WorkerPoolStatus({
+  expanded,
+  onToggle,
   scrollRef,
 }: WorkerPoolStatusProps) {
   const pool = useWorkerPool();
@@ -100,7 +104,16 @@ export const WorkerPoolStatus = memo(function WorkerPoolStatus({
       });
     }
   }, [pool]);
-  return stats != null && <StatsDisplay stats={stats} scrollRef={scrollRef} />;
+  return (
+    stats != null && (
+      <StatsDisplay
+        expanded={expanded}
+        onToggle={onToggle}
+        stats={stats}
+        scrollRef={scrollRef}
+      />
+    )
+  );
 });
 
 export interface StatItemProps {
@@ -130,6 +143,8 @@ export function StatItem({ label, value, valueClassName }: StatItemProps) {
 }
 
 interface StatsDisplayProps {
+  expanded: boolean;
+  onToggle(): void;
   stats: WorkerStats;
   scrollRef: RefObject<HTMLDivElement | null>;
 }
@@ -163,9 +178,13 @@ export function StatusRow({ icon: Icon, children }: StatusRowProps) {
   );
 }
 
-function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
+function StatsDisplay({
+  expanded,
+  onToggle,
+  stats,
+  scrollRef,
+}: StatsDisplayProps) {
   const [isBrrt, setIsBrrt] = useState(false);
-  const [showStats, setShowStats] = useState(false);
   const [scrollTester] = useState(
     () => new AutoScrollTester(scrollRef, setIsBrrt)
   );
@@ -176,23 +195,23 @@ function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'F3') {
         event.preventDefault();
-        setShowStats((prev) => !prev);
+        onToggle();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [onToggle]);
 
   const { Icon: StatusIcon, className: statusIconClass } = getStatusIcon(stats);
 
   return (
     <div className="border-border shrink-0 overscroll-contain border-b text-sm md:border-b-0">
-      <StatusRow icon={showStats ? IconEyeSlash : IconEye}>
+      <StatusRow icon={expanded ? IconEyeSlash : IconEye}>
         <button
           type="button"
-          onClick={() => setShowStats((prev) => !prev)}
+          onClick={onToggle}
           className="text-muted-foreground hover:text-foreground flex min-w-0 flex-1 cursor-pointer items-center gap-1 text-sm focus:outline-none"
-          aria-expanded={showStats}
+          aria-expanded={expanded}
         >
           <span className="truncate">System Monitor</span>
           <span className="text-muted-foreground/50 hidden md:inline">
@@ -213,7 +232,7 @@ function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
           <StatusIcon className={`size-2 shrink-0 ${statusIconClass}`} />
         </div>
       </StatusRow>
-      {showStats && (
+      {expanded && (
         <div className="ml-9 md:mr-1">
           <StatItem
             label="Busy Workers"

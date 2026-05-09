@@ -27,6 +27,7 @@ import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { cn } from '@/lib/utils';
 
 type SidebarTab = 'files' | 'comments';
+type SidebarStatusPanel = 'diffStats' | 'systemMonitor';
 
 const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 
@@ -56,10 +57,21 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   streaming,
 }: CodeViewSidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
+  const [activeStatusPanel, setActiveStatusPanel] =
+    useState<SidebarStatusPanel | null>('diffStats');
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
   const handleModelReady = useCallback((model: FileTree | null) => {
     setFileTreeModel(model);
   }, []);
+  const toggleStatusPanel = useCallback((panel: SidebarStatusPanel) => {
+    setActiveStatusPanel((current) => (current === panel ? null : panel));
+  }, []);
+
+  useEffect(() => {
+    if (mobileOverlayOpen && window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
+      setActiveStatusPanel(null);
+    }
+  }, [mobileOverlayOpen]);
 
   useEffect(() => {
     if (!mobileOverlayOpen || !window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
@@ -163,8 +175,17 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             />
           </div>
         </div>
-        <CodeViewDiffStats stats={diffStats} streaming={streaming} />
-        <WorkerPoolStatus scrollRef={scrollRef} />
+        <CodeViewDiffStats
+          expanded={activeStatusPanel === 'diffStats'}
+          onToggle={() => toggleStatusPanel('diffStats')}
+          stats={diffStats}
+          streaming={streaming}
+        />
+        <WorkerPoolStatus
+          expanded={activeStatusPanel === 'systemMonitor'}
+          onToggle={() => toggleStatusPanel('systemMonitor')}
+          scrollRef={scrollRef}
+        />
       </SidebarWrapper>
     </>
   );
