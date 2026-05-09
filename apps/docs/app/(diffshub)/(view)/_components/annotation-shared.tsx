@@ -7,11 +7,13 @@ export const annotationCardBase =
 
 // All available reviewer personas, derived from /public/diffshub-avatars/ filenames.
 const AVATAR_NAMES = [
+  'alex',
   'amacateus',
   'amadeus',
   'aussie',
   'cedric',
   'chugs',
+  'dwayn',
   'ed',
   'fat',
   'ian',
