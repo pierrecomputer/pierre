@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type RefObject,
   useCallback,
+  useEffect,
   useState,
 } from 'react';
 
@@ -26,6 +27,8 @@ import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { cn } from '@/lib/utils';
 
 type SidebarTab = 'files' | 'comments';
+
+const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 
 interface CodeViewSidebarProps {
   className?: string;
@@ -58,6 +61,33 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
     setFileTreeModel(model);
   }, []);
 
+  useEffect(() => {
+    if (!mobileOverlayOpen || !window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
+      return undefined;
+    }
+
+    const { body, documentElement } = document;
+    const codeViewScroll = scrollRef.current;
+    const previousBodyOverflow = body.style.overflow;
+    const previousRootOverscrollBehavior =
+      documentElement.style.overscrollBehavior;
+    const previousCodeViewOverflow = codeViewScroll?.style.overflow;
+
+    body.style.overflow = 'hidden';
+    documentElement.style.overscrollBehavior = 'none';
+    if (codeViewScroll != null) {
+      codeViewScroll.style.overflow = 'hidden';
+    }
+
+    return () => {
+      body.style.overflow = previousBodyOverflow;
+      documentElement.style.overscrollBehavior = previousRootOverscrollBehavior;
+      if (codeViewScroll != null) {
+        codeViewScroll.style.overflow = previousCodeViewOverflow ?? '';
+      }
+    };
+  }, [mobileOverlayOpen, scrollRef]);
+
   return (
     <>
       <button
@@ -77,40 +107,38 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
         className={className}
         mobileOverlayOpen={mobileOverlayOpen}
       >
-        <div className="px-3">
-          <div className="flex items-center gap-1">
-            <ButtonGroup
-              aria-label="Sidebar sections"
-              className="mr-auto flex min-w-0"
-              value={activeTab}
-              onValueChange={(value) => setActiveTab(value as SidebarTab)}
+        <div className="flex items-center gap-2 p-4 pb-0 md:pt-0 md:pr-2 md:pl-3">
+          <ButtonGroup
+            aria-label="Sidebar sections"
+            className="mr-auto flex min-w-0"
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as SidebarTab)}
+          >
+            <ButtonGroupItem value="files" className="size-9 p-0">
+              <IconFileTree />
+              <span className="sr-only">Files</span>
+            </ButtonGroupItem>
+            <ButtonGroupItem value="comments" className="size-9 p-0">
+              <IconComment />
+              <span className="sr-only">Comments</span>
+            </ButtonGroupItem>
+          </ButtonGroup>
+          {activeTab === 'files' && fileTreeModel != null && (
+            <FileTreeSearchToggle model={fileTreeModel} />
+          )}
+          {onMobileClose != null && (
+            <Button
+              variant="muted"
+              size="icon"
+              className="md:hidden"
+              aria-label="Close file tree"
+              onClick={onMobileClose}
             >
-              <ButtonGroupItem value="files" className="size-9 p-0">
-                <IconFileTree />
-                <span className="sr-only">Files</span>
-              </ButtonGroupItem>
-              <ButtonGroupItem value="comments" className="size-9 p-0">
-                <IconComment />
-                <span className="sr-only">Comments</span>
-              </ButtonGroupItem>
-            </ButtonGroup>
-            {activeTab === 'files' && fileTreeModel != null && (
-              <FileTreeSearchToggle model={fileTreeModel} />
-            )}
-            {onMobileClose != null && (
-              <Button
-                variant="muted"
-                size="icon"
-                className="md:hidden"
-                aria-label="Close file tree"
-                onClick={onMobileClose}
-              >
-                <IconX className="size-4" />
-              </Button>
-            )}
-          </div>
+              <IconX className="size-4" />
+            </Button>
+          )}
         </div>
-        <div className="mt-3 ml-3 min-h-0 flex-1">
+        <div className="mt-3 min-h-0 flex-1">
           <div
             role="region"
             aria-label="Files"
@@ -159,7 +187,7 @@ function SidebarWrapper({
         className,
         'contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
         mobileOverlayOpen
-          ? 'bg-background p-3 pt-5 pointer-events-auto h-[calc(100%_-_env(safe-area-inset-bottom))] translate-y-0 overflow-hidden rounded-t-xl shadow-[0_0_0_1px_var(--color-border),_0_16px_32px_rgb(0_0_0_/0.25)] md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
+          ? 'bg-background pointer-events-auto h-[calc(100%_-_env(safe-area-inset-bottom))] translate-y-0 overflow-hidden rounded-t-xl shadow-[0_0_0_1px_var(--color-border),_0_16px_32px_rgb(0_0_0_/0.25)] md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
           : 'bg-neutral-50 dark:bg-neutral-900 pointer-events-none m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl border border-transparent md:pointer-events-auto md:m-0 md:h-full md:overflow-visible md:rounded-none md:border-0 p-0 pt-3'
       )}
     >

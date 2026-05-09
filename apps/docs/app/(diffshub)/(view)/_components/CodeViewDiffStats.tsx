@@ -42,12 +42,14 @@ export const CodeViewDiffStats = memo(function CodeViewDiffStats({
           aria-expanded={showStats}
         >
           Diff Stats
-          <span className="text-muted-foreground/50">(F2)</span>
+          <span className="text-muted-foreground/50 hidden md:inline">
+            (F2)
+          </span>
           {streaming && <StreamingIndicator />}
         </button>
       </StatusRow>
       {showStats && (
-        <div className="mr-2 mb-2 ml-10">
+        <div className="ml-10 md:mr-1">
           <StatItem
             label="Files"
             value={stats.fileCount}

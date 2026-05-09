@@ -290,7 +290,6 @@
 @supports (-moz-appearance: none) {
   .cv-scrollbar {
     scrollbar-color: var(--cv-scrollbar-thumb-bg) transparent;
-    scrollbar-width: thin;
   }
 }
 

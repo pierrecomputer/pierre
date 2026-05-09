@@ -67,9 +67,10 @@ const HIDDEN_SEARCH_UNSAFE_CSS = `
   [data-file-tree-search-container] {
     padding-bottom: 12px;
     margin-bottom: 12px;
-    margin-right: 9px;
-    margin-left: 1px;
+    margin-right: 4px;
     border-bottom: 1px solid var(--color-border);
+    padding-inline-start: 1px;
+    padding-inline-end: 5px;
   }
 
   [data-file-tree-sticky-overlay-content] {
@@ -100,8 +101,21 @@ const SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS = `
   [data-file-tree-virtualized-scroll="true"] {
     padding-inline-start: 0;
   }
-  [data-file-tree-search-container="true"] {
-    padding-inline-start: 1px;
+
+  @media (width <= 767px) {
+    [data-file-tree-search-container="true"],
+    [data-file-tree-virtualized-scroll="true"] {
+      padding-inline-start: 14px;
+    }
+
+    [data-file-tree-search-container="true"] {
+      margin-right: 0;
+      padding-inline-end: 14px;
+    }
+
+    [data-file-tree-virtualized-scroll="true"] {
+      padding-inline-end: max(0px, calc(14px - var(--trees-scrollbar-gutter)));
+    }
   }
 `;
 

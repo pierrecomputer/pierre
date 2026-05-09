@@ -75,7 +75,7 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
 
   return (
     <FileTree
-      className="h-full min-h-0 overflow-auto overscroll-contain"
+      className="h-full min-h-0 overflow-auto overscroll-contain md:ml-3"
       model={model}
       style={DENSITY_OVERRIDE_STYLES}
     />

@@ -107,7 +107,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   return (
     <div
       className={cn(
-        'z-10 md:m-3 md:mb-0 contain-layout contain-paint flex flex-wrap md:flex-nowrap border-[rgb(0_0_0_/0.1)] bg-background bg-clip-padding items-center gap-2.5 md:rounded-xl border-b md:border p-3 md:py-2 shadow-xs dark:border-[rgb(255_255_255_/0.1)]',
+        'z-10 md:m-3 md:mb-0 contain-layout contain-paint flex flex-wrap md:flex-nowrap border-[rgb(0_0_0_/0.1)] bg-background bg-clip-padding items-center gap-2.5 md:rounded-xl border-b md:border p-3 md:py-2 md:shadow-xs dark:border-[rgb(255_255_255_/0.1)]',
         className
       )}
     >

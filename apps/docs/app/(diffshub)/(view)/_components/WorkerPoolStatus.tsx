@@ -11,7 +11,6 @@ import {
   IconCircleFill,
   IconEye,
   IconEyeSlash,
-  IconFire,
   IconInfoFill,
   IconSquircleLgFill,
   IconTriangleFill,
@@ -115,7 +114,7 @@ export function StatItem({ label, value, valueClassName }: StatItemProps) {
   const formatted =
     typeof value === 'number' ? NUMBER_FORMATTER.format(value) : value;
   return (
-    <div className="border-border/75 flex items-center justify-between border-t py-1 text-[12px]">
+    <div className="border-border/75 flex items-center justify-between border-t py-1 pr-4 text-[12px] md:pr-2">
       <div className="text-muted-foreground">{label}</div>
       <span
         className={cn('pl-[1ch] text-right tabular-nums', valueClassName)}
@@ -157,8 +156,8 @@ export interface StatusRowProps {
 
 export function StatusRow({ icon: Icon, children }: StatusRowProps) {
   return (
-    <div className="text-muted-foreground border-border mr-2 ml-3 flex items-center gap-2 border-t p-2">
-      <Icon className="size-3 opacity-50" />
+    <div className="text-muted-foreground border-border flex min-w-0 items-center gap-2 border-t px-4 py-2 md:mr-1 md:ml-3 md:px-2">
+      <Icon className="size-3 shrink-0 opacity-50" />
       {children}
     </div>
   );
@@ -187,23 +186,35 @@ function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
   const { Icon: StatusIcon, className: statusIconClass } = getStatusIcon(stats);
 
   return (
-    <div className="shrink-0 text-sm">
+    <div className="border-border shrink-0 overscroll-contain border-b text-sm md:border-b-0">
       <StatusRow icon={showStats ? IconEyeSlash : IconEye}>
         <button
           type="button"
           onClick={() => setShowStats((prev) => !prev)}
-          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1 text-sm focus:outline-none"
+          className="text-muted-foreground hover:text-foreground flex min-w-0 flex-1 cursor-pointer items-center gap-1 text-sm focus:outline-none"
           aria-expanded={showStats}
         >
-          System Monitor
-          <span className="text-muted-foreground/50">(F3)</span>
+          <span className="truncate">System Monitor</span>
+          <span className="text-muted-foreground/50 hidden md:inline">
+            (F3)
+          </span>
         </button>
-        <div className="ml-auto flex items-center gap-1">
-          <StatusIcon className={`size-2 ${statusIconClass}`} />
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={scrollTester.toggleState}
+            className="hover:bg-muted/50 hover:text-foreground text-muted-foreground hidden size-5 cursor-pointer items-center justify-center rounded-md transition md:inline-flex"
+            title={isBrrt ? 'Pause autoscroll' : 'Start autoscroll'}
+            aria-label={isBrrt ? 'Pause autoscroll' : 'Start autoscroll'}
+            aria-pressed={isBrrt}
+          >
+            <AutoScrollToggleIcon running={isBrrt} />
+          </button>
+          <StatusIcon className={`size-2 shrink-0 ${statusIconClass}`} />
         </div>
       </StatusRow>
       {showStats && (
-        <div className="mr-2 mb-2 ml-9">
+        <div className="ml-9 md:mr-1">
           <StatItem
             label="Busy Workers"
             value={`${stats.busyWorkers}/${stats.totalWorkers}`}
@@ -213,15 +224,6 @@ function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
           <StatItem label="Diff Cache" value={stats.diffCacheSize} />
         </div>
       )}
-      <StatusRow icon={IconFire}>
-        <button
-          onClick={scrollTester.toggleState}
-          className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center"
-          title={isBrrt ? 'Pause autoscroll' : 'Start autoscroll'}
-        >
-          {isBrrt ? 'No' : 'Go'} brrrt
-        </button>
-      </StatusRow>
       <StatusRow icon={IconInfoFill}>
         <div className="text-muted-foreground/75">
           Powered by{' '}
@@ -245,5 +247,26 @@ function StatsDisplay({ stats, scrollRef }: StatsDisplayProps) {
         </div>
       </StatusRow>
     </div>
+  );
+}
+
+function AutoScrollToggleIcon({ running }: { running: boolean }) {
+  if (running) {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 16 16"
+        className="size-3 fill-current"
+      >
+        <rect x="4" y="3" width="3" height="10" rx="1" />
+        <rect x="9" y="3" width="3" height="10" rx="1" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="size-3 fill-current">
+      <path d="M5 3.75v8.5a.75.75 0 0 0 1.14.64l6.5-4.25a.75.75 0 0 0 0-1.28l-6.5-4.25A.75.75 0 0 0 5 3.75Z" />
+    </svg>
   );
 }
