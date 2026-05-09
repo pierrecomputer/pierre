@@ -133,28 +133,30 @@ export class WorkerPoolManager {
     this.queueInitialization(langs);
   }
 
-  isWorkingPool(): boolean {
+  public isWorkingPool(): boolean {
     return !this.workersFailed;
   }
 
-  getFileResultCache(file: FileContents): RenderFileResult | undefined {
+  public getFileResultCache(file: FileContents): RenderFileResult | undefined {
     return file.cacheKey != null
       ? this.fileCache.get(file.cacheKey)
       : undefined;
   }
 
-  getDiffResultCache(diff: FileDiffMetadata): RenderDiffResult | undefined {
+  public getDiffResultCache(
+    diff: FileDiffMetadata
+  ): RenderDiffResult | undefined {
     return diff.cacheKey != null
       ? this.diffCache.get(diff.cacheKey)
       : undefined;
   }
 
-  inspectCaches(): GetCachesResult {
+  public inspectCaches(): GetCachesResult {
     const { fileCache, diffCache } = this;
     return { fileCache, diffCache };
   }
 
-  evictFileFromCache(cacheKey: string): boolean {
+  public evictFileFromCache(cacheKey: string): boolean {
     try {
       return this.fileCache.delete(cacheKey) !== undefined;
     } finally {
@@ -162,7 +164,7 @@ export class WorkerPoolManager {
     }
   }
 
-  evictDiffFromCache(cacheKey: string): boolean {
+  public evictDiffFromCache(cacheKey: string): boolean {
     try {
       return this.diffCache.delete(cacheKey) !== undefined;
     } finally {
@@ -250,13 +252,13 @@ export class WorkerPoolManager {
     }
   }
 
-  getFileRenderOptions(): RenderFileOptions {
+  public getFileRenderOptions(): RenderFileOptions {
     const { tokenizeMaxLineLength, theme, useTokenTransformer } =
       this.renderOptions;
     return { theme, useTokenTransformer, tokenizeMaxLineLength };
   }
 
-  getDiffRenderOptions(): RenderDiffOptions {
+  public getDiffRenderOptions(): RenderDiffOptions {
     return { ...this.renderOptions };
   }
 
@@ -305,7 +307,7 @@ export class WorkerPoolManager {
     await Promise.all(taskPromises);
   }
 
-  subscribeToThemeChanges(instance: ThemeSubscriber): () => void {
+  public subscribeToThemeChanges(instance: ThemeSubscriber): () => void {
     this.themeSubscribers.add(instance);
     this.queueBroadcastStateChanges();
     return () => {
@@ -314,12 +316,12 @@ export class WorkerPoolManager {
     };
   }
 
-  unsubscribeToThemeChanges(instance: ThemeSubscriber): void {
+  public unsubscribeToThemeChanges(instance: ThemeSubscriber): void {
     this.themeSubscribers.delete(instance);
     this.queueBroadcastStateChanges();
   }
 
-  subscribeToStatChanges(
+  public subscribeToStatChanges(
     callback: (stats: WorkerStats) => unknown
   ): () => void {
     this.statSubscribers.add(callback);
@@ -345,7 +347,7 @@ export class WorkerPoolManager {
     }
   };
 
-  cleanUpPendingTasks(
+  public cleanUpPendingTasks(
     instance: FileRendererInstance | DiffRendererInstance
   ): void {
     this.taskQueue.delete(instance);
@@ -357,11 +359,11 @@ export class WorkerPoolManager {
     this.queueBroadcastStateChanges();
   }
 
-  isInitialized(): boolean {
+  public isInitialized(): boolean {
     return this.initialized === true;
   }
 
-  async initialize(languages: SupportedLanguages[] = []): Promise<void> {
+  public async initialize(languages: SupportedLanguages[] = []): Promise<void> {
     if (this.initialized === true) {
       return;
     } else if (this.initialized === false) {
@@ -521,7 +523,10 @@ export class WorkerPoolManager {
     this.queueBroadcastStateChanges();
   };
 
-  highlightFileAST(instance: FileRendererInstance, file: FileContents): void {
+  public highlightFileAST(
+    instance: FileRendererInstance,
+    file: FileContents
+  ): void {
     if (isFilePlainText(file)) {
       return;
     }
@@ -542,7 +547,7 @@ export class WorkerPoolManager {
     this.submitTask(instance, { type: 'file', file });
   }
 
-  getPlainFileAST(
+  public getPlainFileAST(
     file: FileContents,
     startingLine: number,
     totalLines: number,
@@ -560,7 +565,7 @@ export class WorkerPoolManager {
     );
   }
 
-  highlightDiffAST(
+  public highlightDiffAST(
     instance: DiffRendererInstance,
     diff: FileDiffMetadata
   ): void {
@@ -584,7 +589,7 @@ export class WorkerPoolManager {
     this.submitTask(instance, { type: 'diff', diff });
   }
 
-  getPlainDiffAST(
+  public getPlainDiffAST(
     diff: FileDiffMetadata,
     startingLine: number,
     totalLines: number,
@@ -602,7 +607,7 @@ export class WorkerPoolManager {
       : undefined;
   }
 
-  terminate(): void {
+  public terminate(): void {
     this.lifecycleGeneration++;
     this.cancelPendingAsyncWorkerTasks();
     this.terminateWorkers();
@@ -643,7 +648,7 @@ export class WorkerPoolManager {
     this.workers.length = 0;
   }
 
-  getStats(): WorkerStats {
+  public getStats(): WorkerStats {
     return {
       managerState: (() => {
         if (this.initialized === false) {

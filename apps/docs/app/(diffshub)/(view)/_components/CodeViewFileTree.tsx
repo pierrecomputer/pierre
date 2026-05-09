@@ -8,17 +8,15 @@ import { type CSSProperties, memo, useEffect, useRef } from 'react';
 import type { FileTreePublicId } from '../../../../../../packages/trees/dist/model/publicTypes';
 import { BASE_FILE_TREE_OPTIONS } from './constants';
 import type { CodeViewFileTreeSource } from './types';
-import { cn } from '@/lib/utils';
 
 const DENSITY_OVERRIDE_STYLES = {
   '--trees-bg-override': 'var(--diffshub-sidebar-bg)',
   '--trees-density-override': 0.8,
-  // '--trees-row-height-override': '24px',
   '--trees-selected-fg-override': 'light-dark(#1c1c1e, #f0f0f2)',
+  '--trees-padding-inline-override': 8,
 } as CSSProperties;
 
 interface CodeViewFileTreeProps {
-  className?: string;
   // Callback invoked with the underlying tree model once it's mounted, and
   // again with `null` on unmount. Lets parents drive imperative APIs like
   // search open/close without owning the model creation.
@@ -28,7 +26,6 @@ interface CodeViewFileTreeProps {
 }
 
 export const CodeViewFileTree = memo(function CodeViewFileTree({
-  className,
   onModelReady,
   onSelectItem,
   source,
@@ -72,18 +69,13 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
   }, [model, source]);
 
   useEffect(() => {
-    onModelReady?.(model);
-    return () => {
-      onModelReady?.(null);
-    };
+    onModelReady(model);
+    return () => onModelReady(null);
   }, [model, onModelReady]);
 
   return (
     <FileTree
-      className={cn(
-        'h-full min-h-0 overflow-auto overscroll-contain pt-2',
-        className
-      )}
+      className="h-full min-h-0 overflow-auto overscroll-contain md:ml-3"
       model={model}
       style={DENSITY_OVERRIDE_STYLES}
     />

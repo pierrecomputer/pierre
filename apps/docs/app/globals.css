@@ -166,6 +166,8 @@
 
 :root {
   --diffs-font-family: var(--font-berkeley-mono);
+  --cv-gutter-vertical: 0px;
+  --cv-gutter-horizontal: 0px;
   color-scheme: light;
   -webkit-font-smoothing: antialiased;
 }
@@ -253,35 +255,41 @@
   @apply overflow-hidden rounded-lg border border-transparent dark:border-neutral-800;
 }
 
-.gh-code-view-scrollbar-y {
-  --gh-code-view-scrollbar-thumb: light-dark(
+.cv-scrollbar {
+  --cv-scrollbar-thumb-bg: light-dark(
     color-mix(in lab, var(--background) 85%, black),
     color-mix(in lab, var(--background) 80%, white)
   );
   scrollbar-gutter: stable;
 }
 
-.gh-code-view-scrollbar-y::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.cv-scrollbar::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
 }
 
-.gh-code-view-scrollbar-y::-webkit-scrollbar-track {
+.cv-scrollbar::-webkit-scrollbar-track {
   background: transparent;
-  margin-top: 12px;
+  margin-top: 26px;
 }
 
-.gh-code-view-scrollbar-y::-webkit-scrollbar-thumb {
-  background-color: var(--gh-code-view-scrollbar-thumb);
+.cv-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--cv-scrollbar-thumb-bg);
   background-clip: content-box;
-  border: 1px solid transparent;
-  border-radius: 4px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+}
+
+@media (width <= 767px) {
+  .cv-scrollbar::-webkit-scrollbar-track {
+    margin-top: 0;
+    border-left: 1px solid var(--color-border);
+  }
 }
 
 @supports (-moz-appearance: none) {
-  .gh-code-view-scrollbar-y {
-    scrollbar-color: var(--gh-code-view-scrollbar-thumb) transparent;
-    scrollbar-width: thin;
+  .cv-scrollbar {
+    scrollbar-color: var(--cv-scrollbar-thumb-bg) transparent;
   }
 }
 

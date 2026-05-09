@@ -1,32 +1,34 @@
 'use client';
 
 import { IconSymbolDiffstatFill } from '@pierre/icons';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect } from 'react';
 
 import type { CodeViewDiffStats as CodeViewDiffStatsData } from './types';
 import { StatItem, StatusRow } from './WorkerPoolStatus';
 
 interface CodeViewDiffStatsProps {
+  expanded: boolean;
+  onToggle(): void;
   stats: CodeViewDiffStatsData | null;
   streaming: boolean;
 }
 
 export const CodeViewDiffStats = memo(function CodeViewDiffStats({
+  expanded,
+  onToggle,
   stats,
   streaming,
 }: CodeViewDiffStatsProps) {
-  const [showStats, setShowStats] = useState(true);
-
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'F2') {
         event.preventDefault();
-        setShowStats((prev) => !prev);
+        onToggle();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [onToggle]);
 
   if (stats == null) {
     return null;
@@ -37,17 +39,19 @@ export const CodeViewDiffStats = memo(function CodeViewDiffStats({
       <StatusRow icon={IconSymbolDiffstatFill}>
         <button
           type="button"
-          onClick={() => setShowStats((prev) => !prev)}
+          onClick={onToggle}
           className="text-muted-foreground hover:text-foreground flex w-full cursor-pointer items-center gap-1 text-sm focus:outline-none"
-          aria-expanded={showStats}
+          aria-expanded={expanded}
         >
           Diff Stats
-          <span className="text-muted-foreground/50">(F2)</span>
+          <span className="text-muted-foreground/50 hidden md:inline">
+            (F2)
+          </span>
           {streaming && <StreamingIndicator />}
         </button>
       </StatusRow>
-      {showStats && (
-        <div className="mr-2 mb-2 ml-9">
+      {expanded && (
+        <div className="ml-10 md:mr-1">
           <StatItem
             label="Files"
             value={stats.fileCount}

@@ -42,7 +42,7 @@ export function CodeViewStatusPanel({
         {!isError ? (
           <IconRefresh
             aria-hidden="true"
-            className="text-muted-foreground mx-auto mb-3 size-5 animate-spin"
+            className="text-muted-foreground mx-auto mb-3 size-5 -scale-x-100 animate-spin [animation-direction:reverse]"
           />
         ) : (
           <IconCiWarningFill className="text-muted-foreground mx-auto mb-3 size-5" />

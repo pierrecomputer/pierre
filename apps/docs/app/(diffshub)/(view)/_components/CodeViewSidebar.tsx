@@ -3,7 +3,14 @@
 import { IconComment, IconFileTree, IconSearch, IconX } from '@pierre/icons';
 import { FileTree } from '@pierre/trees';
 import { useFileTreeSearch } from '@pierre/trees/react';
-import { memo, type RefObject, useCallback, useState } from 'react';
+import {
+  memo,
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useState,
+} from 'react';
 
 import { CodeViewCommentsList } from './CodeViewCommentsList';
 import { CodeViewDiffStats } from './CodeViewDiffStats';
@@ -20,6 +27,9 @@ import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { cn } from '@/lib/utils';
 
 type SidebarTab = 'files' | 'comments';
+type SidebarStatusPanel = 'diffStats' | 'systemMonitor';
+
+const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 
 interface CodeViewSidebarProps {
   className?: string;
@@ -30,7 +40,7 @@ interface CodeViewSidebarProps {
   onSelectComment(comment: CodeViewSavedCommentEntry): void;
   onSelectItem(itemId: string): void;
   scrollRef: RefObject<HTMLDivElement | null>;
-  source: CodeViewFileTreeSource | null;
+  source: CodeViewFileTreeSource;
   streaming: boolean;
 }
 
@@ -47,10 +57,48 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   streaming,
 }: CodeViewSidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
+  const [activeStatusPanel, setActiveStatusPanel] =
+    useState<SidebarStatusPanel | null>('diffStats');
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
   const handleModelReady = useCallback((model: FileTree | null) => {
     setFileTreeModel(model);
   }, []);
+  const toggleStatusPanel = useCallback((panel: SidebarStatusPanel) => {
+    setActiveStatusPanel((current) => (current === panel ? null : panel));
+  }, []);
+
+  useEffect(() => {
+    if (mobileOverlayOpen && window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
+      setActiveStatusPanel(null);
+    }
+  }, [mobileOverlayOpen]);
+
+  useEffect(() => {
+    if (!mobileOverlayOpen || !window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
+      return undefined;
+    }
+
+    const { body, documentElement } = document;
+    const codeViewScroll = scrollRef.current;
+    const previousBodyOverflow = body.style.overflow;
+    const previousRootOverscrollBehavior =
+      documentElement.style.overscrollBehavior;
+    const previousCodeViewOverflow = codeViewScroll?.style.overflow;
+
+    body.style.overflow = 'hidden';
+    documentElement.style.overscrollBehavior = 'none';
+    if (codeViewScroll != null) {
+      codeViewScroll.style.overflow = 'hidden';
+    }
+
+    return () => {
+      body.style.overflow = previousBodyOverflow;
+      documentElement.style.overscrollBehavior = previousRootOverscrollBehavior;
+      if (codeViewScroll != null) {
+        codeViewScroll.style.overflow = previousCodeViewOverflow ?? '';
+      }
+    };
+  }, [mobileOverlayOpen, scrollRef]);
 
   return (
     <>
@@ -67,65 +115,53 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
         )}
         onClick={onMobileClose}
       />
-      <div
-        className={cn(
-          'contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
-          mobileOverlayOpen
-            ? 'bg-background p-3 pt-5 pointer-events-auto h-[calc(100%_-_env(safe-area-inset-bottom))] translate-y-0 overflow-hidden rounded-t-xl shadow-[0_0_0_1px_var(--color-border),_0_16px_32px_rgb(0_0_0_/0.25)] md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
-            : 'bg-neutral-50 dark:bg-neutral-900 pointer-events-none m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl border border-transparent md:pointer-events-auto md:m-0 md:h-full md:overflow-visible md:rounded-none md:border-0 p-0 pt-4',
-          className
-        )}
+      <SidebarWrapper
+        className={className}
+        mobileOverlayOpen={mobileOverlayOpen}
       >
-        {source != null && (
-          <div className="px-2">
-            <div className="flex items-center gap-1">
-              <ButtonGroup
-                aria-label="Sidebar sections"
-                className="mr-auto flex min-w-0"
-                value={activeTab}
-                onValueChange={(value) => setActiveTab(value as SidebarTab)}
-              >
-                <ButtonGroupItem value="files" className="size-9 p-0">
-                  <IconFileTree />
-                  <span className="sr-only">Files</span>
-                </ButtonGroupItem>
-                <ButtonGroupItem value="comments" className="size-9 p-0">
-                  <IconComment />
-                  <span className="sr-only">Comments</span>
-                </ButtonGroupItem>
-              </ButtonGroup>
-              {activeTab === 'files' && fileTreeModel != null && (
-                <FileTreeSearchToggle model={fileTreeModel} />
-              )}
-              {onMobileClose != null && (
-                <Button
-                  variant="muted"
-                  size="icon"
-                  className="md:hidden"
-                  aria-label="Close file tree"
-                  onClick={onMobileClose}
-                >
-                  <IconX className="size-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-        <div className="min-h-0 flex-1">
+        <div className="flex items-center gap-2 p-4 pb-0 md:pt-0 md:pr-2 md:pl-3">
+          <ButtonGroup
+            aria-label="Sidebar sections"
+            className="mr-auto flex min-w-0"
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as SidebarTab)}
+          >
+            <ButtonGroupItem value="files" className="size-9 p-0">
+              <IconFileTree />
+              <span className="sr-only">Files</span>
+            </ButtonGroupItem>
+            <ButtonGroupItem value="comments" className="size-9 p-0">
+              <IconComment />
+              <span className="sr-only">Comments</span>
+            </ButtonGroupItem>
+          </ButtonGroup>
+          {activeTab === 'files' && fileTreeModel != null && (
+            <FileTreeSearchToggle model={fileTreeModel} />
+          )}
+          {onMobileClose != null && (
+            <Button
+              variant="muted"
+              size="icon"
+              className="md:hidden"
+              aria-label="Close file tree"
+              onClick={onMobileClose}
+            >
+              <IconX className="size-4" />
+            </Button>
+          )}
+        </div>
+        <div className="mt-3 min-h-0 flex-1">
           <div
             role="region"
             aria-label="Files"
             hidden={activeTab !== 'files'}
             className="h-full min-h-0"
           >
-            {source != null && (
-              <CodeViewFileTree
-                className="h-full min-h-0 pl-2"
-                source={source}
-                onModelReady={handleModelReady}
-                onSelectItem={onSelectItem}
-              />
-            )}
+            <CodeViewFileTree
+              source={source}
+              onModelReady={handleModelReady}
+              onSelectItem={onSelectItem}
+            />
           </div>
           <div
             role="region"
@@ -139,14 +175,47 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             />
           </div>
         </div>
-        {source != null && (
-          <CodeViewDiffStats stats={diffStats} streaming={streaming} />
-        )}
-        {source != null && <WorkerPoolStatus scrollRef={scrollRef} />}
-      </div>
+        <CodeViewDiffStats
+          expanded={activeStatusPanel === 'diffStats'}
+          onToggle={() => toggleStatusPanel('diffStats')}
+          stats={diffStats}
+          streaming={streaming}
+        />
+        <WorkerPoolStatus
+          expanded={activeStatusPanel === 'systemMonitor'}
+          onToggle={() => toggleStatusPanel('systemMonitor')}
+          scrollRef={scrollRef}
+        />
+      </SidebarWrapper>
     </>
   );
 });
+
+interface SidebarWrapperProps {
+  children: ReactNode;
+  className?: string;
+  mobileOverlayOpen: boolean;
+}
+
+function SidebarWrapper({
+  children,
+  className,
+  mobileOverlayOpen,
+}: SidebarWrapperProps) {
+  return (
+    <div
+      className={cn(
+        className,
+        'contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
+        mobileOverlayOpen
+          ? 'bg-background pointer-events-auto h-[calc(100%_-_env(safe-area-inset-bottom))] translate-y-0 overflow-hidden rounded-t-xl shadow-[0_0_0_1px_var(--color-border),_0_16px_32px_rgb(0_0_0_/0.25)] md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
+          : 'bg-neutral-50 dark:bg-neutral-900 pointer-events-none m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl border border-transparent md:pointer-events-auto md:m-0 md:h-full md:overflow-visible md:rounded-none md:border-0 p-0 pt-3'
+      )}
+    >
+      {children}
+    </div>
+  );
+}
 
 // Lives in its own component so we can call useFileTreeSearch only once we
 // actually have a model; conditional hook calls aren't allowed in the parent.

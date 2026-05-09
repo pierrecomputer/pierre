@@ -21,8 +21,9 @@ import { memo, type RefObject, useMemo, useRef, useState } from 'react';
 import type { AvatarName } from './annotation-shared';
 import {
   CODE_VIEW_CUSTOM_CSS,
-  CODE_VIEW_MARGIN_OFFSET,
   CODE_VIEW_PADDING_BLOCK,
+  getCodeViewMarginOffset,
+  getCodeViewPaddingTop,
 } from './constants';
 import { DraftAnnotation } from './DraftAnnotation';
 import { ExampleAnnotation } from './ExampleAnnotation';
@@ -39,10 +40,9 @@ import {
 } from './utils';
 import { cn } from '@/lib/utils';
 
-const VIEWER_METRICS = {
-  gap: 12,
+const BASE_VIEWER_METRICS = {
+  gap: 8,
   paddingBottom: CODE_VIEW_PADDING_BLOCK,
-  paddingTop: CODE_VIEW_PADDING_BLOCK + CODE_VIEW_MARGIN_OFFSET,
 };
 
 function getNextItemVersion(item: CodeViewItem<CommentMetadata>): number {
@@ -80,6 +80,7 @@ interface CodeViewWrapperProps {
   overflow: 'wrap' | 'scroll';
   showBackgrounds: boolean;
   diffIndicators: DiffIndicators;
+  isMobile: boolean;
   lineNumbers: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
@@ -96,6 +97,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   overflow,
   showBackgrounds,
   diffIndicators,
+  isMobile,
   lineNumbers,
   scrollRef,
   viewerRef,
@@ -349,18 +351,24 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       return;
     }
 
-    if (
-      itemTop != null &&
-      itemTop < viewer.getScrollTop() + CODE_VIEW_MARGIN_OFFSET
-    ) {
+    const marginOffset = getCodeViewMarginOffset(isMobile);
+    if (itemTop != null && itemTop < viewer.getScrollTop() + marginOffset) {
       viewer.scrollTo({
         type: 'item',
         id: item.id,
         align: 'start',
-        offset: CODE_VIEW_MARGIN_OFFSET,
+        offset: marginOffset,
       });
     }
   });
+
+  const viewerMetrics = useMemo(
+    () => ({
+      ...BASE_VIEWER_METRICS,
+      paddingTop: getCodeViewPaddingTop(isMobile),
+    }),
+    [isMobile]
+  );
 
   const renderCommentAnnotation = useStableCallback(
     (
@@ -423,7 +431,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   const options: CodeViewOptions<CommentMetadata> = useMemo(
     () =>
       ({
-        viewerMetrics: VIEWER_METRICS,
+        viewerMetrics,
         theme: DEFAULT_THEMES,
         diffStyle,
         diffIndicators,
@@ -448,13 +456,14 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         },
       }) satisfies CodeViewOptions<CommentMetadata>,
     [
+      diffIndicators,
       diffStyle,
       handleCreateDraftComment,
       handleLineSelectionEnd,
-      diffIndicators,
       lineNumbers,
       overflow,
       showBackgrounds,
+      viewerMetrics,
     ]
   );
   return (
@@ -463,7 +472,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       containerRef={scrollRef}
       initialItems={initialItems}
       className={cn(
-        'gh-code-view-scrollbar-y mt-[-12px] h-[calc(100%_+_12px)] relative min-h-0 min-w-0 flex-1 md:px-[1px] overflow-auto overscroll-contain w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] [&_diffs-container]:overflow-clip md:[&_diffs-container]:rounded-lg [&_diffs-container]:shadow-[0_0_0_1px_var(--color-border)] [&_diffs-container]:[contain:layout_paint_style]',
+        'cv-scrollbar relative h-full min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain border-b border-border w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] md:mt-[-12px] md:h-[calc(100%_+_12px)] md:border-b-0 md:pl-[1px] md:pr-[max(0px,calc(13px-var(--cv-gutter-vertical)))] [&_diffs-container]:overflow-clip [&_diffs-container]:[contain:layout_paint_style] md:[&_diffs-container]:rounded-lg [&_diffs-container]:shadow-[0_0_0_1px_var(--color-border)]',
         className
       )}
       options={options}
