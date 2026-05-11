@@ -171,7 +171,7 @@ export interface StatusRowProps {
 
 export function StatusRow({ icon: Icon, children }: StatusRowProps) {
   return (
-    <div className="text-muted-foreground border-border flex min-w-0 items-center gap-2 border-t px-4 py-2 md:mr-1 md:ml-3 md:px-2">
+    <div className="text-muted-foreground border-border flex min-w-0 items-center gap-2 border-t px-4 py-2 md:mx-3 md:px-2">
       <Icon className="size-3 shrink-0 opacity-50" />
       {children}
     </div>
@@ -233,7 +233,7 @@ function StatsDisplay({
         </div>
       </StatusRow>
       {expanded && (
-        <div className="ml-9 md:mr-1">
+        <div className="ml-10 md:mr-3">
           <StatItem
             label="Busy Workers"
             value={`${stats.busyWorkers}/${stats.totalWorkers}`}
