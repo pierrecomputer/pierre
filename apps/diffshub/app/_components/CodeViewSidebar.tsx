@@ -3,10 +3,13 @@
 import {
   IconComment,
   IconFileTree,
+  IconFilter,
   IconSearch,
+  IconX,
   IconXSquircle,
 } from '@pierre/icons';
 import { FileTree } from '@pierre/trees';
+import type { GitStatus } from '@pierre/trees';
 import { useFileTreeSearch } from '@pierre/trees/react';
 import {
   type CSSProperties,
@@ -15,6 +18,8 @@ import {
   type RefObject,
   useCallback,
   useEffect,
+  useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -30,9 +35,22 @@ import type {
   CodeViewSavedCommentItem,
 } from './types';
 import type { ThemeCycleControls } from './useThemeCycle';
+import {
+  filterCodeViewFileTreeSource,
+  getCodeViewFileTreeAvailableStatuses,
+} from './utils';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
 type SidebarTab = 'files' | 'comments';
@@ -85,12 +103,54 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   const [activeStatusPanel, setActiveStatusPanel] =
     useState<SidebarStatusPanel | null>('diffStats');
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
+  const [excludedStatuses, setExcludedStatuses] = useState<
+    ReadonlySet<GitStatus>
+  >(() => new Set());
+  const availableStatuses = useMemo(
+    () => getCodeViewFileTreeAvailableStatuses(source),
+    [source]
+  );
+  const filteredSource = useMemo(
+    () => filterCodeViewFileTreeSource(source, excludedStatuses),
+    [source, excludedStatuses]
+  );
   const handleModelReady = useCallback((model: FileTree | null) => {
     setFileTreeModel(model);
   }, []);
   const toggleStatusPanel = useCallback((panel: SidebarStatusPanel) => {
     setActiveStatusPanel((current) => (current === panel ? null : panel));
   }, []);
+
+  const clearStatusFilter = useCallback(() => {
+    setExcludedStatuses(new Set());
+  }, []);
+
+  const toggleExcludedStatus = useCallback((status: GitStatus) => {
+    setExcludedStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
+  }, []);
+
+  // Alt+click "isolate": exclude everything except the clicked status.
+  // If that status is already the only visible one, clear the filter instead.
+  const isolateStatus = useCallback(
+    (status: GitStatus) => {
+      setExcludedStatuses((prev) => {
+        const visible = [...availableStatuses].filter((s) => !prev.has(s));
+        if (visible.length === 1 && visible[0] === status) {
+          return new Set();
+        }
+        return new Set([...availableStatuses].filter((s) => s !== status));
+      });
+    },
+    [availableStatuses]
+  );
 
   useEffect(() => {
     if (mobileOverlayOpen && window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
@@ -191,6 +251,15 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
           {activeTab === 'files' && fileTreeModel != null && (
             <FileTreeSearchToggle model={fileTreeModel} />
           )}
+          {activeTab === 'files' && availableStatuses.size > 1 && (
+            <FileTreeFilterButton
+              availableStatuses={availableStatuses}
+              excludedStatuses={excludedStatuses}
+              onClear={clearStatusFilter}
+              onToggle={toggleExcludedStatus}
+              onIsolate={isolateStatus}
+            />
+          )}
           {onMobileClose != null && (
             <Button
               variant="ghost"
@@ -211,7 +280,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             className="h-full min-h-0"
           >
             <CodeViewFileTree
-              source={source}
+              source={filteredSource}
               onModelReady={handleModelReady}
               onSelectItem={onSelectItem}
             />
@@ -276,6 +345,128 @@ function SidebarWrapper({
     >
       {children}
     </div>
+  );
+}
+
+// Statuses that can appear in a diff, in the order they should appear in the
+// filter dropdown. Colors mirror the exact light-dark() values from the tree's
+// style.css so the badges match what the tree rows show.
+const DIFF_STATUS_ITEMS: {
+  status: GitStatus;
+  label: string;
+  short: string;
+  color: string;
+}[] = [
+  {
+    status: 'added',
+    label: 'Added',
+    short: 'A',
+    color: 'light-dark(#16a994, #00cab1)',
+  },
+  {
+    status: 'modified',
+    label: 'Modified',
+    short: 'M',
+    color: 'light-dark(#1ca1c7, #08c0ef)',
+  },
+  {
+    status: 'renamed',
+    label: 'Renamed',
+    short: 'R',
+    color: 'light-dark(#d5a910, #ffd452)',
+  },
+  {
+    status: 'deleted',
+    label: 'Deleted',
+    short: 'D',
+    color: 'light-dark(#ff2e3f, #ff6762)',
+  },
+];
+
+interface FileTreeFilterButtonProps {
+  availableStatuses: ReadonlySet<GitStatus>;
+  excludedStatuses: ReadonlySet<GitStatus>;
+  onClear(): void;
+  onIsolate(status: GitStatus): void;
+  onToggle(status: GitStatus): void;
+}
+
+function FileTreeFilterButton({
+  availableStatuses,
+  excludedStatuses,
+  onClear,
+  onIsolate,
+  onToggle,
+}: FileTreeFilterButtonProps) {
+  const isFiltered = excludedStatuses.size > 0;
+  const visibleItems = DIFF_STATUS_ITEMS.filter(({ status }) =>
+    availableStatuses.has(status)
+  );
+  const [isMac] = useState(
+    () => typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+  );
+  // Track whether Alt was held on the most recent pointer-down so the
+  // onCheckedChange handler (which receives no event) can branch on it.
+  const altKeyRef = useRef(false);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant={isFiltered ? 'outline' : 'muted'}
+          size="icon"
+          aria-label="Filter by Git status"
+          aria-pressed={isFiltered}
+          className="group relative"
+        >
+          <IconFilter />
+          {isFiltered && (
+            <span className="border-background group-hover:border-secondary absolute top-1 right-1 size-3 rounded-full border-[2px] bg-blue-500 dark:bg-blue-400" />
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel className="flex flex-col px-3 font-normal">
+          Filter by Git status
+          <small className="text-muted-foreground text-xs">
+            {isMac ? 'Option' : 'Alt'}-click to filter a single status
+          </small>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {visibleItems.map(({ status, label, short, color }) => (
+          <DropdownMenuCheckboxItem
+            key={status}
+            checked={!excludedStatuses.has(status)}
+            onPointerDown={(e) => {
+              altKeyRef.current = e.altKey;
+            }}
+            onCheckedChange={() => {
+              if (altKeyRef.current) {
+                onIsolate(status);
+              } else {
+                onToggle(status);
+              }
+            }}
+          >
+            <span
+              className="mr-2 w-4 shrink-0 rounded-sm text-center font-mono text-xs font-semibold"
+              style={{
+                color,
+                backgroundColor: `color-mix(in srgb, ${color} 15%, transparent)`,
+              }}
+            >
+              {short}
+            </span>
+            {label}
+          </DropdownMenuCheckboxItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={!isFiltered} onSelect={onClear}>
+          <IconXSquircle className="mr-2 opacity-50" />
+          Clear filter
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
