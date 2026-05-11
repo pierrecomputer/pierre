@@ -1200,23 +1200,59 @@ export class File<LAnnotation = undefined> {
       fileContainer ??
       this.fileContainer ??
       document.createElement(DIFFS_TAG_NAME);
-    if (previousContainer != null && previousContainer !== this.fileContainer) {
+    const containerChanged = previousContainer !== this.fileContainer;
+    if (previousContainer != null && containerChanged) {
       this.lastRenderedHeaderHTML = undefined;
       this.headerElement = undefined;
     }
     if (parentNode != null && this.fileContainer.parentNode !== parentNode) {
       parentNode.appendChild(this.fileContainer);
     }
+    if (containerChanged) {
+      this.adoptReusableShellElements(this.fileContainer);
+    }
+    this.ensureSpriteSVG(this.fileContainer);
+    return this.fileContainer;
+  }
+
+  private adoptReusableShellElements(fileContainer: HTMLElement): void {
+    const { shadowRoot } = fileContainer;
+    if (shadowRoot == null) {
+      return;
+    }
+
+    for (const element of shadowRoot.children) {
+      if (element instanceof SVGElement) {
+        this.spriteSVG ??= element;
+      } else if (
+        isStyleNode(element) &&
+        element.hasAttribute(THEME_CSS_ATTRIBUTE)
+      ) {
+        this.themeCSSStyle ??= element;
+      } else if (
+        isStyleNode(element) &&
+        element.hasAttribute(UNSAFE_CSS_ATTRIBUTE)
+      ) {
+        this.unsafeCSSStyle ??= element;
+        this.appliedUnsafeCSS ??= this.options.unsafeCSS ?? undefined;
+      }
+    }
+  }
+
+  private ensureSpriteSVG(fileContainer: HTMLElement): void {
+    const shadowRoot =
+      fileContainer.shadowRoot ?? fileContainer.attachShadow({ mode: 'open' });
     if (this.spriteSVG == null) {
       const fragment = document.createElement('div');
       fragment.innerHTML = SVGSpriteSheet;
       const firstChild = fragment.firstChild;
       if (firstChild instanceof SVGElement) {
         this.spriteSVG = firstChild;
-        this.fileContainer.shadowRoot?.appendChild(this.spriteSVG);
       }
     }
-    return this.fileContainer;
+    if (this.spriteSVG != null && this.spriteSVG.parentNode !== shadowRoot) {
+      shadowRoot.appendChild(this.spriteSVG);
+    }
   }
 
   private getOrCreatePreNode(container: HTMLElement): HTMLPreElement {
@@ -1317,4 +1353,15 @@ function shouldRenderHeader(
   disableFileHeader: boolean = false
 ): boolean {
   return headerElement == null && file != null && !disableFileHeader;
+}
+
+function isStyleNode(element: Element): element is HTMLStyleElement {
+  if (
+    typeof HTMLStyleElement !== 'undefined' &&
+    element instanceof HTMLStyleElement
+  ) {
+    return true;
+  }
+  const tagName = element.tagName ?? element.nodeName;
+  return typeof tagName === 'string' && tagName.toLowerCase() === 'style';
 }
