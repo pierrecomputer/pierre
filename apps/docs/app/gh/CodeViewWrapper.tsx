@@ -58,7 +58,7 @@ const unsafeCSS = `[data-diffs-header] {
   }
 }`;
 
-const VIEWER_METRICS = { gap: 12, paddingBottom: 20, paddingTop: 20 };
+const CODE_VIEW_LAYOUT = { gap: 12, paddingBottom: 20, paddingTop: 20 };
 
 interface CodeViewWrapperProps {
   className?: string;
@@ -368,7 +368,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   const options: CodeViewOptions<CommentMetadata> = useMemo(
     () =>
       ({
-        viewerMetrics: VIEWER_METRICS,
+        layout: CODE_VIEW_LAYOUT,
         theme: DEFAULT_THEMES,
         diffStyle,
         overflow,

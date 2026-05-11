@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
 import { CodeView } from '../src/components/CodeView';
-import { DEFAULT_CODE_VIEW_METRICS } from '../src/constants';
+import { DEFAULT_CODE_VIEW_LAYOUT } from '../src/constants';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 
@@ -207,7 +207,7 @@ describe('CodeView scroll anchoring', () => {
       await renderItems(viewer, items);
 
       const splitAnchorTop =
-        DEFAULT_CODE_VIEW_METRICS.paddingTop +
+        DEFAULT_CODE_VIEW_LAYOUT.paddingTop +
         (viewer.getTopForItem(anchorItem.id) ?? 0);
       const splitMaxScrollTop = getRootMaxScrollTop(root);
       expect(splitMaxScrollTop).toBeGreaterThan(splitAnchorTop);
@@ -220,7 +220,7 @@ describe('CodeView scroll anchoring', () => {
       viewer.render(true);
 
       const unifiedAnchorTop =
-        DEFAULT_CODE_VIEW_METRICS.paddingTop +
+        DEFAULT_CODE_VIEW_LAYOUT.paddingTop +
         (viewer.getTopForItem(anchorItem.id) ?? 0);
       expect(unifiedAnchorTop).toBeGreaterThan(splitMaxScrollTop);
       expect(root.scrollTop).toBe(unifiedAnchorTop);
@@ -234,8 +234,8 @@ describe('CodeView scroll anchoring', () => {
   test('rebases the DOM scroll position while preserving logical scroll progress', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({
-      viewerMetrics: {
-        ...DEFAULT_CODE_VIEW_METRICS,
+      layout: {
+        ...DEFAULT_CODE_VIEW_LAYOUT,
         gap: 1_000_000,
       },
     });
@@ -273,7 +273,7 @@ describe('CodeView scroll anchoring', () => {
       viewer.render(true);
 
       const finalFileTop =
-        DEFAULT_CODE_VIEW_METRICS.paddingTop +
+        DEFAULT_CODE_VIEW_LAYOUT.paddingTop +
         (viewer.getTopForItem('file:39') ?? 0);
       expect(viewer.getScrollTop()).toBeGreaterThan(finalFileTop - ROOT_HEIGHT);
       expect(viewer.getScrollTop()).toBeLessThanOrEqual(finalFileTop);
@@ -291,8 +291,8 @@ describe('CodeView scroll anchoring', () => {
   test('restores the paged scroll height after clearing and reusing the viewer', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({
-      viewerMetrics: {
-        ...DEFAULT_CODE_VIEW_METRICS,
+      layout: {
+        ...DEFAULT_CODE_VIEW_LAYOUT,
         gap: 1_000_000,
       },
     });
@@ -330,8 +330,8 @@ describe('CodeView scroll anchoring', () => {
   test('moves the physical spacer before applying a programmatic rebase jump', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({
-      viewerMetrics: {
-        ...DEFAULT_CODE_VIEW_METRICS,
+      layout: {
+        ...DEFAULT_CODE_VIEW_LAYOUT,
         gap: 1_000_000,
       },
     });
