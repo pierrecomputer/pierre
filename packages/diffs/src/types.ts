@@ -788,12 +788,12 @@ export interface VirtualFileMetrics {
   paddingBottom?: number;
 }
 
-export interface CodeViewMetrics {
-  /** Top padding applied to the viewer's sticky container offset. */
+export interface CodeViewLayout {
+  /** Top padding applied to the CodeView sticky container offset. */
   paddingTop: number;
-  /** Bottom padding added after the final rendered item in the viewer. */
+  /** Bottom padding added after the final rendered item in CodeView. */
   paddingBottom: number;
-  /** Vertical gap between virtualized items in the viewer. */
+  /** Vertical gap between virtualized CodeView items. */
   gap: number;
 }
 

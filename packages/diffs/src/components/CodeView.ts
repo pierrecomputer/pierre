@@ -1,8 +1,9 @@
 import {
   DEFAULT_CODE_VIEW_FILE_METRICS,
-  DEFAULT_CODE_VIEW_METRICS,
+  DEFAULT_CODE_VIEW_LAYOUT,
   DEFAULT_SMOOTH_SCROLL_SETTINGS,
   DEFAULT_THEMES,
+  DIFFS_DEVELOPMENT_BUILD,
   DIFFS_TAG_NAME,
 } from '../constants';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
@@ -16,8 +17,8 @@ import type {
   CodeViewItem,
   CodeViewItemScrollTarget,
   CodeViewItemVersion,
+  CodeViewLayout,
   CodeViewLineScrollTarget,
-  CodeViewMetrics,
   CodeViewPositionScrollTarget,
   CodeViewRangeScrollTarget,
   CodeViewScrollBehavior,
@@ -369,7 +370,12 @@ export interface CodeViewOptions<LAnnotation>
   stickyHeaders?: boolean;
   controlledSelection?: boolean;
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
-  viewerMetrics?: CodeViewMetrics;
+  layout?: CodeViewLayout;
+
+  /** Internal dev-only check to ensure your `itemMetrics` are correct.  Its
+   * automatically disabled in a production build because it will hurt
+   * performance fairly significantly */
+  __devOnlyValidateItemHeights?: boolean;
 }
 
 const DEFAULT_POINTER_EVENTS_RESTORE_DELAY_MS = 120;
@@ -504,8 +510,8 @@ export class CodeView<LAnnotation = undefined> {
     this.stickyContainer.style.flexDirection = 'column';
   }
 
-  private getViewerMetrics(): CodeViewMetrics {
-    return this.options.viewerMetrics ?? DEFAULT_CODE_VIEW_METRICS;
+  private getLayout(): CodeViewLayout {
+    return this.options.layout ?? DEFAULT_CODE_VIEW_LAYOUT;
   }
 
   private getItemMetrics(): VirtualFileMetrics {
@@ -518,6 +524,53 @@ export class CodeView<LAnnotation = undefined> {
 
   private shouldDisablePointerEvents(): boolean {
     return this.options.pointerEventsOnScroll !== true;
+  }
+
+  private shouldValidateItemHeights(): boolean {
+    return (
+      DIFFS_DEVELOPMENT_BUILD &&
+      this.options.__devOnlyValidateItemHeights === true
+    );
+  }
+
+  private validateRenderedItemHeight(
+    item: CodeViewContextItem<LAnnotation>
+  ): void {
+    if (!this.shouldValidateItemHeights() || item.element == null) {
+      return;
+    }
+
+    const stickySpecs = item.instance.getAdvancedStickySpecs();
+    if (stickySpecs == null) {
+      return;
+    }
+
+    const expectedHeight = stickySpecs.height;
+    const actualHeight = item.element.getBoundingClientRect().height;
+
+    if (expectedHeight === actualHeight) {
+      return;
+    }
+
+    console.error(
+      'CodeView: reconciled item height does not match DOM height',
+      {
+        id: item.item.id,
+        type: item.type,
+        index: item.index,
+        version: item.version,
+        expectedHeight,
+        actualHeight,
+        delta: actualHeight - expectedHeight,
+        stickyTopOffset: stickySpecs.topOffset,
+        virtualizedHeight: item.instance.getVirtualizedHeight(),
+        top: item.top,
+        scrollTop: this.getScrollTop(),
+        windowSpecs: { ...this.windowSpecs },
+        element: item.element,
+        instance: item.instance,
+      }
+    );
   }
 
   private clearPointerEventsTimer(): void {
@@ -552,8 +605,8 @@ export class CodeView<LAnnotation = undefined> {
     this.pointerEventsDisabled = false;
   };
 
-  private syncViewerMetrics(): void {
-    const { gap, paddingBottom, paddingTop } = this.getViewerMetrics();
+  private syncLayout(): void {
+    const { gap, paddingBottom, paddingTop } = this.getLayout();
     this.stickyContainer.style.gap = `${gap}px`;
     this.container?.style.setProperty('margin-top', `${paddingTop}px`);
     this.container?.style.setProperty('margin-bottom', `${paddingBottom}px`);
@@ -569,7 +622,7 @@ export class CodeView<LAnnotation = undefined> {
     // NOTE(amadeus): We can't put `size` in here or it breaks
     // Firefox's sticky headers
     this.container.style.contain = 'layout style';
-    this.syncViewerMetrics();
+    this.syncLayout();
     this.container.appendChild(this.stickyOffset);
     this.container.appendChild(this.stickyContainer);
     this.root.appendChild(this.container);
@@ -820,9 +873,8 @@ export class CodeView<LAnnotation = undefined> {
       return;
     }
 
-    const viewerMetrics = this.getViewerMetrics();
-    let nextTop =
-      this.items.length === 0 ? 0 : this.scrollHeight + viewerMetrics.gap;
+    const layout = this.getLayout();
+    let nextTop = this.items.length === 0 ? 0 : this.scrollHeight + layout.gap;
     const appendedTop = nextTop;
     for (let index = 0; index < inputs.length; index++) {
       const input = inputs[index];
@@ -838,10 +890,10 @@ export class CodeView<LAnnotation = undefined> {
       this.idToItem.set(item.item.id, item);
       this.instanceToItem.set(item.instance, item);
       item.height = prepareItemInstance(item);
-      nextTop += item.height + viewerMetrics.gap;
+      nextTop += item.height + layout.gap;
     }
 
-    this.scrollHeight = nextTop - viewerMetrics.gap;
+    this.scrollHeight = nextTop - layout.gap;
     this.scrollDirty = true;
     if (render) {
       if (this.canSkipRenderForAppend(appendedTop)) {
@@ -869,7 +921,7 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     this.capturePendingLayoutAnchor();
-    const previousViewerMetrics = this.getViewerMetrics();
+    const previousLayout = this.getLayout();
     const previousItemMetrics = this.getItemMetrics();
 
     // NOTE(amadeus): This is also something that's probably ridiculously
@@ -881,8 +933,8 @@ export class CodeView<LAnnotation = undefined> {
       previousItemMetrics,
       nextItemMetrics
     );
-    if (!areObjectsEqual(previousViewerMetrics, this.getViewerMetrics())) {
-      this.syncViewerMetrics();
+    if (!areObjectsEqual(previousLayout, this.getLayout())) {
+      this.syncLayout();
     }
     for (let index = 0; index < this.items.length; index++) {
       const item = this.items[index];
@@ -1040,7 +1092,7 @@ export class CodeView<LAnnotation = undefined> {
     if (item == null) {
       return undefined;
     }
-    return item.top + this.getViewerMetrics().paddingTop;
+    return item.top + this.getLayout().paddingTop;
   }
 
   private createItem(
@@ -1470,7 +1522,7 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   private getMaxScrollTopForHeight(scrollHeight: number): number {
-    const { paddingBottom, paddingTop } = this.getViewerMetrics();
+    const { paddingBottom, paddingTop } = this.getLayout();
     return Math.max(
       paddingTop + scrollHeight + paddingBottom - this.getHeight(),
       0
@@ -1667,7 +1719,7 @@ export class CodeView<LAnnotation = undefined> {
     // Determine a stable scrollTo target for `nearest` alignment. This is to
     // ensure that we don't experience any scroll bouncing
     const offset = target.offset ?? 0;
-    const targetTop = this.getViewerMetrics().paddingTop + rect.top;
+    const targetTop = this.getLayout().paddingTop + rect.top;
     const targetBottom = targetTop + rect.height;
     const currentTop = this.getScrollTop();
     const visibleTop =
@@ -1786,7 +1838,7 @@ export class CodeView<LAnnotation = undefined> {
     offset = 0,
     stickyOffset = 0
   ): number {
-    targetTop += this.getViewerMetrics().paddingTop;
+    targetTop += this.getLayout().paddingTop;
     const viewportHeight = this.getHeight();
     // If the item + offset is bigger than the viewport, we'll fall back to
     // 'start'
@@ -2309,10 +2361,11 @@ export class CodeView<LAnnotation = undefined> {
           heightChanged = true;
           item.height = item.instance.getVirtualizedHeight();
         }
+        this.validateRenderedItemHeight(item);
       }
       currentTop += item.instance.getVirtualizedHeight();
       if (index < this.items.length - 1) {
-        currentTop += this.getViewerMetrics().gap;
+        currentTop += this.getLayout().gap;
       }
     }
 
@@ -2455,7 +2508,7 @@ export class CodeView<LAnnotation = undefined> {
         continue;
       }
 
-      const absoluteItemTop = this.getViewerMetrics().paddingTop + item.top;
+      const absoluteItemTop = this.getLayout().paddingTop + item.top;
       const absoluteItemBottom = absoluteItemTop + item.height;
       // Skip items entirely above the viewport since we can't see it
       if (absoluteItemBottom <= scrollTop) {
@@ -2510,7 +2563,7 @@ export class CodeView<LAnnotation = undefined> {
       return undefined;
     }
 
-    const { paddingTop } = this.getViewerMetrics();
+    const { paddingTop } = this.getLayout();
     if (anchor.type === 'item') {
       const absoluteItemTop = paddingTop + item.top;
       return this.clampScrollTop(absoluteItemTop - anchor.viewportOffset);
@@ -2709,14 +2762,14 @@ export class CodeView<LAnnotation = undefined> {
       return;
     }
 
-    const viewerMetrics = this.getViewerMetrics();
+    const layout = this.getLayout();
     let runningTop = 0;
     if (startIndex > 0) {
       const previousItem = this.items[startIndex - 1];
       if (previousItem == null) {
         throw new Error('CodeView.recomputeLayout: invalid dirty index');
       }
-      runningTop = previousItem.top + previousItem.height + viewerMetrics.gap;
+      runningTop = previousItem.top + previousItem.height + layout.gap;
     }
 
     for (let index = startIndex; index < this.items.length; index++) {
@@ -2732,7 +2785,7 @@ export class CodeView<LAnnotation = undefined> {
       }
       runningTop += item.height;
       if (index < this.items.length - 1) {
-        runningTop += viewerMetrics.gap;
+        runningTop += layout.gap;
       }
     }
 
@@ -2757,7 +2810,7 @@ export class CodeView<LAnnotation = undefined> {
   // between.  We do this by adding the the gap and header height above and
   // below the viewport
   private getFitPerfectlyOverscroll() {
-    return this.getViewerMetrics().gap + this.getItemMetrics().diffHeaderHeight;
+    return this.getLayout().gap + this.getItemMetrics().diffHeaderHeight;
   }
 }
 

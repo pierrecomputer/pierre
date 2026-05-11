@@ -37,10 +37,62 @@ yourself.
 - Set `collapsed: true` on an item to mount that file or diff as header-only.
   Collapse state is part of the item snapshot, so publish a new `version` when
   changing it for an existing item id.
-- Viewer-level options such as `viewerMetrics`, `itemMetrics`, `stickyHeaders`,
+- CodeView-level options such as `layout`, `itemMetrics`, `stickyHeaders`,
   `pointerEventsOnScroll`, and `smoothScrollSettings` tune the outer
   orchestrator. Most of the regular `File` / `FileDiff` options are still
   forwarded to each item, but `collapsed` is item-owned in `CodeView`.
+
+### Layout And Item Metrics
+
+`CodeView` has two layout-related option groups. `layout` controls the spacing
+owned by the outer scroll surface:
+
+```ts
+options: {
+  layout: {
+    paddingTop: 16,
+    paddingBottom: 24,
+    gap: 12,
+  }
+}
+```
+
+`itemMetrics` does not change the rendered layout. It only tells `CodeView` what
+heights to expect for each rendered file or diff. Those estimates need to match
+the actual DOM layout or the viewer can scroll to the wrong position, produce
+sticky-header gaps, or render the wrong window of lines.
+
+Only customize `itemMetrics` when you use `unsafeCSS` to change layout-affecting
+styles. Enable the internal development validator while tuning those values:
+
+```ts
+options: {
+  __devOnlyValidateItemHeights: true,
+  itemMetrics: {
+    lineHeight: 22,
+    diffHeaderHeight: 48,
+    hunkSeparatorHeight: 32,
+    hunkLineCount: 1,
+    spacing: 8,
+  },
+}
+```
+
+Any `unsafeCSS` that changes file header height, line height, hunk separator
+height, padding, or vertical spacing must be reflected in `itemMetrics`, and
+`__devOnlyValidateItemHeights` is the fastest way to catch mismatches while
+developing.
+
+`__devOnlyValidateItemHeights` compares each rendered item host's DOM height
+with the item height that `CodeView` reconciled for its active sticky window.
+When the values differ, `CodeView` logs a console error with the item id, item
+type, expected height, actual height, delta, scroll position, and related
+DOM/instance references.
+
+The validator option lives on the top-level `CodeView` options object because it
+is a diagnostic switch for the whole viewer, not one of the layout metrics. It
+only runs when the package is used in development, and is disabled intentionally
+in production builds because it can cause a significant performance hit.
 
 ### Examples
 

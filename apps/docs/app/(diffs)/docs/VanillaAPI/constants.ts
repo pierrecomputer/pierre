@@ -154,7 +154,7 @@ root.style.overflow = 'auto';
 const viewer = new CodeView({
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
   stickyHeaders: true,
-  viewerMetrics: { paddingTop: 16, paddingBottom: 24, gap: 12 },
+  layout: { paddingTop: 16, paddingBottom: 16, gap: 12 },
 });
 
 viewer.setup(root);

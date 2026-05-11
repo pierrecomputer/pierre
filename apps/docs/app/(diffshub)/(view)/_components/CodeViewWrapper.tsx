@@ -20,8 +20,8 @@ import { memo, type RefObject, useMemo, useRef, useState } from 'react';
 
 import type { AvatarName } from './annotation-shared';
 import {
+  BASE_CODE_VIEW_LAYOUT,
   CODE_VIEW_CUSTOM_CSS,
-  CODE_VIEW_PADDING_BLOCK,
   getCodeViewMarginOffset,
   getCodeViewPaddingTop,
 } from './constants';
@@ -39,11 +39,6 @@ import {
   isSavedAnnotation,
 } from './utils';
 import { cn } from '@/lib/utils';
-
-const BASE_VIEWER_METRICS = {
-  gap: 8,
-  paddingBottom: CODE_VIEW_PADDING_BLOCK,
-};
 
 function getNextItemVersion(item: CodeViewItem<CommentMetadata>): number {
   return typeof item.version === 'number' ? item.version + 1 : 1;
@@ -362,9 +357,9 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
     }
   });
 
-  const viewerMetrics = useMemo(
+  const layout = useMemo(
     () => ({
-      ...BASE_VIEWER_METRICS,
+      ...BASE_CODE_VIEW_LAYOUT,
       paddingTop: getCodeViewPaddingTop(isMobile),
     }),
     [isMobile]
@@ -431,7 +426,9 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   const options: CodeViewOptions<CommentMetadata> = useMemo(
     () =>
       ({
-        viewerMetrics,
+        // Use this to validate itemMetrics when changing layout with unsafeCSS.
+        // __devOnlyValidateItemHeights: true,
+        layout,
         theme: DEFAULT_THEMES,
         diffStyle,
         diffIndicators,
@@ -463,7 +460,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       lineNumbers,
       overflow,
       showBackgrounds,
-      viewerMetrics,
+      layout,
     ]
   );
   return (

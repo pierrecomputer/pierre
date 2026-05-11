@@ -1,5 +1,5 @@
 import type {
-  CodeViewMetrics,
+  CodeViewLayout,
   HunkExpansionRegion,
   RenderRange,
   SmoothScrollSettings,
@@ -8,6 +8,16 @@ import type {
 } from './types';
 
 export const DIFFS_TAG_NAME = 'diffs-container' as const;
+
+// Keep this as a NODE_ENV read so app builds can hard-disable development-only
+// checks unless they are explicitly built for development.
+export const DIFFS_DEVELOPMENT_BUILD: boolean = (() => {
+  try {
+    return process.env.NODE_ENV === 'development';
+  } catch {
+    return false;
+  }
+})();
 
 // Misc patch/content parsing regexes
 export const COMMIT_METADATA_SPLIT: RegExp = /(?=^From [a-f0-9]+ .+$)/m;
@@ -61,7 +71,7 @@ export const DEFAULT_CODE_VIEW_FILE_METRICS: VirtualFileMetrics = {
   hunkLineCount: 1,
 };
 
-export const DEFAULT_CODE_VIEW_METRICS: CodeViewMetrics = {
+export const DEFAULT_CODE_VIEW_LAYOUT: CodeViewLayout = {
   paddingTop: 8,
   paddingBottom: 8,
   gap: 8,

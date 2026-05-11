@@ -101,7 +101,7 @@ export function renderDemoCodeView(
     enableLineSelection: true,
     enableGutterUtility: true,
     stickyHeaders: true,
-    viewerMetrics: { paddingTop: 10, paddingBottom: 24, gap: 12 },
+    layout: { paddingTop: 10, paddingBottom: 24, gap: 12 },
     onGutterUtilityClick(range, context) {
       if (context.item.type !== 'diff') {
         return;

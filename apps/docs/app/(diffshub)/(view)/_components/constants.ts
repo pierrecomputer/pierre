@@ -1,3 +1,4 @@
+import type { CodeViewLayout } from '@pierre/diffs';
 import type { FileTreeOptions } from '@pierre/trees';
 
 export type ViewerLoadState =
@@ -10,6 +11,11 @@ export type ViewerLoadState =
 export const CODE_VIEW_MARGIN_OFFSET = 12;
 
 export const CODE_VIEW_PADDING_BLOCK = 13;
+
+export const BASE_CODE_VIEW_LAYOUT: Omit<CodeViewLayout, 'paddingTop'> = {
+  gap: 8,
+  paddingBottom: CODE_VIEW_PADDING_BLOCK,
+};
 
 export function getCodeViewMarginOffset(isMobile: boolean): number {
   return isMobile ? 0 : CODE_VIEW_MARGIN_OFFSET;

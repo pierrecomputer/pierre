@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { CodeView } from '../src/components/CodeView';
 import {
   DEFAULT_CODE_VIEW_FILE_METRICS,
-  DEFAULT_CODE_VIEW_METRICS,
+  DEFAULT_CODE_VIEW_LAYOUT,
 } from '../src/constants';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
@@ -181,7 +181,7 @@ function getFileLineTop(lineNumber: number): number {
 }
 
 function getViewportTopForLocalTop(localTop: number): number {
-  return DEFAULT_CODE_VIEW_METRICS.paddingTop + localTop;
+  return DEFAULT_CODE_VIEW_LAYOUT.paddingTop + localTop;
 }
 
 describe('CodeView range scrolling', () => {
