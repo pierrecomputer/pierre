@@ -10,6 +10,7 @@ import {
 } from './annotation-shared';
 import type { DraftCommentMetadata } from './types';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface DraftAnnotationProps {
   annotation: DiffLineAnnotation<DraftCommentMetadata>;
@@ -61,56 +62,63 @@ export function DraftAnnotation({
 
   return (
     <form
-      className={annotationCardBase}
+      className={cn(annotationCardBase, 'flex-col md:flex-row')}
       onSubmit={(event) => {
         event.preventDefault();
         handleSave();
       }}
     >
-      <CommentAuthorAvatar seed={persona.name} />
-      <textarea
-        ref={textareaRef}
-        value={message}
-        onChange={({ currentTarget }) => setMessage(currentTarget.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
+      <div className="flex w-full gap-2.5">
+        <CommentAuthorAvatar seed={persona.name} />
+        <textarea
+          ref={textareaRef}
+          value={message}
+          onChange={({ currentTarget }) => setMessage(currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              tryCancel();
+              return;
+            }
+
+            if ((!event.shiftKey && !event.metaKey) || event.key !== 'Enter') {
+              return;
+            }
+
             event.preventDefault();
-            tryCancel();
-            return;
-          }
-
-          if ((!event.shiftKey && !event.metaKey) || event.key !== 'Enter') {
-            return;
-          }
-
-          event.preventDefault();
-          handleSave();
-        }}
-        placeholder="Add a comment…"
-        rows={2}
-        className="field-sizing-content w-full resize-none rounded-sm py-1.5 text-[14px] focus:outline-none"
-      />
-      <div className="flex justify-between gap-3">
-        {/* <Button
+            handleSave();
+          }}
+          placeholder="Add a comment…"
+          rows={2}
+          className="field-sizing-content w-full resize-none rounded-sm py-1.5 text-[14px] focus:outline-none"
+        />
+      </div>
+      <div className="flex w-full justify-between gap-3 pl-10.5 md:w-auto md:justify-end md:pl-0">
+        <Button
           type="button"
-          variant="link"
+          variant="muted"
           onClick={tryCancel}
-          className="text-muted-foreground hover:text-foreground gap-1 p-0 font-normal hover:no-underline"
+          className="text-muted-foreground hover:text-foreground gap-1 font-normal hover:no-underline md:hidden"
         >
-          <kbd className="rounded-sm bg-neutral-100 px-1.5 py-0.5 text-xs">
-            Esc
-          </kbd>
-          to cancel
-        </Button> */}
+          Cancel
+        </Button>
         <Button
           type="submit"
           variant="default"
           size="icon-md"
           disabled={trimmedMessage.length === 0}
-          className="rounded-full bg-blue-500 hover:bg-blue-600"
+          className="hidden rounded-full bg-blue-500 hover:bg-blue-600 md:flex"
         >
-          {/* Save comment */}
           <IconArrowRight className="size-4 rotate-[-90deg]" />
+        </Button>
+        <Button
+          type="submit"
+          variant="default"
+          disabled={trimmedMessage.length === 0}
+          className="gap-1.5 bg-blue-500 hover:bg-blue-600 md:hidden"
+        >
+          Submit
+          <IconArrowRight className="-mr-0.5 size-3" />
         </Button>
       </div>
     </form>

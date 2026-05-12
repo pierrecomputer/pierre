@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { DiffsHubLogo } from '../(view)/_components/DiffsHubLogo';
 import { getGitHubPath } from '../(view)/_components/utils';
 import { HomeFetchForm } from './HomeFetchForm';
+import { ScrollDownButton } from './ScrollDownButton';
 
 function Divider() {
   return <hr className="my-8 w-full md:max-w-[80px]" />;
@@ -64,8 +65,8 @@ const SOCIAL_LINKS = [
 
 export default function DiffshubHome() {
   return (
-    <div className="flex min-h-screen min-w-screen flex-col items-center justify-center pb-8 md:bg-neutral-50 md:py-0 md:dark:bg-neutral-900">
-      <section className="flex min-h-screen w-2xl max-w-[100vw] flex-col justify-center space-y-4 px-6 pb-4 md:block md:min-h-0 md:pb-0">
+    <div className="flex min-h-screen min-w-screen flex-col items-center justify-center md:bg-neutral-50 md:py-12 md:dark:bg-neutral-900">
+      <section className="relative flex min-h-[100dvh] w-2xl max-w-[100vw] flex-col justify-center space-y-4 px-6 pt-8 md:block md:min-h-0">
         <h2 className="flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
           <DiffsHubLogo />
           DiffsHub
@@ -131,8 +132,12 @@ export default function DiffshubHome() {
             ))}
           </ul>
         </div>
+        <ScrollDownButton />
       </section>
-      <section className="w-2xl max-w-[100vw] space-y-4 px-5">
+      <section
+        id="home-more"
+        className="w-2xl max-w-[100vw] space-y-4 px-5 pb-8"
+      >
         <Divider />
         <div className="max-w-2xl">
           <FaqItem question="What’s DiffsHub?">
