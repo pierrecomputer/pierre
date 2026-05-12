@@ -20,6 +20,7 @@ export const HomeFetchForm = memo(function HomeFetchForm() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [url, setUrl] = useState('');
 
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -51,13 +52,15 @@ export const HomeFetchForm = memo(function HomeFetchForm() {
           required
           disabled={isPending}
           className="text-md bg-background h-11 rounded-lg sm:flex-1"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
         />
         <Button
           type="submit"
           variant="default"
           size="icon"
           className="size-11 rounded-lg"
-          disabled={isPending}
+          disabled={isPending || url.trim() === ''}
           aria-label={isPending ? 'Opening…' : 'Fetch'}
         >
           {isPending ? (
