@@ -13,7 +13,7 @@ export const CODE_VIEW_MARGIN_OFFSET = 12;
 export const CODE_VIEW_PADDING_BLOCK = 13;
 
 export const BASE_CODE_VIEW_LAYOUT: Omit<CodeViewLayout, 'paddingTop'> = {
-  gap: 8,
+  gap: 0,
   paddingBottom: CODE_VIEW_PADDING_BLOCK,
 };
 
@@ -33,18 +33,9 @@ export const CODE_VIEW_CUSTOM_CSS = `
 
 @media (min-width: 768px) {
   [data-diffs-header] {
-    top: 12px;
+    top: 25px;
 
-    &::before {
-      position: absolute;
-      top: -12px;
-      left: 0;
-      right: 0;
-      height: 12px;
-      width: 100%;
-      content: '';
-      background-color: var(--diffs-bg);
-    }
+
   }
 }
 
