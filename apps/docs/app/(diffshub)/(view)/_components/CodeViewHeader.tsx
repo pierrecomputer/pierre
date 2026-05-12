@@ -119,6 +119,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
         className="absolute top-3 left-[50%] inline-flex -translate-x-1/2 transition-transform duration-200 hover:scale-110 md:static md:translate-x-0"
       >
         <DiffsHubLogo />
+        {/* <IconSymbolDiffstat className="size-6" /> */}
       </Link>
       <span className="text-md hidden text-neutral-300 select-none md:-mr-2 md:inline-flex">
         /
@@ -153,7 +154,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           type="submit"
           variant="muted"
           size="icon"
-          className="md:bg-primary md:text-primary-foreground md:hover:bg-primary/90 md:hover:text-white/90"
+          // className="md:bg-primary md:text-primary-foreground md:hover:bg-primary/90 md:hover:text-white/90"
           aria-busy={busy || undefined}
           aria-label={busy ? 'Loading diff' : 'Submit'}
         >
