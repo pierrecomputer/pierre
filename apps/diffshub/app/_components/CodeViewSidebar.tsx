@@ -413,15 +413,15 @@ function FileTreeFilterButton({
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
-          variant={isFiltered ? 'outline' : 'muted'}
+          variant="muted"
           size="icon"
           aria-label="Filter by Git status"
           aria-pressed={isFiltered}
-          className="group relative"
+          className="relative"
         >
           <IconFilter />
           {isFiltered && (
-            <span className="border-background group-hover:border-secondary absolute top-1 right-1 size-3 rounded-full border-[2px] bg-blue-500 dark:bg-blue-400" />
+            <span className="border-secondary absolute top-1 right-1 size-3 rounded-full border-[2px] bg-blue-500 dark:bg-blue-400" />
           )}
         </Button>
       </DropdownMenuTrigger>

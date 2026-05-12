@@ -84,10 +84,12 @@ export function CommentAuthorAvatar({
 }: CommentAuthorAvatarProps) {
   const { name, avatarSrc } = getCommentPersona(seed);
   return (
-    <img
-      src={avatarSrc}
-      alt={name}
-      className={cn('size-8 shrink-0 rounded-full object-cover', className)}
-    />
+    <div className="relative shrink-0 self-start after:absolute after:inset-0 after:z-10 after:block after:rounded-full after:border after:border-[rgb(0_0_0_/_0.1)] after:content-[''] dark:after:border-[rgb(255_255_255_/_0.1)]">
+      <img
+        src={avatarSrc}
+        alt={name}
+        className={cn('block size-8 object-cover rounded-full', className)}
+      />
+    </div>
   );
 }

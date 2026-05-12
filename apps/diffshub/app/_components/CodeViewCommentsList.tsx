@@ -147,25 +147,23 @@ export const CodeViewCommentsList = memo(function CodeViewCommentsList({
                 }
               >
                 <CommentAuthorAvatar seed={comment.author} className="size-5" />
-                <div className="flex flex-col gap-0.5 select-text">
-                  <div className="flex gap-2">
-                    <span className="text-muted-foreground">
-                      {comment.author} commented on{' '}
-                      <span
-                        className={cn(
-                          getCommentLineClassName(
-                            comment.side,
-                            comment.lineType
-                          ),
-                          'font-medium'
-                        )}
-                      >
-                        {getCommentLineLabel(
+                <div className="flex flex-col items-start gap-0.5 select-text">
+                  <div className="text-muted-foreground flex gap-1">
+                    {comment.author} commented on{' '}
+                    <span
+                      className={cn(
+                        getCommentLineClassName(
                           comment.side,
-                          comment.lineNumber,
                           comment.lineType
-                        )}
-                      </span>
+                        ),
+                        'font-medium'
+                      )}
+                    >
+                      {getCommentLineLabel(
+                        comment.side,
+                        comment.lineNumber,
+                        comment.lineType
+                      )}
                     </span>
                   </div>
                   <p className="text-foreground w-full break-words whitespace-pre-wrap">
