@@ -115,6 +115,7 @@ export function Annotations({ prerenderedDiff }: AnnotationsProps) {
             enableGutterUtility: !hasOpenCommentForm,
             onLineSelectionEnd: handleLineSelectionEnd,
             onLineSelectionChange: handleLineSelectionChange,
+            onGutterUtilityClick: handleLineSelectionChange,
           }),
           [
             prerenderedDiff.options,
