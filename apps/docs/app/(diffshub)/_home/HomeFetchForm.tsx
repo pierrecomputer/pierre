@@ -41,7 +41,7 @@ export const HomeFetchForm = memo(function HomeFetchForm() {
   );
 
   return (
-    <div className="my-5 space-y-2">
+    <div className="space-y-2 py-3 md:py-0">
       <form onSubmit={handleSubmit} className="flex max-w-2xl gap-2">
         <Input
           type="url"

@@ -16,10 +16,9 @@ function Divider() {
 }
 
 const EXAMPLE_URLS = [
-  'https://github.com/nodejs/node/pull/59805',
-  'https://github.com/torvalds/linux/compare/v6.0...v7.0',
-  'https://github.com/ghostty-org/ghostty/pull/12291',
-  'https://github.com/pierrecomputer/pierre/commit/0800fb',
+  'nodejs/node/pull/59805',
+  'ghostty-org/ghostty/pull/12291',
+  'pierrecomputer/pierre/commit/0800fb',
 ] as const;
 
 function FaqItem({
@@ -66,7 +65,7 @@ const SOCIAL_LINKS = [
 export default function DiffshubHome() {
   return (
     <div className="flex min-h-screen min-w-screen flex-col items-center justify-center pb-8 md:bg-neutral-50 md:py-0 md:dark:bg-neutral-900">
-      <section className="flex min-h-screen w-2xl max-w-[100vw] flex-col justify-center space-y-4 px-5 pb-4 md:block md:min-h-0 md:pb-0">
+      <section className="flex min-h-screen w-2xl max-w-[100vw] flex-col justify-center space-y-4 px-6 pb-4 md:block md:min-h-0 md:pb-0">
         <h2 className="flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
           <DiffsHubLogo />
           DiffsHub
@@ -87,10 +86,13 @@ export default function DiffshubHome() {
             href="https://diffs.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-link no-underline"
+            className="inline-link group no-underline"
           >
             <code className="text-foreground/75">
-              @<code className="underline">pierre/diffs</code>
+              @
+              <code className="decoration-muted-foreground group-hover:decoration-foreground group-transition-all underline decoration-[1px] underline-offset-3">
+                pierre/diffs
+              </code>
             </code>
           </Link>{' '}
           and{' '}
@@ -101,24 +103,28 @@ export default function DiffshubHome() {
             className="inline-link no-underline"
           >
             <code className="text-foreground/75">
-              @<code className="underline">pierre/trees</code>
+              @
+              <code className="decoration-muted-foreground group-hover:decoration-foreground group-transition-all underline decoration-[1px] underline-offset-3">
+                pierre/trees
+              </code>
             </code>
           </Link>
           .
         </p>
         <HomeFetchForm />
-        <div className="-mt-2 mb-5 space-y-2">
+        <div className="mb-5 space-y-2">
           <h3 className="text-muted-foreground text-sm font-normal">
             Or use one of these example URLs:
           </h3>
-          <ul className="my-2 flex flex-col gap-1 text-sm">
+          <ul className="flex flex-col gap-1 text-sm">
             {EXAMPLE_URLS.map((url) => (
-              <li key={url} className="flex items-center justify-start gap-1">
-                <IconArrowRightShort className="flex-shrink-0 opacity-50" />
+              <li key={url} className="flex items-start justify-start gap-1">
+                <IconArrowRightShort className="mt-0.5 flex-shrink-0 opacity-50" />
                 <Link
-                  href={getGitHubPath(url) ?? '/'}
+                  href={getGitHubPath(`https://github.com/${url}`) ?? '/'}
                   className="inline-link truncate"
                 >
+                  <span className="hidden md:inline">https://github.com/</span>
                   {url}
                 </Link>
               </li>
@@ -177,6 +183,21 @@ export default function DiffshubHome() {
             Most commonly, you can view any public GitHub pull request. But you
             can also use comparisons between tags and commits, commits, patch
             files, and diff files.
+          </FaqItem>
+          <FaqItem question="What about diffs with millions of lines?">
+            DiffsHub can do millions of lines with ease. Try this{' '}
+            <Link
+              href="/torvalds/linux/compare/v6.0...v7.0"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-link"
+            >
+              diff between v6 and v7 of Linux
+            </Link>
+            . GitHub generates the patch in roughly 10 seconds and then we
+            stream in the code so you’re off to the races as quickly as
+            possible. In a nut shell, if GitHub can generate the diff, we’ll
+            render it.
           </FaqItem>
           <FaqItem question="Can you host my code, too?">
             <strong className="font-medium">Not yet.</strong> DiffsHub is only a

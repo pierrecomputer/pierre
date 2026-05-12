@@ -10,6 +10,7 @@ import {
   IconGearFill,
   IconRefresh,
   IconSymbolDiffstat,
+  IconX,
 } from '@pierre/icons';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -19,6 +20,7 @@ import {
   memo,
   type SetStateAction,
   useEffect,
+  useRef,
   useState,
   useTransition,
 } from 'react';
@@ -82,6 +84,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   const [url, setURL] = useState(initialUrl);
   const busy = isPending || loading;
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setURL(initialUrl);
@@ -117,23 +120,40 @@ export const CodeViewHeader = memo(function CodeViewHeader({
       >
         <DiffsHubLogo />
       </Link>
-      <span className="text-md hidden text-neutral-300 md:-mr-2 md:inline-flex">
+      <span className="text-md hidden text-neutral-300 select-none md:-mr-2 md:inline-flex">
         /
       </span>
       <form
-        className="order-last flex w-full gap-2 md:order-none md:gap-2"
+        className="group order-last flex w-full gap-2 md:order-none md:gap-2"
         onSubmit={handleSubmit}
       >
-        <input
-          className="text-md focus:bg-accent block h-9 w-full min-w-[220px] rounded-md px-2 text-center focus-visible:outline-none md:text-left"
-          value={url}
-          onChange={({ currentTarget }) => setURL(currentTarget.value)}
-          placeholder="e.g. https://github.com/nodejs/node/pull/59805"
-        />
+        <div className="relative flex-1">
+          <input
+            ref={inputRef}
+            className="text-md focus:bg-accent block h-9 w-full min-w-[220px] rounded-md px-2 text-center focus-visible:outline-none md:pr-7 md:text-left"
+            value={url}
+            onChange={({ currentTarget }) => setURL(currentTarget.value)}
+            placeholder="e.g. https://github.com/nodejs/node/pull/59805"
+          />
+          {url.length > 0 && (
+            <button
+              type="button"
+              aria-label="Clear URL"
+              className="text-foreground absolute top-0 right-0 hidden size-9 cursor-pointer items-center justify-center opacity-35 transition-colors hover:opacity-65 md:group-hover:flex"
+              onClick={() => {
+                setURL('');
+                inputRef.current?.focus();
+              }}
+            >
+              <IconX className="size-4" />
+            </button>
+          )}
+        </div>
         <Button
           type="submit"
-          variant="default"
+          variant="muted"
           size="icon"
+          className="md:bg-primary md:text-primary-foreground md:hover:bg-primary/90 md:hover:text-white/90"
           aria-busy={busy || undefined}
           aria-label={busy ? 'Loading diff' : 'Submit'}
         >

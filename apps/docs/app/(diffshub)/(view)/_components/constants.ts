@@ -80,7 +80,7 @@ const HIDDEN_SEARCH_UNSAFE_CSS = `
   }
 
   [data-file-tree-sticky-overlay-content] {
-    box-shadow: 0 1.5px 3px -3px rgba(0,0,0,1);
+    box-shadow: 0 2px 3px -4px rgb(0 0 0 / 1);
 
     [data-item-section="spacing"] {
       opacity: 0.5;
@@ -93,7 +93,7 @@ const HIDDEN_SEARCH_UNSAFE_CSS = `
 
   @media (prefers-color-scheme: dark) {
     [data-file-tree-sticky-overlay-content] {
-      box-shadow: 0 3px 3px -3px rgba(0,0,0,0.8);
+      box-shadow: 0 3px 3px -3px rgb(0 0 0 / 80%);
 
       [data-item-section="spacing"] {
         opacity: 0.6;
@@ -106,6 +106,8 @@ const HIDDEN_SEARCH_UNSAFE_CSS = `
 const SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS = `
   [data-file-tree-virtualized-scroll="true"] {
     padding-inline-start: 0;
+    padding-inline-end: 2px;
+    margin-inline-end: 2px;
   }
 
   @media (width <= 767px) {

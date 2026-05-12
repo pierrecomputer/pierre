@@ -119,18 +119,18 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
         className={className}
         mobileOverlayOpen={mobileOverlayOpen}
       >
-        <div className="flex items-center gap-2 p-4 pb-0 md:pt-0 md:pr-2 md:pl-3">
+        <div className="flex items-center gap-2 p-4 pb-0 md:px-3 md:pt-0">
           <ButtonGroup
             aria-label="Sidebar sections"
             className="mr-auto flex min-w-0"
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as SidebarTab)}
           >
-            <ButtonGroupItem value="files" className="size-9 p-0">
+            <ButtonGroupItem value="files" size="icon">
               <IconFileTree />
               <span className="sr-only">Files</span>
             </ButtonGroupItem>
-            <ButtonGroupItem value="comments" className="size-9 p-0">
+            <ButtonGroupItem value="comments" size="icon">
               <IconComment />
               <span className="sr-only">Comments</span>
             </ButtonGroupItem>

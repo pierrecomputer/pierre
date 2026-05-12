@@ -127,7 +127,7 @@ export function StatItem({ label, value, valueClassName }: StatItemProps) {
   const formatted =
     typeof value === 'number' ? NUMBER_FORMATTER.format(value) : value;
   return (
-    <div className="border-border/75 flex items-center justify-between border-t py-1 pr-4 text-[12px] md:pr-2">
+    <div className="border-border/75 flex items-center justify-between border-t py-1 pr-4 text-[12px] md:pr-0">
       <div className="text-muted-foreground">{label}</div>
       <span
         className={cn('pl-[1ch] text-right tabular-nums', valueClassName)}
@@ -167,11 +167,17 @@ function getStatusIcon(stats: WorkerStats) {
 export interface StatusRowProps {
   icon: ComponentType<{ className?: string }>;
   children: ReactNode;
+  className?: string;
 }
 
-export function StatusRow({ icon: Icon, children }: StatusRowProps) {
+export function StatusRow({ icon: Icon, children, className }: StatusRowProps) {
   return (
-    <div className="text-muted-foreground border-border flex min-w-0 items-center gap-2 border-t px-4 py-2 md:mr-1 md:ml-3 md:px-2">
+    <div
+      className={cn(
+        'text-muted-foreground border-border flex min-w-0 items-center gap-2 border-t px-4 py-2 md:mx-3 md:px-2',
+        className
+      )}
+    >
       <Icon className="size-3 shrink-0 opacity-50" />
       {children}
     </div>
@@ -206,7 +212,7 @@ function StatsDisplay({
 
   return (
     <div className="border-border shrink-0 overscroll-contain border-b text-sm md:border-b-0">
-      <StatusRow icon={expanded ? IconEyeSlash : IconEye}>
+      <StatusRow icon={expanded ? IconEyeSlash : IconEye} className="md:pr-0">
         <button
           type="button"
           onClick={onToggle}
@@ -233,7 +239,7 @@ function StatsDisplay({
         </div>
       </StatusRow>
       {expanded && (
-        <div className="ml-9 md:mr-1">
+        <div className="ml-10 md:mr-3">
           <StatItem
             label="Busy Workers"
             value={`${stats.busyWorkers}/${stats.totalWorkers}`}

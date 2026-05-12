@@ -51,7 +51,7 @@ export const CodeViewDiffStats = memo(function CodeViewDiffStats({
         </button>
       </StatusRow>
       {expanded && (
-        <div className="ml-10 md:mr-1">
+        <div className="ml-10 md:mr-3">
           <StatItem
             label="Files"
             value={stats.fileCount}
