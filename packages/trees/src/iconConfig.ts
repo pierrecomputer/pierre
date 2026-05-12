@@ -2,6 +2,7 @@ export type RemappedIcon =
   | string
   | {
       name: string;
+      color?: string;
       width?: number;
       height?: number;
       viewBox?: string;
@@ -18,6 +19,8 @@ export interface FileTreeIconConfig {
   spriteSheet?: string;
   /** Remap built-in tree icon slots (file, chevron, dot, lock). */
   remap?: Record<string, RemappedIcon>;
+  /** Remap file icons by exact relative path; directory paths should end in `/`. */
+  byFilePath?: Record<string, RemappedIcon>;
   /** Remap file icons by exact basename (e.g. "package.json", ".gitignore"). */
   byFileName?: Record<string, RemappedIcon>;
   /** Remap file icons by extension without a leading dot (e.g. "ts", "spec.ts"). */
@@ -37,6 +40,7 @@ function hasCustomIconOverrides(icons: FileTreeIconConfig): boolean {
   return (
     icons.spriteSheet != null ||
     icons.remap != null ||
+    icons.byFilePath != null ||
     icons.byFileName != null ||
     icons.byFileExtension != null ||
     icons.byFileNameContains != null

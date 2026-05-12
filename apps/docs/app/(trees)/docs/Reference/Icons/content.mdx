@@ -39,6 +39,7 @@ Built-in slot remapping:
 
 File-specific remapping:
 
+- `byFilePath` for exact relative path matches such as `docs/README.md`
 - `byFileName` for exact basename matches such as `package.json`
 - `byFileNameContains` for basename substring rules such as `dockerfile`
 - `byFileExtension` for extension rules without a leading dot, including
@@ -48,11 +49,12 @@ File-specific remapping:
 
 File icon lookup resolves in this order:
 
-1. exact basename match from `byFileName`
-2. basename-contains match from `byFileNameContains`
-3. extension match from `byFileExtension`, with more specific suffixes winning
-4. built-in set mapping
-5. generic file-slot remap or fallback
+1. exact relative path match from `byFilePath`
+2. exact basename match from `byFileName`
+3. basename-contains match from `byFileNameContains`
+4. extension match from `byFileExtension`, with more specific suffixes winning
+5. built-in set mapping
+6. generic file-slot remap or fallback
 
 That means `spec.ts` should beat `ts` when both rules exist.
 
@@ -61,7 +63,7 @@ That means `spec.ts` should beat `ts` when both rules exist.
 `RemappedIcon` supports two forms:
 
 - a string symbol id
-- an object with `name`, plus optional `width`, `height`, and `viewBox`
+- an object with `name`, plus optional `color`, `width`, `height`, and `viewBox`
 
 Use the object form when the replacement symbol needs non-default geometry
 metadata.

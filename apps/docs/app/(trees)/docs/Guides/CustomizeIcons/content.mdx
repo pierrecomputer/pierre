@@ -33,6 +33,7 @@ practical remap surfaces are:
 
 - `remap` for built-in slots such as the generic file icon, chevron, dot, or
   lock
+- `byFilePath` for exact relative paths such as `docs/README.md`
 - `byFileName` for exact basenames such as `package.json`
 - `byFileExtension` for suffixes such as `ts` or `spec.ts`
 - `byFileNameContains` for broader patterns such as `dockerfile`
@@ -46,11 +47,12 @@ That keeps the built-in mapping for everything you did not customize.
 File-specific rules beat broader ones. In practice, Trees resolves icons in this
 order:
 
-1. exact basename matches
-2. basename-contains matches
-3. extension matches, with more specific suffixes winning
-4. the chosen built-in set
-5. the generic file-slot remap or fallback
+1. exact relative path matches
+2. exact basename matches
+3. basename-contains matches
+4. extension matches, with more specific suffixes winning
+5. the chosen built-in set
+6. the generic file-slot remap or fallback
 
 If you want the full lookup contract, read [Icons](#icons-resolution-order).
 

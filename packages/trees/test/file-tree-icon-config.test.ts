@@ -73,6 +73,94 @@ describe('file-tree icon config', () => {
     }
   });
 
+  test('prefers exact file-path icon remaps before basename rules', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: true,
+        icons: {
+          byFilePath: {
+            'docs/README.md': 'pst-test-doc-readme',
+          },
+          byFileName: {
+            'readme.md': 'pst-test-readme',
+          },
+          spriteSheet:
+            '<svg data-icon-sprite aria-hidden="true" width="0" height="0"><symbol id="pst-test-readme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor" /></symbol><symbol id="pst-test-doc-readme" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="currentColor" /></symbol></svg>',
+        },
+        initialExpansion: 'open',
+        paths: ['README.md', 'docs/README.md', 'src/index.ts'],
+        initialVisibleRowCount: 120 / 30,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const rootReadmeButton = getItemButton(shadowRoot, dom, 'README.md');
+      const nestedReadmeButton = getItemButton(
+        shadowRoot,
+        dom,
+        'docs/README.md'
+      );
+
+      expect(rootReadmeButton.querySelector('use')?.getAttribute('href')).toBe(
+        '#pst-test-readme'
+      );
+      expect(
+        nestedReadmeButton.querySelector('use')?.getAttribute('href')
+      ).toBe('#pst-test-doc-readme');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('applies explicit colors on remapped icons', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: true,
+        icons: {
+          byFileName: {
+            'readme.md': {
+              name: 'pst-test-readme',
+              color: 'var(--brand-icon-color)',
+            },
+          },
+          spriteSheet:
+            '<svg data-icon-sprite aria-hidden="true" width="0" height="0"><symbol id="pst-test-readme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor" /></symbol></svg>',
+        },
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts'],
+        initialVisibleRowCount: 120 / 30,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const readmeButton = getItemButton(shadowRoot, dom, 'README.md');
+      const icon = readmeButton.querySelector('svg');
+
+      expect(icon?.getAttribute('style')).toContain(
+        'color: var(--brand-icon-color);'
+      );
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('falls back to built-in file icon tiers when overrides are absent', async () => {
     const { cleanup, dom } = installDom();
     try {
