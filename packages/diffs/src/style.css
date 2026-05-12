@@ -912,6 +912,11 @@
     cursor: pointer;
   }
 
+  [data-interactive-line-numbers] [data-column-number] {
+    cursor: pointer;
+    touch-action: none;
+  }
+
   [data-content-buffer],
   [data-gutter-buffer] {
     position: relative;
@@ -1684,6 +1689,7 @@
     right: 0;
     display: flex;
     justify-content: flex-end;
+    touch-action: none;
   }
 
   [data-utility-button] {
@@ -1705,6 +1711,7 @@
     fill: currentColor;
     position: relative;
     z-index: 4;
+    touch-action: none;
   }
 
   /* Decoration Bars */

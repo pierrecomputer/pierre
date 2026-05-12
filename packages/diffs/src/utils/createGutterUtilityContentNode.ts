@@ -6,5 +6,6 @@ export function createGutterUtilityContentNode(): HTMLElement {
   gutterUtilityContent.style.bottom = '0';
   gutterUtilityContent.style.textAlign = 'center';
   gutterUtilityContent.style.whiteSpace = 'normal';
+  gutterUtilityContent.style.touchAction = 'none';
   return gutterUtilityContent;
 }
