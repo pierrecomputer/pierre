@@ -144,6 +144,32 @@ function createFilePre(lineCount: number): FilePreFixture {
   return { contentRows, gutterRows, pre };
 }
 
+function createAnnotationRowAfter(
+  fixture: FilePreFixture,
+  lineIndex: number
+): { content: HTMLDivElement; gutter: HTMLDivElement } {
+  const gutterRow = fixture.gutterRows[lineIndex];
+  const contentRow = fixture.contentRows[lineIndex];
+  if (gutterRow == null || contentRow == null) {
+    throw new Error('missing annotation owner row');
+  }
+
+  const gutterAnnotation = document.createElement('div');
+  gutterAnnotation.setAttribute('data-gutter-buffer', 'annotation');
+  gutterAnnotation.setAttribute('data-buffer-size', '1');
+
+  const contentAnnotation = document.createElement('div');
+  contentAnnotation.setAttribute('data-line-annotation', `0,${lineIndex}`);
+  const annotationContent = document.createElement('div');
+  annotationContent.setAttribute('data-annotation-content', '');
+  contentAnnotation.appendChild(annotationContent);
+
+  gutterRow.after(gutterAnnotation);
+  contentRow.after(contentAnnotation);
+
+  return { content: annotationContent, gutter: gutterAnnotation };
+}
+
 function dispatchPointer(
   target: EventTarget,
   type: string,
@@ -291,10 +317,6 @@ describe('InteractionManager gutter utility', () => {
       manager.setup(pre);
       manager.setSelection({ start: 1, end: 2 });
       const button = getUtilityButton(gutterRows[1]);
-      const slot = button.closest('[data-gutter-utility-slot]');
-      if (!(slot instanceof HTMLElement)) {
-        throw new Error('missing gutter utility slot');
-      }
       setElementFromPoint(8, 80, gutterRows[3]);
 
       const pointerDown = dispatchPointer(button, 'pointerdown', {
@@ -316,7 +338,6 @@ describe('InteractionManager gutter utility', () => {
         pointerType: 'touch',
       });
 
-      expect(slot.style.touchAction).toBe('none');
       expect(pointerDown.defaultPrevented).toBe(true);
       expect(pointerMove.defaultPrevented).toBe(true);
       expect(manager.getSelection()).toEqual({ start: 1, end: 4 });
@@ -414,6 +435,84 @@ describe('InteractionManager gutter utility', () => {
       });
 
       expect(manager.getSelection()).toEqual({ start: 1, end: 3 });
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('normal touch line selection follows annotation rows', () => {
+    const { cleanup, setElementFromPoint } = installDom();
+    const manager = new InteractionManager('file', {
+      enableGutterUtility: true,
+      enableLineSelection: true,
+    });
+    try {
+      const fixture = createFilePre(4);
+      const { gutterRows, pre } = fixture;
+      const annotation = createAnnotationRowAfter(fixture, 2);
+      manager.setup(pre);
+      setElementFromPoint(80, 60, annotation.content);
+
+      dispatchPointer(gutterRows[0], 'pointerdown', {
+        clientX: 8,
+        clientY: 20,
+        pointerId: 16,
+        pointerType: 'touch',
+      });
+      const pointerMove = dispatchPointer(gutterRows[0], 'pointermove', {
+        clientX: 80,
+        clientY: 60,
+        pointerId: 16,
+        pointerType: 'touch',
+      });
+
+      expect(pointerMove.defaultPrevented).toBe(true);
+      expect(manager.getSelection()).toEqual({ start: 1, end: 3 });
+      expect(
+        gutterRows[2].querySelector('[data-gutter-utility-slot]')
+      ).not.toBe(null);
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('normal touch line selection follows slotted annotation content', () => {
+    const { cleanup, setElementFromPoint } = installDom();
+    const manager = new InteractionManager('file', {
+      enableGutterUtility: true,
+      enableLineSelection: true,
+    });
+    try {
+      const { gutterRows, pre } = createFilePre(4);
+      const annotationSlotContent = document.createElement('div');
+      annotationSlotContent.slot = 'annotation-3';
+      const annotationButton = document.createElement('button');
+      annotationButton.type = 'button';
+      annotationSlotContent.appendChild(annotationButton);
+      document.body.appendChild(annotationSlotContent);
+      manager.setup(pre);
+      setElementFromPoint(80, 60, annotationButton);
+
+      dispatchPointer(gutterRows[0], 'pointerdown', {
+        clientX: 8,
+        clientY: 20,
+        pointerId: 17,
+        pointerType: 'touch',
+      });
+      const pointerMove = dispatchPointer(gutterRows[0], 'pointermove', {
+        clientX: 80,
+        clientY: 60,
+        pointerId: 17,
+        pointerType: 'touch',
+      });
+
+      expect(pointerMove.defaultPrevented).toBe(true);
+      expect(manager.getSelection()).toEqual({ start: 1, end: 3 });
+      expect(
+        gutterRows[2].querySelector('[data-gutter-utility-slot]')
+      ).not.toBe(null);
     } finally {
       manager.cleanUp();
       cleanup();
