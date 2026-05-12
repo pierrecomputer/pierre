@@ -21,6 +21,7 @@ const AVATAR_NAMES = [
   'joe',
   'kris',
   'mdo',
+  'murphy',
   'nicolas',
   'pia',
   'toshi',
