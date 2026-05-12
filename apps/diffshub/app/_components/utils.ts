@@ -365,6 +365,7 @@ export function filterCodeViewFileTreeSource(
 
   return {
     gitStatus: filteredGitStatus,
+    pathCount: filteredPaths.length,
     paths: filteredPaths,
     pathToItemId: filteredPathToItemId,
   };

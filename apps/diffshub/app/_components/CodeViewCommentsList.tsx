@@ -152,10 +152,7 @@ export const CodeViewCommentsList = memo(function CodeViewCommentsList({
                     {comment.author} commented on{' '}
                     <span
                       className={cn(
-                        getCommentLineClassName(
-                          comment.side,
-                          comment.lineType
-                        ),
+                        getCommentLineClassName(comment.side, comment.lineType),
                         'font-medium'
                       )}
                     >

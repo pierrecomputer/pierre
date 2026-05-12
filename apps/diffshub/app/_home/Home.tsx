@@ -13,6 +13,7 @@ const DIFF_LINE_BADGE = 'inline-flex rounded-r py-0.25 pr-1.5 pl-1.5';
 const DIFF_LINE_DELETED_BADGE = `${DIFF_LINE_BADGE} bg-[#ff6762]/15 text-[#ff2e3f] dark:bg-[#ff6762]/10 dark:text-[#ff6762]`;
 const DIFF_LINE_ADDED_BADGE = `${DIFF_LINE_BADGE} bg-[#07c480]/15 text-[#18a46c] dark:bg-[#07c480]/10 dark:text-[#07c480]`;
 import { HomeFetchForm } from './HomeFetchForm';
+import { ScrollDownButton } from './ScrollDownButton';
 
 function Divider() {
   return <hr className="my-8 max-w-[80px] opacity-50" />;
@@ -103,6 +104,7 @@ export default function DiffshubHome() {
             serves diffs over 100k lines with a delayed first byte.
           </p>
         </div>
+        <ScrollDownButton />
       </section>
       <section
         id="home-more"

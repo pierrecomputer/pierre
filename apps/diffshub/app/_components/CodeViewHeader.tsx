@@ -238,7 +238,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className={cn('w-52', THEMED_DROPDOWN_CONTENT_CLASS)}
+                className={cn('w-58 p-2', THEMED_DROPDOWN_CONTENT_CLASS)}
                 style={dropdownThemeStyle}
               >
                 <DropdownMenuItem
