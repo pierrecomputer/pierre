@@ -5,6 +5,8 @@ export const GutterUtilitySlotStyles: CSSProperties = {
   top: 0,
   bottom: 0,
   textAlign: 'center',
+  whiteSpace: 'normal',
+  touchAction: 'none',
 };
 
 export const MergeConflictSlotStyles: CSSProperties = {
