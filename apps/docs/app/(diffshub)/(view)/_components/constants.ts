@@ -8,33 +8,16 @@ export type ViewerLoadState =
   | 'ready'
   | 'error';
 
-export const CODE_VIEW_MARGIN_OFFSET = 12;
-
-export const CODE_VIEW_PADDING_BLOCK = 13;
-
-export const BASE_CODE_VIEW_LAYOUT: Omit<CodeViewLayout, 'paddingTop'> = {
+export const CODE_VIEW_LAYOUT: CodeViewLayout = {
+  paddingTop: 0,
   gap: 0,
-  paddingBottom: CODE_VIEW_PADDING_BLOCK,
+  paddingBottom: 0,
 };
-
-export function getCodeViewMarginOffset(isMobile: boolean): number {
-  return isMobile ? 0 : CODE_VIEW_MARGIN_OFFSET;
-}
-
-export function getCodeViewPaddingTop(isMobile: boolean): number {
-  return CODE_VIEW_PADDING_BLOCK + getCodeViewMarginOffset(isMobile);
-}
 
 export const CODE_VIEW_CUSTOM_CSS = `
 [data-diffs-header] {
   container-type: scroll-state;
   container-name: sticky-header;
-}
-
-@media (min-width: 768px) {
-  [data-diffs-header] {
-    top: 25px;
-  }
 }
 
 @container sticky-header scroll-state(stuck: top) {
