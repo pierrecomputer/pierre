@@ -215,10 +215,10 @@ function SidebarWrapper({
     <div
       className={cn(
         className,
-        'contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
+        'bg-neutral-50 dark:bg-neutral-900 contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
         mobileOverlayOpen
-          ? 'bg-background pointer-events-auto h-[calc(100%_-_env(safe-area-inset-bottom))] translate-y-0 overflow-hidden rounded-t-xl shadow-[0_0_0_1px_var(--color-border),_0_16px_32px_rgb(0_0_0_/0.25)] md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
-          : 'bg-neutral-50 dark:bg-neutral-900 pointer-events-none m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl md:pointer-events-auto md:m-0 md:h-full md:overflow-visible md:rounded-none p-0 pt-3 border-r border-border'
+          ? 'pointer-events-auto h-[calc(100%_-_env(safe-area-inset-bottom))] translate-y-0 overflow-hidden rounded-t-xl shadow-[0_0_0_1px_var(--color-border),_0_16px_32px_rgb(0_0_0_/0.25)] md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
+          : 'pointer-events-none m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl md:pointer-events-auto md:m-0 md:h-full md:overflow-visible md:rounded-none p-0 pt-3 border-r border-border'
       )}
     >
       {children}
