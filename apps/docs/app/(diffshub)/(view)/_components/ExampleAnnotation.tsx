@@ -55,7 +55,7 @@ export const ExampleAnnotation = memo(function ExampleAnnotation({
         <strong className="mt-1 block text-[14px]">
           {annotation.metadata.author}
         </strong>
-        <p className="m-0 text-[14px] whitespace-normal">
+        <p className="m-0 text-[14px] whitespace-pre-wrap">
           {annotation.metadata.message}
         </p>
       </div>
