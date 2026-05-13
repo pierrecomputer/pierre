@@ -152,7 +152,7 @@ export function DiffUrlForm({
         <button
           type="button"
           aria-label="Clear"
-          className="text-foreground size-6 shrink-0 cursor-pointer items-center justify-center opacity-35 transition-colors group-hover:flex hover:opacity-65"
+          className="text-foreground flex size-6 shrink-0 cursor-pointer items-center justify-center opacity-35 transition-colors hover:opacity-65"
           onClick={() => {
             setURL('');
             setValidationError(null);
