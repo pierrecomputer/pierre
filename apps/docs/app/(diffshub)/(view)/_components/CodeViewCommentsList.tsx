@@ -1,7 +1,7 @@
 'use client';
 
 import type { AnnotationSide } from '@pierre/diffs';
-import { IconConvoFill } from '@pierre/icons';
+import { IconConvoFill, IconPlus } from '@pierre/icons';
 import { memo } from 'react';
 
 import { CommentAuthorAvatar } from './annotation-shared';
@@ -38,8 +38,11 @@ export const CodeViewCommentsList = memo(function CodeViewCommentsList({
         <div className="flex flex-col">
           <strong className="font-medium">No comments yet</strong>
           <p>
-            Hover over a line and click the blue + button to add fake code
-            comments.
+            Hover over a line and click the{' '}
+            <span className="light:text-white light:bg-[rgb(0,159,255)] inline-flex h-[20px] w-[20px] items-center justify-center rounded-[4px] align-top dark:bg-[rgb(0,159,255)] dark:text-black">
+              <IconPlus />
+            </span>{' '}
+            button to add fake code comments.
           </p>
         </div>
       </div>
