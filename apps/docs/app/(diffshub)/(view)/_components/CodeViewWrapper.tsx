@@ -469,7 +469,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       containerRef={scrollRef}
       initialItems={initialItems}
       className={cn(
-        'cv-scrollbar relative h-full min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain border-b border-border w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] md:mt-[-12px] md:h-[calc(100%_+_12px)] md:border-b-0 md:pl-[1px] md:pr-[max(0px,calc(13px-var(--cv-gutter-vertical)))] [&_diffs-container]:overflow-clip [&_diffs-container]:[contain:layout_paint_style] md:[&_diffs-container]:rounded-lg [&_diffs-container]:shadow-[0_0_0_1px_var(--color-border)]',
+        'cv-scrollbar relative h-full min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain border-b border-border w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] md:mt-[-12px] md:h-[calc(100%_+_12px)] md:border-b-0 md:pl-[1px] md:pr-[max(0px,calc(13px-var(--cv-gutter-vertical)))] [&_diffs-container]:overflow-clip [&_diffs-container]:[contain:layout_paint_style] md:[&_diffs-container]:rounded-lg [&_diffs-container]:shadow-[0_0_0_1px_var(--color-border)]',
         className
       )}
       options={options}
