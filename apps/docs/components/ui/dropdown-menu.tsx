@@ -85,13 +85,33 @@ const DropdownMenuContent = React.forwardRef<
     const localRef = React.useRef<React.ElementRef<
       typeof DropdownMenuPrimitive.Content
     > | null>(null);
+    const scrollFrameRef = React.useRef<number | null>(null);
 
     const setRefs = React.useCallback(
       (node: React.ElementRef<typeof DropdownMenuPrimitive.Content> | null) => {
-        localRef.current = node;
+        const scrollIntoView =
+          node != null && scrollSelectedIntoView && localRef.current !== node;
 
-        if (node != null && scrollSelectedIntoView) {
-          requestAnimationFrame(() => {
+        // Radix/Floating UI calls this ref super aggressively with null and
+        // the same component quite a lot, resulting in false positives for
+        // scrollIntoView. This is a bunch of code that's annoying to reason
+        // about to work around this.
+        if (node != null) {
+          localRef.current = node;
+        }
+
+        if (scrollIntoView) {
+          if (scrollFrameRef.current != null) {
+            cancelAnimationFrame(scrollFrameRef.current);
+          }
+
+          scrollFrameRef.current = requestAnimationFrame(() => {
+            scrollFrameRef.current = null;
+
+            if (localRef.current !== node || !node.isConnected) {
+              return;
+            }
+
             node
               .querySelector<HTMLElement>(selectedItemSelector)
               ?.scrollIntoView({ block: 'nearest' });
@@ -105,6 +125,16 @@ const DropdownMenuContent = React.forwardRef<
         }
       },
       [ref, scrollSelectedIntoView, selectedItemSelector]
+    );
+
+    React.useEffect(
+      () => () => {
+        localRef.current = null;
+        if (scrollFrameRef.current != null) {
+          cancelAnimationFrame(scrollFrameRef.current);
+        }
+      },
+      []
     );
 
     return (
