@@ -48,6 +48,8 @@ const STREAM_PUBLISH_INTERVAL_MS = 100;
 const STREAM_WORK_BUDGET_MS = 8;
 const STREAM_TREE_PUBLISH_FILE_BATCH_SIZE = 1_000;
 const STREAM_TREE_PUBLISH_INTERVAL_MS = 1_000;
+const GENERIC_PATCH_LOAD_ERROR_MESSAGE =
+  'We couldn’t load that diff. Check the URL and try again.';
 
 interface UsePatchLoaderOptions {
   domain?: string;
@@ -366,9 +368,8 @@ export function usePatchLoader({
         if (!isCurrentRequest()) {
           return;
         }
-        setErrorMessage(
-          error instanceof Error ? error.message : 'Failed to fetch the diff.'
-        );
+        console.warn('Failed to load diff', error);
+        setErrorMessage(GENERIC_PATCH_LOAD_ERROR_MESSAGE);
         setLoadState('error');
       }
     }

@@ -24,6 +24,8 @@ const GITHUB_HOST = 'github.com';
 const GITHUB_RAW_DIFF_HOST = 'patch-diff.githubusercontent.com';
 const RAW_GITHUB_DIFF_PATH_PATTERN =
   /^\/raw\/([^/]+)\/([^/]+)\/pull\/([^/]+\.(?:diff|patch))$/;
+const GITHUB_PULL_TAB_PATH_PATTERN =
+  /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/(?:changes|files)$/;
 
 // Matches GitHub shorthand "owner/repo#123" → /owner/repo/pull/123.
 const GITHUB_SHORTHAND_PATTERN = /^([^/\s]+)\/([^/\s#]+)#(\d+)$/;
@@ -120,7 +122,7 @@ export function getPatchViewerHref(input: string): string | undefined {
   const bareMatch = BARE_GITHUB_PATH_PATTERN.exec(trimmed);
   if (bareMatch != null) {
     const [, owner, repo, rest = ''] = bareMatch;
-    return `/${owner}/${repo}${rest}`;
+    return normalizeGitHubPath(`/${owner}/${repo}${rest}`);
   }
 
   return undefined;
@@ -131,7 +133,7 @@ function getGitHubPathFromURL(parsedURL: URL): string | undefined {
     if (parsedURL.pathname === '/') {
       return undefined;
     }
-    return parsedURL.pathname;
+    return normalizeGitHubPath(parsedURL.pathname);
   }
 
   if (parsedURL.hostname !== GITHUB_RAW_DIFF_HOST) {
@@ -151,6 +153,18 @@ function getGitHubPathFromURL(parsedURL: URL): string | undefined {
   }
 
   return `/${owner}/${repo}/pull/${pullFile}`;
+}
+
+function normalizeGitHubPath(path: string): string {
+  const pathWithoutTrailingSlash = path.replace(/\/+$/, '');
+  const trimmedPath =
+    pathWithoutTrailingSlash === '' ? '/' : pathWithoutTrailingSlash;
+  const pullTabMatch = GITHUB_PULL_TAB_PATH_PATTERN.exec(trimmedPath);
+  if (pullTabMatch == null) {
+    return trimmedPath;
+  }
+
+  return `/${pullTabMatch[1]}/${pullTabMatch[2]}/pull/${pullTabMatch[3]}`;
 }
 
 // Translates the diff-level change type surfaced by @pierre/diffs into the

@@ -10,6 +10,18 @@ describe('getPatchViewerHref', () => {
       );
     });
 
+    test('PR changes tab URL', () => {
+      expect(
+        getPatchViewerHref('https://github.com/owner/repo/pull/123/changes')
+      ).toBe('/owner/repo/pull/123');
+    });
+
+    test('PR files tab URL', () => {
+      expect(
+        getPatchViewerHref('https://github.com/owner/repo/pull/123/files')
+      ).toBe('/owner/repo/pull/123');
+    });
+
     test('compare URL', () => {
       expect(
         getPatchViewerHref(
@@ -46,6 +58,12 @@ describe('getPatchViewerHref', () => {
   describe('bare GitHub paths (no domain)', () => {
     test('owner/repo/pull/123', () => {
       expect(getPatchViewerHref('pierrecomputer/pierre/pull/673')).toBe(
+        '/pierrecomputer/pierre/pull/673'
+      );
+    });
+
+    test('owner/repo/pull/123/changes', () => {
+      expect(getPatchViewerHref('pierrecomputer/pierre/pull/673/changes')).toBe(
         '/pierrecomputer/pierre/pull/673'
       );
     });

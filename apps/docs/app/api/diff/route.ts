@@ -10,6 +10,8 @@ const NON_DIFF_RESPONSE_MESSAGE = 'GitHub did not return a diff for this URL.';
 const NON_WHITESPACE_PATTERN = /\S/;
 const RAW_GITHUB_DIFF_PATH_PATTERN =
   /^\/raw\/[^/]+\/[^/]+\/pull\/[^/]+\.(?:diff|patch)$/;
+const GITHUB_PULL_TAB_PATH_PATTERN =
+  /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/(?:changes|files)$/;
 const LOCAL_PATCH_GITHUB_PATH = '/nodejs/node/pull/59805';
 const LOCAL_PATCH_FIXTURE = 'larg.patch';
 // 'smol.patch'
@@ -71,9 +73,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return createPatchStreamResponse(patchRequest.patchURL, request.signal, {
-      sourceURL: patchRequest.sourceURL ?? patchRequest.patchURL,
-    });
+    return await createPatchStreamResponse(
+      patchRequest.patchURL,
+      request.signal,
+      {
+        sourceURL: patchRequest.sourceURL ?? patchRequest.patchURL,
+      }
+    );
   } catch (error) {
     return createTextResponse(
       error instanceof Error ? error.message : 'Unknown error',
@@ -202,7 +208,7 @@ function resolveGitHubPath(path: string): string | undefined {
     return undefined;
   }
 
-  let patchPath = path.replace(/\/+$/, '');
+  let patchPath = normalizeGitHubPath(path);
   if (patchPath === '') {
     return undefined;
   }
@@ -212,6 +218,16 @@ function resolveGitHubPath(path: string): string | undefined {
   }
 
   return `https://${GITHUB_HOST}${patchPath}`;
+}
+
+function normalizeGitHubPath(path: string): string {
+  const trimmedPath = path.replace(/\/+$/, '');
+  const pullTabMatch = GITHUB_PULL_TAB_PATH_PATTERN.exec(trimmedPath);
+  if (pullTabMatch == null) {
+    return trimmedPath;
+  }
+
+  return `/${pullTabMatch[1]}/${pullTabMatch[2]}/pull/${pullTabMatch[3]}`;
 }
 
 function isAllowedHTTPSURL(url: URL): boolean {
@@ -242,25 +258,63 @@ function createPatchTextResponse(
   return createTextResponse(patchText, options);
 }
 
-// Opens the client-facing stream immediately. For this private transport, a
-// 200 response means the local stream was accepted; upstream GitHub failures
-// are reported later by erroring the response body while the client reads it.
-function createPatchStreamResponse(
+// Validates the upstream response before opening the client-facing stream so
+// GitHub HTML pages and redirects become small text errors instead of Next.js
+// error documents.
+async function createPatchStreamResponse(
   patchURL: string,
   requestSignal: AbortSignal,
   options: Omit<TextResponseOptions, 'status'>
-): Response {
+): Promise<Response> {
   const upstreamController = new AbortController();
   const abortUpstream = () => upstreamController.abort();
   requestSignal.addEventListener('abort', abortUpstream, { once: true });
 
+  let response: Response;
+  try {
+    response = await fetch(patchURL, {
+      cache: 'no-store',
+      headers: { 'User-Agent': 'pierre-diffshub' },
+      signal: upstreamController.signal,
+    });
+  } catch {
+    requestSignal.removeEventListener('abort', abortUpstream);
+    return createTextResponse('Failed to fetch patch.', { status: 502 });
+  }
+
+  if (!response.ok) {
+    const status = response.status >= 400 ? response.status : 502;
+    requestSignal.removeEventListener('abort', abortUpstream);
+    return createTextResponse(
+      `Failed to fetch patch: ${response.status} ${response.statusText}`,
+      { status }
+    );
+  }
+
+  const contentType = response.headers.get('Content-Type');
+  if (contentType == null || !contentType.startsWith('text/plain')) {
+    requestSignal.removeEventListener('abort', abortUpstream);
+    return createTextResponse(NON_DIFF_RESPONSE_MESSAGE, { status: 415 });
+  }
+
+  if (response.headers.get('Content-Length') === '0') {
+    requestSignal.removeEventListener('abort', abortUpstream);
+    return createTextResponse(EMPTY_PATCH_MESSAGE, { status: 422 });
+  }
+
+  const responseBody = response.body;
+  if (responseBody == null) {
+    try {
+      const patchText = await response.text();
+      return createPatchTextResponse(patchText, options);
+    } finally {
+      requestSignal.removeEventListener('abort', abortUpstream);
+    }
+  }
+
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      void pumpPatchURL(
-        patchURL,
-        upstreamController.signal,
-        controller
-      ).finally(() => {
+      void pumpPatchBody(responseBody, controller).finally(() => {
         requestSignal.removeEventListener('abort', abortUpstream);
       });
     },
@@ -273,44 +327,13 @@ function createPatchStreamResponse(
   return createTextResponse(stream, options);
 }
 
-// Fetches the raw GitHub diff and forwards each upstream chunk into the client
-// stream. `cache: 'no-store'` avoids Next/browser replay behavior that can
-// turn a large streamed response back into a delayed full-response read.
-async function pumpPatchURL(
-  patchURL: string,
-  signal: AbortSignal,
+// Forwards each validated upstream diff chunk into the client stream.
+async function pumpPatchBody(
+  body: ReadableStream<Uint8Array>,
   controller: ReadableStreamDefaultController<Uint8Array>
 ): Promise<void> {
   try {
-    const response = await fetch(patchURL, {
-      cache: 'no-store',
-      headers: { 'User-Agent': 'pierre-diffshub' },
-      signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch patch: ${response.status} ${response.statusText}`
-      );
-    }
-
-    const contentType = response.headers.get('Content-Type');
-    if (contentType == null || !contentType.startsWith('text/plain')) {
-      throw new Error(NON_DIFF_RESPONSE_MESSAGE);
-    }
-
-    if (response.body == null) {
-      const patchText = await response.text();
-      if (!NON_WHITESPACE_PATTERN.test(patchText)) {
-        throw new Error(EMPTY_PATCH_MESSAGE);
-      }
-
-      controller.enqueue(new TextEncoder().encode(patchText));
-      controller.close();
-      return;
-    }
-
-    const reader = response.body.getReader();
+    const reader = body.getReader();
     let sawContent = false;
     try {
       for (;;) {
