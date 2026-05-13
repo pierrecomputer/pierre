@@ -86,8 +86,13 @@ const HIDDEN_SEARCH_UNSAFE_CSS = `
       opacity: 0.5;
     }
 
-    > [data-file-tree-sticky-path]:last-of-type [data-item-section="spacing"] {
-      margin-bottom: 4px;
+    > [data-file-tree-sticky-path]:last-of-type {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+
+      [data-item-section="spacing"] {
+        margin-bottom: 4px;
+      }
     }
   }
 
