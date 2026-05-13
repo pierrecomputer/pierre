@@ -168,6 +168,8 @@
   --diffs-font-family: var(--font-berkeley-mono);
   --cv-gutter-vertical: 0px;
   --cv-gutter-horizontal: 0px;
+  --cv-mini-gutter-vertical: 0px;
+  --cv-mini-gutter-horizontal: 0px;
   color-scheme: light;
   -webkit-font-smoothing: antialiased;
 }
@@ -287,9 +289,41 @@
   }
 }
 
+.cv-mini-scrollbar {
+  --cv-mini-scrollbar-thumb-bg: transparent;
+  scrollbar-gutter: stable;
+}
+
+.cv-mini-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.cv-mini-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cv-mini-scrollbar:hover {
+  --cv-mini-scrollbar-thumb-bg: light-dark(
+    color-mix(in lab, var(--background) 85%, black),
+    color-mix(in lab, var(--background) 80%, white)
+  );
+}
+
+.cv-mini-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--cv-mini-scrollbar-thumb-bg);
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: 5px;
+}
+
 @supports (-moz-appearance: none) {
   .cv-scrollbar {
     scrollbar-color: var(--cv-scrollbar-thumb-bg) transparent;
+  }
+  .cv-mini-scrollbar {
+    scrollbar-color: var(--cv-mini-scrollbar-thumb-bg) transparent;
+    scrollbar-width: thin;
   }
 }
 

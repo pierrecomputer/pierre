@@ -4,24 +4,22 @@ import { useLayoutEffect } from 'react';
 
 import { detectGutterSize } from '@/lib/gutterDetector';
 
-const CODE_VIEW_SCROLLBAR_CLASS = 'cv-scrollbar';
-const CODE_VIEW_SCROLLBAR_GUTTER_VERTICAL_VARIABLE = '--cv-gutter-vertical';
-const CODE_VIEW_SCROLLBAR_GUTTER_HORIZONTAL_VARIABLE = '--cv-gutter-horizontal';
+const SCROLLBARS_TO_MEASURE: string[] = ['cv', 'cv-mini'];
 
 export function ScrollbarGutterVariables() {
   useLayoutEffect(() => {
-    const { vertical, horizontal } = detectGutterSize(
-      CODE_VIEW_SCROLLBAR_CLASS
-    );
     const { documentElement: root } = document;
-    root.style.setProperty(
-      CODE_VIEW_SCROLLBAR_GUTTER_VERTICAL_VARIABLE,
-      `${vertical}px`
-    );
-    root.style.setProperty(
-      CODE_VIEW_SCROLLBAR_GUTTER_HORIZONTAL_VARIABLE,
-      `${horizontal}px`
-    );
+    for (const prefix of SCROLLBARS_TO_MEASURE) {
+      const size = detectGutterSize(`${prefix}-scrollbar`);
+      root.style.setProperty(
+        `--${prefix}-gutter-vertical`,
+        `${size.vertical}px`
+      );
+      root.style.setProperty(
+        `--${prefix}-gutter-horizontal`,
+        `${size.horizontal}px`
+      );
+    }
   }, []);
 
   return null;
