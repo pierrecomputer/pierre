@@ -147,21 +147,20 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
     <ReviewGrid>
       <CodeViewHeader
         className="[grid-area:header]"
+        diffIndicators={diffIndicators}
         diffStyle={diffStyle}
         initialUrl={initialUrl}
-        loading={loadState !== 'ready' && loadState !== 'error'}
+        lineNumbers={lineNumbers}
+        overflow={overflow}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
         fileTreeAvailable={treeSource != null}
-        overflow={overflow}
         onToggleFileTreeOverlay={handleToggleFileTreeOverlay}
-        setOverflow={setOverflow}
-        showBackgrounds={showBackgrounds}
-        setShowBackgrounds={setShowBackgrounds}
-        diffIndicators={diffIndicators}
         setDiffIndicators={setDiffIndicators}
-        lineNumbers={lineNumbers}
-        setLineNumbers={setLineNumbers}
         setDiffStyle={setDiffStyle}
+        setLineNumbers={setLineNumbers}
+        setOverflow={setOverflow}
+        setShowBackgrounds={setShowBackgrounds}
+        showBackgrounds={showBackgrounds}
       />
       {viewerAvailable && treeSource != null ? (
         <>
@@ -179,7 +178,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
           />
           <CodeViewWrapper
             key={viewerKey}
-            className="[grid-area:viewer]"
+            className="-mx-px [grid-area:viewer]"
             diffStyle={diffStyle}
             overflow={overflow}
             showBackgrounds={showBackgrounds}
@@ -197,6 +196,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
         </>
       ) : (
         <CodeViewStatusPanel
+          className="[grid-area:viewer]"
           state={loadState}
           errorMessage={errorMessage}
           onRetry={retryLoad}

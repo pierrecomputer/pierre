@@ -25,7 +25,7 @@ export default async function DiffshubViewByPathPage({
   const url = `https://${host}${upstreamPath}`;
 
   return (
-    <div className="flex h-dvh flex-col gap-2 bg-neutral-50 dark:bg-neutral-900">
+    <div className="flex h-dvh flex-col gap-2">
       <ReviewUI domain={requestedDomain} initialUrl={url} path={upstreamPath} />
     </div>
   );

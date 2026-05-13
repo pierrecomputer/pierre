@@ -34,8 +34,6 @@ export const CODE_VIEW_CUSTOM_CSS = `
 @media (min-width: 768px) {
   [data-diffs-header] {
     top: 25px;
-
-
   }
 }
 

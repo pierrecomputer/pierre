@@ -122,16 +122,25 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
         <div className="flex items-center gap-2 p-4 pb-0 md:px-3 md:pt-0">
           <ButtonGroup
             aria-label="Sidebar sections"
-            className="mr-auto flex min-w-0"
+            className="mr-auto flex min-w-0 gap-2 bg-transparent"
+            variant="ghost"
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as SidebarTab)}
           >
-            <ButtonGroupItem value="files" size="icon">
-              <IconFileTree />
+            <ButtonGroupItem
+              value="files"
+              size="icon-only"
+              className="shadow-none"
+            >
+              <IconFileTree className="size-3" />
               <span className="sr-only">Files</span>
             </ButtonGroupItem>
-            <ButtonGroupItem value="comments" size="icon">
-              <IconComment />
+            <ButtonGroupItem
+              value="comments"
+              size="icon-only"
+              className="shadow-none"
+            >
+              <IconComment className="size-3" />
               <span className="sr-only">Comments</span>
             </ButtonGroupItem>
           </ButtonGroup>
@@ -141,12 +150,12 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
           {onMobileClose != null && (
             <Button
               variant="muted"
-              size="icon"
+              size="icon-only"
               className="md:hidden"
               aria-label="Close file tree"
               onClick={onMobileClose}
             >
-              <IconX className="size-4" />
+              <IconX className="size-3" />
             </Button>
           )}
         </div>
@@ -209,7 +218,7 @@ function SidebarWrapper({
         'contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
         mobileOverlayOpen
           ? 'bg-background pointer-events-auto h-[calc(100%_-_env(safe-area-inset-bottom))] translate-y-0 overflow-hidden rounded-t-xl shadow-[0_0_0_1px_var(--color-border),_0_16px_32px_rgb(0_0_0_/0.25)] md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
-          : 'bg-neutral-50 dark:bg-neutral-900 pointer-events-none m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl md:pointer-events-auto md:m-0 md:h-full md:overflow-visible md:rounded-none p-0 pt-3'
+          : 'bg-neutral-50 dark:bg-neutral-900 pointer-events-none m-3 h-[calc(100%_-_1.5rem_-_env(safe-area-inset-bottom))] translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl md:pointer-events-auto md:m-0 md:h-full md:overflow-visible md:rounded-none p-0 pt-3 border-r border-border'
       )}
     >
       {children}
@@ -224,8 +233,8 @@ function FileTreeSearchToggle({ model }: { model: FileTree }) {
   return (
     <Button
       type="button"
-      variant={search.isOpen ? 'outline' : 'muted'}
-      size="icon"
+      variant="ghost"
+      size="icon-only"
       aria-label={search.isOpen ? 'Hide file search' : 'Show file search'}
       aria-pressed={search.isOpen}
       // Avoid focus moving to this button before click: the tree search input
@@ -240,7 +249,7 @@ function FileTreeSearchToggle({ model }: { model: FileTree }) {
         }
       }}
     >
-      <IconSearch className="size-4" />
+      <IconSearch className="size-3" />
     </Button>
   );
 }
