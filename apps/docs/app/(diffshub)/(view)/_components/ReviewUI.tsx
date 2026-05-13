@@ -196,7 +196,6 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
         </>
       ) : (
         <CodeViewStatusPanel
-          className="[grid-area:viewer]"
           state={loadState}
           errorMessage={errorMessage}
           onRetry={retryLoad}
