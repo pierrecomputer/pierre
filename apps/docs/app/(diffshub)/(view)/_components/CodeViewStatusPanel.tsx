@@ -1,6 +1,6 @@
 import { IconCiWarningFill, IconRefresh } from '@pierre/icons';
 
-import type { ViewerLoadState } from './constants';
+import type { ViewerLoadState } from './types';
 import { Button } from '@/components/ui/button';
 
 interface CodeViewStatusPanelProps {
@@ -32,7 +32,7 @@ export function CodeViewStatusPanel({
         : 'Reading the patch and showing files as they arrive…';
 
   return (
-    <div className="col-span-full row-start-2 row-end-3 flex min-h-0 items-center justify-center p-6">
+    <div className="col-span-full flex min-h-0 items-center justify-center p-6">
       <section
         role={isError ? 'alert' : 'status'}
         aria-live="polite"

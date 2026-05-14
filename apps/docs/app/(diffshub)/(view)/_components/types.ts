@@ -3,6 +3,13 @@ import type { FileTreeOptions, GitStatusEntry } from '@pierre/trees';
 
 type FileTreeInputSort = NonNullable<FileTreeOptions['sort']>;
 
+export type ViewerLoadState =
+  | 'fetching'
+  | 'streaming'
+  | 'parsing'
+  | 'ready'
+  | 'error';
+
 export type CodeViewFileTreeSort = Exclude<FileTreeInputSort, 'default'>;
 
 export interface SavedCommentMetadata {

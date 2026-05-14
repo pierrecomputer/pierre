@@ -1,51 +1,16 @@
 import type { CodeViewLayout } from '@pierre/diffs';
 import type { FileTreeOptions } from '@pierre/trees';
 
-export type ViewerLoadState =
-  | 'fetching'
-  | 'streaming'
-  | 'parsing'
-  | 'ready'
-  | 'error';
-
-export const CODE_VIEW_MARGIN_OFFSET = 12;
-
-export const CODE_VIEW_PADDING_BLOCK = 13;
-
-export const BASE_CODE_VIEW_LAYOUT: Omit<CodeViewLayout, 'paddingTop'> = {
-  gap: 8,
-  paddingBottom: CODE_VIEW_PADDING_BLOCK,
+export const CODE_VIEW_LAYOUT: CodeViewLayout = {
+  paddingTop: 0,
+  gap: 1,
+  paddingBottom: 0,
 };
-
-export function getCodeViewMarginOffset(isMobile: boolean): number {
-  return isMobile ? 0 : CODE_VIEW_MARGIN_OFFSET;
-}
-
-export function getCodeViewPaddingTop(isMobile: boolean): number {
-  return CODE_VIEW_PADDING_BLOCK + getCodeViewMarginOffset(isMobile);
-}
 
 export const CODE_VIEW_CUSTOM_CSS = `
 [data-diffs-header] {
   container-type: scroll-state;
   container-name: sticky-header;
-}
-
-@media (min-width: 768px) {
-  [data-diffs-header] {
-    top: 12px;
-
-    &::before {
-      position: absolute;
-      top: -12px;
-      left: 0;
-      right: 0;
-      height: 12px;
-      width: 100%;
-      content: '';
-      background-color: var(--diffs-bg);
-    }
-  }
 }
 
 @container sticky-header scroll-state(stuck: top) {
@@ -56,10 +21,40 @@ export const CODE_VIEW_CUSTOM_CSS = `
     width: 100%;
     height: 1px;
     content: '';
-    background-color: var(--color-border);
+    background-color: var(--color-border-opaque);
   }
 }
 `;
+
+export const CODE_VIEW_FILE_TREE_ITEM_HEIGHT = 24;
+export const CODE_VIEW_BATCH_COUNT = 25;
+export const CODE_VIEW_BATCH_COUNT_MAX = 96;
+
+export function getInitialBatchSize(): number {
+  const viewportHeight = getViewportHeight();
+  if (viewportHeight == null) {
+    return CODE_VIEW_BATCH_COUNT;
+  }
+
+  return Math.min(
+    CODE_VIEW_BATCH_COUNT_MAX,
+    Math.max(
+      CODE_VIEW_BATCH_COUNT,
+      Math.ceil(viewportHeight / CODE_VIEW_FILE_TREE_ITEM_HEIGHT)
+    )
+  );
+}
+
+function getViewportHeight(): number | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+  return Number.isFinite(viewportHeight) && viewportHeight > 0
+    ? viewportHeight
+    : null;
+}
 
 // Hide the built-in search input until the user opts into search via the
 // sidebar toggle. The trees library always mounts the input when

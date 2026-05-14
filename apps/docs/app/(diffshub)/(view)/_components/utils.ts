@@ -24,6 +24,15 @@ const GITHUB_HOST = 'github.com';
 const GITHUB_RAW_DIFF_HOST = 'patch-diff.githubusercontent.com';
 const RAW_GITHUB_DIFF_PATH_PATTERN =
   /^\/raw\/([^/]+)\/([^/]+)\/pull\/([^/]+\.(?:diff|patch))$/;
+const GITHUB_PULL_TAB_PATH_PATTERN =
+  /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/(?:changes|files)$/;
+
+// Matches GitHub shorthand "owner/repo#123" → /owner/repo/pull/123.
+const GITHUB_SHORTHAND_PATTERN = /^([^/\s]+)\/([^/\s#]+)#(\d+)$/;
+
+// Matches bare paths like "owner/repo/pull/123" where neither of the first two
+// segments contains a dot — a dot would indicate a domain like "github.com".
+const BARE_GITHUB_PATH_PATTERN = /^([^/\s.]+)\/([^/\s.]+)(\/[^\s]*)?$/;
 
 export function incrementItemVersion(item: CodeViewItem<CommentMetadata>) {
   item.version = typeof item.version === 'number' ? item.version + 1 : 1;
@@ -62,24 +71,61 @@ export function getGitHubPath(input: string): string | undefined {
   }
 }
 
+// Resolves a user-supplied string into a viewer href, or undefined if the
+// input can't be mapped to a supported diff URL. Accepts full URLs, URLs
+// without a protocol (e.g. "github.com/…"), bare "owner/repo/…" paths, and
+// GitHub shorthand ("owner/repo#123").
 export function getPatchViewerHref(input: string): string | undefined {
+  const trimmed = input.trim();
+  if (trimmed === '') return undefined;
+
+  // GitHub shorthand: "owner/repo#123" → "/owner/repo/pull/123"
+  const shorthandMatch = GITHUB_SHORTHAND_PATTERN.exec(trimmed);
+  if (shorthandMatch != null) {
+    return `/${shorthandMatch[1]}/${shorthandMatch[2]}/pull/${shorthandMatch[3]}`;
+  }
+
+  // Full URL with protocol (most common case).
   try {
-    const parsedURL = new URL(input);
+    const parsedURL = new URL(trimmed);
     const githubPath = getGitHubPathFromURL(parsedURL);
-    if (githubPath != null) {
-      return githubPath;
-    }
-
+    if (githubPath != null) return githubPath;
     if (parsedURL.pathname !== '/') {
-      return `${parsedURL.pathname}?domain=${encodeURIComponent(
-        parsedURL.hostname
-      )}`;
+      return `${parsedURL.pathname}?domain=${encodeURIComponent(parsedURL.hostname)}`;
     }
-
     return undefined;
   } catch {
-    return undefined;
+    // Not a fully-qualified URL; try other interpretations.
   }
+
+  // Domain-relative URL like "github.com/owner/repo/pull/123" — only attempt
+  // when the first path segment contains a dot, indicating it's a hostname
+  // rather than an owner name. Checking only the first segment avoids false
+  // positives from dots in later segments (e.g. "v6.0...v7.0" in a compare URL).
+  const firstSegment = trimmed.split('/')[0] ?? '';
+  if (firstSegment.includes('.')) {
+    try {
+      const parsedURL = new URL(`https://${trimmed}`);
+      const githubPath = getGitHubPathFromURL(parsedURL);
+      if (githubPath != null) return githubPath;
+      if (parsedURL.pathname !== '/') {
+        return `${parsedURL.pathname}?domain=${encodeURIComponent(parsedURL.hostname)}`;
+      }
+    } catch {
+      // Not parseable even with https:// prefix.
+    }
+  }
+
+  // Bare GitHub path: "owner/repo/pull/123" or "owner/repo/compare/a...b".
+  // The dot-free first segment check above ensures we don't land here for
+  // domain-style inputs.
+  const bareMatch = BARE_GITHUB_PATH_PATTERN.exec(trimmed);
+  if (bareMatch != null) {
+    const [, owner, repo, rest = ''] = bareMatch;
+    return normalizeGitHubPath(`/${owner}/${repo}${rest}`);
+  }
+
+  return undefined;
 }
 
 function getGitHubPathFromURL(parsedURL: URL): string | undefined {
@@ -87,7 +133,7 @@ function getGitHubPathFromURL(parsedURL: URL): string | undefined {
     if (parsedURL.pathname === '/') {
       return undefined;
     }
-    return parsedURL.pathname;
+    return normalizeGitHubPath(parsedURL.pathname);
   }
 
   if (parsedURL.hostname !== GITHUB_RAW_DIFF_HOST) {
@@ -107,6 +153,18 @@ function getGitHubPathFromURL(parsedURL: URL): string | undefined {
   }
 
   return `/${owner}/${repo}/pull/${pullFile}`;
+}
+
+function normalizeGitHubPath(path: string): string {
+  const pathWithoutTrailingSlash = path.replace(/\/+$/, '');
+  const trimmedPath =
+    pathWithoutTrailingSlash === '' ? '/' : pathWithoutTrailingSlash;
+  const pullTabMatch = GITHUB_PULL_TAB_PATH_PATTERN.exec(trimmedPath);
+  if (pullTabMatch == null) {
+    return trimmedPath;
+  }
+
+  return `/${pullTabMatch[1]}/${pullTabMatch[2]}/pull/${pullTabMatch[3]}`;
 }
 
 // Translates the diff-level change type surfaced by @pierre/diffs into the

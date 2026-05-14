@@ -24,7 +24,7 @@ import {
   snapshotCodeViewTreeSource,
   takePendingCodeViewItems,
 } from './codeViewDataAccumulator';
-import type { ViewerLoadState } from './constants';
+import { CODE_VIEW_BATCH_COUNT, getInitialBatchSize } from './constants';
 import { getPatchTreePathPrefix } from './gitPatchMetadata';
 import {
   type CodeViewLineHashTarget,
@@ -41,13 +41,16 @@ import type {
   CodeViewFileTreeSource,
   CodeViewSavedCommentItem,
   CommentMetadata,
+  ViewerLoadState,
 } from './types';
 
-const STREAM_PUBLISH_FILE_BATCH_SIZE = 25;
 const STREAM_PUBLISH_INTERVAL_MS = 100;
+const STREAM_INITIAL_PUBLISH_INTERVAL_MS = 500;
 const STREAM_WORK_BUDGET_MS = 8;
 const STREAM_TREE_PUBLISH_FILE_BATCH_SIZE = 1_000;
 const STREAM_TREE_PUBLISH_INTERVAL_MS = 1_000;
+const GENERIC_PATCH_LOAD_ERROR_MESSAGE =
+  'We couldn’t load that diff. Check the URL and try again.';
 
 interface UsePatchLoaderOptions {
   domain?: string;
@@ -231,6 +234,7 @@ export function usePatchLoader({
         let lastPublishTime = performance.now();
         let lastWorkYieldTime = lastPublishTime;
         let lastTreePublishTime = lastPublishTime;
+        const initialPublishFileBatchSize = getInitialBatchSize();
 
         const publishTreeSource = () => {
           if (pendingTreePublishFileCount === 0 || !isCurrentRequest()) {
@@ -278,14 +282,31 @@ export function usePatchLoader({
           }
 
           const elapsed = performance.now() - lastPublishTime;
+          const publishFileBatchSize = hasPublishedInitialItems
+            ? CODE_VIEW_BATCH_COUNT
+            : initialPublishFileBatchSize;
+          const publishInterval = hasPublishedInitialItems
+            ? STREAM_PUBLISH_INTERVAL_MS
+            : STREAM_INITIAL_PUBLISH_INTERVAL_MS;
           if (
-            pendingPublishFileCount < STREAM_PUBLISH_FILE_BATCH_SIZE &&
-            elapsed < STREAM_PUBLISH_INTERVAL_MS
+            pendingPublishFileCount < publishFileBatchSize &&
+            elapsed < publishInterval
           ) {
             return;
           }
 
           await publishPendingData();
+        };
+        const shouldDeferInitialPublishForBatchTarget = () => {
+          if (hasPublishedInitialItems) {
+            return false;
+          }
+
+          const elapsed = performance.now() - lastPublishTime;
+          return (
+            pendingPublishFileCount < initialPublishFileBatchSize &&
+            elapsed < STREAM_INITIAL_PUBLISH_INTERVAL_MS
+          );
         };
         const publishTreeSourceIfNeeded = () => {
           if (pendingTreePublishFileCount === 0) {
@@ -334,7 +355,12 @@ export function usePatchLoader({
           pendingTreePublishFileCount++;
           const elapsedWork = performance.now() - lastWorkYieldTime;
           if (elapsedWork >= STREAM_WORK_BUDGET_MS) {
-            await publishPendingData();
+            if (shouldDeferInitialPublishForBatchTarget()) {
+              await yieldToBrowser();
+              lastWorkYieldTime = performance.now();
+            } else {
+              await publishPendingData();
+            }
           } else {
             await publishPendingDataIfNeeded();
           }
@@ -366,9 +392,8 @@ export function usePatchLoader({
         if (!isCurrentRequest()) {
           return;
         }
-        setErrorMessage(
-          error instanceof Error ? error.message : 'Failed to fetch the diff.'
-        );
+        console.warn('Failed to load diff', error);
+        setErrorMessage(GENERIC_PATCH_LOAD_ERROR_MESSAGE);
         setLoadState('error');
       }
     }

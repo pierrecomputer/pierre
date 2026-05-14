@@ -81,7 +81,7 @@ function ButtonGroupItem({
         isSelected && 'text-foreground pointer-events-none shadow-xs',
         className
       )}
-      variant={isSelected ? 'outline' : 'ghost'}
+      variant={isSelected ? (context.variant ?? 'outline') : 'ghost'}
       size={context.size}
       onClick={handleClick}
       title={value}

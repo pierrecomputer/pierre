@@ -26,6 +26,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
+  --color-border-opaque: var(--border-opaque);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-chart-1: var(--chart-1);
@@ -62,6 +63,11 @@
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
+  --border-opaque: color-mix(
+    in oklch,
+    var(--border) 100%,
+    var(--diffshub-sidebar-bg) 0%
+  );
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.646 0.222 41.116);
@@ -78,16 +84,9 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  --diffshub-sidebar-bg: light-dark(oklch(100% 0 0), oklch(0% 0 0));
+  --diffshub-sidebar-bg: light-dark(oklch(98.5% 0 0), oklch(20.5% 0 0));
 
   color-scheme: light;
-}
-
-@media (width >= 768px) {
-  :root,
-  .light {
-    --diffshub-sidebar-bg: light-dark(oklch(98.5% 0 0), oklch(20.5% 0 0));
-  }
 }
 
 .dark {
@@ -107,6 +106,11 @@
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
+  --border-opaque: color-mix(
+    in oklch,
+    var(--diffshub-sidebar-bg) 90%,
+    oklch(1 0 0)
+  );
   --color-border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -144,6 +148,11 @@
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
     --border: oklch(1 0 0 / 10%);
+    --border-opaque: color-mix(
+      in oklch,
+      var(--diffshub-sidebar-bg) 90%,
+      oklch(1 0 0)
+    );
     --color-border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
@@ -272,7 +281,8 @@
 
 .cv-scrollbar::-webkit-scrollbar-track {
   background: transparent;
-  margin-top: 26px;
+  border-left: 1px solid var(--color-border-opaque);
+  margin-top: -1px;
 }
 
 .cv-scrollbar::-webkit-scrollbar-thumb {
@@ -280,13 +290,6 @@
   background-clip: content-box;
   border: 2px solid transparent;
   border-radius: 6px;
-}
-
-@media (width <= 767px) {
-  .cv-scrollbar::-webkit-scrollbar-track {
-    margin-top: 0;
-    border-left: 1px solid var(--color-border);
-  }
 }
 
 .cv-mini-scrollbar {

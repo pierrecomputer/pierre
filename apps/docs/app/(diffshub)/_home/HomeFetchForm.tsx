@@ -1,80 +1,33 @@
 'use client';
 
-import { IconArrow, IconRefresh } from '@pierre/icons';
-import { useRouter } from 'next/navigation';
-import {
-  type FormEvent,
-  memo,
-  useCallback,
-  useState,
-  useTransition,
-} from 'react';
+import { IconArrow } from '@pierre/icons';
+import { memo } from 'react';
 
-import { getPatchViewerHref } from '../(view)/_components/utils';
+import { DiffUrlForm } from '../_components/DiffUrlForm';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 
 // Submitting the home form should move to the shareable viewer URL first. The
 // viewer route owns fetching and renders its own loading state there.
 export const HomeFetchForm = memo(function HomeFetchForm() {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [url, setUrl] = useState('');
-
-  const handleSubmit = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      setErrorMessage(null);
-
-      const formData = new FormData(event.currentTarget);
-      const urlField = formData.get('url');
-      const rawUrl = typeof urlField === 'string' ? urlField.trim() : '';
-      const viewerHref = getPatchViewerHref(rawUrl);
-      if (viewerHref == null) {
-        setErrorMessage('Enter a valid GitHub URL.');
-        return;
-      }
-
-      startTransition(() => router.push(viewerHref));
-    },
-    [router]
-  );
-
   return (
-    <div className="space-y-2 py-3 md:py-0">
-      <form onSubmit={handleSubmit} className="flex max-w-2xl gap-2">
-        <Input
-          type="url"
-          name="url"
-          inputSize="lg"
-          placeholder="Enter any GitHub URL…"
-          required
-          disabled={isPending}
-          className="text-md bg-background h-11 rounded-lg sm:flex-1"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-        />
-        <Button
-          type="submit"
-          variant="default"
-          size="icon"
-          className="size-11 rounded-lg"
-          disabled={isPending || url.trim() === ''}
-          aria-label={isPending ? 'Opening…' : 'Fetch'}
-        >
-          {isPending ? (
-            <IconRefresh className="size-4 animate-spin" />
-          ) : (
+    <div className="bg-background border-border rounded-lg border px-4">
+      <DiffUrlForm
+        placeholder="https://github.com/org/repo/123"
+        inputClassName="text-md h-12 w-full text-start"
+      >
+        {(isPending, url) => (
+          <Button
+            type="submit"
+            variant="ghost"
+            size="icon-md"
+            disabled={isPending || url.length === 0}
+            aria-label={isPending ? 'Fetching…' : 'Fetch'}
+            className="hover:text-muted-foreground -mr-2 hover:bg-transparent"
+          >
             <IconArrow className="size-4 rotate-180" />
-          )}
-        </Button>
-      </form>
-      {errorMessage != null && (
-        <p className="text-destructive text-sm" role="alert">
-          {errorMessage}
-        </p>
-      )}
+          </Button>
+        )}
+      </DiffUrlForm>
     </div>
   );
 });

@@ -19,12 +19,7 @@ import { IconChevronSm } from '@pierre/icons';
 import { memo, type RefObject, useMemo, useRef, useState } from 'react';
 
 import type { AvatarName } from './annotation-shared';
-import {
-  BASE_CODE_VIEW_LAYOUT,
-  CODE_VIEW_CUSTOM_CSS,
-  getCodeViewMarginOffset,
-  getCodeViewPaddingTop,
-} from './constants';
+import { CODE_VIEW_CUSTOM_CSS, CODE_VIEW_LAYOUT } from './constants';
 import { DraftAnnotation } from './DraftAnnotation';
 import { ExampleAnnotation } from './ExampleAnnotation';
 import type {
@@ -75,7 +70,6 @@ interface CodeViewWrapperProps {
   overflow: 'wrap' | 'scroll';
   showBackgrounds: boolean;
   diffIndicators: DiffIndicators;
-  isMobile: boolean;
   lineNumbers: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
@@ -92,7 +86,6 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   overflow,
   showBackgrounds,
   diffIndicators,
-  isMobile,
   lineNumbers,
   scrollRef,
   viewerRef,
@@ -346,24 +339,14 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       return;
     }
 
-    const marginOffset = getCodeViewMarginOffset(isMobile);
-    if (itemTop != null && itemTop < viewer.getScrollTop() + marginOffset) {
+    if (itemTop != null && itemTop < viewer.getScrollTop()) {
       viewer.scrollTo({
         type: 'item',
         id: item.id,
         align: 'start',
-        offset: marginOffset,
       });
     }
   });
-
-  const layout = useMemo(
-    () => ({
-      ...BASE_CODE_VIEW_LAYOUT,
-      paddingTop: getCodeViewPaddingTop(isMobile),
-    }),
-    [isMobile]
-  );
 
   const renderCommentAnnotation = useStableCallback(
     (
@@ -428,7 +411,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       ({
         // Use this to validate itemMetrics when changing layout with unsafeCSS.
         // __devOnlyValidateItemHeights: true,
-        layout,
+        layout: CODE_VIEW_LAYOUT,
         theme: DEFAULT_THEMES,
         diffStyle,
         diffIndicators,
@@ -460,7 +443,6 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       lineNumbers,
       overflow,
       showBackgrounds,
-      layout,
     ]
   );
   return (
@@ -469,8 +451,8 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       containerRef={scrollRef}
       initialItems={initialItems}
       className={cn(
-        'cv-scrollbar relative h-full min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain border-b border-border w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] md:mt-[-12px] md:h-[calc(100%_+_12px)] md:border-b-0 md:pl-[1px] md:pr-[max(0px,calc(13px-var(--cv-gutter-vertical)))] [&_diffs-container]:overflow-clip [&_diffs-container]:[contain:layout_paint_style] md:[&_diffs-container]:rounded-lg [&_diffs-container]:shadow-[0_0_0_1px_var(--color-border)]',
-        className
+        className,
+        'cv-scrollbar relative h-full min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain border-b border-border w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-clip [&_diffs-container]:[contain:layout_paint_style] [&_diffs-container]:shadow-[0_-1px_0_var(--color-border-opaque),0_1px_0_var(--color-border-opaque)]'
       )}
       options={options}
       selectedLines={selectedLines}

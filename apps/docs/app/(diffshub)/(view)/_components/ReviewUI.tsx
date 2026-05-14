@@ -15,7 +15,6 @@ import { CodeViewHeader } from './CodeViewHeader';
 import { CodeViewSidebar } from './CodeViewSidebar';
 import { CodeViewStatusPanel } from './CodeViewStatusPanel';
 import { CodeViewWrapper } from './CodeViewWrapper';
-import { getCodeViewPaddingTop } from './constants';
 import type {
   CodeViewDeletedCommentEvent,
   CodeViewSavedCommentEntry,
@@ -40,7 +39,6 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
   const [showBackgrounds, setShowBackgrounds] = useState(true);
   const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
@@ -73,7 +71,6 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)');
     const updateMobileState = (matches: boolean) => {
-      setIsMobile(matches);
       setDiffStyle(matches ? 'unified' : 'split');
       if (!matches) setFileTreeOverlayOpen(false);
     };
@@ -85,19 +82,15 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
-  const handleSelectTreeItem = useCallback(
-    (itemId: string) => {
-      setFileTreeOverlayOpen(false);
-      viewerRef.current?.scrollTo({
-        type: 'item',
-        id: itemId,
-        align: 'start',
-        offset: getCodeViewPaddingTop(isMobile),
-        behavior: 'smooth',
-      });
-    },
-    [isMobile]
-  );
+  const handleSelectTreeItem = useCallback((itemId: string) => {
+    setFileTreeOverlayOpen(false);
+    viewerRef.current?.scrollTo({
+      type: 'item',
+      id: itemId,
+      align: 'start',
+      behavior: 'smooth',
+    });
+  }, []);
   const handleCommentSaved = useCallback(
     (comment: CodeViewSavedCommentEvent) => {
       setCommentSections((prev) =>
@@ -147,21 +140,20 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
     <ReviewGrid>
       <CodeViewHeader
         className="[grid-area:header]"
+        diffIndicators={diffIndicators}
         diffStyle={diffStyle}
         initialUrl={initialUrl}
-        loading={loadState !== 'ready' && loadState !== 'error'}
+        lineNumbers={lineNumbers}
+        overflow={overflow}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
         fileTreeAvailable={treeSource != null}
-        overflow={overflow}
         onToggleFileTreeOverlay={handleToggleFileTreeOverlay}
-        setOverflow={setOverflow}
-        showBackgrounds={showBackgrounds}
-        setShowBackgrounds={setShowBackgrounds}
-        diffIndicators={diffIndicators}
         setDiffIndicators={setDiffIndicators}
-        lineNumbers={lineNumbers}
-        setLineNumbers={setLineNumbers}
         setDiffStyle={setDiffStyle}
+        setLineNumbers={setLineNumbers}
+        setOverflow={setOverflow}
+        setShowBackgrounds={setShowBackgrounds}
+        showBackgrounds={showBackgrounds}
       />
       {viewerAvailable && treeSource != null ? (
         <>
@@ -184,7 +176,6 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
             overflow={overflow}
             showBackgrounds={showBackgrounds}
             diffIndicators={diffIndicators}
-            isMobile={isMobile}
             lineNumbers={lineNumbers}
             scrollRef={scrollRef}
             viewerRef={viewerRef}
@@ -232,7 +223,7 @@ interface ReviewGridProps {
 
 function ReviewGrid({ children }: ReviewGridProps) {
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] contain-strict [grid-template-areas:'header''viewer'] md:grid-cols-[320px_minmax(0,1fr)] md:[grid-template-areas:'header_header''tree_viewer']">
+    <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden overscroll-contain contain-strict [grid-template-areas:'header''viewer'] md:grid-cols-[320px_minmax(0,1fr)] md:[grid-template-areas:'header_header''tree_viewer']">
       {children}
     </div>
   );
