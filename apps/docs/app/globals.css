@@ -275,8 +275,8 @@
 }
 
 .cv-scrollbar::-webkit-scrollbar {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
 }
 
 .cv-scrollbar::-webkit-scrollbar-track {
@@ -289,7 +289,7 @@
   background-color: var(--cv-scrollbar-thumb-bg);
   background-clip: content-box;
   border: 2px solid transparent;
-  border-radius: 0;
+  border-radius: 6px;
 }
 
 .cv-mini-scrollbar {
@@ -317,7 +317,7 @@
   background-color: var(--cv-mini-scrollbar-thumb-bg);
   background-clip: content-box;
   border: 3px solid transparent;
-  border-radius: 0;
+  border-radius: 5px;
 }
 
 @supports (-moz-appearance: none) {

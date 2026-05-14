@@ -108,10 +108,6 @@ const SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS = `
     padding-inline-start: 0;
     padding-inline-end: 2px;
     margin-inline-end: 2px;
-
-    &::-webkit-scrollbar-thumb {
-      border-radius: 0;
-    }
   }
 
   @media (width <= 767px) {
