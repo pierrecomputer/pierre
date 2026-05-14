@@ -3,10 +3,14 @@
 import { useStableCallback } from '@pierre/diffs/react';
 import type { FileTree as FileTreeModel } from '@pierre/trees';
 import { FileTree, useFileTree } from '@pierre/trees/react';
-import { type CSSProperties, memo, useEffect, useRef } from 'react';
+import { type CSSProperties, memo, useEffect, useRef, useState } from 'react';
 
 import type { FileTreePublicId } from '../../../../../../packages/trees/dist/model/publicTypes';
-import { BASE_FILE_TREE_OPTIONS } from './constants';
+import {
+  BASE_FILE_TREE_OPTIONS,
+  CODE_VIEW_FILE_TREE_ITEM_HEIGHT,
+  getInitialBatchSize,
+} from './constants';
 import type { CodeViewFileTreeSource } from './types';
 
 const DENSITY_OVERRIDE_STYLES = {
@@ -33,6 +37,7 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
 }: CodeViewFileTreeProps) {
   const sourceRef = useRef(source);
   const previousSourceRef = useRef(source);
+  const [initialVisibleRowCount] = useState(getInitialBatchSize);
   sourceRef.current = source;
   const sort = useStableCallback<CodeViewFileTreeSource['sort']>(
     (left, right) => sourceRef.current.sort(left, right)
@@ -56,7 +61,8 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
     paths: source.paths,
     sort,
     onSelectionChange,
-    itemHeight: 24,
+    itemHeight: CODE_VIEW_FILE_TREE_ITEM_HEIGHT,
+    initialVisibleRowCount,
   });
 
   useEffect(() => {

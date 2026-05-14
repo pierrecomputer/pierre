@@ -1,13 +1,6 @@
 import type { CodeViewLayout } from '@pierre/diffs';
 import type { FileTreeOptions } from '@pierre/trees';
 
-export type ViewerLoadState =
-  | 'fetching'
-  | 'streaming'
-  | 'parsing'
-  | 'ready'
-  | 'error';
-
 export const CODE_VIEW_LAYOUT: CodeViewLayout = {
   paddingTop: 0,
   gap: 0,
@@ -32,6 +25,36 @@ export const CODE_VIEW_CUSTOM_CSS = `
   }
 }
 `;
+
+export const CODE_VIEW_FILE_TREE_ITEM_HEIGHT = 24;
+export const CODE_VIEW_BATCH_COUNT = 25;
+export const CODE_VIEW_BATCH_COUNT_MAX = 96;
+
+export function getInitialBatchSize(): number {
+  const viewportHeight = getViewportHeight();
+  if (viewportHeight == null) {
+    return CODE_VIEW_BATCH_COUNT;
+  }
+
+  return Math.min(
+    CODE_VIEW_BATCH_COUNT_MAX,
+    Math.max(
+      CODE_VIEW_BATCH_COUNT,
+      Math.ceil(viewportHeight / CODE_VIEW_FILE_TREE_ITEM_HEIGHT)
+    )
+  );
+}
+
+function getViewportHeight(): number | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+  return Number.isFinite(viewportHeight) && viewportHeight > 0
+    ? viewportHeight
+    : null;
+}
 
 // Hide the built-in search input until the user opts into search via the
 // sidebar toggle. The trees library always mounts the input when

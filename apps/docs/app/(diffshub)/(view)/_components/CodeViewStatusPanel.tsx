@@ -1,6 +1,6 @@
 import { IconCiWarningFill, IconRefresh } from '@pierre/icons';
 
-import type { ViewerLoadState } from './constants';
+import type { ViewerLoadState } from './types';
 import { Button } from '@/components/ui/button';
 
 interface CodeViewStatusPanelProps {
