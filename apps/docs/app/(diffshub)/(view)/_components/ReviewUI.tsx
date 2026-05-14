@@ -171,7 +171,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
           />
           <CodeViewWrapper
             key={viewerKey}
-            className="-mx-px [grid-area:viewer]"
+            className="[grid-area:viewer]"
             diffStyle={diffStyle}
             overflow={overflow}
             showBackgrounds={showBackgrounds}

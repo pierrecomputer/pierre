@@ -3,7 +3,7 @@ import type { FileTreeOptions } from '@pierre/trees';
 
 export const CODE_VIEW_LAYOUT: CodeViewLayout = {
   paddingTop: 0,
-  gap: 0,
+  gap: 1,
   paddingBottom: 0,
 };
 
@@ -21,7 +21,7 @@ export const CODE_VIEW_CUSTOM_CSS = `
     width: 100%;
     height: 1px;
     content: '';
-    background-color: var(--color-border);
+    background-color: var(--color-border-opaque);
   }
 }
 `;
