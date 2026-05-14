@@ -132,7 +132,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
               size="icon-only"
               className="shadow-none"
             >
-              <IconFileTree className="size-3" />
+              <IconFileTree className="size-4 md:size-3" />
               <span className="sr-only">Files</span>
             </ButtonGroupItem>
             <ButtonGroupItem
@@ -140,7 +140,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
               size="icon-only"
               className="shadow-none"
             >
-              <IconComment className="size-3" />
+              <IconComment className="size-4 md:size-3" />
               <span className="sr-only">Comments</span>
             </ButtonGroupItem>
           </ButtonGroup>
@@ -155,7 +155,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
               aria-label="Close file tree"
               onClick={onMobileClose}
             >
-              <IconX className="size-3" />
+              <IconX className="size-4 md:size-3" />
             </Button>
           )}
         </div>
@@ -249,7 +249,7 @@ function FileTreeSearchToggle({ model }: { model: FileTree }) {
         }
       }}
     >
-      <IconSearch className="size-3" />
+      <IconSearch className="size-4 md:size-3" />
     </Button>
   );
 }

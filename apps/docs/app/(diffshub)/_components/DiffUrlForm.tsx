@@ -14,6 +14,7 @@ import {
 import { createPortal } from 'react-dom';
 
 import { getPatchViewerHref } from '../(view)/_components/utils';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface DiffUrlFormProps {
@@ -111,14 +112,14 @@ export function DiffUrlForm({
 
   return (
     <form
-      className={cn('group flex min-w-0 items-center gap-1', className)}
+      className={cn('group flex min-w-0 items-center gap-1 w-full ', className)}
       noValidate
       onSubmit={handleSubmit}
     >
       <input
         ref={inputRef}
         className={cn(
-          'focus:text-primary block field-sizing-content h-9 min-w-[24ch] rounded-md text-center text-sm focus-visible:outline-none md:text-left',
+          'focus:text-primary block field-sizing-content h-9 min-w-[24ch] rounded-md text-sm focus-visible:outline-none',
           inputClassName
         )}
         enterKeyHint="go"
@@ -149,10 +150,12 @@ export function DiffUrlForm({
         placeholder={placeholder}
       />
       {showClear && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-md"
           aria-label="Clear"
-          className="text-foreground flex size-6 shrink-0 cursor-pointer items-center justify-center opacity-35 transition-colors hover:opacity-65"
+          className="opacity-0 transition-opacity duration-200 will-change-auto group-hover:opacity-50 hover:opacity-75"
           onClick={() => {
             setURL('');
             setValidationError(null);
@@ -160,7 +163,7 @@ export function DiffUrlForm({
           }}
         >
           <IconX className="size-4" />
-        </button>
+        </Button>
       )}
       {children?.(isPending, url)}
       {/* Hidden submit ensures Enter triggers form submission in all browsers */}

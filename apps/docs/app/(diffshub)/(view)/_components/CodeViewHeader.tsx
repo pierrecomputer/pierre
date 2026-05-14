@@ -65,21 +65,21 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   return (
     <div
       className={cn(
-        'z-10 contain-layout contain-paint flex flex-wrap md:flex-nowrap items-center gap-2.5 py-2 px-3 md:py-1 border-b border-[var(--color-border-opaque)] bg-neutral-50 dark:bg-neutral-900',
+        'z-10 contain-layout contain-paint flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 pb-2 px-4 md:px-3 md:py-1.5 border-b border-[var(--color-border-opaque)] bg-neutral-50 dark:bg-neutral-900',
         className
       )}
     >
       <Link
         href="/"
-        className="absolute top-3 left-[50%] inline-flex -translate-x-1/2 transition-transform duration-200 hover:scale-110 md:static md:translate-x-0"
+        className="absolute top-4 left-[50%] inline-flex -translate-x-1/2 transition-transform duration-200 hover:scale-110 md:static md:translate-x-0"
       >
         <DiffsHubLogo />
       </Link>
       <DiffUrlForm
-        className="order-last w-full md:order-none"
-        inputClassName="w-full"
+        className="order-last md:order-none md:mr-auto"
         initialUrl={initialUrl}
         placeholder="https://github.com/org/repo/123"
+        inputClassName="w-full md:w-auto"
       />
       <div className="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end">
         <Button
@@ -92,7 +92,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           className="hover:text-muted-foreground hover:bg-transparent md:hidden"
           onClick={onToggleFileTreeOverlay}
         >
-          <IconFileTreeFill className="size-3" />
+          <IconFileTreeFill className="size-4 md:size-3" />
         </Button>
         <div className="flex items-center gap-1">
           <div className="hidden items-center md:flex">
@@ -111,9 +111,9 @@ export const CodeViewHeader = memo(function CodeViewHeader({
               }
             >
               {diffStyle === 'split' ? (
-                <IconDiffSplit className="size-3" />
+                <IconDiffSplit className="size-4 md:size-3" />
               ) : (
-                <IconDiffUnified className="size-3" />
+                <IconDiffUnified className="size-4 md:size-3" />
               )}
             </Button>
           </div>
@@ -125,7 +125,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
                 size="icon-md"
                 className="hover:text-muted-foreground hover:bg-transparent"
               >
-                <IconGearFill className="size-3" />
+                <IconGearFill className="size-4 md:size-3" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
@@ -194,6 +194,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           </DropdownMenu>
         </div>
       </div>
+      <hr className="border-border/80 w-full md:hidden" />
     </div>
   );
 });
