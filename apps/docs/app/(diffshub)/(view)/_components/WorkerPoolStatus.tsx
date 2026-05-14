@@ -32,7 +32,7 @@ const NUMBER_FORMATTER = new Intl.NumberFormat('en-US');
 class AutoScrollTester {
   static SPEED = 1000;
 
-  private running = false;
+  private running: 0 | 1 | 2 = 0;
   private direction = 1;
 
   constructor(
@@ -41,17 +41,31 @@ class AutoScrollTester {
   ) {}
 
   start() {
-    if (this.running) return;
-    this.running = true;
+    if (this.running > 0) return;
+    this.running = 1;
     this.onStateChange?.(true);
     this.render();
   }
 
   render = () => {
-    if (!this.running || this.scrollRef.current == null) return;
-    const { scrollHeight, scrollTop } = this.scrollRef.current;
-    if (scrollTop <= 0 || scrollTop >= scrollHeight - innerHeight) {
+    if (this.running === 0 || this.scrollRef.current == null) {
+      return;
+    }
+    const { scrollHeight, scrollTop, clientHeight } = this.scrollRef.current;
+
+    // The first scroll tick should always attempt to scroll
+    if (this.running === 1) {
+      this.running = 2;
+    }
+    // If we're scrolling and we hit a boundary, lets stop, and invert the
+    // direction, so next click will scroll us the other direction
+    else if (
+      this.running === 2 &&
+      (scrollTop <= 0 || scrollTop >= scrollHeight - clientHeight)
+    ) {
       this.direction *= -1;
+      this.stop();
+      return;
     }
     this.scrollRef.current.scrollTo({
       top:
@@ -63,12 +77,12 @@ class AutoScrollTester {
   };
 
   stop() {
-    this.running = false;
+    this.running = 0;
     this.onStateChange?.(false);
   }
 
   toggleState = () => {
-    if (this.running) {
+    if (this.running > 0) {
       this.stop();
     } else {
       this.start();
@@ -275,7 +289,11 @@ function StatsDisplay({
   );
 }
 
-function AutoScrollToggleIcon({ running }: { running: boolean }) {
+interface AutoScrollToggleIconProps {
+  running: boolean;
+}
+
+function AutoScrollToggleIcon({ running }: AutoScrollToggleIconProps) {
   if (running) {
     return (
       <svg
