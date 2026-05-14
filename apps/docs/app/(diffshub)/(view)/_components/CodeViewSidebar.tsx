@@ -119,7 +119,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
         className={className}
         mobileOverlayOpen={mobileOverlayOpen}
       >
-        <div className="flex items-center gap-2 p-4 pb-0 md:px-3 md:pt-0">
+        <div className="flex items-center gap-2 p-4 pb-0 md:px-3 md:pt-0.5">
           <ButtonGroup
             aria-label="Sidebar sections"
             className="mr-auto flex min-w-0 gap-2 bg-transparent"

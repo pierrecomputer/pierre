@@ -19,6 +19,8 @@ const DENSITY_OVERRIDE_STYLES = {
   '--trees-selected-fg-override': 'light-dark(#1c1c1e, #f0f0f2)',
   '--trees-padding-inline-override': 8,
   '--trees-bg-muted': 'light-dark(#f5f5f5, #262626)',
+  '--trees-search-bg-override': 'light-dark(#fff, #262626)',
+  '--trees-git-renamed-color-override': 'light-dark(#007aff, #007aff)',
 } as CSSProperties;
 
 interface CodeViewFileTreeProps {
