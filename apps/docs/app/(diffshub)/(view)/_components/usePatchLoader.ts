@@ -45,6 +45,7 @@ import type {
 } from './types';
 
 const STREAM_PUBLISH_INTERVAL_MS = 100;
+const STREAM_INITIAL_PUBLISH_INTERVAL_MS = 500;
 const STREAM_WORK_BUDGET_MS = 8;
 const STREAM_TREE_PUBLISH_FILE_BATCH_SIZE = 1_000;
 const STREAM_TREE_PUBLISH_INTERVAL_MS = 1_000;
@@ -284,9 +285,12 @@ export function usePatchLoader({
           const publishFileBatchSize = hasPublishedInitialItems
             ? CODE_VIEW_BATCH_COUNT
             : initialPublishFileBatchSize;
+          const publishInterval = hasPublishedInitialItems
+            ? STREAM_PUBLISH_INTERVAL_MS
+            : STREAM_INITIAL_PUBLISH_INTERVAL_MS;
           if (
             pendingPublishFileCount < publishFileBatchSize &&
-            elapsed < STREAM_PUBLISH_INTERVAL_MS
+            elapsed < publishInterval
           ) {
             return;
           }
@@ -301,7 +305,7 @@ export function usePatchLoader({
           const elapsed = performance.now() - lastPublishTime;
           return (
             pendingPublishFileCount < initialPublishFileBatchSize &&
-            elapsed < STREAM_PUBLISH_INTERVAL_MS
+            elapsed < STREAM_INITIAL_PUBLISH_INTERVAL_MS
           );
         };
         const publishTreeSourceIfNeeded = () => {
