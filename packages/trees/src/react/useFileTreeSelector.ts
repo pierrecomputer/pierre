@@ -2,9 +2,9 @@
 
 import { useCallback, useRef, useSyncExternalStore } from 'react';
 
-import type { FileTree } from '../render/FileTree';
+import type { FileTreeModel } from '../model/publicTypes';
 
-export type FileTreeSelector<TSelected> = (model: FileTree) => TSelected;
+export type FileTreeSelector<TSelected> = (model: FileTreeModel) => TSelected;
 export type FileTreeSelectorEquality<TSelected> = (
   previous: TSelected,
   next: TSelected
@@ -12,7 +12,7 @@ export type FileTreeSelectorEquality<TSelected> = (
 
 interface SelectorCache<TSelected> {
   hasValue: boolean;
-  model: FileTree | null;
+  model: FileTreeModel | null;
   selector: FileTreeSelector<TSelected> | null;
   value: TSelected | undefined;
 }
@@ -51,7 +51,7 @@ function areSelectedValuesEqual<TSelected>(
 // useSyncExternalStore can compare stable values across real store updates.
 
 export function useFileTreeSelector<TSelected>(
-  model: FileTree,
+  model: FileTreeModel,
   selector: FileTreeSelector<TSelected>,
   isEqual?: FileTreeSelectorEquality<TSelected>
 ): TSelected {

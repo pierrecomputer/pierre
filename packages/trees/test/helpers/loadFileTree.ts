@@ -7,6 +7,13 @@ export async function loadFileTree(): Promise<
   return FileTree;
 }
 
+export async function loadScrollFileTree(): Promise<
+  typeof import('../../src/scroll').FileTree
+> {
+  const { FileTree } = await import('../../src/scroll/FileTree');
+  return FileTree;
+}
+
 export async function loadFileTreeController(): Promise<
   typeof import('../../src/model/FileTreeController').FileTreeController
 > {

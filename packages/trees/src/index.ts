@@ -55,6 +55,7 @@ export type {
   FileTreeInitialExpansion,
   FileTreeItemHandle,
   FileTreeListener,
+  FileTreeModel,
   FileTreeMoveEvent,
   FileTreeMoveOptions,
   FileTreeMutationEvent,

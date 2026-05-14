@@ -1,8 +1,9 @@
 /** @jsxImportSource react */
 'use client';
 
-import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
+import type { CSSProperties, HTMLAttributes, ReactNode, Ref } from 'react';
 import {
+  forwardRef,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -20,9 +21,9 @@ import type {
   FileTreeCompositionOptions,
   FileTreeContextMenuItem,
   FileTreeContextMenuOpenContext,
+  FileTreeModel,
   FileTreeSsrPayload,
 } from '../model/publicTypes';
-import type { FileTree as FileTreeModel } from '../render/FileTree';
 
 const useClientLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -146,6 +147,19 @@ function resolveComposition(
     : undefined;
 }
 
+function assignForwardedRef<T>(ref: Ref<T> | undefined, value: T | null): void {
+  if (ref == null) {
+    return;
+  }
+
+  if (typeof ref === 'function') {
+    ref(value);
+    return;
+  }
+
+  ref.current = value;
+}
+
 export interface FileTreeProps extends Omit<
   HTMLAttributes<HTMLElement>,
   'children'
@@ -159,115 +173,124 @@ export interface FileTreeProps extends Omit<
   ) => ReactNode;
 }
 
-export function FileTree({
-  header,
-  id,
-  model,
-  preloadedData,
-  renderContextMenu,
-  ...hostProps
-}: FileTreeProps): React.JSX.Element {
-  const [activeContextMenu, setActiveContextMenu] =
-    useState<ActiveContextMenuState | null>(null);
-  const [hostElement, setHostElement] = useState<HTMLElement | null>(null);
-  const baselineCompositionRef = useRef<FileTreeCompositionOptions | undefined>(
-    model.getComposition()
-  );
-  const baselineModelRef = useRef(model);
-  if (baselineModelRef.current !== model) {
-    baselineModelRef.current = model;
-    baselineCompositionRef.current = model.getComposition();
-  }
-
-  const hasContextMenu = renderContextMenu != null;
-  const handleContextMenuClose = useCallback(() => {
-    setActiveContextMenu(null);
-  }, []);
-  const handleContextMenuOpen = useCallback(
-    (
-      item: FileTreeContextMenuItem,
-      context: FileTreeContextMenuOpenContext
-    ) => {
-      setActiveContextMenu({ context, item });
-    },
-    []
-  );
-  const baselineComposition = baselineCompositionRef.current;
-  const composition = useMemo<FileTreeCompositionOptions | undefined>(
-    () =>
-      resolveComposition(
-        baselineComposition,
-        header,
-        hasContextMenu,
-        handleContextMenuClose,
-        handleContextMenuOpen
-      ),
-    [
-      baselineComposition,
-      handleContextMenuClose,
-      handleContextMenuOpen,
-      hasContextMenu,
+export const FileTree = forwardRef<HTMLElement, FileTreeProps>(
+  function FileTree(
+    {
       header,
-    ]
-  );
-
-  const handleHostRef = useCallback((node: HTMLElement | null) => {
-    setHostElement(node);
-  }, []);
-
-  useEffect(() => {
-    if (hasContextMenu) {
-      return;
+      id,
+      model,
+      preloadedData,
+      renderContextMenu,
+      ...hostProps
+    }: FileTreeProps,
+    forwardedRef
+  ): React.JSX.Element {
+    const [activeContextMenu, setActiveContextMenu] =
+      useState<ActiveContextMenuState | null>(null);
+    const [hostElement, setHostElement] = useState<HTMLElement | null>(null);
+    const baselineCompositionRef = useRef<
+      FileTreeCompositionOptions | undefined
+    >(model.getComposition());
+    const baselineModelRef = useRef(model);
+    if (baselineModelRef.current !== model) {
+      baselineModelRef.current = model;
+      baselineCompositionRef.current = model.getComposition();
     }
 
-    setActiveContextMenu(null);
-  }, [hasContextMenu]);
+    const hasContextMenu = renderContextMenu != null;
+    const handleContextMenuClose = useCallback(() => {
+      setActiveContextMenu(null);
+    }, []);
+    const handleContextMenuOpen = useCallback(
+      (
+        item: FileTreeContextMenuItem,
+        context: FileTreeContextMenuOpenContext
+      ) => {
+        setActiveContextMenu({ context, item });
+      },
+      []
+    );
+    const baselineComposition = baselineCompositionRef.current;
+    const composition = useMemo<FileTreeCompositionOptions | undefined>(
+      () =>
+        resolveComposition(
+          baselineComposition,
+          header,
+          hasContextMenu,
+          handleContextMenuClose,
+          handleContextMenuOpen
+        ),
+      [
+        baselineComposition,
+        handleContextMenuClose,
+        handleContextMenuOpen,
+        hasContextMenu,
+        header,
+      ]
+    );
 
-  useClientLayoutEffect(() => {
-    model.setComposition(composition);
-  }, [composition, model]);
+    const handleHostRef = useCallback(
+      (node: HTMLElement | null) => {
+        setHostElement(node);
+        assignForwardedRef(forwardedRef, node);
+      },
+      [forwardedRef]
+    );
 
-  useClientLayoutEffect(() => {
-    if (hostElement == null) {
-      return;
-    }
+    useEffect(() => {
+      if (hasContextMenu) {
+        return;
+      }
 
-    if (preloadedData != null && hasExistingPreloadedContent(hostElement)) {
-      model.hydrate({ fileTreeContainer: hostElement });
-    } else {
-      model.render({ fileTreeContainer: hostElement });
-    }
+      setActiveContextMenu(null);
+    }, [hasContextMenu]);
 
-    return () => {
-      model.unmount();
-      model.setComposition(baselineComposition);
+    useClientLayoutEffect(() => {
+      model.setComposition(composition);
+    }, [composition, model]);
+
+    useClientLayoutEffect(() => {
+      if (hostElement == null) {
+        return;
+      }
+
+      if (preloadedData != null && hasExistingPreloadedContent(hostElement)) {
+        model.hydrate({ fileTreeContainer: hostElement });
+      } else {
+        model.render({ fileTreeContainer: hostElement });
+      }
+
+      return () => {
+        model.unmount();
+        model.setComposition(baselineComposition);
+      };
+    }, [baselineComposition, hostElement, model, preloadedData]);
+
+    const children = renderPreloadedShadowDom(
+      renderFileTreeChildren(header, renderContextMenu, activeContextMenu),
+      preloadedData
+    );
+    const resolvedHostId = id ?? preloadedData?.id;
+
+    // Paint the model's resolved density onto the host so callers don't have to
+    // set `--trees-item-height` and `--trees-density-override` themselves.
+    // Caller-provided `style` keys still win via spread order.
+    const mergedStyle: CSSProperties = {
+      ['--trees-item-height' as string]: `${String(model.getItemHeight())}px`,
+      ['--trees-density-override' as string]: model.getDensityFactor(),
+      ...hostProps.style,
     };
-  }, [baselineComposition, hostElement, model, preloadedData]);
 
-  const children = renderPreloadedShadowDom(
-    renderFileTreeChildren(header, renderContextMenu, activeContextMenu),
-    preloadedData
-  );
-  const resolvedHostId = id ?? preloadedData?.id;
-
-  // Paint the model's resolved density onto the host so callers don't have to
-  // set `--trees-item-height` and `--trees-density-override` themselves.
-  // Caller-provided `style` keys still win via spread order.
-  const mergedStyle: CSSProperties = {
-    ['--trees-item-height' as string]: `${String(model.getItemHeight())}px`,
-    ['--trees-density-override' as string]: model.getDensityFactor(),
-    ...hostProps.style,
-  };
-
-  return (
-    <FILE_TREE_TAG_NAME
-      {...hostProps}
-      id={resolvedHostId}
-      ref={handleHostRef}
-      style={mergedStyle}
-      suppressHydrationWarning={preloadedData != null}
-    >
-      {children}
-    </FILE_TREE_TAG_NAME>
-  );
-}
+    return (
+      <FILE_TREE_TAG_NAME
+        {...hostProps}
+        id={resolvedHostId}
+        ref={handleHostRef}
+        style={mergedStyle}
+        suppressHydrationWarning={preloadedData != null}
+      >
+        {children}
+      </FILE_TREE_TAG_NAME>
+    );
+  }
+);

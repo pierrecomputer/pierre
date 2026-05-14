@@ -19,3 +19,43 @@ const focusedPath = useFileTreeSelector(model, (currentModel) =>
   currentModel.getFocusedPath()
 );`
 );
+
+export const REACT_EXTERNAL_SCROLL_EXAMPLE = docsCodeSnippet(
+  'external-scroll-react.tsx',
+  `import {
+  FileTree as ScrollFileTree,
+  createDomScrollSource,
+} from '@pierre/trees/scroll';
+import { FileTree } from '@pierre/trees/react';
+
+const hostRef = useRef<HTMLElement>(null);
+const source = useMemo(
+  () => createDomScrollSource({ scrollContainer: parentScroller }),
+  [parentScroller]
+);
+const model = useMemo(
+  () =>
+    new ScrollFileTree({
+      paths,
+      stickyFolders: true,
+      externalScroll: { initialSnapshot: source.getSnapshot() },
+    }),
+  [paths, source]
+ );
+
+useEffect(
+  () => () => {
+    model.cleanUp();
+    source.destroy();
+  },
+  [model, source]
+ );
+
+useLayoutEffect(() => {
+  source.setHost(hostRef.current);
+  model.setExternalScrollSource(source);
+  return () => model.setExternalScrollSource(undefined);
+}, [model, source]);
+
+return <FileTree ref={hostRef} model={model} />;`
+);

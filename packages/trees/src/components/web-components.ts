@@ -3,9 +3,14 @@ import rawStyles from '../style.css';
 import { wrapCoreCSS } from '../utils/cssWrappers';
 import { ensureMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 
-let sheet: CSSStyleSheet | undefined;
+const sheetCache = new Map<string, CSSStyleSheet>();
+
+function getWrappedStyles(styles: string): string {
+  return wrapCoreCSS(styles);
+}
 
 export function ensureFileTreeStyles(shadowRoot: ShadowRoot): void {
+  const wrappedStyles = getWrappedStyles(rawStyles);
   const hasReplaceSync =
     typeof CSSStyleSheet !== 'undefined' &&
     typeof (CSSStyleSheet.prototype as { replaceSync?: unknown })
@@ -14,9 +19,11 @@ export function ensureFileTreeStyles(shadowRoot: ShadowRoot): void {
   const canAdopt = hasReplaceSync && 'adoptedStyleSheets' in shadowRoot;
 
   if (canAdopt) {
+    let sheet = sheetCache.get(wrappedStyles);
     if (sheet == null) {
       sheet = new CSSStyleSheet();
-      sheet.replaceSync(wrapCoreCSS(rawStyles));
+      sheet.replaceSync(wrappedStyles);
+      sheetCache.set(wrappedStyles, sheet);
     }
     let adopted = false;
     try {
@@ -36,12 +43,16 @@ export function ensureFileTreeStyles(shadowRoot: ShadowRoot): void {
   }
 
   // Fallback path for environments without adoptedStyleSheets.
-  // Ensure an inline style exists in the shadow root.
-  if (shadowRoot.querySelector(`style[${FILE_TREE_STYLE_ATTRIBUTE}]`) == null) {
-    const styleEl = document.createElement('style');
+  // Ensure an inline style exists in the shadow root and keep it synced to the
+  // root tree stylesheet.
+  let styleEl = shadowRoot.querySelector(`style[${FILE_TREE_STYLE_ATTRIBUTE}]`);
+  if (!(styleEl instanceof HTMLStyleElement)) {
+    styleEl = document.createElement('style');
     styleEl.setAttribute(FILE_TREE_STYLE_ATTRIBUTE, '');
-    styleEl.textContent = wrapCoreCSS(rawStyles);
     shadowRoot.prepend(styleEl);
+  }
+  if (styleEl.textContent !== wrappedStyles) {
+    styleEl.textContent = wrappedStyles;
   }
 }
 

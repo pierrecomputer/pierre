@@ -19,3 +19,21 @@ export const LARGE_TREES_VIRTUALIZATION_KNOBS = docsCodeSnippet(
   overscan: 8,
 });`
 );
+
+export const LARGE_TREES_EXTERNAL_SCROLL = docsCodeSnippet(
+  'external-scroll.ts',
+  `import { FileTree } from '@pierre/trees/scroll';
+
+const tree = new FileTree({
+  preparedInput,
+  stickyFolders: true,
+  externalScroll: {
+    initialSnapshot: {
+      viewportTop: 0,
+      viewportHeight: 480,
+      topInset: 48,
+    },
+    source: externalScrollSource,
+  },
+});`
+);

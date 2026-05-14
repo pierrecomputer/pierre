@@ -58,8 +58,6 @@
       --trees-file-icon-color-bootstrap
       --trees-file-icon-color-browserslist
       --trees-file-icon-color-bun
-      --trees-file-icon-color-c
-      --trees-file-icon-color-cpp
       --trees-file-icon-color-claude
       --trees-file-icon-color-css
       --trees-file-icon-color-database
@@ -130,6 +128,7 @@
       --trees-padding-inline-override
     */
 
+    --trees-accent: var(--trees-accent-override, #009fff);
     --trees-fg: var(
       --trees-fg-override,
       var(--trees-theme-sidebar-fg, light-dark(#6c6c71, #adadb1))
@@ -161,7 +160,6 @@
         )
       )
     );
-    --trees-accent: var(--trees-accent-override, #009fff);
     --trees-input-bg: var(
       --trees-input-bg-override,
       light-dark(#f8f8f8, #070707)
@@ -359,14 +357,6 @@
     --trees-file-icon-color-bun: var(
       --trees-file-icon-color,
       var(--trees-icon-mauve)
-    );
-    --trees-file-icon-color-c: var(
-      --trees-file-icon-color,
-      var(--trees-icon-blue)
-    );
-    --trees-file-icon-color-cpp: var(
-      --trees-file-icon-color,
-      var(--trees-icon-blue)
     );
     --trees-file-icon-color-claude: var(
       --trees-file-icon-color,
@@ -583,34 +573,60 @@
     font-weight: var(--trees-font-weight-regular);
   }
 
-  :host([data-file-tree-virtualized='true']) {
+  :host(
+    [data-file-tree-virtualized='true']:not(
+      [data-file-tree-scroll-mode='external']
+    )
+  ) {
     height: 100%;
     overflow: hidden;
+  }
+
+  :host([data-file-tree-scroll-mode='external']) {
+    height: auto;
+    overflow: visible;
   }
 
   [data-file-tree-virtualized-wrapper='true'] {
-    height: 100%;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
+  }
+
+  [data-file-tree-virtualized-wrapper='true']:not(
+    [data-file-tree-scroll-mode='external']
+  ) {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  [data-file-tree-virtualized-wrapper='true'][data-file-tree-scroll-mode='external'] {
+    height: auto;
+    overflow: visible;
   }
 
   [data-file-tree-virtualized-root='true'] {
-    height: 100%;
     display: flex;
     flex-direction: column;
+  }
+
+  [data-file-tree-virtualized-root='true']:not(
+    [data-file-tree-scroll-mode='external']
+  ) {
+    height: 100%;
     overflow: hidden;
   }
 
-  [data-file-tree-virtualized-scroll='true'],
+  [data-file-tree-virtualized-root='true'][data-file-tree-scroll-mode='external'] {
+    height: auto;
+    overflow: visible;
+  }
+
+  [data-file-tree-virtualized-scroll='true']:not(
+    [data-file-tree-scroll-mode='external']
+  ),
   [data-file-tree-scrollbar-measure='true'] {
-    --trees-scrollbar-thumb-current: transparent;
     overflow-y: auto;
     scrollbar-gutter: stable;
-
-    &:hover {
-      --trees-scrollbar-thumb-current: var(--trees-scrollbar-thumb);
-    }
 
     &::-webkit-scrollbar {
       width: var(--trees-scrollbar-gutter);
@@ -622,7 +638,7 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background-color: var(--trees-scrollbar-thumb-current);
+      background-color: var(--trees-scrollbar-thumb);
       border: 1px solid transparent;
       background-clip: content-box;
       border-radius: calc(var(--trees-scrollbar-gutter) / 2);
@@ -648,10 +664,12 @@
   }
 
   @supports (-moz-appearance: none) {
-    [data-file-tree-virtualized-scroll='true'],
+    [data-file-tree-virtualized-scroll='true']:not(
+      [data-file-tree-scroll-mode='external']
+    ),
     [data-file-tree-scrollbar-measure='true'] {
       scrollbar-width: thin;
-      scrollbar-color: var(--trees-scrollbar-thumb-current) transparent;
+      scrollbar-color: var(--trees-scrollbar-thumb) transparent;
     }
   }
 
@@ -680,6 +698,12 @@
         ),
         0px
       );
+  }
+
+  [data-file-tree-virtualized-scroll='true'][data-file-tree-scroll-mode='external'] {
+    overflow: visible;
+    flex: 0 0 auto;
+    min-height: 0;
   }
 
   @supports (-moz-appearance: none) {
@@ -844,6 +868,7 @@
     --truncate-marker-background-color: var(--trees-bg);
     --truncate-marker-background-overlay-color: transparent;
     --truncate-marker-block-inset: 0px;
+
     &:hover,
     &[data-item-context-hover='true'] {
       background-color: var(--trees-bg-muted);
@@ -975,12 +1000,6 @@
     }
     [data-icon-token='bun'] {
       color: var(--trees-file-icon-color-bun);
-    }
-    [data-icon-token='c'] {
-      color: var(--trees-file-icon-color-c);
-    }
-    [data-icon-token='cpp'] {
-      color: var(--trees-file-icon-color-cpp);
     }
     [data-icon-token='claude'] {
       color: var(--trees-file-icon-color-claude);

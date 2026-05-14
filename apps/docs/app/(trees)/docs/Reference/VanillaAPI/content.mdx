@@ -46,6 +46,25 @@ For shared option meanings, read
 
 - returns the mounted host element after render or hydrate
 
+#### External scroll source
+
+Use `@pierre/trees/scroll` when the tree sits inside a parent scroller with
+other content above or below it. The parent owns scrolling. The tree receives
+host-local viewport metrics and keeps only its own virtual spacer height.
+`createDomScrollSource(...)` covers the common DOM-scroller case and keeps the
+snapshot in sync once you attach the host after render.
+
+<DocsCodeExample {...VANILLA_EXTERNAL_SCROLL_EXAMPLE} />
+
+Rules:
+
+- `viewportTop` is the parent viewport's top edge in the FileTree host's
+  coordinate system. It may be negative or below the tree.
+- `topInset` and `bottomInset` describe caller-owned sticky or overlay space.
+- `scrollToViewportTop(nextTop, context)` must update `getSnapshot()`
+  synchronously before it returns when you implement a custom source.
+- Drag edge-autoscroll is not implemented in external scroll mode yet.
+
 #### Read APIs
 
 Common read methods are:
@@ -111,6 +130,8 @@ Runtime reconfiguration helpers:
 - `setComposition(composition?)`
 - `setGitStatus(gitStatus?)`
 - `setIcons(icons?)`
+- `setExternalScrollSource(source?)` for attaching or replacing the live
+  external scroll source on a model constructed from `@pierre/trees/scroll`
 
 #### Subscriptions and external systems
 

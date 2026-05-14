@@ -1,9 +1,9 @@
 'use client';
 
-import type { FileTree } from '../render/FileTree';
+import type { FileTreeModel } from '../model/publicTypes';
 import { areArraysEqual, useFileTreeSelector } from './useFileTreeSelector';
 
-export function useFileTreeSelection(model: FileTree): readonly string[] {
+export function useFileTreeSelection(model: FileTreeModel): readonly string[] {
   return useFileTreeSelector(
     model,
     (currentModel) => currentModel.getSelectedPaths(),

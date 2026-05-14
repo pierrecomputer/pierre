@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>file-tree external scroll fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+        background: #f7f7f8;
+      }
+
+      [data-external-scroll-shell] {
+        width: 440px;
+        height: 360px;
+        overflow-y: auto;
+        border: 1px solid #d4d4d8;
+        border-radius: 12px;
+        background: white;
+      }
+
+      [data-external-scroll-sticky] {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        padding-inline: 12px;
+        background: #111827;
+        color: #f9fafb;
+        font-weight: 600;
+      }
+
+      [data-external-scroll-above],
+      [data-external-scroll-below] {
+        min-height: 500px;
+        padding: 16px;
+        background: #eef2ff;
+      }
+
+      [data-external-scroll-below] {
+        background: #ecfdf5;
+      }
+
+      [data-external-scroll-mount] {
+        border-block: 1px solid #d4d4d8;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-external-scroll-shell>
+      <div data-external-scroll-sticky>Caller sticky toolbar</div>
+      <div data-external-scroll-above>Content above the tree</div>
+      <div data-external-scroll-mount></div>
+      <div data-external-scroll-below>Content below the tree</div>
+    </div>
+    <script type="module" src="./file-tree-external-scroll.ts"></script>
+  </body>
+</html>

@@ -20,6 +20,9 @@
       "react": [
         "dist/react/index.d.ts"
       ],
+      "scroll": [
+        "dist/scroll/index.d.ts"
+      ],
       "ssr": [
         "dist/ssr/index.d.ts"
       ],
@@ -40,6 +43,10 @@
     "./react": {
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js"
+    },
+    "./scroll": {
+      "types": "./dist/scroll/index.d.ts",
+      "import": "./dist/scroll/index.js"
     },
     "./ssr": {
       "types": "./dist/ssr/index.d.ts",

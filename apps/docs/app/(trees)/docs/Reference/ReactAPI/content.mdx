@@ -36,6 +36,7 @@ Primary props:
 
 - `model`
 - normal host HTML attributes such as `className`, `style`, and `id`
+- `ref`, which receives the FileTree host element
 
 React-only props:
 
@@ -51,6 +52,24 @@ Behavior notes:
 - it uses `id ?? preloadedData?.id` for host identity when hydration is involved
 - `header` and `renderContextMenu` layer React rendering onto the model's
   composition surface
+- it forwards the host ref so external scroll adapters can compute host-local
+  metrics
+
+#### External scroll in React
+
+Create the model from `@pierre/trees/scroll` when a parent scroller owns the
+viewport and the tree is one block inside that scroller. The React component
+still comes from `@pierre/trees/react`. `createDomScrollSource(...)` covers the
+common DOM-scroller case; forward the host ref so the source can compute
+host-local metrics, then attach it with `model.setExternalScrollSource(source)`.
+
+<DocsCodeExample {...REACT_EXTERNAL_SCROLL_EXAMPLE} />
+
+The `source.scrollToViewportTop(...)` method must synchronously update the
+snapshot returned by `source.getSnapshot()`. Header and search content scroll
+with the tree in this mode. Sticky folders pin under `topInset`, not under the
+built-in header or search UI. Drag edge-autoscroll is not implemented in
+external scroll mode yet.
 
 #### Reading tree state from React
 

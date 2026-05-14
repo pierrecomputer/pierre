@@ -25,6 +25,18 @@ a different public data model.
 The current exported payload type name is `FileTreeSsrPayload`, but the
 docs-facing rule stays the same: pass it through unchanged.
 
+#### External scroll preload
+
+For this mode, import `preloadFileTree` from `@pierre/trees/scroll`. It uses
+`externalScroll.initialSnapshot` for first paint. It does not call
+`externalScroll.source.getSnapshot()` on the server. If no initial snapshot is
+provided, `initialVisibleRowCount` is only a fallback row budget.
+
+<DocsCodeExample {...SSR_EXTERNAL_SCROLL_EXAMPLE} />
+
+Keep the client model's `externalScroll.initialSnapshot` in sync with the server
+payload. Attach the live source on the client after the host exists.
+
 #### `serializeFileTreeSsrPayload(...)`
 
 `serializeFileTreeSsrPayload(payload, mode?)` turns the preloaded payload back
@@ -59,6 +71,7 @@ Match:
   rendered tree
 - the same appearance-affecting options when they change initial markup or icon
   output
+- the same external scroll `initialSnapshot` when `externalScroll` is enabled
 
 Mismatches are not a supported partial merge. They produce hydration mismatch or
 incorrect first state.

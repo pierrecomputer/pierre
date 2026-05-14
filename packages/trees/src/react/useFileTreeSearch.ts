@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 
-import type { FileTree } from '../render/FileTree';
+import type { FileTreeModel } from '../model/publicTypes';
 import { areArraysEqual, useFileTreeSelector } from './useFileTreeSelector';
 
 interface FileTreeSearchSnapshot {
@@ -30,7 +30,7 @@ function areSearchSnapshotsEqual(
   );
 }
 
-export function useFileTreeSearch(model: FileTree): FileTreeSearchState {
+export function useFileTreeSearch(model: FileTreeModel): FileTreeSearchState {
   const snapshot = useFileTreeSelector(
     model,
     (currentModel): FileTreeSearchSnapshot => ({

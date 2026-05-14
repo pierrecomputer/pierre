@@ -342,6 +342,35 @@ export interface FileTreeMutationHandle {
 
 export type FileTreeListener = () => void;
 
+export interface FileTreeModel
+  extends FileTreeMutationHandle, FileTreeSearchSessionHandle {
+  cleanUp(): void;
+  focusNearestPath(path: FileTreePublicId | null): FileTreePublicId | null;
+  focusPath(path: FileTreePublicId): void;
+  getComposition(): FileTreeCompositionOptions | undefined;
+  getDensityFactor(): number;
+  getFileTreeContainer(): HTMLElement | undefined;
+  getFocusedItem(): FileTreeItemHandle | null;
+  getFocusedPath(): FileTreePublicId | null;
+  getItem(path: FileTreePublicId): FileTreeItemHandle | null;
+  getItemHeight(): number;
+  getSearchMatchingPaths(): readonly FileTreePublicId[];
+  getSearchValue(): string;
+  getSelectedPaths(): readonly FileTreePublicId[];
+  hydrate(props: FileTreeHydrationProps): void;
+  isSearchOpen(): boolean;
+  render(props: FileTreeRenderProps): void;
+  setComposition(composition?: FileTreeCompositionOptions): void;
+  setGitStatus(gitStatus?: FileTreeOptions['gitStatus']): void;
+  setIcons(icons?: FileTreeOptions['icons']): void;
+  startRenaming(
+    path?: FileTreePublicId,
+    options?: { removeIfCanceled?: boolean }
+  ): boolean;
+  subscribe(listener: FileTreeListener): () => void;
+  unmount(): void;
+}
+
 export type FileTreeSelectionChangeListener = (
   selectedPaths: readonly FileTreePublicId[]
 ) => void;

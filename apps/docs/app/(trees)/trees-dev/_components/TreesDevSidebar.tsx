@@ -12,6 +12,7 @@ const DEMO_PAGES = [
   { slug: '', label: 'Main Demo' },
   { slug: 'react', label: 'React' },
   { slug: 'responsiveness', label: 'Responsiveness' },
+  { slug: 'external-scroll', label: 'External Scroll' },
   { slug: 'density', label: 'Density' },
   { slug: 'search', label: 'Search' },
   { slug: 'git-status', label: 'Git Status' },

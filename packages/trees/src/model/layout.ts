@@ -19,6 +19,13 @@ export type FileTreeLayoutMetrics = {
   totalRowCount?: number;
 };
 
+export type FileTreeExternalLayoutMetrics = Omit<
+  FileTreeLayoutMetrics,
+  'scrollTop'
+> & {
+  viewportTop: number;
+};
+
 export type FileTreeLayoutRange = {
   endIndex: number;
   startIndex: number;
@@ -73,6 +80,10 @@ export type FileTreeLayoutSnapshot<
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
+}
+
+function finiteOr(value: number, fallback: number): number {
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function createRange(
@@ -409,6 +420,130 @@ export function computeFileTreeLayout<Row extends FileTreeLayoutRow>(
       maxScrollTop,
       overscan,
       scrollTop,
+      totalHeight,
+      totalRowCount,
+      viewportHeight,
+    },
+    projected: {
+      contentHeight,
+      paneHeight,
+      paneTop,
+    },
+    sticky: {
+      height: stickyHeight,
+      rows: stickyRows,
+    },
+    visible,
+    window: {
+      endIndex: windowRange.endIndex,
+      height: windowHeight,
+      offsetTop: isEmptyRange(windowRange)
+        ? 0
+        : windowRange.startIndex * metrics.itemHeight,
+      startIndex: windowRange.startIndex,
+    },
+  };
+}
+
+export function computeFileTreeExternalLayout<Row extends FileTreeLayoutRow>(
+  rows: readonly Row[],
+  metrics: FileTreeExternalLayoutMetrics
+): FileTreeLayoutSnapshot<Row> {
+  const totalRowCount = metrics.totalRowCount ?? rows.length;
+  const totalHeight = totalRowCount * metrics.itemHeight;
+  const viewportTop = finiteOr(metrics.viewportTop, 0);
+  const viewportHeight = Math.max(0, finiteOr(metrics.viewportHeight, 0));
+  const overscan = Math.max(0, Math.floor(metrics.overscan));
+  const maxScrollTop = Math.max(0, totalHeight - viewportHeight);
+  const viewportBottom = viewportTop + viewportHeight;
+  const intersectsRowArea =
+    totalRowCount > 0 &&
+    viewportHeight > 0 &&
+    viewportBottom > 0 &&
+    viewportTop < totalHeight;
+  const stickyRows =
+    intersectsRowArea && viewportTop > 0
+      ? ((metrics.stickyRows as
+          | readonly FileTreeLayoutStickyRow<Row>[]
+          | undefined) ??
+        computeStickyRows(rows, viewportTop, metrics.itemHeight))
+      : [];
+  const stickyHeight = stickyRows.reduce(
+    (maximumBottom, entry) =>
+      Math.max(maximumBottom, entry.top + metrics.itemHeight),
+    0
+  );
+  const paneTop = viewportTop + stickyHeight;
+  const paneHeight = Math.max(0, viewportHeight - stickyHeight);
+  const contentHeight = Math.max(0, totalHeight - Math.max(0, paneTop));
+
+  const firstVisiblePhysicalIndex = getFirstIntersectingIndex(
+    viewportTop,
+    totalRowCount,
+    metrics.itemHeight
+  );
+  const firstProjectedIndex = getFirstIntersectingIndex(
+    paneTop,
+    totalRowCount,
+    metrics.itemHeight
+  );
+
+  const firstOccludedIndex =
+    stickyHeight <= 0 ||
+    firstVisiblePhysicalIndex < 0 ||
+    firstVisiblePhysicalIndex >= totalRowCount
+      ? -1
+      : firstVisiblePhysicalIndex;
+  const lastOccludedIndex =
+    firstOccludedIndex === -1
+      ? -1
+      : Math.min(totalRowCount - 1, firstProjectedIndex - 1);
+  const occludedCount =
+    firstOccludedIndex === -1 || lastOccludedIndex < firstOccludedIndex
+      ? 0
+      : lastOccludedIndex - firstOccludedIndex + 1;
+
+  const visible =
+    paneHeight <= 0 || firstProjectedIndex >= totalRowCount
+      ? EMPTY_FILE_TREE_LAYOUT_RANGE
+      : createRange(
+          firstProjectedIndex,
+          getLastIntersectingIndex(
+            paneTop + paneHeight,
+            totalRowCount,
+            metrics.itemHeight
+          )
+        );
+
+  const overscanPixels = overscan * metrics.itemHeight;
+  const firstWindowIndex = getFirstIntersectingIndex(
+    paneTop - overscanPixels,
+    totalRowCount,
+    metrics.itemHeight
+  );
+  const lastWindowIndex = getLastIntersectingIndex(
+    paneTop + paneHeight + overscanPixels,
+    totalRowCount,
+    metrics.itemHeight
+  );
+  const minimumWindowStart = lastOccludedIndex + 1;
+  const windowRange = createRange(
+    Math.max(minimumWindowStart, firstWindowIndex),
+    Math.min(totalRowCount - 1, lastWindowIndex)
+  );
+  const windowHeight = getRangeHeight(windowRange, metrics.itemHeight);
+
+  return {
+    occlusion: {
+      firstOccludedIndex,
+      lastOccludedIndex,
+      occludedCount,
+    },
+    physical: {
+      itemHeight: metrics.itemHeight,
+      maxScrollTop,
+      overscan,
+      scrollTop: viewportTop,
       totalHeight,
       totalRowCount,
       viewportHeight,

@@ -63,6 +63,44 @@ const tree = new FileTree({ preparedInput });
 Use `prepareFileTreeInput(paths)` for raw input. Use
 `preparePresortedFileTreeInput(paths)` when the final order is already known.
 
+## External scroll containers
+
+Import from `@pierre/trees/scroll` when a caller-owned scroller contains content
+above and below the tree. The tree remains a normal block in that scroller and
+owns only its virtual spacer height.
+
+```ts
+import { FileTree, createDomScrollSource } from '@pierre/trees/scroll';
+
+const source = createDomScrollSource({
+  scrollContainer: parentScroller,
+  topInset: () => toolbar.getBoundingClientRect().height,
+});
+
+const tree = new FileTree({
+  paths,
+  stickyFolders: true,
+  externalScroll: {
+    initialSnapshot: source.getSnapshot(),
+    source,
+  },
+});
+
+tree.render({ containerWrapper: mount });
+const host = tree.getFileTreeContainer();
+source.setHost(host ?? null);
+```
+
+`createDomScrollSource()` handles the common DOM-scroller case. If you roll your
+own source, it reports host-local metrics: `viewportTop`, `viewportHeight`,
+`topInset`, `bottomInset`, `isScrolling`, and `scrollOrigin`. Its
+`scrollToViewportTop(nextTop, context)` method must update `getSnapshot()`
+synchronously before returning. `initialVisibleRowCount` is only a fallback in
+external mode when `initialSnapshot` is missing.
+
+Header and search UI scroll with the tree in external mode. Sticky folders pin
+below `topInset`, and drag edge-autoscroll is not implemented in this mode yet.
+
 ## React usage
 
 ```tsx

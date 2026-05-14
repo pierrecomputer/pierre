@@ -17,15 +17,13 @@ import {
   CONTEXT_MENU_TRIGGER_TYPE,
   HEADER_SLOT_NAME,
 } from '../constants';
+import { normalizeFileTreeExternalScrollSnapshot } from '../model/externalScroll';
 import {
   FILE_TREE_RENAME_VIEW,
   FileTreeController,
 } from '../model/FileTreeController';
-import type {
-  FileTreeStickyRowCandidate,
-  FileTreeViewProps,
-} from '../model/internalTypes';
 import {
+  computeFileTreeExternalLayout,
   computeFileTreeLayout,
   computeStickyRows,
   type FileTreeLayoutSnapshot,
@@ -48,12 +46,6 @@ import {
   FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
 } from '../model/virtualization';
 import type { GitStatus } from '../publicTypes';
-import type { SVGSpriteNames } from '../sprite';
-import {
-  GIT_STATUS_DESCENDANT_TITLE,
-  GIT_STATUS_LABEL,
-  GIT_STATUS_TITLE,
-} from '../utils/gitStatusPresentation';
 import {
   focusElement,
   getActiveTreeElement,
@@ -63,15 +55,30 @@ import {
   readMeasuredViewportHeight,
   scrollFocusedRowIntoView,
   scrollFocusedRowToViewportOffset,
-} from './focusHelpers';
-import { createFileTreeIconResolver } from './iconResolver';
-import { classifyFileTreeRenameHandoff } from './renameHandoff';
-import { RenameInput } from './RenameInput';
-import { computeFileTreeRowElementAttributes } from './rowAttributes';
+} from '../render/focusHelpers';
+import { createFileTreeIconResolver } from '../render/iconResolver';
+import { classifyFileTreeRenameHandoff } from '../render/renameHandoff';
+import { RenameInput } from '../render/RenameInput';
+import { computeFileTreeRowElementAttributes } from '../render/rowAttributes';
 import {
   computeFileTreeRowClickPlan,
   type FileTreeRowClickMode,
-} from './rowClickPlan';
+} from '../render/rowClickPlan';
+import {
+  computeExternalFocusedRowViewportTop,
+  computeExternalViewportOffsetTop,
+} from '../render/scrollTarget';
+import type { SVGSpriteNames } from '../sprite';
+import {
+  GIT_STATUS_DESCENDANT_TITLE,
+  GIT_STATUS_LABEL,
+  GIT_STATUS_TITLE,
+} from '../utils/gitStatusPresentation';
+import type {
+  FileTreeStickyRowCandidate,
+  FileTreeViewProps,
+} from './internalTypes';
+import type { FileTreeExternalScrollRequestContext } from './publicTypes';
 
 function formatFlattenedSegments(
   row: FileTreeVisibleRow,
@@ -228,6 +235,76 @@ function computeFileTreeViewLayoutState({
           visibleCount
         )
       : stickyFolders && scrollTop <= 0 && visibleRows.length > 0
+        ? computeStickyRows(visibleRows, 1, itemHeight)
+        : snapshot.sticky.rows;
+  const overlayHeight = overlayRows.reduce(
+    (maxBottom, entry) => Math.max(maxBottom, entry.top + itemHeight),
+    0
+  );
+
+  return {
+    overlayHeight,
+    overlayRows,
+    snapshot,
+    visibleRows,
+  };
+}
+
+function computeFileTreeExternalViewLayoutState({
+  controller,
+  itemHeight,
+  overscan,
+  stickyFolders,
+  viewportHeight,
+  viewportTop,
+}: {
+  controller: FileTreeController;
+  itemHeight: number;
+  overscan: number;
+  stickyFolders: boolean;
+  viewportHeight: number;
+  viewportTop: number;
+}): FileTreeViewLayoutState {
+  const visibleCount = controller.getVisibleCount();
+  const stickyCandidates =
+    stickyFolders && visibleCount > 0 && viewportHeight > 0
+      ? controller.getStickyRowCandidates(viewportTop, itemHeight)
+      : [];
+  const visibleRows =
+    stickyCandidates == null && stickyFolders && visibleCount > 0
+      ? controller.getVisibleRows(0, visibleCount - 1)
+      : [];
+  const stickyRows =
+    stickyCandidates == null
+      ? undefined
+      : computeStickyRowsFromCandidates(
+          stickyCandidates,
+          viewportTop,
+          itemHeight,
+          visibleCount
+        );
+  const snapshot = computeFileTreeExternalLayout(visibleRows, {
+    itemHeight,
+    overscan,
+    stickyRows,
+    totalRowCount: visibleCount,
+    viewportHeight,
+    viewportTop,
+  });
+
+  const previewStickyCandidates =
+    stickyFolders && viewportTop <= 0 && visibleCount > 0
+      ? controller.getStickyRowCandidates(1, itemHeight)
+      : [];
+  const overlayRows =
+    previewStickyCandidates != null && viewportTop <= 0
+      ? computeStickyRowsFromCandidates(
+          previewStickyCandidates,
+          1,
+          itemHeight,
+          visibleCount
+        )
+      : stickyFolders && viewportTop <= 0 && visibleRows.length > 0
         ? computeStickyRows(visibleRows, 1, itemHeight)
         : snapshot.sticky.rows;
   const overlayHeight = overlayRows.reduce(
@@ -750,6 +827,25 @@ function getFileTreeRootDomId(
   return instanceId == null ? undefined : `${instanceId}__tree`;
 }
 
+function readRowAreaTopWithinHost(
+  rootElement: HTMLElement | null,
+  rowAreaElement: HTMLElement | null
+): number {
+  if (rootElement == null || rowAreaElement == null) {
+    return 0;
+  }
+
+  const rootNode = rootElement.getRootNode();
+  const hostElement =
+    rootNode instanceof ShadowRoot && rootNode.host instanceof HTMLElement
+      ? rootNode.host
+      : rootElement;
+  const hostRect = hostElement.getBoundingClientRect();
+  const rowAreaRect = rowAreaElement.getBoundingClientRect();
+  const nextTop = rowAreaRect.top - hostRect.top;
+  return Number.isFinite(nextTop) ? nextTop : 0;
+}
+
 // Search keeps DOM focus on the built-in input, so the focused row still needs
 // a stable DOM id for aria-activedescendant and visual-focus parity.
 function getFileTreeFocusedRowDomId(
@@ -1136,7 +1232,7 @@ function renderStyledRow(
           controller.focusMountedPathFromInput(targetPath);
         }
       : undefined,
-    onKeyDown,
+    onKeyDown: !isSticky ? onKeyDown : undefined,
     ref: (element: HTMLElement | null) => {
       registerButton(targetPath, element);
     },
@@ -1212,6 +1308,8 @@ function renderRangeChildren(
 export function FileTreeView({
   composition,
   controller,
+  externalScrollInitialSnapshot,
+  externalScrollSource,
   gitStatusByPath,
   ignoredGitDirectories,
   directoriesWithGitChanges,
@@ -1226,6 +1324,7 @@ export function FileTreeView({
   searchFakeFocus = false,
   slotHost,
   stickyFolders = false,
+  scrollMode,
   initialViewportHeight = FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
 }: FileTreeViewProps): JSX.Element {
   'use no memo';
@@ -1234,7 +1333,6 @@ export function FileTreeView({
   const isScrollingRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
-  const handleTreeKeyDownRef = useRef<(event: KeyboardEvent) => void>(() => {});
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -1300,6 +1398,13 @@ export function FileTreeView({
   } | null>(null);
   const debugContextMenuTriggerPathRef = useRef<string | null>(null);
   const debugDisableScrollSuppressionRef = useRef(false);
+  const externalScrollSourceRef = useRef(externalScrollSource);
+  externalScrollSourceRef.current = externalScrollSource;
+  const initialExternalScrollSnapshot =
+    externalScrollInitialSnapshot ??
+    normalizeFileTreeExternalScrollSnapshot(undefined, initialViewportHeight);
+  const externalScrollSnapshotRef = useRef(initialExternalScrollSnapshot);
+  const rowAreaTopWithinHostRef = useRef(0);
 
   // Keep the coupled sticky-keyboard refs moving together so each transition
   // leaves exactly one preservation mode active.
@@ -1356,6 +1461,14 @@ export function FileTreeView({
   // should resume so they can dismiss the filter with a blur like any other
   // tree.
   const searchInputUserInteractedRef = useRef(false);
+  const isExternalScrollMode = scrollMode === 'external';
+  const initialLayoutViewportHeight = isExternalScrollMode
+    ? initialExternalScrollSnapshot.effectiveViewportHeight
+    : initialViewportHeight;
+  const initialLayoutScrollTop = isExternalScrollMode
+    ? initialExternalScrollSnapshot.viewportTop +
+      initialExternalScrollSnapshot.topInset
+    : 0;
 
   const markSearchInputInteracted = useCallback(() => {
     searchInputUserInteractedRef.current = true;
@@ -1363,14 +1476,23 @@ export function FileTreeView({
   }, []);
 
   const [layoutState, setLayoutState] = useState<FileTreeViewLayoutState>(() =>
-    computeFileTreeViewLayoutState({
-      controller,
-      itemHeight,
-      overscan,
-      scrollTop: 0,
-      stickyFolders,
-      viewportHeight: initialViewportHeight,
-    })
+    isExternalScrollMode
+      ? computeFileTreeExternalViewLayoutState({
+          controller,
+          itemHeight,
+          overscan,
+          stickyFolders,
+          viewportHeight: initialLayoutViewportHeight,
+          viewportTop: initialLayoutScrollTop,
+        })
+      : computeFileTreeViewLayoutState({
+          controller,
+          itemHeight,
+          overscan,
+          scrollTop: initialLayoutScrollTop,
+          stickyFolders,
+          viewportHeight: initialLayoutViewportHeight,
+        })
   );
   const [hasStickyUiMount, setHasStickyUiMount] = useState(false);
   useEffect(() => {
@@ -1514,6 +1636,140 @@ export function FileTreeView({
   const occludedStickyRows = layoutSnapshot.sticky.rows;
   const totalScrollableHeight = layoutSnapshot.physical.totalHeight;
   const stickyOverlayHeight = layoutSnapshot.sticky.height;
+  const externalTopInset = isExternalScrollMode
+    ? externalScrollSnapshotRef.current.topInset
+    : 0;
+  const getExternalRowViewportTop = useCallback(
+    (): number =>
+      externalScrollSnapshotRef.current.viewportTop -
+      rowAreaTopWithinHostRef.current,
+    []
+  );
+  const requestExternalRowViewportTop = useCallback(
+    (
+      nextRowViewportTop: number,
+      context: FileTreeExternalScrollRequestContext
+    ): boolean => {
+      const source = externalScrollSourceRef.current;
+      if (!isExternalScrollMode || source == null) {
+        return false;
+      }
+
+      source.scrollToViewportTop(
+        nextRowViewportTop + rowAreaTopWithinHostRef.current,
+        context
+      );
+      externalScrollSnapshotRef.current =
+        normalizeFileTreeExternalScrollSnapshot(
+          source.getSnapshot(),
+          externalScrollSnapshotRef.current.viewportHeight
+        );
+      updateViewportRef.current();
+      return true;
+    },
+    [isExternalScrollMode]
+  );
+  const getRuntimeViewportHeight = useCallback(
+    (scrollElement: HTMLElement | null): number => {
+      if (isExternalScrollMode) {
+        const snapshot = externalScrollSnapshotRef.current;
+        return Math.max(0, snapshot.viewportHeight - snapshot.bottomInset);
+      }
+
+      return readMeasuredViewportHeight(scrollElement, resolvedViewportHeight);
+    },
+    [isExternalScrollMode, resolvedViewportHeight]
+  );
+  const getRuntimeScrollTop = useCallback(
+    (scrollElement: HTMLElement | null): number | null =>
+      isExternalScrollMode
+        ? getExternalRowViewportTop()
+        : (scrollElement?.scrollTop ?? null),
+    [getExternalRowViewportTop, isExternalScrollMode]
+  );
+  const scrollFocusedRowIntoViewForMode = useCallback(
+    (
+      scrollElement: HTMLElement,
+      context: FileTreeExternalScrollRequestContext
+    ): boolean => {
+      if (!isExternalScrollMode) {
+        return scrollFocusedRowIntoView(
+          scrollElement,
+          focusedIndex,
+          itemHeight,
+          resolvedViewportHeight,
+          stickyOverlayHeight
+        );
+      }
+
+      const snapshot = externalScrollSnapshotRef.current;
+      const nextViewportTop = computeExternalFocusedRowViewportTop({
+        bottomInset: snapshot.bottomInset,
+        currentViewportTop: getExternalRowViewportTop(),
+        focusedIndex,
+        itemHeight,
+        topInset: snapshot.topInset + stickyOverlayHeight,
+        viewportHeight: snapshot.viewportHeight,
+      });
+      return nextViewportTop == null
+        ? false
+        : requestExternalRowViewportTop(nextViewportTop, context);
+    },
+    [
+      focusedIndex,
+      getExternalRowViewportTop,
+      isExternalScrollMode,
+      itemHeight,
+      requestExternalRowViewportTop,
+      resolvedViewportHeight,
+      stickyOverlayHeight,
+    ]
+  );
+  const scrollFocusedRowToViewportOffsetForMode = useCallback(
+    (
+      scrollElement: HTMLElement,
+      targetViewportOffset: number,
+      context: FileTreeExternalScrollRequestContext,
+      focusedRowIndex: number = focusedIndex,
+      totalHeight: number = totalScrollableHeight,
+      viewportHeight: number = resolvedViewportHeight
+    ): boolean => {
+      if (!isExternalScrollMode) {
+        return scrollFocusedRowToViewportOffset(
+          scrollElement,
+          focusedRowIndex,
+          itemHeight,
+          viewportHeight,
+          totalHeight,
+          targetViewportOffset
+        );
+      }
+
+      const snapshot = externalScrollSnapshotRef.current;
+      const nextViewportTop = computeExternalViewportOffsetTop({
+        bottomInset: snapshot.bottomInset,
+        currentViewportTop: getExternalRowViewportTop(),
+        focusedIndex: focusedRowIndex,
+        itemHeight,
+        targetViewportOffset,
+        topInset: snapshot.topInset,
+        totalHeight,
+        viewportHeight: snapshot.viewportHeight,
+      });
+      return nextViewportTop == null
+        ? false
+        : requestExternalRowViewportTop(nextViewportTop, context);
+    },
+    [
+      focusedIndex,
+      getExternalRowViewportTop,
+      isExternalScrollMode,
+      itemHeight,
+      requestExternalRowViewportTop,
+      resolvedViewportHeight,
+      totalScrollableHeight,
+    ]
+  );
   const stickyRowPathSet = useMemo(
     () =>
       new Set(occludedStickyRows.map((entry) => getFileTreeRowPath(entry.row))),
@@ -1611,7 +1867,7 @@ export function FileTreeView({
         const scrollElement = scrollRef.current;
         preserveStickyKeyboardFocusAtScrollTop(
           targetPath,
-          scrollElement?.scrollTop ?? null
+          getRuntimeScrollTop(scrollElement)
         );
         domFocusOwnerRef.current = true;
         setActiveItemPath((previousPath) =>
@@ -1631,7 +1887,12 @@ export function FileTreeView({
         source: options?.source ?? 'keyboard',
       });
     },
-    [controller, getTriggerAnchorButton, updateTriggerPosition]
+    [
+      controller,
+      getRuntimeScrollTop,
+      getTriggerAnchorButton,
+      updateTriggerPosition,
+    ]
   );
   const startRenameFromPath = useCallback(
     (path?: string): void => {
@@ -1641,17 +1902,15 @@ export function FileTreeView({
 
       if (controller.isSearchOpen()) {
         const scrollElement = scrollRef.current;
-        const viewportHeight = readMeasuredViewportHeight(
-          scrollElement,
-          resolvedViewportHeight
-        );
+        const viewportHeight = getRuntimeViewportHeight(scrollElement);
+        const scrollTop = getRuntimeScrollTop(scrollElement);
         restoreTreeFocusViewportOffsetRef.current =
-          focusedIndex < 0 || scrollElement == null
+          focusedIndex < 0 || scrollTop == null
             ? null
             : Math.max(
                 0,
                 Math.min(
-                  focusedIndex * itemHeight - scrollElement.scrollTop,
+                  focusedIndex * itemHeight - scrollTop,
                   Math.max(0, viewportHeight - itemHeight)
                 )
               );
@@ -1668,9 +1927,10 @@ export function FileTreeView({
     [
       controller,
       focusedIndex,
+      getRuntimeScrollTop,
+      getRuntimeViewportHeight,
       itemHeight,
       renamingEnabled,
-      resolvedViewportHeight,
     ]
   );
 
@@ -1704,40 +1964,65 @@ export function FileTreeView({
         return false;
       }
 
-      const liveViewportHeight = readMeasuredViewportHeight(
-        scrollElement,
-        resolvedViewportHeight
-      );
+      const liveViewportHeight = getRuntimeViewportHeight(scrollElement);
       const liveTotalHeight = controller.getVisibleCount() * itemHeight;
+      const currentRuntimeScrollTop = getRuntimeScrollTop(scrollElement) ?? 0;
       const targetViewportOffset =
         targetOffset === 'sticky-parents'
           ? focusedRow.ancestorPaths.length * itemHeight
-          : computeFileTreeViewLayoutState({
-              controller,
-              itemHeight,
-              overscan,
-              scrollTop: scrollElement.scrollTop,
-              stickyFolders,
-              viewportHeight: liveViewportHeight,
-            }).snapshot.sticky.height;
+          : isExternalScrollMode
+            ? computeFileTreeExternalViewLayoutState({
+                controller,
+                itemHeight,
+                overscan,
+                stickyFolders,
+                viewportHeight:
+                  externalScrollSnapshotRef.current.effectiveViewportHeight,
+                viewportTop:
+                  currentRuntimeScrollTop +
+                  externalScrollSnapshotRef.current.topInset,
+              }).snapshot.sticky.height
+            : computeFileTreeViewLayoutState({
+                controller,
+                itemHeight,
+                overscan,
+                scrollTop: currentRuntimeScrollTop,
+                stickyFolders,
+                viewportHeight: liveViewportHeight,
+              }).snapshot.sticky.height;
 
       // A sticky interaction can mutate the tree before we reveal the canonical
       // row. Collapsing the interacted sticky row should leave only its parents
       // pinned, while rename handoff keeps using the live overlay geometry.
       domFocusOwnerRef.current = true;
-      scrollFocusedRowToViewportOffset(
+      scrollFocusedRowToViewportOffsetForMode(
         scrollElement,
+        isExternalScrollMode
+          ? externalScrollSnapshotRef.current.topInset + targetViewportOffset
+          : targetViewportOffset,
+        {
+          origin: 'programmatic',
+          path,
+          reason: 'sticky-row-restore',
+        },
         visibleIndex,
-        itemHeight,
-        liveViewportHeight,
         liveTotalHeight,
-        targetViewportOffset
+        liveViewportHeight
       );
       updateViewportRef.current();
       pendingStickyFocusPathRef.current = restoreTreeFocus ? path : null;
       return true;
     },
-    [controller, itemHeight, overscan, resolvedViewportHeight, stickyFolders]
+    [
+      controller,
+      getRuntimeScrollTop,
+      getRuntimeViewportHeight,
+      isExternalScrollMode,
+      itemHeight,
+      overscan,
+      scrollFocusedRowToViewportOffsetForMode,
+      stickyFolders,
+    ]
   );
 
   const shouldSuppressContextMenu = (): boolean => {
@@ -1877,6 +2162,9 @@ export function FileTreeView({
 
   const runDragAutoScroll = (): void => {
     dragAutoScrollFrameRef.current = null;
+    if (isExternalScrollMode) {
+      return;
+    }
     const dragPoint = dragPointRef.current;
     const scrollElement = scrollRef.current;
     if (
@@ -1916,6 +2204,9 @@ export function FileTreeView({
   };
 
   const updateDragPoint = (clientX: number, clientY: number): void => {
+    if (isExternalScrollMode) {
+      return;
+    }
     dragPointRef.current = { clientX, clientY };
     dragAutoScrollFrameRef.current ??=
       requestDragAnimationFrame(runDragAutoScroll);
@@ -2183,17 +2474,15 @@ export function FileTreeView({
           controller.selectOnlyPath(currentFocusedPath);
         }
         const scrollElement = scrollRef.current;
-        const viewportHeight = readMeasuredViewportHeight(
-          scrollElement,
-          resolvedViewportHeight
-        );
+        const viewportHeight = getRuntimeViewportHeight(scrollElement);
+        const scrollTop = getRuntimeScrollTop(scrollElement);
         restoreTreeFocusViewportOffsetRef.current =
-          focusedIndex < 0 || scrollElement == null
+          focusedIndex < 0 || scrollTop == null
             ? null
             : Math.max(
                 0,
                 Math.min(
-                  focusedIndex * itemHeight - scrollElement.scrollTop,
+                  focusedIndex * itemHeight - scrollTop,
                   Math.max(0, viewportHeight - itemHeight)
                 )
               );
@@ -2252,7 +2541,7 @@ export function FileTreeView({
       const scrollElement = scrollRef.current;
       preserveStickyKeyboardFocusAtScrollTop(
         activeStickyFocusPath,
-        scrollElement?.scrollTop ?? null
+        getRuntimeScrollTop(scrollElement)
       );
       controller.focusPath(activeStickyFocusPath);
     }
@@ -2378,7 +2667,6 @@ export function FileTreeView({
       (stickyKeyboardMoveLandsOnDifferentStickyRow &&
         nextFocusedPathIsMountedSticky) ||
       stickyKeyboardMenuStaysOnStickyRow;
-
     if (
       (startedFromStickyRow || stickyKeyboardMenuStaysOnStickyRow) &&
       nextFocusedPath != null &&
@@ -2386,7 +2674,7 @@ export function FileTreeView({
     ) {
       preserveStickyKeyboardFocusAtScrollTop(
         nextFocusedPath,
-        scrollElement?.scrollTop ?? null
+        getRuntimeScrollTop(scrollElement)
       );
       domFocusOwnerRef.current = true;
       setActiveItemPath((previousPath) =>
@@ -2413,7 +2701,7 @@ export function FileTreeView({
             effectiveFocusedPath,
             itemHeight,
             stickyOverlayHeight,
-            resolvedViewportHeight
+            getRuntimeViewportHeight(scrollElement)
           )
         );
         domFocusOwnerRef.current = true;
@@ -2451,8 +2739,6 @@ export function FileTreeView({
   // rendered input and grabs focus. The classifier here turns the ref state +
   // rendered-input presence into a single action so the transitions are
   // explicit instead of buried in early-return logic.
-  handleTreeKeyDownRef.current = handleTreeKeyDown;
-
   useLayoutEffect(() => {
     const input = renameInputRef.current;
     const action = classifyFileTreeRenameHandoff({
@@ -2567,34 +2853,6 @@ export function FileTreeView({
     };
   }, []);
 
-  useLayoutEffect(() => {
-    const onDocumentKeyDown = (event: KeyboardEvent): void => {
-      const rootElement = rootRef.current;
-      const rootNode = rootElement?.getRootNode();
-      const hostElement =
-        rootNode instanceof ShadowRoot && rootNode.host instanceof HTMLElement
-          ? rootNode.host
-          : rootElement;
-      if (hostElement == null || event.target !== hostElement) {
-        return;
-      }
-      handleTreeKeyDownRef.current(event);
-    };
-
-    document.addEventListener(
-      'keydown',
-      onDocumentKeyDown as EventListener,
-      true
-    );
-    return () => {
-      document.removeEventListener(
-        'keydown',
-        onDocumentKeyDown as EventListener,
-        true
-      );
-    };
-  });
-
   // Mirror `scrollTop <= 0` onto the root element as a data attribute so CSS
   // can hide the pre-populated sticky overlay when the list is at rest at the
   // top. We drive this from the layout snapshot (synced on every scroll +
@@ -2620,6 +2878,144 @@ export function FileTreeView({
     const rootElement = rootRef.current;
     if (scrollElement == null) {
       return;
+    }
+
+    if (isExternalScrollMode) {
+      if (rootElement == null) {
+        return;
+      }
+
+      const normalizeExternalSnapshot = (
+        snapshot: Parameters<
+          typeof normalizeFileTreeExternalScrollSnapshot
+        >[0] = externalScrollSnapshotRef.current
+      ): ReturnType<typeof normalizeFileTreeExternalScrollSnapshot> =>
+        normalizeFileTreeExternalScrollSnapshot(
+          snapshot,
+          externalScrollSnapshotRef.current.viewportHeight
+        );
+      const applyScrollingState = (
+        snapshot: ReturnType<typeof normalizeFileTreeExternalScrollSnapshot>,
+        viewportTop: number
+      ): void => {
+        const isUserScroll =
+          snapshot.isScrolling &&
+          (snapshot.scrollOrigin === 'user' ||
+            snapshot.scrollOrigin === 'unknown');
+        if (
+          snapshot.isScrolling &&
+          debugDisableScrollSuppressionRef.current !== true
+        ) {
+          if (listElement != null) {
+            listElement.dataset.isScrolling ??= '';
+          }
+          rootElement.dataset.isScrolling ??= '';
+          isScrollingRef.current = true;
+        } else {
+          if (listElement != null) {
+            delete listElement.dataset.isScrolling;
+          }
+          delete rootElement.dataset.isScrolling;
+          if (isScrollingRef.current) {
+            setScrollSettledRevision((revision) => revision + 1);
+          }
+          isScrollingRef.current = false;
+        }
+
+        if (snapshot.isScrolling && viewportTop <= 0) {
+          rootElement.dataset.overlayReveal = 'true';
+        } else if (!snapshot.isScrolling || viewportTop > 0) {
+          delete rootElement.dataset.overlayReveal;
+        }
+
+        if (!isUserScroll) {
+          return;
+        }
+
+        setContextHoverPath((previousPath) =>
+          previousPath == null ? previousPath : null
+        );
+        if (contextMenuStateRef.current != null) {
+          closeContextMenuRef.current();
+        }
+      };
+      const updateExternalLayout = (
+        snapshot: Parameters<
+          typeof normalizeFileTreeExternalScrollSnapshot
+        >[0] = externalScrollSnapshotRef.current
+      ): void => {
+        const normalizedSnapshot = normalizeExternalSnapshot(snapshot);
+        externalScrollSnapshotRef.current = normalizedSnapshot;
+        rowAreaTopWithinHostRef.current = readRowAreaTopWithinHost(
+          rootElement,
+          scrollElement
+        );
+        const viewportTop =
+          normalizedSnapshot.viewportTop -
+          rowAreaTopWithinHostRef.current +
+          normalizedSnapshot.topInset;
+        setLayoutState(
+          computeFileTreeExternalViewLayoutState({
+            controller,
+            itemHeight,
+            overscan,
+            stickyFolders,
+            viewportHeight: normalizedSnapshot.effectiveViewportHeight,
+            viewportTop,
+          })
+        );
+        applyScrollingState(normalizedSnapshot, viewportTop);
+      };
+
+      updateViewportRef.current = () => {
+        const source = externalScrollSourceRef.current;
+        updateExternalLayout(
+          source == null
+            ? externalScrollSnapshotRef.current
+            : normalizeExternalSnapshot(source.getSnapshot())
+        );
+      };
+
+      let hasSeenInitialControllerSnapshot = false;
+      const unsubscribeController = controller.subscribe(() => {
+        if (hasSeenInitialControllerSnapshot) {
+          setControllerRevision((revision) => revision + 1);
+        } else {
+          hasSeenInitialControllerSnapshot = true;
+        }
+        updateViewportRef.current();
+      });
+      const source = externalScrollSourceRef.current;
+      const unsubscribeSource =
+        source == null
+          ? null
+          : source.subscribe(() => {
+              updateExternalLayout(
+                normalizeExternalSnapshot(source.getSnapshot())
+              );
+            });
+      updateViewportRef.current();
+
+      const resizeObserver =
+        typeof ResizeObserver !== 'undefined'
+          ? new ResizeObserver(() => {
+              updateViewportRef.current();
+            })
+          : null;
+      resizeObserver?.observe(rootElement);
+
+      return () => {
+        updateViewportRef.current = () => {};
+        unsubscribeController();
+        unsubscribeSource?.();
+        resizeObserver?.disconnect();
+        if (listElement != null) {
+          delete listElement.dataset.isScrolling;
+        }
+        delete rootElement.dataset.isScrolling;
+        delete rootElement.dataset.overlayReveal;
+        isScrollingRef.current = false;
+      };
     }
 
     measuredViewportHeightRef.current = readMeasuredViewportHeight(
@@ -2843,7 +3239,15 @@ export function FileTreeView({
       measuredViewportHeightRef.current = null;
       resizeObserver?.disconnect();
     };
-  }, [controller, initialViewportHeight, itemHeight, overscan, stickyFolders]);
+  }, [
+    controller,
+    externalScrollSource,
+    initialViewportHeight,
+    isExternalScrollMode,
+    itemHeight,
+    overscan,
+    stickyFolders,
+  ]);
 
   useLayoutEffect(() => {
     if (contextMenuEnabled || contextMenuState == null) {
@@ -3018,42 +3422,59 @@ export function FileTreeView({
 
     const shouldRestoreFocusedRowViewportOffset =
       shouldRestoreTreeFocusAfterSearchClose &&
-      scrollFocusedRowToViewportOffset(
+      scrollFocusedRowToViewportOffsetForMode(
         scrollElement,
-        focusedIndex,
-        itemHeight,
-        resolvedViewportHeight,
-        totalScrollableHeight,
-        preservedViewportOffset
+        preservedViewportOffset,
+        {
+          origin: 'programmatic',
+          path: focusedPath,
+          reason: 'search-restore',
+        }
       );
     const shouldRestoreStickyFocusedRowViewportOffset =
       pendingStickyFocusPath != null &&
       pendingStickyFocusPath === focusedPath &&
-      scrollFocusedRowToViewportOffset(
+      scrollFocusedRowToViewportOffsetForMode(
         scrollElement,
-        focusedIndex,
-        itemHeight,
-        resolvedViewportHeight,
-        totalScrollableHeight,
-        stickyOverlayHeight
+        isExternalScrollMode
+          ? externalScrollSnapshotRef.current.topInset + stickyOverlayHeight
+          : stickyOverlayHeight,
+        {
+          origin: 'programmatic',
+          path: focusedPath,
+          reason: 'sticky-row-restore',
+        }
       );
     const shouldRestoreStickyKeyboardViewportOffset =
       pendingStickyKeyboardViewportOffset != null &&
       pendingStickyKeyboardViewportOffset.path === focusedPath &&
-      scrollFocusedRowToViewportOffset(
+      scrollFocusedRowToViewportOffsetForMode(
         scrollElement,
-        focusedIndex,
-        itemHeight,
-        resolvedViewportHeight,
-        totalScrollableHeight,
-        pendingStickyKeyboardViewportOffset.viewportOffset
+        pendingStickyKeyboardViewportOffset.viewportOffset,
+        {
+          origin: 'programmatic',
+          path: focusedPath,
+          reason: 'sticky-keyboard-restore',
+        }
       );
+    const currentRuntimeScrollTop = getRuntimeScrollTop(scrollElement);
     const shouldRestoreStickyKeyboardScrollTop =
       pendingStickyKeyboardScrollTop != null &&
       pendingStickyKeyboardScrollTop.path === focusedPath &&
-      scrollElement.scrollTop !== pendingStickyKeyboardScrollTop.scrollTop;
+      currentRuntimeScrollTop !== pendingStickyKeyboardScrollTop.scrollTop;
     if (shouldRestoreStickyKeyboardScrollTop) {
-      scrollElement.scrollTop = pendingStickyKeyboardScrollTop.scrollTop;
+      if (isExternalScrollMode) {
+        requestExternalRowViewportTop(
+          pendingStickyKeyboardScrollTop.scrollTop,
+          {
+            origin: 'programmatic',
+            path: focusedPath,
+            reason: 'sticky-keyboard-restore',
+          }
+        );
+      } else {
+        scrollElement.scrollTop = pendingStickyKeyboardScrollTop.scrollTop;
+      }
     }
 
     if (
@@ -3065,13 +3486,11 @@ export function FileTreeView({
         focusedPathChanged &&
         pendingStickyFocusPath !== focusedPath &&
         !shouldPreserveStickyKeyboardFocusViewport &&
-        scrollFocusedRowIntoView(
-          scrollElement,
-          focusedIndex,
-          itemHeight,
-          resolvedViewportHeight,
-          stickyOverlayHeight
-        ))
+        scrollFocusedRowIntoViewForMode(scrollElement, {
+          origin: 'programmatic',
+          path: focusedPath,
+          reason: 'focus-reveal',
+        }))
     ) {
       updateViewportRef.current();
     }
@@ -3093,13 +3512,14 @@ export function FileTreeView({
 
     if (focusedButton == null) {
       if (shouldRestoreTreeFocusAfterSearchClose && focusedIndex >= 0) {
-        scrollFocusedRowToViewportOffset(
+        scrollFocusedRowToViewportOffsetForMode(
           scrollElement,
-          focusedIndex,
-          itemHeight,
-          resolvedViewportHeight,
-          totalScrollableHeight,
-          preservedViewportOffset
+          preservedViewportOffset,
+          {
+            origin: 'programmatic',
+            path: focusedPath,
+            reason: 'search-restore',
+          }
         );
         updateViewportRef.current();
       }
@@ -3135,19 +3555,17 @@ export function FileTreeView({
     }
     previousFocusedPathRef.current = focusedPath;
   }, [
-    controller,
     focusedIndex,
     focusedPath,
-    focusedRowIsMounted,
-    itemHeight,
+    getRuntimeScrollTop,
+    isExternalScrollMode,
     isRenaming,
     isSearchOpen,
-    range,
-    resolvedViewportHeight,
+    requestExternalRowViewportTop,
+    scrollFocusedRowIntoViewForMode,
+    scrollFocusedRowToViewportOffsetForMode,
     searchEnabled,
     stickyOverlayHeight,
-    totalScrollableHeight,
-    visibleRows,
   ]);
 
   const focusedRowIsVisible =
@@ -3325,16 +3743,13 @@ export function FileTreeView({
   // behind a fast scroll in either direction, which is what keeps the list
   // from blanking mid-flick.
   //
-  // The bottom edge gets the `stickyOverlayHeight` allowance because sticky
-  // folders can bump `windowOffsetTop` below `scrollTop`; loosening only that
-  // edge keeps the synced window from being pulled upward. The top edge stays
-  // tied to the viewport bottom so a lagging window still fills the view while
-  // the user scrolls quickly downward.
-  const windowStickyTopInset = Math.min(
-    0,
-    resolvedViewportHeight - windowHeight
-  );
-  const windowStickyBottomInset = Math.min(
+  // The `stickyOverlayHeight` subtraction matters when sticky folders are
+  // enabled: the layout bumps `windowStart` past the rows that sit behind
+  // the overlay, so `windowOffsetTop` can exceed `scrollTop` by up to the
+  // overlay's height. Without accounting for that gap, the bottom constraint
+  // would activate every frame and lock the element in place, stalling the
+  // per-pixel scroll.
+  const windowStickyInset = Math.min(
     0,
     resolvedViewportHeight - windowHeight - stickyOverlayHeight
   );
@@ -3613,6 +4028,7 @@ export function FileTreeView({
       }
       data-file-tree-has-git-lane={gitLaneActive ? 'true' : undefined}
       data-file-tree-virtualized-root="true"
+      data-file-tree-scroll-mode={scrollMode}
       onDragLeave={dragAndDropEnabled ? handleTreeDragLeave : undefined}
       onDragOver={dragAndDropEnabled ? handleTreeDragOver : undefined}
       onDrop={dragAndDropEnabled ? handleTreeDrop : undefined}
@@ -3670,9 +4086,21 @@ export function FileTreeView({
           />
         </div>
       ) : null}
-      <div ref={scrollRef} data-file-tree-virtualized-scroll="true">
+      <div
+        ref={scrollRef}
+        data-file-tree-scroll-mode={scrollMode}
+        data-file-tree-virtualized-scroll="true"
+      >
         {stickyFolders && hasStickyUiMount && stickyRows.length > 0 ? (
-          <div aria-hidden="true" data-file-tree-sticky-overlay="true">
+          <div
+            aria-hidden="true"
+            data-file-tree-sticky-overlay="true"
+            style={
+              isExternalScrollMode
+                ? { top: `${externalTopInset}px` }
+                : undefined
+            }
+          >
             <div
               data-file-tree-sticky-overlay-content="true"
               style={{ height: `${overlayRowsHeight}px` }}
@@ -3711,8 +4139,8 @@ export function FileTreeView({
             data-file-tree-virtualized-sticky="true"
             style={{
               height: `${windowHeight}px`,
-              top: `${windowStickyTopInset}px`,
-              bottom: `${windowStickyBottomInset}px`,
+              top: `${windowStickyInset}px`,
+              bottom: `${windowStickyInset}px`,
             }}
           >
             {renderRangeChildren(flowRowFrame, range, stickyRowPathSet)}

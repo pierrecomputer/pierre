@@ -51,6 +51,24 @@ the first render before the browser can measure the actual viewport.
 Keep the language outcome-focused: the tree mounts the visible slice plus a
 small buffer around it.
 
+#### Use external scroll for page-owned scrollers
+
+Use `@pierre/trees/scroll` when a parent scroller contains content above the
+tree, the tree, and content below it. The tree still virtualizes rows, but the
+parent owns the viewport metrics and all scroll movement.
+
+<DocsCodeExample {...LARGE_TREES_EXTERNAL_SCROLL} />
+
+The source reports host-local metrics: `viewportTop`, `viewportHeight`,
+`topInset`, and `bottomInset`. `viewportTop` may be negative or below the tree;
+the tree renders no rows until the viewport intersects the row area, apart from
+normal overscan. In external mode, `initialVisibleRowCount` is only a fallback
+when `externalScroll.initialSnapshot` is missing.
+
+Header and search UI scroll with the tree. Sticky folders pin below `topInset`
+so caller-owned sticky UI stays in charge. Drag edge-autoscroll is not
+implemented in external scroll mode yet.
+
 #### Expansion and search still affect scale
 
 Prepared input lowers the cost of shaping the data, but expansion and search

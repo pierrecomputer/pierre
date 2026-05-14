@@ -39,6 +39,7 @@ class MockStyleSheet {
 
 class MockResizeObserver {
   observe(_target: Element): void {}
+  unobserve(_target: Element): void {}
   disconnect(): void {}
 }
 

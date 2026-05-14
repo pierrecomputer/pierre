@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  computeExternalFocusedRowViewportTop,
+  computeExternalViewportOffsetTop,
   computeFocusedRowScrollIntoView,
   computeViewportOffsetScrollTop,
 } from '../src/render/scrollTarget';
@@ -184,5 +186,49 @@ describe('computeViewportOffsetScrollTop', () => {
         viewportHeight,
       })
     ).toBe(300);
+  });
+});
+
+describe('external scroll target helpers', () => {
+  const itemHeight = 30;
+
+  test('reveals a row beneath the external top inset', () => {
+    expect(
+      computeExternalFocusedRowViewportTop({
+        bottomInset: 0,
+        currentViewportTop: 300,
+        focusedIndex: 10,
+        itemHeight,
+        topInset: 60,
+        viewportHeight: 180,
+      })
+    ).toBe(240);
+  });
+
+  test('uses bottomInset to reduce the effective viewport bottom', () => {
+    expect(
+      computeExternalFocusedRowViewportTop({
+        bottomInset: 30,
+        currentViewportTop: 0,
+        focusedIndex: 5,
+        itemHeight,
+        topInset: 0,
+        viewportHeight: 180,
+      })
+    ).toBe(30);
+  });
+
+  test('requests an offset-preserving external viewport top', () => {
+    expect(
+      computeExternalViewportOffsetTop({
+        bottomInset: 0,
+        currentViewportTop: 0,
+        focusedIndex: 10,
+        itemHeight,
+        targetViewportOffset: 90,
+        totalHeight: 1200,
+        viewportHeight: 180,
+      })
+    ).toBe(210);
   });
 });

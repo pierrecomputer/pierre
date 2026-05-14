@@ -17,6 +17,18 @@ export type FileTreeMinimalScrollIntoViewInput = FileTreeScrollTargetInput & {
   topInset?: number;
 };
 
+export type FileTreeExternalScrollTargetInput = FileTreeScrollTargetInput & {
+  bottomInset?: number;
+  currentViewportTop: number;
+  topInset?: number;
+};
+
+function getExternalScrollTargetViewportHeight(
+  viewportHeight: number,
+  bottomInset: number | undefined
+): number {
+  return Math.max(0, viewportHeight - Math.max(0, bottomInset ?? 0));
+}
 // Minimal adjustment to bring the focused row fully inside the viewport while
 // respecting a `topInset` (the sticky overlay height). Returns `null` when the
 // row is already visible.
@@ -53,11 +65,32 @@ export function computeFocusedRowScrollIntoView(
   return null;
 }
 
+export function computeExternalFocusedRowViewportTop(
+  input: FileTreeExternalScrollTargetInput
+): number | null {
+  return computeFocusedRowScrollIntoView({
+    currentScrollTop: input.currentViewportTop,
+    focusedIndex: input.focusedIndex,
+    itemHeight: input.itemHeight,
+    topInset: input.topInset,
+    viewportHeight: getExternalScrollTargetViewportHeight(
+      input.viewportHeight,
+      input.bottomInset
+    ),
+  });
+}
+
 export type FileTreeViewportOffsetScrollInput = FileTreeScrollTargetInput & {
   currentScrollTop: number;
   totalHeight: number;
   targetViewportOffset: number;
 };
+
+export type FileTreeExternalViewportOffsetScrollInput =
+  FileTreeExternalScrollTargetInput & {
+    targetViewportOffset: number;
+    totalHeight: number;
+  };
 
 // Places the focused row at a specific viewport offset (used when restoring
 // state after search closes or after a sticky-row click collapses ancestors).
@@ -95,4 +128,20 @@ export function computeViewportOffsetScrollTop(
     Math.min(itemTop - effectiveOffset, maxScrollTop)
   );
   return preservedScrollTop === currentScrollTop ? null : preservedScrollTop;
+}
+
+export function computeExternalViewportOffsetTop(
+  input: FileTreeExternalViewportOffsetScrollInput
+): number | null {
+  return computeViewportOffsetScrollTop({
+    currentScrollTop: input.currentViewportTop,
+    focusedIndex: input.focusedIndex,
+    itemHeight: input.itemHeight,
+    targetViewportOffset: input.targetViewportOffset,
+    totalHeight: input.totalHeight,
+    viewportHeight: getExternalScrollTargetViewportHeight(
+      input.viewportHeight,
+      input.bottomInset
+    ),
+  });
 }

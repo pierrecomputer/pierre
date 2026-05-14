@@ -5,10 +5,7 @@ import {
   getBuiltInSpriteSheet,
   isColoredBuiltInIconSet,
 } from '../builtInIcons';
-import {
-  FileTreeContainerLoaded,
-  prepareFileTreeShadowRoot,
-} from '../components/web-components';
+import { FileTreeContainerLoaded } from '../components/web-components';
 import {
   FILE_TREE_STYLE_ATTRIBUTE,
   FILE_TREE_TAG_NAME,
@@ -20,23 +17,24 @@ import {
   type FileTreeDensityPreset,
   resolveFileTreeDensity,
 } from '../model/density';
+import {
+  type FileTreeNormalizedExternalScrollSnapshot,
+  resolveFileTreeExternalScrollInitialSnapshot,
+} from '../model/externalScroll';
 import { FileTreeController } from '../model/FileTreeController';
 import {
   type FileTreeGitStatusState,
   resolveFileTreeGitStatusState,
 } from '../model/gitStatus';
-import type { FileTreeViewProps } from '../model/internalTypes';
 import type {
   FileTreeBatchOperation,
   FileTreeCompositionOptions,
   FileTreeHydrationProps,
   FileTreeItemHandle,
   FileTreeListener,
-  FileTreeModel,
   FileTreeMoveOptions,
   FileTreeMutationEventForType,
   FileTreeMutationEventType,
-  FileTreeOptions,
   FileTreeRemoveOptions,
   FileTreeRenderProps,
   FileTreeResetOptions,
@@ -48,19 +46,26 @@ import {
   FILE_TREE_DEFAULT_ITEM_HEIGHT,
   FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
 } from '../model/virtualization';
-import fileTreeStyles from '../style.css';
+import { FileTreeManagedSlotHost } from '../render/slotHost';
 import {
   escapeStyleTextForHtml,
   wrapCoreCSS,
   wrapUnsafeCSS,
 } from '../utils/cssWrappers';
 import { FileTreeView } from './FileTreeView';
+import type { FileTreeScrollMode, FileTreeViewProps } from './internalTypes';
+import type {
+  FileTreeExternalScrollModel,
+  FileTreeExternalScrollSource,
+  FileTreeOptions,
+} from './publicTypes';
 import {
   hydrateFileTreeRoot,
   renderFileTreeRoot,
   unmountFileTreeRoot,
 } from './runtime';
-import { FileTreeManagedSlotHost } from './slotHost';
+import { prepareScrollFileTreeShadowRoot } from './shadowRoot';
+import fileTreeStyles from './style.css';
 
 let serverInstanceId = 0;
 let clientInstanceId = 0;
@@ -83,9 +88,8 @@ function createServerId(explicitId?: string): string {
   return `pst_srv_${serverInstanceId}`;
 }
 
-// Translates the public row-budget hint into the provisional pixel height shared
-// by SSR and the first client render before the DOM can report a measured
-// scroll viewport.
+// Translates the public row-budget hint into the pixel height shared by SSR and
+// the first client render before the DOM can report a measured scroll viewport.
 function resolveInitialViewportHeight({
   initialVisibleRowCount,
   itemHeight,
@@ -125,14 +129,15 @@ function getHeaderSlotHtml(
 function getFileTreeOuterStart(
   id: string,
   mode: 'declarative' | 'dom',
-  hostStyle: string
+  hostStyle: string,
+  scrollMode: FileTreeScrollMode
 ): string {
   const templateAttr =
     mode === 'declarative'
       ? 'shadowrootmode="open"'
       : 'data-file-tree-shadowrootmode="open"';
   const styleAttr = hostStyle.length === 0 ? '' : ` style="${hostStyle}"`;
-  return `<file-tree-container id="${id}" data-file-tree-virtualized="true"${styleAttr}><template ${templateAttr}>`;
+  return `<file-tree-container id="${id}" data-file-tree-virtualized="true" data-file-tree-scroll-mode="${scrollMode}"${styleAttr}><template ${templateAttr}>`;
 }
 
 function getFileTreeOuterEnd(headerSlotHtml: string): string {
@@ -166,7 +171,7 @@ function getTopLevelSpriteSheets(shadowRoot: ShadowRoot): SVGElement[] {
   );
 }
 
-export class FileTree implements FileTreeModel {
+export class FileTree implements FileTreeExternalScrollModel {
   static LoadedCustomComponent: boolean = FileTreeContainerLoaded;
 
   #composition: FileTreeCompositionOptions | undefined;
@@ -184,6 +189,11 @@ export class FileTree implements FileTreeModel {
     FileTreeOptions,
     'initialVisibleRowCount' | 'itemHeight' | 'overscan' | 'stickyFolders'
   >;
+  readonly #scrollMode: FileTreeScrollMode;
+  #externalScrollSource: FileTreeExternalScrollSource | undefined;
+  readonly #externalScrollInitialSnapshot:
+    | FileTreeNormalizedExternalScrollSnapshot
+    | undefined;
   #fileTreeContainer: HTMLElement | undefined;
   #gitStatusState: FileTreeGitStatusState | null;
   #icons: FileTreeOptions['icons'];
@@ -206,6 +216,7 @@ export class FileTree implements FileTreeModel {
       composition,
       density,
       fileTreeSearchMode,
+      externalScroll,
       gitStatus,
       id,
       initialSearchQuery,
@@ -242,6 +253,16 @@ export class FileTree implements FileTreeModel {
       stickyFolders,
       initialVisibleRowCount,
     };
+    this.#scrollMode = externalScroll == null ? 'internal' : 'external';
+    this.#externalScrollSource = externalScroll?.source;
+    this.#externalScrollInitialSnapshot =
+      externalScroll == null
+        ? undefined
+        : resolveFileTreeExternalScrollInitialSnapshot({
+            initialSnapshot: externalScroll.initialSnapshot,
+            initialVisibleRowCount,
+            itemHeight: this.#density.itemHeight,
+          });
     this.#controller = new FileTreeController({
       ...controllerOptions,
       fileTreeSearchMode,
@@ -262,6 +283,7 @@ export class FileTree implements FileTreeModel {
     if (this.#wrapper != null) {
       unmountFileTreeRoot(this.#wrapper);
       delete this.#wrapper.dataset.fileTreeVirtualizedWrapper;
+      delete this.#wrapper.dataset.fileTreeScrollMode;
       this.#wrapper = undefined;
     }
 
@@ -269,6 +291,7 @@ export class FileTree implements FileTreeModel {
     this.#slotHost.setHost(null);
     if (this.#fileTreeContainer != null) {
       delete this.#fileTreeContainer.dataset.fileTreeVirtualized;
+      delete this.#fileTreeContainer.dataset.fileTreeScrollMode;
       this.#removeOwnedDensityHostStyle(this.#fileTreeContainer);
       this.#fileTreeContainer = undefined;
     }
@@ -410,6 +433,22 @@ export class FileTree implements FileTreeModel {
     this.#controller.resetPaths(paths, options);
   }
 
+  public setExternalScrollSource(source?: FileTreeExternalScrollSource): void {
+    if (this.#scrollMode !== 'external') {
+      throw new Error(
+        'FileTree.setExternalScrollSource() can only be used when the model was constructed with externalScroll.'
+      );
+    }
+
+    this.#externalScrollSource = source;
+    const mountedTree = this.#getMountedTreeElements();
+    if (mountedTree == null) {
+      return;
+    }
+
+    renderFileTreeRoot(mountedTree.wrapper, this.#getViewProps());
+  }
+
   // Deliberately rerenders even when the same object reference is passed again.
   // Callers can reuse one composition object while changing what its render
   // callbacks return, so identity alone is not a reliable no-op signal.
@@ -504,6 +543,9 @@ export class FileTree implements FileTreeModel {
       searchFakeFocus: this.#searchFakeFocus,
       slotHost: this.#slotHost,
       ...this.#getInitialViewOptions(),
+      externalScrollInitialSnapshot: this.#externalScrollInitialSnapshot,
+      externalScrollSource: this.#externalScrollSource,
+      scrollMode: this.#scrollMode,
     };
   }
 
@@ -696,6 +738,7 @@ export class FileTree implements FileTreeModel {
     this.#wrapper = existingWrapper ?? document.createElement('div');
     this.#wrapper.dataset.fileTreeId = this.#id;
     this.#wrapper.dataset.fileTreeVirtualizedWrapper = 'true';
+    this.#wrapper.dataset.fileTreeScrollMode = this.#scrollMode;
     this.#syncIconSurface(host, this.#wrapper);
 
     if (this.#wrapper.parentNode !== shadowRoot) {
@@ -718,9 +761,10 @@ export class FileTree implements FileTreeModel {
     }
 
     const shadowRoot = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
-    prepareFileTreeShadowRoot(host, shadowRoot);
+    prepareScrollFileTreeShadowRoot(host, shadowRoot);
     this.#syncUnsafeCSS(shadowRoot);
     host.dataset.fileTreeVirtualized = 'true';
+    host.dataset.fileTreeScrollMode = this.#scrollMode;
     host.style.display = 'flex';
     this.#applyDensityHostStyle(host);
     this.#slotHost.setHost(host);
@@ -777,6 +821,7 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     composition,
     density,
     fileTreeSearchMode,
+    externalScroll,
     gitStatus,
     id,
     initialSearchQuery,
@@ -809,6 +854,16 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
     initialVisibleRowCount,
     itemHeight: resolvedItemHeight,
   });
+  const scrollMode: FileTreeScrollMode =
+    externalScroll == null ? 'internal' : 'external';
+  const externalScrollInitialSnapshot =
+    externalScroll == null
+      ? undefined
+      : resolveFileTreeExternalScrollInitialSnapshot({
+          initialSnapshot: externalScroll.initialSnapshot,
+          initialVisibleRowCount,
+          itemHeight: resolvedItemHeight,
+        });
   const normalizedIcons = normalizeFileTreeIcons(icons);
   const customSpriteSheet = normalizedIcons.spriteSheet?.trim() ?? '';
   const coloredIconsAttr =
@@ -841,11 +896,13 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
       searchFakeFocus: searchFakeFocus === true,
       stickyFolders,
       initialViewportHeight,
+      externalScrollInitialSnapshot,
+      scrollMode,
     })
   );
   controller.destroy();
 
-  const shadowHtml = `${getBuiltInSpriteSheet(normalizedIcons.set)}${customSpriteSheet}<style ${FILE_TREE_STYLE_ATTRIBUTE}>${wrappedCoreCss}</style>${unsafeCssStyle}<div data-file-tree-id="${resolvedId}" data-file-tree-virtualized-wrapper="true"${coloredIconsAttr}>${bodyHtml}</div>`;
+  const shadowHtml = `${getBuiltInSpriteSheet(normalizedIcons.set)}${customSpriteSheet}<style ${FILE_TREE_STYLE_ATTRIBUTE}>${wrappedCoreCss}</style>${unsafeCssStyle}<div data-file-tree-id="${resolvedId}" data-file-tree-virtualized-wrapper="true" data-file-tree-scroll-mode="${scrollMode}"${coloredIconsAttr}>${bodyHtml}</div>`;
   const headerSlotHtml = getHeaderSlotHtml(composition);
   // Inline the resolved density on the host so vanilla SSR consumers get the
   // same first paint as the React wrapper, where the model paints these vars
@@ -855,9 +912,15 @@ export function preloadFileTree(options: FileTreeOptions): FileTreeSsrPayload {
   const outerStart = getFileTreeOuterStart(
     resolvedId,
     'declarative',
-    hostStyle
+    hostStyle,
+    scrollMode
   );
-  const domOuterStart = getFileTreeOuterStart(resolvedId, 'dom', hostStyle);
+  const domOuterStart = getFileTreeOuterStart(
+    resolvedId,
+    'dom',
+    hostStyle,
+    scrollMode
+  );
   const outerEnd = getFileTreeOuterEnd(headerSlotHtml);
   return {
     domOuterStart,

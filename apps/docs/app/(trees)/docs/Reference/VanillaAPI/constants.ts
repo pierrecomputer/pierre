@@ -11,3 +11,31 @@ const fileTree = new FileTree({
 
 fileTree.render({ fileTreeContainer: container });`
 );
+
+export const VANILLA_EXTERNAL_SCROLL_EXAMPLE = docsCodeSnippet(
+  'external-scroll-source.ts',
+  `import { FileTree, createDomScrollSource } from '@pierre/trees/scroll';
+
+const source = createDomScrollSource({
+  scrollContainer: scroller,
+  topInset: () => toolbar.getBoundingClientRect().height,
+});
+
+const tree = new FileTree({
+  paths,
+  stickyFolders: true,
+  externalScroll: {
+    initialSnapshot: source.getSnapshot(),
+    source,
+  },
+});
+
+tree.render({ containerWrapper: mount });
+const host = tree.getFileTreeContainer();
+source.setHost(host ?? null);
+
+function disposeTree() {
+  source.destroy();
+  tree.cleanUp();
+}`
+);
