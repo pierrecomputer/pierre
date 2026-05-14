@@ -155,7 +155,7 @@ export function DiffUrlForm({
           variant="ghost"
           size="icon-md"
           aria-label="Clear"
-          className="opacity-0 transition-opacity duration-200 will-change-auto group-hover:opacity-50 hover:opacity-75"
+          className="opacity-0 transition-opacity duration-200 will-change-auto group-focus-within:opacity-50 group-hover:opacity-50 hover:opacity-75"
           onClick={() => {
             setURL('');
             setValidationError(null);

@@ -1,6 +1,11 @@
 'use client';
 
-import { IconComment, IconFileTree, IconSearch, IconX } from '@pierre/icons';
+import {
+  IconComment,
+  IconFileTree,
+  IconSearch,
+  IconXSquircle,
+} from '@pierre/icons';
 import { FileTree } from '@pierre/trees';
 import { useFileTreeSearch } from '@pierre/trees/react';
 import {
@@ -119,10 +124,10 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
         className={className}
         mobileOverlayOpen={mobileOverlayOpen}
       >
-        <div className="flex items-center gap-2 p-4 pb-0 md:px-3 md:pt-0.5">
+        <div className="flex items-center gap-3 px-4 pt-5 pb-2 md:px-3 md:pt-0.5 md:pb-0">
           <ButtonGroup
             aria-label="Sidebar sections"
-            className="mr-auto flex min-w-0 gap-2 bg-transparent"
+            className="mr-auto flex min-w-0 gap-3 bg-transparent md:gap-2"
             variant="ghost"
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as SidebarTab)}
@@ -149,13 +154,13 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
           )}
           {onMobileClose != null && (
             <Button
-              variant="muted"
+              variant="ghost"
               size="icon-only"
               className="md:hidden"
               aria-label="Close file tree"
               onClick={onMobileClose}
             >
-              <IconX className="size-4 md:size-3" />
+              <IconXSquircle className="size-4 md:size-3" />
             </Button>
           )}
         </div>
