@@ -115,16 +115,6 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
     }
   );
 
-  const handleLineSelectionEnd = useStableCallback(
-    (range: SelectedLineRange | null, item: CodeViewItem<CommentMetadata>) => {
-      if (range == null || item.type !== 'diff') {
-        onLineLinkChange(null);
-      } else {
-        onLineLinkChange({ id: item.id, range });
-      }
-    }
-  );
-
   const handleViewerRef = useStableCallback(
     (viewer: CodeViewHandle<CommentMetadata> | null) => {
       viewerRef.current = viewer;
@@ -420,26 +410,22 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         disableLineNumbers: !lineNumbers,
         lineHoverHighlight: 'number',
         // hunkSeparators: 'line-info-basic',
-        // FIXME(amadeus): We need to optimize this...
         enableLineSelection: true,
         enableGutterUtility: true,
         stickyHeaders: true,
         unsafeCSS: CODE_VIEW_CUSTOM_CSS,
+        // FIXME(amadeus): Move all `onX` methods onto the react component maybe?
         onGutterUtilityClick(range, context) {
           if (context.item.type !== 'diff') {
             return;
           }
           handleCreateDraftComment(range, context.item.id);
         },
-        onLineSelectionEnd(range, context) {
-          handleLineSelectionEnd(range, context.item);
-        },
       }) satisfies CodeViewOptions<CommentMetadata>,
     [
       diffIndicators,
       diffStyle,
       handleCreateDraftComment,
-      handleLineSelectionEnd,
       lineNumbers,
       overflow,
       showBackgrounds,
@@ -457,7 +443,6 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       options={options}
       selectedLines={selectedLines}
       onSelectedLinesChange={handleSetSelection}
-      // To test annotations and headers and stuff...
       renderAnnotation={renderCommentAnnotation}
       renderHeaderPrefix={renderHeaderPrefix}
     />
