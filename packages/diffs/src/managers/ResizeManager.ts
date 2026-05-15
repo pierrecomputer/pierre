@@ -16,14 +16,46 @@ interface AnnotationSetup {
 }
 
 export class ResizeManager {
-  private resizeObserver: ResizeObserver | undefined;
+  // Shared static resizeObserver that all ResizeManagers use
+  private static resizeObserver: ResizeObserver | undefined;
+  private static managersByElement = new Map<Element, ResizeManager>();
+
+  private static getResizeObserver(): ResizeObserver {
+    const resizeObserver =
+      ResizeManager.resizeObserver ??
+      new ResizeObserver(ResizeManager.handleSharedResizeEntries);
+    ResizeManager.resizeObserver = resizeObserver;
+    return resizeObserver;
+  }
+
+  private static handleSharedResizeEntries(entries: ResizeObserverEntry[]) {
+    // First we need to batch all elements by manager, so callbacks are
+    // properly aligned with a per-instance ResizeManager
+    const entriesByManager = new Map<ResizeManager, ResizeObserverEntry[]>();
+    for (const entry of entries) {
+      const manager = ResizeManager.managersByElement.get(entry.target);
+      if (manager == null) {
+        continue;
+      }
+      const managerEntries = entriesByManager.get(manager);
+      if (managerEntries == null) {
+        entriesByManager.set(manager, [entry]);
+      } else {
+        managerEntries.push(entry);
+      }
+    }
+
+    for (const [manager, managerEntries] of entriesByManager) {
+      manager.handleResizeEntries(managerEntries);
+    }
+  }
+
   private observedNodes = new Map<
     HTMLElement,
     ObservedAnnotationNodes | ObservedGridNodes
   >();
 
   setup(pre: HTMLPreElement, disableAnnotations: boolean): void {
-    this.resizeObserver ??= new ResizeObserver(this.handleResizeObserver);
     const annotationUpdates = new Set<AnnotationSetup>();
     let columnCount = 0;
     const observedNodes = new Map(this.observedNodes);
@@ -60,11 +92,11 @@ export class ResizeManager {
         observedNodes.delete(codeElement);
         if (item.numberElement !== numberElement) {
           if (item.numberElement != null) {
-            this.resizeObserver.unobserve(item.numberElement);
+            this.unobserve(item.numberElement);
             observedNodes.delete(item.numberElement);
           }
           if (numberElement != null) {
-            this.resizeObserver.observe(numberElement);
+            this.observe(numberElement);
             observedNodes.delete(numberElement);
             this.observedNodes.set(numberElement, item);
           }
@@ -86,10 +118,10 @@ export class ResizeManager {
           numberWidth: 0,
         };
         this.observedNodes.set(codeElement, item);
-        this.resizeObserver.observe(codeElement);
+        this.observe(codeElement);
         if (numberElement != null) {
           this.observedNodes.set(numberElement, item);
-          this.resizeObserver.observe(numberElement);
+          this.observe(numberElement);
         }
       }
     }
@@ -185,15 +217,15 @@ export class ResizeManager {
         this.applyNewHeight(pendingUpdate.item, pendingUpdate.newHeight);
         this.observedNodes.set(pendingUpdate.child1, pendingUpdate.item);
         this.observedNodes.set(pendingUpdate.child2, pendingUpdate.item);
-        this.resizeObserver.observe(pendingUpdate.child1);
-        this.resizeObserver.observe(pendingUpdate.child2);
+        this.observe(pendingUpdate.child1);
+        this.observe(pendingUpdate.child2);
       }
       annotationUpdates.clear();
     }
 
     // Cleanup any old nodes that might still be observed
     for (const [element, item] of observedNodes) {
-      this.resizeObserver.unobserve(element);
+      this.unobserve(element);
       if (item.type === 'code') {
         cleanupStaleCodeItem(item);
       } else {
@@ -204,19 +236,57 @@ export class ResizeManager {
   }
 
   cleanUp(): void {
-    // Disconnect any existing observer and nodes
-    this.resizeObserver?.disconnect();
+    for (const element of this.observedNodes.keys()) {
+      this.unobserve(element);
+    }
     this.observedNodes.clear();
   }
 
-  private handleResizeObserver = (entries: ResizeObserverEntry[]) => {
+  private observe(element: HTMLElement): void {
+    const { managersByElement } = ResizeManager;
+    const owner = managersByElement.get(element);
+    // Already registered
+    if (owner === this) {
+      return;
+    }
+    // If we've already somehow registered with another manager, we in for a
+    // world of pain, so complain loudly
+    else if (owner != null && owner !== this) {
+      throw new Error(
+        'ResizeManager.observe: element is already owned by another ResizeManager'
+      );
+    }
+    managersByElement.set(element, this);
+    ResizeManager.getResizeObserver().observe(element);
+  }
+
+  private unobserve(element: HTMLElement): void {
+    const { managersByElement, resizeObserver } = ResizeManager;
+    const owner = managersByElement.get(element);
+    if (owner == null) {
+      return;
+    } else if (owner !== this) {
+      throw new Error(
+        'ResizeManager.unobserve: element is owned by another ResizeManager'
+      );
+    }
+
+    managersByElement.delete(element);
+    resizeObserver?.unobserve(element);
+    if (resizeObserver != null && managersByElement.size === 0) {
+      resizeObserver.disconnect();
+      ResizeManager.resizeObserver = undefined;
+    }
+  }
+
+  private handleResizeEntries(entries: ResizeObserverEntry[]) {
     const codeUpdates: CodeUpdateMap = new Map();
     const annotationUpdates: Set<ObservedAnnotationNodes> = new Set();
     for (const entry of entries) {
       const { target, borderBoxSize, contentBoxSize } = entry;
       if (!(target instanceof HTMLElement)) {
         console.error(
-          'FileDiff.handleResizeObserver: Invalid element for ResizeObserver',
+          'ResizeManager.handleResizeEntries: Invalid element for ResizeObserver',
           entry
         );
         continue;
@@ -224,7 +294,7 @@ export class ResizeManager {
       const item = this.observedNodes.get(target);
       if (item == null) {
         console.error(
-          'FileDiff.handleResizeObserver: Not a valid observed node',
+          'ResizeManager.handleResizeEntries: Not a valid observed node',
           entry
         );
         continue;
@@ -242,7 +312,7 @@ export class ResizeManager {
 
         if (column == null) {
           console.error(
-            `FileDiff.handleResizeObserver: Couldn't find a column for`,
+            `ResizeManager.handleResizeEntries: Couldn't find a column for`,
             { item, target }
           );
           continue;
@@ -265,7 +335,7 @@ export class ResizeManager {
     annotationUpdates.clear();
     this.applyColumnUpdates(codeUpdates);
     codeUpdates.clear();
-  };
+  }
 
   private applyAnnotationUpdates(
     annotationUpdates: Set<ObservedAnnotationNodes>
