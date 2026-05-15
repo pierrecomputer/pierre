@@ -474,14 +474,12 @@ export type DiffLineAnnotation<T = undefined> = {
   lineNumber: number;
 } & OptionalMetadata<T>;
 
-export type CodeViewItemVersion = string | number;
-
 export type CodeViewFileItem<T = undefined> = {
   id: string;
   type: 'file';
   file: FileContents;
   annotations?: LineAnnotation<T>[];
-  version?: CodeViewItemVersion;
+  version?: number;
   collapsed?: boolean;
 };
 
@@ -490,7 +488,7 @@ export type CodeViewDiffItem<T = undefined> = {
   type: 'diff';
   fileDiff: FileDiffMetadata;
   annotations?: DiffLineAnnotation<T>[];
-  version?: CodeViewItemVersion;
+  version?: number;
   collapsed?: boolean;
 };
 

@@ -16,7 +16,6 @@ import type {
   CodeViewFileItem,
   CodeViewItem,
   CodeViewItemScrollTarget,
-  CodeViewItemVersion,
   CodeViewLayout,
   CodeViewLineScrollTarget,
   CodeViewPositionScrollTarget,
@@ -89,7 +88,7 @@ interface AdvancedVirtualizedBaseItem {
    * when rendered. */
   element: HTMLElement | undefined;
   /** Last controlled version observed for this record. */
-  version: CodeViewItemVersion | undefined;
+  version: number | undefined;
 }
 
 interface CodeViewDiffItemContext<
@@ -120,7 +119,7 @@ export interface CodeViewRenderedDiffItem<LAnnotation> {
   id: string;
   type: 'diff';
   item: CodeViewDiffItem<LAnnotation>;
-  version: CodeViewItemVersion | undefined;
+  version: number | undefined;
   element: HTMLElement;
   instance: VirtualizedFileDiff<LAnnotation>;
 }
@@ -129,7 +128,7 @@ export interface CodeViewRenderedFileItem<LAnnotation> {
   id: string;
   type: 'file';
   item: CodeViewFileItem<LAnnotation>;
-  version: CodeViewItemVersion | undefined;
+  version: number | undefined;
   element: HTMLElement;
   instance: VirtualizedFile<LAnnotation>;
 }
