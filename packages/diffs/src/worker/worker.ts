@@ -39,6 +39,8 @@ let renderOptions: WorkerRenderingOptions = {
   maxLineDiffLength: 1000,
 };
 
+const EMPTY_REGEXP = /(?:)/;
+
 self.addEventListener('error', (event) => {
   console.error('[Shiki Worker] Unhandled error:', event.error);
 });
@@ -71,6 +73,10 @@ async function handleMessage(request: WorkerRequest) {
   } catch (error) {
     console.error('Worker error:', error);
     sendError(request.id, error);
+  } finally {
+    // Reset legacy RegExp last-match state so it cannot keep a highlighted
+    // source string alive after a highlight job completes.
+    EMPTY_REGEXP.exec('');
   }
 }
 
