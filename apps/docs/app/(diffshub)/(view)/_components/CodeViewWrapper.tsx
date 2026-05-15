@@ -115,6 +115,16 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
     }
   );
 
+  const handleLineSelectionEnd = useStableCallback(
+    (range: SelectedLineRange | null, item: CodeViewItem<CommentMetadata>) => {
+      if (range == null || item.type !== 'diff') {
+        onLineLinkChange(null);
+      } else {
+        onLineLinkChange({ id: item.id, range });
+      }
+    }
+  );
+
   const handleViewerRef = useStableCallback(
     (viewer: CodeViewHandle<CommentMetadata> | null) => {
       viewerRef.current = viewer;
@@ -421,11 +431,15 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
           }
           handleCreateDraftComment(range, context.item.id);
         },
+        onLineSelectionEnd(range, context) {
+          handleLineSelectionEnd(range, context.item);
+        },
       }) satisfies CodeViewOptions<CommentMetadata>,
     [
       diffIndicators,
       diffStyle,
       handleCreateDraftComment,
+      handleLineSelectionEnd,
       lineNumbers,
       overflow,
       showBackgrounds,
