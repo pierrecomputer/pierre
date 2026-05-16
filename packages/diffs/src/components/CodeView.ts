@@ -857,6 +857,41 @@ export class CodeView<LAnnotation = undefined> {
     return true;
   }
 
+  public updateItemId(oldId: string, newId: string): boolean {
+    if (oldId === newId) {
+      return true;
+    }
+
+    const item = this.idToItem.get(oldId);
+    if (item == null) {
+      console.error(`CodeView.updateItemId: unknown item id "${oldId}"`);
+      return false;
+    }
+
+    if (this.idToItem.has(newId)) {
+      console.error(`CodeView.updateItemId: duplicate item id "${newId}"`);
+      return false;
+    }
+
+    this.idToItem.delete(oldId);
+    item.item.id = newId;
+    this.idToItem.set(newId, item);
+    if (item.type === 'diff') {
+      item.instance.setOptions(this.createOptions(item.item));
+    } else {
+      item.instance.setOptions(this.createOptions(item.item));
+    }
+
+    if (this.selectedLines?.id === oldId) {
+      this.selectedLines = { ...this.selectedLines, id: newId };
+      this.options.onSelectedLinesChange?.(this.selectedLines);
+    }
+    this.renamePendingScrollTarget(oldId, newId);
+    this.renamePendingLayoutAnchor(oldId, newId);
+    this.render();
+    return true;
+  }
+
   public addItem(input: CodeViewItem<LAnnotation>): void {
     this.addItems([input]);
     this.syncSelection();
@@ -1225,6 +1260,25 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     item.instance.setSelectedLines(this.selectedLines.range, { notify: false });
+  }
+
+  private renamePendingScrollTarget(oldId: string, newId: string): void {
+    const { pendingScrollTarget } = this;
+    if (
+      pendingScrollTarget == null ||
+      pendingScrollTarget.type === 'position' ||
+      pendingScrollTarget.id !== oldId
+    ) {
+      return;
+    }
+
+    this.pendingScrollTarget = { ...pendingScrollTarget, id: newId };
+  }
+
+  private renamePendingLayoutAnchor(oldId: string, newId: string): void {
+    if (this.pendingLayoutAnchor?.id === oldId) {
+      this.pendingLayoutAnchor.id = newId;
+    }
   }
 
   private wrapCallbackWithContext<
