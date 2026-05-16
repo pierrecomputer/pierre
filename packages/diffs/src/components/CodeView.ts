@@ -527,9 +527,7 @@ export class CodeView<LAnnotation = undefined> {
       diffHeaderHeight:
         itemMetrics?.diffHeaderHeight ??
         DEFAULT_CODE_VIEW_FILE_METRICS.diffHeaderHeight,
-      hunkSeparatorHeight:
-        itemMetrics?.hunkSeparatorHeight ??
-        DEFAULT_CODE_VIEW_FILE_METRICS.hunkSeparatorHeight,
+      hunkSeparatorHeight: itemMetrics?.hunkSeparatorHeight,
       spacing: itemMetrics?.spacing ?? DEFAULT_CODE_VIEW_FILE_METRICS.spacing,
       paddingTop: itemMetrics?.paddingTop,
       paddingBottom: itemMetrics?.paddingBottom,

@@ -2,6 +2,7 @@ import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   ExpansionDirections,
   FileDiffMetadata,
+  HunkSeparators,
   NumericScrollLineAnchor,
   RenderRange,
   RenderWindow,
@@ -11,13 +12,14 @@ import type {
 } from '../types';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
-import { iterateOverDiff } from '../utils/iterateOverDiff';
-import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import {
+  computeVirtualFileMetrics,
+  getDefaultHunkSeparatorHeight,
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
-  resolveVirtualFileMetrics,
-} from '../utils/resolveVirtualFileMetrics';
+} from '../utils/computeVirtualFileMetrics';
+import { iterateOverDiff } from '../utils/iterateOverDiff';
+import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import type { WorkerPoolManager } from '../worker';
 import type { CodeView } from './CodeView';
 import {
@@ -83,23 +85,15 @@ export class VirtualizedFileDiff<
     isContainerManaged = false
   ) {
     super(options, workerManager, isContainerManaged);
-    const { hunkSeparators = 'line-info' } = this.options;
     this.virtualizer = virtualizer;
-    this.metrics = resolveVirtualFileMetrics(
-      typeof hunkSeparators === 'function' ? 'custom' : hunkSeparators,
-      metrics
-    );
+    this.metrics = computeVirtualFileMetrics(metrics);
   }
 
   public setMetrics(
     metrics?: Partial<VirtualFileMetrics>,
     force = false
   ): void {
-    const { hunkSeparators = 'line-info' } = this.options;
-    const nextMetrics = resolveVirtualFileMetrics(
-      typeof hunkSeparators === 'function' ? 'custom' : hunkSeparators,
-      metrics
-    );
+    const nextMetrics = computeVirtualFileMetrics(metrics);
     if (!force && areObjectsEqual(this.metrics, nextMetrics)) {
       return;
     }
@@ -282,16 +276,11 @@ export class VirtualizedFileDiff<
       expandUnchanged = false,
       collapsed = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-      hunkSeparators = 'line-info',
     } = this.options;
-    const { hunkSeparatorHeight, spacing } = this.metrics;
     const diffStyle = this.getDiffStyle();
-    const separatorGap =
-      hunkSeparators !== 'simple' &&
-      hunkSeparators !== 'metadata' &&
-      hunkSeparators !== 'line-info-basic'
-        ? spacing
-        : 0;
+    const hunkSeparators = this.getHunkSeparatorType();
+    const hunkSeparatorHeight = this.getHunkSeparatorHeight(hunkSeparators);
+    const separatorGap = this.getSeparatorGap(hunkSeparators);
     const targetLineIndex =
       diffStyle === 'split' ? targetLineIndexes[1] : targetLineIndexes[0];
     const checkpoint = this.getLayoutCheckpointBeforeLineIndex(targetLineIndex);
@@ -314,6 +303,7 @@ export class VirtualizedFileDiff<
       collapsedContextThreshold,
       callback: ({
         hunkIndex,
+        hunk,
         collapsedBefore,
         collapsedAfter,
         deletionLine,
@@ -330,7 +320,14 @@ export class VirtualizedFileDiff<
           );
         }
 
-        if (collapsedBefore > 0) {
+        if (
+          collapsedBefore > 0 &&
+          this.hasLeadingHunkSeparator(
+            hunkIndex,
+            hunk?.hunkSpecs,
+            hunkSeparators
+          )
+        ) {
           if (hunkIndex > 0) {
             top += separatorGap;
           }
@@ -360,7 +357,10 @@ export class VirtualizedFileDiff<
         }
         top += lineHeight;
 
-        if (collapsedAfter > 0 && hunkSeparators !== 'simple') {
+        if (
+          collapsedAfter > 0 &&
+          this.hasTrailingHunkSeparator(hunkSeparators)
+        ) {
           if (
             targetLineIndex > lineIndex &&
             targetLineIndex <= lineIndex + collapsedAfter
@@ -393,20 +393,15 @@ export class VirtualizedFileDiff<
       expandUnchanged = false,
       collapsed = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-      hunkSeparators = 'line-info',
     } = this.options;
     if (collapsed) {
       return undefined;
     }
 
-    const { hunkSeparatorHeight, spacing } = this.metrics;
     const diffStyle = this.getDiffStyle();
-    const separatorGap =
-      hunkSeparators !== 'simple' &&
-      hunkSeparators !== 'metadata' &&
-      hunkSeparators !== 'line-info-basic'
-        ? spacing
-        : 0;
+    const hunkSeparators = this.getHunkSeparatorType();
+    const hunkSeparatorHeight = this.getHunkSeparatorHeight(hunkSeparators);
+    const separatorGap = this.getSeparatorGap(hunkSeparators);
 
     const checkpoint = this.getLayoutCheckpointBeforeTop(localViewportTop);
     let top =
@@ -427,6 +422,7 @@ export class VirtualizedFileDiff<
       collapsedContextThreshold,
       callback: ({
         hunkIndex,
+        hunk,
         collapsedBefore,
         collapsedAfter,
         deletionLine,
@@ -443,7 +439,14 @@ export class VirtualizedFileDiff<
           );
         }
 
-        if (collapsedBefore > 0) {
+        if (
+          collapsedBefore > 0 &&
+          this.hasLeadingHunkSeparator(
+            hunkIndex,
+            hunk?.hunkSpecs,
+            hunkSeparators
+          )
+        ) {
           if (hunkIndex > 0) {
             top += separatorGap;
           }
@@ -475,7 +478,10 @@ export class VirtualizedFileDiff<
         );
         top += lineHeight;
 
-        if (collapsedAfter > 0 && hunkSeparators !== 'simple') {
+        if (
+          collapsedAfter > 0 &&
+          this.hasTrailingHunkSeparator(hunkSeparators)
+        ) {
           top += separatorGap + hunkSeparatorHeight;
         }
 
@@ -597,16 +603,11 @@ export class VirtualizedFileDiff<
       expandUnchanged = false,
       collapsed = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-      hunkSeparators = 'line-info',
     } = this.options;
-    const { spacing, hunkSeparatorHeight } = this.metrics;
     const diffStyle = this.getDiffStyle();
-    const separatorGap =
-      hunkSeparators !== 'simple' &&
-      hunkSeparators !== 'metadata' &&
-      hunkSeparators !== 'line-info-basic'
-        ? spacing
-        : 0;
+    const hunkSeparators = this.getHunkSeparatorType();
+    const hunkSeparatorHeight = this.getHunkSeparatorHeight(hunkSeparators);
+    const separatorGap = this.getSeparatorGap(hunkSeparators);
     const headerRegion = getVirtualFileHeaderRegion(
       this.metrics,
       disableFileHeader
@@ -629,6 +630,7 @@ export class VirtualizedFileDiff<
       collapsedContextThreshold,
       callback: ({
         hunkIndex,
+        hunk,
         collapsedBefore,
         collapsedAfter,
         deletionLine,
@@ -647,7 +649,14 @@ export class VirtualizedFileDiff<
         const lineIndex =
           diffStyle === 'split' ? splitLineIndex : unifiedLineIndex;
         this.addLayoutCheckpoint(renderedLineIndex, lineIndex, this.height);
-        if (collapsedBefore > 0) {
+        if (
+          collapsedBefore > 0 &&
+          this.hasLeadingHunkSeparator(
+            hunkIndex,
+            hunk?.hunkSpecs,
+            hunkSeparators
+          )
+        ) {
           if (hunkIndex > 0) {
             this.height += separatorGap;
           }
@@ -656,7 +665,10 @@ export class VirtualizedFileDiff<
 
         this.height += this.getLineHeight(lineIndex, hasMetadata);
 
-        if (collapsedAfter > 0 && hunkSeparators !== 'simple') {
+        if (
+          collapsedAfter > 0 &&
+          this.hasTrailingHunkSeparator(hunkSeparators)
+        ) {
           this.height += separatorGap + hunkSeparatorHeight;
         }
         renderedLineIndex++;
@@ -799,6 +811,47 @@ export class VirtualizedFileDiff<
 
   private getDiffStyle(): 'split' | 'unified' {
     return this.options.diffStyle ?? 'split';
+  }
+
+  private getHunkSeparatorType(): HunkSeparators {
+    return getOptionHunkSeparatorType(this.options.hunkSeparators);
+  }
+
+  private getHunkSeparatorHeight(type = this.getHunkSeparatorType()): number {
+    return (
+      this.metrics.hunkSeparatorHeight ?? getDefaultHunkSeparatorHeight(type)
+    );
+  }
+
+  private getSeparatorGap(type = this.getHunkSeparatorType()): number {
+    return type === 'simple' ||
+      type === 'metadata' ||
+      type === 'line-info-basic'
+      ? 0
+      : this.metrics.spacing;
+  }
+
+  private hasLeadingHunkSeparator(
+    hunkIndex: number,
+    hunkSpecs: string | undefined,
+    type = this.getHunkSeparatorType()
+  ): boolean {
+    switch (type) {
+      case 'simple':
+        return hunkIndex > 0;
+      case 'metadata':
+        return hunkSpecs != null;
+      case 'line-info':
+      case 'line-info-basic':
+      case 'custom':
+        return true;
+    }
+  }
+
+  private hasTrailingHunkSeparator(
+    type = this.getHunkSeparatorType()
+  ): boolean {
+    return type !== 'simple' && type !== 'metadata';
   }
 
   private addLayoutCheckpoint(
@@ -991,11 +1044,11 @@ export class VirtualizedFileDiff<
       disableFileHeader = false,
       expandUnchanged = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-      hunkSeparators = 'line-info',
     } = this.options;
-    const { spacing, hunkLineCount, hunkSeparatorHeight, lineHeight } =
-      this.metrics;
+    const { hunkLineCount, lineHeight } = this.metrics;
     const diffStyle = this.getDiffStyle();
+    const hunkSeparators = this.getHunkSeparatorType();
+    const hunkSeparatorHeight = this.getHunkSeparatorHeight(hunkSeparators);
     const fileHeight = this.height;
     const lineCount =
       this.cache.totalLines > 0
@@ -1039,12 +1092,7 @@ export class VirtualizedFileDiff<
     const hunkOffsets: number[] = [];
     // Halfway between top & bottom, represented as an absolute position
     const viewportCenter = (top + bottom) / 2;
-    const separatorGap =
-      hunkSeparators === 'simple' ||
-      hunkSeparators === 'metadata' ||
-      hunkSeparators === 'line-info-basic'
-        ? 0
-        : spacing;
+    const separatorGap = this.getSeparatorGap(hunkSeparators);
     // Start the scan before the viewport so we collect hunk offsets that may be
     // needed for bufferBefore. This only chooses the scan origin; the returned
     // render range is still computed from the visible window below.
@@ -1069,6 +1117,7 @@ export class VirtualizedFileDiff<
       collapsedContextThreshold,
       callback: ({
         hunkIndex,
+        hunk,
         collapsedBefore,
         collapsedAfter,
         deletionLine,
@@ -1084,15 +1133,17 @@ export class VirtualizedFileDiff<
             : deletionLine.unifiedLineIndex;
         const hasMetadata =
           (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false);
-        let gapAdjustment =
-          collapsedBefore > 0
+        const gapAdjustment =
+          collapsedBefore > 0 &&
+          this.hasLeadingHunkSeparator(
+            hunkIndex,
+            hunk?.hunkSpecs,
+            hunkSeparators
+          )
             ? hunkSeparatorHeight +
               separatorGap +
               (hunkIndex > 0 ? separatorGap : 0)
             : 0;
-        if (hunkIndex === 0 && hunkSeparators === 'simple') {
-          gapAdjustment = 0;
-        }
 
         absoluteLineTop += gapAdjustment;
 
@@ -1145,7 +1196,10 @@ export class VirtualizedFileDiff<
         currentLine++;
         absoluteLineTop += lineHeight;
 
-        if (collapsedAfter > 0 && hunkSeparators !== 'simple') {
+        if (
+          collapsedAfter > 0 &&
+          this.hasTrailingHunkSeparator(hunkSeparators)
+        ) {
           absoluteLineTop += hunkSeparatorHeight + separatorGap;
         }
 
@@ -1235,6 +1289,14 @@ function hasDiffLayoutOptionChanged<LAnnotation>(
         DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) ||
     previousOptions.unsafeCSS !== nextOptions.unsafeCSS
   );
+}
+
+function getOptionHunkSeparatorType<LAnnotation>(
+  hunkSeparators: FileDiffOptions<LAnnotation>['hunkSeparators'] | undefined
+): HunkSeparators {
+  return typeof hunkSeparators === 'function'
+    ? 'custom'
+    : (hunkSeparators ?? 'line-info');
 }
 
 function hasFinalHunk(fileDiff: FileDiffMetadata): boolean {

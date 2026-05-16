@@ -9,11 +9,11 @@ import type {
 } from '../types';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
-import { iterateOverFile } from '../utils/iterateOverFile';
 import {
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
-} from '../utils/resolveVirtualFileMetrics';
+} from '../utils/computeVirtualFileMetrics';
+import { iterateOverFile } from '../utils/iterateOverFile';
 import type { WorkerPoolManager } from '../worker';
 import type { CodeView } from './CodeView';
 import { File, type FileOptions, type FileRenderProps } from './File';

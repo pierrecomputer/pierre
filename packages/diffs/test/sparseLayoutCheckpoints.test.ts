@@ -7,7 +7,7 @@ import type { FileContents, VirtualFileMetrics } from '../src/types';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 
-const metrics: VirtualFileMetrics = {
+const metrics: VirtualFileMetrics & { hunkSeparatorHeight: number } = {
   ...DEFAULT_VIRTUAL_FILE_METRICS,
   hunkLineCount: 1,
   lineHeight: 10,

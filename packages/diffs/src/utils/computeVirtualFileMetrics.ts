@@ -1,19 +1,13 @@
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
 import type { HunkSeparators, VirtualFileMetrics } from '../types';
 
-export function resolveVirtualFileMetrics(
-  hunkSeparators: HunkSeparators,
-  metricsOverride?: Partial<VirtualFileMetrics>
+export function computeVirtualFileMetrics(
+  metrics?: Partial<VirtualFileMetrics>
 ): VirtualFileMetrics {
-  const metrics: VirtualFileMetrics = {
+  return {
     ...DEFAULT_VIRTUAL_FILE_METRICS,
-    ...metricsOverride,
+    ...metrics,
   };
-  metrics.hunkSeparatorHeight = getHunkSeparatorHeight(
-    hunkSeparators,
-    metricsOverride?.hunkSeparatorHeight
-  );
-  return metrics;
 }
 
 export function getVirtualFileHeaderRegion(
@@ -37,13 +31,7 @@ export function getVirtualFilePaddingBottom(
   return metrics.paddingBottom ?? metrics.spacing;
 }
 
-function getHunkSeparatorHeight(
-  type: HunkSeparators,
-  customHeight: number | undefined
-): number {
-  if (customHeight != null) {
-    return customHeight;
-  }
+export function getDefaultHunkSeparatorHeight(type: HunkSeparators): number {
   switch (type) {
     case 'simple':
       return 4;
