@@ -1,13 +1,10 @@
 import {
   ALTERNATE_FILE_NAMES_GIT,
   COMMIT_METADATA_SPLIT,
-  FILE_CONTEXT_BLOB,
   FILENAME_HEADER_REGEX,
   FILENAME_HEADER_REGEX_GIT,
   GIT_DIFF_FILE_BREAK_REGEX,
-  HUNK_HEADER,
   INDEX_LINE_METADATA,
-  SPLIT_WITH_NEWLINES,
   UNIFIED_DIFF_FILE_BREAK_REGEX,
 } from '../constants';
 import type {
@@ -16,26 +13,43 @@ import type {
   FileContents,
   FileDiffMetadata,
   Hunk,
+  HunkLineType,
   ParsedPatch,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
-import { parseLineType } from './parseLineType';
+import { detachString } from './detachString';
+
+export interface ParsePatchStringOptions {
+  detachStrings?: boolean;
+}
+
+interface ParsedHunkHeader {
+  additionCount: number;
+  additionStart: number;
+  deletionCount: number;
+  deletionStart: number;
+  hunkContext?: string;
+}
 
 export function processPatch(
   data: string,
   cacheKeyPrefix?: string,
-  throwOnError = false
+  throwOnError = false,
+  options: ParsePatchStringOptions = {}
 ): ParsedPatch {
-  const isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(data);
-  const rawFiles = data.split(
-    isGitDiff ? GIT_DIFF_FILE_BREAK_REGEX : UNIFIED_DIFF_FILE_BREAK_REGEX
-  );
+  const isGitDiff = isGitDiffPatch(data);
+  const rawFiles = isGitDiff
+    ? splitAtLinePrefix(data, 'diff --git')
+    : data.split(UNIFIED_DIFF_FILE_BREAK_REGEX);
   let patchMetadata: string | undefined;
   const files: FileDiffMetadata[] = [];
   for (const fileOrPatchMetadata of rawFiles) {
     if (isGitDiff && !GIT_DIFF_FILE_BREAK_REGEX.test(fileOrPatchMetadata)) {
       if (patchMetadata == null) {
-        patchMetadata = fileOrPatchMetadata;
+        patchMetadata = maybeDetachString(
+          fileOrPatchMetadata,
+          options.detachStrings === true
+        );
       } else {
         if (throwOnError) {
           throw Error('parsePatchContent: unknown file blob');
@@ -54,7 +68,10 @@ export function processPatch(
       !UNIFIED_DIFF_FILE_BREAK_REGEX.test(fileOrPatchMetadata)
     ) {
       if (patchMetadata == null) {
-        patchMetadata = fileOrPatchMetadata;
+        patchMetadata = maybeDetachString(
+          fileOrPatchMetadata,
+          options.detachStrings === true
+        );
       } else {
         if (throwOnError) {
           throw Error('parsePatchContent: unknown file blob');
@@ -74,6 +91,7 @@ export function processPatch(
           : undefined,
       isGitDiff,
       throwOnError,
+      detachStrings: options.detachStrings,
     });
     if (currentFile != null) {
       files.push(currentFile);
@@ -84,6 +102,7 @@ export function processPatch(
 
 interface ProcessFileOptions {
   cacheKey?: string;
+  detachStrings?: boolean;
   isGitDiff?: boolean;
   oldFile?: FileContents;
   newFile?: FileContents;
@@ -97,18 +116,20 @@ export function processFile(
     isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(fileDiffString),
     oldFile,
     newFile,
+    detachStrings = false,
     throwOnError = false,
   }: ProcessFileOptions = {}
 ): FileDiffMetadata | undefined {
+  const shouldDetachStrings = detachStrings === true;
   let lastHunkEnd = 0;
-  const hunks = fileDiffString.split(FILE_CONTEXT_BLOB);
+  const hunks = splitAtLinePrefix(fileDiffString, '@@ ');
   let currentFile: FileDiffMetadata | undefined;
   const isPartial = oldFile == null || newFile == null;
   let deletionLineIndex = 0;
   let additionLineIndex = 0;
   for (const hunk of hunks) {
-    const lines = hunk.split(SPLIT_WITH_NEWLINES);
-    const firstLine = lines.shift();
+    const lines = splitWithNewlines(hunk);
+    const firstLine = lines[0];
     if (firstLine == null) {
       if (throwOnError) {
         throw Error('parsePatchContent: invalid hunk');
@@ -117,12 +138,12 @@ export function processFile(
       }
       continue;
     }
-    const fileHeaderMatch = firstLine.match(HUNK_HEADER);
+    const fileHeader = parseHunkHeader(firstLine);
     let additionLines = 0;
     let deletionLines = 0;
     // Setup currentFile, this should be the first iteration of our hunks, and
     // technically not a hunk
-    if (fileHeaderMatch == null || currentFile == null) {
+    if (fileHeader == null || currentFile == null) {
       if (currentFile != null) {
         if (throwOnError) {
           throw Error('parsePatchContent: Invalid hunk');
@@ -140,13 +161,13 @@ export function processFile(
         isPartial,
         additionLines:
           !isPartial && oldFile != null && newFile != null
-            ? newFile.contents.split(SPLIT_WITH_NEWLINES)
+            ? splitFileContents(newFile.contents, shouldDetachStrings)
             : [],
         deletionLines:
           !isPartial && oldFile != null && newFile != null
-            ? oldFile.contents.split(SPLIT_WITH_NEWLINES)
+            ? splitFileContents(oldFile.contents, shouldDetachStrings)
             : [],
-        cacheKey,
+        cacheKey: maybeDetachOptionalString(cacheKey, shouldDetachStrings),
       };
       // If either file is technically empty, then we should empty the
       // arrays respectively
@@ -157,44 +178,72 @@ export function processFile(
         currentFile.deletionLines.length = 0;
       }
 
-      // Push that first line back into the group of lines so we can properly
-      // parse it out
-      lines.unshift(firstLine);
       for (const line of lines) {
-        const filenameMatch = line.match(
-          isGitDiff ? FILENAME_HEADER_REGEX_GIT : FILENAME_HEADER_REGEX
-        );
         if (line.startsWith('diff --git')) {
           const [, , prevName, , name] =
             line.trim().match(ALTERNATE_FILE_NAMES_GIT) ?? [];
-          currentFile.name = name.trim();
+          currentFile.name = maybeDetachString(
+            name.trim(),
+            shouldDetachStrings
+          );
           if (prevName !== name) {
-            currentFile.prevName = prevName.trim();
+            currentFile.prevName = maybeDetachString(
+              prevName.trim(),
+              shouldDetachStrings
+            );
           }
-        } else if (filenameMatch != null) {
+          continue;
+        }
+
+        const filenameMatch =
+          line.startsWith('---') || line.startsWith('+++')
+            ? line.match(
+                isGitDiff ? FILENAME_HEADER_REGEX_GIT : FILENAME_HEADER_REGEX
+              )
+            : null;
+        if (filenameMatch != null) {
           const [, type, fileName] = filenameMatch;
           if (type === '---' && fileName !== '/dev/null') {
-            currentFile.prevName = fileName.trim();
-            currentFile.name = fileName.trim();
+            const detachedFileName = maybeDetachString(
+              fileName.trim(),
+              shouldDetachStrings
+            );
+            currentFile.prevName = detachedFileName;
+            currentFile.name = detachedFileName;
           } else if (type === '+++' && fileName !== '/dev/null') {
-            currentFile.name = fileName.trim();
+            currentFile.name = maybeDetachString(
+              fileName.trim(),
+              shouldDetachStrings
+            );
           }
         }
         // Git diffs have a bunch of additional metadata we can pull from
         else if (isGitDiff) {
           if (line.startsWith('new mode ')) {
-            currentFile.mode = line.replace('new mode', '').trim();
+            currentFile.mode = maybeDetachString(
+              line.slice('new mode'.length).trim(),
+              shouldDetachStrings
+            );
           }
           if (line.startsWith('old mode ')) {
-            currentFile.prevMode = line.replace('old mode', '').trim();
+            currentFile.prevMode = maybeDetachString(
+              line.slice('old mode'.length).trim(),
+              shouldDetachStrings
+            );
           }
           if (line.startsWith('new file mode')) {
             currentFile.type = 'new';
-            currentFile.mode = line.replace('new file mode', '').trim();
+            currentFile.mode = maybeDetachString(
+              line.slice('new file mode'.length).trim(),
+              shouldDetachStrings
+            );
           }
           if (line.startsWith('deleted file mode')) {
             currentFile.type = 'deleted';
-            currentFile.mode = line.replace('deleted file mode', '').trim();
+            currentFile.mode = maybeDetachString(
+              line.slice('deleted file mode'.length).trim(),
+              shouldDetachStrings
+            );
           }
           if (line.startsWith('similarity index')) {
             if (line.startsWith('similarity index 100%')) {
@@ -207,22 +256,34 @@ export function processFile(
             const [, prevObjectId, newObjectId, mode] =
               line.trim().match(INDEX_LINE_METADATA) ?? [];
             if (prevObjectId != null) {
-              currentFile.prevObjectId = prevObjectId;
+              currentFile.prevObjectId = maybeDetachString(
+                prevObjectId,
+                shouldDetachStrings
+              );
             }
             if (newObjectId != null) {
-              currentFile.newObjectId = newObjectId;
+              currentFile.newObjectId = maybeDetachString(
+                newObjectId,
+                shouldDetachStrings
+              );
             }
             if (mode != null) {
-              currentFile.mode = mode;
+              currentFile.mode = maybeDetachString(mode, shouldDetachStrings);
             }
           }
           // We have to handle these for pure renames because there won't be
           // --- and +++ lines
           if (line.startsWith('rename from ')) {
-            currentFile.prevName = line.replace('rename from ', '').trim();
+            currentFile.prevName = maybeDetachString(
+              line.slice('rename from '.length).trim(),
+              shouldDetachStrings
+            );
           }
           if (line.startsWith('rename to ')) {
-            currentFile.name = line.replace('rename to ', '').trim();
+            currentFile.name = maybeDetachString(
+              line.slice('rename to '.length).trim(),
+              shouldDetachStrings
+            );
           }
         }
       }
@@ -245,8 +306,7 @@ export function processFile(
       lines.pop();
     }
 
-    const additionStart = parseInt(fileHeaderMatch[3]);
-    const deletionStart = parseInt(fileHeaderMatch[1]);
+    const { additionStart, deletionStart } = fileHeader;
     deletionLineIndex = isPartial ? deletionLineIndex : deletionStart - 1;
     additionLineIndex = isPartial ? additionLineIndex : additionStart - 1;
 
@@ -259,11 +319,11 @@ export function processFile(
       unifiedLineCount: 0,
       unifiedLineStart: 0,
 
-      additionCount: parseInt(fileHeaderMatch[4] ?? '1'),
+      additionCount: fileHeader.additionCount,
       additionStart,
       additionLines,
 
-      deletionCount: parseInt(fileHeaderMatch[2] ?? '1'),
+      deletionCount: fileHeader.deletionCount,
       deletionStart,
       deletionLines,
 
@@ -271,56 +331,49 @@ export function processFile(
       additionLineIndex,
 
       hunkContent: [],
-      hunkContext: fileHeaderMatch[5],
-      hunkSpecs: firstLine,
+      hunkContext: maybeDetachOptionalString(
+        fileHeader.hunkContext,
+        shouldDetachStrings
+      ),
+      hunkSpecs: maybeDetachString(firstLine, shouldDetachStrings),
 
       noEOFCRAdditions: false,
       noEOFCRDeletions: false,
     };
 
-    // Lets validate out hunkData to ensure there's no broken data from the
-    // regex
-    if (
-      isNaN(hunkData.additionCount) ||
-      isNaN(hunkData.deletionCount) ||
-      isNaN(hunkData.additionStart) ||
-      isNaN(hunkData.deletionStart)
-    ) {
-      if (throwOnError) {
-        throw Error('parsePatchContent: invalid hunk metadata');
-      } else {
-        console.error('parsePatchContent: invalid hunk metadata', hunkData);
-      }
-      continue;
-    }
-
     // Now we process each line of the hunk
     let parsedAdditionLines = 0;
     let parsedDeletionLines = 0;
-    for (const rawLine of lines) {
+    for (let lineIndex = 1; lineIndex < lines.length; lineIndex++) {
+      const rawLine = lines[lineIndex];
       if (
-        isHunkBodyComplete({
-          additionCount: hunkData.additionCount,
-          parsedAdditionLines,
-          deletionCount: hunkData.deletionCount,
-          parsedDeletionLines,
-        }) &&
+        parsedAdditionLines >= hunkData.additionCount &&
+        parsedDeletionLines >= hunkData.deletionCount &&
         !rawLine.startsWith('\\')
       ) {
         break;
       }
 
-      const parsedLine = parseLineType(rawLine);
+      const firstChar = rawLine[0];
       // If we can't properly process the line, well, lets just try to salvage
       // things and continue... It's possible an AI generated diff might have
       // some stray blank lines or something in there
-      if (parsedLine == null) {
+      if (
+        firstChar !== '+' &&
+        firstChar !== '-' &&
+        firstChar !== ' ' &&
+        firstChar !== '\\'
+      ) {
+        console.error(
+          `parseLineType: Invalid firstChar: "${firstChar}", full line: "${rawLine}"`
+        );
         console.error('processFile: invalid rawLine:', rawLine);
         continue;
       }
 
-      const { type, line } = parsedLine;
+      const type = parseRawLineType(firstChar);
       if (type === 'addition') {
+        const line = getParsedLineContent(rawLine, shouldDetachStrings);
         if (currentContent == null || currentContent.type !== 'change') {
           currentContent = createContentGroup(
             'change',
@@ -338,6 +391,7 @@ export function processFile(
         additionLines++;
         lastLineType = 'addition';
       } else if (type === 'deletion') {
+        const line = getParsedLineContent(rawLine, shouldDetachStrings);
         if (currentContent == null || currentContent.type !== 'change') {
           currentContent = createContentGroup(
             'change',
@@ -355,6 +409,7 @@ export function processFile(
         deletionLines++;
         lastLineType = 'deletion';
       } else if (type === 'context') {
+        const line = getParsedLineContent(rawLine, shouldDetachStrings);
         if (currentContent == null || currentContent.type !== 'context') {
           currentContent = createContentGroup(
             'context',
@@ -497,27 +552,6 @@ export function processFile(
   return currentFile;
 }
 
-interface isHunkBodyCompleteProps {
-  additionCount: number;
-  parsedAdditionLines: number;
-  deletionCount: number;
-  parsedDeletionLines: number;
-}
-
-// Git format-patch trailers follow the final hunk without a new diff marker.
-// Once both header-declared line counts are satisfied, the next non-metadata
-// line belongs to the surrounding patch file rather than the hunk body.
-function isHunkBodyComplete({
-  additionCount,
-  parsedAdditionLines,
-  deletionCount,
-  parsedDeletionLines,
-}: isHunkBodyCompleteProps): boolean {
-  return (
-    parsedAdditionLines >= additionCount && parsedDeletionLines >= deletionCount
-  );
-}
-
 /**
  * Parses a patch file string into an array of parsed patches.
  *
@@ -529,12 +563,16 @@ function isHunkBodyComplete({
 export function parsePatchFiles(
   data: string,
   cacheKeyPrefix?: string,
-  throwOnError = false
+  throwOnError = false,
+  options: ParsePatchStringOptions = {}
 ): ParsedPatch[] {
   // NOTE(amadeus): This function is pretty forgiving in that it can accept a
   // patch file that includes commit metdata, multiple commits, or not
   const patches: ParsedPatch[] = [];
-  for (const patch of data.split(COMMIT_METADATA_SPLIT)) {
+  const rawPatches = hasCommitMetadataBoundary(data)
+    ? data.split(COMMIT_METADATA_SPLIT)
+    : [data];
+  for (const patch of rawPatches) {
     try {
       patches.push(
         processPatch(
@@ -542,7 +580,8 @@ export function parsePatchFiles(
           cacheKeyPrefix != null
             ? `${cacheKeyPrefix}-${patches.length}`
             : undefined,
-          throwOnError
+          throwOnError,
+          options
         )
       );
     } catch (error) {
@@ -554,6 +593,223 @@ export function parsePatchFiles(
     }
   }
   return patches;
+}
+
+function hasCommitMetadataBoundary(data: string): boolean {
+  return data.startsWith('From ') || data.includes('\nFrom ');
+}
+
+function splitFileContents(contents: string, detachStrings: boolean): string[] {
+  const lines = splitWithNewlines(contents);
+  if (!detachStrings) {
+    return lines;
+  }
+
+  for (let index = 0; index < lines.length; index++) {
+    lines[index] = detachString(lines[index]);
+  }
+  return lines;
+}
+
+function splitWithNewlines(contents: string): string[] {
+  if (contents.length === 0) {
+    return [''];
+  }
+
+  const lines: string[] = [];
+  let startIndex = 0;
+  for (;;) {
+    const newlineIndex = contents.indexOf('\n', startIndex);
+    if (newlineIndex === -1) {
+      break;
+    }
+
+    lines.push(contents.slice(startIndex, newlineIndex + 1));
+    startIndex = newlineIndex + 1;
+  }
+
+  if (startIndex < contents.length) {
+    lines.push(contents.slice(startIndex));
+  }
+  return lines;
+}
+
+function parseHunkHeader(line: string): ParsedHunkHeader | undefined {
+  if (!line.startsWith('@@ -')) {
+    return undefined;
+  }
+
+  let index = 4;
+  const deletionStartResult = readPositiveInteger(line, index);
+  if (deletionStartResult == null) {
+    return undefined;
+  }
+  const deletionStart = deletionStartResult.value;
+  index = deletionStartResult.endIndex;
+
+  let deletionCount = 1;
+  if (line[index] === ',') {
+    const deletionCountResult = readPositiveInteger(line, index + 1);
+    if (deletionCountResult == null) {
+      return undefined;
+    }
+    deletionCount = deletionCountResult.value;
+    index = deletionCountResult.endIndex;
+  }
+
+  if (line[index] !== ' ' || line[index + 1] !== '+') {
+    return undefined;
+  }
+  index += 2;
+
+  const additionStartResult = readPositiveInteger(line, index);
+  if (additionStartResult == null) {
+    return undefined;
+  }
+  const additionStart = additionStartResult.value;
+  index = additionStartResult.endIndex;
+
+  let additionCount = 1;
+  if (line[index] === ',') {
+    const additionCountResult = readPositiveInteger(line, index + 1);
+    if (additionCountResult == null) {
+      return undefined;
+    }
+    additionCount = additionCountResult.value;
+    index = additionCountResult.endIndex;
+  }
+
+  if (
+    line[index] !== ' ' ||
+    line[index + 1] !== '@' ||
+    line[index + 2] !== '@'
+  ) {
+    return undefined;
+  }
+
+  let hunkContext: string | undefined;
+  const contextStartIndex = index + 3;
+  if (line[contextStartIndex] === ' ') {
+    hunkContext = trimLineEnd(line.slice(contextStartIndex + 1));
+  }
+
+  return {
+    additionCount,
+    additionStart,
+    deletionCount,
+    deletionStart,
+    hunkContext,
+  };
+}
+
+function readPositiveInteger(
+  value: string,
+  startIndex: number
+): { value: number; endIndex: number } | undefined {
+  let index = startIndex;
+  let parsedValue = 0;
+  for (; index < value.length; index++) {
+    const digit = value.charCodeAt(index) - 48;
+    if (digit < 0 || digit > 9) {
+      break;
+    }
+    parsedValue = parsedValue * 10 + digit;
+  }
+
+  if (index === startIndex) {
+    return undefined;
+  }
+  return { value: parsedValue, endIndex: index };
+}
+
+function trimLineEnd(value: string): string {
+  if (value.endsWith('\r\n')) {
+    return value.slice(0, -2);
+  }
+  if (value.endsWith('\n')) {
+    return value.slice(0, -1);
+  }
+  return value;
+}
+
+function isGitDiffPatch(data: string): boolean {
+  return data.startsWith('diff --git') || data.includes('\ndiff --git');
+}
+
+function splitAtLinePrefix(contents: string, prefix: string): string[] {
+  if (contents.length === 0) {
+    return [''];
+  }
+
+  const newlinePrefix = `\n${prefix}`;
+  const firstBoundaryIndex = contents.startsWith(prefix)
+    ? 0
+    : findLinePrefixIndex(contents, newlinePrefix, 0);
+  if (firstBoundaryIndex === -1) {
+    return [contents];
+  }
+
+  const parts: string[] = [];
+  if (firstBoundaryIndex > 0) {
+    parts.push(contents.slice(0, firstBoundaryIndex));
+  }
+
+  let startIndex = firstBoundaryIndex;
+  for (;;) {
+    const nextBoundaryIndex = findLinePrefixIndex(
+      contents,
+      newlinePrefix,
+      startIndex + 1
+    );
+    if (nextBoundaryIndex === -1) {
+      break;
+    }
+
+    parts.push(contents.slice(startIndex, nextBoundaryIndex));
+    startIndex = nextBoundaryIndex;
+  }
+  parts.push(contents.slice(startIndex));
+  return parts;
+}
+
+function findLinePrefixIndex(
+  contents: string,
+  newlinePrefix: string,
+  fromIndex: number
+): number {
+  const index = contents.indexOf(newlinePrefix, fromIndex);
+  return index === -1 ? -1 : index + 1;
+}
+
+function maybeDetachString(value: string, detachStrings: boolean): string {
+  return detachStrings ? detachString(value) : value;
+}
+
+function maybeDetachOptionalString<T extends string | undefined>(
+  value: T,
+  detachStrings: boolean
+): T {
+  return (value == null ? value : maybeDetachString(value, detachStrings)) as T;
+}
+
+function parseRawLineType(
+  firstChar: string | undefined
+): Exclude<HunkLineType, 'expanded'> {
+  return firstChar === ' '
+    ? 'context'
+    : firstChar === '\\'
+      ? 'metadata'
+      : firstChar === '+'
+        ? 'addition'
+        : 'deletion';
+}
+
+function getParsedLineContent(rawLine: string, detachStrings: boolean): string {
+  const processedLine = rawLine.slice(1);
+  return maybeDetachString(
+    processedLine === '' ? '\n' : processedLine,
+    detachStrings
+  );
 }
 
 function createContentGroup(
