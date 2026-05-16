@@ -81,6 +81,24 @@ describe('parsePatchFiles', () => {
     }
   });
 
+  test('preserves leading BOM characters in parsed hunk lines', () => {
+    const result = parsePatchFiles(
+      [
+        'diff --git a/bom.txt b/bom.txt\n',
+        'index 1111111..2222222 100644\n',
+        '--- a/bom.txt\n',
+        '+++ b/bom.txt\n',
+        '@@ -1 +1 @@\n',
+        '-\uFEFFold\n',
+        '+\uFEFFnew\n',
+      ].join('')
+    );
+
+    const file = result[0]?.files[0];
+    expect(file?.deletionLines[0]).toBe('\uFEFFold\n');
+    expect(file?.additionLines[0]).toBe('\uFEFFnew\n');
+  });
+
   test(
     'splitLineCount should match rendered line count in split mode',
     async () => {
