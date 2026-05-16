@@ -89,6 +89,7 @@ export interface CodeViewHandle<LAnnotation> {
   addItems(items: readonly CodeViewItem<LAnnotation>[]): void;
   getItem(id: string): CodeViewItem<LAnnotation> | undefined;
   updateItem(item: CodeViewItem<LAnnotation>): boolean;
+  updateItemId(oldId: string, newId: string): boolean;
   scrollTo(target: CodeViewScrollTarget): void;
   setSelectedLines(selection: CodeViewLineSelection | null): void;
   getSelectedLines(): CodeViewLineSelection | null;
@@ -399,6 +400,20 @@ function CodeViewInner<LAnnotation = undefined>(
         }
 
         return instance.updateItem(item);
+      },
+      updateItemId(oldId, newId) {
+        const { controlled, instance } = cachedDataRef.current;
+        assertUncontrolledCodeViewAction(controlled, 'updateItemId');
+        if (instance == null) {
+          console.error(
+            'CodeView.updateItemId: no valid instance to update item id with',
+            oldId,
+            newId
+          );
+          return false;
+        }
+
+        return instance.updateItemId(oldId, newId);
       },
       scrollTo(target) {
         const { instance } = cachedDataRef.current;
