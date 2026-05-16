@@ -884,6 +884,7 @@ export class CodeView<LAnnotation = undefined> {
 
     if (this.selectedLines?.id === oldId) {
       this.selectedLines = { ...this.selectedLines, id: newId };
+      this.options.onSelectedLinesChange?.(this.selectedLines);
     }
     this.renamePendingScrollTarget(oldId, newId);
     this.renamePendingLayoutAnchor(oldId, newId);
@@ -1271,7 +1272,7 @@ export class CodeView<LAnnotation = undefined> {
       return;
     }
 
-    pendingScrollTarget.id = newId;
+    this.pendingScrollTarget = { ...pendingScrollTarget, id: newId };
   }
 
   private renamePendingLayoutAnchor(oldId: string, newId: string): void {
