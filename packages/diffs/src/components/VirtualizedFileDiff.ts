@@ -250,7 +250,7 @@ export class VirtualizedFileDiff<
   // should keep clean instances on a cached-height fast path.
   public prepareVirtualizedItem(fileDiff: FileDiffMetadata): number {
     if (this.fileDiff !== fileDiff) {
-      this.layoutDirty = true;
+      this.resetLayoutCache();
     }
     this.fileDiff = fileDiff;
     this.top = this.getVirtualizedTop();
@@ -528,7 +528,7 @@ export class VirtualizedFileDiff<
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
     if (!recycle) {
-      this.layoutDirty = true;
+      this.resetLayoutCache();
     }
     this.isSetup = false;
     super.cleanUp(recycle);

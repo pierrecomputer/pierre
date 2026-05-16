@@ -479,6 +479,7 @@ export class FileDiff<LAnnotation = undefined> {
     }
     this.fileContainer = undefined;
     this.lineAnnotations = [];
+    this.clearAuxiliaryNodes();
     this.annotationCache.clear();
     this.pre = undefined;
     this.codeUnified = undefined;
@@ -491,6 +492,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerPrefix = undefined;
     this.headerMetadata = undefined;
     this.headerCustom = undefined;
+    this.placeHolder = undefined;
     this.lastRenderedHeaderHTML = undefined;
     this.errorWrapper = undefined;
     this.spriteSVG = undefined;
@@ -964,6 +966,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.resizeManager.cleanUp();
     this.scrollSyncManager.cleanUp();
     this.interactionManager.cleanUp();
+    this.clearAuxiliaryNodes();
 
     this.bufferAfter?.remove();
     this.bufferBefore?.remove();
@@ -972,7 +975,6 @@ export class FileDiff<LAnnotation = undefined> {
     this.codeUnified?.remove();
     this.errorWrapper?.remove();
     this.headerElement?.remove();
-    this.gutterUtilityContent?.remove();
     this.headerPrefix?.remove();
     this.headerMetadata?.remove();
     this.headerCustom?.remove();
@@ -988,7 +990,6 @@ export class FileDiff<LAnnotation = undefined> {
     this.codeUnified = undefined;
     this.errorWrapper = undefined;
     this.headerElement = undefined;
-    this.gutterUtilityContent = undefined;
     this.headerPrefix = undefined;
     this.headerMetadata = undefined;
     this.headerCustom = undefined;
