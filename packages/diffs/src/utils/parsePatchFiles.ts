@@ -19,10 +19,6 @@ import type {
 import { cleanLastNewline } from './cleanLastNewline';
 import { detachString } from './detachString';
 
-export interface ParsePatchStringOptions {
-  detachStrings?: boolean;
-}
-
 interface ParsedHunkHeader {
   additionCount: number;
   additionStart: number;
@@ -34,8 +30,7 @@ interface ParsedHunkHeader {
 export function processPatch(
   data: string,
   cacheKeyPrefix?: string,
-  throwOnError = false,
-  options: ParsePatchStringOptions = {}
+  throwOnError = false
 ): ParsedPatch {
   const isGitDiff = isGitDiffPatch(data);
   const rawFiles = isGitDiff
@@ -46,10 +41,7 @@ export function processPatch(
   for (const fileOrPatchMetadata of rawFiles) {
     if (isGitDiff && !GIT_DIFF_FILE_BREAK_REGEX.test(fileOrPatchMetadata)) {
       if (patchMetadata == null) {
-        patchMetadata = maybeDetachString(
-          fileOrPatchMetadata,
-          options.detachStrings === true
-        );
+        patchMetadata = detachString(fileOrPatchMetadata);
       } else {
         if (throwOnError) {
           throw Error('parsePatchContent: unknown file blob');
@@ -68,10 +60,7 @@ export function processPatch(
       !UNIFIED_DIFF_FILE_BREAK_REGEX.test(fileOrPatchMetadata)
     ) {
       if (patchMetadata == null) {
-        patchMetadata = maybeDetachString(
-          fileOrPatchMetadata,
-          options.detachStrings === true
-        );
+        patchMetadata = detachString(fileOrPatchMetadata);
       } else {
         if (throwOnError) {
           throw Error('parsePatchContent: unknown file blob');
@@ -91,7 +80,6 @@ export function processPatch(
           : undefined,
       isGitDiff,
       throwOnError,
-      detachStrings: options.detachStrings,
     });
     if (currentFile != null) {
       files.push(currentFile);
@@ -102,7 +90,6 @@ export function processPatch(
 
 interface ProcessFileOptions {
   cacheKey?: string;
-  detachStrings?: boolean;
   isGitDiff?: boolean;
   oldFile?: FileContents;
   newFile?: FileContents;
@@ -116,11 +103,9 @@ export function processFile(
     isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(fileDiffString),
     oldFile,
     newFile,
-    detachStrings = false,
     throwOnError = false,
   }: ProcessFileOptions = {}
 ): FileDiffMetadata | undefined {
-  const shouldDetachStrings = detachStrings === true;
   let lastHunkEnd = 0;
   const hunks = splitAtLinePrefix(fileDiffString, '@@ ');
   let currentFile: FileDiffMetadata | undefined;
@@ -161,13 +146,13 @@ export function processFile(
         isPartial,
         additionLines:
           !isPartial && oldFile != null && newFile != null
-            ? splitFileContents(newFile.contents, shouldDetachStrings)
+            ? splitFileContents(newFile.contents)
             : [],
         deletionLines:
           !isPartial && oldFile != null && newFile != null
-            ? splitFileContents(oldFile.contents, shouldDetachStrings)
+            ? splitFileContents(oldFile.contents)
             : [],
-        cacheKey: maybeDetachOptionalString(cacheKey, shouldDetachStrings),
+        cacheKey: maybeDetachOptionalString(cacheKey),
       };
       // If either file is technically empty, then we should empty the
       // arrays respectively
@@ -182,15 +167,9 @@ export function processFile(
         if (line.startsWith('diff --git')) {
           const [, , prevName, , name] =
             line.trim().match(ALTERNATE_FILE_NAMES_GIT) ?? [];
-          currentFile.name = maybeDetachString(
-            name.trim(),
-            shouldDetachStrings
-          );
+          currentFile.name = detachString(name.trim());
           if (prevName !== name) {
-            currentFile.prevName = maybeDetachString(
-              prevName.trim(),
-              shouldDetachStrings
-            );
+            currentFile.prevName = detachString(prevName.trim());
           }
           continue;
         }
@@ -204,45 +183,35 @@ export function processFile(
         if (filenameMatch != null) {
           const [, type, fileName] = filenameMatch;
           if (type === '---' && fileName !== '/dev/null') {
-            const detachedFileName = maybeDetachString(
-              fileName.trim(),
-              shouldDetachStrings
-            );
+            const detachedFileName = detachString(fileName.trim());
             currentFile.prevName = detachedFileName;
             currentFile.name = detachedFileName;
           } else if (type === '+++' && fileName !== '/dev/null') {
-            currentFile.name = maybeDetachString(
-              fileName.trim(),
-              shouldDetachStrings
-            );
+            currentFile.name = detachString(fileName.trim());
           }
         }
         // Git diffs have a bunch of additional metadata we can pull from
         else if (isGitDiff) {
           if (line.startsWith('new mode ')) {
-            currentFile.mode = maybeDetachString(
-              line.slice('new mode'.length).trim(),
-              shouldDetachStrings
+            currentFile.mode = detachString(
+              line.slice('new mode'.length).trim()
             );
           }
           if (line.startsWith('old mode ')) {
-            currentFile.prevMode = maybeDetachString(
-              line.slice('old mode'.length).trim(),
-              shouldDetachStrings
+            currentFile.prevMode = detachString(
+              line.slice('old mode'.length).trim()
             );
           }
           if (line.startsWith('new file mode')) {
             currentFile.type = 'new';
-            currentFile.mode = maybeDetachString(
-              line.slice('new file mode'.length).trim(),
-              shouldDetachStrings
+            currentFile.mode = detachString(
+              line.slice('new file mode'.length).trim()
             );
           }
           if (line.startsWith('deleted file mode')) {
             currentFile.type = 'deleted';
-            currentFile.mode = maybeDetachString(
-              line.slice('deleted file mode'.length).trim(),
-              shouldDetachStrings
+            currentFile.mode = detachString(
+              line.slice('deleted file mode'.length).trim()
             );
           }
           if (line.startsWith('similarity index')) {
@@ -256,33 +225,25 @@ export function processFile(
             const [, prevObjectId, newObjectId, mode] =
               line.trim().match(INDEX_LINE_METADATA) ?? [];
             if (prevObjectId != null) {
-              currentFile.prevObjectId = maybeDetachString(
-                prevObjectId,
-                shouldDetachStrings
-              );
+              currentFile.prevObjectId = detachString(prevObjectId);
             }
             if (newObjectId != null) {
-              currentFile.newObjectId = maybeDetachString(
-                newObjectId,
-                shouldDetachStrings
-              );
+              currentFile.newObjectId = detachString(newObjectId);
             }
             if (mode != null) {
-              currentFile.mode = maybeDetachString(mode, shouldDetachStrings);
+              currentFile.mode = detachString(mode);
             }
           }
           // We have to handle these for pure renames because there won't be
           // --- and +++ lines
           if (line.startsWith('rename from ')) {
-            currentFile.prevName = maybeDetachString(
-              line.slice('rename from '.length).trim(),
-              shouldDetachStrings
+            currentFile.prevName = detachString(
+              line.slice('rename from '.length).trim()
             );
           }
           if (line.startsWith('rename to ')) {
-            currentFile.name = maybeDetachString(
-              line.slice('rename to '.length).trim(),
-              shouldDetachStrings
+            currentFile.name = detachString(
+              line.slice('rename to '.length).trim()
             );
           }
         }
@@ -331,11 +292,8 @@ export function processFile(
       additionLineIndex,
 
       hunkContent: [],
-      hunkContext: maybeDetachOptionalString(
-        fileHeader.hunkContext,
-        shouldDetachStrings
-      ),
-      hunkSpecs: maybeDetachString(firstLine, shouldDetachStrings),
+      hunkContext: maybeDetachOptionalString(fileHeader.hunkContext),
+      hunkSpecs: detachString(firstLine),
 
       noEOFCRAdditions: false,
       noEOFCRDeletions: false,
@@ -373,7 +331,7 @@ export function processFile(
 
       const type = parseRawLineType(firstChar);
       if (type === 'addition') {
-        const line = getParsedLineContent(rawLine, shouldDetachStrings);
+        const line = getParsedLineContent(rawLine);
         if (currentContent == null || currentContent.type !== 'change') {
           currentContent = createContentGroup(
             'change',
@@ -391,7 +349,7 @@ export function processFile(
         additionLines++;
         lastLineType = 'addition';
       } else if (type === 'deletion') {
-        const line = getParsedLineContent(rawLine, shouldDetachStrings);
+        const line = getParsedLineContent(rawLine);
         if (currentContent == null || currentContent.type !== 'change') {
           currentContent = createContentGroup(
             'change',
@@ -409,7 +367,7 @@ export function processFile(
         deletionLines++;
         lastLineType = 'deletion';
       } else if (type === 'context') {
-        const line = getParsedLineContent(rawLine, shouldDetachStrings);
+        const line = getParsedLineContent(rawLine);
         if (currentContent == null || currentContent.type !== 'context') {
           currentContent = createContentGroup(
             'context',
@@ -563,8 +521,7 @@ export function processFile(
 export function parsePatchFiles(
   data: string,
   cacheKeyPrefix?: string,
-  throwOnError = false,
-  options: ParsePatchStringOptions = {}
+  throwOnError = false
 ): ParsedPatch[] {
   // NOTE(amadeus): This function is pretty forgiving in that it can accept a
   // patch file that includes commit metdata, multiple commits, or not
@@ -580,8 +537,7 @@ export function parsePatchFiles(
           cacheKeyPrefix != null
             ? `${cacheKeyPrefix}-${patches.length}`
             : undefined,
-          throwOnError,
-          options
+          throwOnError
         )
       );
     } catch (error) {
@@ -599,12 +555,8 @@ function hasCommitMetadataBoundary(data: string): boolean {
   return data.startsWith('From ') || data.includes('\nFrom ');
 }
 
-function splitFileContents(contents: string, detachStrings: boolean): string[] {
+function splitFileContents(contents: string): string[] {
   const lines = splitWithNewlines(contents);
-  if (!detachStrings) {
-    return lines;
-  }
-
   for (let index = 0; index < lines.length; index++) {
     lines[index] = detachString(lines[index]);
   }
@@ -781,15 +733,8 @@ function findLinePrefixIndex(
   return index === -1 ? -1 : index + 1;
 }
 
-function maybeDetachString(value: string, detachStrings: boolean): string {
-  return detachStrings ? detachString(value) : value;
-}
-
-function maybeDetachOptionalString<T extends string | undefined>(
-  value: T,
-  detachStrings: boolean
-): T {
-  return (value == null ? value : maybeDetachString(value, detachStrings)) as T;
+function maybeDetachOptionalString<T extends string | undefined>(value: T): T {
+  return (value == null ? value : detachString(value)) as T;
 }
 
 function parseRawLineType(
@@ -804,12 +749,9 @@ function parseRawLineType(
         : 'deletion';
 }
 
-function getParsedLineContent(rawLine: string, detachStrings: boolean): string {
+function getParsedLineContent(rawLine: string): string {
   const processedLine = rawLine.slice(1);
-  return maybeDetachString(
-    processedLine === '' ? '\n' : processedLine,
-    detachStrings
-  );
+  return detachString(processedLine === '' ? '\n' : processedLine);
 }
 
 function createContentGroup(

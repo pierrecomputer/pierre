@@ -275,9 +275,7 @@ export function buildCodeViewData(
   const parsedPatches = parsePatchFiles(
     patchContent,
     // Use the url as a cache key
-    encodeURIComponent(githubPath),
-    false,
-    { detachStrings: true }
+    encodeURIComponent(githubPath)
   );
   console.timeEnd('--  parsing patches');
 
