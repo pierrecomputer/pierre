@@ -1,6 +1,4 @@
-import { readFile } from 'fs/promises';
 import { type NextRequest } from 'next/server';
-import { join } from 'path';
 
 const CACHE_CONTROL = 'no-store';
 const EMPTY_PATCH_MESSAGE = 'GitHub returned an empty diff.';
@@ -12,15 +10,25 @@ const RAW_GITHUB_DIFF_PATH_PATTERN =
   /^\/raw\/[^/]+\/[^/]+\/pull\/[^/]+\.(?:diff|patch)$/;
 const GITHUB_PULL_TAB_PATH_PATTERN =
   /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/(?:changes|files)$/;
-const LOCAL_PATCH_GITHUB_PATH = '/nodejs/node/pull/59805';
-const LOCAL_PATCH_FIXTURE = 'larg.patch';
-// 'smol.patch'
+
+const CACHED_BLOBS = new Map<string, string>([
+  ['/nodejs/node/pull/59805', 'https://blobs.diffs.wtf/59805.diff'],
+  ['/ghostty-org/ghostty/pull/12291', 'https://blobs.diffs.wtf/12291.diff'],
+  [
+    '/pierrecomputer/pierre/commit/0800fb',
+    'https://blobs.diffs.wtf/0800fb.diff',
+  ],
+  [
+    '/torvalds/linux/compare/v6.0...v7.0',
+    'https://blobs.diffs.wtf/v6.0-v7.0.diff',
+  ],
+]);
+
 const HIDDEN_PATCH_DOMAIN_RULES = [
   { domainRoot: 'tangled.org', defaultExtension: '.patch' },
 ] as const;
 
 interface ResolvedPatchRequest {
-  fixture?: string;
   patchURL: string;
   sourceURL?: string;
 }
@@ -50,27 +58,6 @@ export async function GET(request: NextRequest) {
       return createTextResponse('Invalid GitHub patch URL format', {
         status: 400,
       });
-    }
-
-    // Override to fetch default patch without requiring GitHub, to help avoid
-    // abuse and potential rate limits.
-    if (patchRequest.fixture != null) {
-      try {
-        const localPatchPath = join(
-          process.cwd(),
-          'app/api/diff',
-          patchRequest.fixture
-        );
-        const patchContent = await readFile(localPatchPath, 'utf-8');
-        return createPatchTextResponse(patchContent, {
-          sourceURL: patchRequest.sourceURL ?? patchRequest.patchURL,
-        });
-      } catch (error) {
-        return createTextResponse(
-          `Failed to read local patch: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          { status: 500 }
-        );
-      }
     }
 
     return await createPatchStreamResponse(
@@ -149,14 +136,6 @@ function resolvePatchURLInput(input: string): ResolvedPatchRequest | undefined {
 function resolveGitHubPatchRequest(
   path: string
 ): ResolvedPatchRequest | undefined {
-  if (path === LOCAL_PATCH_GITHUB_PATH) {
-    return {
-      fixture: LOCAL_PATCH_FIXTURE,
-      patchURL: 'local',
-      sourceURL: 'local',
-    };
-  }
-
   const patchURL = resolveGitHubPath(path);
   return patchURL == null ? undefined : { patchURL };
 }
@@ -213,11 +192,28 @@ function resolveGitHubPath(path: string): string | undefined {
     return undefined;
   }
 
+  const blobPatchURL = CACHED_BLOBS.get(removeDiffExtension(patchPath));
+  if (blobPatchURL != null) {
+    return blobPatchURL;
+  }
+
   if (!patchPath.endsWith('.patch') && !patchPath.endsWith('.diff')) {
     patchPath += '.diff';
   }
 
   return `https://${GITHUB_HOST}${patchPath}`;
+}
+
+function removeDiffExtension(path: string): string {
+  if (path.endsWith('.patch')) {
+    return path.slice(0, -'.patch'.length);
+  }
+
+  if (path.endsWith('.diff')) {
+    return path.slice(0, -'.diff'.length);
+  }
+
+  return path;
 }
 
 function normalizeGitHubPath(path: string): string {
