@@ -1,5 +1,5 @@
 const stringDetachEncoder = new TextEncoder();
-const stringDetachDecoder = new TextDecoder();
+const stringDetachDecoder = new TextDecoder('utf-8', { ignoreBOM: true });
 
 // Forces a fresh backing string so a retained substring does not keep the
 // original raw patch/file text alive.
