@@ -20,6 +20,7 @@ import {
 import {
   appendFileDiffToCodeViewData,
   buildCodeViewData,
+  type CodeViewItemIdRename,
   createCodeViewDataAccumulator,
   snapshotCodeViewTreeSource,
   takePendingCodeViewItems,
@@ -346,11 +347,14 @@ export function usePatchLoader({
             return;
           }
 
-          appendFileDiffToCodeViewData(
+          const itemIdRename = appendFileDiffToCodeViewData(
             accumulator,
             fileDiff,
             streamTreePathPrefix
           );
+          if (itemIdRename != null) {
+            applyCodeViewItemIdRename(viewerRef.current, itemIdRename);
+          }
           pendingPublishFileCount++;
           pendingTreePublishFileCount++;
           const elapsedWork = performance.now() - lastWorkYieldTime;
@@ -479,6 +483,13 @@ function applyCodeViewLineHashTarget(
     behavior: 'instant',
   });
   return true;
+}
+
+function applyCodeViewItemIdRename(
+  viewer: CodeViewHandle<CommentMetadata> | null,
+  rename: CodeViewItemIdRename
+): void {
+  viewer?.updateItemId(rename.oldId, rename.newId);
 }
 
 function getNextItemVersion(item: { version?: string | number }): number {
