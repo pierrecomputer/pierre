@@ -228,6 +228,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.highlighter = undefined;
     this.diff = undefined;
     this.renderCache = undefined;
+    this.additionAnnotations = {};
+    this.deletionAnnotations = {};
+    this.expandedHunks.clear();
     this.workerManager?.cleanUpPendingTasks(this);
     this.workerManager = undefined;
     this.onRenderUpdate = undefined;
@@ -237,6 +240,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.highlighter = undefined;
     this.diff = undefined;
     this.renderCache = undefined;
+    this.additionAnnotations = {};
+    this.deletionAnnotations = {};
     this.workerManager?.cleanUpPendingTasks(this);
   }
 
