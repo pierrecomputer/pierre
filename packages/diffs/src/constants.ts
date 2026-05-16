@@ -62,7 +62,6 @@ export const DEFAULT_VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
   hunkLineCount: 50,
   lineHeight: 20,
   diffHeaderHeight: 44,
-  hunkSeparatorHeight: 32,
   spacing: 8,
 };
 

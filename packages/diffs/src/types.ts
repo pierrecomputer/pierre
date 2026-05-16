@@ -772,8 +772,9 @@ export interface VirtualFileMetrics {
   lineHeight: number;
   /** Height reserved for the file or diff header region. */
   diffHeaderHeight: number;
-  /** Height reserved for each collapsed-context separator row. */
-  hunkSeparatorHeight: number;
+  /** Height reserved for each collapsed-context separator row. Only set this
+   * if you customized the size of hunk separators via unsafeCSS */
+  hunkSeparatorHeight?: number;
   /** Vertical spacing used around hunks and file-level padding. You should not
    * change this from the default if you aren't applying custom CSS */
   spacing: number;

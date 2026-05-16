@@ -2,11 +2,14 @@ import { describe, expect, test } from 'bun:test';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
-import { DEFAULT_VIRTUAL_FILE_METRICS } from '../src/constants';
+import {
+  DEFAULT_CODE_VIEW_FILE_METRICS,
+  DEFAULT_VIRTUAL_FILE_METRICS,
+} from '../src/constants';
 import type { FileContents, VirtualFileMetrics } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 
-const baseMetrics: VirtualFileMetrics = {
+const baseMetrics: VirtualFileMetrics & { hunkSeparatorHeight: number } = {
   ...DEFAULT_VIRTUAL_FILE_METRICS,
   hunkLineCount: 2,
   lineHeight: 10,
@@ -36,6 +39,28 @@ const file: FileContents = {
   name: 'file.ts',
   contents: 'one\ntwo\nthree',
 };
+
+const codeViewLikeMetrics: VirtualFileMetrics = {
+  ...DEFAULT_CODE_VIEW_FILE_METRICS,
+  hunkLineCount: 2,
+  lineHeight: 10,
+  diffHeaderHeight: 30,
+  spacing: 4,
+};
+
+function createTwoHunkDiff() {
+  const oldLines = Array.from({ length: 140 }, (_, index) => `${index + 1}`);
+  const newLines = oldLines.map((line, index) => {
+    if (index === 39) return 'changed-40';
+    if (index === 99) return 'changed-100';
+    return line;
+  });
+
+  return parseDiffFromFile(
+    { name: 'two-hunks.ts', contents: `${oldLines.join('\n')}\n` },
+    { name: 'two-hunks.ts', contents: `${newLines.join('\n')}\n` }
+  );
+}
 
 function createVirtualizedFile(
   metrics: Partial<VirtualFileMetrics> = {},
@@ -190,6 +215,102 @@ describe('virtual file padding metrics', () => {
           firstHunk.splitLineCount * baseMetrics.lineHeight +
           baseMetrics.hunkSeparatorHeight +
           baseMetrics.spacing * 2
+      );
+    });
+
+    test('uses built-in simple separator measurements with CodeView metrics', () => {
+      const fileDiff = createTwoHunkDiff();
+      const [firstHunk, secondHunk] = fileDiff.hunks;
+      if (firstHunk == null || secondHunk == null) {
+        throw new Error('Expected two hunks');
+      }
+      const instance = new VirtualizedFileDiff(
+        { hunkSeparators: 'simple' },
+        virtualizer,
+        codeViewLikeMetrics
+      );
+
+      instance.prepareVirtualizedItem(fileDiff);
+
+      expect(firstHunk.collapsedBefore).toBeGreaterThan(0);
+      expect(secondHunk.collapsedBefore).toBeGreaterThan(0);
+      expect(
+        instance.getLinePosition(firstHunk.additionStart, 'additions')?.top
+      ).toBe(codeViewLikeMetrics.diffHeaderHeight);
+      expect(
+        instance.getLinePosition(secondHunk.additionStart, 'additions')?.top
+      ).toBe(
+        codeViewLikeMetrics.diffHeaderHeight +
+          firstHunk.splitLineCount * codeViewLikeMetrics.lineHeight +
+          4
+      );
+      expect(instance.getVirtualizedHeight()).toBe(
+        codeViewLikeMetrics.diffHeaderHeight +
+          (firstHunk.splitLineCount + secondHunk.splitLineCount) *
+            codeViewLikeMetrics.lineHeight +
+          4 +
+          codeViewLikeMetrics.spacing
+      );
+    });
+
+    test('re-resolves built-in separator measurements when options change', () => {
+      const fileDiff = createTwoHunkDiff();
+      const [firstHunk, secondHunk] = fileDiff.hunks;
+      if (firstHunk == null || secondHunk == null) {
+        throw new Error('Expected two hunks');
+      }
+      const instance = new VirtualizedFileDiff(
+        { hunkSeparators: 'line-info-basic' },
+        virtualizer,
+        codeViewLikeMetrics
+      );
+
+      instance.prepareVirtualizedItem(fileDiff);
+      expect(
+        instance.getLinePosition(secondHunk.additionStart, 'additions')?.top
+      ).toBe(
+        codeViewLikeMetrics.diffHeaderHeight +
+          32 +
+          firstHunk.splitLineCount * codeViewLikeMetrics.lineHeight +
+          32
+      );
+
+      instance.setOptions({ hunkSeparators: 'simple' });
+
+      expect(
+        instance.getLinePosition(secondHunk.additionStart, 'additions')?.top
+      ).toBe(
+        codeViewLikeMetrics.diffHeaderHeight +
+          firstHunk.splitLineCount * codeViewLikeMetrics.lineHeight +
+          4
+      );
+    });
+
+    test('does not reserve metadata separator height for final collapsed context', () => {
+      const fileDiff = createTwoHunkDiff();
+      const [firstHunk, secondHunk] = fileDiff.hunks;
+      if (firstHunk == null || secondHunk == null) {
+        throw new Error('Expected two hunks');
+      }
+      const instance = new VirtualizedFileDiff(
+        { hunkSeparators: 'metadata' },
+        virtualizer,
+        codeViewLikeMetrics
+      );
+
+      instance.prepareVirtualizedItem(fileDiff);
+
+      expect(firstHunk.collapsedBefore).toBeGreaterThan(0);
+      expect(secondHunk.collapsedBefore).toBeGreaterThan(0);
+      expect(
+        instance.getLinePosition(firstHunk.additionStart, 'additions')?.top
+      ).toBe(codeViewLikeMetrics.diffHeaderHeight + 32);
+      expect(instance.getVirtualizedHeight()).toBe(
+        codeViewLikeMetrics.diffHeaderHeight +
+          32 * 2 +
+          (firstHunk.splitLineCount + secondHunk.splitLineCount) *
+            codeViewLikeMetrics.lineHeight +
+          codeViewLikeMetrics.spacing
       );
     });
   });
