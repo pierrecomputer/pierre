@@ -131,7 +131,9 @@ function formatLineHashPoint(point: LineHashPoint): string {
 }
 
 function encodeHashValue(value: string): string {
-  return encodeURIComponent(value).replaceAll('%2F', '/');
+  return encodeURIComponent(value)
+    .replaceAll('%2F', '/')
+    .replaceAll('%3F', '?');
 }
 
 function areLineHashPointsEqual(

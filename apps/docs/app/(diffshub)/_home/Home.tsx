@@ -121,13 +121,17 @@ export default function DiffshubHome() {
             {EXAMPLE_URLS.map((url) => (
               <li key={url} className="flex items-start justify-start gap-1">
                 <IconArrowRightShort className="mt-0.5 flex-shrink-0 opacity-50" />
-                <Link
-                  href={getGitHubPath(`https://github.com/${url}`) ?? '/'}
-                  className="inline-link truncate"
-                >
-                  <span className="hidden md:inline">https://github.com/</span>
-                  {url}
-                </Link>
+                <div>
+                  <Link
+                    href={getGitHubPath(`https://github.com/${url}`) ?? '/'}
+                    className="inline-link"
+                  >
+                    <span className="hidden md:inline">
+                      https://github.com/
+                    </span>
+                    {url}
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>
@@ -190,19 +194,17 @@ export default function DiffshubHome() {
             files, and diff files.
           </FaqItem>
           <FaqItem question="What about diffs with millions of lines?">
-            DiffsHub can do millions of lines with ease. Try this{' '}
+            DiffsHub can do millions of lines with ease... Try this{' '}
             <Link
               href="/torvalds/linux/compare/v6.0...v7.0"
-              target="_blank"
-              rel="noopener noreferrer"
               className="inline-link"
             >
               diff between v6 and v7 of Linux
-            </Link>
-            . GitHub generates the patch in roughly 10 seconds and then we
-            stream in the code so you’re off to the races as quickly as
-            possible. In a nut shell, if GitHub can generate the diff, we’ll
-            render it.
+            </Link>{' '}
+            (a mobile browser will probably crash due to the memory
+            requirements). With larger diffs like 100k lines or more, GitHub
+            won't reliably serve the entire diff and there might be a large
+            delay for first byte.
           </FaqItem>
           <FaqItem question="Can you host my code, too?">
             <strong className="font-medium">Not yet.</strong> DiffsHub is only a
