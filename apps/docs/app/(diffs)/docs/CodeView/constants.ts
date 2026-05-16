@@ -73,15 +73,15 @@ export const CODE_VIEW_ITEM_METRICS_OPTIONS_EXAMPLE: PreloadFileOptions<undefine
 
   // Use \`itemMetrics\` to correct any issues identified by
   // \`__devOnlyValidateItemHeights\`. If you are only using default settings then
-  // you shouldn't need to use \`itemMetrics\` at all
+  // you shouldn't need to use \`itemMetrics\` at all. All fields are optional.
   itemMetrics: {
     // This should match your defined line-height for code. No need to define if
     // you're using the default line-height.
-    lineHeight?: number;
+    lineHeight: number | undefined;
 
     // If you've customized the header for files or diffs via unsafeCSS in a way
     // that changes how tall they are, you'll need to set that new height here.
-    diffHeaderHeight?: number;
+    diffHeaderHeight: number | undefined;
 
     // -------------------
 
@@ -92,7 +92,7 @@ export const CODE_VIEW_ITEM_METRICS_OPTIONS_EXAMPLE: PreloadFileOptions<undefine
     // If you've customized hunk separators at all with unsafeCSS that changes
     // their height, you need to define that new height here.  If you've just set
     // a different type, their sizes will be handled automatically for you
-    hunkSeparatorHeight?: number;
+    hunkSeparatorHeight: number | undefined;
 
     // Vertical spacing used around hunks, also gets used in calculations for
     // padding if paddingTop/Bottom are not defined. The rules for this are
@@ -100,19 +100,19 @@ export const CODE_VIEW_ITEM_METRICS_OPTIONS_EXAMPLE: PreloadFileOptions<undefine
     // never need to edit this unless applying custom CSS to hunk separators that
     // changes the spacing around them.  DO NOT EDIT THIS UNLESS you fully
     // understand how the CSS and HTML work.
-    spacing?: number;
+    spacing: number | undefined;
 
     // Top padding applied after the file header, or before content when
     // the header is disabled.  This should match the effects of your unsafeCSS, it
     // does not actually change paddingTop.  Like the spacing prop, this is for
     // advanced use cases that fully understand how the HTML and CSS work.
-    paddingTop?: number;
+    paddingTop: number | undefined;
 
     // Bottom padding applied after the file content and only if there is
     // code to render.  This should match the effects of your unsafeCSS, it does not
     // actually change paddingBottom.  Like the spacing prop, this is for advanced
     // use cases that fully understand how the HTML and CSS work.
-    paddingBottom?: number;
+    paddingBottom: number | undefined;
   }
 }`,
     },
