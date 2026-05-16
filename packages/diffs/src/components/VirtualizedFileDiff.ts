@@ -72,6 +72,7 @@ export class VirtualizedFileDiff<
   private isVisible: boolean = false;
   private isSetup: boolean = false;
   private virtualizer: Virtualizer | CodeView<LAnnotation>;
+  private layoutDirty = true;
   private forceRenderOverride: true | undefined;
 
   constructor(
@@ -141,6 +142,7 @@ export class VirtualizedFileDiff<
   }
 
   private resetLayoutCache(recompute = false): void {
+    this.layoutDirty = true;
     this.cache.heights.clear();
     this.cache.checkpoints = [];
     this.cache.totalLines = 0;
@@ -233,7 +235,7 @@ export class VirtualizedFileDiff<
     }
 
     if (hasHeightChange || this.isResizeDebuggingEnabled()) {
-      this.computeApproximateSize();
+      this.computeApproximateSize(true);
     }
     return hasHeightChange;
   }
@@ -248,7 +250,14 @@ export class VirtualizedFileDiff<
     return this.render();
   };
 
+  // Prepares this item for CodeView layout by binding the latest diff, syncing
+  // its virtualized top, and returning an approximate height. This method is
+  // called while downstream items are being re-positioned, so later changes
+  // should keep clean instances on a cached-height fast path.
   public prepareVirtualizedItem(fileDiff: FileDiffMetadata): number {
+    if (this.fileDiff !== fileDiff) {
+      this.layoutDirty = true;
+    }
     this.fileDiff = fileDiff;
     this.top = this.getVirtualizedTop();
     this.computeApproximateSize();
@@ -512,6 +521,9 @@ export class VirtualizedFileDiff<
     if (this.fileContainer != null && this.isSimpleMode()) {
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
+    if (!recycle) {
+      this.layoutDirty = true;
+    }
     this.isSetup = false;
     super.cleanUp(recycle);
   }
@@ -526,6 +538,7 @@ export class VirtualizedFileDiff<
       direction,
       expansionLineCountOverride
     );
+    this.layoutDirty = true;
     this.computeApproximateSize();
     this.renderRange = undefined;
     this.virtualizer.instanceChanged(this, true);
@@ -564,12 +577,18 @@ export class VirtualizedFileDiff<
   // The reason we refer to this as `approximate size` is because heights my
   // dynamically change for a number of reasons so we can never be fully sure
   // if the height is 100% accurate
-  private computeApproximateSize(): void {
+  private computeApproximateSize(force = false): void {
+    const shouldValidateSize = this.isResizeDebuggingEnabled();
+    if (!force && !this.layoutDirty && !shouldValidateSize) {
+      return;
+    }
+
     const isFirstCompute = this.height === 0;
     this.height = 0;
     this.cache.checkpoints = [];
     this.cache.totalLines = 0;
     if (this.fileDiff == null) {
+      this.layoutDirty = false;
       return;
     }
 
@@ -596,6 +615,7 @@ export class VirtualizedFileDiff<
 
     this.height += headerRegion;
     if (collapsed) {
+      this.layoutDirty = false;
       return;
     }
 
@@ -649,11 +669,7 @@ export class VirtualizedFileDiff<
       this.height += paddingBottom;
     }
 
-    if (
-      this.fileContainer != null &&
-      this.isResizeDebuggingEnabled() &&
-      !isFirstCompute
-    ) {
+    if (this.fileContainer != null && shouldValidateSize && !isFirstCompute) {
       const rect = this.fileContainer.getBoundingClientRect();
       if (rect.height !== this.height) {
         console.log(
@@ -670,6 +686,7 @@ export class VirtualizedFileDiff<
         );
       }
     }
+    this.layoutDirty = false;
   }
 
   override render({
