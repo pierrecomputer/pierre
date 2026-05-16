@@ -16,7 +16,6 @@ import type {
   CodeViewFileItem,
   CodeViewItem,
   CodeViewItemScrollTarget,
-  CodeViewItemVersion,
   CodeViewLayout,
   CodeViewLineScrollTarget,
   CodeViewPositionScrollTarget,
@@ -89,7 +88,7 @@ interface AdvancedVirtualizedBaseItem {
    * when rendered. */
   element: HTMLElement | undefined;
   /** Last controlled version observed for this record. */
-  version: CodeViewItemVersion | undefined;
+  version: number | undefined;
 }
 
 interface CodeViewDiffItemContext<
@@ -120,7 +119,7 @@ export interface CodeViewRenderedDiffItem<LAnnotation> {
   id: string;
   type: 'diff';
   item: CodeViewDiffItem<LAnnotation>;
-  version: CodeViewItemVersion | undefined;
+  version: number | undefined;
   element: HTMLElement;
   instance: VirtualizedFileDiff<LAnnotation>;
 }
@@ -129,7 +128,7 @@ export interface CodeViewRenderedFileItem<LAnnotation> {
   id: string;
   type: 'file';
   item: CodeViewFileItem<LAnnotation>;
-  version: CodeViewItemVersion | undefined;
+  version: number | undefined;
   element: HTMLElement;
   instance: VirtualizedFile<LAnnotation>;
 }
@@ -364,7 +363,7 @@ export interface CodeViewOptions<LAnnotation>
     CodeViewSharedCallbackOptions<LAnnotation>,
     CodeViewSelectionCallbackOptions<LAnnotation> {
   hunkSeparators?: Exclude<HunkSeparators, 'custom'>;
-  itemMetrics?: VirtualFileMetrics;
+  itemMetrics?: Partial<VirtualFileMetrics>;
   pointerEventsOnScroll?: boolean;
   smoothScrollSettings?: SmoothScrollSettings;
   stickyHeaders?: boolean;
@@ -459,6 +458,7 @@ export class CodeView<LAnnotation = undefined> {
     stickyTop: -1,
     stickyBottom: -1,
   };
+  private itemMetricsCache: VirtualFileMetrics = DEFAULT_CODE_VIEW_FILE_METRICS;
   // Pending scroll target, either instant or smooth. The next render cycle
   // will attempt to resolve it's position instantly or as part of a dynamic
   // animation.
@@ -498,6 +498,7 @@ export class CodeView<LAnnotation = undefined> {
     isContainerManaged = false
   ) {
     this.options = options;
+    this.computeMetricsCache(options.itemMetrics);
     this.workerManager = workerManager;
     this.isContainerManaged = isContainerManaged;
 
@@ -514,8 +515,26 @@ export class CodeView<LAnnotation = undefined> {
     return this.options.layout ?? DEFAULT_CODE_VIEW_LAYOUT;
   }
 
-  private getItemMetrics(): VirtualFileMetrics {
-    return this.options.itemMetrics ?? DEFAULT_CODE_VIEW_FILE_METRICS;
+  private computeMetricsCache(
+    itemMetrics: Partial<VirtualFileMetrics> | undefined
+  ): VirtualFileMetrics {
+    this.itemMetricsCache = {
+      hunkLineCount:
+        itemMetrics?.hunkLineCount ??
+        DEFAULT_CODE_VIEW_FILE_METRICS.hunkLineCount,
+      lineHeight:
+        itemMetrics?.lineHeight ?? DEFAULT_CODE_VIEW_FILE_METRICS.lineHeight,
+      diffHeaderHeight:
+        itemMetrics?.diffHeaderHeight ??
+        DEFAULT_CODE_VIEW_FILE_METRICS.diffHeaderHeight,
+      hunkSeparatorHeight:
+        itemMetrics?.hunkSeparatorHeight ??
+        DEFAULT_CODE_VIEW_FILE_METRICS.hunkSeparatorHeight,
+      spacing: itemMetrics?.spacing ?? DEFAULT_CODE_VIEW_FILE_METRICS.spacing,
+      paddingTop: itemMetrics?.paddingTop,
+      paddingBottom: itemMetrics?.paddingBottom,
+    };
+    return this.itemMetricsCache;
   }
 
   private getSmoothScrollSettings(): SmoothScrollSettings {
@@ -922,13 +941,13 @@ export class CodeView<LAnnotation = undefined> {
 
     this.capturePendingLayoutAnchor();
     const previousLayout = this.getLayout();
-    const previousItemMetrics = this.getItemMetrics();
+    const { itemMetricsCache: previousItemMetrics } = this;
 
     // NOTE(amadeus): This is also something that's probably ridiculously
     // expensive to pull off, and we should probably figure out some way to
     // incrementally version/render stuff
     this.options = options;
-    const nextItemMetrics = this.getItemMetrics();
+    const nextItemMetrics = this.computeMetricsCache(options.itemMetrics);
     const itemMetricsChanged = !areObjectsEqual(
       previousItemMetrics,
       nextItemMetrics
@@ -1100,7 +1119,7 @@ export class CodeView<LAnnotation = undefined> {
     index: number,
     top: number
   ): CodeViewContextItem<LAnnotation> {
-    const itemMetrics = this.getItemMetrics();
+    const { itemMetricsCache: itemMetrics } = this;
     if (input.type === 'diff') {
       return {
         type: 'diff',
@@ -1655,7 +1674,7 @@ export class CodeView<LAnnotation = undefined> {
   private getStickyHeaderOffset(): number {
     return this.options.stickyHeaders === true &&
       this.options.disableFileHeader !== true
-      ? this.getItemMetrics().diffHeaderHeight
+      ? this.itemMetricsCache.diffHeaderHeight
       : 0;
   }
 
@@ -2298,7 +2317,7 @@ export class CodeView<LAnnotation = undefined> {
     stickyBottom,
   }: StickyBounds): void {
     const height = this.getHeight();
-    const itemMetrics = this.getItemMetrics();
+    const { itemMetricsCache: itemMetrics } = this;
     const stickyContainerHeight = stickyBottom - stickyTop;
 
     this.renderState.stickyHeight = stickyContainerHeight;
@@ -2810,7 +2829,7 @@ export class CodeView<LAnnotation = undefined> {
   // between.  We do this by adding the the gap and header height above and
   // below the viewport
   private getFitPerfectlyOverscroll() {
-    return this.getLayout().gap + this.getItemMetrics().diffHeaderHeight;
+    return this.getLayout().gap + this.itemMetricsCache.diffHeaderHeight;
   }
 }
 

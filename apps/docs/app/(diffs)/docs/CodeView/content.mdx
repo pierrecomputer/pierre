@@ -2,97 +2,70 @@
 
 <Notice icon={<IconInfoFill />}>
   `CodeView` is the high-level API for rendering one large scroll region that
-  can contain files, diffs, or a mix of both.
+  can contain files, diffs, or both.
 </Notice>
 
-`CodeView` renders an ordered `CodeViewItem[]` list and manages the hard parts
-for you: virtualization, measured layout reconciliation, sticky headers,
-selection across items, and `scrollTo` targeting by item, line, or absolute
-position.
+`CodeView` renders a list of `CodeViewItem[]` and manages the hard parts for
+you: virtualization, measured layout reconciliation, sticky headers, selection
+across items, and `scrollTo` targeting by item, line, or absolute position.
 
-Use it when the amount of content is large, unbounded, or hard to predict. It is
-meant to handle anything from a single file up to very large multi-file diff
-surfaces without you wiring together the lower-level virtualization primitives
-yourself.
+You can check out a live demo at [diffshub.com](https://diffshub.com)
+
+<DocsCodeExample {...codeViewItemTypeExample} />
+
+If you need to render one or more files or diffs in a scrollable container, use
+CodeView to avoid handling scaling yourself.
 
 ### What It Gives You
 
-- One scroll container for the whole surface instead of one scroller per file.
-- A mixed list of `file` and `diff` items in one ordered stream.
-- Built-in virtualization for large amounts of content.
-- `scrollTo` APIs for item ids, line targets, and raw scroll positions.
-- Shared selection, annotations, custom headers, and gutter utilities across the
-  full viewer.
+- One scroll container for a mixed list of `file` and `diff` items.
+- Built-in per-line virtualization that should scale to nearly any file or diff
+  that can fit in memory.
+- `scrollTo` APIs for items, line targets, and raw scroll positions.
+- Unified selection API, support for custom annotations, custom headers, and
+  gutter utilities across the entire viewer.
 
 ### Core Model
 
-- Every item needs a stable unique `id`. That id is how `scrollTo`, selection,
-  `getItem`, `updateItem`, and reconciliation find the correct record.
+`CodeView` is designed to enable easy rendering of any files or diffs,
+regardless of scale, so its data model does not depend on traditional
+immutability or deep equality checks, which can quickly become expensive.
+
+- Every item needs a stable unique `id`. That id is how `scrollTo`, line
+  selection, `getItem`, `updateItem`, and reconciliation find the correct
+  records.
 - Items are either `{ type: 'file', file }` or `{ type: 'diff', fileDiff }`.
-- If you keep the same item id but change its content or annotations, publish a
-  new `version` so `CodeView` refreshes that item in place without rebuilding
-  the whole surface.
-- Selection is viewer-wide, so the payload shape is `{ id, range }` instead of
-  only a line range.
-- Set `collapsed: true` on an item to mount that file or diff as header-only.
-  Collapse state is part of the item snapshot, so publish a new `version` when
-  changing it for an existing item id.
+- If you keep the same item id but change its content or annotations, you must
+  increment the `version` so `CodeView` can make an efficient targeted updates
+  based only on what changed without recomputing everything.
+- Selection is viewer-wide, meaning a selection in one file will remove the
+  selection in another file in the same scroll view. The payload shape is
+  `{ id, range }` instead of only a line range.
+- The `collapsed` property on an item controls whether file or diff content is
+  shown. You'll have to wire up your own custom header or utilities if you want
+  to control it interactively. Remember to update `version` when this value
+  changes.
 - CodeView-level options such as `layout`, `itemMetrics`, `stickyHeaders`,
-  `pointerEventsOnScroll`, and `smoothScrollSettings` tune the outer
-  orchestrator. Most of the regular `File` / `FileDiff` options are still
-  forwarded to each item, but `collapsed` is item-owned in `CodeView`.
+  `pointerEventsOnScroll`, and `smoothScrollSettings` allow you to configure the
+  scroll view. All other options are shared between all files and diffs.
 
-### Layout And Item Metrics
+### Padding &amp; Gap
 
-`CodeView` has two layout-related option groups. `layout` controls the spacing
-owned by the outer scroll surface:
+For controlling layout inside and between items in `CodeView`, you can use the
+`layout` prop. Unlike `itemMetrics`, these values actually set internal values
+and adjust the layout. You should not apply these values with CSS yourself.
 
-```ts
-options: {
-  layout: {
-    paddingTop: 16,
-    paddingBottom: 24,
-    gap: 12,
-  }
-}
-```
+<DocsCodeExample {...codeViewLayoutOptionsExample} />
 
-`itemMetrics` does not change the rendered layout. It only tells `CodeView` what
-heights to expect for each rendered file or diff. Those estimates need to match
-the actual DOM layout or the viewer can scroll to the wrong position, produce
-sticky-header gaps, or render the wrong window of lines.
+### File &amp; Diff Size Estimation
 
-Only customize `itemMetrics` when you use `unsafeCSS` to change layout-affecting
-styles. Enable the internal development validator while tuning those values:
+`CodeView` uses a line-based virtualization system that renders a minimal
+snapshot to keep browser performance top of mind. Under the hood, it estimates
+the mathematical size of all code, then corrects and caches those estimates as
+you scroll and more content renders. These estimates are based on `itemMetrics`,
+and can be verified with the `__devOnlyValidateItemHeights` property.
 
-```ts
-options: {
-  __devOnlyValidateItemHeights: true,
-  itemMetrics: {
-    lineHeight: 22,
-    diffHeaderHeight: 48,
-    hunkSeparatorHeight: 32,
-    hunkLineCount: 1,
-    spacing: 8,
-  },
-}
-```
-
-Any `unsafeCSS` that changes file header height, line height, hunk separator
-height, padding, or vertical spacing must be reflected in `itemMetrics`, and
-`__devOnlyValidateItemHeights` is the fastest way to catch mismatches while
-developing.
-
-`__devOnlyValidateItemHeights` compares each rendered item host's DOM height
-with the item height that `CodeView` reconciled for its active sticky window.
-When the values differ, `CodeView` logs a console error with the item id, item
-type, expected height, actual height, delta, scroll position, and related
-DOM/instance references.
-
-The validator option lives on the top-level `CodeView` options object because it
-is a diagnostic switch for the whole viewer, not one of the layout metrics. It
-only runs when the package is used in development, and is disabled intentionally
-in production builds because it can cause a significant performance hit.
+<DocsCodeExample {...codeViewItemMetricsOptionsExample} />
 
 ### Examples
 
@@ -149,26 +122,13 @@ items or update existing ones.
 
 ### Scroll Targets
 
-`scrollTo` supports three target shapes:
+`scrollTo` supports four target shapes:
 
-```ts
-viewer.scrollTo({ type: 'item', id: 'diff:src/app.ts', align: 'start' });
+<DocsCodeExample {...codeViewScrollTargetsExample} />
 
-viewer.scrollTo({
-  type: 'line',
-  id: 'diff:src/app.ts',
-  lineNumber: 42,
-  side: 'additions',
-  align: 'center',
-  behavior: 'smooth-auto',
-});
-
-viewer.scrollTo({ type: 'position', position: 0 });
-```
-
-Line and item targets resolve against live measured layout, so they continue to
-work even when wrapped lines or annotations change the rendered heights after
-initial paint.
+Line, range, and item targets resolve against live measured layout, so they
+continue to work even when wrapped lines or annotations change the rendered
+heights after initial paint.
 
 ### Relationship To Virtualization
 
@@ -179,6 +139,6 @@ prone to blanking than the lower-level virtualization APIs.
 
 Drop down to [Virtualization](#virtualization) when you need a more flexible,
 mixed-content layout that `CodeView` cannot own directly. That flexibility comes
-with tradeoffs: the lower-level virtualizer always mounts every top-level file
-or diff container, is easier to blank during aggressive scroll, and is usually
-less performant than `CodeView`.
+with trade-offs: the lower-level virtualizer always mounts every top-level file
+or diff container, can blank more easily during aggressive scroll, and is
+generally less performant than `CodeView`.

@@ -420,11 +420,11 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         disableLineNumbers: !lineNumbers,
         lineHoverHighlight: 'number',
         // hunkSeparators: 'line-info-basic',
-        // FIXME(amadeus): We need to optimize this...
         enableLineSelection: true,
         enableGutterUtility: true,
         stickyHeaders: true,
         unsafeCSS: CODE_VIEW_CUSTOM_CSS,
+        // FIXME(amadeus): Move all `onX` methods onto the react component maybe?
         onGutterUtilityClick(range, context) {
           if (context.item.type !== 'diff') {
             return;
@@ -457,7 +457,6 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       options={options}
       selectedLines={selectedLines}
       onSelectedLinesChange={handleSetSelection}
-      // To test annotations and headers and stuff...
       renderAnnotation={renderCommentAnnotation}
       renderHeaderPrefix={renderHeaderPrefix}
     />

@@ -8,6 +8,151 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
+export const CODE_VIEW_ITEM_TYPE_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'code_view_items.ts',
+    contents: `type CodeViewFileItem<T = undefined> = {
+  type: 'file';
+  id: string;
+  file: FileContents;
+  annotations?: LineAnnotation<T>[];
+  collapsed?: boolean;
+  // Any time a value changes on an item, you must increment the version. This
+  // is an intentional escape hatch to avoid potentially expensive deep object
+  // equality checks
+  version?: number;
+};
+
+type CodeViewDiffItem<T = undefined> = {
+  type: 'diff';
+  id: string;
+  fileDiff: FileDiffMetadata;
+  annotations?: DiffLineAnnotation<T>[];
+  collapsed?: boolean;
+  // Any time a value changes on an item, you must increment the version. This
+  // is an intentional escape hatch to avoid potentially expensive deep object
+  // equality checks
+  version?: number;
+};
+
+type CodeViewItem<T = undefined> = CodeViewFileItem<T> | CodeViewDiffItem<T>;`,
+  },
+  options,
+};
+
+export const CODE_VIEW_LAYOUT_OPTIONS_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'code_view_layout.ts',
+    contents: `options: {
+  layout: {
+    // Controls how much spacing before files/diffs
+    paddingTop: 16,
+    // Controls how much spacing after files/diffs
+    paddingBottom: 16,
+    // Controls how much spacing between files/diffs
+    gap: 12,
+  }
+}`,
+  },
+  options,
+};
+
+export const CODE_VIEW_ITEM_METRICS_OPTIONS_EXAMPLE: PreloadFileOptions<undefined> =
+  {
+    file: {
+      name: 'code_view_item_metrics.ts',
+      contents: `const options: CodeViewOptions = {
+  // As a general rule if you are using any \`unsafeCSS\` or custom line-height,
+  // you should test with \`__devOnlyValidateItemHeights\` enabled to ensure
+  // that estimations are working correctly. Otherwise CodeView's layout and
+  // scrolling can become inaccurate. Don't leave this property on because it
+  // incurs a significant performance penalty. With this property enabled, open
+  // the console and scroll around your CodeView. If you don't see any console 
+  // errors you should be good.
+  __devOnlyValidateItemHeights: true,
+
+  // Use \`itemMetrics\` to correct any issues identified by
+  // \`__devOnlyValidateItemHeights\`. If you are only using default settings then
+  // you shouldn't need to use \`itemMetrics\` at all. All fields are optional.
+  itemMetrics: {
+    // This should match your defined line-height for code. No need to define if
+    // you're using the default line-height.
+    lineHeight: number | undefined;
+
+    // If you've customized the header for files or diffs via unsafeCSS in a way
+    // that changes how tall they are, you'll need to set that new height here.
+    diffHeaderHeight: number | undefined;
+
+    // -------------------
+
+    // Advanced Measurement Values - you probably should NEVER set these next
+    // values unless you absolutely know what you're doing and fully understand the
+    // different rendering scenarios for files and diffs
+
+    // If you've customized hunk separators at all with unsafeCSS that changes
+    // their height, you need to define that new height here.  If you've just set
+    // a different type, their sizes will be handled automatically for you
+    hunkSeparatorHeight: number | undefined;
+
+    // Vertical spacing used around hunks, also gets used in calculations for
+    // padding if paddingTop/Bottom are not defined. The rules for this are
+    // dependent on the type of hunk separators that are used. Normally you should
+    // never need to edit this unless applying custom CSS to hunk separators that
+    // changes the spacing around them.  DO NOT EDIT THIS UNLESS you fully
+    // understand how the CSS and HTML work.
+    spacing: number | undefined;
+
+    // Top padding applied after the file header, or before content when
+    // the header is disabled.  This should match the effects of your unsafeCSS, it
+    // does not actually change paddingTop.  Like the spacing prop, this is for
+    // advanced use cases that fully understand how the HTML and CSS work.
+    paddingTop: number | undefined;
+
+    // Bottom padding applied after the file content and only if there is
+    // code to render.  This should match the effects of your unsafeCSS, it does not
+    // actually change paddingBottom.  Like the spacing prop, this is for advanced
+    // use cases that fully understand how the HTML and CSS work.
+    paddingBottom: number | undefined;
+  }
+}`,
+    },
+    options,
+  };
+
+export const CODE_VIEW_SCROLL_TARGETS_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'code_view_scroll_targets.ts',
+    contents: `// Scroll directly to a file or diff
+viewer.scrollTo({ type: 'item', id: 'diff:src/app.ts', align: 'start' });
+
+// Scroll directly to a line in a file or diff
+viewer.scrollTo({
+  type: 'line',
+  id: 'diff:src/app.ts',
+  lineNumber: 42,
+  side: 'additions',
+  align: 'center',
+  behavior: 'smooth-auto',
+});
+
+// Scroll directly to a range of lines in a file or diff
+viewer.scrollTo({
+  type: 'range',
+  id: 'diff:src/app.ts',
+  range: { start: 42, end: 48 },
+  align: 'center',
+  behavior: 'smooth-auto',
+});
+
+// Scroll directly to a pixel position in the CodeView scroll container. Generally
+// you want to avoid this for scrolling to a file or line because, due to layout
+// estimation: the target's actual position may change after it's rendered. It can
+// still be useful for scrolling to the top.
+viewer.scrollTo({ type: 'position', position: 0 });`,
+  },
+  options,
+};
+
 export const CODE_VIEW_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'code_view_react.tsx',
@@ -21,23 +166,23 @@ import { useMemo, useRef, useState } from 'react';
 
 const oldAppFile = {
   name: 'src/app.ts',
-  contents: 'export function greet() {\n  return "hello";\n}',
+  contents: \`export function greet() {\n  return "hello";\n}\`,
 };
 
 const newAppFile = {
   name: 'src/app.ts',
   contents:
-    'export function greet(name: string) {\n  return "hello " + name;\n}',
+    \`export function greet(name: string) {\n  return "hello " + name;\n}\`,
 };
 
 const readmeFile = {
   name: 'README.md',
-  contents: '# Docs\n\nThis file is rendered inline with the diff list.',
+  contents: \`# Docs\n\nThis file is rendered inline with the diff list.\`,
 };
 
 const changelogFile = {
   name: 'CHANGELOG.md',
-  contents: '# Changelog\n\n- Added personalized greetings.',
+  contents: \`# Changelog\n\n- Added personalized greetings.\`,
 };
 
 export function ReviewSurface() {
@@ -90,7 +235,7 @@ export function ReviewSurface() {
 
           viewer.updateItem({
             ...item,
-            version: typeof item.version === 'number' ? item.version + 1 : 1,
+            version: item.version != null ? item.version + 1 : 1,
             collapsed: !item.collapsed,
           });
         }}
@@ -139,17 +284,6 @@ export function ReviewSurface() {
             Note for {item.id} on line {annotation.lineNumber}
           </div>
         )}
-        renderGutterUtility={(getHoveredLine, item) => {
-          const hoveredLine = getHoveredLine();
-          if (hoveredLine == null || item.type !== 'diff') {
-            return null;
-          }
-          return (
-            <button type="button">
-              Comment on line {hoveredLine.lineNumber}
-            </button>
-          );
-        }}
       />
     </>
   );
