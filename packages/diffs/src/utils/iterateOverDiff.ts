@@ -48,8 +48,6 @@ type DiffStyle = 'unified' | 'split' | 'both';
 
 type EqualLineIterationRange = [startIndex: number, endIndex: number];
 
-type ChangeContentSide = 'deletions' | 'additions';
-
 interface IterationState {
   finalHunk: Hunk | undefined;
   isWindowedHighlight: boolean;
@@ -75,6 +73,18 @@ interface IterationStartState {
 interface HunkPrefixCounts {
   splitCount: number;
   unifiedCount: number;
+}
+
+interface ChangeIterationRanges {
+  count: number;
+  firstStart: number;
+  firstEnd: number;
+  secondStart: number;
+  secondEnd: number;
+  thirdStart: number;
+  thirdEnd: number;
+  fourthStart: number;
+  fourthEnd: number;
 }
 
 interface IterationStartStateProps extends Omit<
@@ -212,6 +222,17 @@ export function iterateOverDiff({
       }
       return callback(props) ?? false;
     },
+  };
+  const changeRanges: ChangeIterationRanges = {
+    count: 0,
+    firstStart: 0,
+    firstEnd: 0,
+    secondStart: 0,
+    secondEnd: 0,
+    thirdStart: 0,
+    thirdEnd: 0,
+    fourthStart: 0,
+    fourthEnd: 0,
   };
 
   hunkIterator: for (
@@ -518,14 +539,30 @@ export function iterateOverDiff({
         const unifiedCount = content.deletions + content.additions;
         const shouldSkipChange = state.shouldSkip(unifiedCount, splitCount);
         if (!shouldSkipChange) {
-          const iterationRanges = getChangeIterationRanges(
-            state,
-            content,
-            diffStyle
-          );
+          setChangeIterationRanges(state, content, diffStyle, changeRanges);
+          for (
+            let rangeOffset = 0;
+            rangeOffset < changeRanges.count;
+            rangeOffset++
+          ) {
+            const rangeStart =
+              rangeOffset === 0
+                ? changeRanges.firstStart
+                : rangeOffset === 1
+                  ? changeRanges.secondStart
+                  : rangeOffset === 2
+                    ? changeRanges.thirdStart
+                    : changeRanges.fourthStart;
+            const rangeEnd =
+              rangeOffset === 0
+                ? changeRanges.firstEnd
+                : rangeOffset === 1
+                  ? changeRanges.secondEnd
+                  : rangeOffset === 2
+                    ? changeRanges.thirdEnd
+                    : changeRanges.fourthEnd;
 
-          // No need for any skipping because the render ranges skip for us
-          for (const [rangeStart, rangeEnd] of iterationRanges) {
+            // No need for any skipping because the render ranges skip for us
             for (let index = rangeStart; index < rangeEnd; index++) {
               const unifiedRowIndex = unifiedLineIndex + index;
               const splitRowIndex =
@@ -651,7 +688,7 @@ function getIterationStartState({
   expandedHunks,
   collapsedContextThreshold,
 }: IterationStartStateProps): IterationStartState {
-  if (startingLine <= 0 || diffStyle === 'both') {
+  if (startingLine <= 0) {
     return { hunkIndex: 0, splitCount: 0, unifiedCount: 0 };
   }
 
@@ -671,10 +708,15 @@ function getIterationStartState({
     if (counts == null) {
       throw new Error('iterateOverDiff: invalid hunk prefix index');
     }
-    const selectedCount =
-      diffStyle === 'unified' ? counts.unifiedCount : counts.splitCount;
+    const isPastStartingLine =
+      diffStyle === 'unified'
+        ? counts.unifiedCount > startingLine
+        : diffStyle === 'split'
+          ? counts.splitCount > startingLine
+          : counts.unifiedCount > startingLine ||
+            counts.splitCount > startingLine;
 
-    if (selectedCount > startingLine) {
+    if (isPastStartingLine) {
       result = mid;
       high = mid - 1;
     } else {
@@ -775,32 +817,26 @@ function getEqualLineIterationRange(
     return [0, count];
   }
 
-  const ranges: EqualLineIterationRange[] = [];
-  function pushRange(currentCount: number): void {
-    const start = Math.max(0, state.viewportStart - currentCount);
-    const end = Math.min(count, state.viewportEnd - currentCount);
-    if (end > start) {
-      ranges.push([start, end]);
+  let start = Infinity;
+  let end = -Infinity;
+  function mergeRange(currentCount: number): void {
+    const rangeStart = Math.max(0, state.viewportStart - currentCount);
+    const rangeEnd = Math.min(count, state.viewportEnd - currentCount);
+    if (rangeEnd > rangeStart) {
+      start = Math.min(start, rangeStart);
+      end = Math.max(end, rangeEnd);
     }
   }
 
   if (diffStyle !== 'split') {
-    pushRange(state.unifiedCount);
+    mergeRange(state.unifiedCount);
   }
   if (diffStyle !== 'unified') {
-    pushRange(state.splitCount);
+    mergeRange(state.splitCount);
   }
 
-  if (ranges.length === 0) {
+  if (end < 0) {
     return [0, 0];
-  }
-
-  let start = ranges[0][0];
-  let end = ranges[0][1];
-  for (let index = 1; index < ranges.length; index++) {
-    const range = ranges[index];
-    start = Math.min(start, range[0]);
-    end = Math.max(end, range[1]);
   }
   return [start, end];
 }
@@ -884,107 +920,195 @@ function hasFinalCollapsedHunk(diff: FileDiffMetadata): boolean {
   );
 }
 
-// The intention of this function is to grab the appropriate windowed ranges of
-// the change content.  If diffStyle is both, we will iterate AS split, however
-// we will encompass all needed lines to allow us to render split or unified
-function getChangeIterationRanges(
+function pushChangeIterationRange(
+  ranges: ChangeIterationRanges,
+  start: number,
+  end: number
+): void {
+  if (end <= start || ranges.count >= 4) {
+    return;
+  }
+
+  if (ranges.count === 0) {
+    ranges.firstStart = start;
+    ranges.firstEnd = end;
+  } else if (ranges.count === 1) {
+    ranges.secondStart = start;
+    ranges.secondEnd = end;
+  } else if (ranges.count === 2) {
+    ranges.thirdStart = start;
+    ranges.thirdEnd = end;
+  } else {
+    ranges.fourthStart = start;
+    ranges.fourthEnd = end;
+  }
+  ranges.count++;
+}
+
+function pushVisibleChangeIterationRange(
+  state: IterationState,
+  ranges: ChangeIterationRanges,
+  baseStart: number,
+  count: number,
+  iterationOffset: number
+): void {
+  const baseEnd = baseStart + count;
+  if (baseEnd <= state.viewportStart || baseStart >= state.viewportEnd) {
+    return;
+  }
+  pushChangeIterationRange(
+    ranges,
+    Math.max(0, state.viewportStart - baseStart) + iterationOffset,
+    Math.min(count, state.viewportEnd - baseStart) + iterationOffset
+  );
+}
+
+function swapFirstSecondChangeRange(ranges: ChangeIterationRanges): void {
+  const start = ranges.firstStart;
+  const end = ranges.firstEnd;
+  ranges.firstStart = ranges.secondStart;
+  ranges.firstEnd = ranges.secondEnd;
+  ranges.secondStart = start;
+  ranges.secondEnd = end;
+}
+
+function swapSecondThirdChangeRange(ranges: ChangeIterationRanges): void {
+  const start = ranges.secondStart;
+  const end = ranges.secondEnd;
+  ranges.secondStart = ranges.thirdStart;
+  ranges.secondEnd = ranges.thirdEnd;
+  ranges.thirdStart = start;
+  ranges.thirdEnd = end;
+}
+
+function swapThirdFourthChangeRange(ranges: ChangeIterationRanges): void {
+  const start = ranges.thirdStart;
+  const end = ranges.thirdEnd;
+  ranges.thirdStart = ranges.fourthStart;
+  ranges.thirdEnd = ranges.fourthEnd;
+  ranges.fourthStart = start;
+  ranges.fourthEnd = end;
+}
+
+function sortChangeIterationRanges(ranges: ChangeIterationRanges): void {
+  if (ranges.count > 1 && ranges.secondStart < ranges.firstStart) {
+    swapFirstSecondChangeRange(ranges);
+  }
+  if (ranges.count > 2 && ranges.thirdStart < ranges.secondStart) {
+    swapSecondThirdChangeRange(ranges);
+  }
+  if (ranges.count > 1 && ranges.secondStart < ranges.firstStart) {
+    swapFirstSecondChangeRange(ranges);
+  }
+  if (ranges.count > 3 && ranges.fourthStart < ranges.thirdStart) {
+    swapThirdFourthChangeRange(ranges);
+  }
+  if (ranges.count > 2 && ranges.thirdStart < ranges.secondStart) {
+    swapSecondThirdChangeRange(ranges);
+  }
+  if (ranges.count > 1 && ranges.secondStart < ranges.firstStart) {
+    swapFirstSecondChangeRange(ranges);
+  }
+}
+
+function mergeFirstSecondChangeRange(ranges: ChangeIterationRanges): void {
+  ranges.firstEnd = Math.max(ranges.firstEnd, ranges.secondEnd);
+  ranges.secondStart = ranges.thirdStart;
+  ranges.secondEnd = ranges.thirdEnd;
+  ranges.thirdStart = ranges.fourthStart;
+  ranges.thirdEnd = ranges.fourthEnd;
+  ranges.count--;
+}
+
+function mergeSecondThirdChangeRange(ranges: ChangeIterationRanges): void {
+  ranges.secondEnd = Math.max(ranges.secondEnd, ranges.thirdEnd);
+  ranges.thirdStart = ranges.fourthStart;
+  ranges.thirdEnd = ranges.fourthEnd;
+  ranges.count--;
+}
+
+function mergeChangeIterationRanges(ranges: ChangeIterationRanges): void {
+  if (ranges.count > 1 && ranges.secondStart <= ranges.firstEnd) {
+    mergeFirstSecondChangeRange(ranges);
+  }
+  if (ranges.count > 1 && ranges.secondStart <= ranges.firstEnd) {
+    mergeFirstSecondChangeRange(ranges);
+  }
+  if (ranges.count > 1 && ranges.secondStart <= ranges.firstEnd) {
+    mergeFirstSecondChangeRange(ranges);
+  }
+  if (ranges.count > 2 && ranges.thirdStart <= ranges.secondEnd) {
+    mergeSecondThirdChangeRange(ranges);
+  }
+  if (ranges.count > 2 && ranges.thirdStart <= ranges.secondEnd) {
+    mergeSecondThirdChangeRange(ranges);
+  }
+  if (ranges.count > 3 && ranges.fourthStart <= ranges.thirdEnd) {
+    ranges.thirdEnd = Math.max(ranges.thirdEnd, ranges.fourthEnd);
+    ranges.count--;
+  }
+}
+
+// Store the visible sub-ranges of a change block without allocating temporary
+// range arrays. For `diffStyle: both` the iterator still emits rows in split
+// row space, but it merges the split and unified visible windows so either view
+// can make a row worth emitting.
+function setChangeIterationRanges(
   state: IterationState,
   content: ChangeContent,
-  diffStyle: DiffStyle
-): EqualLineIterationRange[] {
+  diffStyle: DiffStyle,
+  ranges: ChangeIterationRanges
+): void {
+  ranges.count = 0;
+
   // If not a window highlight, then we should just render the entire range
   if (!state.isWindowedHighlight) {
-    return [
-      [
-        0,
-        diffStyle === 'unified'
-          ? content.deletions + content.additions
-          : Math.max(content.deletions, content.additions),
-      ],
-    ];
-  }
-  const useUnified = diffStyle !== 'split';
-  const useSplit = diffStyle !== 'unified';
-  const iterationSpace = diffStyle === 'unified' ? 'unified' : 'split';
-  const iterationRanges: EqualLineIterationRange[] = [];
-  function getVisibleRange(
-    start: number,
-    count: number
-  ): EqualLineIterationRange | undefined {
-    const end = start + count;
-    if (end <= state.viewportStart || start >= state.viewportEnd) {
-      return undefined;
-    }
-    const visibleStart = Math.max(0, state.viewportStart - start);
-    const visibleEnd = Math.min(count, state.viewportEnd - start);
-    return visibleEnd > visibleStart ? [visibleStart, visibleEnd] : undefined;
-  }
-  function mapRangeToIteration(
-    range: EqualLineIterationRange,
-    kind: ChangeContentSide
-  ): EqualLineIterationRange {
-    if (iterationSpace === 'split') {
-      // For split iteration, additions/deletions are already in split row space.
-      return range;
-    }
-    return kind === 'additions'
-      ? [range[0] + content.deletions, range[1] + content.deletions]
-      : range;
-  }
-  function pushRange(
-    range: EqualLineIterationRange | undefined,
-    kind: ChangeContentSide
-  ) {
-    if (range == null) {
-      return;
-    }
-    const [start, end] = mapRangeToIteration(range, kind);
-    if (end > start) {
-      iterationRanges.push([start, end]);
-    }
+    pushChangeIterationRange(
+      ranges,
+      0,
+      diffStyle === 'unified'
+        ? content.deletions + content.additions
+        : Math.max(content.deletions, content.additions)
+    );
+    return;
   }
 
-  if (useUnified) {
-    pushRange(
-      getVisibleRange(state.unifiedCount, content.deletions),
-      'deletions'
+  if (diffStyle !== 'split') {
+    pushVisibleChangeIterationRange(
+      state,
+      ranges,
+      state.unifiedCount,
+      content.deletions,
+      0
     );
-    pushRange(
-      getVisibleRange(
-        state.unifiedCount + content.deletions,
-        content.additions
-      ),
-      'additions'
+    pushVisibleChangeIterationRange(
+      state,
+      ranges,
+      state.unifiedCount + content.deletions,
+      content.additions,
+      diffStyle === 'unified' ? content.deletions : 0
     );
   }
 
-  if (useSplit) {
-    pushRange(
-      getVisibleRange(state.splitCount, content.deletions),
-      'deletions'
+  if (diffStyle !== 'unified') {
+    pushVisibleChangeIterationRange(
+      state,
+      ranges,
+      state.splitCount,
+      content.deletions,
+      0
     );
-    pushRange(
-      getVisibleRange(state.splitCount, content.additions),
-      'additions'
+    pushVisibleChangeIterationRange(
+      state,
+      ranges,
+      state.splitCount,
+      content.additions,
+      0
     );
   }
 
-  if (iterationRanges.length === 0) {
-    return iterationRanges;
-  }
-
-  iterationRanges.sort((a, b) => a[0] - b[0]);
-  const merged: EqualLineIterationRange[] = [iterationRanges[0]];
-  for (const [start, end] of iterationRanges.slice(1)) {
-    const last = merged[merged.length - 1];
-    if (start <= last[1]) {
-      last[1] = Math.max(last[1], end);
-    } else {
-      merged.push([start, end]);
-    }
-  }
-
-  return merged;
+  sortChangeIterationRanges(ranges);
+  mergeChangeIterationRanges(ranges);
 }
 
 interface GetChangeLineDataProps {

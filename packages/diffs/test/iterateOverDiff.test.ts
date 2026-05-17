@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 
 import { parseDiffFromFile } from '../src';
 import { baseline_iterateOverDiff } from '../src/utils/baseline_iterateOverDiff';
@@ -10,6 +11,15 @@ import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { fileNew, fileOld } from './mocks';
 
 type IterateOverDiffFunction = (props: IterateOverDiffProps) => void;
+
+interface IterateOverDiffFixture {
+  files: Array<{
+    summary: {
+      name: string;
+    };
+    diff: IterateOverDiffProps['diff'];
+  }>;
+}
 
 interface LineSnapshot {
   unifiedLineIndex: number;
@@ -34,6 +44,39 @@ function createFileContents(lineCount: number): string {
   return Array.from({ length: lineCount }, (_, index) => `${index + 1}`).join(
     '\n'
   );
+}
+
+function getRenderedLineEstimate(
+  diff: IterateOverDiffProps['diff'],
+  diffStyle: IterateOverDiffProps['diffStyle']
+): number {
+  if (diffStyle === 'split') return diff.splitLineCount;
+  if (diffStyle === 'unified') return diff.unifiedLineCount;
+  return Math.max(diff.splitLineCount, diff.unifiedLineCount);
+}
+
+function getDeepStart(
+  diff: IterateOverDiffProps['diff'],
+  diffStyle: IterateOverDiffProps['diffStyle'],
+  totalLines: number
+): number {
+  const renderedRows = getRenderedLineEstimate(diff, diffStyle);
+  return Math.max(
+    0,
+    Math.floor(renderedRows * 0.75) - Math.floor(totalLines / 2)
+  );
+}
+
+function loadRealFixture(): IterateOverDiffFixture {
+  return JSON.parse(
+    readFileSync(
+      new URL(
+        '../scripts/fixtures/iterateOverDiffTopChanges.json',
+        import.meta.url
+      ),
+      'utf8'
+    )
+  ) as IterateOverDiffFixture;
 }
 
 function cloneLineSnapshot(
@@ -391,5 +434,17 @@ describe('iterateOverDiff', () => {
     expect(checksumRows(iterateOverDiff, checksumProps)).toBe(
       checksumRows(baseline_iterateOverDiff, checksumProps)
     );
+  });
+
+  test('real fixture both-style deep windows match the baseline iterator', () => {
+    const totalLines = 300;
+    for (const { diff: fixtureDiff } of loadRealFixture().files) {
+      expectMatchesBaseline({
+        diff: fixtureDiff,
+        diffStyle: 'both',
+        startingLine: getDeepStart(fixtureDiff, 'both', totalLines),
+        totalLines,
+      });
+    }
   });
 });
