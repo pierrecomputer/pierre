@@ -18,7 +18,7 @@ type CallbackMode =
   | 'scroll-anchor'
   | 'render-range';
 
-type BenchmarkPreset = 'smoke' | 'standard' | 'exhaustive';
+type BenchmarkPreset = 'smoke' | 'standard' | 'exhaustive' | 'stress';
 
 interface FixtureSummary {
   rank: number;
@@ -196,11 +196,16 @@ function parseNonNegativeInteger(value: string, flagName: string): number {
 }
 
 function parsePreset(value: string): BenchmarkPreset {
-  if (value === 'smoke' || value === 'standard' || value === 'exhaustive') {
+  if (
+    value === 'smoke' ||
+    value === 'standard' ||
+    value === 'exhaustive' ||
+    value === 'stress'
+  ) {
     return value;
   }
   throw new Error(
-    `Invalid --preset value "${value}". Expected smoke, standard, or exhaustive.`
+    `Invalid --preset value "${value}". Expected smoke, standard, exhaustive, or stress.`
   );
 }
 
@@ -328,7 +333,7 @@ function printHelpAndExit(): never {
     '  --memory-batch-runs <n>  Case invocations per memory sample (default: 25)'
   );
   console.log(
-    '  --preset <name>          smoke, standard, or exhaustive (default: standard)'
+    '  --preset <name>          smoke, standard, exhaustive, or stress (default: standard)'
   );
   console.log('  --fixture <text>         Only run fixtures containing text');
   console.log('  --case <text>            Only run cases containing text');
@@ -1111,6 +1116,64 @@ function createSyntheticFixtures(): BenchmarkFixture[] {
   }));
 }
 
+function createSingleAdditionHunkDiff(lineCount: number): FileDiffMetadata {
+  const additionLines = Array.from(
+    { length: lineCount },
+    (_, index) => `stress-addition-${index + 1}`
+  );
+  return {
+    name: `synthetic-single-${lineCount}-line-hunk.txt`,
+    type: 'new',
+    hunks: [
+      {
+        collapsedBefore: 0,
+        additionStart: 1,
+        additionCount: lineCount,
+        additionLines: lineCount,
+        additionLineIndex: 0,
+        deletionStart: 0,
+        deletionCount: 0,
+        deletionLines: 0,
+        deletionLineIndex: 0,
+        hunkContent: [
+          {
+            type: 'change',
+            deletions: 0,
+            deletionLineIndex: 0,
+            additions: lineCount,
+            additionLineIndex: 0,
+          },
+        ],
+        hunkSpecs: `@@ -0,0 +1,${lineCount} @@`,
+        splitLineStart: 0,
+        splitLineCount: lineCount,
+        unifiedLineStart: 0,
+        unifiedLineCount: lineCount,
+        noEOFCRDeletions: false,
+        noEOFCRAdditions: false,
+      },
+    ],
+    splitLineCount: lineCount,
+    unifiedLineCount: lineCount,
+    isPartial: false,
+    deletionLines: [],
+    additionLines,
+  };
+}
+
+function createStressFixtures(): BenchmarkFixture[] {
+  const diff = createSingleAdditionHunkDiff(500_000);
+  return [
+    {
+      id: 'stress-500k-single-hunk',
+      label: `stress#1:${shortName(diff.name)}`,
+      source: 'synthetic',
+      summary: makeSummary(1, diff),
+      diff,
+    },
+  ];
+}
+
 function createPartialExpansionMap(): Map<number, HunkExpansionRegion> {
   return new Map([
     [0, { fromStart: 40, fromEnd: 40 }],
@@ -1242,6 +1305,18 @@ function createExhaustiveCases(fixture: BenchmarkFixture): BenchmarkCase[] {
   return cases;
 }
 
+function createStressCases(fixture: BenchmarkFixture): BenchmarkCase[] {
+  const cases: BenchmarkCase[] = [];
+  for (const diffStyle of ['unified', 'split', 'both'] satisfies DiffStyle[]) {
+    cases.push(makeCase(fixture, 'noop', diffStyle, 'full'));
+    cases.push(makeCase(fixture, 'checksum', diffStyle, 'full'));
+  }
+  for (const diffStyle of ['unified', 'split'] satisfies DiffStyle[]) {
+    cases.push(makeCase(fixture, 'layout-size', diffStyle, 'full'));
+  }
+  return cases;
+}
+
 function createBenchmarkCases(
   fixtures: BenchmarkFixture[],
   config: BenchmarkConfig
@@ -1258,6 +1333,7 @@ function createBenchmarkCases(
   const cases = baseFixtures.flatMap((fixture) => {
     if (config.preset === 'smoke') return createSmokeCases(fixture);
     if (config.preset === 'exhaustive') return createExhaustiveCases(fixture);
+    if (config.preset === 'stress') return createStressCases(fixture);
     return createStandardCases(fixture);
   });
 
@@ -1320,10 +1396,13 @@ function runCaseSet(
 
 function main() {
   const config = parseArgs(process.argv.slice(2));
-  const fixtures = [
-    ...loadRealFixtures(config.fixturePath),
-    ...(config.includeSynthetic ? createSyntheticFixtures() : []),
-  ];
+  const fixtures =
+    config.preset === 'stress'
+      ? createStressFixtures()
+      : [
+          ...loadRealFixtures(config.fixturePath),
+          ...(config.includeSynthetic ? createSyntheticFixtures() : []),
+        ];
   const cases = createBenchmarkCases(fixtures, config);
   if (cases.length === 0) {
     throw new Error('No benchmark cases matched the provided filters.');
