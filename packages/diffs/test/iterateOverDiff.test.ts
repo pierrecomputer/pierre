@@ -1,8 +1,118 @@
 import { describe, expect, test } from 'bun:test';
 
 import { parseDiffFromFile } from '../src';
+import { baseline_iterateOverDiff } from '../src/utils/baseline_iterateOverDiff';
+import type {
+  DiffLineCallbackProps,
+  IterateOverDiffProps,
+} from '../src/utils/iterateOverDiff';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { fileNew, fileOld } from './mocks';
+
+type IterateOverDiffFunction = (props: IterateOverDiffProps) => void;
+
+interface LineSnapshot {
+  unifiedLineIndex: number;
+  splitLineIndex: number;
+  lineIndex: number;
+  lineNumber: number;
+  noEOFCR: boolean;
+}
+
+interface RowSnapshot {
+  type: DiffLineCallbackProps['type'];
+  hunkIndex: number;
+  hasHunk: boolean;
+  hunkSpecs: string | undefined;
+  collapsedBefore: number;
+  collapsedAfter: number;
+  deletionLine: LineSnapshot | undefined;
+  additionLine: LineSnapshot | undefined;
+}
+
+function createFileContents(lineCount: number): string {
+  return Array.from({ length: lineCount }, (_, index) => `${index + 1}`).join(
+    '\n'
+  );
+}
+
+function cloneLineSnapshot(
+  line: DiffLineCallbackProps['deletionLine']
+): LineSnapshot | undefined {
+  if (line == null) {
+    return undefined;
+  }
+  return {
+    unifiedLineIndex: line.unifiedLineIndex,
+    splitLineIndex: line.splitLineIndex,
+    lineIndex: line.lineIndex,
+    lineNumber: line.lineNumber,
+    noEOFCR: line.noEOFCR,
+  };
+}
+
+function cloneRowSnapshot(props: DiffLineCallbackProps): RowSnapshot {
+  return {
+    type: props.type,
+    hunkIndex: props.hunkIndex,
+    hasHunk: props.hunk != null,
+    hunkSpecs: props.hunk?.hunkSpecs,
+    collapsedBefore: props.collapsedBefore,
+    collapsedAfter: props.collapsedAfter,
+    deletionLine: cloneLineSnapshot(props.deletionLine),
+    additionLine: cloneLineSnapshot(props.additionLine),
+  };
+}
+
+function captureRows(
+  iterator: IterateOverDiffFunction,
+  props: Omit<IterateOverDiffProps, 'callback'>,
+  stopAfter?: number
+): RowSnapshot[] {
+  const rows: RowSnapshot[] = [];
+  iterator({
+    ...props,
+    callback: (row) => {
+      rows.push(cloneRowSnapshot(row));
+      return stopAfter != null && rows.length >= stopAfter;
+    },
+  });
+  return rows;
+}
+
+function expectMatchesBaseline(
+  props: Omit<IterateOverDiffProps, 'callback'>,
+  stopAfter?: number
+) {
+  const baselineRows = captureRows(baseline_iterateOverDiff, props, stopAfter);
+  const rows = captureRows(iterateOverDiff, props, stopAfter);
+  expect(rows).toEqual(baselineRows);
+  return rows;
+}
+
+function checksumRows(
+  iterator: IterateOverDiffFunction,
+  props: Omit<IterateOverDiffProps, 'callback'>
+): number {
+  let checksum = 0;
+  iterator({
+    ...props,
+    callback: (row) => {
+      checksum += row.hunkIndex;
+      checksum += row.type.length;
+      checksum += row.collapsedBefore + row.collapsedAfter;
+      checksum += row.deletionLine?.lineIndex ?? 0;
+      checksum += row.deletionLine?.lineNumber ?? 0;
+      checksum += row.deletionLine?.splitLineIndex ?? 0;
+      checksum += row.deletionLine?.unifiedLineIndex ?? 0;
+      checksum += row.additionLine?.lineIndex ?? 0;
+      checksum += row.additionLine?.lineNumber ?? 0;
+      checksum += row.additionLine?.splitLineIndex ?? 0;
+      checksum += row.additionLine?.unifiedLineIndex ?? 0;
+    },
+  });
+  return checksum;
+}
 
 // NOTE(amadeus): These tests were written by an AI and they are probably
 // pretty sloppy, but keeping them for now until we can have better tests
@@ -166,5 +276,120 @@ describe('iterateOverDiff', () => {
     for (let i = 1; i < results.length; i++) {
       expect(results[i]).toBe(results[i - 1] + 1);
     }
+  });
+
+  test('both-style deep windowing matches the baseline iterator', () => {
+    const oldFile = {
+      name: 'both-deep-window.txt',
+      contents: createFileContents(1_000),
+    };
+    const newLines = oldFile.contents.split('\n');
+    newLines[249] = 'changed-250';
+    newLines[799] = 'changed-800';
+    const largeDiff = parseDiffFromFile(oldFile, {
+      ...oldFile,
+      contents: newLines.join('\n'),
+    });
+
+    const rows = expectMatchesBaseline({
+      diff: largeDiff,
+      diffStyle: 'both',
+      startingLine: 700,
+      totalLines: 25,
+      expandedHunks: true,
+    });
+
+    expect(rows.length).toBeGreaterThan(0);
+    expect(
+      rows.some(
+        (row) =>
+          (row.additionLine?.lineNumber ?? row.deletionLine?.lineNumber ?? 0) >
+          700
+      )
+    ).toBe(true);
+  });
+
+  test('expanded leading context windows match the baseline iterator', () => {
+    const oldFile = {
+      name: 'expanded-leading-context.txt',
+      contents: createFileContents(120),
+    };
+    const newLines = oldFile.contents.split('\n');
+    newLines[59] = 'changed-60';
+    const leadingDiff = parseDiffFromFile(oldFile, {
+      ...oldFile,
+      contents: newLines.join('\n'),
+    });
+    const expandedHunks = new Map([[0, { fromStart: 12, fromEnd: 8 }]]);
+
+    const fromStartRows = expectMatchesBaseline({
+      diff: leadingDiff,
+      diffStyle: 'split',
+      startingLine: 5,
+      totalLines: 8,
+      expandedHunks,
+    });
+    const fromEndRows = expectMatchesBaseline({
+      diff: leadingDiff,
+      diffStyle: 'split',
+      startingLine: 12,
+      totalLines: 8,
+      expandedHunks,
+    });
+
+    expect(fromStartRows.every((row) => row.type === 'context-expanded')).toBe(
+      true
+    );
+    expect(fromEndRows[0]?.collapsedBefore).toBeGreaterThan(0);
+    expect(fromEndRows.every((row) => row.type === 'context-expanded')).toBe(
+      true
+    );
+  });
+
+  test('trailing collapsed context matches the baseline iterator', () => {
+    const oldFile = {
+      name: 'trailing-context.txt',
+      contents: createFileContents(160),
+    };
+    const newLines = oldFile.contents.split('\n');
+    newLines[1] = 'changed-2';
+    const trailingDiff = parseDiffFromFile(oldFile, {
+      ...oldFile,
+      contents: newLines.join('\n'),
+    });
+
+    const rows = expectMatchesBaseline({
+      diff: trailingDiff,
+      diffStyle: 'unified',
+    });
+
+    expect(rows.some((row) => row.collapsedAfter > 0)).toBe(true);
+  });
+
+  test('early return stops at the same row as the baseline iterator', () => {
+    const rows = expectMatchesBaseline(
+      {
+        diff,
+        diffStyle: 'split',
+        expandedHunks: true,
+      },
+      7
+    );
+
+    expect(rows).toHaveLength(7);
+  });
+
+  test('supports transient callback consumption without retaining row objects', () => {
+    const checksumProps = {
+      diff,
+      diffStyle: 'both' as const,
+      startingLine: 100,
+      totalLines: 50,
+      expandedHunks: true as const,
+    };
+
+    expect(checksumRows(iterateOverDiff, checksumProps)).toBe(
+      checksumRows(baseline_iterateOverDiff, checksumProps)
+    );
   });
 });

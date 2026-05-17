@@ -61,6 +61,9 @@
     "build": "tsdown --clean",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "benchmark:parse-merge-conflict": "bun run ./scripts/benchmarkParseMergeConflictDiffFromFile.ts",
+    "benchmark:iterate-over-diff": "bun run ./scripts/benchmarkIterateOverDiff.ts",
+    "benchmark:iterate-over-diff:compare": "bun run ./scripts/compareIterateOverDiffBenchmark.ts",
+    "benchmark:iterate-over-diff:fixture": "bun run ./scripts/generateIterateOverDiffFixture.ts",
     "test": "bun test",
     "tsc": "tsgo --noEmit --pretty",
     "prepublishOnly": "bun run build"
