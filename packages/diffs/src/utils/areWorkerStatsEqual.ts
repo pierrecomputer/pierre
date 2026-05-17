@@ -12,7 +12,7 @@ export function areWorkerStatsEqual(
     statsA.diffCacheSize === statsB.diffCacheSize &&
     statsA.fileCacheSize === statsB.fileCacheSize &&
     statsA.managerState === statsB.managerState &&
-    statsA.pendingTasks === statsB.pendingTasks &&
+    statsA.activeTasks === statsB.activeTasks &&
     statsA.queuedTasks === statsB.queuedTasks &&
     statsA.themeSubscribers === statsB.themeSubscribers &&
     statsA.totalWorkers === statsB.totalWorkers &&

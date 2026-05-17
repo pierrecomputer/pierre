@@ -32,6 +32,7 @@ import type {
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
+import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 import { roundToDevicePixel } from '../utils/roundToDevicePixel';
 import type { WorkerPoolManager } from '../worker';
 import type { FileOptions } from './File';
@@ -764,10 +765,23 @@ export class CodeView<LAnnotation = undefined> {
     }
   }
 
+  private primeScrollTarget(target: PendingScrollTarget): void {
+    if (target.type === 'position') return;
+
+    const item = this.idToItem.get(target.id);
+    if (item == null) return;
+
+    item.instance.primeHighlightCache();
+  }
+
   private resolveEffectiveScrollBehavior(
     target: CodeViewScrollTarget,
     destination: number
   ): Exclude<CodeViewScrollBehavior, 'smooth-auto'> {
+    if (prefersReducedMotion()) {
+      return 'instant';
+    }
+
     if (target.behavior !== 'smooth-auto') {
       return target.behavior ?? 'instant';
     }
@@ -791,6 +805,8 @@ export class CodeView<LAnnotation = undefined> {
     if (destination == null) {
       return;
     }
+
+    this.primeScrollTarget(pendingTarget);
 
     const behavior = this.resolveEffectiveScrollBehavior(
       pendingTarget,

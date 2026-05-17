@@ -84,14 +84,14 @@ describe('WorkerPoolManager lifecycle', () => {
     await withTimeout(initialization);
     expect(manager.getStats()).toMatchObject({
       managerState: 'waiting',
-      pendingTasks: 0,
+      activeTasks: 0,
       totalWorkers: 0,
       workersFailed: false,
     });
     expect(worker.terminated).toBe(true);
   });
 
-  test('settles initialization when terminate cancels pending worker setup', async () => {
+  test('settles initialization when terminate cancels active worker setup', async () => {
     const { initialization, manager, worker } = createInitializingManager();
     await worker.waitForInitializeRequest();
 
@@ -100,7 +100,7 @@ describe('WorkerPoolManager lifecycle', () => {
     await withTimeout(initialization);
     expect(manager.getStats()).toMatchObject({
       managerState: 'waiting',
-      pendingTasks: 0,
+      activeTasks: 0,
       totalWorkers: 0,
       workersFailed: false,
     });

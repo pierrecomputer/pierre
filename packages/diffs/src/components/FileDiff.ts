@@ -4,6 +4,7 @@ import { toHtml } from 'hast-util-to-html';
 import {
   CUSTOM_HEADER_SLOT_ID,
   DEFAULT_THEMES,
+  DEFAULT_TOKENIZE_MAX_LENGTH,
   DIFFS_TAG_NAME,
   EMPTY_RENDER_RANGE,
   HEADER_METADATA_SLOT_ID,
@@ -62,6 +63,7 @@ import {
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
+import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
@@ -960,6 +962,26 @@ export class FileDiff<LAnnotation = undefined> {
     }
     this.placeHolder.style.setProperty('height', `${height}px`);
     return true;
+  }
+
+  public primeHighlightCache(): void {
+    const { fileDiff, workerManager } = this;
+    if (
+      fileDiff == null ||
+      workerManager == null ||
+      isDiffPlainText(fileDiff)
+    ) {
+      return;
+    }
+    const tokenizeMaxLength =
+      this.options.tokenizeMaxLength ?? DEFAULT_TOKENIZE_MAX_LENGTH;
+    if (
+      Math.max(fileDiff.additionLines.length, fileDiff.deletionLines.length) >
+      tokenizeMaxLength
+    ) {
+      return;
+    }
+    workerManager.primeDiffHighlightCache(fileDiff);
   }
 
   private cleanChildNodes() {

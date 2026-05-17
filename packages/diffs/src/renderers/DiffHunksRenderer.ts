@@ -38,6 +38,7 @@ import type {
   ThemedDiffResult,
 } from '../types';
 import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
+import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createAnnotationElement as createDefaultAnnotationElement } from '../utils/createAnnotationElement';
 import { createContentColumn } from '../utils/createContentColumn';
@@ -82,7 +83,7 @@ interface PushLineWithAnnotation {
 
 interface GetRenderOptionsReturn {
   options: RenderDiffOptions;
-  forceRender: boolean;
+  forceHighlight: boolean;
 }
 
 interface PushSeparatorProps {
@@ -225,13 +226,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   public cleanUp(): void {
-    this.highlighter = undefined;
-    this.diff = undefined;
-    this.renderCache = undefined;
-    this.additionAnnotations = {};
-    this.deletionAnnotations = {};
+    this.recycle();
     this.expandedHunks.clear();
-    this.workerManager?.cleanUpPendingTasks(this);
     this.workerManager = undefined;
     this.onRenderUpdate = undefined;
   }
@@ -242,7 +238,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.renderCache = undefined;
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
-    this.workerManager?.cleanUpPendingTasks(this);
+    this.workerManager?.cleanUpTasks(this);
   }
 
   public setOptions(options: DiffHunksRendererOptions): void {
@@ -445,15 +441,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.getOptionsWithDefaults();
     const { renderCache } = this;
     if (renderCache?.result == null) {
-      return { options, forceRender: true };
+      return { options, forceHighlight: true };
     }
     if (
-      diff !== renderCache.diff ||
+      !areDiffTargetsEqual(diff, renderCache.diff) ||
       !areDiffRenderOptionsEqual(options, renderCache.options)
     ) {
-      return { options, forceRender: true };
+      return { options, forceHighlight: true };
     }
-    return { options, forceRender: false };
+    return { options, forceHighlight: false };
   }
 
   public renderDiff(
@@ -465,16 +461,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     const { expandUnchanged = false, collapsedContextThreshold } =
       this.getOptionsWithDefaults();
-    const cache = this.workerManager?.getDiffResultCache(diff);
-    if (cache != null && this.renderCache == null) {
+    let { options, forceHighlight } = this.getRenderOptions(diff);
+    const cache = this.getMatchingWorkerResultCache(diff, options);
+    if (cache != null && !this.hasHighlightedRenderCache(diff, options)) {
       this.renderCache = {
         diff,
         highlighted: true,
         renderRange: undefined,
         ...cache,
       };
+      forceHighlight = false;
     }
-    const { options, forceRender } = this.getRenderOptions(diff);
     const forcePlainText = isDiffMassive(diff, this.getTokenizeMaxLength());
     this.renderCache ??= {
       diff,
@@ -488,7 +485,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         forcePlainText ||
         this.renderCache.result == null ||
         (!this.renderCache.highlighted &&
-          (diff !== this.renderCache.diff ||
+          (!areDiffTargetsEqual(diff, this.renderCache.diff) ||
             !areRenderRangesEqual(this.renderCache.renderRange, renderRange)))
       ) {
         this.renderCache.diff = diff;
@@ -514,7 +511,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         // are lines to render
         renderRange.totalLines > 0 &&
         !forcePlainText &&
-        (!this.renderCache.highlighted || forceRender)
+        (!this.renderCache.highlighted || forceHighlight)
       ) {
         this.workerManager.highlightDiffAST(this, diff);
       }
@@ -533,7 +530,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       if (
         this.highlighter != null &&
         hasThemes &&
-        (forceRender ||
+        (forceHighlight ||
           forcePlainText ||
           (!this.renderCache.highlighted && canHighlight) ||
           this.renderCache.result == null)
@@ -649,8 +646,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     highlighted = true
   ): void {
     // NOTE(amadeus): This is a bad assumption, and I should figure out
-    // something better...
-    // If renderCache was blown away, we can assume we've run cleanUp()
+    // something better... If renderCache was blown away, we can assume we've
+    // run cleanUp()
     if (this.renderCache == null) {
       return;
     }
@@ -658,7 +655,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const triggerRenderUpdate =
       !this.renderCache.highlighted ||
       !areDiffRenderOptionsEqual(this.renderCache.options, options) ||
-      this.renderCache.diff !== diff;
+      !areDiffTargetsEqual(this.renderCache.diff, diff);
 
     this.renderCache = {
       diff,
@@ -670,6 +667,30 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (triggerRenderUpdate) {
       this.onRenderUpdate?.();
     }
+  }
+
+  private getMatchingWorkerResultCache(
+    diff: FileDiffMetadata,
+    options: RenderDiffOptions
+  ): RenderDiffResult | undefined {
+    const cache = this.workerManager?.getDiffResultCache(diff);
+    if (cache == null || !areDiffRenderOptionsEqual(options, cache.options)) {
+      return undefined;
+    }
+    return cache;
+  }
+
+  private hasHighlightedRenderCache(
+    diff: FileDiffMetadata,
+    options: RenderDiffOptions
+  ): boolean {
+    const { renderCache } = this;
+    return (
+      renderCache?.result != null &&
+      renderCache.highlighted &&
+      areDiffTargetsEqual(diff, renderCache.diff) &&
+      areDiffRenderOptionsEqual(options, renderCache.options)
+    );
   }
 
   public onHighlightError(error: unknown): void {

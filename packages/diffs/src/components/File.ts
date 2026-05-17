@@ -4,6 +4,7 @@ import { toHtml } from 'hast-util-to-html';
 import {
   CUSTOM_HEADER_SLOT_ID,
   DEFAULT_THEMES,
+  DEFAULT_TOKENIZE_MAX_LENGTH,
   DIFFS_TAG_NAME,
   EMPTY_RENDER_RANGE,
   HEADER_METADATA_SLOT_ID,
@@ -48,6 +49,7 @@ import {
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
+import { isFilePlainText } from '../utils/isFilePlainText';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
@@ -295,7 +297,9 @@ export class File<LAnnotation = undefined> {
     this.placeHolder = undefined;
     this.unsafeCSSStyle = undefined;
 
-    if (!recycle) {
+    if (recycle) {
+      this.fileRenderer.recycle();
+    } else {
       this.fileRenderer.cleanUp();
       this.workerManager = undefined;
       this.file = undefined;
@@ -632,6 +636,26 @@ export class File<LAnnotation = undefined> {
     }
     this.placeHolder.style.setProperty('height', `${height}px`);
     return true;
+  }
+
+  public primeHighlightCache(): void {
+    const { file, workerManager } = this;
+    if (
+      file == null ||
+      file.cacheKey == null ||
+      workerManager == null ||
+      isFilePlainText(file)
+    ) {
+      return;
+    }
+    const lines = this.fileRenderer.getOrCreateLineCache(file);
+    if (
+      lines.length >
+      (this.options.tokenizeMaxLength ?? DEFAULT_TOKENIZE_MAX_LENGTH)
+    ) {
+      return;
+    }
+    workerManager.primeFileHighlightCache(file);
   }
 
   private cleanChildNodes() {
