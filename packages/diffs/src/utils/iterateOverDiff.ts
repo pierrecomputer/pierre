@@ -368,36 +368,25 @@ export function iterateOverDiff({
           break;
         }
         if (state.isInWindow(0, 0)) {
-          if (
-            state.emit({
-              hunkIndex,
-              hunk: hunk,
-              collapsedBefore: 0,
-              collapsedAfter: 0,
-              // NOTE(amadeus): Pretty sure this is would never return a value,
-              // so lets not call it, but if i notice a bug, i may need to
-              // bring this back.
-              // collapsedAfter: getTrailingCollapsedAfter(
-              //   unifiedRowIndex,
-              //   splitRowIndex
-              // ),
-              type: 'context-expanded',
-              deletionLine: {
-                lineNumber: deletionLineNumber + index,
-                lineIndex: deletionLineIndex + index,
-                noEOFCR: false,
-                unifiedLineIndex: unifiedLineIndex + index,
-                splitLineIndex: splitLineIndex + index,
-              },
-              additionLine: {
-                unifiedLineIndex: unifiedLineIndex + index,
-                splitLineIndex: splitLineIndex + index,
-                lineIndex: additionLineIndex + index,
-                lineNumber: additionLineNumber + index,
-                noEOFCR: false,
-              },
-            })
-          ) {
+          setBothLineData({
+            target: reusableChangeProps,
+            deletionLine: reusableDeletionLine,
+            additionLine: reusableAdditionLine,
+            type: 'context-expanded',
+            hunkIndex,
+            hunk,
+            collapsedBefore: 0,
+            collapsedAfter: 0,
+            deletionLineNumber: deletionLineNumber + index,
+            deletionLineIndex: deletionLineIndex + index,
+            additionLineNumber: additionLineNumber + index,
+            additionLineIndex: additionLineIndex + index,
+            unifiedLineIndex: unifiedLineIndex + index,
+            splitLineIndex: splitLineIndex + index,
+            deletionNoEOF: false,
+            additionNoEOF: false,
+          });
+          if (state.emit(reusableChangeProps as DiffLineCallbackProps)) {
             break hunkIterator;
           }
         } else {
@@ -432,36 +421,25 @@ export function iterateOverDiff({
           break;
         }
         if (state.isInWindow(0, 0)) {
-          if (
-            state.emit({
-              hunkIndex,
-              hunk,
-              collapsedBefore: getPendingCollapsed(),
-              collapsedAfter: 0,
-              // NOTE(amadeus): Pretty sure this is would never return a value,
-              // so lets not call it, but if i notice a bug, i may need to
-              // bring this back.
-              // collapsedAfter: getTrailingCollapsedAfter(
-              //   unifiedRowIndex,
-              //   splitRowIndex
-              // ),
-              type: 'context-expanded',
-              deletionLine: {
-                lineNumber: deletionLineNumber + index,
-                lineIndex: deletionLineIndex + index,
-                noEOFCR: false,
-                unifiedLineIndex: unifiedLineIndex + index,
-                splitLineIndex: splitLineIndex + index,
-              },
-              additionLine: {
-                unifiedLineIndex: unifiedLineIndex + index,
-                splitLineIndex: splitLineIndex + index,
-                lineIndex: additionLineIndex + index,
-                lineNumber: additionLineNumber + index,
-                noEOFCR: false,
-              },
-            })
-          ) {
+          setBothLineData({
+            target: reusableChangeProps,
+            deletionLine: reusableDeletionLine,
+            additionLine: reusableAdditionLine,
+            type: 'context-expanded',
+            hunkIndex,
+            hunk,
+            collapsedBefore: getPendingCollapsed(),
+            collapsedAfter: 0,
+            deletionLineNumber: deletionLineNumber + index,
+            deletionLineIndex: deletionLineIndex + index,
+            additionLineNumber: additionLineNumber + index,
+            additionLineIndex: additionLineIndex + index,
+            unifiedLineIndex: unifiedLineIndex + index,
+            splitLineIndex: splitLineIndex + index,
+            deletionNoEOF: false,
+            additionNoEOF: false,
+          });
+          if (state.emit(reusableChangeProps as DiffLineCallbackProps)) {
             break hunkIterator;
           }
         } else {
@@ -514,32 +492,28 @@ export function iterateOverDiff({
               const isLastLine = isLastContent && index === content.lines - 1;
               const unifiedRowIndex = unifiedLineIndex + index;
               const splitRowIndex = splitLineIndex + index;
-              if (
-                state.emit({
-                  hunkIndex,
-                  hunk,
-                  collapsedBefore: getPendingCollapsed(),
-                  collapsedAfter: getTrailingCollapsedAfter(
-                    unifiedRowIndex,
-                    splitRowIndex
-                  ),
-                  type: 'context',
-                  deletionLine: {
-                    lineNumber: deletionLineNumber + index,
-                    lineIndex: deletionLineIndex + index,
-                    noEOFCR: isLastLine && hunk.noEOFCRDeletions,
-                    unifiedLineIndex: unifiedRowIndex,
-                    splitLineIndex: splitRowIndex,
-                  },
-                  additionLine: {
-                    unifiedLineIndex: unifiedRowIndex,
-                    splitLineIndex: splitRowIndex,
-                    lineIndex: additionLineIndex + index,
-                    lineNumber: additionLineNumber + index,
-                    noEOFCR: isLastLine && hunk.noEOFCRAdditions,
-                  },
-                })
-              ) {
+              setBothLineData({
+                target: reusableChangeProps,
+                deletionLine: reusableDeletionLine,
+                additionLine: reusableAdditionLine,
+                type: 'context',
+                hunkIndex,
+                hunk,
+                collapsedBefore: getPendingCollapsed(),
+                collapsedAfter: getTrailingCollapsedAfter(
+                  unifiedRowIndex,
+                  splitRowIndex
+                ),
+                deletionLineNumber: deletionLineNumber + index,
+                deletionLineIndex: deletionLineIndex + index,
+                additionLineNumber: additionLineNumber + index,
+                additionLineIndex: additionLineIndex + index,
+                unifiedLineIndex: unifiedRowIndex,
+                splitLineIndex: splitRowIndex,
+                deletionNoEOF: isLastLine && hunk.noEOFCRDeletions,
+                additionNoEOF: isLastLine && hunk.noEOFCRAdditions,
+              });
+              if (state.emit(reusableChangeProps as DiffLineCallbackProps)) {
                 break hunkIterator;
               }
             } else {
@@ -785,31 +759,25 @@ export function iterateOverDiff({
         }
         if (state.isInWindow(0, 0)) {
           const isLastLine = index === len - 1;
-          if (
-            state.emit({
-              hunkIndex: diff.hunks.length,
-              hunk: undefined,
-              collapsedBefore: 0,
-              collapsedAfter: isLastLine ? collapsedLines : 0,
-              type: 'context-expanded',
-              // NOTE(amadeus): Maybe create an object cache for this to reduce
-              // garbage collection?
-              deletionLine: {
-                lineNumber: deletionLineNumber + index,
-                lineIndex: deletionLineIndex + index,
-                noEOFCR: false,
-                unifiedLineIndex: unifiedLineIndex + index,
-                splitLineIndex: splitLineIndex + index,
-              },
-              additionLine: {
-                unifiedLineIndex: unifiedLineIndex + index,
-                splitLineIndex: splitLineIndex + index,
-                lineIndex: additionLineIndex + index,
-                lineNumber: additionLineNumber + index,
-                noEOFCR: false,
-              },
-            })
-          ) {
+          setBothLineData({
+            target: reusableChangeProps,
+            deletionLine: reusableDeletionLine,
+            additionLine: reusableAdditionLine,
+            type: 'context-expanded',
+            hunkIndex: diff.hunks.length,
+            hunk: undefined,
+            collapsedBefore: 0,
+            collapsedAfter: isLastLine ? collapsedLines : 0,
+            deletionLineNumber: deletionLineNumber + index,
+            deletionLineIndex: deletionLineIndex + index,
+            additionLineNumber: additionLineNumber + index,
+            additionLineIndex: additionLineIndex + index,
+            unifiedLineIndex: unifiedLineIndex + index,
+            splitLineIndex: splitLineIndex + index,
+            deletionNoEOF: false,
+            additionNoEOF: false,
+          });
+          if (state.emit(reusableChangeProps as DiffLineCallbackProps)) {
             break hunkIterator;
           }
         } else {
@@ -1280,6 +1248,25 @@ interface GetChangeLineDataProps {
   splitCount: number;
 }
 
+interface SetBothLineDataProps {
+  target: MutableDiffLineCallbackProps;
+  deletionLine: DiffLineMetadata;
+  additionLine: DiffLineMetadata;
+  type: DiffLineCallbackContextChange['type'];
+  hunkIndex: number;
+  hunk: Hunk | undefined;
+  collapsedBefore: number;
+  collapsedAfter: number;
+  deletionLineNumber: number;
+  deletionLineIndex: number;
+  additionLineNumber: number;
+  additionLineIndex: number;
+  unifiedLineIndex: number;
+  splitLineIndex: number;
+  deletionNoEOF: boolean;
+  additionNoEOF: boolean;
+}
+
 // NOTE(amadeus): It's quite tedious to grab the appropriate line info and
 // related props for change content regions, so I made it a specialized
 // function to help make the main hunkIterator easy to reason about
@@ -1306,6 +1293,50 @@ function setLineMetadata(
   target.lineIndex = lineIndex;
   target.lineNumber = lineNumber;
   target.noEOFCR = noEOFCR;
+}
+
+function setBothLineData({
+  target,
+  deletionLine,
+  additionLine,
+  type,
+  hunkIndex,
+  hunk,
+  collapsedBefore,
+  collapsedAfter,
+  deletionLineNumber,
+  deletionLineIndex,
+  additionLineNumber,
+  additionLineIndex,
+  unifiedLineIndex,
+  splitLineIndex,
+  deletionNoEOF,
+  additionNoEOF,
+}: SetBothLineDataProps): void {
+  target.type = type;
+  target.hunkIndex = hunkIndex;
+  target.hunk = hunk;
+  target.collapsedBefore = collapsedBefore;
+  target.collapsedAfter = collapsedAfter;
+
+  setLineMetadata(
+    deletionLine,
+    unifiedLineIndex,
+    splitLineIndex,
+    deletionLineIndex,
+    deletionLineNumber,
+    deletionNoEOF
+  );
+  setLineMetadata(
+    additionLine,
+    unifiedLineIndex,
+    splitLineIndex,
+    additionLineIndex,
+    additionLineNumber,
+    additionNoEOF
+  );
+  target.deletionLine = deletionLine;
+  target.additionLine = additionLine;
 }
 
 function setChangeLineData({
