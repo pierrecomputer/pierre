@@ -589,6 +589,85 @@ export function iterateOverDiff({
                 break hunkIterator;
               }
             }
+          } else if (
+            !state.isWindowedHighlight &&
+            content.deletions > 0 &&
+            content.additions > 0 &&
+            pendingCollapsedLines === 0 &&
+            trailingCollapsedLines <= 0 &&
+            !(isLastContent && hunk.noEOFCRAdditions) &&
+            !(isLastContent && hunk.noEOFCRDeletions)
+          ) {
+            reusableChangeProps.collapsedBefore = 0;
+            reusableChangeProps.collapsedAfter = 0;
+            reusableDeletionLine.noEOFCR = false;
+            reusableAdditionLine.noEOFCR = false;
+
+            if (diffStyle === 'unified') {
+              reusableChangeProps.deletionLine = reusableDeletionLine;
+              reusableChangeProps.additionLine = undefined;
+              for (let index = 0; index < content.deletions; index++) {
+                reusableDeletionLine.unifiedLineIndex =
+                  unifiedLineIndex + index;
+                reusableDeletionLine.splitLineIndex = splitLineIndex + index;
+                reusableDeletionLine.lineIndex = deletionLineIndex + index;
+                reusableDeletionLine.lineNumber = deletionLineNumber + index;
+                if (
+                  callback(reusableChangeProps as DiffLineCallbackProps) ===
+                  true
+                ) {
+                  break hunkIterator;
+                }
+              }
+
+              reusableChangeProps.deletionLine = undefined;
+              reusableChangeProps.additionLine = reusableAdditionLine;
+              for (let index = 0; index < content.additions; index++) {
+                reusableAdditionLine.unifiedLineIndex =
+                  unifiedLineIndex + content.deletions + index;
+                reusableAdditionLine.splitLineIndex = splitLineIndex + index;
+                reusableAdditionLine.lineIndex = additionLineIndex + index;
+                reusableAdditionLine.lineNumber = additionLineNumber + index;
+                if (
+                  callback(reusableChangeProps as DiffLineCallbackProps) ===
+                  true
+                ) {
+                  break hunkIterator;
+                }
+              }
+            } else {
+              const rowCount = splitCount;
+              for (let index = 0; index < rowCount; index++) {
+                if (index < content.deletions) {
+                  reusableDeletionLine.unifiedLineIndex =
+                    unifiedLineIndex + index;
+                  reusableDeletionLine.splitLineIndex = splitLineIndex + index;
+                  reusableDeletionLine.lineIndex = deletionLineIndex + index;
+                  reusableDeletionLine.lineNumber = deletionLineNumber + index;
+                  reusableChangeProps.deletionLine = reusableDeletionLine;
+                } else {
+                  reusableChangeProps.deletionLine = undefined;
+                }
+
+                if (index < content.additions) {
+                  reusableAdditionLine.unifiedLineIndex =
+                    unifiedLineIndex + content.deletions + index;
+                  reusableAdditionLine.splitLineIndex = splitLineIndex + index;
+                  reusableAdditionLine.lineIndex = additionLineIndex + index;
+                  reusableAdditionLine.lineNumber = additionLineNumber + index;
+                  reusableChangeProps.additionLine = reusableAdditionLine;
+                } else {
+                  reusableChangeProps.additionLine = undefined;
+                }
+
+                if (
+                  callback(reusableChangeProps as DiffLineCallbackProps) ===
+                  true
+                ) {
+                  break hunkIterator;
+                }
+              }
+            }
           } else {
             setChangeIterationRanges(state, content, diffStyle, changeRanges);
             if (content.deletions === 0) {
