@@ -539,187 +539,236 @@ export function iterateOverDiff({
         const unifiedCount = content.deletions + content.additions;
         const shouldSkipChange = state.shouldSkip(unifiedCount, splitCount);
         if (!shouldSkipChange) {
-          setChangeIterationRanges(state, content, diffStyle, changeRanges);
           reusableChangeProps.type = 'change';
           reusableChangeProps.hunkIndex = hunkIndex;
           reusableChangeProps.hunk = hunk;
-          if (content.deletions === 0) {
+
+          if (
+            !state.isWindowedHighlight &&
+            content.deletions === 0 &&
+            pendingCollapsedLines === 0 &&
+            trailingCollapsedLines <= 0 &&
+            !(isLastContent && hunk.noEOFCRAdditions)
+          ) {
             reusableChangeProps.deletionLine = undefined;
             reusableChangeProps.additionLine = reusableAdditionLine;
-            for (
-              let rangeOffset = 0;
-              rangeOffset < changeRanges.count;
-              rangeOffset++
-            ) {
-              const rangeStart =
-                rangeOffset === 0
-                  ? changeRanges.firstStart
-                  : rangeOffset === 1
-                    ? changeRanges.secondStart
-                    : rangeOffset === 2
-                      ? changeRanges.thirdStart
-                      : changeRanges.fourthStart;
-              const rangeEnd =
-                rangeOffset === 0
-                  ? changeRanges.firstEnd
-                  : rangeOffset === 1
-                    ? changeRanges.secondEnd
-                    : rangeOffset === 2
-                      ? changeRanges.thirdEnd
-                      : changeRanges.fourthEnd;
-
-              for (let index = rangeStart; index < rangeEnd; index++) {
-                const rowUnifiedLineIndex = unifiedLineIndex + index;
-                const rowSplitLineIndex = splitLineIndex + index;
-                reusableChangeProps.collapsedBefore = pendingCollapsedLines;
-                pendingCollapsedLines = 0;
-                reusableChangeProps.collapsedAfter =
-                  trailingCollapsedLines <= 0
-                    ? 0
-                    : diffStyle === 'unified'
-                      ? rowUnifiedLineIndex ===
-                        trailingCollapsedUnifiedLineIndex
-                        ? trailingCollapsedLines
-                        : 0
-                      : rowSplitLineIndex === trailingCollapsedSplitLineIndex
-                        ? trailingCollapsedLines
-                        : 0;
-                reusableAdditionLine.unifiedLineIndex = rowUnifiedLineIndex;
-                reusableAdditionLine.splitLineIndex = rowSplitLineIndex;
-                reusableAdditionLine.lineIndex = additionLineIndex + index;
-                reusableAdditionLine.lineNumber = additionLineNumber + index;
-                reusableAdditionLine.noEOFCR =
-                  isLastContent &&
-                  index === content.additions - 1 &&
-                  hunk.noEOFCRAdditions;
-                if (
-                  callback(reusableChangeProps as DiffLineCallbackProps) ===
-                  true
-                ) {
-                  break hunkIterator;
-                }
+            reusableChangeProps.collapsedBefore = 0;
+            reusableChangeProps.collapsedAfter = 0;
+            reusableAdditionLine.noEOFCR = false;
+            for (let index = 0; index < content.additions; index++) {
+              reusableAdditionLine.unifiedLineIndex = unifiedLineIndex + index;
+              reusableAdditionLine.splitLineIndex = splitLineIndex + index;
+              reusableAdditionLine.lineIndex = additionLineIndex + index;
+              reusableAdditionLine.lineNumber = additionLineNumber + index;
+              if (
+                callback(reusableChangeProps as DiffLineCallbackProps) === true
+              ) {
+                break hunkIterator;
               }
             }
-          } else if (content.additions === 0) {
+          } else if (
+            !state.isWindowedHighlight &&
+            content.additions === 0 &&
+            pendingCollapsedLines === 0 &&
+            trailingCollapsedLines <= 0 &&
+            !(isLastContent && hunk.noEOFCRDeletions)
+          ) {
             reusableChangeProps.deletionLine = reusableDeletionLine;
             reusableChangeProps.additionLine = undefined;
-            for (
-              let rangeOffset = 0;
-              rangeOffset < changeRanges.count;
-              rangeOffset++
-            ) {
-              const rangeStart =
-                rangeOffset === 0
-                  ? changeRanges.firstStart
-                  : rangeOffset === 1
-                    ? changeRanges.secondStart
-                    : rangeOffset === 2
-                      ? changeRanges.thirdStart
-                      : changeRanges.fourthStart;
-              const rangeEnd =
-                rangeOffset === 0
-                  ? changeRanges.firstEnd
-                  : rangeOffset === 1
-                    ? changeRanges.secondEnd
-                    : rangeOffset === 2
-                      ? changeRanges.thirdEnd
-                      : changeRanges.fourthEnd;
-
-              for (let index = rangeStart; index < rangeEnd; index++) {
-                const rowUnifiedLineIndex = unifiedLineIndex + index;
-                const rowSplitLineIndex = splitLineIndex + index;
-                reusableChangeProps.collapsedBefore = pendingCollapsedLines;
-                pendingCollapsedLines = 0;
-                reusableChangeProps.collapsedAfter =
-                  trailingCollapsedLines <= 0
-                    ? 0
-                    : diffStyle === 'unified'
-                      ? rowUnifiedLineIndex ===
-                        trailingCollapsedUnifiedLineIndex
-                        ? trailingCollapsedLines
-                        : 0
-                      : rowSplitLineIndex === trailingCollapsedSplitLineIndex
-                        ? trailingCollapsedLines
-                        : 0;
-                reusableDeletionLine.unifiedLineIndex = rowUnifiedLineIndex;
-                reusableDeletionLine.splitLineIndex = rowSplitLineIndex;
-                reusableDeletionLine.lineIndex = deletionLineIndex + index;
-                reusableDeletionLine.lineNumber = deletionLineNumber + index;
-                reusableDeletionLine.noEOFCR =
-                  isLastContent &&
-                  index === content.deletions - 1 &&
-                  hunk.noEOFCRDeletions;
-                if (
-                  callback(reusableChangeProps as DiffLineCallbackProps) ===
-                  true
-                ) {
-                  break hunkIterator;
-                }
+            reusableChangeProps.collapsedBefore = 0;
+            reusableChangeProps.collapsedAfter = 0;
+            reusableDeletionLine.noEOFCR = false;
+            for (let index = 0; index < content.deletions; index++) {
+              reusableDeletionLine.unifiedLineIndex = unifiedLineIndex + index;
+              reusableDeletionLine.splitLineIndex = splitLineIndex + index;
+              reusableDeletionLine.lineIndex = deletionLineIndex + index;
+              reusableDeletionLine.lineNumber = deletionLineNumber + index;
+              if (
+                callback(reusableChangeProps as DiffLineCallbackProps) === true
+              ) {
+                break hunkIterator;
               }
             }
           } else {
-            for (
-              let rangeOffset = 0;
-              rangeOffset < changeRanges.count;
-              rangeOffset++
-            ) {
-              const rangeStart =
-                rangeOffset === 0
-                  ? changeRanges.firstStart
-                  : rangeOffset === 1
-                    ? changeRanges.secondStart
-                    : rangeOffset === 2
-                      ? changeRanges.thirdStart
-                      : changeRanges.fourthStart;
-              const rangeEnd =
-                rangeOffset === 0
-                  ? changeRanges.firstEnd
-                  : rangeOffset === 1
-                    ? changeRanges.secondEnd
-                    : rangeOffset === 2
-                      ? changeRanges.thirdEnd
-                      : changeRanges.fourthEnd;
+            setChangeIterationRanges(state, content, diffStyle, changeRanges);
+            if (content.deletions === 0) {
+              reusableChangeProps.deletionLine = undefined;
+              reusableChangeProps.additionLine = reusableAdditionLine;
+              for (
+                let rangeOffset = 0;
+                rangeOffset < changeRanges.count;
+                rangeOffset++
+              ) {
+                const rangeStart =
+                  rangeOffset === 0
+                    ? changeRanges.firstStart
+                    : rangeOffset === 1
+                      ? changeRanges.secondStart
+                      : rangeOffset === 2
+                        ? changeRanges.thirdStart
+                        : changeRanges.fourthStart;
+                const rangeEnd =
+                  rangeOffset === 0
+                    ? changeRanges.firstEnd
+                    : rangeOffset === 1
+                      ? changeRanges.secondEnd
+                      : rangeOffset === 2
+                        ? changeRanges.thirdEnd
+                        : changeRanges.fourthEnd;
 
-              // No need for any skipping because the render ranges skip for us
-              for (let index = rangeStart; index < rangeEnd; index++) {
-                const unifiedRowIndex = unifiedLineIndex + index;
-                const splitRowIndex =
-                  diffStyle === 'unified'
-                    ? splitLineIndex +
-                      (index < content.deletions
-                        ? index
-                        : index - content.deletions)
-                    : splitLineIndex + index;
-                const collapsedAfter = getTrailingCollapsedAfter(
-                  unifiedRowIndex,
-                  splitRowIndex
-                );
-                setChangeLineData({
-                  target: reusableChangeProps,
-                  deletionLine: reusableDeletionLine,
-                  additionLine: reusableAdditionLine,
-                  hunkIndex,
-                  hunk,
-                  collapsedBefore: getPendingCollapsed(),
-                  collapsedAfter,
-                  diffStyle,
-                  index,
-                  unifiedLineIndex,
-                  splitLineIndex,
-                  additionLineIndex,
-                  deletionLineIndex,
-                  additionLineNumber,
-                  deletionLineNumber,
-                  content,
-                  isLastContent,
-                  unifiedCount,
-                  splitCount,
-                });
-                if (
-                  callback(reusableChangeProps as DiffLineCallbackProps) ===
-                  true
-                ) {
-                  break hunkIterator;
+                for (let index = rangeStart; index < rangeEnd; index++) {
+                  const rowUnifiedLineIndex = unifiedLineIndex + index;
+                  const rowSplitLineIndex = splitLineIndex + index;
+                  reusableChangeProps.collapsedBefore = pendingCollapsedLines;
+                  pendingCollapsedLines = 0;
+                  reusableChangeProps.collapsedAfter =
+                    trailingCollapsedLines <= 0
+                      ? 0
+                      : diffStyle === 'unified'
+                        ? rowUnifiedLineIndex ===
+                          trailingCollapsedUnifiedLineIndex
+                          ? trailingCollapsedLines
+                          : 0
+                        : rowSplitLineIndex === trailingCollapsedSplitLineIndex
+                          ? trailingCollapsedLines
+                          : 0;
+                  reusableAdditionLine.unifiedLineIndex = rowUnifiedLineIndex;
+                  reusableAdditionLine.splitLineIndex = rowSplitLineIndex;
+                  reusableAdditionLine.lineIndex = additionLineIndex + index;
+                  reusableAdditionLine.lineNumber = additionLineNumber + index;
+                  reusableAdditionLine.noEOFCR =
+                    isLastContent &&
+                    index === content.additions - 1 &&
+                    hunk.noEOFCRAdditions;
+                  if (
+                    callback(reusableChangeProps as DiffLineCallbackProps) ===
+                    true
+                  ) {
+                    break hunkIterator;
+                  }
+                }
+              }
+            } else if (content.additions === 0) {
+              reusableChangeProps.deletionLine = reusableDeletionLine;
+              reusableChangeProps.additionLine = undefined;
+              for (
+                let rangeOffset = 0;
+                rangeOffset < changeRanges.count;
+                rangeOffset++
+              ) {
+                const rangeStart =
+                  rangeOffset === 0
+                    ? changeRanges.firstStart
+                    : rangeOffset === 1
+                      ? changeRanges.secondStart
+                      : rangeOffset === 2
+                        ? changeRanges.thirdStart
+                        : changeRanges.fourthStart;
+                const rangeEnd =
+                  rangeOffset === 0
+                    ? changeRanges.firstEnd
+                    : rangeOffset === 1
+                      ? changeRanges.secondEnd
+                      : rangeOffset === 2
+                        ? changeRanges.thirdEnd
+                        : changeRanges.fourthEnd;
+
+                for (let index = rangeStart; index < rangeEnd; index++) {
+                  const rowUnifiedLineIndex = unifiedLineIndex + index;
+                  const rowSplitLineIndex = splitLineIndex + index;
+                  reusableChangeProps.collapsedBefore = pendingCollapsedLines;
+                  pendingCollapsedLines = 0;
+                  reusableChangeProps.collapsedAfter =
+                    trailingCollapsedLines <= 0
+                      ? 0
+                      : diffStyle === 'unified'
+                        ? rowUnifiedLineIndex ===
+                          trailingCollapsedUnifiedLineIndex
+                          ? trailingCollapsedLines
+                          : 0
+                        : rowSplitLineIndex === trailingCollapsedSplitLineIndex
+                          ? trailingCollapsedLines
+                          : 0;
+                  reusableDeletionLine.unifiedLineIndex = rowUnifiedLineIndex;
+                  reusableDeletionLine.splitLineIndex = rowSplitLineIndex;
+                  reusableDeletionLine.lineIndex = deletionLineIndex + index;
+                  reusableDeletionLine.lineNumber = deletionLineNumber + index;
+                  reusableDeletionLine.noEOFCR =
+                    isLastContent &&
+                    index === content.deletions - 1 &&
+                    hunk.noEOFCRDeletions;
+                  if (
+                    callback(reusableChangeProps as DiffLineCallbackProps) ===
+                    true
+                  ) {
+                    break hunkIterator;
+                  }
+                }
+              }
+            } else {
+              for (
+                let rangeOffset = 0;
+                rangeOffset < changeRanges.count;
+                rangeOffset++
+              ) {
+                const rangeStart =
+                  rangeOffset === 0
+                    ? changeRanges.firstStart
+                    : rangeOffset === 1
+                      ? changeRanges.secondStart
+                      : rangeOffset === 2
+                        ? changeRanges.thirdStart
+                        : changeRanges.fourthStart;
+                const rangeEnd =
+                  rangeOffset === 0
+                    ? changeRanges.firstEnd
+                    : rangeOffset === 1
+                      ? changeRanges.secondEnd
+                      : rangeOffset === 2
+                        ? changeRanges.thirdEnd
+                        : changeRanges.fourthEnd;
+
+                // No need for any skipping because the render ranges skip for us
+                for (let index = rangeStart; index < rangeEnd; index++) {
+                  const unifiedRowIndex = unifiedLineIndex + index;
+                  const splitRowIndex =
+                    diffStyle === 'unified'
+                      ? splitLineIndex +
+                        (index < content.deletions
+                          ? index
+                          : index - content.deletions)
+                      : splitLineIndex + index;
+                  const collapsedAfter = getTrailingCollapsedAfter(
+                    unifiedRowIndex,
+                    splitRowIndex
+                  );
+                  setChangeLineData({
+                    target: reusableChangeProps,
+                    deletionLine: reusableDeletionLine,
+                    additionLine: reusableAdditionLine,
+                    hunkIndex,
+                    hunk,
+                    collapsedBefore: getPendingCollapsed(),
+                    collapsedAfter,
+                    diffStyle,
+                    index,
+                    unifiedLineIndex,
+                    splitLineIndex,
+                    additionLineIndex,
+                    deletionLineIndex,
+                    additionLineNumber,
+                    deletionLineNumber,
+                    content,
+                    isLastContent,
+                    unifiedCount,
+                    splitCount,
+                  });
+                  if (
+                    callback(reusableChangeProps as DiffLineCallbackProps) ===
+                    true
+                  ) {
+                    break hunkIterator;
+                  }
                 }
               }
             }
