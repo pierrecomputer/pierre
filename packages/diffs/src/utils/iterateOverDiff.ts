@@ -101,7 +101,6 @@ interface IterationState {
   isInWindow(unifiedHeight: number, splitHeight: number): boolean;
   isInUnifiedWindow(height: number): boolean;
   isInSplitWindow(height: number): boolean;
-  emit(props: DiffLineCallbackProps, silent?: boolean): boolean;
 }
 
 interface IterationStartState {
@@ -264,24 +263,9 @@ export function iterateOverDiff({
           state.splitCount < startingLine + totalLines)
       );
     },
-    emit(props: DiffLineCallbackProps, silent = false): boolean {
-      if (!silent) {
-        if (diffStyle === 'unified') {
-          state.incrementCounts(1, 0);
-        } else if (diffStyle === 'split') {
-          state.incrementCounts(0, 1);
-        } else {
-          state.incrementCounts(1, 1);
-          // FIXME MAYBE
-          // state.incrementCounts(
-          //   state.isInUnifiedWindow(0) ? 1 : 0,
-          //   state.isInSplitWindow(0) ? 1 : 0
-          // );
-        }
-      }
-      return callback(props) ?? false;
-    },
   };
+  const emittedUnifiedIncrement = diffStyle === 'split' ? 0 : 1;
+  const emittedSplitIncrement = diffStyle === 'unified' ? 0 : 1;
   const changeRanges: ChangeIterationRanges = {
     count: 0,
     firstStart: 0,
@@ -429,30 +413,28 @@ export function iterateOverDiff({
           );
           break;
         }
-        if (state.isInWindow(0, 0)) {
-          setBothLineData(
-            reusableChangeProps,
-            reusableDeletionLine,
-            reusableAdditionLine,
-            'context-expanded',
-            hunkIndex,
-            hunk,
-            0,
-            0,
-            deletionLineNumber + index,
-            deletionLineIndex + index,
-            additionLineNumber + index,
-            additionLineIndex + index,
-            unifiedLineIndex + index,
-            splitLineIndex + index,
-            false,
-            false
-          );
-          if (state.emit(reusableChangeProps as DiffLineCallbackProps)) {
-            break hunkIterator;
-          }
-        } else {
-          state.incrementCounts(1, 1);
+        setBothLineData(
+          reusableChangeProps,
+          reusableDeletionLine,
+          reusableAdditionLine,
+          'context-expanded',
+          hunkIndex,
+          hunk,
+          0,
+          0,
+          deletionLineNumber + index,
+          deletionLineIndex + index,
+          additionLineNumber + index,
+          additionLineIndex + index,
+          unifiedLineIndex + index,
+          splitLineIndex + index,
+          false,
+          false
+        );
+        state.unifiedCount += emittedUnifiedIncrement;
+        state.splitCount += emittedSplitIncrement;
+        if (callback(reusableChangeProps as DiffLineCallbackProps) === true) {
+          break hunkIterator;
         }
         index++;
       }
@@ -482,30 +464,28 @@ export function iterateOverDiff({
           );
           break;
         }
-        if (state.isInWindow(0, 0)) {
-          setBothLineData(
-            reusableChangeProps,
-            reusableDeletionLine,
-            reusableAdditionLine,
-            'context-expanded',
-            hunkIndex,
-            hunk,
-            getPendingCollapsed(),
-            0,
-            deletionLineNumber + index,
-            deletionLineIndex + index,
-            additionLineNumber + index,
-            additionLineIndex + index,
-            unifiedLineIndex + index,
-            splitLineIndex + index,
-            false,
-            false
-          );
-          if (state.emit(reusableChangeProps as DiffLineCallbackProps)) {
-            break hunkIterator;
-          }
-        } else {
-          state.incrementCounts(1, 1);
+        setBothLineData(
+          reusableChangeProps,
+          reusableDeletionLine,
+          reusableAdditionLine,
+          'context-expanded',
+          hunkIndex,
+          hunk,
+          getPendingCollapsed(),
+          0,
+          deletionLineNumber + index,
+          deletionLineIndex + index,
+          additionLineNumber + index,
+          additionLineIndex + index,
+          unifiedLineIndex + index,
+          splitLineIndex + index,
+          false,
+          false
+        );
+        state.unifiedCount += emittedUnifiedIncrement;
+        state.splitCount += emittedSplitIncrement;
+        if (callback(reusableChangeProps as DiffLineCallbackProps) === true) {
+          break hunkIterator;
         }
         index++;
       }
@@ -609,33 +589,33 @@ export function iterateOverDiff({
               );
               break;
             }
-            if (state.isInWindow(0, 0)) {
-              const isLastLine = isLastContent && index === content.lines - 1;
-              const unifiedRowIndex = unifiedLineIndex + index;
-              const splitRowIndex = splitLineIndex + index;
-              setBothLineData(
-                reusableChangeProps,
-                reusableDeletionLine,
-                reusableAdditionLine,
-                'context',
-                hunkIndex,
-                hunk,
-                getPendingCollapsed(),
-                getTrailingCollapsedAfter(unifiedRowIndex, splitRowIndex),
-                deletionLineNumber + index,
-                deletionLineIndex + index,
-                additionLineNumber + index,
-                additionLineIndex + index,
-                unifiedRowIndex,
-                splitRowIndex,
-                isLastLine && hunk.noEOFCRDeletions,
-                isLastLine && hunk.noEOFCRAdditions
-              );
-              if (state.emit(reusableChangeProps as DiffLineCallbackProps)) {
-                break hunkIterator;
-              }
-            } else {
-              state.incrementCounts(1, 1);
+            const isLastLine = isLastContent && index === content.lines - 1;
+            const unifiedRowIndex = unifiedLineIndex + index;
+            const splitRowIndex = splitLineIndex + index;
+            setBothLineData(
+              reusableChangeProps,
+              reusableDeletionLine,
+              reusableAdditionLine,
+              'context',
+              hunkIndex,
+              hunk,
+              getPendingCollapsed(),
+              getTrailingCollapsedAfter(unifiedRowIndex, splitRowIndex),
+              deletionLineNumber + index,
+              deletionLineIndex + index,
+              additionLineNumber + index,
+              additionLineIndex + index,
+              unifiedRowIndex,
+              splitRowIndex,
+              isLastLine && hunk.noEOFCRDeletions,
+              isLastLine && hunk.noEOFCRAdditions
+            );
+            state.unifiedCount += emittedUnifiedIncrement;
+            state.splitCount += emittedSplitIncrement;
+            if (
+              callback(reusableChangeProps as DiffLineCallbackProps) === true
+            ) {
+              break hunkIterator;
             }
             index++;
           }
@@ -1204,31 +1184,29 @@ export function iterateOverDiff({
           state.incrementCounts(len - index, len - index);
           break;
         }
-        if (state.isInWindow(0, 0)) {
-          const isLastLine = index === len - 1;
-          setBothLineData(
-            reusableChangeProps,
-            reusableDeletionLine,
-            reusableAdditionLine,
-            'context-expanded',
-            diff.hunks.length,
-            undefined,
-            0,
-            isLastLine ? collapsedLines : 0,
-            deletionLineNumber + index,
-            deletionLineIndex + index,
-            additionLineNumber + index,
-            additionLineIndex + index,
-            unifiedLineIndex + index,
-            splitLineIndex + index,
-            false,
-            false
-          );
-          if (state.emit(reusableChangeProps as DiffLineCallbackProps)) {
-            break hunkIterator;
-          }
-        } else {
-          state.incrementCounts(1, 1);
+        const isLastLine = index === len - 1;
+        setBothLineData(
+          reusableChangeProps,
+          reusableDeletionLine,
+          reusableAdditionLine,
+          'context-expanded',
+          diff.hunks.length,
+          undefined,
+          0,
+          isLastLine ? collapsedLines : 0,
+          deletionLineNumber + index,
+          deletionLineIndex + index,
+          additionLineNumber + index,
+          additionLineIndex + index,
+          unifiedLineIndex + index,
+          splitLineIndex + index,
+          false,
+          false
+        );
+        state.unifiedCount += emittedUnifiedIncrement;
+        state.splitCount += emittedSplitIncrement;
+        if (callback(reusableChangeProps as DiffLineCallbackProps) === true) {
+          break hunkIterator;
         }
         index++;
       }
