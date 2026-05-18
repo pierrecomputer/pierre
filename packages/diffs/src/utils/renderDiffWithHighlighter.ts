@@ -91,8 +91,11 @@ export function renderDiffWithHighlighter(
   const buckets = new Map<number, RenderBucket>();
   function getBucketForHunk(hunkIndex: number) {
     const index = shouldGroupAll ? 0 : hunkIndex;
-    const bucket = buckets.get(index) ?? createBucket();
-    buckets.set(index, bucket);
+    let bucket = buckets.get(index);
+    if (bucket == null) {
+      bucket = createBucket();
+      buckets.set(index, bucket);
+    }
     return bucket;
   }
 
@@ -103,7 +106,7 @@ export function renderDiffWithHighlighter(
     contentWrapper: FakeArrayType
   ) {
     if (isWindowedHighlight) {
-      let segment = segments.at(-1);
+      let segment = segments[segments.length - 1];
       if (
         segment == null ||
         segment.targetIndex + segment.count !== lineIndex
@@ -131,7 +134,7 @@ export function renderDiffWithHighlighter(
       return;
     }
     if (isWindowedHighlight) {
-      let segment = segments.at(-1);
+      let segment = segments[segments.length - 1];
       if (
         segment == null ||
         segment.targetIndex + segment.count !== lineIndex
