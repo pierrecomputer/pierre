@@ -44,6 +44,9 @@ export class ResizeManager {
         if (item.numberElement !== numberElement) {
           if (item.numberElement != null) {
             this.resizeObserver.unobserve(item.numberElement);
+            // Mirrors the numberElement bookkeeping in the else-branch below.
+            observedNodes.delete(item.numberElement);
+            this.observedNodes.delete(item.numberElement);
           }
           if (numberElement != null) {
             this.resizeObserver.observe(numberElement);
