@@ -183,8 +183,9 @@ export function snapshotCodeViewTreeSource(
 ): CodeViewFileTreeSource {
   const snapshot: CodeViewFileTreeSource = {
     gitStatus: Array.from(accumulator.gitStatusByPath.values()),
-    paths: accumulator.paths.slice(),
-    pathToItemId: new Map(accumulator.pathToItemId),
+    pathCount: accumulator.paths.length,
+    paths: accumulator.paths,
+    pathToItemId: accumulator.pathToItemId,
     previousSource: accumulator.lastTreeSource,
     sort: accumulator.sort,
   };
