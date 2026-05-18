@@ -1,7 +1,10 @@
 'use client';
 
 import { useStableCallback } from '@pierre/diffs/react';
-import type { FileTree as FileTreeModel } from '@pierre/trees';
+import type {
+  FileTreeBatchOperation,
+  FileTree as FileTreeModel,
+} from '@pierre/trees';
 import { FileTree, useFileTree } from '@pierre/trees/react';
 import { type CSSProperties, memo, useEffect, useRef, useState } from 'react';
 
@@ -68,12 +71,41 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
   });
 
   useEffect(() => {
-    if (previousSourceRef.current === source) {
+    const previousSource = previousSourceRef.current;
+    if (previousSource === source) {
       return;
     }
 
     previousSourceRef.current = source;
-    model.resetPaths(source.paths);
+    // The streaming patch loader links each tree-source snapshot to the prior
+    // one through `previousSource`. When the link matches what this component
+    // last applied, the new paths array is guaranteed to extend the previous
+    // one, so we apply the delta as add() operations instead of asking the
+    // model to throw itself away and rebuild against the full path list. This
+    // turns tree publishes from O(N) each (where N is the total accumulated
+    // path count) into O(delta), which keeps the Diff Stats counter fast as
+    // more files stream in.
+    if (
+      source.previousSource != null &&
+      source.previousSource === previousSource
+    ) {
+      const previousPathCount = previousSource.paths.length;
+      if (source.paths.length > previousPathCount) {
+        const operations: FileTreeBatchOperation[] = [];
+        for (
+          let index = previousPathCount;
+          index < source.paths.length;
+          index++
+        ) {
+          operations.push({ type: 'add', path: source.paths[index] });
+        }
+        if (operations.length > 0) {
+          model.batch(operations);
+        }
+      }
+    } else {
+      model.resetPaths(source.paths);
+    }
     model.setGitStatus(source.gitStatus);
   }, [model, source]);
 
