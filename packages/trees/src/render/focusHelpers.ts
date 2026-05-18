@@ -1,5 +1,7 @@
+import type { FileTreeScrollOffset } from '../model/publicTypes';
 import {
   computeFocusedRowScrollIntoView,
+  computeFocusedRowScrollTopForOffset,
   computeViewportOffsetScrollTop,
 } from './scrollTarget';
 
@@ -102,6 +104,34 @@ export function scrollFocusedRowIntoView(
     focusedIndex,
     itemHeight,
     topInset,
+    viewportHeight,
+  });
+  if (nextScrollTop == null) {
+    return false;
+  }
+
+  scrollElement.scrollTop = nextScrollTop;
+  return true;
+}
+
+// Applies a programmatic scroll request without moving DOM focus. `nearest`
+// minimally reveals the row; `top` and `center` align it in the usable viewport.
+export function scrollFocusedRowToOffset(
+  scrollElement: HTMLElement,
+  focusedIndex: number,
+  itemHeight: number,
+  viewportHeight: number,
+  totalHeight: number,
+  offset: FileTreeScrollOffset,
+  topInset: number = 0
+): boolean {
+  const nextScrollTop = computeFocusedRowScrollTopForOffset({
+    currentScrollTop: scrollElement.scrollTop,
+    focusedIndex,
+    itemHeight,
+    offset,
+    topInset,
+    totalHeight,
     viewportHeight,
   });
   if (nextScrollTop == null) {

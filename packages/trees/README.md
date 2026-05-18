@@ -43,7 +43,8 @@ Common model methods include:
   `tree.resetPaths(paths)`
 - `tree.openSearch()`, `tree.setSearch(value)`, and `tree.closeSearch()`
 - `tree.setGitStatus(entries)` and `tree.setIcons(config)`
-- `tree.getItem(path)`, `tree.getSelectedPaths()`, and `tree.getFocusedPath()`
+- `tree.getItem(path)`, `tree.getSelectedPaths()`, `tree.getFocusedPath()`, and
+  `tree.scrollToPath(path, { focus: false })`
 - `tree.cleanUp()`
 
 ## Prepared input

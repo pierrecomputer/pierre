@@ -86,8 +86,12 @@ Focus and selection control:
 
 - `focusPath(path)`
 - `focusNearestPath(path | null)`
+- `scrollToPath(path, { offset: 'top' | 'center' | 'nearest', focus?: boolean })`
 - `startRenaming(path?)`
 - item-handle selection and focus methods
+
+`scrollToPath(...)` scrolls the virtualizer without moving DOM focus. It updates
+model focus by default; pass `focus: false` to leave model focus unchanged.
 
 Search control:
 

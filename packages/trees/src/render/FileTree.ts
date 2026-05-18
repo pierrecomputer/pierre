@@ -37,10 +37,12 @@ import type {
   FileTreeMutationEventType,
   FileTreeMutationHandle,
   FileTreeOptions,
+  FileTreePublicId,
   FileTreeRemoveOptions,
   FileTreeRenderProps,
   FileTreeResetOptions,
   FileTreeRowDecorationRenderer,
+  FileTreeScrollToPathOptions,
   FileTreeSearchSessionHandle,
   FileTreeSelectionChangeListener,
   FileTreeSsrPayload,
@@ -333,6 +335,13 @@ export class FileTree
 
   public focusPath(path: string): void {
     this.#controller.focusPath(path);
+  }
+
+  public scrollToPath(
+    path: FileTreePublicId,
+    options?: FileTreeScrollToPathOptions
+  ): void {
+    this.#controller.scrollToPath(path, options);
   }
 
   public focusNearestPath(path: string | null): string | null {

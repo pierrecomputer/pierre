@@ -8,7 +8,12 @@ const DEMO_PATHS = [
   'src/index.ts',
   'src/components/Button.tsx',
   'src/components/Button.test.tsx',
-] as const;
+  ...Array.from(
+    { length: 28 },
+    (_, index) =>
+      `src/components/feature-${String(index + 1).padStart(2, '0')}.ts`
+  ),
+] satisfies readonly string[];
 const VIEWPORT_HEIGHT = 240;
 
 export default async function TreesDevReactPage() {

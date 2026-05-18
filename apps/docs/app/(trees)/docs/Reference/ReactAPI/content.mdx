@@ -92,7 +92,9 @@ exposes.
 
 Typical write paths are:
 
-- focus and selection methods on the model or item handles
+- focus and selection methods on the model or item handles, including
+  `scrollToPath(...)` when you want to reveal a path without moving DOM focus
+  and optional model focus changes
 - search methods such as `setSearch(...)` and `openSearch(...)`
 - mutation methods such as `add(...)`, `remove(...)`, `move(...)`, `batch(...)`,
   and `resetPaths(...)`

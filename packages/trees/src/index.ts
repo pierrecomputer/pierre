@@ -80,6 +80,8 @@ export type {
   FileTreeSearchChangeListener,
   FileTreeSearchMode,
   FileTreeSearchSessionHandle,
+  FileTreeScrollOffset,
+  FileTreeScrollToPathOptions,
   FileTreeSelectionChangeListener,
   FileTreeSortComparator,
   FileTreeSortEntry,

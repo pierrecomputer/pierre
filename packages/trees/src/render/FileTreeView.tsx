@@ -62,6 +62,7 @@ import {
   getResizeObserverViewportHeight,
   readMeasuredViewportHeight,
   scrollFocusedRowIntoView,
+  scrollFocusedRowToOffset,
   scrollFocusedRowToViewportOffset,
 } from './focusHelpers';
 import { createFileTreeIconResolver } from './iconResolver';
@@ -1241,6 +1242,15 @@ export function FileTreeView({
   const stickyRowButtonRefs = useRef(new Map<string, HTMLElement>());
   const updateViewportRef = useRef<() => void>(() => {});
   const measuredViewportHeightRef = useRef<number | null>(null);
+  const processedScrollRequestIdRef = useRef(0);
+  const initialFocusedScrollAppliedRef = useRef(false);
+  const initialFocusedScrollControllerRef = useRef<FileTreeController | null>(
+    null
+  );
+  if (initialFocusedScrollControllerRef.current !== controller) {
+    initialFocusedScrollAppliedRef.current = false;
+    initialFocusedScrollControllerRef.current = controller;
+  }
   const domFocusOwnerRef = useRef(false);
   const previousFocusedPathRef = useRef<string | null>(null);
   const previousRenamingPathRef = useRef<string | null>(null);
@@ -1481,6 +1491,7 @@ export function FileTreeView({
   const searchValue = controller.getSearchValue();
   const focusedPath = controller.getFocusedPath();
   const focusedIndex = controller.getFocusedIndex();
+  const scrollRequest = controller.getScrollRequest();
   const dragAndDropEnabled = controller.isDragAndDropEnabled();
   const dragSession = controller.getDragSession();
   const draggedPathSet = useMemo(
@@ -2623,6 +2634,42 @@ export function FileTreeView({
       );
     };
 
+    // Seed the physical scroll position from the controller's initial focus
+    // before the first viewport snapshot, so an initially selected row mounts
+    // inside the virtualized window instead of starting at the top of the tree.
+    if (!initialFocusedScrollAppliedRef.current) {
+      initialFocusedScrollAppliedRef.current = true;
+      const initialFocusedIndex = controller.getFocusedIndex();
+      if (initialFocusedIndex >= 0) {
+        const initialViewportHeightPx = getCachedViewportHeight(
+          measuredViewportHeightRef.current,
+          initialViewportHeight
+        );
+        const initialFocusedRow =
+          controller.getVisibleRows(
+            initialFocusedIndex,
+            initialFocusedIndex
+          )[0] ?? null;
+        const initialTopInset =
+          stickyFolders && initialFocusedRow != null
+            ? Math.max(
+                0,
+                Math.min(
+                  initialFocusedRow.ancestorPaths.length * itemHeight,
+                  Math.max(0, initialViewportHeightPx - itemHeight)
+                )
+              )
+            : 0;
+        scrollFocusedRowIntoView(
+          scrollElement,
+          initialFocusedIndex,
+          itemHeight,
+          initialViewportHeightPx,
+          initialTopInset
+        );
+      }
+    }
+
     updateViewportRef.current = update;
     let hasSeenInitialControllerSnapshot = false;
     const unsubscribe = controller.subscribe(() => {
@@ -2983,8 +3030,43 @@ export function FileTreeView({
       pendingStickyKeyboardFocusPath != null &&
       pendingStickyKeyboardFocusPath === focusedPath &&
       focusedPath != null;
+    let shouldSuppressDomFocusForScrollRequest = false;
+    let shouldUpdateViewportForScrollRequest = false;
+    if (
+      scrollRequest != null &&
+      scrollRequest.id !== processedScrollRequestIdRef.current
+    ) {
+      processedScrollRequestIdRef.current = scrollRequest.id;
+      const scrollRequestIndex = scrollRequest.visibleIndex;
+      const scrollRequestRow =
+        controller.getVisibleRows(scrollRequestIndex, scrollRequestIndex)[0] ??
+        null;
+      if (scrollRequestRow != null) {
+        const scrollRequestTopInset = stickyFolders
+          ? Math.max(
+              0,
+              Math.min(
+                scrollRequestRow.ancestorPaths.length * itemHeight,
+                Math.max(0, resolvedViewportHeight - itemHeight)
+              )
+            )
+          : stickyOverlayHeight;
+        shouldSuppressDomFocusForScrollRequest = true;
+        shouldUpdateViewportForScrollRequest = scrollFocusedRowToOffset(
+          scrollElement,
+          scrollRequestIndex,
+          itemHeight,
+          resolvedViewportHeight,
+          totalScrollableHeight,
+          scrollRequest.offset,
+          scrollRequestTopInset
+        );
+      }
+      controller.clearScrollRequest(scrollRequest.id);
+    }
 
     const shouldRestoreFocusedRowViewportOffset =
+      !shouldSuppressDomFocusForScrollRequest &&
       shouldRestoreTreeFocusAfterSearchClose &&
       scrollFocusedRowToViewportOffset(
         scrollElement,
@@ -2995,6 +3077,7 @@ export function FileTreeView({
         preservedViewportOffset
       );
     const shouldRestoreStickyFocusedRowViewportOffset =
+      !shouldSuppressDomFocusForScrollRequest &&
       pendingStickyFocusPath != null &&
       pendingStickyFocusPath === focusedPath &&
       scrollFocusedRowToViewportOffset(
@@ -3006,6 +3089,7 @@ export function FileTreeView({
         stickyOverlayHeight
       );
     const shouldRestoreStickyKeyboardViewportOffset =
+      !shouldSuppressDomFocusForScrollRequest &&
       pendingStickyKeyboardViewportOffset != null &&
       pendingStickyKeyboardViewportOffset.path === focusedPath &&
       scrollFocusedRowToViewportOffset(
@@ -3017,6 +3101,7 @@ export function FileTreeView({
         pendingStickyKeyboardViewportOffset.viewportOffset
       );
     const shouldRestoreStickyKeyboardScrollTop =
+      !shouldSuppressDomFocusForScrollRequest &&
       pendingStickyKeyboardScrollTop != null &&
       pendingStickyKeyboardScrollTop.path === focusedPath &&
       scrollElement.scrollTop !== pendingStickyKeyboardScrollTop.scrollTop;
@@ -3026,6 +3111,7 @@ export function FileTreeView({
 
     if (
       shouldRestoreStickyKeyboardScrollTop ||
+      shouldUpdateViewportForScrollRequest ||
       shouldRestoreStickyFocusedRowViewportOffset ||
       shouldRestoreStickyKeyboardViewportOffset ||
       shouldRestoreFocusedRowViewportOffset ||
@@ -3042,6 +3128,11 @@ export function FileTreeView({
         ))
     ) {
       updateViewportRef.current();
+    }
+
+    if (shouldSuppressDomFocusForScrollRequest) {
+      previousFocusedPathRef.current = focusedPath;
+      return;
     }
 
     if (!shouldOwnDomFocus) {
@@ -3113,6 +3204,8 @@ export function FileTreeView({
     range,
     resolvedViewportHeight,
     searchEnabled,
+    scrollRequest,
+    stickyFolders,
     stickyOverlayHeight,
     totalScrollableHeight,
     visibleRows,

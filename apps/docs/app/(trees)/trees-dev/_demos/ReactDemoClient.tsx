@@ -99,9 +99,15 @@ function ClientRenderedExample({
   ReactDemoClientProps,
   'flattenEmptyDirectories' | 'paths' | 'viewportHeight'
 >) {
+  const firstScrollPath = 'src/';
+  const middleScrollPath = 'src/components/feature-13.ts';
+  const lastScrollPath = 'README.md';
+  const initialActivePath = paths.at(-1) ?? null;
   const { model } = useFileTree({
     flattenEmptyDirectories,
     initialExpansion: 'open',
+    initialSelectedPaths:
+      initialActivePath == null ? undefined : [initialActivePath],
     paths,
     search: true,
     initialVisibleRowCount: viewportHeight / 30,
@@ -111,13 +117,23 @@ function ClientRenderedExample({
   const [addedCount, setAddedCount] = useState(0);
   const [headerClicks, setHeaderClicks] = useState(0);
   const [lastAddedPath, setLastAddedPath] = useState<string | null>(null);
+  const [lastScrolledPath, setLastScrolledPath] = useState<string | null>(null);
+  const [scrollToShouldFocus, setScrollToShouldFocus] = useState(true);
+  const scrollToPath = (path: string | null): void => {
+    if (path == null) {
+      return;
+    }
+    model.scrollToPath(path, { focus: scrollToShouldFocus, offset: 'center' });
+    setLastScrolledPath(path);
+  };
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-neutral-600">
-        Selected paths: {selectedPaths.length}. Search value:{' '}
+        Initial active path: {initialActivePath ?? '—'}. Selected paths:{' '}
+        {selectedPaths.length}. Search value:{' '}
         {search.value.length > 0 ? search.value : '—'}. Last added:{' '}
-        {lastAddedPath ?? '—'}.
+        {lastAddedPath ?? '—'}. Last scrollTo: {lastScrolledPath ?? '—'}.
       </p>
       <FileTree
         model={model}
@@ -150,6 +166,46 @@ function ClientRenderedExample({
               }}
             >
               Add file
+            </button>
+            <label className="flex items-center gap-1 rounded-md border px-2 py-1">
+              <input
+                type="checkbox"
+                checked={scrollToShouldFocus}
+                onChange={(event) => {
+                  setScrollToShouldFocus(event.currentTarget.checked);
+                }}
+              />
+              Focus on scroll
+            </label>
+            <button
+              type="button"
+              className="rounded-md border px-2 py-1"
+              title={firstScrollPath}
+              onClick={() => {
+                scrollToPath(firstScrollPath);
+              }}
+            >
+              Scroll first
+            </button>
+            <button
+              type="button"
+              className="rounded-md border px-2 py-1"
+              title={middleScrollPath}
+              onClick={() => {
+                scrollToPath(middleScrollPath);
+              }}
+            >
+              Scroll middle
+            </button>
+            <button
+              type="button"
+              className="rounded-md border px-2 py-1"
+              title={lastScrollPath}
+              onClick={() => {
+                scrollToPath(lastScrollPath);
+              }}
+            >
+              Scroll last
             </button>
             <button
               type="button"

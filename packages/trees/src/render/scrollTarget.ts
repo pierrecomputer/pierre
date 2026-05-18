@@ -6,6 +6,8 @@
 // no change is required. Callers that currently own a scroll element perform
 // the single imperative write.
 
+import type { FileTreeScrollOffset } from '../model/publicTypes';
+
 export type FileTreeScrollTargetInput = {
   focusedIndex: number;
   itemHeight: number;
@@ -51,6 +53,58 @@ export function computeFocusedRowScrollIntoView(
   }
 
   return null;
+}
+
+export type FileTreeOffsetScrollInput = FileTreeScrollTargetInput & {
+  currentScrollTop: number;
+  offset: FileTreeScrollOffset;
+  topInset?: number;
+  totalHeight: number;
+};
+
+// Resolves a programmatic scroll target for a focused row. `nearest` mirrors
+// scroll-into-view, while `top` and `center` align inside the unobscured
+// viewport below any sticky overlay.
+export function computeFocusedRowScrollTopForOffset(
+  input: FileTreeOffsetScrollInput
+): number | null {
+  const {
+    currentScrollTop,
+    focusedIndex,
+    itemHeight,
+    offset,
+    topInset = 0,
+    totalHeight,
+    viewportHeight,
+  } = input;
+
+  if (offset === 'nearest') {
+    return computeFocusedRowScrollIntoView({
+      currentScrollTop,
+      focusedIndex,
+      itemHeight,
+      topInset,
+      viewportHeight,
+    });
+  }
+
+  if (focusedIndex < 0) {
+    return null;
+  }
+
+  const effectiveInset = Math.max(0, topInset);
+  const itemTop = focusedIndex * itemHeight;
+  const visibleHeight = Math.max(0, viewportHeight - effectiveInset);
+  const targetViewportOffset =
+    offset === 'center'
+      ? effectiveInset + Math.max(0, (visibleHeight - itemHeight) / 2)
+      : effectiveInset;
+  const maxScrollTop = Math.max(0, totalHeight - viewportHeight);
+  const nextScrollTop = Math.max(
+    0,
+    Math.min(itemTop - targetViewportOffset, maxScrollTop)
+  );
+  return nextScrollTop === currentScrollTop ? null : nextScrollTop;
 }
 
 export type FileTreeViewportOffsetScrollInput = FileTreeScrollTargetInput & {

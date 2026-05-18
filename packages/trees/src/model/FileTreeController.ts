@@ -21,6 +21,7 @@ import {
 import { resolveFileTreeInput } from './inputResolution';
 import type {
   FileTreeControllerListener,
+  FileTreeScrollRequest,
   FileTreeStickyRowCandidate,
 } from './internalTypes';
 import {
@@ -54,6 +55,8 @@ import type {
   FileTreeRenamingConfig,
   FileTreeResetEvent,
   FileTreeResetOptions,
+  FileTreeScrollOffset,
+  FileTreeScrollToPathOptions,
   FileTreeSearchMode,
   FileTreeSearchSessionHandle,
   FileTreeVisibleRow,
@@ -100,6 +103,12 @@ export const FILE_TREE_RENAME_VIEW = Symbol('FILE_TREE_RENAME_VIEW');
 // until the user actually navigates outside that initial window.
 const INITIAL_PROJECTION_ROW_LIMIT = 512;
 const CONTEXT_VISIBLE_ROW_RANGE_LIMIT = 512;
+
+function normalizeScrollOffset(
+  offset: FileTreeScrollToPathOptions['offset']
+): FileTreeScrollOffset {
+  return offset === 'top' || offset === 'center' ? offset : 'nearest';
+}
 
 // Keeps focus resolution cheap after expand/collapse by asking for only the
 // candidate path and its ancestors instead of forcing a full visible-index map.
@@ -228,6 +237,8 @@ export class FileTreeController
   #searchVisibleIndexByPath: Map<string, number> | null = null;
   #searchVisibleIndices: readonly number[] | null = null;
   #searchVisiblePaths: readonly string[] | null = null;
+  #scrollRequest: FileTreeScrollRequest | null = null;
+  #scrollRequestId = 0;
   #selectionAnchorPath: string | null = null;
   #selectedPaths = new Set<string>();
   #selectionVersion = 0;
@@ -345,6 +356,40 @@ export class FileTreeController
     }
   }
 
+  // Records a one-shot scroll request for the mounted view. By default the
+  // target also becomes the model-focused row; callers can pass `focus: false`
+  // to reveal a row without changing model focus or DOM focus.
+  public scrollToPath(
+    path: string,
+    options?: FileTreeScrollToPathOptions
+  ): void {
+    const resolvedPath = this.#store.getPathInfo(path)?.path ?? null;
+    if (resolvedPath == null) {
+      return;
+    }
+
+    this.#ensureFullProjection();
+    const targetIndex = this.#getExactCurrentVisibleIndexByPath(resolvedPath);
+    if (targetIndex < 0) {
+      return;
+    }
+
+    const targetPath = this.#resolveVisiblePathAtIndex(targetIndex);
+    if (targetPath == null) {
+      return;
+    }
+
+    if (options?.focus !== false) {
+      this.#setFocusedIndex(targetIndex, false);
+    }
+    this.#scrollRequest = {
+      id: (this.#scrollRequestId += 1),
+      offset: normalizeScrollOffset(options?.offset),
+      visibleIndex: targetIndex,
+    };
+    this.#emit();
+  }
+
   // DOM row events already know the target row is mounted, so they can focus it
   // by path without materializing every visible row in large open trees.
   public focusMountedPathFromInput(path: string): void {
@@ -390,6 +435,16 @@ export class FileTreeController
 
   public getFocusedPath(): string | null {
     return this.#focusedPath;
+  }
+
+  public getScrollRequest(): FileTreeScrollRequest | null {
+    return this.#scrollRequest;
+  }
+
+  public clearScrollRequest(id: number): void {
+    if (this.#scrollRequest?.id === id) {
+      this.#scrollRequest = null;
+    }
   }
 
   public resolveNearestVisiblePath(path: string | null): string | null {
@@ -1681,6 +1736,14 @@ export class FileTreeController
 
   #getCurrentVisiblePaths(): readonly string[] {
     return this.#searchVisiblePaths ?? this.#projectionPaths;
+  }
+
+  #getExactCurrentVisibleIndexByPath(path: string): number {
+    if (this.#searchVisiblePaths != null) {
+      return this.#searchVisibleIndexByPath?.get(path) ?? -1;
+    }
+
+    return this.#store.getVisibleIndex(path) ?? -1;
   }
 
   #getProjectionIndexFromVisibleIndex(index: number): number {

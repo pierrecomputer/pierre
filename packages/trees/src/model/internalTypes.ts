@@ -5,6 +5,7 @@ import type {
   FileTreePublicId,
   FileTreeRenderOptions,
   FileTreeRowDecorationRenderer,
+  FileTreeScrollOffset,
   FileTreeSearchBlurBehavior,
   FileTreeVisibleRow,
 } from './publicTypes';
@@ -36,6 +37,11 @@ export interface FileTreeStickyWindowLayout {
   windowHeight: number;
 }
 
+export interface FileTreeScrollRequest {
+  id: number;
+  offset: FileTreeScrollOffset;
+  visibleIndex: number;
+}
 export interface FileTreeSlotHost {
   clearSlotContent(slotName: string): void;
   setSlotContent(slotName: string, content: HTMLElement | null): void;

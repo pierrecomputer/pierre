@@ -7,6 +7,7 @@ import {
   computeExpectedRenderedWindow,
   createResizeObserverEntry,
   getMountedItemPaths,
+  getVisibleIndexForPath,
 } from './helpers/renderHarness';
 
 describe('file-tree virtualization windows', () => {
@@ -79,6 +80,311 @@ describe('file-tree virtualization windows', () => {
 
       fileTree.cleanUp();
     } finally {
+      cleanup();
+    }
+  });
+
+  test('mounts with the initially selected item in the rendered window', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const itemHeight = 30;
+      const viewportHeight = 120;
+      const targetIndex = 80;
+      const targetPath = `item${String(targetIndex).padStart(3, '0')}.ts`;
+      const paths = Array.from(
+        { length: 120 },
+        (_, index) => `item${String(index).padStart(3, '0')}.ts`
+      );
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialSelectedPaths: [targetPath],
+        paths,
+        initialVisibleRowCount: viewportHeight / itemHeight,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      await flushDom();
+
+      const mountedPaths = getMountedItemPaths(shadowRoot, dom);
+      expect(fileTree.getFocusedPath()).toBe(targetPath);
+      expect(scrollElement.scrollTop).toBe(
+        (targetIndex + 1) * itemHeight - viewportHeight
+      );
+      expect(mountedPaths).toContain(targetPath);
+      expect(mountedPaths).not.toContain('item000.ts');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('scrollToPath scrolls a focused path into view without moving DOM focus', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const containerWrapper = dom.window.document.createElement('div');
+      const outsideButton = dom.window.document.createElement('button');
+      dom.window.document.body.append(containerWrapper, outsideButton);
+
+      const itemHeight = 30;
+      const viewportHeight = 120;
+      const targetIndex = 80;
+      const targetPath = `item${String(targetIndex).padStart(3, '0')}.ts`;
+      const paths = Array.from(
+        { length: 120 },
+        (_, index) => `item${String(index).padStart(3, '0')}.ts`
+      );
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        paths,
+        initialVisibleRowCount: viewportHeight / itemHeight,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      outsideButton.focus();
+      fileTree.focusPath(targetPath);
+      await flushDom();
+      expect(scrollElement.scrollTop).toBe(0);
+      expect(dom.window.document.activeElement).toBe(outsideButton);
+
+      fileTree.scrollToPath(targetPath, { offset: 'center' });
+      await flushDom(2);
+
+      const mountedPaths = getMountedItemPaths(shadowRoot, dom);
+      expect(fileTree.getFocusedPath()).toBe(targetPath);
+      expect(scrollElement.scrollTop).toBe(
+        targetIndex * itemHeight - (viewportHeight - itemHeight) / 2
+      );
+      expect(mountedPaths).toContain(targetPath);
+      expect(mountedPaths).not.toContain('item000.ts');
+      expect(dom.window.document.activeElement).toBe(outsideButton);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('scrollToPath can reveal a path without changing model focus', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const containerWrapper = dom.window.document.createElement('div');
+      const outsideButton = dom.window.document.createElement('button');
+      dom.window.document.body.append(containerWrapper, outsideButton);
+
+      const itemHeight = 30;
+      const viewportHeight = 120;
+      const targetIndex = 80;
+      const targetPath = `item${String(targetIndex).padStart(3, '0')}.ts`;
+      const paths = Array.from(
+        { length: 120 },
+        (_, index) => `item${String(index).padStart(3, '0')}.ts`
+      );
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        paths,
+        initialVisibleRowCount: viewportHeight / itemHeight,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      await flushDom();
+      const initialFocusedPath = fileTree.getFocusedPath();
+      outsideButton.focus();
+
+      fileTree.scrollToPath(targetPath, { focus: false, offset: 'center' });
+      await flushDom(2);
+
+      const mountedPaths = getMountedItemPaths(shadowRoot, dom);
+      expect(fileTree.getFocusedPath()).toBe(initialFocusedPath);
+      expect(scrollElement.scrollTop).toBe(
+        targetIndex * itemHeight - (viewportHeight - itemHeight) / 2
+      );
+      expect(mountedPaths).toContain(targetPath);
+      expect(dom.window.document.activeElement).toBe(outsideButton);
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('scrollToPath supports top, nearest, and clamped center offsets through the public API', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const itemHeight = 30;
+      const viewportHeight = 120;
+      const paths = Array.from(
+        { length: 120 },
+        (_, index) => `item${String(index).padStart(3, '0')}.ts`
+      );
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        paths,
+        initialVisibleRowCount: viewportHeight / itemHeight,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      fileTree.scrollToPath('item080.ts', { offset: 'top' });
+      await flushDom(2);
+      expect(scrollElement.scrollTop).toBe(80 * itemHeight);
+
+      fileTree.scrollToPath('item082.ts', { offset: 'nearest' });
+      await flushDom(2);
+      expect(scrollElement.scrollTop).toBe(80 * itemHeight);
+
+      fileTree.scrollToPath('item119.ts', { offset: 'center' });
+      await flushDom(2);
+      expect(scrollElement.scrollTop).toBe(
+        paths.length * itemHeight - viewportHeight
+      );
+      expect(getMountedItemPaths(shadowRoot, dom)).toContain('item119.ts');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('scrollToPath ignores paths that are not in the current visible projection', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const FileTree = await loadFileTree();
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialExpansion: 'closed',
+        paths: ['src/deep/file.ts', 'README.md'],
+        initialVisibleRowCount: 4,
+      });
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      await flushDom();
+      const initialFocusedPath = fileTree.getFocusedPath();
+
+      fileTree.scrollToPath('src/deep/file.ts', { offset: 'center' });
+      await flushDom(2);
+
+      expect(fileTree.getFocusedPath()).toBe(initialFocusedPath);
+      expect(scrollElement.scrollTop).toBe(0);
+      expect(getMountedItemPaths(shadowRoot, dom)).not.toContain(
+        'src/deep/file.ts'
+      );
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('scrollToPath top offset accounts for sticky ancestor rows', async () => {
+    const { cleanup, dom } = installDom();
+    let expectedController: InstanceType<
+      Awaited<ReturnType<typeof loadFileTreeController>>
+    > | null = null;
+    try {
+      const FileTree = await loadFileTree();
+      const FileTreeController = await loadFileTreeController();
+      const containerWrapper = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(containerWrapper);
+
+      const itemHeight = 30;
+      const viewportHeight = 120;
+      const targetPath = 'src/components/file020.ts';
+      const paths = Array.from(
+        { length: 40 },
+        (_, index) => `src/components/file${String(index).padStart(3, '0')}.ts`
+      );
+      const options = {
+        flattenEmptyDirectories: false,
+        initialExpansion: 'open',
+        paths,
+        stickyFolders: true,
+        initialVisibleRowCount: viewportHeight / itemHeight,
+      } as const;
+      expectedController = new FileTreeController(options);
+      const targetIndex = getVisibleIndexForPath(
+        expectedController,
+        targetPath
+      );
+      const targetRow =
+        expectedController.getVisibleRows(targetIndex, targetIndex)[0] ?? null;
+      if (targetIndex < 0 || targetRow == null) {
+        throw new Error('missing target row');
+      }
+      const expectedScrollTop =
+        targetIndex * itemHeight - targetRow.ancestorPaths.length * itemHeight;
+      const fileTree = new FileTree(options);
+
+      fileTree.render({ containerWrapper });
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const scrollElement = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-scroll="true"]'
+      );
+      if (!(scrollElement instanceof dom.window.HTMLElement)) {
+        throw new Error('missing scroll element');
+      }
+
+      fileTree.scrollToPath(targetPath, { offset: 'top' });
+      await flushDom(2);
+
+      expect(scrollElement.scrollTop).toBe(expectedScrollTop);
+      expect(getMountedItemPaths(shadowRoot, dom)).toContain(targetPath);
+
+      fileTree.cleanUp();
+    } finally {
+      expectedController?.destroy();
       cleanup();
     }
   });

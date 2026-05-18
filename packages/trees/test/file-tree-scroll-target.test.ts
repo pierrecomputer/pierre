@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   computeFocusedRowScrollIntoView,
+  computeFocusedRowScrollTopForOffset,
   computeViewportOffsetScrollTop,
 } from '../src/render/scrollTarget';
 
@@ -87,6 +88,66 @@ describe('computeFocusedRowScrollIntoView', () => {
         viewportHeight,
       })
     ).toBe(0);
+  });
+});
+
+describe('computeFocusedRowScrollTopForOffset', () => {
+  const itemHeight = 30;
+  const viewportHeight = 180;
+  const totalHeight = 1200;
+
+  test('uses minimal movement for nearest offset', () => {
+    expect(
+      computeFocusedRowScrollTopForOffset({
+        currentScrollTop: 0,
+        focusedIndex: 8,
+        itemHeight,
+        offset: 'nearest',
+        totalHeight,
+        viewportHeight,
+      })
+    ).toBe(90);
+  });
+
+  test('aligns top offset below the sticky inset', () => {
+    expect(
+      computeFocusedRowScrollTopForOffset({
+        currentScrollTop: 0,
+        focusedIndex: 10,
+        itemHeight,
+        offset: 'top',
+        topInset: 60,
+        totalHeight,
+        viewportHeight,
+      })
+    ).toBe(240);
+  });
+
+  test('aligns center offset inside the unobscured viewport', () => {
+    expect(
+      computeFocusedRowScrollTopForOffset({
+        currentScrollTop: 0,
+        focusedIndex: 10,
+        itemHeight,
+        offset: 'center',
+        topInset: 60,
+        totalHeight,
+        viewportHeight,
+      })
+    ).toBe(195);
+  });
+
+  test('clamps explicit alignment at the scroll bounds', () => {
+    expect(
+      computeFocusedRowScrollTopForOffset({
+        currentScrollTop: 0,
+        focusedIndex: 39,
+        itemHeight,
+        offset: 'center',
+        totalHeight,
+        viewportHeight,
+      })
+    ).toBe(1020);
   });
 });
 

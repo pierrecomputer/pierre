@@ -150,6 +150,13 @@ export interface FileTreeRenderOptions {
   stickyFolders?: boolean;
 }
 
+export type FileTreeScrollOffset = 'top' | 'center' | 'nearest';
+
+export interface FileTreeScrollToPathOptions {
+  focus?: boolean;
+  offset?: FileTreeScrollOffset;
+}
+
 export type FileTreeSearchMode =
   | 'expand-matches'
   | 'collapse-non-matches'
