@@ -551,10 +551,10 @@ export class Virtualizer {
         );
       }
       const instance = this.observers.get(target);
+      // IntersectionObserver delivers entries asynchronously, so an entry can
+      // arrive after the target was unobserved via disconnect() or releaseElement().
       if (instance == null) {
-        throw new Error(
-          'Virtualizer.handleIntersectionChange: no instance for target'
-        );
+        continue;
       }
       if (isIntersecting && !this.visibleInstances.has(target)) {
         instance.setVisibility(true);
