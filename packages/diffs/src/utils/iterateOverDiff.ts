@@ -106,6 +106,12 @@ interface HunkPrefixCountsProps extends Pick<
   'diff' | 'expandedHunks' | 'collapsedContextThreshold'
 > {}
 
+interface HunkPrefixCountsCacheEntry {
+  collapsedContextThreshold: number;
+  defaultCounts: HunkPrefixCounts[] | undefined;
+  expandedCounts: HunkPrefixCounts[] | undefined;
+}
+
 // Callback props are borrowed for the lifetime of the callback. Consumers that
 // retain row or line data after the callback returns must clone the fields they
 // need.
@@ -120,6 +126,11 @@ export interface IterateOverDiffProps {
   collapsedContextThreshold?: number;
   callback: DiffLineCallback;
 }
+
+const hunkPrefixCountsCache = new WeakMap<
+  FileDiffMetadata,
+  HunkPrefixCountsCacheEntry
+>();
 
 export function iterateOverDiff({
   diff,
@@ -935,7 +946,7 @@ function getIterationStartState({
     return { hunkIndex: 0, splitCount: 0, unifiedCount: 0 };
   }
 
-  const prefixCounts = getHunkPrefixCounts({
+  const prefixCounts = getCachedHunkPrefixCounts({
     diff,
     expandedHunks,
     collapsedContextThreshold,
@@ -988,6 +999,36 @@ function getIterationStartState({
     splitCount: counts.splitCount,
     unifiedCount: counts.unifiedCount,
   };
+}
+
+function getCachedHunkPrefixCounts(
+  props: HunkPrefixCountsProps
+): HunkPrefixCounts[] {
+  const { diff, expandedHunks, collapsedContextThreshold } = props;
+  if (expandedHunks !== undefined && expandedHunks !== true) {
+    return getHunkPrefixCounts(props);
+  }
+
+  let cacheEntry = hunkPrefixCountsCache.get(diff);
+  if (
+    cacheEntry == null ||
+    cacheEntry.collapsedContextThreshold !== collapsedContextThreshold
+  ) {
+    cacheEntry = {
+      collapsedContextThreshold,
+      defaultCounts: undefined,
+      expandedCounts: undefined,
+    };
+    hunkPrefixCountsCache.set(diff, cacheEntry);
+  }
+
+  if (expandedHunks === true) {
+    cacheEntry.expandedCounts ??= getHunkPrefixCounts(props);
+    return cacheEntry.expandedCounts;
+  }
+
+  cacheEntry.defaultCounts ??= getHunkPrefixCounts(props);
+  return cacheEntry.defaultCounts;
 }
 
 // Build cumulative rendered-row counts at every hunk boundary for the current
