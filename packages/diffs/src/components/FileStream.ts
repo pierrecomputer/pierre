@@ -152,6 +152,9 @@ export class FileStream {
     this.abortController?.abort();
     this.abortController = new AbortController();
     const { onStreamStart, onStreamClose, onStreamAbort } = this.options;
+    // Cancel the prior source so upstream producers stop generating tokens.
+    // Swallow AbortError / locked-stream rejections since we're tearing down.
+    this.stream?.cancel().catch(() => {});
     this.stream = stream;
     this.stream
       .pipeThrough(
