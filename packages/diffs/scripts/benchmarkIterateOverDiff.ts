@@ -1,10 +1,13 @@
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import type { FileDiffMetadata, HunkExpansionRegion } from '../src/types';
+import { baseline_iterateOverDiff } from '../src/utils/baseline_iterateOverDiff';
 import type {
   DiffLineCallbackProps,
   DiffLineRangeCallbackProps,
+  IterateOverDiffProps,
 } from '../src/utils/iterateOverDiff';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
@@ -61,11 +64,13 @@ interface BenchmarkFixture {
 interface BenchmarkConfig {
   runs: number;
   warmupRuns: number;
-  memoryBatchRuns: number;
   preset: BenchmarkPreset;
   outputJson: boolean;
   measureMemory: boolean;
   includeSynthetic: boolean;
+  compareBaseline: boolean;
+  memoryChildImplementation: BenchmarkImplementationId | undefined;
+  memoryChildCaseIndex: number | undefined;
   fixtureFilter: string | undefined;
   caseFilter: string | undefined;
   modeFilter: CallbackMode | undefined;
@@ -92,14 +97,10 @@ interface RunResult {
 
 interface TimedResult extends RunResult {
   elapsedMs: number;
-  heapGrowth: number | undefined;
-  retainedHeapDelta: number | undefined;
 }
 
 interface CaseStorage {
   samples: number[];
-  heapGrowthDeltas: number[];
-  retainedHeapDeltas: number[];
   checksum: number;
   rows: number;
 }
@@ -119,10 +120,62 @@ interface CaseSummary {
   minMs: number;
   maxMs: number;
   stdDevMs: number;
-  meanHeapGrowth: number | undefined;
-  meanRetainedHeapDelta: number | undefined;
   checksum: number;
   rows: number;
+}
+
+type BenchmarkImplementationId = 'baseline' | 'current';
+
+interface BenchmarkImplementation {
+  id: BenchmarkImplementationId;
+  label: string;
+  supportsRangeCallback: boolean;
+  run(props: IterateOverDiffProps): void;
+}
+
+interface BenchmarkRunSummary {
+  score: number;
+  checksum: number;
+  summaries: CaseSummary[];
+}
+
+interface ComparedSummary {
+  label: string;
+  baselineMeanMs: number;
+  currentMeanMs: number;
+  meanDeltaMs: number;
+  meanDeltaPct: number;
+  baselineP95Ms: number;
+  currentP95Ms: number;
+  p95DeltaPct: number;
+  rowsMatch: boolean;
+  checksumMatch: boolean;
+}
+
+interface MemorySnapshot {
+  rss: number;
+  heapTotal: number;
+  heapUsed: number;
+  external: number;
+  arrayBuffers: number;
+}
+
+interface MemorySummary {
+  before: MemorySnapshot;
+  after: MemorySnapshot;
+  delta: MemorySnapshot;
+}
+
+interface MemoryChildOutput {
+  implementation: BenchmarkImplementationId;
+  implementationLabel: string;
+  caseIndex: number;
+  caseLabel: string;
+  caseCount: number;
+  fixtureCount: number;
+  checksum: number;
+  score: number;
+  memory: MemorySummary;
 }
 
 interface Segment {
@@ -158,11 +211,13 @@ const DEFAULT_HUNK_LINE_COUNT = 50;
 const DEFAULT_CONFIG: BenchmarkConfig = {
   runs: 50,
   warmupRuns: 5,
-  memoryBatchRuns: 25,
   preset: 'standard',
   outputJson: false,
   measureMemory: false,
   includeSynthetic: false,
+  compareBaseline: false,
+  memoryChildImplementation: undefined,
+  memoryChildCaseIndex: undefined,
   fixtureFilter: undefined,
   caseFilter: undefined,
   modeFilter: undefined,
@@ -182,6 +237,37 @@ const CALLBACK_MODES: CallbackMode[] = [
   'scroll-anchor',
   'render-range',
 ];
+
+const BASELINE_IMPLEMENTATION: BenchmarkImplementation = {
+  id: 'baseline',
+  label: 'baseline_iterateOverDiff',
+  supportsRangeCallback: false,
+  run(props) {
+    const baselineProps: Parameters<typeof baseline_iterateOverDiff>[0] = {
+      diff: props.diff,
+      diffStyle: props.diffStyle,
+      startingLine: props.startingLine,
+      totalLines: props.totalLines,
+      expandedHunks: props.expandedHunks,
+      collapsedContextThreshold: props.collapsedContextThreshold,
+      callback: props.callback,
+    };
+    baseline_iterateOverDiff(baselineProps);
+  },
+};
+
+const CURRENT_IMPLEMENTATION: BenchmarkImplementation = {
+  id: 'current',
+  label: 'iterateOverDiff',
+  supportsRangeCallback: true,
+  run: iterateOverDiff,
+};
+
+function getBenchmarkImplementation(
+  id: BenchmarkImplementationId
+): BenchmarkImplementation {
+  return id === 'baseline' ? BASELINE_IMPLEMENTATION : CURRENT_IMPLEMENTATION;
+}
 
 function parsePositiveInteger(value: string, flagName: string): number {
   const parsed = Number.parseInt(value, 10);
@@ -247,12 +333,42 @@ function parseArgs(argv: string[]): BenchmarkConfig {
       continue;
     }
 
+    if (rawArg === '--compare-baseline') {
+      config.compareBaseline = true;
+      continue;
+    }
+
     if (rawArg === '--include-synthetic') {
       config.includeSynthetic = true;
       continue;
     }
 
     const [flag, inlineValue] = rawArg.split('=', 2);
+    if (flag === '--memory-child') {
+      const value = inlineValue ?? argv[index + 1];
+      if (value == null) throw new Error('Missing value for --memory-child');
+      if (inlineValue == null) index++;
+      if (value !== 'baseline' && value !== 'current') {
+        throw new Error(
+          `Invalid --memory-child value "${value}". Expected baseline or current.`
+        );
+      }
+      config.memoryChildImplementation = value;
+      continue;
+    }
+
+    if (flag === '--memory-child-case-index') {
+      const value = inlineValue ?? argv[index + 1];
+      if (value == null)
+        throw new Error('Missing value for --memory-child-case-index');
+      if (inlineValue == null) index++;
+      config.memoryChildCaseIndex = parseNonNegativeInteger(
+        value,
+        '--memory-child-case-index'
+      );
+      continue;
+    }
+
     if (flag === '--runs') {
       const value = inlineValue ?? argv[index + 1];
       if (value == null) throw new Error('Missing value for --runs');
@@ -266,18 +382,6 @@ function parseArgs(argv: string[]): BenchmarkConfig {
       if (value == null) throw new Error('Missing value for --warmup-runs');
       if (inlineValue == null) index++;
       config.warmupRuns = parseNonNegativeInteger(value, '--warmup-runs');
-      continue;
-    }
-
-    if (flag === '--memory-batch-runs') {
-      const value = inlineValue ?? argv[index + 1];
-      if (value == null)
-        throw new Error('Missing value for --memory-batch-runs');
-      if (inlineValue == null) index++;
-      config.memoryBatchRuns = parsePositiveInteger(
-        value,
-        '--memory-batch-runs'
-      );
       continue;
     }
 
@@ -338,9 +442,6 @@ function printHelpAndExit(): never {
     '  --warmup-runs <number>   Warmup runs per benchmark case (default: 5)'
   );
   console.log(
-    '  --memory-batch-runs <n>  Case invocations per memory sample (default: 25)'
-  );
-  console.log(
     '  --preset <name>          smoke, standard, exhaustive, or stress (default: standard)'
   );
   console.log('  --fixture <text>         Only run fixtures containing text');
@@ -354,7 +455,12 @@ function printHelpAndExit(): never {
   console.log(
     '  --include-synthetic      Include deterministic synthetic diffs'
   );
-  console.log('  --memory                 Force GC and report heap deltas');
+  console.log(
+    '  --memory                 Run each selected case in fresh child processes and report GC-before/after memory deltas'
+  );
+  console.log(
+    '  --compare-baseline       Run baseline_iterateOverDiff and iterateOverDiff, then compare'
+  );
   console.log('  --json                   Emit machine-readable JSON output');
   console.log('  -h, --help               Show this help output');
   process.exit(0);
@@ -1135,68 +1241,44 @@ function createRunner(benchmarkCase: BenchmarkCase): BenchmarkRunner {
   }
 }
 
-function runBenchmarkCase(benchmarkCase: BenchmarkCase): RunResult {
+function runBenchmarkCase(
+  benchmarkCase: BenchmarkCase,
+  implementation: BenchmarkImplementation
+): RunResult {
   const runner = createRunner(benchmarkCase);
-  iterateOverDiff({
+  const props: IterateOverDiffProps = {
     diff: benchmarkCase.fixture.diff,
     diffStyle: benchmarkCase.diffStyle,
     startingLine: benchmarkCase.startingLine,
     totalLines: benchmarkCase.totalLines,
     expandedHunks: benchmarkCase.expandedHunks,
     callback: runner.callback,
-    rangeCallback: runner.rangeCallback,
-  });
-  return runner.readResult();
-}
-
-function forceGc() {
-  const bun = globalThis as typeof globalThis & {
-    Bun?: { gc?: (force?: boolean) => void };
   };
-  const nodeGlobal = globalThis as typeof globalThis & { gc?: () => void };
-  bun.Bun?.gc?.(true);
-  nodeGlobal.gc?.();
-}
-
-function getTrackedHeapSize(): number {
-  return process.memoryUsage().heapTotal;
+  if (implementation.supportsRangeCallback && runner.rangeCallback != null) {
+    props.rangeCallback = runner.rangeCallback;
+  }
+  implementation.run(props);
+  return runner.readResult();
 }
 
 function runTimedCase(
   benchmarkCase: BenchmarkCase,
-  measureMemory: boolean,
+  implementation: BenchmarkImplementation,
   batchRuns: number
 ): TimedResult {
-  if (measureMemory) {
-    forceGc();
-  }
-  const heapBefore = measureMemory ? getTrackedHeapSize() : undefined;
   const startTime = performance.now();
   let checksum = 0;
   let rows = 0;
   for (let index = 0; index < batchRuns; index++) {
-    const result = runBenchmarkCase(benchmarkCase);
+    const result = runBenchmarkCase(benchmarkCase, implementation);
     checksum = addChecksum(checksum, result.checksum);
     rows += result.rows;
   }
   const elapsedMs = performance.now() - startTime;
-  const heapAfterRun = measureMemory ? getTrackedHeapSize() : undefined;
-  if (measureMemory) {
-    forceGc();
-  }
-  const heapAfterGc = measureMemory ? getTrackedHeapSize() : undefined;
   return {
     checksum,
     rows,
     elapsedMs: elapsedMs / batchRuns,
-    heapGrowth:
-      heapBefore != null && heapAfterRun != null
-        ? heapAfterRun - heapBefore
-        : undefined,
-    retainedHeapDelta:
-      heapBefore != null && heapAfterGc != null
-        ? heapAfterGc - heapBefore
-        : undefined,
   };
 }
 
@@ -1225,19 +1307,6 @@ function summarizeCase(
       ? samples.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
         samples.length
       : 0;
-  const heapGrowthDeltas = storage.heapGrowthDeltas;
-  const meanHeapGrowth =
-    heapGrowthDeltas.length > 0
-      ? heapGrowthDeltas.reduce((sum, value) => sum + value, 0) /
-        heapGrowthDeltas.length
-      : undefined;
-  const retainedHeapDeltas = storage.retainedHeapDeltas;
-  const meanRetainedHeapDelta =
-    retainedHeapDeltas.length > 0
-      ? retainedHeapDeltas.reduce((sum, value) => sum + value, 0) /
-        retainedHeapDeltas.length
-      : undefined;
-
   return {
     label: benchmarkCase.label,
     fixture: benchmarkCase.fixture.label,
@@ -1256,8 +1325,6 @@ function summarizeCase(
     minMs: sortedSamples[0] ?? 0,
     maxMs: sortedSamples[sortedSamples.length - 1] ?? 0,
     stdDevMs: Math.sqrt(variance),
-    meanHeapGrowth,
-    meanRetainedHeapDelta,
     checksum: storage.checksum,
     rows: storage.rows,
   };
@@ -1267,9 +1334,121 @@ function formatMs(value: number): string {
   return value.toFixed(3);
 }
 
-function formatHeap(value: number | undefined): string {
-  if (value == null) return '-';
-  return `${(value / 1024).toFixed(1)}KiB`;
+function formatPct(value: number | undefined): string {
+  if (value == null) {
+    return '-';
+  }
+  if (!Number.isFinite(value)) {
+    return value > 0 ? '+Inf%' : '-Inf%';
+  }
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(1)}%`;
+}
+
+function formatDuration(milliseconds: number): string {
+  const seconds = milliseconds / 1000;
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}m${String(remainingSeconds).padStart(2, '0')}s`;
+}
+
+class ProgressReporter {
+  private completedSteps = 0;
+  private currentPhase = '';
+  private readonly startTime = performance.now();
+  private lastPrintedAt = this.startTime;
+
+  constructor(
+    private readonly totalSteps: number,
+    private readonly enabled: boolean
+  ) {
+    if (enabled && totalSteps > 0) {
+      this.print(`benchmark progress: 0/${totalSteps} samples`);
+    }
+  }
+
+  step(phase: string) {
+    if (!this.enabled || this.totalSteps <= 0) {
+      return;
+    }
+
+    this.completedSteps++;
+    const now = performance.now();
+    const phaseChanged = phase !== this.currentPhase;
+    const isDone = this.completedSteps >= this.totalSteps;
+    if (!phaseChanged && !isDone && now - this.lastPrintedAt < 2000) {
+      return;
+    }
+
+    this.currentPhase = phase;
+    this.lastPrintedAt = now;
+    const percent = (this.completedSteps / this.totalSteps) * 100;
+    this.print(
+      `benchmark progress: ${phase} ${this.completedSteps}/${this.totalSteps} samples (${percent.toFixed(
+        1
+      )}%, elapsed ${formatDuration(now - this.startTime)})`
+    );
+  }
+
+  private print(message: string) {
+    process.stderr.write(`${message}\n`);
+  }
+}
+
+function forceGc() {
+  const bun = globalThis as typeof globalThis & {
+    Bun?: { gc?: (force?: boolean) => void };
+  };
+  const nodeGlobal = globalThis as typeof globalThis & { gc?: () => void };
+  bun.Bun?.gc?.(true);
+  nodeGlobal.gc?.();
+}
+
+function captureMemorySnapshot(): MemorySnapshot {
+  forceGc();
+  const memory = process.memoryUsage();
+  return {
+    rss: memory.rss,
+    heapTotal: memory.heapTotal,
+    heapUsed: memory.heapUsed,
+    external: memory.external,
+    arrayBuffers: memory.arrayBuffers,
+  };
+}
+
+function subtractMemorySnapshots(
+  after: MemorySnapshot,
+  before: MemorySnapshot
+): MemorySnapshot {
+  return {
+    rss: after.rss - before.rss,
+    heapTotal: after.heapTotal - before.heapTotal,
+    heapUsed: after.heapUsed - before.heapUsed,
+    external: after.external - before.external,
+    arrayBuffers: after.arrayBuffers - before.arrayBuffers,
+  };
+}
+
+function createMemorySummary(
+  before: MemorySnapshot,
+  after: MemorySnapshot
+): MemorySummary {
+  return {
+    before,
+    after,
+    delta: subtractMemorySnapshots(after, before),
+  };
+}
+
+function formatMegabytes(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(2)}MB`;
+}
+
+function formatMemoryChangePercent(before: number, after: number): string {
+  return formatPct(percentDelta(before, after));
 }
 
 interface SummaryTableRow {
@@ -1282,11 +1461,9 @@ interface SummaryTableRow {
   max: string;
   rows: string;
   checksum: string;
-  heap: string;
-  retained: string;
 }
 
-function printSummaryTable(summaries: CaseSummary[], includeMemory: boolean) {
+function printSummaryTable(summaries: CaseSummary[]) {
   const rows: SummaryTableRow[] = summaries.map((summary) => ({
     case: summary.label,
     runs: String(summary.runs),
@@ -1297,24 +1474,18 @@ function printSummaryTable(summaries: CaseSummary[], includeMemory: boolean) {
     max: formatMs(summary.maxMs),
     rows: String(summary.rows),
     checksum: String(summary.checksum),
-    heap: formatHeap(summary.meanHeapGrowth),
-    retained: formatHeap(summary.meanRetainedHeapDelta),
   }));
-  const headers: (keyof SummaryTableRow)[] = includeMemory
-    ? [
-        'case',
-        'runs',
-        'mean',
-        'p50',
-        'p95',
-        'min',
-        'max',
-        'rows',
-        'checksum',
-        'heap',
-        'retained',
-      ]
-    : ['case', 'runs', 'mean', 'p50', 'p95', 'min', 'max', 'rows', 'checksum'];
+  const headers: (keyof SummaryTableRow)[] = [
+    'case',
+    'runs',
+    'mean',
+    'p50',
+    'p95',
+    'min',
+    'max',
+    'rows',
+    'checksum',
+  ];
   const widths = headers.map((header) =>
     rows.reduce((max, row) => Math.max(max, row[header].length), header.length)
   );
@@ -1333,8 +1504,6 @@ function printSummaryTable(summaries: CaseSummary[], includeMemory: boolean) {
     max: 'max',
     rows: 'rows',
     checksum: 'checksum',
-    heap: 'heap',
-    retained: 'retained',
   };
 
   console.log(formatRow(headerRow));
@@ -1663,44 +1832,503 @@ function createBenchmarkCases(
 function createCaseStorage(cases: BenchmarkCase[]): CaseStorage[] {
   return cases.map(() => ({
     samples: [],
-    heapGrowthDeltas: [],
-    retainedHeapDeltas: [],
     checksum: 0,
     rows: 0,
   }));
 }
 
-function runCaseSet(
+function recordTimingResult(storage: CaseStorage, result: TimedResult) {
+  storage.checksum = addChecksum(storage.checksum, result.checksum);
+  storage.rows += result.rows;
+  storage.samples.push(result.elapsedMs);
+}
+
+function runImplementationCaseSet(
+  implementation: BenchmarkImplementation,
   cases: BenchmarkCase[],
   storages: CaseStorage[],
   runs: number,
-  measureMemory: boolean,
-  memoryBatchRuns: number,
-  recordSamples: boolean
+  recordSamples: boolean,
+  progress: ProgressReporter | undefined,
+  phase: string
 ) {
   for (let runIndex = 0; runIndex < runs; runIndex++) {
     for (let caseOffset = 0; caseOffset < cases.length; caseOffset++) {
       const caseIndex = (runIndex + caseOffset) % cases.length;
       const benchmarkCase = cases[caseIndex];
-      const storage = storages[caseIndex];
-      const result = runTimedCase(
-        benchmarkCase,
-        measureMemory && recordSamples,
-        measureMemory && recordSamples ? memoryBatchRuns : 1
-      );
+      const result = runTimedCase(benchmarkCase, implementation, 1);
       if (recordSamples) {
-        storage.checksum = addChecksum(storage.checksum, result.checksum);
-        storage.rows += result.rows;
-        storage.samples.push(result.elapsedMs);
-        if (result.heapGrowth != null) {
-          storage.heapGrowthDeltas.push(result.heapGrowth);
+        recordTimingResult(storages[caseIndex], result);
+      }
+      progress?.step(phase);
+    }
+  }
+}
+
+function runComparisonCaseSet(
+  cases: BenchmarkCase[],
+  baselineStorages: CaseStorage[],
+  currentStorages: CaseStorage[],
+  runs: number,
+  recordSamples: boolean,
+  progress: ProgressReporter | undefined,
+  phase: string
+) {
+  for (let runIndex = 0; runIndex < runs; runIndex++) {
+    for (let caseOffset = 0; caseOffset < cases.length; caseOffset++) {
+      const caseIndex = (runIndex + caseOffset) % cases.length;
+      const benchmarkCase = cases[caseIndex];
+      const baselineFirst = (runIndex + caseOffset) % 2 === 0;
+      const implementations = baselineFirst
+        ? [BASELINE_IMPLEMENTATION, CURRENT_IMPLEMENTATION]
+        : [CURRENT_IMPLEMENTATION, BASELINE_IMPLEMENTATION];
+
+      for (const implementation of implementations) {
+        const result = runTimedCase(benchmarkCase, implementation, 1);
+        if (!recordSamples) {
+          progress?.step(phase);
+          continue;
         }
-        if (result.retainedHeapDelta != null) {
-          storage.retainedHeapDeltas.push(result.retainedHeapDelta);
-        }
+        const storage =
+          implementation.id === 'baseline'
+            ? baselineStorages[caseIndex]
+            : currentStorages[caseIndex];
+        recordTimingResult(storage, result);
+        progress?.step(phase);
       }
     }
   }
+}
+
+function summarizeBenchmarkRun(
+  cases: BenchmarkCase[],
+  storages: CaseStorage[]
+): BenchmarkRunSummary {
+  const summaries = cases.map((benchmarkCase, index) =>
+    summarizeCase(benchmarkCase, storages[index])
+  );
+  const allSamples = storages
+    .flatMap((storage) => storage.samples)
+    .sort((a, b) => a - b);
+  const score = percentile(allSamples, 0.5);
+  const checksum = summaries.reduce(
+    (sum, summary) => addChecksum(sum, summary.checksum),
+    0
+  );
+  return { score, checksum, summaries };
+}
+
+function runSingleImplementationBenchmark(
+  implementation: BenchmarkImplementation,
+  cases: BenchmarkCase[],
+  config: BenchmarkConfig,
+  progress: ProgressReporter | undefined
+): BenchmarkRunSummary {
+  const storages = createCaseStorage(cases);
+  runImplementationCaseSet(
+    implementation,
+    cases,
+    storages,
+    config.warmupRuns,
+    false,
+    progress,
+    'warmup'
+  );
+  runImplementationCaseSet(
+    implementation,
+    cases,
+    storages,
+    config.runs,
+    true,
+    progress,
+    'timing'
+  );
+  return summarizeBenchmarkRun(cases, storages);
+}
+
+function runBaselineComparisonBenchmark(
+  cases: BenchmarkCase[],
+  config: BenchmarkConfig,
+  progress: ProgressReporter | undefined
+): { baseline: BenchmarkRunSummary; current: BenchmarkRunSummary } {
+  const baselineStorages = createCaseStorage(cases);
+  const currentStorages = createCaseStorage(cases);
+  runComparisonCaseSet(
+    cases,
+    baselineStorages,
+    currentStorages,
+    config.warmupRuns,
+    false,
+    progress,
+    'warmup'
+  );
+  runComparisonCaseSet(
+    cases,
+    baselineStorages,
+    currentStorages,
+    config.runs,
+    true,
+    progress,
+    'timing'
+  );
+  return {
+    baseline: summarizeBenchmarkRun(cases, baselineStorages),
+    current: summarizeBenchmarkRun(cases, currentStorages),
+  };
+}
+
+function runMemoryChildBenchmark(
+  config: BenchmarkConfig,
+  fixtures: BenchmarkFixture[],
+  cases: BenchmarkCase[]
+) {
+  const implementationId = config.memoryChildImplementation;
+  const caseIndex = config.memoryChildCaseIndex;
+  if (implementationId == null || caseIndex == null) {
+    throw new Error('Missing memory child implementation or case index.');
+  }
+  const benchmarkCase = cases[caseIndex];
+  if (benchmarkCase == null) {
+    throw new Error(`Invalid memory child case index: ${caseIndex}`);
+  }
+
+  const implementation = getBenchmarkImplementation(implementationId);
+  const before = captureMemorySnapshot();
+  const result = runSingleImplementationBenchmark(
+    implementation,
+    [benchmarkCase],
+    config,
+    undefined
+  );
+  const after = captureMemorySnapshot();
+  const output: MemoryChildOutput = {
+    implementation: implementation.id,
+    implementationLabel: implementation.label,
+    caseIndex,
+    caseLabel: benchmarkCase.label,
+    caseCount: cases.length,
+    fixtureCount: fixtures.length,
+    checksum: result.checksum,
+    score: result.score,
+    memory: createMemorySummary(before, after),
+  };
+  console.log(JSON.stringify(output));
+}
+
+function percentDelta(baseline: number, current: number): number {
+  if (baseline === 0) {
+    return current === 0 ? 0 : Infinity;
+  }
+  return ((current - baseline) / baseline) * 100;
+}
+
+function compareSummaries(
+  baseline: BenchmarkRunSummary,
+  current: BenchmarkRunSummary
+): ComparedSummary[] {
+  const baselineByLabel = new Map(
+    baseline.summaries.map((summary) => [summary.label, summary])
+  );
+
+  return current.summaries
+    .map((currentSummary) => {
+      const baselineSummary = baselineByLabel.get(currentSummary.label);
+      if (baselineSummary == null) {
+        return undefined;
+      }
+      return {
+        label: currentSummary.label,
+        baselineMeanMs: baselineSummary.meanMs,
+        currentMeanMs: currentSummary.meanMs,
+        meanDeltaMs: currentSummary.meanMs - baselineSummary.meanMs,
+        meanDeltaPct: percentDelta(
+          baselineSummary.meanMs,
+          currentSummary.meanMs
+        ),
+        baselineP95Ms: baselineSummary.p95Ms,
+        currentP95Ms: currentSummary.p95Ms,
+        p95DeltaPct: percentDelta(baselineSummary.p95Ms, currentSummary.p95Ms),
+        rowsMatch: baselineSummary.rows === currentSummary.rows,
+        checksumMatch: baselineSummary.checksum === currentSummary.checksum,
+      } satisfies ComparedSummary;
+    })
+    .filter((summary): summary is ComparedSummary => summary != null)
+    .sort(
+      (left, right) =>
+        Math.abs(right.meanDeltaPct) - Math.abs(left.meanDeltaPct)
+    );
+}
+
+interface ComparisonTableRow {
+  case: string;
+  meanBase: string;
+  meanNow: string;
+  meanDelta: string;
+  p95Delta: string;
+  rows: string;
+  checksum: string;
+}
+
+function printComparisonTable(comparisons: ComparedSummary[]) {
+  const rows: ComparisonTableRow[] = comparisons.map((comparison) => ({
+    case: comparison.label,
+    meanBase: formatMs(comparison.baselineMeanMs),
+    meanNow: formatMs(comparison.currentMeanMs),
+    meanDelta: `${formatMs(comparison.meanDeltaMs)} (${formatPct(
+      comparison.meanDeltaPct
+    )})`,
+    p95Delta: formatPct(comparison.p95DeltaPct),
+    rows: comparison.rowsMatch ? 'ok' : 'DIFF',
+    checksum: comparison.checksumMatch ? 'ok' : 'DIFF',
+  }));
+  const headers: (keyof ComparisonTableRow)[] = [
+    'case',
+    'meanBase',
+    'meanNow',
+    'meanDelta',
+    'p95Delta',
+    'rows',
+    'checksum',
+  ];
+  const widths = headers.map((header) =>
+    rows.reduce((max, row) => Math.max(max, row[header].length), header.length)
+  );
+  const formatRow = (row: ComparisonTableRow) =>
+    headers
+      .map((header, index) => row[header].padEnd(widths[index]))
+      .join('  ')
+      .trimEnd();
+  const headerRow: ComparisonTableRow = {
+    case: 'case',
+    meanBase: 'meanBase',
+    meanNow: 'meanNow',
+    meanDelta: 'meanDelta',
+    p95Delta: 'p95Delta',
+    rows: 'rows',
+    checksum: 'checksum',
+  };
+
+  console.log(formatRow(headerRow));
+  console.log(
+    widths
+      .map((width) => '-'.repeat(width))
+      .join('  ')
+      .trimEnd()
+  );
+  for (const row of rows) {
+    console.log(formatRow(row));
+  }
+}
+
+function buildMemoryChildArgs(
+  config: BenchmarkConfig,
+  implementation: BenchmarkImplementationId,
+  caseIndex: number
+): string[] {
+  const args = [
+    resolve(import.meta.dir, 'benchmarkIterateOverDiff.ts'),
+    '--memory-child',
+    implementation,
+    '--memory-child-case-index',
+    String(caseIndex),
+    '--runs',
+    String(config.runs),
+    '--warmup-runs',
+    String(config.warmupRuns),
+    '--preset',
+    config.preset,
+    '--fixture-path',
+    config.fixturePath,
+  ];
+  if (config.includeSynthetic) {
+    args.push('--include-synthetic');
+  }
+  if (config.fixtureFilter != null) {
+    args.push('--fixture', config.fixtureFilter);
+  }
+  if (config.caseFilter != null) {
+    args.push('--case', config.caseFilter);
+  }
+  if (config.modeFilter != null) {
+    args.push('--mode', config.modeFilter);
+  }
+  return args;
+}
+
+function runMemoryChildProcess(
+  config: BenchmarkConfig,
+  implementation: BenchmarkImplementationId,
+  caseIndex: number
+): MemoryChildOutput {
+  const child = spawnSync(
+    process.execPath,
+    buildMemoryChildArgs(config, implementation, caseIndex),
+    {
+      encoding: 'utf8',
+      env: { ...process.env, AGENT: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  );
+  if (child.error != null) {
+    throw child.error;
+  }
+  if (child.status !== 0) {
+    throw new Error(
+      `Memory child failed for ${implementation} case ${caseIndex}:\n${child.stderr}`
+    );
+  }
+  return JSON.parse(child.stdout) as MemoryChildOutput;
+}
+
+interface MemoryComparisonRow {
+  case: string;
+  memoryBaseline: string;
+  memoryCurrent: string;
+  change: string;
+}
+
+function printFreshProcessMemoryTable(
+  baselineOutputs: MemoryChildOutput[],
+  currentOutputs: MemoryChildOutput[]
+) {
+  const currentByCase = new Map(
+    currentOutputs.map((output) => [output.caseLabel, output])
+  );
+  const rows: MemoryComparisonRow[] = baselineOutputs.map((baseline) => {
+    const current = currentByCase.get(baseline.caseLabel);
+    if (current == null) {
+      throw new Error(
+        `Missing current memory output for ${baseline.caseLabel}`
+      );
+    }
+    return {
+      case: baseline.caseLabel,
+      memoryBaseline: formatMegabytes(baseline.memory.after.rss),
+      memoryCurrent: formatMegabytes(current.memory.after.rss),
+      change: formatMemoryChangePercent(
+        baseline.memory.after.rss,
+        current.memory.after.rss
+      ),
+    };
+  });
+  const headers: (keyof MemoryComparisonRow)[] = [
+    'case',
+    'memoryBaseline',
+    'memoryCurrent',
+    'change',
+  ];
+  const widths = headers.map((header) =>
+    rows.reduce((max, row) => Math.max(max, row[header].length), header.length)
+  );
+  const formatRow = (row: MemoryComparisonRow) =>
+    headers
+      .map((header, index) => row[header].padEnd(widths[index]))
+      .join('  ')
+      .trimEnd();
+  const headerRow: MemoryComparisonRow = {
+    case: 'case',
+    memoryBaseline: 'memoryBaseline',
+    memoryCurrent: 'memoryCurrent',
+    change: 'change',
+  };
+
+  console.log(formatRow(headerRow));
+  console.log(
+    widths
+      .map((width) => '-'.repeat(width))
+      .join('  ')
+      .trimEnd()
+  );
+  for (const row of rows) {
+    console.log(formatRow(row));
+  }
+}
+
+interface SingleMemoryRow {
+  case: string;
+  memoryBefore: string;
+  memoryAfter: string;
+  change: string;
+}
+
+function printFreshProcessSingleMemoryTable(outputs: MemoryChildOutput[]) {
+  const rows: SingleMemoryRow[] = outputs.map((output) => ({
+    case: output.caseLabel,
+    memoryBefore: formatMegabytes(output.memory.before.rss),
+    memoryAfter: formatMegabytes(output.memory.after.rss),
+    change: formatMemoryChangePercent(
+      output.memory.before.rss,
+      output.memory.after.rss
+    ),
+  }));
+  const headers: (keyof SingleMemoryRow)[] = [
+    'case',
+    'memoryBefore',
+    'memoryAfter',
+    'change',
+  ];
+  const widths = headers.map((header) =>
+    rows.reduce((max, row) => Math.max(max, row[header].length), header.length)
+  );
+  const formatRow = (row: SingleMemoryRow) =>
+    headers
+      .map((header, index) => row[header].padEnd(widths[index]))
+      .join('  ')
+      .trimEnd();
+  const headerRow: SingleMemoryRow = {
+    case: 'case',
+    memoryBefore: 'memoryBefore',
+    memoryAfter: 'memoryAfter',
+    change: 'change',
+  };
+
+  console.log(formatRow(headerRow));
+  console.log(
+    widths
+      .map((width) => '-'.repeat(width))
+      .join('  ')
+      .trimEnd()
+  );
+  for (const row of rows) {
+    console.log(formatRow(row));
+  }
+}
+
+function runFreshProcessMemoryComparison(
+  cases: BenchmarkCase[],
+  config: BenchmarkConfig,
+  progressEnabled: boolean
+): { baseline: MemoryChildOutput[]; current: MemoryChildOutput[] } {
+  const implementationIds: BenchmarkImplementationId[] = config.compareBaseline
+    ? ['baseline', 'current']
+    : ['current'];
+  const totalSteps = cases.length * implementationIds.length;
+  const progress = new ProgressReporter(totalSteps, progressEnabled);
+  const baseline: MemoryChildOutput[] = [];
+  const current: MemoryChildOutput[] = [];
+
+  for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
+    for (const implementationId of implementationIds) {
+      const output = runMemoryChildProcess(config, implementationId, caseIndex);
+      if (implementationId === 'baseline') {
+        baseline.push(output);
+      } else {
+        current.push(output);
+      }
+      progress.step('memory');
+    }
+  }
+
+  return { baseline, current };
+}
+
+function getProgressStepCount(
+  cases: BenchmarkCase[],
+  config: BenchmarkConfig
+): number {
+  const implementationCount = config.compareBaseline ? 2 : 1;
+  const runs = config.warmupRuns + config.runs;
+  return cases.length * implementationCount * runs;
 }
 
 function main() {
@@ -1716,42 +2344,102 @@ function main() {
   if (cases.length === 0) {
     throw new Error('No benchmark cases matched the provided filters.');
   }
-
-  const storages = createCaseStorage(cases);
-  runCaseSet(
-    cases,
-    storages,
-    config.warmupRuns,
-    config.measureMemory,
-    config.memoryBatchRuns,
-    false
-  );
-  runCaseSet(
-    cases,
-    storages,
-    config.runs,
-    config.measureMemory,
-    config.memoryBatchRuns,
-    true
+  if (config.memoryChildImplementation != null) {
+    runMemoryChildBenchmark(config, fixtures, cases);
+    return;
+  }
+  const progress = new ProgressReporter(
+    getProgressStepCount(cases, config),
+    !config.outputJson
   );
 
-  const summaries = cases.map((benchmarkCase, index) =>
-    summarizeCase(benchmarkCase, storages[index])
+  if (config.compareBaseline) {
+    const { baseline, current } = runBaselineComparisonBenchmark(
+      cases,
+      config,
+      progress
+    );
+    const comparisons = compareSummaries(baseline, current);
+    const scoreDeltaPct = percentDelta(baseline.score, current.score);
+    const checksumMatch = baseline.checksum === current.checksum;
+    const freshProcessMemory = config.measureMemory
+      ? runFreshProcessMemoryComparison(cases, config, !config.outputJson)
+      : undefined;
+
+    if (config.outputJson) {
+      console.log(
+        JSON.stringify(
+          {
+            benchmark: 'iterateOverDiff:baseline-compare',
+            fixturePath: config.fixturePath,
+            config,
+            implementations: {
+              baseline: BASELINE_IMPLEMENTATION.label,
+              current: CURRENT_IMPLEMENTATION.label,
+            },
+            caseCount: cases.length,
+            fixtureCount: fixtures.length,
+            baseline,
+            current,
+            scoreDeltaPct,
+            checksumMatch,
+            comparedCases: comparisons.length,
+            comparisons,
+            freshProcessMemory,
+          },
+          null,
+          2
+        )
+      );
+      return;
+    }
+
+    console.log('iterateOverDiff benchmark comparison');
+    console.log(`fixture=${config.fixturePath}`);
+    console.log(`fixtures=${fixtures.length} cases=${cases.length}`);
+    console.log(
+      `preset=${config.preset} runsPerCase=${config.runs} warmupRunsPerCase=${config.warmupRuns}`
+    );
+    console.log(
+      `baseline=${BASELINE_IMPLEMENTATION.label} current=${CURRENT_IMPLEMENTATION.label}`
+    );
+    console.log(
+      `score ${formatMs(baseline.score)}ms -> ${formatMs(
+        current.score
+      )}ms (${formatPct(scoreDeltaPct)})`
+    );
+    console.log(`checksum=${checksumMatch ? 'ok' : 'DIFF'}`);
+    console.log('');
+    printComparisonTable(comparisons);
+    if (freshProcessMemory != null) {
+      console.log('');
+      console.log(
+        'fresh process memory comparison (post-GC RSS after baseline/current case processes)'
+      );
+      printFreshProcessMemoryTable(
+        freshProcessMemory.baseline,
+        freshProcessMemory.current
+      );
+    }
+    return;
+  }
+
+  const { checksum, score, summaries } = runSingleImplementationBenchmark(
+    CURRENT_IMPLEMENTATION,
+    cases,
+    config,
+    progress
   );
-  const allSamples = storages
-    .flatMap((storage) => storage.samples)
-    .sort((a, b) => a - b);
-  const score = percentile(allSamples, 0.5);
-  const checksum = summaries.reduce(
-    (sum, summary) => addChecksum(sum, summary.checksum),
-    0
-  );
+  const freshProcessMemory = config.measureMemory
+    ? runFreshProcessMemoryComparison(cases, config, !config.outputJson)
+    : undefined;
 
   if (config.outputJson) {
     console.log(
       JSON.stringify(
         {
           benchmark: 'iterateOverDiff',
+          implementation: CURRENT_IMPLEMENTATION.label,
           fixturePath: config.fixturePath,
           config,
           caseCount: cases.length,
@@ -1759,6 +2447,7 @@ function main() {
           checksum,
           score,
           summaries,
+          freshProcessMemory,
         },
         null,
         2
@@ -1773,14 +2462,17 @@ function main() {
   console.log(
     `preset=${config.preset} runsPerCase=${config.runs} warmupRunsPerCase=${config.warmupRuns}`
   );
+  console.log(`implementation=${CURRENT_IMPLEMENTATION.label}`);
   console.log(`checksum=${checksum}`);
-  if (config.measureMemory) {
-    console.log(
-      `memory=heap is pre-GC heapTotal growth over ${config.memoryBatchRuns} invocations; retained is after forced post-run GC`
-    );
-  }
   console.log('');
-  printSummaryTable(summaries, config.measureMemory);
+  printSummaryTable(summaries);
+  if (freshProcessMemory != null) {
+    console.log('');
+    console.log(
+      'fresh process memory (post-GC RSS before/after each current case process)'
+    );
+    printFreshProcessSingleMemoryTable(freshProcessMemory.current);
+  }
   console.log('');
   console.log(`score=${formatMs(score)}ms`);
 }
