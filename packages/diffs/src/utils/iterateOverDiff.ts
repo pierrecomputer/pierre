@@ -335,7 +335,7 @@ export function iterateOverDiff({
     if (hunk == null) {
       throw new Error('iterateOverDiff: invalid hunk index');
     }
-    if (state.shouldBreak()) {
+    if (state.isWindowedHighlight && state.shouldBreak()) {
       break;
     }
 
@@ -347,10 +347,8 @@ export function iterateOverDiff({
       collapsedContextThreshold
     );
     // We only create a trailing region if it's the last hunk
-    const trailingRegion = (() => {
-      if (hunk !== state.finalHunk || !hasFinalCollapsedHunk(diff)) {
-        return undefined;
-      }
+    let trailingRegion: ExpandedRegionResult | undefined;
+    if (hunk === state.finalHunk && hasFinalCollapsedHunk(diff)) {
       const additionRemaining =
         diff.additionLines.length -
         (hunk.additionLineIndex + hunk.additionCount);
@@ -364,7 +362,7 @@ export function iterateOverDiff({
         );
       }
       const trailingRangeSize = Math.min(additionRemaining, deletionRemaining);
-      return getExpandedRegion(
+      trailingRegion = getExpandedRegion(
         diff.isPartial,
         trailingRangeSize,
         expandedHunks,
@@ -372,7 +370,7 @@ export function iterateOverDiff({
         diff.hunks.length,
         collapsedContextThreshold
       );
-    })();
+    }
     const expandedLineCount = leadingRegion.fromStart + leadingRegion.fromEnd;
     let pendingCollapsedLines = leadingRegion.collapsedLines;
     const trailingCollapsedLines =
@@ -412,7 +410,10 @@ export function iterateOverDiff({
     }
 
     // Emit for expanded lines
-    if (!state.shouldSkip(expandedLineCount, expandedLineCount)) {
+    if (
+      !state.isWindowedHighlight ||
+      !state.shouldSkip(expandedLineCount, expandedLineCount)
+    ) {
       let unifiedLineIndex = hunk.unifiedLineStart - leadingRegion.rangeSize;
       let splitLineIndex = hunk.splitLineStart - leadingRegion.rangeSize;
 
@@ -554,7 +555,7 @@ export function iterateOverDiff({
       contentIndex < hunkContent.length;
       contentIndex++
     ) {
-      if (state.shouldBreak()) {
+      if (state.isWindowedHighlight && state.shouldBreak()) {
         break hunkIterator;
       }
 
@@ -656,7 +657,10 @@ export function iterateOverDiff({
           ) {
             break hunkIterator;
           }
-        } else if (!state.shouldSkip(content.lines, content.lines)) {
+        } else if (
+          !state.isWindowedHighlight ||
+          !state.shouldSkip(content.lines, content.lines)
+        ) {
           const [startIndex, endIndex] = getEqualLineIterationRange(
             state,
             content.lines,
@@ -720,7 +724,9 @@ export function iterateOverDiff({
       else {
         const splitCount = Math.max(content.deletions, content.additions);
         const unifiedCount = content.deletions + content.additions;
-        const shouldSkipChange = state.shouldSkip(unifiedCount, splitCount);
+        const shouldSkipChange =
+          state.isWindowedHighlight &&
+          state.shouldSkip(unifiedCount, splitCount);
         if (!shouldSkipChange) {
           reusableChangeProps.type = 'change';
           reusableChangeProps.hunkIndex = hunkIndex;
@@ -1309,7 +1315,7 @@ export function iterateOverDiff({
       }
       let index = startIndex;
       while (index < len) {
-        if (state.shouldBreak()) {
+        if (state.isWindowedHighlight && state.shouldBreak()) {
           break hunkIterator;
         }
         if (index >= endIndex) {
