@@ -562,7 +562,7 @@ function createChecksumRunner(diffStyle: DiffStyle): BenchmarkRunner {
       rows += lineCount;
       checksum = addChecksumProduct(checksum, props.hunkIndex, lineCount);
       checksum = addChecksumProduct(checksum, props.type.length, lineCount);
-      checksum = addChecksumProduct(checksum, props.collapsedBefore, lineCount);
+      checksum = addChecksum(checksum, props.collapsedBefore);
       checksum = addChecksumProduct(checksum, props.collapsedAfter, lineCount);
       checksum = addChecksumRange(
         checksum,
@@ -793,6 +793,9 @@ function createLayoutSizeRunner(diffStyle: DiffStyle): BenchmarkRunner {
     rangeCallback(props) {
       const lineCount = props.lineCount;
       const lineIndex = getRangeStyleLineIndex(props, diffStyle);
+      if (props.collapsedBefore > 0) {
+        height += 16;
+      }
       const firstCheckpointOffset =
         (5_000 - (renderedLineIndex % 5_000)) % 5_000;
       for (
@@ -850,6 +853,9 @@ function createLinePositionRunner(
     rangeCallback(props) {
       const lineCount = props.lineCount;
       const lineIndex = getRangeStyleLineIndex(props, diffStyle);
+      if (props.collapsedBefore > 0) {
+        top += 16;
+      }
       const offset = Math.max(0, targetLine - lineIndex);
       if (offset < lineCount) {
         rows += offset + 1;
@@ -901,6 +907,9 @@ function createScrollAnchorRunner(
     rangeCallback(props) {
       const lineCount = props.lineCount;
       const lineIndex = getRangeStyleLineIndex(props, diffStyle);
+      if (props.collapsedBefore > 0) {
+        top += 16;
+      }
       const offset =
         top >= targetTop
           ? 0
@@ -993,6 +1002,9 @@ function createRenderRangeRunner(
     rangeCallback(props) {
       let remaining = props.lineCount;
       let lineIndex = getRangeStyleLineIndex(props, diffStyle);
+      if (props.collapsedBefore > 0) {
+        top += 16;
+      }
       while (remaining > 0) {
         const isAtHunkBoundary = currentLine % DEFAULT_HUNK_LINE_COUNT === 0;
         const currentHunk = Math.floor(currentLine / DEFAULT_HUNK_LINE_COUNT);

@@ -217,7 +217,7 @@ function checksumRowsWithRanges(
         checksum = addRowChecksum(checksum, {
           type: range.type,
           hunkIndex: range.hunkIndex,
-          collapsedBefore: range.collapsedBefore,
+          collapsedBefore: offset === 0 ? range.collapsedBefore : 0,
           collapsedAfter: range.collapsedAfter,
           deletionLine: addLineOffset(range.deletionLine, offset),
           additionLine: addLineOffset(range.additionLine, offset),

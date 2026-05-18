@@ -571,6 +571,37 @@ export function iterateOverDiff({
               }
             }
           }
+        } else if (
+          !state.isWindowedHighlight &&
+          rangeCallback != null &&
+          pendingCollapsedLines > 0 &&
+          trailingCollapsedLines <= 0 &&
+          !(isLastContent && (hunk.noEOFCRAdditions || hunk.noEOFCRDeletions))
+        ) {
+          setRangeLineData(
+            reusableRangeProps,
+            reusableRangeDeletionLine,
+            reusableRangeAdditionLine,
+            'context',
+            hunkIndex,
+            hunk,
+            content.lines,
+            deletionLineNumber,
+            deletionLineIndex,
+            additionLineNumber,
+            additionLineIndex,
+            unifiedLineIndex,
+            splitLineIndex,
+            unifiedLineIndex,
+            splitLineIndex,
+            getPendingCollapsed()
+          );
+          if (
+            rangeCallback(reusableRangeProps as DiffLineRangeCallbackProps) ===
+            true
+          ) {
+            break hunkIterator;
+          }
         } else if (!state.shouldSkip(content.lines, content.lines)) {
           const [startIndex, endIndex] = getEqualLineIterationRange(
             state,
@@ -1120,27 +1151,74 @@ export function iterateOverDiff({
                     unifiedRowIndex,
                     splitRowIndex
                   );
-                  setChangeLineData(
-                    reusableChangeProps,
-                    reusableDeletionLine,
-                    reusableAdditionLine,
-                    hunkIndex,
-                    hunk,
-                    getPendingCollapsed(),
-                    collapsedAfter,
-                    diffStyle,
-                    index,
-                    unifiedLineIndex,
-                    splitLineIndex,
-                    additionLineIndex,
-                    deletionLineIndex,
-                    additionLineNumber,
-                    deletionLineNumber,
-                    content,
-                    isLastContent,
-                    unifiedCount,
-                    splitCount
-                  );
+                  reusableChangeProps.collapsedBefore = getPendingCollapsed();
+                  reusableChangeProps.collapsedAfter = collapsedAfter;
+                  if (diffStyle === 'unified') {
+                    if (index < content.deletions) {
+                      reusableDeletionLine.unifiedLineIndex =
+                        unifiedLineIndex + index;
+                      reusableDeletionLine.splitLineIndex = splitRowIndex;
+                      reusableDeletionLine.lineIndex =
+                        deletionLineIndex + index;
+                      reusableDeletionLine.lineNumber =
+                        deletionLineNumber + index;
+                      reusableDeletionLine.noEOFCR =
+                        isLastContent &&
+                        index === content.deletions - 1 &&
+                        hunk.noEOFCRDeletions;
+                      reusableChangeProps.deletionLine = reusableDeletionLine;
+                      reusableChangeProps.additionLine = undefined;
+                    } else {
+                      const additionOffset = index - content.deletions;
+                      reusableAdditionLine.unifiedLineIndex =
+                        unifiedLineIndex + index;
+                      reusableAdditionLine.splitLineIndex = splitRowIndex;
+                      reusableAdditionLine.lineIndex =
+                        additionLineIndex + additionOffset;
+                      reusableAdditionLine.lineNumber =
+                        additionLineNumber + additionOffset;
+                      reusableAdditionLine.noEOFCR =
+                        isLastContent &&
+                        index === unifiedCount - 1 &&
+                        hunk.noEOFCRAdditions;
+                      reusableChangeProps.deletionLine = undefined;
+                      reusableChangeProps.additionLine = reusableAdditionLine;
+                    }
+                  } else {
+                    if (index < content.deletions) {
+                      reusableDeletionLine.unifiedLineIndex =
+                        unifiedLineIndex + index;
+                      reusableDeletionLine.splitLineIndex = splitRowIndex;
+                      reusableDeletionLine.lineIndex =
+                        deletionLineIndex + index;
+                      reusableDeletionLine.lineNumber =
+                        deletionLineNumber + index;
+                      reusableDeletionLine.noEOFCR =
+                        isLastContent &&
+                        index === splitCount - 1 &&
+                        hunk.noEOFCRDeletions;
+                      reusableChangeProps.deletionLine = reusableDeletionLine;
+                    } else {
+                      reusableChangeProps.deletionLine = undefined;
+                    }
+
+                    if (index < content.additions) {
+                      reusableAdditionLine.unifiedLineIndex =
+                        unifiedLineIndex + content.deletions + index;
+                      reusableAdditionLine.splitLineIndex = splitRowIndex;
+                      reusableAdditionLine.lineIndex =
+                        additionLineIndex + index;
+                      reusableAdditionLine.lineNumber =
+                        additionLineNumber + index;
+                      reusableAdditionLine.noEOFCR =
+                        isLastContent &&
+                        index === splitCount - 1 &&
+                        hunk.noEOFCRAdditions;
+                      reusableChangeProps.additionLine = reusableAdditionLine;
+                    } else {
+                      reusableChangeProps.additionLine = undefined;
+                    }
+                  }
                   if (
                     callback(reusableChangeProps as DiffLineCallbackProps) ===
                     true
@@ -1768,13 +1846,14 @@ function setRangeLineData(
   deletionUnifiedLineIndex: number | undefined,
   deletionSplitLineIndex: number | undefined,
   additionUnifiedLineIndex: number | undefined,
-  additionSplitLineIndex: number | undefined
+  additionSplitLineIndex: number | undefined,
+  collapsedBefore = 0
 ): void {
   target.type = type;
   target.hunkIndex = hunkIndex;
   target.hunk = hunk;
   target.lineCount = lineCount;
-  target.collapsedBefore = 0;
+  target.collapsedBefore = collapsedBefore;
   target.collapsedAfter = 0;
 
   if (
@@ -1813,122 +1892,5 @@ function setRangeLineData(
     target.additionLine = additionLine;
   } else {
     target.additionLine = undefined;
-  }
-}
-
-function setChangeLineData(
-  target: MutableDiffLineCallbackProps,
-  deletionLine: DiffLineMetadata,
-  additionLine: DiffLineMetadata,
-  hunkIndex: number,
-  hunk: Hunk,
-  collapsedBefore: number,
-  collapsedAfter: number,
-  diffStyle: DiffStyle,
-  index: number,
-  unifiedLineIndex: number,
-  splitLineIndex: number,
-  additionLineIndex: number,
-  deletionLineIndex: number,
-  additionLineNumber: number,
-  deletionLineNumber: number,
-  content: ChangeContent,
-  isLastContent: boolean,
-  unifiedCount: number,
-  splitCount: number
-): void {
-  target.type = 'change';
-  target.hunkIndex = hunkIndex;
-  target.hunk = hunk;
-  target.collapsedAfter = collapsedAfter;
-  target.collapsedBefore = collapsedBefore;
-
-  const unifiedDeletionLineIndex =
-    index < content.deletions ? unifiedLineIndex + index : undefined;
-  const unifiedAdditionLineIndex =
-    diffStyle === 'unified'
-      ? index >= content.deletions
-        ? unifiedLineIndex + index
-        : undefined
-      : index < content.additions
-        ? unifiedLineIndex + content.deletions + index
-        : undefined;
-
-  const resolvedSplitLineIndex =
-    diffStyle === 'unified'
-      ? splitLineIndex +
-        (index < content.deletions ? index : index - content.deletions)
-      : splitLineIndex + index;
-
-  const deletionLineIndexValue =
-    index < content.deletions ? deletionLineIndex + index : undefined;
-  const deletionLineNumberValue =
-    index < content.deletions ? deletionLineNumber + index : undefined;
-  const additionLineIndexValue =
-    diffStyle === 'unified'
-      ? index >= content.deletions
-        ? additionLineIndex + (index - content.deletions)
-        : undefined
-      : index < content.additions
-        ? additionLineIndex + index
-        : undefined;
-  const additionLineNumberValue =
-    diffStyle === 'unified'
-      ? index >= content.deletions
-        ? additionLineNumber + (index - content.deletions)
-        : undefined
-      : index < content.additions
-        ? additionLineNumber + index
-        : undefined;
-
-  const noEOFCRDeletion =
-    diffStyle === 'unified'
-      ? isLastContent &&
-        index === content.deletions - 1 &&
-        hunk.noEOFCRDeletions
-      : isLastContent && index === splitCount - 1 && hunk.noEOFCRDeletions;
-  const noEOFCRAddition =
-    diffStyle === 'unified'
-      ? isLastContent && index === unifiedCount - 1 && hunk.noEOFCRAdditions
-      : isLastContent && index === splitCount - 1 && hunk.noEOFCRAdditions;
-
-  if (
-    deletionLineIndexValue != null &&
-    deletionLineNumberValue != null &&
-    unifiedDeletionLineIndex != null
-  ) {
-    setLineMetadata(
-      deletionLine,
-      unifiedDeletionLineIndex,
-      resolvedSplitLineIndex,
-      deletionLineIndexValue,
-      deletionLineNumberValue,
-      noEOFCRDeletion
-    );
-    target.deletionLine = deletionLine;
-  } else {
-    target.deletionLine = undefined;
-  }
-
-  if (
-    additionLineIndexValue != null &&
-    additionLineNumberValue != null &&
-    unifiedAdditionLineIndex != null
-  ) {
-    setLineMetadata(
-      additionLine,
-      unifiedAdditionLineIndex,
-      resolvedSplitLineIndex,
-      additionLineIndexValue,
-      additionLineNumberValue,
-      noEOFCRAddition
-    );
-    target.additionLine = additionLine;
-  } else {
-    target.additionLine = undefined;
-  }
-
-  if (target.deletionLine == null && target.additionLine == null) {
-    throw new Error('iterateOverDiff: missing change line data');
   }
 }
