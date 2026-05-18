@@ -773,7 +773,7 @@
     display: grid;
     grid-auto-flow: dense;
     grid-template-columns: var(--diffs-code-grid);
-    overflow: scroll clip;
+    overflow: var(--diffs-overflow-override, scroll) clip;
     overscroll-behavior-x: none;
     tab-size: var(--diffs-tab-size, 2);
     align-self: flex-start;
