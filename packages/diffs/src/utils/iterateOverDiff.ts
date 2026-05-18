@@ -114,6 +114,17 @@ interface HunkPrefixCounts {
   unifiedCount: number;
 }
 
+interface HunkContentPrefixCounts {
+  splitCount: number;
+  unifiedCount: number;
+  deletionCount: number;
+  additionCount: number;
+}
+
+interface HunkContentStartState extends HunkContentPrefixCounts {
+  contentIndex: number;
+}
+
 interface ChangeIterationRanges {
   count: number;
   firstStart: number;
@@ -168,6 +179,13 @@ const hunkPrefixCountsCache = new WeakMap<
   FileDiffMetadata,
   HunkPrefixCountsCacheEntry
 >();
+const hunkContentPrefixCountsCache = new WeakMap<
+  Hunk,
+  HunkContentPrefixCounts[]
+>();
+// Prefix seeking only wins once a hunk has enough content blocks to skip; below
+// this, the binary search and cache lookup cost more than the short linear scan.
+const HUNK_CONTENT_SEEK_THRESHOLD = 64;
 
 export function iterateOverDiff({
   diff,
@@ -276,6 +294,13 @@ export function iterateOverDiff({
     thirdEnd: 0,
     fourthStart: 0,
     fourthEnd: 0,
+  };
+  const contentStartState: HunkContentStartState = {
+    contentIndex: 0,
+    splitCount: 0,
+    unifiedCount: 0,
+    deletionCount: 0,
+    additionCount: 0,
   };
   const reusableDeletionLine = createReusableLineMetadata();
   const reusableAdditionLine = createReusableLineMetadata();
@@ -501,14 +526,43 @@ export function iterateOverDiff({
     let additionLineIndex = hunk.additionLineIndex;
     let deletionLineNumber = hunk.deletionStart;
     let additionLineNumber = hunk.additionStart;
-    const lastContent = hunk.hunkContent.at(-1);
+    const hunkContent = hunk.hunkContent;
+    const lastContentIndex = hunkContent.length - 1;
 
-    for (const content of hunk.hunkContent) {
+    contentStartState.contentIndex = 0;
+    if (
+      state.isWindowedHighlight &&
+      hunkContent.length > HUNK_CONTENT_SEEK_THRESHOLD &&
+      setHunkContentStartState(contentStartState, state, hunk, diffStyle) &&
+      contentStartState.contentIndex > 0
+    ) {
+      state.incrementCounts(
+        contentStartState.unifiedCount,
+        contentStartState.splitCount
+      );
+      unifiedLineIndex += contentStartState.unifiedCount;
+      splitLineIndex += contentStartState.splitCount;
+      deletionLineIndex += contentStartState.deletionCount;
+      additionLineIndex += contentStartState.additionCount;
+      deletionLineNumber += contentStartState.deletionCount;
+      additionLineNumber += contentStartState.additionCount;
+      getPendingCollapsed();
+    }
+
+    for (
+      let contentIndex = contentStartState.contentIndex;
+      contentIndex < hunkContent.length;
+      contentIndex++
+    ) {
       if (state.shouldBreak()) {
         break hunkIterator;
       }
 
-      const isLastContent = content === lastContent;
+      const content = hunkContent[contentIndex];
+      if (content == null) {
+        throw new Error('iterateOverDiff: invalid hunk content index');
+      }
+      const isLastContent = contentIndex === lastContentIndex;
 
       // Hunk Context Content
       if (content.type === 'context') {
@@ -1450,6 +1504,100 @@ function getHunkPrefixCounts({
   }
 
   return prefixCounts;
+}
+
+function getHunkContentPrefixCounts(hunk: Hunk): HunkContentPrefixCounts[] {
+  let prefixCounts = hunkContentPrefixCountsCache.get(hunk);
+  if (prefixCounts != null) {
+    return prefixCounts;
+  }
+
+  let splitCount = 0;
+  let unifiedCount = 0;
+  let deletionCount = 0;
+  let additionCount = 0;
+  prefixCounts = [
+    {
+      splitCount: 0,
+      unifiedCount: 0,
+      deletionCount: 0,
+      additionCount: 0,
+    },
+  ];
+
+  for (const content of hunk.hunkContent) {
+    if (content.type === 'context') {
+      splitCount += content.lines;
+      unifiedCount += content.lines;
+      deletionCount += content.lines;
+      additionCount += content.lines;
+    } else {
+      splitCount += Math.max(content.deletions, content.additions);
+      unifiedCount += content.deletions + content.additions;
+      deletionCount += content.deletions;
+      additionCount += content.additions;
+    }
+    prefixCounts.push({
+      splitCount,
+      unifiedCount,
+      deletionCount,
+      additionCount,
+    });
+  }
+
+  hunkContentPrefixCountsCache.set(hunk, prefixCounts);
+  return prefixCounts;
+}
+
+// Seek within the selected hunk by using cached content-block prefix counts.
+// Hunk-level prefixes get us to the right hunk; this avoids replaying every
+// preceding context/change block in large hunks before a deep visible window.
+function setHunkContentStartState(
+  target: HunkContentStartState,
+  state: IterationState,
+  hunk: Hunk,
+  diffStyle: DiffStyle
+): boolean {
+  const prefixCounts = getHunkContentPrefixCounts(hunk);
+  let low = 1;
+  let high = prefixCounts.length - 1;
+  let result = prefixCounts.length;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const counts = prefixCounts[mid];
+    if (counts == null) {
+      throw new Error('iterateOverDiff: invalid hunk content prefix index');
+    }
+    const reachesViewportStart =
+      diffStyle === 'unified'
+        ? state.unifiedCount + counts.unifiedCount >= state.viewportStart
+        : diffStyle === 'split'
+          ? state.splitCount + counts.splitCount >= state.viewportStart
+          : state.unifiedCount + counts.unifiedCount >= state.viewportStart ||
+            state.splitCount + counts.splitCount >= state.viewportStart;
+
+    if (reachesViewportStart) {
+      result = mid;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+
+  const contentIndex =
+    result > hunk.hunkContent.length ? hunk.hunkContent.length : result - 1;
+  const skippedCounts = prefixCounts[contentIndex];
+  if (skippedCounts == null) {
+    throw new Error('iterateOverDiff: invalid skipped content prefix index');
+  }
+
+  target.contentIndex = contentIndex;
+  target.splitCount = skippedCounts.splitCount;
+  target.unifiedCount = skippedCounts.unifiedCount;
+  target.deletionCount = skippedCounts.deletionCount;
+  target.additionCount = skippedCounts.additionCount;
+  return contentIndex > 0;
 }
 
 // Clip a run of unchanged rows to the active rendered window. Equal rows advance
