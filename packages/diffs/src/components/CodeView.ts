@@ -782,6 +782,11 @@ export class CodeView<LAnnotation = undefined> {
     this.reset();
     this.clearElementPool();
     this.restoreScrollInteractions();
+    dequeueRender(this.computeRenderRangeAndEmit);
+    this.clearPendingScroll();
+    this.scrollListeners.clear();
+    this.slotCoordinator = undefined;
+    this.slotSnapshot = undefined;
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
     this.root?.removeEventListener('scroll', this.handleScroll);
