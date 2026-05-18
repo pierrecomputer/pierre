@@ -72,13 +72,21 @@ export interface CodeViewSavedCommentItem {
 }
 
 // The fully pre-computed input this tree needs for a given fetch. It is built
-// once at fetch time by createCodeViewFileTreeSource and stored alongside
-// the viewer items, so later per-item annotation updates do not feed into the
+// once at fetch time by snapshotCodeViewTreeSource and stored alongside the
+// viewer items, so later per-item annotation updates do not feed into the
 // tree and do not cause it to rebuild.
+//
+// Streamed publishes link successive snapshots through `previousSource` so the
+// tree consumer can recognize append-only growth and apply the delta as
+// `model.batch` adds instead of rebuilding the entire path store. The link is
+// present only on snapshots that share the same underlying accumulator; the
+// initial publish and any non-streamed source leave it undefined and force a
+// full reset.
 export interface CodeViewFileTreeSource {
   gitStatus: readonly GitStatusEntry[];
   paths: readonly string[];
   pathToItemId: ReadonlyMap<string, string>;
+  previousSource?: CodeViewFileTreeSource;
   sort: CodeViewFileTreeSort;
 }
 

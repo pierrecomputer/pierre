@@ -11,26 +11,39 @@ import type {
   CodeViewCommentFileByItemId,
   CodeViewCommentSidebarFile,
   CodeViewDiffStats,
+  CodeViewFileTreeSort,
   CodeViewFileTreeSource,
   CommentMetadata,
 } from './types';
 import {
-  createCodeViewFileTreeSource,
+  createPatchOrderSortFromRankMap,
+  extendPatchOrderRanks,
   mapChangeTypeToGitStatus,
 } from './utils';
 
 export interface CodeViewDataAccumulator {
+  diffStats: CodeViewDiffStats;
   fileIndex: number;
   gitStatusByPath: Map<string, GitStatusEntry>;
   itemIdToFile: Map<string, CodeViewCommentSidebarFile>;
   items: CodeViewItem<CommentMetadata>[];
+  // The last tree source emitted by snapshotCodeViewTreeSource for this
+  // accumulator. Each new snapshot links back to this so the consumer can
+  // recognize append-only growth and skip the full PathStore rebuild.
+  lastTreeSource: CodeViewFileTreeSource | undefined;
+  nextCollisionSuffixByBase: Map<string, number>;
   pendingItems: CodeViewItem<CommentMetadata>[];
   pendingItemById: Map<string, CodeViewItem<CommentMetadata>>;
   pathToItemId: Map<string, string>;
   pathStateByTreePath: Map<string, CodeViewPathState>;
   paths: string[];
-  nextCollisionSuffixByBase: Map<string, number>;
-  diffStats: CodeViewDiffStats;
+  // Patch-order ranks for every path and directory ancestor we have ever
+  // appended. Extended incrementally so the sort comparator below stays valid
+  // across publishes without rebuilding the map.
+  rankByPath: Map<string, number>;
+  // Stable comparator that reads from rankByPath. Reused across snapshots so
+  // each publish does not allocate a fresh closure or repopulate a rank map.
+  sort: CodeViewFileTreeSort;
 }
 
 export interface CodeViewItemIdRename {
@@ -53,23 +66,27 @@ export interface LoadedCodeViewData {
 }
 
 export function createCodeViewDataAccumulator(): CodeViewDataAccumulator {
+  const rankByPath = new Map<string, number>();
   return {
-    fileIndex: 0,
-    gitStatusByPath: new Map(),
-    itemIdToFile: new Map(),
-    items: [],
-    pendingItems: [],
-    pendingItemById: new Map(),
-    pathToItemId: new Map(),
-    pathStateByTreePath: new Map(),
-    paths: [],
-    nextCollisionSuffixByBase: new Map(),
     diffStats: {
       addedLines: 0,
       deletedLines: 0,
       fileCount: 0,
       totalLinesOfCode: 0,
     },
+    fileIndex: 0,
+    gitStatusByPath: new Map(),
+    itemIdToFile: new Map(),
+    items: [],
+    lastTreeSource: undefined,
+    nextCollisionSuffixByBase: new Map(),
+    pendingItems: [],
+    pendingItemById: new Map(),
+    pathToItemId: new Map(),
+    pathStateByTreePath: new Map(),
+    paths: [],
+    rankByPath,
+    sort: createPatchOrderSortFromRankMap(rankByPath),
   };
 }
 
@@ -122,6 +139,11 @@ export function appendFileDiffToCodeViewData(
 
   if (previousPathState == null) {
     accumulator.paths.push(treePath);
+    extendPatchOrderRanks(
+      accumulator.rankByPath,
+      treePath,
+      accumulator.paths.length - 1
+    );
   }
   accumulator.pathToItemId.set(treePath, id);
   updateGitStatusByPath(
@@ -150,14 +172,24 @@ export function takePendingCodeViewItems(
   return pendingItems;
 }
 
+// Produces a tree source snapshot, linking it to the previous snapshot from
+// the same accumulator. The consumer treats that link as a hint that the new
+// paths array is an append-only extension of the prior one and applies the
+// delta with model.batch instead of rebuilding the whole PathStore. Consumers
+// that recreate the accumulator (e.g. a new request) discard the prior link
+// implicitly because lastTreeSource is undefined on a fresh accumulator.
 export function snapshotCodeViewTreeSource(
   accumulator: CodeViewDataAccumulator
 ): CodeViewFileTreeSource {
-  return createCodeViewFileTreeSource(
-    accumulator.paths.slice(),
-    new Map(accumulator.pathToItemId),
-    Array.from(accumulator.gitStatusByPath.values())
-  );
+  const snapshot: CodeViewFileTreeSource = {
+    gitStatus: Array.from(accumulator.gitStatusByPath.values()),
+    paths: accumulator.paths.slice(),
+    pathToItemId: new Map(accumulator.pathToItemId),
+    previousSource: accumulator.lastTreeSource,
+    sort: accumulator.sort,
+  };
+  accumulator.lastTreeSource = snapshot;
+  return snapshot;
 }
 
 // Moves the current CodeView item for a path off the canonical tree id so the

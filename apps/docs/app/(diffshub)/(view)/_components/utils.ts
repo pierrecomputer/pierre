@@ -4,13 +4,12 @@ import type {
   CodeViewItem,
   DiffLineAnnotation,
 } from '@pierre/diffs';
-import type { GitStatus, GitStatusEntry } from '@pierre/trees';
+import type { GitStatus } from '@pierre/trees';
 
 import type {
   CodeViewCommentFileByItemId,
   CodeViewDeletedCommentEvent,
   CodeViewFileTreeSort,
-  CodeViewFileTreeSource,
   CodeViewSavedCommentEntry,
   CodeViewSavedCommentEvent,
   CodeViewSavedCommentItem,
@@ -185,28 +184,39 @@ export function mapChangeTypeToGitStatus(type: ChangeTypes): GitStatus {
   }
 }
 
-function createPatchOrderSort(paths: readonly string[]): CodeViewFileTreeSort {
-  const rankByPath = new Map<string, number>();
-  for (let index = 0; index < paths.length; index++) {
-    const path = paths[index];
-    if (path == null || path.length === 0) {
-      continue;
-    }
-
-    if (!rankByPath.has(path)) {
-      rankByPath.set(path, index);
-    }
-
-    let slashIndex = path.lastIndexOf('/');
-    while (slashIndex > 0) {
-      const directory = path.slice(0, slashIndex);
-      if (!rankByPath.has(directory)) {
-        rankByPath.set(directory, index);
-      }
-      slashIndex = directory.lastIndexOf('/');
-    }
+// Records the patch-order rank for a path and every directory ancestor inside
+// `rankByPath`. Existing ranks are preserved so callers can fold new paths into
+// the same map without disturbing the ordering established for earlier paths.
+export function extendPatchOrderRanks(
+  rankByPath: Map<string, number>,
+  path: string,
+  index: number
+): void {
+  if (path.length === 0) {
+    return;
   }
 
+  if (!rankByPath.has(path)) {
+    rankByPath.set(path, index);
+  }
+
+  let slashIndex = path.lastIndexOf('/');
+  while (slashIndex > 0) {
+    const directory = path.slice(0, slashIndex);
+    if (!rankByPath.has(directory)) {
+      rankByPath.set(directory, index);
+    }
+    slashIndex = directory.lastIndexOf('/');
+  }
+}
+
+// Builds a sort comparator that reads from a `rankByPath` map populated by
+// extendPatchOrderRanks. The comparator captures the map by reference so the
+// same comparator instance can be reused across incremental publishes while
+// the map continues to grow.
+export function createPatchOrderSortFromRankMap(
+  rankByPath: ReadonlyMap<string, number>
+): CodeViewFileTreeSort {
   return (left, right) => {
     const leftRank = rankByPath.get(left.path) ?? PATCH_ORDER_FALLBACK_RANK;
     const rightRank = rankByPath.get(right.path) ?? PATCH_ORDER_FALLBACK_RANK;
@@ -227,25 +237,6 @@ function createPatchOrderSort(paths: readonly string[]): CodeViewFileTreeSort {
     }
 
     return left.path < right.path ? -1 : 1;
-  };
-}
-
-// Finalizes the stable tree input from a fresh fetch. Callers are expected to
-// populate paths, pathToItemId, and gitStatus in the same pass that builds
-// the viewer items so the tree data structure does not require its own walk
-// over items. Modified-status entries should be excluded from gitStatus before
-// calling here so the tree renders them as the visual default (no tint or badge).
-export function createCodeViewFileTreeSource(
-  paths: readonly string[],
-  pathToItemId: ReadonlyMap<string, string>,
-  gitStatus: readonly GitStatusEntry[]
-): CodeViewFileTreeSource {
-  const sort = createPatchOrderSort(paths);
-  return {
-    gitStatus,
-    paths,
-    pathToItemId,
-    sort,
   };
 }
 
