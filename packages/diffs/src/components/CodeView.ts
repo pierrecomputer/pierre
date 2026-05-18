@@ -378,7 +378,8 @@ export interface CodeViewOptions<LAnnotation>
   __devOnlyValidateItemHeights?: boolean;
 }
 
-const DEFAULT_POINTER_EVENTS_RESTORE_DELAY_MS = 120;
+const DEFAULT_SCROLL_INTERACTION_RESTORE_DELAY_MS = 120;
+const SCROLLING_CODE_OVERFLOW_FIX_VARIABLE = '--diffs-overflow-override';
 const SCROLL_REBASE_CONTAINER_HEIGHT = 12_000_000;
 const SCROLL_REBASE_TRIGGER_TOP = 1_000_000;
 const SCROLL_REBASE_TARGET_TOP = 2_000_000;
@@ -397,6 +398,23 @@ interface SpringStepResult {
   position: number;
   velocity: number;
 }
+
+// A vibe slopped heuristic to detect mobile safari only
+const MOBILE_SAFARI = (() => {
+  const { navigator } = globalThis;
+
+  const userAgent = navigator.userAgent;
+  const isIOS = /iP(?:hone|ad|od)/.test(userAgent);
+  const isIPadOS =
+    navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+
+  return (
+    (isIOS || isIPadOS) &&
+    /AppleWebKit/.test(userAgent) &&
+    /Safari/.test(userAgent) &&
+    !/(CriOS|FxiOS|EdgiOS|OPiOS)/.test(userAgent)
+  );
+})();
 
 type PendingAlignTypes = Exclude<CodeViewLineScrollTarget['align'], 'nearest'>;
 
@@ -446,8 +464,9 @@ export class CodeView<LAnnotation = undefined> {
   private scrollTop: number = 0;
   private scrollPageOffset: number = 0;
   private scrollDirty = true;
-  private pointerEventsRestoreTimer: ReturnType<typeof setTimeout> | undefined;
+  private scrollInteractionFixTimer: ReturnType<typeof setTimeout> | undefined;
   private pointerEventsDisabled = false;
+  private codeOverflowFix = false;
   private height: number = 0;
   private heightDirty = true;
   private windowSpecs: VirtualWindowSpecs = { top: 0, bottom: 0 };
@@ -591,36 +610,56 @@ export class CodeView<LAnnotation = undefined> {
     );
   }
 
-  private clearPointerEventsTimer(): void {
-    if (this.pointerEventsRestoreTimer != null) {
-      clearTimeout(this.pointerEventsRestoreTimer);
-      this.pointerEventsRestoreTimer = undefined;
+  private clearScrollInteractionTimer(): void {
+    if (this.scrollInteractionFixTimer != null) {
+      clearTimeout(this.scrollInteractionFixTimer);
+      this.scrollInteractionFixTimer = undefined;
     }
   }
 
-  private suspendPointerEvents(): void {
-    if (!this.shouldDisablePointerEvents()) {
-      return;
-    }
+  private suspendScrollInteractions(): void {
+    this.clearScrollInteractionTimer();
 
-    this.clearPointerEventsTimer();
-    if (!this.pointerEventsDisabled) {
+    if (this.shouldDisablePointerEvents() && !this.pointerEventsDisabled) {
       this.stickyContainer.style.pointerEvents = 'none';
       this.pointerEventsDisabled = true;
     }
-    this.pointerEventsRestoreTimer = setTimeout(
-      this.restorePointerEvents,
-      DEFAULT_POINTER_EVENTS_RESTORE_DELAY_MS
+
+    // This is a really important fix for mobile safari; under aggressive scroll
+    // conditions we'll eventually crash/reload the page. It appears to be
+    // caused by the fact that the code wrapper elements are horizontally
+    // scrollable, so while aggressively scrolling, we disable scrolling. We
+    // don't want to apply this fix to good browsers since in those cases it
+    // can fuck with layout in ways that aren't appropriate
+    if (MOBILE_SAFARI && !this.codeOverflowFix) {
+      this.stickyContainer.style.setProperty(
+        SCROLLING_CODE_OVERFLOW_FIX_VARIABLE,
+        'hidden'
+      );
+      this.codeOverflowFix = true;
+    }
+
+    this.scrollInteractionFixTimer = setTimeout(
+      this.restoreScrollInteractions,
+      DEFAULT_SCROLL_INTERACTION_RESTORE_DELAY_MS
     );
   }
 
-  private restorePointerEvents = (): void => {
-    this.clearPointerEventsTimer();
-    if (!this.pointerEventsDisabled) {
-      return;
+  private restoreScrollInteractions = (): void => {
+    this.clearScrollInteractionTimer();
+
+    if (this.pointerEventsDisabled) {
+      this.stickyContainer.style.removeProperty('pointer-events');
+      this.pointerEventsDisabled = false;
     }
-    this.stickyContainer.style.removeProperty('pointer-events');
-    this.pointerEventsDisabled = false;
+
+    if (this.codeOverflowFix) {
+      this.stickyContainer.style.setProperty(
+        SCROLLING_CODE_OVERFLOW_FIX_VARIABLE,
+        'auto'
+      );
+      this.codeOverflowFix = false;
+    }
   };
 
   private syncLayout(): void {
@@ -699,7 +738,7 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   public reset(): void {
-    this.restorePointerEvents();
+    this.restoreScrollInteractions();
     this.cleanAllRenderedItems();
     this.selectedLines = null;
     this.items.length = 0;
@@ -729,7 +768,7 @@ export class CodeView<LAnnotation = undefined> {
 
   public cleanUp(): void {
     this.reset();
-    this.restorePointerEvents();
+    this.restoreScrollInteractions();
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
     this.root?.removeEventListener('scroll', this.handleScroll);
@@ -828,7 +867,7 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     // We'll attempt to scroll to this new target on the next render frame
-    this.suspendPointerEvents();
+    this.suspendScrollInteractions();
     this.pendingLayoutAnchor = undefined;
     this.pendingScrollTarget = pendingTarget;
     this.render();
@@ -2485,7 +2524,7 @@ export class CodeView<LAnnotation = undefined> {
     if (CodeView.__STOP) {
       return;
     }
-    this.suspendPointerEvents();
+    this.suspendScrollInteractions();
     this.scrollDirty = true;
     this.notifyScroll();
     this.render();
@@ -2701,7 +2740,7 @@ export class CodeView<LAnnotation = undefined> {
     ) {
       return;
     }
-    this.suspendPointerEvents();
+    this.suspendScrollInteractions();
     if (targetPagedScrollTop !== syncedPagedScrollTop || rebaseChanged) {
       this.scrollPageOffset = scrollPageOffset;
       this.syncPagedScrollScaffolding(windowSpecs);
