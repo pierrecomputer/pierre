@@ -209,6 +209,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private hasLineAnnotations = false;
 
   private computedLang: SupportedLanguages = 'text';
   private renderCache: RenderedDiffASTCache | undefined;
@@ -238,6 +239,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.renderCache = undefined;
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
+    this.hasLineAnnotations = false;
     this.workerManager?.cleanUpTasks(this);
   }
 
@@ -288,6 +290,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   ): void {
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
+    this.hasLineAnnotations = lineAnnotations.length > 0;
     for (const annotation of lineAnnotations) {
       const map = ((): AnnotationLineMap<LAnnotation> => {
         switch (annotation.side) {
@@ -717,6 +720,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     this.diff = fileDiff;
     const unified = diffStyle === 'unified';
+    const hasLineAnnotations = this.hasLineAnnotations;
 
     let additionsContentAST: ElementContent[] | undefined = [];
     let deletionsContentAST: ElementContent[] | undefined = [];
@@ -811,6 +815,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         pushSeparator('additions', props, context);
       }
     }
+    const createAnnotationElement = (span: AnnotationSpan) =>
+      this.createAnnotationElement(span);
 
     iterateOverDiff({
       diff: fileDiff,
@@ -855,19 +861,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
         const lineIndex =
           diffStyle === 'unified' ? unifiedLineIndex : splitLineIndex;
-        const renderedLineContext: RenderedLineContext = {
-          type,
-          hunkIndex,
-          lineIndex,
-          unifiedLineIndex,
-          splitLineIndex,
-          deletionLine,
-          additionLine,
-        };
 
         if (diffStyle === 'unified') {
           const injectedRows =
-            this.getUnifiedInjectedRowsForLine?.(renderedLineContext);
+            this.getUnifiedInjectedRowsForLine == null
+              ? undefined
+              : this.getUnifiedInjectedRowsForLine({
+                  type,
+                  hunkIndex,
+                  lineIndex,
+                  unifiedLineIndex,
+                  splitLineIndex,
+                  deletionLine,
+                  additionLine,
+                });
           if (injectedRows?.before != null) {
             pushUnifiedInjectedRows(injectedRows.before, context);
           }
@@ -924,15 +931,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             type: type,
             deletionLine: deletionLineContent,
             additionLine: additionLineContent,
-            unifiedSpan: this.getAnnotations(
-              'unified',
-              deletionLine?.lineNumber,
-              additionLine?.lineNumber,
-              hunkIndex,
-              lineIndex
-            ),
-            createAnnotationElement: (span) =>
-              this.createAnnotationElement(span),
+            unifiedSpan: hasLineAnnotations
+              ? this.getAnnotations(
+                  'unified',
+                  deletionLine?.lineNumber,
+                  additionLine?.lineNumber,
+                  hunkIndex,
+                  lineIndex
+                )
+              : undefined,
+            createAnnotationElement,
             context,
           });
           if (injectedRows?.after != null) {
@@ -940,7 +948,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           }
         } else {
           const injectedRows =
-            this.getSplitInjectedRowsForLine?.(renderedLineContext);
+            this.getSplitInjectedRowsForLine == null
+              ? undefined
+              : this.getSplitInjectedRowsForLine({
+                  type,
+                  hunkIndex,
+                  lineIndex,
+                  unifiedLineIndex,
+                  splitLineIndex,
+                  deletionLine,
+                  additionLine,
+                });
           if (injectedRows?.before != null) {
             pushSplitInjectedRows(
               injectedRows.before,
@@ -999,13 +1017,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             pendingSplitContext.increment();
           }
 
-          const annotationSpans = this.getAnnotations(
-            'split',
-            deletionLine?.lineNumber,
-            additionLine?.lineNumber,
-            hunkIndex,
-            lineIndex
-          );
+          const annotationSpans = hasLineAnnotations
+            ? this.getAnnotations(
+                'split',
+                deletionLine?.lineNumber,
+                additionLine?.lineNumber,
+                hunkIndex,
+                lineIndex
+              )
+            : undefined;
           if (annotationSpans != null && pendingSplitContext.size > 0) {
             pendingSplitContext.flush();
           }
@@ -1047,9 +1067,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             type: type,
             additionLine: additionLineContent,
             deletionLine: deletionLineContent,
-            ...annotationSpans,
-            createAnnotationElement: (span) =>
-              this.createAnnotationElement(span),
+            deletionSpan: annotationSpans?.deletionSpan,
+            additionSpan: annotationSpans?.additionSpan,
+            createAnnotationElement,
             context,
           });
           if (injectedRows?.after != null) {
