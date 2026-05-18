@@ -131,13 +131,17 @@ interface Segment {
   count: number;
 }
 
+interface ContentCounter {
+  length: number;
+}
+
 interface HighlighterBucket {
-  deletionContent: string[];
-  additionContent: string[];
+  deletionContent: ContentCounter;
+  additionContent: ContentCounter;
   deletionSegments: Segment[];
   additionSegments: Segment[];
-  deletionInfo: number[];
-  additionInfo: number[];
+  deletionInfoCount: number;
+  additionInfoCount: number;
   decorations: number;
 }
 
@@ -460,12 +464,12 @@ function getDeepStart(
 
 function createHighlighterBucket(): HighlighterBucket {
   return {
-    deletionContent: [],
-    additionContent: [],
+    deletionContent: { length: 0 },
+    additionContent: { length: 0 },
     deletionSegments: [],
     additionSegments: [],
-    deletionInfo: [],
-    additionInfo: [],
+    deletionInfoCount: 0,
+    additionInfoCount: 0,
     decorations: 0,
   };
 }
@@ -474,7 +478,7 @@ function appendContent(
   lineContent: string | undefined,
   lineIndex: number,
   segments: Segment[],
-  content: string[],
+  content: ContentCounter,
   isWindowed: boolean
 ) {
   if (lineContent == null) {
@@ -492,7 +496,34 @@ function appendContent(
     }
     segment.count++;
   }
-  content.push(lineContent);
+  content.length++;
+}
+
+function appendContentRange(
+  lines: string[],
+  lineIndex: number | undefined,
+  lineCount: number,
+  segments: Segment[],
+  content: ContentCounter,
+  isWindowed: boolean
+) {
+  if (lineIndex == null || lineCount <= 0 || lines[lineIndex] == null) {
+    return;
+  }
+  if (isWindowed) {
+    let segment = segments[segments.length - 1];
+    if (segment == null || segment.targetIndex + segment.count !== lineIndex) {
+      segment = {
+        targetIndex: lineIndex,
+        originalOffset: content.length,
+        count: 0,
+      };
+      segments.push(segment);
+    }
+    segment.count += lineCount;
+  }
+
+  content.length += lineCount;
 }
 
 function createNoopRunner(): BenchmarkRunner {
@@ -588,8 +619,6 @@ function createHighlighterIngestRunner(
     callback({ hunkIndex, additionLine, deletionLine, type }) {
       rows++;
       const bucket = getBucket(hunkIndex);
-      const splitLineIndex =
-        additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex ?? 0;
 
       if (type === 'change' && additionLine != null && deletionLine != null) {
         const additionContent = diff.additionLines[additionLine.lineIndex];
@@ -606,11 +635,7 @@ function createHighlighterIngestRunner(
           bucket.deletionContent,
           isWindowed
         );
-        bucket.deletionInfo.push(
-          deletionLine.lineNumber +
-            deletionLine.unifiedLineIndex +
-            splitLineIndex
-        );
+        bucket.deletionInfoCount++;
       }
 
       if (additionLine != null) {
@@ -621,11 +646,47 @@ function createHighlighterIngestRunner(
           bucket.additionContent,
           isWindowed
         );
-        bucket.additionInfo.push(
-          additionLine.lineNumber +
-            additionLine.unifiedLineIndex +
-            splitLineIndex
+        bucket.additionInfoCount++;
+      }
+    },
+    rangeCallback(props) {
+      const { hunkIndex, additionLine, deletionLine, lineCount, type } = props;
+      rows += lineCount;
+      const bucket = getBucket(hunkIndex);
+
+      if (type === 'change' && additionLine != null && deletionLine != null) {
+        for (let offset = 0; offset < lineCount; offset++) {
+          const additionContent =
+            diff.additionLines[additionLine.lineIndex + offset];
+          const deletionContent =
+            diff.deletionLines[deletionLine.lineIndex + offset];
+          bucket.decorations +=
+            (additionContent?.length ?? 0) ^ (deletionContent?.length ?? 0);
+        }
+      }
+
+      if (deletionLine != null) {
+        appendContentRange(
+          diff.deletionLines,
+          deletionLine.lineIndex,
+          lineCount,
+          bucket.deletionSegments,
+          bucket.deletionContent,
+          isWindowed
         );
+        bucket.deletionInfoCount += lineCount;
+      }
+
+      if (additionLine != null) {
+        appendContentRange(
+          diff.additionLines,
+          additionLine.lineIndex,
+          lineCount,
+          bucket.additionSegments,
+          bucket.additionContent,
+          isWindowed
+        );
+        bucket.additionInfoCount += lineCount;
       }
     },
     readResult() {
@@ -634,8 +695,8 @@ function createHighlighterIngestRunner(
         checksum = addChecksum(checksum, bucket.additionContent.length);
         checksum = addChecksum(checksum, bucket.deletionSegments.length);
         checksum = addChecksum(checksum, bucket.additionSegments.length);
-        checksum = addChecksum(checksum, bucket.deletionInfo.length);
-        checksum = addChecksum(checksum, bucket.additionInfo.length);
+        checksum = addChecksum(checksum, bucket.deletionInfoCount);
+        checksum = addChecksum(checksum, bucket.additionInfoCount);
         checksum = addChecksum(checksum, bucket.decorations);
       }
       return { checksum, rows };

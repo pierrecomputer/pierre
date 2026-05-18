@@ -25,6 +25,7 @@ import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 import { getLineNodes } from './getLineNodes';
+import type { DiffLineRangeCallbackProps } from './iterateOverDiff';
 import { iterateOverDiff } from './iterateOverDiff';
 import {
   createDiffSpanDecoration,
@@ -119,6 +120,134 @@ export function renderDiffWithHighlighter(
     contentWrapper.push(lineContent);
   }
 
+  function appendContentRange(
+    lines: string[],
+    lineIndex: number,
+    lineCount: number,
+    segments: HighlightSegment[],
+    contentWrapper: FakeArrayType
+  ) {
+    if (lineCount <= 0) {
+      return;
+    }
+    if (isWindowedHighlight) {
+      let segment = segments.at(-1);
+      if (
+        segment == null ||
+        segment.targetIndex + segment.count !== lineIndex
+      ) {
+        segment = {
+          targetIndex: lineIndex,
+          originalOffset: contentWrapper.length,
+          count: 0,
+        };
+        segments.push(segment);
+      }
+      segment.count += lineCount;
+    }
+    contentWrapper.pushRange(lines, lineIndex, lineCount);
+  }
+
+  function pushLineInfoRange({
+    target,
+    type,
+    lineNumber,
+    altLineNumber,
+    unifiedLineIndex,
+    splitLineIndex,
+    lineCount,
+  }: {
+    target: LineInfoStore;
+    type: LineInfo['type'];
+    lineNumber: number;
+    altLineNumber: number | undefined;
+    unifiedLineIndex: number;
+    splitLineIndex: number;
+    lineCount: number;
+  }) {
+    target.pushRange({
+      type,
+      lineNumber,
+      altLineNumber,
+      unifiedLineIndex,
+      splitLineIndex,
+      lineCount,
+    });
+  }
+
+  function handleRange({
+    hunkIndex,
+    additionLine,
+    deletionLine,
+    type,
+    lineCount,
+  }: DiffLineRangeCallbackProps) {
+    const bucket = getBucketForHunk(hunkIndex);
+    const splitLineIndex =
+      additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex ?? 0;
+
+    if (type === 'change' && additionLine != null && deletionLine != null) {
+      const deletionContentStart = bucket.deletionContent.length;
+      const additionContentStart = bucket.additionContent.length;
+      for (let offset = 0; offset < lineCount; offset++) {
+        computeLineDiffDecorations({
+          additionLine: diff.additionLines[additionLine.lineIndex + offset],
+          deletionLine: diff.deletionLines[deletionLine.lineIndex + offset],
+          deletionLineIndex: deletionContentStart + offset,
+          additionLineIndex: additionContentStart + offset,
+          deletionDecorations: bucket.deletionDecorations,
+          additionDecorations: bucket.additionDecorations,
+          lineDiffType,
+          maxLineDiffLength,
+        });
+      }
+    }
+
+    if (deletionLine != null) {
+      appendContentRange(
+        diff.deletionLines,
+        deletionLine.lineIndex,
+        lineCount,
+        bucket.deletionSegments,
+        bucket.deletionContent
+      );
+      pushLineInfoRange({
+        target: bucket.deletionInfo,
+        type: type === 'change' ? 'change-deletion' : type,
+        lineNumber: deletionLine.lineNumber,
+        altLineNumber:
+          type === 'change'
+            ? undefined
+            : (additionLine?.lineNumber ?? undefined),
+        unifiedLineIndex: deletionLine.unifiedLineIndex,
+        splitLineIndex,
+        lineCount,
+      });
+    }
+
+    if (additionLine != null) {
+      appendContentRange(
+        diff.additionLines,
+        additionLine.lineIndex,
+        lineCount,
+        bucket.additionSegments,
+        bucket.additionContent
+      );
+      pushLineInfoRange({
+        target: bucket.additionInfo,
+        type: type === 'change' ? 'change-addition' : type,
+        lineNumber: additionLine.lineNumber,
+        altLineNumber:
+          type === 'change'
+            ? undefined
+            : (deletionLine?.lineNumber ?? undefined),
+        unifiedLineIndex: additionLine.unifiedLineIndex,
+        splitLineIndex,
+        lineCount,
+      });
+    }
+  }
+
   iterateOverDiff({
     diff,
     diffStyle: 'both',
@@ -153,14 +282,17 @@ export function renderDiffWithHighlighter(
           bucket.deletionSegments,
           bucket.deletionContent
         );
-        bucket.deletionInfo.push({
+        pushLineInfoRange({
+          target: bucket.deletionInfo,
           type: type === 'change' ? 'change-deletion' : type,
           lineNumber: deletionLine.lineNumber,
           altLineNumber:
             type === 'change'
               ? undefined
               : (additionLine.lineNumber ?? undefined),
-          lineIndex: `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
+          unifiedLineIndex: deletionLine.unifiedLineIndex,
+          splitLineIndex,
+          lineCount: 1,
         });
       }
 
@@ -171,17 +303,21 @@ export function renderDiffWithHighlighter(
           bucket.additionSegments,
           bucket.additionContent
         );
-        bucket.additionInfo.push({
+        pushLineInfoRange({
+          target: bucket.additionInfo,
           type: type === 'change' ? 'change-addition' : type,
           lineNumber: additionLine.lineNumber,
           altLineNumber:
             type === 'change'
               ? undefined
               : (deletionLine.lineNumber ?? undefined),
-          lineIndex: `${additionLine.unifiedLineIndex},${splitLineIndex}`,
+          unifiedLineIndex: additionLine.unifiedLineIndex,
+          splitLineIndex,
+          lineCount: 1,
         });
       }
     },
+    rangeCallback: handleRange,
   });
 
   for (const bucket of buckets.values()) {
@@ -202,11 +338,11 @@ export function renderDiffWithHighlighter(
     };
     const { deletionLines, additionLines } = renderTwoFiles({
       deletionFile,
-      deletionInfo: bucket.deletionInfo,
+      deletionInfo: bucket.deletionInfo.toResolver(),
       deletionDecorations: bucket.deletionDecorations,
 
       additionFile,
-      additionInfo: bucket.additionInfo,
+      additionInfo: bucket.additionInfo.toResolver(),
       additionDecorations: bucket.additionDecorations,
 
       highlighter,
@@ -351,41 +487,135 @@ interface HighlightSegment {
 
 interface FakeArrayType {
   push(value: string): void;
+  pushRange(values: string[], start: number, count: number): void;
   value: string;
   length: number;
+}
+
+interface LineInfoRange {
+  contentStart: number;
+  lineCount: number;
+  type: LineInfo['type'];
+  lineNumber: number;
+  altLineNumber: number | undefined;
+  unifiedLineIndex: number;
+  splitLineIndex: number;
+}
+
+interface LineInfoStore {
+  lineCount: number;
+  pushRange(range: Omit<LineInfoRange, 'contentStart'>): void;
+  toResolver(): (shikiLineNumber: number) => LineInfo;
 }
 
 interface RenderBucket {
   deletionContent: FakeArrayType;
   additionContent: FakeArrayType;
-  deletionInfo: (LineInfo | undefined)[];
-  additionInfo: (LineInfo | undefined)[];
+  deletionInfo: LineInfoStore;
+  additionInfo: LineInfoStore;
   deletionDecorations: DecorationItem[];
   additionDecorations: DecorationItem[];
   deletionSegments: HighlightSegment[];
   additionSegments: HighlightSegment[];
 }
 
-function createBucket(): RenderBucket {
+function canExtendLineInfoRange(
+  current: LineInfoRange,
+  next: Omit<LineInfoRange, 'contentStart'>
+): boolean {
+  return (
+    current.type === next.type &&
+    current.lineNumber + current.lineCount === next.lineNumber &&
+    (current.altLineNumber == null
+      ? next.altLineNumber == null
+      : current.altLineNumber + current.lineCount === next.altLineNumber) &&
+    current.unifiedLineIndex + current.lineCount === next.unifiedLineIndex &&
+    current.splitLineIndex + current.lineCount === next.splitLineIndex
+  );
+}
+
+// Store highlighter line metadata as contiguous ranges so large unchanged
+// blocks do not allocate a LineInfo object before Shiki asks for each line.
+function createLineInfoStore(): LineInfoStore {
+  const ranges: LineInfoRange[] = [];
   return {
-    deletionContent: {
-      push(value: string) {
-        this.value += value;
-        this.length++;
-      },
-      value: '',
-      length: 0,
+    lineCount: 0,
+    pushRange(range) {
+      if (range.lineCount <= 0) {
+        return;
+      }
+      const lastRange = ranges.at(-1);
+      if (lastRange != null && canExtendLineInfoRange(lastRange, range)) {
+        lastRange.lineCount += range.lineCount;
+      } else {
+        ranges.push({ ...range, contentStart: this.lineCount });
+      }
+      this.lineCount += range.lineCount;
     },
-    additionContent: {
-      push(value: string) {
-        this.value += value;
-        this.length++;
-      },
-      value: '',
-      length: 0,
+    toResolver() {
+      let rangeIndex = 0;
+      return (shikiLineNumber: number) => {
+        const contentIndex = shikiLineNumber - 1;
+        let range = ranges[rangeIndex];
+        if (
+          range != null &&
+          (contentIndex < range.contentStart ||
+            contentIndex >= range.contentStart + range.lineCount)
+        ) {
+          if (contentIndex < range.contentStart) {
+            rangeIndex = 0;
+          }
+          while (
+            ranges[rangeIndex] != null &&
+            contentIndex >=
+              ranges[rangeIndex].contentStart + ranges[rangeIndex].lineCount
+          ) {
+            rangeIndex++;
+          }
+          range = ranges[rangeIndex];
+        }
+        if (range == null) {
+          throw new Error(
+            `renderDiffWithHighlighter: line ${shikiLineNumber} contains no line info`
+          );
+        }
+        const offset = contentIndex - range.contentStart;
+        return {
+          type: range.type,
+          lineNumber: range.lineNumber + offset,
+          altLineNumber:
+            range.altLineNumber == null
+              ? undefined
+              : range.altLineNumber + offset,
+          lineIndex: `${range.unifiedLineIndex + offset},${range.splitLineIndex + offset}`,
+        };
+      };
     },
-    deletionInfo: [],
-    additionInfo: [],
+  };
+}
+
+function createBucket(): RenderBucket {
+  const createContent = (): FakeArrayType => ({
+    push(value: string) {
+      this.value += value;
+      this.length++;
+    },
+    pushRange(values: string[], start: number, count: number) {
+      const end = start + count;
+      for (let index = start; index < end; index += 1024) {
+        this.value += values.slice(index, Math.min(index + 1024, end)).join('');
+      }
+      this.length += count;
+    },
+    value: '',
+    length: 0,
+  });
+
+  return {
+    deletionContent: createContent(),
+    additionContent: createContent(),
+    deletionInfo: createLineInfoStore(),
+    additionInfo: createLineInfoStore(),
     deletionDecorations: [],
     additionDecorations: [],
     deletionSegments: [],
@@ -396,8 +626,8 @@ function createBucket(): RenderBucket {
 interface RenderTwoFilesProps {
   deletionFile: FileContents;
   additionFile: FileContents;
-  deletionInfo: (LineInfo | undefined)[];
-  additionInfo: (LineInfo | undefined)[];
+  deletionInfo: (shikiLineNumber: number) => LineInfo;
+  additionInfo: (shikiLineNumber: number) => LineInfo;
   deletionDecorations: DecorationItem[];
   additionDecorations: DecorationItem[];
   options: RenderDiffOptions;
