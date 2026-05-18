@@ -430,24 +430,24 @@ export function iterateOverDiff({
           break;
         }
         if (state.isInWindow(0, 0)) {
-          setBothLineData({
-            target: reusableChangeProps,
-            deletionLine: reusableDeletionLine,
-            additionLine: reusableAdditionLine,
-            type: 'context-expanded',
+          setBothLineData(
+            reusableChangeProps,
+            reusableDeletionLine,
+            reusableAdditionLine,
+            'context-expanded',
             hunkIndex,
             hunk,
-            collapsedBefore: 0,
-            collapsedAfter: 0,
-            deletionLineNumber: deletionLineNumber + index,
-            deletionLineIndex: deletionLineIndex + index,
-            additionLineNumber: additionLineNumber + index,
-            additionLineIndex: additionLineIndex + index,
-            unifiedLineIndex: unifiedLineIndex + index,
-            splitLineIndex: splitLineIndex + index,
-            deletionNoEOF: false,
-            additionNoEOF: false,
-          });
+            0,
+            0,
+            deletionLineNumber + index,
+            deletionLineIndex + index,
+            additionLineNumber + index,
+            additionLineIndex + index,
+            unifiedLineIndex + index,
+            splitLineIndex + index,
+            false,
+            false
+          );
           if (state.emit(reusableChangeProps as DiffLineCallbackProps)) {
             break hunkIterator;
           }
@@ -483,24 +483,24 @@ export function iterateOverDiff({
           break;
         }
         if (state.isInWindow(0, 0)) {
-          setBothLineData({
-            target: reusableChangeProps,
-            deletionLine: reusableDeletionLine,
-            additionLine: reusableAdditionLine,
-            type: 'context-expanded',
+          setBothLineData(
+            reusableChangeProps,
+            reusableDeletionLine,
+            reusableAdditionLine,
+            'context-expanded',
             hunkIndex,
             hunk,
-            collapsedBefore: getPendingCollapsed(),
-            collapsedAfter: 0,
-            deletionLineNumber: deletionLineNumber + index,
-            deletionLineIndex: deletionLineIndex + index,
-            additionLineNumber: additionLineNumber + index,
-            additionLineIndex: additionLineIndex + index,
-            unifiedLineIndex: unifiedLineIndex + index,
-            splitLineIndex: splitLineIndex + index,
-            deletionNoEOF: false,
-            additionNoEOF: false,
-          });
+            getPendingCollapsed(),
+            0,
+            deletionLineNumber + index,
+            deletionLineIndex + index,
+            additionLineNumber + index,
+            additionLineIndex + index,
+            unifiedLineIndex + index,
+            splitLineIndex + index,
+            false,
+            false
+          );
           if (state.emit(reusableChangeProps as DiffLineCallbackProps)) {
             break hunkIterator;
           }
@@ -539,23 +539,23 @@ export function iterateOverDiff({
           !(isLastContent && (hunk.noEOFCRAdditions || hunk.noEOFCRDeletions))
         ) {
           if (rangeCallback != null) {
-            setRangeLineData({
-              target: reusableRangeProps,
-              deletionLine: reusableRangeDeletionLine,
-              additionLine: reusableRangeAdditionLine,
-              type: 'context',
+            setRangeLineData(
+              reusableRangeProps,
+              reusableRangeDeletionLine,
+              reusableRangeAdditionLine,
+              'context',
               hunkIndex,
               hunk,
-              lineCount: content.lines,
+              content.lines,
               deletionLineNumber,
               deletionLineIndex,
               additionLineNumber,
               additionLineIndex,
-              deletionUnifiedLineIndex: unifiedLineIndex,
-              deletionSplitLineIndex: splitLineIndex,
-              additionUnifiedLineIndex: unifiedLineIndex,
-              additionSplitLineIndex: splitLineIndex,
-            });
+              unifiedLineIndex,
+              splitLineIndex,
+              unifiedLineIndex,
+              splitLineIndex
+            );
             if (
               rangeCallback(
                 reusableRangeProps as DiffLineRangeCallbackProps
@@ -613,27 +613,24 @@ export function iterateOverDiff({
               const isLastLine = isLastContent && index === content.lines - 1;
               const unifiedRowIndex = unifiedLineIndex + index;
               const splitRowIndex = splitLineIndex + index;
-              setBothLineData({
-                target: reusableChangeProps,
-                deletionLine: reusableDeletionLine,
-                additionLine: reusableAdditionLine,
-                type: 'context',
+              setBothLineData(
+                reusableChangeProps,
+                reusableDeletionLine,
+                reusableAdditionLine,
+                'context',
                 hunkIndex,
                 hunk,
-                collapsedBefore: getPendingCollapsed(),
-                collapsedAfter: getTrailingCollapsedAfter(
-                  unifiedRowIndex,
-                  splitRowIndex
-                ),
-                deletionLineNumber: deletionLineNumber + index,
-                deletionLineIndex: deletionLineIndex + index,
-                additionLineNumber: additionLineNumber + index,
-                additionLineIndex: additionLineIndex + index,
-                unifiedLineIndex: unifiedRowIndex,
-                splitLineIndex: splitRowIndex,
-                deletionNoEOF: isLastLine && hunk.noEOFCRDeletions,
-                additionNoEOF: isLastLine && hunk.noEOFCRAdditions,
-              });
+                getPendingCollapsed(),
+                getTrailingCollapsedAfter(unifiedRowIndex, splitRowIndex),
+                deletionLineNumber + index,
+                deletionLineIndex + index,
+                additionLineNumber + index,
+                additionLineIndex + index,
+                unifiedRowIndex,
+                splitRowIndex,
+                isLastLine && hunk.noEOFCRDeletions,
+                isLastLine && hunk.noEOFCRAdditions
+              );
               if (state.emit(reusableChangeProps as DiffLineCallbackProps)) {
                 break hunkIterator;
               }
@@ -672,23 +669,23 @@ export function iterateOverDiff({
             !(isLastContent && hunk.noEOFCRAdditions)
           ) {
             if (rangeCallback != null) {
-              setRangeLineData({
-                target: reusableRangeProps,
-                deletionLine: reusableRangeDeletionLine,
-                additionLine: reusableRangeAdditionLine,
-                type: 'change',
+              setRangeLineData(
+                reusableRangeProps,
+                reusableRangeDeletionLine,
+                reusableRangeAdditionLine,
+                'change',
                 hunkIndex,
                 hunk,
-                lineCount: content.additions,
-                deletionLineNumber: undefined,
-                deletionLineIndex: undefined,
+                content.additions,
+                undefined,
+                undefined,
                 additionLineNumber,
                 additionLineIndex,
-                deletionUnifiedLineIndex: undefined,
-                deletionSplitLineIndex: undefined,
-                additionUnifiedLineIndex: unifiedLineIndex,
-                additionSplitLineIndex: splitLineIndex,
-              });
+                undefined,
+                undefined,
+                unifiedLineIndex,
+                splitLineIndex
+              );
               if (
                 rangeCallback(
                   reusableRangeProps as DiffLineRangeCallbackProps
@@ -724,23 +721,23 @@ export function iterateOverDiff({
             !(isLastContent && hunk.noEOFCRDeletions)
           ) {
             if (rangeCallback != null) {
-              setRangeLineData({
-                target: reusableRangeProps,
-                deletionLine: reusableRangeDeletionLine,
-                additionLine: reusableRangeAdditionLine,
-                type: 'change',
+              setRangeLineData(
+                reusableRangeProps,
+                reusableRangeDeletionLine,
+                reusableRangeAdditionLine,
+                'change',
                 hunkIndex,
                 hunk,
-                lineCount: content.deletions,
+                content.deletions,
                 deletionLineNumber,
                 deletionLineIndex,
-                additionLineNumber: undefined,
-                additionLineIndex: undefined,
-                deletionUnifiedLineIndex: unifiedLineIndex,
-                deletionSplitLineIndex: splitLineIndex,
-                additionUnifiedLineIndex: undefined,
-                additionSplitLineIndex: undefined,
-              });
+                undefined,
+                undefined,
+                unifiedLineIndex,
+                splitLineIndex,
+                undefined,
+                undefined
+              );
               if (
                 rangeCallback(
                   reusableRangeProps as DiffLineRangeCallbackProps
@@ -779,23 +776,23 @@ export function iterateOverDiff({
           ) {
             if (rangeCallback != null) {
               if (diffStyle === 'unified') {
-                setRangeLineData({
-                  target: reusableRangeProps,
-                  deletionLine: reusableRangeDeletionLine,
-                  additionLine: reusableRangeAdditionLine,
-                  type: 'change',
+                setRangeLineData(
+                  reusableRangeProps,
+                  reusableRangeDeletionLine,
+                  reusableRangeAdditionLine,
+                  'change',
                   hunkIndex,
                   hunk,
-                  lineCount: content.deletions,
+                  content.deletions,
                   deletionLineNumber,
                   deletionLineIndex,
-                  additionLineNumber: undefined,
-                  additionLineIndex: undefined,
-                  deletionUnifiedLineIndex: unifiedLineIndex,
-                  deletionSplitLineIndex: splitLineIndex,
-                  additionUnifiedLineIndex: undefined,
-                  additionSplitLineIndex: undefined,
-                });
+                  undefined,
+                  undefined,
+                  unifiedLineIndex,
+                  splitLineIndex,
+                  undefined,
+                  undefined
+                );
                 if (
                   rangeCallback(
                     reusableRangeProps as DiffLineRangeCallbackProps
@@ -804,24 +801,23 @@ export function iterateOverDiff({
                   break hunkIterator;
                 }
 
-                setRangeLineData({
-                  target: reusableRangeProps,
-                  deletionLine: reusableRangeDeletionLine,
-                  additionLine: reusableRangeAdditionLine,
-                  type: 'change',
+                setRangeLineData(
+                  reusableRangeProps,
+                  reusableRangeDeletionLine,
+                  reusableRangeAdditionLine,
+                  'change',
                   hunkIndex,
                   hunk,
-                  lineCount: content.additions,
-                  deletionLineNumber: undefined,
-                  deletionLineIndex: undefined,
+                  content.additions,
+                  undefined,
+                  undefined,
                   additionLineNumber,
                   additionLineIndex,
-                  deletionUnifiedLineIndex: undefined,
-                  deletionSplitLineIndex: undefined,
-                  additionUnifiedLineIndex:
-                    unifiedLineIndex + content.deletions,
-                  additionSplitLineIndex: splitLineIndex,
-                });
+                  undefined,
+                  undefined,
+                  unifiedLineIndex + content.deletions,
+                  splitLineIndex
+                );
                 if (
                   rangeCallback(
                     reusableRangeProps as DiffLineRangeCallbackProps
@@ -835,24 +831,23 @@ export function iterateOverDiff({
                   content.additions
                 );
                 if (pairedCount > 0) {
-                  setRangeLineData({
-                    target: reusableRangeProps,
-                    deletionLine: reusableRangeDeletionLine,
-                    additionLine: reusableRangeAdditionLine,
-                    type: 'change',
+                  setRangeLineData(
+                    reusableRangeProps,
+                    reusableRangeDeletionLine,
+                    reusableRangeAdditionLine,
+                    'change',
                     hunkIndex,
                     hunk,
-                    lineCount: pairedCount,
+                    pairedCount,
                     deletionLineNumber,
                     deletionLineIndex,
                     additionLineNumber,
                     additionLineIndex,
-                    deletionUnifiedLineIndex: unifiedLineIndex,
-                    deletionSplitLineIndex: splitLineIndex,
-                    additionUnifiedLineIndex:
-                      unifiedLineIndex + content.deletions,
-                    additionSplitLineIndex: splitLineIndex,
-                  });
+                    unifiedLineIndex,
+                    splitLineIndex,
+                    unifiedLineIndex + content.deletions,
+                    splitLineIndex
+                  );
                   if (
                     rangeCallback(
                       reusableRangeProps as DiffLineRangeCallbackProps
@@ -863,23 +858,23 @@ export function iterateOverDiff({
                 }
 
                 if (content.deletions > pairedCount) {
-                  setRangeLineData({
-                    target: reusableRangeProps,
-                    deletionLine: reusableRangeDeletionLine,
-                    additionLine: reusableRangeAdditionLine,
-                    type: 'change',
+                  setRangeLineData(
+                    reusableRangeProps,
+                    reusableRangeDeletionLine,
+                    reusableRangeAdditionLine,
+                    'change',
                     hunkIndex,
                     hunk,
-                    lineCount: content.deletions - pairedCount,
-                    deletionLineNumber: deletionLineNumber + pairedCount,
-                    deletionLineIndex: deletionLineIndex + pairedCount,
-                    additionLineNumber: undefined,
-                    additionLineIndex: undefined,
-                    deletionUnifiedLineIndex: unifiedLineIndex + pairedCount,
-                    deletionSplitLineIndex: splitLineIndex + pairedCount,
-                    additionUnifiedLineIndex: undefined,
-                    additionSplitLineIndex: undefined,
-                  });
+                    content.deletions - pairedCount,
+                    deletionLineNumber + pairedCount,
+                    deletionLineIndex + pairedCount,
+                    undefined,
+                    undefined,
+                    unifiedLineIndex + pairedCount,
+                    splitLineIndex + pairedCount,
+                    undefined,
+                    undefined
+                  );
                   if (
                     rangeCallback(
                       reusableRangeProps as DiffLineRangeCallbackProps
@@ -890,24 +885,23 @@ export function iterateOverDiff({
                 }
 
                 if (content.additions > pairedCount) {
-                  setRangeLineData({
-                    target: reusableRangeProps,
-                    deletionLine: reusableRangeDeletionLine,
-                    additionLine: reusableRangeAdditionLine,
-                    type: 'change',
+                  setRangeLineData(
+                    reusableRangeProps,
+                    reusableRangeDeletionLine,
+                    reusableRangeAdditionLine,
+                    'change',
                     hunkIndex,
                     hunk,
-                    lineCount: content.additions - pairedCount,
-                    deletionLineNumber: undefined,
-                    deletionLineIndex: undefined,
-                    additionLineNumber: additionLineNumber + pairedCount,
-                    additionLineIndex: additionLineIndex + pairedCount,
-                    deletionUnifiedLineIndex: undefined,
-                    deletionSplitLineIndex: undefined,
-                    additionUnifiedLineIndex:
-                      unifiedLineIndex + content.deletions + pairedCount,
-                    additionSplitLineIndex: splitLineIndex + pairedCount,
-                  });
+                    content.additions - pairedCount,
+                    undefined,
+                    undefined,
+                    additionLineNumber + pairedCount,
+                    additionLineIndex + pairedCount,
+                    undefined,
+                    undefined,
+                    unifiedLineIndex + content.deletions + pairedCount,
+                    splitLineIndex + pairedCount
+                  );
                   if (
                     rangeCallback(
                       reusableRangeProps as DiffLineRangeCallbackProps
@@ -1146,13 +1140,13 @@ export function iterateOverDiff({
                     unifiedRowIndex,
                     splitRowIndex
                   );
-                  setChangeLineData({
-                    target: reusableChangeProps,
-                    deletionLine: reusableDeletionLine,
-                    additionLine: reusableAdditionLine,
+                  setChangeLineData(
+                    reusableChangeProps,
+                    reusableDeletionLine,
+                    reusableAdditionLine,
                     hunkIndex,
                     hunk,
-                    collapsedBefore: getPendingCollapsed(),
+                    getPendingCollapsed(),
                     collapsedAfter,
                     diffStyle,
                     index,
@@ -1165,8 +1159,8 @@ export function iterateOverDiff({
                     content,
                     isLastContent,
                     unifiedCount,
-                    splitCount,
-                  });
+                    splitCount
+                  );
                   if (
                     callback(reusableChangeProps as DiffLineCallbackProps) ===
                     true
@@ -1212,24 +1206,24 @@ export function iterateOverDiff({
         }
         if (state.isInWindow(0, 0)) {
           const isLastLine = index === len - 1;
-          setBothLineData({
-            target: reusableChangeProps,
-            deletionLine: reusableDeletionLine,
-            additionLine: reusableAdditionLine,
-            type: 'context-expanded',
-            hunkIndex: diff.hunks.length,
-            hunk: undefined,
-            collapsedBefore: 0,
-            collapsedAfter: isLastLine ? collapsedLines : 0,
-            deletionLineNumber: deletionLineNumber + index,
-            deletionLineIndex: deletionLineIndex + index,
-            additionLineNumber: additionLineNumber + index,
-            additionLineIndex: additionLineIndex + index,
-            unifiedLineIndex: unifiedLineIndex + index,
-            splitLineIndex: splitLineIndex + index,
-            deletionNoEOF: false,
-            additionNoEOF: false,
-          });
+          setBothLineData(
+            reusableChangeProps,
+            reusableDeletionLine,
+            reusableAdditionLine,
+            'context-expanded',
+            diff.hunks.length,
+            undefined,
+            0,
+            isLastLine ? collapsedLines : 0,
+            deletionLineNumber + index,
+            deletionLineIndex + index,
+            additionLineNumber + index,
+            additionLineIndex + index,
+            unifiedLineIndex + index,
+            splitLineIndex + index,
+            false,
+            false
+          );
           if (state.emit(reusableChangeProps as DiffLineCallbackProps)) {
             break hunkIterator;
           }
@@ -1709,65 +1703,6 @@ function setChangeIterationRanges(
   mergeChangeIterationRanges(ranges);
 }
 
-interface GetChangeLineDataProps {
-  target: MutableDiffLineCallbackProps;
-  deletionLine: DiffLineMetadata;
-  additionLine: DiffLineMetadata;
-  hunkIndex: number;
-  hunk: Hunk;
-  collapsedBefore: number;
-  collapsedAfter: number;
-  diffStyle: DiffStyle;
-  index: number;
-  unifiedLineIndex: number;
-  splitLineIndex: number;
-  additionLineIndex: number;
-  additionLineNumber: number;
-  deletionLineNumber: number;
-  deletionLineIndex: number;
-  content: ChangeContent;
-  isLastContent: boolean;
-  unifiedCount: number;
-  splitCount: number;
-}
-
-interface SetBothLineDataProps {
-  target: MutableDiffLineCallbackProps;
-  deletionLine: DiffLineMetadata;
-  additionLine: DiffLineMetadata;
-  type: DiffLineCallbackContextChange['type'];
-  hunkIndex: number;
-  hunk: Hunk | undefined;
-  collapsedBefore: number;
-  collapsedAfter: number;
-  deletionLineNumber: number;
-  deletionLineIndex: number;
-  additionLineNumber: number;
-  additionLineIndex: number;
-  unifiedLineIndex: number;
-  splitLineIndex: number;
-  deletionNoEOF: boolean;
-  additionNoEOF: boolean;
-}
-
-interface SetRangeLineDataProps {
-  target: MutableDiffLineRangeCallbackProps;
-  deletionLine: DiffLineMetadata;
-  additionLine: DiffLineMetadata;
-  type: DiffLineRangeCallbackProps['type'];
-  hunkIndex: number;
-  hunk: Hunk | undefined;
-  lineCount: number;
-  deletionLineNumber: number | undefined;
-  deletionLineIndex: number | undefined;
-  additionLineNumber: number | undefined;
-  additionLineIndex: number | undefined;
-  deletionUnifiedLineIndex: number | undefined;
-  deletionSplitLineIndex: number | undefined;
-  additionUnifiedLineIndex: number | undefined;
-  additionSplitLineIndex: number | undefined;
-}
-
 // NOTE(amadeus): It's quite tedious to grab the appropriate line info and
 // related props for change content regions, so I made it a specialized
 // function to help make the main hunkIterator easy to reason about
@@ -1796,24 +1731,24 @@ function setLineMetadata(
   target.noEOFCR = noEOFCR;
 }
 
-function setBothLineData({
-  target,
-  deletionLine,
-  additionLine,
-  type,
-  hunkIndex,
-  hunk,
-  collapsedBefore,
-  collapsedAfter,
-  deletionLineNumber,
-  deletionLineIndex,
-  additionLineNumber,
-  additionLineIndex,
-  unifiedLineIndex,
-  splitLineIndex,
-  deletionNoEOF,
-  additionNoEOF,
-}: SetBothLineDataProps): void {
+function setBothLineData(
+  target: MutableDiffLineCallbackProps,
+  deletionLine: DiffLineMetadata,
+  additionLine: DiffLineMetadata,
+  type: DiffLineCallbackContextChange['type'],
+  hunkIndex: number,
+  hunk: Hunk | undefined,
+  collapsedBefore: number,
+  collapsedAfter: number,
+  deletionLineNumber: number,
+  deletionLineIndex: number,
+  additionLineNumber: number,
+  additionLineIndex: number,
+  unifiedLineIndex: number,
+  splitLineIndex: number,
+  deletionNoEOF: boolean,
+  additionNoEOF: boolean
+): void {
   target.type = type;
   target.hunkIndex = hunkIndex;
   target.hunk = hunk;
@@ -1840,23 +1775,23 @@ function setBothLineData({
   target.additionLine = additionLine;
 }
 
-function setRangeLineData({
-  target,
-  deletionLine,
-  additionLine,
-  type,
-  hunkIndex,
-  hunk,
-  lineCount,
-  deletionLineNumber,
-  deletionLineIndex,
-  additionLineNumber,
-  additionLineIndex,
-  deletionUnifiedLineIndex,
-  deletionSplitLineIndex,
-  additionUnifiedLineIndex,
-  additionSplitLineIndex,
-}: SetRangeLineDataProps): void {
+function setRangeLineData(
+  target: MutableDiffLineRangeCallbackProps,
+  deletionLine: DiffLineMetadata,
+  additionLine: DiffLineMetadata,
+  type: DiffLineRangeCallbackProps['type'],
+  hunkIndex: number,
+  hunk: Hunk | undefined,
+  lineCount: number,
+  deletionLineNumber: number | undefined,
+  deletionLineIndex: number | undefined,
+  additionLineNumber: number | undefined,
+  additionLineIndex: number | undefined,
+  deletionUnifiedLineIndex: number | undefined,
+  deletionSplitLineIndex: number | undefined,
+  additionUnifiedLineIndex: number | undefined,
+  additionSplitLineIndex: number | undefined
+): void {
   target.type = type;
   target.hunkIndex = hunkIndex;
   target.hunk = hunk;
@@ -1903,27 +1838,27 @@ function setRangeLineData({
   }
 }
 
-function setChangeLineData({
-  target,
-  deletionLine,
-  additionLine,
-  hunkIndex,
-  hunk,
-  collapsedAfter,
-  collapsedBefore,
-  diffStyle,
-  index,
-  unifiedLineIndex,
-  splitLineIndex,
-  additionLineIndex,
-  deletionLineIndex,
-  additionLineNumber,
-  deletionLineNumber,
-  content,
-  isLastContent,
-  unifiedCount,
-  splitCount,
-}: GetChangeLineDataProps): void {
+function setChangeLineData(
+  target: MutableDiffLineCallbackProps,
+  deletionLine: DiffLineMetadata,
+  additionLine: DiffLineMetadata,
+  hunkIndex: number,
+  hunk: Hunk,
+  collapsedBefore: number,
+  collapsedAfter: number,
+  diffStyle: DiffStyle,
+  index: number,
+  unifiedLineIndex: number,
+  splitLineIndex: number,
+  additionLineIndex: number,
+  deletionLineIndex: number,
+  additionLineNumber: number,
+  deletionLineNumber: number,
+  content: ChangeContent,
+  isLastContent: boolean,
+  unifiedCount: number,
+  splitCount: number
+): void {
   target.type = 'change';
   target.hunkIndex = hunkIndex;
   target.hunk = hunk;
