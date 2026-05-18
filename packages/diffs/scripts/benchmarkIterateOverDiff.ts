@@ -707,8 +707,10 @@ function createHighlighterIngestRunner(
 function createRendererPostprocessRunner(
   diffStyle: DiffStyle
 ): BenchmarkRunner {
-  const gutterRows: object[] = [];
-  const contentRows: object[] = [];
+  // The renderer no longer retains idle per-row context objects; this benchmark
+  // keeps the same row accounting without allocating throwaway synthetic rows.
+  let gutterRows = 0;
+  let contentRows = 0;
   let rows = 0;
   let checksum = 0;
 
@@ -721,43 +723,30 @@ function createRendererPostprocessRunner(
       const lineKey = `${unifiedLineIndex},${splitLineIndex}`;
 
       if (props.collapsedBefore > 0) {
-        gutterRows.push({ type: 'separator', hunkIndex: props.hunkIndex });
+        gutterRows++;
         checksum = addChecksum(checksum, props.collapsedBefore);
       }
 
       if (props.deletionLine != null) {
-        gutterRows.push({
-          side: diffStyle === 'unified' ? 'unified' : 'deletions',
-          type: props.type,
-          lineNumber: props.deletionLine.lineNumber,
-          lineKey,
-        });
-        contentRows.push({ side: 'deletions', lineIndex, lineKey });
+        gutterRows++;
+        contentRows++;
       }
 
       if (props.additionLine != null) {
-        gutterRows.push({
-          side: diffStyle === 'unified' ? 'unified' : 'additions',
-          type: props.type,
-          lineNumber: props.additionLine.lineNumber,
-          lineKey,
-        });
-        contentRows.push({ side: 'additions', lineIndex, lineKey });
+        gutterRows++;
+        contentRows++;
       }
 
       if (props.collapsedAfter > 0) {
-        gutterRows.push({
-          type: 'trailing-separator',
-          hunkIndex: props.hunkIndex,
-        });
+        gutterRows++;
         checksum = addChecksum(checksum, props.collapsedAfter);
       }
       checksum = addChecksum(checksum, lineIndex);
       checksum = addChecksum(checksum, lineKey.length);
     },
     readResult() {
-      checksum = addChecksum(checksum, gutterRows.length);
-      checksum = addChecksum(checksum, contentRows.length);
+      checksum = addChecksum(checksum, gutterRows);
+      checksum = addChecksum(checksum, contentRows);
       return { checksum, rows };
     },
   };
