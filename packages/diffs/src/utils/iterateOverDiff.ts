@@ -481,7 +481,39 @@ export function iterateOverDiff({
 
       // Hunk Context Content
       if (content.type === 'context') {
-        if (!state.shouldSkip(content.lines, content.lines)) {
+        if (
+          !state.isWindowedHighlight &&
+          pendingCollapsedLines === 0 &&
+          trailingCollapsedLines <= 0 &&
+          !(isLastContent && (hunk.noEOFCRAdditions || hunk.noEOFCRDeletions))
+        ) {
+          reusableChangeProps.type = 'context';
+          reusableChangeProps.hunkIndex = hunkIndex;
+          reusableChangeProps.hunk = hunk;
+          reusableChangeProps.collapsedBefore = 0;
+          reusableChangeProps.collapsedAfter = 0;
+          reusableChangeProps.deletionLine = reusableDeletionLine;
+          reusableChangeProps.additionLine = reusableAdditionLine;
+          reusableDeletionLine.noEOFCR = false;
+          reusableAdditionLine.noEOFCR = false;
+          for (let index = 0; index < content.lines; index++) {
+            const rowUnifiedLineIndex = unifiedLineIndex + index;
+            const rowSplitLineIndex = splitLineIndex + index;
+            reusableDeletionLine.unifiedLineIndex = rowUnifiedLineIndex;
+            reusableDeletionLine.splitLineIndex = rowSplitLineIndex;
+            reusableDeletionLine.lineIndex = deletionLineIndex + index;
+            reusableDeletionLine.lineNumber = deletionLineNumber + index;
+            reusableAdditionLine.unifiedLineIndex = rowUnifiedLineIndex;
+            reusableAdditionLine.splitLineIndex = rowSplitLineIndex;
+            reusableAdditionLine.lineIndex = additionLineIndex + index;
+            reusableAdditionLine.lineNumber = additionLineNumber + index;
+            if (
+              callback(reusableChangeProps as DiffLineCallbackProps) === true
+            ) {
+              break hunkIterator;
+            }
+          }
+        } else if (!state.shouldSkip(content.lines, content.lines)) {
           const [startIndex, endIndex] = getEqualLineIterationRange(
             state,
             content.lines,
