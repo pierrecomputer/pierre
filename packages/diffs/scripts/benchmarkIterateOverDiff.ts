@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import type { FileDiffMetadata, HunkExpansionRegion } from '../src/types';
-import type { DiffLineCallbackProps } from '../src/utils/iterateOverDiff';
+import type {
+  DiffLineCallbackProps,
+  DiffLineRangeCallbackProps,
+} from '../src/utils/iterateOverDiff';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 
@@ -140,6 +143,7 @@ interface HighlighterBucket {
 
 interface BenchmarkRunner {
   callback(props: DiffLineCallbackProps): boolean | void;
+  rangeCallback?(props: DiffLineRangeCallbackProps): boolean | void;
   readResult(): RunResult;
 }
 
@@ -359,6 +363,36 @@ function addChecksum(current: number, value: number | undefined): number {
   return (current + Math.abs(Math.trunc(value))) % CHECKSUM_MOD;
 }
 
+function addChecksumProduct(
+  current: number,
+  value: number | undefined,
+  count: number
+): number {
+  if (value == null || !Number.isFinite(value) || count <= 0) {
+    return current;
+  }
+  return (
+    (current +
+      (Math.abs(Math.trunc(value)) % CHECKSUM_MOD) * (count % CHECKSUM_MOD)) %
+    CHECKSUM_MOD
+  );
+}
+
+function addChecksumRange(
+  current: number,
+  start: number | undefined,
+  count: number
+): number {
+  if (start == null || !Number.isFinite(start) || count <= 0) {
+    return current;
+  }
+  const first = Math.abs(Math.trunc(start));
+  return (
+    (current + ((count * first + (count * (count - 1)) / 2) % CHECKSUM_MOD)) %
+    CHECKSUM_MOD
+  );
+}
+
 function getSplitLineIndex(props: DiffLineCallbackProps): number {
   return (
     props.additionLine?.splitLineIndex ??
@@ -382,6 +416,19 @@ function getStyleLineIndex(
   return diffStyle === 'split'
     ? getSplitLineIndex(props)
     : getUnifiedLineIndex(props);
+}
+
+function getRangeStyleLineIndex(
+  props: DiffLineRangeCallbackProps,
+  diffStyle: DiffStyle
+): number {
+  return diffStyle === 'split'
+    ? (props.additionLine?.splitLineIndex ??
+        props.deletionLine?.splitLineIndex ??
+        0)
+    : (props.additionLine?.unifiedLineIndex ??
+        props.deletionLine?.unifiedLineIndex ??
+        0);
 }
 
 function getRenderedLineEstimate(
@@ -454,6 +501,9 @@ function createNoopRunner(): BenchmarkRunner {
     callback() {
       rows++;
     },
+    rangeCallback(props) {
+      rows += props.lineCount;
+    },
     readResult() {
       return { checksum: rows, rows };
     },
@@ -475,6 +525,39 @@ function createChecksumRunner(diffStyle: DiffStyle): BenchmarkRunner {
       checksum = addChecksum(checksum, props.additionLine?.lineNumber);
       checksum = addChecksum(checksum, props.deletionLine?.lineIndex);
       checksum = addChecksum(checksum, props.additionLine?.lineIndex);
+    },
+    rangeCallback(props) {
+      const lineCount = props.lineCount;
+      rows += lineCount;
+      checksum = addChecksumProduct(checksum, props.hunkIndex, lineCount);
+      checksum = addChecksumProduct(checksum, props.type.length, lineCount);
+      checksum = addChecksumProduct(checksum, props.collapsedBefore, lineCount);
+      checksum = addChecksumProduct(checksum, props.collapsedAfter, lineCount);
+      checksum = addChecksumRange(
+        checksum,
+        getRangeStyleLineIndex(props, diffStyle),
+        lineCount
+      );
+      checksum = addChecksumRange(
+        checksum,
+        props.deletionLine?.lineNumber,
+        lineCount
+      );
+      checksum = addChecksumRange(
+        checksum,
+        props.additionLine?.lineNumber,
+        lineCount
+      );
+      checksum = addChecksumRange(
+        checksum,
+        props.deletionLine?.lineIndex,
+        lineCount
+      );
+      checksum = addChecksumRange(
+        checksum,
+        props.additionLine?.lineIndex,
+        lineCount
+      );
     },
     readResult() {
       return { checksum, rows };
@@ -646,6 +729,25 @@ function createLayoutSizeRunner(diffStyle: DiffStyle): BenchmarkRunner {
       checksum = addChecksum(checksum, lineIndex);
       renderedLineIndex++;
     },
+    rangeCallback(props) {
+      const lineCount = props.lineCount;
+      const lineIndex = getRangeStyleLineIndex(props, diffStyle);
+      const firstCheckpointOffset =
+        (5_000 - (renderedLineIndex % 5_000)) % 5_000;
+      for (
+        let offset = firstCheckpointOffset;
+        offset < lineCount;
+        offset += 5_000
+      ) {
+        checkpoints.push(
+          height + offset * DEFAULT_LINE_HEIGHT + lineIndex + offset
+        );
+      }
+      checksum = addChecksumRange(checksum, lineIndex, lineCount);
+      height += lineCount * DEFAULT_LINE_HEIGHT;
+      renderedLineIndex += lineCount;
+      rows += lineCount;
+    },
     readResult() {
       checksum = addChecksum(checksum, height);
       checksum = addChecksum(checksum, checkpoints.length);
@@ -684,6 +786,22 @@ function createLinePositionRunner(
         top += 16;
       }
     },
+    rangeCallback(props) {
+      const lineCount = props.lineCount;
+      const lineIndex = getRangeStyleLineIndex(props, diffStyle);
+      const offset = Math.max(0, targetLine - lineIndex);
+      if (offset < lineCount) {
+        rows += offset + 1;
+        top += offset * DEFAULT_LINE_HEIGHT;
+        checksum = addChecksum(
+          checksum,
+          top + lineIndex + offset + DEFAULT_LINE_HEIGHT
+        );
+        return true;
+      }
+      rows += lineCount;
+      top += lineCount * DEFAULT_LINE_HEIGHT;
+    },
     readResult() {
       return { checksum, rows };
     },
@@ -718,6 +836,34 @@ function createScrollAnchorRunner(
       if (props.collapsedAfter > 0) {
         top += 16;
       }
+    },
+    rangeCallback(props) {
+      const lineCount = props.lineCount;
+      const lineIndex = getRangeStyleLineIndex(props, diffStyle);
+      const offset =
+        top >= targetTop
+          ? 0
+          : Math.ceil((targetTop - top) / DEFAULT_LINE_HEIGHT);
+      if (offset < lineCount) {
+        rows += offset + 1;
+        top += offset * DEFAULT_LINE_HEIGHT;
+        checksum = addChecksum(checksum, top + lineIndex + offset);
+        checksum = addChecksum(
+          checksum,
+          props.deletionLine == null
+            ? undefined
+            : props.deletionLine.lineNumber + offset
+        );
+        checksum = addChecksum(
+          checksum,
+          props.additionLine == null
+            ? undefined
+            : props.additionLine.lineNumber + offset
+        );
+        return true;
+      }
+      rows += lineCount;
+      top += lineCount * DEFAULT_LINE_HEIGHT;
     },
     readResult() {
       return { checksum, rows };
@@ -783,6 +929,58 @@ function createRenderRangeRunner(
       }
       checksum = addChecksum(checksum, getStyleLineIndex(props, diffStyle));
     },
+    rangeCallback(props) {
+      let remaining = props.lineCount;
+      let lineIndex = getRangeStyleLineIndex(props, diffStyle);
+      while (remaining > 0) {
+        const isAtHunkBoundary = currentLine % DEFAULT_HUNK_LINE_COUNT === 0;
+        const currentHunk = Math.floor(currentLine / DEFAULT_HUNK_LINE_COUNT);
+        if (isAtHunkBoundary) {
+          hunkOffsets[currentHunk] = top;
+          if (overflowCounter != null) {
+            if (overflowCounter <= 0) {
+              rows++;
+              return true;
+            }
+            overflowCounter--;
+          }
+        }
+
+        const segmentCount = Math.min(
+          remaining,
+          isAtHunkBoundary
+            ? DEFAULT_HUNK_LINE_COUNT
+            : DEFAULT_HUNK_LINE_COUNT - (currentLine % DEFAULT_HUNK_LINE_COUNT)
+        );
+        const finalSegmentTop = top + (segmentCount - 1) * DEFAULT_LINE_HEIGHT;
+        if (
+          firstVisibleHunk == null &&
+          finalSegmentTop > targetTop - DEFAULT_LINE_HEIGHT &&
+          top < bottom
+        ) {
+          firstVisibleHunk = currentHunk;
+        }
+        if (
+          centerHunk == null &&
+          finalSegmentTop + DEFAULT_LINE_HEIGHT > viewportCenter
+        ) {
+          centerHunk = currentHunk;
+        }
+        if (overflowCounter == null && top >= bottom && isAtHunkBoundary) {
+          overflowCounter = Math.ceil(
+            viewportHeight / DEFAULT_LINE_HEIGHT / 10
+          );
+        }
+
+        checksum = addChecksumRange(checksum, lineIndex, segmentCount);
+        rows += segmentCount;
+        currentLine += segmentCount;
+        top += segmentCount * DEFAULT_LINE_HEIGHT;
+        lineIndex += segmentCount;
+        remaining -= segmentCount;
+      }
+      return false;
+    },
     readResult() {
       checksum = addChecksum(checksum, firstVisibleHunk);
       checksum = addChecksum(checksum, centerHunk);
@@ -836,6 +1034,7 @@ function runBenchmarkCase(benchmarkCase: BenchmarkCase): RunResult {
     totalLines: benchmarkCase.totalLines,
     expandedHunks: benchmarkCase.expandedHunks,
     callback: runner.callback,
+    rangeCallback: runner.rangeCallback,
   });
   return runner.readResult();
 }

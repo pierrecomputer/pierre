@@ -44,8 +44,42 @@ export type DiffLineCallbackProps =
   | DiffLineCallbackChangeDeletion
   | DiffLineCallbackChangeAddition;
 
+interface DiffLineRangeCallbackBase extends DiffLineCallbackBase {
+  lineCount: number;
+}
+
+interface DiffLineRangeCallbackContextChange extends DiffLineRangeCallbackBase {
+  type: 'change' | 'context' | 'context-expanded';
+  deletionLine: DiffLineMetadata;
+  additionLine: DiffLineMetadata;
+}
+
+interface DiffLineRangeCallbackChangeDeletion extends DiffLineRangeCallbackBase {
+  type: 'change';
+  deletionLine: DiffLineMetadata;
+  additionLine?: undefined;
+}
+
+interface DiffLineRangeCallbackChangeAddition extends DiffLineRangeCallbackBase {
+  type: 'change';
+  deletionLine?: undefined;
+  additionLine: DiffLineMetadata;
+}
+
+export type DiffLineRangeCallbackProps =
+  | DiffLineRangeCallbackContextChange
+  | DiffLineRangeCallbackChangeDeletion
+  | DiffLineRangeCallbackChangeAddition;
+
 interface MutableDiffLineCallbackProps extends DiffLineCallbackBase {
   type: DiffLineCallbackProps['type'];
+  deletionLine: DiffLineMetadata | undefined;
+  additionLine: DiffLineMetadata | undefined;
+}
+
+interface MutableDiffLineRangeCallbackProps extends DiffLineCallbackBase {
+  type: DiffLineRangeCallbackProps['type'];
+  lineCount: number;
   deletionLine: DiffLineMetadata | undefined;
   additionLine: DiffLineMetadata | undefined;
 }
@@ -95,7 +129,7 @@ interface ChangeIterationRanges {
 
 interface IterationStartStateProps extends Omit<
   IterateOverDiffProps,
-  'callback' | 'totalLines'
+  'callback' | 'rangeCallback' | 'totalLines'
 > {
   startingLine: number;
   collapsedContextThreshold: number;
@@ -116,6 +150,9 @@ interface HunkPrefixCountsCacheEntry {
 // retain row or line data after the callback returns must clone the fields they
 // need.
 export type DiffLineCallback = (props: DiffLineCallbackProps) => boolean | void;
+export type DiffLineRangeCallback = (
+  props: DiffLineRangeCallbackProps
+) => boolean | void;
 
 export interface IterateOverDiffProps {
   diff: FileDiffMetadata;
@@ -125,6 +162,7 @@ export interface IterateOverDiffProps {
   expandedHunks?: Map<number, HunkExpansionRegion> | true;
   collapsedContextThreshold?: number;
   callback: DiffLineCallback;
+  rangeCallback?: DiffLineRangeCallback;
 }
 
 const hunkPrefixCountsCache = new WeakMap<
@@ -140,6 +178,7 @@ export function iterateOverDiff({
   expandedHunks,
   collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
   callback,
+  rangeCallback,
 }: IterateOverDiffProps): void {
   const iterationStart = getIterationStartState({
     diff,
@@ -256,8 +295,20 @@ export function iterateOverDiff({
   };
   const reusableDeletionLine = createReusableLineMetadata();
   const reusableAdditionLine = createReusableLineMetadata();
+  const reusableRangeDeletionLine = createReusableLineMetadata();
+  const reusableRangeAdditionLine = createReusableLineMetadata();
   const reusableChangeProps: MutableDiffLineCallbackProps = {
     type: 'change',
+    hunkIndex: 0,
+    hunk: undefined,
+    collapsedBefore: 0,
+    collapsedAfter: 0,
+    deletionLine: undefined,
+    additionLine: undefined,
+  };
+  const reusableRangeProps: MutableDiffLineRangeCallbackProps = {
+    type: 'change',
+    lineCount: 0,
     hunkIndex: 0,
     hunk: undefined,
     collapsedBefore: 0,
@@ -487,30 +538,57 @@ export function iterateOverDiff({
           trailingCollapsedLines <= 0 &&
           !(isLastContent && (hunk.noEOFCRAdditions || hunk.noEOFCRDeletions))
         ) {
-          reusableChangeProps.type = 'context';
-          reusableChangeProps.hunkIndex = hunkIndex;
-          reusableChangeProps.hunk = hunk;
-          reusableChangeProps.collapsedBefore = 0;
-          reusableChangeProps.collapsedAfter = 0;
-          reusableChangeProps.deletionLine = reusableDeletionLine;
-          reusableChangeProps.additionLine = reusableAdditionLine;
-          reusableDeletionLine.noEOFCR = false;
-          reusableAdditionLine.noEOFCR = false;
-          for (let index = 0; index < content.lines; index++) {
-            const rowUnifiedLineIndex = unifiedLineIndex + index;
-            const rowSplitLineIndex = splitLineIndex + index;
-            reusableDeletionLine.unifiedLineIndex = rowUnifiedLineIndex;
-            reusableDeletionLine.splitLineIndex = rowSplitLineIndex;
-            reusableDeletionLine.lineIndex = deletionLineIndex + index;
-            reusableDeletionLine.lineNumber = deletionLineNumber + index;
-            reusableAdditionLine.unifiedLineIndex = rowUnifiedLineIndex;
-            reusableAdditionLine.splitLineIndex = rowSplitLineIndex;
-            reusableAdditionLine.lineIndex = additionLineIndex + index;
-            reusableAdditionLine.lineNumber = additionLineNumber + index;
+          if (rangeCallback != null) {
+            setRangeLineData({
+              target: reusableRangeProps,
+              deletionLine: reusableRangeDeletionLine,
+              additionLine: reusableRangeAdditionLine,
+              type: 'context',
+              hunkIndex,
+              hunk,
+              lineCount: content.lines,
+              deletionLineNumber,
+              deletionLineIndex,
+              additionLineNumber,
+              additionLineIndex,
+              deletionUnifiedLineIndex: unifiedLineIndex,
+              deletionSplitLineIndex: splitLineIndex,
+              additionUnifiedLineIndex: unifiedLineIndex,
+              additionSplitLineIndex: splitLineIndex,
+            });
             if (
-              callback(reusableChangeProps as DiffLineCallbackProps) === true
+              rangeCallback(
+                reusableRangeProps as DiffLineRangeCallbackProps
+              ) === true
             ) {
               break hunkIterator;
+            }
+          } else {
+            reusableChangeProps.type = 'context';
+            reusableChangeProps.hunkIndex = hunkIndex;
+            reusableChangeProps.hunk = hunk;
+            reusableChangeProps.collapsedBefore = 0;
+            reusableChangeProps.collapsedAfter = 0;
+            reusableChangeProps.deletionLine = reusableDeletionLine;
+            reusableChangeProps.additionLine = reusableAdditionLine;
+            reusableDeletionLine.noEOFCR = false;
+            reusableAdditionLine.noEOFCR = false;
+            for (let index = 0; index < content.lines; index++) {
+              const rowUnifiedLineIndex = unifiedLineIndex + index;
+              const rowSplitLineIndex = splitLineIndex + index;
+              reusableDeletionLine.unifiedLineIndex = rowUnifiedLineIndex;
+              reusableDeletionLine.splitLineIndex = rowSplitLineIndex;
+              reusableDeletionLine.lineIndex = deletionLineIndex + index;
+              reusableDeletionLine.lineNumber = deletionLineNumber + index;
+              reusableAdditionLine.unifiedLineIndex = rowUnifiedLineIndex;
+              reusableAdditionLine.splitLineIndex = rowSplitLineIndex;
+              reusableAdditionLine.lineIndex = additionLineIndex + index;
+              reusableAdditionLine.lineNumber = additionLineNumber + index;
+              if (
+                callback(reusableChangeProps as DiffLineCallbackProps) === true
+              ) {
+                break hunkIterator;
+              }
             }
           }
         } else if (!state.shouldSkip(content.lines, content.lines)) {
@@ -593,20 +671,49 @@ export function iterateOverDiff({
             trailingCollapsedLines <= 0 &&
             !(isLastContent && hunk.noEOFCRAdditions)
           ) {
-            reusableChangeProps.deletionLine = undefined;
-            reusableChangeProps.additionLine = reusableAdditionLine;
-            reusableChangeProps.collapsedBefore = 0;
-            reusableChangeProps.collapsedAfter = 0;
-            reusableAdditionLine.noEOFCR = false;
-            for (let index = 0; index < content.additions; index++) {
-              reusableAdditionLine.unifiedLineIndex = unifiedLineIndex + index;
-              reusableAdditionLine.splitLineIndex = splitLineIndex + index;
-              reusableAdditionLine.lineIndex = additionLineIndex + index;
-              reusableAdditionLine.lineNumber = additionLineNumber + index;
+            if (rangeCallback != null) {
+              setRangeLineData({
+                target: reusableRangeProps,
+                deletionLine: reusableRangeDeletionLine,
+                additionLine: reusableRangeAdditionLine,
+                type: 'change',
+                hunkIndex,
+                hunk,
+                lineCount: content.additions,
+                deletionLineNumber: undefined,
+                deletionLineIndex: undefined,
+                additionLineNumber,
+                additionLineIndex,
+                deletionUnifiedLineIndex: undefined,
+                deletionSplitLineIndex: undefined,
+                additionUnifiedLineIndex: unifiedLineIndex,
+                additionSplitLineIndex: splitLineIndex,
+              });
               if (
-                callback(reusableChangeProps as DiffLineCallbackProps) === true
+                rangeCallback(
+                  reusableRangeProps as DiffLineRangeCallbackProps
+                ) === true
               ) {
                 break hunkIterator;
+              }
+            } else {
+              reusableChangeProps.deletionLine = undefined;
+              reusableChangeProps.additionLine = reusableAdditionLine;
+              reusableChangeProps.collapsedBefore = 0;
+              reusableChangeProps.collapsedAfter = 0;
+              reusableAdditionLine.noEOFCR = false;
+              for (let index = 0; index < content.additions; index++) {
+                reusableAdditionLine.unifiedLineIndex =
+                  unifiedLineIndex + index;
+                reusableAdditionLine.splitLineIndex = splitLineIndex + index;
+                reusableAdditionLine.lineIndex = additionLineIndex + index;
+                reusableAdditionLine.lineNumber = additionLineNumber + index;
+                if (
+                  callback(reusableChangeProps as DiffLineCallbackProps) ===
+                  true
+                ) {
+                  break hunkIterator;
+                }
               }
             }
           } else if (
@@ -616,39 +723,37 @@ export function iterateOverDiff({
             trailingCollapsedLines <= 0 &&
             !(isLastContent && hunk.noEOFCRDeletions)
           ) {
-            reusableChangeProps.deletionLine = reusableDeletionLine;
-            reusableChangeProps.additionLine = undefined;
-            reusableChangeProps.collapsedBefore = 0;
-            reusableChangeProps.collapsedAfter = 0;
-            reusableDeletionLine.noEOFCR = false;
-            for (let index = 0; index < content.deletions; index++) {
-              reusableDeletionLine.unifiedLineIndex = unifiedLineIndex + index;
-              reusableDeletionLine.splitLineIndex = splitLineIndex + index;
-              reusableDeletionLine.lineIndex = deletionLineIndex + index;
-              reusableDeletionLine.lineNumber = deletionLineNumber + index;
+            if (rangeCallback != null) {
+              setRangeLineData({
+                target: reusableRangeProps,
+                deletionLine: reusableRangeDeletionLine,
+                additionLine: reusableRangeAdditionLine,
+                type: 'change',
+                hunkIndex,
+                hunk,
+                lineCount: content.deletions,
+                deletionLineNumber,
+                deletionLineIndex,
+                additionLineNumber: undefined,
+                additionLineIndex: undefined,
+                deletionUnifiedLineIndex: unifiedLineIndex,
+                deletionSplitLineIndex: splitLineIndex,
+                additionUnifiedLineIndex: undefined,
+                additionSplitLineIndex: undefined,
+              });
               if (
-                callback(reusableChangeProps as DiffLineCallbackProps) === true
+                rangeCallback(
+                  reusableRangeProps as DiffLineRangeCallbackProps
+                ) === true
               ) {
                 break hunkIterator;
               }
-            }
-          } else if (
-            !state.isWindowedHighlight &&
-            content.deletions > 0 &&
-            content.additions > 0 &&
-            pendingCollapsedLines === 0 &&
-            trailingCollapsedLines <= 0 &&
-            !(isLastContent && hunk.noEOFCRAdditions) &&
-            !(isLastContent && hunk.noEOFCRDeletions)
-          ) {
-            reusableChangeProps.collapsedBefore = 0;
-            reusableChangeProps.collapsedAfter = 0;
-            reusableDeletionLine.noEOFCR = false;
-            reusableAdditionLine.noEOFCR = false;
-
-            if (diffStyle === 'unified') {
+            } else {
               reusableChangeProps.deletionLine = reusableDeletionLine;
               reusableChangeProps.additionLine = undefined;
+              reusableChangeProps.collapsedBefore = 0;
+              reusableChangeProps.collapsedAfter = 0;
+              reusableDeletionLine.noEOFCR = false;
               for (let index = 0; index < content.deletions; index++) {
                 reusableDeletionLine.unifiedLineIndex =
                   unifiedLineIndex + index;
@@ -662,52 +767,229 @@ export function iterateOverDiff({
                   break hunkIterator;
                 }
               }
-
-              reusableChangeProps.deletionLine = undefined;
-              reusableChangeProps.additionLine = reusableAdditionLine;
-              for (let index = 0; index < content.additions; index++) {
-                reusableAdditionLine.unifiedLineIndex =
-                  unifiedLineIndex + content.deletions + index;
-                reusableAdditionLine.splitLineIndex = splitLineIndex + index;
-                reusableAdditionLine.lineIndex = additionLineIndex + index;
-                reusableAdditionLine.lineNumber = additionLineNumber + index;
+            }
+          } else if (
+            !state.isWindowedHighlight &&
+            content.deletions > 0 &&
+            content.additions > 0 &&
+            pendingCollapsedLines === 0 &&
+            trailingCollapsedLines <= 0 &&
+            !(isLastContent && hunk.noEOFCRAdditions) &&
+            !(isLastContent && hunk.noEOFCRDeletions)
+          ) {
+            if (rangeCallback != null) {
+              if (diffStyle === 'unified') {
+                setRangeLineData({
+                  target: reusableRangeProps,
+                  deletionLine: reusableRangeDeletionLine,
+                  additionLine: reusableRangeAdditionLine,
+                  type: 'change',
+                  hunkIndex,
+                  hunk,
+                  lineCount: content.deletions,
+                  deletionLineNumber,
+                  deletionLineIndex,
+                  additionLineNumber: undefined,
+                  additionLineIndex: undefined,
+                  deletionUnifiedLineIndex: unifiedLineIndex,
+                  deletionSplitLineIndex: splitLineIndex,
+                  additionUnifiedLineIndex: undefined,
+                  additionSplitLineIndex: undefined,
+                });
                 if (
-                  callback(reusableChangeProps as DiffLineCallbackProps) ===
-                  true
+                  rangeCallback(
+                    reusableRangeProps as DiffLineRangeCallbackProps
+                  ) === true
                 ) {
                   break hunkIterator;
                 }
+
+                setRangeLineData({
+                  target: reusableRangeProps,
+                  deletionLine: reusableRangeDeletionLine,
+                  additionLine: reusableRangeAdditionLine,
+                  type: 'change',
+                  hunkIndex,
+                  hunk,
+                  lineCount: content.additions,
+                  deletionLineNumber: undefined,
+                  deletionLineIndex: undefined,
+                  additionLineNumber,
+                  additionLineIndex,
+                  deletionUnifiedLineIndex: undefined,
+                  deletionSplitLineIndex: undefined,
+                  additionUnifiedLineIndex:
+                    unifiedLineIndex + content.deletions,
+                  additionSplitLineIndex: splitLineIndex,
+                });
+                if (
+                  rangeCallback(
+                    reusableRangeProps as DiffLineRangeCallbackProps
+                  ) === true
+                ) {
+                  break hunkIterator;
+                }
+              } else {
+                const pairedCount = Math.min(
+                  content.deletions,
+                  content.additions
+                );
+                if (pairedCount > 0) {
+                  setRangeLineData({
+                    target: reusableRangeProps,
+                    deletionLine: reusableRangeDeletionLine,
+                    additionLine: reusableRangeAdditionLine,
+                    type: 'change',
+                    hunkIndex,
+                    hunk,
+                    lineCount: pairedCount,
+                    deletionLineNumber,
+                    deletionLineIndex,
+                    additionLineNumber,
+                    additionLineIndex,
+                    deletionUnifiedLineIndex: unifiedLineIndex,
+                    deletionSplitLineIndex: splitLineIndex,
+                    additionUnifiedLineIndex:
+                      unifiedLineIndex + content.deletions,
+                    additionSplitLineIndex: splitLineIndex,
+                  });
+                  if (
+                    rangeCallback(
+                      reusableRangeProps as DiffLineRangeCallbackProps
+                    ) === true
+                  ) {
+                    break hunkIterator;
+                  }
+                }
+
+                if (content.deletions > pairedCount) {
+                  setRangeLineData({
+                    target: reusableRangeProps,
+                    deletionLine: reusableRangeDeletionLine,
+                    additionLine: reusableRangeAdditionLine,
+                    type: 'change',
+                    hunkIndex,
+                    hunk,
+                    lineCount: content.deletions - pairedCount,
+                    deletionLineNumber: deletionLineNumber + pairedCount,
+                    deletionLineIndex: deletionLineIndex + pairedCount,
+                    additionLineNumber: undefined,
+                    additionLineIndex: undefined,
+                    deletionUnifiedLineIndex: unifiedLineIndex + pairedCount,
+                    deletionSplitLineIndex: splitLineIndex + pairedCount,
+                    additionUnifiedLineIndex: undefined,
+                    additionSplitLineIndex: undefined,
+                  });
+                  if (
+                    rangeCallback(
+                      reusableRangeProps as DiffLineRangeCallbackProps
+                    ) === true
+                  ) {
+                    break hunkIterator;
+                  }
+                }
+
+                if (content.additions > pairedCount) {
+                  setRangeLineData({
+                    target: reusableRangeProps,
+                    deletionLine: reusableRangeDeletionLine,
+                    additionLine: reusableRangeAdditionLine,
+                    type: 'change',
+                    hunkIndex,
+                    hunk,
+                    lineCount: content.additions - pairedCount,
+                    deletionLineNumber: undefined,
+                    deletionLineIndex: undefined,
+                    additionLineNumber: additionLineNumber + pairedCount,
+                    additionLineIndex: additionLineIndex + pairedCount,
+                    deletionUnifiedLineIndex: undefined,
+                    deletionSplitLineIndex: undefined,
+                    additionUnifiedLineIndex:
+                      unifiedLineIndex + content.deletions + pairedCount,
+                    additionSplitLineIndex: splitLineIndex + pairedCount,
+                  });
+                  if (
+                    rangeCallback(
+                      reusableRangeProps as DiffLineRangeCallbackProps
+                    ) === true
+                  ) {
+                    break hunkIterator;
+                  }
+                }
               }
             } else {
-              const rowCount = splitCount;
-              for (let index = 0; index < rowCount; index++) {
-                if (index < content.deletions) {
+              reusableChangeProps.collapsedBefore = 0;
+              reusableChangeProps.collapsedAfter = 0;
+              reusableDeletionLine.noEOFCR = false;
+              reusableAdditionLine.noEOFCR = false;
+
+              if (diffStyle === 'unified') {
+                reusableChangeProps.deletionLine = reusableDeletionLine;
+                reusableChangeProps.additionLine = undefined;
+                for (let index = 0; index < content.deletions; index++) {
                   reusableDeletionLine.unifiedLineIndex =
                     unifiedLineIndex + index;
                   reusableDeletionLine.splitLineIndex = splitLineIndex + index;
                   reusableDeletionLine.lineIndex = deletionLineIndex + index;
                   reusableDeletionLine.lineNumber = deletionLineNumber + index;
-                  reusableChangeProps.deletionLine = reusableDeletionLine;
-                } else {
-                  reusableChangeProps.deletionLine = undefined;
+                  if (
+                    callback(reusableChangeProps as DiffLineCallbackProps) ===
+                    true
+                  ) {
+                    break hunkIterator;
+                  }
                 }
 
-                if (index < content.additions) {
+                reusableChangeProps.deletionLine = undefined;
+                reusableChangeProps.additionLine = reusableAdditionLine;
+                for (let index = 0; index < content.additions; index++) {
                   reusableAdditionLine.unifiedLineIndex =
                     unifiedLineIndex + content.deletions + index;
                   reusableAdditionLine.splitLineIndex = splitLineIndex + index;
                   reusableAdditionLine.lineIndex = additionLineIndex + index;
                   reusableAdditionLine.lineNumber = additionLineNumber + index;
-                  reusableChangeProps.additionLine = reusableAdditionLine;
-                } else {
-                  reusableChangeProps.additionLine = undefined;
+                  if (
+                    callback(reusableChangeProps as DiffLineCallbackProps) ===
+                    true
+                  ) {
+                    break hunkIterator;
+                  }
                 }
+              } else {
+                const rowCount = splitCount;
+                for (let index = 0; index < rowCount; index++) {
+                  if (index < content.deletions) {
+                    reusableDeletionLine.unifiedLineIndex =
+                      unifiedLineIndex + index;
+                    reusableDeletionLine.splitLineIndex =
+                      splitLineIndex + index;
+                    reusableDeletionLine.lineIndex = deletionLineIndex + index;
+                    reusableDeletionLine.lineNumber =
+                      deletionLineNumber + index;
+                    reusableChangeProps.deletionLine = reusableDeletionLine;
+                  } else {
+                    reusableChangeProps.deletionLine = undefined;
+                  }
 
-                if (
-                  callback(reusableChangeProps as DiffLineCallbackProps) ===
-                  true
-                ) {
-                  break hunkIterator;
+                  if (index < content.additions) {
+                    reusableAdditionLine.unifiedLineIndex =
+                      unifiedLineIndex + content.deletions + index;
+                    reusableAdditionLine.splitLineIndex =
+                      splitLineIndex + index;
+                    reusableAdditionLine.lineIndex = additionLineIndex + index;
+                    reusableAdditionLine.lineNumber =
+                      additionLineNumber + index;
+                    reusableChangeProps.additionLine = reusableAdditionLine;
+                  } else {
+                    reusableChangeProps.additionLine = undefined;
+                  }
+
+                  if (
+                    callback(reusableChangeProps as DiffLineCallbackProps) ===
+                    true
+                  ) {
+                    break hunkIterator;
+                  }
                 }
               }
             }
@@ -1468,6 +1750,24 @@ interface SetBothLineDataProps {
   additionNoEOF: boolean;
 }
 
+interface SetRangeLineDataProps {
+  target: MutableDiffLineRangeCallbackProps;
+  deletionLine: DiffLineMetadata;
+  additionLine: DiffLineMetadata;
+  type: DiffLineRangeCallbackProps['type'];
+  hunkIndex: number;
+  hunk: Hunk | undefined;
+  lineCount: number;
+  deletionLineNumber: number | undefined;
+  deletionLineIndex: number | undefined;
+  additionLineNumber: number | undefined;
+  additionLineIndex: number | undefined;
+  deletionUnifiedLineIndex: number | undefined;
+  deletionSplitLineIndex: number | undefined;
+  additionUnifiedLineIndex: number | undefined;
+  additionSplitLineIndex: number | undefined;
+}
+
 // NOTE(amadeus): It's quite tedious to grab the appropriate line info and
 // related props for change content regions, so I made it a specialized
 // function to help make the main hunkIterator easy to reason about
@@ -1538,6 +1838,69 @@ function setBothLineData({
   );
   target.deletionLine = deletionLine;
   target.additionLine = additionLine;
+}
+
+function setRangeLineData({
+  target,
+  deletionLine,
+  additionLine,
+  type,
+  hunkIndex,
+  hunk,
+  lineCount,
+  deletionLineNumber,
+  deletionLineIndex,
+  additionLineNumber,
+  additionLineIndex,
+  deletionUnifiedLineIndex,
+  deletionSplitLineIndex,
+  additionUnifiedLineIndex,
+  additionSplitLineIndex,
+}: SetRangeLineDataProps): void {
+  target.type = type;
+  target.hunkIndex = hunkIndex;
+  target.hunk = hunk;
+  target.lineCount = lineCount;
+  target.collapsedBefore = 0;
+  target.collapsedAfter = 0;
+
+  if (
+    deletionLineNumber != null &&
+    deletionLineIndex != null &&
+    deletionUnifiedLineIndex != null &&
+    deletionSplitLineIndex != null
+  ) {
+    setLineMetadata(
+      deletionLine,
+      deletionUnifiedLineIndex,
+      deletionSplitLineIndex,
+      deletionLineIndex,
+      deletionLineNumber,
+      false
+    );
+    target.deletionLine = deletionLine;
+  } else {
+    target.deletionLine = undefined;
+  }
+
+  if (
+    additionLineNumber != null &&
+    additionLineIndex != null &&
+    additionUnifiedLineIndex != null &&
+    additionSplitLineIndex != null
+  ) {
+    setLineMetadata(
+      additionLine,
+      additionUnifiedLineIndex,
+      additionSplitLineIndex,
+      additionLineIndex,
+      additionLineNumber,
+      false
+    );
+    target.additionLine = additionLine;
+  } else {
+    target.additionLine = undefined;
+  }
 }
 
 function setChangeLineData({

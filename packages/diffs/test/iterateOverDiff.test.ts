@@ -5,6 +5,7 @@ import { parseDiffFromFile } from '../src';
 import { baseline_iterateOverDiff } from '../src/utils/baseline_iterateOverDiff';
 import type {
   DiffLineCallbackProps,
+  DiffLineRangeCallbackProps,
   IterateOverDiffProps,
 } from '../src/utils/iterateOverDiff';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
@@ -155,6 +156,77 @@ function checksumRows(
     },
   });
   return checksum;
+}
+
+function addRowChecksum(
+  checksum: number,
+  row: Pick<
+    RowSnapshot,
+    | 'type'
+    | 'hunkIndex'
+    | 'collapsedBefore'
+    | 'collapsedAfter'
+    | 'deletionLine'
+    | 'additionLine'
+  >
+): number {
+  let nextChecksum = checksum;
+  nextChecksum += row.hunkIndex;
+  nextChecksum += row.type.length;
+  nextChecksum += row.collapsedBefore + row.collapsedAfter;
+  nextChecksum += row.deletionLine?.lineIndex ?? 0;
+  nextChecksum += row.deletionLine?.lineNumber ?? 0;
+  nextChecksum += row.deletionLine?.splitLineIndex ?? 0;
+  nextChecksum += row.deletionLine?.unifiedLineIndex ?? 0;
+  nextChecksum += row.additionLine?.lineIndex ?? 0;
+  nextChecksum += row.additionLine?.lineNumber ?? 0;
+  nextChecksum += row.additionLine?.splitLineIndex ?? 0;
+  nextChecksum += row.additionLine?.unifiedLineIndex ?? 0;
+  return nextChecksum;
+}
+
+function addLineOffset(
+  line: DiffLineRangeCallbackProps['deletionLine'],
+  offset: number
+): LineSnapshot | undefined {
+  if (line == null) {
+    return undefined;
+  }
+  return {
+    unifiedLineIndex: line.unifiedLineIndex + offset,
+    splitLineIndex: line.splitLineIndex + offset,
+    lineIndex: line.lineIndex + offset,
+    lineNumber: line.lineNumber + offset,
+    noEOFCR: line.noEOFCR,
+  };
+}
+
+function checksumRowsWithRanges(
+  props: Omit<IterateOverDiffProps, 'callback' | 'rangeCallback'>
+): { checksum: number; rows: number } {
+  let checksum = 0;
+  let rows = 0;
+  iterateOverDiff({
+    ...props,
+    callback: (row) => {
+      checksum = addRowChecksum(checksum, cloneRowSnapshot(row));
+      rows++;
+    },
+    rangeCallback: (range) => {
+      for (let offset = 0; offset < range.lineCount; offset++) {
+        checksum = addRowChecksum(checksum, {
+          type: range.type,
+          hunkIndex: range.hunkIndex,
+          collapsedBefore: range.collapsedBefore,
+          collapsedAfter: range.collapsedAfter,
+          deletionLine: addLineOffset(range.deletionLine, offset),
+          additionLine: addLineOffset(range.additionLine, offset),
+        });
+        rows++;
+      }
+    },
+  });
+  return { checksum, rows };
 }
 
 // NOTE(amadeus): These tests were written by an AI and they are probably
@@ -434,6 +506,20 @@ describe('iterateOverDiff', () => {
     expect(checksumRows(iterateOverDiff, checksumProps)).toBe(
       checksumRows(baseline_iterateOverDiff, checksumProps)
     );
+  });
+
+  test('range callbacks cover the same full rows as row callbacks', () => {
+    const rangeProps = {
+      diff,
+      diffStyle: 'both' as const,
+      expandedHunks: true as const,
+    };
+    const baselineRows = captureRows(baseline_iterateOverDiff, rangeProps);
+    const baselineChecksum = baselineRows.reduce(addRowChecksum, 0);
+    const ranged = checksumRowsWithRanges(rangeProps);
+
+    expect(ranged.rows).toBe(baselineRows.length);
+    expect(ranged.checksum).toBe(baselineChecksum);
   });
 
   test('real fixture both-style deep windows match the baseline iterator', () => {
