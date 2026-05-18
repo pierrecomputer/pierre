@@ -435,6 +435,26 @@ function getRangeStyleLineIndex(
         0);
 }
 
+function getPositiveIntegerDigitCount(value: number): number {
+  if (value < 10) return 1;
+  if (value < 100) return 2;
+  if (value < 1_000) return 3;
+  if (value < 10_000) return 4;
+  if (value < 100_000) return 5;
+  if (value < 1_000_000) return 6;
+  return String(value).length;
+}
+
+function getPositiveIntegerDigitLimit(digitCount: number): number {
+  if (digitCount === 1) return 10;
+  if (digitCount === 2) return 100;
+  if (digitCount === 3) return 1_000;
+  if (digitCount === 4) return 10_000;
+  if (digitCount === 5) return 100_000;
+  if (digitCount === 6) return 1_000_000;
+  return 10 ** digitCount;
+}
+
 function getRenderedLineEstimate(
   diff: FileDiffMetadata,
   diffStyle: DiffStyle
@@ -713,6 +733,12 @@ function createRendererPostprocessRunner(
   let contentRows = 0;
   let rows = 0;
   let checksum = 0;
+  let unifiedDigitCount = 1;
+  let unifiedDigitFloor = 0;
+  let unifiedDigitLimit = 10;
+  let splitDigitCount = 1;
+  let splitDigitFloor = 0;
+  let splitDigitLimit = 10;
 
   return {
     callback(props) {
@@ -720,7 +746,29 @@ function createRendererPostprocessRunner(
       const splitLineIndex = getSplitLineIndex(props);
       const unifiedLineIndex = getUnifiedLineIndex(props);
       const lineIndex = getStyleLineIndex(props, diffStyle);
-      const lineKey = `${unifiedLineIndex},${splitLineIndex}`;
+      if (
+        unifiedLineIndex < unifiedDigitFloor ||
+        unifiedLineIndex >= unifiedDigitLimit
+      ) {
+        unifiedDigitCount = getPositiveIntegerDigitCount(unifiedLineIndex);
+        unifiedDigitLimit = getPositiveIntegerDigitLimit(unifiedDigitCount);
+        unifiedDigitFloor =
+          unifiedDigitCount === 1
+            ? 0
+            : getPositiveIntegerDigitLimit(unifiedDigitCount - 1);
+      }
+      if (
+        splitLineIndex < splitDigitFloor ||
+        splitLineIndex >= splitDigitLimit
+      ) {
+        splitDigitCount = getPositiveIntegerDigitCount(splitLineIndex);
+        splitDigitLimit = getPositiveIntegerDigitLimit(splitDigitCount);
+        splitDigitFloor =
+          splitDigitCount === 1
+            ? 0
+            : getPositiveIntegerDigitLimit(splitDigitCount - 1);
+      }
+      const lineKeyLength = unifiedDigitCount + 1 + splitDigitCount;
 
       if (props.collapsedBefore > 0) {
         gutterRows++;
@@ -742,7 +790,7 @@ function createRendererPostprocessRunner(
         checksum = addChecksum(checksum, props.collapsedAfter);
       }
       checksum = addChecksum(checksum, lineIndex);
-      checksum = addChecksum(checksum, lineKey.length);
+      checksum = addChecksum(checksum, lineKeyLength);
     },
     readResult() {
       checksum = addChecksum(checksum, gutterRows);
