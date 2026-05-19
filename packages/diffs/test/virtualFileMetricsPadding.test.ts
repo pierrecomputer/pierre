@@ -70,7 +70,7 @@ function createVirtualizedFile(
     ...baseMetrics,
     ...metrics,
   });
-  instance.prepareVirtualizedItem(file);
+  instance.prepareCodeViewItem(file);
   return instance;
 }
 
@@ -86,7 +86,7 @@ function createVirtualizedFileDiff(
     ...baseMetrics,
     ...metrics,
   });
-  instance.prepareVirtualizedItem(fileDiff);
+  instance.prepareCodeViewItem(fileDiff);
   return instance;
 }
 
@@ -188,7 +188,7 @@ describe('virtual file padding metrics', () => {
         paddingBottom: 13,
       });
 
-      instance.prepareVirtualizedItem(fileDiff);
+      instance.prepareCodeViewItem(fileDiff);
 
       expect(fileDiff.hunks.length).toBe(0);
       expect(instance.getVirtualizedHeight()).toBe(
@@ -212,7 +212,7 @@ describe('virtual file padding metrics', () => {
         }
       );
 
-      instance.prepareVirtualizedItem(fileDiff);
+      instance.prepareCodeViewItem(fileDiff);
 
       expect(instance.getVirtualizedHeight()).toBe(
         baseMetrics.diffHeaderHeight + 6
@@ -248,7 +248,7 @@ describe('virtual file padding metrics', () => {
         paddingTop: 50,
         paddingBottom: 60,
       });
-      instance.prepareVirtualizedItem(fileDiff);
+      instance.prepareCodeViewItem(fileDiff);
 
       const [firstHunk, secondHunk] = fileDiff.hunks;
       if (firstHunk == null || secondHunk == null) {
@@ -290,7 +290,7 @@ describe('virtual file padding metrics', () => {
         (firstHunk.splitLineCount + secondHunk.splitLineCount) *
         codeViewLikeMetrics.lineHeight;
 
-      instance.prepareVirtualizedItem(fileDiff);
+      instance.prepareCodeViewItem(fileDiff);
 
       expect(firstHunk.collapsedBefore).toBeGreaterThan(0);
       expect(secondHunk.collapsedBefore).toBeGreaterThan(0);
@@ -331,7 +331,7 @@ describe('virtual file padding metrics', () => {
         (firstHunk.splitLineCount + secondHunk.splitLineCount) *
         codeViewLikeMetrics.lineHeight;
 
-      instance.prepareVirtualizedItem(fileDiff);
+      instance.prepareCodeViewItem(fileDiff);
 
       expect(
         instance.getLinePosition(firstHunk.additionStart, 'additions')?.top
@@ -378,7 +378,7 @@ describe('virtual file padding metrics', () => {
         (firstHunk.splitLineCount + secondHunk.splitLineCount) *
         codeViewLikeMetrics.lineHeight;
 
-      instance.prepareVirtualizedItem(fileDiff);
+      instance.prepareCodeViewItem(fileDiff);
 
       expect(
         instance.getLinePosition(firstHunk.additionStart, 'additions')?.top
@@ -413,7 +413,7 @@ describe('virtual file padding metrics', () => {
         codeViewLikeMetrics
       );
 
-      instance.prepareVirtualizedItem(fileDiff);
+      instance.prepareCodeViewItem(fileDiff);
 
       expect(firstHunk.collapsedBefore).toBeGreaterThan(0);
       expect(secondHunk.collapsedBefore).toBeGreaterThan(0);
@@ -448,7 +448,7 @@ describe('virtual file padding metrics', () => {
         codeViewLikeMetrics
       );
 
-      instance.prepareVirtualizedItem(fileDiff);
+      instance.prepareCodeViewItem(fileDiff);
       expect(
         instance.getLinePosition(secondHunk.additionStart, 'additions')?.top
       ).toBe(
@@ -481,7 +481,7 @@ describe('virtual file padding metrics', () => {
         codeViewLikeMetrics
       );
 
-      instance.prepareVirtualizedItem(fileDiff);
+      instance.prepareCodeViewItem(fileDiff);
 
       expect(firstHunk.collapsedBefore).toBeGreaterThan(0);
       expect(secondHunk.collapsedBefore).toBeGreaterThan(0);

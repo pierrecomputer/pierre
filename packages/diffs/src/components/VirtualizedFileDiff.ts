@@ -10,8 +10,10 @@ import type {
   StickySpecs,
   VirtualFileMetrics,
 } from '../types';
+import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
+import { computeEstimatedDiffHeights } from '../utils/computeEstimatedDiffHeights';
 import {
   computeVirtualFileMetrics,
   getVirtualFileHeaderRegion,
@@ -43,12 +45,21 @@ interface DiffLayoutCache {
   // Sparse map: view-specific line index -> measured height. Only stores lines
   // that differ from what is returned by `getLineHeight`.
   heights: Map<number, number>;
+  // Baseline estimated heights for the active diff content. These are preserved
+  // across style/collapse toggles and cleared only when estimate inputs change.
+  estimatedSplitHeight: number | undefined;
+  estimatedUnifiedHeight: number | undefined;
   // Sparse measured positions used to resume deep geometry scans near a target
   // diff line, rendered row, or scroll offset instead of replaying layout from
   // the first hunk.
   checkpoints: DiffLayoutCheckpoint[];
   // Total renderable diff rows for the current diff style and expansion state.
   totalLines: number;
+}
+
+interface ResetLayoutCacheOptions {
+  forceSimpleRecompute?: boolean;
+  includeEstimatedHeights?: boolean;
 }
 
 const LAYOUT_CHECKPOINT_INTERVAL = 5_000;
@@ -65,6 +76,8 @@ export class VirtualizedFileDiff<
   private metrics: VirtualFileMetrics;
   private cache: DiffLayoutCache = {
     heights: new Map(),
+    estimatedSplitHeight: undefined,
+    estimatedUnifiedHeight: undefined,
     checkpoints: [],
     totalLines: 0,
   };
@@ -96,7 +109,7 @@ export class VirtualizedFileDiff<
     }
 
     this.metrics = nextMetrics;
-    this.resetLayoutCache();
+    this.resetLayoutCache({ includeEstimatedHeights: true });
   }
 
   // Get the height for a line, using cached value if available.
@@ -120,7 +133,13 @@ export class VirtualizedFileDiff<
     super.setOptions(options);
 
     if (layoutChanged) {
-      this.resetLayoutCache(true);
+      this.resetLayoutCache({
+        forceSimpleRecompute: true,
+        includeEstimatedHeights: hasDiffEstimateOptionChanged(
+          previousOptions,
+          options
+        ),
+      });
     }
     // Any option can affect rendered DOM; only layout-affecting options clear
     // the measured height cache above.
@@ -132,15 +151,22 @@ export class VirtualizedFileDiff<
     }
   }
 
-  private resetLayoutCache(recompute = false): void {
+  private resetLayoutCache({
+    forceSimpleRecompute = false,
+    includeEstimatedHeights = false,
+  }: ResetLayoutCacheOptions = {}): void {
     this.layoutDirty = true;
     this.cache.heights.clear();
     this.cache.checkpoints = [];
     this.cache.totalLines = 0;
+    if (includeEstimatedHeights) {
+      this.cache.estimatedSplitHeight = undefined;
+      this.cache.estimatedUnifiedHeight = undefined;
+    }
     this.renderRange = undefined;
     // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
     // at the same time, so we shouldn't trigger this there.
-    if (recompute && this.isSimpleMode()) {
+    if (forceSimpleRecompute && this.isSimpleMode()) {
       this.computeApproximateSize();
     }
   }
@@ -245,9 +271,9 @@ export class VirtualizedFileDiff<
   // its virtualized top, and returning an approximate height. This method is
   // called while downstream items are being re-positioned, so later changes
   // should keep clean instances on a cached-height fast path.
-  public prepareVirtualizedItem(fileDiff: FileDiffMetadata): number {
-    if (this.fileDiff !== fileDiff) {
-      this.resetLayoutCache();
+  public prepareCodeViewItem(fileDiff: FileDiffMetadata): number {
+    if (!areDiffTargetsEqual(this.fileDiff, fileDiff)) {
+      this.resetLayoutCache({ includeEstimatedHeights: true });
     }
     this.fileDiff = fileDiff;
     this.top = this.getVirtualizedTop();
@@ -524,7 +550,7 @@ export class VirtualizedFileDiff<
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
     if (!recycle) {
-      this.resetLayoutCache();
+      this.resetLayoutCache({ includeEstimatedHeights: true });
     }
     this.isSetup = false;
     super.cleanUp(recycle);
@@ -540,6 +566,8 @@ export class VirtualizedFileDiff<
       direction,
       expansionLineCountOverride
     );
+    this.cache.estimatedSplitHeight = undefined;
+    this.cache.estimatedUnifiedHeight = undefined;
     this.layoutDirty = true;
     this.computeApproximateSize();
     this.renderRange = undefined;
@@ -614,6 +642,15 @@ export class VirtualizedFileDiff<
       return;
     }
 
+    if (this.cache.heights.size === 0) {
+      this.height = this.getActiveEstimatedHeight();
+      if (shouldValidateSize && !isFirstCompute) {
+        this.validateComputedHeight();
+      }
+      this.layoutDirty = false;
+      return;
+    }
+
     let renderedLineIndex = 0;
     iterateOverDiff({
       diff: this.fileDiff,
@@ -676,24 +713,77 @@ export class VirtualizedFileDiff<
       this.height += paddingBottom;
     }
 
-    if (this.fileContainer != null && shouldValidateSize && !isFirstCompute) {
-      const rect = this.fileContainer.getBoundingClientRect();
-      if (rect.height !== this.height) {
-        console.log(
-          'VirtualizedFileDiff.computeApproximateSize: computed height doesnt match',
-          {
-            name: this.fileDiff.name,
-            elementHeight: rect.height,
-            computedHeight: this.height,
-          }
-        );
-      } else {
-        console.log(
-          'VirtualizedFileDiff.computeApproximateSize: computed height IS CORRECT'
-        );
-      }
+    if (shouldValidateSize && !isFirstCompute) {
+      this.validateComputedHeight();
     }
     this.layoutDirty = false;
+  }
+
+  private getActiveEstimatedHeight(): number {
+    this.ensureEstimatedDiffHeights();
+    const estimatedHeight =
+      this.getDiffStyle() === 'split'
+        ? this.cache.estimatedSplitHeight
+        : this.cache.estimatedUnifiedHeight;
+    if (estimatedHeight == null) {
+      throw new Error(
+        'VirtualizedFileDiff.getActiveEstimatedHeight: missing estimated height'
+      );
+    }
+    return estimatedHeight;
+  }
+
+  private ensureEstimatedDiffHeights(): void {
+    if (this.fileDiff == null) {
+      this.cache.estimatedSplitHeight = undefined;
+      this.cache.estimatedUnifiedHeight = undefined;
+      return;
+    }
+    if (
+      this.cache.estimatedSplitHeight != null &&
+      this.cache.estimatedUnifiedHeight != null
+    ) {
+      return;
+    }
+
+    const {
+      disableFileHeader = false,
+      expandUnchanged = false,
+      collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    } = this.options;
+    const { splitHeight, unifiedHeight } = computeEstimatedDiffHeights({
+      fileDiff: this.fileDiff,
+      metrics: this.metrics,
+      disableFileHeader,
+      hunkSeparators: this.getHunkSeparatorType(),
+      expandUnchanged,
+      expandedHunks: this.hunksRenderer.getExpandedHunksMap(),
+      collapsedContextThreshold,
+    });
+    this.cache.estimatedSplitHeight = splitHeight;
+    this.cache.estimatedUnifiedHeight = unifiedHeight;
+  }
+
+  private validateComputedHeight(): void {
+    if (this.fileContainer == null || this.fileDiff == null) {
+      return;
+    }
+
+    const rect = this.fileContainer.getBoundingClientRect();
+    if (rect.height !== this.height) {
+      console.log(
+        'VirtualizedFileDiff.computeApproximateSize: computed height doesnt match',
+        {
+          name: this.fileDiff.name,
+          elementHeight: rect.height,
+          computedHeight: this.height,
+        }
+      );
+    } else {
+      console.log(
+        'VirtualizedFileDiff.computeApproximateSize: computed height IS CORRECT'
+      );
+    }
   }
 
   override render({
@@ -1218,6 +1308,24 @@ function hasDiffLayoutOptionChanged<LAnnotation>(
       (nextOptions.collapsedContextThreshold ??
         DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) ||
     previousOptions.unsafeCSS !== nextOptions.unsafeCSS
+  );
+}
+
+function hasDiffEstimateOptionChanged<LAnnotation>(
+  previousOptions: FileDiffOptions<LAnnotation>,
+  nextOptions: FileDiffOptions<LAnnotation>
+): boolean {
+  return (
+    (previousOptions.disableFileHeader ?? false) !==
+      (nextOptions.disableFileHeader ?? false) ||
+    (previousOptions.hunkSeparators ?? 'line-info') !==
+      (nextOptions.hunkSeparators ?? 'line-info') ||
+    (previousOptions.expandUnchanged ?? false) !==
+      (nextOptions.expandUnchanged ?? false) ||
+    (previousOptions.collapsedContextThreshold ??
+      DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) !==
+      (nextOptions.collapsedContextThreshold ??
+        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD)
   );
 }
 

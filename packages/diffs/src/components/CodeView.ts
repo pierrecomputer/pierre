@@ -2997,9 +2997,9 @@ export class CodeView<LAnnotation = undefined> {
       }
       item.top = runningTop;
       if (item.type === 'diff') {
-        item.height = item.instance.prepareVirtualizedItem(item.item.fileDiff);
+        item.height = item.instance.prepareCodeViewItem(item.item.fileDiff);
       } else {
-        item.height = item.instance.prepareVirtualizedItem(item.item.file);
+        item.height = item.instance.prepareCodeViewItem(item.item.file);
       }
       runningTop += item.height;
       if (index < this.items.length - 1) {
@@ -3037,9 +3037,9 @@ function prepareItemInstance<LAnnotation>(
 ): number {
   item.instance.cleanUp(true);
   if (item.type === 'diff') {
-    return item.instance.prepareVirtualizedItem(item.item.fileDiff);
+    return item.instance.prepareCodeViewItem(item.item.fileDiff);
   } else {
-    return item.instance.prepareVirtualizedItem(item.item.file);
+    return item.instance.prepareCodeViewItem(item.item.file);
   }
 }
 
