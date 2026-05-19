@@ -9,7 +9,14 @@ import type {
 } from '@pierre/trees';
 import { themeToTreeStyles } from '@pierre/trees';
 import { FileTree, useFileTree } from '@pierre/trees/react';
-import { type CSSProperties, memo, useEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import type { FileTreePublicId } from '../../../../../../packages/trees/dist/model/publicTypes';
 import {
@@ -51,8 +58,15 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
   source,
 }: CodeViewFileTreeProps) {
   const { resolvedTheme } = useTheme();
-  const themeStyles =
-    resolvedTheme === 'dark' ? DARK_SOFT_TREE_STYLES : LIGHT_SOFT_TREE_STYLES;
+  const themeStyles = useMemo(
+    () => ({
+      ...(resolvedTheme === 'dark'
+        ? DARK_SOFT_TREE_STYLES
+        : LIGHT_SOFT_TREE_STYLES),
+      ...DENSITY_OVERRIDE_STYLES,
+    }),
+    [resolvedTheme]
+  );
   const sourceRef = useRef(source);
   const previousSourceRef = useRef(source);
   const [initialVisibleRowCount] = useState(getInitialBatchSize);
@@ -139,7 +153,7 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
     <FileTree
       className="h-full min-h-0 overflow-auto overscroll-contain md:ml-3"
       model={model}
-      style={{ ...themeStyles, ...DENSITY_OVERRIDE_STYLES }}
+      style={themeStyles}
     />
   );
 });
