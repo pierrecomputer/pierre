@@ -36,6 +36,24 @@ describe('getPatchViewerHref', () => {
       ).toBe('/owner/repo/commit/abc123def');
     });
 
+    test('PR changes tab scoped to a commit SHA', () => {
+      expect(
+        getPatchViewerHref(
+          'https://github.com/pierrecomputer/pierre/pull/692/changes/83fea5e63ef8751ddbcfabe33154bc2e096c3d85'
+        )
+      ).toBe(
+        '/pierrecomputer/pierre/commit/83fea5e63ef8751ddbcfabe33154bc2e096c3d85'
+      );
+    });
+
+    test('PR files tab scoped to a commit SHA', () => {
+      expect(
+        getPatchViewerHref(
+          'https://github.com/owner/repo/pull/123/files/abc1234'
+        )
+      ).toBe('/owner/repo/commit/abc1234');
+    });
+
     test('root github.com returns undefined', () => {
       expect(getPatchViewerHref('https://github.com/')).toBeUndefined();
     });
@@ -65,6 +83,16 @@ describe('getPatchViewerHref', () => {
     test('owner/repo/pull/123/changes', () => {
       expect(getPatchViewerHref('pierrecomputer/pierre/pull/673/changes')).toBe(
         '/pierrecomputer/pierre/pull/673'
+      );
+    });
+
+    test('owner/repo/pull/123/changes/{sha}', () => {
+      expect(
+        getPatchViewerHref(
+          'pierrecomputer/pierre/pull/692/changes/83fea5e63ef8751ddbcfabe33154bc2e096c3d85'
+        )
+      ).toBe(
+        '/pierrecomputer/pierre/commit/83fea5e63ef8751ddbcfabe33154bc2e096c3d85'
       );
     });
 
