@@ -98,7 +98,7 @@ export default function DiffshubHome() {
           </Link>{' '}
           and{' '}
           <Link
-            href="https://trees.com"
+            href="https://trees.software"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-link no-underline"
@@ -167,7 +167,7 @@ export default function DiffshubHome() {
             </Link>{' '}
             and{' '}
             <Link
-              href="https://trees.com"
+              href="https://trees.software"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-link no-underline"
