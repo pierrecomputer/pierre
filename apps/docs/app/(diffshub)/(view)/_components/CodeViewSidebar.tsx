@@ -62,6 +62,10 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   streaming,
 }: CodeViewSidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
+  let totalCommentCount = 0;
+  for (const section of commentSections) {
+    totalCommentCount += section.comments.length;
+  }
   const [activeStatusPanel, setActiveStatusPanel] =
     useState<SidebarStatusPanel | null>('diffStats');
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
@@ -143,10 +147,21 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             <ButtonGroupItem
               value="comments"
               size="icon-only"
-              className="shadow-none"
+              className={cn(
+                'shadow-none',
+                totalCommentCount > 0 && 'w-auto gap-1 pr-1'
+              )}
             >
               <IconComment className="size-4 md:size-3" />
               <span className="sr-only">Comments</span>
+              {totalCommentCount > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-neutral-200 px-1 text-[10px] leading-none font-medium text-neutral-700 tabular-nums dark:bg-neutral-700 dark:text-neutral-200"
+                >
+                  {totalCommentCount}
+                </span>
+              )}
             </ButtonGroupItem>
           </ButtonGroup>
           {activeTab === 'files' && fileTreeModel != null && (
@@ -186,6 +201,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             <CodeViewCommentsList
               commentSections={commentSections}
               onSelectComment={onSelectComment}
+              onSelectItem={onSelectItem}
             />
           </div>
         </div>

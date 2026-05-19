@@ -39,11 +39,17 @@ export type CodeViewCommentFileByItemId = ReadonlyMap<
   CodeViewCommentSidebarFile
 >;
 
+// Whether the line the comment is anchored to is a real addition/deletion or
+// an unchanged context line shown in the diff. Tracked so the sidebar can
+// render "Line N" without a misleading + / - sigil for context lines.
+export type CommentLineType = 'change' | 'context';
+
 export interface CodeViewSavedCommentEvent {
   author: string;
   itemId: string;
   key: string;
   lineNumber: number;
+  lineType: CommentLineType;
   message: string;
   range: SelectedLineRange;
   side: AnnotationSide;
@@ -59,6 +65,7 @@ export interface CodeViewSavedCommentEntry {
   itemId: string;
   key: string;
   lineNumber: number;
+  lineType: CommentLineType;
   message: string;
   range: SelectedLineRange;
   side: AnnotationSide;
