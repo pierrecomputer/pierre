@@ -12,6 +12,7 @@ const GITHUB_PULL_TAB_PATH_PATTERN =
   /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/(?:changes|files)$/;
 
 const CACHED_BLOBS = new Map<string, string>([
+  ['/nodejs/oven-sh/bun/pull/30412', 'https://blobs.diffs.wtf/30412.diff'],
   ['/nodejs/node/pull/59805', 'https://blobs.diffs.wtf/59805.diff'],
   ['/ghostty-org/ghostty/pull/12291', 'https://blobs.diffs.wtf/12291.diff'],
   [
