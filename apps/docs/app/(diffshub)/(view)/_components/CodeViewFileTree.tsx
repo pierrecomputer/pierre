@@ -44,6 +44,14 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
   const previousSourceRef = useRef(source);
   const [initialVisibleRowCount] = useState(getInitialBatchSize);
   sourceRef.current = source;
+  // `source.paths` aliases the streaming accumulator's live array, so it keeps
+  // growing on later publishes. The FileTree model consumes its path list
+  // exactly once via useFileTree's useState initializer; capture a bounded
+  // snapshot here so the first model build uses only what `pathCount`
+  // describes and so subsequent streaming re-renders don't re-slice the
+  // ever-growing live array.
+  const initialPathsRef = useRef<readonly string[] | null>(null);
+  initialPathsRef.current ??= source.paths.slice(0, source.pathCount);
   const sort = useStableCallback<CodeViewFileTreeSource['sort']>(
     (left, right) => sourceRef.current.sort(left, right)
   );
@@ -53,7 +61,7 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
         return;
       }
       const [path] = selectedPaths;
-      const itemId = source?.pathToItemId.get(path);
+      const itemId = sourceRef.current.pathToItemId.get(path);
       if (itemId != null) {
         onSelectItem(itemId);
       }
@@ -63,7 +71,7 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
   const { model } = useFileTree({
     ...BASE_FILE_TREE_OPTIONS,
     gitStatus: source.gitStatus,
-    paths: source.paths,
+    paths: initialPathsRef.current,
     sort,
     onSelectionChange,
     itemHeight: CODE_VIEW_FILE_TREE_ITEM_HEIGHT,
@@ -85,18 +93,18 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
     // turns tree publishes from O(N) each (where N is the total accumulated
     // path count) into O(delta), which keeps the Diff Stats counter fast as
     // more files stream in.
+    //
+    // Both snapshots alias the live accumulator's paths array, so we read the
+    // delta bounds from each snapshot's captured `pathCount` instead of the
+    // shared array's current length.
     if (
       source.previousSource != null &&
       source.previousSource === previousSource
     ) {
-      const previousPathCount = previousSource.paths.length;
-      if (source.paths.length > previousPathCount) {
+      const previousPathCount = previousSource.pathCount;
+      if (source.pathCount > previousPathCount) {
         const operations: FileTreeBatchOperation[] = [];
-        for (
-          let index = previousPathCount;
-          index < source.paths.length;
-          index++
-        ) {
+        for (let index = previousPathCount; index < source.pathCount; index++) {
           operations.push({ type: 'add', path: source.paths[index] });
         }
         if (operations.length > 0) {
@@ -104,7 +112,7 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
         }
       }
     } else {
-      model.resetPaths(source.paths);
+      model.resetPaths(source.paths.slice(0, source.pathCount));
     }
     model.setGitStatus(source.gitStatus);
   }, [model, source]);
