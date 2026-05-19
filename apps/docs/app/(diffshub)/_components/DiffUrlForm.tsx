@@ -1,7 +1,7 @@
 'use client';
 
 import { useStableCallback } from '@pierre/diffs/react';
-import { IconX } from '@pierre/icons';
+import { IconArrowUpRight, IconX } from '@pierre/icons';
 import { useRouter } from 'next/navigation';
 import {
   type FormEvent,
@@ -109,6 +109,9 @@ export function DiffUrlForm({
   const showClear =
     url.length > 0 &&
     (initialUrl === '' || url === initialUrl || validationError !== null);
+  // Only expose the external-link button when the input still reflects the
+  // committed URL — otherwise we'd be pointing at a draft the user is editing.
+  const showExternalLink = initialUrl !== '' && url === initialUrl;
 
   return (
     <form
@@ -163,6 +166,20 @@ export function DiffUrlForm({
           }}
         >
           <IconX className="size-4" />
+        </Button>
+      )}
+      {showExternalLink && (
+        <Button
+          asChild
+          variant="ghost"
+          size="icon-md"
+          aria-label="Open source in new tab"
+          title="Open source in new tab"
+          className="opacity-0 transition-opacity duration-200 will-change-auto group-focus-within:opacity-50 group-hover:opacity-50 hover:opacity-75"
+        >
+          <a href={initialUrl} target="_blank" rel="noreferrer noopener">
+            <IconArrowUpRight className="size-4" />
+          </a>
         </Button>
       )}
       {children?.(isPending, url)}
