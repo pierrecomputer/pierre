@@ -47,6 +47,7 @@ import { Switch } from '@/components/ui/switch';
 
 const LIGHT_THEMES = [
   'pierre-light',
+  'pierre-light-soft',
   'catppuccin-latte',
   'github-light',
   'one-light',
@@ -55,6 +56,7 @@ const LIGHT_THEMES = [
 
 const DARK_THEMES = [
   'pierre-dark',
+  'pierre-dark-soft',
   'catppuccin-mocha',
   'dracula',
   'github-dark',
@@ -83,8 +85,8 @@ type HunkSeparatorValue = (typeof HUNK_SEPARATOR_OPTIONS)[number]['value'];
 const DEFAULTS = {
   diffStyle: 'split',
   themeType: 'system',
-  lightTheme: 'pierre-light',
-  darkTheme: 'pierre-dark',
+  lightTheme: 'pierre-light-soft',
+  darkTheme: 'pierre-dark-soft',
   diffIndicators: 'bars',
   lineDiffType: 'word-alt',
   hunkSeparators: 'line-info' as HunkSeparatorValue,

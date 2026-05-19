@@ -65,7 +65,9 @@ const SAMPLE_NEW_FILE = {
 const THEMES = [
   // Pierre
   'pierre-light',
+  'pierre-light-soft',
   'pierre-dark',
+  'pierre-dark-soft',
 
   // GitHub
   'github-light',

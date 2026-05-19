@@ -46,7 +46,7 @@ const PoolOptions: WorkerPoolOptions = {
 };
 
 const HighlighterOptions: WorkerInitializationRenderOptions = {
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  theme: { dark: 'pierre-dark-soft', light: 'pierre-light-soft' },
   langs: [
     'cpp',
     'css',

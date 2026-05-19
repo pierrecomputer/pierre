@@ -132,7 +132,17 @@ registerCustomTheme('pierre-dark', async () => {
   return { ...theme, name: 'pierre-dark' } as ThemeRegistrationResolved;
 });
 
+registerCustomTheme('pierre-dark-soft', async () => {
+  const { default: theme } = await import('@pierre/theme/pierre-dark-soft');
+  return { ...theme, name: 'pierre-dark-soft' } as ThemeRegistrationResolved;
+});
+
 registerCustomTheme('pierre-light', async () => {
   const { default: theme } = await import('@pierre/theme/pierre-light');
   return { ...theme, name: 'pierre-light' } as ThemeRegistrationResolved;
+});
+
+registerCustomTheme('pierre-light-soft', async () => {
+  const { default: theme } = await import('@pierre/theme/pierre-light-soft');
+  return { ...theme, name: 'pierre-light-soft' } as ThemeRegistrationResolved;
 });

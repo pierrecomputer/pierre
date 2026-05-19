@@ -39,6 +39,7 @@ import { PRODUCTS } from '@/lib/product-config';
 
 const LIGHT_THEMES = [
   'pierre-light',
+  'pierre-light-soft',
   'catppuccin-latte',
   'everforest-light',
   'github-light',
@@ -61,6 +62,7 @@ const LIGHT_THEMES = [
 
 const DARK_THEMES = [
   'pierre-dark',
+  'pierre-dark-soft',
   'andromeeda',
   'aurora-x',
   'ayu-dark',
@@ -127,9 +129,9 @@ export function DemoThemingClient({
     initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.theming / 30,
   });
   const [selectedLightTheme, setSelectedLightTheme] =
-    useState<LightTheme>('pierre-light');
+    useState<LightTheme>('pierre-light-soft');
   const [selectedDarkTheme, setSelectedDarkTheme] =
-    useState<DarkTheme>('pierre-dark');
+    useState<DarkTheme>('pierre-dark-soft');
   const [colorMode, setColorMode] = useState<'system' | 'light' | 'dark'>(
     'system'
   );

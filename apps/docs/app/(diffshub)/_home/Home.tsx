@@ -65,7 +65,7 @@ const SOCIAL_LINKS = [
 
 export default function DiffshubHome() {
   return (
-    <div className="flex min-h-screen min-w-screen flex-col items-center justify-center md:bg-neutral-50 md:py-12 md:dark:bg-neutral-900">
+    <div className="flex min-h-screen min-w-screen flex-col items-center justify-center md:bg-neutral-50 md:py-12 md:dark:bg-[#101010]">
       <section className="relative flex min-h-[100dvh] w-2xl max-w-[100vw] flex-col justify-center space-y-4 px-6 pt-8 md:block md:min-h-0">
         <h2 className="flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
           <DiffsHubLogo />

@@ -25,6 +25,7 @@ import {
 
 const LIGHT_THEMES = [
   'pierre-light',
+  'pierre-light-soft',
   'catppuccin-latte',
   'everforest-light',
   'github-light',
@@ -47,6 +48,7 @@ const LIGHT_THEMES = [
 
 const DARK_THEMES = [
   'pierre-dark',
+  'pierre-dark-soft',
   'andromeeda',
   'aurora-x',
   'ayu-dark',
@@ -114,10 +116,10 @@ export function ShikiThemes({
   const themeObj = typeof options?.theme === 'object' ? options.theme : null;
   const [selectedLightTheme, setSelectedLightTheme] = useState<
     (typeof LIGHT_THEMES)[number]
-  >((themeObj?.light as 'pierre-light') ?? 'pierre-light');
+  >((themeObj?.light as 'pierre-light-soft') ?? 'pierre-light-soft');
   const [selectedDarkTheme, setSelectedDarkTheme] = useState<
     (typeof DARK_THEMES)[number]
-  >((themeObj?.dark as 'pierre-dark') ?? 'pierre-dark');
+  >((themeObj?.dark as 'pierre-dark-soft') ?? 'pierre-dark-soft');
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
   >('system');

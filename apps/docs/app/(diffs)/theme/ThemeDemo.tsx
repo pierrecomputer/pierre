@@ -17,7 +17,12 @@ import { cn } from '@/lib/utils';
 
 // Preload themes at module level for earliest possible start
 void preloadHighlighter({
-  themes: ['pierre-dark', 'pierre-light'],
+  themes: [
+    'pierre-dark',
+    'pierre-dark-soft',
+    'pierre-light',
+    'pierre-light-soft',
+  ],
   langs: ['tsx', 'html', 'css'],
 });
 
@@ -370,7 +375,7 @@ export function ThemeDemo() {
   const currentTab = TABS.find((t) => t.id === activeTab) ?? TABS[0];
 
   const isDark = colorMode === 'dark';
-  const themeName = isDark ? 'pierre-dark' : 'pierre-light';
+  const themeName = isDark ? 'pierre-dark-soft' : 'pierre-light-soft';
 
   // Consolidated color-mode-specific styles
   const styles = useMemo(
