@@ -2015,14 +2015,30 @@ function runMemoryChildBenchmark(
   }
 
   const implementation = getBenchmarkImplementation(implementationId);
-  const before = captureMemorySnapshot();
-  const result = runSingleImplementationBenchmark(
+  const storages = createCaseStorage([benchmarkCase]);
+  runImplementationCaseSet(
     implementation,
     [benchmarkCase],
-    config,
-    undefined
+    storages,
+    config.warmupRuns,
+    config.batchRuns,
+    false,
+    undefined,
+    'warmup'
+  );
+  const before = captureMemorySnapshot();
+  runImplementationCaseSet(
+    implementation,
+    [benchmarkCase],
+    storages,
+    config.runs,
+    config.batchRuns,
+    true,
+    undefined,
+    'timing'
   );
   const after = captureMemorySnapshot();
+  const result = summarizeBenchmarkRun([benchmarkCase], storages);
   const output: MemoryChildOutput = {
     implementation: implementation.id,
     implementationLabel: implementation.label,
@@ -2209,7 +2225,12 @@ interface MemoryComparisonRow {
   memoryBaseline: string;
   memoryCurrent: string;
   change: string;
+  changePercent: number;
 }
+type MemoryComparisonColumn = Exclude<
+  keyof MemoryComparisonRow,
+  'changePercent'
+>;
 
 function printFreshProcessMemoryTable(
   baselineOutputs: MemoryChildOutput[],
@@ -2218,24 +2239,35 @@ function printFreshProcessMemoryTable(
   const currentByCase = new Map(
     currentOutputs.map((output) => [output.caseLabel, output])
   );
-  const rows: MemoryComparisonRow[] = baselineOutputs.map((baseline) => {
-    const current = currentByCase.get(baseline.caseLabel);
-    if (current == null) {
-      throw new Error(
-        `Missing current memory output for ${baseline.caseLabel}`
-      );
-    }
-    return {
-      case: baseline.caseLabel,
-      memoryBaseline: formatMegabytes(baseline.memory.after.rss),
-      memoryCurrent: formatMegabytes(current.memory.after.rss),
-      change: formatMemoryChangePercent(
-        baseline.memory.after.rss,
-        current.memory.after.rss
-      ),
-    };
-  });
-  const headers: (keyof MemoryComparisonRow)[] = [
+  const rows: MemoryComparisonRow[] = baselineOutputs
+    .map((baseline) => {
+      const current = currentByCase.get(baseline.caseLabel);
+      if (current == null) {
+        throw new Error(
+          `Missing current memory output for ${baseline.caseLabel}`
+        );
+      }
+      return {
+        case: baseline.caseLabel,
+        memoryBaseline: formatMegabytes(baseline.memory.after.rss),
+        memoryCurrent: formatMegabytes(current.memory.after.rss),
+        change: formatMemoryChangePercent(
+          baseline.memory.after.rss,
+          current.memory.after.rss
+        ),
+        changePercent: percentDelta(
+          baseline.memory.after.rss,
+          current.memory.after.rss
+        ),
+      };
+    })
+    .sort((left, right) => {
+      const changeDelta = left.changePercent - right.changePercent;
+      return changeDelta !== 0
+        ? changeDelta
+        : left.case.localeCompare(right.case);
+    });
+  const headers: MemoryComparisonColumn[] = [
     'case',
     'memoryBaseline',
     'memoryCurrent',
@@ -2254,6 +2286,7 @@ function printFreshProcessMemoryTable(
     memoryBaseline: 'memoryBaseline',
     memoryCurrent: 'memoryCurrent',
     change: 'change',
+    changePercent: 0,
   };
 
   console.log(formatRow(headerRow));
@@ -2273,19 +2306,32 @@ interface SingleMemoryRow {
   memoryBefore: string;
   memoryAfter: string;
   change: string;
+  changePercent: number;
 }
+type SingleMemoryColumn = Exclude<keyof SingleMemoryRow, 'changePercent'>;
 
 function printFreshProcessSingleMemoryTable(outputs: MemoryChildOutput[]) {
-  const rows: SingleMemoryRow[] = outputs.map((output) => ({
-    case: output.caseLabel,
-    memoryBefore: formatMegabytes(output.memory.before.rss),
-    memoryAfter: formatMegabytes(output.memory.after.rss),
-    change: formatMemoryChangePercent(
-      output.memory.before.rss,
-      output.memory.after.rss
-    ),
-  }));
-  const headers: (keyof SingleMemoryRow)[] = [
+  const rows: SingleMemoryRow[] = outputs
+    .map((output) => ({
+      case: output.caseLabel,
+      memoryBefore: formatMegabytes(output.memory.before.rss),
+      memoryAfter: formatMegabytes(output.memory.after.rss),
+      change: formatMemoryChangePercent(
+        output.memory.before.rss,
+        output.memory.after.rss
+      ),
+      changePercent: percentDelta(
+        output.memory.before.rss,
+        output.memory.after.rss
+      ),
+    }))
+    .sort((left, right) => {
+      const changeDelta = left.changePercent - right.changePercent;
+      return changeDelta !== 0
+        ? changeDelta
+        : left.case.localeCompare(right.case);
+    });
+  const headers: SingleMemoryColumn[] = [
     'case',
     'memoryBefore',
     'memoryAfter',
@@ -2304,6 +2350,7 @@ function printFreshProcessSingleMemoryTable(outputs: MemoryChildOutput[]) {
     memoryBefore: 'memoryBefore',
     memoryAfter: 'memoryAfter',
     change: 'change',
+    changePercent: 0,
   };
 
   console.log(formatRow(headerRow));
