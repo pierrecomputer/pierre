@@ -1,5 +1,6 @@
 'use client';
 
+import { DEFAULT_THEMES } from '@pierre/diffs';
 import {
   type WorkerInitializationRenderOptions,
   WorkerPoolContextProvider,
@@ -45,8 +46,13 @@ const PoolOptions: WorkerPoolOptions = {
   },
 };
 
+const SITE = process.env.NEXT_PUBLIC_SITE;
+
 const HighlighterOptions: WorkerInitializationRenderOptions = {
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  theme:
+    SITE === 'diffshub'
+      ? { dark: 'pierre-dark-soft', light: 'pierre-light-soft' }
+      : DEFAULT_THEMES,
   langs: [
     'cpp',
     'css',

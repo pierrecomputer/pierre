@@ -65,7 +65,7 @@ const SOCIAL_LINKS = [
 
 export default function DiffshubHome() {
   return (
-    <div className="flex min-h-screen min-w-screen flex-col items-center justify-center md:bg-neutral-50 md:py-12 md:dark:bg-neutral-900">
+    <div className="flex min-h-screen min-w-screen flex-col items-center justify-center md:bg-[var(--diffshub-sidebar-bg)] md:py-12">
       <section className="relative flex min-h-[100dvh] w-2xl max-w-[100vw] flex-col justify-center space-y-4 px-6 pt-8 md:block md:min-h-0">
         <h2 className="flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
           <DiffsHubLogo />
@@ -73,7 +73,8 @@ export default function DiffshubHome() {
         </h2>
         <p className="text-muted-foreground text-pretty">
           View code changes from any public GitHub diff or patch URL with a
-          super-freaking-fast, beautiful, and virtualized interface. Built by{' '}
+          super-freaking-fast, beautiful, and virtualized interface by replacing{' '}
+          <code>github.com</code> with <code>diffshub.com</code>. Built by{' '}
           <Link
             href="https://pierre.computer"
             target="_blank"
@@ -82,35 +83,7 @@ export default function DiffshubHome() {
           >
             The Pierre Computer Company
           </Link>{' '}
-          using{' '}
-          <Link
-            href="https://diffs.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-link group no-underline"
-          >
-            <code className="text-foreground/75">
-              @
-              <code className="decoration-muted-foreground group-hover:decoration-foreground group-transition-all underline decoration-[1px] underline-offset-3">
-                pierre/diffs
-              </code>
-            </code>
-          </Link>{' '}
-          and{' '}
-          <Link
-            href="https://trees.software"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-link no-underline"
-          >
-            <code className="text-foreground/75">
-              @
-              <code className="decoration-muted-foreground group-hover:decoration-foreground group-transition-all underline decoration-[1px] underline-offset-3">
-                pierre/trees
-              </code>
-            </code>
-          </Link>
-          .
+          using the new CodeView component.
         </p>
         <HomeFetchForm />
         <div className="mb-5 space-y-2">

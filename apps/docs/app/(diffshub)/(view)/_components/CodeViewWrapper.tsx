@@ -4,7 +4,6 @@ import {
   type CodeViewItem,
   type CodeViewLineSelection,
   type CodeViewOptions,
-  DEFAULT_THEMES,
   type DiffIndicators,
   type DiffLineAnnotation,
   type LineAnnotation,
@@ -412,7 +411,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         // Use this to validate itemMetrics when changing layout with unsafeCSS.
         // __devOnlyValidateItemHeights: true,
         layout: CODE_VIEW_LAYOUT,
-        theme: DEFAULT_THEMES,
+        theme: { dark: 'pierre-dark-soft', light: 'pierre-light-soft' },
         diffStyle,
         diffIndicators,
         overflow,

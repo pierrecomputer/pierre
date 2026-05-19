@@ -47,6 +47,7 @@ import { Switch } from '@/components/ui/switch';
 
 const LIGHT_THEMES = [
   'pierre-light',
+  'pierre-light-soft',
   'catppuccin-latte',
   'github-light',
   'one-light',
@@ -55,6 +56,7 @@ const LIGHT_THEMES = [
 
 const DARK_THEMES = [
   'pierre-dark',
+  'pierre-dark-soft',
   'catppuccin-mocha',
   'dracula',
   'github-dark',

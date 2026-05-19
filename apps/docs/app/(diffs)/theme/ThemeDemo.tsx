@@ -17,7 +17,12 @@ import { cn } from '@/lib/utils';
 
 // Preload themes at module level for earliest possible start
 void preloadHighlighter({
-  themes: ['pierre-dark', 'pierre-light'],
+  themes: [
+    'pierre-dark',
+    'pierre-dark-soft',
+    'pierre-light',
+    'pierre-light-soft',
+  ],
   langs: ['tsx', 'html', 'css'],
 });
 

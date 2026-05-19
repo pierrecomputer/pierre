@@ -48,6 +48,7 @@
         "@icons-pack/react-simple-icons": "catalog:",
         "@pierre/diffs": "workspace:*",
         "@pierre/icons": "catalog:",
+        "@pierre/theme": "catalog:",
         "@pierre/tree-test-data": "workspace:*",
         "@pierre/trees": "workspace:*",
         "@pierre/truncate": "workspace:*",
@@ -104,7 +105,7 @@
     },
     "packages/diffs": {
       "name": "@pierre/diffs",
-      "version": "1.2.0-beta.0",
+      "version": "1.2.0-beta.6",
       "dependencies": {
         "@pierre/theme": "catalog:",
         "@shikijs/transformers": "^3.0.0",
@@ -262,7 +263,7 @@
     "@octokit/rest": "22.0.0",
     "@pierre/icons": "0.5.0",
     "@pierre/storage": "0.0.10",
-    "@pierre/theme": "0.0.28",
+    "@pierre/theme": "1.0.3",
     "@pierre/vscode-icons": "0.0.9",
     "@playwright/test": "1.51.1",
     "@radix-ui/react-avatar": "1.1.10",
@@ -649,7 +650,7 @@
 
     "@pierre/storage-elements-next": ["@pierre/storage-elements-next@workspace:packages/storage-elements-next"],
 
-    "@pierre/theme": ["@pierre/theme@0.0.28", "", {}, "sha512-1j/H/fECBuc9dEvntdWI+l435HZapw+RCJTlqCA6BboQ5TjlnE005j/ROWutXIs8aq5OAc82JI2Kwk4A1WWBgw=="],
+    "@pierre/theme": ["@pierre/theme@1.0.3", "", {}, "sha512-sWHv11TMoqKxKDgTIk5VbhQjdPhs8DCcBxbjh3mRlS3YOM/OcrWoGX6MM8eBGn9cUu3M46Py0JnxsG2nJaFTuA=="],
 
     "@pierre/tree-test-data": ["@pierre/tree-test-data@workspace:packages/tree-test-data"],
 

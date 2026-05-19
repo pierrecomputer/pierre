@@ -52,7 +52,9 @@ export type {
 export type DiffsThemeNames =
   | BundledTheme
   | 'pierre-dark'
+  | 'pierre-dark-soft'
   | 'pierre-light'
+  | 'pierre-light-soft'
   | (string & {});
 
 export type ThemesType = Record<'dark' | 'light', DiffsThemeNames>;
