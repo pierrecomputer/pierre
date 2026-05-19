@@ -1,8 +1,10 @@
 import type { DiffIndicators } from '@pierre/diffs';
 import {
   IconCodeStyleBars,
+  IconCollapsedRow,
   IconDiffSplit,
   IconDiffUnified,
+  IconExpandAll,
   IconEyeSlash,
   IconFileTreeFill,
   IconGearFill,
@@ -30,6 +32,7 @@ const SETTING_ROW_CLASS =
 
 interface HeaderProps {
   className?: string;
+  collapseMode: 'expanded' | 'collapsed';
   diffIndicators: DiffIndicators;
   diffStyle: 'split' | 'unified';
   fileTreeAvailable: boolean;
@@ -37,6 +40,7 @@ interface HeaderProps {
   initialUrl: string;
   lineNumbers: boolean;
   overflow: 'wrap' | 'scroll';
+  onToggleCollapseMode(): void;
   onToggleFileTreeOverlay(): void;
   setDiffIndicators: Dispatch<SetStateAction<DiffIndicators>>;
   setDiffStyle: Dispatch<SetStateAction<'split' | 'unified'>>;
@@ -48,6 +52,7 @@ interface HeaderProps {
 
 export const CodeViewHeader = memo(function CodeViewHeader({
   className,
+  collapseMode,
   diffIndicators,
   diffStyle,
   fileTreeAvailable,
@@ -55,6 +60,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   initialUrl,
   lineNumbers,
   overflow,
+  onToggleCollapseMode,
   onToggleFileTreeOverlay,
   setDiffIndicators,
   setDiffStyle,
@@ -137,6 +143,25 @@ export const CodeViewHeader = memo(function CodeViewHeader({
                 <IconDiffSplit className="size-4 md:size-3" />
               ) : (
                 <IconDiffUnified className="size-4 md:size-3" />
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-md"
+              aria-pressed={collapseMode === 'collapsed'}
+              title={
+                collapseMode === 'expanded'
+                  ? 'Collapse all files'
+                  : 'Expand all files'
+              }
+              className="hover:text-muted-foreground hover:bg-transparent"
+              onClick={onToggleCollapseMode}
+            >
+              {collapseMode === 'expanded' ? (
+                <IconExpandAll className="size-4 md:size-3" />
+              ) : (
+                <IconCollapsedRow className="size-4 md:size-3" />
               )}
             </Button>
             <DropdownMenu>

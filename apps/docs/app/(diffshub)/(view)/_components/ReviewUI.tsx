@@ -38,6 +38,9 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
 
   const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
+  const [collapseMode, setCollapseMode] = useState<'expanded' | 'collapsed'>(
+    'expanded'
+  );
   const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
   const [showBackgrounds, setShowBackgrounds] = useState(true);
@@ -49,6 +52,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
     setFileTreeOverlayOpen(false);
   }, []);
   const {
+    applyCollapseModeToLoaded,
     commentFileByItemId,
     commentSections,
     diffStats,
@@ -62,6 +66,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
     treeSource,
     viewerKey,
   } = usePatchLoader({
+    collapseMode,
     domain,
     onLoadStart: handlePatchLoadStart,
     path,
@@ -84,13 +89,28 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   }, []);
   const handleSelectTreeItem = useCallback((itemId: string) => {
     setFileTreeOverlayOpen(false);
-    viewerRef.current?.scrollTo({
+    const viewer = viewerRef.current;
+    if (viewer == null) {
+      return;
+    }
+    const item = viewer.getItem(itemId);
+    if (item != null && item.collapsed === true) {
+      item.collapsed = false;
+      item.version = typeof item.version === 'number' ? item.version + 1 : 1;
+      viewer.updateItem(item);
+    }
+    viewer.scrollTo({
       type: 'item',
       id: itemId,
       align: 'start',
       behavior: 'smooth',
     });
   }, []);
+  const handleToggleCollapseMode = useCallback(() => {
+    const next = collapseMode === 'expanded' ? 'collapsed' : 'expanded';
+    setCollapseMode(next);
+    applyCollapseModeToLoaded(next);
+  }, [applyCollapseModeToLoaded, collapseMode]);
   const handleCommentSaved = useCallback(
     (comment: CodeViewSavedCommentEvent) => {
       setCommentSections((prev) =>
@@ -140,6 +160,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
     <ReviewGrid>
       <CodeViewHeader
         className="[grid-area:header]"
+        collapseMode={collapseMode}
         diffIndicators={diffIndicators}
         diffStyle={diffStyle}
         initialUrl={initialUrl}
@@ -147,6 +168,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
         overflow={overflow}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
         fileTreeAvailable={treeSource != null}
+        onToggleCollapseMode={handleToggleCollapseMode}
         onToggleFileTreeOverlay={handleToggleFileTreeOverlay}
         setDiffIndicators={setDiffIndicators}
         setDiffStyle={setDiffStyle}

@@ -54,6 +54,7 @@ const GENERIC_PATCH_LOAD_ERROR_MESSAGE =
   'We couldn’t load that diff. Check the URL and try again.';
 
 interface UsePatchLoaderOptions {
+  collapseMode: 'expanded' | 'collapsed';
   domain?: string;
   onLoadStart(): void;
   path: string;
@@ -61,6 +62,7 @@ interface UsePatchLoaderOptions {
 }
 
 interface UsePatchLoaderResult {
+  applyCollapseModeToLoaded(mode: 'expanded' | 'collapsed'): void;
   commentFileByItemId: CodeViewCommentFileByItemId | null;
   commentSections: CodeViewSavedCommentItem[];
   diffStats: CodeViewDiffStats | null;
@@ -76,6 +78,7 @@ interface UsePatchLoaderResult {
 }
 
 export function usePatchLoader({
+  collapseMode,
   domain,
   onLoadStart,
   path,
@@ -103,6 +106,76 @@ export function usePatchLoader({
   const requestIdRef = useRef(0);
   const appliedLineHashKeyRef = useRef<string | null>(null);
   const viewerKeyRef = useRef(0);
+  // Tracks the ids of every item that has been handed to the viewer so we can
+  // walk the full set when the user toggles collapse mode. The viewer handle
+  // does not expose an enumeration API, so we maintain our own index.
+  const loadedItemIdsRef = useRef<Set<string>>(new Set());
+  // Mirrors the latest collapse mode so the streaming code path (which lives
+  // inside a long-lived effect/closure) can read the live value without us
+  // having to re-bind it on every change.
+  const collapseModeRef = useRef(collapseMode);
+  collapseModeRef.current = collapseMode;
+
+  // Pre-mutates fresh items so they arrive in the viewer matching the current
+  // collapse mode, then records their ids for later bulk updates. Diff items
+  // are normalized in both directions because the accumulator initializes
+  // deleted-file diffs as collapsed by default — without an unconditional
+  // overwrite, those would stay collapsed even when the user is in expanded
+  // mode.
+  const prepareItemsForViewer = (
+    items: readonly CodeViewItem<CommentMetadata>[]
+  ): void => {
+    const targetCollapsed = collapseModeRef.current === 'collapsed';
+    for (const item of items) {
+      loadedItemIdsRef.current.add(item.id);
+      if (item.type === 'diff') {
+        item.collapsed = targetCollapsed;
+      }
+    }
+  };
+
+  const applyCollapseModeToLoaded = useStableCallback(
+    (mode: 'expanded' | 'collapsed') => {
+      const targetCollapsed = mode === 'collapsed';
+      const viewer = viewerRef.current;
+      if (viewer == null) {
+        // The viewer hasn't mounted yet (e.g. the worker pool is still warming
+        // up while the header is already interactive). Rewrite any items
+        // already buffered in initialItems so they arrive in the right state
+        // once the viewer mounts. New items still streaming in pick up the
+        // live collapse mode through prepareItemsForViewer.
+        setInitialItems((prev) => {
+          let changed = false;
+          const next = prev.map((item) => {
+            if (
+              item.type !== 'diff' ||
+              (item.collapsed === true) === targetCollapsed
+            ) {
+              return item;
+            }
+            changed = true;
+            return { ...item, collapsed: targetCollapsed };
+          });
+          return changed ? next : prev;
+        });
+        return;
+      }
+
+      for (const itemId of loadedItemIdsRef.current) {
+        const item = viewer.getItem(itemId);
+        if (item == null || item.type !== 'diff') {
+          continue;
+        }
+        const current = item.collapsed === true;
+        if (current === targetCollapsed) {
+          continue;
+        }
+        item.collapsed = targetCollapsed;
+        item.version = getNextItemVersion(item);
+        viewer.updateItem(item);
+      }
+    }
+  );
 
   const tryApplyLineHashTarget = useStableCallback(() => {
     const { hash } = window.location;
@@ -153,6 +226,7 @@ export function usePatchLoader({
 
     viewerKeyRef.current = requestId;
     appliedLineHashKeyRef.current = null;
+    loadedItemIdsRef.current = new Set();
     setViewerKey(requestId);
     setInitialItems([]);
     setTreeSource(null);
@@ -185,6 +259,7 @@ export function usePatchLoader({
           setCommentFileByItemId(loadedData.itemIdToFile);
           setCommentSections([]);
           setDiffStats(loadedData.diffStats);
+          prepareItemsForViewer(loadedData.items);
           setInitialItems(loadedData.items);
           setLoadState('ready');
           await yieldToBrowser();
@@ -258,6 +333,7 @@ export function usePatchLoader({
           pendingPublishFileCount = 0;
           lastPublishTime = performance.now();
           const pendingItems = takePendingCodeViewItems(accumulator);
+          prepareItemsForViewer(pendingItems);
           if (!hasPublishedInitialItems) {
             hasPublishedInitialItems = true;
             publishTreeSource();
@@ -354,6 +430,9 @@ export function usePatchLoader({
           );
           if (itemIdRename != null) {
             applyCodeViewItemIdRename(viewerRef.current, itemIdRename);
+            if (loadedItemIdsRef.current.delete(itemIdRename.oldId)) {
+              loadedItemIdsRef.current.add(itemIdRename.newId);
+            }
           }
           pendingPublishFileCount++;
           pendingTreePublishFileCount++;
@@ -429,6 +508,7 @@ export function usePatchLoader({
   }, []);
 
   return {
+    applyCollapseModeToLoaded,
     commentFileByItemId,
     commentSections,
     diffStats,
