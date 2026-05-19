@@ -5,6 +5,7 @@ import type {
   Hunk,
   HunkExpansionRegion,
 } from '../types';
+import { getExpandedRegion } from './virtualDiffLayout';
 
 export interface DiffLineMetadata {
   unifiedLineIndex: number;
@@ -227,13 +228,13 @@ export function iterateOverDiff({
       break;
     }
 
-    const leadingRegion = getExpandedRegion(
-      diff.isPartial,
-      hunk.collapsedBefore,
+    const leadingRegion = getExpandedRegion({
+      isPartial: diff.isPartial,
+      rangeSize: hunk.collapsedBefore,
       expandedHunks,
       hunkIndex,
-      collapsedContextThreshold
-    );
+      collapsedContextThreshold,
+    });
     // We only create a trailing region if it's the last hunk
     const trailingRegion = (() => {
       if (hunk !== state.finalHunk || !hasFinalCollapsedHunk(diff)) {
@@ -252,14 +253,14 @@ export function iterateOverDiff({
         );
       }
       const trailingRangeSize = Math.min(additionRemaining, deletionRemaining);
-      return getExpandedRegion(
-        diff.isPartial,
-        trailingRangeSize,
+      return getExpandedRegion({
+        isPartial: diff.isPartial,
+        rangeSize: trailingRangeSize,
         expandedHunks,
         // hunkIndex for trailing region
-        diff.hunks.length,
-        collapsedContextThreshold
-      );
+        hunkIndex: diff.hunks.length,
+        collapsedContextThreshold,
+      });
     })();
     const expandedLineCount = leadingRegion.fromStart + leadingRegion.fromEnd;
 
@@ -731,26 +732,26 @@ function getHunkPrefixCounts({
       throw new Error('iterateOverDiff: invalid hunk summary index');
     }
 
-    const leadingRegion = getExpandedRegion(
-      diff.isPartial,
-      hunk.collapsedBefore,
+    const leadingRegion = getExpandedRegion({
+      isPartial: diff.isPartial,
+      rangeSize: hunk.collapsedBefore,
       expandedHunks,
-      index,
-      collapsedContextThreshold
-    );
+      hunkIndex: index,
+      collapsedContextThreshold,
+    });
     const leadingCount = leadingRegion.fromStart + leadingRegion.fromEnd;
     splitCount += leadingCount + hunk.splitLineCount;
     unifiedCount += leadingCount + hunk.unifiedLineCount;
 
     if (index === finalHunkIndex && hasFinalCollapsedHunk(diff)) {
       const trailingRangeSize = getTrailingRangeSize(diff, hunk);
-      const trailingRegion = getExpandedRegion(
-        diff.isPartial,
-        trailingRangeSize,
+      const trailingRegion = getExpandedRegion({
+        isPartial: diff.isPartial,
+        rangeSize: trailingRangeSize,
         expandedHunks,
-        diff.hunks.length,
-        collapsedContextThreshold
-      );
+        hunkIndex: diff.hunks.length,
+        collapsedContextThreshold,
+      });
       const trailingCount = trailingRegion.fromStart + trailingRegion.fromEnd;
       splitCount += trailingCount;
       unifiedCount += trailingCount;
@@ -820,50 +821,6 @@ function getTrailingRangeSize(diff: FileDiffMetadata, hunk: Hunk): number {
     );
   }
   return Math.min(additionRemaining, deletionRemaining);
-}
-
-interface ExpandedRegionResult {
-  fromStart: number;
-  fromEnd: number;
-  rangeSize: number;
-  collapsedLines: number;
-}
-
-function getExpandedRegion(
-  isPartial: boolean,
-  rangeSize: number,
-  expandedHunks: Map<number, HunkExpansionRegion> | true | undefined,
-  hunkIndex: number,
-  collapsedContextThreshold: number
-): ExpandedRegionResult {
-  rangeSize = Math.max(rangeSize, 0);
-  if (rangeSize === 0 || isPartial) {
-    return {
-      fromStart: 0,
-      fromEnd: 0,
-      rangeSize,
-      collapsedLines: Math.max(rangeSize, 0),
-    };
-  }
-  if (expandedHunks === true || rangeSize <= collapsedContextThreshold) {
-    return {
-      fromStart: rangeSize,
-      fromEnd: 0,
-      rangeSize,
-      collapsedLines: 0,
-    };
-  }
-  const region = expandedHunks?.get(hunkIndex);
-  const fromStart = Math.min(Math.max(region?.fromStart ?? 0, 0), rangeSize);
-  const fromEnd = Math.min(Math.max(region?.fromEnd ?? 0, 0), rangeSize);
-  const expandedCount = fromStart + fromEnd;
-  const renderAll = expandedCount >= rangeSize;
-  return {
-    fromStart: renderAll ? rangeSize : fromStart,
-    fromEnd: renderAll ? 0 : fromEnd,
-    rangeSize,
-    collapsedLines: Math.max(rangeSize - expandedCount, 0),
-  };
 }
 
 function hasFinalCollapsedHunk(diff: FileDiffMetadata): boolean {
