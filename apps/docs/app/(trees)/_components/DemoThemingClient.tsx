@@ -129,9 +129,9 @@ export function DemoThemingClient({
     initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.theming / 30,
   });
   const [selectedLightTheme, setSelectedLightTheme] =
-    useState<LightTheme>('pierre-light-soft');
+    useState<LightTheme>('pierre-light');
   const [selectedDarkTheme, setSelectedDarkTheme] =
-    useState<DarkTheme>('pierre-dark-soft');
+    useState<DarkTheme>('pierre-dark');
   const [colorMode, setColorMode] = useState<'system' | 'light' | 'dark'>(
     'system'
   );

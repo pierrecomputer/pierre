@@ -73,7 +73,8 @@ export default function DiffshubHome() {
         </h2>
         <p className="text-muted-foreground text-pretty">
           View code changes from any public GitHub diff or patch URL with a
-          super-freaking-fast, beautiful, and virtualized interface. Built by{' '}
+          super-freaking-fast, beautiful, and virtualized interface by replacing{' '}
+          <code>github.com</code> with <code>diffshub.com</code>. Built by{' '}
           <Link
             href="https://pierre.computer"
             target="_blank"
@@ -82,36 +83,9 @@ export default function DiffshubHome() {
           >
             The Pierre Computer Company
           </Link>{' '}
-          using{' '}
-          <Link
-            href="https://diffs.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-link group no-underline"
-          >
-            <code className="text-foreground/75">
-              @
-              <code className="decoration-muted-foreground group-hover:decoration-foreground group-transition-all underline decoration-[1px] underline-offset-3">
-                pierre/diffs
-              </code>
-            </code>
-          </Link>{' '}
-          and{' '}
-          <Link
-            href="https://trees.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-link no-underline"
-          >
-            <code className="text-foreground/75">
-              @
-              <code className="decoration-muted-foreground group-hover:decoration-foreground group-transition-all underline decoration-[1px] underline-offset-3">
-                pierre/trees
-              </code>
-            </code>
-          </Link>
-          .
+          using the new CodeView component.
         </p>
+        - github.com/org/repo/pull/number + diffshub.com/org/repo/pull/number
         <HomeFetchForm />
         <div className="mb-5 space-y-2">
           <h3 className="text-muted-foreground text-sm font-normal">

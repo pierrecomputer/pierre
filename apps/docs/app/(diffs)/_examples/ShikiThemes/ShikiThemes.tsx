@@ -116,10 +116,10 @@ export function ShikiThemes({
   const themeObj = typeof options?.theme === 'object' ? options.theme : null;
   const [selectedLightTheme, setSelectedLightTheme] = useState<
     (typeof LIGHT_THEMES)[number]
-  >((themeObj?.light as 'pierre-light-soft') ?? 'pierre-light-soft');
+  >((themeObj?.light as 'pierre-light') ?? 'pierre-light');
   const [selectedDarkTheme, setSelectedDarkTheme] = useState<
     (typeof DARK_THEMES)[number]
-  >((themeObj?.dark as 'pierre-dark-soft') ?? 'pierre-dark-soft');
+  >((themeObj?.dark as 'pierre-dark') ?? 'pierre-dark');
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
   >('system');

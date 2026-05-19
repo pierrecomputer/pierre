@@ -85,8 +85,8 @@ type HunkSeparatorValue = (typeof HUNK_SEPARATOR_OPTIONS)[number]['value'];
 const DEFAULTS = {
   diffStyle: 'split',
   themeType: 'system',
-  lightTheme: 'pierre-light-soft',
-  darkTheme: 'pierre-dark-soft',
+  lightTheme: 'pierre-light',
+  darkTheme: 'pierre-dark',
   diffIndicators: 'bars',
   lineDiffType: 'word-alt',
   hunkSeparators: 'line-info' as HunkSeparatorValue,

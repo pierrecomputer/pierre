@@ -375,7 +375,7 @@ export function ThemeDemo() {
   const currentTab = TABS.find((t) => t.id === activeTab) ?? TABS[0];
 
   const isDark = colorMode === 'dark';
-  const themeName = isDark ? 'pierre-dark-soft' : 'pierre-light-soft';
+  const themeName = isDark ? 'pierre-dark' : 'pierre-light';
 
   // Consolidated color-mode-specific styles
   const styles = useMemo(

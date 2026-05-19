@@ -45,8 +45,8 @@ export const HEADER_METADATA_SLOT_ID = 'header-metadata';
 export const CUSTOM_HEADER_SLOT_ID = 'header-custom';
 
 export const DEFAULT_THEMES: ThemesType = {
-  dark: 'pierre-dark-soft',
-  light: 'pierre-light-soft',
+  dark: 'pierre-dark',
+  light: 'pierre-light',
 };
 
 export const THEME_CSS_ATTRIBUTE = 'data-theme-css';
