@@ -62,6 +62,7 @@
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "benchmark:parse-merge-conflict": "bun run ./scripts/benchmarkParseMergeConflictDiffFromFile.ts",
     "benchmark:iterate-over-diff": "bun run ./scripts/benchmarkIterateOverDiff.ts",
+    "benchmark:iterate-over-diff:browser": "bun run ./scripts/benchmarkIterateOverDiffBrowser.ts",
     "benchmark:iterate-over-diff:compare": "bun run ./scripts/compareIterateOverDiffBenchmark.ts",
     "benchmark:iterate-over-diff:fixture": "bun run ./scripts/generateIterateOverDiffFixture.ts",
     "test": "bun test",
@@ -78,6 +79,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",
+    "@playwright/test": "catalog:",
     "@types/hast": "catalog:",
     "@types/jsdom": "catalog:",
     "@types/react": "catalog:",

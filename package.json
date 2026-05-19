@@ -116,6 +116,7 @@
     "demo:build": "(cd apps/demo && bun run build)",
     "docs:build": "(cd apps/docs && bun run build)",
     "benchmark:iterate-over-diff": "bun run ws diffs benchmark:iterate-over-diff",
+    "benchmark:iterate-over-diff:browser": "bun run ws diffs benchmark:iterate-over-diff:browser",
     "benchmark:iterate-over-diff:compare": "bun run ws diffs benchmark:iterate-over-diff:compare",
     "benchmark:iterate-over-diff:fixture": "bun run ws diffs benchmark:iterate-over-diff:fixture",
     "chrome": "./scripts/chrome-remote-debug.sh"

@@ -12,9 +12,9 @@ import type {
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 
-type DiffStyle = 'unified' | 'split' | 'both';
+export type DiffStyle = 'unified' | 'split' | 'both';
 
-type CallbackMode =
+export type CallbackMode =
   | 'noop'
   | 'checksum'
   | 'highlighter-ingest'
@@ -24,9 +24,9 @@ type CallbackMode =
   | 'scroll-anchor'
   | 'render-range';
 
-type BenchmarkPreset = 'smoke' | 'standard' | 'exhaustive' | 'stress';
+export type BenchmarkPreset = 'smoke' | 'standard' | 'exhaustive' | 'stress';
 
-interface FixtureSummary {
+export interface FixtureSummary {
   rank: number;
   name: string;
   type: FileDiffMetadata['type'];
@@ -39,13 +39,13 @@ interface FixtureSummary {
   deletionLines: number;
 }
 
-interface FixtureEntry {
+export interface FixtureEntry {
   rank: number;
   summary: FixtureSummary;
   diff: FileDiffMetadata;
 }
 
-interface IterateOverDiffFixture {
+export interface IterateOverDiffFixture {
   benchmark: 'iterateOverDiff';
   sourcePatch: string;
   rankMetric: string;
@@ -53,7 +53,7 @@ interface IterateOverDiffFixture {
   files: FixtureEntry[];
 }
 
-interface BenchmarkFixture {
+export interface BenchmarkFixture {
   id: string;
   label: string;
   source: 'real-patch' | 'synthetic';
@@ -61,9 +61,10 @@ interface BenchmarkFixture {
   diff: FileDiffMetadata;
 }
 
-interface BenchmarkConfig {
+export interface BenchmarkConfig {
   runs: number;
   warmupRuns: number;
+  batchRuns: number;
   preset: BenchmarkPreset;
   outputJson: boolean;
   measureMemory: boolean;
@@ -77,7 +78,7 @@ interface BenchmarkConfig {
   fixturePath: string;
 }
 
-interface BenchmarkCase {
+export interface BenchmarkCase {
   label: string;
   fixture: BenchmarkFixture;
   mode: CallbackMode;
@@ -133,13 +134,13 @@ interface BenchmarkImplementation {
   run(props: IterateOverDiffProps): void;
 }
 
-interface BenchmarkRunSummary {
+export interface BenchmarkRunSummary {
   score: number;
   checksum: number;
   summaries: CaseSummary[];
 }
 
-interface ComparedSummary {
+export interface ComparedSummary {
   label: string;
   baselineMeanMs: number;
   currentMeanMs: number;
@@ -211,6 +212,7 @@ const DEFAULT_HUNK_LINE_COUNT = 50;
 const DEFAULT_CONFIG: BenchmarkConfig = {
   runs: 50,
   warmupRuns: 5,
+  batchRuns: 1,
   preset: 'standard',
   outputJson: false,
   measureMemory: false,
@@ -221,10 +223,7 @@ const DEFAULT_CONFIG: BenchmarkConfig = {
   fixtureFilter: undefined,
   caseFilter: undefined,
   modeFilter: undefined,
-  fixturePath: resolve(
-    import.meta.dir,
-    'fixtures/iterateOverDiffTopChanges.json'
-  ),
+  fixturePath: '',
 };
 
 const CALLBACK_MODES: CallbackMode[] = [
@@ -238,7 +237,7 @@ const CALLBACK_MODES: CallbackMode[] = [
   'render-range',
 ];
 
-const BASELINE_IMPLEMENTATION: BenchmarkImplementation = {
+export const BASELINE_IMPLEMENTATION: BenchmarkImplementation = {
   id: 'baseline',
   label: 'baseline_iterateOverDiff',
   supportsRangeCallback: false,
@@ -256,7 +255,7 @@ const BASELINE_IMPLEMENTATION: BenchmarkImplementation = {
   },
 };
 
-const CURRENT_IMPLEMENTATION: BenchmarkImplementation = {
+export const CURRENT_IMPLEMENTATION: BenchmarkImplementation = {
   id: 'current',
   label: 'iterateOverDiff',
   supportsRangeCallback: true,
@@ -314,8 +313,14 @@ function parseMode(value: string): CallbackMode {
   );
 }
 
-function parseArgs(argv: string[]): BenchmarkConfig {
-  const config: BenchmarkConfig = { ...DEFAULT_CONFIG };
+export function parseArgs(argv: string[]): BenchmarkConfig {
+  const config: BenchmarkConfig = {
+    ...DEFAULT_CONFIG,
+    fixturePath:
+      typeof import.meta.dir === 'string'
+        ? resolve(import.meta.dir, 'fixtures/iterateOverDiffTopChanges.json')
+        : 'fixtures/iterateOverDiffTopChanges.json',
+  };
 
   for (let index = 0; index < argv.length; index++) {
     const rawArg = argv[index];
@@ -385,6 +390,14 @@ function parseArgs(argv: string[]): BenchmarkConfig {
       continue;
     }
 
+    if (flag === '--batch-runs') {
+      const value = inlineValue ?? argv[index + 1];
+      if (value == null) throw new Error('Missing value for --batch-runs');
+      if (inlineValue == null) index++;
+      config.batchRuns = parsePositiveInteger(value, '--batch-runs');
+      continue;
+    }
+
     if (flag === '--preset') {
       const value = inlineValue ?? argv[index + 1];
       if (value == null) throw new Error('Missing value for --preset');
@@ -440,6 +453,9 @@ function printHelpAndExit(): never {
   );
   console.log(
     '  --warmup-runs <number>   Warmup runs per benchmark case (default: 5)'
+  );
+  console.log(
+    '  --batch-runs <number>    Invocations per timing sample, reported as per-invocation time (default: 1)'
   );
   console.log(
     '  --preset <name>          smoke, standard, exhaustive, or stress (default: standard)'
@@ -1330,11 +1346,11 @@ function summarizeCase(
   };
 }
 
-function formatMs(value: number): string {
+export function formatMs(value: number): string {
   return value.toFixed(3);
 }
 
-function formatPct(value: number | undefined): string {
+export function formatPct(value: number | undefined): string {
   if (value == null) {
     return '-';
   }
@@ -1543,7 +1559,7 @@ function shortName(name: string): string {
   return name.split('/').at(-1) ?? name;
 }
 
-function loadRealFixtures(fixturePath: string): BenchmarkFixture[] {
+export function loadRealFixtures(fixturePath: string): BenchmarkFixture[] {
   const fixture = JSON.parse(
     readFileSync(fixturePath, 'utf8')
   ) as IterateOverDiffFixture;
@@ -1563,7 +1579,7 @@ function createLineFile(name: string, lineCount: number): string {
   ).join('\n');
 }
 
-function createSyntheticFixtures(): BenchmarkFixture[] {
+export function createSyntheticFixtures(): BenchmarkFixture[] {
   const largeOld = createLineFile('large', 12_000);
   const largeLines = largeOld.split('\n');
   largeLines[9_000] = 'large-changed-9001';
@@ -1639,7 +1655,7 @@ function createSingleAdditionHunkDiff(lineCount: number): FileDiffMetadata {
   };
 }
 
-function createStressFixtures(): BenchmarkFixture[] {
+export function createStressFixtures(): BenchmarkFixture[] {
   const diff = createSingleAdditionHunkDiff(500_000);
   return [
     {
@@ -1795,7 +1811,7 @@ function createStressCases(fixture: BenchmarkFixture): BenchmarkCase[] {
   return cases;
 }
 
-function createBenchmarkCases(
+export function createBenchmarkCases(
   fixtures: BenchmarkFixture[],
   config: BenchmarkConfig
 ): BenchmarkCase[] {
@@ -1848,6 +1864,7 @@ function runImplementationCaseSet(
   cases: BenchmarkCase[],
   storages: CaseStorage[],
   runs: number,
+  batchRuns: number,
   recordSamples: boolean,
   progress: ProgressReporter | undefined,
   phase: string
@@ -1856,7 +1873,7 @@ function runImplementationCaseSet(
     for (let caseOffset = 0; caseOffset < cases.length; caseOffset++) {
       const caseIndex = (runIndex + caseOffset) % cases.length;
       const benchmarkCase = cases[caseIndex];
-      const result = runTimedCase(benchmarkCase, implementation, 1);
+      const result = runTimedCase(benchmarkCase, implementation, batchRuns);
       if (recordSamples) {
         recordTimingResult(storages[caseIndex], result);
       }
@@ -1870,6 +1887,7 @@ function runComparisonCaseSet(
   baselineStorages: CaseStorage[],
   currentStorages: CaseStorage[],
   runs: number,
+  batchRuns: number,
   recordSamples: boolean,
   progress: ProgressReporter | undefined,
   phase: string
@@ -1884,7 +1902,7 @@ function runComparisonCaseSet(
         : [CURRENT_IMPLEMENTATION, BASELINE_IMPLEMENTATION];
 
       for (const implementation of implementations) {
-        const result = runTimedCase(benchmarkCase, implementation, 1);
+        const result = runTimedCase(benchmarkCase, implementation, batchRuns);
         if (!recordSamples) {
           progress?.step(phase);
           continue;
@@ -1918,7 +1936,7 @@ function summarizeBenchmarkRun(
   return { score, checksum, summaries };
 }
 
-function runSingleImplementationBenchmark(
+export function runSingleImplementationBenchmark(
   implementation: BenchmarkImplementation,
   cases: BenchmarkCase[],
   config: BenchmarkConfig,
@@ -1930,6 +1948,7 @@ function runSingleImplementationBenchmark(
     cases,
     storages,
     config.warmupRuns,
+    config.batchRuns,
     false,
     progress,
     'warmup'
@@ -1939,6 +1958,7 @@ function runSingleImplementationBenchmark(
     cases,
     storages,
     config.runs,
+    config.batchRuns,
     true,
     progress,
     'timing'
@@ -1946,7 +1966,7 @@ function runSingleImplementationBenchmark(
   return summarizeBenchmarkRun(cases, storages);
 }
 
-function runBaselineComparisonBenchmark(
+export function runBaselineComparisonBenchmark(
   cases: BenchmarkCase[],
   config: BenchmarkConfig,
   progress: ProgressReporter | undefined
@@ -1958,6 +1978,7 @@ function runBaselineComparisonBenchmark(
     baselineStorages,
     currentStorages,
     config.warmupRuns,
+    config.batchRuns,
     false,
     progress,
     'warmup'
@@ -1967,6 +1988,7 @@ function runBaselineComparisonBenchmark(
     baselineStorages,
     currentStorages,
     config.runs,
+    config.batchRuns,
     true,
     progress,
     'timing'
@@ -2015,14 +2037,14 @@ function runMemoryChildBenchmark(
   console.log(JSON.stringify(output));
 }
 
-function percentDelta(baseline: number, current: number): number {
+export function percentDelta(baseline: number, current: number): number {
   if (baseline === 0) {
     return current === 0 ? 0 : Infinity;
   }
   return ((current - baseline) / baseline) * 100;
 }
 
-function compareSummaries(
+export function compareSummaries(
   baseline: BenchmarkRunSummary,
   current: BenchmarkRunSummary
 ): ComparedSummary[] {
@@ -2135,6 +2157,8 @@ function buildMemoryChildArgs(
     String(config.runs),
     '--warmup-runs',
     String(config.warmupRuns),
+    '--batch-runs',
+    String(config.batchRuns),
     '--preset',
     config.preset,
     '--fixture-path',
@@ -2398,7 +2422,7 @@ function main() {
     console.log(`fixture=${config.fixturePath}`);
     console.log(`fixtures=${fixtures.length} cases=${cases.length}`);
     console.log(
-      `preset=${config.preset} runsPerCase=${config.runs} warmupRunsPerCase=${config.warmupRuns}`
+      `preset=${config.preset} runsPerCase=${config.runs} warmupRunsPerCase=${config.warmupRuns} batchRuns=${config.batchRuns}`
     );
     console.log(
       `baseline=${BASELINE_IMPLEMENTATION.label} current=${CURRENT_IMPLEMENTATION.label}`
@@ -2460,7 +2484,7 @@ function main() {
   console.log(`fixture=${config.fixturePath}`);
   console.log(`fixtures=${fixtures.length} cases=${cases.length}`);
   console.log(
-    `preset=${config.preset} runsPerCase=${config.runs} warmupRunsPerCase=${config.warmupRuns}`
+    `preset=${config.preset} runsPerCase=${config.runs} warmupRunsPerCase=${config.warmupRuns} batchRuns=${config.batchRuns}`
   );
   console.log(`implementation=${CURRENT_IMPLEMENTATION.label}`);
   console.log(`checksum=${checksum}`);
@@ -2477,4 +2501,9 @@ function main() {
   console.log(`score=${formatMs(score)}ms`);
 }
 
-main();
+if (
+  typeof process !== 'undefined' &&
+  process.argv[1]?.endsWith('benchmarkIterateOverDiff.ts')
+) {
+  main();
+}
