@@ -88,21 +88,6 @@ type DiffStyle = 'unified' | 'split' | 'both';
 
 type EqualLineIterationRange = [startIndex: number, endIndex: number];
 
-interface IterationState {
-  finalHunk: Hunk | undefined;
-  isWindowedHighlight: boolean;
-  viewportStart: number;
-  viewportEnd: number;
-  splitCount: number;
-  unifiedCount: number;
-  shouldBreak(): boolean;
-  shouldSkip(unifiedHeight: number, splitHeight: number): boolean;
-  incrementCounts(unifiedValue: number, splitValue: number): void;
-  isInWindow(unifiedHeight: number, splitHeight: number): boolean;
-  isInUnifiedWindow(height: number): boolean;
-  isInSplitWindow(height: number): boolean;
-}
-
 interface IterationStartState {
   hunkIndex: number;
   splitCount: number;
@@ -204,84 +189,12 @@ export function iterateOverDiff({
     expandedHunks,
     collapsedContextThreshold,
   });
-  const state: IterationState = {
-    finalHunk: diff.hunks.at(-1),
-    viewportStart: startingLine,
-    viewportEnd: startingLine + totalLines,
-    isWindowedHighlight: startingLine > 0 || totalLines < Infinity,
-    splitCount: iterationStart.splitCount,
-    unifiedCount: iterationStart.unifiedCount,
-    shouldBreak() {
-      if (!state.isWindowedHighlight) {
-        return false;
-      }
-
-      const breakUnified = state.unifiedCount >= startingLine + totalLines;
-      const breakSplit = state.splitCount >= startingLine + totalLines;
-
-      if (diffStyle === 'unified') {
-        return breakUnified;
-      } else if (diffStyle === 'split') {
-        return breakSplit;
-      } else {
-        return breakUnified && breakSplit;
-      }
-    },
-    shouldSkip(unifiedHeight: number, splitHeight: number) {
-      if (!state.isWindowedHighlight) {
-        return false;
-      }
-
-      const skipUnified = state.unifiedCount + unifiedHeight < startingLine;
-      const skipSplit = state.splitCount + splitHeight < startingLine;
-
-      if (diffStyle === 'unified') {
-        return skipUnified;
-      } else if (diffStyle === 'split') {
-        return skipSplit;
-      } else {
-        return skipUnified && skipSplit;
-      }
-    },
-    incrementCounts(unifiedValue: number, splitValue: number) {
-      if (diffStyle === 'unified' || diffStyle === 'both') {
-        state.unifiedCount += unifiedValue;
-      }
-      if (diffStyle === 'split' || diffStyle === 'both') {
-        state.splitCount += splitValue;
-      }
-    },
-    isInWindow(unifiedHeight: number, splitHeight: number) {
-      if (!state.isWindowedHighlight) {
-        return true;
-      }
-
-      const unifiedInWindow = state.isInUnifiedWindow(unifiedHeight);
-      const splitInWindow = state.isInSplitWindow(splitHeight);
-
-      if (diffStyle === 'unified') {
-        return unifiedInWindow;
-      } else if (diffStyle === 'split') {
-        return splitInWindow;
-      } else {
-        return unifiedInWindow || splitInWindow;
-      }
-    },
-    isInUnifiedWindow(unifiedHeight: number) {
-      return (
-        !state.isWindowedHighlight ||
-        (state.unifiedCount >= startingLine - unifiedHeight &&
-          state.unifiedCount < startingLine + totalLines)
-      );
-    },
-    isInSplitWindow(splitHeight: number) {
-      return (
-        !state.isWindowedHighlight ||
-        (state.splitCount >= startingLine - splitHeight &&
-          state.splitCount < startingLine + totalLines)
-      );
-    },
-  };
+  const finalHunk = diff.hunks.at(-1);
+  const viewportStart = startingLine;
+  const viewportEnd = startingLine + totalLines;
+  const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
+  let splitRowCount = iterationStart.splitCount;
+  let unifiedRowCount = iterationStart.unifiedCount;
   const emittedUnifiedIncrement = diffStyle === 'split' ? 0 : 1;
   const emittedSplitIncrement = diffStyle === 'unified' ? 0 : 1;
   const changeRanges: ChangeIterationRanges = {
@@ -335,8 +248,18 @@ export function iterateOverDiff({
     if (hunk == null) {
       throw new Error('iterateOverDiff: invalid hunk index');
     }
-    if (state.isWindowedHighlight && state.shouldBreak()) {
-      break;
+    if (isWindowedHighlight) {
+      const breakUnified = unifiedRowCount >= viewportEnd;
+      const breakSplit = splitRowCount >= viewportEnd;
+      if (
+        diffStyle === 'unified'
+          ? breakUnified
+          : diffStyle === 'split'
+            ? breakSplit
+            : breakUnified && breakSplit
+      ) {
+        break;
+      }
     }
 
     const leadingRegion = getExpandedRegion(
@@ -348,7 +271,7 @@ export function iterateOverDiff({
     );
     // We only create a trailing region if it's the last hunk
     let trailingRegion: ExpandedRegionResult | undefined;
-    if (hunk === state.finalHunk && hasFinalCollapsedHunk(diff)) {
+    if (hunk === finalHunk && hasFinalCollapsedHunk(diff)) {
       const additionRemaining =
         diff.additionLines.length -
         (hunk.additionLineIndex + hunk.additionCount);
@@ -384,36 +307,16 @@ export function iterateOverDiff({
     const trailingCollapsedSplitLineIndex =
       hunk.splitLineStart + hunk.splitLineCount - 1;
 
-    function getTrailingCollapsedAfter(
-      unifiedLineIndex: number,
-      splitLineIndex: number
-    ) {
-      if (trailingCollapsedLines <= 0) {
-        return 0;
-      }
-      if (diffStyle === 'unified') {
-        return unifiedLineIndex === trailingCollapsedUnifiedLineIndex
-          ? trailingCollapsedLines
-          : 0;
-      }
-      return splitLineIndex === trailingCollapsedSplitLineIndex
-        ? trailingCollapsedLines
-        : 0;
-    }
-    function getPendingCollapsed() {
-      if (pendingCollapsedLines === 0) {
-        return 0;
-      }
-      const value = pendingCollapsedLines;
-      pendingCollapsedLines = 0;
-      return value;
-    }
-
     // Emit for expanded lines
-    if (
-      !state.isWindowedHighlight ||
-      !state.shouldSkip(expandedLineCount, expandedLineCount)
-    ) {
+    const shouldSkipExpanded =
+      isWindowedHighlight &&
+      (diffStyle === 'unified'
+        ? unifiedRowCount + expandedLineCount < viewportStart
+        : diffStyle === 'split'
+          ? splitRowCount + expandedLineCount < viewportStart
+          : unifiedRowCount + expandedLineCount < viewportStart &&
+            splitRowCount + expandedLineCount < viewportStart);
+    if (!shouldSkipExpanded) {
       let unifiedLineIndex = hunk.unifiedLineStart - leadingRegion.rangeSize;
       let splitLineIndex = hunk.splitLineStart - leadingRegion.rangeSize;
 
@@ -423,20 +326,32 @@ export function iterateOverDiff({
       let additionLineNumber = hunk.additionStart - leadingRegion.rangeSize;
 
       const [startIndex, endIndex] = getEqualLineIterationRange(
-        state,
+        isWindowedHighlight,
+        viewportStart,
+        viewportEnd,
+        unifiedRowCount,
+        splitRowCount,
         leadingRegion.fromStart,
         diffStyle
       );
       if (startIndex > 0) {
-        state.incrementCounts(startIndex, startIndex);
+        if (diffStyle !== 'split') {
+          unifiedRowCount += startIndex;
+        }
+        if (diffStyle !== 'unified') {
+          splitRowCount += startIndex;
+        }
       }
       let index = startIndex;
       while (index < leadingRegion.fromStart) {
         if (index >= endIndex) {
-          state.incrementCounts(
-            leadingRegion.fromStart - index,
-            leadingRegion.fromStart - index
-          );
+          const remainingCount = leadingRegion.fromStart - index;
+          if (diffStyle !== 'split') {
+            unifiedRowCount += remainingCount;
+          }
+          if (diffStyle !== 'unified') {
+            splitRowCount += remainingCount;
+          }
           break;
         }
         setBothLineData(
@@ -457,8 +372,8 @@ export function iterateOverDiff({
           false,
           false
         );
-        state.unifiedCount += emittedUnifiedIncrement;
-        state.splitCount += emittedSplitIncrement;
+        unifiedRowCount += emittedUnifiedIncrement;
+        splitRowCount += emittedSplitIncrement;
         if (callback(reusableChangeProps as DiffLineCallbackProps) === true) {
           break hunkIterator;
         }
@@ -473,23 +388,37 @@ export function iterateOverDiff({
       deletionLineNumber = hunk.deletionStart - leadingRegion.fromEnd;
       additionLineNumber = hunk.additionStart - leadingRegion.fromEnd;
       const [fromEndStartIndex, fromEndEndIndex] = getEqualLineIterationRange(
-        state,
+        isWindowedHighlight,
+        viewportStart,
+        viewportEnd,
+        unifiedRowCount,
+        splitRowCount,
         leadingRegion.fromEnd,
         diffStyle
       );
       if (fromEndStartIndex > 0) {
-        state.incrementCounts(fromEndStartIndex, fromEndStartIndex);
+        if (diffStyle !== 'split') {
+          unifiedRowCount += fromEndStartIndex;
+        }
+        if (diffStyle !== 'unified') {
+          splitRowCount += fromEndStartIndex;
+        }
       }
       index = fromEndStartIndex;
 
       while (index < leadingRegion.fromEnd) {
         if (index >= fromEndEndIndex) {
-          state.incrementCounts(
-            leadingRegion.fromEnd - index,
-            leadingRegion.fromEnd - index
-          );
+          const remainingCount = leadingRegion.fromEnd - index;
+          if (diffStyle !== 'split') {
+            unifiedRowCount += remainingCount;
+          }
+          if (diffStyle !== 'unified') {
+            splitRowCount += remainingCount;
+          }
           break;
         }
+        const collapsedBefore = pendingCollapsedLines;
+        pendingCollapsedLines = 0;
         setBothLineData(
           reusableChangeProps,
           reusableDeletionLine,
@@ -497,7 +426,7 @@ export function iterateOverDiff({
           'context-expanded',
           hunkIndex,
           hunk,
-          getPendingCollapsed(),
+          collapsedBefore,
           0,
           deletionLineNumber + index,
           deletionLineIndex + index,
@@ -508,16 +437,21 @@ export function iterateOverDiff({
           false,
           false
         );
-        state.unifiedCount += emittedUnifiedIncrement;
-        state.splitCount += emittedSplitIncrement;
+        unifiedRowCount += emittedUnifiedIncrement;
+        splitRowCount += emittedSplitIncrement;
         if (callback(reusableChangeProps as DiffLineCallbackProps) === true) {
           break hunkIterator;
         }
         index++;
       }
     } else {
-      state.incrementCounts(expandedLineCount, expandedLineCount);
-      getPendingCollapsed();
+      if (diffStyle !== 'split') {
+        unifiedRowCount += expandedLineCount;
+      }
+      if (diffStyle !== 'unified') {
+        splitRowCount += expandedLineCount;
+      }
+      pendingCollapsedLines = 0;
     }
 
     let unifiedLineIndex = hunk.unifiedLineStart;
@@ -532,22 +466,31 @@ export function iterateOverDiff({
 
     contentStartState.contentIndex = 0;
     if (
-      state.isWindowedHighlight &&
+      isWindowedHighlight &&
       hunkContent.length > HUNK_CONTENT_SEEK_THRESHOLD &&
-      setHunkContentStartState(contentStartState, state, hunk, diffStyle) &&
+      setHunkContentStartState(
+        contentStartState,
+        hunk,
+        diffStyle,
+        viewportStart,
+        splitRowCount,
+        unifiedRowCount
+      ) &&
       contentStartState.contentIndex > 0
     ) {
-      state.incrementCounts(
-        contentStartState.unifiedCount,
-        contentStartState.splitCount
-      );
+      if (diffStyle !== 'split') {
+        unifiedRowCount += contentStartState.unifiedCount;
+      }
+      if (diffStyle !== 'unified') {
+        splitRowCount += contentStartState.splitCount;
+      }
       unifiedLineIndex += contentStartState.unifiedCount;
       splitLineIndex += contentStartState.splitCount;
       deletionLineIndex += contentStartState.deletionCount;
       additionLineIndex += contentStartState.additionCount;
       deletionLineNumber += contentStartState.deletionCount;
       additionLineNumber += contentStartState.additionCount;
-      getPendingCollapsed();
+      pendingCollapsedLines = 0;
     }
 
     for (
@@ -555,8 +498,18 @@ export function iterateOverDiff({
       contentIndex < hunkContent.length;
       contentIndex++
     ) {
-      if (state.isWindowedHighlight && state.shouldBreak()) {
-        break hunkIterator;
+      if (isWindowedHighlight) {
+        const breakUnified = unifiedRowCount >= viewportEnd;
+        const breakSplit = splitRowCount >= viewportEnd;
+        if (
+          diffStyle === 'unified'
+            ? breakUnified
+            : diffStyle === 'split'
+              ? breakSplit
+              : breakUnified && breakSplit
+        ) {
+          break hunkIterator;
+        }
       }
 
       const content = hunkContent[contentIndex];
@@ -568,7 +521,7 @@ export function iterateOverDiff({
       // Hunk Context Content
       if (content.type === 'context') {
         if (
-          !state.isWindowedHighlight &&
+          !isWindowedHighlight &&
           pendingCollapsedLines === 0 &&
           trailingCollapsedLines <= 0 &&
           !(isLastContent && (hunk.noEOFCRAdditions || hunk.noEOFCRDeletions))
@@ -627,7 +580,7 @@ export function iterateOverDiff({
             }
           }
         } else if (
-          !state.isWindowedHighlight &&
+          !isWindowedHighlight &&
           rangeCallback != null &&
           pendingCollapsedLines > 0 &&
           trailingCollapsedLines <= 0 &&
@@ -649,8 +602,9 @@ export function iterateOverDiff({
             splitLineIndex,
             unifiedLineIndex,
             splitLineIndex,
-            getPendingCollapsed()
+            pendingCollapsedLines
           );
+          pendingCollapsedLines = 0;
           if (
             rangeCallback(reusableRangeProps as DiffLineRangeCallbackProps) ===
             true
@@ -658,29 +612,60 @@ export function iterateOverDiff({
             break hunkIterator;
           }
         } else if (
-          !state.isWindowedHighlight ||
-          !state.shouldSkip(content.lines, content.lines)
+          !(
+            isWindowedHighlight &&
+            (diffStyle === 'unified'
+              ? unifiedRowCount + content.lines < viewportStart
+              : diffStyle === 'split'
+                ? splitRowCount + content.lines < viewportStart
+                : unifiedRowCount + content.lines < viewportStart &&
+                  splitRowCount + content.lines < viewportStart)
+          )
         ) {
           const [startIndex, endIndex] = getEqualLineIterationRange(
-            state,
+            isWindowedHighlight,
+            viewportStart,
+            viewportEnd,
+            unifiedRowCount,
+            splitRowCount,
             content.lines,
             diffStyle
           );
           if (startIndex > 0) {
-            state.incrementCounts(startIndex, startIndex);
+            if (diffStyle !== 'split') {
+              unifiedRowCount += startIndex;
+            }
+            if (diffStyle !== 'unified') {
+              splitRowCount += startIndex;
+            }
           }
           let index = startIndex;
           while (index < content.lines) {
             if (index >= endIndex) {
-              state.incrementCounts(
-                content.lines - index,
-                content.lines - index
-              );
+              const remainingCount = content.lines - index;
+              if (diffStyle !== 'split') {
+                unifiedRowCount += remainingCount;
+              }
+              if (diffStyle !== 'unified') {
+                splitRowCount += remainingCount;
+              }
               break;
             }
             const isLastLine = isLastContent && index === content.lines - 1;
             const unifiedRowIndex = unifiedLineIndex + index;
             const splitRowIndex = splitLineIndex + index;
+            const collapsedBefore = pendingCollapsedLines;
+            pendingCollapsedLines = 0;
+            const collapsedAfter =
+              trailingCollapsedLines <= 0
+                ? 0
+                : diffStyle === 'unified'
+                  ? unifiedRowIndex === trailingCollapsedUnifiedLineIndex
+                    ? trailingCollapsedLines
+                    : 0
+                  : splitRowIndex === trailingCollapsedSplitLineIndex
+                    ? trailingCollapsedLines
+                    : 0;
             setBothLineData(
               reusableChangeProps,
               reusableDeletionLine,
@@ -688,8 +673,8 @@ export function iterateOverDiff({
               'context',
               hunkIndex,
               hunk,
-              getPendingCollapsed(),
-              getTrailingCollapsedAfter(unifiedRowIndex, splitRowIndex),
+              collapsedBefore,
+              collapsedAfter,
               deletionLineNumber + index,
               deletionLineIndex + index,
               additionLineNumber + index,
@@ -699,8 +684,8 @@ export function iterateOverDiff({
               isLastLine && hunk.noEOFCRDeletions,
               isLastLine && hunk.noEOFCRAdditions
             );
-            state.unifiedCount += emittedUnifiedIncrement;
-            state.splitCount += emittedSplitIncrement;
+            unifiedRowCount += emittedUnifiedIncrement;
+            splitRowCount += emittedSplitIncrement;
             if (
               callback(reusableChangeProps as DiffLineCallbackProps) === true
             ) {
@@ -709,8 +694,13 @@ export function iterateOverDiff({
             index++;
           }
         } else {
-          state.incrementCounts(content.lines, content.lines);
-          getPendingCollapsed();
+          if (diffStyle !== 'split') {
+            unifiedRowCount += content.lines;
+          }
+          if (diffStyle !== 'unified') {
+            splitRowCount += content.lines;
+          }
+          pendingCollapsedLines = 0;
         }
         unifiedLineIndex += content.lines;
         splitLineIndex += content.lines;
@@ -725,15 +715,20 @@ export function iterateOverDiff({
         const splitCount = Math.max(content.deletions, content.additions);
         const unifiedCount = content.deletions + content.additions;
         const shouldSkipChange =
-          state.isWindowedHighlight &&
-          state.shouldSkip(unifiedCount, splitCount);
+          isWindowedHighlight &&
+          (diffStyle === 'unified'
+            ? unifiedRowCount + unifiedCount < viewportStart
+            : diffStyle === 'split'
+              ? splitRowCount + splitCount < viewportStart
+              : unifiedRowCount + unifiedCount < viewportStart &&
+                splitRowCount + splitCount < viewportStart);
         if (!shouldSkipChange) {
           reusableChangeProps.type = 'change';
           reusableChangeProps.hunkIndex = hunkIndex;
           reusableChangeProps.hunk = hunk;
 
           if (
-            !state.isWindowedHighlight &&
+            !isWindowedHighlight &&
             content.deletions === 0 &&
             pendingCollapsedLines === 0 &&
             trailingCollapsedLines <= 0 &&
@@ -785,7 +780,7 @@ export function iterateOverDiff({
               }
             }
           } else if (
-            !state.isWindowedHighlight &&
+            !isWindowedHighlight &&
             content.additions === 0 &&
             pendingCollapsedLines === 0 &&
             trailingCollapsedLines <= 0 &&
@@ -837,7 +832,7 @@ export function iterateOverDiff({
               }
             }
           } else if (
-            !state.isWindowedHighlight &&
+            !isWindowedHighlight &&
             content.deletions > 0 &&
             content.additions > 0 &&
             pendingCollapsedLines === 0 &&
@@ -1059,7 +1054,16 @@ export function iterateOverDiff({
               }
             }
           } else {
-            setChangeIterationRanges(state, content, diffStyle, changeRanges);
+            setChangeIterationRanges(
+              isWindowedHighlight,
+              viewportStart,
+              viewportEnd,
+              unifiedRowCount,
+              splitRowCount,
+              content,
+              diffStyle,
+              changeRanges
+            );
             if (content.deletions === 0) {
               reusableChangeProps.deletionLine = undefined;
               reusableChangeProps.additionLine = reusableAdditionLine;
@@ -1207,12 +1211,18 @@ export function iterateOverDiff({
                           ? index
                           : index - content.deletions)
                       : splitLineIndex + index;
-                  const collapsedAfter = getTrailingCollapsedAfter(
-                    unifiedRowIndex,
-                    splitRowIndex
-                  );
-                  reusableChangeProps.collapsedBefore = getPendingCollapsed();
-                  reusableChangeProps.collapsedAfter = collapsedAfter;
+                  reusableChangeProps.collapsedBefore = pendingCollapsedLines;
+                  pendingCollapsedLines = 0;
+                  reusableChangeProps.collapsedAfter =
+                    trailingCollapsedLines <= 0
+                      ? 0
+                      : diffStyle === 'unified'
+                        ? unifiedRowIndex === trailingCollapsedUnifiedLineIndex
+                          ? trailingCollapsedLines
+                          : 0
+                        : splitRowIndex === trailingCollapsedSplitLineIndex
+                          ? trailingCollapsedLines
+                          : 0;
                   if (diffStyle === 'unified') {
                     if (index < content.deletions) {
                       reusableDeletionLine.unifiedLineIndex =
@@ -1291,8 +1301,13 @@ export function iterateOverDiff({
           }
         }
 
-        getPendingCollapsed();
-        state.incrementCounts(unifiedCount, splitCount);
+        pendingCollapsedLines = 0;
+        if (diffStyle !== 'split') {
+          unifiedRowCount += unifiedCount;
+        }
+        if (diffStyle !== 'unified') {
+          splitRowCount += splitCount;
+        }
         unifiedLineIndex += unifiedCount;
         splitLineIndex += splitCount;
         deletionLineIndex += content.deletions;
@@ -1306,20 +1321,45 @@ export function iterateOverDiff({
       const { collapsedLines, fromStart, fromEnd } = trailingRegion;
       const len = fromStart + fromEnd;
       const [startIndex, endIndex] = getEqualLineIterationRange(
-        state,
+        isWindowedHighlight,
+        viewportStart,
+        viewportEnd,
+        unifiedRowCount,
+        splitRowCount,
         len,
         diffStyle
       );
       if (startIndex > 0) {
-        state.incrementCounts(startIndex, startIndex);
+        if (diffStyle !== 'split') {
+          unifiedRowCount += startIndex;
+        }
+        if (diffStyle !== 'unified') {
+          splitRowCount += startIndex;
+        }
       }
       let index = startIndex;
       while (index < len) {
-        if (state.isWindowedHighlight && state.shouldBreak()) {
-          break hunkIterator;
+        if (isWindowedHighlight) {
+          const breakUnified = unifiedRowCount >= viewportEnd;
+          const breakSplit = splitRowCount >= viewportEnd;
+          if (
+            diffStyle === 'unified'
+              ? breakUnified
+              : diffStyle === 'split'
+                ? breakSplit
+                : breakUnified && breakSplit
+          ) {
+            break hunkIterator;
+          }
         }
         if (index >= endIndex) {
-          state.incrementCounts(len - index, len - index);
+          const remainingCount = len - index;
+          if (diffStyle !== 'split') {
+            unifiedRowCount += remainingCount;
+          }
+          if (diffStyle !== 'unified') {
+            splitRowCount += remainingCount;
+          }
           break;
         }
         const isLastLine = index === len - 1;
@@ -1341,8 +1381,8 @@ export function iterateOverDiff({
           false,
           false
         );
-        state.unifiedCount += emittedUnifiedIncrement;
-        state.splitCount += emittedSplitIncrement;
+        unifiedRowCount += emittedUnifiedIncrement;
+        splitRowCount += emittedSplitIncrement;
         if (callback(reusableChangeProps as DiffLineCallbackProps) === true) {
           break hunkIterator;
         }
@@ -1560,9 +1600,11 @@ function getHunkContentPrefixCounts(hunk: Hunk): HunkContentPrefixCounts[] {
 // preceding context/change block in large hunks before a deep visible window.
 function setHunkContentStartState(
   target: HunkContentStartState,
-  state: IterationState,
   hunk: Hunk,
-  diffStyle: DiffStyle
+  diffStyle: DiffStyle,
+  viewportStart: number,
+  splitRowCount: number,
+  unifiedRowCount: number
 ): boolean {
   const prefixCounts = getHunkContentPrefixCounts(hunk);
   let low = 1;
@@ -1577,11 +1619,11 @@ function setHunkContentStartState(
     }
     const reachesViewportStart =
       diffStyle === 'unified'
-        ? state.unifiedCount + counts.unifiedCount >= state.viewportStart
+        ? unifiedRowCount + counts.unifiedCount >= viewportStart
         : diffStyle === 'split'
-          ? state.splitCount + counts.splitCount >= state.viewportStart
-          : state.unifiedCount + counts.unifiedCount >= state.viewportStart ||
-            state.splitCount + counts.splitCount >= state.viewportStart;
+          ? splitRowCount + counts.splitCount >= viewportStart
+          : unifiedRowCount + counts.unifiedCount >= viewportStart ||
+            splitRowCount + counts.splitCount >= viewportStart;
 
     if (reachesViewportStart) {
       result = mid;
@@ -1611,19 +1653,23 @@ function setHunkContentStartState(
 // the split and unified visible ranges because either view can make the row
 // worth emitting.
 function getEqualLineIterationRange(
-  state: IterationState,
+  isWindowedHighlight: boolean,
+  viewportStart: number,
+  viewportEnd: number,
+  unifiedRowCount: number,
+  splitRowCount: number,
   count: number,
   diffStyle: DiffStyle
 ): EqualLineIterationRange {
-  if (!state.isWindowedHighlight || count <= 0) {
+  if (!isWindowedHighlight || count <= 0) {
     return [0, count];
   }
 
   let start = Infinity;
   let end = -Infinity;
   function mergeRange(currentCount: number): void {
-    const rangeStart = Math.max(0, state.viewportStart - currentCount);
-    const rangeEnd = Math.min(count, state.viewportEnd - currentCount);
+    const rangeStart = Math.max(0, viewportStart - currentCount);
+    const rangeEnd = Math.min(count, viewportEnd - currentCount);
     if (rangeEnd > rangeStart) {
       start = Math.min(start, rangeStart);
       end = Math.max(end, rangeEnd);
@@ -1631,10 +1677,10 @@ function getEqualLineIterationRange(
   }
 
   if (diffStyle !== 'split') {
-    mergeRange(state.unifiedCount);
+    mergeRange(unifiedRowCount);
   }
   if (diffStyle !== 'unified') {
-    mergeRange(state.splitCount);
+    mergeRange(splitRowCount);
   }
 
   if (end < 0) {
@@ -1748,20 +1794,21 @@ function pushChangeIterationRange(
 }
 
 function pushVisibleChangeIterationRange(
-  state: IterationState,
+  viewportStart: number,
+  viewportEnd: number,
   ranges: ChangeIterationRanges,
   baseStart: number,
   count: number,
   iterationOffset: number
 ): void {
   const baseEnd = baseStart + count;
-  if (baseEnd <= state.viewportStart || baseStart >= state.viewportEnd) {
+  if (baseEnd <= viewportStart || baseStart >= viewportEnd) {
     return;
   }
   pushChangeIterationRange(
     ranges,
-    Math.max(0, state.viewportStart - baseStart) + iterationOffset,
-    Math.min(count, state.viewportEnd - baseStart) + iterationOffset
+    Math.max(0, viewportStart - baseStart) + iterationOffset,
+    Math.min(count, viewportEnd - baseStart) + iterationOffset
   );
 }
 
@@ -1856,7 +1903,11 @@ function mergeChangeIterationRanges(ranges: ChangeIterationRanges): void {
 // row space, but it merges the split and unified visible windows so either view
 // can make a row worth emitting.
 function setChangeIterationRanges(
-  state: IterationState,
+  isWindowedHighlight: boolean,
+  viewportStart: number,
+  viewportEnd: number,
+  unifiedRowCount: number,
+  splitRowCount: number,
   content: ChangeContent,
   diffStyle: DiffStyle,
   ranges: ChangeIterationRanges
@@ -1864,7 +1915,7 @@ function setChangeIterationRanges(
   ranges.count = 0;
 
   // If not a window highlight, then we should just render the entire range
-  if (!state.isWindowedHighlight) {
+  if (!isWindowedHighlight) {
     pushChangeIterationRange(
       ranges,
       0,
@@ -1877,16 +1928,18 @@ function setChangeIterationRanges(
 
   if (diffStyle !== 'split') {
     pushVisibleChangeIterationRange(
-      state,
+      viewportStart,
+      viewportEnd,
       ranges,
-      state.unifiedCount,
+      unifiedRowCount,
       content.deletions,
       0
     );
     pushVisibleChangeIterationRange(
-      state,
+      viewportStart,
+      viewportEnd,
       ranges,
-      state.unifiedCount + content.deletions,
+      unifiedRowCount + content.deletions,
       content.additions,
       diffStyle === 'unified' ? content.deletions : 0
     );
@@ -1894,16 +1947,18 @@ function setChangeIterationRanges(
 
   if (diffStyle !== 'unified') {
     pushVisibleChangeIterationRange(
-      state,
+      viewportStart,
+      viewportEnd,
       ranges,
-      state.splitCount,
+      splitRowCount,
       content.deletions,
       0
     );
     pushVisibleChangeIterationRange(
-      state,
+      viewportStart,
+      viewportEnd,
       ranges,
-      state.splitCount,
+      splitRowCount,
       content.additions,
       0
     );
