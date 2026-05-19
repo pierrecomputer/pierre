@@ -27,6 +27,7 @@ import type {
   CommentMetadata,
 } from './types';
 import {
+  classifyCommentLineType,
   isDiffItem,
   isDraftAnnotation,
   isDraftMetadata,
@@ -313,6 +314,11 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         itemId,
         key,
         lineNumber: draftAnnotation.lineNumber,
+        lineType: classifyCommentLineType(
+          item.fileDiff,
+          draftAnnotation.side,
+          draftAnnotation.lineNumber
+        ),
         message: trimmedMessage,
         range: draftAnnotation.metadata.range,
         side: draftAnnotation.side,
