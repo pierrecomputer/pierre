@@ -177,6 +177,54 @@ describe('virtual file padding metrics', () => {
       );
     });
 
+    test('does not add paddingBottom when a diff has no hunks', () => {
+      const fileDiff = parseDiffFromFile(
+        { name: 'same.ts', contents: 'one\n' },
+        { name: 'same.ts', contents: 'one\n' }
+      );
+      const instance = new VirtualizedFileDiff({}, virtualizer, {
+        ...baseMetrics,
+        paddingTop: 6,
+        paddingBottom: 13,
+      });
+
+      instance.prepareVirtualizedItem(fileDiff);
+
+      expect(fileDiff.hunks.length).toBe(0);
+      expect(instance.getVirtualizedHeight()).toBe(
+        baseMetrics.diffHeaderHeight + 6
+      );
+    });
+
+    test('uses only the top region when collapsed', () => {
+      const fileDiff = createTwoHunkDiff();
+      const [firstHunk] = fileDiff.hunks;
+      if (firstHunk == null) {
+        throw new Error('Expected a hunk');
+      }
+      const instance = new VirtualizedFileDiff(
+        { collapsed: true },
+        virtualizer,
+        {
+          ...baseMetrics,
+          paddingTop: 6,
+          paddingBottom: 13,
+        }
+      );
+
+      instance.prepareVirtualizedItem(fileDiff);
+
+      expect(instance.getVirtualizedHeight()).toBe(
+        baseMetrics.diffHeaderHeight + 6
+      );
+      expect(
+        instance.getLinePosition(firstHunk.additionStart, 'additions')
+      ).toEqual({
+        top: baseMetrics.diffHeaderHeight + 6,
+        height: 0,
+      });
+    });
+
     test('keeps hunk separator gaps based on spacing', () => {
       const fileDiff = parseDiffFromFile(
         {
@@ -215,6 +263,141 @@ describe('virtual file padding metrics', () => {
           firstHunk.splitLineCount * baseMetrics.lineHeight +
           baseMetrics.hunkSeparatorHeight +
           baseMetrics.spacing * 2
+      );
+    });
+
+    test('keeps current line-info separator estimates for first, middle, and trailing collapsed context', () => {
+      const fileDiff = createTwoHunkDiff();
+      const [firstHunk, secondHunk] = fileDiff.hunks;
+      if (firstHunk == null || secondHunk == null) {
+        throw new Error('Expected two hunks');
+      }
+      const instance = new VirtualizedFileDiff(
+        { hunkSeparators: 'line-info' },
+        virtualizer,
+        codeViewLikeMetrics
+      );
+      const separatorHeight = 32;
+      const firstSeparatorHeight =
+        separatorHeight + codeViewLikeMetrics.spacing;
+      const middleSeparatorHeight =
+        codeViewLikeMetrics.spacing +
+        separatorHeight +
+        codeViewLikeMetrics.spacing;
+      const trailingSeparatorHeight =
+        codeViewLikeMetrics.spacing + separatorHeight;
+      const hunkLineHeight =
+        (firstHunk.splitLineCount + secondHunk.splitLineCount) *
+        codeViewLikeMetrics.lineHeight;
+
+      instance.prepareVirtualizedItem(fileDiff);
+
+      expect(firstHunk.collapsedBefore).toBeGreaterThan(0);
+      expect(secondHunk.collapsedBefore).toBeGreaterThan(0);
+      expect(
+        instance.getLinePosition(firstHunk.additionStart, 'additions')?.top
+      ).toBe(codeViewLikeMetrics.diffHeaderHeight + firstSeparatorHeight);
+      expect(
+        instance.getLinePosition(secondHunk.additionStart, 'additions')?.top
+      ).toBe(
+        codeViewLikeMetrics.diffHeaderHeight +
+          firstSeparatorHeight +
+          firstHunk.splitLineCount * codeViewLikeMetrics.lineHeight +
+          middleSeparatorHeight
+      );
+      expect(instance.getVirtualizedHeight()).toBe(
+        codeViewLikeMetrics.diffHeaderHeight +
+          firstSeparatorHeight +
+          hunkLineHeight +
+          middleSeparatorHeight +
+          trailingSeparatorHeight +
+          codeViewLikeMetrics.spacing
+      );
+    });
+
+    test('keeps current line-info-basic separator estimates without spacing gaps', () => {
+      const fileDiff = createTwoHunkDiff();
+      const [firstHunk, secondHunk] = fileDiff.hunks;
+      if (firstHunk == null || secondHunk == null) {
+        throw new Error('Expected two hunks');
+      }
+      const instance = new VirtualizedFileDiff(
+        { hunkSeparators: 'line-info-basic' },
+        virtualizer,
+        codeViewLikeMetrics
+      );
+      const separatorHeight = 32;
+      const hunkLineHeight =
+        (firstHunk.splitLineCount + secondHunk.splitLineCount) *
+        codeViewLikeMetrics.lineHeight;
+
+      instance.prepareVirtualizedItem(fileDiff);
+
+      expect(
+        instance.getLinePosition(firstHunk.additionStart, 'additions')?.top
+      ).toBe(codeViewLikeMetrics.diffHeaderHeight + separatorHeight);
+      expect(
+        instance.getLinePosition(secondHunk.additionStart, 'additions')?.top
+      ).toBe(
+        codeViewLikeMetrics.diffHeaderHeight +
+          separatorHeight +
+          firstHunk.splitLineCount * codeViewLikeMetrics.lineHeight +
+          separatorHeight
+      );
+      expect(instance.getVirtualizedHeight()).toBe(
+        codeViewLikeMetrics.diffHeaderHeight +
+          separatorHeight +
+          hunkLineHeight +
+          separatorHeight +
+          separatorHeight +
+          codeViewLikeMetrics.spacing
+      );
+    });
+
+    test('keeps current custom separator estimates aligned with line-info gaps', () => {
+      const fileDiff = createTwoHunkDiff();
+      const [firstHunk, secondHunk] = fileDiff.hunks;
+      if (firstHunk == null || secondHunk == null) {
+        throw new Error('Expected two hunks');
+      }
+      const instance = new VirtualizedFileDiff(
+        { hunkSeparators: () => undefined },
+        virtualizer,
+        codeViewLikeMetrics
+      );
+      const separatorHeight = 32;
+      const firstSeparatorHeight =
+        separatorHeight + codeViewLikeMetrics.spacing;
+      const middleSeparatorHeight =
+        codeViewLikeMetrics.spacing +
+        separatorHeight +
+        codeViewLikeMetrics.spacing;
+      const trailingSeparatorHeight =
+        codeViewLikeMetrics.spacing + separatorHeight;
+      const hunkLineHeight =
+        (firstHunk.splitLineCount + secondHunk.splitLineCount) *
+        codeViewLikeMetrics.lineHeight;
+
+      instance.prepareVirtualizedItem(fileDiff);
+
+      expect(
+        instance.getLinePosition(firstHunk.additionStart, 'additions')?.top
+      ).toBe(codeViewLikeMetrics.diffHeaderHeight + firstSeparatorHeight);
+      expect(
+        instance.getLinePosition(secondHunk.additionStart, 'additions')?.top
+      ).toBe(
+        codeViewLikeMetrics.diffHeaderHeight +
+          firstSeparatorHeight +
+          firstHunk.splitLineCount * codeViewLikeMetrics.lineHeight +
+          middleSeparatorHeight
+      );
+      expect(instance.getVirtualizedHeight()).toBe(
+        codeViewLikeMetrics.diffHeaderHeight +
+          firstSeparatorHeight +
+          hunkLineHeight +
+          middleSeparatorHeight +
+          trailingSeparatorHeight +
+          codeViewLikeMetrics.spacing
       );
     });
 
