@@ -220,7 +220,7 @@ function SidebarWrapper({
     <div
       className={cn(
         className,
-        'bg-neutral-50 dark:bg-neutral-900 contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
+        'bg-[var(--diffshub-sidebar-bg)] contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
         mobileOverlayOpen
           ? 'pointer-events-auto translate-y-0 overflow-hidden rounded-t-xl shadow-[0_0_0_1px_var(--color-border-opaque),_0_16px_32px_rgb(0_0_0_/0.25)] md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
           : 'pointer-events-none translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl md:pointer-events-auto md:h-full md:overflow-visible md:rounded-none pt-3 border-r border-[var(--color-border-opaque)]'

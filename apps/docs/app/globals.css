@@ -84,7 +84,7 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  --diffshub-sidebar-bg: light-dark(oklch(98.5% 0 0), oklch(20.5% 0 0));
+  --diffshub-sidebar-bg: #f7f7f7;
 
   color-scheme: light;
 }
@@ -127,6 +127,7 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --diffshub-sidebar-bg: #101010;
   color-scheme: dark;
 }
 

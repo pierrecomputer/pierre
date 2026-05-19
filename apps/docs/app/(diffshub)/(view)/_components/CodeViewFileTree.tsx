@@ -1,12 +1,22 @@
 'use client';
 
 import { useStableCallback } from '@pierre/diffs/react';
+import darkSoftTheme from '@pierre/theme/pierre-dark-soft';
+import lightSoftTheme from '@pierre/theme/pierre-light-soft';
 import type {
   FileTreeBatchOperation,
   FileTree as FileTreeModel,
 } from '@pierre/trees';
+import { themeToTreeStyles } from '@pierre/trees';
 import { FileTree, useFileTree } from '@pierre/trees/react';
-import { type CSSProperties, memo, useEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import type { FileTreePublicId } from '../../../../../../packages/trees/dist/model/publicTypes';
 import {
@@ -15,7 +25,14 @@ import {
   getInitialBatchSize,
 } from './constants';
 import type { CodeViewFileTreeSource } from './types';
+import { useTheme } from '@/components/theme-provider';
 
+// Computed once at module level so they're never re-derived on every render.
+const LIGHT_SOFT_TREE_STYLES = themeToTreeStyles(lightSoftTheme);
+const DARK_SOFT_TREE_STYLES = themeToTreeStyles(darkSoftTheme);
+
+// These override vars take precedence over the --trees-theme-* vars set by
+// themeToTreeStyles, so diffshub-specific layout tweaks are always preserved.
 const DENSITY_OVERRIDE_STYLES = {
   '--trees-bg-override': 'var(--diffshub-sidebar-bg)',
   '--trees-density-override': 0.8,
@@ -40,6 +57,16 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
   onSelectItem,
   source,
 }: CodeViewFileTreeProps) {
+  const { resolvedTheme } = useTheme();
+  const themeStyles = useMemo(
+    () => ({
+      ...(resolvedTheme === 'dark'
+        ? DARK_SOFT_TREE_STYLES
+        : LIGHT_SOFT_TREE_STYLES),
+      ...DENSITY_OVERRIDE_STYLES,
+    }),
+    [resolvedTheme]
+  );
   const sourceRef = useRef(source);
   const previousSourceRef = useRef(source);
   const [initialVisibleRowCount] = useState(getInitialBatchSize);
@@ -126,7 +153,7 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
     <FileTree
       className="h-full min-h-0 overflow-auto overscroll-contain md:ml-3"
       model={model}
-      style={DENSITY_OVERRIDE_STYLES}
+      style={themeStyles}
     />
   );
 });

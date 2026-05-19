@@ -39,6 +39,7 @@ import { PRODUCTS } from '@/lib/product-config';
 
 const LIGHT_THEMES = [
   'pierre-light',
+  'pierre-light-soft',
   'catppuccin-latte',
   'everforest-light',
   'github-light',
@@ -61,6 +62,7 @@ const LIGHT_THEMES = [
 
 const DARK_THEMES = [
   'pierre-dark',
+  'pierre-dark-soft',
   'andromeeda',
   'aurora-x',
   'ayu-dark',
