@@ -211,6 +211,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected renderRange: RenderRange | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
   protected lastRenderedHeaderHTML: string | undefined;
+  protected cachedHeaderHTML: string | undefined;
   protected lastRowCount: number | undefined;
 
   protected enabled = true;
@@ -356,6 +357,7 @@ export class FileDiff<LAnnotation = undefined> {
   public setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
+    this.cachedHeaderHTML = undefined;
     this.hunksRenderer.setOptions(this.getHunksRendererOptions(options));
     this.interactionManager.setOptions(
       pluckInteractionOptions(
@@ -496,6 +498,9 @@ export class FileDiff<LAnnotation = undefined> {
     this.headerCustom = undefined;
     this.placeHolder = undefined;
     this.lastRenderedHeaderHTML = undefined;
+    if (!recycle) {
+      this.cachedHeaderHTML = undefined;
+    }
     this.errorWrapper = undefined;
     this.spriteSVG = undefined;
     this.lastRowCount = undefined;
@@ -757,6 +762,9 @@ export class FileDiff<LAnnotation = undefined> {
         newFile,
         this.options.parseDiffOptions
       );
+    }
+    if (diffDidChange) {
+      this.cachedHeaderHTML = undefined;
     }
 
     if (lineAnnotations != null) {
@@ -1214,7 +1222,8 @@ export class FileDiff<LAnnotation = undefined> {
     this.placeHolder?.remove();
     this.placeHolder = undefined;
     const { fileDiff } = this;
-    const headerHTML = toHtml(headerAST);
+    const headerHTML = this.cachedHeaderHTML ?? toHtml(headerAST);
+    this.cachedHeaderHTML = headerHTML;
     if (headerHTML !== this.lastRenderedHeaderHTML) {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = headerHTML;
