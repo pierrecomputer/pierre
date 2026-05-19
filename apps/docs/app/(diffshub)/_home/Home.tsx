@@ -17,6 +17,7 @@ function Divider() {
 }
 
 const EXAMPLE_URLS = [
+  'oven-sh/bun/pull/30412',
   'nodejs/node/pull/59805',
   'ghostty-org/ghostty/pull/12291',
   'pierrecomputer/pierre/commit/0800fb',
