@@ -99,7 +99,6 @@ const nextConfig = {
       '@pierre/truncate/style.css': '../../packages/truncate/src/style.css',
     },
   },
-  allowedDevOrigins: ['192.168.1.65'],
 };
 
 export default nextConfig;
