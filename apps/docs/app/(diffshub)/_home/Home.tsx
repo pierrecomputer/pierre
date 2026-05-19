@@ -74,7 +74,24 @@ export default function DiffshubHome() {
         <p className="text-muted-foreground text-pretty">
           View code changes from any public GitHub diff or patch URL with a
           super-freaking-fast, beautiful, and virtualized interface by replacing{' '}
-          <code>github.com</code> with <code>diffshub.com</code>. Built by{' '}
+          <code>github.com</code> with <code>diffshub.com</code>.
+        </p>
+        <div className="text-muted-foreground flex flex-col gap-[2px] font-mono text-sm leading-[22px] tracking-tight">
+          <div>
+            <span className="inline-flex rounded bg-[#ff6762]/15 py-0.25 pr-1 pl-1.5 text-[#ff2e3f] dark:bg-[#ff6762]/10 dark:text-[#ff6762]">
+              - github
+            </span>
+            .com/org/repo/pull/number
+          </div>
+          <div>
+            <span className="inline-flex rounded bg-[#07c480]/15 py-0.25 pr-1 pl-1.5 text-[#18a46c] dark:bg-[#07c480]/10 dark:text-[#07c480]">
+              + diffshub
+            </span>
+            .com/org/repo/pull/number
+          </div>
+        </div>
+        <p className="text-muted-foreground text-pretty">
+          Built by{' '}
           <Link
             href="https://pierre.computer"
             target="_blank"
@@ -83,7 +100,16 @@ export default function DiffshubHome() {
           >
             The Pierre Computer Company
           </Link>{' '}
-          using the new CodeView component.
+          using our new{' '}
+          <Link
+            href="https://diffs.com/docs#codeview"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-link"
+          >
+            CodeView
+          </Link>{' '}
+          component.
         </p>
         <HomeFetchForm />
         <div className="mb-5 space-y-2">

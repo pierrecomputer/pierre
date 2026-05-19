@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 // viewer route owns fetching and renders its own loading state there.
 export const HomeFetchForm = memo(function HomeFetchForm() {
   return (
-    <div className="bg-background border-border rounded-lg border px-4">
+    <div className="bg-background border-border my-6 rounded-lg border px-4">
       <DiffUrlForm
         placeholder="https://github.com/org/repo/123"
         inputClassName="text-md h-12 w-full text-start"
