@@ -52,53 +52,22 @@ export default function DiffshubHome() {
           virtualized interface by replacing <code>github.com</code> with{' '}
           <code>diffshub.com</code>.
         </p>
-        <div className="text-muted-foreground flex flex-col gap-[2px] font-mono text-sm leading-[22px] tracking-tight">
-          <div>
-            <span className="inline-flex rounded bg-[#ff6762]/15 py-0.25 pr-1 pl-1.5 text-[#ff2e3f] dark:bg-[#ff6762]/10 dark:text-[#ff6762]">
+        <div className="text-muted-foreground flex flex-col gap-[2px] font-mono leading-[22px] tracking-tight">
+          <code className="font-normal text-inherit">
+            <code className="inline-flex rounded bg-[#ff6762]/15 py-0.25 pr-1 pl-1.5 text-[#ff2e3f] dark:bg-[#ff6762]/10 dark:text-[#ff6762]">
               - github
-            </span>
+            </code>
             .com/org/repo/pull/number
-          </div>
-          <div>
-            <span className="inline-flex rounded bg-[#07c480]/15 py-0.25 pr-1 pl-1.5 text-[#18a46c] dark:bg-[#07c480]/10 dark:text-[#07c480]">
+          </code>
+          <code className="font-normal text-inherit">
+            <code className="inline-flex rounded bg-[#07c480]/15 py-0.25 pr-1 pl-1.5 text-[#18a46c] dark:bg-[#07c480]/10 dark:text-[#07c480]">
               + diffshub
-            </span>
+            </code>
             .com/org/repo/pull/number
-          </div>
+          </code>
         </div>
-        <p className="text-muted-foreground text-pretty">
-          Built by{' '}
-          <Link
-            href="https://pierre.computer"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-link"
-          >
-            The Pierre Computer Company
-          </Link>{' '}
-          with{' '}
-          <Link
-            href="https://trees.software/docs#react-api-filetree"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-link"
-          >
-            FileTree
-          </Link>{' '}
-          and the new{' '}
-          <Link
-            href="https://diffs.com/docs#codeview"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-link"
-          >
-            CodeView
-          </Link>{' '}
-          component.
-        </p>
-
         <HomeFetchForm />
-        <div className="mb-5 space-y-2">
+        <div className="space-y-2">
           <h3 className="text-muted-foreground text-sm font-normal">
             Enter a URL above, or use one of these:
           </h3>
@@ -137,6 +106,37 @@ export default function DiffshubHome() {
         id="home-more"
         className="w-2xl max-w-[100vw] space-y-4 px-5 pb-8"
       >
+        <Divider />
+        <p className="text-muted-foreground text-sm text-pretty">
+          Built by{' '}
+          <Link
+            href="https://pierre.computer"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-link"
+          >
+            The Pierre Computer Company
+          </Link>{' '}
+          with{' '}
+          <Link
+            href="https://trees.software/docs#react-api-filetree"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-link"
+          >
+            FileTree
+          </Link>{' '}
+          and the new{' '}
+          <Link
+            href="https://diffs.com/docs#codeview"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-link"
+          >
+            CodeView
+          </Link>{' '}
+          component.
+        </p>
         <Divider />
         <nav aria-label="Social links" className="flex items-center gap-2 pt-2">
           {SOCIAL_LINKS.map(({ label, href, Icon }) => (
