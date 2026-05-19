@@ -125,6 +125,14 @@ interface HunkContentStartState extends HunkContentPrefixCounts {
   contentIndex: number;
 }
 
+interface HunkContentStartCacheEntry extends HunkContentStartState {
+  diffStyle: DiffStyle;
+  viewportStart: number;
+  stateSplitCount: number;
+  stateUnifiedCount: number;
+  contentLength: number;
+}
+
 interface ChangeIterationRanges {
   count: number;
   firstStart: number;
@@ -179,10 +187,7 @@ const hunkPrefixCountsCache = new WeakMap<
   FileDiffMetadata,
   HunkPrefixCountsCacheEntry
 >();
-const hunkContentPrefixCountsCache = new WeakMap<
-  Hunk,
-  HunkContentPrefixCounts[]
->();
+const hunkContentStartCache = new WeakMap<Hunk, HunkContentStartCacheEntry>();
 // Prefix seeking only wins once a hunk has enough content blocks to skip; below
 // this, the binary search and cache lookup cost more than the short linear scan.
 const HUNK_CONTENT_SEEK_THRESHOLD = 64;
@@ -1512,98 +1517,105 @@ function getHunkPrefixCounts({
   return prefixCounts;
 }
 
-function getHunkContentPrefixCounts(hunk: Hunk): HunkContentPrefixCounts[] {
-  let prefixCounts = hunkContentPrefixCountsCache.get(hunk);
-  if (prefixCounts != null) {
-    return prefixCounts;
-  }
-
+function setHunkContentCountsToStartOfVisibleBlock(
+  target: HunkContentStartState,
+  state: IterationState,
+  hunk: Hunk,
+  diffStyle: DiffStyle
+): void {
   let splitCount = 0;
   let unifiedCount = 0;
   let deletionCount = 0;
   let additionCount = 0;
-  prefixCounts = [
-    {
-      splitCount: 0,
-      unifiedCount: 0,
-      deletionCount: 0,
-      additionCount: 0,
-    },
-  ];
+  let contentIndex = 0;
 
-  for (const content of hunk.hunkContent) {
-    if (content.type === 'context') {
-      splitCount += content.lines;
-      unifiedCount += content.lines;
-      deletionCount += content.lines;
-      additionCount += content.lines;
-    } else {
-      splitCount += Math.max(content.deletions, content.additions);
-      unifiedCount += content.deletions + content.additions;
-      deletionCount += content.deletions;
-      additionCount += content.additions;
+  for (; contentIndex < hunk.hunkContent.length; contentIndex++) {
+    const content = hunk.hunkContent[contentIndex];
+    if (content == null) {
+      throw new Error('iterateOverDiff: invalid hunk content prefix index');
     }
-    prefixCounts.push({
-      splitCount,
-      unifiedCount,
-      deletionCount,
-      additionCount,
-    });
+    let nextSplitCount = splitCount;
+    let nextUnifiedCount = unifiedCount;
+    let nextDeletionCount = deletionCount;
+    let nextAdditionCount = additionCount;
+    if (content.type === 'context') {
+      nextSplitCount += content.lines;
+      nextUnifiedCount += content.lines;
+      nextDeletionCount += content.lines;
+      nextAdditionCount += content.lines;
+    } else {
+      nextSplitCount += Math.max(content.deletions, content.additions);
+      nextUnifiedCount += content.deletions + content.additions;
+      nextDeletionCount += content.deletions;
+      nextAdditionCount += content.additions;
+    }
+
+    const reachesViewportStart =
+      diffStyle === 'unified'
+        ? state.unifiedCount + nextUnifiedCount >= state.viewportStart
+        : diffStyle === 'split'
+          ? state.splitCount + nextSplitCount >= state.viewportStart
+          : state.unifiedCount + nextUnifiedCount >= state.viewportStart ||
+            state.splitCount + nextSplitCount >= state.viewportStart;
+
+    if (reachesViewportStart) {
+      break;
+    }
+
+    splitCount = nextSplitCount;
+    unifiedCount = nextUnifiedCount;
+    deletionCount = nextDeletionCount;
+    additionCount = nextAdditionCount;
   }
 
-  hunkContentPrefixCountsCache.set(hunk, prefixCounts);
-  return prefixCounts;
+  target.contentIndex = contentIndex;
+  target.splitCount = splitCount;
+  target.unifiedCount = unifiedCount;
+  target.deletionCount = deletionCount;
+  target.additionCount = additionCount;
 }
 
-// Seek within the selected hunk by using cached content-block prefix counts.
-// Hunk-level prefixes get us to the right hunk; this avoids replaying every
-// preceding context/change block in large hunks before a deep visible window.
+// Seek within the selected hunk and retain only the most recent seek result for
+// that hunk/start/style. Hunk-level prefixes get us to the right hunk; this
+// avoids replaying every preceding content block on repeated deep-window calls
+// without retaining one prefix object per content block after GC.
 function setHunkContentStartState(
   target: HunkContentStartState,
   state: IterationState,
   hunk: Hunk,
   diffStyle: DiffStyle
 ): boolean {
-  const prefixCounts = getHunkContentPrefixCounts(hunk);
-  let low = 1;
-  let high = prefixCounts.length - 1;
-  let result = prefixCounts.length;
-
-  while (low <= high) {
-    const mid = (low + high) >> 1;
-    const counts = prefixCounts[mid];
-    if (counts == null) {
-      throw new Error('iterateOverDiff: invalid hunk content prefix index');
-    }
-    const reachesViewportStart =
-      diffStyle === 'unified'
-        ? state.unifiedCount + counts.unifiedCount >= state.viewportStart
-        : diffStyle === 'split'
-          ? state.splitCount + counts.splitCount >= state.viewportStart
-          : state.unifiedCount + counts.unifiedCount >= state.viewportStart ||
-            state.splitCount + counts.splitCount >= state.viewportStart;
-
-    if (reachesViewportStart) {
-      result = mid;
-      high = mid - 1;
-    } else {
-      low = mid + 1;
-    }
+  const cached = hunkContentStartCache.get(hunk);
+  if (
+    cached != null &&
+    cached.diffStyle === diffStyle &&
+    cached.viewportStart === state.viewportStart &&
+    cached.stateSplitCount === state.splitCount &&
+    cached.stateUnifiedCount === state.unifiedCount &&
+    cached.contentLength === hunk.hunkContent.length
+  ) {
+    target.contentIndex = cached.contentIndex;
+    target.splitCount = cached.splitCount;
+    target.unifiedCount = cached.unifiedCount;
+    target.deletionCount = cached.deletionCount;
+    target.additionCount = cached.additionCount;
+    return target.contentIndex > 0;
   }
 
-  const contentIndex =
-    result > hunk.hunkContent.length ? hunk.hunkContent.length : result - 1;
-  const skippedCounts = prefixCounts[contentIndex];
-  if (skippedCounts == null) {
-    throw new Error('iterateOverDiff: invalid skipped content prefix index');
-  }
-
-  target.contentIndex = contentIndex;
-  target.splitCount = skippedCounts.splitCount;
-  target.unifiedCount = skippedCounts.unifiedCount;
-  target.deletionCount = skippedCounts.deletionCount;
-  target.additionCount = skippedCounts.additionCount;
-  return contentIndex > 0;
+  setHunkContentCountsToStartOfVisibleBlock(target, state, hunk, diffStyle);
+  hunkContentStartCache.set(hunk, {
+    diffStyle,
+    viewportStart: state.viewportStart,
+    stateSplitCount: state.splitCount,
+    stateUnifiedCount: state.unifiedCount,
+    contentLength: hunk.hunkContent.length,
+    contentIndex: target.contentIndex,
+    splitCount: target.splitCount,
+    unifiedCount: target.unifiedCount,
+    deletionCount: target.deletionCount,
+    additionCount: target.additionCount,
+  });
+  return target.contentIndex > 0;
 }
 
 // Clip a run of unchanged rows to the active rendered window. Equal rows advance
