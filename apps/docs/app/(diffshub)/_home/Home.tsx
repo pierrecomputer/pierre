@@ -85,7 +85,6 @@ export default function DiffshubHome() {
           </Link>{' '}
           using the new CodeView component.
         </p>
-        - github.com/org/repo/pull/number + diffshub.com/org/repo/pull/number
         <HomeFetchForm />
         <div className="mb-5 space-y-2">
           <h3 className="text-muted-foreground text-sm font-normal">
@@ -141,7 +140,7 @@ export default function DiffshubHome() {
             </Link>{' '}
             and{' '}
             <Link
-              href="https://trees.com"
+              href="https://trees.software"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-link no-underline"

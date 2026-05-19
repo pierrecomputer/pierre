@@ -276,7 +276,7 @@ function StatsDisplay({
           </Link>{' '}
           and{' '}
           <Link
-            href="https://trees.com"
+            href="https://trees.software"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-link text-muted-foreground hover:text-foreground no-underline"
