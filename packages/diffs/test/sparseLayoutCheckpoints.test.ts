@@ -105,7 +105,7 @@ describe('sparse layout checkpoints', () => {
       metrics
     );
 
-    instance.prepareVirtualizedItem(file);
+    instance.prepareCodeViewItem(file);
 
     expect(instance.getLinePosition(10_000)?.top).toBe(
       metrics.diffHeaderHeight + 9_999 * metrics.lineHeight
@@ -125,7 +125,7 @@ describe('sparse layout checkpoints', () => {
       metrics
     );
 
-    instance.prepareVirtualizedItem(diff);
+    instance.prepareCodeViewItem(diff);
 
     const expectedTop = metrics.diffHeaderHeight + 9_999 * metrics.lineHeight;
     expect(instance.getLinePosition(10_000, 'additions')?.top).toBe(
@@ -160,7 +160,7 @@ describe('sparse layout checkpoints', () => {
     }
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
-    instance.prepareVirtualizedItem(diff);
+    instance.prepareCodeViewItem(diff);
 
     expect(
       instance.getLinePosition(secondHunk.additionStart - 2, 'additions')
@@ -181,7 +181,7 @@ describe('sparse layout checkpoints', () => {
       metrics
     );
 
-    instance.prepareVirtualizedItem(createLargeFile());
+    instance.prepareCodeViewItem(createLargeFile());
     instance.setOptions({ disableVirtualizationBuffers: true });
 
     expect(layoutDirtyCalls).toEqual([false]);
@@ -203,7 +203,7 @@ describe('sparse layout checkpoints', () => {
       metrics
     );
 
-    instance.prepareVirtualizedItem(parseDiffFromFile(oldFile, newFile));
+    instance.prepareCodeViewItem(parseDiffFromFile(oldFile, newFile));
     instance.setOptions({ diffIndicators: 'classic' });
 
     expect(layoutDirtyCalls).toEqual([true]);

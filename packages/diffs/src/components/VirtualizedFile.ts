@@ -224,7 +224,7 @@ export class VirtualizedFile<
   // its virtualized top, and returning an approximate height. This method is
   // called while downstream items are being re-positioned, so later changes
   // should keep clean instances on a cached-height fast path.
-  public prepareVirtualizedItem(file: FileContents): number {
+  public prepareCodeViewItem(file: FileContents): number {
     if (this.file !== file) {
       this.layoutDirty = true;
     }

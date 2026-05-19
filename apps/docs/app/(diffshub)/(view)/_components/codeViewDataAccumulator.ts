@@ -109,7 +109,6 @@ export function appendFileDiffToCodeViewData(
   const item: CodeViewItem<CommentMetadata> = {
     id,
     type: 'diff',
-    collapsed: fileDiff.type === 'deleted',
     fileDiff,
     version: 0,
   };
