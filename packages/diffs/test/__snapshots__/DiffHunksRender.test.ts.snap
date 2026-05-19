@@ -217,7 +217,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -243,7 +243,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -269,7 +269,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -294,7 +294,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -343,7 +343,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -405,7 +405,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -430,7 +430,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -456,7 +456,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -482,7 +482,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -526,7 +526,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -539,7 +539,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -552,7 +552,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -565,7 +565,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#7B43F8",
+            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#693ACF",
           },
           "tagName": "span",
           "type": "element",
@@ -578,7 +578,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -591,7 +591,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -616,7 +616,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -629,7 +629,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -654,7 +654,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -667,7 +667,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -680,7 +680,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -705,7 +705,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -720,7 +720,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
                 },
               ],
               "properties": {
-                "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+                "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
               },
               "tagName": "span",
               "type": "element",
@@ -741,7 +741,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -766,7 +766,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -779,7 +779,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -792,7 +792,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -817,7 +817,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -830,7 +830,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -843,7 +843,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -856,7 +856,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -869,7 +869,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -894,7 +894,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -907,7 +907,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -920,7 +920,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -945,7 +945,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -970,7 +970,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1326,7 +1326,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -1352,7 +1352,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -1378,7 +1378,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FBFBFB;--diffs-token-light:#070707",
+            "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
           },
           "tagName": "span",
           "type": "element",
@@ -1429,7 +1429,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -1455,7 +1455,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1480,7 +1480,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -1529,7 +1529,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -1591,7 +1591,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1645,7 +1645,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -1658,7 +1658,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -1671,7 +1671,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -1684,7 +1684,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#7B43F8",
+            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#693ACF",
           },
           "tagName": "span",
           "type": "element",
@@ -1697,7 +1697,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1710,7 +1710,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1735,7 +1735,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -1748,7 +1748,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1773,7 +1773,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1786,7 +1786,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -1799,7 +1799,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1824,7 +1824,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1839,7 +1839,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
                 },
               ],
               "properties": {
-                "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+                "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
               },
               "tagName": "span",
               "type": "element",
@@ -1860,7 +1860,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1885,7 +1885,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1898,7 +1898,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -1911,7 +1911,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1946,7 +1946,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1959,7 +1959,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -1972,7 +1972,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -1997,7 +1997,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -2022,7 +2022,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -2479,7 +2479,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to additions colum
     "type": "element",
   },
   "rowCount": 14,
-  "themeStyles": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+  "themeStyles": "--diffs-dark:#fafafa;--diffs-dark-bg:#0a0a0a;--diffs-dark-addition-color:#07c480;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#0a0a0a;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#18a46c;--diffs-light-deletion-color:#d52c36;--diffs-light-modified-color:#009fff;",
   "totalLines": 14,
   "unifiedContentAST": undefined,
   "unifiedGutterAST": undefined,
@@ -2693,7 +2693,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -2719,7 +2719,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -2745,7 +2745,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FBFBFB;--diffs-token-light:#070707",
+            "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
           },
           "tagName": "span",
           "type": "element",
@@ -2796,7 +2796,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -2822,7 +2822,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -2847,7 +2847,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -2896,7 +2896,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -2958,7 +2958,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3012,7 +3012,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -3025,7 +3025,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -3038,7 +3038,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -3051,7 +3051,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#7B43F8",
+            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#693ACF",
           },
           "tagName": "span",
           "type": "element",
@@ -3064,7 +3064,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3077,7 +3077,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3102,7 +3102,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -3115,7 +3115,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3140,7 +3140,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3153,7 +3153,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -3166,7 +3166,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3191,7 +3191,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3206,7 +3206,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
                 },
               ],
               "properties": {
-                "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+                "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
               },
               "tagName": "span",
               "type": "element",
@@ -3227,7 +3227,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3252,7 +3252,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3265,7 +3265,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -3278,7 +3278,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3313,7 +3313,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3326,7 +3326,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -3339,7 +3339,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3364,7 +3364,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3389,7 +3389,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3742,7 +3742,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -3768,7 +3768,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -3794,7 +3794,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3819,7 +3819,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -3868,7 +3868,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -3930,7 +3930,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -3955,7 +3955,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -3981,7 +3981,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -4007,7 +4007,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4051,7 +4051,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -4064,7 +4064,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -4077,7 +4077,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -4090,7 +4090,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#7B43F8",
+            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#693ACF",
           },
           "tagName": "span",
           "type": "element",
@@ -4103,7 +4103,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4116,7 +4116,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4141,7 +4141,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -4154,7 +4154,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4179,7 +4179,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4192,7 +4192,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -4205,7 +4205,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4230,7 +4230,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4245,7 +4245,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
                 },
               ],
               "properties": {
-                "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+                "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
               },
               "tagName": "span",
               "type": "element",
@@ -4266,7 +4266,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4291,7 +4291,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4304,7 +4304,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -4317,7 +4317,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4342,7 +4342,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4355,7 +4355,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -4368,7 +4368,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4381,7 +4381,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -4394,7 +4394,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4419,7 +4419,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4432,7 +4432,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -4445,7 +4445,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4470,7 +4470,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4495,7 +4495,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -4965,7 +4965,7 @@ exports[`DiffHunksRenderer proper buffers should be prepended to deletions colum
     "type": "element",
   },
   "rowCount": 14,
-  "themeStyles": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+  "themeStyles": "--diffs-dark:#fafafa;--diffs-dark-bg:#0a0a0a;--diffs-dark-addition-color:#07c480;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#0a0a0a;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#18a46c;--diffs-light-deletion-color:#d52c36;--diffs-light-modified-color:#009fff;",
   "totalLines": 14,
   "unifiedContentAST": undefined,
   "unifiedGutterAST": undefined,
@@ -5305,7 +5305,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
     "type": "element",
   },
   "rowCount": 16,
-  "themeStyles": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+  "themeStyles": "--diffs-dark:#fafafa;--diffs-dark-bg:#0a0a0a;--diffs-dark-addition-color:#07c480;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#0a0a0a;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#18a46c;--diffs-light-deletion-color:#d52c36;--diffs-light-modified-color:#009fff;",
   "totalLines": 14,
   "unifiedContentAST": [
     {
@@ -5318,7 +5318,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5344,7 +5344,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5370,7 +5370,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FBFBFB;--diffs-token-light:#070707",
+            "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
           },
           "tagName": "span",
           "type": "element",
@@ -5395,7 +5395,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5421,7 +5421,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5447,7 +5447,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -5472,7 +5472,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5521,7 +5521,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5583,7 +5583,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -5608,7 +5608,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5657,7 +5657,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5719,7 +5719,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -5744,7 +5744,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5770,7 +5770,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5796,7 +5796,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -5840,7 +5840,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5853,7 +5853,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5866,7 +5866,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -5879,7 +5879,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#7B43F8",
+            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#693ACF",
           },
           "tagName": "span",
           "type": "element",
@@ -5892,7 +5892,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -5905,7 +5905,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -5930,7 +5930,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -5943,7 +5943,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -5968,7 +5968,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -5981,7 +5981,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -5994,7 +5994,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6019,7 +6019,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6034,7 +6034,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
                 },
               ],
               "properties": {
-                "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+                "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
               },
               "tagName": "span",
               "type": "element",
@@ -6055,7 +6055,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6080,7 +6080,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6095,7 +6095,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
                 },
               ],
               "properties": {
-                "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+                "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
               },
               "tagName": "span",
               "type": "element",
@@ -6116,7 +6116,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6141,7 +6141,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6154,7 +6154,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -6167,7 +6167,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6192,7 +6192,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6205,7 +6205,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -6218,7 +6218,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6231,7 +6231,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -6244,7 +6244,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6269,7 +6269,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6282,7 +6282,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -6295,7 +6295,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6320,7 +6320,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6345,7 +6345,7 @@ exports[`DiffHunksRenderer additions and deletions should be empty when unified:
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6863,7 +6863,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -6889,7 +6889,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -6915,7 +6915,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -6940,7 +6940,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -6966,7 +6966,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -6992,7 +6992,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7017,7 +7017,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -7043,7 +7043,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -7069,7 +7069,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7113,7 +7113,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -7126,7 +7126,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -7139,7 +7139,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -7152,7 +7152,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#7B43F8",
+            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#693ACF",
           },
           "tagName": "span",
           "type": "element",
@@ -7165,7 +7165,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7178,7 +7178,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7203,7 +7203,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -7216,7 +7216,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7241,7 +7241,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7254,7 +7254,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -7267,7 +7267,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7292,7 +7292,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7305,7 +7305,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -7318,7 +7318,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7343,7 +7343,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7356,7 +7356,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -7369,7 +7369,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7394,7 +7394,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7407,7 +7407,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -7420,7 +7420,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7433,7 +7433,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -7446,7 +7446,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7471,7 +7471,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7484,7 +7484,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -7497,7 +7497,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7522,7 +7522,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7547,7 +7547,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -7999,7 +7999,7 @@ exports[`DiffHunksRenderer a diff with only additions should have an empty delet
     "type": "element",
   },
   "rowCount": 13,
-  "themeStyles": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+  "themeStyles": "--diffs-dark:#fafafa;--diffs-dark-bg:#0a0a0a;--diffs-dark-addition-color:#07c480;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#0a0a0a;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#18a46c;--diffs-light-deletion-color:#d52c36;--diffs-light-modified-color:#009fff;",
   "totalLines": 14,
   "unifiedContentAST": undefined,
   "unifiedGutterAST": undefined,
@@ -8121,7 +8121,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -8147,7 +8147,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -8173,7 +8173,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FBFBFB;--diffs-token-light:#070707",
+            "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
           },
           "tagName": "span",
           "type": "element",
@@ -8224,7 +8224,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -8250,7 +8250,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8275,7 +8275,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -8301,7 +8301,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -8327,7 +8327,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8371,7 +8371,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -8384,7 +8384,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -8397,7 +8397,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -8410,7 +8410,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#7B43F8",
+            "style": "--diffs-token-dark:#9D6AFB;--diffs-token-light:#693ACF",
           },
           "tagName": "span",
           "type": "element",
@@ -8423,7 +8423,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8436,7 +8436,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8461,7 +8461,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#FC2B73",
+            "style": "--diffs-token-dark:#FF678D;--diffs-token-light:#D32A61",
           },
           "tagName": "span",
           "type": "element",
@@ -8474,7 +8474,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8499,7 +8499,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8512,7 +8512,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -8525,7 +8525,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8550,7 +8550,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8563,7 +8563,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -8576,7 +8576,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8601,7 +8601,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8614,7 +8614,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -8627,7 +8627,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8652,7 +8652,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8665,7 +8665,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FF6762;--diffs-token-light:#D52C36",
+            "style": "--diffs-token-dark:#FF855E;--diffs-token-light:#D5512F",
           },
           "tagName": "span",
           "type": "element",
@@ -8678,7 +8678,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8703,7 +8703,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -8728,7 +8728,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -9150,7 +9150,7 @@ exports[`DiffHunksRenderer a diff with only deletions should have an empty addit
     "type": "element",
   },
   "rowCount": 12,
-  "themeStyles": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+  "themeStyles": "--diffs-dark:#fafafa;--diffs-dark-bg:#0a0a0a;--diffs-dark-addition-color:#07c480;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#0a0a0a;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#18a46c;--diffs-light-deletion-color:#d52c36;--diffs-light-modified-color:#009fff;",
   "totalLines": 13,
   "unifiedContentAST": undefined,
   "unifiedGutterAST": undefined,
@@ -9170,7 +9170,7 @@ exports[`DiffHunksRenderer skips inline diff decorations for changed lines above
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -9183,7 +9183,7 @@ exports[`DiffHunksRenderer skips inline diff decorations for changed lines above
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FFCA00;--diffs-token-light:#D5A910",
+            "style": "--diffs-token-dark:#FFAB16;--diffs-token-light:#D5901C",
           },
           "tagName": "span",
           "type": "element",
@@ -9222,7 +9222,7 @@ exports[`DiffHunksRenderer skips inline diff decorations for changed lines above
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -9279,7 +9279,7 @@ exports[`DiffHunksRenderer skips inline diff decorations for changed lines above
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -9292,7 +9292,7 @@ exports[`DiffHunksRenderer skips inline diff decorations for changed lines above
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FFCA00;--diffs-token-light:#D5A910",
+            "style": "--diffs-token-dark:#FFAB16;--diffs-token-light:#D5901C",
           },
           "tagName": "span",
           "type": "element",
@@ -9331,7 +9331,7 @@ exports[`DiffHunksRenderer skips inline diff decorations for changed lines above
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -9502,7 +9502,7 @@ exports[`DiffHunksRenderer skips inline diff decorations for changed lines above
     "type": "element",
   },
   "rowCount": 1,
-  "themeStyles": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+  "themeStyles": "--diffs-dark:#fafafa;--diffs-dark-bg:#0a0a0a;--diffs-dark-addition-color:#07c480;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#0a0a0a;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#18a46c;--diffs-light-deletion-color:#d52c36;--diffs-light-modified-color:#009fff;",
   "totalLines": 2,
   "unifiedContentAST": undefined,
   "unifiedGutterAST": undefined,
@@ -9522,7 +9522,7 @@ exports[`DiffHunksRenderer keeps inline diff decorations for changed lines below
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -9535,7 +9535,7 @@ exports[`DiffHunksRenderer keeps inline diff decorations for changed lines below
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FFCA00;--diffs-token-light:#D5A910",
+            "style": "--diffs-token-dark:#FFAB16;--diffs-token-light:#D5901C",
           },
           "tagName": "span",
           "type": "element",
@@ -9597,7 +9597,7 @@ exports[`DiffHunksRenderer keeps inline diff decorations for changed lines below
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -9654,7 +9654,7 @@ exports[`DiffHunksRenderer keeps inline diff decorations for changed lines below
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#C635E4",
+            "style": "--diffs-token-dark:#D568EA;--diffs-token-light:#A631BE",
           },
           "tagName": "span",
           "type": "element",
@@ -9667,7 +9667,7 @@ exports[`DiffHunksRenderer keeps inline diff decorations for changed lines below
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#FFCA00;--diffs-token-light:#D5A910",
+            "style": "--diffs-token-dark:#FFAB16;--diffs-token-light:#D5901C",
           },
           "tagName": "span",
           "type": "element",
@@ -9729,7 +9729,7 @@ exports[`DiffHunksRenderer keeps inline diff decorations for changed lines below
             },
           ],
           "properties": {
-            "style": "--diffs-token-dark:#79797F;--diffs-token-light:#79797F",
+            "style": "--diffs-token-dark:#636363;--diffs-token-light:#636363",
           },
           "tagName": "span",
           "type": "element",
@@ -9900,7 +9900,7 @@ exports[`DiffHunksRenderer keeps inline diff decorations for changed lines below
     "type": "element",
   },
   "rowCount": 1,
-  "themeStyles": "--diffs-dark:#fbfbfb;--diffs-dark-bg:#070707;--diffs-dark-addition-color:#00cab1;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#070707;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#00cab1;--diffs-light-deletion-color:#ff2e3f;--diffs-light-modified-color:#009fff;",
+  "themeStyles": "--diffs-dark:#fafafa;--diffs-dark-bg:#0a0a0a;--diffs-dark-addition-color:#07c480;--diffs-dark-deletion-color:#ff2e3f;--diffs-dark-modified-color:#009fff;--diffs-light:#0a0a0a;--diffs-light-bg:#ffffff;--diffs-light-addition-color:#18a46c;--diffs-light-deletion-color:#d52c36;--diffs-light-modified-color:#009fff;",
   "totalLines": 2,
   "unifiedContentAST": undefined,
   "unifiedGutterAST": undefined,
