@@ -50,6 +50,7 @@ export type {
   FileTreeDropResult,
   FileTreeDropTarget,
   FileTreeFileHandle,
+  FileTreeGitStatusPatch,
   FileTreeHeaderCompositionOptions,
   FileTreeHydrationProps,
   FileTreeInitialExpansion,
