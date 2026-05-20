@@ -30,8 +30,6 @@ import { cn } from '@/lib/utils';
 const NUMBER_FORMATTER = new Intl.NumberFormat('en-US');
 
 class AutoScrollTester {
-  static SPEED = 1000;
-
   private running: 0 | 1 | 2 = 0;
   private direction = 1;
 
@@ -70,7 +68,7 @@ class AutoScrollTester {
     this.scrollRef.current.scrollTo({
       top:
         scrollTop +
-        AutoScrollTester.SPEED * this.direction +
+        clientHeight * 2 * this.direction +
         Math.random() * DEFAULT_CODE_VIEW_FILE_METRICS.lineHeight,
     });
     queueRender(this.render);
