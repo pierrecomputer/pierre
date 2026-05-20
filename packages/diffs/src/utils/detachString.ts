@@ -1,7 +1,16 @@
 const stringDetachEncoder = new TextEncoder();
 const stringDetachDecoder = new TextDecoder('utf-8', { ignoreBOM: true });
 const SURROGATE_CODE_UNIT_PATTERN = /[\uD800-\uDFFF]/;
-let stringDetachBuffer = new Uint8Array(1024);
+const STRING_DETACH_INITIAL_BUFFER_SIZE = 1024;
+let stringDetachBuffer = new Uint8Array(STRING_DETACH_INITIAL_BUFFER_SIZE);
+
+// Drops the reusable scratch buffer after a parsing run so one unusually long
+// line does not pin that peak allocation for the lifetime of the process.
+export function releaseStringDetachBuffer(): void {
+  if (stringDetachBuffer.length !== STRING_DETACH_INITIAL_BUFFER_SIZE) {
+    stringDetachBuffer = new Uint8Array(STRING_DETACH_INITIAL_BUFFER_SIZE);
+  }
+}
 
 // Forces a fresh backing string so a retained substring does not keep the
 // original raw patch/file text alive.
