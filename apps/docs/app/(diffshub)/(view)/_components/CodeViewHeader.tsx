@@ -109,7 +109,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
                 size="icon-md"
                 aria-label="Open source in new tab"
                 title="Open source in new tab"
-                className="hover:text-muted-foreground hover:bg-transparent"
+                className="hover:text-muted-foreground hidden hover:bg-transparent md:flex"
               >
                 <a href={initialUrl} target="_blank" rel="noreferrer noopener">
                   <IconShare className="size-4 md:size-3" />
@@ -118,7 +118,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
               <div className="bg-border hidden h-3 w-px md:block" />
             </>
           )}
-          <div className="hidden items-center md:flex">
+          <div className="flex items-center">
             <Button
               type="button"
               variant="ghost"
@@ -128,7 +128,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
                   ? 'Switch to unified view'
                   : 'Switch to split view'
               }
-              className="hover:text-muted-foreground hover:bg-transparent"
+              className="hover:text-muted-foreground hidden hover:bg-transparent md:flex"
               onClick={() =>
                 setDiffStyle(diffStyle === 'split' ? 'unified' : 'split')
               }
