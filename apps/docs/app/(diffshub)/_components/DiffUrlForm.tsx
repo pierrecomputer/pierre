@@ -26,6 +26,9 @@ interface DiffUrlFormProps {
   // button shows whenever the input has content.
   initialUrl?: string;
   inputClassName?: string;
+  // Called whenever the controlled URL value changes, so parent components
+  // can react to edits (e.g. to conditionally show/hide related controls).
+  onUrlChange?: (url: string) => void;
   placeholder?: string;
   // Render prop for the submit button area. Receives the transition pending
   // state and current URL value so callers can conditionally render controls.
@@ -40,6 +43,7 @@ export function DiffUrlForm({
   className,
   initialUrl = '',
   inputClassName,
+  onUrlChange,
   placeholder,
   children,
 }: DiffUrlFormProps) {
@@ -62,6 +66,10 @@ export function DiffUrlForm({
   useEffect(() => {
     setURL(initialUrl);
   }, [initialUrl]);
+
+  useEffect(() => {
+    onUrlChange?.(url);
+  }, [onUrlChange, url]);
 
   // Keep the portal position in sync with the input whenever it's visible.
   // Resize (including DevTools opening) and scroll both change the input's
@@ -112,7 +120,7 @@ export function DiffUrlForm({
 
   return (
     <form
-      className={cn('group flex min-w-0 items-center gap-1 w-full ', className)}
+      className={cn('group flex min-w-0 items-center gap-1 w-full', className)}
       noValidate
       onSubmit={handleSubmit}
     >

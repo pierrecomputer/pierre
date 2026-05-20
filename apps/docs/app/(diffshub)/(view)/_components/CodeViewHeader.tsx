@@ -6,10 +6,11 @@ import {
   IconEyeSlash,
   IconFileTreeFill,
   IconGearFill,
+  IconShare,
   IconSymbolDiffstat,
 } from '@pierre/icons';
 import Link from 'next/link';
-import { type Dispatch, memo, type SetStateAction } from 'react';
+import { type Dispatch, memo, type SetStateAction, useState } from 'react';
 
 import { DiffUrlForm } from '../../_components/DiffUrlForm';
 import { DiffsHubLogo } from './DiffsHubLogo';
@@ -62,6 +63,10 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   setShowBackgrounds,
   showBackgrounds,
 }: HeaderProps) {
+  const [currentUrl, setCurrentUrl] = useState(initialUrl);
+  // Only show the external-link button when the input still reflects the
+  // committed URL — otherwise we'd be pointing at a draft the user is editing.
+  const showExternalLink = currentUrl === initialUrl;
   return (
     <div
       className={cn(
@@ -78,6 +83,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
       <DiffUrlForm
         className="order-last md:order-none md:mr-auto"
         initialUrl={initialUrl}
+        onUrlChange={setCurrentUrl}
         placeholder="https://github.com/org/repo/123"
         inputClassName="w-full md:w-auto"
       />
@@ -94,8 +100,25 @@ export const CodeViewHeader = memo(function CodeViewHeader({
         >
           <IconFileTreeFill className="size-4 md:size-3" />
         </Button>
-        <div className="flex items-center gap-1">
-          <div className="hidden items-center md:flex">
+        <div className="flex items-center gap-2">
+          {showExternalLink && (
+            <>
+              <Button
+                asChild
+                variant="ghost"
+                size="icon-md"
+                aria-label="Open source in new tab"
+                title="Open source in new tab"
+                className="hover:text-muted-foreground hidden hover:bg-transparent md:flex"
+              >
+                <a href={initialUrl} target="_blank" rel="noreferrer noopener">
+                  <IconShare className="size-4 md:size-3" />
+                </a>
+              </Button>
+              <div className="bg-border hidden h-3 w-px md:block" />
+            </>
+          )}
+          <div className="flex items-center">
             <Button
               type="button"
               variant="ghost"
@@ -105,7 +128,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
                   ? 'Switch to unified view'
                   : 'Switch to split view'
               }
-              className="hover:text-muted-foreground hover:bg-transparent"
+              className="hover:text-muted-foreground hidden hover:bg-transparent md:flex"
               onClick={() =>
                 setDiffStyle(diffStyle === 'split' ? 'unified' : 'split')
               }
@@ -116,82 +139,81 @@ export const CodeViewHeader = memo(function CodeViewHeader({
                 <IconDiffUnified className="size-4 md:size-3" />
               )}
             </Button>
-          </div>
-          <div className="bg-border hidden h-3 w-px md:block" />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-md"
-                className="hover:text-muted-foreground hover:bg-transparent"
-              >
-                <IconGearFill className="size-4 md:size-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem
-                className="cursor-default p-0"
-                onSelect={(e) => e.preventDefault()}
-              >
-                <label className={SETTING_ROW_CLASS}>
-                  <span className="min-w-0 flex-1">Backgrounds</span>
-                  <Switch
-                    checked={showBackgrounds}
-                    onCheckedChange={setShowBackgrounds}
-                  />
-                </label>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="cursor-default p-0"
-                onSelect={(e) => e.preventDefault()}
-              >
-                <label className={SETTING_ROW_CLASS}>
-                  <span className="min-w-0 flex-1">Line numbers</span>
-                  <Switch
-                    checked={lineNumbers}
-                    onCheckedChange={setLineNumbers}
-                  />
-                </label>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="cursor-default p-0"
-                onSelect={(e) => e.preventDefault()}
-              >
-                <label className={SETTING_ROW_CLASS}>
-                  <span className="min-w-0 flex-1">Word wrap</span>
-                  <Switch
-                    checked={overflow === 'wrap'}
-                    onCheckedChange={(checked) =>
-                      setOverflow(checked ? 'wrap' : 'scroll')
-                    }
-                  />
-                </label>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="w-full px-2 focus:bg-transparent"
-                onSelect={(e) => e.preventDefault()}
-              >
-                <span>Indicator style</span>
-                <ButtonGroup
-                  className="ml-auto"
-                  value={diffIndicators}
-                  onValueChange={(value) =>
-                    setDiffIndicators(value as DiffIndicators)
-                  }
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-md"
+                  className="hover:text-muted-foreground hover:bg-transparent"
                 >
-                  <ButtonGroupItem value="bars" className="size-7 p-0">
-                    <IconCodeStyleBars className="size-3" />
-                  </ButtonGroupItem>
-                  <ButtonGroupItem value="classic" className="size-7 p-0">
-                    <IconSymbolDiffstat className="size-3" />
-                  </ButtonGroupItem>
-                  <ButtonGroupItem value="none" className="size-7 p-0">
-                    <IconEyeSlash className="size-3" />
-                  </ButtonGroupItem>
-                </ButtonGroup>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <IconGearFill className="size-4 md:size-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem
+                  className="cursor-default p-0"
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  <label className={SETTING_ROW_CLASS}>
+                    <span className="min-w-0 flex-1">Backgrounds</span>
+                    <Switch
+                      checked={showBackgrounds}
+                      onCheckedChange={setShowBackgrounds}
+                    />
+                  </label>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="cursor-default p-0"
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  <label className={SETTING_ROW_CLASS}>
+                    <span className="min-w-0 flex-1">Line numbers</span>
+                    <Switch
+                      checked={lineNumbers}
+                      onCheckedChange={setLineNumbers}
+                    />
+                  </label>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="cursor-default p-0"
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  <label className={SETTING_ROW_CLASS}>
+                    <span className="min-w-0 flex-1">Word wrap</span>
+                    <Switch
+                      checked={overflow === 'wrap'}
+                      onCheckedChange={(checked) =>
+                        setOverflow(checked ? 'wrap' : 'scroll')
+                      }
+                    />
+                  </label>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="w-full px-2 focus:bg-transparent"
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  <span>Indicator style</span>
+                  <ButtonGroup
+                    className="ml-auto"
+                    value={diffIndicators}
+                    onValueChange={(value) =>
+                      setDiffIndicators(value as DiffIndicators)
+                    }
+                  >
+                    <ButtonGroupItem value="bars" className="size-7 p-0">
+                      <IconCodeStyleBars className="size-3" />
+                    </ButtonGroupItem>
+                    <ButtonGroupItem value="classic" className="size-7 p-0">
+                      <IconSymbolDiffstat className="size-3" />
+                    </ButtonGroupItem>
+                    <ButtonGroupItem value="none" className="size-7 p-0">
+                      <IconEyeSlash className="size-3" />
+                    </ButtonGroupItem>
+                  </ButtonGroup>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
       <hr className="border-border/80 w-full md:hidden" />
