@@ -86,7 +86,10 @@ interface MutableDiffLineRangeCallbackProps extends DiffLineCallbackBase {
 
 type DiffStyle = 'unified' | 'split' | 'both';
 
-type EqualLineIterationRange = [startIndex: number, endIndex: number];
+interface EqualLineIterationRange {
+  startIndex: number;
+  endIndex: number;
+}
 
 interface IterationState {
   finalHunk: Hunk | undefined;
@@ -98,9 +101,6 @@ interface IterationState {
   shouldBreak(): boolean;
   shouldSkip(unifiedHeight: number, splitHeight: number): boolean;
   incrementCounts(unifiedValue: number, splitValue: number): void;
-  isInWindow(unifiedHeight: number, splitHeight: number): boolean;
-  isInUnifiedWindow(height: number): boolean;
-  isInSplitWindow(height: number): boolean;
 }
 
 interface IterationStartState {
@@ -188,6 +188,9 @@ const hunkPrefixCountsCache = new WeakMap<
   HunkPrefixCountsCacheEntry
 >();
 const hunkContentStartCache = new WeakMap<Hunk, HunkContentStartCacheEntry>();
+// Small hunk lists are cheap to scan and not worth retaining in the prefix
+// cache after a post-GC memory benchmark sample.
+const MAX_UNCACHED_HUNK_PREFIX_COUNT = 16;
 // Prefix seeking only wins once a hunk has enough content blocks to skip; below
 // this, the binary search and cache lookup cost more than the short linear scan.
 const HUNK_CONTENT_SEEK_THRESHOLD = 64;
@@ -209,20 +212,21 @@ export function iterateOverDiff({
     expandedHunks,
     collapsedContextThreshold,
   });
+  const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
   const state: IterationState = {
     finalHunk: diff.hunks.at(-1),
     viewportStart: startingLine,
     viewportEnd: startingLine + totalLines,
-    isWindowedHighlight: startingLine > 0 || totalLines < Infinity,
+    isWindowedHighlight,
     splitCount: iterationStart.splitCount,
     unifiedCount: iterationStart.unifiedCount,
     shouldBreak() {
-      if (!state.isWindowedHighlight) {
+      if (!isWindowedHighlight) {
         return false;
       }
 
-      const breakUnified = state.unifiedCount >= startingLine + totalLines;
-      const breakSplit = state.splitCount >= startingLine + totalLines;
+      const breakUnified = state.unifiedCount >= state.viewportEnd;
+      const breakSplit = state.splitCount >= state.viewportEnd;
 
       if (diffStyle === 'unified') {
         return breakUnified;
@@ -233,12 +237,13 @@ export function iterateOverDiff({
       }
     },
     shouldSkip(unifiedHeight: number, splitHeight: number) {
-      if (!state.isWindowedHighlight) {
+      if (!isWindowedHighlight) {
         return false;
       }
 
-      const skipUnified = state.unifiedCount + unifiedHeight < startingLine;
-      const skipSplit = state.splitCount + splitHeight < startingLine;
+      const skipUnified =
+        state.unifiedCount + unifiedHeight < state.viewportStart;
+      const skipSplit = state.splitCount + splitHeight < state.viewportStart;
 
       if (diffStyle === 'unified') {
         return skipUnified;
@@ -256,39 +261,14 @@ export function iterateOverDiff({
         state.splitCount += splitValue;
       }
     },
-    isInWindow(unifiedHeight: number, splitHeight: number) {
-      if (!state.isWindowedHighlight) {
-        return true;
-      }
-
-      const unifiedInWindow = state.isInUnifiedWindow(unifiedHeight);
-      const splitInWindow = state.isInSplitWindow(splitHeight);
-
-      if (diffStyle === 'unified') {
-        return unifiedInWindow;
-      } else if (diffStyle === 'split') {
-        return splitInWindow;
-      } else {
-        return unifiedInWindow || splitInWindow;
-      }
-    },
-    isInUnifiedWindow(unifiedHeight: number) {
-      return (
-        !state.isWindowedHighlight ||
-        (state.unifiedCount >= startingLine - unifiedHeight &&
-          state.unifiedCount < startingLine + totalLines)
-      );
-    },
-    isInSplitWindow(splitHeight: number) {
-      return (
-        !state.isWindowedHighlight ||
-        (state.splitCount >= startingLine - splitHeight &&
-          state.splitCount < startingLine + totalLines)
-      );
-    },
   };
   const emittedUnifiedIncrement = diffStyle === 'split' ? 0 : 1;
   const emittedSplitIncrement = diffStyle === 'unified' ? 0 : 1;
+  const canUseRangeCallback = rangeCallback != null && !isWindowedHighlight;
+  const equalLineRange: EqualLineIterationRange = {
+    startIndex: 0,
+    endIndex: 0,
+  };
   const changeRanges: ChangeIterationRanges = {
     count: 0,
     firstStart: 0,
@@ -300,17 +280,15 @@ export function iterateOverDiff({
     fourthStart: 0,
     fourthEnd: 0,
   };
-  const contentStartState: HunkContentStartState = {
-    contentIndex: 0,
-    splitCount: 0,
-    unifiedCount: 0,
-    deletionCount: 0,
-    additionCount: 0,
-  };
+  let contentStartState: HunkContentStartState | undefined;
   const reusableDeletionLine = createReusableLineMetadata();
   const reusableAdditionLine = createReusableLineMetadata();
-  const reusableRangeDeletionLine = createReusableLineMetadata();
-  const reusableRangeAdditionLine = createReusableLineMetadata();
+  const reusableRangeDeletionLine = canUseRangeCallback
+    ? createReusableLineMetadata()
+    : reusableDeletionLine;
+  const reusableRangeAdditionLine = canUseRangeCallback
+    ? createReusableLineMetadata()
+    : reusableAdditionLine;
   const reusableChangeProps: MutableDiffLineCallbackProps = {
     type: 'change',
     hunkIndex: 0,
@@ -320,16 +298,19 @@ export function iterateOverDiff({
     deletionLine: undefined,
     additionLine: undefined,
   };
-  const reusableRangeProps: MutableDiffLineRangeCallbackProps = {
-    type: 'change',
-    lineCount: 0,
-    hunkIndex: 0,
-    hunk: undefined,
-    collapsedBefore: 0,
-    collapsedAfter: 0,
-    deletionLine: undefined,
-    additionLine: undefined,
-  };
+  const reusableRangeProps: MutableDiffLineRangeCallbackProps =
+    canUseRangeCallback
+      ? {
+          type: 'change',
+          lineCount: 0,
+          hunkIndex: 0,
+          hunk: undefined,
+          collapsedBefore: 0,
+          collapsedAfter: 0,
+          deletionLine: undefined,
+          additionLine: undefined,
+        }
+      : (reusableChangeProps as unknown as MutableDiffLineRangeCallbackProps);
 
   hunkIterator: for (
     let hunkIndex = iterationStart.hunkIndex;
@@ -340,7 +321,7 @@ export function iterateOverDiff({
     if (hunk == null) {
       throw new Error('iterateOverDiff: invalid hunk index');
     }
-    if (state.isWindowedHighlight && state.shouldBreak()) {
+    if (isWindowedHighlight && state.shouldBreak()) {
       break;
     }
 
@@ -416,7 +397,7 @@ export function iterateOverDiff({
 
     // Emit for expanded lines
     if (
-      !state.isWindowedHighlight ||
+      !isWindowedHighlight ||
       !state.shouldSkip(expandedLineCount, expandedLineCount)
     ) {
       let unifiedLineIndex = hunk.unifiedLineStart - leadingRegion.rangeSize;
@@ -427,11 +408,14 @@ export function iterateOverDiff({
       let deletionLineNumber = hunk.deletionStart - leadingRegion.rangeSize;
       let additionLineNumber = hunk.additionStart - leadingRegion.rangeSize;
 
-      const [startIndex, endIndex] = getEqualLineIterationRange(
+      setEqualLineIterationRange(
+        equalLineRange,
         state,
         leadingRegion.fromStart,
         diffStyle
       );
+      const startIndex = equalLineRange.startIndex;
+      const endIndex = equalLineRange.endIndex;
       if (startIndex > 0) {
         state.incrementCounts(startIndex, startIndex);
       }
@@ -477,11 +461,14 @@ export function iterateOverDiff({
       additionLineIndex = hunk.additionLineIndex - leadingRegion.fromEnd;
       deletionLineNumber = hunk.deletionStart - leadingRegion.fromEnd;
       additionLineNumber = hunk.additionStart - leadingRegion.fromEnd;
-      const [fromEndStartIndex, fromEndEndIndex] = getEqualLineIterationRange(
+      setEqualLineIterationRange(
+        equalLineRange,
         state,
         leadingRegion.fromEnd,
         diffStyle
       );
+      const fromEndStartIndex = equalLineRange.startIndex;
+      const fromEndEndIndex = equalLineRange.endIndex;
       if (fromEndStartIndex > 0) {
         state.incrementCounts(fromEndStartIndex, fromEndStartIndex);
       }
@@ -535,32 +522,43 @@ export function iterateOverDiff({
     const hunkContent = hunk.hunkContent;
     const lastContentIndex = hunkContent.length - 1;
 
-    contentStartState.contentIndex = 0;
+    let contentStartIndex = 0;
     if (
-      state.isWindowedHighlight &&
-      hunkContent.length > HUNK_CONTENT_SEEK_THRESHOLD &&
-      setHunkContentStartState(contentStartState, state, hunk, diffStyle) &&
-      contentStartState.contentIndex > 0
+      isWindowedHighlight &&
+      hunkContent.length > HUNK_CONTENT_SEEK_THRESHOLD
     ) {
-      state.incrementCounts(
-        contentStartState.unifiedCount,
-        contentStartState.splitCount
-      );
-      unifiedLineIndex += contentStartState.unifiedCount;
-      splitLineIndex += contentStartState.splitCount;
-      deletionLineIndex += contentStartState.deletionCount;
-      additionLineIndex += contentStartState.additionCount;
-      deletionLineNumber += contentStartState.deletionCount;
-      additionLineNumber += contentStartState.additionCount;
-      getPendingCollapsed();
+      contentStartState ??= {
+        contentIndex: 0,
+        splitCount: 0,
+        unifiedCount: 0,
+        deletionCount: 0,
+        additionCount: 0,
+      };
+      if (
+        setHunkContentStartState(contentStartState, state, hunk, diffStyle) &&
+        contentStartState.contentIndex > 0
+      ) {
+        contentStartIndex = contentStartState.contentIndex;
+        state.incrementCounts(
+          contentStartState.unifiedCount,
+          contentStartState.splitCount
+        );
+        unifiedLineIndex += contentStartState.unifiedCount;
+        splitLineIndex += contentStartState.splitCount;
+        deletionLineIndex += contentStartState.deletionCount;
+        additionLineIndex += contentStartState.additionCount;
+        deletionLineNumber += contentStartState.deletionCount;
+        additionLineNumber += contentStartState.additionCount;
+        getPendingCollapsed();
+      }
     }
 
     for (
-      let contentIndex = contentStartState.contentIndex;
+      let contentIndex = contentStartIndex;
       contentIndex < hunkContent.length;
       contentIndex++
     ) {
-      if (state.isWindowedHighlight && state.shouldBreak()) {
+      if (isWindowedHighlight && state.shouldBreak()) {
         break hunkIterator;
       }
 
@@ -573,12 +571,12 @@ export function iterateOverDiff({
       // Hunk Context Content
       if (content.type === 'context') {
         if (
-          !state.isWindowedHighlight &&
+          !isWindowedHighlight &&
           pendingCollapsedLines === 0 &&
           trailingCollapsedLines <= 0 &&
           !(isLastContent && (hunk.noEOFCRAdditions || hunk.noEOFCRDeletions))
         ) {
-          if (rangeCallback != null) {
+          if (canUseRangeCallback) {
             setRangeLineData(
               reusableRangeProps,
               reusableRangeDeletionLine,
@@ -632,8 +630,8 @@ export function iterateOverDiff({
             }
           }
         } else if (
-          !state.isWindowedHighlight &&
-          rangeCallback != null &&
+          !isWindowedHighlight &&
+          canUseRangeCallback &&
           pendingCollapsedLines > 0 &&
           trailingCollapsedLines <= 0 &&
           !(isLastContent && (hunk.noEOFCRAdditions || hunk.noEOFCRDeletions))
@@ -663,14 +661,17 @@ export function iterateOverDiff({
             break hunkIterator;
           }
         } else if (
-          !state.isWindowedHighlight ||
+          !isWindowedHighlight ||
           !state.shouldSkip(content.lines, content.lines)
         ) {
-          const [startIndex, endIndex] = getEqualLineIterationRange(
+          setEqualLineIterationRange(
+            equalLineRange,
             state,
             content.lines,
             diffStyle
           );
+          const startIndex = equalLineRange.startIndex;
+          const endIndex = equalLineRange.endIndex;
           if (startIndex > 0) {
             state.incrementCounts(startIndex, startIndex);
           }
@@ -730,21 +731,20 @@ export function iterateOverDiff({
         const splitCount = Math.max(content.deletions, content.additions);
         const unifiedCount = content.deletions + content.additions;
         const shouldSkipChange =
-          state.isWindowedHighlight &&
-          state.shouldSkip(unifiedCount, splitCount);
+          isWindowedHighlight && state.shouldSkip(unifiedCount, splitCount);
         if (!shouldSkipChange) {
           reusableChangeProps.type = 'change';
           reusableChangeProps.hunkIndex = hunkIndex;
           reusableChangeProps.hunk = hunk;
 
           if (
-            !state.isWindowedHighlight &&
+            !isWindowedHighlight &&
             content.deletions === 0 &&
             pendingCollapsedLines === 0 &&
             trailingCollapsedLines <= 0 &&
             !(isLastContent && hunk.noEOFCRAdditions)
           ) {
-            if (rangeCallback != null) {
+            if (canUseRangeCallback) {
               setRangeLineData(
                 reusableRangeProps,
                 reusableRangeDeletionLine,
@@ -790,13 +790,13 @@ export function iterateOverDiff({
               }
             }
           } else if (
-            !state.isWindowedHighlight &&
+            !isWindowedHighlight &&
             content.additions === 0 &&
             pendingCollapsedLines === 0 &&
             trailingCollapsedLines <= 0 &&
             !(isLastContent && hunk.noEOFCRDeletions)
           ) {
-            if (rangeCallback != null) {
+            if (canUseRangeCallback) {
               setRangeLineData(
                 reusableRangeProps,
                 reusableRangeDeletionLine,
@@ -842,7 +842,7 @@ export function iterateOverDiff({
               }
             }
           } else if (
-            !state.isWindowedHighlight &&
+            !isWindowedHighlight &&
             content.deletions > 0 &&
             content.additions > 0 &&
             pendingCollapsedLines === 0 &&
@@ -850,7 +850,7 @@ export function iterateOverDiff({
             !(isLastContent && hunk.noEOFCRAdditions) &&
             !(isLastContent && hunk.noEOFCRDeletions)
           ) {
-            if (rangeCallback != null) {
+            if (canUseRangeCallback) {
               if (diffStyle === 'unified') {
                 setRangeLineData(
                   reusableRangeProps,
@@ -1310,17 +1310,15 @@ export function iterateOverDiff({
     if (trailingRegion != null) {
       const { collapsedLines, fromStart, fromEnd } = trailingRegion;
       const len = fromStart + fromEnd;
-      const [startIndex, endIndex] = getEqualLineIterationRange(
-        state,
-        len,
-        diffStyle
-      );
+      setEqualLineIterationRange(equalLineRange, state, len, diffStyle);
+      const startIndex = equalLineRange.startIndex;
+      const endIndex = equalLineRange.endIndex;
       if (startIndex > 0) {
         state.incrementCounts(startIndex, startIndex);
       }
       let index = startIndex;
       while (index < len) {
-        if (state.isWindowedHighlight && state.shouldBreak()) {
+        if (isWindowedHighlight && state.shouldBreak()) {
           break hunkIterator;
         }
         if (index >= endIndex) {
@@ -1434,7 +1432,10 @@ function getCachedHunkPrefixCounts(
   props: HunkPrefixCountsProps
 ): HunkPrefixCounts[] {
   const { diff, expandedHunks, collapsedContextThreshold } = props;
-  if (expandedHunks !== undefined && expandedHunks !== true) {
+  if (
+    diff.hunks.length <= MAX_UNCACHED_HUNK_PREFIX_COUNT ||
+    (expandedHunks !== undefined && expandedHunks !== true)
+  ) {
     return getHunkPrefixCounts(props);
   }
 
@@ -1622,18 +1623,30 @@ function setHunkContentStartState(
 // split and unified counters together, but `diffStyle: both` needs the union of
 // the split and unified visible ranges because either view can make the row
 // worth emitting.
-function getEqualLineIterationRange(
+function setEqualLineIterationRange(
+  target: EqualLineIterationRange,
   state: IterationState,
   count: number,
   diffStyle: DiffStyle
-): EqualLineIterationRange {
+): void {
   if (!state.isWindowedHighlight || count <= 0) {
-    return [0, count];
+    target.startIndex = 0;
+    target.endIndex = count;
+    return;
   }
 
   let start = Infinity;
   let end = -Infinity;
-  function mergeRange(currentCount: number): void {
+  if (diffStyle !== 'split') {
+    const rangeStart = Math.max(0, state.viewportStart - state.unifiedCount);
+    const rangeEnd = Math.min(count, state.viewportEnd - state.unifiedCount);
+    if (rangeEnd > rangeStart) {
+      start = rangeStart;
+      end = rangeEnd;
+    }
+  }
+  if (diffStyle !== 'unified') {
+    const currentCount = state.splitCount;
     const rangeStart = Math.max(0, state.viewportStart - currentCount);
     const rangeEnd = Math.min(count, state.viewportEnd - currentCount);
     if (rangeEnd > rangeStart) {
@@ -1642,17 +1655,13 @@ function getEqualLineIterationRange(
     }
   }
 
-  if (diffStyle !== 'split') {
-    mergeRange(state.unifiedCount);
-  }
-  if (diffStyle !== 'unified') {
-    mergeRange(state.splitCount);
-  }
-
   if (end < 0) {
-    return [0, 0];
+    target.startIndex = 0;
+    target.endIndex = 0;
+    return;
   }
-  return [start, end];
+  target.startIndex = start;
+  target.endIndex = end;
 }
 
 // Measure the unchanged tail after the final hunk so it can be collapsed or

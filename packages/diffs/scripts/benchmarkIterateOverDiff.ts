@@ -63,6 +63,8 @@ export interface BenchmarkFixture {
 
 export interface BenchmarkConfig {
   runs: number;
+  memoryRuns: number;
+  memorySamples: number;
   warmupRuns: number;
   batchRuns: number;
   preset: BenchmarkPreset;
@@ -211,6 +213,8 @@ const DEFAULT_LINE_HEIGHT = 10;
 const DEFAULT_HUNK_LINE_COUNT = 50;
 const DEFAULT_CONFIG: BenchmarkConfig = {
   runs: 50,
+  memoryRuns: 1,
+  memorySamples: 1,
   warmupRuns: 5,
   batchRuns: 1,
   preset: 'standard',
@@ -382,6 +386,22 @@ export function parseArgs(argv: string[]): BenchmarkConfig {
       continue;
     }
 
+    if (flag === '--memory-runs') {
+      const value = inlineValue ?? argv[index + 1];
+      if (value == null) throw new Error('Missing value for --memory-runs');
+      if (inlineValue == null) index++;
+      config.memoryRuns = parsePositiveInteger(value, '--memory-runs');
+      continue;
+    }
+
+    if (flag === '--memory-samples') {
+      const value = inlineValue ?? argv[index + 1];
+      if (value == null) throw new Error('Missing value for --memory-samples');
+      if (inlineValue == null) index++;
+      config.memorySamples = parsePositiveInteger(value, '--memory-samples');
+      continue;
+    }
+
     if (flag === '--warmup-runs') {
       const value = inlineValue ?? argv[index + 1];
       if (value == null) throw new Error('Missing value for --warmup-runs');
@@ -452,6 +472,12 @@ function printHelpAndExit(): never {
     '  --runs <number>          Measured runs per benchmark case (default: 50)'
   );
   console.log(
+    '  --memory-runs <number>   Measured runs per fresh memory child process (default: 1)'
+  );
+  console.log(
+    '  --memory-samples <n>     Fresh memory child processes per case; reports median post-GC RSS (default: 1)'
+  );
+  console.log(
     '  --warmup-runs <number>   Warmup runs per benchmark case (default: 5)'
   );
   console.log(
@@ -472,7 +498,7 @@ function printHelpAndExit(): never {
     '  --include-synthetic      Include deterministic synthetic diffs'
   );
   console.log(
-    '  --memory                 Run each selected case in fresh child processes and report GC-before/after memory deltas'
+    '  --memory                 Run each selected case in fresh child processes and report post-GC RSS'
   );
   console.log(
     '  --compare-baseline       Run baseline_iterateOverDiff and iterateOverDiff, then compare'
@@ -2170,7 +2196,7 @@ function buildMemoryChildArgs(
     '--memory-child-case-index',
     String(caseIndex),
     '--runs',
-    String(config.runs),
+    String(config.memoryRuns),
     '--warmup-runs',
     String(config.warmupRuns),
     '--batch-runs',
@@ -2218,6 +2244,17 @@ function runMemoryChildProcess(
     );
   }
   return JSON.parse(child.stdout) as MemoryChildOutput;
+}
+
+function selectMedianMemoryOutput(
+  outputs: MemoryChildOutput[]
+): MemoryChildOutput {
+  if (outputs.length === 0) {
+    throw new Error('No memory child outputs were collected.');
+  }
+  return [...outputs].sort(
+    (left, right) => left.memory.after.rss - right.memory.after.rss
+  )[Math.floor(outputs.length / 2)];
 }
 
 interface MemoryComparisonRow {
@@ -2373,20 +2410,31 @@ function runFreshProcessMemoryComparison(
   const implementationIds: BenchmarkImplementationId[] = config.compareBaseline
     ? ['baseline', 'current']
     : ['current'];
-  const totalSteps = cases.length * implementationIds.length;
+  const totalSteps =
+    cases.length * implementationIds.length * config.memorySamples;
   const progress = new ProgressReporter(totalSteps, progressEnabled);
   const baseline: MemoryChildOutput[] = [];
   const current: MemoryChildOutput[] = [];
 
   for (let caseIndex = 0; caseIndex < cases.length; caseIndex++) {
     for (const implementationId of implementationIds) {
-      const output = runMemoryChildProcess(config, implementationId, caseIndex);
+      const samples: MemoryChildOutput[] = [];
+      for (
+        let sampleIndex = 0;
+        sampleIndex < config.memorySamples;
+        sampleIndex++
+      ) {
+        samples.push(
+          runMemoryChildProcess(config, implementationId, caseIndex)
+        );
+        progress.step('memory');
+      }
+      const output = selectMedianMemoryOutput(samples);
       if (implementationId === 'baseline') {
         baseline.push(output);
       } else {
         current.push(output);
       }
-      progress.step('memory');
     }
   }
 
@@ -2485,6 +2533,9 @@ function main() {
     if (freshProcessMemory != null) {
       console.log('');
       console.log(
+        `memoryRunsPerCase=${config.memoryRuns} memorySamplesPerCase=${config.memorySamples}`
+      );
+      console.log(
         'fresh process memory comparison (post-GC RSS after baseline/current case processes)'
       );
       printFreshProcessMemoryTable(
@@ -2539,6 +2590,9 @@ function main() {
   printSummaryTable(summaries);
   if (freshProcessMemory != null) {
     console.log('');
+    console.log(
+      `memoryRunsPerCase=${config.memoryRuns} memorySamplesPerCase=${config.memorySamples}`
+    );
     console.log(
       'fresh process memory (post-GC RSS before/after each current case process)'
     );
