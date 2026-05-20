@@ -3,48 +3,26 @@ import {
   IconBrandDiscord,
   IconBrandGithub,
   IconBrandTwitterX,
-  IconChevronSm,
 } from '@pierre/icons';
 import Link from 'next/link';
 
 import { DiffsHubLogo } from '../(view)/_components/DiffsHubLogo';
 import { getGitHubPath } from '../(view)/_components/utils';
+
+const DIFF_LINE_BADGE = 'inline-flex rounded-r py-0.25 pr-1.5 pl-1.5';
+const DIFF_LINE_DELETED_BADGE = `${DIFF_LINE_BADGE} bg-[#ff6762]/15 text-[#ff2e3f] dark:bg-[#ff6762]/10 dark:text-[#ff6762]`;
+const DIFF_LINE_ADDED_BADGE = `${DIFF_LINE_BADGE} bg-[#07c480]/15 text-[#18a46c] dark:bg-[#07c480]/10 dark:text-[#07c480]`;
 import { HomeFetchForm } from './HomeFetchForm';
-import { ScrollDownButton } from './ScrollDownButton';
 
 function Divider() {
-  return <hr className="my-8 w-full md:max-w-[80px]" />;
+  return <hr className="my-8 max-w-[80px] opacity-50" />;
 }
 
 const EXAMPLE_URLS = [
   'oven-sh/bun/pull/30412',
   'nodejs/node/pull/59805',
   'ghostty-org/ghostty/pull/12291',
-  'pierrecomputer/pierre/commit/0800fb',
 ] as const;
-
-function FaqItem({
-  question,
-  children,
-}: {
-  question: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <details className="faq-item group my-2">
-      <summary className="text-foreground hover:text-foreground/80 inline-flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1 font-medium transition-colors marker:hidden [&::-webkit-details-marker]:hidden">
-        <IconChevronSm
-          aria-hidden
-          className="text-muted-foreground transform-origin-center -rotate-90 transition-transform duration-150 group-open:rotate-0"
-        />
-        {question}
-      </summary>
-      <div className="text-muted-foreground -mt-0.5 mb-2 ml-6.5 max-w-2xl text-sm text-pretty">
-        {children}
-      </div>
-    </details>
-  );
-}
 
 const SOCIAL_LINKS = [
   {
@@ -73,51 +51,27 @@ export default function DiffshubHome() {
           DiffsHub
         </h2>
         <p className="text-muted-foreground text-pretty">
-          View code changes from any public GitHub diff or patch URL with a
-          super-freaking-fast, beautiful, and virtualized interface by replacing{' '}
-          <code>github.com</code> with <code>diffshub.com</code>.
+          View code changes from any public GitHub diff—PRs, comparisons,
+          commits, diffs, and patches—with a super-freaking-fast, beautiful, and
+          virtualized interface by replacing <code>github.com</code> with{' '}
+          <code>diffshub.com</code>.
         </p>
-        <div className="text-muted-foreground flex flex-col gap-[2px] font-mono text-sm leading-[22px] tracking-tight">
-          <div>
-            <span className="inline-flex rounded bg-[#ff6762]/15 py-0.25 pr-1 pl-1.5 text-[#ff2e3f] dark:bg-[#ff6762]/10 dark:text-[#ff6762]">
-              - github
-            </span>
+        <div className="text-muted-foreground flex flex-col gap-[2px] font-mono leading-[22px] tracking-tight">
+          <code className="diffshub-border-deleted overflow-hidden rounded-l font-normal text-inherit">
+            <code className={DIFF_LINE_DELETED_BADGE}>- github</code>
             .com/org/repo/pull/number
-          </div>
-          <div>
-            <span className="inline-flex rounded bg-[#07c480]/15 py-0.25 pr-1 pl-1.5 text-[#18a46c] dark:bg-[#07c480]/10 dark:text-[#07c480]">
-              + diffshub
-            </span>
+          </code>
+          <code className="rounded-l border-l-[4px] border-[#07c480] font-normal text-inherit">
+            <code className={DIFF_LINE_ADDED_BADGE}>+ diffshub</code>
             .com/org/repo/pull/number
-          </div>
+          </code>
         </div>
-        <p className="text-muted-foreground text-pretty">
-          Built by{' '}
-          <Link
-            href="https://pierre.computer"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-link"
-          >
-            The Pierre Computer Company
-          </Link>{' '}
-          using our new{' '}
-          <Link
-            href="https://diffs.com/docs#codeview"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-link"
-          >
-            CodeView
-          </Link>{' '}
-          component.
-        </p>
         <HomeFetchForm />
-        <div className="mb-5 space-y-2">
+        <div className="space-y-2">
           <h3 className="text-muted-foreground text-sm font-normal">
-            Or use one of these example URLs:
+            Enter a URL above, or use one of these:
           </h3>
-          <ul className="flex flex-col gap-1 text-sm">
+          <ul className="mb-5 flex flex-col gap-1 text-sm">
             {EXAMPLE_URLS.map((url) => (
               <li key={url} className="flex items-start justify-start gap-1">
                 <IconArrowRightShort className="mt-0.5 flex-shrink-0 opacity-50" />
@@ -135,102 +89,58 @@ export default function DiffshubHome() {
               </li>
             ))}
           </ul>
+          <p className="text-muted-foreground hidden text-sm md:block">
+            You can also compare millions of lines with ease, like{' '}
+            <Link
+              href="/torvalds/linux/compare/v6.0...v7.0"
+              className="inline-link"
+            >
+              v6...v7 of Linux
+            </Link>
+            . This sometimes crashes mobile browsers, and GitHub unreliably
+            serves diffs over 100k lines with a delayed first byte.
+          </p>
         </div>
-        <ScrollDownButton />
       </section>
       <section
         id="home-more"
         className="w-2xl max-w-[100vw] space-y-4 px-5 pb-8"
       >
         <Divider />
-        <div className="max-w-2xl">
-          <FaqItem question="What’s DiffsHub?">
-            DiffsHub is a demo app from{' '}
-            <Link
-              href="https://pierre.computer"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-link"
-            >
-              The Pierre Computer Company
-            </Link>
-            , built with our{' '}
-            <Link
-              href="https://diffs.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-link no-underline"
-            >
-              <code className="text-foreground/75">
-                @<code className="underline">pierre/diffs</code>
-              </code>
-            </Link>{' '}
-            and{' '}
-            <Link
-              href="https://trees.software"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-link no-underline"
-            >
-              <code className="text-foreground/75">
-                @<code className="underline">pierre/trees</code>
-              </code>
-            </Link>{' '}
-            source libraries. It's enhanced by our new{' '}
-            <Link
-              href="https://diffs.com/docs#codeview"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-link"
-            >
-              CodeView
-            </Link>{' '}
-            component, which aids developers in rendering, scrolling,
-            navigating, and annotating code or changes across files.
-          </FaqItem>
-          <FaqItem question="What kind of changes can I view?">
-            Most commonly, you can view any public GitHub pull request. But you
-            can also use comparisons between tags and commits, commits, patch
-            files, and diff files.
-          </FaqItem>
-          <FaqItem question="What about diffs with millions of lines?">
-            DiffsHub can do millions of lines with ease... Try this{' '}
-            <Link
-              href="/torvalds/linux/compare/v6.0...v7.0"
-              className="inline-link"
-            >
-              diff between v6 and v7 of Linux
-            </Link>{' '}
-            (a mobile browser will probably crash due to the memory
-            requirements). With larger diffs like 100k lines or more, GitHub
-            won't reliably serve the entire diff and there might be a large
-            delay for first byte.
-          </FaqItem>
-          <FaqItem question="Can you host my code, too?">
-            <strong className="font-medium">Not yet.</strong> DiffsHub is only a
-            demo app that fetches and renders public GitHub diffs and patches.
-            However, if your team is looking for Git infrastructure that scales
-            with your AI-first products, consider using{' '}
-            <Link
-              href="https://code.storage"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-link"
-            >
-              Code Storage
-            </Link>
-            .
-          </FaqItem>
-          <FaqItem question="What is The Pierre Computer Company?">
-            We&rsquo;re a small team building developer tools for today’s teams
-            and their AI-first products. Collectively, our team brings many many
-            years of expertise designing, building, and scaling the world’s
-            largest distributed systems at Cloudflare, Coinbase, Discord,
-            GitHub, Reddit, Stripe, X, and others.
-          </FaqItem>
-        </div>
-        <Divider />
-        <nav aria-label="Social links" className="flex items-center gap-2 pt-2">
+        <p className="text-muted-foreground text-sm text-pretty">
+          Built by{' '}
+          <Link
+            href="https://pierre.computer"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-link"
+          >
+            The Pierre Computer Company
+          </Link>{' '}
+          with{' '}
+          <Link
+            href="https://trees.software/docs#react-api-filetree"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-link"
+          >
+            FileTree
+          </Link>{' '}
+          and the new{' '}
+          <Link
+            href="https://diffs.com/docs#codeview"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-link"
+          >
+            CodeView
+          </Link>{' '}
+          component.
+        </p>
+        <nav
+          aria-label="Social links"
+          className="-ml-2 flex items-center gap-2 pt-2"
+        >
           {SOCIAL_LINKS.map(({ label, href, Icon }) => (
             <a
               key={label}

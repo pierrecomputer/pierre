@@ -138,7 +138,7 @@ const SITE_ICONS_BY_SITE: Record<ProductId, Metadata['icons']> = {
   diffshub: {
     icon: [
       { url: '/diffshub-brand/icon.svg', type: 'image/svg+xml' },
-      { url: '/diffshub-brand/icon.png', type: 'image/png' },
+      { url: '/diffshub-brand/icon.ico', sizes: 'any' },
     ],
     apple: '/diffshub-brand/apple-icon.png',
   },

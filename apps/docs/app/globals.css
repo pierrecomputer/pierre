@@ -376,6 +376,26 @@
   }
 }
 
+.diffshub-border-deleted {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.diffshub-border-deleted::before {
+  display: block;
+  content: '';
+  width: 4px;
+  height: 24px;
+  background-image: linear-gradient(
+    0deg,
+    light-dark(#ff2e3f, #ff6762) 50%,
+    light-dark(#ffdbd6, #3e1715) 50%
+  );
+  background-repeat: repeat;
+  background-size: 2px 2px;
+  background-size: calc(1lh / round(1lh / 2px)) calc(1lh / round(1lh / 2px));
+}
+
 /* Docs sidebar: shares mobile popover styles, adds desktop sticky overrides */
 .docs-sidebar {
   /* Desktop sticky sidebar */
