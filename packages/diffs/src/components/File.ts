@@ -137,6 +137,7 @@ export class File<LAnnotation = undefined> {
   protected errorWrapper: HTMLElement | undefined;
   protected placeHolder: HTMLElement | undefined;
   protected lastRenderedHeaderHTML: string | undefined;
+  protected cachedHeaderHTML: string | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
   protected lastRowCount: number | undefined;
 
@@ -192,6 +193,7 @@ export class File<LAnnotation = undefined> {
   public setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
+    this.cachedHeaderHTML = undefined;
     this.interactionManager.setOptions(pluckInteractionOptions(options));
   }
 
@@ -291,6 +293,9 @@ export class File<LAnnotation = undefined> {
     this.headerMetadata = undefined;
     this.headerCustom = undefined;
     this.lastRenderedHeaderHTML = undefined;
+    if (!recycle) {
+      this.cachedHeaderHTML = undefined;
+    }
     this.errorWrapper = undefined;
     this.themeCSSStyle = undefined;
     this.appliedThemeCSS = undefined;
@@ -460,6 +465,9 @@ export class File<LAnnotation = undefined> {
     }
 
     this.renderRange = nextRenderRange;
+    if (didFileChange) {
+      this.cachedHeaderHTML = undefined;
+    }
     this.file = file;
     this.fileRenderer.setOptions({
       ...this.options,
@@ -1133,7 +1141,8 @@ export class File<LAnnotation = undefined> {
     this.cleanupErrorWrapper();
     this.placeHolder?.remove();
     this.placeHolder = undefined;
-    const headerHTML = toHtml(headerAST);
+    const headerHTML = this.cachedHeaderHTML ?? toHtml(headerAST);
+    this.cachedHeaderHTML = headerHTML;
     if (headerHTML !== this.lastRenderedHeaderHTML) {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = headerHTML;
