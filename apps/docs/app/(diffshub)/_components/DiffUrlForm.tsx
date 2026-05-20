@@ -1,7 +1,7 @@
 'use client';
 
 import { useStableCallback } from '@pierre/diffs/react';
-import { IconArrowUpRight, IconX } from '@pierre/icons';
+import { IconX } from '@pierre/icons';
 import { useRouter } from 'next/navigation';
 import {
   type FormEvent,
@@ -26,6 +26,9 @@ interface DiffUrlFormProps {
   // button shows whenever the input has content.
   initialUrl?: string;
   inputClassName?: string;
+  // Called whenever the controlled URL value changes, so parent components
+  // can react to edits (e.g. to conditionally show/hide related controls).
+  onUrlChange?: (url: string) => void;
   placeholder?: string;
   // Render prop for the submit button area. Receives the transition pending
   // state and current URL value so callers can conditionally render controls.
@@ -40,6 +43,7 @@ export function DiffUrlForm({
   className,
   initialUrl = '',
   inputClassName,
+  onUrlChange,
   placeholder,
   children,
 }: DiffUrlFormProps) {
@@ -62,6 +66,10 @@ export function DiffUrlForm({
   useEffect(() => {
     setURL(initialUrl);
   }, [initialUrl]);
+
+  useEffect(() => {
+    onUrlChange?.(url);
+  }, [onUrlChange, url]);
 
   // Keep the portal position in sync with the input whenever it's visible.
   // Resize (including DevTools opening) and scroll both change the input's
@@ -109,13 +117,10 @@ export function DiffUrlForm({
   const showClear =
     url.length > 0 &&
     (initialUrl === '' || url === initialUrl || validationError !== null);
-  // Only expose the external-link button when the input still reflects the
-  // committed URL — otherwise we'd be pointing at a draft the user is editing.
-  const showExternalLink = initialUrl !== '' && url === initialUrl;
 
   return (
     <form
-      className={cn('group flex min-w-0 items-center gap-1 w-full ', className)}
+      className={cn('group flex min-w-0 items-center gap-1 w-full', className)}
       noValidate
       onSubmit={handleSubmit}
     >
@@ -166,20 +171,6 @@ export function DiffUrlForm({
           }}
         >
           <IconX className="size-4" />
-        </Button>
-      )}
-      {showExternalLink && (
-        <Button
-          asChild
-          variant="ghost"
-          size="icon-md"
-          aria-label="Open source in new tab"
-          title="Open source in new tab"
-          className="opacity-0 transition-opacity duration-200 will-change-auto group-focus-within:opacity-50 group-hover:opacity-50 hover:opacity-75"
-        >
-          <a href={initialUrl} target="_blank" rel="noreferrer noopener">
-            <IconArrowUpRight className="size-4" />
-          </a>
         </Button>
       )}
       {children?.(isPending, url)}
