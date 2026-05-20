@@ -11,15 +11,10 @@ import type {
   CodeViewCommentFileByItemId,
   CodeViewCommentSidebarFile,
   CodeViewDiffStats,
-  CodeViewFileTreeSort,
   CodeViewFileTreeSource,
   CommentMetadata,
 } from './types';
-import {
-  createPatchOrderSortFromRankMap,
-  extendPatchOrderRanks,
-  mapChangeTypeToGitStatus,
-} from './utils';
+import { mapChangeTypeToGitStatus } from './utils';
 
 export interface CodeViewDataAccumulator {
   diffStats: CodeViewDiffStats;
@@ -37,13 +32,6 @@ export interface CodeViewDataAccumulator {
   pathToItemId: Map<string, string>;
   pathStateByTreePath: Map<string, CodeViewPathState>;
   paths: string[];
-  // Patch-order ranks for every path and directory ancestor we have ever
-  // appended. Extended incrementally so the sort comparator below stays valid
-  // across publishes without rebuilding the map.
-  rankByPath: Map<string, number>;
-  // Stable comparator that reads from rankByPath. Reused across snapshots so
-  // each publish does not allocate a fresh closure or repopulate a rank map.
-  sort: CodeViewFileTreeSort;
 }
 
 export interface CodeViewItemIdRename {
@@ -66,7 +54,6 @@ export interface LoadedCodeViewData {
 }
 
 export function createCodeViewDataAccumulator(): CodeViewDataAccumulator {
-  const rankByPath = new Map<string, number>();
   return {
     diffStats: {
       addedLines: 0,
@@ -85,8 +72,6 @@ export function createCodeViewDataAccumulator(): CodeViewDataAccumulator {
     pathToItemId: new Map(),
     pathStateByTreePath: new Map(),
     paths: [],
-    rankByPath,
-    sort: createPatchOrderSortFromRankMap(rankByPath),
   };
 }
 
@@ -139,11 +124,6 @@ export function appendFileDiffToCodeViewData(
 
   if (previousPathState == null) {
     accumulator.paths.push(treePath);
-    extendPatchOrderRanks(
-      accumulator.rankByPath,
-      treePath,
-      accumulator.paths.length - 1
-    );
   }
   accumulator.pathToItemId.set(treePath, id);
   updateGitStatusByPath(
@@ -187,7 +167,6 @@ export function snapshotCodeViewTreeSource(
     paths: accumulator.paths,
     pathToItemId: accumulator.pathToItemId,
     previousSource: accumulator.lastTreeSource,
-    sort: accumulator.sort,
   };
   accumulator.lastTreeSource = snapshot;
   return snapshot;

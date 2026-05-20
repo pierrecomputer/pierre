@@ -11,7 +11,6 @@ import type { GitStatus } from '@pierre/trees';
 import type {
   CodeViewCommentFileByItemId,
   CodeViewDeletedCommentEvent,
-  CodeViewFileTreeSort,
   CodeViewSavedCommentEntry,
   CodeViewSavedCommentEvent,
   CodeViewSavedCommentItem,
@@ -21,7 +20,6 @@ import type {
   SavedCommentMetadata,
 } from './types';
 
-const PATCH_ORDER_FALLBACK_RANK = Number.MAX_SAFE_INTEGER;
 const GITHUB_HOST = 'github.com';
 const GITHUB_RAW_DIFF_HOST = 'patch-diff.githubusercontent.com';
 const RAW_GITHUB_DIFF_PATH_PATTERN =
@@ -237,62 +235,6 @@ export function mapChangeTypeToGitStatus(type: ChangeTypes): GitStatus {
     case 'change':
       return 'modified';
   }
-}
-
-// Records the patch-order rank for a path and every directory ancestor inside
-// `rankByPath`. Existing ranks are preserved so callers can fold new paths into
-// the same map without disturbing the ordering established for earlier paths.
-export function extendPatchOrderRanks(
-  rankByPath: Map<string, number>,
-  path: string,
-  index: number
-): void {
-  if (path.length === 0) {
-    return;
-  }
-
-  if (!rankByPath.has(path)) {
-    rankByPath.set(path, index);
-  }
-
-  let slashIndex = path.lastIndexOf('/');
-  while (slashIndex > 0) {
-    const directory = path.slice(0, slashIndex);
-    if (!rankByPath.has(directory)) {
-      rankByPath.set(directory, index);
-    }
-    slashIndex = directory.lastIndexOf('/');
-  }
-}
-
-// Builds a sort comparator that reads from a `rankByPath` map populated by
-// extendPatchOrderRanks. The comparator captures the map by reference so the
-// same comparator instance can be reused across incremental publishes while
-// the map continues to grow.
-export function createPatchOrderSortFromRankMap(
-  rankByPath: ReadonlyMap<string, number>
-): CodeViewFileTreeSort {
-  return (left, right) => {
-    const leftRank = rankByPath.get(left.path) ?? PATCH_ORDER_FALLBACK_RANK;
-    const rightRank = rankByPath.get(right.path) ?? PATCH_ORDER_FALLBACK_RANK;
-    if (leftRank !== rightRank) {
-      return leftRank - rightRank;
-    }
-
-    if (left.depth !== right.depth) {
-      return left.depth - right.depth;
-    }
-
-    if (left.isDirectory !== right.isDirectory) {
-      return left.isDirectory ? -1 : 1;
-    }
-
-    if (left.path === right.path) {
-      return 0;
-    }
-
-    return left.path < right.path ? -1 : 1;
-  };
 }
 
 function insertCommentInLineOrder(
