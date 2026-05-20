@@ -1,6 +1,3 @@
-const stringDetachEncoder = new TextEncoder();
-const stringDetachDecoder = new TextDecoder('utf-8', { ignoreBOM: true });
-
 // Forces a fresh backing string so a retained substring does not keep the
 // original raw patch/file text alive.
 export function detachString(value: string): string {
@@ -8,19 +5,8 @@ export function detachString(value: string): string {
     return value;
   }
 
-  if (!hasSurrogateCodeUnit(value)) {
-    return stringDetachDecoder.decode(stringDetachEncoder.encode(value));
-  }
-
+  // JSON string round-tripping copies the string without changing lone
+  // surrogates. In browser traces this is substantially faster than a
+  // TextEncoder/TextDecoder copy and keeps the same memory-safety invariant.
   return JSON.parse(JSON.stringify(value)) as string;
-}
-
-function hasSurrogateCodeUnit(value: string): boolean {
-  for (let index = 0; index < value.length; index++) {
-    const code = value.charCodeAt(index);
-    if (code >= 0xd800 && code <= 0xdfff) {
-      return true;
-    }
-  }
-  return false;
 }

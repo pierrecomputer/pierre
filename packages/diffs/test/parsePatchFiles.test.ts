@@ -99,6 +99,24 @@ describe('parsePatchFiles', () => {
     expect(file?.additionLines[0]).toBe('\uFEFFnew\n');
   });
 
+  test('preserves lone surrogate characters in parsed hunk lines', () => {
+    const result = parsePatchFiles(
+      [
+        'diff --git a/surrogate.txt b/surrogate.txt\n',
+        'index 1111111..2222222 100644\n',
+        '--- a/surrogate.txt\n',
+        '+++ b/surrogate.txt\n',
+        '@@ -1 +1 @@\n',
+        '-old\ud800\n',
+        '+new\ud800\n',
+      ].join('')
+    );
+
+    const file = result[0]?.files[0];
+    expect(file?.deletionLines[0]).toBe('old\ud800\n');
+    expect(file?.additionLines[0]).toBe('new\ud800\n');
+  });
+
   test(
     'splitLineCount should match rendered line count in split mode',
     async () => {
