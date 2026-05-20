@@ -120,7 +120,10 @@ export function DiffUrlForm({
 
   return (
     <form
-      className={cn('group flex min-w-0 items-center gap-1 w-full', className)}
+      className={cn(
+        'group flex min-w-0 items-center gap-1 w-full overflow-hidden',
+        className
+      )}
       noValidate
       onSubmit={handleSubmit}
     >
