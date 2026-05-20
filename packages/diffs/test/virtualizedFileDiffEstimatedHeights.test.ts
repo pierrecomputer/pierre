@@ -32,12 +32,15 @@ const virtualizer = {
 
 interface InspectableVirtualizedFileDiff {
   cache: {
-    heights: Map<number, number>;
+    heightDeltas: Map<number, number>;
+    measuredHeightDeltaTotal: number;
     estimatedSplitHeight: number | undefined;
     estimatedUnifiedHeight: number | undefined;
     checkpoints: unknown[];
     totalLines: number;
   };
+  fileContainer: HTMLElement | undefined;
+  codeAdditions: HTMLElement | undefined;
 }
 
 function inspect(
@@ -68,6 +71,109 @@ function createTwoHunkDiff(cacheKey = 'base'): FileDiffMetadata {
   );
 }
 
+function createLargeExpandedDiff(): FileDiffMetadata {
+  const oldLines = Array.from({ length: 12_000 }, (_, index) => `${index + 1}`);
+  const newLines = oldLines.map((line, index) =>
+    index === 5_999 ? 'changed-6000' : line
+  );
+
+  return parseDiffFromFile(
+    { name: 'large.ts', contents: `${oldLines.join('\n')}\n` },
+    { name: 'large.ts', contents: `${newLines.join('\n')}\n` }
+  );
+}
+
+function createHugeSingleBlockDiff(lineCount: number): FileDiffMetadata {
+  return {
+    name: 'huge.ts',
+    type: 'change',
+    hunks: [
+      {
+        collapsedBefore: 0,
+        additionStart: 1,
+        additionCount: lineCount,
+        additionLines: 0,
+        additionLineIndex: 0,
+        deletionStart: 1,
+        deletionCount: lineCount,
+        deletionLines: 0,
+        deletionLineIndex: 0,
+        hunkContent: [
+          {
+            type: 'context',
+            lines: lineCount,
+            additionLineIndex: 0,
+            deletionLineIndex: 0,
+          },
+        ],
+        splitLineStart: 0,
+        splitLineCount: lineCount,
+        unifiedLineStart: 0,
+        unifiedLineCount: lineCount,
+        noEOFCRDeletions: false,
+        noEOFCRAdditions: false,
+      },
+    ],
+    splitLineCount: lineCount,
+    unifiedLineCount: lineCount,
+    isPartial: true,
+    deletionLines: [],
+    additionLines: [],
+  };
+}
+
+class FakeHTMLElement {
+  public children: FakeHTMLElement[] = [];
+  public dataset: Record<string, string> = {};
+  public nextElementSibling: FakeHTMLElement | undefined;
+
+  constructor(private readonly getHeight = () => 0) {}
+
+  public append(...elements: FakeHTMLElement[]): void {
+    this.children.push(...elements);
+  }
+
+  public getBoundingClientRect(): DOMRect {
+    return { height: this.getHeight() } as DOMRect;
+  }
+}
+
+function installFakeHTMLElement() {
+  const originalValues = {
+    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
+  };
+
+  Object.assign(globalThis, {
+    HTMLElement: FakeHTMLElement,
+  });
+
+  return {
+    cleanup() {
+      for (const [key, value] of Object.entries(originalValues)) {
+        if (value === undefined) {
+          Reflect.deleteProperty(globalThis, key);
+        } else {
+          Object.assign(globalThis, { [key]: value });
+        }
+      }
+    },
+  };
+}
+
+function createMeasuredCodeGroup(
+  lineIndex: string,
+  getMeasuredHeight: () => number
+): HTMLElement {
+  const group = new FakeHTMLElement();
+  const gutter = new FakeHTMLElement();
+  const content = new FakeHTMLElement();
+  const line = new FakeHTMLElement(getMeasuredHeight);
+  line.dataset.lineIndex = lineIndex;
+  content.append(line);
+  group.append(gutter, content);
+  return group as unknown as HTMLElement;
+}
+
 describe('VirtualizedFileDiff estimated height cache', () => {
   test('computes split and unified estimates together on first prepare', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
@@ -76,6 +182,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
 
     expect(inspect(instance).cache.estimatedSplitHeight).toBe(326);
     expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(346);
+    expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
     expect(inspect(instance).cache.totalLines).toBe(0);
     expect(inspect(instance).cache.checkpoints).toEqual([]);
     expect(instance.getVirtualizedHeight()).toBe(326);
@@ -92,12 +199,14 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     instance.prepareCodeViewItem(fileDiff);
     inspect(instance).cache.estimatedSplitHeight = 123;
     inspect(instance).cache.estimatedUnifiedHeight = 456;
-    inspect(instance).cache.heights.set(0, 999);
+    inspect(instance).cache.heightDeltas.set(0, 7);
+    inspect(instance).cache.measuredHeightDeltaTotal = 7;
     instance.prepareCodeViewItem(equivalentFileDiff);
 
     expect(inspect(instance).cache.estimatedSplitHeight).toBe(123);
     expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(456);
-    expect(inspect(instance).cache.heights.get(0)).toBe(999);
+    expect(inspect(instance).cache.heightDeltas.get(0)).toBe(7);
+    expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(7);
   });
 
   test('clears estimates and measurements for changed diff content', () => {
@@ -106,22 +215,28 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     instance.prepareCodeViewItem(createTwoHunkDiff('first'));
     inspect(instance).cache.estimatedSplitHeight = 123;
     inspect(instance).cache.estimatedUnifiedHeight = 456;
-    inspect(instance).cache.heights.set(0, 999);
+    inspect(instance).cache.heightDeltas.set(0, 7);
+    inspect(instance).cache.measuredHeightDeltaTotal = 7;
     instance.prepareCodeViewItem(createTwoHunkDiff('second'));
 
     expect(inspect(instance).cache.estimatedSplitHeight).toBe(326);
     expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(346);
-    expect(inspect(instance).cache.heights.size).toBe(0);
+    expect(inspect(instance).cache.heightDeltas.size).toBe(0);
+    expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
   });
 
   test('reuses paired estimates across split and unified style changes', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
     instance.prepareCodeViewItem(createTwoHunkDiff());
+    inspect(instance).cache.heightDeltas.set(0, 7);
+    inspect(instance).cache.measuredHeightDeltaTotal = 7;
     instance.setOptions({ diffStyle: 'unified' });
 
     expect(inspect(instance).cache.estimatedSplitHeight).toBe(326);
     expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(346);
+    expect(inspect(instance).cache.heightDeltas.size).toBe(0);
+    expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
     expect(instance.getVirtualizedHeight()).toBe(346);
 
     instance.setOptions({ diffStyle: 'split' });
@@ -152,10 +267,88 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
     instance.prepareCodeViewItem(createTwoHunkDiff());
+    inspect(instance).cache.heightDeltas.set(0, 7);
+    inspect(instance).cache.measuredHeightDeltaTotal = 7;
     instance.expandHunk(0, 'down', 5);
 
     expect(inspect(instance).cache.estimatedSplitHeight).toBe(376);
     expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(396);
+    expect(inspect(instance).cache.heightDeltas.size).toBe(0);
+    expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
     expect(instance.getVirtualizedHeight()).toBe(376);
+  });
+
+  test('applies measured height deltas without replaying full diff layout', () => {
+    const { cleanup } = installFakeHTMLElement();
+    try {
+      const instance = new VirtualizedFileDiff(
+        { overflow: 'wrap' },
+        virtualizer,
+        metrics
+      );
+      let measuredHeight = 17;
+
+      instance.prepareCodeViewItem(createTwoHunkDiff());
+      inspect(instance).fileContainer =
+        new FakeHTMLElement() as unknown as HTMLElement;
+      inspect(instance).codeAdditions = createMeasuredCodeGroup(
+        '0,0',
+        () => measuredHeight
+      );
+
+      expect(instance.reconcileHeights()).toBe(true);
+      expect(inspect(instance).cache.heightDeltas.get(0)).toBe(7);
+      expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(7);
+      expect(inspect(instance).cache.totalLines).toBe(0);
+      expect(inspect(instance).cache.checkpoints).toEqual([]);
+      expect(instance.getVirtualizedHeight()).toBe(333);
+
+      measuredHeight = 10;
+
+      expect(instance.reconcileHeights()).toBe(true);
+      expect(inspect(instance).cache.heightDeltas.size).toBe(0);
+      expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
+      expect(inspect(instance).cache.totalLines).toBe(0);
+      expect(inspect(instance).cache.checkpoints).toEqual([]);
+      expect(instance.getVirtualizedHeight()).toBe(326);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('builds layout checkpoints lazily for deep geometry lookups', () => {
+    const instance = new VirtualizedFileDiff(
+      { expandUnchanged: true },
+      virtualizer,
+      metrics
+    );
+
+    instance.prepareCodeViewItem(createLargeExpandedDiff());
+    const estimatedHeight = instance.getVirtualizedHeight();
+
+    expect(inspect(instance).cache.totalLines).toBe(0);
+    expect(inspect(instance).cache.checkpoints).toEqual([]);
+
+    expect(instance.getLinePosition(10_000, 'additions')).toBeDefined();
+
+    expect(instance.getVirtualizedHeight()).toBe(estimatedHeight);
+    expect(inspect(instance).cache.totalLines).toBeGreaterThan(10_000);
+    expect(inspect(instance).cache.checkpoints.length).toBeGreaterThan(1);
+  });
+
+  test('checkpoint generation jumps through large uniform blocks', () => {
+    const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
+    const lineCount = 1_000_000;
+
+    instance.prepareCodeViewItem(createHugeSingleBlockDiff(lineCount));
+
+    expect(instance.getLinePosition(900_000, 'additions')).toEqual({
+      top: metrics.diffHeaderHeight + 899_999 * metrics.lineHeight,
+      height: metrics.lineHeight,
+    });
+    expect(inspect(instance).cache.totalLines).toBe(lineCount);
+    expect(inspect(instance).cache.checkpoints.length).toBe(
+      Math.floor((lineCount - 1) / 5_000) + 1
+    );
   });
 });
