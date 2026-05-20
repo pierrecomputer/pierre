@@ -189,7 +189,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground font-geist;
+    @apply bg-[var(--diffshub-sidebar-bg,_var(--color-background))] text-foreground font-geist;
   }
   textarea {
     @apply outline-offset-1;
