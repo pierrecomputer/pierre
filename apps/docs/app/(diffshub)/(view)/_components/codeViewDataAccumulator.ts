@@ -4,7 +4,7 @@ import {
   type FileDiffMetadata,
   parsePatchFiles,
 } from '@pierre/diffs';
-import type { GitStatusEntry } from '@pierre/trees';
+import type { FileTreeGitStatusPatch, GitStatusEntry } from '@pierre/trees';
 
 import { getPatchTreePathPrefix } from './gitPatchMetadata';
 import type {
@@ -27,6 +27,8 @@ export interface CodeViewDataAccumulator {
   // recognize append-only growth and skip the full PathStore rebuild.
   lastTreeSource: CodeViewFileTreeSource | undefined;
   nextCollisionSuffixByBase: Map<string, number>;
+  pendingGitStatusRemovePaths: Set<string>;
+  pendingGitStatusSetByPath: Map<string, GitStatusEntry>;
   pendingItems: CodeViewItem<CommentMetadata>[];
   pendingItemById: Map<string, CodeViewItem<CommentMetadata>>;
   pathToItemId: Map<string, string>;
@@ -67,6 +69,8 @@ export function createCodeViewDataAccumulator(): CodeViewDataAccumulator {
     items: [],
     lastTreeSource: undefined,
     nextCollisionSuffixByBase: new Map(),
+    pendingGitStatusRemovePaths: new Set(),
+    pendingGitStatusSetByPath: new Map(),
     pendingItems: [],
     pendingItemById: new Map(),
     pathToItemId: new Map(),
@@ -160,15 +164,42 @@ export function takePendingCodeViewItems(
 export function snapshotCodeViewTreeSource(
   accumulator: CodeViewDataAccumulator
 ): CodeViewFileTreeSource {
+  const previousSource = accumulator.lastTreeSource;
+  const gitStatusPatch = takePendingGitStatusPatch(accumulator);
   const snapshot: CodeViewFileTreeSource = {
     gitStatus: Array.from(accumulator.gitStatusByPath.values()),
+    gitStatusPatch: previousSource == null ? undefined : gitStatusPatch,
     pathCount: accumulator.paths.length,
     paths: accumulator.paths,
     pathToItemId: accumulator.pathToItemId,
-    previousSource: accumulator.lastTreeSource,
+    previousSource,
   };
   accumulator.lastTreeSource = snapshot;
   return snapshot;
+}
+
+function takePendingGitStatusPatch(
+  accumulator: CodeViewDataAccumulator
+): FileTreeGitStatusPatch | undefined {
+  const { pendingGitStatusRemovePaths, pendingGitStatusSetByPath } =
+    accumulator;
+  if (
+    pendingGitStatusRemovePaths.size === 0 &&
+    pendingGitStatusSetByPath.size === 0
+  ) {
+    return undefined;
+  }
+
+  const patch: FileTreeGitStatusPatch = {};
+  if (pendingGitStatusRemovePaths.size > 0) {
+    patch.remove = [...pendingGitStatusRemovePaths];
+    pendingGitStatusRemovePaths.clear();
+  }
+  if (pendingGitStatusSetByPath.size > 0) {
+    patch.set = [...pendingGitStatusSetByPath.values()];
+    pendingGitStatusSetByPath.clear();
+  }
+  return patch;
 }
 
 // Moves the current CodeView item for a path off the canonical tree id so the
@@ -248,7 +279,9 @@ function updateGitStatusByPath(
   hadDeletedEntry: boolean
 ): void {
   if (hadDeletedEntry && changeType !== 'deleted') {
-    accumulator.gitStatusByPath.delete(treePath);
+    if (accumulator.gitStatusByPath.delete(treePath)) {
+      recordGitStatusRemove(accumulator, treePath);
+    }
     return;
   }
 
@@ -256,13 +289,38 @@ function updateGitStatusByPath(
   // added, deleted, and renamed files retain status indicators.
   const gitStatusEntry = mapChangeTypeToGitStatus(changeType);
   if (gitStatusEntry === 'modified') {
-    accumulator.gitStatusByPath.delete(treePath);
+    if (accumulator.gitStatusByPath.delete(treePath)) {
+      recordGitStatusRemove(accumulator, treePath);
+    }
   } else {
-    accumulator.gitStatusByPath.set(treePath, {
+    const previousStatus = accumulator.gitStatusByPath.get(treePath)?.status;
+    if (previousStatus === gitStatusEntry) {
+      return;
+    }
+
+    const entry = {
       path: treePath,
       status: gitStatusEntry,
-    });
+    };
+    accumulator.gitStatusByPath.set(treePath, entry);
+    recordGitStatusSet(accumulator, entry);
   }
+}
+
+function recordGitStatusSet(
+  accumulator: CodeViewDataAccumulator,
+  entry: GitStatusEntry
+): void {
+  accumulator.pendingGitStatusRemovePaths.delete(entry.path);
+  accumulator.pendingGitStatusSetByPath.set(entry.path, entry);
+}
+
+function recordGitStatusRemove(
+  accumulator: CodeViewDataAccumulator,
+  path: string
+): void {
+  accumulator.pendingGitStatusSetByPath.delete(path);
+  accumulator.pendingGitStatusRemovePaths.add(path);
 }
 
 export function snapshotCodeViewData(
