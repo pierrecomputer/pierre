@@ -6,6 +6,7 @@ import lightSoftTheme from '@pierre/theme/pierre-light-soft';
 import type {
   FileTreeBatchOperation,
   FileTree as FileTreeModel,
+  FileTreeOptions,
 } from '@pierre/trees';
 import { themeToTreeStyles } from '@pierre/trees';
 import { FileTree, useFileTree } from '@pierre/trees/react';
@@ -30,6 +31,13 @@ import { useTheme } from '@/components/theme-provider';
 // Computed once at module level so they're never re-derived on every render.
 const LIGHT_SOFT_TREE_STYLES = themeToTreeStyles(lightSoftTheme);
 const DARK_SOFT_TREE_STYLES = themeToTreeStyles(darkSoftTheme);
+type FileTreeSortComparator = Exclude<
+  NonNullable<FileTreeOptions['sort']>,
+  'default'
+>;
+// Keeps @pierre/trees from applying its default semantic sort so the sidebar
+// follows the same patch path sequence that drives the code view.
+const PRESERVE_INPUT_ORDER_SORT: FileTreeSortComparator = () => 0;
 
 // These override vars take precedence over the --trees-theme-* vars set by
 // themeToTreeStyles, so diffshub-specific layout tweaks are always preserved.
@@ -79,9 +87,6 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
   // ever-growing live array.
   const initialPathsRef = useRef<readonly string[] | null>(null);
   initialPathsRef.current ??= source.paths.slice(0, source.pathCount);
-  const sort = useStableCallback<CodeViewFileTreeSource['sort']>(
-    (left, right) => sourceRef.current.sort(left, right)
-  );
   const onSelectionChange = useStableCallback(
     (selectedPaths: readonly FileTreePublicId[]) => {
       if (selectedPaths.length !== 1 || onSelectItem == null) {
@@ -99,7 +104,7 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
     ...BASE_FILE_TREE_OPTIONS,
     gitStatus: source.gitStatus,
     paths: initialPathsRef.current,
-    sort,
+    sort: PRESERVE_INPUT_ORDER_SORT,
     onSelectionChange,
     itemHeight: CODE_VIEW_FILE_TREE_ITEM_HEIGHT,
     initialVisibleRowCount,

@@ -1,7 +1,5 @@
 import type { AnnotationSide, SelectedLineRange } from '@pierre/diffs';
-import type { FileTreeOptions, GitStatusEntry } from '@pierre/trees';
-
-type FileTreeInputSort = NonNullable<FileTreeOptions['sort']>;
+import type { GitStatusEntry } from '@pierre/trees';
 
 export type ViewerLoadState =
   | 'fetching'
@@ -9,8 +7,6 @@ export type ViewerLoadState =
   | 'parsing'
   | 'ready'
   | 'error';
-
-export type CodeViewFileTreeSort = Exclude<FileTreeInputSort, 'default'>;
 
 export interface SavedCommentMetadata {
   kind: 'saved';
@@ -102,7 +98,6 @@ export interface CodeViewFileTreeSource {
   paths: readonly string[];
   pathToItemId: ReadonlyMap<string, string>;
   previousSource?: CodeViewFileTreeSource;
-  sort: CodeViewFileTreeSort;
 }
 
 export interface CodeViewDiffStats {

@@ -17,7 +17,7 @@ import type {
   ParsedPatch,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
-import { detachString } from './detachString';
+import { detachString, releaseStringDetachBuffer } from './detachString';
 
 interface ParsedHunkHeader {
   additionCount: number;
@@ -28,6 +28,18 @@ interface ParsedHunkHeader {
 }
 
 export function processPatch(
+  data: string,
+  cacheKeyPrefix?: string,
+  throwOnError?: boolean
+): ParsedPatch {
+  try {
+    return _processPatch(data, cacheKeyPrefix, throwOnError);
+  } finally {
+    releaseStringDetachBuffer();
+  }
+}
+
+function _processPatch(
   data: string,
   cacheKeyPrefix?: string,
   throwOnError = false
@@ -73,7 +85,7 @@ export function processPatch(
       }
       continue;
     }
-    const currentFile = processFile(fileOrPatchMetadata, {
+    const currentFile = _processFile(fileOrPatchMetadata, {
       cacheKey:
         cacheKeyPrefix != null
           ? `${cacheKeyPrefix}-${files.length}`
@@ -97,6 +109,17 @@ interface ProcessFileOptions {
 }
 
 export function processFile(
+  fileDiffString: string,
+  options?: ProcessFileOptions
+): FileDiffMetadata | undefined {
+  try {
+    return _processFile(fileDiffString, options);
+  } finally {
+    releaseStringDetachBuffer();
+  }
+}
+
+function _processFile(
   fileDiffString: string,
   {
     cacheKey,

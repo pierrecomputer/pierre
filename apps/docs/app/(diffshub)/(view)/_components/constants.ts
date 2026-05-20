@@ -150,6 +150,7 @@ export const BASE_FILE_TREE_OPTIONS = {
   flattenEmptyDirectories: true,
   id: 'gh-code-view-tree',
   initialExpansion: 'open',
+  presorted: true,
   search: true,
   stickyFolders: true,
   unsafeCSS: `${HIDDEN_SEARCH_UNSAFE_CSS}\n${SIDEBAR_VIRTUALIZED_SCROLL_UNSAFE_CSS}\n${SUPPRESS_FOLDER_DOT_UNSAFE_CSS}\n${FOLDER_LABEL_UNSAFE_CSS}`,
