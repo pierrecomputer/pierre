@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
-import { resolveFileTreeGitStatusState } from '../src/model/gitStatus';
+import {
+  applyFileTreeGitStatusPatch,
+  resolveFileTreeGitStatusState,
+} from '../src/model/gitStatus';
 import type { GitStatusEntry } from '../src/publicTypes';
 import { serializeFileTreeSsrPayload } from '../src/ssr';
 import { flushDom, installDom } from './helpers/dom';
@@ -56,6 +59,69 @@ describe('file-tree git status', () => {
     expect(state).not.toBeNull();
     expect(state?.statusByPath.get('src/')).toBe('modified');
     expect(state?.ignoredDirectoryPaths.has('src/')).toBe(false);
+  });
+
+  test('incremental patches update only changed status entries', () => {
+    const initialState = resolveFileTreeGitStatusState([
+      { path: 'src/index.ts', status: 'modified' },
+      { path: 'src/components/Button.tsx', status: 'added' },
+    ]);
+    if (initialState == null) {
+      throw new Error('expected initial git status state');
+    }
+
+    const noOpState = applyFileTreeGitStatusPatch(initialState, {
+      set: [{ path: 'src/index.ts', status: 'modified' }],
+    });
+    expect(noOpState).toBe(initialState);
+
+    const oneRemovedState = applyFileTreeGitStatusPatch(initialState, {
+      remove: ['src/index.ts'],
+    });
+    if (oneRemovedState == null) {
+      throw new Error('expected remaining git status state');
+    }
+
+    expect(oneRemovedState.statusByPath.has('src/index.ts')).toBe(false);
+    expect(oneRemovedState.statusByPath.get('src/components/Button.tsx')).toBe(
+      'added'
+    );
+    expect(oneRemovedState.directoriesWithChanges.has('src/')).toBe(true);
+    expect(oneRemovedState.directoriesWithChanges.has('src/components/')).toBe(
+      true
+    );
+
+    const emptyState = applyFileTreeGitStatusPatch(oneRemovedState, {
+      remove: ['src/components/Button.tsx'],
+    });
+    expect(emptyState).toBeNull();
+  });
+
+  test('incremental patches update ignored directory status inheritance', () => {
+    const initialState = resolveFileTreeGitStatusState([
+      { path: 'src/', status: 'ignored' },
+    ]);
+    if (initialState == null) {
+      throw new Error('expected initial git status state');
+    }
+
+    expect(initialState.ignoredDirectoryPaths.has('src/')).toBe(true);
+
+    const modifiedState = applyFileTreeGitStatusPatch(initialState, {
+      set: [{ path: 'src/', status: 'modified' }],
+    });
+    if (modifiedState == null) {
+      throw new Error('expected modified git status state');
+    }
+
+    expect(modifiedState.statusByPath.get('src/')).toBe('modified');
+    expect(modifiedState.ignoredDirectoryPaths.has('src/')).toBe(false);
+    expect(modifiedState.directoriesWithChanges.has('src/')).toBe(false);
+
+    const emptyState = applyFileTreeGitStatusPatch(modifiedState, {
+      remove: ['src/'],
+    });
+    expect(emptyState).toBeNull();
   });
 
   test('renders markers for all supported file git statuses and folder change attrs', async () => {
@@ -392,6 +458,86 @@ describe('file-tree git status', () => {
       expect(
         shadowRoot?.querySelector('[data-item-contains-git-change="true"]')
       ).toBeNull();
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('applyGitStatusPatch refreshes decorations without replacing the tree wrapper', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: false,
+        initialExpansion: 'open',
+        paths: FILES,
+        initialVisibleRowCount: 180 / 30,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+      const wrapperBefore = shadowRoot?.querySelector(
+        '[data-file-tree-virtualized-wrapper="true"]'
+      );
+
+      fileTree.applyGitStatusPatch({
+        set: [
+          { path: 'src/index.ts', status: 'modified' },
+          { path: 'src/components/Button.tsx', status: 'added' },
+        ],
+      });
+      await flushDom();
+
+      expect(
+        getItemButton(shadowRoot, dom, 'src/index.ts').getAttribute(
+          'data-item-git-status'
+        )
+      ).toBe('modified');
+      expect(
+        getItemButton(
+          shadowRoot,
+          dom,
+          'src/components/Button.tsx'
+        ).getAttribute('data-item-git-status')
+      ).toBe('added');
+      expect(
+        getItemButton(shadowRoot, dom, 'src/').getAttribute(
+          'data-item-contains-git-change'
+        )
+      ).toBe('true');
+
+      fileTree.applyGitStatusPatch({ remove: ['src/index.ts'] });
+      await flushDom();
+
+      expect(
+        getItemButton(shadowRoot, dom, 'src/index.ts').getAttribute(
+          'data-item-git-status'
+        )
+      ).toBeNull();
+      expect(
+        getItemButton(shadowRoot, dom, 'src/').getAttribute(
+          'data-item-contains-git-change'
+        )
+      ).toBe('true');
+
+      fileTree.applyGitStatusPatch({ remove: ['src/components/Button.tsx'] });
+      await flushDom();
+
+      expect(shadowRoot?.querySelector('[data-item-git-status]')).toBeNull();
+      expect(
+        getItemButton(shadowRoot, dom, 'src/').getAttribute(
+          'data-item-contains-git-change'
+        )
+      ).toBeNull();
+      expect(
+        shadowRoot?.querySelector('[data-file-tree-virtualized-wrapper="true"]')
+      ).toBe(wrapperBefore);
 
       fileTree.cleanUp();
     } finally {

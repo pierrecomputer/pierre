@@ -22,6 +22,7 @@ import {
 } from '../model/density';
 import { FileTreeController } from '../model/FileTreeController';
 import {
+  applyFileTreeGitStatusPatch,
   type FileTreeGitStatusState,
   resolveFileTreeGitStatusState,
 } from '../model/gitStatus';
@@ -29,6 +30,7 @@ import type { FileTreeViewProps } from '../model/internalTypes';
 import type {
   FileTreeBatchOperation,
   FileTreeCompositionOptions,
+  FileTreeGitStatusPatch,
   FileTreeHydrationProps,
   FileTreeItemHandle,
   FileTreeListener,
@@ -356,6 +358,25 @@ export class FileTree
     this.#controller.batch(operations);
   }
 
+  public applyGitStatusPatch(patch: FileTreeGitStatusPatch): void {
+    const nextGitStatusState = applyFileTreeGitStatusPatch(
+      this.#gitStatusState,
+      patch
+    );
+    if (nextGitStatusState === this.#gitStatusState) {
+      return;
+    }
+
+    this.#gitStatusState = nextGitStatusState;
+
+    const mountedTree = this.#getMountedTreeElements();
+    if (mountedTree == null) {
+      return;
+    }
+
+    renderFileTreeRoot(mountedTree.wrapper, this.#getViewProps());
+  }
+
   public move(
     fromPath: string,
     toPath: string,
@@ -437,10 +458,15 @@ export class FileTree
   }
 
   public setGitStatus(gitStatus?: FileTreeOptions['gitStatus']): void {
-    this.#gitStatusState = resolveFileTreeGitStatusState(
+    const nextGitStatusState = resolveFileTreeGitStatusState(
       gitStatus,
       this.#gitStatusState
     );
+    if (nextGitStatusState === this.#gitStatusState) {
+      return;
+    }
+
+    this.#gitStatusState = nextGitStatusState;
 
     const mountedTree = this.#getMountedTreeElements();
     if (mountedTree == null) {

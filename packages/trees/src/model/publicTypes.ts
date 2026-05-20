@@ -59,6 +59,11 @@ export type FileTreeBatchOperation =
       type: 'move';
     } & FileTreeMoveOptions);
 
+export interface FileTreeGitStatusPatch {
+  remove?: readonly FileTreePublicId[];
+  set?: readonly GitStatusEntry[];
+}
+
 // Mirrors the subset of PathStoreConstructorOptions that trees forwards to its
 // underlying store. See the duplication note above the FileTree* type cluster.
 interface FileTreeStoreOptions {
