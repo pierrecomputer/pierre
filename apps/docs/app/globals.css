@@ -180,7 +180,7 @@
     --body-bg: #fff;
   }
   .dark {
-    --body-bg: #101010;
+    --body-bg: oklch(14.5% 0 0);
   }
 }
 
