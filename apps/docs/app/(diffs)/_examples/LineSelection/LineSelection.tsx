@@ -173,6 +173,9 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
           onLineSelected(range) {
             setSelectedRange(range);
           },
+          onLineSelectionChange(range) {
+            setSelectedRange(range);
+          },
         }}
       />
     </div>
