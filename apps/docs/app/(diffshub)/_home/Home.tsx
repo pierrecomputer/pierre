@@ -15,7 +15,7 @@ const DIFF_LINE_ADDED_BADGE = `${DIFF_LINE_BADGE} bg-[#07c480]/15 text-[#18a46c]
 import { HomeFetchForm } from './HomeFetchForm';
 
 function Divider() {
-  return <hr className="my-8 w-full md:max-w-[80px]" />;
+  return <hr className="my-8 max-w-[80px] opacity-50" />;
 }
 
 const EXAMPLE_URLS = [
@@ -137,8 +137,10 @@ export default function DiffshubHome() {
           </Link>{' '}
           component.
         </p>
-        <Divider />
-        <nav aria-label="Social links" className="flex items-center gap-2 pt-2">
+        <nav
+          aria-label="Social links"
+          className="-ml-2 flex items-center gap-2 pt-2"
+        >
           {SOCIAL_LINKS.map(({ label, href, Icon }) => (
             <a
               key={label}
