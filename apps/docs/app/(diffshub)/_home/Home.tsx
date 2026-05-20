@@ -8,6 +8,10 @@ import Link from 'next/link';
 
 import { DiffsHubLogo } from '../(view)/_components/DiffsHubLogo';
 import { getGitHubPath } from '../(view)/_components/utils';
+
+const DIFF_LINE_BADGE = 'inline-flex rounded-r py-0.25 pr-1.5 pl-1.5';
+const DIFF_LINE_DELETED_BADGE = `${DIFF_LINE_BADGE} bg-[#ff6762]/15 text-[#ff2e3f] dark:bg-[#ff6762]/10 dark:text-[#ff6762]`;
+const DIFF_LINE_ADDED_BADGE = `${DIFF_LINE_BADGE} bg-[#07c480]/15 text-[#18a46c] dark:bg-[#07c480]/10 dark:text-[#07c480]`;
 import { HomeFetchForm } from './HomeFetchForm';
 
 function Divider() {
@@ -53,16 +57,12 @@ export default function DiffshubHome() {
           <code>diffshub.com</code>.
         </p>
         <div className="text-muted-foreground flex flex-col gap-[2px] font-mono leading-[22px] tracking-tight">
-          <code className="font-normal text-inherit">
-            <code className="inline-flex rounded bg-[#ff6762]/15 py-0.25 pr-1 pl-1.5 text-[#ff2e3f] dark:bg-[#ff6762]/10 dark:text-[#ff6762]">
-              - github
-            </code>
+          <code className="diffshub-border-deleted overflow-hidden rounded-l font-normal text-inherit">
+            <code className={DIFF_LINE_DELETED_BADGE}>- github</code>
             .com/org/repo/pull/number
           </code>
-          <code className="font-normal text-inherit">
-            <code className="inline-flex rounded bg-[#07c480]/15 py-0.25 pr-1 pl-1.5 text-[#18a46c] dark:bg-[#07c480]/10 dark:text-[#07c480]">
-              + diffshub
-            </code>
+          <code className="rounded-l border-l-[4px] border-[#07c480] font-normal text-inherit">
+            <code className={DIFF_LINE_ADDED_BADGE}>+ diffshub</code>
             .com/org/repo/pull/number
           </code>
         </div>
