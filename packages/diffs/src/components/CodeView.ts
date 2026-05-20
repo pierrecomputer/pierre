@@ -1,10 +1,13 @@
 import {
+  CORE_CSS_ATTRIBUTE,
   DEFAULT_CODE_VIEW_FILE_METRICS,
   DEFAULT_CODE_VIEW_LAYOUT,
   DEFAULT_SMOOTH_SCROLL_SETTINGS,
   DEFAULT_THEMES,
   DIFFS_DEVELOPMENT_BUILD,
   DIFFS_TAG_NAME,
+  THEME_CSS_ATTRIBUTE,
+  UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
@@ -31,7 +34,9 @@ import type {
 } from '../types';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
+import { areThemesEqual } from '../utils/areThemesEqual';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
+import { isStyleNode } from '../utils/isStyleNode';
 import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 import { roundToDevicePixel } from '../utils/roundToDevicePixel';
 import type { WorkerPoolManager } from '../worker';
@@ -387,6 +392,7 @@ const SCROLL_REBASE_TARGET_BOTTOM =
   SCROLL_REBASE_CONTAINER_HEIGHT - SCROLL_REBASE_TARGET_TOP;
 const SCROLL_REBASE_THRESHOLD =
   SCROLL_REBASE_CONTAINER_HEIGHT - SCROLL_REBASE_TRIGGER_TOP;
+const CODE_VIEW_ELEMENT_POOL_LIMIT = 32;
 
 interface ScrollToAnimation {
   position: number;
@@ -508,6 +514,12 @@ export class CodeView<LAnnotation = undefined> {
   private container: HTMLDivElement | undefined = document.createElement('div');
   private stickyContainer = document.createElement('div');
   private stickyOffset = document.createElement('div');
+  private elementPool: HTMLElement[] = [];
+  // Container-managed elements may still have externally-owned light DOM slot
+  // children after release, so hold them here until they are safe to reuse.
+  // i.e. the react CodeView component will require a separate react cleanup
+  // phase that we don't want to interrupt
+  private pendingElementPool: HTMLElement[] = [];
   private options: CodeViewOptions<LAnnotation>;
   private workerManager: WorkerPoolManager | undefined;
   private isContainerManaged: boolean;
@@ -768,6 +780,7 @@ export class CodeView<LAnnotation = undefined> {
 
   public cleanUp(): void {
     this.reset();
+    this.clearElementPool();
     this.restoreScrollInteractions();
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
@@ -800,7 +813,7 @@ export class CodeView<LAnnotation = undefined> {
           `CodeView.cleanAllRenderedItems: Item does not exist at index: ${index}`
         );
       }
-      cleanRenderedItem(item);
+      this.releaseRenderedItem(item);
     }
   }
 
@@ -811,6 +824,85 @@ export class CodeView<LAnnotation = undefined> {
     if (item == null) return;
 
     item.instance.primeHighlightCache();
+  }
+
+  private acquireElement(): HTMLElement {
+    this.promotePendingPooledElements();
+    return this.elementPool.pop() ?? document.createElement(DIFFS_TAG_NAME);
+  }
+
+  private releaseRenderedItem(item: CodeViewContextItem<LAnnotation>): void {
+    const { element } = item;
+    item.instance.cleanUp(true);
+    item.element = undefined;
+    if (element == null) {
+      return;
+    }
+
+    element.remove();
+    this.cleanElementForPool(element);
+    this.queueElementForPool(element);
+  }
+
+  // Strip item-specific DOM while keeping the expensive shared shell assets
+  // that are valid for every item in this CodeView until shared options change.
+  private cleanElementForPool(element: HTMLElement): void {
+    const { shadowRoot } = element;
+    if (shadowRoot != null) {
+      for (const child of Array.from(shadowRoot.children)) {
+        if (!isPooledShadowChild(child)) {
+          child.remove();
+        }
+      }
+    }
+
+    if (!this.isContainerManaged) {
+      element.replaceChildren();
+    }
+  }
+
+  private queueElementForPool(element: HTMLElement): void {
+    if (this.getElementPoolSize() >= CODE_VIEW_ELEMENT_POOL_LIMIT) {
+      return;
+    }
+
+    if (this.isElementClean(element)) {
+      this.elementPool.push(element);
+    } else {
+      this.pendingElementPool.push(element);
+    }
+  }
+
+  private promotePendingPooledElements(): void {
+    if (this.pendingElementPool.length === 0) {
+      return;
+    }
+
+    const { pendingElementPool: pendingElements } = this;
+    this.pendingElementPool = [];
+    for (const element of pendingElements) {
+      if (
+        this.isElementClean(element) &&
+        this.elementPool.length < CODE_VIEW_ELEMENT_POOL_LIMIT
+      ) {
+        this.elementPool.push(element);
+      } else if (this.getElementPoolSize() < CODE_VIEW_ELEMENT_POOL_LIMIT) {
+        this.pendingElementPool.push(element);
+      }
+    }
+  }
+
+  private isElementClean(element: HTMLElement): boolean {
+    return element.childNodes.length === 0;
+  }
+
+  private getElementPoolSize(): number {
+    return this.elementPool.length + this.pendingElementPool.length;
+  }
+
+  private clearElementPool(): void {
+    this.elementPool.length = 0;
+    this.pendingElementPool.length = 0;
   }
 
   private resolveEffectiveScrollBehavior(
@@ -1031,6 +1123,9 @@ export class CodeView<LAnnotation = undefined> {
     const previousLayout = this.getLayout();
     const { itemMetricsCache: previousItemMetrics } = this;
 
+    if (shouldClearPool(this.options, options)) {
+      this.clearElementPool();
+    }
     // NOTE(amadeus): This is also something that's probably ridiculously
     // expensive to pull off, and we should probably figure out some way to
     // incrementally version/render stuff
@@ -1593,7 +1688,7 @@ export class CodeView<LAnnotation = undefined> {
       if (removedItem == null || !removedItems.has(removedItem)) {
         continue;
       }
-      cleanRenderedItem(removedItem);
+      this.releaseRenderedItem(removedItem);
       const dirtyIndex = Math.max(nextItems.length - 1, 0);
       firstDirtyIndex = Math.min(firstDirtyIndex ?? dirtyIndex, dirtyIndex);
     }
@@ -2240,10 +2335,7 @@ export class CodeView<LAnnotation = undefined> {
         const isVisible = item.top > top - item.height && item.top <= bottom;
         // If not visible, we should unmount it and clean it up
         if (!isVisible) {
-          // TODO(amadeus): Should probably experiment with dom element
-          // recycling here (since things like the css files and svg stuff is
-          // probably some level of cost that we shouldn't need to pay...)
-          cleanRenderedItem(item);
+          this.releaseRenderedItem(item);
         }
       }
     }
@@ -2266,7 +2358,7 @@ export class CodeView<LAnnotation = undefined> {
       // If the item isn't rendered yet, we need to create a wrapper element
       // for it and render it
       if (item.element == null) {
-        item.element = document.createElement(DIFFS_TAG_NAME);
+        item.element = this.acquireElement();
         syncRenderedItemOrder(this.stickyContainer, item.element, prevElement);
         instance.virtualizedSetup();
         if (renderItem(item, item.element)) {
@@ -2940,14 +3032,6 @@ export class CodeView<LAnnotation = undefined> {
   }
 }
 
-function cleanRenderedItem<LAnnotation>(
-  item: CodeViewContextItem<LAnnotation>
-) {
-  item.instance.cleanUp(true);
-  item.element?.remove();
-  item.element = undefined;
-}
-
 function prepareItemInstance<LAnnotation>(
   item: CodeViewContextItem<LAnnotation>
 ): number {
@@ -2957,6 +3041,33 @@ function prepareItemInstance<LAnnotation>(
   } else {
     return item.instance.prepareVirtualizedItem(item.item.file);
   }
+}
+
+function shouldClearPool<LAnnotation>(
+  previousOptions: CodeViewOptions<LAnnotation>,
+  nextOptions: CodeViewOptions<LAnnotation>
+): boolean {
+  return (
+    !areThemesEqual(
+      previousOptions.theme ?? DEFAULT_THEMES,
+      nextOptions.theme ?? DEFAULT_THEMES
+    ) ||
+    (previousOptions.themeType ?? 'system') !==
+      (nextOptions.themeType ?? 'system') ||
+    previousOptions.unsafeCSS !== nextOptions.unsafeCSS
+  );
+}
+
+function isPooledShadowChild(child: Element): boolean {
+  if (child instanceof SVGElement) {
+    return true;
+  }
+  return (
+    isStyleNode(child) &&
+    (child.hasAttribute(CORE_CSS_ATTRIBUTE) ||
+      child.hasAttribute(THEME_CSS_ATTRIBUTE) ||
+      child.hasAttribute(UNSAFE_CSS_ATTRIBUTE))
+  );
 }
 
 function formatSelectedLineRange(range: SelectedLineRange): string {
