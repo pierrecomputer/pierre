@@ -45,7 +45,7 @@ const SOCIAL_LINKS = [
 export default function DiffshubHome() {
   return (
     <div className="flex min-h-[100svh] min-w-screen flex-col items-center justify-center md:bg-[var(--diffshub-sidebar-bg)] md:py-12">
-      <section className="relative flex min-h-[100svh] w-2xl max-w-[100vw] flex-col justify-center space-y-4 px-6 pt-8 md:block md:min-h-0">
+      <section className="relative flex min-h-[100svh] w-2xl max-w-[100vw] flex-col justify-center space-y-4 px-6 pt-8 text-sm min-[340px]:text-base md:block md:min-h-0">
         <h2 className="flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
           <DiffsHubLogo />
           DiffsHub
@@ -57,11 +57,13 @@ export default function DiffshubHome() {
           <code>diffshub.com</code>.
         </p>
         <div className="text-muted-foreground flex flex-col gap-[2px] font-mono leading-[22px] tracking-tight">
-          <code className="diffshub-border-deleted overflow-hidden rounded-l font-normal text-inherit">
-            <code className={DIFF_LINE_DELETED_BADGE}>- github</code>
-            .com/org/repo/pull/number
+          <code className="diffshub-border-deleted rounded-l font-normal text-inherit">
+            <span className="min-w-0 truncate">
+              <code className={DIFF_LINE_DELETED_BADGE}>- github</code>
+              .com/org/repo/pull/number
+            </span>
           </code>
-          <code className="rounded-l border-l-[4px] border-[#07c480] font-normal text-inherit">
+          <code className="truncate rounded-l border-l-[4px] border-[#07c480] font-normal text-inherit">
             <code className={DIFF_LINE_ADDED_BADGE}>+ diffshub</code>
             .com/org/repo/pull/number
           </code>

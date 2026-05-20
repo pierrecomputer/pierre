@@ -48,7 +48,9 @@ export function CodeViewStatusPanel({
           <IconCiWarningFill className="text-muted-foreground mx-auto mb-3 size-5" />
         )}
         <h2 className="text-foreground text-sm font-medium">{title}</h2>
-        <p className="text-muted-foreground mt-1 text-sm">{message}</p>
+        <p className="text-muted-foreground mt-1 text-sm text-pretty">
+          {message}
+        </p>
         {isError && (
           <Button type="button" className="mt-4" onClick={onRetry}>
             Try again
