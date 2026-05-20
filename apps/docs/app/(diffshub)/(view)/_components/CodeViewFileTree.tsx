@@ -143,10 +143,13 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
           model.batch(operations);
         }
       }
+      if (source.gitStatusPatch != null) {
+        model.applyGitStatusPatch(source.gitStatusPatch);
+      }
     } else {
       model.resetPaths(source.paths.slice(0, source.pathCount));
+      model.setGitStatus(source.gitStatus);
     }
-    model.setGitStatus(source.gitStatus);
   }, [model, source]);
 
   useEffect(() => {

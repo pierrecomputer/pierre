@@ -1,5 +1,5 @@
 import type { AnnotationSide, SelectedLineRange } from '@pierre/diffs';
-import type { GitStatusEntry } from '@pierre/trees';
+import type { FileTreeGitStatusPatch, GitStatusEntry } from '@pierre/trees';
 
 export type ViewerLoadState =
   | 'fetching'
@@ -94,6 +94,7 @@ export interface CodeViewSavedCommentItem {
 // this snapshot.
 export interface CodeViewFileTreeSource {
   gitStatus: readonly GitStatusEntry[];
+  gitStatusPatch?: FileTreeGitStatusPatch;
   pathCount: number;
   paths: readonly string[];
   pathToItemId: ReadonlyMap<string, string>;
