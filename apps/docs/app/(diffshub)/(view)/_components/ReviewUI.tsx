@@ -15,6 +15,13 @@ import { CodeViewHeader } from './CodeViewHeader';
 import { CodeViewSidebar } from './CodeViewSidebar';
 import { CodeViewStatusPanel } from './CodeViewStatusPanel';
 import { CodeViewWrapper } from './CodeViewWrapper';
+import {
+  type ColorMode,
+  type DarkTheme,
+  DEFAULT_DARK_THEME,
+  DEFAULT_LIGHT_THEME,
+  type LightTheme,
+} from './themes';
 import type {
   CodeViewDeletedCommentEvent,
   CodeViewSavedCommentEntry,
@@ -26,6 +33,7 @@ import {
   removeSavedCommentSidebarEntry,
   upsertSavedCommentSidebarEntry,
 } from './utils';
+import { useTheme } from '@/components/theme-provider';
 
 interface ReviewUIProps {
   domain?: string;
@@ -37,6 +45,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   useEffect(preloadAvatars, []);
 
   const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
+  const workerPool = useWorkerPool();
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [collapseMode, setCollapseMode] = useState<'expanded' | 'collapsed'>(
     'expanded'
@@ -46,6 +55,27 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   const [showBackgrounds, setShowBackgrounds] = useState(true);
   const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
   const [lineNumbers, setLineNumbers] = useState(true);
+  const [lightTheme, setLightTheme] = useState<LightTheme>(DEFAULT_LIGHT_THEME);
+  const [darkTheme, setDarkTheme] = useState<DarkTheme>(DEFAULT_DARK_THEME);
+  // The diffshub UI shares its color mode with the surrounding ThemeProvider
+  // so picking Auto/Light/Dark flips both the CodeView's `themeType` and the
+  // app's <html> light/dark class (the tree sidebar, header, etc.).
+  // `theme` from useTheme() can briefly be undefined during initial mount
+  // before localStorage is read; fall back to 'system' so the header doesn't
+  // render an empty selection.
+  const { theme: appTheme, setTheme: setColorMode } = useTheme();
+  const colorMode: ColorMode = (appTheme as ColorMode | undefined) ?? 'system';
+
+  // Push theme changes through the WorkerPool so background tokenizers reload
+  // the active light/dark Shiki themes. Without this, workers keep using the
+  // pair they were initialized with and the diff continues to render with the
+  // old theme even though the option object changed.
+  useEffect(() => {
+    if (workerPool == null) return;
+    void workerPool.setRenderOptions({
+      theme: { dark: darkTheme, light: lightTheme },
+    });
+  }, [workerPool, darkTheme, lightTheme]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
   const handlePatchLoadStart = useCallback(() => {
@@ -161,17 +191,23 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
       <CodeViewHeader
         className="[grid-area:header]"
         collapseMode={collapseMode}
+        colorMode={colorMode}
+        darkTheme={darkTheme}
         diffIndicators={diffIndicators}
         diffStyle={diffStyle}
         initialUrl={initialUrl}
+        lightTheme={lightTheme}
         lineNumbers={lineNumbers}
         overflow={overflow}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
         fileTreeAvailable={treeSource != null}
         onToggleCollapseMode={handleToggleCollapseMode}
         onToggleFileTreeOverlay={handleToggleFileTreeOverlay}
+        setColorMode={setColorMode}
+        setDarkTheme={setDarkTheme}
         setDiffIndicators={setDiffIndicators}
         setDiffStyle={setDiffStyle}
+        setLightTheme={setLightTheme}
         setLineNumbers={setLineNumbers}
         setOverflow={setOverflow}
         setShowBackgrounds={setShowBackgrounds}
@@ -194,12 +230,15 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
           <CodeViewWrapper
             key={viewerKey}
             className="[grid-area:viewer]"
+            darkTheme={darkTheme}
             diffStyle={diffStyle}
+            lightTheme={lightTheme}
             overflow={overflow}
             showBackgrounds={showBackgrounds}
             diffIndicators={diffIndicators}
             lineNumbers={lineNumbers}
             scrollRef={scrollRef}
+            themeType={colorMode}
             viewerRef={viewerRef}
             initialItems={initialItems}
             onCommentDeleted={handleCommentDeleted}
