@@ -1712,7 +1712,13 @@
     position: relative;
     z-index: 4;
     touch-action: none;
-    overflow: hidden;
+
+    &::before {
+      content: '';
+      display: block;
+      position: absolute;
+      inset: 0 -4px;
+    }
   }
 
   /* Decoration Bars */
