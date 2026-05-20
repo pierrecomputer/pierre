@@ -412,15 +412,15 @@ function FileTreeFilterButton({
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
-          variant="muted"
-          size="icon"
+          variant="ghost"
+          size="icon-only"
           aria-label="Filter by Git status"
           aria-pressed={isFiltered}
           className="relative"
         >
-          <IconFilter />
+          <IconFilter className="size-4 md:size-3" />
           {isFiltered && (
-            <span className="border-secondary absolute top-1 right-1 size-3 rounded-full border-[2px] bg-blue-500 dark:bg-blue-400" />
+            <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full border-[1px] border-[var(--diffshub-sidebar-bg)] bg-blue-500 dark:bg-blue-400" />
           )}
         </Button>
       </DropdownMenuTrigger>
@@ -439,6 +439,7 @@ function FileTreeFilterButton({
             onPointerDown={(e) => {
               altKeyRef.current = e.altKey;
             }}
+            onSelect={(e) => e.preventDefault()}
             onCheckedChange={() => {
               if (altKeyRef.current) {
                 onIsolate(status);

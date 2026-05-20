@@ -34,7 +34,8 @@ const buttonVariants = cva(
         icon: 'size-9',
         'icon-md': 'size-8 rounded-md',
         'icon-sm': 'size-5 rounded-sm',
-        'icon-only': 'size-4 rounded-0 p-0',
+        'icon-only':
+          'size-4 rounded-none p-0 hover:bg-transparent dark:hover:bg-transparent focus-visible:ring-0 focus:border-none',
       },
     },
     defaultVariants: {
