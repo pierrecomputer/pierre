@@ -1717,7 +1717,7 @@
       content: '';
       display: block;
       position: absolute;
-      inset: 0 -4px;
+      inset: 0 0 0 -4px;
     }
   }
 
