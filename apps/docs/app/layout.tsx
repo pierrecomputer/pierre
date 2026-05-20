@@ -225,7 +225,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
         />
       </head>
-      <body>
+      <body className={SITE}>
         <ScrollbarGutterVariables />
         <WrapperContext>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
