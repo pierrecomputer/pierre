@@ -9,11 +9,13 @@ import {
 import { FileTree } from '@pierre/trees';
 import { useFileTreeSearch } from '@pierre/trees/react';
 import {
+  type CSSProperties,
   memo,
   type ReactNode,
   type RefObject,
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from 'react';
 
@@ -26,7 +28,7 @@ import type {
   CodeViewSavedCommentEntry,
   CodeViewSavedCommentItem,
 } from './types';
-import { useResolvedTreeThemeStyles } from './useResolvedTreeThemeStyles';
+import { useResolvedTreeTheme } from './useResolvedTreeThemeStyles';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -71,16 +73,61 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   for (const section of commentSections) {
     totalCommentCount += section.comments.length;
   }
-  // Pull the resolved Shiki theme bg so the whole sidebar (tabs row, file
-  // tree, diff stats panel, footer) sits on the theme's editor background
-  // instead of the diffshub neutral chrome — keeps the visual surface
-  // consistent with the diff viewer next to it.
-  const activeThemeStyles = useResolvedTreeThemeStyles(lightTheme, darkTheme);
-  const sidebarBg =
-    typeof activeThemeStyles.backgroundColor === 'string' &&
-    activeThemeStyles.backgroundColor !== ''
-      ? activeThemeStyles.backgroundColor
-      : undefined;
+  // Pull the resolved Shiki theme so the whole sidebar (tabs row, file
+  // tree, diff stats panel, footer) sits on the theme's editor surface and
+  // its chrome text follows the theme's own foreground tokens instead of
+  // an opacity-derived fade of the file-tree's muted text.
+  const activeTheme = useResolvedTreeTheme(lightTheme, darkTheme);
+  const sidebarStyle = useMemo<CSSProperties | undefined>(() => {
+    const bg =
+      typeof activeTheme.treeStyles.backgroundColor === 'string' &&
+      activeTheme.treeStyles.backgroundColor !== ''
+        ? activeTheme.treeStyles.backgroundColor
+        : undefined;
+    // Primary text uses the theme's editor.foreground — that's the
+    // highest-contrast color the theme defines, the same one the diff
+    // viewer next door uses for code. Fall back to the file-tree color
+    // (sideBar.foreground) if a theme oddly skips editor.foreground.
+    const primaryFg =
+      activeTheme.editorFg ??
+      (typeof activeTheme.treeStyles.color === 'string'
+        ? activeTheme.treeStyles.color
+        : undefined);
+    // Muted text uses sideBar.foreground / descriptionForeground — the
+    // theme's own muted shade — so labels like "Files" / "Additions" stay
+    // legible without falling off into transparency.
+    const mutedFg = activeTheme.mutedFg ?? primaryFg;
+    if (bg == null && primaryFg == null) return undefined;
+    const style: CSSProperties & Record<string, string> = {};
+    if (bg != null) style.backgroundColor = bg;
+    if (primaryFg != null) {
+      style.color = primaryFg;
+      // Tailwind v4 reads `--color-foreground` / `--color-muted-foreground`
+      // / `--color-border` (the `@theme` aliases in globals.css are baked
+      // out to concrete values, so overriding the raw `--foreground` etc.
+      // is not enough — we have to override the `--color-*` names too).
+      style['--color-foreground'] = primaryFg;
+      style['--foreground'] = primaryFg;
+      const muted = mutedFg ?? primaryFg;
+      style['--color-muted-foreground'] = muted;
+      style['--muted-foreground'] = muted;
+      // Borders should also pick up the theme so the dividers between
+      // panels match the surface. ~20% gives a subtle line on both light
+      // and dark themes without taking on a strong tint.
+      const border = `color-mix(in srgb, ${primaryFg} 20%, transparent)`;
+      style['--color-border'] = border;
+      style['--border'] = border;
+      const borderOpaque = `color-mix(in srgb, ${primaryFg} 15%, ${bg ?? 'transparent'})`;
+      style['--color-border-opaque'] = borderOpaque;
+      style['--border-opaque'] = borderOpaque;
+    }
+    return style as CSSProperties;
+  }, [
+    activeTheme.editorFg,
+    activeTheme.mutedFg,
+    activeTheme.treeStyles.backgroundColor,
+    activeTheme.treeStyles.color,
+  ]);
   const [activeStatusPanel, setActiveStatusPanel] =
     useState<SidebarStatusPanel | null>('diffStats');
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
@@ -142,7 +189,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
       <SidebarWrapper
         className={className}
         mobileOverlayOpen={mobileOverlayOpen}
-        backgroundColor={sidebarBg}
+        themeStyle={sidebarStyle}
       >
         <div className="flex items-center gap-3 px-4 pt-5 pb-2 md:px-3 md:pt-0.5 md:pb-0">
           <ButtonGroup
@@ -240,17 +287,17 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
 });
 
 interface SidebarWrapperProps {
-  backgroundColor?: string;
   children: ReactNode;
   className?: string;
   mobileOverlayOpen: boolean;
+  themeStyle?: CSSProperties;
 }
 
 function SidebarWrapper({
-  backgroundColor,
   children,
   className,
   mobileOverlayOpen,
+  themeStyle,
 }: SidebarWrapperProps) {
   return (
     <div
@@ -260,12 +307,12 @@ function SidebarWrapper({
         // Fall back to the neutral diffshub chrome background when no Shiki
         // theme bg is available yet (initial render before the resolver
         // returns).
-        backgroundColor == null && 'bg-[var(--diffshub-sidebar-bg)]',
+        themeStyle == null && 'bg-[var(--diffshub-sidebar-bg)]',
         mobileOverlayOpen
           ? 'pointer-events-auto translate-y-0 overflow-hidden rounded-t-xl shadow-[0_0_0_1px_var(--color-border-opaque),_0_16px_32px_rgb(0_0_0_/0.25)] md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
           : 'pointer-events-none translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl md:pointer-events-auto md:h-full md:overflow-visible md:rounded-none pt-3 border-r border-[var(--color-border-opaque)]'
       )}
-      style={backgroundColor != null ? { backgroundColor } : undefined}
+      style={themeStyle}
     >
       {children}
     </div>
