@@ -28,6 +28,7 @@ import {
   LIGHT_THEMES,
   type LightTheme,
 } from './themes';
+import { useThemeChromeStyle } from './useResolvedTreeThemeStyles';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -97,12 +98,20 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   // Only show the external-link button when the input still reflects the
   // committed URL — otherwise we'd be pointing at a draft the user is editing.
   const showExternalLink = currentUrl === initialUrl;
+  // Mirror the sidebar's themed chrome so the header bar lives on the same
+  // Shiki surface (background, text, icons, borders) instead of the global
+  // light/dark palette. Falls back to the diffshub-sidebar-bg CSS variable
+  // on first render while the theme is still resolving.
+  const themeChromeStyle = useThemeChromeStyle(lightTheme, darkTheme);
   return (
     <div
       className={cn(
-        'z-10 contain-layout contain-paint flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 pb-2 px-4 md:px-3 md:py-1.5 border-b border-[var(--color-border-opaque)] bg-background md:bg-[var(--diffshub-sidebar-bg)]',
+        'z-10 contain-layout contain-paint flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 pb-2 px-4 md:px-3 md:py-1.5 border-b border-[var(--color-border-opaque)]',
+        themeChromeStyle == null &&
+          'bg-background md:bg-[var(--diffshub-sidebar-bg)]',
         className
       )}
+      style={themeChromeStyle}
     >
       <Link
         href="/"

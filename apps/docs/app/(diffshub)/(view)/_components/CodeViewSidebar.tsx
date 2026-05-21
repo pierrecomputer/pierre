@@ -15,7 +15,6 @@ import {
   type RefObject,
   useCallback,
   useEffect,
-  useMemo,
   useState,
 } from 'react';
 
@@ -28,7 +27,7 @@ import type {
   CodeViewSavedCommentEntry,
   CodeViewSavedCommentItem,
 } from './types';
-import { useResolvedTreeTheme } from './useResolvedTreeThemeStyles';
+import { useThemeChromeStyle } from './useResolvedTreeThemeStyles';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -77,61 +76,8 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   // tree, diff stats panel, footer) sits on the theme's sidebar surface
   // and its chrome text follows the theme's own foreground tokens
   // instead of an opacity-derived fade of the file-tree's muted text.
-  const activeTheme = useResolvedTreeTheme(lightTheme, darkTheme);
-  const sidebarStyle = useMemo<CSSProperties | undefined>(() => {
-    const bg =
-      typeof activeTheme.treeStyles.backgroundColor === 'string' &&
-      activeTheme.treeStyles.backgroundColor !== ''
-        ? activeTheme.treeStyles.backgroundColor
-        : undefined;
-    // Primary text uses the theme's sideBar.foreground — the color the
-    // theme assigns to this surface. Picking editor.foreground first
-    // breaks on themes like slack-ochin where editor and sidebar use
-    // opposite palettes (white editor, dark navy sidebar) — primary text
-    // and icons would render black on the dark sidebar.
-    const primaryFg =
-      activeTheme.primaryFg ??
-      (typeof activeTheme.treeStyles.color === 'string'
-        ? activeTheme.treeStyles.color
-        : undefined);
-    if (bg == null && primaryFg == null) return undefined;
-    const style: CSSProperties & Record<string, string> = {};
-    if (bg != null) style.backgroundColor = bg;
-    if (primaryFg != null) {
-      style.color = primaryFg;
-      // Tailwind v4 reads `--color-foreground` / `--color-muted-foreground`
-      // / `--color-border` (the `@theme` aliases in globals.css are baked
-      // out to concrete values, so overriding the raw `--foreground` etc.
-      // is not enough — we have to override the `--color-*` names too).
-      style['--color-foreground'] = primaryFg;
-      style['--foreground'] = primaryFg;
-      // Muted text prefers the theme's own descriptionForeground; if the
-      // theme doesn't define it, fade the primary text rather than
-      // picking another opaque token. sideBarSectionHeader.foreground is
-      // tempting but is brighter than primary on some themes (slack-ochin
-      // sets it to #FFF), which inverts the muted/primary hierarchy.
-      const muted =
-        activeTheme.mutedFg ??
-        `color-mix(in srgb, ${primaryFg} 55%, transparent)`;
-      style['--color-muted-foreground'] = muted;
-      style['--muted-foreground'] = muted;
-      // Borders should also pick up the theme so the dividers between
-      // panels match the surface. ~20% gives a subtle line on both light
-      // and dark themes without taking on a strong tint.
-      const border = `color-mix(in srgb, ${primaryFg} 20%, transparent)`;
-      style['--color-border'] = border;
-      style['--border'] = border;
-      const borderOpaque = `color-mix(in srgb, ${primaryFg} 15%, ${bg ?? 'transparent'})`;
-      style['--color-border-opaque'] = borderOpaque;
-      style['--border-opaque'] = borderOpaque;
-    }
-    return style as CSSProperties;
-  }, [
-    activeTheme.primaryFg,
-    activeTheme.mutedFg,
-    activeTheme.treeStyles.backgroundColor,
-    activeTheme.treeStyles.color,
-  ]);
+  // Shared with the header so both chrome surfaces stay in sync.
+  const sidebarStyle = useThemeChromeStyle(lightTheme, darkTheme);
   const [activeStatusPanel, setActiveStatusPanel] =
     useState<SidebarStatusPanel | null>('diffStats');
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
