@@ -71,6 +71,20 @@ describe('getPatchViewerHref', () => {
         getPatchViewerHref('github.com/torvalds/linux/compare/v6.0...v7.0')
       ).toBe('/torvalds/linux/compare/v6.0...v7.0');
     });
+
+    test('Tangled patch path preserves the host in the domain query', () => {
+      expect(getPatchViewerHref('tangled.org/@owner/repo/pulls/123')).toBe(
+        '/@owner/repo/pulls/123?domain=tangled.org'
+      );
+    });
+  });
+
+  describe('alternate domain URLs', () => {
+    test('Tangled URL preserves the host in the domain query', () => {
+      expect(
+        getPatchViewerHref('https://tangled.org/@owner/repo/pulls/123')
+      ).toBe('/@owner/repo/pulls/123?domain=tangled.org');
+    });
   });
 
   describe('bare GitHub paths (no domain)', () => {

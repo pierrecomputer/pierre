@@ -2,6 +2,14 @@ import { redirect } from 'next/navigation';
 
 import { ReviewUI } from '../_components/ReviewUI';
 import { resolveDiffshubViewerRoute } from '../_components/utils';
+import { loadInitialDiffshubPatchResponse } from '@/lib/diffshubPatchResponse';
+
+export const revalidate = 86400;
+export const dynamicParams = true;
+
+export function generateStaticParams(): { path: string[] }[] {
+  return [];
+}
 
 // Viewer route that mirrors the upstream path. GitHub is the public default,
 // while hidden alternate domains can opt in through the `domain` query param.
@@ -20,11 +28,16 @@ export default async function DiffshubViewByPathPage({
   if (route.kind === 'redirect') {
     redirect(route.target);
   }
+  const initialPatchResponse = loadInitialDiffshubPatchResponse({
+    domain: route.domain,
+    path: route.upstreamPath,
+  });
 
   return (
     <div className="flex h-dvh flex-col gap-2">
       <ReviewUI
         domain={route.domain}
+        initialPatchResponse={initialPatchResponse}
         initialUrl={route.url}
         path={route.upstreamPath}
       />

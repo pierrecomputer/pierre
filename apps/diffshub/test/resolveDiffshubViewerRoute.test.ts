@@ -126,6 +126,20 @@ describe('resolveDiffshubViewerRoute', () => {
   });
 
   describe('alternate domain', () => {
+    test('renders Tangled paths against the requested host', () => {
+      expect(
+        resolveDiffshubViewerRoute(
+          ['@owner', 'repo', 'pulls', '123'],
+          'tangled.org'
+        )
+      ).toEqual({
+        domain: 'tangled.org',
+        kind: 'render',
+        upstreamPath: '/@owner/repo/pulls/123',
+        url: 'https://tangled.org/@owner/repo/pulls/123',
+      });
+    });
+
     test('renders against the requested host without rewriting', () => {
       expect(
         resolveDiffshubViewerRoute(

@@ -34,6 +34,7 @@ import {
 } from './lineHash';
 import {
   getStreamedPatchMetadata,
+  type GitPatchStream,
   streamGitPatchFiles,
 } from './streamGitPatchFiles';
 import type {
@@ -44,6 +45,7 @@ import type {
   CommentMetadata,
   ViewerLoadState,
 } from './types';
+import type { InitialDiffshubPatchResponse } from '@/lib/diffshubPatchTypes';
 
 const STREAM_PUBLISH_INTERVAL_MS = 100;
 const STREAM_INITIAL_PUBLISH_INTERVAL_MS = 500;
@@ -56,6 +58,7 @@ const GENERIC_PATCH_LOAD_ERROR_MESSAGE =
 interface UsePatchLoaderOptions {
   collapseMode: 'expanded' | 'collapsed';
   domain?: string;
+  initialPatchResponse: Promise<InitialDiffshubPatchResponse>;
   onLoadStart(): void;
   path: string;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
@@ -80,6 +83,7 @@ interface UsePatchLoaderResult {
 export function usePatchLoader({
   collapseMode,
   domain,
+  initialPatchResponse,
   onLoadStart,
   path,
   viewerRef,
@@ -269,17 +273,20 @@ export function usePatchLoader({
         }
 
         console.time('--     request time');
-        const response = await fetch(`/api/diff?${patchSearchParams}`, {
-          cache: 'no-store',
-          signal: controller.signal,
-        });
+        const response =
+          loadAttempt === 0
+            ? await initialPatchResponse
+            : await fetch(`/api/diff?${patchSearchParams}`, {
+                cache: 'no-store',
+                signal: controller.signal,
+              });
         console.timeEnd('--     request time');
 
         // This only catches route setup errors. GitHub fetch failures are
         // delivered while consuming the stream so the UI can enter the
         // streaming state as soon as the local transport opens.
         if (!response.ok) {
-          const detail = (await response.text()).trim();
+          const detail = (await readPatchResponseText(response)).trim();
           throw new Error(
             detail.length > 0 ? detail : `Request failed (${response.status}).`
           );
@@ -287,7 +294,7 @@ export function usePatchLoader({
 
         if (response.body == null) {
           console.time('--     reading patch');
-          const patchContent = await response.text();
+          const patchContent = await readPatchResponseText(response);
           console.timeEnd('--     reading patch');
           await commitFullPatch(patchContent);
           return;
@@ -402,6 +409,10 @@ export function usePatchLoader({
           publishTreeSource();
         };
         const appendStreamedFile = async (fileText: string) => {
+          if (!isCurrentRequest()) {
+            return;
+          }
+
           if (!hasReceivedFirstStreamedFile) {
             hasReceivedFirstStreamedFile = true;
             console.timeEnd('--     first streamed file');
@@ -454,7 +465,8 @@ export function usePatchLoader({
         console.time('--     reading patch stream');
         const fallbackPatchContent = await streamGitPatchFiles(
           response.body,
-          appendStreamedFile
+          appendStreamedFile,
+          controller.signal
         );
         console.timeEnd('--     reading patch stream');
         if (!isCurrentRequest()) {
@@ -488,6 +500,7 @@ export function usePatchLoader({
     };
   }, [
     domain,
+    initialPatchResponse,
     loadAttempt,
     onLoadStart,
     path,
@@ -574,6 +587,43 @@ function applyCodeViewItemIdRename(
 
 function getNextItemVersion(item: { version?: string | number }): number {
   return typeof item.version === 'number' ? item.version + 1 : 1;
+}
+
+type PatchResponseSource = Response | InitialDiffshubPatchResponse;
+
+async function readPatchResponseText(
+  response: PatchResponseSource
+): Promise<string> {
+  if ('bodyText' in response) {
+    if (response.bodyText != null) {
+      return response.bodyText;
+    }
+    return response.body == null ? '' : await readStreamText(response.body);
+  }
+
+  return response.text();
+}
+
+async function readStreamText(body: GitPatchStream): Promise<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  try {
+    for (;;) {
+      const result = await reader.read();
+      if (result.done) {
+        break;
+      }
+      text +=
+        typeof result.value === 'string'
+          ? result.value
+          : decoder.decode(result.value, { stream: true });
+    }
+    text += decoder.decode();
+    return text;
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 function replaceLocationHash(hash: string | null): void {

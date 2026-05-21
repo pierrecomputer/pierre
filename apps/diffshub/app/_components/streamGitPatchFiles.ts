@@ -6,22 +6,34 @@ const GIT_FILE_BOUNDARY_SCAN_OVERLAP =
   GIT_FILE_BOUNDARY_WITH_NEWLINE.length - 1;
 const NON_WHITESPACE_PATTERN = /\S/;
 
+export type GitPatchStream = ReadableStream<string | Uint8Array>;
+
 export async function streamGitPatchFiles(
-  body: ReadableStream<Uint8Array>,
-  onFileText: (fileText: string) => Promise<void>
+  body: GitPatchStream,
+  onFileText: (fileText: string) => Promise<void>,
+  signal?: AbortSignal
 ): Promise<string | undefined> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   const parser = createGitPatchFileStreamParser();
+  const abortReader = () => {
+    void reader.cancel().catch(() => {});
+  };
+  signal?.addEventListener('abort', abortReader, { once: true });
 
   try {
     for (;;) {
+      if (signal?.aborted === true) {
+        return undefined;
+      }
+
       const result = await reader.read();
       if (result.done) {
         break;
       }
-      if (result.value.byteLength > 0) {
-        parser.push(decoder.decode(result.value, { stream: true }));
+      const text = decodeGitPatchStreamChunk(decoder, result.value);
+      if (text.length > 0) {
+        parser.push(text);
         await consumeAvailableStreamedFiles(parser, onFileText);
       }
     }
@@ -41,8 +53,18 @@ export async function streamGitPatchFiles(
     }
     return result.fallbackPatchContent;
   } finally {
+    signal?.removeEventListener('abort', abortReader);
     reader.releaseLock();
   }
+}
+
+function decodeGitPatchStreamChunk(
+  decoder: TextDecoder,
+  chunk: string | Uint8Array
+): string {
+  return typeof chunk === 'string'
+    ? chunk
+    : decoder.decode(chunk, { stream: true });
 }
 
 export function getStreamedPatchMetadata(fileText: string): string | undefined {

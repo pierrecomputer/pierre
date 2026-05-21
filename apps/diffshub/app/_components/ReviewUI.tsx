@@ -35,24 +35,31 @@ import {
   docsThemeCatalog,
   themeController,
 } from '@/components/themeController';
+import type { InitialDiffshubPatchResponse } from '@/lib/diffshubPatchTypes';
 
 interface ReviewUIProps {
   domain?: string;
+  initialPatchResponse: Promise<InitialDiffshubPatchResponse>;
   initialUrl: string;
   path: string;
 }
 
-export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
+export function ReviewUI(props: ReviewUIProps) {
   // Provide the diffshub-scoped theme context, then render the body BELOW it so
   // the diffs hook + selection hook can read the controller context.
   return (
     <ThemeProvider controller={themeController}>
-      <ReviewUIInner domain={domain} initialUrl={initialUrl} path={path} />
+      <ReviewUIInner {...props} />
     </ThemeProvider>
   );
 }
 
-function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
+function ReviewUIInner({
+  domain,
+  initialPatchResponse,
+  initialUrl,
+  path,
+}: ReviewUIProps) {
   useEffect(preloadAvatars, []);
 
   const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
@@ -139,6 +146,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   } = usePatchLoader({
     collapseMode,
     domain,
+    initialPatchResponse,
     onLoadStart: handlePatchLoadStart,
     path,
     viewerRef,
