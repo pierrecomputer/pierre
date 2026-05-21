@@ -234,10 +234,9 @@ export class FileRenderer<LAnnotation = undefined> {
       forceHighlight = false;
     }
     const lines = this.getOrCreateLineCache(file);
-    const forcePlainText = isFileMassive(
-      lines.length,
-      this.getTokenizeMaxLength()
-    );
+    const forcePlainText =
+      isFilePlainText(file) ||
+      isFileMassive(lines.length, this.getTokenizeMaxLength());
     this.renderCache ??= {
       file,
       highlighted: false,
@@ -267,9 +266,7 @@ export class FileRenderer<LAnnotation = undefined> {
       }
 
       if (
-        // We should only attempt to kick off the worker highlighter if there
-        // are lines to render
-        renderRange.totalLines > 0 &&
+        file.contents.length > 0 &&
         !forcePlainText &&
         (!this.renderCache.highlighted || forceHighlight)
       ) {

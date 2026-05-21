@@ -472,7 +472,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
       forceHighlight = false;
     }
-    const forcePlainText = isDiffMassive(diff, this.getTokenizeMaxLength());
+    const forcePlainText =
+      isDiffPlainText(diff) || isDiffMassive(diff, this.getTokenizeMaxLength());
     this.renderCache ??= {
       diff,
       highlighted: false,
@@ -507,9 +508,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.renderCache.renderRange = renderRange;
       }
       if (
-        // We should only attempt to kick off the worker highlighter if there
-        // are lines to render
-        renderRange.totalLines > 0 &&
+        (diff.additionLines.length > 0 || diff.deletionLines.length > 0) &&
         !forcePlainText &&
         (!this.renderCache.highlighted || forceHighlight)
       ) {
