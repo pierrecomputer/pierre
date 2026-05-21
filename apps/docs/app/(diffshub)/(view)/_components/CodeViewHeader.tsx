@@ -470,7 +470,7 @@ function ThemeList({
           {isLight ? 'Light theme' : 'Dark theme'}
         </span>
       </DropdownMenuItem>
-      <div className="mt-1 max-h-[320px] overflow-y-auto">
+      <div className="cv-mini-scrollbar mt-1 max-h-[320px] overflow-y-auto overscroll-contain">
         {themes.map((theme) => (
           <DropdownMenuItem
             key={theme}
