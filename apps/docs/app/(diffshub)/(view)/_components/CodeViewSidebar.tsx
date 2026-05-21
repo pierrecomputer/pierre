@@ -26,6 +26,7 @@ import type {
   CodeViewSavedCommentEntry,
   CodeViewSavedCommentItem,
 } from './types';
+import { useResolvedTreeThemeStyles } from './useResolvedTreeThemeStyles';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -39,7 +40,9 @@ const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 interface CodeViewSidebarProps {
   className?: string;
   commentSections: readonly CodeViewSavedCommentItem[];
+  darkTheme: string;
   diffStats: CodeViewDiffStatsData | null;
+  lightTheme: string;
   mobileOverlayOpen?: boolean;
   onMobileClose(): void;
   onSelectComment(comment: CodeViewSavedCommentEntry): void;
@@ -52,7 +55,9 @@ interface CodeViewSidebarProps {
 export const CodeViewSidebar = memo(function CodeViewSidebar({
   className,
   commentSections,
+  darkTheme,
   diffStats,
+  lightTheme,
   mobileOverlayOpen = false,
   onMobileClose,
   onSelectComment,
@@ -66,6 +71,16 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   for (const section of commentSections) {
     totalCommentCount += section.comments.length;
   }
+  // Pull the resolved Shiki theme bg so the whole sidebar (tabs row, file
+  // tree, diff stats panel, footer) sits on the theme's editor background
+  // instead of the diffshub neutral chrome — keeps the visual surface
+  // consistent with the diff viewer next to it.
+  const activeThemeStyles = useResolvedTreeThemeStyles(lightTheme, darkTheme);
+  const sidebarBg =
+    typeof activeThemeStyles.backgroundColor === 'string' &&
+    activeThemeStyles.backgroundColor !== ''
+      ? activeThemeStyles.backgroundColor
+      : undefined;
   const [activeStatusPanel, setActiveStatusPanel] =
     useState<SidebarStatusPanel | null>('diffStats');
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
@@ -127,6 +142,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
       <SidebarWrapper
         className={className}
         mobileOverlayOpen={mobileOverlayOpen}
+        backgroundColor={sidebarBg}
       >
         <div className="flex items-center gap-3 px-4 pt-5 pb-2 md:px-3 md:pt-0.5 md:pb-0">
           <ButtonGroup
@@ -187,6 +203,8 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             className="h-full min-h-0"
           >
             <CodeViewFileTree
+              darkTheme={darkTheme}
+              lightTheme={lightTheme}
               source={source}
               onModelReady={handleModelReady}
               onSelectItem={onSelectItem}
@@ -222,12 +240,14 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
 });
 
 interface SidebarWrapperProps {
+  backgroundColor?: string;
   children: ReactNode;
   className?: string;
   mobileOverlayOpen: boolean;
 }
 
 function SidebarWrapper({
+  backgroundColor,
   children,
   className,
   mobileOverlayOpen,
@@ -236,11 +256,16 @@ function SidebarWrapper({
     <div
       className={cn(
         className,
-        'bg-[var(--diffshub-sidebar-bg)] contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
+        'contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
+        // Fall back to the neutral diffshub chrome background when no Shiki
+        // theme bg is available yet (initial render before the resolver
+        // returns).
+        backgroundColor == null && 'bg-[var(--diffshub-sidebar-bg)]',
         mobileOverlayOpen
           ? 'pointer-events-auto translate-y-0 overflow-hidden rounded-t-xl shadow-[0_0_0_1px_var(--color-border-opaque),_0_16px_32px_rgb(0_0_0_/0.25)] md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
           : 'pointer-events-none translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl md:pointer-events-auto md:h-full md:overflow-visible md:rounded-none pt-3 border-r border-[var(--color-border-opaque)]'
       )}
+      style={backgroundColor != null ? { backgroundColor } : undefined}
     >
       {children}
     </div>

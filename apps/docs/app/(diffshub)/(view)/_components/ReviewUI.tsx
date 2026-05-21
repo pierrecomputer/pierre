@@ -218,7 +218,9 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
           <CodeViewSidebar
             className="[grid-area:viewer] md:[grid-area:tree]"
             commentSections={commentSections}
+            darkTheme={darkTheme}
             diffStats={diffStats}
+            lightTheme={lightTheme}
             mobileOverlayOpen={fileTreeOverlayOpen}
             onMobileClose={handleCloseFileTreeOverlay}
             onSelectComment={handleSelectComment}

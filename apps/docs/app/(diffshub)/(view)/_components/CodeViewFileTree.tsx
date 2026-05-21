@@ -1,14 +1,12 @@
 'use client';
 
+import { type DiffsThemeNames } from '@pierre/diffs';
 import { useStableCallback } from '@pierre/diffs/react';
-import darkSoftTheme from '@pierre/theme/pierre-dark-soft';
-import lightSoftTheme from '@pierre/theme/pierre-light-soft';
 import type {
   FileTreeBatchOperation,
   FileTree as FileTreeModel,
   FileTreeOptions,
 } from '@pierre/trees';
-import { themeToTreeStyles } from '@pierre/trees';
 import { FileTree, useFileTree } from '@pierre/trees/react';
 import {
   type CSSProperties,
@@ -26,11 +24,7 @@ import {
   getInitialBatchSize,
 } from './constants';
 import type { CodeViewFileTreeSource } from './types';
-import { useTheme } from '@/components/theme-provider';
-
-// Computed once at module level so they're never re-derived on every render.
-const LIGHT_SOFT_TREE_STYLES = themeToTreeStyles(lightSoftTheme);
-const DARK_SOFT_TREE_STYLES = themeToTreeStyles(darkSoftTheme);
+import { useResolvedTreeThemeStyles } from './useResolvedTreeThemeStyles';
 type FileTreeSortComparator = Exclude<
   NonNullable<FileTreeOptions['sort']>,
   'default'
@@ -39,19 +33,23 @@ type FileTreeSortComparator = Exclude<
 // follows the same patch path sequence that drives the code view.
 const PRESERVE_INPUT_ORDER_SORT: FileTreeSortComparator = () => 0;
 
-// These override vars take precedence over the --trees-theme-* vars set by
-// themeToTreeStyles, so diffshub-specific layout tweaks are always preserved.
+// Layout-only overrides. Colors flow through from the resolved Shiki theme
+// (via themeToTreeStyles) so the sidebar matches the diff theme, but the
+// density and padding stay tuned for the diffshub layout regardless of
+// which theme the user picks. `--trees-git-renamed-color-override` is kept
+// because most Shiki themes don't define a "renamed" decoration color.
 const DENSITY_OVERRIDE_STYLES = {
-  '--trees-bg-override': 'var(--diffshub-sidebar-bg)',
   '--trees-density-override': 0.8,
-  '--trees-selected-fg-override': 'light-dark(#1c1c1e, #f0f0f2)',
   '--trees-padding-inline-override': 8,
-  '--trees-bg-muted': 'light-dark(#f5f5f5, #262626)',
-  '--trees-search-bg-override': 'light-dark(#fff, #262626)',
   '--trees-git-renamed-color-override': 'light-dark(#007aff, #007aff)',
 } as CSSProperties;
 
 interface CodeViewFileTreeProps {
+  // Themes selected in the header's theme switcher. Resolved via shiki
+  // (cached after first use) and mapped to tree CSS variables so the
+  // sidebar tracks the same Shiki theme as the diff viewer.
+  darkTheme: DiffsThemeNames;
+  lightTheme: DiffsThemeNames;
   // Callback invoked with the underlying tree model once it's mounted, and
   // again with `null` on unmount. Lets parents drive imperative APIs like
   // search open/close without owning the model creation.
@@ -61,19 +59,16 @@ interface CodeViewFileTreeProps {
 }
 
 export const CodeViewFileTree = memo(function CodeViewFileTree({
+  darkTheme,
+  lightTheme,
   onModelReady,
   onSelectItem,
   source,
 }: CodeViewFileTreeProps) {
-  const { resolvedTheme } = useTheme();
+  const activeStyles = useResolvedTreeThemeStyles(lightTheme, darkTheme);
   const themeStyles = useMemo(
-    () => ({
-      ...(resolvedTheme === 'dark'
-        ? DARK_SOFT_TREE_STYLES
-        : LIGHT_SOFT_TREE_STYLES),
-      ...DENSITY_OVERRIDE_STYLES,
-    }),
-    [resolvedTheme]
+    () => ({ ...activeStyles, ...DENSITY_OVERRIDE_STYLES }),
+    [activeStyles]
   );
   const sourceRef = useRef(source);
   const previousSourceRef = useRef(source);
