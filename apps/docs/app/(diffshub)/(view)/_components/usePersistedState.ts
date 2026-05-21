@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  type Dispatch,
-  type SetStateAction,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
 
 // useState-like hook that mirrors its value to localStorage. On mount it
 // reads `storageKey`; if the stored string is included in `validValues` it
@@ -15,16 +9,21 @@ import {
 // markup always uses the default and React's hydration check stays happy.
 // localStorage access is wrapped in try/catch because it can throw under
 // private browsing or denied permissions.
+//
+// The third tuple element exposes whether the rehydration effect has run.
+// Callers that wire the stored value into shared singletons (e.g. the
+// diffshub WorkerPool) gate side effects on this flag so the brief initial
+// window where the hook still returns `defaultValue` doesn't clobber the
+// singleton's current state. The flag also doubles as the write guard so
+// the first `setItem` can't fire with the default before the rehydrating
+// `setItem` has had a chance to land.
 export function usePersistedState<T extends string>(
   storageKey: string,
   defaultValue: T,
   validValues: readonly T[]
-): [T, Dispatch<SetStateAction<T>>] {
+): [T, Dispatch<SetStateAction<T>>, boolean] {
   const [value, setValue] = useState<T>(defaultValue);
-  // Tracks whether the rehydration effect has run yet. Without this guard
-  // the write effect would fire on the initial commit and clobber the
-  // stored value with `defaultValue` before we get a chance to read it.
-  const hydratedRef = useRef(false);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
     try {
@@ -38,17 +37,17 @@ export function usePersistedState<T extends string>(
     } catch {
       // localStorage unavailable; keep the default.
     }
-    hydratedRef.current = true;
+    setIsHydrated(true);
   }, [storageKey, validValues]);
 
   useEffect(() => {
-    if (!hydratedRef.current) return;
+    if (!isHydrated) return;
     try {
       window.localStorage.setItem(storageKey, value);
     } catch {
       // See note above.
     }
-  }, [storageKey, value]);
+  }, [storageKey, value, isHydrated]);
 
-  return [value, setValue];
+  return [value, setValue, isHydrated];
 }
