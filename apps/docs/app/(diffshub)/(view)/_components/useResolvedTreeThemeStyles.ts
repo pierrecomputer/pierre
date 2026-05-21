@@ -23,17 +23,18 @@ interface ResolvedShikiTheme {
 // without going through TreeThemeStyles' tree-specific naming.
 export interface ResolvedTreeTheme {
   treeStyles: TreeThemeStyles;
-  // editor.foreground (or theme.fg) — the highest-contrast text color in
-  // the theme. Use this for the sidebar's primary text so labels read
-  // clearly against the sideBar.background surface.
-  editorFg?: string;
-  // editor.background (or theme.bg) — useful when mixing colors that
-  // need to sit opaquely on the sidebar surface.
-  editorBg?: string;
-  // sideBar.foreground (or descriptionForeground) — typically a muted
-  // shade in the theme. Use this for secondary/muted sidebar text so it
-  // stays in the theme's palette instead of being a fade-to-transparent
-  // version of the primary text.
+  // The color the theme assigns to the sidebar surface
+  // (sideBar.foreground, falling back to editor.foreground then theme.fg).
+  // Use this for primary text and icon chrome so they stay legible
+  // against the tree's sideBar.background — picking editor.foreground
+  // first breaks on themes like slack-ochin where the editor and sidebar
+  // use opposite palettes (white editor, dark navy sidebar).
+  primaryFg?: string;
+  // descriptionForeground — VS Code's muted-text token. Many themes
+  // don't define it; when missing, callers should fade `primaryFg`
+  // themselves rather than reaching for another opaque token like
+  // sideBarSectionHeader.foreground, which on some themes is brighter
+  // than the primary text and inverts the muted/primary hierarchy.
   mutedFg?: string;
 }
 
@@ -42,14 +43,8 @@ function buildResolvedTheme(theme: ResolvedShikiTheme): ResolvedTreeTheme {
   const c = theme.colors ?? {};
   return {
     treeStyles: themeToTreeStyles(theme),
-    editorFg: c['editor.foreground'] ?? theme.fg,
-    editorBg: c['editor.background'] ?? theme.bg,
-    mutedFg:
-      c['sideBar.foreground'] ??
-      c['descriptionForeground'] ??
-      c['sideBarSectionHeader.foreground'] ??
-      c['editor.foreground'] ??
-      theme.fg,
+    primaryFg: c['sideBar.foreground'] ?? c['editor.foreground'] ?? theme.fg,
+    mutedFg: c['descriptionForeground'],
   };
 }
 

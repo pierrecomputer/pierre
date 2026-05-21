@@ -74,9 +74,9 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
     totalCommentCount += section.comments.length;
   }
   // Pull the resolved Shiki theme so the whole sidebar (tabs row, file
-  // tree, diff stats panel, footer) sits on the theme's editor surface and
-  // its chrome text follows the theme's own foreground tokens instead of
-  // an opacity-derived fade of the file-tree's muted text.
+  // tree, diff stats panel, footer) sits on the theme's sidebar surface
+  // and its chrome text follows the theme's own foreground tokens
+  // instead of an opacity-derived fade of the file-tree's muted text.
   const activeTheme = useResolvedTreeTheme(lightTheme, darkTheme);
   const sidebarStyle = useMemo<CSSProperties | undefined>(() => {
     const bg =
@@ -84,19 +84,16 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
       activeTheme.treeStyles.backgroundColor !== ''
         ? activeTheme.treeStyles.backgroundColor
         : undefined;
-    // Primary text uses the theme's editor.foreground — that's the
-    // highest-contrast color the theme defines, the same one the diff
-    // viewer next door uses for code. Fall back to the file-tree color
-    // (sideBar.foreground) if a theme oddly skips editor.foreground.
+    // Primary text uses the theme's sideBar.foreground — the color the
+    // theme assigns to this surface. Picking editor.foreground first
+    // breaks on themes like slack-ochin where editor and sidebar use
+    // opposite palettes (white editor, dark navy sidebar) — primary text
+    // and icons would render black on the dark sidebar.
     const primaryFg =
-      activeTheme.editorFg ??
+      activeTheme.primaryFg ??
       (typeof activeTheme.treeStyles.color === 'string'
         ? activeTheme.treeStyles.color
         : undefined);
-    // Muted text uses sideBar.foreground / descriptionForeground — the
-    // theme's own muted shade — so labels like "Files" / "Additions" stay
-    // legible without falling off into transparency.
-    const mutedFg = activeTheme.mutedFg ?? primaryFg;
     if (bg == null && primaryFg == null) return undefined;
     const style: CSSProperties & Record<string, string> = {};
     if (bg != null) style.backgroundColor = bg;
@@ -108,7 +105,14 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
       // is not enough — we have to override the `--color-*` names too).
       style['--color-foreground'] = primaryFg;
       style['--foreground'] = primaryFg;
-      const muted = mutedFg ?? primaryFg;
+      // Muted text prefers the theme's own descriptionForeground; if the
+      // theme doesn't define it, fade the primary text rather than
+      // picking another opaque token. sideBarSectionHeader.foreground is
+      // tempting but is brighter than primary on some themes (slack-ochin
+      // sets it to #FFF), which inverts the muted/primary hierarchy.
+      const muted =
+        activeTheme.mutedFg ??
+        `color-mix(in srgb, ${primaryFg} 55%, transparent)`;
       style['--color-muted-foreground'] = muted;
       style['--muted-foreground'] = muted;
       // Borders should also pick up the theme so the dividers between
@@ -123,7 +127,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
     }
     return style as CSSProperties;
   }, [
-    activeTheme.editorFg,
+    activeTheme.primaryFg,
     activeTheme.mutedFg,
     activeTheme.treeStyles.backgroundColor,
     activeTheme.treeStyles.color,
