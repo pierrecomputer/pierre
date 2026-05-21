@@ -4,12 +4,7 @@ import { ReviewUI } from '../_components/ReviewUI';
 import { resolveDiffshubViewerRoute } from '../_components/utils';
 import { loadInitialDiffshubPatchResponse } from '@/lib/diffshubPatchResponse';
 
-export const revalidate = 86400;
-export const dynamicParams = true;
-
-export function generateStaticParams(): { path: string[] }[] {
-  return [];
-}
+export const dynamic = 'force-dynamic';
 
 // Viewer route that mirrors the upstream path. GitHub is the public default,
 // while hidden alternate domains can opt in through the `domain` query param.
