@@ -18,10 +18,12 @@ import {
 } from '@pierre/icons';
 import Link from 'next/link';
 import {
+  type CSSProperties,
   type Dispatch,
   memo,
   type SetStateAction,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -49,6 +51,8 @@ import { cn } from '@/lib/utils';
 
 const SETTING_ROW_CLASS =
   'w-full flex cursor-pointer items-center justify-between gap-4 px-2 py-1.5 text-sm';
+const THEMED_DROPDOWN_CONTENT_CLASS =
+  'border-[var(--diffshub-popover-border,var(--color-border))] bg-[var(--diffshub-popover-bg,var(--color-popover))] text-[var(--diffshub-popover-fg,var(--color-popover-foreground))] shadow-[var(--diffshub-popover-shadow,0_10px_30px_rgb(0_0_0_/_0.15))]';
 
 interface HeaderProps {
   className?: string;
@@ -110,6 +114,10 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   // light/dark palette. Falls back to the diffshub-sidebar-bg CSS variable
   // on first render while the theme is still resolving.
   const themeChromeStyle = useThemeChromeStyle(lightTheme, darkTheme);
+  const dropdownThemeStyle = useMemo(
+    () => getDropdownThemeStyle(themeChromeStyle),
+    [themeChromeStyle]
+  );
   return (
     <div
       className={cn(
@@ -211,18 +219,25 @@ export const CodeViewHeader = memo(function CodeViewHeader({
               setColorMode={setColorMode}
               setDarkTheme={setDarkTheme}
               setLightTheme={setLightTheme}
+              themeDropdownStyle={dropdownThemeStyle}
             />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-md"
+                  aria-label="Display settings"
+                  title="Display settings"
                   className="hover:text-muted-foreground hover:bg-transparent"
                 >
                   <IconGearFill className="size-4 md:size-3" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent
+                align="end"
+                className={cn('w-52', THEMED_DROPDOWN_CONTENT_CLASS)}
+                style={dropdownThemeStyle}
+              >
                 <DropdownMenuItem
                   className="cursor-default p-0"
                   onSelect={(e) => e.preventDefault()}
@@ -300,6 +315,22 @@ function colorModeIcon(colorMode: ColorMode) {
   return IconColorAuto;
 }
 
+function getDropdownThemeStyle(
+  themeChromeStyle: CSSProperties | undefined
+): CSSProperties | undefined {
+  if (themeChromeStyle == null) {
+    return undefined;
+  }
+
+  return {
+    ...themeChromeStyle,
+    backgroundColor: 'var(--diffshub-popover-bg, var(--color-popover))',
+    borderColor: 'var(--diffshub-popover-border, var(--color-border))',
+    boxShadow: 'var(--diffshub-popover-shadow, 0 10px 30px rgb(0 0 0 / 0.15))',
+    color: 'var(--diffshub-popover-fg, var(--color-popover-foreground))',
+  };
+}
+
 interface ThemeDropdownProps {
   colorMode: ColorMode;
   darkTheme: DarkTheme;
@@ -307,6 +338,7 @@ interface ThemeDropdownProps {
   setColorMode(mode: ColorMode): void;
   setDarkTheme: Dispatch<SetStateAction<DarkTheme>>;
   setLightTheme: Dispatch<SetStateAction<LightTheme>>;
+  themeDropdownStyle?: CSSProperties;
 }
 
 // Theme picker shown next to the gear icon. Avoids horizontal sub-menus
@@ -323,6 +355,7 @@ function ThemeDropdown({
   setColorMode,
   setDarkTheme,
   setLightTheme,
+  themeDropdownStyle,
 }: ThemeDropdownProps) {
   const TriggerIcon = colorModeIcon(colorMode);
   const [view, setView] = useState<'main' | 'light' | 'dark'>('main');
@@ -348,7 +381,11 @@ function ThemeDropdown({
           <TriggerIcon className="size-4 md:size-3" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72 p-2">
+      <DropdownMenuContent
+        align="end"
+        className={cn('w-72 p-2', THEMED_DROPDOWN_CONTENT_CLASS)}
+        style={themeDropdownStyle}
+      >
         {view === 'main' ? (
           <>
             <DropdownMenuItem

@@ -424,12 +424,58 @@ export function buildThemeChromeStyle(
     // theme is "light" or "dark" — the cards always sit a touch above the
     // surface they live on, and the same text color works on both.
     const cardSurfaceBase = bg ?? 'transparent';
+    const popoverBg = `color-mix(in srgb, ${primaryFg} 7%, ${cardSurfaceBase})`;
+    const popoverHoverBg = `color-mix(in srgb, ${primaryFg} 14%, ${cardSurfaceBase})`;
+    const popoverSelectedBg = `color-mix(in srgb, ${primaryFg} 20%, ${cardSurfaceBase})`;
+    const popoverBorder = `color-mix(in srgb, ${primaryFg} 18%, ${cardSurfaceBase})`;
+    const popoverShadow = `0 18px 44px color-mix(in srgb, ${cardSurfaceBase} 72%, transparent), 0 0 0 1px ${popoverBorder}`;
     style['--diffshub-card-bg'] =
       `color-mix(in srgb, ${primaryFg} 6%, ${cardSurfaceBase})`;
     style['--diffshub-card-hover-bg'] =
       `color-mix(in srgb, ${primaryFg} 12%, ${cardSurfaceBase})`;
     style['--diffshub-card-border'] =
       `color-mix(in srgb, ${primaryFg} 12%, ${cardSurfaceBase})`;
+    style['--diffshub-popover-bg'] = popoverBg;
+    style['--diffshub-popover-fg'] = primaryFg;
+    style['--diffshub-popover-muted-fg'] = muted;
+    style['--diffshub-popover-hover-bg'] = popoverHoverBg;
+    style['--diffshub-popover-selected-bg'] = popoverSelectedBg;
+    style['--diffshub-popover-border'] = popoverBorder;
+    style['--diffshub-popover-shadow'] = popoverShadow;
+    style['--diffshub-annotation-bg'] = popoverBg;
+    style['--diffshub-annotation-fg'] = primaryFg;
+    style['--diffshub-annotation-border'] = popoverBorder;
+    style['--diffshub-annotation-hover-border'] =
+      `color-mix(in srgb, ${primaryFg} 28%, ${cardSurfaceBase})`;
+    style['--diffshub-annotation-shadow'] = popoverShadow;
+    style['--color-popover'] = popoverBg;
+    style['--popover'] = popoverBg;
+    style['--color-popover-foreground'] = primaryFg;
+    style['--popover-foreground'] = primaryFg;
+    style['--color-card'] = popoverBg;
+    style['--card'] = popoverBg;
+    style['--color-card-foreground'] = primaryFg;
+    style['--card-foreground'] = primaryFg;
+    style['--color-background'] = bg ?? popoverBg;
+    style['--background'] = bg ?? popoverBg;
+    style['--color-accent'] = popoverHoverBg;
+    style['--accent'] = popoverHoverBg;
+    style['--color-accent-foreground'] = primaryFg;
+    style['--accent-foreground'] = primaryFg;
+    style['--color-secondary'] = popoverBg;
+    style['--secondary'] = popoverBg;
+    style['--color-secondary-foreground'] = primaryFg;
+    style['--secondary-foreground'] = primaryFg;
+    style['--color-input'] = popoverHoverBg;
+    style['--input'] = popoverHoverBg;
+    style['--color-muted'] = popoverHoverBg;
+    style['--muted'] = popoverHoverBg;
+    style['--color-primary'] = primaryFg;
+    style['--primary'] = primaryFg;
+    style['--color-primary-foreground'] = bg ?? popoverBg;
+    style['--primary-foreground'] = bg ?? popoverBg;
+    style['--color-ring'] = primaryFg;
+    style['--ring'] = primaryFg;
     // Addition / deletion tints for comment line labels switch between
     // Tailwind's 700 and 400 shades based on whether the chrome surface is
     // dark or light. The global `dark:` variant keys off the app's color
