@@ -170,7 +170,14 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
               {totalCommentCount > 0 && (
                 <span
                   aria-hidden="true"
-                  className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-neutral-200 px-1 text-[10px] leading-none font-medium text-neutral-700 tabular-nums dark:bg-neutral-700 dark:text-neutral-200"
+                  // Tint the badge with the chrome's current text color so
+                  // it follows the active Shiki theme instead of staying
+                  // on hardcoded neutral grays. `currentColor` resolves to
+                  // whichever fg the button inherits (chrome primaryFg
+                  // for the unselected ghost variant, accent-foreground
+                  // when this tab is selected), so the pill stays
+                  // on-palette in both states.
+                  className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[color-mix(in_srgb,currentColor_18%,transparent)] px-1 text-[10px] leading-none font-medium tabular-nums"
                 >
                   {totalCommentCount}
                 </span>
