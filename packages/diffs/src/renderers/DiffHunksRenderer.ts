@@ -472,8 +472,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
       forceHighlight = false;
     }
-    const forcePlainText =
-      isDiffPlainText(diff) || isDiffMassive(diff, this.getTokenizeMaxLength());
     this.renderCache ??= {
       diff,
       highlighted: false,
@@ -481,35 +479,53 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       result: undefined,
       renderRange: undefined,
     };
+    const hasContent =
+      diff.additionLines.length > 0 || diff.deletionLines.length > 0;
+    const forcePlainText =
+      !hasContent ||
+      isDiffPlainText(diff) ||
+      isDiffMassive(diff, this.getTokenizeMaxLength());
+    const newContent = !areDiffTargetsEqual(diff, this.renderCache.diff);
+    const newRenderRange = !areRenderRangesEqual(
+      this.renderCache.renderRange,
+      renderRange
+    );
     if (this.workerManager?.isWorkingPool() === true) {
       if (
         forcePlainText ||
         this.renderCache.result == null ||
-        (!this.renderCache.highlighted &&
-          (!areDiffTargetsEqual(diff, this.renderCache.diff) ||
-            !areRenderRangesEqual(this.renderCache.renderRange, renderRange)))
+        (!this.renderCache.highlighted && (newContent || newRenderRange))
       ) {
         this.renderCache.diff = diff;
         this.renderCache.options = options;
         this.renderCache.highlighted = false;
-        this.renderCache.result = this.workerManager.getPlainDiffAST(
-          diff,
-          renderRange.startingLine,
-          renderRange.totalLines,
-          // If we aren't using a windowed render, then we need to render
-          // everything
-          isDefaultRenderRange(renderRange)
-            ? true
-            : expandUnchanged
+        if (
+          this.renderCache.result == null ||
+          newContent ||
+          newRenderRange ||
+          forceHighlight
+        ) {
+          this.renderCache.result = this.workerManager.getPlainDiffAST(
+            diff,
+            renderRange.startingLine,
+            renderRange.totalLines,
+            // If we aren't using a windowed render, then we need to render
+            // everything
+            isDefaultRenderRange(renderRange)
               ? true
-              : this.expandedHunks,
-          collapsedContextThreshold
-        );
+              : expandUnchanged
+                ? true
+                : this.expandedHunks,
+            collapsedContextThreshold
+          );
+        }
         this.renderCache.renderRange = renderRange;
       }
+
+      // Should we kick off an async highlight process
       if (
-        (diff.additionLines.length > 0 || diff.deletionLines.length > 0) &&
         !forcePlainText &&
+        hasContent &&
         (!this.renderCache.highlighted || forceHighlight)
       ) {
         this.workerManager.highlightDiffAST(this, diff);

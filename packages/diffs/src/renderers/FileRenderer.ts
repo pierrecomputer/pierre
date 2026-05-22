@@ -233,10 +233,6 @@ export class FileRenderer<LAnnotation = undefined> {
       };
       forceHighlight = false;
     }
-    const lines = this.getOrCreateLineCache(file);
-    const forcePlainText =
-      isFilePlainText(file) ||
-      isFileMassive(lines.length, this.getTokenizeMaxLength());
     this.renderCache ??= {
       file,
       highlighted: false,
@@ -244,30 +240,46 @@ export class FileRenderer<LAnnotation = undefined> {
       result: undefined,
       renderRange: undefined,
     };
+    const lines = this.getOrCreateLineCache(file);
+    const hasContent = file.contents.length > 0;
+    const forcePlainText =
+      !hasContent ||
+      isFilePlainText(file) ||
+      isFileMassive(lines.length, this.getTokenizeMaxLength());
+    const newContent = !areFilesEqual(file, this.renderCache.file);
+    const newRenderRange = !areRenderRangesEqual(
+      this.renderCache.renderRange,
+      renderRange
+    );
     if (this.workerManager?.isWorkingPool() === true) {
       // Cache invalidation based on renderRange comparison
       if (
-        this.renderCache.result == null ||
         forcePlainText ||
-        (!this.renderCache.highlighted &&
-          (!areFilesEqual(file, this.renderCache.file) ||
-            !areRenderRangesEqual(this.renderCache.renderRange, renderRange)))
+        this.renderCache.result == null ||
+        (!this.renderCache.highlighted && (newContent || newRenderRange))
       ) {
         this.renderCache.file = file;
         this.renderCache.options = options;
         this.renderCache.highlighted = false;
-        this.renderCache.result = this.workerManager.getPlainFileAST(
-          file,
-          renderRange.startingLine,
-          renderRange.totalLines,
-          lines
-        );
+        if (
+          this.renderCache.result == null ||
+          newContent ||
+          newRenderRange ||
+          forceHighlight
+        ) {
+          this.renderCache.result = this.workerManager.getPlainFileAST(
+            file,
+            renderRange.startingLine,
+            renderRange.totalLines,
+            lines
+          );
+        }
         this.renderCache.renderRange = renderRange;
       }
 
       if (
-        file.contents.length > 0 &&
         !forcePlainText &&
+        hasContent &&
         (!this.renderCache.highlighted || forceHighlight)
       ) {
         this.workerManager.highlightFileAST(this, file);
