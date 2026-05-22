@@ -41,11 +41,195 @@ export interface ResolvedTreeTheme {
 // Defaults used while the user-selected Shiki theme is still resolving.
 function buildResolvedTheme(theme: ResolvedShikiTheme): ResolvedTreeTheme {
   const c = theme.colors ?? {};
+  const sideBarBg =
+    c['sideBar.background'] ?? c['editor.background'] ?? theme.bg;
+  // Pick the foreground that's actually legible on the sidebar surface.
+  // Some themes (slack-ochin) want sideBar.foreground because their editor
+  // foreground is the opposite palette; others (material-theme-ocean) ship
+  // a deliberately dim sideBar.foreground — #525975 on #0F111A is ~2.6:1,
+  // well below WCAG AA — and the same theme's editor.foreground (#babed8
+  // ~10:1) is the brightness the chrome and tree are supposed to use.
+  // Probe candidates in design-intent order and keep the first one that
+  // clears AA; only fall through to "highest contrast wins" when no
+  // candidate is legible enough on its own.
+  //
+  // `theme.fg` is Shiki's normalized editor text color, populated through
+  // a fallback chain that covers `colors['editor.foreground']`, a
+  // tokenColor without scope, and finally Shiki's #bbbbbb default for
+  // dark themes / #333333 for light. Aurora-x has none of `sideBar`/
+  // `editor.foreground` set in its `colors` block, so the editor renders
+  // body text in that Shiki #bbbbbb fallback — using `theme.fg` here
+  // makes the chrome match. Notably absent from the list:
+  // - `list.activeSelectionForeground` — reserved for the *selected* item
+  //   highlight, often a saturated accent (aurora-x: `#86A5FF`); using it
+  //   as the default would tint every chrome label that accent color.
+  // - `colors.foreground` — VS Code's global UI text token. Aurora-x sets
+  //   it to `#576daf` (a deliberately dim blue-gray) intended for menus
+  //   and the like; preferring it over `theme.fg` swaps the chrome away
+  //   from the editor's body text color, which is exactly the mismatch
+  //   the user flagged.
+  const primaryFg = pickReadableForeground(sideBarBg, [
+    c['sideBar.foreground'],
+    c['editor.foreground'],
+    theme.fg,
+  ]);
+  const treeStyles = themeToTreeStyles(theme);
+  // themeToTreeStyles pulls its text color tokens straight from
+  // sideBar.foreground; when the contrast-based pick disagrees with that
+  // raw value, overwrite the tree's tokens so the file rows match the
+  // chrome instead of staying on the dim original. Tokens that the theme
+  // sets explicitly (sideBarSectionHeader.foreground,
+  // list.activeSelectionForeground) keep their intended values — we only
+  // upgrade the unconditional fallbacks.
+  if (
+    primaryFg != null &&
+    primaryFg !== c['sideBar.foreground'] &&
+    primaryFg !== ''
+  ) {
+    treeStyles.color = primaryFg;
+    treeStyles['--trees-theme-sidebar-fg'] = primaryFg;
+    if (c['sideBarSectionHeader.foreground'] == null) {
+      treeStyles['--trees-theme-sidebar-header-fg'] = primaryFg;
+    }
+    if (c['list.activeSelectionForeground'] == null) {
+      treeStyles['--trees-theme-list-active-selection-fg'] = primaryFg;
+    }
+    if (
+      c['list.focusOutline'] == null &&
+      c['focusBorder'] == null &&
+      c['sideBar.foreground'] == null
+    ) {
+      treeStyles['--trees-theme-focus-ring'] = primaryFg;
+    }
+  }
   return {
-    treeStyles: themeToTreeStyles(theme),
-    primaryFg: c['sideBar.foreground'] ?? c['editor.foreground'] ?? theme.fg,
+    treeStyles,
+    primaryFg,
     mutedFg: c['descriptionForeground'],
   };
+}
+
+// Walks `candidates` in priority order. Returns the first color whose
+// contrast against `bg` clears `MIN_READABLE_RATIO`. If nothing reaches
+// that bar, returns the candidate with the highest contrast — that keeps
+// weakly-typed themes (where everything is dim) on the brightest
+// available token rather than silently picking the first dim one. Non-hex
+// candidates (var(...), color-mix(...), named colors) can't be measured
+// here without rendering; they're treated as opaque misses and only
+// returned via the `firstDefined` fallback when nothing parses.
+//
+// The 3:1 threshold is WCAG AA's "large text" floor. We use it instead
+// of the 4.5:1 "normal text" cutoff because the theme designer's
+// `sideBar.foreground` is the design-intent value for sidebar chrome —
+// honoring it is preferable to forcing a stronger token whenever
+// possible. 3:1 still catches the egregious failures (material-theme-
+// ocean's #525975 on #0F111A at ~2.6:1) while leaving deliberately soft
+// palettes like pierre-light-soft (~4.4:1) untouched.
+const MIN_READABLE_RATIO = 3;
+
+function pickReadableForeground(
+  bg: string | undefined,
+  candidates: ReadonlyArray<string | undefined>
+): string | undefined {
+  const bgL = relativeLuminance(bg);
+  const firstDefined = candidates.find(
+    (candidate) => candidate != null && candidate !== ''
+  );
+  if (bgL == null) return firstDefined;
+  let best: string | undefined;
+  let bestRatio = -1;
+  for (const candidate of candidates) {
+    if (candidate == null || candidate === '') continue;
+    const candidateL = relativeLuminance(candidate);
+    if (candidateL == null) continue;
+    const ratio = contrastRatio(bgL, candidateL);
+    if (ratio >= MIN_READABLE_RATIO) return candidate;
+    if (ratio > bestRatio) {
+      best = candidate;
+      bestRatio = ratio;
+    }
+  }
+  return best ?? firstDefined;
+}
+
+function contrastRatio(la: number, lb: number): number {
+  const [hi, lo] = la > lb ? [la, lb] : [lb, la];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+// Returns the theme's descriptionForeground when it's readable enough
+// (>= 3:1 against the chrome bg). Hex-with-alpha values like aurora-x's
+// `#576daf79` are composited over the bg first, since rgba previews don't
+// reach AA on their own. Returns undefined when the value is missing,
+// unparseable, or fails the contrast bar — letting the call site fall
+// back to primaryFg so the chrome stays uniformly bright.
+function pickReadableMuted(
+  bg: string | undefined,
+  mutedCandidate: string | undefined
+): string | undefined {
+  if (mutedCandidate == null || mutedCandidate === '') return undefined;
+  const composited = compositeOverBg(mutedCandidate, bg) ?? mutedCandidate;
+  const compositedL = relativeLuminance(composited);
+  const bgL = relativeLuminance(bg);
+  if (compositedL == null || bgL == null) {
+    // Can't measure — trust the designer's value rather than second-
+    // guess exotic non-hex formats (var(...), color-mix(...), named
+    // colors).
+    return mutedCandidate;
+  }
+  return contrastRatio(bgL, compositedL) >= MIN_READABLE_RATIO
+    ? mutedCandidate
+    : undefined;
+}
+
+// Composites a hex (`#rrggbb` or `#rrggbbaa`) candidate over a hex
+// background and returns the resulting opaque hex. Used so we can measure
+// the actual contrast of semi-transparent muted-fg tokens (#576daf79 etc.)
+// against the surface they'll render on, rather than the alpha-stripped
+// base color. Returns undefined for unparseable inputs.
+function compositeOverBg(
+  fg: string,
+  bg: string | undefined
+): string | undefined {
+  if (bg == null) return undefined;
+  const fgParts = parseHexRgba(fg);
+  const bgParts = parseHexRgba(bg);
+  if (fgParts == null || bgParts == null) return undefined;
+  const [fr, fg2, fb, fa] = fgParts;
+  const [br, bg3, bb] = bgParts;
+  const r = Math.round(fr * fa + br * (1 - fa));
+  const g = Math.round(fg2 * fa + bg3 * (1 - fa));
+  const b = Math.round(fb * fa + bb * (1 - fa));
+  return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+}
+
+// Parses `#rgb`, `#rrggbb`, or `#rrggbbaa` into [r, g, b, a] with channels
+// in [0, 255] and alpha in [0, 1]. Returns null for any other format.
+function parseHexRgba(
+  color: string
+): readonly [number, number, number, number] | null {
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})\b/i.exec(color.trim());
+  if (match == null) return null;
+  const hex = match[1];
+  let expanded: string;
+  let alpha = 1;
+  if (hex.length === 3) {
+    expanded = hex
+      .split('')
+      .map((c) => c + c)
+      .join('');
+  } else if (hex.length === 6) {
+    expanded = hex;
+  } else {
+    expanded = hex.slice(0, 6);
+    alpha = parseInt(hex.slice(6, 8), 16) / 255;
+  }
+  return [
+    parseInt(expanded.slice(0, 2), 16),
+    parseInt(expanded.slice(2, 4), 16),
+    parseInt(expanded.slice(4, 6), 16),
+    alpha,
+  ];
 }
 
 const LIGHT_SOFT_THEME = buildResolvedTheme(lightSoftTheme);
@@ -151,9 +335,18 @@ export function buildThemeChromeStyle(
     style.color = primaryFg;
     style['--color-foreground'] = primaryFg;
     style['--foreground'] = primaryFg;
-    const muted =
-      activeTheme.mutedFg ??
-      `color-mix(in srgb, ${primaryFg} 55%, transparent)`;
+    // The chrome (file tree, sidebar status panel, header, comments list)
+    // wants a single high-contrast text color across labels, icons, and
+    // values — the visual hierarchy comes from layout, not from fading the
+    // labels. Pull muted up to the same level as primary unless the theme
+    // ships a descriptionForeground that's actually legible (>= 3:1 on the
+    // sidebar bg). Aurora-X is the cautionary tale: its
+    // descriptionForeground is `#576daf79` (#576daf at ~47% alpha) which
+    // reads as ~1.8:1 on the dark navy surface — silently using it leaves
+    // the unselected tab icons, the empty-comments copy, and every
+    // `text-muted-foreground` consumer in the chrome essentially
+    // invisible.
+    const muted = pickReadableMuted(bg, activeTheme.mutedFg) ?? primaryFg;
     style['--color-muted-foreground'] = muted;
     style['--muted-foreground'] = muted;
     const border = `color-mix(in srgb, ${primaryFg} 20%, transparent)`;
