@@ -132,10 +132,14 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public recycle(): void {
-    this.renderCache = undefined;
+    this.clearRenderCache();
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
     this.lineCache = undefined;
+  }
+
+  public clearRenderCache(): void {
+    this.renderCache = undefined;
   }
 
   public hydrate(file: FileContents): void {
