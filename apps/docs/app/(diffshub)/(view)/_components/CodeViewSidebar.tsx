@@ -3,6 +3,7 @@
 import {
   IconComment,
   IconFileTree,
+  IconPlus,
   IconSearch,
   IconXSquircle,
 } from '@pierre/icons';
@@ -32,6 +33,11 @@ import type { ThemeCycleControls } from './useThemeCycle';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 type SidebarTab = 'files' | 'comments';
@@ -40,12 +46,14 @@ type SidebarStatusPanel = 'diffStats' | 'systemMonitor';
 const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 
 interface CodeViewSidebarProps {
+  addFakeCommentsDisabled: boolean;
   className?: string;
   commentSections: readonly CodeViewSavedCommentItem[];
   darkTheme: string;
   diffStats: CodeViewDiffStatsData | null;
   lightTheme: string;
   mobileOverlayOpen?: boolean;
+  onAddFakeComments(): void;
   onMobileClose(): void;
   onSelectComment(comment: CodeViewSavedCommentEntry): void;
   onSelectItem(itemId: string): void;
@@ -56,12 +64,14 @@ interface CodeViewSidebarProps {
 }
 
 export const CodeViewSidebar = memo(function CodeViewSidebar({
+  addFakeCommentsDisabled,
   className,
   commentSections,
   darkTheme,
   diffStats,
   lightTheme,
   mobileOverlayOpen = false,
+  onAddFakeComments,
   onMobileClose,
   onSelectComment,
   onSelectItem,
@@ -189,6 +199,25 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
           </ButtonGroup>
           {activeTab === 'files' && fileTreeModel != null && (
             <FileTreeSearchToggle model={fileTreeModel} />
+          )}
+          {activeTab === 'comments' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-only"
+                  aria-label="Add 3 fake comments"
+                  disabled={addFakeCommentsDisabled}
+                  onClick={onAddFakeComments}
+                >
+                  <IconPlus className="size-4 md:size-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Add 3 fake comments
+              </TooltipContent>
+            </Tooltip>
           )}
           {onMobileClose != null && (
             <Button

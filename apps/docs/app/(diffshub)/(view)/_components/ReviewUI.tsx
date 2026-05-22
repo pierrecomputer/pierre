@@ -35,6 +35,11 @@ import { usePatchLoader } from './usePatchLoader';
 import { usePersistedState } from './usePersistedState';
 import { useThemeCycle } from './useThemeCycle';
 import {
+  createFakeCommentEvents,
+  createSavedCommentAnnotation,
+  type FakeCommentSourceItem,
+  incrementItemVersion,
+  isDiffItem,
   removeSavedCommentSidebarEntry,
   upsertSavedCommentSidebarEntry,
 } from './utils';
@@ -137,6 +142,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   }, [workerPool, darkTheme, lightTheme, themesHydrated]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
+  const nextFakeCommentKeyRef = useRef(0);
   const handlePatchLoadStart = useCallback(() => {
     setFileTreeOverlayOpen(false);
   }, []);
@@ -216,6 +222,63 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
     },
     [setCommentSections]
   );
+  const handleAddFakeComments = useCallback(() => {
+    const viewer = viewerRef.current;
+    if (viewer == null || commentFileByItemId == null) {
+      return;
+    }
+
+    const sourceItems: FakeCommentSourceItem[] = [];
+    for (const [itemId, file] of commentFileByItemId) {
+      const item = viewer.getItem(itemId);
+      if (item != null && isDiffItem(item)) {
+        sourceItems.push({ fileOrder: file.fileOrder, item });
+      }
+    }
+
+    const comments = createFakeCommentEvents(
+      sourceItems,
+      3,
+      nextFakeCommentKeyRef.current
+    );
+    if (comments.length === 0) {
+      return;
+    }
+    nextFakeCommentKeyRef.current += comments.length;
+
+    const savedComments: CodeViewSavedCommentEvent[] = [];
+    for (const comment of comments) {
+      const item = viewer.getItem(comment.itemId);
+      if (item == null || !isDiffItem(item)) {
+        continue;
+      }
+
+      item.annotations = [
+        ...(item.annotations ?? []),
+        createSavedCommentAnnotation(comment),
+      ];
+      incrementItemVersion(item);
+      if (viewer.updateItem(item)) {
+        savedComments.push(comment);
+      }
+    }
+
+    if (savedComments.length === 0) {
+      return;
+    }
+
+    setCommentSections((prev) => {
+      let next = prev;
+      for (const comment of savedComments) {
+        next = upsertSavedCommentSidebarEntry(
+          next,
+          commentFileByItemId,
+          comment
+        );
+      }
+      return next;
+    });
+  }, [commentFileByItemId, setCommentSections]);
   const handleToggleFileTreeOverlay = useCallback(() => {
     setFileTreeOverlayOpen((open) => !open);
   }, []);
@@ -250,6 +313,10 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
     themesHydrated &&
     (loadState === 'ready' ||
       (loadState === 'streaming' && initialItems.length > 0));
+  const fakeCommentsAvailable =
+    viewerAvailable &&
+    commentFileByItemId != null &&
+    commentFileByItemId.size > 0;
 
   return (
     <ReviewGrid>
@@ -281,12 +348,14 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
       {viewerAvailable && treeSource != null ? (
         <>
           <CodeViewSidebar
+            addFakeCommentsDisabled={!fakeCommentsAvailable}
             className="[grid-area:viewer] md:[grid-area:tree]"
             commentSections={commentSections}
             darkTheme={darkTheme}
             diffStats={diffStats}
             lightTheme={lightTheme}
             mobileOverlayOpen={fileTreeOverlayOpen}
+            onAddFakeComments={handleAddFakeComments}
             onMobileClose={handleCloseFileTreeOverlay}
             onSelectComment={handleSelectComment}
             scrollRef={scrollRef}

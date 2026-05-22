@@ -237,6 +237,438 @@ export function mapChangeTypeToGitStatus(type: ChangeTypes): GitStatus {
   }
 }
 
+const FAKE_COMMENT_AUTHORS = [
+  'pia',
+  'mdo',
+  'nicolas',
+  'alex',
+  'cedric',
+  'kris',
+  'ed',
+  'toshi',
+  'zac',
+] as const;
+const FAKE_COMMENT_OPENERS = [
+  'Could we',
+  'Tiny thought:',
+  'This reads well.',
+  'Worth double-checking:',
+  'I like this direction.',
+] as const;
+const FAKE_COMMENT_FOCUS = [
+  'add a regression test around this path?',
+  'make the state transition a little easier to scan?',
+  'confirm this behaves correctly while the diff is still streaming?',
+  'handle the empty-result case here as explicitly as the happy path?',
+  'pull this condition into a named helper before it grows?',
+] as const;
+const FAKE_COMMENT_CONTEXT = [
+  'It would make future review passes calmer.',
+  'The surrounding code is carrying a lot of detail already.',
+  'That would also make theme-swap regressions easier to spot.',
+  'The current shape is close; this is mostly about guardrails.',
+  'The behavior looks right, but the intent could be louder.',
+] as const;
+
+export interface FakeCommentSourceItem {
+  fileOrder: number;
+  item: CodeViewDiffItem<CommentMetadata>;
+}
+
+interface FakeCommentSpan {
+  availableLineCount: number;
+  lineCount: number;
+  occupiedLines: readonly number[];
+  side: AnnotationSide;
+  startLine: number;
+}
+
+interface FakeCommentFileCandidate {
+  availableLineCount: number;
+  fileOrder: number;
+  hasExistingComments: boolean;
+  itemId: string;
+  spans: FakeCommentSpan[];
+}
+
+// Builds saved-comment events for fake review comments. Candidates are
+// gathered from real changed lines, but selected at file granularity first so
+// repeated clicks move through different diffs before adding another comment to
+// a file that already has one.
+export function createFakeCommentEvents(
+  sourceItems: readonly FakeCommentSourceItem[],
+  count: number,
+  keyStart: number
+): CodeViewSavedCommentEvent[] {
+  if (count <= 0) {
+    return [];
+  }
+
+  const files = collectFakeCommentFileCandidates(sourceItems);
+  const selectedCandidates = selectFakeCommentCandidates(
+    files,
+    count,
+    keyStart
+  );
+
+  return selectedCandidates.map((candidate, index) => {
+    const keyIndex = keyStart + index;
+    const key = `fake-${keyIndex}`;
+    const author = FAKE_COMMENT_AUTHORS[keyIndex % FAKE_COMMENT_AUTHORS.length];
+    const message = getFakeCommentMessage(keyIndex);
+
+    return {
+      author,
+      itemId: candidate.itemId,
+      key,
+      lineNumber: candidate.lineNumber,
+      lineType: 'change',
+      message,
+      range: {
+        end: candidate.lineNumber,
+        endSide: candidate.side,
+        side: candidate.side,
+        start: candidate.lineNumber,
+      },
+      side: candidate.side,
+    };
+  });
+}
+
+export function createSavedCommentAnnotation(
+  comment: CodeViewSavedCommentEvent
+): DiffLineAnnotation<CommentMetadata> {
+  return {
+    lineNumber: comment.lineNumber,
+    metadata: {
+      author: comment.author,
+      key: comment.key,
+      kind: 'saved',
+      message: comment.message,
+      range: comment.range,
+    },
+    side: comment.side,
+  };
+}
+
+function getFakeCommentMessage(keyIndex: number): string {
+  const opener = FAKE_COMMENT_OPENERS[keyIndex % FAKE_COMMENT_OPENERS.length];
+  const focus =
+    FAKE_COMMENT_FOCUS[
+      Math.floor(keyIndex / FAKE_COMMENT_OPENERS.length) %
+        FAKE_COMMENT_FOCUS.length
+    ];
+  const context =
+    FAKE_COMMENT_CONTEXT[
+      Math.floor(
+        keyIndex / (FAKE_COMMENT_OPENERS.length * FAKE_COMMENT_FOCUS.length)
+      ) % FAKE_COMMENT_CONTEXT.length
+    ];
+
+  return `${opener} ${focus} ${context}`;
+}
+
+function collectFakeCommentFileCandidates(
+  sourceItems: readonly FakeCommentSourceItem[]
+): FakeCommentFileCandidate[] {
+  const sortedItems = [...sourceItems].sort(
+    (itemA, itemB) => itemA.fileOrder - itemB.fileOrder
+  );
+  const files: FakeCommentFileCandidate[] = [];
+
+  for (const { fileOrder, item } of sortedItems) {
+    const occupiedAnchors = getOccupiedCommentAnchors(item);
+    const spans: FakeCommentSpan[] = [];
+    for (const hunk of item.fileDiff.hunks) {
+      let additionLineNumber = hunk.additionStart;
+      let deletionLineNumber = hunk.deletionStart;
+
+      for (const content of hunk.hunkContent) {
+        if (content.type === 'context') {
+          additionLineNumber += content.lines;
+          deletionLineNumber += content.lines;
+          continue;
+        }
+
+        if (content.additions > 0) {
+          pushAvailableFakeCommentSpan(spans, {
+            lineCount: content.additions,
+            occupiedLines: getOccupiedLinesInSpan(
+              occupiedAnchors.additions,
+              additionLineNumber,
+              content.additions
+            ),
+            side: 'additions',
+            startLine: additionLineNumber,
+          });
+        } else if (content.deletions > 0) {
+          pushAvailableFakeCommentSpan(spans, {
+            lineCount: content.deletions,
+            occupiedLines: getOccupiedLinesInSpan(
+              occupiedAnchors.deletions,
+              deletionLineNumber,
+              content.deletions
+            ),
+            side: 'deletions',
+            startLine: deletionLineNumber,
+          });
+        }
+
+        additionLineNumber += content.additions;
+        deletionLineNumber += content.deletions;
+      }
+    }
+
+    let availableLineCount = 0;
+    for (const span of spans) {
+      availableLineCount += span.availableLineCount;
+    }
+    if (availableLineCount > 0) {
+      files.push({
+        availableLineCount,
+        fileOrder,
+        hasExistingComments: (item.annotations?.length ?? 0) > 0,
+        itemId: item.id,
+        spans,
+      });
+    }
+  }
+
+  return files;
+}
+
+function getOccupiedCommentAnchors(
+  item: CodeViewDiffItem<CommentMetadata>
+): Record<AnnotationSide, Set<number>> {
+  const anchors = {
+    additions: new Set<number>(),
+    deletions: new Set<number>(),
+  };
+  for (const annotation of item.annotations ?? []) {
+    anchors[annotation.side].add(annotation.lineNumber);
+  }
+  return anchors;
+}
+
+function getOccupiedLinesInSpan(
+  occupiedLines: ReadonlySet<number>,
+  startLine: number,
+  lineCount: number
+): number[] {
+  if (occupiedLines.size === 0) {
+    return [];
+  }
+
+  const endLine = startLine + lineCount;
+  const linesInSpan: number[] = [];
+  for (const lineNumber of occupiedLines) {
+    if (lineNumber >= startLine && lineNumber < endLine) {
+      linesInSpan.push(lineNumber);
+    }
+  }
+  linesInSpan.sort((lineA, lineB) => lineA - lineB);
+  return linesInSpan;
+}
+
+function pushAvailableFakeCommentSpan(
+  spans: FakeCommentSpan[],
+  span: Omit<FakeCommentSpan, 'availableLineCount'>
+): void {
+  const availableLineCount = span.lineCount - span.occupiedLines.length;
+  if (availableLineCount <= 0) {
+    return;
+  }
+  spans.push({ ...span, availableLineCount });
+}
+
+function selectFakeCommentCandidates(
+  files: readonly FakeCommentFileCandidate[],
+  count: number,
+  keyStart: number
+): FakeCommentCandidate[] {
+  if (files.length === 0) {
+    return [];
+  }
+
+  const selected: FakeCommentCandidate[] = [];
+  const selectedAnchors = new Set<string>();
+  const batchIndex = Math.floor(keyStart / Math.max(count, 1));
+  const freshFiles = files.filter((file) => !file.hasExistingComments);
+  const commentedFiles = files.filter((file) => file.hasExistingComments);
+
+  addFakeCommentCandidatesFromFiles(
+    selected,
+    selectedAnchors,
+    selectEvenlySpacedFiles(freshFiles, count, batchIndex),
+    keyStart
+  );
+
+  if (selected.length < count) {
+    addFakeCommentCandidatesFromFiles(
+      selected,
+      selectedAnchors,
+      selectEvenlySpacedFiles(
+        commentedFiles,
+        count - selected.length,
+        batchIndex
+      ),
+      keyStart + selected.length
+    );
+  }
+
+  for (let pass = 0; selected.length < count && pass < count; pass++) {
+    const rotatedFiles = rotateFiles(files, batchIndex + pass);
+    addFakeCommentCandidatesFromFiles(
+      selected,
+      selectedAnchors,
+      rotatedFiles,
+      keyStart + selected.length + pass,
+      count
+    );
+  }
+
+  return selected;
+}
+
+function selectEvenlySpacedFiles(
+  files: readonly FakeCommentFileCandidate[],
+  count: number,
+  seed: number
+): FakeCommentFileCandidate[] {
+  if (count <= 0) {
+    return [];
+  }
+  if (files.length <= count) {
+    return files.slice();
+  }
+
+  const rotatedFiles = rotateFiles(files, seed);
+  const selected: FakeCommentFileCandidate[] = [];
+  const step = rotatedFiles.length / count;
+  for (let index = 0; index < count; index++) {
+    const fileIndex = Math.min(
+      rotatedFiles.length - 1,
+      Math.floor(index * step + step / 2)
+    );
+    const file = rotatedFiles[fileIndex];
+    if (file != null) {
+      selected.push(file);
+    }
+  }
+  return selected;
+}
+
+function rotateFiles(
+  files: readonly FakeCommentFileCandidate[],
+  seed: number
+): FakeCommentFileCandidate[] {
+  if (files.length === 0) {
+    return [];
+  }
+  const offset = seed % files.length;
+  return [...files.slice(offset), ...files.slice(0, offset)];
+}
+
+function addFakeCommentCandidatesFromFiles(
+  selected: FakeCommentCandidate[],
+  selectedAnchors: Set<string>,
+  files: readonly FakeCommentFileCandidate[],
+  seed: number,
+  maxCount = Number.POSITIVE_INFINITY
+): void {
+  let fileOffset = 0;
+  for (const file of files) {
+    if (selected.length >= maxCount) {
+      return;
+    }
+
+    const candidate = getFakeCommentCandidateForFile(
+      file,
+      seed + fileOffset,
+      selectedAnchors
+    );
+    fileOffset++;
+    if (candidate == null) {
+      continue;
+    }
+
+    selected.push(candidate);
+    selectedAnchors.add(getFakeCommentAnchorKey(candidate));
+  }
+}
+
+interface FakeCommentCandidate {
+  itemId: string;
+  lineNumber: number;
+  side: AnnotationSide;
+}
+
+function getFakeCommentCandidateForFile(
+  file: FakeCommentFileCandidate,
+  seed: number,
+  selectedAnchors: ReadonlySet<string>
+): FakeCommentCandidate | undefined {
+  const startOffset = seed % file.availableLineCount;
+  for (let offset = 0; offset < file.availableLineCount; offset++) {
+    const candidate = getFakeCommentCandidateAtFileOffset(
+      file,
+      (startOffset + offset) % file.availableLineCount
+    );
+    if (
+      candidate != null &&
+      !selectedAnchors.has(getFakeCommentAnchorKey(candidate))
+    ) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function getFakeCommentCandidateAtFileOffset(
+  file: FakeCommentFileCandidate,
+  offset: number
+): FakeCommentCandidate | undefined {
+  let spanStartOffset = 0;
+  for (const span of file.spans) {
+    const spanEndOffset = spanStartOffset + span.availableLineCount;
+    if (offset >= spanEndOffset) {
+      spanStartOffset = spanEndOffset;
+      continue;
+    }
+
+    const lineNumber = getAvailableLineAtOffset(span, offset - spanStartOffset);
+    if (lineNumber == null) {
+      return undefined;
+    }
+
+    return {
+      itemId: file.itemId,
+      lineNumber,
+      side: span.side,
+    };
+  }
+  return undefined;
+}
+
+function getFakeCommentAnchorKey(candidate: FakeCommentCandidate): string {
+  return `${candidate.itemId}:${candidate.side}:${candidate.lineNumber}`;
+}
+
+function getAvailableLineAtOffset(
+  span: FakeCommentSpan,
+  offset: number
+): number | undefined {
+  let lineNumber = span.startLine + offset;
+  for (const occupiedLine of span.occupiedLines) {
+    if (occupiedLine > lineNumber) {
+      break;
+    }
+    lineNumber++;
+  }
+
+  return lineNumber < span.startLine + span.lineCount ? lineNumber : undefined;
+}
+
 function insertCommentInLineOrder(
   comments: readonly CodeViewSavedCommentEntry[],
   entry: CodeViewSavedCommentEntry
