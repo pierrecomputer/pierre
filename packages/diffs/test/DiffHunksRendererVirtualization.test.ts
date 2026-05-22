@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from 'bun:test';
+import type { ElementContent } from 'hast';
 
 import {
   DiffHunksRenderer,
@@ -8,6 +9,7 @@ import {
 import { fileNew, fileOld } from './mocks';
 import {
   assertDefined,
+  collectAllElements,
   countRenderedLines,
   extractLineNumbers,
   findBufferElements,
@@ -31,6 +33,30 @@ describe('DiffHunksRenderer - Virtualization', () => {
   const splitRenderer = new DiffHunksRenderer({
     diffStyle: 'split',
   });
+
+  function countNoNewlineElements(ast: ElementContent[]): number {
+    return collectAllElements(ast).filter(
+      (node) => 'data-no-newline' in node.properties
+    ).length;
+  }
+
+  function getTopLevelNodeKinds(ast: ElementContent[]): string[] {
+    return ast.map((node) => {
+      if (node.type !== 'element') {
+        return 'other';
+      }
+      if ('data-content-buffer' in node.properties) {
+        return 'buffer';
+      }
+      if ('data-no-newline' in node.properties) {
+        return 'no-newline';
+      }
+      if (node.properties['data-line'] != null) {
+        return 'line';
+      }
+      return 'other';
+    });
+  }
 
   // Diff structure from fileOld/fileNew:
   // - 14 hunks total
@@ -95,6 +121,62 @@ describe('DiffHunksRenderer - Virtualization', () => {
       // between change hunks
       expect(deletionLines).toBe(267);
       expect(additionLines).toBe(431);
+    });
+  });
+
+  describe('no-newline metadata', () => {
+    test('renders deletion-side metadata when deletions are shorter in split mode', async () => {
+      const fileDiff = parseDiffFromFile(
+        { name: 'deletion-shorter.txt', contents: 'same\nold-final' },
+        { name: 'deletion-shorter.txt', contents: 'same\nnew-a\nnew-b\n' }
+      );
+      const result = await new DiffHunksRenderer({
+        diffStyle: 'split',
+      }).asyncRender(fileDiff);
+
+      assertDefined(
+        result.deletionsContentAST,
+        'deletionsContentAST should be defined'
+      );
+      assertDefined(
+        result.additionsContentAST,
+        'additionsContentAST should be defined'
+      );
+      expect(countNoNewlineElements(result.deletionsContentAST)).toBe(1);
+      expect(countNoNewlineElements(result.additionsContentAST)).toBe(0);
+      expect(
+        getTopLevelNodeKinds(result.deletionsContentAST).slice(-2)
+      ).toEqual(['buffer', 'no-newline']);
+      expect(
+        getTopLevelNodeKinds(result.additionsContentAST).slice(-1)
+      ).toEqual(['buffer']);
+    });
+
+    test('renders addition-side metadata when additions are shorter in split mode', async () => {
+      const fileDiff = parseDiffFromFile(
+        { name: 'addition-shorter.txt', contents: 'same\nold-a\nold-b\n' },
+        { name: 'addition-shorter.txt', contents: 'same\nnew-final' }
+      );
+      const result = await new DiffHunksRenderer({
+        diffStyle: 'split',
+      }).asyncRender(fileDiff);
+
+      assertDefined(
+        result.deletionsContentAST,
+        'deletionsContentAST should be defined'
+      );
+      assertDefined(
+        result.additionsContentAST,
+        'additionsContentAST should be defined'
+      );
+      expect(countNoNewlineElements(result.deletionsContentAST)).toBe(0);
+      expect(countNoNewlineElements(result.additionsContentAST)).toBe(1);
+      expect(
+        getTopLevelNodeKinds(result.deletionsContentAST).slice(-1)
+      ).toEqual(['buffer']);
+      expect(
+        getTopLevelNodeKinds(result.additionsContentAST).slice(-2)
+      ).toEqual(['buffer', 'no-newline']);
     });
   });
 

@@ -46,6 +46,7 @@ import {
   wrapThemeCSS,
   wrapUnsafeCSS,
 } from '../utils/cssWrappers';
+import { getFileRendererOptions } from '../utils/getFileRendererOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
@@ -190,11 +191,19 @@ export class File<LAnnotation = undefined> {
     });
   }
 
+  public onThemeChange(): void {
+    this.rerender();
+  }
+
   public setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
     this.cachedHeaderHTML = undefined;
-    this.interactionManager.setOptions(pluckInteractionOptions(options));
+    this.syncInteractionOptions();
+  }
+
+  protected syncInteractionOptions(): void {
+    this.interactionManager.setOptions(pluckInteractionOptions(this.options));
   }
 
   private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
@@ -404,11 +413,8 @@ export class File<LAnnotation = undefined> {
   }: HydrationSetup<LAnnotation>): void {
     this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
     this.file = file;
-    this.fileRenderer.setOptions({
-      ...this.options,
-      headerRenderMode:
-        this.options.renderCustomHeader != null ? 'custom' : 'default',
-    });
+    this.fileRenderer.setOptions(getFileRendererOptions(this.options));
+    this.syncInteractionOptions();
     if (this.pre == null) {
       return;
     }
@@ -469,11 +475,8 @@ export class File<LAnnotation = undefined> {
       this.cachedHeaderHTML = undefined;
     }
     this.file = file;
-    this.fileRenderer.setOptions({
-      ...this.options,
-      headerRenderMode:
-        this.options.renderCustomHeader != null ? 'custom' : 'default',
-    });
+    this.fileRenderer.setOptions(getFileRendererOptions(this.options));
+    this.syncInteractionOptions();
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }

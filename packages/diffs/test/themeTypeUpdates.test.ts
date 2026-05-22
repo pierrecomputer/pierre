@@ -12,6 +12,8 @@ import {
   FileDiff,
   parseDiffFromFile,
   type RenderRange,
+  VirtualizedFile,
+  VirtualizedFileDiff,
 } from '../src';
 
 function installDom() {
@@ -318,6 +320,24 @@ describe('themeType updates', () => {
       instance?.cleanUp();
       cleanup();
       await disposeHighlighter();
+    }
+  });
+
+  test('CodeView-owned virtualized items reject direct themeType changes', () => {
+    const { cleanup } = installDom();
+    try {
+      const viewer = new CodeView();
+      const file = new VirtualizedFile({}, viewer);
+      const diff = new VirtualizedFileDiff({}, viewer);
+
+      expect(() => file.setThemeType('dark')).toThrow(
+        'VirtualizedFile.setThemeType cannot be used inside CodeView. Update CodeView options instead.'
+      );
+      expect(() => diff.setThemeType('dark')).toThrow(
+        'VirtualizedFileDiff.setThemeType cannot be used inside CodeView. Update CodeView options instead.'
+      );
+    } finally {
+      cleanup();
     }
   });
 
