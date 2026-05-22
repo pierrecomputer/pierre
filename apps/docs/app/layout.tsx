@@ -66,6 +66,19 @@ export const viewport: Viewport = {
     maximumScale: 1,
     viewportFit: 'cover',
   }),
+  // diffshub body uses --diffshub-sidebar-bg (#f7f7f7 / #101010) rather than
+  // the plain neutral background shared by diffs and trees, so it gets its
+  // own theme-color pair for the browser chrome address bar.
+  themeColor:
+    process.env.NEXT_PUBLIC_SITE === 'diffshub'
+      ? [
+          { media: '(prefers-color-scheme: light)', color: '#f7f7f7' },
+          { media: '(prefers-color-scheme: dark)', color: '#101010' },
+        ]
+      : [
+          { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+          { media: '(prefers-color-scheme: dark)', color: '#252525' },
+        ],
 };
 
 // When running in a worktree, prefix the title with a stable emoji + slug so
