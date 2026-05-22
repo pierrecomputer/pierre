@@ -188,8 +188,17 @@ function _processFile(
 
       for (const line of lines) {
         if (line.startsWith('diff --git')) {
-          const [, , prevName, , name] =
-            line.trim().match(ALTERNATE_FILE_NAMES_GIT) ?? [];
+          const filenameMatch = line.trim().match(ALTERNATE_FILE_NAMES_GIT);
+          const prevName = filenameMatch?.[1] ?? filenameMatch?.[2];
+          const name = filenameMatch?.[3] ?? filenameMatch?.[4];
+          if (prevName == null || name == null) {
+            if (throwOnError) {
+              throw Error('parsePatchContent: invalid git diff header');
+            } else {
+              console.error('parsePatchContent: invalid git diff header', line);
+            }
+            continue;
+          }
           currentFile.name = detachString(name.trim());
           if (prevName !== name) {
             currentFile.prevName = detachString(prevName.trim());

@@ -2,7 +2,7 @@ import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
-import { parsePatchFiles } from '../src/utils/parsePatchFiles';
+import { parsePatchFiles, processFile } from '../src/utils/parsePatchFiles';
 import {
   diffPatch,
   finalBlankLinePatch,
@@ -115,6 +115,24 @@ describe('parsePatchFiles', () => {
     const file = result[0]?.files[0];
     expect(file?.deletionLines[0]).toBe('old\ud800\n');
     expect(file?.additionLines[0]).toBe('new\ud800\n');
+  });
+
+  test('parses quoted git diff headers with escaped file names', () => {
+    const oldName =
+      'test/integration/image-optimizer/app/public/\\303\\244\\303\\266\\303\\274\\305\\241\\304\\215\\305\\231\\303\\255.png';
+    const newName =
+      'test/e2e/image-optimizer/app/public/\\303\\244\\303\\266\\303\\274\\305\\241\\304\\215\\305\\231\\303\\255.png';
+    const file = processFile(
+      [
+        `diff --git "a/${oldName}" "b/${newName}"\n`,
+        'similarity index 100%\n',
+      ].join(''),
+      { isGitDiff: true }
+    );
+
+    expect(file?.name).toBe(newName);
+    expect(file?.prevName).toBe(oldName);
+    expect(file?.type).toBe('rename-pure');
   });
 
   test(
