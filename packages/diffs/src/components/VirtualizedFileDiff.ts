@@ -5,6 +5,7 @@ import type {
   Hunk,
   HunkSeparators,
   NumericScrollLineAnchor,
+  PendingCodeViewLayoutReset,
   RenderRange,
   RenderWindow,
   SelectionSide,
@@ -90,6 +91,7 @@ export class VirtualizedFileDiff<
   private virtualizer: Virtualizer | CodeView<LAnnotation>;
   private layoutDirty = true;
   private forceRenderOverride: true | undefined;
+  private currentCollapsed: boolean | undefined;
 
   constructor(
     options: FileDiffOptions<LAnnotation> | undefined,
@@ -131,10 +133,15 @@ export class VirtualizedFileDiff<
   }
 
   override setOptions(options: FileDiffOptions<LAnnotation> | undefined): void {
+    if (this.isAdvancedMode()) {
+      throw new Error(
+        'VirtualizedFileDiff.setOptions cannot be used inside CodeView. Update CodeView options instead.'
+      );
+    }
+
     if (options == null) return;
     const { options: previousOptions } = this;
-    const optionsChanged =
-      this.isAdvancedMode() || !areOptionsEqual(previousOptions, options);
+    const optionsChanged = !areOptionsEqual(previousOptions, options);
     const layoutChanged =
       optionsChanged && hasDiffLayoutOptionChanged(previousOptions, options);
 
@@ -276,9 +283,32 @@ export class VirtualizedFileDiff<
   // its virtualized top, and returning an approximate height. This method is
   // called while downstream items are being re-positioned, so later changes
   // should keep clean instances on a cached-height fast path.
-  public prepareCodeViewItem(fileDiff: FileDiffMetadata): number {
-    if (!areDiffTargetsEqual(this.fileDiff, fileDiff)) {
-      this.resetLayoutCache({ includeEstimatedHeights: true });
+  public prepareCodeViewItem(
+    fileDiff: FileDiffMetadata,
+    reset?: PendingCodeViewLayoutReset
+  ): number {
+    const targetChanged = !areDiffTargetsEqual(this.fileDiff, fileDiff);
+    let shouldResetLayoutCache =
+      reset?.resetDiffLayoutCache === true || targetChanged;
+    let includeEstimatedHeights =
+      targetChanged ||
+      (reset?.resetDiffLayoutCache === true &&
+        reset.includeEstimatedDiffHeights);
+
+    if (reset?.metrics != null) {
+      this.metrics = computeVirtualFileMetrics(reset.metrics);
+      shouldResetLayoutCache = true;
+      includeEstimatedHeights = true;
+    }
+
+    const { collapsed = false } = this.options;
+    if (this.currentCollapsed !== collapsed) {
+      this.currentCollapsed = collapsed;
+      shouldResetLayoutCache = true;
+    }
+
+    if (shouldResetLayoutCache) {
+      this.resetLayoutCache({ includeEstimatedHeights });
     }
     this.fileDiff = fileDiff;
     this.top = this.getVirtualizedTop();

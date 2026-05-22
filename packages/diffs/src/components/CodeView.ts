@@ -2,6 +2,7 @@ import {
   CORE_CSS_ATTRIBUTE,
   DEFAULT_CODE_VIEW_FILE_METRICS,
   DEFAULT_CODE_VIEW_LAYOUT,
+  DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
   DEFAULT_SMOOTH_SCROLL_SETTINGS,
   DEFAULT_THEMES,
   DIFFS_DEVELOPMENT_BUILD,
@@ -26,6 +27,7 @@ import type {
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
   HunkSeparators,
+  PendingCodeViewLayoutReset,
   SelectedLineRange,
   SelectionSide,
   SmoothScrollSettings,
@@ -33,6 +35,7 @@ import type {
   VirtualWindowSpecs,
 } from '../types';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
+import { areOptionsEqual } from '../utils/areOptionsEqual';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
@@ -95,6 +98,8 @@ interface AdvancedVirtualizedBaseItem {
   element: HTMLElement | undefined;
   /** Last controlled version observed for this record. */
   version: number | undefined;
+  /** Last CodeView option revision this item rendered with. */
+  renderedOptionsRevision: number;
 }
 
 interface CodeViewDiffItemContext<
@@ -277,6 +282,8 @@ const CODE_VIEW_FILE_OPTION_KEYS = [
   'disableErrorHandling',
 ] as const;
 
+type CodeViewFileOptionKeys = (typeof CODE_VIEW_FILE_OPTION_KEYS)[number];
+
 type CodeViewPassThroughOptions<LAnnotation> = Pick<
   FileDiffOptions<LAnnotation>,
   CodeViewDiffOptionKeys
@@ -349,6 +356,45 @@ type CodeViewSharedCallbackKeys =
 type CodeViewSelectionCallbackKeys =
   (typeof CODE_VIEW_SELECTION_CALLBACK_KEYS)[number];
 
+const CODE_VIEW_LIVE_OPTIONS_STATE = Symbol('CodeView.liveOptionsState');
+
+type CodeViewLiveCallbackCache = Partial<
+  Record<CodeViewSharedCallbackKeys | CodeViewSelectionCallbackKeys, unknown>
+>;
+
+interface CodeViewLiveOptionsState<LAnnotation, TMode extends CodeViewMode> {
+  owner: CodeView<LAnnotation>;
+  mode: TMode;
+  id: string;
+  callbackCache: CodeViewLiveCallbackCache;
+}
+
+type CodeViewLiveOptions<
+  LAnnotation,
+  TMode extends CodeViewMode,
+> = CodeViewModeOptions<LAnnotation, TMode> & {
+  [CODE_VIEW_LIVE_OPTIONS_STATE]: CodeViewLiveOptionsState<LAnnotation, TMode>;
+};
+
+function defineLiveOptionsState<LAnnotation, TMode extends CodeViewMode>(
+  options: CodeViewModeOptions<LAnnotation, TMode>,
+  state: CodeViewLiveOptionsState<LAnnotation, TMode>
+): void {
+  Object.defineProperty(options, CODE_VIEW_LIVE_OPTIONS_STATE, {
+    configurable: false,
+    enumerable: false,
+    value: state,
+  });
+}
+
+function getLiveOptionsState<LAnnotation, TMode extends CodeViewMode>(
+  options: CodeViewModeOptions<LAnnotation, TMode>
+): CodeViewLiveOptionsState<LAnnotation, TMode> {
+  return (options as CodeViewLiveOptions<LAnnotation, TMode>)[
+    CODE_VIEW_LIVE_OPTIONS_STATE
+  ];
+}
+
 type CodeViewSharedCallbackOptions<LAnnotation> = {
   [TKey in CodeViewSharedCallbackKeys]?: CodeViewOptionCallback<
     LAnnotation,
@@ -362,6 +408,18 @@ type CodeViewSelectionCallbackOptions<LAnnotation> = {
     TKey
   >;
 };
+
+function defineLiveOption<TOptions extends object, TKey extends keyof TOptions>(
+  target: TOptions,
+  key: TKey,
+  get: () => TOptions[TKey]
+): void {
+  Object.defineProperty(target, key, {
+    configurable: false,
+    enumerable: true,
+    get,
+  });
+}
 
 export interface CodeViewOptions<LAnnotation>
   extends
@@ -462,6 +520,8 @@ export class CodeView<LAnnotation = undefined> {
     CodeViewContextItem<LAnnotation>
   > = new Map();
   private layoutDirtyIndex: number | undefined;
+  private pendingLayoutReset: PendingCodeViewLayoutReset | undefined;
+  private renderOptionsRevision = 0;
   private slotCoordinator: CodeViewCoordinator<LAnnotation> | undefined;
   private slotSnapshot: CodeViewRenderedItem<LAnnotation>[] | undefined;
   private scrollListeners: Set<CodeViewScrollListener<LAnnotation>> = new Set();
@@ -757,6 +817,7 @@ export class CodeView<LAnnotation = undefined> {
     this.idToItem.clear();
     this.instanceToItem.clear();
     this.layoutDirtyIndex = undefined;
+    this.pendingLayoutReset = undefined;
     this.stickyContainer.textContent = '';
     this.stickyOffset.style.height = '';
     this.container?.style.removeProperty('height');
@@ -1021,11 +1082,7 @@ export class CodeView<LAnnotation = undefined> {
     this.idToItem.delete(oldId);
     item.item.id = newId;
     this.idToItem.set(newId, item);
-    if (item.type === 'diff') {
-      item.instance.setOptions(this.createOptions(item.item));
-    } else {
-      item.instance.setOptions(this.createOptions(item.item));
-    }
+    this.updateLiveOptionsId(item.instance.options, newId);
 
     if (this.selectedLines?.id === oldId) {
       this.selectedLines = { ...this.selectedLines, id: newId };
@@ -1120,42 +1177,49 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     this.capturePendingLayoutAnchor();
+    const { options: prevOptions } = this;
     const previousLayout = this.getLayout();
     const { itemMetricsCache: previousItemMetrics } = this;
 
-    if (shouldClearPool(this.options, options)) {
+    if (shouldClearPool(prevOptions, options)) {
       this.clearElementPool();
     }
-    // NOTE(amadeus): This is also something that's probably ridiculously
-    // expensive to pull off, and we should probably figure out some way to
-    // incrementally version/render stuff
+
     this.options = options;
     const nextItemMetrics = this.computeMetricsCache(options.itemMetrics);
     const itemMetricsChanged = !areObjectsEqual(
       previousItemMetrics,
       nextItemMetrics
     );
-    if (!areObjectsEqual(previousLayout, this.getLayout())) {
+    const layoutChanged = !areObjectsEqual(previousLayout, this.getLayout());
+    if (layoutChanged) {
       this.syncLayout();
     }
-    for (let index = 0; index < this.items.length; index++) {
-      const item = this.items[index];
-      if (item == null) {
-        throw new Error('CodeView.setOptions: invalid item index');
-      }
 
-      if (itemMetricsChanged) {
-        item.instance.setMetrics(nextItemMetrics, true);
-      }
-      if (item.type === 'diff') {
-        item.instance.setOptions(this.createOptions(item.item));
-      } else {
-        item.instance.setOptions(this.createOptions(item.item));
-      }
+    const itemLayoutChanged =
+      itemMetricsChanged || hasItemLayoutOptionChanged(prevOptions, options);
+    if (itemLayoutChanged) {
+      const previousReset = this.pendingLayoutReset;
+      this.pendingLayoutReset = {
+        metrics: itemMetricsChanged ? nextItemMetrics : previousReset?.metrics,
+        resetFileLayoutCache: true,
+        resetDiffLayoutCache: true,
+        includeEstimatedDiffHeights:
+          previousReset?.includeEstimatedDiffHeights === true ||
+          itemMetricsChanged ||
+          hasCodeViewDiffEstimateOptionChanged(prevOptions, options),
+      };
     }
 
-    this.markLayoutDirtyFromIndex(0);
-    this.scrollDirty = true;
+    if (layoutChanged || itemLayoutChanged) {
+      this.markLayoutDirtyFromIndex(0);
+      this.scrollDirty = true;
+    }
+
+    if (!areOptionsEqual(prevOptions, options)) {
+      this.renderOptionsRevision++;
+    }
+
     if (!this.isContainerManaged && this.items.length > 0) {
       this.render();
     }
@@ -1304,67 +1368,44 @@ export class CodeView<LAnnotation = undefined> {
   ): CodeViewContextItem<LAnnotation> {
     const { itemMetricsCache: itemMetrics } = this;
     if (input.type === 'diff') {
+      const instance = new VirtualizedFileDiff<LAnnotation>(
+        this.createLiveDiffOptions(input.id),
+        this,
+        itemMetrics,
+        this.workerManager,
+        this.isContainerManaged
+      );
       return {
         type: 'diff',
         item: input,
         version: input.version,
         index,
-        instance: new VirtualizedFileDiff<LAnnotation>(
-          this.createOptions(input),
-          this,
-          itemMetrics,
-          this.workerManager,
-          this.isContainerManaged
-        ),
         top,
         height: 0,
         element: undefined,
+        renderedOptionsRevision: this.renderOptionsRevision,
+        instance,
       } satisfies CodeViewDiffItemContext<LAnnotation>;
     }
 
+    const instance = new VirtualizedFile<LAnnotation>(
+      this.createLiveFileOptions(input.id),
+      this,
+      itemMetrics,
+      this.workerManager,
+      this.isContainerManaged
+    );
     return {
       type: 'file',
       item: input,
       version: input.version,
       index,
-      instance: new VirtualizedFile<LAnnotation>(
-        this.createOptions(input),
-        this,
-        itemMetrics,
-        this.workerManager,
-        this.isContainerManaged
-      ),
       top,
       height: 0,
       element: undefined,
+      renderedOptionsRevision: this.renderOptionsRevision,
+      instance,
     } satisfies CodeViewFileItemContext<LAnnotation>;
-  }
-
-  private getItemById(
-    itemId: string
-  ): CodeViewContextItem<LAnnotation> | undefined {
-    const item = this.idToItem.get(itemId);
-    if (item == null) {
-      console.error(`CodeView.getItemById: unknown item id "${itemId}"`);
-    }
-    return item;
-  }
-
-  private getItemByMode<TMode extends CodeViewMode>(
-    itemId: string,
-    mode: TMode
-  ): CodeViewModeItemContext<LAnnotation, TMode> | undefined {
-    const item = this.getItemById(itemId);
-    if (item == null) {
-      return undefined;
-    }
-    if (item.type !== mode) {
-      console.error(
-        `CodeView.getItemByMode: item id "${itemId}" is not a ${mode}`
-      );
-      return undefined;
-    }
-    return item as CodeViewModeItemContext<LAnnotation, TMode>;
   }
 
   private applySelectedLines(
@@ -1429,131 +1470,204 @@ export class CodeView<LAnnotation = undefined> {
     }
   }
 
-  private wrapCallbackWithContext<
-    TMode extends CodeViewMode,
-    TArgs extends unknown[],
-    TResult,
-  >(
-    mode: TMode,
-    itemId: string,
-    callback: (
-      ...args: [...TArgs, CodeViewModeItemContext<LAnnotation, TMode>]
-    ) => TResult
-  ): (...args: TArgs) => TResult | undefined {
-    return (...args: TArgs) => {
-      const item = this.getItemByMode(itemId, mode);
-      if (item == null) {
-        return undefined;
-      }
-      return callback(...args, item);
+  // CodeView owns advanced option invalidation. These live facades only answer
+  // current option reads for the item instance that keeps them for its lifetime.
+  private createLiveFileOptions(id: string): FileOptions<LAnnotation> {
+    const options = {} as FileOptions<LAnnotation>;
+    const state: CodeViewLiveOptionsState<LAnnotation, 'file'> = {
+      owner: this,
+      mode: 'file',
+      id,
+      callbackCache: {},
     };
-  }
+    defineLiveOptionsState(options, state);
 
-  private getWrappedOptionCallback<
-    TMode extends CodeViewMode,
-    TKey extends CodeViewSharedCallbackKeys,
-  >(
-    mode: TMode,
-    key: TKey,
-    itemId: string
-  ): CodeViewModeOptions<LAnnotation, TMode>[TKey] | undefined {
-    const callback = this.options[key] as
-      | CodeViewModeOptionCallback<LAnnotation, TMode, TKey>
-      | undefined;
-    if (callback == null) {
-      return undefined;
+    for (const key of CODE_VIEW_FILE_OPTION_KEYS) {
+      defineLiveOption<FileOptions<LAnnotation>, CodeViewFileOptionKeys>(
+        options,
+        key,
+        () => this.options[key]
+      );
     }
-    return this.wrapCallbackWithContext(
-      mode,
-      itemId,
-      callback as CodeViewModeInternalOptionCallback<LAnnotation, TMode, TKey>
-    ) as CodeViewModeOptions<LAnnotation, TMode>[TKey] | undefined;
-  }
 
-  private getWrappedSelectionOptionCallback<
-    TMode extends CodeViewMode,
-    TKey extends CodeViewSelectionCallbackKeys,
-  >(
-    mode: TMode,
-    key: TKey,
-    itemId: string
-  ): CodeViewModeOptions<LAnnotation, TMode>[TKey] | undefined {
-    if (this.options.enableLineSelection !== true) {
-      return undefined;
-    }
-    const callback = this.options[key] as
-      | ((
-          range: SelectedLineRange | null,
-          context: CodeViewModeItemContext<LAnnotation, TMode>
-        ) => unknown)
-      | undefined;
-    return ((range: SelectedLineRange | null) => {
-      const item = this.getItemByMode(itemId, mode);
-      if (item == null) {
-        return undefined;
-      }
-      const selection = range == null ? null : { id: itemId, range };
-      if (this.options.controlledSelection !== true) {
-        if (range != null || this.selectedLines?.id === itemId) {
-          this.applySelectedLines(selection, { notify: false });
-        }
-      }
-      this.options.onSelectedLinesChange?.(selection);
-      return callback?.(range, item);
-    }) as CodeViewModeOptions<LAnnotation, TMode>[TKey] | undefined;
-  }
-
-  private createOptions(
-    item: CodeViewFileItem<LAnnotation>
-  ): FileOptions<LAnnotation>;
-  private createOptions(
-    item: CodeViewDiffItem<LAnnotation>
-  ): FileDiffOptions<LAnnotation>;
-  private createOptions(
-    item: CodeViewItem<LAnnotation>
-  ): FileOptions<LAnnotation> | FileDiffOptions<LAnnotation> {
-    const { id: itemId, type: mode } = item;
-    const options =
-      mode === 'file'
-        ? ({
-            stickyHeader: this.options.stickyHeaders,
-          } satisfies FileOptions<LAnnotation>)
-        : ({
-            stickyHeader: this.options.stickyHeaders,
-            hunkSeparators: this.options.hunkSeparators,
-          } satisfies FileDiffOptions<LAnnotation>);
-    // NOTE(amadeus): Hacks on hacks...
-    const target = options as Record<string, unknown>;
-    const passThroughKeys =
-      mode === 'file' ? CODE_VIEW_FILE_OPTION_KEYS : CODE_VIEW_DIFF_OPTION_KEYS;
-
-    for (const key of passThroughKeys) {
-      const value = this.options[key];
-      if (value !== undefined) {
-        target[key] = value;
-      }
-    }
-    target.collapsed = item.collapsed === true;
+    defineLiveOption(options, 'stickyHeader', () => this.options.stickyHeaders);
+    defineLiveOption(
+      options,
+      'collapsed',
+      () => this.getLiveOptionsItem(state)?.item.collapsed === true
+    );
 
     for (const key of CODE_VIEW_SHARED_CALLBACK_KEYS) {
-      const callback = this.getWrappedOptionCallback(mode, key, itemId);
-      if (callback !== undefined) {
-        target[key] = callback;
-      }
+      this.defineLiveSharedCallback(options, state, key);
     }
-
     for (const key of CODE_VIEW_SELECTION_CALLBACK_KEYS) {
-      const callback = this.getWrappedSelectionOptionCallback(
-        mode,
-        key,
-        itemId
-      );
-      if (callback !== undefined) {
-        target[key] = callback;
-      }
+      this.defineLiveSelectionCallback(options, state, key);
     }
 
     return options;
+  }
+
+  private createLiveDiffOptions(id: string): FileDiffOptions<LAnnotation> {
+    const options = {} as FileDiffOptions<LAnnotation>;
+    const state: CodeViewLiveOptionsState<LAnnotation, 'diff'> = {
+      owner: this,
+      mode: 'diff',
+      id,
+      callbackCache: {},
+    };
+    defineLiveOptionsState(options, state);
+
+    for (const key of CODE_VIEW_DIFF_OPTION_KEYS) {
+      defineLiveOption<FileDiffOptions<LAnnotation>, CodeViewDiffOptionKeys>(
+        options,
+        key,
+        () => this.options[key]
+      );
+    }
+
+    defineLiveOption(options, 'stickyHeader', () => this.options.stickyHeaders);
+    defineLiveOption(
+      options,
+      'hunkSeparators',
+      () => this.options.hunkSeparators
+    );
+    defineLiveOption(
+      options,
+      'collapsed',
+      () => this.getLiveOptionsItem(state)?.item.collapsed === true
+    );
+
+    for (const key of CODE_VIEW_SHARED_CALLBACK_KEYS) {
+      this.defineLiveSharedCallback(options, state, key);
+    }
+    for (const key of CODE_VIEW_SELECTION_CALLBACK_KEYS) {
+      this.defineLiveSelectionCallback(options, state, key);
+    }
+
+    return options;
+  }
+
+  private updateLiveOptionsId(
+    options: FileOptions<LAnnotation> | FileDiffOptions<LAnnotation>,
+    id: string
+  ): void {
+    getLiveOptionsState(options).id = id;
+  }
+
+  private getLiveOptionsItem<TMode extends CodeViewMode>(
+    state: CodeViewLiveOptionsState<LAnnotation, TMode>
+  ): CodeViewModeItemContext<LAnnotation, TMode> | undefined {
+    const item = this.idToItem.get(state.id);
+    if (item == null || item.type !== state.mode) {
+      return undefined;
+    }
+    return item as CodeViewModeItemContext<LAnnotation, TMode>;
+  }
+
+  private defineLiveSharedCallback<
+    TMode extends CodeViewMode,
+    TKey extends CodeViewSharedCallbackKeys,
+  >(
+    options: CodeViewModeOptions<LAnnotation, TMode>,
+    state: CodeViewLiveOptionsState<LAnnotation, TMode>,
+    key: TKey
+  ): void {
+    defineLiveOption(
+      options as Record<
+        TKey,
+        CodeViewModeOptions<LAnnotation, TMode>[TKey] | undefined
+      >,
+      key,
+      () => {
+        const current = state.owner.options[key] as
+          | CodeViewModeOptionCallback<LAnnotation, TMode, TKey>
+          | undefined;
+        if (current == null) {
+          return undefined;
+        }
+
+        let wrapped = state.callbackCache[key] as
+          | CodeViewModeOptions<LAnnotation, TMode>[TKey]
+          | undefined;
+        if (wrapped == null) {
+          wrapped = ((...args: unknown[]) => {
+            const latest = state.owner.getLiveOptionsItem(state);
+            if (latest == null) {
+              return undefined;
+            }
+            const callback = state.owner.options[key] as
+              | CodeViewModeInternalOptionCallback<LAnnotation, TMode, TKey>
+              | undefined;
+            return (
+              callback as ((...callbackArgs: unknown[]) => unknown) | undefined
+            )?.(...args, latest);
+          }) as CodeViewModeOptions<LAnnotation, TMode>[TKey];
+
+          state.callbackCache[key] = wrapped;
+        }
+
+        return wrapped;
+      }
+    );
+  }
+
+  private defineLiveSelectionCallback<
+    TMode extends CodeViewMode,
+    TKey extends CodeViewSelectionCallbackKeys,
+  >(
+    options: CodeViewModeOptions<LAnnotation, TMode>,
+    state: CodeViewLiveOptionsState<LAnnotation, TMode>,
+    key: TKey
+  ): void {
+    defineLiveOption(
+      options as Record<
+        TKey,
+        CodeViewModeOptions<LAnnotation, TMode>[TKey] | undefined
+      >,
+      key,
+      () => {
+        if (state.owner.options.enableLineSelection !== true) {
+          return undefined;
+        }
+
+        let wrapped = state.callbackCache[key] as
+          | CodeViewModeOptions<LAnnotation, TMode>[TKey]
+          | undefined;
+        if (wrapped == null) {
+          wrapped = ((range: SelectedLineRange | null) => {
+            const latest = state.owner.getLiveOptionsItem(state);
+            if (latest == null) {
+              return undefined;
+            }
+
+            const selection =
+              range == null ? null : { id: latest.item.id, range };
+            if (state.owner.options.controlledSelection !== true) {
+              if (
+                range != null ||
+                state.owner.selectedLines?.id === latest.item.id
+              ) {
+                state.owner.applySelectedLines(selection, { notify: false });
+              }
+            }
+
+            state.owner.options.onSelectedLinesChange?.(selection);
+
+            const callback = state.owner.options[key] as
+              | ((
+                  nextRange: SelectedLineRange | null,
+                  context: CodeViewModeItemContext<LAnnotation, TMode>
+                ) => unknown)
+              | undefined;
+            return callback?.(range, latest);
+          }) as CodeViewModeOptions<LAnnotation, TMode>[TKey];
+
+          state.callbackCache[key] = wrapped;
+        }
+
+        return wrapped;
+      }
+    );
   }
 
   /**
@@ -1734,11 +1848,7 @@ export class CodeView<LAnnotation = undefined> {
 
     item.item = nextItem;
     item.version = nextItem.version;
-    if (item.type === 'diff') {
-      item.instance.setOptions(this.createOptions(item.item));
-    } else {
-      item.instance.setOptions(this.createOptions(item.item));
-    }
+    item.renderedOptionsRevision = -1;
     return true;
   }
 
@@ -2242,8 +2352,9 @@ export class CodeView<LAnnotation = undefined> {
     // If any item marked itself as difty, we should re-compute everything
     // after it and then force a new scroll top correction if we aren't already
     if (this.layoutDirtyIndex != null) {
-      this.recomputeLayout(this.layoutDirtyIndex);
+      this.recomputeLayout(this.layoutDirtyIndex, this.pendingLayoutReset);
       this.layoutDirtyIndex = undefined;
+      this.pendingLayoutReset = undefined;
       computeScrollCorrection = true;
     }
 
@@ -2362,6 +2473,7 @@ export class CodeView<LAnnotation = undefined> {
         syncRenderedItemOrder(this.stickyContainer, item.element, prevElement);
         instance.virtualizedSetup();
         if (renderItem(item, item.element)) {
+          item.renderedOptionsRevision = this.renderOptionsRevision;
           updatedItems.add(item);
         }
         prevElement = item.element;
@@ -2369,7 +2481,10 @@ export class CodeView<LAnnotation = undefined> {
       // Otherwise kick off a render as necessary
       else {
         syncRenderedItemOrder(this.stickyContainer, item.element, prevElement);
-        if (renderItem(item)) {
+        const forceRender =
+          item.renderedOptionsRevision !== this.renderOptionsRevision;
+        if (renderItem(item, undefined, forceRender)) {
+          item.renderedOptionsRevision = this.renderOptionsRevision;
           updatedItems.add(item);
         }
         prevElement = item.element;
@@ -2974,7 +3089,10 @@ export class CodeView<LAnnotation = undefined> {
    * onward is remeasured so downstream positions and total scroll height stay
    * consistent after inserts, removals, or versioned item updates.
    */
-  private recomputeLayout(startIndex = 0): void {
+  private recomputeLayout(
+    startIndex = 0,
+    reset: PendingCodeViewLayoutReset | undefined
+  ): void {
     if (this.items.length === 0) {
       this.scrollHeight = 0;
       return;
@@ -2997,9 +3115,12 @@ export class CodeView<LAnnotation = undefined> {
       }
       item.top = runningTop;
       if (item.type === 'diff') {
-        item.height = item.instance.prepareCodeViewItem(item.item.fileDiff);
+        item.height = item.instance.prepareCodeViewItem(
+          item.item.fileDiff,
+          reset
+        );
       } else {
-        item.height = item.instance.prepareCodeViewItem(item.item.file);
+        item.height = item.instance.prepareCodeViewItem(item.item.file, reset);
       }
       runningTop += item.height;
       if (index < this.items.length - 1) {
@@ -3058,6 +3179,51 @@ function shouldClearPool<LAnnotation>(
   );
 }
 
+function hasItemLayoutOptionChanged<LAnnotation>(
+  previousOptions: CodeViewOptions<LAnnotation>,
+  nextOptions: CodeViewOptions<LAnnotation>
+): boolean {
+  return (
+    (previousOptions.overflow ?? 'scroll') !==
+      (nextOptions.overflow ?? 'scroll') ||
+    (previousOptions.disableLineNumbers ?? false) !==
+      (nextOptions.disableLineNumbers ?? false) ||
+    (previousOptions.disableFileHeader ?? false) !==
+      (nextOptions.disableFileHeader ?? false) ||
+    previousOptions.unsafeCSS !== nextOptions.unsafeCSS ||
+    (previousOptions.diffStyle ?? 'split') !==
+      (nextOptions.diffStyle ?? 'split') ||
+    (previousOptions.diffIndicators ?? 'bars') !==
+      (nextOptions.diffIndicators ?? 'bars') ||
+    (previousOptions.hunkSeparators ?? 'line-info') !==
+      (nextOptions.hunkSeparators ?? 'line-info') ||
+    (previousOptions.expandUnchanged ?? false) !==
+      (nextOptions.expandUnchanged ?? false) ||
+    (previousOptions.collapsedContextThreshold ??
+      DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) !==
+      (nextOptions.collapsedContextThreshold ??
+        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD)
+  );
+}
+
+function hasCodeViewDiffEstimateOptionChanged<LAnnotation>(
+  previousOptions: CodeViewOptions<LAnnotation>,
+  nextOptions: CodeViewOptions<LAnnotation>
+): boolean {
+  return (
+    (previousOptions.disableFileHeader ?? false) !==
+      (nextOptions.disableFileHeader ?? false) ||
+    (previousOptions.hunkSeparators ?? 'line-info') !==
+      (nextOptions.hunkSeparators ?? 'line-info') ||
+    (previousOptions.expandUnchanged ?? false) !==
+      (nextOptions.expandUnchanged ?? false) ||
+    (previousOptions.collapsedContextThreshold ??
+      DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) !==
+      (nextOptions.collapsedContextThreshold ??
+        DEFAULT_COLLAPSED_CONTEXT_THRESHOLD)
+  );
+}
+
 function isPooledShadowChild(child: Element): boolean {
   if (child instanceof SVGElement) {
     return true;
@@ -3089,13 +3255,15 @@ function formatSelectedLinePoint(
 
 function renderItem<LAnnotation>(
   item: CodeViewContextItem<LAnnotation>,
-  fileContainer?: HTMLElement
+  fileContainer?: HTMLElement,
+  forceRender = false
 ): boolean {
   if (item.type === 'diff') {
     return item.instance.render({
       deferManagers: true,
       fileContainer,
       fileDiff: item.item.fileDiff,
+      forceRender,
       lineAnnotations: item.item.annotations,
     });
   } else {
@@ -3103,6 +3271,7 @@ function renderItem<LAnnotation>(
       deferManagers: true,
       fileContainer,
       file: item.item.file,
+      forceRender,
       lineAnnotations: item.item.annotations,
     });
   }

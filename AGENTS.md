@@ -141,6 +141,10 @@ We use project references between packages and apps.
 - Keep comments concrete and behavior-focused. Good comments usually explain
   what data is being transformed, what invariant is being checked, or what the
   helper is protecting against.
+- After changing boolean logic or invalidation paths, simplify the final control
+  flow before calling the work done. If code is already inside `if (foo)`, don't
+  keep `|| foo` in assignments inside that block. Prefer direct values that make
+  the invariant obvious.
 
 ## Performance
 

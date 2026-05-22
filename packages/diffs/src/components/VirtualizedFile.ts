@@ -2,6 +2,7 @@ import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
 import type {
   FileContents,
   NumericScrollLineAnchor,
+  PendingCodeViewLayoutReset,
   RenderRange,
   RenderWindow,
   StickySpecs,
@@ -65,6 +66,7 @@ export class VirtualizedFile<
   private isSetup: boolean = false;
   private layoutDirty = true;
   private forceRenderOverride: true | undefined;
+  private currentCollapsed: boolean | undefined;
 
   constructor(
     options: FileOptions<LAnnotation> | undefined,
@@ -98,6 +100,12 @@ export class VirtualizedFile<
   }
 
   override setOptions(options: FileOptions<LAnnotation> | undefined): void {
+    if (this.isAdvancedMode()) {
+      throw new Error(
+        'VirtualizedFile.setOptions cannot be used inside CodeView. Update CodeView options instead.'
+      );
+    }
+
     if (options == null) return;
     const { options: previousOptions } = this;
     const optionsChanged = !areOptionsEqual(previousOptions, options);
@@ -113,7 +121,7 @@ export class VirtualizedFile<
     if (optionsChanged) {
       this.forceRenderOverride = true;
     }
-    if (optionsChanged && this.isSimpleMode()) {
+    if (optionsChanged) {
       this.virtualizer.instanceChanged(this, layoutChanged);
     }
   }
@@ -224,7 +232,26 @@ export class VirtualizedFile<
   // its virtualized top, and returning an approximate height. This method is
   // called while downstream items are being re-positioned, so later changes
   // should keep clean instances on a cached-height fast path.
-  public prepareCodeViewItem(file: FileContents): number {
+  public prepareCodeViewItem(
+    file: FileContents,
+    reset?: PendingCodeViewLayoutReset
+  ): number {
+    let shouldResetLayoutCache = reset?.resetFileLayoutCache === true;
+    if (reset?.metrics != null) {
+      this.metrics = reset.metrics;
+      shouldResetLayoutCache = true;
+    }
+
+    const { collapsed = false } = this.options;
+    if (this.currentCollapsed !== collapsed) {
+      this.currentCollapsed = collapsed;
+      shouldResetLayoutCache = true;
+    }
+
+    if (shouldResetLayoutCache) {
+      this.resetLayoutCache();
+    }
+
     if (this.file !== file) {
       this.layoutDirty = true;
     }
