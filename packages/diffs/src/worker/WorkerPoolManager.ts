@@ -34,7 +34,6 @@ import {
   getCustomExtensionsVersion,
   getFiletypeFromFileName,
 } from '../utils/getFiletypeFromFileName';
-import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
 import { getThemes } from '../utils/getThemes';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isFilePlainText } from '../utils/isFilePlainText';
@@ -228,35 +227,8 @@ export class WorkerPoolManager {
 
       if (this.highlighter != null) {
         attachResolvedThemes(resolvedThemes, this.highlighter);
-        // Fire the worker theme update without awaiting, then update
-        // local state and trigger the chrome rerender synchronously
-        // before awaiting the worker ACKs. `setRenderOptionsOnWorkers`
-        // calls `postMessage` from inside its Promise constructor, so
-        // every worker has the set-render-options task queued before
-        // this call returns — any highlight tasks the rerender submits
-        // will be processed by the workers *after* the theme swap, so
-        // ordering is preserved. The await at the end keeps the public
-        // promise honest about full completion without blocking the
-        // sidebar/diff-chrome repaint behind the worker round-trip.
-        const workerUpdate = this.setRenderOptionsOnWorkers(
-          newRenderOptions,
-          resolvedThemes
-        );
-        this.renderOptions = newRenderOptions;
-        this.renderOptionsVersion++;
-        this.diffCache.clear();
-        this.fileCache.clear();
-        for (const instance of this.themeSubscribers) {
-          instance.onThemeChange();
-        }
-        await workerUpdate;
-        if (!this.isCurrentLifecycle(lifecycleGeneration)) {
-          return;
-        }
+        await this.setRenderOptionsOnWorkers(newRenderOptions, resolvedThemes);
       } else {
-        // First-time init: we can't compute current themeStyles until
-        // the highlighter is created, so the rerender has to wait for
-        // it anyway. Keep the original ordering for this path.
         const [highlighter] = await Promise.all([
           getSharedHighlighter({
             themes: themeNames,
@@ -269,13 +241,19 @@ export class WorkerPoolManager {
           return;
         }
         this.highlighter = highlighter;
-        this.renderOptions = newRenderOptions;
-        this.renderOptionsVersion++;
-        this.diffCache.clear();
-        this.fileCache.clear();
-        for (const instance of this.themeSubscribers) {
-          instance.onThemeChange();
-        }
+      }
+
+      if (!this.isCurrentLifecycle(lifecycleGeneration)) {
+        return;
+      }
+
+      this.renderOptions = newRenderOptions;
+      this.renderOptionsVersion++;
+      this.diffCache.clear();
+      this.fileCache.clear();
+
+      for (const instance of this.themeSubscribers) {
+        instance.onThemeChange();
       }
     } catch (error) {
       if (
@@ -296,28 +274,6 @@ export class WorkerPoolManager {
 
   public getDiffRenderOptions(): RenderDiffOptions {
     return { ...this.renderOptions };
-  }
-
-  // Computes the :host CSS variable string (--diffs-light, --diffs-dark,
-  // addition/deletion/modified colors) for the worker pool's current theme.
-  // Renderers use this to refresh `result.themeStyles` on already-cached diff
-  // results after `setRenderOptions` swaps the active theme — so a collapsed
-  // file's header (and the diff's chrome generally) picks up the new theme
-  // without having to wait for the worker to re-tokenize the file.
-  public getCurrentThemeStyles():
-    | { themeStyles: string; baseThemeType: 'light' | 'dark' | undefined }
-    | undefined {
-    if (this.highlighter == null) return undefined;
-    const { theme } = this.renderOptions;
-    const themeStyles = getHighlighterThemeStyles({
-      theme,
-      highlighter: this.highlighter,
-    });
-    const baseThemeType =
-      typeof theme === 'string'
-        ? this.highlighter.getTheme(theme).type
-        : undefined;
-    return { themeStyles, baseThemeType };
   }
 
   private async setRenderOptionsOnWorkers(
