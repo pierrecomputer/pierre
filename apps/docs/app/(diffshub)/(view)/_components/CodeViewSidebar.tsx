@@ -28,6 +28,7 @@ import type {
   CodeViewSavedCommentItem,
 } from './types';
 import { useThemeChromeStyle } from './useResolvedTreeThemeStyles';
+import type { ThemeCycleControls } from './useThemeCycle';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -51,6 +52,7 @@ interface CodeViewSidebarProps {
   scrollRef: RefObject<HTMLDivElement | null>;
   source: CodeViewFileTreeSource;
   streaming: boolean;
+  themeCycle: ThemeCycleControls;
 }
 
 export const CodeViewSidebar = memo(function CodeViewSidebar({
@@ -66,6 +68,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   scrollRef,
   source,
   streaming,
+  themeCycle,
 }: CodeViewSidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
   let totalCommentCount = 0;
@@ -237,6 +240,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
           expanded={activeStatusPanel === 'systemMonitor'}
           onToggle={() => toggleStatusPanel('systemMonitor')}
           scrollRef={scrollRef}
+          themeCycle={themeCycle}
         />
       </SidebarWrapper>
     </>

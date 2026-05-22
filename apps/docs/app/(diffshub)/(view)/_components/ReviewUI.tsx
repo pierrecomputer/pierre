@@ -32,6 +32,7 @@ import type {
 } from './types';
 import { usePatchLoader } from './usePatchLoader';
 import { usePersistedState } from './usePersistedState';
+import { useThemeCycle } from './useThemeCycle';
 import {
   removeSavedCommentSidebarEntry,
   upsertSavedCommentSidebarEntry,
@@ -85,8 +86,24 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   // `theme` from useTheme() can briefly be undefined during initial mount
   // before localStorage is read; fall back to 'system' so the header doesn't
   // render an empty selection.
-  const { theme: appTheme, setTheme: setColorMode } = useTheme();
+  const {
+    theme: appTheme,
+    resolvedTheme: appResolvedTheme,
+    setTheme: setColorMode,
+  } = useTheme();
   const colorMode: ColorMode = (appTheme as ColorMode | undefined) ?? 'system';
+  // The cycle button in the System Monitor sweeps through every Shiki
+  // theme so reviewers can preview the full set without manually picking
+  // each one. The hook captures the user's current pick when cycling
+  // starts so the visible theme anchors the rotation.
+  const themeCycle = useThemeCycle({
+    lightTheme,
+    darkTheme,
+    resolvedThemeMode: appResolvedTheme,
+    setLightTheme,
+    setDarkTheme,
+    setColorMode,
+  });
 
   // Push theme changes through the WorkerPool so background tokenizers reload
   // the active light/dark Shiki themes. Without this, workers keep using the
@@ -266,6 +283,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
             scrollRef={scrollRef}
             source={treeSource}
             streaming={loadState === 'streaming'}
+            themeCycle={themeCycle}
             onSelectItem={handleSelectTreeItem}
           />
           <CodeViewWrapper
