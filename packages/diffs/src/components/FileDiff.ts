@@ -354,12 +354,16 @@ export class FileDiff<LAnnotation = undefined> {
     this.options = options;
     this.cachedHeaderHTML = undefined;
     this.hunksRenderer.setOptions(this.getHunksRendererOptions(options));
+    this.syncInteractionOptions();
+  }
+
+  protected syncInteractionOptions(): void {
     this.interactionManager.setOptions(
       pluckInteractionOptions(
-        options,
-        typeof options.hunkSeparators === 'function' ||
-          (options.hunkSeparators ?? 'line-info') === 'line-info' ||
-          options.hunkSeparators === 'line-info-basic'
+        this.options,
+        typeof this.options.hunkSeparators === 'function' ||
+          (this.options.hunkSeparators ?? 'line-info') === 'line-info' ||
+          this.options.hunkSeparators === 'line-info-basic'
           ? this.handleExpandHunk
           : undefined,
         this.getLineIndex
@@ -646,6 +650,7 @@ export class FileDiff<LAnnotation = undefined> {
       return;
     }
 
+    this.syncInteractionOptions();
     this.hunksRenderer.hydrate(this.fileDiff);
     // FIXME(amadeus): not sure how to handle this yet...
     // this.renderSeparators();
@@ -774,6 +779,7 @@ export class FileDiff<LAnnotation = undefined> {
       return false;
     }
     this.hunksRenderer.setOptions(this.getHunksRendererOptions(this.options));
+    this.syncInteractionOptions();
 
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
 

@@ -199,7 +199,11 @@ export class File<LAnnotation = undefined> {
     if (options == null) return;
     this.options = options;
     this.cachedHeaderHTML = undefined;
-    this.interactionManager.setOptions(pluckInteractionOptions(options));
+    this.syncInteractionOptions();
+  }
+
+  protected syncInteractionOptions(): void {
+    this.interactionManager.setOptions(pluckInteractionOptions(this.options));
   }
 
   private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
@@ -410,6 +414,7 @@ export class File<LAnnotation = undefined> {
     this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
     this.file = file;
     this.fileRenderer.setOptions(getFileRendererOptions(this.options));
+    this.syncInteractionOptions();
     if (this.pre == null) {
       return;
     }
@@ -471,6 +476,7 @@ export class File<LAnnotation = undefined> {
     }
     this.file = file;
     this.fileRenderer.setOptions(getFileRendererOptions(this.options));
+    this.syncInteractionOptions();
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }
