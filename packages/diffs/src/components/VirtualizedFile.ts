@@ -128,9 +128,15 @@ export class VirtualizedFile<
 
   private resetLayoutCache(recompute = false): void {
     this.layoutDirty = true;
-    this.cache.heights.clear();
-    this.cache.checkpoints = [];
-    this.renderRange = undefined;
+    if (this.cache.heights.size > 0) {
+      this.cache.heights.clear();
+    }
+    if (this.cache.checkpoints.length > 0) {
+      this.cache.checkpoints.length = 0;
+    }
+    if (this.renderRange != null) {
+      this.renderRange = undefined;
+    }
     // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
     // at the same time, so we shouldn't trigger this there.
     if (recompute && this.isSimpleMode()) {
@@ -234,6 +240,7 @@ export class VirtualizedFile<
   // should keep clean instances on a cached-height fast path.
   public prepareCodeViewItem(
     file: FileContents,
+    top: number,
     reset?: PendingCodeViewLayoutReset
   ): number {
     let shouldResetLayoutCache = reset?.resetFileLayoutCache === true;
@@ -256,7 +263,7 @@ export class VirtualizedFile<
       this.layoutDirty = true;
     }
     this.file = file;
-    this.top = this.getVirtualizedTop();
+    this.top = top;
     this.computeApproximateSize();
     return this.height;
   }

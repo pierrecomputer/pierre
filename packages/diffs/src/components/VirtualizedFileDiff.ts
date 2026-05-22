@@ -171,15 +171,25 @@ export class VirtualizedFileDiff<
     includeEstimatedHeights = false,
   }: ResetLayoutCacheOptions = {}): void {
     this.layoutDirty = true;
-    this.cache.heightDeltas.clear();
-    this.cache.measuredHeightDeltaTotal = 0;
-    this.cache.checkpoints = [];
-    this.cache.totalLines = 0;
+    if (this.cache.heightDeltas.size > 0) {
+      this.cache.heightDeltas.clear();
+    }
+    if (this.cache.measuredHeightDeltaTotal !== 0) {
+      this.cache.measuredHeightDeltaTotal = 0;
+    }
+    if (this.cache.checkpoints.length > 0) {
+      this.cache.checkpoints.length = 0;
+    }
+    if (this.cache.totalLines !== 0) {
+      this.cache.totalLines = 0;
+    }
     if (includeEstimatedHeights) {
       this.cache.estimatedSplitHeight = undefined;
       this.cache.estimatedUnifiedHeight = undefined;
     }
-    this.renderRange = undefined;
+    if (this.renderRange != null) {
+      this.renderRange = undefined;
+    }
     // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
     // at the same time, so we shouldn't trigger this there.
     if (forceSimpleRecompute && this.isSimpleMode()) {
@@ -285,6 +295,7 @@ export class VirtualizedFileDiff<
   // should keep clean instances on a cached-height fast path.
   public prepareCodeViewItem(
     fileDiff: FileDiffMetadata,
+    top: number,
     reset?: PendingCodeViewLayoutReset
   ): number {
     const targetChanged = !areDiffTargetsEqual(this.fileDiff, fileDiff);
@@ -311,7 +322,7 @@ export class VirtualizedFileDiff<
       this.resetLayoutCache({ includeEstimatedHeights });
     }
     this.fileDiff = fileDiff;
-    this.top = this.getVirtualizedTop();
+    this.top = top;
     this.computeApproximateSize();
     return this.height;
   }

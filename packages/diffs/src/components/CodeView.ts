@@ -3117,10 +3117,15 @@ export class CodeView<LAnnotation = undefined> {
       if (item.type === 'diff') {
         item.height = item.instance.prepareCodeViewItem(
           item.item.fileDiff,
+          runningTop,
           reset
         );
       } else {
-        item.height = item.instance.prepareCodeViewItem(item.item.file, reset);
+        item.height = item.instance.prepareCodeViewItem(
+          item.item.file,
+          runningTop,
+          reset
+        );
       }
       runningTop += item.height;
       if (index < this.items.length - 1) {
@@ -3158,9 +3163,9 @@ function prepareItemInstance<LAnnotation>(
 ): number {
   item.instance.cleanUp(true);
   if (item.type === 'diff') {
-    return item.instance.prepareCodeViewItem(item.item.fileDiff);
+    return item.instance.prepareCodeViewItem(item.item.fileDiff, item.top);
   } else {
-    return item.instance.prepareCodeViewItem(item.item.file);
+    return item.instance.prepareCodeViewItem(item.item.file, item.top);
   }
 }
 
