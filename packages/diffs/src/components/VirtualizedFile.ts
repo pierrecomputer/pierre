@@ -6,6 +6,7 @@ import type {
   RenderRange,
   RenderWindow,
   StickySpecs,
+  ThemeTypes,
   VirtualFileMetrics,
 } from '../types';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
@@ -124,6 +125,16 @@ export class VirtualizedFile<
     if (optionsChanged) {
       this.virtualizer.instanceChanged(this, layoutChanged);
     }
+  }
+
+  override setThemeType(themeType: ThemeTypes): void {
+    if (this.isAdvancedMode()) {
+      throw new Error(
+        'VirtualizedFile.setThemeType cannot be used inside CodeView. Update CodeView options instead.'
+      );
+    }
+
+    super.setThemeType(themeType);
   }
 
   private resetLayoutCache(recompute = false): void {

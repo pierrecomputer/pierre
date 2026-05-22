@@ -20,11 +20,7 @@ import {
   type SelectionWriteOptions,
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
-import {
-  FileRenderer,
-  type FileRendererOptions,
-  type FileRenderResult,
-} from '../renderers/FileRenderer';
+import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 import type {
   AppliedThemeStyleCache,
@@ -50,6 +46,7 @@ import {
   wrapThemeCSS,
   wrapUnsafeCSS,
 } from '../utils/cssWrappers';
+import { getFileRendererOptions } from '../utils/getFileRendererOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
@@ -184,31 +181,6 @@ export class File<LAnnotation = undefined> {
   private handleHighlightRender = (): void => {
     this.rerender();
   };
-
-  protected getFileRendererOptions(
-    options: FileOptions<LAnnotation>
-  ): FileRendererOptions {
-    // Keep this explicit: CodeView live options may inherit getters, and
-    // spreading them would either miss values or materialize dense copies.
-    return {
-      theme: options.theme,
-      disableLineNumbers: options.disableLineNumbers,
-      overflow: options.overflow,
-      themeType: options.themeType,
-      collapsed: options.collapsed,
-      disableFileHeader: options.disableFileHeader,
-      disableVirtualizationBuffers: options.disableVirtualizationBuffers,
-      stickyHeader: options.stickyHeader,
-      preferredHighlighter: options.preferredHighlighter,
-      useCSSClasses: options.useCSSClasses,
-      useTokenTransformer: options.useTokenTransformer,
-      tokenizeMaxLineLength: options.tokenizeMaxLineLength,
-      tokenizeMaxLength: options.tokenizeMaxLength,
-      unsafeCSS: options.unsafeCSS,
-      headerRenderMode:
-        options.renderCustomHeader != null ? 'custom' : 'default',
-    };
-  }
 
   public rerender(): void {
     if (!this.enabled || this.file == null) return;
@@ -433,7 +405,7 @@ export class File<LAnnotation = undefined> {
   }: HydrationSetup<LAnnotation>): void {
     this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
     this.file = file;
-    this.fileRenderer.setOptions(this.getFileRendererOptions(this.options));
+    this.fileRenderer.setOptions(getFileRendererOptions(this.options));
     if (this.pre == null) {
       return;
     }
@@ -494,7 +466,7 @@ export class File<LAnnotation = undefined> {
       this.cachedHeaderHTML = undefined;
     }
     this.file = file;
-    this.fileRenderer.setOptions(this.getFileRendererOptions(this.options));
+    this.fileRenderer.setOptions(getFileRendererOptions(this.options));
     if (lineAnnotations != null) {
       this.setLineAnnotations(lineAnnotations);
     }

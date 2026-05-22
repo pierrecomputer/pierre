@@ -10,6 +10,7 @@ import type {
   RenderWindow,
   SelectionSide,
   StickySpecs,
+  ThemeTypes,
   VirtualFileMetrics,
 } from '../types';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
@@ -164,6 +165,16 @@ export class VirtualizedFileDiff<
     if (optionsChanged && this.isSimpleMode()) {
       this.virtualizer.instanceChanged(this, layoutChanged);
     }
+  }
+
+  override setThemeType(themeType: ThemeTypes): void {
+    if (this.isAdvancedMode()) {
+      throw new Error(
+        'VirtualizedFileDiff.setThemeType cannot be used inside CodeView. Update CodeView options instead.'
+      );
+    }
+
+    super.setThemeType(themeType);
   }
 
   private resetLayoutCache({

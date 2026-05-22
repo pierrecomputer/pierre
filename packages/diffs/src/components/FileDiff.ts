@@ -60,6 +60,7 @@ import {
   wrapThemeCSS,
   wrapUnsafeCSS,
 } from '../utils/cssWrappers';
+import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
@@ -249,37 +250,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected getHunksRendererOptions(
     options: FileDiffOptions<LAnnotation>
   ): DiffHunksRendererOptions {
-    const hunkSeparators =
-      typeof options.hunkSeparators === 'function'
-        ? 'custom'
-        : options.hunkSeparators;
-    // Keep this explicit: CodeView live options may inherit getters, and
-    // spreading them would either miss values or materialize dense copies.
-    return {
-      theme: options.theme,
-      disableLineNumbers: options.disableLineNumbers,
-      overflow: options.overflow,
-      collapsed: options.collapsed,
-      disableFileHeader: options.disableFileHeader,
-      disableVirtualizationBuffers: options.disableVirtualizationBuffers,
-      stickyHeader: options.stickyHeader,
-      preferredHighlighter: options.preferredHighlighter,
-      useCSSClasses: options.useCSSClasses,
-      useTokenTransformer: options.useTokenTransformer,
-      tokenizeMaxLineLength: options.tokenizeMaxLineLength,
-      tokenizeMaxLength: options.tokenizeMaxLength,
-      diffStyle: options.diffStyle,
-      diffIndicators: options.diffIndicators,
-      disableBackground: options.disableBackground,
-      hunkSeparators,
-      expandUnchanged: options.expandUnchanged,
-      collapsedContextThreshold: options.collapsedContextThreshold,
-      lineDiffType: options.lineDiffType,
-      maxLineDiffLength: options.maxLineDiffLength,
-      expansionLineCount: options.expansionLineCount,
-      headerRenderMode:
-        options.renderCustomHeader != null ? 'custom' : 'default',
-    };
+    return getDiffHunksRendererOptions(options);
   }
 
   protected createHunksRenderer(
