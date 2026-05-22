@@ -398,14 +398,6 @@ export class FileRenderer<LAnnotation = undefined> {
     renderRange: RenderRange,
     { code, themeStyles, baseThemeType }: ThemedFileResult
   ): FileRenderResult {
-    // See the matching block in DiffHunksRenderer.processDiffResult — pull
-    // themeStyles from the worker pool's current state so collapsed/cached
-    // files don't keep showing the old theme's header colors after a swap.
-    const currentTheme = this.workerManager?.getCurrentThemeStyles();
-    if (currentTheme != null) {
-      themeStyles = currentTheme.themeStyles;
-      baseThemeType = currentTheme.baseThemeType;
-    }
     const { disableFileHeader = false } = this.options;
     const contentArray: ElementContent[] = [];
     const gutter = createGutterWrapper();

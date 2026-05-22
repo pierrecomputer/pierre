@@ -34,7 +34,6 @@ import {
   getCustomExtensionsVersion,
   getFiletypeFromFileName,
 } from '../utils/getFiletypeFromFileName';
-import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
 import { getThemes } from '../utils/getThemes';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isFilePlainText } from '../utils/isFilePlainText';
@@ -278,28 +277,6 @@ export class WorkerPoolManager {
 
   public getDiffRenderOptions(): RenderDiffOptions {
     return { ...this.renderOptions };
-  }
-
-  // Computes the :host CSS variable string (--diffs-light, --diffs-dark,
-  // addition/deletion/modified colors) for the worker pool's current theme.
-  // Renderers use this to refresh `result.themeStyles` on already-cached diff
-  // results after `setRenderOptions` swaps the active theme — so a collapsed
-  // file's header (and the diff's chrome generally) picks up the new theme
-  // without having to wait for the worker to re-tokenize the file.
-  public getCurrentThemeStyles():
-    | { themeStyles: string; baseThemeType: 'light' | 'dark' | undefined }
-    | undefined {
-    if (this.highlighter == null) return undefined;
-    const { theme } = this.renderOptions;
-    const themeStyles = getHighlighterThemeStyles({
-      theme,
-      highlighter: this.highlighter,
-    });
-    const baseThemeType =
-      typeof theme === 'string'
-        ? this.highlighter.getTheme(theme).type
-        : undefined;
-    return { themeStyles, baseThemeType };
   }
 
   private async setRenderOptionsOnWorkers(

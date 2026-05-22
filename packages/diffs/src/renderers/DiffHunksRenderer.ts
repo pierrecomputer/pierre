@@ -725,18 +725,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     renderRange: RenderRange,
     { code, themeStyles, baseThemeType }: ThemedDiffResult
   ): HunksRenderResult {
-    // When the worker pool's active theme changes, its diffCache is cleared
-    // but this instance's `renderCache.result` may still hold stale tokens and
-    // themeStyles (e.g. for a collapsed file we never re-tokenize). The tokens
-    // get refreshed asynchronously by `highlightDiffAST`, but the diff chrome
-    // (file header, line numbers, addition/deletion colors) comes from
-    // themeStyles, so we reach into the worker manager for the current value
-    // every time to avoid leaving collapsed/cached files on the old theme.
-    const currentTheme = this.workerManager?.getCurrentThemeStyles();
-    if (currentTheme != null) {
-      themeStyles = currentTheme.themeStyles;
-      baseThemeType = currentTheme.baseThemeType;
-    }
     const {
       diffStyle,
       disableFileHeader,

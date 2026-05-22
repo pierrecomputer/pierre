@@ -437,7 +437,6 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         // Use this to validate itemMetrics when changing layout with unsafeCSS.
         // __devOnlyValidateItemHeights: true,
         layout: CODE_VIEW_LAYOUT,
-        theme: { dark: darkTheme, light: lightTheme },
         themeType,
         diffStyle,
         diffIndicators,
@@ -462,12 +461,10 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         },
       }) satisfies CodeViewOptions<CommentMetadata>,
     [
-      darkTheme,
       diffIndicators,
       diffStyle,
       handleCreateDraftComment,
       handleLineSelectionEnd,
-      lightTheme,
       lineNumbers,
       overflow,
       showBackgrounds,
