@@ -77,6 +77,30 @@ describe('computeEstimatedDiffHeights', () => {
     });
   });
 
+  test('computes split metadata when the no-newline deletion side is shorter', () => {
+    const fileDiff = parseDiffFromFile(
+      { name: 'deletion-shorter.ts', contents: 'same\nold-final' },
+      { name: 'deletion-shorter.ts', contents: 'same\nnew-a\nnew-b\n' }
+    );
+
+    expect(compute(fileDiff)).toEqual({
+      splitHeight: 74,
+      unifiedHeight: 84,
+    });
+  });
+
+  test('computes split metadata when the no-newline addition side is shorter', () => {
+    const fileDiff = parseDiffFromFile(
+      { name: 'addition-shorter.ts', contents: 'same\nold-a\nold-b\n' },
+      { name: 'addition-shorter.ts', contents: 'same\nnew-final' }
+    );
+
+    expect(compute(fileDiff)).toEqual({
+      splitHeight: 74,
+      unifiedHeight: 84,
+    });
+  });
+
   test('accounts for collapsed leading and trailing line-info separators', () => {
     const fileDiff = createTwoHunkDiff();
 

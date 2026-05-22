@@ -147,11 +147,10 @@ function getChangeNoNewlineMetadataLineCounts(
   const unified =
     (content.deletions > 0 && hunk.noEOFCRDeletions ? 1 : 0) +
     (content.additions > 0 && hunk.noEOFCRAdditions ? 1 : 0);
-  const splitCount = Math.max(content.deletions, content.additions);
   const splitDeletionHasMetadata =
-    content.deletions === splitCount && hunk.noEOFCRDeletions;
+    content.deletions > 0 && hunk.noEOFCRDeletions;
   const splitAdditionHasMetadata =
-    content.additions === splitCount && hunk.noEOFCRAdditions;
+    content.additions > 0 && hunk.noEOFCRAdditions;
   const split = splitDeletionHasMetadata || splitAdditionHasMetadata ? 1 : 0;
 
   return { split, unified };

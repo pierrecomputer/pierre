@@ -1076,9 +1076,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           }
         }
 
-        const noEOFCRDeletion = deletionLine?.noEOFCR ?? false;
-        const noEOFCRAddition = additionLine?.noEOFCR ?? false;
+        const isFinalSplitHunkRow =
+          diffStyle === 'split' &&
+          hunk != null &&
+          splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1;
+        const splitNoEOFCRDeletion = isFinalSplitHunkRow
+          ? hunk.noEOFCRDeletions
+          : false;
+        const splitNoEOFCRAddition = isFinalSplitHunkRow
+          ? hunk.noEOFCRAdditions
+          : false;
+        const noEOFCRDeletion =
+          (deletionLine?.noEOFCR ?? false) || splitNoEOFCRDeletion;
+        const noEOFCRAddition =
+          (additionLine?.noEOFCR ?? false) || splitNoEOFCRAddition;
         if (noEOFCRAddition || noEOFCRDeletion) {
+          if (diffStyle === 'split') {
+            pendingSplitContext.flush();
+          }
           if (noEOFCRDeletion) {
             const noEOFType =
               type === 'context' || type === 'context-expanded'
