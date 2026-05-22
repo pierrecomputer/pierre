@@ -17,7 +17,14 @@ import {
   IconSymbolDiffstat,
 } from '@pierre/icons';
 import Link from 'next/link';
-import { type Dispatch, memo, type SetStateAction, useState } from 'react';
+import {
+  type Dispatch,
+  memo,
+  type SetStateAction,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import { DiffUrlForm } from '../../_components/DiffUrlForm';
 import { DiffsHubLogo } from './DiffsHubLogo';
@@ -452,6 +459,29 @@ function ThemeList({
   const themes = isLight ? LIGHT_THEMES : DARK_THEMES;
   const current = isLight ? currentLight : currentDark;
   const HeaderIcon = isLight ? IconColorLight : IconColorDark;
+  // Auto-scroll so the currently-selected row sits at the second visible
+  // position when the list opens. The current theme lands right under the
+  // user's cursor (Radix opens the menu under the trigger) and the row
+  // above it makes the previous theme easy to reach with one tap of the
+  // up arrow — sequential browsing through themes feels natural without
+  // the user having to hunt for the active row first.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const selectedItemRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    const selected = selectedItemRef.current;
+    if (container == null || selected == null) return;
+    // `offsetTop` measures from the nearest positioned ancestor, which the
+    // scroll container is not — use bounding rects so the math works
+    // regardless of where ancestors set `position`. Subtract one row
+    // height so the selected row appears as the second-from-top visible
+    // row instead of flush with the top.
+    const containerTop = container.getBoundingClientRect().top;
+    const selectedTop = selected.getBoundingClientRect().top;
+    const offsetWithinScroll = selectedTop - containerTop + container.scrollTop;
+    const rowHeight = selected.offsetHeight;
+    container.scrollTop = Math.max(0, offsetWithinScroll - rowHeight);
+  }, [view]);
   return (
     <>
       <DropdownMenuItem
@@ -470,10 +500,14 @@ function ThemeList({
           {isLight ? 'Light theme' : 'Dark theme'}
         </span>
       </DropdownMenuItem>
-      <div className="cv-mini-scrollbar mt-1 max-h-[320px] overflow-y-auto overscroll-contain">
+      <div
+        ref={scrollContainerRef}
+        className="cv-mini-scrollbar mt-1 max-h-[320px] overflow-y-auto overscroll-contain"
+      >
         {themes.map((theme) => (
           <DropdownMenuItem
             key={theme}
+            ref={current === theme ? selectedItemRef : undefined}
             onSelect={(event) => {
               event.preventDefault();
               if (isLight) {
