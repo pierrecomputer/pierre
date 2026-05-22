@@ -6,6 +6,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -119,7 +120,15 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   // off a re-tokenization with the wrong theme — before the rehydration
   // pass corrected it. Waiting until both themes are hydrated keeps the
   // pool on the user's selection through the whole mount.
-  useEffect(() => {
+  //
+  // useLayoutEffect (not useEffect) so the worker pool's synchronous
+  // rerender — which writes the new themeStyles CSS into the diff
+  // containers' shadow roots — happens in the same commit/paint as the
+  // sidebar's inline-style update. A plain useEffect runs after paint,
+  // which made the diff side trail the chrome by one frame and was
+  // visible as a flicker on the comment cards and tab badge during fast
+  // theme cycling.
+  useLayoutEffect(() => {
     if (workerPool == null) return;
     if (!themesHydrated) return;
     void workerPool.setRenderOptions({

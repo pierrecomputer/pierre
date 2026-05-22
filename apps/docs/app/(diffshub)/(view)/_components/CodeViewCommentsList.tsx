@@ -135,7 +135,13 @@ export const CodeViewCommentsList = memo(function CodeViewCommentsList({
                 // (light-typed but uses a dark navy sidebar). The
                 // hardcoded fallbacks cover the brief window before the
                 // Shiki theme resolves on first render.
-                className="focus-visible:ring-ring flex w-full cursor-pointer items-start gap-2 border-b border-[var(--diffshub-card-border,rgb(0_0_0_/_0.1))] bg-[var(--diffshub-card-bg,var(--color-card))] p-3 text-left text-sm transition-colors outline-none first:rounded-t-lg last:rounded-b-lg last:border-b-0 hover:bg-[var(--diffshub-card-hover-bg,var(--color-muted))] focus-visible:ring-2 dark:border-[var(--diffshub-card-border,rgb(255_255_255_/_0.15))]"
+                // No `transition-colors` here: the bg / border / text
+                // colors are driven by CSS variables that flip the entire
+                // chrome on every theme swap, so a smooth color transition
+                // on each card visibly trails the rest of the UI (header,
+                // file tree, diff body) which snap instantly. Hover bg is
+                // snappy enough without an interpolated transition.
+                className="focus-visible:ring-ring flex w-full cursor-pointer items-start gap-2 border-b border-[var(--diffshub-card-border,rgb(0_0_0_/_0.1))] bg-[var(--diffshub-card-bg,var(--color-card))] p-3 text-left text-sm outline-none first:rounded-t-lg last:rounded-b-lg last:border-b-0 hover:bg-[var(--diffshub-card-hover-bg,var(--color-muted))] focus-visible:ring-2 dark:border-[var(--diffshub-card-border,rgb(255_255_255_/_0.15))]"
                 onClick={(event) =>
                   handleRowClick(event, () => onSelectComment?.(comment))
                 }

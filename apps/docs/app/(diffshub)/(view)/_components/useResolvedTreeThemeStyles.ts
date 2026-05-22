@@ -288,15 +288,32 @@ function useResolvedThemeByName(
   themeName: DiffsThemeNames,
   fallback: ResolvedTreeTheme
 ): ResolvedTreeTheme {
+  // Read the module cache on every render so a theme that's already
+  // resolved (the common case once the user has cycled through it
+  // once) applies in the same render as the prop change — no useState
+  // round-trip. Without this, the sidebar's comment cards and tab
+  // badge visibly lag one React commit behind the diff viewer's theme
+  // swap, because useState's initializer only runs on mount.
   const cached = RESOLVED_THEME_CACHE.get(themeName);
-  const [resolved, setResolved] = useState<ResolvedTreeTheme>(
+
+  // Track the most recently *resolved* theme so cold themes don't
+  // flash the pierre-soft fallback in between the prop change and the
+  // async load completing. The diff side keeps the previous theme
+  // visible during its own await inside `WorkerPoolManager.setRenderOptions`
+  // — matching that behaviour here means chrome and diff stay aligned
+  // through a swap: both show the prior theme until the new one is
+  // ready, then both flip together.
+  const [lastResolved, setLastResolved] = useState<ResolvedTreeTheme>(
     cached ?? fallback
   );
 
   useEffect(() => {
     const existing = RESOLVED_THEME_CACHE.get(themeName);
     if (existing != null) {
-      setResolved(existing);
+      // The render path already returned the cached value via `cached`
+      // above; update the fallback state too so it stays in step when
+      // the next swap hits a cold theme.
+      setLastResolved(existing);
       return;
     }
     let cancelled = false;
@@ -305,10 +322,10 @@ function useResolvedThemeByName(
         const theme = await getResolvedOrResolveTheme(themeName);
         const next = buildResolvedTheme(theme);
         RESOLVED_THEME_CACHE.set(themeName, next);
-        if (!cancelled) setResolved(next);
+        if (!cancelled) setLastResolved(next);
       } catch {
-        // Resolution failures are surfaced by the diff side; the fallback
-        // keeps the sidebar usable in the meantime.
+        // Resolution failures are surfaced by the diff side; keeping
+        // the previous theme keeps the sidebar usable in the meantime.
       }
     }
     void load();
@@ -317,7 +334,7 @@ function useResolvedThemeByName(
     };
   }, [themeName]);
 
-  return resolved;
+  return cached ?? lastResolved;
 }
 
 // Returns the resolved Shiki theme bundle (tree styles + raw colors) for

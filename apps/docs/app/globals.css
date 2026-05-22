@@ -249,7 +249,13 @@
   }
 
   .inline-link {
-    @apply text-foreground hover:text-foreground decoration-muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-3 transition-[color,text-decoration-color,text-underline-offset];
+    /* No `color` in the transition list: chrome surfaces flip
+       `--color-foreground` / `--color-muted-foreground` together on every
+       Shiki theme swap, and a smooth color interpolation on every link
+       makes the footer trail the rest of the UI (header, file tree, diff
+       body) which snap instantly. Keep the decoration transitions so
+       hover underline reveals stay smooth. */
+    @apply text-foreground hover:text-foreground decoration-muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-3 transition-[text-decoration-color,text-underline-offset];
   }
 
   .no-scrollbar::-webkit-scrollbar {
@@ -261,6 +267,7 @@
     scrollbar-width: none;
   }
 }
+
 
 .gridstack {
   display: grid;

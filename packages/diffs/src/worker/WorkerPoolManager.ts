@@ -228,8 +228,35 @@ export class WorkerPoolManager {
 
       if (this.highlighter != null) {
         attachResolvedThemes(resolvedThemes, this.highlighter);
-        await this.setRenderOptionsOnWorkers(newRenderOptions, resolvedThemes);
+        // Fire the worker theme update without awaiting, then update
+        // local state and trigger the chrome rerender synchronously
+        // before awaiting the worker ACKs. `setRenderOptionsOnWorkers`
+        // calls `postMessage` from inside its Promise constructor, so
+        // every worker has the set-render-options task queued before
+        // this call returns — any highlight tasks the rerender submits
+        // will be processed by the workers *after* the theme swap, so
+        // ordering is preserved. The await at the end keeps the public
+        // promise honest about full completion without blocking the
+        // sidebar/diff-chrome repaint behind the worker round-trip.
+        const workerUpdate = this.setRenderOptionsOnWorkers(
+          newRenderOptions,
+          resolvedThemes
+        );
+        this.renderOptions = newRenderOptions;
+        this.renderOptionsVersion++;
+        this.diffCache.clear();
+        this.fileCache.clear();
+        for (const instance of this.themeSubscribers) {
+          instance.rerender();
+        }
+        await workerUpdate;
+        if (!this.isCurrentLifecycle(lifecycleGeneration)) {
+          return;
+        }
       } else {
+        // First-time init: we can't compute current themeStyles until
+        // the highlighter is created, so the rerender has to wait for
+        // it anyway. Keep the original ordering for this path.
         const [highlighter] = await Promise.all([
           getSharedHighlighter({
             themes: themeNames,
@@ -242,19 +269,13 @@ export class WorkerPoolManager {
           return;
         }
         this.highlighter = highlighter;
-      }
-
-      if (!this.isCurrentLifecycle(lifecycleGeneration)) {
-        return;
-      }
-
-      this.renderOptions = newRenderOptions;
-      this.renderOptionsVersion++;
-      this.diffCache.clear();
-      this.fileCache.clear();
-
-      for (const instance of this.themeSubscribers) {
-        instance.rerender();
+        this.renderOptions = newRenderOptions;
+        this.renderOptionsVersion++;
+        this.diffCache.clear();
+        this.fileCache.clear();
+        for (const instance of this.themeSubscribers) {
+          instance.rerender();
+        }
       }
     } catch (error) {
       if (
