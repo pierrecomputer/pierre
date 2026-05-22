@@ -356,42 +356,51 @@ type CodeViewSharedCallbackKeys =
 type CodeViewSelectionCallbackKeys =
   (typeof CODE_VIEW_SELECTION_CALLBACK_KEYS)[number];
 
-const CODE_VIEW_LIVE_OPTIONS_STATE = Symbol('CodeView.liveOptionsState');
+const CODE_VIEW_ITEM_OPTIONS_STATE = Symbol('CodeView.itemOptionsState');
 
-type CodeViewLiveCallbackCache = Partial<
+type CodeViewItemCallbackCache = Partial<
   Record<CodeViewSharedCallbackKeys | CodeViewSelectionCallbackKeys, unknown>
 >;
 
-interface CodeViewLiveOptionsState<LAnnotation, TMode extends CodeViewMode> {
-  owner: CodeView<LAnnotation>;
-  mode: TMode;
+// Each item gets a tiny state record and an options object whose properties
+// come from a shared prototype. This avoids retaining dozens of getter closures
+// and property descriptors per item while still letting the item instance read
+// the latest CodeView options whenever it renders.
+interface CodeViewItemOptionsState {
+  // Store the id instead of the item object so item -> instance -> options does
+  // not form a strong cycle back to the item context. The id also lets
+  // updateItemId() keep reused instances pointed at the current record.
   id: string;
-  callbackCache: CodeViewLiveCallbackCache;
+  // Callback wrappers are only needed when a renderer/interaction path reads a
+  // callback option, so this cache stays absent for plain CodeView items.
+  callbackCache?: CodeViewItemCallbackCache;
 }
 
-type CodeViewLiveOptions<
+type CodeViewItemOptions<
   LAnnotation,
   TMode extends CodeViewMode,
 > = CodeViewModeOptions<LAnnotation, TMode> & {
-  [CODE_VIEW_LIVE_OPTIONS_STATE]: CodeViewLiveOptionsState<LAnnotation, TMode>;
+  [CODE_VIEW_ITEM_OPTIONS_STATE]: CodeViewItemOptionsState;
 };
 
-function defineLiveOptionsState<LAnnotation, TMode extends CodeViewMode>(
+function defineOptionsState<LAnnotation, TMode extends CodeViewMode>(
   options: CodeViewModeOptions<LAnnotation, TMode>,
-  state: CodeViewLiveOptionsState<LAnnotation, TMode>
+  state: CodeViewItemOptionsState
 ): void {
-  Object.defineProperty(options, CODE_VIEW_LIVE_OPTIONS_STATE, {
+  // Keep the state hidden from option enumeration. Renderer option builders
+  // should copy known keys explicitly and must not depend on object spread.
+  Object.defineProperty(options, CODE_VIEW_ITEM_OPTIONS_STATE, {
     configurable: false,
     enumerable: false,
     value: state,
   });
 }
 
-function getLiveOptionsState<LAnnotation, TMode extends CodeViewMode>(
+function getItemOptionsState<LAnnotation, TMode extends CodeViewMode>(
   options: CodeViewModeOptions<LAnnotation, TMode>
-): CodeViewLiveOptionsState<LAnnotation, TMode> {
-  return (options as CodeViewLiveOptions<LAnnotation, TMode>)[
-    CODE_VIEW_LIVE_OPTIONS_STATE
+): CodeViewItemOptionsState {
+  return (options as CodeViewItemOptions<LAnnotation, TMode>)[
+    CODE_VIEW_ITEM_OPTIONS_STATE
   ];
 }
 
@@ -409,15 +418,20 @@ type CodeViewSelectionCallbackOptions<LAnnotation> = {
   >;
 };
 
-function defineLiveOption<TOptions extends object, TKey extends keyof TOptions>(
+function defineItemOption<TOptions extends object, TKey extends keyof TOptions>(
   target: TOptions,
   key: TKey,
-  get: () => TOptions[TKey]
+  get: (receiver: TOptions) => TOptions[TKey]
 ): void {
+  // These accessors usually live on the shared prototype. Passing `this` to the
+  // getter lets one shared accessor resolve per-item state from the receiving
+  // options object instead of closing over an individual item.
   Object.defineProperty(target, key, {
     configurable: false,
     enumerable: true,
-    get,
+    get() {
+      return get(this as TOptions);
+    },
   });
 }
 
@@ -545,6 +559,8 @@ export class CodeView<LAnnotation = undefined> {
     stickyBottom: -1,
   };
   private itemMetricsCache: VirtualFileMetrics = DEFAULT_CODE_VIEW_FILE_METRICS;
+  private readonly fileOptionsPrototype: FileOptions<LAnnotation>;
+  private readonly diffOptionsPrototype: FileDiffOptions<LAnnotation>;
   // Pending scroll target, either instant or smooth. The next render cycle
   // will attempt to resolve it's position instantly or as part of a dynamic
   // animation.
@@ -591,6 +607,8 @@ export class CodeView<LAnnotation = undefined> {
   ) {
     this.options = options;
     this.computeMetricsCache(options.itemMetrics);
+    this.fileOptionsPrototype = this.createFileOptionsPrototype();
+    this.diffOptionsPrototype = this.createDiffOptionsPrototype();
     this.workerManager = workerManager;
     this.isContainerManaged = isContainerManaged;
 
@@ -1082,7 +1100,7 @@ export class CodeView<LAnnotation = undefined> {
     this.idToItem.delete(oldId);
     item.item.id = newId;
     this.idToItem.set(newId, item);
-    this.updateLiveOptionsId(item.instance.options, newId);
+    this.updateItemOptionsId(item.instance.options, newId);
 
     if (this.selectedLines?.id === oldId) {
       this.selectedLines = { ...this.selectedLines, id: newId };
@@ -1369,7 +1387,7 @@ export class CodeView<LAnnotation = undefined> {
     const { itemMetricsCache: itemMetrics } = this;
     if (input.type === 'diff') {
       const instance = new VirtualizedFileDiff<LAnnotation>(
-        this.createLiveDiffOptions(input.id),
+        this.createDiffOptions(input.id),
         this,
         itemMetrics,
         this.workerManager,
@@ -1389,7 +1407,7 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     const instance = new VirtualizedFile<LAnnotation>(
-      this.createLiveFileOptions(input.id),
+      this.createFileOptions(input.id),
       this,
       itemMetrics,
       this.workerManager,
@@ -1470,132 +1488,165 @@ export class CodeView<LAnnotation = undefined> {
     }
   }
 
-  // CodeView owns advanced option invalidation. These live facades only answer
-  // current option reads for the item instance that keeps them for its lifetime.
-  private createLiveFileOptions(id: string): FileOptions<LAnnotation> {
-    const options = {} as FileOptions<LAnnotation>;
-    const state: CodeViewLiveOptionsState<LAnnotation, 'file'> = {
-      owner: this,
-      mode: 'file',
-      id,
-      callbackCache: {},
-    };
-    defineLiveOptionsState(options, state);
+  // CodeView owns advanced option invalidation. These item option facades only
+  // answer current option reads for the item instance that keeps them for its
+  // lifetime. The accessors live on per-CodeView prototypes so large viewers do
+  // not allocate the full option surface for every file or diff item.
+  private createFileOptionsPrototype(): FileOptions<LAnnotation> {
+    const prototype = {} as FileOptions<LAnnotation>;
 
     for (const key of CODE_VIEW_FILE_OPTION_KEYS) {
-      defineLiveOption<FileOptions<LAnnotation>, CodeViewFileOptionKeys>(
-        options,
+      defineItemOption<FileOptions<LAnnotation>, CodeViewFileOptionKeys>(
+        prototype,
         key,
         () => this.options[key]
       );
     }
 
-    defineLiveOption(options, 'stickyHeader', () => this.options.stickyHeaders);
-    defineLiveOption(
-      options,
+    defineItemOption(
+      prototype,
+      'stickyHeader',
+      () => this.options.stickyHeaders
+    );
+    defineItemOption(
+      prototype,
       'collapsed',
-      () => this.getLiveOptionsItem(state)?.item.collapsed === true
+      (receiver) =>
+        this.getItemOptions(getItemOptionsState(receiver), 'file')?.item
+          .collapsed === true
     );
 
     for (const key of CODE_VIEW_SHARED_CALLBACK_KEYS) {
-      this.defineLiveSharedCallback(options, state, key);
+      this.defineItemSharedCallback(prototype, 'file', key);
     }
     for (const key of CODE_VIEW_SELECTION_CALLBACK_KEYS) {
-      this.defineLiveSelectionCallback(options, state, key);
+      this.defineItemSelectionCallback(prototype, 'file', key);
     }
 
-    return options;
+    return prototype;
   }
 
-  private createLiveDiffOptions(id: string): FileDiffOptions<LAnnotation> {
-    const options = {} as FileDiffOptions<LAnnotation>;
-    const state: CodeViewLiveOptionsState<LAnnotation, 'diff'> = {
-      owner: this,
-      mode: 'diff',
-      id,
-      callbackCache: {},
-    };
-    defineLiveOptionsState(options, state);
+  private createDiffOptionsPrototype(): FileDiffOptions<LAnnotation> {
+    const prototype = {} as FileDiffOptions<LAnnotation>;
 
     for (const key of CODE_VIEW_DIFF_OPTION_KEYS) {
-      defineLiveOption<FileDiffOptions<LAnnotation>, CodeViewDiffOptionKeys>(
-        options,
+      defineItemOption<FileDiffOptions<LAnnotation>, CodeViewDiffOptionKeys>(
+        prototype,
         key,
         () => this.options[key]
       );
     }
 
-    defineLiveOption(options, 'stickyHeader', () => this.options.stickyHeaders);
-    defineLiveOption(
-      options,
+    defineItemOption(
+      prototype,
+      'stickyHeader',
+      () => this.options.stickyHeaders
+    );
+    defineItemOption(
+      prototype,
       'hunkSeparators',
       () => this.options.hunkSeparators
     );
-    defineLiveOption(
-      options,
+    defineItemOption(
+      prototype,
       'collapsed',
-      () => this.getLiveOptionsItem(state)?.item.collapsed === true
+      (receiver) =>
+        this.getItemOptions(getItemOptionsState(receiver), 'diff')?.item
+          .collapsed === true
     );
 
     for (const key of CODE_VIEW_SHARED_CALLBACK_KEYS) {
-      this.defineLiveSharedCallback(options, state, key);
+      this.defineItemSharedCallback(prototype, 'diff', key);
     }
     for (const key of CODE_VIEW_SELECTION_CALLBACK_KEYS) {
-      this.defineLiveSelectionCallback(options, state, key);
+      this.defineItemSelectionCallback(prototype, 'diff', key);
     }
 
+    return prototype;
+  }
+
+  private createFileOptions(id: string): FileOptions<LAnnotation> {
+    // The per-item options object intentionally owns only hidden state. All
+    // public option reads fall through to the shared prototype above.
+    const options = Object.create(
+      this.fileOptionsPrototype
+    ) as FileOptions<LAnnotation>;
+    const state: CodeViewItemOptionsState = {
+      id,
+    };
+    defineOptionsState(options, state);
     return options;
   }
 
-  private updateLiveOptionsId(
+  private createDiffOptions(id: string): FileDiffOptions<LAnnotation> {
+    // The per-item options object intentionally owns only hidden state. All
+    // public option reads fall through to the shared prototype above.
+    const options = Object.create(
+      this.diffOptionsPrototype
+    ) as FileDiffOptions<LAnnotation>;
+    const state: CodeViewItemOptionsState = {
+      id,
+    };
+    defineOptionsState(options, state);
+    return options;
+  }
+
+  private updateItemOptionsId(
     options: FileOptions<LAnnotation> | FileDiffOptions<LAnnotation>,
     id: string
   ): void {
-    getLiveOptionsState(options).id = id;
+    getItemOptionsState(options).id = id;
   }
 
-  private getLiveOptionsItem<TMode extends CodeViewMode>(
-    state: CodeViewLiveOptionsState<LAnnotation, TMode>
+  private getItemOptions<TMode extends CodeViewMode>(
+    state: CodeViewItemOptionsState,
+    mode: TMode
   ): CodeViewModeItemContext<LAnnotation, TMode> | undefined {
     const item = this.idToItem.get(state.id);
-    if (item == null || item.type !== state.mode) {
+    if (item == null || item.type !== mode) {
       return undefined;
     }
     return item as CodeViewModeItemContext<LAnnotation, TMode>;
   }
 
-  private defineLiveSharedCallback<
+  private defineItemSharedCallback<
     TMode extends CodeViewMode,
     TKey extends CodeViewSharedCallbackKeys,
   >(
     options: CodeViewModeOptions<LAnnotation, TMode>,
-    state: CodeViewLiveOptionsState<LAnnotation, TMode>,
+    mode: TMode,
     key: TKey
   ): void {
-    defineLiveOption(
+    defineItemOption(
       options as Record<
         TKey,
         CodeViewModeOptions<LAnnotation, TMode>[TKey] | undefined
       >,
       key,
-      () => {
-        const current = state.owner.options[key] as
+      (receiver) => {
+        const current = this.options[key] as
           | CodeViewModeOptionCallback<LAnnotation, TMode, TKey>
           | undefined;
         if (current == null) {
           return undefined;
         }
 
-        let wrapped = state.callbackCache[key] as
+        const state = getItemOptionsState(
+          receiver as CodeViewModeOptions<LAnnotation, TMode>
+        );
+        // Allocate wrapper storage only once a callback option is actually
+        // observed. Most large CodeViews never read these callback properties.
+        const callbackCache = (state.callbackCache ??= {});
+        let wrapped = callbackCache[key] as
           | CodeViewModeOptions<LAnnotation, TMode>[TKey]
           | undefined;
         if (wrapped == null) {
           wrapped = ((...args: unknown[]) => {
-            const latest = state.owner.getLiveOptionsItem(state);
+            const latest = this.getItemOptions(state, mode);
             if (latest == null) {
               return undefined;
             }
-            const callback = state.owner.options[key] as
+            const callback = this.options[key] as
               | CodeViewModeInternalOptionCallback<LAnnotation, TMode, TKey>
               | undefined;
             return (
@@ -1603,7 +1654,7 @@ export class CodeView<LAnnotation = undefined> {
             )?.(...args, latest);
           }) as CodeViewModeOptions<LAnnotation, TMode>[TKey];
 
-          state.callbackCache[key] = wrapped;
+          callbackCache[key] = wrapped;
         }
 
         return wrapped;
@@ -1611,49 +1662,53 @@ export class CodeView<LAnnotation = undefined> {
     );
   }
 
-  private defineLiveSelectionCallback<
+  private defineItemSelectionCallback<
     TMode extends CodeViewMode,
     TKey extends CodeViewSelectionCallbackKeys,
   >(
     options: CodeViewModeOptions<LAnnotation, TMode>,
-    state: CodeViewLiveOptionsState<LAnnotation, TMode>,
+    mode: TMode,
     key: TKey
   ): void {
-    defineLiveOption(
+    defineItemOption(
       options as Record<
         TKey,
         CodeViewModeOptions<LAnnotation, TMode>[TKey] | undefined
       >,
       key,
-      () => {
-        if (state.owner.options.enableLineSelection !== true) {
+      (receiver) => {
+        if (this.options.enableLineSelection !== true) {
           return undefined;
         }
 
-        let wrapped = state.callbackCache[key] as
+        const state = getItemOptionsState(
+          receiver as CodeViewModeOptions<LAnnotation, TMode>
+        );
+        // Selection callbacks also use the per-item lazy cache. The wrapper
+        // owns CodeView selection synchronization and then delegates to the
+        // latest user callback, if one exists.
+        const callbackCache = (state.callbackCache ??= {});
+        let wrapped = callbackCache[key] as
           | CodeViewModeOptions<LAnnotation, TMode>[TKey]
           | undefined;
         if (wrapped == null) {
           wrapped = ((range: SelectedLineRange | null) => {
-            const latest = state.owner.getLiveOptionsItem(state);
+            const latest = this.getItemOptions(state, mode);
             if (latest == null) {
               return undefined;
             }
 
             const selection =
               range == null ? null : { id: latest.item.id, range };
-            if (state.owner.options.controlledSelection !== true) {
-              if (
-                range != null ||
-                state.owner.selectedLines?.id === latest.item.id
-              ) {
-                state.owner.applySelectedLines(selection, { notify: false });
+            if (this.options.controlledSelection !== true) {
+              if (range != null || this.selectedLines?.id === latest.item.id) {
+                this.applySelectedLines(selection, { notify: false });
               }
             }
 
-            state.owner.options.onSelectedLinesChange?.(selection);
+            this.options.onSelectedLinesChange?.(selection);
 
-            const callback = state.owner.options[key] as
+            const callback = this.options[key] as
               | ((
                   nextRange: SelectedLineRange | null,
                   context: CodeViewModeItemContext<LAnnotation, TMode>
@@ -1662,7 +1717,7 @@ export class CodeView<LAnnotation = undefined> {
             return callback?.(range, latest);
           }) as CodeViewModeOptions<LAnnotation, TMode>[TKey];
 
-          state.callbackCache[key] = wrapped;
+          callbackCache[key] = wrapped;
         }
 
         return wrapped;
