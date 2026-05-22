@@ -127,6 +127,17 @@ function buildResolvedTheme(theme: ResolvedShikiTheme): ResolvedTreeTheme {
 // palettes like pierre-light-soft (~4.4:1) untouched.
 const MIN_READABLE_RATIO = 3;
 
+// Muted chrome text ("Diff Stats", "System Monitor", "Comments", file
+// counts, empty-state copy) is normal-size body text, so we hold its
+// threshold at WCAG AA normal-text (4.5:1) rather than the large-text
+// floor used for the primary fg. Several VS Code themes set
+// `descriptionForeground` to a value that doubles as the editor comment
+// color and clears 3:1 but not 4.5:1 — ayu-dark's `#5a6378` on `#0d1017`
+// (~3.27:1) is the canonical case. We'd rather lose the muted/primary
+// hierarchy on those themes than ship sidebar text that fades into the
+// background.
+const MIN_MUTED_RATIO = 4.5;
+
 function pickReadableForeground(
   bg: string | undefined,
   candidates: ReadonlyArray<string | undefined>
@@ -158,11 +169,11 @@ function contrastRatio(la: number, lb: number): number {
 }
 
 // Returns the theme's descriptionForeground when it's readable enough
-// (>= 3:1 against the chrome bg). Hex-with-alpha values like aurora-x's
-// `#576daf79` are composited over the bg first, since rgba previews don't
-// reach AA on their own. Returns undefined when the value is missing,
-// unparseable, or fails the contrast bar — letting the call site fall
-// back to primaryFg so the chrome stays uniformly bright.
+// (>= MIN_MUTED_RATIO against the chrome bg). Hex-with-alpha values like
+// aurora-x's `#576daf79` are composited over the bg first, since rgba
+// previews don't reach AA on their own. Returns undefined when the value
+// is missing, unparseable, or fails the contrast bar — letting the call
+// site fall back to a derived muted (or primaryFg when no bg is known).
 function pickReadableMuted(
   bg: string | undefined,
   mutedCandidate: string | undefined
@@ -177,9 +188,40 @@ function pickReadableMuted(
     // colors).
     return mutedCandidate;
   }
-  return contrastRatio(bgL, compositedL) >= MIN_READABLE_RATIO
+  return contrastRatio(bgL, compositedL) >= MIN_MUTED_RATIO
     ? mutedCandidate
     : undefined;
+}
+
+// Mixes primaryFg toward bg until the result clears MIN_MUTED_RATIO,
+// stepping from a strong-hierarchy 60% blend up to 100% (== primaryFg).
+// Returning primaryFg as a final fallback flattens the muted/primary
+// hierarchy on extreme palettes, which is the correct tradeoff: dim but
+// legible chrome beats stylish but unreadable chrome. Falls back to a
+// CSS `color-mix` expression when either input isn't a parseable hex —
+// the browser can still composite, we just can't verify the contrast.
+function deriveMutedFg(primaryFg: string, bg: string | undefined): string {
+  if (bg == null) return primaryFg;
+  const fgParts = parseHexRgba(primaryFg);
+  const bgParts = parseHexRgba(bg);
+  const bgL = relativeLuminance(bg);
+  if (fgParts == null || bgParts == null || bgL == null) {
+    return `color-mix(in srgb, ${primaryFg} 70%, ${bg})`;
+  }
+  const [fr, fg2, fb] = fgParts;
+  const [br, bg3, bb] = bgParts;
+  for (const weight of [0.6, 0.7, 0.8, 0.9]) {
+    const r = Math.round(fr * weight + br * (1 - weight));
+    const g = Math.round(fg2 * weight + bg3 * (1 - weight));
+    const b = Math.round(fb * weight + bb * (1 - weight));
+    const hex =
+      '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+    const L = relativeLuminance(hex);
+    if (L != null && contrastRatio(bgL, L) >= MIN_MUTED_RATIO) {
+      return hex;
+    }
+  }
+  return primaryFg;
 }
 
 // Composites a hex (`#rrggbb` or `#rrggbbaa`) candidate over a hex
@@ -336,17 +378,21 @@ export function buildThemeChromeStyle(
     style['--color-foreground'] = primaryFg;
     style['--foreground'] = primaryFg;
     // The chrome (file tree, sidebar status panel, header, comments list)
-    // wants a single high-contrast text color across labels, icons, and
-    // values — the visual hierarchy comes from layout, not from fading the
-    // labels. Pull muted up to the same level as primary unless the theme
-    // ships a descriptionForeground that's actually legible (>= 3:1 on the
-    // sidebar bg). Aurora-X is the cautionary tale: its
-    // descriptionForeground is `#576daf79` (#576daf at ~47% alpha) which
-    // reads as ~1.8:1 on the dark navy surface — silently using it leaves
-    // the unselected tab icons, the empty-comments copy, and every
-    // `text-muted-foreground` consumer in the chrome essentially
-    // invisible.
-    const muted = pickReadableMuted(bg, activeTheme.mutedFg) ?? primaryFg;
+    // wants muted text that's softer than the primary fg for visual
+    // hierarchy, but still hits WCAG AA normal-text (~4.5:1) on the
+    // sidebar bg. We honour the theme's `descriptionForeground` when it
+    // clears that bar, fall back to a mix of primaryFg into bg when it
+    // doesn't, and only flatten down to primaryFg as a last resort. Two
+    // cautionary tales:
+    //   - Aurora-X sets descriptionForeground to `#576daf79` (~1.8:1
+    //     composited over the dark navy sidebar). Using it leaves
+    //     unselected tab icons and the empty-comments copy invisible.
+    //   - ayu-dark sets it to `#5a6378` (~3.27:1 on `#0d1017`) — clears
+    //     large-text 3:1 but fails normal-text 4.5:1, which is the bar
+    //     these chrome labels need to meet.
+    const muted =
+      pickReadableMuted(bg, activeTheme.mutedFg) ??
+      deriveMutedFg(primaryFg, bg);
     style['--color-muted-foreground'] = muted;
     style['--muted-foreground'] = muted;
     const border = `color-mix(in srgb, ${primaryFg} 20%, transparent)`;
