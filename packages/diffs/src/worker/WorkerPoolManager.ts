@@ -82,7 +82,7 @@ interface ManagedWorker {
 }
 
 interface ThemeSubscriber {
-  rerender(): void;
+  onThemeChange(): void;
 }
 
 type RenderTask = RenderFileTask | RenderDiffTask;
@@ -253,7 +253,7 @@ export class WorkerPoolManager {
       this.fileCache.clear();
 
       for (const instance of this.themeSubscribers) {
-        instance.rerender();
+        instance.onThemeChange();
       }
     } catch (error) {
       if (

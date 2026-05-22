@@ -668,6 +668,10 @@ export class FileDiff<LAnnotation = undefined> {
     this.render({ forceRender: true, renderRange: this.renderRange });
   }
 
+  public onThemeChange(): void {
+    this.rerender();
+  }
+
   // This wrapper must stay separate from `expandHunk` because subclasses like
   // `VirtualizedFileDiff` replace `expandHunk` with their own instance field
   // after `super()` returns. `InteractionManager` is created in this base

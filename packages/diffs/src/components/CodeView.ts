@@ -763,6 +763,7 @@ export class CodeView<LAnnotation = undefined> {
     if (this.root != null) {
       throw new Error('CodeView.setup: already setup');
     }
+    this.workerManager?.subscribeToThemeChanges(this);
     this.root = root;
     this.root.style.overflowAnchor = 'none';
     this.container ??= document.createElement('div');
@@ -861,6 +862,7 @@ export class CodeView<LAnnotation = undefined> {
     this.reset();
     this.clearElementPool();
     this.restoreScrollInteractions();
+    this.workerManager?.unsubscribeToThemeChanges(this);
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
     this.root?.removeEventListener('scroll', this.handleScroll);
@@ -1187,6 +1189,10 @@ export class CodeView<LAnnotation = undefined> {
       this.layoutDirtyIndex == null &&
       appendedTop > this.windowSpecs.bottom
     );
+  }
+
+  public onThemeChange(): void {
+    this.clearElementPool();
   }
 
   public setOptions(options: CodeViewOptions<LAnnotation> | undefined): void {

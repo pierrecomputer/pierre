@@ -191,6 +191,10 @@ export class File<LAnnotation = undefined> {
     });
   }
 
+  public onThemeChange(): void {
+    this.rerender();
+  }
+
   public setOptions(options: FileOptions<LAnnotation> | undefined): void {
     if (options == null) return;
     this.options = options;
