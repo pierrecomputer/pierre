@@ -65,9 +65,7 @@ interface ActiveDraftComment {
 
 interface CodeViewWrapperProps {
   className?: string;
-  darkTheme: string;
   diffStyle: 'split' | 'unified';
-  lightTheme: string;
   onCommentDeleted(comment: CodeViewDeletedCommentEvent): void;
   onCommentSaved(comment: CodeViewSavedCommentEvent): void;
   overflow: 'wrap' | 'scroll';
@@ -84,9 +82,7 @@ interface CodeViewWrapperProps {
 
 export const CodeViewWrapper = memo(function CodeViewWrapper({
   className,
-  darkTheme,
   diffStyle,
-  lightTheme,
   onCommentDeleted,
   onCommentSaved,
   overflow,
@@ -424,7 +420,6 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         // Use this to validate itemMetrics when changing layout with unsafeCSS.
         // __devOnlyValidateItemHeights: true,
         layout: CODE_VIEW_LAYOUT,
-        theme: { dark: darkTheme, light: lightTheme },
         themeType,
         diffStyle,
         diffIndicators,
@@ -449,12 +444,10 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         },
       }) satisfies CodeViewOptions<CommentMetadata>,
     [
-      darkTheme,
       diffIndicators,
       diffStyle,
       handleCreateDraftComment,
       handleLineSelectionEnd,
-      lightTheme,
       lineNumbers,
       overflow,
       showBackgrounds,
