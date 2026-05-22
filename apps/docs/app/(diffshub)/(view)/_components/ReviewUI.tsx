@@ -289,7 +289,9 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
           <CodeViewWrapper
             key={viewerKey}
             className="[grid-area:viewer]"
+            darkTheme={darkTheme}
             diffStyle={diffStyle}
+            lightTheme={lightTheme}
             overflow={overflow}
             showBackgrounds={showBackgrounds}
             diffIndicators={diffIndicators}
