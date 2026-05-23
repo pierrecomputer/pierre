@@ -12,9 +12,10 @@ const ICON_SVG_BY_SITE: Record<ProductId, string> = {
   diffshub: '/diffshub-brand/icon.svg',
 };
 
-// diffshub behaves like a standalone app (viewport-fit cover, no browser
-// chrome desired), while the diffs/trees sites are primarily documentation
-// and benefit from keeping browser navigation controls visible.
+// Chrome needs ≥192px for icon, ≥512px for the splash-screen
+const APPLE_ICON_SIZE = '640x640';
+
+// diffshub behaves like a standalone app (viewport-fit cover, no browser chrome desired), while the diffs/trees sites are primarily documentation and benefit from keeping browser navigation controls visible.
 const DISPLAY_BY_SITE: Record<ProductId, MetadataRoute.Manifest['display']> = {
   diffs: 'minimal-ui',
   trees: 'minimal-ui',
@@ -60,13 +61,13 @@ export default function manifest(): MetadataRoute.Manifest {
       {
         src: `/${SITE}-brand/apple-icon.png`,
         type: 'image/png',
-        sizes: '180x180',
+        sizes: APPLE_ICON_SIZE,
         purpose: 'any',
       },
       {
         src: `/${SITE}-brand/apple-icon.png`,
         type: 'image/png',
-        sizes: '180x180',
+        sizes: APPLE_ICON_SIZE,
         purpose: 'maskable',
       },
     ],
