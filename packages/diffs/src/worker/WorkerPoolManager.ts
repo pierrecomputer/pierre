@@ -75,7 +75,8 @@ interface GetCachesResult {
 
 interface ManagedWorker {
   worker: Worker;
-  request_id: string | undefined;
+  requestId: string | undefined;
+  pendingSetupRequestId: WorkerRequestId | undefined;
   initialized: boolean;
   langs: Set<SupportedLanguages>;
   customExtensionsVersion: number;
@@ -93,6 +94,7 @@ export class WorkerPoolManager {
   private highlighter: DiffsHighlighter | undefined;
   private readonly preferredHighlighter: HighlighterTypes;
   private renderOptions: WorkerRenderingOptions;
+  private renderOptionsRequestVersion = 0;
   private renderOptionsVersion = 0;
   private initialized: Promise<void> | boolean = false;
   private workers: ManagedWorker[] = [];
@@ -193,6 +195,10 @@ export class WorkerPoolManager {
     tokenizeMaxLineLength = 1000,
   }: Partial<WorkerRenderingOptions>): Promise<void> {
     const { lifecycleGeneration } = this;
+    const renderOptionsRequestVersion = ++this.renderOptionsRequestVersion;
+    const isCurrentRequest = (): boolean =>
+      this.isCurrentLifecycle(lifecycleGeneration) &&
+      this.renderOptionsRequestVersion === renderOptionsRequestVersion;
     try {
       const newRenderOptions: WorkerRenderingOptions = {
         theme,
@@ -205,7 +211,7 @@ export class WorkerPoolManager {
         await this.initialize();
       }
       if (
-        !this.isCurrentLifecycle(lifecycleGeneration) ||
+        !isCurrentRequest() ||
         areDiffRenderOptionsEqual(newRenderOptions, this.renderOptions)
       ) {
         return;
@@ -221,45 +227,42 @@ export class WorkerPoolManager {
         }
       }
 
-      if (!this.isCurrentLifecycle(lifecycleGeneration)) {
+      if (!isCurrentRequest()) {
         return;
       }
 
       if (this.highlighter != null) {
         attachResolvedThemes(resolvedThemes, this.highlighter);
-        await this.setRenderOptionsOnWorkers(newRenderOptions, resolvedThemes);
       } else {
-        const [highlighter] = await Promise.all([
-          getSharedHighlighter({
-            themes: themeNames,
-            langs: ['text'],
-            preferredHighlighter: this.preferredHighlighter,
-          }),
-          this.setRenderOptionsOnWorkers(newRenderOptions, resolvedThemes),
-        ]);
-        if (!this.isCurrentLifecycle(lifecycleGeneration)) {
+        const highlighter = await getSharedHighlighter({
+          themes: themeNames,
+          langs: ['text'],
+          preferredHighlighter: this.preferredHighlighter,
+        });
+        if (!isCurrentRequest()) {
           return;
         }
         this.highlighter = highlighter;
       }
 
-      if (!this.isCurrentLifecycle(lifecycleGeneration)) {
-        return;
-      }
+      const workerSetup = this.setRenderOptionsOnWorkers(
+        newRenderOptions,
+        resolvedThemes
+      );
 
       this.renderOptions = newRenderOptions;
       this.renderOptionsVersion++;
       this.diffCache.clear();
       this.fileCache.clear();
+      this.invalidateRenderTasks();
 
       for (const instance of this.themeSubscribers) {
         instance.onThemeChange();
       }
+
+      await workerSetup;
     } catch (error) {
-      if (
-        error instanceof WorkerPoolTerminatedError ||
-        !this.isCurrentLifecycle(lifecycleGeneration)
-      ) {
+      if (error instanceof WorkerPoolTerminatedError || !isCurrentRequest()) {
         return;
       }
       throw error;
@@ -310,10 +313,10 @@ export class WorkerPoolManager {
             reject,
             requestStart: Date.now(),
           };
-          // NOTE(amadeus): We intentionally ignore the normal active requests
-          // infra because these tasks should technically interrupt the normal
-          // flow and should be processed by the worker when ready immediately
+          // Render-option updates are posted immediately, but the worker stays
+          // unavailable for new render work until it acknowledges this message.
           this.activeTaskById.set(id, task);
+          managedWorker.pendingSetupRequestId = id;
           managedWorker.worker.postMessage(task.request);
         })
       );
@@ -472,7 +475,8 @@ export class WorkerPoolManager {
       const worker = this.options.workerFactory();
       const managedWorker: ManagedWorker = {
         worker,
-        request_id: undefined,
+        requestId: undefined,
+        pendingSetupRequestId: undefined,
         initialized: false,
         langs: new Set(['text', ...resolvedLanguages.map(({ name }) => name)]),
         customExtensionsVersion: 0,
@@ -740,7 +744,9 @@ export class WorkerPoolManager {
       })(),
       totalWorkers: this.workers.length,
       workersFailed: this.workersFailed,
-      busyWorkers: this.workers.filter((w) => w.request_id != null).length,
+      busyWorkers: this.workers.filter(
+        (w) => w.requestId != null || w.pendingSetupRequestId != null
+      ).length,
       queuedTasks: this.queuedTasks.length,
       activeTasks: this.activeTaskById.size,
       themeSubscribers: this.themeSubscribers.size,
@@ -780,6 +786,7 @@ export class WorkerPoolManager {
     this.detachInstanceFromQueuedTasks(instance);
     const id = this.generateRequestId();
     const requestStart = Date.now();
+    const { renderOptionsVersion } = this;
     const task: RenderTask = (() => {
       switch (request.type) {
         case 'file':
@@ -790,6 +797,7 @@ export class WorkerPoolManager {
             instances: new Set([instance as FileRendererInstance]),
             primeCache: false,
             highlightKey,
+            renderOptionsVersion,
             requestStart,
           };
         case 'diff':
@@ -800,6 +808,7 @@ export class WorkerPoolManager {
             instances: new Set([instance as DiffRendererInstance]),
             primeCache: false,
             highlightKey,
+            renderOptionsVersion,
             requestStart,
           };
       }
@@ -813,6 +822,7 @@ export class WorkerPoolManager {
     }
     const id = this.generateRequestId();
     const requestStart = Date.now();
+    const { renderOptionsVersion } = this;
     const task: RenderTask = (() => {
       switch (request.type) {
         case 'file':
@@ -823,6 +833,7 @@ export class WorkerPoolManager {
             instances: new Set<FileRendererInstance>(),
             primeCache: true,
             highlightKey,
+            renderOptionsVersion,
             requestStart,
           };
         case 'diff':
@@ -833,6 +844,7 @@ export class WorkerPoolManager {
             instances: new Set<DiffRendererInstance>(),
             primeCache: true,
             highlightKey,
+            renderOptionsVersion,
             requestStart,
           };
       }
@@ -877,7 +889,7 @@ export class WorkerPoolManager {
       // If the task has been cleaned up after awaiting language resolving,
       // lets fully clean it up
       if (!this.activeTaskById.has(task.id)) {
-        if (availableWorker.request_id === task.id) {
+        if (availableWorker.requestId === task.id) {
           this.cleanWorkerAndTask(availableWorker, task);
           this.queueBroadcastStateChanges();
           if (this.queuedTasks.length > 0) {
@@ -939,6 +951,12 @@ export class WorkerPoolManager {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
             const { result, options } = response;
+            if (
+              !this.isCurrentRenderTask(task) ||
+              !areFileRenderOptionsEqual(options, this.getFileRenderOptions())
+            ) {
+              throw IGNORE_RESPONSE;
+            }
             const { request } = task;
             this.syncCustomExtensionVersion(managedWorker, request);
             if (request.file.cacheKey != null) {
@@ -952,6 +970,12 @@ export class WorkerPoolManager {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
             const { result, options } = response;
+            if (
+              !this.isCurrentRenderTask(task) ||
+              !areDiffRenderOptionsEqual(options, this.getDiffRenderOptions())
+            ) {
+              throw IGNORE_RESPONSE;
+            }
             const { request } = task;
             this.syncCustomExtensionVersion(managedWorker, request);
             if (request.diff.cacheKey != null) {
@@ -968,7 +992,7 @@ export class WorkerPoolManager {
       }
     }
 
-    this.cleanWorkerAndTask(managedWorker, task);
+    this.cleanWorkerAndTask(managedWorker, task, response.id);
     this.queueBroadcastStateChanges();
     if (this.queuedTasks.length > 0) {
       // We queue drain so that potentially multiple workers can free up
@@ -988,7 +1012,7 @@ export class WorkerPoolManager {
     task: AllWorkerTasks,
     managedWorker: ManagedWorker
   ) {
-    managedWorker.request_id = task.id;
+    managedWorker.requestId = task.id;
     if (isRenderTask(task)) {
       this.clearQueuedInstanceRequests(task);
       this.trackInstanceRequests(task);
@@ -998,9 +1022,15 @@ export class WorkerPoolManager {
 
   private cleanWorkerAndTask(
     managedWorker: ManagedWorker,
-    task?: AllWorkerTasks
+    task?: AllWorkerTasks,
+    requestId: WorkerRequestId | undefined = task?.id
   ) {
-    managedWorker.request_id = undefined;
+    if (managedWorker.requestId === requestId) {
+      managedWorker.requestId = undefined;
+    }
+    if (managedWorker.pendingSetupRequestId === requestId) {
+      managedWorker.pendingSetupRequestId = undefined;
+    }
     if (task != null) {
       if (isRenderTask(task)) {
         this.clearInstanceRequests(task);
@@ -1070,7 +1100,11 @@ export class WorkerPoolManager {
   ): ManagedWorker | undefined {
     let worker: ManagedWorker | undefined;
     for (const managedWorker of this.workers) {
-      if (managedWorker.request_id != null || !managedWorker.initialized) {
+      if (
+        managedWorker.requestId != null ||
+        managedWorker.pendingSetupRequestId != null ||
+        !managedWorker.initialized
+      ) {
         continue;
       }
       worker = managedWorker;
@@ -1182,6 +1216,24 @@ export class WorkerPoolManager {
     this.activeTaskById.delete(task.id);
   }
 
+  private invalidateRenderTasks(): void {
+    for (let index = this.queuedTasks.length - 1; index >= 0; index--) {
+      const task = this.queuedTasks[index];
+      if (task.renderOptionsVersion !== this.renderOptionsVersion) {
+        this.removeQueuedTask(task);
+      }
+    }
+
+    for (const task of Array.from(this.activeTaskById.values())) {
+      if (
+        isRenderTask(task) &&
+        task.renderOptionsVersion !== this.renderOptionsVersion
+      ) {
+        this.removeActiveTask(task);
+      }
+    }
+  }
+
   private clearQueuedInstanceRequests(task: RenderTask): void {
     for (const instance of getInstances(task)) {
       if (this.queuedTaskByInstance.get(instance) === task) {
@@ -1252,6 +1304,7 @@ export class WorkerPoolManager {
     for (const task of this.iterateRenderTasks()) {
       if (
         task.type === 'file' &&
+        this.isCurrentRenderTask(task) &&
         task.instances.has(instance) &&
         areFilesEqual(file, task.request.file)
       ) {
@@ -1268,6 +1321,7 @@ export class WorkerPoolManager {
     for (const task of this.iterateRenderTasks()) {
       if (
         task.type === 'diff' &&
+        this.isCurrentRenderTask(task) &&
         task.instances.has(instance) &&
         areDiffTargetsEqual(task.request.diff, diff)
       ) {
@@ -1278,7 +1332,12 @@ export class WorkerPoolManager {
   }
 
   private getTaskByHighlightKey(highlightKey: string): RenderTask | undefined {
-    return this.taskByHighlightKey.get(highlightKey);
+    const task = this.taskByHighlightKey.get(highlightKey);
+    return task != null && this.isCurrentRenderTask(task) ? task : undefined;
+  }
+
+  private isCurrentRenderTask(task: RenderTask): boolean {
+    return task.renderOptionsVersion === this.renderOptionsVersion;
   }
 
   private *iterateRenderTasks(): Generator<RenderTask> {
