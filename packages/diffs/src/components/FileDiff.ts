@@ -674,6 +674,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   public onThemeChange(): void {
+    this.hunksRenderer.clearRenderCache();
     this.rerender();
   }
 

@@ -192,6 +192,7 @@ export class File<LAnnotation = undefined> {
   }
 
   public onThemeChange(): void {
+    this.fileRenderer.clearRenderCache();
     this.rerender();
   }
 

@@ -193,6 +193,7 @@ export interface RenderFileTask {
   // regardless of whether there's any instances subscribed to the task
   primeCache: boolean;
   highlightKey?: string;
+  renderOptionsVersion: number;
   requestStart: number;
 }
 
@@ -205,6 +206,7 @@ export interface RenderDiffTask {
   // regardless of whether there's any instances subscribed to the task
   primeCache: boolean;
   highlightKey?: string;
+  renderOptionsVersion: number;
   requestStart: number;
 }
 

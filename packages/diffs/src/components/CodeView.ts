@@ -464,8 +464,6 @@ const SCROLL_REBASE_TARGET_BOTTOM =
   SCROLL_REBASE_CONTAINER_HEIGHT - SCROLL_REBASE_TARGET_TOP;
 const SCROLL_REBASE_THRESHOLD =
   SCROLL_REBASE_CONTAINER_HEIGHT - SCROLL_REBASE_TRIGGER_TOP;
-const CODE_VIEW_ELEMENT_POOL_LIMIT = 32;
-
 interface ScrollToAnimation {
   position: number;
   velocity: number;
@@ -591,6 +589,8 @@ export class CodeView<LAnnotation = undefined> {
   private stickyContainer = document.createElement('div');
   private stickyOffset = document.createElement('div');
   private elementPool: HTMLElement[] = [];
+  private elementPoolVersion = 0;
+  private elementPoolTracker = new WeakMap<HTMLElement, number>();
   // Container-managed elements may still have externally-owned light DOM slot
   // children after release, so hold them here until they are safe to reuse.
   // i.e. the react CodeView component will require a separate react cleanup
@@ -907,9 +907,30 @@ export class CodeView<LAnnotation = undefined> {
     item.instance.primeHighlightCache();
   }
 
+  private getElementPoolLimit() {
+    const viewportSize = this.getHeight() + this.config.overscrollSize * 2;
+    const { diffHeaderHeight } = this.itemMetricsCache;
+    // The goal here roughly is to hold an element pool that's maxed out at
+    // around the size of all collapsed files, doubled if `isContainerManaged`
+    // because we have to wait an additional render tick to actually re-use the
+    // elements
+    return (
+      Math.max(
+        8,
+        Math.ceil(viewportSize / Math.max(diffHeaderHeight, 10)) + 1
+      ) * (this.isContainerManaged ? 2 : 1)
+    );
+  }
+
   private acquireElement(): HTMLElement {
     this.promotePendingPooledElements();
-    return this.elementPool.pop() ?? document.createElement(DIFFS_TAG_NAME);
+    let element = this.elementPool.pop();
+    while (element != null && !this.isElementPoolGenerationCurrent(element)) {
+      element = this.elementPool.pop();
+    }
+    element ??= document.createElement(DIFFS_TAG_NAME);
+    this.markElementPoolGenerationCurrent(element);
+    return element;
   }
 
   private releaseRenderedItem(item: CodeViewContextItem<LAnnotation>): void {
@@ -921,13 +942,14 @@ export class CodeView<LAnnotation = undefined> {
     }
 
     element.remove();
-    this.cleanElementForPool(element);
+    this.cleanElement(element);
     this.queueElementForPool(element);
   }
 
   // Strip item-specific DOM while keeping the expensive shared shell assets
-  // that are valid for every item in this CodeView until shared options change.
-  private cleanElementForPool(element: HTMLElement): void {
+  // that are valid for every item in this CodeView until shared options
+  // change.
+  private cleanElement(element: HTMLElement): void {
     const { shadowRoot } = element;
     if (shadowRoot != null) {
       for (const child of Array.from(shadowRoot.children)) {
@@ -943,7 +965,11 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   private queueElementForPool(element: HTMLElement): void {
-    if (this.getElementPoolSize() >= CODE_VIEW_ELEMENT_POOL_LIMIT) {
+    const poolLimit = this.getElementPoolLimit();
+    if (
+      !this.isElementPoolGenerationCurrent(element) ||
+      this.getElementPoolSize() >= poolLimit
+    ) {
       return;
     }
 
@@ -961,13 +987,18 @@ export class CodeView<LAnnotation = undefined> {
 
     const { pendingElementPool: pendingElements } = this;
     this.pendingElementPool = [];
+    const poolLimit = this.getElementPoolLimit();
     for (const element of pendingElements) {
       if (
+        this.isElementPoolGenerationCurrent(element) &&
         this.isElementClean(element) &&
-        this.elementPool.length < CODE_VIEW_ELEMENT_POOL_LIMIT
+        this.elementPool.length < poolLimit
       ) {
         this.elementPool.push(element);
-      } else if (this.getElementPoolSize() < CODE_VIEW_ELEMENT_POOL_LIMIT) {
+      } else if (
+        this.isElementPoolGenerationCurrent(element) &&
+        this.getElementPoolSize() < poolLimit
+      ) {
         this.pendingElementPool.push(element);
       }
     }
@@ -984,6 +1015,19 @@ export class CodeView<LAnnotation = undefined> {
   private clearElementPool(): void {
     this.elementPool.length = 0;
     this.pendingElementPool.length = 0;
+  }
+
+  private invalidateElementPool(): void {
+    this.elementPoolVersion++;
+    this.clearElementPool();
+  }
+
+  private markElementPoolGenerationCurrent(element: HTMLElement): void {
+    this.elementPoolTracker.set(element, this.elementPoolVersion);
+  }
+
+  private isElementPoolGenerationCurrent(element: HTMLElement): boolean {
+    return this.elementPoolTracker.get(element) === this.elementPoolVersion;
   }
 
   private resolveEffectiveScrollBehavior(
@@ -1192,7 +1236,7 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   public onThemeChange(): void {
-    this.clearElementPool();
+    this.invalidateElementPool();
   }
 
   public setOptions(options: CodeViewOptions<LAnnotation> | undefined): void {
@@ -1206,7 +1250,7 @@ export class CodeView<LAnnotation = undefined> {
     const { itemMetricsCache: previousItemMetrics } = this;
 
     if (shouldClearPool(prevOptions, options)) {
-      this.clearElementPool();
+      this.invalidateElementPool();
     }
 
     this.options = options;

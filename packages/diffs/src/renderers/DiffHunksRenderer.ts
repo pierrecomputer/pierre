@@ -235,10 +235,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public recycle(): void {
     this.highlighter = undefined;
     this.diff = undefined;
-    this.renderCache = undefined;
+    this.clearRenderCache();
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
     this.workerManager?.cleanUpTasks(this);
+  }
+
+  public clearRenderCache(): void {
+    this.renderCache = undefined;
   }
 
   public setOptions(options: DiffHunksRendererOptions): void {
@@ -270,7 +274,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // NOTE(amadeus): If our render cache is not highlighted, we need to clear
     // it, otherwise we won't have the correct AST lines
     if (this.renderCache?.highlighted !== true) {
-      this.renderCache = undefined;
+      this.clearRenderCache();
     }
     this.expandedHunks.set(index, region);
   }
