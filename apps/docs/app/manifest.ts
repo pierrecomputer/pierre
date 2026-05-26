@@ -4,28 +4,21 @@ import { type ProductId, PRODUCTS } from '@/lib/product-config';
 
 const SITE = (process.env.NEXT_PUBLIC_SITE ?? 'diffs') as ProductId;
 
-// SVG icon path is per-site; diffs uses the root favicon since it predates
-// the *-brand directory convention.
-const ICON_SVG_BY_SITE: Record<ProductId, string> = {
-  diffs: '/favicon.svg',
-  trees: '/trees-brand/icon.svg',
-  diffshub: '/diffshub-brand/icon.svg',
-};
-
-// Chrome needs ≥192px for icon, ≥512px for the splash-screen
+// All apple-icon.png assets are 640×640, satisfying Chrome's ≥192px install
+// prompt and ≥512px splash-screen requirements.
 const APPLE_ICON_SIZE = '640x640';
 
-// diffshub behaves like a standalone app (viewport-fit cover, no browser chrome desired), while the diffs/trees sites are primarily documentation and benefit from keeping browser navigation controls visible.
+// diffshub is a full standalone app (viewport-fit cover); diffs and trees are
+// documentation sites that benefit from keeping browser navigation visible.
 const DISPLAY_BY_SITE: Record<ProductId, MetadataRoute.Manifest['display']> = {
   diffs: 'minimal-ui',
   trees: 'minimal-ui',
   diffshub: 'standalone',
 };
 
-// Match the body background per site. diffshub uses --diffshub-sidebar-bg
-// (#f7f7f7 light / #101010 dark) rather than the plain neutral palette used
-// by diffs and trees. The manifest only accepts one theme_color; we use the
-// light value since that pairs with the white background_color.
+// diffshub body uses --diffshub-sidebar-bg (#f7f7f7) rather than plain white.
+// The manifest only accepts a single theme_color, so we use the light value;
+// dark-mode tinting is handled via themeColor in the viewport export.
 const THEME_COLOR_BY_SITE: Record<ProductId, string> = {
   diffs: '#ffffff',
   trees: '#ffffff',
@@ -45,15 +38,12 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: 'any',
     lang: 'en',
     dir: 'ltr',
-    // Match the light-mode background. The dark-mode browser chrome tint is
-    // handled separately via themeColor in the viewport export, which supports
-    // media-query-based light/dark values that the manifest spec doesn't allow.
     background_color: '#ffffff',
     theme_color: THEME_COLOR_BY_SITE[SITE],
     categories: ['developer', 'productivity'],
     icons: [
       {
-        src: ICON_SVG_BY_SITE[SITE],
+        src: `/${SITE}-brand/icon.svg`,
         type: 'image/svg+xml',
         sizes: 'any',
         purpose: 'any',

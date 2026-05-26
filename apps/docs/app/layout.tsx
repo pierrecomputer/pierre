@@ -136,22 +136,22 @@ const description = SITE_PRODUCT.description;
 const SITE_ICONS_BY_SITE: Record<ProductId, Metadata['icons']> = {
   diffs: {
     icon: [
-      { url: '/favicon.svg', type: 'image/svg+xml' },
-      { url: '/favicon.png', type: 'image/png' },
+      { url: '/diffs-brand/icon.svg', type: 'image/svg+xml' },
+      { url: '/diffs-brand/icon.ico', sizes: '32x32' },
     ],
     apple: '/diffs-brand/apple-icon.png',
   },
   trees: {
     icon: [
       { url: '/trees-brand/icon.svg', type: 'image/svg+xml' },
-      { url: '/trees-brand/icon.ico', sizes: 'any' },
+      { url: '/trees-brand/icon.ico', sizes: '32x32' },
     ],
     apple: '/trees-brand/apple-icon.png',
   },
   diffshub: {
     icon: [
       { url: '/diffshub-brand/icon.svg', type: 'image/svg+xml' },
-      { url: '/diffshub-brand/icon.ico', sizes: 'any' },
+      { url: '/diffshub-brand/icon.ico', sizes: '32x32' },
     ],
     apple: '/diffshub-brand/apple-icon.png',
   },
