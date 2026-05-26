@@ -1,7 +1,12 @@
 import type { DiffIndicators } from '@pierre/diffs';
 import {
+  IconCheck,
+  IconChevronSm,
   IconCodeStyleBars,
   IconCollapsedRow,
+  IconColorAuto,
+  IconColorDark,
+  IconColorLight,
   IconDiffSplit,
   IconDiffUnified,
   IconExpandAll,
@@ -12,10 +17,27 @@ import {
   IconSymbolDiffstat,
 } from '@pierre/icons';
 import Link from 'next/link';
-import { type Dispatch, memo, type SetStateAction, useState } from 'react';
+import {
+  type CSSProperties,
+  type Dispatch,
+  memo,
+  type SetStateAction,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { DiffUrlForm } from '../../_components/DiffUrlForm';
 import { DiffsHubLogo } from './DiffsHubLogo';
+import {
+  type ColorMode,
+  DARK_THEMES,
+  type DarkTheme,
+  LIGHT_THEMES,
+  type LightTheme,
+} from './themes';
+import { useThemeChromeStyle } from './useResolvedTreeThemeStyles';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -29,21 +51,29 @@ import { cn } from '@/lib/utils';
 
 const SETTING_ROW_CLASS =
   'w-full flex cursor-pointer items-center justify-between gap-4 px-2 py-1.5 text-sm';
+const THEMED_DROPDOWN_CONTENT_CLASS =
+  'border-[var(--diffshub-popover-border,var(--color-border))] bg-[var(--diffshub-popover-bg,var(--color-popover))] text-[var(--diffshub-popover-fg,var(--color-popover-foreground))] shadow-[var(--diffshub-popover-shadow,0_10px_30px_rgb(0_0_0_/_0.15))]';
 
 interface HeaderProps {
   className?: string;
   collapseMode: 'expanded' | 'collapsed';
+  colorMode: ColorMode;
+  darkTheme: DarkTheme;
   diffIndicators: DiffIndicators;
   diffStyle: 'split' | 'unified';
   fileTreeAvailable: boolean;
   fileTreeOverlayOpen: boolean;
   initialUrl: string;
+  lightTheme: LightTheme;
   lineNumbers: boolean;
   overflow: 'wrap' | 'scroll';
   onToggleCollapseMode(): void;
   onToggleFileTreeOverlay(): void;
+  setColorMode(mode: ColorMode): void;
+  setDarkTheme: Dispatch<SetStateAction<DarkTheme>>;
   setDiffIndicators: Dispatch<SetStateAction<DiffIndicators>>;
   setDiffStyle: Dispatch<SetStateAction<'split' | 'unified'>>;
+  setLightTheme: Dispatch<SetStateAction<LightTheme>>;
   setLineNumbers: Dispatch<SetStateAction<boolean>>;
   setOverflow: Dispatch<SetStateAction<'wrap' | 'scroll'>>;
   setShowBackgrounds: Dispatch<SetStateAction<boolean>>;
@@ -53,17 +83,23 @@ interface HeaderProps {
 export const CodeViewHeader = memo(function CodeViewHeader({
   className,
   collapseMode,
+  colorMode,
+  darkTheme,
   diffIndicators,
   diffStyle,
   fileTreeAvailable,
   fileTreeOverlayOpen,
   initialUrl,
+  lightTheme,
   lineNumbers,
   overflow,
   onToggleCollapseMode,
   onToggleFileTreeOverlay,
+  setColorMode,
+  setDarkTheme,
   setDiffIndicators,
   setDiffStyle,
+  setLightTheme,
   setLineNumbers,
   setOverflow,
   setShowBackgrounds,
@@ -73,12 +109,24 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   // Only show the external-link button when the input still reflects the
   // committed URL — otherwise we'd be pointing at a draft the user is editing.
   const showExternalLink = currentUrl === initialUrl;
+  // Mirror the sidebar's themed chrome so the header bar lives on the same
+  // Shiki surface (background, text, icons, borders) instead of the global
+  // light/dark palette. Falls back to the diffshub-sidebar-bg CSS variable
+  // on first render while the theme is still resolving.
+  const themeChromeStyle = useThemeChromeStyle(lightTheme, darkTheme);
+  const dropdownThemeStyle = useMemo(
+    () => getDropdownThemeStyle(themeChromeStyle),
+    [themeChromeStyle]
+  );
   return (
     <div
       className={cn(
-        'z-10 contain-layout contain-paint flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 pb-2 px-4 md:px-3 md:py-1.5 border-b border-[var(--color-border-opaque)] bg-background md:bg-[var(--diffshub-sidebar-bg)]',
+        'z-10 contain-layout contain-paint flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 pb-2 px-4 md:px-3 md:py-1.5 border-b border-[var(--color-border-opaque)]',
+        themeChromeStyle == null &&
+          'bg-background md:bg-[var(--diffshub-sidebar-bg)]',
         className
       )}
+      style={themeChromeStyle}
     >
       <Link
         href="/"
@@ -164,17 +212,32 @@ export const CodeViewHeader = memo(function CodeViewHeader({
                 <IconCollapsedRow className="size-4 md:size-3" />
               )}
             </Button>
+            <ThemeDropdown
+              colorMode={colorMode}
+              darkTheme={darkTheme}
+              lightTheme={lightTheme}
+              setColorMode={setColorMode}
+              setDarkTheme={setDarkTheme}
+              setLightTheme={setLightTheme}
+              themeDropdownStyle={dropdownThemeStyle}
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-md"
+                  aria-label="Display settings"
+                  title="Display settings"
                   className="hover:text-muted-foreground hover:bg-transparent"
                 >
                   <IconGearFill className="size-4 md:size-3" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent
+                align="end"
+                className={cn('w-52', THEMED_DROPDOWN_CONTENT_CLASS)}
+                style={dropdownThemeStyle}
+              >
                 <DropdownMenuItem
                   className="cursor-default p-0"
                   onSelect={(e) => e.preventDefault()}
@@ -245,3 +308,262 @@ export const CodeViewHeader = memo(function CodeViewHeader({
     </div>
   );
 });
+
+function colorModeIcon(colorMode: ColorMode) {
+  if (colorMode === 'light') return IconColorLight;
+  if (colorMode === 'dark') return IconColorDark;
+  return IconColorAuto;
+}
+
+function getDropdownThemeStyle(
+  themeChromeStyle: CSSProperties | undefined
+): CSSProperties | undefined {
+  if (themeChromeStyle == null) {
+    return undefined;
+  }
+
+  return {
+    ...themeChromeStyle,
+    backgroundColor: 'var(--diffshub-popover-bg, var(--color-popover))',
+    borderColor: 'var(--diffshub-popover-border, var(--color-border))',
+    boxShadow: 'var(--diffshub-popover-shadow, 0 10px 30px rgb(0 0 0 / 0.15))',
+    color: 'var(--diffshub-popover-fg, var(--color-popover-foreground))',
+  };
+}
+
+interface ThemeDropdownProps {
+  colorMode: ColorMode;
+  darkTheme: DarkTheme;
+  lightTheme: LightTheme;
+  setColorMode(mode: ColorMode): void;
+  setDarkTheme: Dispatch<SetStateAction<DarkTheme>>;
+  setLightTheme: Dispatch<SetStateAction<LightTheme>>;
+  themeDropdownStyle?: CSSProperties;
+}
+
+// Theme picker shown next to the gear icon. Avoids horizontal sub-menus
+// (which overflow on narrow viewports) by re-using the same DropdownMenu
+// content for three "views" — main, light theme list, dark theme list —
+// switched via local state. The user enters a list by clicking the
+// corresponding row, picks a theme, and is returned to the main view. The
+// menu auto-resets to the main view whenever it closes so the next open
+// always starts from the top.
+function ThemeDropdown({
+  colorMode,
+  darkTheme,
+  lightTheme,
+  setColorMode,
+  setDarkTheme,
+  setLightTheme,
+  themeDropdownStyle,
+}: ThemeDropdownProps) {
+  const TriggerIcon = colorModeIcon(colorMode);
+  const [view, setView] = useState<'main' | 'light' | 'dark'>('main');
+  return (
+    // `modal={false}` lets the user scroll and click the code view while the
+    // theme picker is open. The default Radix DropdownMenu blocks pointer
+    // events outside its content (incl. wheel/scroll), which made the diff
+    // feel frozen while previewing themes.
+    <DropdownMenu
+      modal={false}
+      onOpenChange={(open) => {
+        if (!open) setView('main');
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-md"
+          aria-label="Theme settings"
+          title="Theme settings"
+          className="hover:text-muted-foreground hover:bg-transparent"
+        >
+          <TriggerIcon className="size-4 md:size-3" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className={cn('w-72 p-2', THEMED_DROPDOWN_CONTENT_CLASS)}
+        style={themeDropdownStyle}
+      >
+        {view === 'main' ? (
+          <>
+            <DropdownMenuItem
+              className="cursor-default p-1 focus:bg-transparent"
+              onSelect={(event) => event.preventDefault()}
+            >
+              <ButtonGroup
+                className="w-full"
+                value={colorMode}
+                onValueChange={(value) => {
+                  if (
+                    value === 'system' ||
+                    value === 'light' ||
+                    value === 'dark'
+                  ) {
+                    setColorMode(value);
+                  }
+                }}
+              >
+                <ButtonGroupItem value="system" className="flex-1">
+                  <IconColorAuto />
+                  Auto
+                </ButtonGroupItem>
+                <ButtonGroupItem value="light" className="flex-1">
+                  <IconColorLight />
+                  Light
+                </ButtonGroupItem>
+                <ButtonGroupItem value="dark" className="flex-1">
+                  <IconColorDark />
+                  Dark
+                </ButtonGroupItem>
+              </ButtonGroup>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="mt-1 flex cursor-pointer items-center gap-2"
+              onSelect={(event) => {
+                event.preventDefault();
+                setView('light');
+              }}
+            >
+              <IconColorLight />
+              <span className="min-w-0 flex-1 truncate">{lightTheme}</span>
+              <IconChevronSm
+                aria-hidden
+                className="text-muted-foreground -rotate-90"
+              />
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="flex cursor-pointer items-center gap-2"
+              onSelect={(event) => {
+                event.preventDefault();
+                setView('dark');
+              }}
+            >
+              <IconColorDark />
+              <span className="min-w-0 flex-1 truncate">{darkTheme}</span>
+              <IconChevronSm
+                aria-hidden
+                className="text-muted-foreground -rotate-90"
+              />
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <ThemeList
+            view={view}
+            currentLight={lightTheme}
+            currentDark={darkTheme}
+            onBack={() => setView('main')}
+            onPickLight={(theme) => {
+              setLightTheme(theme);
+              setColorMode('light');
+              setView('main');
+            }}
+            onPickDark={(theme) => {
+              setDarkTheme(theme);
+              setColorMode('dark');
+              setView('main');
+            }}
+          />
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+interface ThemeListProps {
+  view: 'light' | 'dark';
+  currentLight: LightTheme;
+  currentDark: DarkTheme;
+  onBack(): void;
+  onPickLight(theme: LightTheme): void;
+  onPickDark(theme: DarkTheme): void;
+}
+
+// Inline list of theme names shown after the user enters the light or dark
+// "view" from the main panel. The list is keyboard-friendly (each row is a
+// DropdownMenuItem) and scrolls in place so it fits inside the same
+// dropdown content even on narrow viewports.
+function ThemeList({
+  view,
+  currentLight,
+  currentDark,
+  onBack,
+  onPickLight,
+  onPickDark,
+}: ThemeListProps) {
+  const isLight = view === 'light';
+  const themes = isLight ? LIGHT_THEMES : DARK_THEMES;
+  const current = isLight ? currentLight : currentDark;
+  const HeaderIcon = isLight ? IconColorLight : IconColorDark;
+  // Auto-scroll so the currently-selected row sits at the second visible
+  // position when the list opens. The current theme lands right under the
+  // user's cursor (Radix opens the menu under the trigger) and the row
+  // above it makes the previous theme easy to reach with one tap of the
+  // up arrow — sequential browsing through themes feels natural without
+  // the user having to hunt for the active row first.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const selectedItemRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    const selected = selectedItemRef.current;
+    if (container == null || selected == null) return;
+    // `offsetTop` measures from the nearest positioned ancestor, which the
+    // scroll container is not — use bounding rects so the math works
+    // regardless of where ancestors set `position`. Subtract one row
+    // height so the selected row appears as the second-from-top visible
+    // row instead of flush with the top.
+    const containerTop = container.getBoundingClientRect().top;
+    const selectedTop = selected.getBoundingClientRect().top;
+    const offsetWithinScroll = selectedTop - containerTop + container.scrollTop;
+    const rowHeight = selected.offsetHeight;
+    container.scrollTop = Math.max(0, offsetWithinScroll - rowHeight);
+  }, [view]);
+  return (
+    <>
+      <DropdownMenuItem
+        className="flex cursor-pointer items-center gap-2"
+        onSelect={(event) => {
+          event.preventDefault();
+          onBack();
+        }}
+      >
+        <IconChevronSm
+          aria-hidden
+          className="text-muted-foreground rotate-90"
+        />
+        <HeaderIcon />
+        <span className="flex-1 truncate">
+          {isLight ? 'Light theme' : 'Dark theme'}
+        </span>
+      </DropdownMenuItem>
+      <div
+        ref={scrollContainerRef}
+        className="cv-mini-scrollbar mt-1 max-h-[320px] overflow-y-auto overscroll-contain"
+      >
+        {themes.map((theme) => (
+          <DropdownMenuItem
+            key={theme}
+            ref={current === theme ? selectedItemRef : undefined}
+            onSelect={(event) => {
+              event.preventDefault();
+              if (isLight) {
+                onPickLight(theme as LightTheme);
+              } else {
+                onPickDark(theme as DarkTheme);
+              }
+            }}
+            selected={current === theme}
+          >
+            <span className="flex-1 truncate">{theme}</span>
+            {current === theme ? (
+              <IconCheck className="ml-auto" />
+            ) : (
+              <div className="ml-2 h-4 w-4" />
+            )}
+          </DropdownMenuItem>
+        ))}
+      </div>
+    </>
+  );
+}

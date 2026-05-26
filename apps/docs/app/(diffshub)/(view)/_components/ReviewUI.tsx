@@ -15,6 +15,15 @@ import { CodeViewHeader } from './CodeViewHeader';
 import { CodeViewSidebar } from './CodeViewSidebar';
 import { CodeViewStatusPanel } from './CodeViewStatusPanel';
 import { CodeViewWrapper } from './CodeViewWrapper';
+import {
+  type ColorMode,
+  DARK_THEMES,
+  type DarkTheme,
+  DEFAULT_DARK_THEME,
+  DEFAULT_LIGHT_THEME,
+  LIGHT_THEMES,
+  type LightTheme,
+} from './themes';
 import type {
   CodeViewDeletedCommentEvent,
   CodeViewSavedCommentEntry,
@@ -22,10 +31,15 @@ import type {
   CommentMetadata,
 } from './types';
 import { usePatchLoader } from './usePatchLoader';
+import { usePersistedState } from './usePersistedState';
 import {
   removeSavedCommentSidebarEntry,
   upsertSavedCommentSidebarEntry,
 } from './utils';
+import { useTheme } from '@/components/theme-provider';
+
+const LIGHT_THEME_STORAGE_KEY = 'diffshub-light-theme';
+const DARK_THEME_STORAGE_KEY = 'diffshub-dark-theme';
 
 interface ReviewUIProps {
   domain?: string;
@@ -46,6 +60,27 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   const [showBackgrounds, setShowBackgrounds] = useState(true);
   const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
   const [lineNumbers, setLineNumbers] = useState(true);
+  // Light/dark theme picks persist across reloads via localStorage. The
+  // hook reads after mount (not during render) so the SSR markup always
+  // uses the defaults and React's hydration check stays happy.
+  const [lightTheme, setLightTheme] = usePersistedState<LightTheme>(
+    LIGHT_THEME_STORAGE_KEY,
+    DEFAULT_LIGHT_THEME,
+    LIGHT_THEMES
+  );
+  const [darkTheme, setDarkTheme] = usePersistedState<DarkTheme>(
+    DARK_THEME_STORAGE_KEY,
+    DEFAULT_DARK_THEME,
+    DARK_THEMES
+  );
+  // The diffshub UI shares its color mode with the surrounding ThemeProvider
+  // so picking Auto/Light/Dark flips both the CodeView's `themeType` and the
+  // app's <html> light/dark class (the tree sidebar, header, etc.).
+  // `theme` from useTheme() can briefly be undefined during initial mount
+  // before localStorage is read; fall back to 'system' so the header doesn't
+  // render an empty selection.
+  const { theme: appTheme, setTheme: setColorMode } = useTheme();
+  const colorMode: ColorMode = (appTheme as ColorMode | undefined) ?? 'system';
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
   const handlePatchLoadStart = useCallback(() => {
@@ -161,17 +196,23 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
       <CodeViewHeader
         className="[grid-area:header]"
         collapseMode={collapseMode}
+        colorMode={colorMode}
+        darkTheme={darkTheme}
         diffIndicators={diffIndicators}
         diffStyle={diffStyle}
         initialUrl={initialUrl}
+        lightTheme={lightTheme}
         lineNumbers={lineNumbers}
         overflow={overflow}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
         fileTreeAvailable={treeSource != null}
         onToggleCollapseMode={handleToggleCollapseMode}
         onToggleFileTreeOverlay={handleToggleFileTreeOverlay}
+        setColorMode={setColorMode}
+        setDarkTheme={setDarkTheme}
         setDiffIndicators={setDiffIndicators}
         setDiffStyle={setDiffStyle}
+        setLightTheme={setLightTheme}
         setLineNumbers={setLineNumbers}
         setOverflow={setOverflow}
         setShowBackgrounds={setShowBackgrounds}
@@ -200,6 +241,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
             diffIndicators={diffIndicators}
             lineNumbers={lineNumbers}
             scrollRef={scrollRef}
+            themeType={colorMode}
             viewerRef={viewerRef}
             initialItems={initialItems}
             onCommentDeleted={handleCommentDeleted}

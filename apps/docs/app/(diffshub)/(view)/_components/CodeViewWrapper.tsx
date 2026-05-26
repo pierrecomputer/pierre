@@ -8,6 +8,7 @@ import {
   type DiffLineAnnotation,
   type LineAnnotation,
   type SelectedLineRange,
+  type ThemeTypes,
 } from '@pierre/diffs';
 import {
   CodeView,
@@ -72,6 +73,7 @@ interface CodeViewWrapperProps {
   diffIndicators: DiffIndicators;
   lineNumbers: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
+  themeType: ThemeTypes;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
   initialItems: CodeViewItem<CommentMetadata>[];
   onLineLinkChange(selection: CodeViewLineSelection | null): void;
@@ -88,6 +90,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   diffIndicators,
   lineNumbers,
   scrollRef,
+  themeType,
   viewerRef,
   initialItems,
   onLineLinkChange,
@@ -417,7 +420,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
         // Use this to validate itemMetrics when changing layout with unsafeCSS.
         // __devOnlyValidateItemHeights: true,
         layout: CODE_VIEW_LAYOUT,
-        theme: { dark: 'pierre-dark-soft', light: 'pierre-light-soft' },
+        themeType,
         diffStyle,
         diffIndicators,
         overflow,
@@ -448,6 +451,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       lineNumbers,
       overflow,
       showBackgrounds,
+      themeType,
     ]
   );
   return (
