@@ -16,7 +16,14 @@ import {
   useStableCallback,
 } from '@pierre/diffs/react';
 import { IconChevronSm } from '@pierre/icons';
-import { memo, type RefObject, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  memo,
+  type RefObject,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import type { AvatarName } from './annotation-shared';
 import { CODE_VIEW_CUSTOM_CSS, CODE_VIEW_LAYOUT } from './constants';
@@ -27,6 +34,7 @@ import type {
   CodeViewSavedCommentEvent,
   CommentMetadata,
 } from './types';
+import { useThemeChromeStyle } from './useResolvedTreeThemeStyles';
 import {
   classifyCommentLineType,
   isDiffItem,
@@ -65,7 +73,9 @@ interface ActiveDraftComment {
 
 interface CodeViewWrapperProps {
   className?: string;
+  darkTheme: string;
   diffStyle: 'split' | 'unified';
+  lightTheme: string;
   onCommentDeleted(comment: CodeViewDeletedCommentEvent): void;
   onCommentSaved(comment: CodeViewSavedCommentEvent): void;
   overflow: 'wrap' | 'scroll';
@@ -82,7 +92,9 @@ interface CodeViewWrapperProps {
 
 export const CodeViewWrapper = memo(function CodeViewWrapper({
   className,
+  darkTheme,
   diffStyle,
+  lightTheme,
   onCommentDeleted,
   onCommentSaved,
   overflow,
@@ -100,6 +112,11 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   const activeDraftRef = useRef<ActiveDraftComment | null>(null);
   const [selectedLines, setSelectedLines] =
     useState<CodeViewLineSelection | null>(null);
+  const themeChromeStyle = useThemeChromeStyle(lightTheme, darkTheme);
+  const annotationThemeStyle = useMemo(
+    () => buildAnnotationThemeStyle(themeChromeStyle),
+    [themeChromeStyle]
+  );
 
   const handleSetSelection = useStableCallback(
     (selection: CodeViewLineSelection | null) => {
@@ -461,9 +478,10 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
       initialItems={initialItems}
       className={cn(
         className,
-        'cv-scrollbar relative h-full min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain border-b border-border w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-clip [&_diffs-container]:[contain:layout_paint_style] [&_diffs-container]:shadow-[0_-1px_0_var(--color-border-opaque),0_1px_0_var(--color-border-opaque)]'
+        'cv-scrollbar relative h-full min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain border-b border-border w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-clip [&_diffs-container]:[contain:layout_paint_style] [&_diffs-container]:shadow-[0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque)),0_1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))]'
       )}
       options={options}
+      style={annotationThemeStyle}
       selectedLines={selectedLines}
       onSelectedLinesChange={handleSetSelection}
       renderAnnotation={renderCommentAnnotation}
@@ -471,6 +489,39 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
     />
   );
 });
+
+const ANNOTATION_THEME_STYLE_KEYS = [
+  '--diffshub-annotation-bg',
+  '--diffshub-annotation-border',
+  '--diffshub-annotation-fg',
+  '--diffshub-annotation-hover-border',
+  '--diffshub-annotation-shadow',
+  '--diffshub-popover-muted-fg',
+  // Inter-file separator hairline. Carries the themed border-opaque value
+  // (same weight as the header/sidebar chrome borders) so it stays visible
+  // on any theme without reading darker than the surrounding chrome.
+  '--diffshub-diff-separator',
+] as const;
+
+export function buildAnnotationThemeStyle(
+  themeChromeStyle: CSSProperties | undefined
+): CSSProperties | undefined {
+  if (themeChromeStyle == null) {
+    return undefined;
+  }
+
+  const source = themeChromeStyle as CSSProperties &
+    Partial<Record<(typeof ANNOTATION_THEME_STYLE_KEYS)[number], string>>;
+  const style: Record<string, string> = {};
+  for (const key of ANNOTATION_THEME_STYLE_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string') {
+      style[key] = value;
+    }
+  }
+
+  return Object.keys(style).length > 0 ? (style as CSSProperties) : undefined;
+}
 
 interface CollapseDiffButtonProps {
   disabled?: boolean;

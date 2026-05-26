@@ -6,6 +6,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -51,6 +52,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   useEffect(preloadAvatars, []);
 
   const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
+  const workerPool = useWorkerPool();
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [collapseMode, setCollapseMode] = useState<'expanded' | 'collapsed'>(
     'expanded'
@@ -62,17 +64,22 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   const [lineNumbers, setLineNumbers] = useState(true);
   // Light/dark theme picks persist across reloads via localStorage. The
   // hook reads after mount (not during render) so the SSR markup always
-  // uses the defaults and React's hydration check stays happy.
-  const [lightTheme, setLightTheme] = usePersistedState<LightTheme>(
-    LIGHT_THEME_STORAGE_KEY,
-    DEFAULT_LIGHT_THEME,
-    LIGHT_THEMES
-  );
-  const [darkTheme, setDarkTheme] = usePersistedState<DarkTheme>(
-    DARK_THEME_STORAGE_KEY,
-    DEFAULT_DARK_THEME,
-    DARK_THEMES
-  );
+  // uses the defaults and React's hydration check stays happy. The
+  // `*Hydrated` flags let downstream effects wait for the real values
+  // before pushing them through to long-lived singletons.
+  const [lightTheme, setLightTheme, lightThemeHydrated] =
+    usePersistedState<LightTheme>(
+      LIGHT_THEME_STORAGE_KEY,
+      DEFAULT_LIGHT_THEME,
+      LIGHT_THEMES
+    );
+  const [darkTheme, setDarkTheme, darkThemeHydrated] =
+    usePersistedState<DarkTheme>(
+      DARK_THEME_STORAGE_KEY,
+      DEFAULT_DARK_THEME,
+      DARK_THEMES
+    );
+  const themesHydrated = lightThemeHydrated && darkThemeHydrated;
   // The diffshub UI shares its color mode with the surrounding ThemeProvider
   // so picking Auto/Light/Dark flips both the CodeView's `themeType` and the
   // app's <html> light/dark class (the tree sidebar, header, etc.).
@@ -81,6 +88,36 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   // render an empty selection.
   const { theme: appTheme, setTheme: setColorMode } = useTheme();
   const colorMode: ColorMode = (appTheme as ColorMode | undefined) ?? 'system';
+
+  // Push theme changes through the WorkerPool so background tokenizers reload
+  // the active light/dark Shiki themes. Without this, workers keep using the
+  // pair they were initialized with and the diff continues to render with the
+  // old theme even though the option object changed.
+  //
+  // The hydration gate is critical for client-side navigation: the WorkerPool
+  // is a long-lived singleton that survives across routes. On a second visit
+  // to a diff (e.g. logo → home → another PR) ReviewUI remounts with the
+  // theme state at DEFAULT_*_THEME for one render until usePersistedState
+  // rehydrates from localStorage. Without the gate, that initial pass would
+  // call setRenderOptions(DEFAULT) — clearing the pool's caches and kicking
+  // off a re-tokenization with the wrong theme — before the rehydration
+  // pass corrected it. Waiting until both themes are hydrated keeps the
+  // pool on the user's selection through the whole mount.
+  //
+  // useLayoutEffect (not useEffect) so the worker pool's synchronous
+  // rerender — which writes the new themeStyles CSS into the diff
+  // containers' shadow roots — happens in the same commit/paint as the
+  // sidebar's inline-style update. A plain useEffect runs after paint,
+  // which made the diff side trail the chrome by one frame and was
+  // visible as a flicker on the comment cards and tab badge during fast
+  // theme cycling.
+  useLayoutEffect(() => {
+    if (workerPool == null) return;
+    if (!themesHydrated) return;
+    void workerPool.setRenderOptions({
+      theme: { dark: darkTheme, light: lightTheme },
+    });
+  }, [workerPool, darkTheme, lightTheme, themesHydrated]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
   const handlePatchLoadStart = useCallback(() => {
@@ -186,8 +223,14 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
     },
     []
   );
+  // Withhold the viewer until the persisted themes have been read from
+  // localStorage. Otherwise on client-side navigation back into a diff the
+  // CodeView would mount during the brief render where lightTheme/darkTheme
+  // are still at their `DEFAULT_*_THEME` initial values and tokenize the
+  // first batch of files against the wrong palette.
   const viewerAvailable =
     isWorkerPoolReadyOrDisable &&
+    themesHydrated &&
     (loadState === 'ready' ||
       (loadState === 'streaming' && initialItems.length > 0));
 
@@ -223,7 +266,9 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
           <CodeViewSidebar
             className="[grid-area:viewer] md:[grid-area:tree]"
             commentSections={commentSections}
+            darkTheme={darkTheme}
             diffStats={diffStats}
+            lightTheme={lightTheme}
             mobileOverlayOpen={fileTreeOverlayOpen}
             onMobileClose={handleCloseFileTreeOverlay}
             onSelectComment={handleSelectComment}
@@ -235,7 +280,9 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
           <CodeViewWrapper
             key={viewerKey}
             className="[grid-area:viewer]"
+            darkTheme={darkTheme}
             diffStyle={diffStyle}
+            lightTheme={lightTheme}
             overflow={overflow}
             showBackgrounds={showBackgrounds}
             diffIndicators={diffIndicators}

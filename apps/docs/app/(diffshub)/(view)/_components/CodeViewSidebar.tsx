@@ -9,6 +9,7 @@ import {
 import { FileTree } from '@pierre/trees';
 import { useFileTreeSearch } from '@pierre/trees/react';
 import {
+  type CSSProperties,
   memo,
   type ReactNode,
   type RefObject,
@@ -26,6 +27,7 @@ import type {
   CodeViewSavedCommentEntry,
   CodeViewSavedCommentItem,
 } from './types';
+import { useThemeChromeStyle } from './useResolvedTreeThemeStyles';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -39,7 +41,9 @@ const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 interface CodeViewSidebarProps {
   className?: string;
   commentSections: readonly CodeViewSavedCommentItem[];
+  darkTheme: string;
   diffStats: CodeViewDiffStatsData | null;
+  lightTheme: string;
   mobileOverlayOpen?: boolean;
   onMobileClose(): void;
   onSelectComment(comment: CodeViewSavedCommentEntry): void;
@@ -52,7 +56,9 @@ interface CodeViewSidebarProps {
 export const CodeViewSidebar = memo(function CodeViewSidebar({
   className,
   commentSections,
+  darkTheme,
   diffStats,
+  lightTheme,
   mobileOverlayOpen = false,
   onMobileClose,
   onSelectComment,
@@ -66,6 +72,12 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   for (const section of commentSections) {
     totalCommentCount += section.comments.length;
   }
+  // Pull the resolved Shiki theme so the whole sidebar (tabs row, file
+  // tree, diff stats panel, footer) sits on the theme's sidebar surface
+  // and its chrome text follows the theme's own foreground tokens
+  // instead of an opacity-derived fade of the file-tree's muted text.
+  // Shared with the header so both chrome surfaces stay in sync.
+  const sidebarStyle = useThemeChromeStyle(lightTheme, darkTheme);
   const [activeStatusPanel, setActiveStatusPanel] =
     useState<SidebarStatusPanel | null>('diffStats');
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
@@ -127,6 +139,7 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
       <SidebarWrapper
         className={className}
         mobileOverlayOpen={mobileOverlayOpen}
+        themeStyle={sidebarStyle}
       >
         <div className="flex items-center gap-3 px-4 pt-5 pb-2 md:px-3 md:pt-0.5 md:pb-0">
           <ButtonGroup
@@ -157,7 +170,14 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
               {totalCommentCount > 0 && (
                 <span
                   aria-hidden="true"
-                  className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-neutral-200 px-1 text-[10px] leading-none font-medium text-neutral-700 tabular-nums dark:bg-neutral-700 dark:text-neutral-200"
+                  // Tint the badge with the chrome's current text color so
+                  // it follows the active Shiki theme instead of staying
+                  // on hardcoded neutral grays. `currentColor` resolves to
+                  // whichever fg the button inherits (chrome primaryFg
+                  // for the unselected ghost variant, accent-foreground
+                  // when this tab is selected), so the pill stays
+                  // on-palette in both states.
+                  className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[color-mix(in_srgb,currentColor_18%,transparent)] px-1 text-[10px] leading-none font-medium tabular-nums"
                 >
                   {totalCommentCount}
                 </span>
@@ -187,6 +207,8 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             className="h-full min-h-0"
           >
             <CodeViewFileTree
+              darkTheme={darkTheme}
+              lightTheme={lightTheme}
               source={source}
               onModelReady={handleModelReady}
               onSelectItem={onSelectItem}
@@ -225,22 +247,29 @@ interface SidebarWrapperProps {
   children: ReactNode;
   className?: string;
   mobileOverlayOpen: boolean;
+  themeStyle?: CSSProperties;
 }
 
 function SidebarWrapper({
   children,
   className,
   mobileOverlayOpen,
+  themeStyle,
 }: SidebarWrapperProps) {
   return (
     <div
       className={cn(
         className,
-        'bg-[var(--diffshub-sidebar-bg)] contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
+        'contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
+        // Fall back to the neutral diffshub chrome background when no Shiki
+        // theme bg is available yet (initial render before the resolver
+        // returns).
+        themeStyle == null && 'bg-[var(--diffshub-sidebar-bg)]',
         mobileOverlayOpen
           ? 'pointer-events-auto translate-y-0 overflow-hidden rounded-t-xl shadow-[0_0_0_1px_var(--color-border-opaque),_0_16px_32px_rgb(0_0_0_/0.25)] md:h-full md:overflow-visible md:rounded-none md:border-0 md:shadow-none'
           : 'pointer-events-none translate-y-[calc(100%+1.5rem)] overflow-hidden rounded-xl md:pointer-events-auto md:h-full md:overflow-visible md:rounded-none pt-3 border-r border-[var(--color-border-opaque)]'
       )}
+      style={themeStyle}
     >
       {children}
     </div>

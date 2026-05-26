@@ -36,6 +36,14 @@ export interface ResolvedTreeTheme {
   // sideBarSectionHeader.foreground, which on some themes is brighter
   // than the primary text and inverts the muted/primary hierarchy.
   mutedFg?: string;
+  // editor.background / editor.foreground — the surface and text color the
+  // diff body itself renders on. Kept separately from the sidebar pair
+  // because some themes use opposite palettes for the two (slack-ochin:
+  // white editor, dark navy sidebar). The inter-file separator is derived
+  // from these so it contrasts the *diff* surface at the same perceptual
+  // weight as the chrome borders do against the sidebar.
+  editorBg?: string;
+  editorFg?: string;
 }
 
 // Defaults used while the user-selected Shiki theme is still resolving.
@@ -43,6 +51,8 @@ function buildResolvedTheme(theme: ResolvedShikiTheme): ResolvedTreeTheme {
   const c = theme.colors ?? {};
   const sideBarBg =
     c['sideBar.background'] ?? c['editor.background'] ?? theme.bg;
+  const editorBg = c['editor.background'] ?? theme.bg ?? sideBarBg;
+  const editorFg = c['editor.foreground'] ?? theme.fg;
   // Pick the foreground that's actually legible on the sidebar surface.
   // Some themes (slack-ochin) want sideBar.foreground because their editor
   // foreground is the opposite palette; others (material-theme-ocean) ship
@@ -106,6 +116,8 @@ function buildResolvedTheme(theme: ResolvedShikiTheme): ResolvedTreeTheme {
     treeStyles,
     primaryFg,
     mutedFg: c['descriptionForeground'],
+    editorBg,
+    editorFg: editorFg ?? primaryFg,
   };
 }
 
@@ -137,6 +149,13 @@ const MIN_READABLE_RATIO = 3;
 // hierarchy on those themes than ship sidebar text that fades into the
 // background.
 const MIN_MUTED_RATIO = 4.5;
+
+// Mix weight (percent of the surface's own foreground blended into its
+// background) for the opaque chrome borders and the inter-file diff
+// separator. Shared so both lines carry the same visual weight across
+// themes. Tuned up from an initial 15%, which was too faint to register
+// the header/sidebar edges and file boundaries on most surfaces.
+const DIFF_BORDER_MIX = 22;
 
 function pickReadableForeground(
   bg: string | undefined,
@@ -415,7 +434,11 @@ export function buildThemeChromeStyle(
     const border = `color-mix(in srgb, ${primaryFg} 20%, transparent)`;
     style['--color-border'] = border;
     style['--border'] = border;
-    const borderOpaque = `color-mix(in srgb, ${primaryFg} 15%, ${bg ?? 'transparent'})`;
+    // Opaque chrome border (header bottom, sidebar edge). Mixing the theme
+    // foreground into its surface keeps the line on-palette; the weight is
+    // shared with the diff separator (DIFF_BORDER_MIX) so the two read as
+    // one system. 15% was too faint to register against most surfaces.
+    const borderOpaque = `color-mix(in srgb, ${primaryFg} ${DIFF_BORDER_MIX}%, ${bg ?? 'transparent'})`;
     style['--color-border-opaque'] = borderOpaque;
     style['--border-opaque'] = borderOpaque;
     // Card surface tokens for chrome elements that sit on top of the
@@ -428,7 +451,16 @@ export function buildThemeChromeStyle(
     const popoverHoverBg = `color-mix(in srgb, ${primaryFg} 14%, ${cardSurfaceBase})`;
     const popoverSelectedBg = `color-mix(in srgb, ${primaryFg} 20%, ${cardSurfaceBase})`;
     const popoverBorder = `color-mix(in srgb, ${primaryFg} 18%, ${cardSurfaceBase})`;
-    const popoverShadow = `0 18px 44px color-mix(in srgb, ${cardSurfaceBase} 72%, transparent), 0 0 0 1px ${popoverBorder}`;
+    // A real elevation drop shadow. It must read as "lifted off the page"
+    // on every theme, so the color is occlusion-black (translucent) rather
+    // than derived from the surface — a surface-tinted shadow vanishes on
+    // light themes (a near-white blur over a near-white page). We do NOT
+    // bake a `0 0 0 1px` ring in here: every consumer (the popovers and the
+    // annotation cards) already paints its own 1px CSS border, so the ring
+    // would render a second hairline just outside it and read as a doubled,
+    // too-thick border.
+    const popoverShadow =
+      '0 10px 30px rgb(0 0 0 / 0.18), 0 3px 8px rgb(0 0 0 / 0.12)';
     style['--diffshub-card-bg'] =
       `color-mix(in srgb, ${primaryFg} 6%, ${cardSurfaceBase})`;
     style['--diffshub-card-hover-bg'] =
@@ -462,8 +494,15 @@ export function buildThemeChromeStyle(
     style['--accent'] = popoverHoverBg;
     style['--color-accent-foreground'] = primaryFg;
     style['--accent-foreground'] = primaryFg;
-    style['--color-secondary'] = popoverBg;
-    style['--secondary'] = popoverBg;
+    // `secondary` is the segmented-control (ButtonGroup) track. It must sit
+    // visibly *behind* the buttons so the three Auto/Light/Dark options read
+    // as one connected control — but the popover surface it lives on is
+    // already `popoverBg`, so reusing that here made the track disappear
+    // into the menu. Use the slightly stronger hover mix so the track is a
+    // distinct inset band; the selected pill (which paints `background`)
+    // still pops above it.
+    style['--color-secondary'] = popoverHoverBg;
+    style['--secondary'] = popoverHoverBg;
     style['--color-secondary-foreground'] = primaryFg;
     style['--secondary-foreground'] = primaryFg;
     style['--color-input'] = popoverHoverBg;
@@ -486,6 +525,27 @@ export function buildThemeChromeStyle(
     const surfaceIsDark = isDarkSurface(bg, primaryFg);
     style['--diffshub-comment-add-fg'] = surfaceIsDark ? '#34d399' : '#047857';
     style['--diffshub-comment-del-fg'] = surfaceIsDark ? '#fb7185' : '#be123c';
+    // Hairline between diff files. The static global --color-border-opaque
+    // follows the app's light/dark palette, so it goes faint (or mismatched)
+    // once the diff renders on a Shiki theme that drifts from it.
+    //
+    // When the diff (editor) surface matches the sidebar surface — the
+    // common case — reuse the chrome border verbatim so the separator can
+    // never drift brighter or darker than it. This matters for themes like
+    // material-theme that share one bg (#263238) for editor and sidebar but
+    // pair it with a near-white editor fg (#EEFFFF) and a dim sidebar fg
+    // (#6c8692): deriving the separator from the editor fg would make it far
+    // brighter than the chrome border on the very same surface.
+    //
+    // Only when the palettes genuinely diverge (slack-ochin: dark navy
+    // sidebar, white editor) do we derive from the editor surface, so the
+    // hairline contrasts the diff body instead of going dark-on-light.
+    const editorBg = activeTheme.editorBg ?? bg;
+    const editorFg = activeTheme.editorFg ?? primaryFg;
+    style['--diffshub-diff-separator'] =
+      editorBg == null || surfacesMatch(editorBg, bg)
+        ? borderOpaque
+        : `color-mix(in srgb, ${editorFg} ${DIFF_BORDER_MIX}%, ${editorBg})`;
   }
   return style as CSSProperties;
 }
@@ -500,6 +560,21 @@ function isDarkSurface(bg: string | undefined, primaryFg: string): boolean {
   if (fromBg != null) return fromBg < 0.4;
   const fromFg = relativeLuminance(primaryFg);
   return fromFg != null ? fromFg > 0.6 : false;
+}
+
+// True when two surface colors read as the "same surface" — identical hex,
+// or close enough in luminance that a border tuned for one looks right on
+// the other. Used to decide whether the diff separator can reuse the chrome
+// border (shared surface) or must be re-derived from the editor surface
+// (divergent palettes like slack-ochin). Non-hex inputs we can't measure
+// are treated as non-matching so we fall back to per-surface derivation.
+function surfacesMatch(a: string | undefined, b: string | undefined): boolean {
+  if (a == null || b == null) return false;
+  if (a.trim().toLowerCase() === b.trim().toLowerCase()) return true;
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  if (la == null || lb == null) return false;
+  return Math.abs(la - lb) < 0.06;
 }
 
 // Parse the leading `#rrggbb` / `#rgb` of a color string and return its

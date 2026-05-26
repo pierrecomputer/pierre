@@ -389,7 +389,7 @@ function ThemeDropdown({
         {view === 'main' ? (
           <>
             <DropdownMenuItem
-              className="cursor-default p-1 focus:bg-transparent"
+              className="cursor-default p-0 focus:bg-transparent"
               onSelect={(event) => event.preventDefault()}
             >
               <ButtonGroup
