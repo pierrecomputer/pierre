@@ -120,12 +120,14 @@ export function useFileDiffInstance<LAnnotation>({
       hasGutterRenderUtility,
       options,
     });
-    if (editor !== undefined) {
+    if (contentEditable && editor !== undefined) {
       newOptions = {
         ...newOptions,
         useTokenTransformer: true,
         enableGutterUtility: false,
         enableLineSelection: false,
+        diffStyle: 'split',
+        expandUnchanged: true,
       };
     }
     const forceRender = !areOptionsEqual(instance.options, newOptions);

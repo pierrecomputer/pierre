@@ -176,25 +176,33 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   edit(component: DiffsEditableComponent<LAnnotation>): () => void {
-    this.#component = component;
-    this.#initialize();
+    const {
+      useTokenTransformer,
+      enableGutterUtility,
+      enableLineSelection,
+      diffStyle,
+      expandUnchanged,
+      ...rest
+    } = component.options;
     if (
-      component.options.useTokenTransformer !== true ||
-      Reflect.get(component.options, 'enableGutterUtility') === true ||
-      Reflect.get(component.options, 'enableLineSelection') === true
+      useTokenTransformer !== true ||
+      enableGutterUtility === true ||
+      enableLineSelection === true ||
+      diffStyle === 'unified' ||
+      (expandUnchanged !== true && Object.hasOwn(component, 'fileDiff'))
     ) {
-      // Normalize the component options:
-      // 1. Ensure the component uses token transformer that adds `data-char` attribute to the tokens
-      // 2. Disable gutter utility to avoid conflicts with the editor
-      const options = {
-        ...component.options,
+      component.setOptions({
+        ...rest,
         useTokenTransformer: true,
         enableGutterUtility: false,
         enableLineSelection: false,
-      };
-      component.setOptions(options);
+        diffStyle: 'split',
+        expandUnchanged: true,
+      });
       component.rerender();
     }
+    this.#component = component;
+    this.#initialize();
     this.#removeEditorFromComponent = component.setupEditor(this);
     return () => this.cleanUp();
   }
@@ -331,7 +339,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           startingLine ??= lineIndex;
           endLine = lineIndex;
         }
-        if (lineType !== 'context' && lineType !== 'change-addition') {
+        if (
+          lineType !== 'context' &&
+          lineType !== 'change-addition' &&
+          lineType !== 'context-expanded'
+        ) {
           el.contentEditable = 'false';
         }
       }

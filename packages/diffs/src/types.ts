@@ -898,9 +898,16 @@ export interface DiffsEditor<LAnnotation> {
   cleanUp(): void;
 }
 
+export interface DiffsEditorOptions extends BaseCodeOptions {
+  enableGutterUtility?: boolean;
+  enableLineSelection?: boolean;
+  diffStyle?: 'unified' | 'split';
+  expandUnchanged?: boolean;
+}
+
 export interface DiffsBaseComponent {
-  readonly options: BaseCodeOptions;
-  setOptions: (options: Partial<BaseCodeOptions>) => void;
+  readonly options: DiffsEditorOptions;
+  setOptions: (options: Partial<DiffsEditorOptions>) => void;
   setSelectedLines: (range: { start: number; end: number } | null) => void;
   rerender(): void;
   cleanUp(): void;
@@ -910,14 +917,14 @@ export interface DiffsEditableComponent<
   LAnnotation,
 > extends DiffsBaseComponent {
   setupEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
-  emitLineChange?: (
-    lines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
-  ) => void;
   emitLayoutChange: (
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     shouldUpdateBuffer?: boolean
+  ) => void;
+  emitLineChange?: (
+    lines: Map<number, Array<HighlightedToken>>,
+    themeType: 'dark' | 'light'
   ) => void;
 }
 

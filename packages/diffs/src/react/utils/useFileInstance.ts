@@ -121,7 +121,7 @@ export function useFileInstance<LAnnotation>({
       hasGutterRenderUtility,
       options,
     });
-    if (editor !== undefined) {
+    if (contentEditable && editor !== undefined) {
       newOptions = {
         ...newOptions,
         useTokenTransformer: true,
