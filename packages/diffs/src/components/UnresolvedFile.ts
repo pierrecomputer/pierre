@@ -13,6 +13,7 @@ import type {
   MergeConflictMarkerRow,
   MergeConflictRegion,
   MergeConflictResolution,
+  PostRenderPhase,
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areMergeConflictActionsEqual } from '../utils/areMergeConflictActionsEqual';
@@ -45,11 +46,12 @@ export type MergeConflictActionsTypeOption<LAnnotation> =
 
 export interface UnresolvedFileOptions<LAnnotation> extends Omit<
   FileDiffOptions<LAnnotation>,
-  'diffStyle'
+  'diffStyle' | 'onPostRender'
 > {
   onPostRender?(
     node: HTMLElement,
-    instance: UnresolvedFile<LAnnotation>
+    instance: UnresolvedFile<LAnnotation>,
+    phase: PostRenderPhase
   ): unknown;
   mergeConflictActionsType?: MergeConflictActionsTypeOption<LAnnotation>;
   onMergeConflictAction?(
@@ -114,6 +116,8 @@ export class UnresolvedFile<
   LAnnotation = undefined,
 > extends FileDiff<LAnnotation> {
   override readonly __id: string = `unresolved-file:${++instanceId}`;
+  override readonly type = 'unresolved-file';
+
   protected computedCache: UnresolvedFileDataCache = {
     file: undefined,
     fileDiff: undefined,

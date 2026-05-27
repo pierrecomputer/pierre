@@ -27,6 +27,7 @@ import type {
   BaseCodeOptions,
   FileContents,
   LineAnnotation,
+  PostRenderPhase,
   PrePropertiesConfig,
   RenderFileMetadata,
   RenderRange,
@@ -98,7 +99,11 @@ export interface FileOptions<LAnnotation>
     getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
   ): HTMLElement | null | undefined;
 
-  onPostRender?(node: HTMLElement, instance: File<LAnnotation>): unknown;
+  onPostRender?(
+    node: HTMLElement,
+    instance: File<LAnnotation>,
+    phase: PostRenderPhase
+  ): unknown;
 }
 
 interface AnnotationElementCache<LAnnotation> {
@@ -122,6 +127,7 @@ export class File<LAnnotation = undefined> {
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
   readonly __id: string = `file:${++instanceId}`;
+  readonly type = 'file';
 
   protected fileContainer: HTMLElement | undefined;
   protected spriteSVG: SVGElement | undefined;
@@ -141,6 +147,7 @@ export class File<LAnnotation = undefined> {
   protected cachedHeaderHTML: string | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
   protected lastRowCount: number | undefined;
+  private mounted = false;
 
   protected headerElement: HTMLElement | undefined;
   protected headerCustom: HTMLElement | undefined;
@@ -156,7 +163,7 @@ export class File<LAnnotation = undefined> {
   protected lineAnnotations: LineAnnotation<LAnnotation>[] = [];
   protected managersDirty = false;
 
-  protected file: FileContents | undefined;
+  public file: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
 
@@ -291,6 +298,7 @@ export class File<LAnnotation = undefined> {
       this.fileContainer?.remove();
     }
     this.fileContainer = undefined;
+    this.mounted = false;
     this.lineAnnotations = [];
     this.annotationCache.clear();
     this.pre = undefined;
@@ -403,6 +411,9 @@ export class File<LAnnotation = undefined> {
     if (this.pre != null) {
       this.syncCodeNodeFromPre(this.pre);
       this.pre.removeAttribute('data-dehydrated');
+    }
+    if (this.fileContainer !== fileContainer) {
+      this.mounted = false;
     }
     this.fileContainer = fileContainer;
     this.hydrateMeasuredScrollbar();
@@ -590,9 +601,17 @@ export class File<LAnnotation = undefined> {
   }
 
   private emitPostRender() {
-    if (this.fileContainer != null) {
-      this.options.onPostRender?.(this.fileContainer, this);
+    const {
+      fileContainer,
+      options: { onPostRender },
+    } = this;
+    if (fileContainer == null) {
+      return;
     }
+
+    const phase: PostRenderPhase = this.mounted ? 'update' : 'mount';
+    this.mounted = true;
+    onPostRender?.(fileContainer, this, phase);
   }
 
   private removeRenderedCode(): void {
@@ -710,6 +729,8 @@ export class File<LAnnotation = undefined> {
 
     this.lastRenderedHeaderHTML = undefined;
     this.lastRowCount = undefined;
+
+    this.mounted = false;
   }
 
   private renderAnnotations(): void {
@@ -1256,6 +1277,9 @@ export class File<LAnnotation = undefined> {
       this.fileContainer ??
       document.createElement(DIFFS_TAG_NAME);
     const containerChanged = previousContainer !== this.fileContainer;
+    if (containerChanged) {
+      this.mounted = false;
+    }
     if (previousContainer != null && containerChanged) {
       this.lastRenderedHeaderHTML = undefined;
       this.headerElement = undefined;

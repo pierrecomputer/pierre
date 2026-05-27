@@ -10,6 +10,7 @@ import type {
   FileContents,
   HunkSeparators,
   MergeConflictResolution,
+  PostRenderPhase,
 } from '../types';
 import { type MergeConflictDiffAction } from '../utils/parseMergeConflictDiffFromFile';
 import type { FileDiffProps } from './FileDiff';
@@ -41,7 +42,8 @@ export interface UnresolvedFileReactOptions<LAnnotation>
   hunkSeparators?: HunkSeparators;
   onPostRender?(
     node: HTMLElement,
-    instance: UnresolvedFileClass<LAnnotation>
+    instance: UnresolvedFileClass<LAnnotation>,
+    phase: PostRenderPhase
   ): unknown;
   maxContextLines?: number;
 }

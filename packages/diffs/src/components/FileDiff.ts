@@ -38,6 +38,7 @@ import type {
   FileDiffMetadata,
   HunkData,
   HunkSeparators,
+  PostRenderPhase,
   PrePropertiesConfig,
   RenderHeaderMetadataCallback,
   RenderHeaderPrefixCallback,
@@ -94,6 +95,8 @@ export interface FileDiffHydrationProps<LAnnotation> extends Omit<
   prerenderedHTML?: string;
 }
 
+export type FileDiffType = 'file-diff' | 'unresolved-file';
+
 export interface FileDiffOptions<LAnnotation>
   extends
     Omit<BaseDiffOptions, 'hunkSeparators'>,
@@ -124,7 +127,11 @@ export interface FileDiffOptions<LAnnotation>
     getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
   ): HTMLElement | null | undefined;
 
-  onPostRender?(node: HTMLElement, instance: FileDiff<LAnnotation>): unknown;
+  onPostRender?(
+    node: HTMLElement,
+    instance: FileDiff<LAnnotation>,
+    phase: PostRenderPhase
+  ): unknown;
 }
 
 interface AnnotationElementCache<LAnnotation> {
@@ -174,6 +181,7 @@ export class FileDiff<LAnnotation = undefined> {
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
   readonly __id: string = `file-diff:${++instanceId}`;
+  readonly type: FileDiffType = 'file-diff';
 
   protected fileContainer: HTMLElement | undefined;
   protected spriteSVG: SVGElement | undefined;
@@ -210,12 +218,13 @@ export class FileDiff<LAnnotation = undefined> {
 
   protected deletionFile: FileContents | undefined;
   protected additionFile: FileContents | undefined;
-  protected fileDiff: FileDiffMetadata | undefined;
+  public fileDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
   protected lastRenderedHeaderHTML: string | undefined;
   protected cachedHeaderHTML: string | undefined;
   protected lastRowCount: number | undefined;
+  private mounted = false;
 
   protected enabled = true;
 
@@ -481,6 +490,7 @@ export class FileDiff<LAnnotation = undefined> {
       this.fileContainer?.remove();
     }
     this.fileContainer = undefined;
+    this.mounted = false;
     this.lineAnnotations = [];
     this.clearAuxiliaryNodes();
     this.annotationCache.clear();
@@ -624,6 +634,9 @@ export class FileDiff<LAnnotation = undefined> {
     if (this.pre != null) {
       this.syncCodeNodesFromPre(this.pre);
       this.pre.removeAttribute('data-dehydrated');
+    }
+    if (this.fileContainer !== fileContainer) {
+      this.mounted = false;
     }
     this.fileContainer = fileContainer;
     this.hydrateMeasuredScrollbar();
@@ -917,9 +930,14 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   protected emitPostRender(): void {
-    if (this.fileContainer != null) {
-      this.options.onPostRender?.(this.fileContainer, this);
+    const { fileContainer } = this;
+    if (fileContainer == null) {
+      return;
     }
+
+    const phase: PostRenderPhase = this.mounted ? 'update' : 'mount';
+    this.mounted = true;
+    this.options.onPostRender?.(fileContainer, this, phase);
   }
 
   private removeRenderedCode(): void {
@@ -1040,6 +1058,7 @@ export class FileDiff<LAnnotation = undefined> {
 
     this.lastRenderedHeaderHTML = undefined;
     this.lastRowCount = undefined;
+    this.mounted = false;
   }
 
   private renderSeparators(hunkData: HunkData[]): void {
@@ -1155,6 +1174,9 @@ export class FileDiff<LAnnotation = undefined> {
       this.fileContainer ??
       document.createElement(DIFFS_TAG_NAME);
     const containerChanged = previousContainer !== this.fileContainer;
+    if (containerChanged) {
+      this.mounted = false;
+    }
     if (previousContainer != null && containerChanged) {
       this.lastRenderedHeaderHTML = undefined;
       this.headerElement = undefined;
