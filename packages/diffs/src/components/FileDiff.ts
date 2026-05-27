@@ -1186,15 +1186,16 @@ export class FileDiff<LAnnotation = undefined> {
     fileContainer?: HTMLElement,
     parentNode?: HTMLElement
   ): HTMLElement {
-    const previousContainer = this.fileContainer;
-    this.fileContainer =
+    const { fileContainer: previousContainer } = this;
+    const nextContainer =
       fileContainer ??
-      this.fileContainer ??
+      previousContainer ??
       document.createElement(DIFFS_TAG_NAME);
-    const containerChanged = previousContainer !== this.fileContainer;
+    const containerChanged = previousContainer !== nextContainer;
     if (containerChanged) {
-      this.mounted = false;
+      this.emitPostRender(true);
     }
+    this.fileContainer = nextContainer;
     if (previousContainer != null && containerChanged) {
       this.lastRenderedHeaderHTML = undefined;
       this.headerElement = undefined;
