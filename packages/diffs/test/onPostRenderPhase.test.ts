@@ -256,6 +256,38 @@ describe('onPostRender phases', () => {
     }
   });
 
+  test('FileDiff emits unmount for the previous container when render swaps containers', () => {
+    const { cleanup } = installDom();
+    const firstContainer = createHydrationContainer();
+    const secondContainer = createHydrationContainer();
+    const phases: { container: 'first' | 'second'; phase: PostRenderPhase }[] =
+      [];
+    const instance = new FileDiff({
+      collapsed: true,
+      disableFileHeader: true,
+      onPostRender(node, _instance, phase) {
+        phases.push({
+          container: node === firstContainer ? 'first' : 'second',
+          phase,
+        });
+      },
+    });
+
+    try {
+      instance.render({ fileDiff, fileContainer: firstContainer });
+      instance.render({ fileDiff, fileContainer: secondContainer });
+
+      expect(phases).toEqual([
+        { container: 'first', phase: 'mount' },
+        { container: 'first', phase: 'unmount' },
+        { container: 'second', phase: 'mount' },
+      ]);
+    } finally {
+      instance.cleanUp();
+      cleanup();
+    }
+  });
+
   test('UnresolvedFile emits mount, update, and unmount around cleanup', () => {
     const { cleanup } = installDom();
     const phases: PostRenderPhase[] = [];
