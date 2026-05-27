@@ -478,6 +478,7 @@ export class FileDiff<LAnnotation = undefined> {
   }
 
   public cleanUp(recycle: boolean = false): void {
+    this.emitPostRender(true);
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
     this.scrollSyncManager.cleanUp();
@@ -581,6 +582,9 @@ export class FileDiff<LAnnotation = undefined> {
     fileContainer: HTMLElement,
     prerenderedHTML: string | undefined
   ): void {
+    if (this.fileContainer !== fileContainer) {
+      this.emitPostRender(true);
+    }
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of fileContainer.shadowRoot?.children ?? []) {
       if (element instanceof SVGElement) {
@@ -634,9 +638,6 @@ export class FileDiff<LAnnotation = undefined> {
     if (this.pre != null) {
       this.syncCodeNodesFromPre(this.pre);
       this.pre.removeAttribute('data-dehydrated');
-    }
-    if (this.fileContainer !== fileContainer) {
-      this.mounted = false;
     }
     this.fileContainer = fileContainer;
     this.hydrateMeasuredScrollbar();
@@ -929,15 +930,31 @@ export class FileDiff<LAnnotation = undefined> {
     return true;
   }
 
-  protected emitPostRender(): void {
-    const { fileContainer } = this;
+  protected emitPostRender(unmount = false): void {
+    const {
+      fileContainer,
+      options: { onPostRender },
+    } = this;
+
+    if (unmount) {
+      if (!this.mounted) {
+        return;
+      }
+      this.mounted = false;
+      if (fileContainer == null) {
+        return;
+      }
+      this.options.onPostRender?.(fileContainer, this, 'unmount');
+      return;
+    }
+
     if (fileContainer == null) {
       return;
     }
 
     const phase: PostRenderPhase = this.mounted ? 'update' : 'mount';
     this.mounted = true;
-    this.options.onPostRender?.(fileContainer, this, phase);
+    onPostRender?.(fileContainer, this, phase);
   }
 
   private removeRenderedCode(): void {
@@ -983,6 +1000,7 @@ export class FileDiff<LAnnotation = undefined> {
     if (this.fileContainer == null) {
       return false;
     }
+    this.emitPostRender(true);
     this.cleanChildNodes();
 
     if (this.placeHolder == null) {

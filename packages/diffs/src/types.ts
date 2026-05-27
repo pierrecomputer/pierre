@@ -355,7 +355,7 @@ export type HunkLineType =
 
 export type ThemeTypes = 'system' | 'light' | 'dark';
 
-export type PostRenderPhase = 'mount' | 'update';
+export type PostRenderPhase = 'mount' | 'update' | 'unmount';
 
 /**
  * The `'custom'` variant is deprecated and will be removed in a future version.

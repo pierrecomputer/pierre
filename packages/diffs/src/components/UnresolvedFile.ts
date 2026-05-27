@@ -201,6 +201,7 @@ export class UnresolvedFile<
   }
 
   override cleanUp(): void {
+    this.emitPostRender(true);
     this.clearMergeConflictActionCache();
     this.computedCache = {
       file: undefined,

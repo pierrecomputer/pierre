@@ -287,6 +287,7 @@ export class File<LAnnotation = undefined> {
   }
 
   public cleanUp(recycle = false): void {
+    this.emitPostRender(true);
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
     this.managersDirty = false;
@@ -371,6 +372,9 @@ export class File<LAnnotation = undefined> {
     fileContainer: HTMLElement,
     prerenderedHTML: string | undefined
   ): void {
+    if (this.fileContainer !== fileContainer) {
+      this.emitPostRender(true);
+    }
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of Array.from(
       fileContainer.shadowRoot?.children ?? []
@@ -411,9 +415,6 @@ export class File<LAnnotation = undefined> {
     if (this.pre != null) {
       this.syncCodeNodeFromPre(this.pre);
       this.pre.removeAttribute('data-dehydrated');
-    }
-    if (this.fileContainer !== fileContainer) {
-      this.mounted = false;
     }
     this.fileContainer = fileContainer;
     this.hydrateMeasuredScrollbar();
@@ -600,11 +601,24 @@ export class File<LAnnotation = undefined> {
     return true;
   }
 
-  private emitPostRender() {
+  private emitPostRender(unmount = false) {
     const {
       fileContainer,
       options: { onPostRender },
     } = this;
+
+    if (unmount) {
+      if (!this.mounted) {
+        return;
+      }
+      this.mounted = false;
+      if (fileContainer == null) {
+        return;
+      }
+      onPostRender?.(fileContainer, this, 'unmount');
+      return;
+    }
+
     if (fileContainer == null) {
       return;
     }
@@ -658,6 +672,7 @@ export class File<LAnnotation = undefined> {
     if (this.fileContainer == null) {
       return false;
     }
+    this.emitPostRender(true);
     this.cleanChildNodes();
 
     if (this.placeHolder == null) {
