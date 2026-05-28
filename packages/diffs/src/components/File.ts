@@ -461,13 +461,13 @@ export class File<
     }
   }
 
-  public setupEditor(editor: DiffsEditor<LAnnotation>): () => void {
+  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     const fileContainer = this.fileContainer;
     const file = this.file;
     if (fileContainer != null && file != null) {
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
-        editor.emitRender(
+        editor.syncWithRender(
           highlighter,
           fileContainer,
           file,
@@ -482,14 +482,14 @@ export class File<
     };
   }
 
-  public emitLineChange(
-    lines: Map<number, Array<HighlightedToken>>,
+  public applyLineChange(
+    dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
   ): void {
-    this.fileRenderer.applyDirtyLines(lines, themeType);
+    this.fileRenderer.applyDirtyLines(dirtyLines, themeType);
   }
 
-  public emitLayoutChange(
+  public applyLayoutChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {
@@ -648,7 +648,7 @@ export class File<
       const editor = this.editor;
       if (editor != null) {
         void this.fileRenderer.initializeHighlighter().then((highlighter) => {
-          editor.emitRender(
+          editor.syncWithRender(
             highlighter,
             fileContainer,
             file,

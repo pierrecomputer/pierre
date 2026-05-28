@@ -935,7 +935,7 @@ export class FileDiff<
       const file = this.getAdditionFile();
       if (editor != null && file != null) {
         void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-          editor.emitRender(
+          editor.syncWithRender(
             highlighter,
             fileContainer,
             file,
@@ -987,7 +987,7 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
-  emitLayoutChange(
+  applyLayoutChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
@@ -1024,13 +1024,13 @@ export class FileDiff<
     }
   }
 
-  setupEditor(editor: DiffsEditor<LAnnotation>): () => void {
+  attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     const fileContainer = this.fileContainer;
     const file = this.getAdditionFile();
     if (fileContainer != null && file != null) {
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-        editor.emitRender(
+        editor.syncWithRender(
           highlighter,
           fileContainer,
           file,

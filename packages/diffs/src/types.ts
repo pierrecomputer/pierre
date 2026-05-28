@@ -889,7 +889,7 @@ export interface StickySpecs {
 }
 
 export interface DiffsEditor<LAnnotation> {
-  emitRender(
+  syncWithRender(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileContents: FileContents,
@@ -919,13 +919,13 @@ export interface DiffsBaseComponent {
 export interface DiffsEditableComponent<
   LAnnotation,
 > extends DiffsBaseComponent {
-  setupEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
-  emitLayoutChange: (
+  attachEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
+  applyLayoutChange: (
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     shouldUpdateBuffer?: boolean
   ) => void;
-  emitLineChange?: (
+  applyLineChange?: (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
   ) => void;

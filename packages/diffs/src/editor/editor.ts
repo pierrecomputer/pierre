@@ -96,7 +96,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #editorEventDisposes?: (() => void)[];
   #globalEventDisposes?: (() => void)[];
   #mouseUpDisposes?: (() => void)[];
-  #removeEditorFromComponent?: () => void;
+  #detach?: () => void;
 
   // file
   #component?: DiffsEditableComponent<LAnnotation>;
@@ -153,7 +153,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
   ) => {
-    this.#component?.emitLineChange?.(lines, themeType);
+    this.#component?.applyLineChange?.(lines, themeType);
     // update the view if the render range is updated by scrolling
     // and the deferred tokenized lines inside the render range
     if (
@@ -208,7 +208,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     this.#component = component;
     this.#initialize();
-    this.#removeEditorFromComponent = component.setupEditor(this);
+    this.#detach = component.attachEditor(this);
     return () => this.cleanUp();
   }
 
@@ -258,8 +258,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#editorEventDisposes?.forEach((dispose) => dispose());
     this.#editorEventDisposes = undefined;
 
-    this.#removeEditorFromComponent?.();
-    this.#removeEditorFromComponent = undefined;
+    this.#detach?.();
+    this.#detach = undefined;
     this.#component?.setSelectedLines(null);
     this.#component = undefined;
     this.#fileContents = undefined;
@@ -302,7 +302,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#reservedSelections = undefined;
   }
 
-  emitRender(
+  syncWithRender(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileContents: FileContents,
@@ -790,7 +790,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#themeStyleElement = h('style', {
       dataset: 'editorThemeCss',
-      textContent: '',
     });
 
     this.#globalStyleElement = h('style', {
@@ -1226,9 +1225,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       contentEl.style.gridRow = 'span ' + contentEl.children.length;
     }
 
-    component.emitLineChange?.(dirtyLines, tokenizer.themeType);
+    component.applyLineChange?.(dirtyLines, tokenizer.themeType);
     if (change.lineDelta !== 0 || isAdvancedMode) {
-      component.emitLayoutChange(
+      component.applyLayoutChange(
         textDocument,
         newLineAnnotations,
         shouldUpdateBuffer

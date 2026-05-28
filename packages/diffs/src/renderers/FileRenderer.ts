@@ -228,7 +228,7 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public applyDirtyLines(
-    lines: Map<number, Array<HighlightedToken>>,
+    dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
   ): void {
     if (this.renderCache == null) {
@@ -238,7 +238,7 @@ export class FileRenderer<LAnnotation = undefined> {
     if (result == null) {
       return;
     }
-    for (const [line, tokens] of lines) {
+    for (const [line, tokens] of dirtyLines) {
       result.code[line] = {
         type: 'element',
         tagName: 'div',
