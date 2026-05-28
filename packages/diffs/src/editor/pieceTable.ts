@@ -245,6 +245,16 @@ export class PieceTable {
     if (searchParams.text.length === 0 || this.#length === 0) {
       return [];
     }
+    // Search currently operates line-by-line, so newline-spanning patterns are unsupported.
+    if (
+      searchParams.text.includes('\n') ||
+      searchParams.text.includes('\r') ||
+      (searchParams.regex &&
+        (searchParams.text.includes('\\n') ||
+          searchParams.text.includes('\\r')))
+    ) {
+      return [];
+    }
 
     let pattern: RegExp;
     try {

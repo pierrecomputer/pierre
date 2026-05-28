@@ -281,6 +281,33 @@ describe('PieceTable', () => {
     ).toBeUndefined();
   });
 
+  test('search does not match newline-spanning plain queries', () => {
+    const table = new PieceTable('foo\nbar\nfoo');
+    const searchParams = {
+      text: 'foo\nbar',
+      replaceText: '',
+      caseSensitive: false,
+      wholeWord: false,
+      regex: false,
+    };
+
+    expect(table.search('findAll', searchParams)).toEqual([]);
+    expect(table.search('findNext', searchParams)).toEqual([]);
+  });
+
+  test('search does not match literal newline regex patterns', () => {
+    const table = new PieceTable('foo\nbar\nfoo');
+    const searchParams = {
+      text: 'foo\\nbar',
+      replaceText: '',
+      caseSensitive: false,
+      wholeWord: false,
+      regex: true,
+    };
+
+    expect(table.search('findAll', searchParams)).toEqual([]);
+  });
+
   test('tracks trailing newline as an empty final line', () => {
     const table = new PieceTable('a\n');
 

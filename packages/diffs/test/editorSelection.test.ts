@@ -17,6 +17,7 @@ import {
   mapCursorMove,
   mapSelectionShift,
   mergeOverlappingSelections,
+  resolveIndentEdits,
   selectionIntersects,
 } from '../src/editor/selection';
 import {
@@ -934,6 +935,23 @@ describe('applyTextChangeToSelections', () => {
     ]);
   });
 
+  test('preserves CRLF when copying indentation after Enter', () => {
+    const textDocument = new TextDocument('inmemory://1', '  foo\r\nbar');
+    const selections = [createSelection(0, 5, 0, 5)];
+    const { nextSelections } = applyTextChangeToSelections(
+      textDocument,
+      selections,
+      {
+        start: 5,
+        end: 5,
+        text: '\r\n',
+      }
+    );
+
+    expect(textDocument.getText()).toBe('  foo\r\n  \r\nbar');
+    expect(nextSelections).toEqual([createSelection(1, 2, 1, 2)]);
+  });
+
   test('moves the caret to the previous line end after deleting a line break', () => {
     const textDocument = new TextDocument('inmemory://1', 'foo\n\nbar');
     const selections = [createSelection(1, 0, 1, 0)];
@@ -989,6 +1007,31 @@ describe('applyTextChangeToSelections', () => {
     expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
   });
 
+  test('normalizes backspace indentation per caret context', () => {
+    const textDocument = new TextDocument('inmemory://1', '\tfoo\n    bar');
+    const selections = [
+      createSelection(0, 1, 0, 1),
+      createSelection(1, 4, 1, 4),
+    ];
+    const { nextSelections } = applyTextChangeToSelections(
+      textDocument,
+      selections,
+      {
+        start: 8,
+        end: 9,
+        text: '',
+      },
+      undefined,
+      4
+    );
+
+    expect(textDocument.getText()).toBe('foo\nbar');
+    expect(nextSelections).toEqual([
+      createSelection(0, 0, 0, 0),
+      createSelection(1, 0, 1, 0),
+    ]);
+  });
+
   test('does not expand deletion outside leading indentation', () => {
     const textDocument = new TextDocument('inmemory://1', '  foo');
     const selections = [createSelection(0, 3, 0, 3)];
@@ -1037,6 +1080,44 @@ describe('mapSelectionMove', () => {
       createSelection(1, 1, 1, 1, DirectionNone),
     ]);
   });
+
+  test('moves carets right across line boundaries', () => {
+    const textDocument = new TextDocument('inmemory://1', 'ab\ncd');
+    const selections = [
+      createSelection(0, 2, 0, 2),
+      createSelection(1, 2, 1, 2),
+    ];
+
+    expect(mapCursorMove(textDocument, selections, 'right')).toEqual([
+      createSelection(1, 0, 1, 0),
+      createSelection(1, 2, 1, 2),
+    ]);
+  });
+
+  test('moves to text start and toggles to column zero', () => {
+    const textDocument = new TextDocument('inmemory://1', '  foo');
+    const firstMove = mapCursorMove(
+      textDocument,
+      [createSelection(0, 4, 0, 4)],
+      'textStart'
+    );
+    const secondMove = mapCursorMove(textDocument, firstMove, 'textStart');
+
+    expect(firstMove).toEqual([createSelection(0, 2, 0, 2)]);
+    expect(secondMove).toEqual([createSelection(0, 0, 0, 0)]);
+  });
+
+  test('moves to line start and end', () => {
+    const textDocument = new TextDocument('inmemory://1', 'abcd');
+    const selections = [createSelection(0, 2, 0, 2)];
+
+    expect(mapCursorMove(textDocument, selections, 'start')).toEqual([
+      createSelection(0, 0, 0, 0),
+    ]);
+    expect(mapCursorMove(textDocument, selections, 'end')).toEqual([
+      createSelection(0, 4, 0, 4),
+    ]);
+  });
 });
 
 describe('mapSelectionRangeMove', () => {
@@ -1075,6 +1156,19 @@ describe('mapSelectionRangeMove', () => {
     expect(mapSelectionShift(textDocument, selections, 'right')).toEqual([
       createSelection(0, 1, 0, 2, DirectionBackward),
       createSelection(1, 1, 1, 2, DirectionBackward),
+    ]);
+  });
+
+  test('extends selection up and down while preserving anchor', () => {
+    const textDocument = new TextDocument('inmemory://1', 'abcd\nefgh\nijkl');
+    const upSelections = [createSelection(1, 1, 1, 3, DirectionForward)];
+    const downSelections = [createSelection(1, 1, 1, 3, DirectionBackward)];
+
+    expect(mapSelectionShift(textDocument, upSelections, 'up')).toEqual([
+      createSelection(0, 3, 1, 1, DirectionBackward),
+    ]);
+    expect(mapSelectionShift(textDocument, downSelections, 'down')).toEqual([
+      createSelection(1, 3, 2, 1, DirectionForward),
     ]);
   });
 });
@@ -1262,6 +1356,66 @@ describe('applyTextReplaceToSelections', () => {
       createSelection(1, 2, 1, 2),
       createSelection(2, 2, 2, 2),
     ]);
+  });
+
+  test('throws when replacement count does not match selections', () => {
+    const textDocument = new TextDocument('inmemory://1', 'x\ny');
+    const selections = [
+      createSelection(0, 1, 0, 1),
+      createSelection(1, 1, 1, 1),
+    ];
+
+    expect(() =>
+      applyTextReplaceToSelections(textDocument, selections, ['a'])
+    ).toThrow('Selection text replacements must match the selection count');
+  });
+
+  test('throws on overlapping selection ranges', () => {
+    const textDocument = new TextDocument('inmemory://1', 'abcd');
+    const selections = [
+      createSelection(0, 0, 0, 2, DirectionForward),
+      createSelection(0, 1, 0, 3, DirectionForward),
+    ];
+
+    expect(() =>
+      applyTextReplaceToSelections(textDocument, selections, ['x', 'y'])
+    ).toThrow('Overlapping multi-selection edits are not supported');
+  });
+});
+
+describe('resolveIndentEdits', () => {
+  test('outdent removes one tab or one soft-tab width per line', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      '\tfoo\n    bar\nbaz'
+    );
+    const selection = createSelection(0, 1, 2, 0, DirectionForward);
+    const [edits, nextSelection] = resolveIndentEdits(
+      textDocument,
+      selection,
+      4,
+      true
+    );
+
+    expect(edits).toEqual([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 1 },
+        },
+        newText: '',
+      },
+      {
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 4 },
+        },
+        newText: '',
+      },
+    ]);
+    expect(nextSelection).toEqual(
+      createSelection(0, 0, 2, 0, DirectionForward)
+    );
   });
 });
 

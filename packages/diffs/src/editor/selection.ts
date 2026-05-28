@@ -275,7 +275,6 @@ export function applyTextChangeToSelections<LAnnotation>(
   const adjustedChange = normalizeLeadingIndentForChange(
     textDocument,
     edit,
-    primarySelection,
     tabSize
   );
   const edits: ResolvedTextEdit[] = [];
@@ -294,14 +293,23 @@ export function applyTextChangeToSelections<LAnnotation>(
     if (mergedGroup === undefined) {
       return;
     }
+    const perGroupChange = normalizeLeadingIndentForChange(
+      textDocument,
+      {
+        start: mergedGroup.start,
+        end: mergedGroup.end,
+        text: adjustedChange.text,
+      },
+      tabSize
+    );
     const newText = expandSingleNewlineInsert(
       textDocument,
-      adjustedChange.text,
-      mergedGroup.start
+      perGroupChange.text,
+      perGroupChange.start
     );
     edits.push({
-      start: mergedGroup.start,
-      end: mergedGroup.end,
+      start: perGroupChange.start,
+      end: perGroupChange.end,
       text: newText,
     });
     const nextOffsets: [number, number] = [
@@ -311,7 +319,7 @@ export function applyTextChangeToSelections<LAnnotation>(
     for (const index of mergedGroup.indices) {
       nextSelectionOffsets[index] = nextOffsets;
     }
-    offsetDelta += newText.length - (mergedGroup.end - mergedGroup.start);
+    offsetDelta += newText.length - (perGroupChange.end - perGroupChange.start);
     mergedGroup = undefined;
   };
   for (const entry of ordered) {
@@ -1090,7 +1098,7 @@ function expandSingleNewlineInsert(
   if (indentLen === 0) {
     return insertText;
   }
-  return '\n' + lineText.slice(0, indentLen);
+  return insertText + lineText.slice(0, indentLen);
 }
 
 function getLeadingSpaces(text: string): number {
@@ -1136,23 +1144,13 @@ function createSelectionsFromOffsetPairs(
 function normalizeLeadingIndentForChange(
   textDocument: TextDocument<unknown>,
   change: ResolvedTextEdit,
-  primarySelection: EditorSelection,
   tabSize: number
 ): ResolvedTextEdit {
-  if (
-    change.text !== '' ||
-    change.start !== change.end - 1 ||
-    primarySelection.start.line !== primarySelection.end.line ||
-    primarySelection.start.character !== primarySelection.end.character
-  ) {
+  if (change.text !== '' || change.start !== change.end - 1) {
     return change;
   }
   const caretPosition = textDocument.positionAt(change.end);
   if (caretPosition.character === 0) {
-    return change;
-  }
-  const primaryOffset = textDocument.offsetAt(primarySelection.start);
-  if (change.end !== primaryOffset) {
     return change;
   }
   const lineText = textDocument.getLineText(caretPosition.line);
