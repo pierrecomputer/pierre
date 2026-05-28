@@ -317,9 +317,11 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
         </>
       ) : (
         <CodeViewStatusPanel
-          state={loadState}
+          darkTheme={darkTheme}
           errorMessage={errorMessage}
+          lightTheme={lightTheme}
           onRetry={retryLoad}
+          state={loadState}
         />
       )}
     </ReviewGrid>
