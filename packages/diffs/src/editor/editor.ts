@@ -80,6 +80,7 @@ export interface EditorOptions<LAnnotation> {
     file: FileContents,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ) => void;
+  __debug?: boolean;
 }
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
@@ -728,9 +729,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#updateSelections(this.#selections);
     }
 
-    if (renderRange !== undefined) {
+    if (this.#options.__debug === true && renderRange !== undefined) {
       const { startingLine, totalLines } = renderRange;
-      console.debug(
+      console.log(
         '[diffs/editor] render file:',
         fileContents.name,
         'RenderRange:',
@@ -1212,10 +1213,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
 
-    console.debug(
-      `[diffs/editor] re-render in: ${round(performance.now() - t2)}ms,`,
-      `tokenize in: ${round(t2 - t)}ms (${dirtyLines.size} dirty lines)`
-    );
+    if (this.#options.__debug === true) {
+      console.log(
+        `[diffs/editor] re-render in: ${round(performance.now() - t2)}ms,`,
+        `tokenize in: ${round(t2 - t)}ms (${dirtyLines.size} dirty lines)`
+      );
+    }
   }
 
   #handleInput(inputType: string, data: string | null) {
