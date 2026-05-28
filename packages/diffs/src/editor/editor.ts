@@ -22,7 +22,7 @@ import {
 } from './command';
 import { editorCSS, editorGlobalCSS } from './css';
 import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
-import { isPrimaryModifier, isSafari } from './platform';
+import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import { type QuickEditContext, QuickEditWidget } from './quickEdit';
 import { SearchPanelWidget } from './searchPanel';
 import type { EditorSelection } from './selection';
@@ -521,6 +521,62 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             return;
           }
           if (!targetIsContentElement(e)) {
+            return;
+          }
+          // handle the arrow key events to scroll to the cursor position manually
+          const mvShortcut = isMoveCursorShortcut(e);
+          const textDocument = this.#textDocument;
+          if (
+            this.#selections !== undefined &&
+            this.#selections.length > 0 &&
+            mvShortcut !== undefined &&
+            textDocument !== undefined
+          ) {
+            const lineCount = textDocument.lineCount;
+            this.#updateSelections(
+              this.#selections.map((selection) => {
+                let { line, character } =
+                  mvShortcut === 'up' || mvShortcut === 'left'
+                    ? selection.start
+                    : selection.end;
+                if (mvShortcut === 'up') {
+                  line = Math.max(0, line - 1);
+                } else if (mvShortcut === 'down') {
+                  line = Math.min(Math.max(lineCount - 1, 0), line + 1);
+                } else if (isCollapsedSelection(selection)) {
+                  if (mvShortcut === 'left') {
+                    character--;
+
+                    if (character < 0) {
+                      if (line === 0) {
+                        character = 0;
+                      } else {
+                        line = Math.max(0, line - 1);
+                        character = textDocument.getLineText(line).length;
+                      }
+                    }
+                  } else {
+                    character++;
+                    if (character > textDocument.getLineText(line).length) {
+                      if (line === lineCount - 1) {
+                        character--;
+                      } else {
+                        line = Math.min(Math.max(lineCount - 1, 0), line + 1);
+                        character = 0;
+                      }
+                    }
+                  }
+                }
+                const pos = { line, character };
+                return {
+                  start: pos,
+                  end: pos,
+                  direction: DirectionNone,
+                };
+              })
+            );
+            this.#scrollToPrimaryCaret();
+            e.preventDefault();
             return;
           }
           const command = resolveEditorCommandFromKeyboardEvent(e);
@@ -1249,10 +1305,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #updateSelections(selections: EditorSelection[]) {
-    const primarySelection = selections.at(-1);
-    if (primarySelection === undefined) {
+    if (selections.length === 0) {
       return;
     }
+    const primarySelection = selections.at(-1)!;
     this.#selections = selections;
     this.#primaryCaretElement = undefined;
     this.#component?.setSelectedLines(null);

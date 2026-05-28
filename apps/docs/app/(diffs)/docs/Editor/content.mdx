@@ -4,13 +4,14 @@
   The editor API is experimental and subject to change.
 </Notice>
 
-The editor is a pluggable editing layer for `File`-style code surfaces.
-It adds keyboard-driven editing to an already-rendered `File` or `FileDiff` while the
+The editor is a pluggable editing layer for `File`-style code surfaces. It adds
+keyboard-driven editing to an already-rendered `File` or `FileDiff` while the
 existing renderer continues to own syntax highlighting, layout, annotations, and
 virtualization.
 
-To attach the editor to a `File` instance, import it from `@pierre/diffs/editor`. It is intentionally separate from the
-core bundle so you can lazy-load it when editing is optional.
+To attach the editor to a `File` instance, import it from
+`@pierre/diffs/editor`. It is intentionally separate from the core bundle so you
+can lazy-load it when editing is optional.
 
 - Text editing
 - Selection management, including multiple cursors
@@ -50,8 +51,9 @@ editing) and trigger a re-render.
 
 ### Vanilla JS
 
-For vanilla integrations, render with `File` or `FileDiff` first, then attach the editor.
-For best performance when editing large files, we strongly recommend using `VirtualizedFile` and `VirtualizedFileDiff`.
+For vanilla integrations, render with `File` or `FileDiff` first, then attach
+the editor. For best performance when editing large files, we strongly recommend
+using `VirtualizedFile` and `VirtualizedFileDiff`.
 
 <EditorComponentTabs
   fileExample={editorVanillaFileExample}
@@ -81,7 +83,8 @@ editing will have no effect.
 Create one `Editor` instance (typically with `useMemo`), wrap your tree in
 `EditorProvider`, and set `contentEditable` on `File` or `FileDiff` when editing
 should be active. The provider cleans up the editor on unmount. We highly
-recommend using the `Virtualizer` component for best performance when editing large files.
+recommend using the `Virtualizer` component for best performance when editing
+large files.
 
 <EditorComponentTabs
   fileExample={editorReactExample}
@@ -100,7 +103,8 @@ page bundle smaller and can improve LCP on pages where editing is rare.
 
 Quick Edit helps you quickly change the active selection without breaking your
 flow. Enable it with `enabledQuickEdit: true`, define the UI in
-`renderQuickEdit`, then click the gutter icon on the active selection to open it.
+`renderQuickEdit`, then click the gutter icon on the active selection to open
+it.
 
 <DocsCodeExample {...editorQuickEditExample} />
 
