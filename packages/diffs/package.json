@@ -57,10 +57,6 @@
       "import": "./dist/worker/worker-portable.js"
     }
   },
-  "publishConfig": {
-    "access": "public",
-    "tag": "beta"
-  },
   "scripts": {
     "build": "tsdown --clean",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",

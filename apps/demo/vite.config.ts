@@ -115,8 +115,5 @@ export default defineConfig(() => {
         },
       },
     },
-    server: {
-      hmr: !process.env.NO_HMR,
-    },
   };
 });

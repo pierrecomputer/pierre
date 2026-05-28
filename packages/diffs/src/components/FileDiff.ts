@@ -225,7 +225,7 @@ export class FileDiff<
   protected enabled = true;
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
-  protected renderDiffTimer: ReturnType<typeof setTimeout> | undefined;
+  protected rerenderTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -532,10 +532,10 @@ export class FileDiff<
 
     this.editor?.cleanUp();
     this.editor = undefined;
-    if (this.renderDiffTimer !== undefined) {
-      clearTimeout(this.renderDiffTimer);
+    if (this.rerenderTimeout !== undefined) {
+      clearTimeout(this.rerenderTimeout);
     }
-    this.renderDiffTimer = undefined;
+    this.rerenderTimeout = undefined;
   }
 
   public virtualizedSetup(): void {
@@ -975,10 +975,10 @@ export class FileDiff<
       Object.defineProperty(newFile, 'contents', {
         get: () => textDocument.getText(),
       });
-      if (this.renderDiffTimer !== undefined) {
-        clearTimeout(this.renderDiffTimer);
+      if (this.rerenderTimeout !== undefined) {
+        clearTimeout(this.rerenderTimeout);
       }
-      this.renderDiffTimer = setTimeout(() => {
+      this.rerenderTimeout = setTimeout(() => {
         this.fileDiff = parseDiffFromFile(
           deletionFile,
           newFile,

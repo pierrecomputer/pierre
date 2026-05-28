@@ -254,10 +254,6 @@ diffs-container {
   gap: 4px;
 }
 
-[data-icon-sprite] {
-  display: none;
-}
-
 [data-quick-edit-slot] button {
   border-color: rgba(128, 128, 128, 0.4);
 
