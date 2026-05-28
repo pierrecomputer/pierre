@@ -108,7 +108,17 @@ function cleanupInstances(container: HTMLElement) {
   cleanupCodeView(container);
   container.textContent = '';
   delete container.dataset.diff;
+  editShortcutCallback = undefined;
 }
+
+let editShortcutCallback: (() => boolean | void) | undefined;
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'e') {
+    if (editShortcutCallback?.() === false) {
+      event.preventDefault();
+    }
+  }
+});
 
 let loadingPatch: Promise<string> | undefined;
 async function loadPatchContent() {
@@ -242,6 +252,12 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
               }
             }
           );
+          editShortcutCallback = (): boolean | void => {
+            if (!isEditing) {
+              editableToggle.querySelector('input')?.click();
+              return false;
+            }
+          };
           const div = document.createElement('div');
           div.style.display = 'flex';
           div.style.gap = '8px';
@@ -809,6 +825,12 @@ if (renderFileButton != null) {
             }
           }
         );
+        editShortcutCallback = (): boolean | void => {
+          if (!isEditing) {
+            editableToggle.querySelector('input')?.click();
+            return false;
+          }
+        };
         const div = document.createElement('div');
         div.style.display = 'flex';
         div.style.gap = '8px';
