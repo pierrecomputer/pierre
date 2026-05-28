@@ -618,6 +618,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 this.#isGutterMouseDown = true;
                 this.#selectionStart = selection;
                 this.#updateSelections([selection]);
+                this.#focus(selection.end);
               }
               this.#mouseUpDisposes = [
                 addEventListener(
@@ -662,8 +663,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                       } else {
                         this.#selectionStart = selection;
                       }
-
                       this.#updateSelections([selection]);
+                      this.#focus(selection.end);
                     }
                   },
                   { passive: true }
@@ -697,7 +698,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#scrollToPrimaryCaret();
       this.#initSelections = undefined;
     } else if (this.#selections !== undefined && this.#selections.length > 0) {
-      // when re-rendering triggered by viewport scroll,
+      // when re-rendering triggered by virtual viewport scroll,
       // re-render the existing selections
       this.#updateSelections(this.#selections);
     }
@@ -927,6 +928,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             return sel;
           });
           this.#updateSelections(expanded);
+          this.focus();
         } else {
           const nextMatch = findNexMatch(textDocument, selections);
           if (nextMatch !== undefined) {
@@ -978,6 +980,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
       case 'selectAll':
         this.#updateSelections([getDocumentFullSelection(textDocument)]);
+        this.focus();
         break;
 
       case 'moveCursorToDocStart':
@@ -1047,6 +1050,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     if (this.#selections !== undefined) {
       this.#updateSelections(this.#selections);
+      this.focus();
     }
   }
 
@@ -1777,37 +1781,34 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#searchPanel?.cleanup();
 
     const textDocument = this.#textDocument;
-    const selections = this.#selections;
     const preElement =
       this.#componentContainer?.shadowRoot?.querySelector<HTMLElement>('pre');
-    if (
-      textDocument === undefined ||
-      selections === undefined ||
-      preElement == null
-    ) {
+    if (textDocument === undefined || preElement == null) {
       return;
     }
 
-    const primaryIndex = selections.length - 1;
-    let primarySelection = selections[primaryIndex];
-    if (isCollapsedSelection(primarySelection)) {
-      const expanded = expandCollapsedSelectionToWord(
-        textDocument,
-        primarySelection
-      );
-      const nextSelections = [...selections.slice(0, primaryIndex), expanded];
-      this.#updateSelections(nextSelections);
-      primarySelection = expanded;
-    }
-    const selectionText = textDocument.getText(primarySelection);
-    const defaultQuery = !selectionText.includes('\n') ? selectionText : '';
-    const initialMatch: [number, number] | undefined =
-      defaultQuery !== ''
-        ? [
+    let defaultQuery = '';
+    let initialMatch: [number, number] | undefined = undefined;
+
+    const selections = this.#selections;
+    if (selections !== undefined && selections.length > 0) {
+      let primarySelection = selections.at(-1)!;
+      if (isCollapsedSelection(primarySelection)) {
+        primarySelection = expandCollapsedSelectionToWord(
+          textDocument,
+          primarySelection
+        );
+        this.#updateSelections([...selections.slice(0, -1), primarySelection]);
+        const selectionText = textDocument.getText(primarySelection);
+        if (!selectionText.includes('\n')) {
+          defaultQuery = selectionText;
+          initialMatch = [
             textDocument.offsetAt(primarySelection.start),
             textDocument.offsetAt(primarySelection.end),
-          ]
-        : undefined;
+          ];
+        }
+      }
+    }
 
     this.#searchPanel = new SearchPanelWidget({
       textDocument,
