@@ -8,6 +8,35 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
+export const VANILLA_API_POST_RENDER_LIFECYCLE: PreloadFileOptions<undefined> =
+  {
+    file: {
+      name: 'post_render_lifecycle.ts',
+      contents: `import { FileDiff } from '@pierre/diffs';
+
+const cleanupByNode = new WeakMap<HTMLElement, () => void>();
+
+const instance = new FileDiff({
+  onPostRender(node, _instance, phase) {
+    if (phase === 'mount') {
+      const observer = new ResizeObserver(() => {
+        console.log(node.getBoundingClientRect().height);
+      });
+      observer.observe(node);
+      cleanupByNode.set(node, () => observer.disconnect());
+      return;
+    }
+
+    if (phase === 'unmount') {
+      cleanupByNode.get(node)?.();
+      cleanupByNode.delete(node);
+    }
+  },
+});`,
+    },
+    options,
+  };
+
 // =============================================================================
 // COMPONENT EXAMPLES (short, focused on usage)
 // =============================================================================
@@ -331,12 +360,16 @@ const instance = new FileDiff({
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
 
-  // Fires after hydration, and after render passes that commit DOM updates.
-  // Those DOM updates may be a full replacement or a partial update.
+  // Fires after hydration, after DOM-committing render updates, and before
+  // mounted DOM is removed. Phase is 'mount' | 'update' | 'unmount'.
   // Receives the outer diffs container element.
-  // Useful when you want to do your own post-render DOM manipulation.
+  // Useful when you want to measure, observe, or clean up DOM-node state.
   // You can access the shadow DOM from here if you need to inspect lines.
-  onPostRender(node, fileDiffInstance) {
+  onPostRender(node, fileDiffInstance, phase) {
+    if (phase === 'unmount') {
+      return;
+    }
+
     const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
     console.log('rendered line count', codeLines?.length ?? 0);
   },
@@ -583,12 +616,16 @@ const instance = new File({
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
 
-  // Fires after hydration, and after render passes that commit DOM updates.
-  // Those DOM updates may be a full replacement or a partial update.
+  // Fires after hydration, after DOM-committing render updates, and before
+  // mounted DOM is removed. Phase is 'mount' | 'update' | 'unmount'.
   // Receives the outer diffs container element.
-  // Useful when you want to do your own post-render DOM manipulation.
+  // Useful when you want to measure, observe, or clean up DOM-node state.
   // You can access the shadow DOM from here if you need to inspect lines.
-  onPostRender(node, fileInstance) {
+  onPostRender(node, fileInstance, phase) {
+    if (phase === 'unmount') {
+      return;
+    }
+
     const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
     console.log('rendered line count', codeLines?.length ?? 0);
   },

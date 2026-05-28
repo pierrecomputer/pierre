@@ -3,7 +3,7 @@
 import { cn } from '@/lib/utils';
 
 export const annotationCardBase =
-  'bg-card m-2 flex max-w-[600px] gap-2.5 rounded-xl border border-[rgb(0_0_0_/_0.1)] bg-clip-padding p-3 font-sans shadow-[0_2px_4px_rgb(0_0_0_/_0.025),0_4px_8px_rgb(0_0_0_/_0.025)] dark:border-[rgb(255_255_255_/_0.1)] dark:shadow-[0_2px_4px_rgb(0_0_0_/_0.25),0_4px_8px_rgb(0_0_0_/_0.25)] dark:bg-neutral-900/80';
+  'm-2 flex max-w-[600px] gap-2.5 rounded-xl border border-[var(--diffshub-annotation-border,var(--color-border))] bg-[var(--diffshub-annotation-bg,var(--color-card))] bg-clip-padding p-3 font-sans text-[var(--diffshub-annotation-fg,var(--color-card-foreground))] shadow-[var(--diffshub-annotation-shadow,0_2px_4px_rgb(0_0_0_/_0.025),0_4px_8px_rgb(0_0_0_/_0.025))]';
 
 // All available reviewer personas, derived from /public/diffshub-avatars/ filenames.
 const AVATAR_NAMES = [

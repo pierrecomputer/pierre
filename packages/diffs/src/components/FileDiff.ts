@@ -41,6 +41,7 @@ import type {
   FileDiffMetadata,
   HunkData,
   HunkSeparators,
+  PostRenderPhase,
   PrePropertiesConfig,
   RenderHeaderMetadataCallback,
   RenderHeaderPrefixCallback,
@@ -97,6 +98,8 @@ export interface FileDiffHydrationProps<LAnnotation> extends Omit<
   prerenderedHTML?: string;
 }
 
+export type FileDiffType = 'file-diff' | 'unresolved-file';
+
 export interface FileDiffOptions<LAnnotation>
   extends
     Omit<BaseDiffOptions, 'hunkSeparators'>,
@@ -127,7 +130,11 @@ export interface FileDiffOptions<LAnnotation>
     getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
   ): HTMLElement | null | undefined;
 
-  onPostRender?(node: HTMLElement, instance: FileDiff<LAnnotation>): unknown;
+  onPostRender?(
+    node: HTMLElement,
+    instance: FileDiff<LAnnotation>,
+    phase: PostRenderPhase
+  ): unknown;
 }
 
 interface AnnotationElementCache<LAnnotation> {
@@ -179,6 +186,7 @@ export class FileDiff<
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
   readonly __id: string = `file-diff:${++instanceId}`;
+  readonly type: FileDiffType = 'file-diff';
 
   protected fileContainer: HTMLElement | undefined;
   protected spriteSVG: SVGElement | undefined;
@@ -215,12 +223,13 @@ export class FileDiff<
 
   protected deletionFile: FileContents | undefined;
   protected additionFile: FileContents | undefined;
-  protected fileDiff: FileDiffMetadata | undefined;
+  public fileDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
   protected lastRenderedHeaderHTML: string | undefined;
   protected cachedHeaderHTML: string | undefined;
   protected lastRowCount: number | undefined;
+  private mounted = false;
 
   protected enabled = true;
 
@@ -477,6 +486,7 @@ export class FileDiff<
   }
 
   public cleanUp(recycle: boolean = false): void {
+    this.emitPostRender(true);
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
     this.scrollSyncManager.cleanUp();
@@ -489,6 +499,7 @@ export class FileDiff<
       this.fileContainer?.remove();
     }
     this.fileContainer = undefined;
+    this.mounted = false;
     this.lineAnnotations = [];
     this.clearAuxiliaryNodes();
     this.annotationCache.clear();
@@ -586,6 +597,9 @@ export class FileDiff<
     fileContainer: HTMLElement,
     prerenderedHTML: string | undefined
   ): void {
+    if (this.fileContainer !== fileContainer) {
+      this.emitPostRender(true);
+    }
     prerenderHTMLIfNecessary(fileContainer, prerenderedHTML);
     for (const element of fileContainer.shadowRoot?.children ?? []) {
       if (element instanceof SVGElement) {
@@ -946,10 +960,31 @@ export class FileDiff<
     return true;
   }
 
-  protected emitPostRender(): void {
-    if (this.fileContainer != null) {
-      this.options.onPostRender?.(this.fileContainer, this);
+  protected emitPostRender(unmount = false): void {
+    const {
+      fileContainer,
+      options: { onPostRender },
+    } = this;
+
+    if (unmount) {
+      if (!this.mounted) {
+        return;
+      }
+      this.mounted = false;
+      if (fileContainer == null) {
+        return;
+      }
+      this.options.onPostRender?.(fileContainer, this, 'unmount');
+      return;
     }
+
+    if (fileContainer == null) {
+      return;
+    }
+
+    const phase: PostRenderPhase = this.mounted ? 'update' : 'mount';
+    this.mounted = true;
+    onPostRender?.(fileContainer, this, phase);
   }
 
   emitLayoutChange(
@@ -1094,6 +1129,7 @@ export class FileDiff<
     if (this.fileContainer == null) {
       return false;
     }
+    this.emitPostRender(true);
     this.cleanChildNodes();
 
     if (this.placeHolder == null) {
@@ -1169,6 +1205,7 @@ export class FileDiff<
 
     this.lastRenderedHeaderHTML = undefined;
     this.lastRowCount = undefined;
+    this.mounted = false;
   }
 
   private renderSeparators(hunkData: HunkData[]): void {
@@ -1278,12 +1315,16 @@ export class FileDiff<
     fileContainer?: HTMLElement,
     parentNode?: HTMLElement
   ): HTMLElement {
-    const previousContainer = this.fileContainer;
-    this.fileContainer =
+    const { fileContainer: previousContainer } = this;
+    const nextContainer =
       fileContainer ??
-      this.fileContainer ??
+      previousContainer ??
       document.createElement(DIFFS_TAG_NAME);
-    const containerChanged = previousContainer !== this.fileContainer;
+    const containerChanged = previousContainer !== nextContainer;
+    if (containerChanged) {
+      this.emitPostRender(true);
+    }
+    this.fileContainer = nextContainer;
     if (previousContainer != null && containerChanged) {
       this.lastRenderedHeaderHTML = undefined;
       this.headerElement = undefined;

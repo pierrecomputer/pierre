@@ -79,6 +79,55 @@ function opaqueOrUndefined(color: string | undefined): string | undefined {
   return isFullyTransparent(color) ? undefined : color;
 }
 
+// Parses an opaque hex color (#rgb / #rrggbb / #rrggbbff) into 0..1 sRGB
+// components, ignoring the alpha byte when present. Returns undefined for
+// other color formats — callers should treat that as "unknown" and skip
+// any luminance-based heuristics rather than guessing.
+function parseHexRgb(color: string): [number, number, number] | undefined {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(color.trim());
+  if (m == null) return undefined;
+  const hex = m[1];
+  const expand = (s: string) => parseInt(s.length === 1 ? s + s : s, 16) / 255;
+  if (hex.length === 3) {
+    return [expand(hex[0]), expand(hex[1]), expand(hex[2])];
+  }
+  return [
+    expand(hex.slice(0, 2)),
+    expand(hex.slice(2, 4)),
+    expand(hex.slice(4, 6)),
+  ];
+}
+
+// WCAG relative luminance: sRGB channel → linear → weighted sum. Used
+// only to compare two colors' lightness, not for absolute contrast
+// scoring, so the exact gamma curve is fine to keep inline.
+function relativeLuminance(rgb: [number, number, number]): number {
+  const linear = rgb.map((channel) =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+  );
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+// True when `hover` is closer in luminance to `fg` than to `bg` — i.e.,
+// the hover surface would land on top of the row text rather than next
+// to it, erasing legibility. Returns false when any color can't be
+// parsed (unknown format → trust the theme designer's intent).
+function hoverWouldEraseText(
+  hover: string,
+  bg: string | undefined,
+  fg: string | undefined
+): boolean {
+  if (bg == null || fg == null) return false;
+  const hoverRgb = parseHexRgb(hover);
+  const bgRgb = parseHexRgb(bg);
+  const fgRgb = parseHexRgb(fg);
+  if (hoverRgb == null || bgRgb == null || fgRgb == null) return false;
+  const hoverL = relativeLuminance(hoverRgb);
+  const bgL = relativeLuminance(bgRgb);
+  const fgL = relativeLuminance(fgRgb);
+  return Math.abs(hoverL - fgL) < Math.abs(hoverL - bgL);
+}
+
 export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
   const c = theme.colors ?? {};
   const sideBarBg =
@@ -91,11 +140,19 @@ export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
 
   // Some themes (e.g. Material) set hover/selection bg to the same color as
   // the sidebar bg, making the state invisible. Detect this and fall through
-  // so the computed defaults provide visible feedback.
+  // so the computed defaults provide visible feedback. Additionally, some
+  // themes (e.g. slack-ochin) define list.hoverBackground for an editor
+  // surface whose palette is opposite the sidebar's — a near-white hover on
+  // a dark navy sidebar with light text. Reject those too so the hovered
+  // row's text doesn't disappear.
   const bgLower = sideBarBg?.toLowerCase();
   const rawHoverBg = c['list.hoverBackground'];
-  const listHoverBg =
-    rawHoverBg?.toLowerCase() === bgLower ? undefined : rawHoverBg;
+  let listHoverBg: string | undefined;
+  if (rawHoverBg != null && rawHoverBg.toLowerCase() !== bgLower) {
+    listHoverBg = hoverWouldEraseText(rawHoverBg, sideBarBg, sideBarFg)
+      ? undefined
+      : rawHoverBg;
+  }
   const rawSelectionBg = c['list.activeSelectionBackground'];
   const listSelectionBg =
     rawSelectionBg?.toLowerCase() === bgLower
@@ -127,6 +184,13 @@ export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
     c['editorGutter.deletedBackground'];
 
   const isDark = theme.type === 'dark';
+  // Pick the hover fallback based on the actual sidebar surface
+  // luminance, not theme.type — themes like slack-ochin are tagged
+  // `light` for the editor but ship a dark sidebar; a 6%-black overlay
+  // on dark navy is nearly invisible.
+  const sideBarBgRgb = sideBarBg != null ? parseHexRgb(sideBarBg) : undefined;
+  const sideBarIsDark =
+    sideBarBgRgb != null ? relativeLuminance(sideBarBgRgb) < 0.5 : isDark;
   const result: TreeThemeStyles = {
     colorScheme: isDark ? 'dark' : 'light',
     backgroundColor: sideBarBg ?? '',
@@ -139,7 +203,8 @@ export function themeToTreeStyles(theme: TreeThemeInput): TreeThemeStyles {
     '--trees-theme-list-active-selection-fg':
       listActiveSelectionFg ?? sideBarFg ?? '',
     '--trees-theme-list-hover-bg':
-      listHoverBg ?? (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+      listHoverBg ??
+      (sideBarIsDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
     '--trees-theme-list-active-selection-bg': listSelectionBg ?? 'transparent',
     '--trees-theme-focus-ring': focusRing ?? sideBarFg ?? '',
     '--trees-theme-input-bg': inputBg ?? '',

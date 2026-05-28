@@ -37,9 +37,16 @@ function getCommentLineClassName(
   if (lineType === 'context') {
     return 'text-muted-foreground';
   }
+  // The themed chrome sets --diffshub-comment-add-fg / -del-fg with a shade
+  // chosen from the active Shiki surface's luminance, so addition/deletion
+  // labels stay legible even on mixed-palette themes (e.g. slack-ochin's
+  // "light" classification with a dark navy sidebar, where the global
+  // `dark:` variant would otherwise leave us with low-contrast 700 shades
+  // on a dark card). The Tailwind shades stay as fallbacks for the
+  // first-render window before the chrome style applies.
   return side === 'additions'
-    ? 'text-emerald-700 dark:text-emerald-400'
-    : 'text-rose-700 dark:text-rose-400';
+    ? 'text-[var(--diffshub-comment-add-fg,#047857)] dark:text-[var(--diffshub-comment-add-fg,#34d399)]'
+    : 'text-[var(--diffshub-comment-del-fg,#be123c)] dark:text-[var(--diffshub-comment-del-fg,#fb7185)]';
 }
 
 // Wraps a click handler so users can drag-select text inside the row without
@@ -117,12 +124,24 @@ export const CodeViewCommentsList = memo(function CodeViewCommentsList({
               {section.path}
             </div>
           )}
-          <div className="rounded-lg border border-[rgb(0_0_0_/_0.1)] dark:border-[rgb(255_255_255_/_0.15)]">
+          <div className="rounded-lg border border-[var(--diffshub-card-border,rgb(0_0_0_/_0.1))] dark:border-[var(--diffshub-card-border,rgb(255_255_255_/_0.15))]">
             {section.comments.map((comment) => (
               <button
                 key={comment.key}
                 type="button"
-                className="focus-visible:ring-ring hover:bg-muted bg-card flex w-full cursor-pointer items-start gap-2 border-b border-[rgb(0_0_0_/_0.1)] p-3 text-left text-sm transition-colors outline-none first:rounded-t-lg last:rounded-b-lg last:border-b-0 focus-visible:ring-2 dark:border-[rgb(255_255_255_/_0.15)] dark:bg-neutral-800 dark:hover:bg-[var(--diffshub-sidebar-bg)]"
+                // Card surface, hover, and border come from the themed
+                // chrome (set on the sidebar wrapper) so cards stay
+                // on-palette for mixed-light/dark themes like slack-ochin
+                // (light-typed but uses a dark navy sidebar). The
+                // hardcoded fallbacks cover the brief window before the
+                // Shiki theme resolves on first render.
+                // No `transition-colors` here: the bg / border / text
+                // colors are driven by CSS variables that flip the entire
+                // chrome on every theme swap, so a smooth color transition
+                // on each card visibly trails the rest of the UI (header,
+                // file tree, diff body) which snap instantly. Hover bg is
+                // snappy enough without an interpolated transition.
+                className="focus-visible:ring-ring flex w-full cursor-pointer items-start gap-2 border-b border-[var(--diffshub-card-border,rgb(0_0_0_/_0.1))] bg-[var(--diffshub-card-bg,var(--color-card))] p-3 text-left text-sm outline-none first:rounded-t-lg last:rounded-b-lg last:border-b-0 hover:bg-[var(--diffshub-card-hover-bg,var(--color-muted))] focus-visible:ring-2 dark:border-[var(--diffshub-card-border,rgb(255_255_255_/_0.15))]"
                 onClick={(event) =>
                   handleRowClick(event, () => onSelectComment?.(comment))
                 }

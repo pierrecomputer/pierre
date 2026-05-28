@@ -12,6 +12,7 @@ import {
   IconEye,
   IconEyeSlash,
   IconInfoFill,
+  IconRepeat,
   IconSquircleLgFill,
   IconTriangleFill,
 } from '@pierre/icons';
@@ -19,12 +20,14 @@ import Link from 'next/link';
 import {
   type ComponentType,
   memo,
+  type MouseEvent,
   type ReactNode,
   type RefObject,
   useEffect,
   useState,
 } from 'react';
 
+import type { ThemeCycleControls } from './useThemeCycle';
 import { cn } from '@/lib/utils';
 
 const NUMBER_FORMATTER = new Intl.NumberFormat('en-US');
@@ -92,12 +95,14 @@ interface WorkerPoolStatusProps {
   expanded: boolean;
   onToggle(): void;
   scrollRef: RefObject<HTMLDivElement | null>;
+  themeCycle: ThemeCycleControls;
 }
 
 export const WorkerPoolStatus = memo(function WorkerPoolStatus({
   expanded,
   onToggle,
   scrollRef,
+  themeCycle,
 }: WorkerPoolStatusProps) {
   const pool = useWorkerPool();
   const [stats, setStats] = useState<WorkerStats | undefined>(undefined);
@@ -123,6 +128,7 @@ export const WorkerPoolStatus = memo(function WorkerPoolStatus({
         onToggle={onToggle}
         stats={stats}
         scrollRef={scrollRef}
+        themeCycle={themeCycle}
       />
     )
   );
@@ -159,6 +165,7 @@ interface StatsDisplayProps {
   onToggle(): void;
   stats: WorkerStats;
   scrollRef: RefObject<HTMLDivElement | null>;
+  themeCycle: ThemeCycleControls;
 }
 
 // Map worker pool status to a single icon component + color so the legend row
@@ -201,6 +208,7 @@ function StatsDisplay({
   onToggle,
   stats,
   scrollRef,
+  themeCycle,
 }: StatsDisplayProps) {
   const [isBrrt, setIsBrrt] = useState(false);
   const [scrollTester] = useState(
@@ -237,6 +245,7 @@ function StatsDisplay({
           </span>
         </button>
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <ThemeCycleToggle controls={themeCycle} />
           <button
             type="button"
             onClick={scrollTester.toggleState}
@@ -284,6 +293,45 @@ function StatsDisplay({
         </div>
       </StatusRow>
     </div>
+  );
+}
+
+interface ThemeCycleToggleProps {
+  controls: ThemeCycleControls;
+}
+
+// Sweep-through-themes button. Plain click matches the neighboring
+// autoscroll button's primary affordance — it starts (and stops) the
+// rotation. Shift-click bumps the per-step duration through
+// [1s, 3s, 5s, 10s]; the current value is rendered next to the icon so
+// every shift-click visibly steps through the presets.
+function ThemeCycleToggle({ controls }: ThemeCycleToggleProps) {
+  const { cycling, stepSeconds, bumpDuration, toggleCycle } = controls;
+  const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.shiftKey) {
+      bumpDuration();
+    } else {
+      toggleCycle();
+    }
+  };
+  const title = cycling
+    ? `Stop cycling themes (every ${stepSeconds}s) — shift+click to change speed`
+    : `Cycle themes every ${stepSeconds}s — shift+click to change speed`;
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="hover:bg-muted/50 hover:text-foreground text-muted-foreground hidden h-5 cursor-pointer items-center gap-1 rounded-md px-1 text-[10px] leading-none tabular-nums transition md:inline-flex"
+      title={title}
+      aria-label={title}
+      aria-pressed={cycling}
+    >
+      <IconRepeat
+        aria-hidden="true"
+        className={cn('size-3', cycling && 'animate-pulse')}
+      />
+      <span>{stepSeconds}s</span>
+    </button>
   );
 }
 
