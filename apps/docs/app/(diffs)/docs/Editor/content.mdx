@@ -4,21 +4,22 @@
   The editor API is experimental and subject to change.
 </Notice>
 
-The editor is a pluggable editing layer for `File`-style code surfaces. It adds
-keyboard-driven editing to an already-rendered file or diff while the existing
-renderer continues to own syntax highlighting, layout, annotations, and
+The editor is a pluggable editing layer for `File`-style code surfaces.
+It adds keyboard-driven editing to an already-rendered `File` or `FileDiff` while the
+existing renderer continues to own syntax highlighting, layout, annotations, and
 virtualization.
 
-Import it from `@pierre/diffs/editor`. It is intentionally separate from the
+To attach the editor to a `File` instance, import it from `@pierre/diffs/editor`. It is intentionally separate from the
 core bundle so you can lazy-load it when editing is optional.
 
-- Text editing with a document model and debounced `onChange` callbacks
-- Selection management, including multiple cursors (Cmd/Ctrl-click to add)
-- Undo and redo
-- Find-in-file search (panel and incremental match)
+- Text editing
+- Selection management, including multiple cursors
+- Automatic indentation
+- History (undo and redo)
+- Find-in-file search
 - [Quick Edit](#editor-quick-edit) (opt-in, custom UI)
-- Automatic indentation on Tab and Shift+Tab
-- Mobile-friendly input via native `contentEditable` and selection handles
+- SSR supported
+- Mobile-friendly
 
 <EditorDemo />
 
@@ -41,7 +42,7 @@ You render the surface first, then attach editing:
 4. **Updates** — Keystrokes update an internal `TextDocument`, then changed
    lines are re-highlighted through the same tokenizer pipeline as read-only
    mode. Your `onChange` handler receives updated `FileContents` (and line
-   annotations when present), debounced by 500ms.
+   annotations when present).
 
 When attaching, the editor may normalize component options (for example,
 enabling the token transformer and disabling gutter utilities that conflict with
@@ -49,10 +50,8 @@ editing) and trigger a re-render.
 
 ### Vanilla JS
 
-For vanilla integrations, render with `VirtualizedFile` or `VirtualizedFileDiff`
-inside a [Virtualizer](#virtualization) scroll region. Virtualization keeps
-large files responsive; the editor cooperates with the virtualizer's visible
-line window instead of assuming the full document is in the DOM.
+For vanilla integrations, render with `File` or `FileDiff` first, then attach the editor.
+For best performance when editing large files, we strongly recommend using `VirtualizedFile` and `VirtualizedFileDiff`.
 
 <EditorComponentTabs
   fileExample={editorVanillaFileExample}
@@ -81,9 +80,13 @@ editing will have no effect.
 
 Create one `Editor` instance (typically with `useMemo`), wrap your tree in
 `EditorProvider`, and set `contentEditable` on `File` or `FileDiff` when editing
-should be active. The provider cleans up the editor on unmount.
+should be active. The provider cleans up the editor on unmount. We highly
+recommend using the `Virtualizer` component for best performance when editing large files.
 
-<DocsCodeExample {...editorReactExample} />
+<EditorComponentTabs
+  fileExample={editorReactExample}
+  fileDiffExample={editorReactFileDiffExample}
+/>
 
 ### Lazy Loading
 

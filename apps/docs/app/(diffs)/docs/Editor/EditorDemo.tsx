@@ -11,10 +11,11 @@ const initialFile: FileContents = {
 
 const editor = new Editor({
   onChange(file, lineAnnotations) {
-    console.log('change', file.name, file.contents, lineAnnotations);
+    console.log('change', file.name, lineAnnotations);
   },
 });
 
+// Attach the editor to the file instance
 const dispose = editor.edit(fileInstance);
 
 // Later, when the editor is no longer needed:
@@ -60,7 +61,7 @@ export function EditorDemo() {
     <div className="not-prose bg-card overflow-hidden rounded-lg border">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <div>
-          <h5 className="text-sm font-medium">Editable file demo</h5>
+          <h5 className="text-sm font-medium">Editor Demo</h5>
           <p className="text-muted-foreground text-xs">
             Click into the code and type to try the editor.
           </p>

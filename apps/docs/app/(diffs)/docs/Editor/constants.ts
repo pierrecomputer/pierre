@@ -40,7 +40,7 @@ fileInstance.render({ file, containerWrapper: content });
 
 const editor = new Editor({
   onChange(file, lineAnnotations) {
-    console.log('change', file.name, file.contents, lineAnnotations);
+    console.log('change', file.name, lineAnnotations);
   },
 });
 
@@ -92,7 +92,7 @@ fileDiffInstance.render({ oldFile, newFile, containerWrapper: content });
 
 const editor = new Editor({
   onChange(file, lineAnnotations) {
-    console.log('change', file.name, file.contents, lineAnnotations);
+    console.log('change', file.name, lineAnnotations);
   },
 });
 
@@ -117,7 +117,7 @@ async function edit(fileInstance: VirtualizedFile): Promise<() => void> {
   const { Editor } = await import('@pierre/diffs/editor');
   const editor = new Editor({
     onChange(file, lineAnnotations) {
-      console.log('change', file.name, file.contents, lineAnnotations);
+      console.log('change', file.name, lineAnnotations);
     },
   });
   return editor.edit(fileInstance);
@@ -183,7 +183,7 @@ export const EDITOR_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
     name: 'editor_react.tsx',
     contents: `import type { FileContents } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File } from '@pierre/diffs/react';
+import { EditorProvider, File, Virtualizer } from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
 const file: FileContents = {
@@ -201,7 +201,7 @@ export function EditCodeFile() {
     () =>
       new Editor({
         onChange(file, lineAnnotations) {
-          console.log('change', file.name, file.contents, lineAnnotations);
+          console.log('change', file.name, lineAnnotations);
         },
       }),
     []
@@ -213,13 +213,84 @@ export function EditCodeFile() {
         {editable ? 'Disable editing' : 'Enable editing'}
       </button>
 
-      <File
-        file={file}
-        options={{
-          theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      <Virtualizer
+        style={{
+          maxHeight: '16rem',
+          overflow: 'auto',
+          borderRadius: '0.5rem',
         }}
-        contentEditable={editable}
-      />
+      >
+        <File
+          file={file}
+          options={{
+            theme: { dark: 'pierre-dark', light: 'pierre-light' },
+          }}
+          contentEditable={editable}
+        />
+      </Virtualizer>
+    </EditorProvider>
+  );
+}`,
+  },
+  options,
+};
+
+export const EDITOR_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_react_file_diff.tsx',
+    contents: `import type { FileContents } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+import { EditorProvider, FileDiff, Virtualizer } from '@pierre/diffs/react';
+import { useMemo, useState } from 'react';
+
+const oldFile: FileContents = {
+  name: 'example.ts',
+  contents: \`function greet(name: string) {
+  return name;
+}\`,
+};
+
+const newFile: FileContents = {
+  ...oldFile,
+  contents: \`function greet(name: string) {
+  return \\\`Hello, \\\${name}!\\\`;
+}\`,
+};
+
+export function EditCodeDiff() {
+  const [editable, setEditable] = useState(true);
+  const editor = useMemo(
+    () =>
+      new Editor({
+        onChange(file, lineAnnotations) {
+          console.log('change', file.name, lineAnnotations);
+        },
+      }),
+    []
+  );
+
+  return (
+    <EditorProvider editor={editor}>
+      <button type="button" onClick={() => setEditable((value) => !value)}>
+        {editable ? 'Disable editing' : 'Enable editing'}
+      </button>
+
+      <Virtualizer
+        style={{
+          maxHeight: '16rem',
+          overflow: 'auto',
+          borderRadius: '0.5rem',
+        }}
+      >
+        <FileDiff
+          oldFile={oldFile}
+          newFile={newFile}
+          options={{
+            theme: { dark: 'pierre-dark', light: 'pierre-light' },
+          }}
+          contentEditable={editable}
+        />
+      </Virtualizer>
     </EditorProvider>
   );
 }`,
