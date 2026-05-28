@@ -258,87 +258,10 @@ diffs-container {
   display: none;
 }
 
-#editor {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  grid-template-rows: 1fr;
-  gap: 10px;
-  background-color: light-dark(white, black);
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-}
+[data-quick-edit-slot] button {
+  border-color: rgba(128, 128, 128, 0.4);
 
-#file-tree-header h1 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: var(--fg);
-  padding: 4px 16px 12px;
-}
-
-#file-tree-header svg {
-  width: 20px;
-  height: 20px;
-}
-
-#editor-container {
-  overflow-y: auto;
-  overscroll-behavior: none;
-  height: 100%;
-}
-
-#editor-container diffs-container {
-  margin-top: 0;
-}
-
-.quick-edit {
-  box-sizing: border-box;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 8px 0;
-  padding: 8px;
-  border: 1px solid rgba(128, 128, 128, 0.5);
-  border-radius: 6px;
-}
-
-.quick-edit-left {
-  position: relative;
-  flex: 1;
-  height: 24px;
-}
-
-.quick-edit-input {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 24px;
-  padding: 0;
-  margin: 0;
-  line-height: 24px;
-  border: none;
-  outline: none;
-  resize: none;
-}
-
-.quick-edit-status {
-  position: absolute;
-  top: 0;
-  left: 0;
-  line-height: 24px;
-  color: #999;
-  opacity: 0;
-}
-
-.quick-edit-right {
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #666;
+  &:hover {
+    border-color: #646cff;
+  }
 }

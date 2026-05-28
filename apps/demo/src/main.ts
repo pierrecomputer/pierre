@@ -739,49 +739,21 @@ if (renderFileButton != null) {
     const wrap = getWrapped();
     const editor = new Editor<LineCommentMetadata>({
       enabledQuickEdit: true,
-      renderQuickEdit: ({ close, replaceSelectionText }) => {
-        const el = document.createElement('div');
-        const input = document.createElement('input');
-        const span = document.createElement('span');
-        const left = document.createElement('div');
-        const right = document.createElement('div');
-        el.className = 'quick-edit';
-        input.className = 'quick-edit-input';
-        span.className = 'quick-edit-status';
-        left.className = 'quick-edit-left';
-        right.className = 'quick-edit-right';
-        right.innerHTML = `
-          <svg width="20" height="20" viewBox="0 0 20 20">
-            <line x1="10" y1="14" x2="10" y2="6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-            <polyline points="13 9 10 6 7 9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></polyline>
-            <path d="m17,13v1c0,1.657-1.343,3-3,3h-1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-            <path d="m13,3h1c1.657,0,3,1.343,3,3v1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path><path d="m3,7v-1c0-1.657,1.343-3,3-3h1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-            <path d="m7,17h-1c-1.657,0-3-1.343-3-3v-1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-          </svg>
-        `;
-        input.placeholder = 'Ask AI...';
-        span.textContent = 'Thinking...';
-        input.addEventListener('keyup', (e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            input.style.opacity = '0';
-            span.style.opacity = '1';
-            right.style.opacity = '0.5';
-            setTimeout(() => {
-              close();
-              replaceSelectionText('');
-            }, 2000);
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            close();
-          }
+      renderQuickEdit: (ctx) => {
+        const div = document.createElement('div');
+        const button = document.createElement('button');
+        button.innerText = `Comment the selection`;
+        button.addEventListener('click', () => {
+          const lines = ctx.getSelectionText().split('\n');
+          const comment = lines
+            .map((line) => (line.startsWith('//') ? line : `// ${line}`))
+            .join('\n');
+          ctx.replaceSelectionText(comment);
+          ctx.close();
         });
-        left.append(span, input);
-        el.append(left, right);
-        setTimeout(() => {
-          input.focus();
-        }, 100);
-        return el;
+        div.style.marginBlock = '4px';
+        div.appendChild(button);
+        return div;
       },
       onChange: (file, lineAnnotations) => {
         console.log('change', file, lineAnnotations);

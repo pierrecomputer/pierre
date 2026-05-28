@@ -19,7 +19,6 @@
   },
   "dependencies": {
     "@pierre/diffs": "workspace:*",
-    "@pierre/trees": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",
     "shiki": "catalog:"
