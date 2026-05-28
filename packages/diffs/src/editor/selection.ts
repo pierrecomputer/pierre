@@ -113,105 +113,104 @@ export function resolveIndentEdits(
 
 /**
  * Maps the cursor move to all selections.
- * TODO(@ije): use move cursor commands
  */
 export function mapCursorMove(
   textDocument: TextDocument<unknown>,
   selections: EditorSelection[],
-  nextPosition: Position
+  shortcut: 'textStart' | 'start' | 'end' | 'up' | 'down' | 'left' | 'right'
 ): EditorSelection[] {
-  const primarySelection = selections[selections.length - 1];
-  if (primarySelection === undefined) {
-    return [];
-  }
-  const deltaOffset =
-    textDocument.offsetAt(nextPosition) -
-    textDocument.offsetAt(primarySelection.start);
-  const deltaLine = nextPosition.line - primarySelection.start.line;
-  const movedOneChar = deltaOffset === 1 || deltaOffset === -1;
-  const newSelections: EditorSelection[] = [];
-  for (const selection of selections) {
-    let newPosition = nextPosition;
-    if (selection !== primarySelection) {
-      if (deltaLine === 0 || movedOneChar) {
-        newPosition = textDocument.positionAt(
-          textDocument.offsetAt(selection.start) + deltaOffset
-        );
+  const lineCount = textDocument.lineCount;
+  return selections.map((selection) => {
+    let { line, character } =
+      shortcut === 'up' || shortcut === 'left'
+        ? selection.start
+        : selection.end;
+    if (
+      shortcut === 'textStart' ||
+      shortcut === 'start' ||
+      shortcut === 'end'
+    ) {
+      if (shortcut === 'textStart') {
+        const indent = getLeadingSpaces(textDocument.getLineText(line));
+        character = character === indent ? 0 : indent;
       } else {
-        newPosition = {
-          line: clamp(
-            selection.start.line + deltaLine,
-            0,
-            textDocument.lineCount - 1
-          ),
-          character: selection.start.character,
-        };
+        character =
+          shortcut === 'start' ? 0 : textDocument.getLineText(line).length;
+      }
+      if (selection.direction === DirectionBackward) {
+        line = selection.start.line;
+      } else {
+        line = selection.end.line;
+      }
+    } else if (shortcut === 'up') {
+      line = Math.max(0, line - 1);
+    } else if (shortcut === 'down') {
+      line = Math.min(Math.max(lineCount - 1, 0), line + 1);
+    } else if (isCollapsedSelection(selection)) {
+      if (shortcut === 'left') {
+        character--;
+
+        if (character < 0) {
+          if (line === 0) {
+            character = 0;
+          } else {
+            line = Math.max(0, line - 1);
+            character = textDocument.getLineText(line).length;
+          }
+        }
+      } else {
+        character++;
+        if (character > textDocument.getLineText(line).length) {
+          if (line === lineCount - 1) {
+            character--;
+          } else {
+            line = Math.min(Math.max(lineCount - 1, 0), line + 1);
+            character = 0;
+          }
+        }
       }
     }
-    const newSelection: EditorSelection = {
-      start: newPosition,
-      end: newPosition,
+    const pos = { line, character };
+    return {
+      start: pos,
+      end: pos,
       direction: DirectionNone,
     };
-    const previousSelection = newSelections.at(-1);
-    if (
-      previousSelection === undefined ||
-      comparePosition(previousSelection.start, newSelection.start) !== 0
-    ) {
-      newSelections.push(newSelection);
-    }
-  }
-  return newSelections;
+  });
 }
 
 /**
- * Maps the selection shift to all selections.
+ * Same as mapCursorMove, but with shift key pressed.
  */
 export function mapSelectionShift(
   textDocument: TextDocument<unknown>,
   selections: EditorSelection[],
-  selectionShift: EditorSelection
+  shortcut: 'textStart' | 'start' | 'end' | 'up' | 'down' | 'left' | 'right'
 ): EditorSelection[] {
-  const primarySelection = selections[selections.length - 1];
-  if (primarySelection === undefined) {
-    return [];
-  }
-  const [primaryAnchorOffset, primaryFocusOffset] =
-    getSelectionAnchorAndFocusOffsets(textDocument, primarySelection);
-  const [shiftAnchorOffset, shiftFocusOffset] =
-    getSelectionAnchorAndFocusOffsets(textDocument, selectionShift);
-  const anchorDelta = shiftAnchorOffset - primaryAnchorOffset;
-  const focusDelta = shiftFocusOffset - primaryFocusOffset;
-  const mappedSelections: EditorSelection[] = [];
-  for (const selection of selections) {
+  return selections.map((selection) => {
     const [anchorOffset, focusOffset] = getSelectionAnchorAndFocusOffsets(
       textDocument,
       selection
     );
-    const mappedOffsets = createSelectionFromAnchorAndFocusOffsets(
+    const focusPosition = textDocument.positionAt(focusOffset);
+    const [movedFocusSelection] = mapCursorMove(
       textDocument,
-      anchorOffset + anchorDelta,
-      focusOffset + focusDelta
+      [
+        {
+          start: focusPosition,
+          end: focusPosition,
+          direction: DirectionNone,
+        },
+      ],
+      shortcut
     );
-    const newSelection =
-      !isCollapsedSelection(mappedOffsets) &&
-      selectionShift.direction !== DirectionNone
-        ? { ...mappedOffsets, direction: selectionShift.direction }
-        : mappedOffsets;
-    const previousSelection = mappedSelections.at(-1);
-    if (
-      previousSelection !== undefined &&
-      selectionIntersects(previousSelection, newSelection)
-    ) {
-      Object.assign(
-        previousSelection,
-        createSelectionFrom(previousSelection, newSelection)
-      );
-    } else {
-      mappedSelections.push(newSelection);
-    }
-  }
-  return mappedSelections;
+    const movedFocusOffset = textDocument.offsetAt(movedFocusSelection.start);
+    return createSelectionFromAnchorAndFocusOffsets(
+      textDocument,
+      anchorOffset,
+      movedFocusOffset
+    );
+  });
 }
 
 /**
@@ -1087,17 +1086,22 @@ function expandSingleNewlineInsert(
   }
   const line = textDocument.positionAt(insertStartOffset).line;
   const lineText = textDocument.getLineText(line);
-  let indentLen = 0;
-  for (; indentLen < lineText.length; indentLen++) {
-    const ch = lineText[indentLen];
-    if (ch !== ' ' && ch !== '\t') {
-      break;
-    }
-  }
+  const indentLen = getLeadingSpaces(lineText);
   if (indentLen === 0) {
     return insertText;
   }
   return '\n' + lineText.slice(0, indentLen);
+}
+
+function getLeadingSpaces(text: string): number {
+  let indent = 0;
+  for (; indent < text.length; indent++) {
+    const c = text.charCodeAt(indent);
+    if (c !== /* space */ 32 && c !== /* tab */ 9) {
+      break;
+    }
+  }
+  return indent;
 }
 
 function createSelectionsFromOffsetPairs(
@@ -1447,8 +1451,4 @@ function getTextOffset(
     offset,
     lineBreakIndex === -1 ? value.length : lineBreakIndex
   );
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(value, max));
 }

@@ -524,7 +524,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           if (!targetIsContentElement(e)) {
             return;
           }
-          // handle the arrow key events to scroll to the cursor position manually
+
+          // handle the cursor move events manually for multiple selections and virtual viewport
           const mvShortcut = isMoveCursorShortcut(e);
           const textDocument = this.#textDocument;
           if (
@@ -533,53 +534,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             mvShortcut !== undefined &&
             textDocument !== undefined
           ) {
-            const lineCount = textDocument.lineCount;
-            this.#updateSelections(
-              this.#selections.map((selection) => {
-                let { line, character } =
-                  mvShortcut === 'up' || mvShortcut === 'left'
-                    ? selection.start
-                    : selection.end;
-                if (mvShortcut === 'up') {
-                  line = Math.max(0, line - 1);
-                } else if (mvShortcut === 'down') {
-                  line = Math.min(Math.max(lineCount - 1, 0), line + 1);
-                } else if (isCollapsedSelection(selection)) {
-                  if (mvShortcut === 'left') {
-                    character--;
-
-                    if (character < 0) {
-                      if (line === 0) {
-                        character = 0;
-                      } else {
-                        line = Math.max(0, line - 1);
-                        character = textDocument.getLineText(line).length;
-                      }
-                    }
-                  } else {
-                    character++;
-                    if (character > textDocument.getLineText(line).length) {
-                      if (line === lineCount - 1) {
-                        character--;
-                      } else {
-                        line = Math.min(Math.max(lineCount - 1, 0), line + 1);
-                        character = 0;
-                      }
-                    }
-                  }
-                }
-                const pos = { line, character };
-                return {
-                  start: pos,
-                  end: pos,
-                  direction: DirectionNone,
-                };
-              })
-            );
+            if (e.shiftKey) {
+              this.#updateSelections(
+                mapSelectionShift(textDocument, this.#selections, mvShortcut)
+              );
+            } else {
+              this.#updateSelections(
+                mapCursorMove(textDocument, this.#selections, mvShortcut)
+              );
+            }
             this.#scrollToPrimaryCaret();
             e.preventDefault();
             return;
           }
+
           const command = resolveEditorCommandFromKeyboardEvent(e);
           if (command !== undefined) {
             e.preventDefault();
@@ -874,33 +842,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               selection,
             ]);
           } else {
-            if (
-              this.#isContentMouseDown ||
-              this.#selections === undefined ||
-              this.#selections.length === 0 ||
-              this.#textDocument === undefined
-            ) {
-              this.#updateSelections([selection]);
-            }
-            // The selection change is triggered by the keyboard
-            // For example, moving the cursor by arrow keys.
-            else if (isCollapsedSelection(selection)) {
-              this.#updateSelections(
-                mapCursorMove(
-                  this.#textDocument,
-                  this.#selections,
-                  selection.start
-                )
-              );
-            } else {
-              // shift key is pressed when moving the cursor by
-              const newSelections = mapSelectionShift(
-                this.#textDocument,
-                this.#selections,
-                selection
-              );
-              this.#updateSelections(newSelections);
-            }
+            this.#updateSelections([selection]);
           }
         },
         { passive: true }

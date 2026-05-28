@@ -1010,7 +1010,7 @@ describe('applyTextChangeToSelections', () => {
 });
 
 describe('mapSelectionMove', () => {
-  test('moves all carets when the primary caret moves', () => {
+  test('moves all carets left when pressing left arrow', () => {
     const textDocument = new TextDocument('inmemory://1', 'ab\ncd\nef');
     const selections = [
       createSelection(0, 1, 0, 1),
@@ -1018,25 +1018,21 @@ describe('mapSelectionMove', () => {
       createSelection(2, 1, 2, 1),
     ];
 
-    expect(
-      mapCursorMove(textDocument, selections, { line: 2, character: 0 })
-    ).toEqual([
+    expect(mapCursorMove(textDocument, selections, 'left')).toEqual([
       createSelection(0, 0, 0, 0),
       createSelection(1, 0, 1, 0),
       createSelection(2, 0, 2, 0),
     ]);
   });
 
-  test('extends all selections when the primary selection grows', () => {
+  test('collapses all forward selections to their start on left arrow', () => {
     const textDocument = new TextDocument('inmemory://1', 'abcd\nefgh');
     const selections = [
       createSelection(0, 1, 0, 2, DirectionForward),
       createSelection(1, 1, 1, 2, DirectionForward),
     ];
 
-    expect(
-      mapCursorMove(textDocument, selections, { line: 1, character: 1 })
-    ).toEqual([
+    expect(mapCursorMove(textDocument, selections, 'left')).toEqual([
       createSelection(0, 1, 0, 1, DirectionNone),
       createSelection(1, 1, 1, 1, DirectionNone),
     ]);
@@ -1044,51 +1040,41 @@ describe('mapSelectionMove', () => {
 });
 
 describe('mapSelectionRangeMove', () => {
-  test('extends all carets when the primary textarea selection becomes a range', () => {
+  test('extends all carets one character on shift + right', () => {
     const textDocument = new TextDocument('inmemory://1', 'abcd\nefgh');
     const selections = [
       createSelection(0, 1, 0, 1),
       createSelection(1, 1, 1, 1),
     ];
 
-    expect(
-      mapSelectionShift(textDocument, selections, createSelection(1, 1, 1, 3))
-    ).toEqual([
-      createSelection(0, 1, 0, 3, DirectionForward),
-      createSelection(1, 1, 1, 3, DirectionForward),
+    expect(mapSelectionShift(textDocument, selections, 'right')).toEqual([
+      createSelection(0, 1, 0, 2, DirectionForward),
+      createSelection(1, 1, 1, 2, DirectionForward),
     ]);
   });
 
-  test('preserves backward selection direction from the textarea focus', () => {
+  test('preserves backward selection direction on shift + left', () => {
     const textDocument = new TextDocument('inmemory://1', 'abcd\nefgh');
     const selections = [
       createSelection(0, 2, 0, 2),
       createSelection(1, 2, 1, 2),
     ];
 
-    expect(
-      mapSelectionShift(textDocument, selections, createSelection(1, 2, 1, 0))
-    ).toEqual([
-      createSelection(0, 0, 0, 2, DirectionBackward),
-      createSelection(1, 0, 1, 2, DirectionBackward),
+    expect(mapSelectionShift(textDocument, selections, 'left')).toEqual([
+      createSelection(0, 1, 0, 2, DirectionBackward),
+      createSelection(1, 1, 1, 2, DirectionBackward),
     ]);
   });
 
-  test('maps a normalized backward range using selection direction', () => {
+  test('uses existing backward anchor and shrinks with shift + right', () => {
     const textDocument = new TextDocument('inmemory://1', 'abcd\nefgh');
     const selections = [
-      createSelection(0, 2, 0, 2),
-      createSelection(1, 2, 1, 2),
-    ];
-    const shift: EditorSelection = {
-      start: { line: 1, character: 0 },
-      end: { line: 1, character: 2 },
-      direction: DirectionBackward,
-    };
-
-    expect(mapSelectionShift(textDocument, selections, shift)).toEqual([
       createSelection(0, 0, 0, 2, DirectionBackward),
       createSelection(1, 0, 1, 2, DirectionBackward),
+    ];
+    expect(mapSelectionShift(textDocument, selections, 'right')).toEqual([
+      createSelection(0, 1, 0, 2, DirectionBackward),
+      createSelection(1, 1, 1, 2, DirectionBackward),
     ]);
   });
 });

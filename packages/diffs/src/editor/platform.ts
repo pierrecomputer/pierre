@@ -27,22 +27,34 @@ export function isPrimaryModifier(
 
 export function isMoveCursorShortcut(
   e: KeyboardEvent
-): 'up' | 'down' | 'left' | 'right' | undefined {
-  if (
-    (isMacLike() || isLinux()) &&
-    e.ctrlKey &&
-    !e.shiftKey &&
-    !e.altKey &&
-    !e.metaKey
-  ) {
-    if (e.key === 'p') {
-      return 'up';
-    } else if (e.key === 'n') {
-      return 'down';
+):
+  | 'up'
+  | 'down'
+  | 'left'
+  | 'right'
+  | 'start'
+  | 'textStart'
+  | 'end'
+  | undefined {
+  // emacs key bindings
+  if ((isMacLike() || isLinux()) && e.ctrlKey && !e.altKey && !e.metaKey) {
+    switch (e.key) {
+      case 'a':
+        return 'start';
+      case 'e':
+        return 'end';
+      case 'p':
+        return 'up';
+      case 'n':
+        return 'down';
+      case 'f':
+        return 'right';
+      case 'b':
+        return 'left';
     }
   }
 
-  if (!e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+  if (!e.altKey && !e.ctrlKey && !e.metaKey) {
     if (e.key === 'ArrowUp') {
       return 'up';
     } else if (e.key === 'ArrowDown') {
@@ -51,6 +63,14 @@ export function isMoveCursorShortcut(
       return 'left';
     } else if (e.key === 'ArrowRight') {
       return 'right';
+    }
+  }
+
+  if (isPrimaryModifier(e)) {
+    if (e.key === 'ArrowLeft') {
+      return 'textStart';
+    } else if (e.key === 'ArrowRight') {
+      return 'end';
     }
   }
 
