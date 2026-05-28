@@ -277,9 +277,14 @@
 }
 
 .cv-scrollbar {
-  --cv-scrollbar-thumb-bg: light-dark(
-    color-mix(in lab, var(--background) 85%, black),
-    color-mix(in lab, var(--background) 80%, white)
+  /* Themed thumb from useThemeChromeStyle; light-dark fallback for
+     non-themed contexts. */
+  --cv-scrollbar-thumb-bg: var(
+    --diffshub-scrollbar-thumb-bg,
+    light-dark(
+      color-mix(in lab, var(--background) 85%, black),
+      color-mix(in lab, var(--background) 80%, white)
+    )
   );
   scrollbar-gutter: stable;
 }
@@ -290,8 +295,13 @@
 }
 
 .cv-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-  border-left: 1px solid var(--color-border-opaque);
+  /* Themed editor surface so the gutter isn't a dark band beside the diff;
+     transparent fallback keeps default behavior. */
+  background: var(--diffshub-scrollbar-track-bg, transparent);
+  /* Reuse the inter-file separator so the gutter edge reads as one hairline
+     with the file boundaries. */
+  border-left: 1px solid
+    var(--diffshub-diff-separator, var(--color-border-opaque));
   margin-top: -1px;
 }
 
@@ -332,7 +342,8 @@
 
 @supports (-moz-appearance: none) {
   .cv-scrollbar {
-    scrollbar-color: var(--cv-scrollbar-thumb-bg) transparent;
+    scrollbar-color: var(--cv-scrollbar-thumb-bg)
+      var(--diffshub-scrollbar-track-bg, transparent);
   }
   .cv-mini-scrollbar {
     scrollbar-color: var(--cv-mini-scrollbar-thumb-bg) transparent;
