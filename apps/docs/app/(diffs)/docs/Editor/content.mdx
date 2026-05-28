@@ -98,12 +98,9 @@ page bundle smaller and can improve LCP on pages where editing is rare.
 
 ### Quick Edit
 
-Quick Edit is disabled by default. Enable it on the `Editor` constructor with
-`enabledQuickEdit: true` and provide `renderQuickEdit` to return the UI for a
-given line (for example, an inline prompt or form). The editor shows a gutter
-icon on the active line; clicking it mounts your element and exposes helpers
-such as `getSelectionText`, `replaceSelectionText`, and `close` on the context
-object.
+Quick Edit helps you quickly change the active selection without breaking your
+flow. Enable it with `enabledQuickEdit: true`, define the UI in
+`renderQuickEdit`, then click the gutter icon on the active selection to open it.
 
 <DocsCodeExample {...editorQuickEditExample} />
 
@@ -134,8 +131,3 @@ platforms, **Home** and **End** are used instead.
 | `expandSelectionDocEnd`   | Cmd + Shift + Down |
 | `undo`                    | Cmd + Z            |
 | `redo`                    | Cmd + Shift + Z    |
-
-### Planned Features
-
-- Command palette (`Cmd + K`)
-- Language Server Protocol (LSP) integration

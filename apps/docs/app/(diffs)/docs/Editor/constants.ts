@@ -44,12 +44,10 @@ const editor = new Editor({
   },
 });
 
-const dispose = editor.edit(fileInstance);
+editor.edit(fileInstance);
 
 // Later, when the editor is no longer needed:
-dispose();
-virtualizer.cleanUp();
-// Or call editor.cleanUp();`,
+editor.cleanUp();`,
   },
   options,
 };
@@ -96,12 +94,10 @@ const editor = new Editor({
   },
 });
 
-const dispose = editor.edit(fileDiffInstance);
+editor.edit(fileDiffInstance);
 
 // Later, when the editor is no longer needed:
-dispose();
-virtualizer.cleanUp();
-// Or call editor.cleanUp();`,
+editor.cleanUp();`,
   },
   options,
 };
