@@ -49,6 +49,7 @@ import {
   isCollapsedSelection,
   mapCursorMove,
   mapSelectionShift,
+  mergeOverlappingSelections,
   resolveIndentEdits,
   selectionIntersects,
 } from './selection';
@@ -1308,8 +1309,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (selections.length === 0) {
       return;
     }
-    const primarySelection = selections.at(-1)!;
-    this.#selections = selections;
+    const normalizedSelections = mergeOverlappingSelections(selections);
+    const primarySelection = normalizedSelections.at(-1)!;
+    this.#selections = normalizedSelections;
     this.#primaryCaretElement = undefined;
     this.#component?.setSelectedLines(null);
     if (isCollapsedSelection(primarySelection)) {
@@ -1324,7 +1326,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       fragment,
       elements: new Map<string, HTMLElement>(),
     };
-    for (const selection of selections) {
+    for (const selection of normalizedSelections) {
       if (!isCollapsedSelection(selection)) {
         this.#renderSelection(renderCtx, selection);
       }

@@ -561,7 +561,7 @@ describe('selectionIntersects', () => {
 });
 
 describe('mergeOverlappingSelections', () => {
-  test('sorts selections and merges overlapping ranges', () => {
+  test('drops earlier overlapping ranges and keeps later selections', () => {
     expect(
       mergeOverlappingSelections([
         createSelection(2, 0, 2, 4, DirectionForward),
@@ -569,8 +569,8 @@ describe('mergeOverlappingSelections', () => {
         createSelection(0, 2, 0, 7, DirectionForward),
       ])
     ).toEqual([
-      createSelection(0, 2, 0, 8, DirectionForward),
       createSelection(2, 0, 2, 4, DirectionForward),
+      createSelection(0, 2, 0, 7, DirectionForward),
     ]);
   });
 
@@ -586,31 +586,36 @@ describe('mergeOverlappingSelections', () => {
     ]);
   });
 
-  test('merges a caret on a range boundary', () => {
+  test('drops a range when a later caret overlaps its boundary', () => {
     expect(
       mergeOverlappingSelections([
         createSelection(0, 2, 0, 6, DirectionForward),
         createSelection(0, 6, 0, 6, DirectionNone),
       ])
-    ).toEqual([createSelection(0, 2, 0, 6, DirectionForward)]);
+    ).toEqual([createSelection(0, 6, 0, 6, DirectionNone)]);
   });
 
-  test('preserves forward direction for ranges extended to the same end', () => {
+  test('drops an earlier range when a later overlapping range extends it', () => {
     expect(
       mergeOverlappingSelections([
         createSelection(1, 2, 3, 0, DirectionForward),
         createSelection(2, 0, 3, 0, DirectionForward),
       ])
-    ).toEqual([createSelection(1, 2, 3, 0, DirectionForward)]);
+    ).toEqual([createSelection(2, 0, 3, 0, DirectionForward)]);
   });
 
-  test('preserves backward direction for ranges extended to the same start', () => {
+  test('keeps disjoint selections in their original order', () => {
     expect(
       mergeOverlappingSelections([
-        createSelection(0, 0, 1, 4, DirectionBackward),
-        createSelection(0, 0, 2, 3, DirectionBackward),
+        createSelection(3, 0, 3, 1, DirectionForward),
+        createSelection(1, 0, 1, 1, DirectionForward),
+        createSelection(2, 0, 2, 1, DirectionForward),
       ])
-    ).toEqual([createSelection(0, 0, 2, 3, DirectionBackward)]);
+    ).toEqual([
+      createSelection(3, 0, 3, 1, DirectionForward),
+      createSelection(1, 0, 1, 1, DirectionForward),
+      createSelection(2, 0, 2, 1, DirectionForward),
+    ]);
   });
 });
 

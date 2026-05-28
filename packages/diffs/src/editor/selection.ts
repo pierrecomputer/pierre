@@ -786,80 +786,42 @@ export function mergeOverlappingSelections(
   if (selections.length <= 1) {
     return selections;
   }
-
-  const sortedSelections = [...selections].sort((a, b) => {
-    const startOrder = comparePosition(a.start, b.start);
-    if (startOrder !== 0) {
-      return startOrder;
-    }
-    return comparePosition(a.end, b.end);
-  });
-  const mergedSelections: EditorSelection[] = [];
-  for (const selection of sortedSelections) {
-    const previousSelection = mergedSelections.at(-1);
-    if (
-      previousSelection === undefined ||
-      !selectionIntersects(previousSelection, selection)
-    ) {
-      mergedSelections.push(selection);
+  const selected = new Set<number>();
+  const accepted: {
+    index: number;
+    selection: EditorSelection;
+  }[] = [];
+  for (let i = selections.length - 1; i >= 0; i--) {
+    const selection = selections[i];
+    if (selection === undefined) {
       continue;
     }
-    mergedSelections[mergedSelections.length - 1] = mergeSelections(
-      previousSelection,
-      selection
-    );
+    let left = 0;
+    let right = accepted.length;
+    while (left < right) {
+      const mid = Math.floor((left + right) / 2);
+      const candidate = accepted[mid]?.selection;
+      if (candidate === undefined) {
+        break;
+      }
+      if (comparePosition(candidate.start, selection.start) < 0) {
+        left = mid + 1;
+      } else {
+        right = mid;
+      }
+    }
+    const previous = accepted[left - 1]?.selection;
+    const next = accepted[left]?.selection;
+    if (
+      (previous !== undefined && selectionIntersects(previous, selection)) ||
+      (next !== undefined && selectionIntersects(next, selection))
+    ) {
+      continue;
+    }
+    accepted.splice(left, 0, { index: i, selection });
+    selected.add(i);
   }
-  return mergedSelections;
-}
-
-function mergeSelections(
-  a: EditorSelection,
-  b: EditorSelection
-): EditorSelection {
-  const start = comparePosition(a.start, b.start) <= 0 ? a.start : b.start;
-  const end = comparePosition(a.end, b.end) >= 0 ? a.end : b.end;
-  return {
-    start,
-    end,
-    direction: getMergedSelectionDirection(start, end, a, b),
-  };
-}
-
-// Choose a direction whose anchor is still one of the merged range endpoints.
-function getMergedSelectionDirection(
-  start: Position,
-  end: Position,
-  a: EditorSelection,
-  b: EditorSelection
-): SelectionDirection {
-  if (comparePosition(start, end) === 0) {
-    return DirectionNone;
-  }
-  return (
-    getSelectionBoundaryDirection(b, start, end) ??
-    getSelectionBoundaryDirection(a, start, end) ??
-    DirectionForward
-  );
-}
-
-function getSelectionBoundaryDirection(
-  selection: EditorSelection,
-  start: Position,
-  end: Position
-): SelectionDirection | undefined {
-  if (
-    selection.direction === DirectionForward &&
-    comparePosition(selection.start, start) === 0
-  ) {
-    return DirectionForward;
-  }
-  if (
-    selection.direction === DirectionBackward &&
-    comparePosition(selection.end, end) === 0
-  ) {
-    return DirectionBackward;
-  }
-  return undefined;
+  return selections.filter((_, index) => selected.has(index));
 }
 
 /**
