@@ -873,6 +873,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#isGutterMouseDown = false;
             this.#focus();
           }
+          this.#shouldIgnoreSelectionChange = false;
           this.#isContentMouseDown = false;
           this.#shiftKeyPressed = false;
           this.#selectionStart = undefined;
