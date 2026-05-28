@@ -46,6 +46,10 @@ const editor = new Editor({
 
 editor.edit(fileInstance);
 
+// Update the file, editor retains to work with the new file
+const newFile: FileContents = { ... }
+fileInstance.render({ file: newFile });
+
 // Later, when the editor is no longer needed:
 editor.cleanUp();`,
   },
@@ -95,6 +99,10 @@ const editor = new Editor({
 });
 
 editor.edit(fileDiffInstance);
+
+// Update the file, editor retains to work with the new file
+const newFile: FileContents = { ... }
+fileInstance.render({ file: newFile });
 
 // Later, when the editor is no longer needed:
 editor.cleanUp();`,
