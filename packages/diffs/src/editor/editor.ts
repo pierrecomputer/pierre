@@ -1376,10 +1376,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // add scroll margin to the primary caret element to prevent
   // the caret from being hidden by the gutter
   #getScrollMargin() {
+    const componentTop = this.#component?.top ?? 0;
     const top = this.#searchPanel !== undefined ? 48 : 0;
     const start = this.#getGutterWidth() + this.#metrics.ch;
     const end = this.#metrics.ch;
-    return `${top}px ${end}px 0 ${start}px`;
+    return `${componentTop + top}px ${end}px 0 ${start}px`;
   }
 
   #scrollToLine(line: number, char = 0) {

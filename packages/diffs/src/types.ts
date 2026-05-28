@@ -906,6 +906,7 @@ export interface DiffsEditorOptions extends BaseCodeOptions {
 }
 
 export interface DiffsBaseComponent {
+  readonly top?: number;
   readonly options: DiffsEditorOptions;
   setOptions: (options: Partial<DiffsEditorOptions>) => void;
   setSelectedLines: (range: { start: number; end: number } | null) => void;
