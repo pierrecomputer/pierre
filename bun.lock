@@ -105,7 +105,7 @@
     },
     "packages/diffs": {
       "name": "@pierre/diffs",
-      "version": "1.2.3",
+      "version": "1.2.0-beta.6",
       "dependencies": {
         "@pierre/theme": "catalog:",
         "@shikijs/transformers": "^3.0.0",
@@ -197,7 +197,7 @@
     },
     "packages/trees": {
       "name": "@pierre/trees",
-      "version": "1.0.0-beta.4",
+      "version": "1.0.0-beta.3",
       "dependencies": {
         "@pierre/path-store": "workspace:*",
         "preact": "catalog:",
