@@ -34,6 +34,8 @@ import {
   type ColorMode,
   DARK_THEMES,
   type DarkTheme,
+  DEFAULT_DARK_THEME,
+  DEFAULT_LIGHT_THEME,
   LIGHT_THEMES,
   type LightTheme,
 } from './themes';
@@ -359,6 +361,10 @@ function ThemeDropdown({
 }: ThemeDropdownProps) {
   const TriggerIcon = colorModeIcon(colorMode);
   const [view, setView] = useState<'main' | 'light' | 'dark'>('main');
+  // Only offer a reset when at least one slot drifts from the default
+  // pierre-soft pair, so the link stays out of the way until it's useful.
+  const themesAreCustom =
+    lightTheme !== DEFAULT_LIGHT_THEME || darkTheme !== DEFAULT_DARK_THEME;
   return (
     // `modal={false}` lets the user scroll and click the code view while the
     // theme picker is open. The default Radix DropdownMenu blocks pointer
@@ -447,6 +453,18 @@ function ThemeDropdown({
                 className="text-muted-foreground -rotate-90"
               />
             </DropdownMenuItem>
+            {themesAreCustom && (
+              <DropdownMenuItem
+                className="text-muted-foreground hover:text-foreground mt-1 cursor-pointer justify-center text-xs focus:bg-transparent"
+                onSelect={(event) => {
+                  event.preventDefault();
+                  setLightTheme(DEFAULT_LIGHT_THEME);
+                  setDarkTheme(DEFAULT_DARK_THEME);
+                }}
+              >
+                Reset to default themes
+              </DropdownMenuItem>
+            )}
           </>
         ) : (
           <ThemeList
