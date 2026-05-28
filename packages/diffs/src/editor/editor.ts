@@ -498,6 +498,26 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#retainSearchPanelFocus = false;
             this.#quickEdit?.cleanup();
             this.#quickEdit = undefined;
+            if (this.#selections !== undefined && this.#selections.length > 0) {
+              const primarySelection = this.#selections.at(-1)!;
+              if (
+                !isCollapsedSelection(primarySelection) ||
+                this.#selections.length > 1
+              ) {
+                const pos =
+                  primarySelection.direction === DirectionBackward
+                    ? primarySelection.start
+                    : primarySelection.end;
+                this.#updateSelections([
+                  {
+                    start: pos,
+                    end: pos,
+                    direction: DirectionNone,
+                  },
+                ]);
+                this.#focus(pos);
+              }
+            }
             return;
           }
           if (!targetIsContentElement(e)) {
