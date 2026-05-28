@@ -8,6 +8,37 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
+export const REACT_API_POST_RENDER_LIFECYCLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'post_render_lifecycle.tsx',
+    contents: `import { FileDiff } from '@pierre/diffs/react';
+
+const cleanupByNode = new WeakMap<HTMLElement, () => void>();
+
+<FileDiff
+  fileDiff={fileDiff}
+  options={{
+    onPostRender(node, _instance, phase) {
+      if (phase === 'mount') {
+        const observer = new ResizeObserver(() => {
+          console.log(node.getBoundingClientRect().height);
+        });
+        observer.observe(node);
+        cleanupByNode.set(node, () => observer.disconnect());
+        return;
+      }
+
+      if (phase === 'unmount') {
+        cleanupByNode.get(node)?.();
+        cleanupByNode.delete(node);
+      }
+    },
+  }}
+/>`,
+  },
+  options,
+};
+
 export const REACT_API_SHARED_DIFF_OPTIONS: PreloadFileOptions<undefined> = {
   file: {
     name: 'shared_diff_options.tsx',
@@ -20,6 +51,7 @@ export const REACT_API_SHARED_DIFF_OPTIONS: PreloadFileOptions<undefined> = {
 import type {
   DiffTokenEventBaseProps,
   FileDiff as FileDiffClass,
+  PostRenderPhase,
 } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 
@@ -139,12 +171,20 @@ interface DiffOptions {
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
 
-  // Fires after hydration, and after render passes that commit DOM updates.
-  // Those DOM updates may be a full replacement or a partial update.
+  // Fires after hydration, after DOM-committing render updates, and before
+  // mounted DOM is removed. Phase is 'mount' | 'update' | 'unmount'.
   // Receives the outer diffs container element.
-  // Useful when you want to do your own post-render DOM manipulation.
+  // Useful when you want to measure, observe, or clean up DOM-node state.
   // You can access the shadow DOM from here if you need to inspect lines.
-  onPostRender(node: HTMLElement, instance: FileDiffClass) {
+  onPostRender(
+    node: HTMLElement,
+    instance: FileDiffClass,
+    phase: PostRenderPhase
+  ) {
+    if (phase === 'unmount') {
+      return;
+    }
+
     const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
     console.log('rendered line count', codeLines?.length ?? 0);
   },
@@ -568,7 +608,10 @@ export function CodeFile() {
 export const REACT_API_UNRESOLVED_FILE: PreloadFileOptions<undefined> = {
   file: {
     name: 'unresolved_file.tsx',
-    contents: `import type { UnresolvedFile as UnresolvedFileClass } from '@pierre/diffs';
+    contents: `import type {
+  PostRenderPhase,
+  UnresolvedFile as UnresolvedFileClass,
+} from '@pierre/diffs';
 import { UnresolvedFile, type FileContents } from '@pierre/diffs/react';
 import { useState } from 'react';
 
@@ -601,7 +644,15 @@ export function MergeConflictPreview() {
         options={{
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
           diffIndicators: 'none',
-          onPostRender(node: HTMLElement, instance: UnresolvedFileClass) {
+          onPostRender(
+            node: HTMLElement,
+            instance: UnresolvedFileClass,
+            phase: PostRenderPhase
+          ) {
+            if (phase === 'unmount') {
+              return;
+            }
+
             const codeLines = node.shadowRoot?.querySelectorAll(
               '[data-line]'
             );
@@ -687,7 +738,11 @@ export const REACT_API_SHARED_FILE_OPTIONS: PreloadFileOptions<undefined> = {
 // ============================================================
 // Pass these via the \`options\` prop on the File component.
 
-import type { File as FileClass, TokenEventBase } from '@pierre/diffs';
+import type {
+  File as FileClass,
+  PostRenderPhase,
+  TokenEventBase,
+} from '@pierre/diffs';
 import { File } from '@pierre/diffs/react';
 
 <File
@@ -740,12 +795,20 @@ interface FileOptions {
   // Skip syntax highlighting for lines exceeding this length
   tokenizeMaxLineLength: 1000,
 
-  // Fires after hydration, and after render passes that commit DOM updates.
-  // Those DOM updates may be a full replacement or a partial update.
+  // Fires after hydration, after DOM-committing render updates, and before
+  // mounted DOM is removed. Phase is 'mount' | 'update' | 'unmount'.
   // Receives the outer diffs container element.
-  // Useful when you want to do your own post-render DOM manipulation.
+  // Useful when you want to measure, observe, or clean up DOM-node state.
   // You can access the shadow DOM from here if you need to inspect lines.
-  onPostRender(node: HTMLElement, instance: FileClass) {
+  onPostRender(
+    node: HTMLElement,
+    instance: FileClass,
+    phase: PostRenderPhase
+  ) {
+    if (phase === 'unmount') {
+      return;
+    }
+
     const codeLines = node.shadowRoot?.querySelectorAll('[data-line]');
     console.log('rendered line count', codeLines?.length ?? 0);
   },

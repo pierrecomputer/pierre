@@ -21,6 +21,7 @@ import {
   FILE_DIFF_METADATA_TYPE,
   PARSE_DIFF_FROM_FILE_EXAMPLE,
   PARSE_PATCH_FILES_EXAMPLE,
+  POST_RENDER_PHASE_TYPE,
 } from '../docs/CoreTypes/constants';
 import {
   CUSTOM_HUNK_SEPARATORS_EXAMPLE,
@@ -43,6 +44,7 @@ import {
   REACT_API_FILE_DIFF,
   REACT_API_MULTI_FILE_DIFF,
   REACT_API_PATCH_DIFF,
+  REACT_API_POST_RENDER_LIFECYCLE,
   REACT_API_SHARED_DIFF_OPTIONS,
   REACT_API_SHARED_DIFF_RENDER_PROPS,
   REACT_API_SHARED_FILE_OPTIONS,
@@ -92,6 +94,7 @@ import {
   VANILLA_API_FILE_RENDERER,
   VANILLA_API_HUNKS_RENDERER_FILE,
   VANILLA_API_HUNKS_RENDERER_PATCH_FILE,
+  VANILLA_API_POST_RENDER_LIFECYCLE,
   VANILLA_API_UNRESOLVED_FILE_EXAMPLE,
 } from '../docs/VanillaAPI/constants';
 import {
@@ -210,11 +213,13 @@ async function CoreTypesSection() {
   const [
     fileContentsType,
     fileDiffMetadataType,
+    postRenderPhaseType,
     parseDiffFromFileExample,
     parsePatchFilesExample,
   ] = await Promise.all([
     preloadFile(FILE_CONTENTS_TYPE),
     preloadFile(FILE_DIFF_METADATA_TYPE),
+    preloadFile(POST_RENDER_PHASE_TYPE),
     preloadFile(PARSE_DIFF_FROM_FILE_EXAMPLE),
     preloadFile(PARSE_PATCH_FILES_EXAMPLE),
   ]);
@@ -223,6 +228,7 @@ async function CoreTypesSection() {
     scope: {
       fileContentsType,
       fileDiffMetadataType,
+      postRenderPhaseType,
       parseDiffFromFileExample,
       parsePatchFilesExample,
     },
@@ -265,6 +271,7 @@ async function ReactAPISection() {
     reactAPIPatch,
     reactAPIFileDiff,
     reactAPIUnresolvedFile,
+    postRenderLifecycleExample,
     sharedDiffOptions,
     sharedDiffRenderProps,
     sharedFileOptions,
@@ -276,6 +283,7 @@ async function ReactAPISection() {
     preloadFile(REACT_API_PATCH_DIFF),
     preloadFile(REACT_API_FILE_DIFF),
     preloadFile(REACT_API_UNRESOLVED_FILE),
+    preloadFile(REACT_API_POST_RENDER_LIFECYCLE),
     preloadFile(REACT_API_SHARED_DIFF_OPTIONS),
     preloadFile(REACT_API_SHARED_DIFF_RENDER_PROPS),
     preloadFile(REACT_API_SHARED_FILE_OPTIONS),
@@ -290,6 +298,7 @@ async function ReactAPISection() {
       reactAPIFileDiff,
       reactAPIFile,
       reactAPIUnresolvedFile,
+      postRenderLifecycleExample,
       sharedDiffOptions,
       sharedDiffRenderProps,
       sharedFileOptions,
@@ -307,6 +316,7 @@ async function VanillaAPISection() {
     fileDiffProps,
     fileProps,
     unresolvedFileExample,
+    postRenderLifecycleExample,
     customHunk,
     diffHunksRenderer,
     diffHunksRendererPatch,
@@ -318,6 +328,7 @@ async function VanillaAPISection() {
     preloadFile(VANILLA_API_FILE_DIFF_PROPS),
     preloadFile(VANILLA_API_FILE_PROPS),
     preloadFile(VANILLA_API_UNRESOLVED_FILE_EXAMPLE),
+    preloadFile(VANILLA_API_POST_RENDER_LIFECYCLE),
     preloadFile(VANILLA_API_CUSTOM_HUNK_FILE),
     preloadFile(VANILLA_API_HUNKS_RENDERER_FILE),
     preloadFile(VANILLA_API_HUNKS_RENDERER_PATCH_FILE),
@@ -332,6 +343,7 @@ async function VanillaAPISection() {
       fileDiffProps,
       fileProps,
       unresolvedFileExample,
+      postRenderLifecycleExample,
       customHunk,
       diffHunksRenderer,
       diffHunksRendererPatch,

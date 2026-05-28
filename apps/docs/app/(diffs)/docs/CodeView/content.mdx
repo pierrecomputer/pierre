@@ -113,6 +113,9 @@ items or update existing ones.
   viewer, and `getItem` / `updateItem` for item-level imperative changes.
 - Shared callbacks receive the normal file/diff payload plus a `context`
   argument containing the current viewer item and instance.
+- `onPostRender` receives `(node, instance, phase, context)`. Its `unmount`
+  phase will fire when an item scrolls out of the rendered window and CodeView
+  recycles that item's DOM shell.
 - By default, `CodeView` temporarily disables pointer events on rendered content
   while scrolling for smoother scroll performance. Set
   `pointerEventsOnScroll: true` only when pointer interactions must remain

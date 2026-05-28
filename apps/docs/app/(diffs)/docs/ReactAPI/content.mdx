@@ -64,6 +64,21 @@ Header customization and collapsing behavior:
 - Use `options.collapsed` to hide file body content while keeping the file
   header visible.
 
+#### Post Render Lifecycle
+
+`options.onPostRender(node, instance, phase)` is a DOM-node lifecycle callback.
+It fires with `phase: 'mount'` after the first committed render or hydration for
+a container node, `phase: 'update'` after later DOM-committing renders, and
+`phase: 'unmount'` before a mounted container node is removed, replaced, cleaned
+up, or recycled.
+
+Use this callback for DOM-node-associated work such as observers, measurements,
+or imperative integrations. Treat `unmount` as node-centric: if you need
+teardown state, capture it by `node` when the node mounts instead of depending
+on mutable instance fields.
+
+<DocsCodeExample {...postRenderLifecycleExample} />
+
 <SharedPropTabs
   sharedDiffOptions={sharedDiffOptions}
   sharedDiffRenderProps={sharedDiffRenderProps}

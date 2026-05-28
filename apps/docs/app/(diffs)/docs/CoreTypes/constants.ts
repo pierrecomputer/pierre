@@ -138,6 +138,20 @@ interface ChangeContent {
   options,
 };
 
+export const POST_RENDER_PHASE_TYPE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'PostRenderPhase.ts',
+    contents: `// Exported from @pierre/diffs.
+// Lifecycle phase passed as the third argument to onPostRender.
+type PostRenderPhase = 'mount' | 'update' | 'unmount';
+
+// mount: first committed render or hydration for a container node
+// update: later committed render for the same mounted container node
+// unmount: before a mounted container node is removed, replaced, or recycled`,
+  },
+  options,
+};
+
 export const PARSE_DIFF_FROM_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'parseDiffFromFile.ts',

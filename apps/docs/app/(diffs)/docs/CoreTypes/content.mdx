@@ -23,6 +23,13 @@ expansion.
 
 <DocsCodeExample {...fileDiffMetadataType} />
 
+### PostRenderPhase
+
+`PostRenderPhase` is passed to `onPostRender` callbacks so integrations can
+separate setup, update, and teardown work for the rendered DOM node.
+
+<DocsCodeExample {...postRenderPhaseType} />
+
 ### Creating Diffs
 
 There are two ways to create a `FileDiffMetadata`.
