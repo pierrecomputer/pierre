@@ -629,6 +629,14 @@ export function isCollapsedSelection(selection: EditorSelection): boolean {
 }
 
 /**
+ * Returns the caret (focus) position for a selection.
+ */
+export function getCaretPosition(selection: EditorSelection): Position {
+  const { start, end, direction } = selection;
+  return direction === DirectionBackward ? start : end;
+}
+
+/**
  * Checks if a line is editable.
  */
 export function isLineEditable(lineType: string): boolean {
@@ -1073,7 +1081,7 @@ function getSelectionAnchorAndFocusOffsets(
   const isBackward = selection.direction === DirectionBackward;
   return [
     textDocument.offsetAt(isBackward ? selection.end : selection.start),
-    textDocument.offsetAt(isBackward ? selection.start : selection.end),
+    textDocument.offsetAt(getCaretPosition(selection)),
   ];
 }
 

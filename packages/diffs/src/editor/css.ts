@@ -35,7 +35,23 @@ export const editorCSS: string = /* CSS */ `
   [data-line]:not([data-selected-line]) span {
     background-color: transparent;
   }
-  [data-line][data-line-type='change-deletion'] {
+  [data-line]:is([data-selected-line]),
+  [data-line]:is([data-selected-line]) span,
+  [data-line-annotation]:is([data-selected-line]) {
+    background-color: var(--diffs-editor-line-highlight-bg);
+  }
+  [data-column-number] {
+    color: var(--diffs-editor-line-number-fg);
+  }
+  [data-column-number]:is([data-selected-line]),
+  [data-gutter-buffer]:is([data-selected-line]) {
+    background-color: var(--diffs-editor-line-number-active-bg);
+    color: var(--diffs-editor-line-number-active-fg);
+  }
+  [data-column-number]:is([data-active]) {
+    color: var(--diffs-editor-line-number-active-fg);
+  }
+  [data-line]:is([data-line-type='change-deletion']) {
     background-color: var(--diffs-line-bg);
     -webkit-user-select: none;
     user-select: none;
@@ -58,7 +74,7 @@ export const editorCSS: string = /* CSS */ `
   [data-selection-range] {
     height: 1lh;
     z-index: -10;
-    background-color: var(--diffs-line-bg);
+    background-color: var(--diffs-editor-selection-bg);
   }
   [data-editor-overlay] {
     display: contents;

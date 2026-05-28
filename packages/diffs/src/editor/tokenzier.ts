@@ -20,6 +20,7 @@ export interface EditorTokenizerProps {
   highlighter: DiffsHighlighter;
   textDocument: TextDocument<unknown>;
   codeOptions: BaseCodeOptions;
+  setStyle: (style: string) => void;
   onDeferTokenize: (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
@@ -37,6 +38,7 @@ export class EditorTokenizer {
   #colorMap: string[];
   #textDocument: TextDocument<unknown>;
   #tokenizeMaxLineLength: number;
+  #setStyle: EditorTokenizerProps['setStyle'];
   #onDeferTokenize: EditorTokenizerProps['onDeferTokenize'];
   #editorEventDisposes?: (() => void)[];
 
@@ -75,12 +77,28 @@ export class EditorTokenizer {
   // the preferred theme. When the theme type is changed, the tokenizer will re-tokenize the document.
   #onThemeChange = (themeName: string, themeType: 'light' | 'dark') => {
     this.#themeType = themeType;
-    this.#colorMap = this.#highlighter.setTheme(themeName).colorMap;
+    this.#setTheme(themeName);
     this.stopBackgroundTokenize();
     this.#stateStackCache = [INITIAL];
     if (this.#grammar !== undefined && this.#textDocument.lineCount > 0) {
       this.#scheduleBackgroundTokenize(0);
     }
+  };
+
+  #setTheme = (themeName: string): void => {
+    this.#colorMap = this.#highlighter.setTheme(themeName).colorMap;
+    const { colors = {} } = this.#highlighter.getTheme(themeName);
+    const selectionBackground = colors['editor.selectionBackground'];
+    const lineHighlightBackground = colors['editor.lineHighlightBackground'];
+    const gutterForeground = colors['editorLineNumber.foreground'];
+    const gutterActiveForeground = colors['editorLineNumber.activeForeground'];
+    this.#setStyle(`:host {
+      --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
+      --diffs-editor-line-highlight-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg)'};
+      --diffs-editor-line-number-fg: ${gutterForeground ?? 'var(--diffs-fg-number)'};
+      --diffs-editor-line-number-active-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg, var(--diffs-bg))'};
+      --diffs-editor-line-number-active-fg: ${gutterActiveForeground ?? 'var(--diffs-selection-number-fg)'};
+    }`);
   };
 
   #watchColorScheme = (theme: ThemesType) => {
@@ -119,6 +137,7 @@ export class EditorTokenizer {
     codeOptions,
     highlighter,
     textDocument,
+    setStyle,
     onDeferTokenize,
   }: EditorTokenizerProps) {
     const {
@@ -135,16 +154,16 @@ export class EditorTokenizer {
     if (typeof theme !== 'string') {
       this.#watchColorScheme(theme);
     }
-    const themeName =
-      typeof theme === 'string' ? theme : theme[this.#themeType];
-    this.#colorMap = highlighter.setTheme(themeName).colorMap;
     this.#highlighter = highlighter;
     this.#textDocument = textDocument;
     this.#tokenizeMaxLineLength = tokenizeMaxLineLength;
+    this.#setStyle = setStyle;
     this.#onDeferTokenize = onDeferTokenize;
     if (highlighter.getLoadedLanguages().includes(textDocument.languageId)) {
       this.#grammar = highlighter.getLanguage(textDocument.languageId);
     }
+    this.#colorMap = [];
+    this.#setTheme(typeof theme === 'string' ? theme : theme[this.#themeType]);
   }
 
   cleanUp(): void {

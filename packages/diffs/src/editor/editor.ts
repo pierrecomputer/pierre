@@ -42,6 +42,7 @@ import {
   extendSelection,
   extendSelections,
   findNexMatch,
+  getCaretPosition,
   getDocumentBoundarySelection,
   getDocumentFullSelection,
   getSelectionAnchor,
@@ -114,7 +115,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   // dom
   #globalStyleElement?: HTMLStyleElement;
-  #styleElement?: HTMLStyleElement;
+  #editorStyleElement?: HTMLStyleElement;
+  #themeStyleElement?: HTMLStyleElement;
   #componentContainer?: HTMLElement;
   #contentElement?: HTMLElement;
   #overlayElement?: HTMLElement;
@@ -273,8 +275,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#globalStyleElement?.remove();
     this.#globalStyleElement = undefined;
-    this.#styleElement?.remove();
-    this.#styleElement = undefined;
+    this.#editorStyleElement?.remove();
+    this.#editorStyleElement = undefined;
+    this.#themeStyleElement?.remove();
+    this.#themeStyleElement = undefined;
     this.#componentContainer = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
     this.#contentElement = undefined;
@@ -370,8 +374,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (this.#globalStyleElement !== undefined) {
         fileContainer.appendChild(this.#globalStyleElement);
       }
-      if (this.#styleElement !== undefined) {
-        shadowRoot.appendChild(this.#styleElement);
+      if (this.#editorStyleElement !== undefined) {
+        shadowRoot.appendChild(this.#editorStyleElement);
+      }
+      if (this.#themeStyleElement !== undefined) {
+        shadowRoot.appendChild(this.#themeStyleElement);
       }
     }
 
@@ -393,6 +400,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         textDocument,
         codeOptions: this.#component?.options ?? {},
         onDeferTokenize: this.#onDeferTokenize,
+        setStyle: (css) => {
+          this.#themeStyleElement!.textContent = css;
+        },
       });
       this.#shouldIgnoreSelectionChange = false;
       this.#selectionElements?.forEach((el) => el.remove());
@@ -503,10 +513,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 !isCollapsedSelection(primarySelection) ||
                 this.#selections.length > 1
               ) {
-                const pos =
-                  primarySelection.direction === DirectionBackward
-                    ? primarySelection.start
-                    : primarySelection.end;
+                const pos = getCaretPosition(primarySelection);
                 this.#updateSelections([
                   {
                     start: pos,
@@ -776,9 +783,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #initialize(): void {
-    this.#styleElement = h('style', {
+    this.#editorStyleElement = h('style', {
       dataset: 'editorCss',
       textContent: editorCSS,
+    });
+
+    this.#themeStyleElement = h('style', {
+      dataset: 'editorThemeCss',
+      textContent: '',
     });
 
     this.#globalStyleElement = h('style', {
@@ -1264,17 +1276,28 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (selections.length === 0) {
       return;
     }
+    const gutterBuffer = this.#contentElement?.previousElementSibling;
     const normalizedSelections = mergeOverlappingSelections(selections);
     const primarySelection = normalizedSelections.at(-1)!;
     this.#selections = normalizedSelections;
     this.#primaryCaretElement = undefined;
     this.#component?.setSelectedLines(null);
+    gutterBuffer
+      ?.querySelectorAll('[data-active]')
+      .forEach((el) => el.removeAttribute('data-active'));
     if (isCollapsedSelection(primarySelection)) {
       const line = primarySelection.start.line + 1;
       this.#component?.setSelectedLines({
         start: line,
         end: line,
       });
+    } else {
+      if (gutterBuffer !== undefined && gutterBuffer instanceof HTMLElement) {
+        const pos = getCaretPosition(primarySelection);
+        gutterBuffer
+          .querySelector(`[data-column-number="${pos.line + 1}"]`)
+          ?.setAttribute('data-active', '');
+      }
     }
     const fragment = document.createDocumentFragment();
     const renderCtx = {
@@ -1380,8 +1403,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           : primarySelection.start
       );
     } else {
-      const { start, end, direction } = primarySelection;
-      const pos = direction === DirectionBackward ? start : end;
+      const pos = getCaretPosition(primarySelection);
       this.#scrollToLine(pos.line, pos.character);
     }
   }
@@ -1652,10 +1674,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     selection: EditorSelection,
     isPrimary: boolean
   ) {
-    const { start, end, direction } = selection;
-    const isBackward = direction === DirectionBackward;
-    const line = isBackward ? start.line : end.line;
-    const character = isBackward ? start.character : end.character;
+    const { line, character } = getCaretPosition(selection);
     if (!this.#isLineVisible(line)) {
       return;
     }
@@ -1688,10 +1707,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     },
     selection: EditorSelection
   ) {
-    const line =
-      selection.direction === DirectionBackward
-        ? selection.start.line
-        : selection.end.line;
+    const line = getCaretPosition(selection).line;
     if (!this.#isLineVisible(line)) {
       return;
     }
@@ -2086,8 +2102,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             inline: 'nearest',
           });
         } else if (selections.length > 0) {
-          const { start, end, direction } = selections.at(-1)!;
-          const pos = direction === DirectionBackward ? start : end;
+          const pos = getCaretPosition(selections.at(-1)!);
           this.#scrollToLine(pos.line, pos.character);
         }
       });

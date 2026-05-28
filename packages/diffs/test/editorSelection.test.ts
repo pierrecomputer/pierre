@@ -13,6 +13,7 @@ import {
   expandCollapsedSelectionToWord,
   extendSelection,
   findNexMatch,
+  getCaretPosition,
   getSelectionAnchor,
   mapCursorMove,
   mapSelectionShift,
@@ -487,6 +488,42 @@ describe('getSelectionAnchor', () => {
     );
     expect(node).toBe(line as unknown as Node);
     expect(offset).toBe(0);
+  });
+});
+
+describe('getCaretPosition', () => {
+  test('returns end for forward selections', () => {
+    expect(
+      getCaretPosition(createSelection(1, 2, 3, 4, DirectionForward))
+    ).toEqual({ line: 3, character: 4 });
+  });
+
+  test('returns start for backward selections', () => {
+    expect(
+      getCaretPosition(createSelection(1, 2, 3, 4, DirectionBackward))
+    ).toEqual({ line: 1, character: 2 });
+  });
+
+  test('returns end for direction-none selections', () => {
+    expect(
+      getCaretPosition(createSelection(1, 2, 3, 4, DirectionNone))
+    ).toEqual({
+      line: 3,
+      character: 4,
+    });
+  });
+
+  test('returns start or end for collapsed carets based on direction', () => {
+    const pos = { line: 2, character: 5 };
+    expect(
+      getCaretPosition(createSelection(2, 5, 2, 5, DirectionForward))
+    ).toEqual(pos);
+    expect(
+      getCaretPosition(createSelection(2, 5, 2, 5, DirectionBackward))
+    ).toEqual(pos);
+    expect(
+      getCaretPosition(createSelection(2, 5, 2, 5, DirectionNone))
+    ).toEqual(pos);
   });
 });
 

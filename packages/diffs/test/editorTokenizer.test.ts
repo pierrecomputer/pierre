@@ -8,6 +8,19 @@ import {
 import { EditorTokenizer } from '../src/editor/tokenzier';
 import type { DiffsHighlighter, HighlightedToken } from '../src/types';
 
+const noopSetStyle = () => {};
+
+function createTestHighlighter(
+  overrides: Record<string, unknown> = {}
+): DiffsHighlighter {
+  return {
+    getLoadedLanguages: () => ['typescript'],
+    getTheme: () => ({ colors: {} }),
+    setTheme: () => ({ colorMap: [''] }),
+    ...overrides,
+  } as unknown as DiffsHighlighter;
+}
+
 describe('EditorTokenizer', () => {
   const originalWindowDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -73,13 +86,12 @@ describe('EditorTokenizer', () => {
         'typescript'
       );
       const tokenizer = new EditorTokenizer({
-        highlighter: {
+        highlighter: createTestHighlighter({
           getLanguage: () => grammar,
-          getLoadedLanguages: () => ['typescript'],
-          setTheme: () => ({ colorMap: [''] }),
-        } as unknown as DiffsHighlighter,
+        }),
         textDocument,
         codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
         onDeferTokenize: () => {},
       });
       const renderRange = {
@@ -145,13 +157,12 @@ describe('EditorTokenizer', () => {
     );
     const offscreenUpdates: Map<number, Array<HighlightedToken>>[] = [];
     const tokenizer = new EditorTokenizer({
-      highlighter: {
+      highlighter: createTestHighlighter({
         getLanguage: () => grammar,
-        getLoadedLanguages: () => ['typescript'],
-        setTheme: () => ({ colorMap: [''] }),
-      } as unknown as DiffsHighlighter,
+      }),
       textDocument,
       codeOptions: { theme: 'test-theme', themeType: 'dark' },
+      setStyle: noopSetStyle,
       onDeferTokenize: (lines) => {
         offscreenUpdates.push(lines);
       },
@@ -239,13 +250,12 @@ describe('EditorTokenizer', () => {
       );
       const deferredUpdates: Map<number, Array<HighlightedToken>>[] = [];
       const tokenizer = new EditorTokenizer({
-        highlighter: {
+        highlighter: createTestHighlighter({
           getLanguage: () => grammar,
-          getLoadedLanguages: () => ['typescript'],
-          setTheme: () => ({ colorMap: [''] }),
-        } as unknown as DiffsHighlighter,
+        }),
         textDocument,
         codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
         onDeferTokenize: (lines) => {
           deferredUpdates.push(lines);
         },
@@ -315,13 +325,12 @@ describe('EditorTokenizer', () => {
     );
     const offscreenUpdates: Map<number, Array<HighlightedToken>>[] = [];
     const tokenizer = new EditorTokenizer({
-      highlighter: {
+      highlighter: createTestHighlighter({
         getLanguage: () => grammar,
-        getLoadedLanguages: () => ['typescript'],
-        setTheme: () => ({ colorMap: [''] }),
-      } as unknown as DiffsHighlighter,
+      }),
       textDocument,
       codeOptions: { theme: 'test-theme', themeType: 'dark' },
+      setStyle: noopSetStyle,
       onDeferTokenize: (lines) => {
         offscreenUpdates.push(lines);
       },
@@ -408,13 +417,12 @@ describe('EditorTokenizer', () => {
         'typescript'
       );
       const tokenizer = new EditorTokenizer({
-        highlighter: {
+        highlighter: createTestHighlighter({
           getLanguage: () => grammar,
-          getLoadedLanguages: () => ['typescript'],
-          setTheme: () => ({ colorMap: [''] }),
-        } as unknown as DiffsHighlighter,
+        }),
         textDocument,
         codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
         onDeferTokenize: () => {},
       });
       const change: TextDocumentChange = {
@@ -471,13 +479,12 @@ describe('EditorTokenizer', () => {
       'typescript'
     );
     const tokenizer = new EditorTokenizer({
-      highlighter: {
+      highlighter: createTestHighlighter({
         getLanguage: () => grammar,
-        getLoadedLanguages: () => ['typescript'],
-        setTheme: () => ({ colorMap: [''] }),
-      } as unknown as DiffsHighlighter,
+      }),
       textDocument,
       codeOptions: { theme: 'test-theme', themeType: 'dark' },
+      setStyle: noopSetStyle,
       onDeferTokenize: () => {},
     });
 
