@@ -901,8 +901,8 @@ export interface DiffsEditor<LAnnotation> {
 export interface DiffsEditorOptions extends BaseCodeOptions {
   enableGutterUtility?: boolean;
   enableLineSelection?: boolean;
-  diffStyle?: 'unified' | 'split';
   expandUnchanged?: boolean;
+  lineHoverHighlight?: 'disabled' | 'both' | 'number' | 'line';
 }
 
 export interface DiffsBaseComponent {

@@ -47,6 +47,7 @@ import {
   getSelectionAnchor,
   getSelectionText,
   isCollapsedSelection,
+  isLineEditable,
   mapCursorMove,
   mapSelectionShift,
   mergeOverlappingSelections,
@@ -182,24 +183,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       useTokenTransformer,
       enableGutterUtility,
       enableLineSelection,
-      diffStyle,
       expandUnchanged,
+      lineHoverHighlight,
       ...rest
     } = component.options;
     if (
       useTokenTransformer !== true ||
       enableGutterUtility === true ||
       enableLineSelection === true ||
-      diffStyle === 'unified' ||
-      (expandUnchanged !== true && Object.hasOwn(component, 'fileDiff'))
+      (expandUnchanged !== true && Object.hasOwn(component, 'fileDiff')) ||
+      lineHoverHighlight !== 'disabled'
     ) {
       component.setOptions({
         ...rest,
         useTokenTransformer: true,
         enableGutterUtility: false,
         enableLineSelection: false,
-        diffStyle: 'split',
         expandUnchanged: true,
+        lineHoverHighlight: 'disabled',
       });
       component.rerender();
     }
@@ -341,11 +342,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           startingLine ??= lineIndex;
           endLine = lineIndex;
         }
-        if (
-          lineType !== 'context' &&
-          lineType !== 'change-addition' &&
-          lineType !== 'context-expanded'
-        ) {
+        if (lineType === undefined || !isLineEditable(lineType)) {
           el.contentEditable = 'false';
         }
       }
@@ -625,51 +622,63 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             guttterEl,
             'pointerdown',
             (e) => {
-              const target = e.composedPath()[0] as HTMLElement;
-              const textDocument = this.#textDocument;
-              if (
-                target.dataset.lineNumberContent !== undefined &&
-                textDocument !== undefined
-              ) {
-                const lineNumber = target.textContent.trim();
-                const lineIndex = Number(lineNumber) - 1;
-                const selection: EditorSelection = {
-                  start: { line: lineIndex, character: 0 },
-                  end: {
-                    line: lineIndex,
-                    character: textDocument.getLineText(lineIndex).length,
-                  },
-                  direction: DirectionForward,
-                };
-                this.#isGutterMouseDown = true;
-                this.#selectionStart = selection;
-                this.#updateSelections([selection]);
-                this.#focus(selection.end);
+              let target = e.composedPath()[0] as HTMLElement | undefined;
+              if (target?.dataset.lineNumberContent !== undefined) {
+                target =
+                  target.parentElement ??
+                  (undefined as HTMLElement | undefined);
               }
+              const textDocument = this.#textDocument;
+              if (target === undefined || textDocument === undefined) {
+                return;
+              }
+              const lineNumber = target.dataset.columnNumber;
+              const lineType = target.dataset.lineType;
+              if (
+                lineNumber === undefined ||
+                lineType === undefined ||
+                !isLineEditable(lineType)
+              ) {
+                return;
+              }
+              const lineIndex = Number(lineNumber) - 1;
+              const selection: EditorSelection = {
+                start: { line: lineIndex, character: 0 },
+                end: {
+                  line: lineIndex,
+                  character: textDocument.getLineText(lineIndex).length,
+                },
+                direction: DirectionForward,
+              };
+              this.#isGutterMouseDown = true;
+              this.#selectionStart = selection;
+              this.#updateSelections([selection]);
+              this.#focus(selection.end);
               this.#mouseUpDisposes = [
                 addEventListener(
                   document,
                   'mousemove',
                   (e) => {
-                    let lineNumber: number | undefined;
-                    const target = e.composedPath()[0] as HTMLElement;
-                    const dataset = target.dataset;
-                    if (dataset.lineNumberContent !== undefined) {
-                      lineNumber = Number(target.textContent.trim());
-                    } else if (dataset.columnNumber !== undefined) {
-                      lineNumber = Number(dataset.columnNumber);
-                    } else if (dataset.line !== undefined) {
-                      lineNumber = Number(dataset.line);
-                    } else if (dataset.char !== undefined) {
-                      const lineElement = target.closest('[data-line]');
-                      if (lineElement instanceof HTMLElement) {
-                        lineNumber = Number(lineElement.dataset.line);
-                      }
+                    let target = e.composedPath()[0] as HTMLElement | undefined;
+                    if (target?.dataset.lineNumberContent !== undefined) {
+                      target = target?.parentElement ?? undefined;
+                    } else if (target?.tagName === 'SPAN') {
+                      target = target?.closest('[data-line]') as
+                        | HTMLElement
+                        | undefined;
                     }
+                    if (target === undefined) {
+                      return;
+                    }
+                    const lineNumber =
+                      target.dataset.columnNumber ?? target.dataset.line;
+                    const lineType = target.dataset.lineType;
                     if (
                       this.#isGutterMouseDown &&
                       this.#textDocument !== undefined &&
-                      lineNumber !== undefined
+                      lineNumber !== undefined &&
+                      lineType !== undefined &&
+                      isLineEditable(lineType)
                     ) {
                       const lineIndex = Number(lineNumber) - 1;
                       let selection: EditorSelection = {
@@ -2115,16 +2124,26 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const { children } = contentElement;
       for (let i = line - startingLine; i <= children.length; i++) {
         const child = children[i] as HTMLElement | undefined;
+        const lineNumber = child?.dataset.line;
+        const lineType = child?.dataset.lineType;
         if (
-          child !== undefined &&
-          child.dataset.line !== undefined &&
-          Number(child.dataset.line) - 1 === line
+          lineNumber !== undefined &&
+          lineType !== undefined &&
+          isLineEditable(lineType) &&
+          Number(lineNumber) === line + 1
         ) {
           return child;
         }
       }
     }
-    // fallback to query selector
+    // fallback to query selector (ignoring `change-deletion` lines)
+    if (this.#editMode === 'advanced') {
+      return (
+        contentElement.querySelector<HTMLElement>(
+          `[data-line="${line + 1}"]:not([data-line-type="change-deletion"])`
+        ) ?? undefined
+      );
+    }
     return (
       contentElement.querySelector<HTMLElement>(`[data-line="${line + 1}"]`) ??
       undefined

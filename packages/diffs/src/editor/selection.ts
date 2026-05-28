@@ -629,6 +629,17 @@ export function isCollapsedSelection(selection: EditorSelection): boolean {
 }
 
 /**
+ * Checks if a line is editable.
+ */
+export function isLineEditable(lineType: string): boolean {
+  return (
+    lineType === 'context' ||
+    lineType === 'change-addition' ||
+    lineType === 'context-expanded'
+  );
+}
+
+/**
  * Checks whether selections `a` and `b` intersect.
  */
 export function selectionIntersects(
@@ -777,6 +788,9 @@ export function extendSelection(
   };
 }
 
+/**
+ * Extends multiple selections.
+ */
 export function extendSelections(
   selections: EditorSelection[],
   target: EditorSelection
@@ -787,6 +801,9 @@ export function extendSelections(
   return mergeOverlappingSelections(newSelections);
 }
 
+/**
+ * Merges overlapping selections.
+ */
 export function mergeOverlappingSelections(
   selections: EditorSelection[]
 ): EditorSelection[] {
@@ -884,6 +901,9 @@ export function findNexMatch(
   return [...normalizedSelections, added];
 }
 
+/**
+ * Get the full selection of the document.
+ */
 export function getDocumentFullSelection(
   textDocument: TextDocument<unknown>
 ): EditorSelection {
@@ -896,6 +916,9 @@ export function getDocumentFullSelection(
   };
 }
 
+/**
+ * Get the boundary selection of the document.
+ */
 export function getDocumentBoundarySelection(
   textDocument: TextDocument<unknown>,
   atEnd: boolean

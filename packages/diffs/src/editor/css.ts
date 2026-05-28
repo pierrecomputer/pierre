@@ -1,6 +1,8 @@
+const DEBUG_SELECTION = false;
+
 export const editorCSS: string = /* CSS */ `
   ::selection {
-    background-color: transparent;
+    background-color: ${DEBUG_SELECTION ? 'rgba(255, 0, 0, 0.1)' : 'transparent'};
   }
   @keyframes blinking {
     0% { opacity: 1; }
@@ -20,7 +22,7 @@ export const editorCSS: string = /* CSS */ `
   }
   @media (min-width: 480px) {
     [data-content] {
-      caret-color: transparent;
+      caret-color: ${DEBUG_SELECTION ? 'red' : 'transparent'};
     }
     [data-quick-edit] {
       caret-color: currentColor;
@@ -29,8 +31,14 @@ export const editorCSS: string = /* CSS */ `
   [data-line] {
     cursor: text;
   }
-  [data-line]:not([data-selected-line]) {
+  [data-line]:not([data-selected-line]),
+  [data-line]:not([data-selected-line]) span {
     background-color: transparent;
+  }
+  [data-line][data-line-type='change-deletion'] {
+    background-color: var(--diffs-line-bg);
+    -webkit-user-select: none;
+    user-select: none;
   }
   [data-caret], [data-selection-range] {
     position: absolute;
@@ -42,7 +50,7 @@ export const editorCSS: string = /* CSS */ `
   [data-caret] {
     width: 2px;
     height: 1lh;
-    background-color: var(--diffs-bg-caret);
+    background-color: ${DEBUG_SELECTION ? 'transparent' : 'var(--diffs-bg-caret)'};
     animation: blinking 1.2s infinite;
     animation-delay: 0.8s;
     visibility: hidden;

@@ -126,8 +126,8 @@ export function useFileDiffInstance<LAnnotation>({
         useTokenTransformer: true,
         enableGutterUtility: false,
         enableLineSelection: false,
-        diffStyle: 'split',
         expandUnchanged: true,
+        lineHoverHighlight: 'disabled',
       };
     }
     const forceRender = !areOptionsEqual(instance.options, newOptions);

@@ -127,6 +127,7 @@ export function useFileInstance<LAnnotation>({
         useTokenTransformer: true,
         enableGutterUtility: false,
         enableLineSelection: false,
+        lineHoverHighlight: 'disabled',
       };
     }
     const forceRender = !areOptionsEqual(
