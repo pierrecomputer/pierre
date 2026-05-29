@@ -8,7 +8,7 @@ import type {
   RenderFileOptions,
   ThemedFileResult,
 } from '../types';
-import { computeLineOffsets } from './computeFileOffsets';
+import { linesFromFileContents } from './computeFileOffsets';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
@@ -31,7 +31,7 @@ export function renderFileWithHighlighter(
     forcePlainText,
     startingLine,
     totalLines,
-    lineOffsets,
+    lines,
   }: ForceFilePlainTextOptions = DEFAULT_PLAIN_TEXT_OPTIONS
 ): ThemedFileResult {
   if (forcePlainText) {
@@ -86,8 +86,7 @@ export function renderFileWithHighlighter(
     highlighter.codeToHast(
       isWindowedHighlight
         ? extractWindowedFileContent(
-            file,
-            lineOffsets ?? computeLineOffsets(file.contents),
+            lines ?? linesFromFileContents(file.contents),
             startingLine,
             totalLines
           )
@@ -106,16 +105,13 @@ export function renderFileWithHighlighter(
 }
 
 function extractWindowedFileContent(
-  file: FileContents,
-  lineOffsets: number[],
+  lines: string[],
   startingLine: number,
   totalLines: number
 ): string {
-  if (lineOffsets.length === 0) {
+  if (lines.length === 0) {
     return '';
   }
-  const endLine = Math.min(startingLine + totalLines, lineOffsets.length);
-  const startOffset = lineOffsets[startingLine] ?? file.contents.length;
-  const endOffset = lineOffsets[endLine] ?? file.contents.length;
-  return file.contents.slice(startOffset, endOffset);
+  const endLine = Math.min(startingLine + totalLines, lines.length);
+  return lines.slice(startingLine, endLine).join('');
 }

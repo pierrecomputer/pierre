@@ -709,7 +709,7 @@ export interface ForceFilePlainTextOptions {
   startingLine?: number;
   totalLines?: number;
   // Pre-split lines for caching in windowing scenarios
-  lineOffsets?: number[];
+  lines?: string[];
 }
 
 export interface RenderFileOptions {

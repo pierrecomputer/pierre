@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import { computeLineOffsets } from '../src/utils/computeFileOffsets';
+import {
+  computeLineOffsets,
+  linesFromFileContents,
+} from '../src/utils/computeFileOffsets';
 
 describe('computeLineOffsets', () => {
   test('returns a single start offset for empty contents', () => {
@@ -42,5 +45,25 @@ describe('computeLineOffsets', () => {
 
     expect([...lines]).toEqual([0, 1]);
     expect(lines.length).toBe(2);
+  });
+});
+
+describe('linesFromFileContents', () => {
+  test('matches computeLineOffsets line count', () => {
+    const cases = ['', 'hello', 'hello\n', 'a\nb\n', 'a\nb', '\n'];
+
+    for (const contents of cases) {
+      expect(linesFromFileContents(contents).length).toBe(
+        computeLineOffsets(contents).length
+      );
+    }
+  });
+
+  test('preserves newlines so windowed joins reconstruct the file', () => {
+    const contents = 'hello\n';
+    const lines = linesFromFileContents(contents);
+
+    expect(lines).toEqual(['hello\n', '']);
+    expect(lines.slice(0, lines.length).join('')).toBe(contents);
   });
 });

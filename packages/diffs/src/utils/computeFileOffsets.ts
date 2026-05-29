@@ -21,3 +21,17 @@ export function computeLineOffsets(contents: string): number[] {
   }
   return offsets;
 }
+
+/**
+ * Splits file contents into lines aligned with {@link computeLineOffsets}.
+ * Unlike splitFileContents, a trailing newline produces a final empty line.
+ */
+export function linesFromFileContents(contents: string): string[] {
+  const offsets = computeLineOffsets(contents);
+  const lines = Array.from({ length: offsets.length }, (_, i) => {
+    const start = offsets[i];
+    const end = offsets[i + 1] ?? contents.length;
+    return contents.slice(start, end);
+  });
+  return lines;
+}

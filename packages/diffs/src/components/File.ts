@@ -63,6 +63,8 @@ import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
 
+const EMPTY_STRINGS: string[] = [''];
+
 export interface FileRenderProps<LAnnotation> {
   file: FileContents;
   fileContainer?: HTMLElement;
@@ -449,10 +451,12 @@ export class File<
     this.flushManagers();
   }
 
-  protected getOrCreateLineOffSets(
+  public getOrCreateLineCache(
     file: FileContents | undefined = this.file
-  ): number[] {
-    return file != null ? this.fileRenderer.getOrCreateLineOffsets(file) : [0]; // empty string
+  ): string[] {
+    return file != null
+      ? this.fileRenderer.getOrCreateLineCache(file)
+      : EMPTY_STRINGS;
   }
 
   protected updateBuffers(renderRange: RenderRange): void {
@@ -768,7 +772,7 @@ export class File<
     ) {
       return;
     }
-    const lines = this.fileRenderer.getOrCreateLineOffsets(file);
+    const lines = this.fileRenderer.getOrCreateLineCache(file);
     if (
       lines.length >
       (this.options.tokenizeMaxLength ?? DEFAULT_TOKENIZE_MAX_LENGTH)

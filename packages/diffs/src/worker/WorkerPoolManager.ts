@@ -605,7 +605,7 @@ export class WorkerPoolManager {
     file: FileContents,
     startingLine: number,
     totalLines: number,
-    lineOffsets?: number[]
+    lines?: string[]
   ): ThemedFileResult | undefined {
     if (this.highlighter == null) {
       this.queueInitialization();
@@ -615,7 +615,7 @@ export class WorkerPoolManager {
       file,
       this.highlighter,
       this.renderOptions,
-      { forcePlainText: true, startingLine, totalLines, lineOffsets }
+      { forcePlainText: true, startingLine, totalLines, lines }
     );
   }
 

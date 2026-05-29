@@ -31,7 +31,7 @@ import type {
 import { areFileRenderOptionsEqual } from '../utils/areFileRenderOptionsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
-import { computeLineOffsets } from '../utils/computeFileOffsets';
+import { linesFromFileContents } from '../utils/computeFileOffsets';
 import { createAnnotationElement } from '../utils/createAnnotationElement';
 import { createContentColumn } from '../utils/createContentColumn';
 import { createFileHeaderElement } from '../utils/createFileHeaderElement';
@@ -75,6 +75,11 @@ export interface FileRenderResult {
   bufferAfter: number;
 }
 
+interface LineCache {
+  cacheKey: string | undefined;
+  lines: string[];
+}
+
 export interface FileRendererOptions extends BaseCodeOptions {
   headerRenderMode?: FileHeaderRenderMode;
 }
@@ -88,10 +93,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private renderCache: RenderedFileASTCache | undefined;
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
-  private lineOffsetsCache = new WeakMap<
-    FileContents,
-    { offsets: number[]; cacheKey?: string }
-  >();
+  private lineCache: LineCache | undefined;
   private textDoucmentCache = new WeakMap<FileContents, DiffsTextDocument>();
 
   constructor(
@@ -143,6 +145,7 @@ export class FileRenderer<LAnnotation = undefined> {
     ) {
       this.workerManager?.evictFileFromCache(renderCache.file.cacheKey);
     }
+    this.lineCache = undefined;
   }
 
   public clearRenderCache(): void {
@@ -151,7 +154,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public hydrate(file: FileContents): void {
     const { options } = this.getRenderOptions(file);
-    const lines = this.getOrCreateLineOffsets(file);
+    const lines = this.getOrCreateLineCache(file);
     const massiveFile = isFileMassive(
       lines.length,
       this.getTokenizeMaxLength()
@@ -207,15 +210,23 @@ export class FileRenderer<LAnnotation = undefined> {
     return { options, forceHighlight: false };
   }
 
-  public getOrCreateLineOffsets(file: FileContents): number[] {
-    const cacheKey = file.cacheKey;
-    const cached = this.lineOffsetsCache.get(file);
-    if (cached === undefined || cached.cacheKey !== cacheKey) {
-      const offsets = computeLineOffsets(file.contents);
-      this.lineOffsetsCache.set(file, { offsets, cacheKey });
-      return offsets;
+  public getOrCreateLineCache(file: FileContents): string[] {
+    // Uncached files will get split every time, not the greatest experience
+    // tbh... but something people should try to optimize away
+    if (file.cacheKey == null) {
+      this.lineCache = undefined;
+      return linesFromFileContents(file.contents);
     }
-    return cached.offsets;
+
+    let { lineCache } = this;
+    if (lineCache == null || lineCache.cacheKey !== file.cacheKey) {
+      lineCache = {
+        cacheKey: file.cacheKey,
+        lines: linesFromFileContents(file.contents),
+      };
+    }
+    this.lineCache = lineCache;
+    return lineCache.lines;
   }
 
   // when a emitLineCountChange is called,
@@ -223,7 +234,7 @@ export class FileRenderer<LAnnotation = undefined> {
   public getLineCount(file: FileContents): number {
     return (
       this.textDoucmentCache.get(file)?.lineCount ??
-      this.getOrCreateLineOffsets(file).length
+      this.getOrCreateLineCache(file).length
     );
   }
 
@@ -343,7 +354,7 @@ export class FileRenderer<LAnnotation = undefined> {
       result: undefined,
       renderRange: undefined,
     };
-    const lines = this.getOrCreateLineOffsets(file);
+    const lines = this.getOrCreateLineCache(file);
     const hasContent = file.contents.length > 0;
     const forcePlainText =
       !hasContent ||
@@ -454,9 +465,9 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   private async asyncHighlight(file: FileContents): Promise<RenderFileResult> {
-    const lineOffsets = this.getOrCreateLineOffsets(file);
+    const lines = this.getOrCreateLineCache(file);
     const forcePlainText = isFileMassive(
-      lineOffsets.length,
+      lines.length,
       this.getTokenizeMaxLength()
     );
     this.computedLang = forcePlainText
