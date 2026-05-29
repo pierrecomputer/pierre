@@ -47,8 +47,4 @@ export interface FileProps<LAnnotation> {
   prerenderedHTML?: string;
   disableWorkerPool?: boolean;
   contentEditable?: boolean;
-  onChange?: (
-    file: FileContents,
-    lineAnnotations?: LineAnnotation<LAnnotation>[]
-  ) => void;
 }
