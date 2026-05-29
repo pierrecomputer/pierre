@@ -18,6 +18,7 @@ export interface MultiFileDiffProps<
   oldFile: FileContents;
   newFile: FileContents;
   disableWorkerPool?: boolean;
+  contentEditable?: boolean;
 }
 
 export function MultiFileDiff<LAnnotation = undefined>({
@@ -36,6 +37,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
   renderHeaderMetadata,
   renderGutterUtility,
   disableWorkerPool = false,
+  contentEditable = false,
 }: MultiFileDiffProps<LAnnotation>): React.JSX.Element {
   const fileDiff = useMemo(() => {
     return parseDiffFromFile(oldFile, newFile, options?.parseDiffOptions);
@@ -50,6 +52,7 @@ export function MultiFileDiff<LAnnotation = undefined>({
     hasGutterRenderUtility: renderGutterUtility != null,
     hasCustomHeader: renderCustomHeader != null,
     disableWorkerPool,
+    contentEditable,
   });
   const children = renderDiffChildren({
     fileDiff,

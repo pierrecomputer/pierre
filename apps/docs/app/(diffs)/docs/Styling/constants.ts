@@ -46,6 +46,9 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined> = {
   --diffs-bg-selection-override: rgba(147, 197, 253, 0.28);
   --diffs-bg-selection-number-override: rgba(96, 165, 250, 0.55);
 
+  /* Edit cursor background color */
+  --diffs-bg-caret-override: rgba(128, 128, 128, 0.55);
+
   /* Some basic variables for tweaking the layouts of some of the built in
    * components */
   --diffs-gap-inline: 8px;
