@@ -17,6 +17,7 @@ import type {
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
 import { noopRender } from '../constants';
+import { useEditor } from '../EditorContext';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
@@ -34,6 +35,11 @@ interface UseFileInstanceProps<LAnnotation> {
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
   disableWorkerPool: boolean;
+  contentEditable: boolean;
+  onChange?: (
+    file: FileContents,
+    lineAnnotations?: LineAnnotation<LAnnotation>[]
+  ) => void;
 }
 
 interface UseFileInstanceReturn {
@@ -51,10 +57,12 @@ export function useFileInstance<LAnnotation>({
   hasGutterRenderUtility,
   hasCustomHeader,
   disableWorkerPool,
+  contentEditable,
 }: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
+  const editor = useEditor<LAnnotation>();
   const instanceRef = useRef<
     File<LAnnotation> | VirtualizedFile<LAnnotation> | null
   >(null);
@@ -69,7 +77,9 @@ export function useFileInstance<LAnnotation>({
         instanceRef.current = new VirtualizedFile(
           mergeFileOptions({
             controlledSelection,
+            contentEditable,
             hasCustomHeader,
+            hasEditor: editor !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -82,7 +92,9 @@ export function useFileInstance<LAnnotation>({
         instanceRef.current = new File(
           mergeFileOptions({
             controlledSelection,
+            contentEditable,
             hasCustomHeader,
+            hasEditor: editor !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -109,7 +121,9 @@ export function useFileInstance<LAnnotation>({
     if (instanceRef.current == null) return;
     const newOptions = mergeFileOptions({
       controlledSelection,
+      contentEditable,
       hasCustomHeader,
+      hasEditor: editor !== undefined,
       hasGutterRenderUtility,
       options,
     });
@@ -124,6 +138,16 @@ export function useFileInstance<LAnnotation>({
     }
   });
 
+  useIsometricEffect(() => {
+    if (contentEditable && instanceRef.current != null) {
+      if (editor === undefined) {
+        throw new Error('File: Editor is not attached');
+      }
+      return editor.edit(instanceRef.current);
+    }
+    return undefined;
+  }, [contentEditable, editor]);
+
   const getHoveredLine = useCallback(():
     | GetHoveredLineResult<'file'>
     | undefined => {
@@ -135,6 +159,8 @@ export function useFileInstance<LAnnotation>({
 interface MergeFileOptionsProps<LAnnotation> {
   options: FileOptions<LAnnotation> | undefined;
   controlledSelection: boolean;
+  contentEditable: boolean;
+  hasEditor: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
 }
@@ -142,20 +168,43 @@ interface MergeFileOptionsProps<LAnnotation> {
 function mergeFileOptions<LAnnotation>({
   options,
   controlledSelection,
+  contentEditable,
   hasCustomHeader,
+  hasEditor,
   hasGutterRenderUtility,
 }: MergeFileOptionsProps<LAnnotation>): FileOptions<LAnnotation> | undefined {
-  if (!controlledSelection && !hasGutterRenderUtility && !hasCustomHeader) {
+  const needsEditorOptions = contentEditable && hasEditor;
+  const needsReactOverrides =
+    controlledSelection || hasGutterRenderUtility || hasCustomHeader;
+
+  if (!needsReactOverrides && !needsEditorOptions) {
     return options;
   }
-  return {
-    ...options,
-    controlledSelection,
-    renderCustomHeader: hasCustomHeader
-      ? noopRender
-      : options?.renderCustomHeader,
-    renderGutterUtility: hasGutterRenderUtility
-      ? noopRender
-      : options?.renderGutterUtility,
-  };
+
+  let merged: FileOptions<LAnnotation> = { ...options };
+
+  if (needsReactOverrides) {
+    merged = {
+      ...merged,
+      controlledSelection,
+      renderCustomHeader: hasCustomHeader
+        ? noopRender
+        : options?.renderCustomHeader,
+      renderGutterUtility: hasGutterRenderUtility
+        ? noopRender
+        : options?.renderGutterUtility,
+    };
+  }
+
+  if (needsEditorOptions) {
+    merged = {
+      ...merged,
+      useTokenTransformer: true,
+      enableGutterUtility: false,
+      enableLineSelection: false,
+      lineHoverHighlight: 'disabled',
+    };
+  }
+
+  return merged;
 }

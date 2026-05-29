@@ -82,6 +82,23 @@ export function createTransformerWithState(
   if (useCSSClasses) {
     transformers.push(tokenStyleNormalizer, toClass);
   }
+  if (useTokenTransformer) {
+    // shiki renders empty lines as " " that breaks the editor selection.
+    // We replace them with <br> tags.
+    transformers.push({
+      line: (node) => {
+        if (node.type === 'element' && node.children.length === 0) {
+          node.children.push({
+            type: 'element',
+            tagName: 'br',
+            properties: {},
+            children: [],
+          });
+        }
+        return node;
+      },
+    });
+  }
   return { state, transformers, toClass };
 }
 

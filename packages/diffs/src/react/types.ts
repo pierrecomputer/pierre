@@ -46,4 +46,5 @@ export interface FileProps<LAnnotation> {
   style?: CSSProperties;
   prerenderedHTML?: string;
   disableWorkerPool?: boolean;
+  contentEditable?: boolean;
 }

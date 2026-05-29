@@ -30,10 +30,28 @@
             <input id="wrap-lines" type="checkbox" />
             Wrap
           </label>
+          <label>
+            <input id="lag-radar" type="checkbox" />
+            Lag Radar
+          </label>
         </div>
       </div>
-      <div id="wrapper" class="wrapper" />
+      <div id="wrapper" class="wrapper"></div>
     </div>
+    <!-- lag radar -->
+    <div
+      id="radar"
+      style="
+        display: none;
+        position: fixed;
+        bottom: 4px;
+        right: 4px;
+        width: 100px;
+        height: 100px;
+        z-index: 100;
+        pointer-events: none;
+      "
+    ></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

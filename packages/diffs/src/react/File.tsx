@@ -24,6 +24,7 @@ export function File<LAnnotation = undefined>({
   prerenderedHTML,
   renderGutterUtility,
   disableWorkerPool = false,
+  contentEditable = false,
 }: FileProps<LAnnotation>): React.JSX.Element {
   const { ref, getHoveredLine } = useFileInstance({
     file,
@@ -35,6 +36,7 @@ export function File<LAnnotation = undefined>({
     hasGutterRenderUtility: renderGutterUtility != null,
     hasCustomHeader: renderCustomHeader != null,
     disableWorkerPool,
+    contentEditable,
   });
   const children = renderFileChildren({
     file,

@@ -1,6 +1,8 @@
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
 import type {
+  DiffsTextDocument,
   FileContents,
+  LineAnnotation,
   NumericScrollLineAnchor,
   PendingCodeViewLayoutReset,
   RenderRange,
@@ -9,13 +11,13 @@ import type {
   ThemeTypes,
   VirtualFileMetrics,
 } from '../types';
+import { areFilesEqual } from '../utils/areFilesEqual';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
 import {
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
-import { iterateOverFile } from '../utils/iterateOverFile';
 import type { WorkerPoolManager } from '../worker';
 import type { CodeView } from './CodeView';
 import { File, type FileOptions, type FileRenderProps } from './File';
@@ -287,8 +289,7 @@ export class VirtualizedFile<
     }
 
     const { disableFileHeader = false, collapsed = false } = this.options;
-    const lines = this.getOrCreateLineCache(this.file);
-    const lastLineIndex = getLastVisibleLineIndex(lines);
+    const lastLineIndex = this.fileRenderer.getLineCount(this.file) - 1;
     let top = getVirtualFileHeaderRegion(this.metrics, disableFileHeader);
 
     if (collapsed || lastLineIndex < 0) {
@@ -342,8 +343,7 @@ export class VirtualizedFile<
       return undefined;
     }
 
-    const lines = this.getOrCreateLineCache(this.file);
-    const lastLineIndex = getLastVisibleLineIndex(lines);
+    const lastLineIndex = this.fileRenderer.getLineCount(this.file) - 1;
     if (lastLineIndex < 0) {
       return undefined;
     }
@@ -482,7 +482,7 @@ export class VirtualizedFile<
       overflow = 'scroll',
     } = this.options;
     const { lineHeight } = this.metrics;
-    const lines = this.getOrCreateLineCache(this.file);
+    const lineCount = this.fileRenderer.getLineCount(this.file);
     const headerRegion = getVirtualFileHeaderRegion(
       this.metrics,
       disableFileHeader
@@ -496,18 +496,15 @@ export class VirtualizedFile<
     }
 
     if (overflow === 'scroll' && this.lineAnnotations.length === 0) {
-      this.height += this.getOrCreateLineCache(this.file).length * lineHeight;
+      this.height += lineCount * lineHeight;
     } else {
-      iterateOverFile({
-        lines,
-        callback: ({ lineIndex }) => {
-          this.addLayoutCheckpoint(lineIndex, this.height);
-          this.height += this.getLineHeight(lineIndex, false);
-        },
-      });
+      for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
+        this.addLayoutCheckpoint(lineIndex, this.height);
+        this.height += this.getLineHeight(lineIndex, false);
+      }
     }
 
-    if (lines.length > 0) {
+    if (lineCount > 0) {
       this.height += paddingBottom;
     }
 
@@ -552,16 +549,45 @@ export class VirtualizedFile<
     this.virtualizer.instanceChanged(this, false);
   }
 
+  override applyLayoutChange(
+    textDocument: DiffsTextDocument,
+    newLineAnnotations?: LineAnnotation<LAnnotation>[],
+    shouldUpdateBuffer = false
+  ): void {
+    const previousRenderRange = this.renderRange;
+    super.applyLayoutChange(textDocument, newLineAnnotations);
+    this.getSimpleVirtualizer()?.markDOMDirty();
+    this.resetLayoutCache(true);
+    // Update the buffers caused by the line-count change to ensure the editor
+    // scrolls to the correct position before re-rendering
+    if (
+      shouldUpdateBuffer &&
+      previousRenderRange !== undefined &&
+      this.file !== undefined
+    ) {
+      const windowSpecs = this.virtualizer.getWindowSpecs();
+      const renderRange = this.computeRenderRangeFromWindow(
+        this.file,
+        this.top ?? 0,
+        windowSpecs
+      );
+      if (renderRange.bufferAfter !== previousRenderRange.bufferAfter) {
+        this.updateBuffers(renderRange);
+      }
+    }
+  }
+
   override render({
     fileContainer,
     file,
     forceRender = false,
     ...props
   }: FileRenderProps<LAnnotation>): boolean {
+    const didFileChange = this.file == null || !areFilesEqual(this.file, file);
     const { forceRenderOverride, isSetup } = this;
     this.forceRenderOverride = undefined;
 
-    this.file ??= file;
+    this.file = file;
 
     fileContainer = this.getOrCreateFileContainerNode(fileContainer);
 
@@ -593,6 +619,10 @@ export class VirtualizedFile<
       this.isSetup = true;
     } else {
       this.top ??= this.getVirtualizedTop();
+      if (didFileChange && this.isSimpleMode()) {
+        this.getSimpleVirtualizer()?.markDOMDirty();
+        this.resetLayoutCache(true);
+      }
     }
 
     if (!this.isVisible && this.isSimpleMode()) {
@@ -738,8 +768,7 @@ export class VirtualizedFile<
   ): RenderRange {
     const { disableFileHeader = false, overflow = 'scroll' } = this.options;
     const { hunkLineCount, lineHeight } = this.metrics;
-    const lines = this.getOrCreateLineCache(file);
-    const lineCount = lines.length;
+    const lineCount = this.fileRenderer.getLineCount(file);
     const fileHeight = this.height;
     const headerRegion = getVirtualFileHeaderRegion(
       this.metrics,
@@ -832,51 +861,50 @@ export class VirtualizedFile<
     let centerHunk: number | undefined;
     let overflowCounter: number | undefined;
 
-    iterateOverFile({
-      lines,
-      startingLine: checkpoint?.lineIndex ?? 0,
-      callback: ({ lineIndex }) => {
-        const isAtHunkBoundary = currentLine % hunkLineCount === 0;
-        const currentHunk = Math.floor(currentLine / hunkLineCount);
+    const startingLineIndex = checkpoint?.lineIndex ?? 0;
+    for (
+      let lineIndex = startingLineIndex;
+      lineIndex < lineCount;
+      lineIndex++
+    ) {
+      const isAtHunkBoundary = currentLine % hunkLineCount === 0;
+      const currentHunk = Math.floor(currentLine / hunkLineCount);
 
-        if (isAtHunkBoundary) {
-          hunkOffsets[currentHunk] = absoluteLineTop - (fileTop + headerRegion);
+      if (isAtHunkBoundary) {
+        hunkOffsets[currentHunk] = absoluteLineTop - (fileTop + headerRegion);
 
-          if (overflowCounter != null) {
-            if (overflowCounter <= 0) {
-              return true;
-            }
-            overflowCounter--;
+        if (overflowCounter != null) {
+          if (overflowCounter <= 0) {
+            break;
           }
+          overflowCounter--;
         }
+      }
 
-        const lineHeight = this.getLineHeight(lineIndex, false);
+      const lineHeight = this.getLineHeight(lineIndex, false);
 
-        // Track visible region
-        if (absoluteLineTop > top - lineHeight && absoluteLineTop < bottom) {
-          firstVisibleHunk ??= currentHunk;
-        }
+      // Track visible region
+      if (absoluteLineTop > top - lineHeight && absoluteLineTop < bottom) {
+        firstVisibleHunk ??= currentHunk;
+      }
 
-        // Track which hunk contains the viewport center
-        if (absoluteLineTop + lineHeight > viewportCenter) {
-          centerHunk ??= currentHunk;
-        }
+      // Track which hunk contains the viewport center
+      if (absoluteLineTop + lineHeight > viewportCenter) {
+        centerHunk ??= currentHunk;
+      }
 
-        // Start overflow when we are out of the viewport at a hunk boundary
-        if (
-          overflowCounter == null &&
-          absoluteLineTop >= bottom &&
-          isAtHunkBoundary
-        ) {
-          overflowCounter = overflowHunks;
-        }
+      // Start overflow when we are out of the viewport at a hunk boundary
+      if (
+        overflowCounter == null &&
+        absoluteLineTop >= bottom &&
+        isAtHunkBoundary
+      ) {
+        overflowCounter = overflowHunks;
+      }
 
-        currentLine++;
-        absoluteLineTop += lineHeight;
-
-        return false;
-      },
-    });
+      currentLine++;
+      absoluteLineTop += lineHeight;
+    }
 
     // No visible lines found
     if (firstVisibleHunk == null) {
@@ -927,19 +955,4 @@ export class VirtualizedFile<
       bufferAfter,
     };
   }
-}
-
-function getLastVisibleLineIndex(lines: string[]): number {
-  const lastLine = lines.at(-1);
-  if (
-    lastLine == null ||
-    lastLine === '' ||
-    lastLine === '\n' ||
-    lastLine === '\r\n' ||
-    lastLine === '\r'
-  ) {
-    return lines.length - 2;
-  }
-
-  return lines.length - 1;
 }

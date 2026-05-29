@@ -21,6 +21,7 @@ import {
   VirtualizedFileDiff,
   Virtualizer,
 } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
 import type { WorkerPoolManager } from '@pierre/diffs/worker';
 
 import {
@@ -108,7 +109,17 @@ function cleanupInstances(container: HTMLElement) {
   cleanupCodeView(container);
   container.textContent = '';
   delete container.dataset.diff;
+  editShortcutCallback = undefined;
 }
+
+let editShortcutCallback: (() => boolean | void) | undefined;
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'e') {
+    if (editShortcutCallback?.() === false) {
+      event.preventDefault();
+    }
+  }
+});
 
 let loadingPatch: Promise<string> | undefined;
 async function loadPatchContent() {
@@ -239,10 +250,12 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
     const patchAnnotations = FAKE_DIFF_LINE_ANNOTATIONS[patchIndex] ?? [];
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
+      const editor = new Editor<LineCommentMetadata>();
       const fileAnnotations = patchAnnotations[hunkIndex];
       let instance:
         | FileDiff<LineCommentMetadata>
         | VirtualizedFileDiff<LineCommentMetadata>;
+      let isEditing = false;
       const options: FileDiffOptions<LineCommentMetadata> = {
         theme: DEMO_THEME,
         themeType,
@@ -250,7 +263,8 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation: renderDiffAnnotation,
         renderHeaderMetadata() {
-          return createCollapsedToggle(
+          const collapseToggle = createToggle(
+            'Collapse',
             instance?.options.collapsed ?? false,
             (checked) => {
               instance?.setOptions({
@@ -262,6 +276,32 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
               }
             }
           );
+          const editableToggle = createToggle(
+            'Editable',
+            isEditing,
+            (checked) => {
+              isEditing = checked;
+              if (isEditing) {
+                editor.edit(instance);
+              } else {
+                editor.cleanUp();
+              }
+            }
+          );
+          editShortcutCallback = (): boolean | void => {
+            if (!isEditing) {
+              editableToggle.querySelector('input')?.click();
+              return false;
+            }
+          };
+          const div = document.createElement('div');
+          div.style.display = 'flex';
+          div.style.gap = '8px';
+          div.append(collapseToggle);
+          if (!fileDiff.isPartial) {
+            div.append(editableToggle);
+          }
+          return div;
         },
         lineHoverHighlight: 'both',
         expansionLineCount: 10,
@@ -745,18 +785,42 @@ if (renderFileButton != null) {
 
     virtualizer?.setup(globalThis.document);
     const wrap = getWrapped();
+    const editor = new Editor<LineCommentMetadata>({
+      enabledQuickEdit: true,
+      renderQuickEdit: (ctx) => {
+        const div = document.createElement('div');
+        const button = document.createElement('button');
+        button.innerText = `Comment the selection`;
+        button.addEventListener('click', () => {
+          const lines = ctx.getSelectionText().split('\n');
+          const comment = lines
+            .map((line) => (line.startsWith('//') ? line : `// ${line}`))
+            .join('\n');
+          ctx.replaceSelectionText(comment);
+          ctx.close();
+        });
+        div.style.marginBlock = '4px';
+        div.appendChild(button);
+        return div;
+      },
+      onChange: (file, lineAnnotations) => {
+        console.log('change', file, lineAnnotations);
+      },
+    });
     const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
     let instance:
       | File<LineCommentMetadata>
       | VirtualizedFile<LineCommentMetadata>;
+    let isEditing = false;
     const options: FileOptions<LineCommentMetadata> = {
       overflow: wrap ? 'wrap' : 'scroll',
       theme: DEMO_THEME,
       themeType: getThemeType(),
       renderAnnotation,
       renderHeaderMetadata() {
-        return createCollapsedToggle(
+        const collapsedToggle = createToggle(
+          'Collapse',
           instance?.options.collapsed ?? false,
           (checked) => {
             instance?.setOptions({
@@ -768,6 +832,42 @@ if (renderFileButton != null) {
             }
           }
         );
+        const editableToggle = createToggle(
+          'Editable',
+          isEditing,
+          (checked) => {
+            isEditing = checked;
+            if (isEditing) {
+              editor.edit(instance);
+              editor.setSelections([
+                {
+                  start: {
+                    line: 0,
+                    character: 1000, // will be normalized to the end of the line(< 1000 chars)
+                  },
+                  end: {
+                    line: 0,
+                    character: 1000, // will be normalized to the end of the line(< 1000 chars)
+                  },
+                  direction: 'none',
+                },
+              ]);
+            } else {
+              editor.cleanUp();
+            }
+          }
+        );
+        editShortcutCallback = (): boolean | void => {
+          if (!isEditing) {
+            editableToggle.querySelector('input')?.click();
+            return false;
+          }
+        };
+        const div = document.createElement('div');
+        div.style.display = 'flex';
+        div.style.gap = '8px';
+        div.append(collapsedToggle, editableToggle);
+        return div;
       },
 
       // Line selection stuff
@@ -955,7 +1055,34 @@ cleanButton?.addEventListener('click', () => {
   cleanupInstances(container);
 });
 
-function createCollapsedToggle(
+const lagRadarCheckbox = document.getElementById('lag-radar');
+const radar = document.getElementById('radar');
+if (lagRadarCheckbox != null && radar != null) {
+  const { default: lagRadar } =
+    // @ts-expect-error dynamic import
+    await import('https://mobz.github.io/lag-radar/lag-radar.js');
+  let dispose: (() => void) | undefined;
+  lagRadarCheckbox.addEventListener('change', () => {
+    if (
+      lagRadarCheckbox instanceof HTMLInputElement &&
+      lagRadarCheckbox.checked
+    ) {
+      dispose = lagRadar({
+        parent: radar,
+        size: 100,
+        frames: 60,
+      });
+      radar.style.display = 'block';
+    } else {
+      dispose?.();
+      dispose = undefined;
+      radar.style.display = 'none';
+    }
+  });
+}
+
+function createToggle(
+  labelText: string,
   checked: boolean,
   onChange: (checked: boolean) => void
 ): HTMLElement {
@@ -968,7 +1095,7 @@ function createCollapsedToggle(
   });
   label.dataset.collapser = '';
   label.appendChild(input);
-  label.append(' Collapse');
+  label.appendChild(document.createTextNode(` ${labelText}`));
   return label;
 }
 

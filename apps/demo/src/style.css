@@ -253,3 +253,11 @@ diffs-container {
   align-items: center;
   gap: 4px;
 }
+
+[data-quick-edit-slot] button {
+  border-color: rgba(128, 128, 128, 0.4);
+
+  &:hover {
+    border-color: #646cff;
+  }
+}

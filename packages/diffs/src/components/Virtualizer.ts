@@ -641,7 +641,7 @@ export class Virtualizer {
     return this.height;
   }
 
-  private markDOMDirty() {
+  markDOMDirty(): void {
     this.scrollDirty = true;
     this.scrollHeightDirty = true;
     this.heightDirty = true;

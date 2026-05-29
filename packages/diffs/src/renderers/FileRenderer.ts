@@ -16,8 +16,10 @@ import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
 import type {
   BaseCodeOptions,
   DiffsHighlighter,
+  DiffsTextDocument,
   FileContents,
   FileHeaderRenderMode,
+  HighlightedToken,
   LineAnnotation,
   RenderedFileASTCache,
   RenderFileOptions,
@@ -29,6 +31,7 @@ import type {
 import { areFileRenderOptionsEqual } from '../utils/areFileRenderOptionsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
+import { linesFromFileContents } from '../utils/computeFileOffsets';
 import { createAnnotationElement } from '../utils/createAnnotationElement';
 import { createContentColumn } from '../utils/createContentColumn';
 import { createFileHeaderElement } from '../utils/createFileHeaderElement';
@@ -44,10 +47,8 @@ import {
   createHastElement,
 } from '../utils/hast_utils';
 import { isFilePlainText } from '../utils/isFilePlainText';
-import { iterateOverFile } from '../utils/iterateOverFile';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
-import { splitFileContents } from '../utils/splitFileContents';
 import type { WorkerPoolManager } from '../worker';
 
 type AnnotationLineMap<LAnnotation> = Record<
@@ -93,6 +94,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
   private lineCache: LineCache | undefined;
+  private textDoucmentCache = new WeakMap<FileContents, DiffsTextDocument>();
 
   constructor(
     public options: FileRendererOptions = { theme: DEFAULT_THEMES },
@@ -132,9 +134,17 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public recycle(): void {
+    const renderCache = this.renderCache;
     this.clearRenderCache();
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
+    if (
+      renderCache != null &&
+      renderCache.isDirty === true &&
+      renderCache.file.cacheKey != null
+    ) {
+      this.workerManager?.evictFileFromCache(renderCache.file.cacheKey);
+    }
     this.lineCache = undefined;
   }
 
@@ -205,18 +215,118 @@ export class FileRenderer<LAnnotation = undefined> {
     // tbh... but something people should try to optimize away
     if (file.cacheKey == null) {
       this.lineCache = undefined;
-      return splitFileContents(file.contents);
+      return linesFromFileContents(file.contents);
     }
 
     let { lineCache } = this;
     if (lineCache == null || lineCache.cacheKey !== file.cacheKey) {
       lineCache = {
         cacheKey: file.cacheKey,
-        lines: splitFileContents(file.contents),
+        lines: linesFromFileContents(file.contents),
       };
     }
     this.lineCache = lineCache;
     return lineCache.lines;
+  }
+
+  // when a emitLineCountChange is called,
+  // calculate the line count using the cached text document
+  public getLineCount(file: FileContents): number {
+    return (
+      this.textDoucmentCache.get(file)?.lineCount ??
+      this.getOrCreateLineCache(file).length
+    );
+  }
+
+  public applyDirtyLines(
+    dirtyLines: Map<number, Array<HighlightedToken>>,
+    themeType: 'dark' | 'light'
+  ): void {
+    if (this.renderCache == null) {
+      return;
+    }
+    const { result } = this.renderCache;
+    if (result == null) {
+      return;
+    }
+    for (const [line, tokens] of dirtyLines) {
+      result.code[line] = {
+        type: 'element',
+        tagName: 'div',
+        properties: {
+          'data-line': line + 1,
+          'data-line-type': 'context',
+          'data-line-index': line,
+        },
+        children: tokens.map(([char, fg, text]) => {
+          if (char === 0 && fg === '') {
+            if (text === '') {
+              return {
+                type: 'element',
+                tagName: 'br',
+                properties: {},
+                children: [],
+              };
+            }
+            return { type: 'text', value: text };
+          }
+          return {
+            type: 'element',
+            tagName: 'span',
+            properties: {
+              'data-char': char,
+              style: `--diffs-token-${themeType}:${fg};`,
+            },
+            children: [{ type: 'text', value: text }],
+          };
+        }),
+      };
+    }
+    this.renderCache.isDirty = true;
+  }
+
+  public applyLayoutChange(
+    textDocument: DiffsTextDocument,
+    newLineAnnotations?: LineAnnotation<LAnnotation>[]
+  ): void {
+    if (this.renderCache == null) {
+      return undefined;
+    }
+    const { file, result } = this.renderCache;
+    if (result != null && result.code.length !== textDocument.lineCount) {
+      for (let i = result.code.length; i < textDocument.lineCount; i++) {
+        // prefill lines with plain text content
+        result.code.push({
+          type: 'element',
+          tagName: 'div',
+          properties: {
+            'data-line': i + 1,
+            'data-line-type': 'context',
+            'data-line-index': i,
+          },
+          children: [
+            {
+              type: 'element',
+              tagName: 'span',
+              properties: {
+                'data-char': 0,
+              },
+              children: [
+                {
+                  type: 'text',
+                  value: textDocument.getLineText(i),
+                },
+              ],
+            },
+          ],
+        });
+      }
+      this.renderCache.isDirty = true;
+    }
+    if (newLineAnnotations != null) {
+      this.setLineAnnotations(newLineAnnotations);
+    }
+    this.textDoucmentCache.set(file, textDocument);
   }
 
   public renderFile(
@@ -398,66 +508,68 @@ export class FileRenderer<LAnnotation = undefined> {
     renderRange: RenderRange,
     { code, themeStyles, baseThemeType }: ThemedFileResult
   ): FileRenderResult {
+    const totalLines = this.getLineCount(file);
     const { disableFileHeader = false } = this.options;
     const contentArray: ElementContent[] = [];
     const gutter = createGutterWrapper();
-    const lines = this.getOrCreateLineCache(file);
+    const endLine = Math.min(
+      renderRange.startingLine + renderRange.totalLines,
+      totalLines
+    );
     let rowCount = 0;
 
-    iterateOverFile({
-      lines,
-      startingLine: renderRange.startingLine,
-      totalLines: renderRange.totalLines,
-      callback: ({ lineIndex, lineNumber }) => {
-        // Sparse array - directly indexed by lineIndex
-        const line = code[lineIndex];
-        if (line == null) {
-          const message = 'FileRenderer.processFileResult: Line doesnt exist';
-          console.error(message, {
-            name: file.name,
-            lineIndex,
-            lineNumber,
-            lines,
-          });
-          throw new Error(message);
-        }
+    for (
+      let lineIndex = renderRange.startingLine;
+      lineIndex < endLine;
+      lineIndex++
+    ) {
+      const lineNumber = lineIndex + 1;
 
-        if (line != null) {
-          // Add gutter line number
-          gutter.children.push(
-            createGutterItem('context', lineNumber, `${lineIndex}`)
-          );
-          contentArray.push(line);
-          rowCount++;
+      // Sparse array - directly indexed by lineIndex
+      const line = code[lineIndex];
+      if (line == null) {
+        const message = 'FileRenderer.processFileResult: Line doesnt exist';
+        console.error(message, {
+          name: file.name,
+          lineIndex,
+          lineNumber,
+        });
+        throw new Error(message);
+      }
 
-          // Check annotations using ACTUAL line number from file
-          const annotations = this.lineAnnotations[lineNumber];
-          if (annotations != null) {
-            gutter.children.push(createGutterGap('context', 'annotation', 1));
-            contentArray.push(
-              createAnnotationElement({
-                type: 'annotation',
-                hunkIndex: 0,
-                lineIndex: lineNumber,
-                annotations: annotations.map((annotation) =>
-                  getLineAnnotationName(annotation)
-                ),
-              })
-            );
-            rowCount++;
-          }
-        }
-      },
-    });
+      // Add gutter line number
+      gutter.children.push(
+        createGutterItem('context', lineNumber, `${lineIndex}`)
+      );
+      contentArray.push(line);
+      rowCount++;
+
+      // Check annotations using ACTUAL line number from file
+      const annotations = this.lineAnnotations[lineNumber];
+      if (annotations != null) {
+        gutter.children.push(createGutterGap('context', 'annotation', 1));
+        contentArray.push(
+          createAnnotationElement({
+            type: 'annotation',
+            hunkIndex: 0,
+            lineIndex: lineNumber,
+            annotations: annotations.map((annotation) =>
+              getLineAnnotationName(annotation)
+            ),
+          })
+        );
+        rowCount++;
+      }
+    }
 
     // Finalize: wrap gutter and content
     gutter.properties.style = `grid-row: span ${rowCount}`;
     return {
       gutterAST: gutter.children ?? [],
       contentAST: contentArray,
-      preAST: this.createPreElement(lines.length),
+      preAST: this.createPreElement(totalLines),
       headerAST: !disableFileHeader ? this.renderHeader(file) : undefined,
-      totalLines: lines.length,
+      totalLines: totalLines,
       rowCount,
       themeStyles: themeStyles,
       baseThemeType,
