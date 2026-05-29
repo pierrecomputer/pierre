@@ -600,7 +600,7 @@ export class VirtualizedFile<
       this.isSetup = true;
     } else {
       this.top ??= this.getVirtualizedTop();
-      if (didFileChange) {
+      if (didFileChange && this.isSimpleMode()) {
         this.getSimpleVirtualizer()?.markDOMDirty();
         this.resetLayoutCache(true);
       }
