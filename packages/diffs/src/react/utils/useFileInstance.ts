@@ -77,7 +77,9 @@ export function useFileInstance<LAnnotation>({
         instanceRef.current = new VirtualizedFile(
           mergeFileOptions({
             controlledSelection,
+            contentEditable,
             hasCustomHeader,
+            hasEditor: editor !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -90,7 +92,9 @@ export function useFileInstance<LAnnotation>({
         instanceRef.current = new File(
           mergeFileOptions({
             controlledSelection,
+            contentEditable,
             hasCustomHeader,
+            hasEditor: editor !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -115,21 +119,14 @@ export function useFileInstance<LAnnotation>({
 
   useIsometricEffect(() => {
     if (instanceRef.current == null) return;
-    let newOptions = mergeFileOptions({
+    const newOptions = mergeFileOptions({
       controlledSelection,
+      contentEditable,
       hasCustomHeader,
+      hasEditor: editor !== undefined,
       hasGutterRenderUtility,
       options,
     });
-    if (contentEditable && editor !== undefined) {
-      newOptions = {
-        ...newOptions,
-        useTokenTransformer: true,
-        enableGutterUtility: false,
-        enableLineSelection: false,
-        lineHoverHighlight: 'disabled',
-      };
-    }
     const forceRender = !areOptionsEqual(
       instanceRef.current.options,
       newOptions
@@ -142,10 +139,10 @@ export function useFileInstance<LAnnotation>({
   });
 
   useIsometricEffect(() => {
-    if (editor === undefined) {
-      throw new Error('File: Editor is not attached');
-    }
     if (contentEditable && instanceRef.current != null) {
+      if (editor === undefined) {
+        throw new Error('File: Editor is not attached');
+      }
       return editor.edit(instanceRef.current);
     }
     return undefined;
@@ -162,6 +159,8 @@ export function useFileInstance<LAnnotation>({
 interface MergeFileOptionsProps<LAnnotation> {
   options: FileOptions<LAnnotation> | undefined;
   controlledSelection: boolean;
+  contentEditable: boolean;
+  hasEditor: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
 }
@@ -169,20 +168,43 @@ interface MergeFileOptionsProps<LAnnotation> {
 function mergeFileOptions<LAnnotation>({
   options,
   controlledSelection,
+  contentEditable,
   hasCustomHeader,
+  hasEditor,
   hasGutterRenderUtility,
 }: MergeFileOptionsProps<LAnnotation>): FileOptions<LAnnotation> | undefined {
-  if (!controlledSelection && !hasGutterRenderUtility && !hasCustomHeader) {
+  const needsEditorOptions = contentEditable && hasEditor;
+  const needsReactOverrides =
+    controlledSelection || hasGutterRenderUtility || hasCustomHeader;
+
+  if (!needsReactOverrides && !needsEditorOptions) {
     return options;
   }
-  return {
-    ...options,
-    controlledSelection,
-    renderCustomHeader: hasCustomHeader
-      ? noopRender
-      : options?.renderCustomHeader,
-    renderGutterUtility: hasGutterRenderUtility
-      ? noopRender
-      : options?.renderGutterUtility,
-  };
+
+  let merged: FileOptions<LAnnotation> = { ...options };
+
+  if (needsReactOverrides) {
+    merged = {
+      ...merged,
+      controlledSelection,
+      renderCustomHeader: hasCustomHeader
+        ? noopRender
+        : options?.renderCustomHeader,
+      renderGutterUtility: hasGutterRenderUtility
+        ? noopRender
+        : options?.renderGutterUtility,
+    };
+  }
+
+  if (needsEditorOptions) {
+    merged = {
+      ...merged,
+      useTokenTransformer: true,
+      enableGutterUtility: false,
+      enableLineSelection: false,
+      lineHoverHighlight: 'disabled',
+    };
+  }
+
+  return merged;
 }
