@@ -109,6 +109,15 @@ export function createFileTreeIconResolver(icons?: FileTreeIcons): {
         extensionCandidates
       );
       if (builtInToken != null && normalizedIcons.set !== 'none') {
+        // When the resolved token is the generic 'default' fallback, let the
+        // user's remap['file-tree-icon-file'] win — that slot is explicitly
+        // meant to override the generic file placeholder.
+        if (builtInToken === 'default') {
+          const remappedEntry = iconRemap?.[name];
+          if (remappedEntry != null) {
+            return remapEntryToIcon(remappedEntry, name);
+          }
+        }
         return {
           name: getBuiltInFileIconName(builtInToken),
           remappedFrom: name,

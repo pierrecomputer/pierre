@@ -501,6 +501,9 @@ const ANNOTATION_THEME_STYLE_KEYS = [
   // (same weight as the header/sidebar chrome borders) so it stays visible
   // on any theme without reading darker than the surrounding chrome.
   '--diffshub-diff-separator',
+  // Main scrollbar thumb + gutter tint; this element is the cv-scrollbar host.
+  '--diffshub-scrollbar-thumb-bg',
+  '--diffshub-scrollbar-track-bg',
 ] as const;
 
 export function buildAnnotationThemeStyle(

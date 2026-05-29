@@ -1,19 +1,31 @@
 import { IconCiWarningFill, IconRefresh } from '@pierre/icons';
 
 import type { ViewerLoadState } from './types';
+import { useThemeChromeStyle } from './useResolvedTreeThemeStyles';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface CodeViewStatusPanelProps {
+  darkTheme: string;
   errorMessage: string | null;
+  lightTheme: string;
   onRetry(): void;
   state: ViewerLoadState;
 }
 
 export function CodeViewStatusPanel({
+  darkTheme,
   errorMessage,
+  lightTheme,
   onRetry,
   state,
 }: CodeViewStatusPanelProps) {
+  // Mirror the rest of the diffshub chrome so the loading screen sits on the
+  // active Shiki theme's surface instead of the global light/dark palette.
+  // Mounted before the viewer is available, so we lean on the same hook the
+  // header/sidebar use — the resolved-theme cache keeps subsequent renders
+  // synchronous.
+  const themeChromeStyle = useThemeChromeStyle(lightTheme, darkTheme);
   const isError = state === 'error';
   const title = isError
     ? 'Couldn’t load diff'
@@ -32,7 +44,13 @@ export function CodeViewStatusPanel({
         : 'Reading the patch and showing files as they arrive…';
 
   return (
-    <div className="col-span-full flex min-h-0 items-center justify-center p-6">
+    <div
+      className={cn(
+        'col-span-full flex min-h-0 items-center justify-center p-6',
+        themeChromeStyle == null && 'bg-background'
+      )}
+      style={themeChromeStyle}
+    >
       <section
         role={isError ? 'alert' : 'status'}
         aria-live="polite"

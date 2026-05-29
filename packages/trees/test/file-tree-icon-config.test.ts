@@ -102,6 +102,53 @@ describe('file-tree icon config', () => {
     }
   });
 
+  test('remap[file-tree-icon-file] overrides the default built-in fallback when set is complete', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const fileTree = new FileTree({
+        flattenEmptyDirectories: true,
+        icons: {
+          set: 'complete',
+          spriteSheet:
+            '<svg data-icon-sprite aria-hidden="true" width="0" height="0"><symbol id="pst-test-generic-file" viewBox="0 0 16 16"><rect width="16" height="16" fill="currentColor" /></symbol></svg>',
+          remap: {
+            'file-tree-icon-file': 'pst-test-generic-file',
+          },
+        },
+        initialExpansion: 'open',
+        paths: ['unknown.xyz', 'src/index.ts'],
+        initialVisibleRowCount: 120 / 30,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const shadowRoot = fileTree.getFileTreeContainer()?.shadowRoot;
+
+      // Unknown extension has no specific built-in token — remap should win
+      // over the generic 'default' fallback.
+      const unknownButton = getItemButton(shadowRoot, dom, 'unknown.xyz');
+      expect(unknownButton.querySelector('use')?.getAttribute('href')).toBe(
+        '#pst-test-generic-file'
+      );
+
+      // Known extension has a specific built-in token — remap must not
+      // override it.
+      const tsButton = getItemButton(shadowRoot, dom, 'src/index.ts');
+      expect(tsButton.querySelector('use')?.getAttribute('href')).toBe(
+        '#file-tree-builtin-typescript'
+      );
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
   test('setIcons swaps icon modes without resetting expanded state', async () => {
     const { cleanup, dom } = installDom();
     try {

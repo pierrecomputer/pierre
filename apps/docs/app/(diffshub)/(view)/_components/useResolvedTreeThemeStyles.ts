@@ -546,6 +546,20 @@ export function buildThemeChromeStyle(
       editorBg == null || surfacesMatch(editorBg, bg)
         ? borderOpaque
         : `color-mix(in srgb, ${editorFg} ${DIFF_BORDER_MIX}%, ${editorBg})`;
+    // Theme the main scrollbar off the editor surface it overlays: thumb
+    // via the default rule's own formula (lighten dark surfaces, darken
+    // light ones) so it matches the dropdown mini-scrollbars, and track
+    // from the editor bg so the reserved gutter isn't a dark band beside
+    // the diff.
+    if (editorBg != null) {
+      style['--diffshub-scrollbar-thumb-bg'] = isDarkSurface(
+        editorBg,
+        editorFg ?? primaryFg
+      )
+        ? `color-mix(in lab, ${editorBg} 80%, white)`
+        : `color-mix(in lab, ${editorBg} 85%, black)`;
+      style['--diffshub-scrollbar-track-bg'] = editorBg;
+    }
   }
   return style as CSSProperties;
 }
