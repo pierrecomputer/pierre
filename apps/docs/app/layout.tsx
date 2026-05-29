@@ -174,6 +174,22 @@ const themeBootstrapScript = `(${String(function applyInitialTheme() {
     root.classList.remove('light', 'dark');
     root.classList.add(resolvedTheme);
     root.style.colorScheme = resolvedTheme;
+
+    // Set the iOS navbar tint before first paint so it matches the resolved
+    // mode immediately. The meta is created here (not authored in JSX, which
+    // React 19 would hoist into a duplicate) and owned by JS thereafter.
+    // Literals mirror MODE_THEME_COLOR in theme-provider.tsx (this stringified
+    // script can't import it); keep them in sync.
+    let themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeColorMeta == null) {
+      themeColorMeta = document.createElement('meta');
+      themeColorMeta.setAttribute('name', 'theme-color');
+      document.head.appendChild(themeColorMeta);
+    }
+    themeColorMeta.setAttribute(
+      'content',
+      resolvedTheme === 'dark' ? '#0a0a0a' : '#ffffff'
+    );
   } catch {
     // Ignore storage/media failures and let CSS defaults apply.
   }
@@ -220,6 +236,10 @@ export default function RootLayout({
       className={`${berkeleyMono.variable} ${geistSans.variable} ${geistMono.variable} ${firaMono.variable} ${ibmPlexMono.variable} ${jetbrainsMono.variable} ${inter.variable}`}
     >
       <head>
+        {/* The iOS navbar tint <meta name="theme-color"> is created and
+            managed entirely by the bootstrap script below (and ThemeProvider),
+            not authored here — React 19 hoists head tags and would leave a
+            duplicate it manages alongside ours. */}
         <script
           id="docs-theme-bootstrap"
           dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}

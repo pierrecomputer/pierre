@@ -39,6 +39,31 @@ const DEFAULT_STORAGE_KEY = 'theme';
 const DEFAULT_ATTRIBUTE = 'data-theme';
 const THEME_QUERY = '(prefers-color-scheme: dark)';
 
+// Navbar tint (iOS Safari's <meta name="theme-color">) for each resolved
+// color mode. These match the global body `--background` (oklch(1)/oklch(0.145))
+// that iOS samples at the top of the page, so the navbar blends with the page
+// instead of contrasting it. Kept in sync with the same literals hardcoded in
+// the layout's pre-paint bootstrap script (which can't import this module).
+const MODE_THEME_COLOR: Record<ResolvedTheme, string> = {
+  light: '#ffffff',
+  dark: '#0a0a0a',
+};
+
+// Points the document's theme-color meta at `color` (the iOS Safari navbar
+// tint), creating the meta if it isn't there yet. The meta is intentionally
+// not authored in JSX: React 19 hoists head tags and would leave a duplicate
+// next to the one it manages. Creating it imperatively keeps exactly one,
+// owned entirely by this code.
+function setThemeColorMeta(color: string) {
+  let meta = document.querySelector('meta[name="theme-color"]');
+  if (meta == null) {
+    meta = document.createElement('meta');
+    meta.setAttribute('name', 'theme-color');
+    document.head.appendChild(meta);
+  }
+  meta.setAttribute('content', color);
+}
+
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 function getSystemTheme(): ResolvedTheme {
@@ -104,6 +129,9 @@ function applyTheme({
   if (enableColorScheme) {
     root.style.colorScheme = resolvedTheme;
   }
+
+  // Keep the iOS navbar tint in step with the resolved color mode.
+  setThemeColorMeta(MODE_THEME_COLOR[resolvedTheme]);
 }
 
 function isTheme(value: string | null, themes: Theme[]): value is Theme {
