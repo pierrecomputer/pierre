@@ -143,11 +143,10 @@ export function useFileDiffInstance<LAnnotation>({
   });
 
   useIsometricEffect(() => {
-    if (
-      contentEditable &&
-      editor !== undefined &&
-      instanceRef.current != null
-    ) {
+    if (editor === undefined) {
+      throw new Error('FileDiff: Editor is not attached');
+    }
+    if (contentEditable && instanceRef.current != null) {
       return editor.edit(instanceRef.current);
     }
     return undefined;

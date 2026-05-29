@@ -142,11 +142,10 @@ export function useFileInstance<LAnnotation>({
   });
 
   useIsometricEffect(() => {
-    if (
-      contentEditable &&
-      editor !== undefined &&
-      instanceRef.current != null
-    ) {
+    if (editor === undefined) {
+      throw new Error('File: Editor is not attached');
+    }
+    if (contentEditable && instanceRef.current != null) {
       return editor.edit(instanceRef.current);
     }
     return undefined;
