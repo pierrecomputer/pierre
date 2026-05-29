@@ -289,7 +289,7 @@ export class VirtualizedFile<
     }
 
     const { disableFileHeader = false, collapsed = false } = this.options;
-    const lastLineIndex = this.getOrCreateLineOffSets(this.file).at(-1) ?? -1;
+    const lastLineIndex = this.fileRenderer.getLineCount(this.file) - 1;
     let top = getVirtualFileHeaderRegion(this.metrics, disableFileHeader);
 
     if (collapsed || lastLineIndex < 0) {
@@ -343,7 +343,7 @@ export class VirtualizedFile<
       return undefined;
     }
 
-    const lastLineIndex = this.getOrCreateLineOffSets(this.file).at(-1) ?? -1;
+    const lastLineIndex = this.fileRenderer.getLineCount(this.file) - 1;
     if (lastLineIndex < 0) {
       return undefined;
     }

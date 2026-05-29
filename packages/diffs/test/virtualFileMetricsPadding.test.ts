@@ -123,6 +123,20 @@ describe('virtual file padding metrics', () => {
       expect(instance.getLinePosition(1)?.top).toBe(0);
     });
 
+    test('clamps getLinePosition to the last line index, not a character offset', () => {
+      const longFirstLineFile: FileContents = {
+        name: 'file.ts',
+        contents: 'abcdef\nxyz',
+      };
+      const instance = new VirtualizedFile({}, virtualizer, baseMetrics);
+      instance.prepareCodeViewItem(longFirstLineFile, 0);
+
+      expect(instance.getLinePosition(100)).toEqual({
+        top: baseMetrics.diffHeaderHeight + baseMetrics.lineHeight,
+        height: baseMetrics.lineHeight,
+      });
+    });
+
     test('uses paddingBottom instead of spacing in total height', () => {
       const instance = createVirtualizedFile({ paddingBottom: 13 });
 
