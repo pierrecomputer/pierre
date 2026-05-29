@@ -149,6 +149,20 @@ describe('FileRenderer AST Structure', () => {
     expect(result.totalLines).toBe(file1Lines);
   });
 
+  test('should render one content line when the buffer ends with a newline', async () => {
+    const instance = new FileRenderer();
+    const result = await instance.asyncRender({
+      name: 'single-line.txt',
+      contents: 'hello\n',
+    });
+    const [gutter, contentColumn] = instance.renderCodeAST(result) as Element[];
+
+    expect(result.totalLines).toBe(2);
+    expect(result.rowCount).toBe(2);
+    expect(gutter.children).toHaveLength(2);
+    expect(contentColumn.children).toHaveLength(2);
+  });
+
   test('css is always empty in the non-worker render path', async () => {
     const instance = new FileRenderer();
     const result = await instance.asyncRender(mockFiles.file2);

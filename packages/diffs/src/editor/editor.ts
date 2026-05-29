@@ -1,0 +1,2432 @@
+import {
+  type Position,
+  type ResolvedTextEdit,
+  TextDocument,
+  type TextDocumentChange,
+  type TextEdit,
+} from '../editor/textDocument';
+import type {
+  DiffLineAnnotation,
+  DiffsEditableComponent,
+  DiffsEditor,
+  DiffsEditorSelection,
+  DiffsHighlighter,
+  FileContents,
+  HighlightedToken,
+  RenderRange,
+} from '../types';
+import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
+import {
+  type EditorCommand,
+  resolveEditorCommandFromKeyboardEvent,
+} from './command';
+import { editorCSS, editorGlobalCSS } from './css';
+import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
+import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
+import { type QuickEditContext, QuickEditWidget } from './quickEdit';
+import { SearchPanelWidget } from './searchPanel';
+import type { EditorSelection } from './selection';
+import {
+  applyDeleteHardLineForwardToSelections,
+  applyTextChangeToSelections,
+  applyTextReplaceToSelections,
+  applyTransposeToSelections,
+  comparePosition,
+  convertSelection,
+  createSelectionFrom,
+  createSelectionFromAnchorAndFocusOffsets,
+  DirectionBackward,
+  DirectionForward,
+  DirectionNone,
+  expandCollapsedSelectionToWord,
+  extendSelection,
+  extendSelections,
+  findNexMatch,
+  getCaretPosition,
+  getDocumentBoundarySelection,
+  getDocumentFullSelection,
+  getSelectionAnchor,
+  getSelectionText,
+  isCollapsedSelection,
+  isLineEditable,
+  mapCursorMove,
+  mapSelectionShift,
+  mergeOverlappingSelections,
+  resolveIndentEdits,
+  selectionIntersects,
+} from './selection';
+import {
+  getExpandedAsciiTextColumns,
+  getUnicodeMeasurementOffsets,
+  Metrics,
+  snapTextOffsetToUnicodeBoundary,
+} from './textMeasure';
+import { EditorTokenizer, renderLineTokens } from './tokenzier';
+import { addEventListener, debounce, extend, h, round } from './utils';
+
+function clampDomOffset(node: Node, offset: number): number {
+  if (node.nodeType === 3) {
+    const length = (node as Text).textContent?.length ?? 0;
+    return Math.max(0, Math.min(offset, length));
+  }
+  if (node.nodeType === 1) {
+    return Math.max(0, Math.min(offset, node.childNodes.length));
+  }
+  return 0;
+}
+
+export interface EditorOptions<LAnnotation> {
+  enabledQuickEdit?: boolean;
+  renderQuickEdit?: (context: QuickEditContext<LAnnotation>) => HTMLElement;
+  onChange?: (
+    file: FileContents,
+    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  ) => void;
+  __debug?: boolean;
+}
+
+export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
+  #options: EditorOptions<LAnnotation>;
+  #editMode: 'simple' | 'advanced' = 'simple';
+  #wrap = false;
+  #metrics = new Metrics();
+  #tokenizer?: EditorTokenizer;
+
+  // event handlers
+  #editorEventDisposes?: (() => void)[];
+  #globalEventDisposes?: (() => void)[];
+  #mouseUpDisposes?: (() => void)[];
+  #detach?: () => void;
+
+  // file
+  #component?: DiffsEditableComponent<LAnnotation>;
+  #fileContents?: FileContents;
+  #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+  #textDocument?: TextDocument<LAnnotation>;
+  #renderRange?: RenderRange;
+
+  // cache
+  #codePaddingTop = 0;
+  #gutterWidthCache?: number;
+  #contentWidthCache?: number;
+  #lineYCache = new Map<number, number>();
+  #wrapLineOffsetsCache = new Map<number, Uint32Array>();
+  #lastCharX?: [line: number, character: number, x: number, wrapLine: number];
+
+  // dom
+  #globalStyleElement?: HTMLStyleElement;
+  #editorStyleElement?: HTMLStyleElement;
+  #themeStyleElement?: HTMLStyleElement;
+  #componentContainer?: HTMLElement;
+  #contentElement?: HTMLElement;
+  #overlayElement?: HTMLElement;
+  #primaryCaretElement?: HTMLElement;
+  #selectionElements?: Map<string, HTMLElement>;
+  #quickEdit?: QuickEditWidget;
+  #searchPanel?: SearchPanelWidget;
+  #resizeObserver?: ResizeObserver;
+
+  // state
+  #shouldIgnoreSelectionChange = false;
+  #isGutterMouseDown = false;
+  #isContentMouseDown = false;
+  #shiftKeyPressed = false;
+  #selectionStart: EditorSelection | undefined;
+  #reservedSelections?: EditorSelection[];
+  #selections?: EditorSelection[];
+  #initSelections?: DiffsEditorSelection[];
+  #scrollingToLine?: number;
+  #scrollingToLineChar?: number;
+  #retainSearchPanelFocus = false;
+
+  #emitChange = debounce(
+    (
+      fileContents: FileContents,
+      lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    ) => {
+      this.#options.onChange?.(fileContents, lineAnnotations);
+    },
+    500
+  );
+
+  #onDeferTokenize = (
+    lines: Map<number, Array<HighlightedToken>>,
+    themeType: 'light' | 'dark'
+  ) => {
+    this.#component?.applyLineChange?.(lines, themeType);
+    // update the view if the render range is updated by scrolling
+    // and the deferred tokenized lines inside the render range
+    if (
+      this.#renderRange !== undefined &&
+      this.#renderRange.totalLines !== Infinity
+    ) {
+      const { startingLine, totalLines } = this.#renderRange;
+      const endLine = Math.min(
+        startingLine + totalLines,
+        this.#textDocument?.lineCount ?? 0
+      );
+      for (const [line, tokens] of lines) {
+        if (line >= startingLine && line < endLine) {
+          const lineElement = this.#getLineElement(line);
+          if (lineElement !== undefined) {
+            lineElement.replaceChildren(...renderLineTokens(tokens, themeType));
+          }
+        }
+      }
+    }
+  };
+
+  constructor(options: EditorOptions<LAnnotation> = {}) {
+    this.#options = options;
+  }
+
+  edit(component: DiffsEditableComponent<LAnnotation>): () => void {
+    const {
+      useTokenTransformer,
+      enableGutterUtility,
+      enableLineSelection,
+      expandUnchanged,
+      lineHoverHighlight,
+      ...rest
+    } = component.options;
+    if (
+      useTokenTransformer !== true ||
+      enableGutterUtility === true ||
+      enableLineSelection === true ||
+      (expandUnchanged !== true && Object.hasOwn(component, 'fileDiff')) ||
+      lineHoverHighlight !== 'disabled'
+    ) {
+      component.setOptions({
+        ...rest,
+        useTokenTransformer: true,
+        enableGutterUtility: false,
+        enableLineSelection: false,
+        expandUnchanged: true,
+        lineHoverHighlight: 'disabled',
+      });
+      component.rerender();
+    }
+    this.#component = component;
+    this.#initialize();
+    this.#detach = component.attachEditor(this);
+    return () => this.cleanUp();
+  }
+
+  setSelections(selections: DiffsEditorSelection[]): void {
+    const textDocument = this.#textDocument;
+    if (textDocument !== undefined) {
+      const resolvedSelections = selections.map<EditorSelection>(
+        (selection) => {
+          const start = textDocument.normalizePosition(selection.start);
+          const end = textDocument.normalizePosition(selection.end);
+          const direction =
+            selection.direction === 'none'
+              ? DirectionNone
+              : selection.direction === 'backward'
+                ? DirectionBackward
+                : DirectionForward;
+          return { direction, start, end };
+        }
+      );
+      this.#updateSelections(resolvedSelections);
+      this.#scrollToPrimaryCaret();
+    } else {
+      this.#initSelections = selections;
+    }
+  }
+
+  focus(options?: FocusOptions): void {
+    const preventScroll = options?.preventScroll ?? false;
+    const primarySelection = this.#selections?.at(-1);
+    if (primarySelection !== undefined) {
+      const pos =
+        primarySelection.direction === DirectionBackward
+          ? primarySelection.end
+          : primarySelection.start;
+      this.#focus(pos, preventScroll);
+    } else {
+      this.#focus(undefined, preventScroll);
+    }
+  }
+
+  cleanUp(): void {
+    this.#tokenizer?.cleanUp();
+    this.#tokenizer = undefined;
+
+    this.#globalEventDisposes?.forEach((dispose) => dispose());
+    this.#globalEventDisposes = undefined;
+    this.#editorEventDisposes?.forEach((dispose) => dispose());
+    this.#editorEventDisposes = undefined;
+
+    this.#detach?.();
+    this.#detach = undefined;
+    this.#component?.setSelectedLines(null);
+    this.#component = undefined;
+    this.#fileContents = undefined;
+    this.#lineAnnotations = undefined;
+    this.#textDocument = undefined;
+    this.#renderRange = undefined;
+
+    this.#gutterWidthCache = undefined;
+    this.#contentWidthCache = undefined;
+    this.#lineYCache.clear();
+    this.#wrapLineOffsetsCache.clear();
+    this.#lastCharX = undefined;
+
+    this.#globalStyleElement?.remove();
+    this.#globalStyleElement = undefined;
+    this.#editorStyleElement?.remove();
+    this.#editorStyleElement = undefined;
+    this.#themeStyleElement?.remove();
+    this.#themeStyleElement = undefined;
+    this.#componentContainer = undefined;
+    this.#contentElement?.removeAttribute('contentEditable');
+    this.#contentElement = undefined;
+    this.#overlayElement?.remove();
+    this.#overlayElement = undefined;
+    this.#primaryCaretElement?.remove();
+    this.#primaryCaretElement = undefined;
+    this.#selectionElements?.forEach((el) => el.remove());
+    this.#selectionElements?.clear();
+    this.#selectionElements = undefined;
+    this.#searchPanel?.cleanup();
+    this.#searchPanel = undefined;
+    this.#quickEdit?.cleanup();
+    this.#quickEdit = undefined;
+    this.#resizeObserver?.disconnect();
+    this.#resizeObserver = undefined;
+
+    this.#shouldIgnoreSelectionChange = false;
+    this.#selectionStart = undefined;
+    this.#selections = undefined;
+    this.#reservedSelections = undefined;
+  }
+
+  syncWithRender(
+    highlighter: DiffsHighlighter,
+    fileContainer: HTMLElement,
+    fileContents: FileContents,
+    lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
+    renderRange: RenderRange | undefined,
+    editMode?: 'simple' | 'advanced'
+  ): void {
+    const shadowRoot = fileContainer.shadowRoot;
+    if (shadowRoot == null) {
+      console.error('[editor] Could not find the shadow root.');
+      return;
+    }
+
+    let codeElement: HTMLElement | undefined;
+    for (const el of shadowRoot.querySelectorAll<HTMLElement>('[data-code]')) {
+      if (el.dataset.deletions === undefined) {
+        codeElement = el;
+        break;
+      }
+    }
+    if (codeElement === undefined) {
+      return;
+    }
+    const contentEl = codeElement.children[1] as HTMLElement | undefined;
+    if (contentEl === undefined) {
+      return;
+    }
+
+    this.#editMode = editMode ?? 'simple';
+    this.#wrap = this.#component?.options.overflow === 'wrap';
+
+    if (editMode === 'advanced' || (lineAnnotations?.length ?? 0) > 0) {
+      let startingLine: number | undefined;
+      let endLine: number | undefined;
+      for (const child of contentEl.children) {
+        const el = child as HTMLElement;
+        const line = el.dataset.line;
+        const lineType = el.dataset.lineType;
+        if (line !== undefined) {
+          const lineIndex = Number(line) - 1;
+          startingLine ??= lineIndex;
+          endLine = lineIndex;
+        }
+        if (lineType === undefined || !isLineEditable(lineType)) {
+          el.contentEditable = 'false';
+        }
+      }
+      if (endLine !== undefined && renderRange !== undefined) {
+        const { startingLine, totalLines } = renderRange;
+        endLine = Math.max(endLine, startingLine + totalLines);
+      }
+      // normalize the render range
+      if (startingLine !== undefined && endLine !== undefined) {
+        renderRange = {
+          startingLine: startingLine,
+          totalLines: endLine - startingLine,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        };
+      }
+    }
+
+    // inject editor css to the file container
+    if (this.#componentContainer !== fileContainer) {
+      this.#componentContainer = fileContainer;
+      this.#codePaddingTop = Number(
+        getComputedStyle(codeElement).paddingTop.slice(0, -2)
+      );
+      if (this.#globalStyleElement !== undefined) {
+        fileContainer.appendChild(this.#globalStyleElement);
+      }
+      if (this.#editorStyleElement !== undefined) {
+        shadowRoot.appendChild(this.#editorStyleElement);
+      }
+      if (this.#themeStyleElement !== undefined) {
+        shadowRoot.appendChild(this.#themeStyleElement);
+      }
+    }
+
+    if (
+      this.#textDocument === undefined ||
+      this.#fileContents === undefined ||
+      this.#fileContents.name !== fileContents.name
+    ) {
+      const textDocument = new TextDocument<LAnnotation>(
+        fileContents.name,
+        fileContents.contents,
+        fileContents.lang ?? getFiletypeFromFileName(fileContents.name)
+      );
+      this.#fileContents = fileContents;
+      this.#textDocument = textDocument;
+      this.#tokenizer?.cleanUp();
+      this.#tokenizer = new EditorTokenizer({
+        highlighter,
+        textDocument,
+        codeOptions: this.#component?.options ?? {},
+        onDeferTokenize: this.#onDeferTokenize,
+        setStyle: (css) => {
+          this.#themeStyleElement!.textContent = css;
+        },
+      });
+      this.#shouldIgnoreSelectionChange = false;
+      this.#selectionElements?.forEach((el) => el.remove());
+      this.#selectionElements?.clear();
+      this.#component?.setSelectedLines(null);
+      this.#selectionElements = undefined;
+      this.#selections = undefined;
+      this.#scrollingToLine = undefined;
+      this.#reservedSelections = undefined;
+      this.#searchPanel?.cleanup();
+      this.#searchPanel = undefined;
+      this.#quickEdit?.cleanup();
+      this.#quickEdit = undefined;
+    }
+
+    if (this.#contentElement !== contentEl) {
+      const guttterEl = contentEl.previousElementSibling as HTMLElement | null;
+      const targetIsContentElement = (e: Event) => {
+        const target = e.composedPath()[0] as HTMLElement;
+        return target === contentEl || contentEl.contains(target);
+      };
+
+      this.#metrics.init(contentEl);
+      this.#contentElement = extend(contentEl, {
+        contentEditable: 'true',
+        role: 'textbox',
+        ariaMultiLine: 'true',
+        autocapitalize: 'off',
+        writingSuggestions: 'off',
+        autocorrect: false,
+        spellcheck: false,
+        translate: false,
+      });
+      if (this.#overlayElement !== undefined) {
+        contentEl.after(this.#overlayElement);
+      }
+      this.#editorEventDisposes?.forEach((dispose) => dispose());
+      this.#editorEventDisposes = [
+        addEventListener(
+          contentEl,
+          'pointerdown',
+          (e) => {
+            if (e.pointerType !== 'mouse') {
+              return;
+            }
+
+            // this is a workaround for the selection rendering glitch
+            // happens when selecting content in shadow DOM on Safari
+            if (
+              isSafari() &&
+              this.#lineAnnotations !== undefined &&
+              this.#lineAnnotations.length > 0
+            ) {
+              this.#mouseUpDisposes = [
+                ...contentEl.querySelectorAll<HTMLElement>(
+                  '[data-line-annotation]'
+                ),
+              ]
+                .map((el) => [
+                  addEventListener(el, 'mouseenter', () => {
+                    this.#shouldIgnoreSelectionChange = true;
+                  }),
+                  addEventListener(el, 'mouseleave', () => {
+                    this.#shouldIgnoreSelectionChange = false;
+                  }),
+                ])
+                .flat();
+            }
+
+            this.#isContentMouseDown = true;
+            this.#selectionStart = undefined;
+            if (e.button === 0 && isPrimaryModifier(e)) {
+              this.#reservedSelections = this.#selections?.map((selection) => ({
+                ...selection,
+              }));
+            }
+            if (e.shiftKey) {
+              const primarySelection = this.#selections?.at(-1);
+              if (primarySelection !== undefined) {
+                const pos =
+                  primarySelection.direction === DirectionBackward
+                    ? primarySelection.end
+                    : primarySelection.start;
+                // fix the window selection for shift mode
+                this.#updateWindowSelection({
+                  start: pos,
+                  end: pos,
+                  direction: DirectionNone,
+                });
+              }
+              this.#shiftKeyPressed = true;
+            }
+          },
+          { passive: true }
+        ),
+
+        addEventListener(contentEl, 'keydown', (e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            this.#searchPanel?.cleanup();
+            this.#searchPanel = undefined;
+            this.#retainSearchPanelFocus = false;
+            this.#quickEdit?.cleanup();
+            this.#quickEdit = undefined;
+            if (this.#selections !== undefined && this.#selections.length > 0) {
+              const primarySelection = this.#selections.at(-1)!;
+              if (
+                !isCollapsedSelection(primarySelection) ||
+                this.#selections.length > 1
+              ) {
+                const pos = getCaretPosition(primarySelection);
+                this.#updateSelections([
+                  {
+                    start: pos,
+                    end: pos,
+                    direction: DirectionNone,
+                  },
+                ]);
+                this.#focus(pos);
+              }
+            }
+            return;
+          }
+          if (!targetIsContentElement(e)) {
+            return;
+          }
+
+          // handle the cursor move events manually for multiple selections and virtual viewport
+          const mvShortcut = isMoveCursorShortcut(e);
+          const textDocument = this.#textDocument;
+          if (
+            this.#selections !== undefined &&
+            this.#selections.length > 0 &&
+            mvShortcut !== undefined &&
+            textDocument !== undefined
+          ) {
+            if (e.shiftKey) {
+              this.#updateSelections(
+                mapSelectionShift(textDocument, this.#selections, mvShortcut)
+              );
+            } else {
+              this.#updateSelections(
+                mapCursorMove(textDocument, this.#selections, mvShortcut)
+              );
+            }
+            this.#scrollToPrimaryCaret();
+            e.preventDefault();
+            return;
+          }
+
+          const command = resolveEditorCommandFromKeyboardEvent(e);
+          if (command !== undefined) {
+            e.preventDefault();
+            this.#runCommand(command);
+          }
+        }),
+
+        addEventListener(contentEl, 'copy', (e) => {
+          if (!targetIsContentElement(e)) {
+            return;
+          }
+          e.preventDefault();
+          e.clipboardData?.setData('text', this.#getSelectionText());
+        }),
+
+        addEventListener(contentEl, 'cut', (e) => {
+          if (!targetIsContentElement(e)) {
+            return;
+          }
+          e.preventDefault();
+          e.clipboardData?.setData('text', this.#getSelectionText());
+          this.#replaceSelectionText('');
+        }),
+
+        addEventListener(contentEl, 'paste', (e) => {
+          if (!targetIsContentElement(e)) {
+            return;
+          }
+          e.preventDefault();
+          const text = e.clipboardData?.getData('text');
+          if (text !== undefined) {
+            // TODO(@ije): Add support of multiple selections copy&paste
+            // TODO(@ije): normalize the pasted text with textDocument.EOF
+            this.#replaceSelectionText(text);
+          }
+        }),
+
+        addEventListener(contentEl, 'beforeinput', (e) => {
+          if (!targetIsContentElement(e)) {
+            return;
+          }
+          e.preventDefault();
+          this.#handleInput(e.inputType, e.data);
+        }),
+
+        addEventListener(
+          contentEl,
+          'compositionstart',
+          (e) => {
+            if (!targetIsContentElement(e)) {
+              return;
+            }
+            this.#shouldIgnoreSelectionChange = true;
+          },
+          { passive: true }
+        ),
+
+        addEventListener(
+          contentEl,
+          'compositionend',
+          (e) => {
+            if (!targetIsContentElement(e)) {
+              return;
+            }
+            this.#shouldIgnoreSelectionChange = false;
+            this.#handleInput('insertText', e.data);
+          },
+          { passive: true }
+        ),
+      ];
+      if (guttterEl !== null && guttterEl.dataset.gutter !== undefined) {
+        this.#editorEventDisposes.push(
+          addEventListener(
+            guttterEl,
+            'pointerdown',
+            (e) => {
+              let target = e.composedPath()[0] as HTMLElement | undefined;
+              if (target?.dataset.lineNumberContent !== undefined) {
+                target =
+                  target.parentElement ??
+                  (undefined as HTMLElement | undefined);
+              }
+              const textDocument = this.#textDocument;
+              if (target === undefined || textDocument === undefined) {
+                return;
+              }
+              const lineNumber = target.dataset.columnNumber;
+              const lineType = target.dataset.lineType;
+              if (
+                lineNumber === undefined ||
+                lineType === undefined ||
+                !isLineEditable(lineType)
+              ) {
+                return;
+              }
+              const lineIndex = Number(lineNumber) - 1;
+              const selection: EditorSelection = {
+                start: { line: lineIndex, character: 0 },
+                end: {
+                  line: lineIndex,
+                  character: textDocument.getLineText(lineIndex).length,
+                },
+                direction: DirectionForward,
+              };
+              this.#isGutterMouseDown = true;
+              this.#selectionStart = selection;
+              this.#updateSelections([selection]);
+              this.#focus(selection.end);
+              this.#mouseUpDisposes = [
+                addEventListener(
+                  document,
+                  'mousemove',
+                  (e) => {
+                    let target = e.composedPath()[0] as HTMLElement | undefined;
+                    if (target?.dataset.lineNumberContent !== undefined) {
+                      target = target?.parentElement ?? undefined;
+                    } else if (target?.tagName === 'SPAN') {
+                      target = target?.closest('[data-line]') as
+                        | HTMLElement
+                        | undefined;
+                    }
+                    if (target === undefined) {
+                      return;
+                    }
+                    const lineNumber =
+                      target.dataset.columnNumber ?? target.dataset.line;
+                    const lineType = target.dataset.lineType;
+                    if (
+                      this.#isGutterMouseDown &&
+                      this.#textDocument !== undefined &&
+                      lineNumber !== undefined &&
+                      lineType !== undefined &&
+                      isLineEditable(lineType)
+                    ) {
+                      const lineIndex = Number(lineNumber) - 1;
+                      let selection: EditorSelection = {
+                        start: { line: lineIndex, character: 0 },
+                        end: {
+                          line: lineIndex,
+                          character:
+                            this.#textDocument.getLineText(lineIndex).length,
+                        },
+                        direction: DirectionForward,
+                      };
+                      if (this.#selectionStart !== undefined) {
+                        selection = createSelectionFrom(
+                          this.#selectionStart,
+                          selection
+                        );
+                      } else {
+                        this.#selectionStart = selection;
+                      }
+                      this.#updateSelections([selection]);
+                      this.#focus(selection.end);
+                    }
+                  },
+                  { passive: true }
+                ),
+              ];
+            },
+            { passive: true }
+          )
+        );
+      }
+      this.#resizeObserver?.disconnect();
+      this.#resizeObserver = new ResizeObserver(() => {
+        requestAnimationFrame(() => {
+          this.#handleLayoutResize();
+        });
+      });
+      this.#resizeObserver.observe(contentEl);
+      this.#resizeObserver.observe(contentEl.parentElement!);
+    }
+
+    this.#lineYCache.clear();
+    this.#wrapLineOffsetsCache.clear();
+    this.#lastCharX = undefined;
+
+    this.#lineAnnotations = lineAnnotations;
+    this.#renderRange = renderRange;
+    this.#tokenizer?.prebuildStateStackMap(renderRange);
+
+    if (this.#initSelections !== undefined) {
+      this.setSelections(this.#initSelections);
+      this.#scrollToPrimaryCaret();
+      this.#initSelections = undefined;
+    } else if (this.#selections !== undefined && this.#selections.length > 0) {
+      // when re-rendering triggered by virtual viewport scroll,
+      // re-render the existing selections
+      this.#updateSelections(this.#selections);
+    }
+
+    if (this.#options.__debug === true && renderRange !== undefined) {
+      const { startingLine, totalLines } = renderRange;
+      console.log(
+        '[diffs/editor] render file:',
+        fileContents.name,
+        'RenderRange:',
+        startingLine + '-' + (startingLine + totalLines),
+        'of',
+        this.#textDocument.lineCount,
+        'lines'
+      );
+    }
+
+    if (this.#scrollingToLine !== undefined) {
+      this.#scrollToLine(this.#scrollingToLine, this.#scrollingToLineChar);
+      this.#scrollingToLine = undefined;
+      this.#scrollingToLineChar = undefined;
+    } else if (this.#selections !== undefined && this.#selections.length > 0) {
+      this.focus({ preventScroll: true });
+    }
+
+    if (this.#retainSearchPanelFocus) {
+      this.#retainSearchPanelFocus = false;
+      requestAnimationFrame(() => {
+        this.#searchPanel?.focus();
+      });
+    }
+
+    if (
+      this.#quickEdit !== undefined &&
+      this.#isLineVisible(this.#quickEdit.line) &&
+      this.#contentElement !== undefined
+    ) {
+      this.#quickEdit.render(this.#contentElement);
+    }
+  }
+
+  #initialize(): void {
+    this.#editorStyleElement = h('style', {
+      dataset: 'editorCss',
+      textContent: editorCSS,
+    });
+
+    this.#themeStyleElement = h('style', {
+      dataset: 'editorThemeCss',
+    });
+
+    this.#globalStyleElement = h('style', {
+      dataset: 'editorGlobalCss',
+      textContent: editorGlobalCSS,
+    });
+
+    this.#overlayElement = h('div', {
+      dataset: 'editorOverlay',
+    });
+
+    this.#globalEventDisposes = [
+      addEventListener(
+        document,
+        'selectionchange',
+        () => {
+          const shadowRoot = this.#componentContainer?.shadowRoot;
+          if (this.#shouldIgnoreSelectionChange || shadowRoot == null) {
+            return;
+          }
+
+          const selectionRaw = document.getSelection();
+          const composedRange = selectionRaw?.getComposedRanges({
+            shadowRoots: [shadowRoot],
+          })?.[0];
+          if (
+            composedRange === undefined ||
+            !this.#rangeBelongsToEditor(composedRange)
+          ) {
+            return;
+          }
+
+          let selection = convertSelection(composedRange, DirectionNone);
+          if (selection === undefined) {
+            return;
+          }
+
+          // extend selection by shift + click
+          if (
+            this.#isContentMouseDown &&
+            this.#shiftKeyPressed &&
+            this.#selections !== undefined &&
+            this.#selections.length > 0
+          ) {
+            const primarySelection = this.#selections.at(-1)!;
+            this.#updateSelections([
+              extendSelection(primarySelection, selection),
+            ]);
+            return;
+          }
+
+          if (this.#isContentMouseDown) {
+            if (this.#selectionStart !== undefined) {
+              selection = createSelectionFrom(this.#selectionStart, selection);
+            } else {
+              this.#selectionStart = selection;
+            }
+          } else if (this.#selectionStart !== undefined) {
+            selection.direction = createSelectionFrom(
+              this.#selectionStart,
+              selection
+            ).direction;
+          }
+
+          if (this.#reservedSelections !== undefined) {
+            this.#updateSelections([
+              ...this.#reservedSelections.filter(
+                (reservedSelection) =>
+                  !selectionIntersects(reservedSelection, selection)
+              ),
+              selection,
+            ]);
+          } else {
+            this.#updateSelections([selection]);
+          }
+        },
+        { passive: true }
+      ),
+
+      addEventListener(
+        document,
+        'pointerup',
+        (e) => {
+          if (e.pointerType !== 'mouse') {
+            return;
+          }
+
+          this.#mouseUpDisposes?.forEach((dispose) => dispose());
+          this.#mouseUpDisposes = undefined;
+
+          if (this.#isGutterMouseDown) {
+            this.#isGutterMouseDown = false;
+            this.#focus();
+          }
+          this.#shouldIgnoreSelectionChange = false;
+          this.#isContentMouseDown = false;
+          this.#shiftKeyPressed = false;
+          this.#selectionStart = undefined;
+          this.#reservedSelections = undefined;
+          this.#selectionElements?.forEach((el, key) => {
+            if (key.startsWith('quickEditIcon-')) {
+              el.dataset.visible = 'true';
+            }
+          });
+        },
+        { passive: true }
+      ),
+
+      addEventListener(
+        document,
+        'keydown',
+        (e) => {
+          if (e.key === 'Shift') {
+            this.#selectionStart = this.#selections?.at(-1);
+          }
+        },
+        { passive: true }
+      ),
+
+      addEventListener(
+        document,
+        'keyup',
+        (e) => {
+          if (e.key === 'Shift') {
+            this.#selectionStart = undefined;
+          }
+        },
+        { passive: true }
+      ),
+    ];
+  }
+
+  // TODO(@ije): add command registry
+  #runCommand(command: EditorCommand) {
+    const textDocument = this.#textDocument;
+    if (textDocument === undefined) {
+      return;
+    }
+
+    switch (command) {
+      case 'openSearchPanel':
+        this.#renderSearchPanel();
+        break;
+
+      case 'findNextMatch': {
+        const selections = this.#selections;
+        const textDocument = this.#textDocument;
+        if (selections === undefined || textDocument === undefined) {
+          break;
+        }
+        const hasCollapsed = selections.some(isCollapsedSelection);
+        if (hasCollapsed) {
+          const expanded: EditorSelection[] = selections.map((sel) => {
+            if (isCollapsedSelection(sel)) {
+              return expandCollapsedSelectionToWord(textDocument, sel);
+            }
+            return sel;
+          });
+          this.#updateSelections(expanded);
+          this.focus();
+        } else {
+          const nextMatch = findNexMatch(textDocument, selections);
+          if (nextMatch !== undefined) {
+            this.#updateSelections(nextMatch);
+            this.#scrollToPrimaryCaret();
+          }
+        }
+        break;
+      }
+
+      case 'indent':
+      case 'outdent':
+        if (this.#selections !== undefined) {
+          const edits: TextEdit[] = [];
+          const nextSelections: EditorSelection[] = [];
+          for (const selection of this.#selections) {
+            const startLine = selection.start.line;
+            const outdent = command === 'outdent';
+            if (startLine !== selection.end.line || outdent) {
+              const ret = resolveIndentEdits(
+                textDocument,
+                selection,
+                this.#metrics.tabSize,
+                outdent
+              );
+              edits.push(...ret[0]);
+              nextSelections.push(ret[1]);
+            } else {
+              const lineChar0 = textDocument.charAt({
+                line: startLine,
+                character: 0,
+              });
+              this.#replaceSelectionText(
+                lineChar0 === '\t' ? '\t' : ' '.repeat(this.#metrics.tabSize)
+              );
+            }
+          }
+          const change = textDocument.applyEdits(
+            edits,
+            true,
+            this.#selections,
+            nextSelections
+          );
+          if (change !== undefined) {
+            this.#applyChange(change, nextSelections);
+          }
+        }
+        break;
+
+      case 'selectAll':
+        this.#updateSelections([getDocumentFullSelection(textDocument)]);
+        this.focus();
+        break;
+
+      case 'moveCursorToDocStart':
+      case 'moveCursorToDocEnd':
+        {
+          const atEnd = command === 'moveCursorToDocEnd';
+          this.#updateSelections([
+            getDocumentBoundarySelection(textDocument, atEnd),
+          ]);
+          this.#scrollToPrimaryCaret();
+        }
+        break;
+
+      case 'expandSelectionDocStart':
+      case 'expandSelectionDocEnd':
+        {
+          const atEnd = command === 'expandSelectionDocEnd';
+          const selections = this.#selections;
+          if (selections !== undefined) {
+            this.#updateSelections(
+              extendSelections(
+                selections,
+                getDocumentBoundarySelection(textDocument, atEnd)
+              )
+            );
+            this.#scrollToPrimaryCaret();
+          }
+        }
+        break;
+
+      case 'undo':
+        if (this.#textDocument?.canUndo === true) {
+          const undoResult = this.#textDocument.undo();
+          if (undoResult !== undefined) {
+            this.#applyChange(...undoResult);
+          }
+        }
+        break;
+
+      case 'redo':
+        if (this.#textDocument?.canRedo === true) {
+          const redoResult = this.#textDocument.redo();
+          if (redoResult !== undefined) {
+            this.#applyChange(...redoResult);
+          }
+        }
+        break;
+    }
+  }
+
+  #handleLayoutResize() {
+    const lineAnnotations = this.#lineAnnotations?.length ?? 0;
+    const prevGutterWidth = this.#gutterWidthCache;
+    const prevContentWidth = this.#contentWidthCache;
+    this.#gutterWidthCache = undefined;
+    this.#contentWidthCache = undefined;
+    const gutterWidthChanged = this.#getGutterWidth() !== prevGutterWidth;
+    const contentWidthChanged = this.#getContentWidth() !== prevContentWidth;
+    if (!gutterWidthChanged && !contentWidthChanged) {
+      return;
+    }
+
+    this.#lastCharX = undefined;
+    if (contentWidthChanged && (this.#wrap || lineAnnotations > 0)) {
+      this.#lineYCache.clear();
+      this.#wrapLineOffsetsCache.clear();
+    }
+    if (this.#selections !== undefined) {
+      this.#updateSelections(this.#selections);
+      this.focus();
+    }
+  }
+
+  #rerender(
+    change: TextDocumentChange,
+    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+    renderRange = this.#renderRange,
+    shouldUpdateBuffer?: boolean
+  ) {
+    const tokenizer = this.#tokenizer;
+    const component = this.#component;
+    const fileContents = this.#fileContents;
+    const textDocument = this.#textDocument;
+    const contentEl = this.#contentElement;
+    const gutterEl = this.#contentElement?.previousElementSibling ?? undefined;
+    if (
+      tokenizer === undefined ||
+      component === undefined ||
+      fileContents === undefined ||
+      textDocument === undefined ||
+      contentEl === undefined ||
+      gutterEl === undefined ||
+      !(gutterEl instanceof HTMLElement) ||
+      gutterEl.dataset.gutter === undefined
+    ) {
+      return;
+    }
+
+    // cancel existing background tokenzier task
+    tokenizer.stopBackgroundTokenize();
+
+    const t = performance.now();
+    const isAdvancedMode = this.#editMode === 'advanced';
+    const dirtyLines = tokenizer.tokenize(change, renderRange);
+    const t2 = performance.now();
+
+    if (dirtyLines.size > 0) {
+      const children = contentEl.children;
+      const dirtyLineIndexes = new Set<number>(dirtyLines.keys());
+
+      // update line elements that have been changed in the document
+      if (isAdvancedMode) {
+        for (const child of children) {
+          const el = child as HTMLElement;
+          const line = el.dataset.line;
+          if (line !== undefined) {
+            const lineIndex = Number(el.dataset.line) - 1;
+            const tokens = dirtyLines.get(lineIndex);
+            if (tokens !== undefined) {
+              el.replaceChildren(
+                ...renderLineTokens(tokens, tokenizer.themeType)
+              );
+              dirtyLineIndexes.delete(lineIndex);
+              if (dirtyLineIndexes.size === 0) {
+                break;
+              }
+            }
+          }
+        }
+      } else {
+        const startingLine = renderRange?.startingLine ?? 0;
+        for (
+          let i = change.startLine - startingLine;
+          i < children.length;
+          i++
+        ) {
+          const child = children[i] as HTMLElement | undefined;
+          if (child?.dataset.line !== undefined) {
+            const lineIndex = Number(child.dataset.line) - 1;
+            if (dirtyLines.has(lineIndex)) {
+              const tokens = dirtyLines.get(lineIndex)!;
+              child.replaceChildren(
+                ...renderLineTokens(tokens, tokenizer.themeType)
+              );
+              dirtyLineIndexes.delete(lineIndex);
+              if (dirtyLineIndexes.size === 0) {
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // create new line elements for new lines
+      if (dirtyLineIndexes.size > 0) {
+        for (const lineIndex of dirtyLineIndexes) {
+          const tokens = dirtyLines.get(lineIndex)!;
+          const lineNumber = String(lineIndex + 1);
+          h(
+            'div',
+            {
+              dataset: {
+                line: lineNumber,
+                lineType: 'context',
+                lineIndex: lineIndex.toString(),
+              },
+              // oxlint-disable-next-line react/no-children-prop
+              children: renderLineTokens(tokens, tokenizer.themeType),
+            },
+            contentEl
+          );
+          h(
+            'div',
+            {
+              dataset: {
+                lineType: 'context',
+                columnNumber: lineNumber,
+                lineIndex: lineIndex.toString(),
+              },
+              // oxlint-disable-next-line react/no-children-prop
+              children: [
+                h('span', {
+                  dataset: {
+                    lineNumberContent: '',
+                  },
+                  textContent: lineNumber,
+                }),
+              ],
+            },
+            gutterEl
+          );
+        }
+      }
+    }
+
+    // remove line elements that have been deleted in the document
+    if (change.lineDelta < 0) {
+      for (const parent of [contentEl, gutterEl]) {
+        const children = parent.children;
+        for (let i = children.length - 1; i >= 0; i--) {
+          const child = children[i] as HTMLElement;
+          const { lineIndex, lineAnnotation } = child.dataset;
+          if (lineIndex !== undefined || lineAnnotation !== undefined) {
+            const lineIndexNum = Number(
+              lineAnnotation !== undefined
+                ? lineAnnotation.split(',')[1]
+                : lineIndex
+            );
+            if (lineIndexNum < change.lineCount) {
+              break;
+            }
+            child.remove();
+          }
+        }
+      }
+    }
+
+    // fix grid layout
+    if (change.lineDelta !== 0) {
+      gutterEl.style.gridRow = 'span ' + gutterEl.children.length;
+      contentEl.style.gridRow = 'span ' + contentEl.children.length;
+    }
+
+    component.applyLineChange?.(dirtyLines, tokenizer.themeType);
+    if (change.lineDelta !== 0 || isAdvancedMode) {
+      component.applyLayoutChange(
+        textDocument,
+        newLineAnnotations,
+        shouldUpdateBuffer
+      );
+    }
+
+    if (this.#options.__debug === true) {
+      console.log(
+        `[diffs/editor] re-render in: ${round(performance.now() - t2)}ms,`,
+        `tokenize in: ${round(t2 - t)}ms (${dirtyLines.size} dirty lines)`
+      );
+    }
+  }
+
+  #handleInput(inputType: string, data: string | null) {
+    switch (inputType) {
+      case 'insertText':
+        this.#replaceSelectionText(data ?? '');
+        break;
+      case 'insertParagraph':
+        // TODO(@ije): use document.EOF instead of '\n'
+        this.#replaceSelectionText('\n');
+        break;
+      case 'deleteContentBackward':
+        this.#deleteSelectionText();
+        break;
+      case 'deleteContentForward':
+        this.#deleteSelectionText(true);
+        break;
+      // TODO(@ije): Safari and Firefox does not support this input type
+      // use command instead
+      case 'deleteHardLineForward':
+        this.#deleteHardLineForward();
+        break;
+      case 'insertTranspose':
+        this.#insertTranspose();
+        break;
+      default:
+        console.warn(`[diffs] Unknown input type: ${inputType}`);
+        break;
+    }
+  }
+
+  #updateSelections(selections: EditorSelection[]) {
+    if (selections.length === 0) {
+      return;
+    }
+    const gutterBuffer = this.#contentElement?.previousElementSibling;
+    const normalizedSelections = mergeOverlappingSelections(selections);
+    const primarySelection = normalizedSelections.at(-1)!;
+    this.#selections = normalizedSelections;
+    this.#primaryCaretElement = undefined;
+    this.#component?.setSelectedLines(null);
+    gutterBuffer
+      ?.querySelectorAll('[data-active]')
+      .forEach((el) => el.removeAttribute('data-active'));
+    if (isCollapsedSelection(primarySelection)) {
+      const line = primarySelection.start.line + 1;
+      this.#component?.setSelectedLines({
+        start: line,
+        end: line,
+      });
+    } else {
+      if (gutterBuffer !== undefined && gutterBuffer instanceof HTMLElement) {
+        const pos = getCaretPosition(primarySelection);
+        gutterBuffer
+          .querySelector(`[data-column-number="${pos.line + 1}"]`)
+          ?.setAttribute('data-active', '');
+      }
+    }
+    const fragment = document.createDocumentFragment();
+    const renderCtx = {
+      fragment,
+      elements: new Map<string, HTMLElement>(),
+    };
+    for (const selection of normalizedSelections) {
+      if (!isCollapsedSelection(selection)) {
+        this.#renderSelection(renderCtx, selection);
+      }
+      this.#renderCaret(renderCtx, selection, selection === primarySelection);
+    }
+    if (
+      this.#options.enabledQuickEdit === true &&
+      !isCollapsedSelection(primarySelection)
+    ) {
+      this.#renderQuickEditIcon(renderCtx, primarySelection);
+    }
+    this.#overlayElement?.appendChild(fragment);
+    this.#selectionElements?.forEach((el) => el.remove());
+    this.#selectionElements?.clear();
+    this.#selectionElements = renderCtx.elements;
+  }
+
+  // update window native selection to match the selection
+  #updateWindowSelection(selection: EditorSelection) {
+    const winSelection = window.getSelection();
+    if (winSelection === null) {
+      return;
+    }
+    let { start, end, direction } = selection;
+    if (comparePosition(start, end) > 0) {
+      [start, end] = [end, start];
+    }
+    const startLineElement = this.#getLineElement(start.line);
+    const endLineElement = this.#getLineElement(end.line);
+    if (startLineElement === undefined || endLineElement === undefined) {
+      return;
+    }
+    let [anchorNode, anchorOffset] = getSelectionAnchor(
+      startLineElement,
+      start.character
+    );
+    let [focusNode, focusOffset] = getSelectionAnchor(
+      endLineElement,
+      end.character
+    );
+    if (direction === DirectionBackward) {
+      [anchorNode, anchorOffset, focusNode, focusOffset] = [
+        focusNode,
+        focusOffset,
+        anchorNode,
+        anchorOffset,
+      ];
+    }
+    try {
+      winSelection.setBaseAndExtent(
+        anchorNode,
+        clampDomOffset(anchorNode, anchorOffset),
+        focusNode,
+        clampDomOffset(focusNode, focusOffset)
+      );
+    } catch (err) {
+      console.error('[diffs/editor] failed to update window selection:', err);
+    }
+  }
+
+  #focus(position?: Position, preventScroll = true) {
+    if (position !== undefined) {
+      this.#shouldIgnoreSelectionChange = true;
+      this.#updateWindowSelection({
+        start: position,
+        end: position,
+        direction: DirectionNone,
+      });
+      requestAnimationFrame(() => {
+        this.#contentElement?.focus({ preventScroll });
+        requestAnimationFrame(() => {
+          this.#shouldIgnoreSelectionChange = false;
+        });
+      });
+    } else {
+      requestAnimationFrame(() => {
+        this.#contentElement?.focus({ preventScroll });
+      });
+    }
+  }
+
+  #scrollToPrimaryCaret() {
+    const primaryCaretElement = this.#primaryCaretElement;
+    const primarySelection = this.#selections?.at(-1);
+    if (primarySelection === undefined) {
+      return;
+    }
+    if (primaryCaretElement !== undefined) {
+      primaryCaretElement.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest',
+      });
+      this.#focus(
+        primarySelection.direction === DirectionBackward
+          ? primarySelection.end
+          : primarySelection.start
+      );
+    } else {
+      const pos = getCaretPosition(primarySelection);
+      this.#scrollToLine(pos.line, pos.character);
+    }
+  }
+
+  // add scroll margin to the primary caret element to prevent
+  // the caret from being hidden by the gutter
+  #getScrollMargin() {
+    const componentTop = this.#component?.top ?? 0;
+    const top = this.#searchPanel !== undefined ? 48 : 0;
+    const start = this.#getGutterWidth() + this.#metrics.ch;
+    const end = this.#metrics.ch;
+    return `${componentTop + top}px ${end}px 0 ${start}px`;
+  }
+
+  #scrollToLine(line: number, char = 0) {
+    const virtualCaret = h('div', {
+      style: {
+        position: 'absolute',
+        left: '0',
+        width: '2px',
+        height: this.#metrics.lineHeight + 'px',
+        scrollMargin: this.#getScrollMargin(),
+      },
+    });
+    if (this.#getLineElement(line) !== undefined) {
+      const [left, wrapLine] = this.#getCharX(line, char);
+      const lineY = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
+      virtualCaret.style.top = lineY + 'px';
+      virtualCaret.style.left = left + 'px';
+      this.#overlayElement?.appendChild(virtualCaret);
+      virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
+      this.#focus({ line, character: char });
+      requestAnimationFrame(() => virtualCaret.remove());
+    }
+    // if the line is not rendered yet(virtualized),
+    // scroll to the approximate line position to trigger
+    // the line to be rendered, then recall this function
+    // to ensure the line is scrolled into view
+    else {
+      const lineAnnotations = (this.#lineAnnotations ?? []).filter(
+        (annotation) => annotation.lineNumber < line
+      ).length;
+      const approximateLineY =
+        (lineAnnotations + line) * this.#metrics.lineHeight;
+      virtualCaret.style.top = approximateLineY + 'px';
+      this.#componentContainer?.shadowRoot?.appendChild(virtualCaret);
+      this.#scrollingToLine = line;
+      this.#scrollingToLineChar = char;
+      virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
+      requestAnimationFrame(() => virtualCaret.remove());
+    }
+  }
+
+  #renderSelection(
+    renderCtx: {
+      fragment: DocumentFragment;
+      elements: Map<string, HTMLElement>;
+    },
+    selection: EditorSelection
+  ) {
+    if (this.#textDocument === undefined) {
+      return;
+    }
+
+    const { start, end } = selection;
+    for (let ln = start.line; ln <= end.line; ln++) {
+      if (!this.#isLineVisible(ln)) {
+        continue;
+      }
+
+      const lineText = this.#textDocument.getLineText(ln);
+      const startChar = ln === start.line ? start.character : 0;
+      const endChar = ln === end.line ? end.character : lineText.length;
+
+      if (this.#wrap) {
+        const paddingInline = this.#metrics.ch; // 1ch, align to diff css: padding-inline: 1ch
+        const contentWidth = this.#getContentWidth();
+        const textWidth =
+          2 * paddingInline + this.#metrics.measureTextWidth(lineText);
+        if (textWidth > contentWidth) {
+          this.#renderWrappedSelection(
+            renderCtx,
+            selection,
+            ln,
+            lineText,
+            startChar,
+            endChar,
+            paddingInline
+          );
+          continue;
+        }
+      }
+
+      let left = 0;
+      let width = 0;
+      if (startChar === endChar && startChar === 0) {
+        left = this.#getGutterWidth() + this.#metrics.ch; // gutter width + inline padding (1ch)
+        width = ln === end.line ? 0 : this.#metrics.ch;
+      } else {
+        left = this.#getCharX(ln, startChar)[0];
+        width =
+          endChar === startChar ? 0 : this.#getCharX(ln, endChar)[0] - left;
+      }
+      this.#renderSelectionRange(
+        renderCtx,
+        selection,
+        ln,
+        0,
+        startChar,
+        endChar,
+        width,
+        left
+      );
+    }
+  }
+
+  // Render the selection on a wrapped logical line by splitting it into one
+  // selection-range div per visual sub-line. For each wrap segment, we compute
+  // the intersection with the line's selection range and render the slice in
+  // segment-local coordinates so left/width line up with the visually wrapped
+  // text. Zero-width slices that fall on intermediate segment boundaries are
+  // skipped to avoid duplicate markers across consecutive visual lines.
+  #renderWrappedSelection(
+    renderCtx: {
+      fragment: DocumentFragment;
+      elements: Map<string, HTMLElement>;
+    },
+    selection: EditorSelection,
+    line: number,
+    lineText: string,
+    startChar: number,
+    endChar: number,
+    paddingInline: number
+  ) {
+    const wrapOffsets = this.#wrapLineText(line);
+    const segmentCount = wrapOffsets.length - 1;
+    const lastSegmentIndex = segmentCount - 1;
+    const offsetLeft = this.#getGutterWidth() + paddingInline;
+
+    for (let w = 0; w < segmentCount; w++) {
+      const segmentStart = wrapOffsets[w];
+      const segmentEnd = wrapOffsets[w + 1];
+      const wrapStartChar = Math.max(startChar, segmentStart);
+      const wrapEndChar = Math.min(endChar, segmentEnd);
+
+      // Selection range doesn't reach this visual segment.
+      if (wrapStartChar > wrapEndChar) {
+        continue;
+      }
+
+      // Zero-width slices on segment boundaries can appear on two consecutive
+      // segments (end of one, start of the next). Only render at the natural
+      // anchor positions: the very beginning of the first visual line, or the
+      // very end of the last visual line.
+      if (wrapStartChar === wrapEndChar) {
+        const isAtLineStart = wrapStartChar === 0 && w === 0;
+        const isAtLineEnd =
+          wrapEndChar === lineText.length && w === lastSegmentIndex;
+        if (!isAtLineStart && !isAtLineEnd) {
+          continue;
+        }
+      }
+
+      let segmentLeft: number;
+      let segmentWidth: number;
+      if (wrapStartChar === 0 && wrapEndChar === 0) {
+        // Empty range pinned to line start (e.g. multi-line selection ending
+        // with end.character === 0). Mirrors the non-wrap path.
+        segmentLeft = offsetLeft;
+        segmentWidth = line === selection.end.line ? 0 : paddingInline;
+      } else {
+        const prefixInSegment = lineText.slice(segmentStart, wrapStartChar);
+        const prefixAsciiColumns = getExpandedAsciiTextColumns(
+          prefixInSegment,
+          this.#metrics.tabSize
+        );
+        segmentLeft =
+          offsetLeft +
+          (prefixAsciiColumns !== -1
+            ? prefixAsciiColumns * this.#metrics.ch
+            : this.#metrics.measureTextWidth(prefixInSegment));
+
+        if (wrapStartChar === wrapEndChar) {
+          segmentWidth = 0;
+        } else {
+          const selectionInSegment = lineText.slice(wrapStartChar, wrapEndChar);
+          const selectionAsciiWidth = getExpandedAsciiTextColumns(
+            selectionInSegment,
+            this.#metrics.tabSize
+          );
+          segmentWidth =
+            selectionAsciiWidth !== -1
+              ? selectionAsciiWidth * this.#metrics.ch
+              : this.#metrics.measureTextWidth(selectionInSegment);
+        }
+      }
+
+      this.#renderSelectionRange(
+        renderCtx,
+        selection,
+        line,
+        w,
+        wrapStartChar,
+        wrapEndChar,
+        segmentWidth,
+        segmentLeft,
+        w === lastSegmentIndex
+      );
+    }
+  }
+
+  // Render one selection range div for a single visual line. `applyEolSpacing`
+  // controls whether the trailing one-character "line continuation" marker is
+  // appended at the end. For wrapped logical lines this must be false on every
+  // visual segment except the last one, since an intra-line wrap is not a real
+  // newline and shouldn't visually extend past the wrapped content.
+  #renderSelectionRange(
+    renderCtx: {
+      fragment: DocumentFragment;
+      elements: Map<string, HTMLElement>;
+    },
+    selection: EditorSelection,
+    ln: number,
+    wrapLine: number,
+    startChar: number,
+    endChar: number,
+    width: number,
+    left: number,
+    applyEolSpacing = true
+  ) {
+    const spacing =
+      !applyEolSpacing ||
+      selection.end.line === ln ||
+      (startChar === endChar && ln !== selection.start.line)
+        ? 0
+        : this.#metrics.ch;
+    const css = `width:${width + spacing}px;transform:translateY(${this.#getLineY(ln) + wrapLine * this.#metrics.lineHeight}px) translateX(${left}px);`;
+    const cacheKey = 'selection-range-' + css;
+    const selectionEls = this.#selectionElements;
+
+    if (renderCtx.elements.has(cacheKey)) {
+      return;
+    }
+
+    let rangeEl: HTMLElement | undefined;
+    if (selectionEls?.has(cacheKey) === true) {
+      rangeEl = selectionEls.get(cacheKey)!;
+      selectionEls.delete(cacheKey);
+    } else {
+      rangeEl = h(
+        'div',
+        {
+          dataset: 'selectionRange',
+          style: { cssText: css },
+        },
+        renderCtx.fragment
+      );
+    }
+
+    renderCtx.elements.set(cacheKey, rangeEl);
+  }
+
+  #renderCaret(
+    renderCtx: {
+      fragment: DocumentFragment;
+      elements: Map<string, HTMLElement>;
+    },
+    selection: EditorSelection,
+    isPrimary: boolean
+  ) {
+    const { line, character } = getCaretPosition(selection);
+    if (!this.#isLineVisible(line)) {
+      return;
+    }
+    const [left, wrapLine] = this.#getCharX(line, character);
+    const cacheKey = 'caret-' + line + '(' + wrapLine + ')-' + character;
+    if (renderCtx.elements.has(cacheKey)) {
+      return;
+    }
+    const caretEl = h(
+      'div',
+      {
+        dataset: 'caret',
+        style: {
+          transform: `translateY(${this.#getLineY(line) + wrapLine * this.#metrics.lineHeight}px) translateX(${left - 1}px)`,
+        },
+      },
+      renderCtx.fragment
+    );
+    renderCtx.elements.set(cacheKey, caretEl);
+    if (isPrimary) {
+      caretEl.style.scrollMargin = this.#getScrollMargin();
+      this.#primaryCaretElement = caretEl;
+    }
+  }
+
+  #renderQuickEditIcon(
+    renderCtx: {
+      fragment: DocumentFragment;
+      elements: Map<string, HTMLElement>;
+    },
+    selection: EditorSelection
+  ) {
+    const line = getCaretPosition(selection).line;
+    if (!this.#isLineVisible(line)) {
+      return;
+    }
+
+    const [left, wrapLine] = this.#getCharX(line, 0);
+    const cacheKey = 'quickEditIcon-' + line + '(' + wrapLine + ')';
+    if (renderCtx.elements.has(cacheKey)) {
+      return;
+    }
+
+    const quickEditIcon = QuickEditWidget.renderIcon(
+      left,
+      this.#getLineY(line) + wrapLine * this.#metrics.lineHeight,
+      renderCtx.fragment,
+      () => {
+        const cleanUpQuickEdit = () => {
+          this.#quickEdit?.cleanup();
+          this.#quickEdit = undefined;
+        };
+
+        const handleWidgetDomResize = () => {
+          // the line y cache is invalidated by the DOM change,
+          // clear the line y cache and re-render the selection
+          this.#lineYCache.clear();
+          if (this.#selections !== undefined) {
+            this.#updateSelections(this.#selections);
+          }
+        };
+
+        // remove the existing quick edit element
+        cleanUpQuickEdit();
+
+        const textDocument = this.#textDocument;
+        const renderQuickEdit = this.#options.renderQuickEdit;
+        const fileContainer = this.#componentContainer;
+        if (
+          textDocument === undefined ||
+          renderQuickEdit === undefined ||
+          fileContainer == null
+        ) {
+          return;
+        }
+
+        const line = selection.end.line;
+        const lineText = textDocument.getLineText(line);
+        const quickEditElement = renderQuickEdit({
+          textDocument,
+          selection,
+          applyEdits: (edits: TextEdit[]) => {
+            const change = textDocument.applyEdits(
+              edits,
+              true,
+              this.#selections
+            );
+            if (change !== undefined) {
+              this.#applyChange(change);
+            }
+          },
+          getSelectionText: () => {
+            return this.#textDocument?.getText(selection) ?? '';
+          },
+          replaceSelectionText: (text: string) => {
+            this.#replaceSelectionText(text);
+          },
+          close: () => {
+            cleanUpQuickEdit();
+            handleWidgetDomResize();
+            this.#scrollToPrimaryCaret();
+          },
+        });
+        let leadingWhitespaces = 0;
+        for (let i = 0; i < lineText.length; i++) {
+          const charCode = lineText.charCodeAt(i);
+          if (charCode === /* space */ 32) {
+            leadingWhitespaces++;
+          } else if (charCode === /* tab */ 9) {
+            leadingWhitespaces += this.#metrics.tabSize;
+          } else {
+            break;
+          }
+        }
+        this.#quickEdit = new QuickEditWidget(
+          line,
+          quickEditElement,
+          fileContainer,
+          leadingWhitespaces,
+          handleWidgetDomResize
+        );
+        this.#updateSelections([selection]);
+        if (this.#isLineVisible(line) && this.#contentElement !== undefined) {
+          this.#quickEdit.render(this.#contentElement);
+        }
+      }
+    );
+    renderCtx.elements.set(cacheKey, quickEditIcon);
+  }
+
+  // TODO(@ije): render search highlight
+  #renderSearchPanel() {
+    // cleanup the existing search panel
+    this.#searchPanel?.cleanup();
+
+    const textDocument = this.#textDocument;
+    const preElement =
+      this.#componentContainer?.shadowRoot?.querySelector<HTMLElement>('pre');
+    if (textDocument === undefined || preElement == null) {
+      return;
+    }
+
+    let defaultQuery = '';
+    let initialMatch: [number, number] | undefined = undefined;
+
+    const selections = this.#selections;
+    if (selections !== undefined && selections.length > 0) {
+      let primarySelection = selections.at(-1)!;
+      if (isCollapsedSelection(primarySelection)) {
+        primarySelection = expandCollapsedSelectionToWord(
+          textDocument,
+          primarySelection
+        );
+        this.#updateSelections([...selections.slice(0, -1), primarySelection]);
+        const selectionText = textDocument.getText(primarySelection);
+        if (!selectionText.includes('\n')) {
+          defaultQuery = selectionText;
+          initialMatch = [
+            textDocument.offsetAt(primarySelection.start),
+            textDocument.offsetAt(primarySelection.end),
+          ];
+        }
+      }
+    }
+
+    this.#searchPanel = new SearchPanelWidget({
+      textDocument,
+      containerElement: preElement,
+      defaultQuery,
+      initialMatch,
+      getCurrentSearchRange: () => this.#selections?.at(-1),
+      postSearch: (kind, [startOffset, endOffset], retainFocus) => {
+        if (
+          kind === 'findNext' ||
+          kind === 'findPrevious' ||
+          kind === 'replace'
+        ) {
+          const nextSelection = createSelectionFromAnchorAndFocusOffsets(
+            textDocument,
+            startOffset,
+            endOffset
+          );
+          this.#updateSelections([nextSelection]);
+          this.#scrollToPrimaryCaret();
+          if (retainFocus === true) {
+            this.#retainSearchPanelFocus = true;
+            requestAnimationFrame(() => {
+              this.#searchPanel?.focus();
+            });
+          }
+        } else if (kind === 'findAll' || kind === 'replaceAll') {
+          const { line, character } = textDocument.positionAt(startOffset);
+          this.#scrollToLine(line, character);
+        }
+      },
+      onClose: () => {
+        this.#searchPanel = undefined;
+        this.#retainSearchPanelFocus = false;
+      },
+    });
+    this.#retainSearchPanelFocus = false;
+  }
+
+  #getSelectionText() {
+    const textDocument = this.#textDocument;
+    const selections = this.#selections;
+    if (textDocument === undefined || selections === undefined) {
+      return '';
+    }
+    return getSelectionText(textDocument, selections);
+  }
+
+  // replace the selection text
+  #replaceSelectionText(text: string | string[]) {
+    const selections = this.#selections;
+    if (selections === undefined) {
+      return;
+    }
+    const textDocument = this.#textDocument;
+    const primarySelection = selections.at(-1);
+    if (textDocument === undefined || primarySelection === undefined) {
+      return;
+    }
+    const { nextSelections, change } =
+      Array.isArray(text) && text.length === selections.length
+        ? applyTextReplaceToSelections<LAnnotation>(
+            textDocument,
+            selections,
+            text,
+            this.#lineAnnotations
+          )
+        : applyTextChangeToSelections<LAnnotation>(
+            textDocument,
+            selections,
+            {
+              start: textDocument.offsetAt(primarySelection.start),
+              end: textDocument.offsetAt(primarySelection.end),
+              text: Array.isArray(text) ? text.join('\n') : text,
+            },
+            this.#lineAnnotations
+          );
+
+    if (change !== undefined) {
+      this.#applyChange(
+        change,
+        nextSelections,
+        this.#applyChangeToLineAnnotations(change)
+      );
+    }
+  }
+
+  #deleteSelectionText(forward: boolean = false) {
+    const selections = this.#selections;
+    const textDocument = this.#textDocument;
+    if (selections === undefined || textDocument === undefined) {
+      return;
+    }
+
+    const primarySelection = selections.at(-1);
+    if (primarySelection === undefined) {
+      return;
+    }
+
+    const edit = isCollapsedSelection(primarySelection)
+      ? (() => {
+          const offset = textDocument.offsetAt(primarySelection.start);
+          const nextOffset = forward
+            ? Math.min(textDocument.getText().length, offset + 1)
+            : Math.max(0, offset - 1);
+          return {
+            start: Math.min(offset, nextOffset),
+            end: Math.max(offset, nextOffset),
+            text: '',
+          };
+        })()
+      : {
+          start: textDocument.offsetAt(primarySelection.start),
+          end: textDocument.offsetAt(primarySelection.end),
+          text: '',
+        };
+
+    this.#applyResolvedTextEdit(edit);
+  }
+
+  #deleteHardLineForward() {
+    const selections = this.#selections;
+    const textDocument = this.#textDocument;
+    if (selections === undefined || textDocument === undefined) {
+      return;
+    }
+    const { nextSelections, change } =
+      applyDeleteHardLineForwardToSelections<LAnnotation>(
+        textDocument,
+        selections,
+        this.#lineAnnotations
+      );
+    if (change !== undefined) {
+      this.#applyChange(
+        change,
+        nextSelections,
+        this.#applyChangeToLineAnnotations(change)
+      );
+    }
+  }
+
+  #insertTranspose() {
+    const selections = this.#selections;
+    const textDocument = this.#textDocument;
+    if (selections === undefined || textDocument === undefined) {
+      return;
+    }
+    const { nextSelections, change } = applyTransposeToSelections<LAnnotation>(
+      textDocument,
+      selections,
+      this.#lineAnnotations
+    );
+    if (change !== undefined) {
+      this.#applyChange(
+        change,
+        nextSelections,
+        this.#applyChangeToLineAnnotations(change)
+      );
+    }
+  }
+
+  #applyResolvedTextEdit(edit: ResolvedTextEdit) {
+    if (this.#selections === undefined || this.#textDocument === undefined) {
+      return;
+    }
+    const { nextSelections, change } = applyTextChangeToSelections<LAnnotation>(
+      this.#textDocument,
+      this.#selections,
+      edit,
+      this.#lineAnnotations,
+      this.#metrics.tabSize
+    );
+    if (change !== undefined) {
+      this.#applyChange(
+        change,
+        nextSelections,
+        this.#applyChangeToLineAnnotations(change)
+      );
+    }
+  }
+
+  #applyChange(
+    change: TextDocumentChange,
+    selections?: EditorSelection[],
+    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  ) {
+    const fileContents = this.#fileContents;
+    const textDocument = this.#textDocument;
+    const onChange = this.#options.onChange;
+    if (
+      fileContents !== undefined &&
+      textDocument !== undefined &&
+      onChange !== undefined
+    ) {
+      const { contents: _, ...file } = fileContents;
+      let contents: string | undefined;
+      // tradeoff: using a getter for the 'contents' property
+      // to avoid pre-concactinating the text content of the textDocument
+      // but the user may get newer contents when accessing
+      // the 'contents' property
+      Object.defineProperty(file, 'contents', {
+        get: () => (contents ??= textDocument.getText()),
+      });
+      this.#emitChange(
+        file as FileContents,
+        newLineAnnotations ?? this.#lineAnnotations
+      );
+    }
+
+    // Invalidate layout caches touched by the edit.
+    // - line inserts/deletes shift line numbers, so clear from startLine onward
+    // - wrapped edits can change visual height, which shifts downstream line Y
+    if (change.lineDelta !== 0) {
+      for (const line of this.#lineYCache.keys()) {
+        if (line >= change.startLine) {
+          this.#lineYCache.delete(line);
+        }
+      }
+    }
+    if (this.#wrap) {
+      for (const line of this.#wrapLineOffsetsCache.keys()) {
+        if (line >= change.startLine) {
+          this.#wrapLineOffsetsCache.delete(line);
+        }
+      }
+    }
+    this.#lastCharX = undefined;
+
+    let renderRange = this.#renderRange;
+    let shouldUpdateBuffer: boolean | undefined;
+    if (
+      renderRange !== undefined &&
+      selections !== undefined &&
+      selections.length > 0
+    ) {
+      const primarySelection = selections.at(-1)!;
+      const renderRangeEndLine =
+        renderRange.startingLine + renderRange.totalLines;
+      // when typing new line at the end of the file,
+      // extend the render range +1 to trigger the re-render of the new line
+      if (primarySelection.end.line === renderRangeEndLine) {
+        renderRange = {
+          ...renderRange,
+          totalLines: renderRange.totalLines + 1,
+        };
+      } else if (primarySelection.end.line > renderRangeEndLine) {
+        shouldUpdateBuffer = true;
+      }
+    }
+    this.#rerender(change, newLineAnnotations, renderRange, shouldUpdateBuffer);
+
+    if (selections !== undefined) {
+      // re-render selection range and caret, focus to the editor to update the window selection,
+      // and scroll to the crate to mock the 'contenteditable' behavior
+      this.#updateSelections(selections);
+      this.focus({ preventScroll: true });
+      requestAnimationFrame(() => {
+        if (this.#primaryCaretElement !== undefined) {
+          this.#primaryCaretElement.scrollIntoView({
+            block: 'nearest',
+            inline: 'nearest',
+          });
+        } else if (selections.length > 0) {
+          const pos = getCaretPosition(selections.at(-1)!);
+          this.#scrollToLine(pos.line, pos.character);
+        }
+      });
+    }
+  }
+
+  #applyChangeToLineAnnotations(
+    change: TextDocumentChange
+  ): DiffLineAnnotation<LAnnotation>[] | undefined {
+    if (this.#lineAnnotations !== undefined) {
+      const nextLineAnnotations =
+        applyDocumentChangeToLineAnnotations<LAnnotation>(
+          change,
+          this.#lineAnnotations
+        );
+      if (nextLineAnnotations !== undefined) {
+        this.#textDocument?.setLastUndoLineAnnotations(
+          this.#lineAnnotations,
+          nextLineAnnotations
+        );
+        return nextLineAnnotations;
+      }
+    }
+    return undefined;
+  }
+
+  #getLineElement(line: number): HTMLElement | undefined {
+    const contentElement = this.#contentElement;
+    if (contentElement === undefined) {
+      return undefined;
+    }
+    // check if the line is within the render range
+    if (this.#renderRange !== undefined && this.#editMode === 'simple') {
+      const { startingLine } = this.#renderRange;
+      const { children } = contentElement;
+      for (let i = line - startingLine; i <= children.length; i++) {
+        const child = children[i] as HTMLElement | undefined;
+        const lineNumber = child?.dataset.line;
+        const lineType = child?.dataset.lineType;
+        if (
+          lineNumber !== undefined &&
+          lineType !== undefined &&
+          isLineEditable(lineType) &&
+          Number(lineNumber) === line + 1
+        ) {
+          return child;
+        }
+      }
+    }
+    // fallback to query selector (ignoring `change-deletion` lines)
+    if (this.#editMode === 'advanced') {
+      return (
+        contentElement.querySelector<HTMLElement>(
+          `[data-line="${line + 1}"]:not([data-line-type="change-deletion"])`
+        ) ?? undefined
+      );
+    }
+    return (
+      contentElement.querySelector<HTMLElement>(`[data-line="${line + 1}"]`) ??
+      undefined
+    );
+  }
+
+  #getGutterWidth(): number {
+    const gutterElement = this.#contentElement?.previousElementSibling;
+    if (
+      gutterElement == null ||
+      !(gutterElement instanceof HTMLElement) ||
+      !gutterElement.hasAttribute('data-gutter')
+    ) {
+      return 0;
+    }
+
+    if (this.#gutterWidthCache === undefined) {
+      const diffsColumnNumberWidth =
+        this.#contentElement?.parentElement?.style.getPropertyValue(
+          '--diffs-column-number-width'
+        );
+      if (
+        diffsColumnNumberWidth !== undefined &&
+        diffsColumnNumberWidth.length > 2 &&
+        diffsColumnNumberWidth.endsWith('px')
+      ) {
+        this.#gutterWidthCache = Number(diffsColumnNumberWidth.slice(0, -2));
+      } else {
+        this.#gutterWidthCache = gutterElement.offsetWidth;
+      }
+    }
+
+    return this.#gutterWidthCache;
+  }
+
+  #getContentWidth(): number {
+    if (this.#contentElement === undefined) {
+      return 0;
+    }
+
+    if (this.#contentWidthCache === undefined) {
+      const diffsColumnContentWidth =
+        this.#contentElement.parentElement?.style.getPropertyValue(
+          '--diffs-column-content-width'
+        );
+      if (
+        diffsColumnContentWidth !== undefined &&
+        diffsColumnContentWidth.length > 2 &&
+        diffsColumnContentWidth.endsWith('px')
+      ) {
+        this.#contentWidthCache = Number(diffsColumnContentWidth.slice(0, -2));
+      } else {
+        this.#contentWidthCache = this.#contentElement.offsetWidth;
+      }
+    }
+    return this.#contentWidthCache;
+  }
+
+  // get line top(y-coordinate) position
+  #getLineY(line: number) {
+    const cachedY = this.#lineYCache.get(line);
+    if (cachedY !== undefined) {
+      return cachedY;
+    }
+
+    const lineElement = this.#getLineElement(line);
+    if (lineElement === undefined) {
+      return -1;
+    }
+
+    // cold(slow) path: measure line top position from DOM (will cause reflow)
+    const y = lineElement.offsetTop + this.#codePaddingTop;
+    this.#lineYCache.set(line, y);
+    return y;
+  }
+
+  // Return the visual position for a character. Wrapped lines include the
+  // visual line index so carets can be placed on the correct row.
+  #getCharX(line: number, char: number): [x: number, wrapLine: number] {
+    if (
+      this.#lastCharX !== undefined &&
+      this.#lastCharX[0] === line &&
+      this.#lastCharX[1] === char
+    ) {
+      return [this.#lastCharX[2], this.#lastCharX[3]];
+    }
+
+    const lineText = this.#textDocument?.getLineText(line);
+    const offsetLeft = this.#getGutterWidth() + this.#metrics.ch; // gutter width + inline padding (1ch)
+    if (lineText === undefined || lineText.length === 0 || char <= 0) {
+      return [offsetLeft, 0];
+    }
+
+    const boundedCharacter = snapTextOffsetToUnicodeBoundary(
+      lineText,
+      Math.min(char, lineText.length)
+    );
+    const textBeforeCharacter = lineText.slice(0, boundedCharacter);
+    const asciiColumns = getExpandedAsciiTextColumns(
+      textBeforeCharacter,
+      this.#metrics.tabSize
+    );
+
+    let left = 0;
+    let wrapLine = 0;
+    if (asciiColumns !== -1) {
+      left = offsetLeft + asciiColumns * this.#metrics.ch;
+    } else {
+      left = offsetLeft + this.#metrics.measureTextWidth(textBeforeCharacter);
+    }
+
+    if (this.#wrap) {
+      const contentWidth = this.#getContentWidth();
+      const textWidth =
+        2 * this.#metrics.ch + this.#metrics.measureTextWidth(lineText);
+      if (textWidth > contentWidth) {
+        const wrapOffsets = this.#wrapLineText(line);
+        for (let w = 0; w + 1 < wrapOffsets.length; w++) {
+          const segmentStart = wrapOffsets[w];
+          const segmentEnd = wrapOffsets[w + 1];
+          if (boundedCharacter <= segmentEnd) {
+            wrapLine = w;
+            const prefixInSegment = lineText.slice(
+              segmentStart,
+              boundedCharacter
+            );
+            const segmentAsciiColumns = getExpandedAsciiTextColumns(
+              prefixInSegment,
+              this.#metrics.tabSize
+            );
+            if (segmentAsciiColumns !== -1) {
+              left = offsetLeft + segmentAsciiColumns * this.#metrics.ch;
+            } else {
+              left =
+                offsetLeft + this.#metrics.measureTextWidth(prefixInSegment);
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    if (this.#lastCharX !== undefined) {
+      this.#lastCharX[0] = line;
+      this.#lastCharX[1] = char;
+      this.#lastCharX[2] = left;
+      this.#lastCharX[3] = wrapLine;
+    } else {
+      this.#lastCharX = [line, char, left, wrapLine];
+    }
+
+    return [left, wrapLine];
+  }
+
+  // Compute how a logical line of text is broken into visual lines when line
+  // wrapping is enabled.
+  #wrapLineText(line: number): Uint32Array {
+    const cachedOffsets = this.#wrapLineOffsetsCache.get(line);
+    if (cachedOffsets !== undefined) {
+      return cachedOffsets;
+    }
+
+    const lineText = this.#textDocument?.getLineText(line);
+    if (lineText === undefined || lineText.length === 0) {
+      const offsets = new Uint32Array([0]);
+      this.#wrapLineOffsetsCache.set(line, offsets);
+      return offsets;
+    }
+
+    const div = h(
+      'div',
+      {
+        style: {
+          position: 'absolute',
+          top: '0',
+          left: '0',
+          width: '100%',
+          boxSizing: 'border-box',
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          font: 'inherit',
+          paddingInline: '1ch',
+          tabSize: this.#metrics.tabSize.toString(),
+        },
+        textContent: lineText,
+      },
+      this.#contentElement
+    );
+    const textNode = div.firstChild as Text;
+    const range = document.createRange();
+    const starts: number[] = [];
+
+    try {
+      const unicodeOffsets = getUnicodeMeasurementOffsets(lineText);
+      const wrapLineStartLeft =
+        div.getBoundingClientRect().left + this.#metrics.ch;
+
+      let previousOffset = 0;
+      let lastTop = Number.NEGATIVE_INFINITY;
+
+      for (let i = 0, offsetIndex = 0; i < lineText.length; ) {
+        const nextOffset =
+          unicodeOffsets === undefined
+            ? i + 1
+            : unicodeOffsets[offsetIndex + 1];
+        range.setStart(textNode, i);
+        range.setEnd(textNode, nextOffset);
+
+        // A new visual line starts whenever the character's top edge moves
+        // below the previous character's top edge.
+        const { left, top } = range.getBoundingClientRect();
+        if (top > lastTop) {
+          // Safari can report the first range on a wrapped visual line as
+          // starting one character past the visual line start. Use the previous
+          // offset so segment-local caret math begins at the actual wrap point.
+          const startsPastLineStart =
+            isSafari() &&
+            starts.length > 0 &&
+            left - wrapLineStartLeft > this.#metrics.ch / 2;
+          starts.push(startsPastLineStart ? previousOffset : i);
+          lastTop = top;
+        }
+        previousOffset = i;
+        i = nextOffset;
+        offsetIndex++;
+      }
+
+      const offsets = new Uint32Array(starts.length + 1);
+      for (let i = 0; i < starts.length; i++) {
+        offsets[i] = starts[i]!;
+      }
+      offsets[starts.length] = lineText.length;
+      this.#wrapLineOffsetsCache.set(line, offsets);
+      return offsets;
+    } finally {
+      div.remove();
+    }
+  }
+
+  // check if the web selection belongs to editor
+  #rangeBelongsToEditor({ startContainer, endContainer }: StaticRange) {
+    const contentEl = this.#contentElement;
+    if (contentEl === undefined) {
+      return false;
+    }
+    return (
+      contentEl.contains(startContainer) && contentEl.contains(endContainer)
+    );
+  }
+
+  // Check whether a line is visible in the currently rendered line window.
+  #isLineVisible(line: number): boolean {
+    const lineCount = this.#textDocument?.lineCount ?? 0;
+    if (line < 0 || line >= lineCount) {
+      return false;
+    }
+    if (this.#renderRange === undefined) {
+      return true;
+    }
+    const { startingLine, totalLines } = this.#renderRange;
+    if (line < startingLine) {
+      return false;
+    }
+    if (totalLines === Infinity) {
+      return true;
+    }
+    return line < startingLine + totalLines;
+  }
+}

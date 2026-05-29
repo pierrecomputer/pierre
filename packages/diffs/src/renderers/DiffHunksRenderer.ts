@@ -396,7 +396,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
-  private async initializeHighlighter(): Promise<DiffsHighlighter> {
+  public async initializeHighlighter(): Promise<DiffsHighlighter> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, this.options)
     );

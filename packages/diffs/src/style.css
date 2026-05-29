@@ -34,6 +34,7 @@
     --diffs-bg-context-override
     --diffs-bg-context-gutter-override
     --diffs-bg-separator-override
+    --diffs-bg-caret-override
 
     --diffs-fg-number-override
     --diffs-fg-number-addition-override
@@ -129,6 +130,14 @@
     --diffs-fg-conflict-marker: var(
       --diffs-fg-conflict-marker-override,
       var(--diffs-fg-number)
+    );
+
+    --diffs-bg-caret: var(
+      --diffs-bg-caret-override,
+      light-dark(
+        color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg)),
+        color-mix(in lab, var(--diffs-fg) 75%, var(--diffs-bg))
+      )
     );
 
     --diffs-deletion-base: var(
@@ -326,7 +335,8 @@
   [data-line-annotation],
   [data-no-newline],
   [data-merge-conflict],
-  [data-merge-conflict-actions] {
+  [data-merge-conflict-actions],
+  [data-editor-overlay] {
     /* Pre-fill css variables for appropriate up-mixing */
     --diffs-computed-decoration-bg: var(--diffs-bg);
     --diffs-computed-diff-line-bg: var(--diffs-bg);
@@ -676,12 +686,14 @@
   [data-line-annotation],
   [data-merge-conflict],
   [data-merge-conflict-actions],
-  [data-no-newline] {
+  [data-no-newline],
+  [data-editor-overlay] {
     --diffs-selection-mix-target: var(
       --diffs-bg-selection-override,
       var(--diffs-selection-base)
     );
 
+    &:where([data-editor-overlay]),
     &:where(
         [data-line],
         [data-line-annotation],
@@ -724,6 +736,7 @@
       }
     }
 
+    &:where([data-editor-overlay]),
     &[data-selected-line] {
       --diffs-computed-selected-line-bg: light-dark(
         color-mix(

@@ -17,6 +17,7 @@ import type {
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
 import { noopRender } from '../constants';
+import { useEditor } from '../EditorContext';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
 import { useStableCallback } from './useStableCallback';
@@ -34,6 +35,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
   disableWorkerPool: boolean;
+  contentEditable: boolean;
 }
 
 interface UseFileDiffInstanceReturn {
@@ -51,10 +53,12 @@ export function useFileDiffInstance<LAnnotation>({
   hasGutterRenderUtility,
   hasCustomHeader,
   disableWorkerPool,
+  contentEditable,
 }: UseFileDiffInstanceProps<LAnnotation>): UseFileDiffInstanceReturn {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
+  const editor = useEditor<LAnnotation>();
   const instanceRef = useRef<
     FileDiff<LAnnotation> | VirtualizedFileDiff<LAnnotation> | null
   >(null);
@@ -69,7 +73,9 @@ export function useFileDiffInstance<LAnnotation>({
         instanceRef.current = new VirtualizedFileDiff(
           mergeFileDiffOptions({
             controlledSelection,
+            contentEditable,
             hasCustomHeader,
+            hasEditor: editor !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -82,7 +88,9 @@ export function useFileDiffInstance<LAnnotation>({
         instanceRef.current = new FileDiff(
           mergeFileDiffOptions({
             controlledSelection,
+            contentEditable,
             hasCustomHeader,
+            hasEditor: editor !== undefined,
             hasGutterRenderUtility,
             options,
           }),
@@ -112,7 +120,9 @@ export function useFileDiffInstance<LAnnotation>({
     if (instance == null) return;
     const newOptions = mergeFileDiffOptions({
       controlledSelection,
+      contentEditable,
       hasCustomHeader,
+      hasEditor: editor !== undefined,
       hasGutterRenderUtility,
       options,
     });
@@ -128,6 +138,16 @@ export function useFileDiffInstance<LAnnotation>({
     }
   });
 
+  useIsometricEffect(() => {
+    if (contentEditable && instanceRef.current != null) {
+      if (editor === undefined) {
+        throw new Error('FileDiff: Editor is not attached');
+      }
+      return editor.edit(instanceRef.current);
+    }
+    return undefined;
+  }, [contentEditable, editor]);
+
   const getHoveredLine = useCallback(():
     | GetHoveredLineResult<'diff'>
     | undefined => {
@@ -139,6 +159,8 @@ export function useFileDiffInstance<LAnnotation>({
 
 interface MergeFileDiffOptionsProps<LAnnotation> {
   controlledSelection: boolean;
+  contentEditable: boolean;
+  hasEditor: boolean;
   hasCustomHeader: boolean;
   hasGutterRenderUtility: boolean;
   options: FileDiffOptions<LAnnotation> | undefined;
@@ -147,22 +169,46 @@ interface MergeFileDiffOptionsProps<LAnnotation> {
 function mergeFileDiffOptions<LAnnotation>({
   options,
   controlledSelection,
+  contentEditable,
   hasCustomHeader,
+  hasEditor,
   hasGutterRenderUtility,
 }: MergeFileDiffOptionsProps<LAnnotation>):
   | FileDiffOptions<LAnnotation>
   | undefined {
-  if (!controlledSelection && !hasGutterRenderUtility && !hasCustomHeader) {
+  const needsEditorOptions = contentEditable && hasEditor;
+  const needsReactOverrides =
+    controlledSelection || hasGutterRenderUtility || hasCustomHeader;
+
+  if (!needsReactOverrides && !needsEditorOptions) {
     return options;
   }
-  return {
-    ...options,
-    controlledSelection,
-    renderCustomHeader: hasCustomHeader
-      ? noopRender
-      : options?.renderCustomHeader,
-    renderGutterUtility: hasGutterRenderUtility
-      ? noopRender
-      : options?.renderGutterUtility,
-  };
+
+  let merged: FileDiffOptions<LAnnotation> = { ...options };
+
+  if (needsReactOverrides) {
+    merged = {
+      ...merged,
+      controlledSelection,
+      renderCustomHeader: hasCustomHeader
+        ? noopRender
+        : options?.renderCustomHeader,
+      renderGutterUtility: hasGutterRenderUtility
+        ? noopRender
+        : options?.renderGutterUtility,
+    };
+  }
+
+  if (needsEditorOptions) {
+    merged = {
+      ...merged,
+      useTokenTransformer: true,
+      enableGutterUtility: false,
+      enableLineSelection: false,
+      expandUnchanged: true,
+      lineHoverHighlight: 'disabled',
+    };
+  }
+
+  return merged;
 }

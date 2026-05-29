@@ -25,7 +25,11 @@ import { SVGSpriteSheet } from '../sprite';
 import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
+  DiffsEditableComponent,
+  DiffsEditor,
+  DiffsTextDocument,
   FileContents,
+  HighlightedToken,
   LineAnnotation,
   PostRenderPhase,
   PrePropertiesConfig,
@@ -59,7 +63,7 @@ import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
 
-const EMPTY_STRINGS: string[] = [];
+const EMPTY_STRINGS: string[] = [''];
 
 export interface FileRenderProps<LAnnotation> {
   file: FileContents;
@@ -123,7 +127,9 @@ interface HydrationSetup<LAnnotation> {
 
 let instanceId = -1;
 
-export class File<LAnnotation = undefined> {
+export class File<
+  LAnnotation = undefined,
+> implements DiffsEditableComponent<LAnnotation> {
   static LoadedCustomComponent: boolean = DiffsContainerLoaded;
 
   readonly __id: string = `file:${++instanceId}`;
@@ -166,6 +172,8 @@ export class File<LAnnotation = undefined> {
   public file: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
+
+  protected editor: DiffsEditor<LAnnotation> | undefined;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -335,6 +343,10 @@ export class File<LAnnotation = undefined> {
     }
 
     this.enabled = false;
+
+    // Clean up the editor
+    this.editor?.cleanUp();
+    this.editor = undefined;
   }
 
   public virtualizedSetup(): void {
@@ -447,6 +459,56 @@ export class File<LAnnotation = undefined> {
     return file != null
       ? this.fileRenderer.getOrCreateLineCache(file)
       : EMPTY_STRINGS;
+  }
+
+  protected updateBuffers(renderRange: RenderRange): void {
+    if (this.pre != null) {
+      this.applyBuffers(this.pre, renderRange);
+    }
+  }
+
+  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+    this.editor?.cleanUp();
+    const fileContainer = this.fileContainer;
+    const file = this.file;
+    if (fileContainer != null && file != null) {
+      void this.fileRenderer.initializeHighlighter().then((highlighter) => {
+        editor.syncWithRender(
+          highlighter,
+          fileContainer,
+          file,
+          this.lineAnnotations,
+          this.renderRange
+        );
+      });
+    }
+    this.editor = editor;
+    return () => {
+      this.editor = undefined;
+    };
+  }
+
+  public applyLineChange(
+    dirtyLines: Map<number, Array<HighlightedToken>>,
+    themeType: 'dark' | 'light'
+  ): void {
+    this.fileRenderer.applyDirtyLines(dirtyLines, themeType);
+  }
+
+  public applyLayoutChange(
+    textDocument: DiffsTextDocument,
+    newLineAnnotations?: LineAnnotation<LAnnotation>[]
+  ): void {
+    this.fileRenderer.applyLayoutChange(textDocument, newLineAnnotations);
+    if (
+      newLineAnnotations != null &&
+      newLineAnnotations !== this.lineAnnotations
+    ) {
+      this.annotationCache.forEach(({ element }) => element.remove());
+      this.annotationCache.clear();
+      this.lineAnnotations = newLineAnnotations;
+      this.rerender();
+    }
   }
 
   public render({
@@ -588,6 +650,19 @@ export class File<LAnnotation = undefined> {
       }
       this.renderAnnotations();
       this.renderGutterUtility();
+
+      const editor = this.editor;
+      if (editor != null) {
+        void this.fileRenderer.initializeHighlighter().then((highlighter) => {
+          editor.syncWithRender(
+            highlighter,
+            fileContainer,
+            file,
+            this.lineAnnotations,
+            this.renderRange
+          );
+        });
+      }
     } catch (error: unknown) {
       if (disableErrorHandling) {
         throw error;

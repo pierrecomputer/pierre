@@ -8,14 +8,12 @@ import type {
   RenderFileOptions,
   ThemedFileResult,
 } from '../types';
-import { cleanLastNewline } from './cleanLastNewline';
+import { linesFromFileContents } from './computeFileOffsets';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 import { getLineNodes } from './getLineNodes';
-import { iterateOverFile } from './iterateOverFile';
-import { splitFileContents } from './splitFileContents';
 
 const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
   forcePlainText: false,
@@ -96,11 +94,11 @@ export function renderFileWithHighlighter(
     highlighter.codeToHast(
       isWindowedHighlight
         ? extractWindowedFileContent(
-            lines ?? splitFileContents(file.contents),
+            lines ?? linesFromFileContents(file.contents),
             startingLine,
             totalLines
           )
-        : cleanLastNewline(file.contents),
+        : file.contents,
       hastConfig
     )
   );
@@ -119,14 +117,9 @@ function extractWindowedFileContent(
   startingLine: number,
   totalLines: number
 ): string {
-  let windowContent: string = '';
-  iterateOverFile({
-    lines,
-    startingLine,
-    totalLines,
-    callback({ content }) {
-      windowContent += content;
-    },
-  });
-  return windowContent;
+  if (lines.length === 0) {
+    return '';
+  }
+  const endLine = Math.min(startingLine + totalLines, lines.length);
+  return lines.slice(startingLine, endLine).join('');
 }

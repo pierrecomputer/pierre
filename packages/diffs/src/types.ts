@@ -40,6 +40,8 @@ export interface FileContents {
 
 export type HighlighterTypes = 'shiki-js' | 'shiki-wasm';
 
+export type HighlightedToken = [char: number, fg: string, text: string];
+
 export type {
   BundledLanguage,
   CodeToHastOptions,
@@ -746,6 +748,7 @@ export interface RenderedFileASTCache {
   options: RenderFileOptions;
   result: ThemedFileResult | undefined;
   renderRange: RenderRange | undefined;
+  isDirty?: boolean;
 }
 
 export interface RenderedDiffASTCache {
@@ -889,4 +892,65 @@ export interface AppliedThemeStyleCache {
 export interface StickySpecs {
   topOffset: number;
   height: number;
+}
+
+export interface DiffsEditor<LAnnotation> {
+  syncWithRender(
+    highlighter: DiffsHighlighter,
+    fileContainer: HTMLElement,
+    fileContents: FileContents,
+    lineAnnotations: LineAnnotation<LAnnotation>[] | undefined,
+    renderRange: RenderRange | undefined,
+    editMode?: 'simple' | 'advanced'
+  ): void;
+  cleanUp(): void;
+}
+
+export interface DiffsEditorOptions extends BaseCodeOptions {
+  enableGutterUtility?: boolean;
+  enableLineSelection?: boolean;
+  expandUnchanged?: boolean;
+  lineHoverHighlight?: 'disabled' | 'both' | 'number' | 'line';
+}
+
+export interface DiffsBaseComponent {
+  readonly top?: number;
+  readonly options: DiffsEditorOptions;
+  setOptions: (options: Partial<DiffsEditorOptions>) => void;
+  setSelectedLines: (range: { start: number; end: number } | null) => void;
+  rerender(): void;
+  cleanUp(): void;
+}
+
+export interface DiffsEditableComponent<
+  LAnnotation,
+> extends DiffsBaseComponent {
+  attachEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
+  applyLayoutChange: (
+    textDocument: DiffsTextDocument,
+    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+    shouldUpdateBuffer?: boolean
+  ) => void;
+  applyLineChange?: (
+    lines: Map<number, Array<HighlightedToken>>,
+    themeType: 'dark' | 'light'
+  ) => void;
+}
+
+export interface DiffsTextDocument {
+  lineCount: number;
+  getLineText: (lineNumber: number) => string;
+  getText: () => string;
+}
+
+export interface DiffsEditorSelection {
+  start: {
+    line: number;
+    character: number;
+  };
+  end: {
+    line: number;
+    character: number;
+  };
+  direction: 'none' | 'backward' | 'forward';
 }

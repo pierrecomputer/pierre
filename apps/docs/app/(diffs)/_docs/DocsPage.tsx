@@ -27,6 +27,15 @@ import {
   CUSTOM_HUNK_SEPARATORS_SWITCHER,
 } from '../docs/CustomHunkSeparators/constants';
 import {
+  EDITOR_LAZY_FILE_EXAMPLE,
+  EDITOR_QUICK_EDIT_CONTEXT_TYPE,
+  EDITOR_QUICK_EDIT_EXAMPLE,
+  EDITOR_REACT_EXAMPLE,
+  EDITOR_REACT_FILE_DIFF_EXAMPLE,
+  EDITOR_VANILLA_FILE_DIFF_EXAMPLE,
+  EDITOR_VANILLA_FILE_EXAMPLE,
+} from '../docs/Editor/constants';
+import {
   INSTALLATION_EXAMPLES,
   PACKAGE_MANAGERS,
 } from '../docs/Installation/constants';
@@ -163,6 +172,7 @@ export default function DocsPage() {
           <ReactAPISection />
           <VanillaAPISection />
           <CodeViewSection />
+          <EditorSection />
           <VirtualizationSection />
           <CustomHunkSeparatorsSection />
           <UtilitiesSection />
@@ -374,6 +384,39 @@ async function CodeViewSection() {
       codeViewReactExample,
       codeViewScrollTargetsExample,
       codeViewVanillaExample,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function EditorSection() {
+  const [
+    editorVanillaFileExample,
+    editorVanillaFileDiffExample,
+    editorLazyFileExample,
+    editorQuickEditContextType,
+    editorQuickEditExample,
+    editorReactExample,
+    editorReactFileDiffExample,
+  ] = await Promise.all([
+    preloadFile(EDITOR_VANILLA_FILE_EXAMPLE),
+    preloadFile(EDITOR_VANILLA_FILE_DIFF_EXAMPLE),
+    preloadFile(EDITOR_LAZY_FILE_EXAMPLE),
+    preloadFile(EDITOR_QUICK_EDIT_CONTEXT_TYPE),
+    preloadFile(EDITOR_QUICK_EDIT_EXAMPLE),
+    preloadFile(EDITOR_REACT_EXAMPLE),
+    preloadFile(EDITOR_REACT_FILE_DIFF_EXAMPLE),
+  ]);
+  const content = await renderMDX({
+    filePath: '(diffs)/docs/Editor/content.mdx',
+    scope: {
+      editorVanillaFileExample,
+      editorVanillaFileDiffExample,
+      editorLazyFileExample,
+      editorQuickEditContextType,
+      editorQuickEditExample,
+      editorReactExample,
+      editorReactFileDiffExample,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;

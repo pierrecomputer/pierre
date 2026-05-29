@@ -20,8 +20,8 @@ import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import type { Virtualizer } from '../src/components/Virtualizer';
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../src/constants';
 import type { FileContents, FileDiffMetadata } from '../src/types';
+import { linesFromFileContents } from '../src/utils/computeFileOffsets';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { splitFileContents } from '../src/utils/splitFileContents';
 import { assertDefined } from './testUtils';
 
 function installDomConstructors() {
@@ -197,8 +197,8 @@ function createVirtualizer() {
 
 // Mirrors the virtualized placeholder height estimate for the default options
 // used in these tests: the header region (diffHeaderHeight with no top padding
-// because the file header is enabled), one lineHeight per content row, and the
-// bottom padding (spacing).
+// because the file header is enabled), one lineHeight per renderer line, and
+// the bottom padding (spacing).
 function getExpectedPlaceholderHeight(rowCount: number): string {
   const { diffHeaderHeight, lineHeight, spacing } =
     DEFAULT_VIRTUAL_FILE_METRICS;
@@ -329,7 +329,9 @@ describe('collapsed hydration', () => {
         'expected hydration to render a placeholder for the off-screen file'
       );
       expect(placeholderHeight).toBe(
-        getExpectedPlaceholderHeight(splitFileContents(file.contents).length)
+        getExpectedPlaceholderHeight(
+          linesFromFileContents(file.contents).length
+        )
       );
     } finally {
       dom.cleanup();
