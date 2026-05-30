@@ -700,6 +700,53 @@ export class CodeView<LAnnotation = undefined> {
     );
   }
 
+  // Dev-only invariant check: the sticky container only holds the currently
+  // rendered item content, so its measured block-size must equal the
+  // `stickyHeight` we derived from the first/last item sticky specs. Individual
+  // item heights can all be correct while this aggregate is still wrong (for
+  // example when an edge item reports a logical-bottom offset while it only
+  // rendered its header), and that mismatch is what drives the sticky container
+  // to position against the wrong bounds.
+  private validateStickyContainerHeight(): void {
+    if (!this.shouldValidateItemHeights()) {
+      return;
+    }
+
+    const { firstIndex, lastIndex, stickyHeight, stickyTop, stickyBottom } =
+      this.renderState;
+    if (firstIndex === -1 || lastIndex === -1) {
+      return;
+    }
+
+    const actualHeight = this.stickyContainer.getBoundingClientRect().height;
+    // Tolerate sub-pixel rounding from summing many flex children; real
+    // discrepancies are whole rows (or larger) tall.
+    if (Math.abs(actualHeight - stickyHeight) < 1) {
+      return;
+    }
+
+    console.error(
+      'CodeView: sticky container height does not match computed layout',
+      {
+        computedStickyHeight: stickyHeight,
+        actualStickyHeight: actualHeight,
+        delta: actualHeight - stickyHeight,
+        stickyTop,
+        stickyBottom,
+        firstIndex,
+        lastIndex,
+        firstStickySpecs:
+          this.items[firstIndex]?.instance.getAdvancedStickySpecs(),
+        lastStickySpecs:
+          this.items[lastIndex]?.instance.getAdvancedStickySpecs(),
+        scrollTop: this.getScrollTop(),
+        scrollPageOffset: this.scrollPageOffset,
+        windowSpecs: { ...this.windowSpecs },
+        stickyContainer: this.stickyContainer,
+      }
+    );
+  }
+
   private clearScrollInteractionTimer(): void {
     if (this.scrollInteractionFixTimer != null) {
       clearTimeout(this.scrollInteractionFixTimer);
@@ -2671,6 +2718,8 @@ export class CodeView<LAnnotation = undefined> {
     this.renderState.scrollTop = roundToDevicePixel(syncedScrollTop);
 
     this.flushManagers(updatedItems);
+
+    this.validateStickyContainerHeight();
 
     // If we are hitting a fitPerfectly heuristic, we should queue up another
     // render to fill out content. If we are performing a scroll animation we'll
