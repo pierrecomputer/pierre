@@ -598,8 +598,27 @@ export class VirtualizedFileDiff<
       return undefined;
     }
     const { bufferBefore, bufferAfter, totalLines } = renderRange;
+    // Rendered items flow contiguously in the sticky container with no buffer
+    // spacers, so a header-only item (totalLines === 0, none of its rows fall
+    // inside the window) must report where its header actually sits in that
+    // flow, which depends on which side of the window its content is on:
+    //  - content ABOVE the window (item starts above window.top): the header
+    //    sits at the item's bottom so the following item connects, so offset by
+    //    bufferAfter.
+    //  - content BELOW the window (item starts at/after window.top, e.g. a
+    //    trailing header peeking in at the bottom): the header renders at the
+    //    item's top with nothing after it, so no offset. Always adding
+    //    bufferAfter here made getStickyBounds over-measure the sticky
+    //    container for that trailing case.
+    let headerOnlyOffset = 0;
+    if (totalLines === 0) {
+      const activeWindow = windowSpecs ?? this.virtualizer.getWindowSpecs();
+      if (this.top < activeWindow.top) {
+        headerOnlyOffset = bufferAfter;
+      }
+    }
     return {
-      topOffset: this.top + bufferBefore + (totalLines === 0 ? bufferAfter : 0),
+      topOffset: this.top + bufferBefore + headerOnlyOffset,
       height: this.height - (bufferBefore + bufferAfter),
     };
   }
