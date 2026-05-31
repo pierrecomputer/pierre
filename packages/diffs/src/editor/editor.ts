@@ -1633,12 +1633,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     left: number,
     applyEolSpacing = true
   ) {
-    const spacing =
-      !applyEolSpacing ||
-      selection.end.line === ln ||
-      (startChar === endChar && ln !== selection.start.line)
-        ? 0
-        : this.#metrics.ch;
+    let spacing = 0;
+    if (applyEolSpacing && ln < selection.end.line && startChar !== endChar) {
+      spacing = this.#metrics.ch;
+    }
+    if (width === 0 && spacing === 0) {
+      return;
+    }
+
     const css = `width:${width + spacing}px;transform:translateY(${this.#getLineY(ln) + wrapLine * this.#metrics.lineHeight}px) translateX(${left}px);`;
     const cacheKey = 'selection-range-' + css;
     const selectionEls = this.#selectionElements;
