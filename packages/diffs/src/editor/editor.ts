@@ -1478,10 +1478,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const endChar = ln === end.line ? end.character : lineText.length;
 
       if (this.#wrap) {
-        const paddingInline = this.#metrics.ch; // 1ch, align to diff css: padding-inline: 1ch
         const contentWidth = this.#getContentWidth();
         const textWidth =
-          2 * paddingInline + this.#metrics.measureTextWidth(lineText);
+          2 * this.#metrics.ch + this.#metrics.measureTextWidth(lineText);
         if (textWidth > contentWidth) {
           this.#renderWrappedSelection(
             renderCtx,
@@ -1489,8 +1488,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             ln,
             lineText,
             startChar,
-            endChar,
-            paddingInline
+            endChar
           );
           continue;
         }
@@ -1498,24 +1496,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
       let left = 0;
       let width = 0;
-      if (startChar === endChar && startChar === 0) {
+      if (startChar === 0) {
         left = this.#getGutterWidth() + this.#metrics.ch; // gutter width + inline padding (1ch)
-        width = ln === end.line ? 0 : this.#metrics.ch;
       } else {
         left = this.#getCharX(ln, startChar)[0];
+      }
+      if (startChar === endChar) {
+        width = ln === end.line ? 0 : this.#metrics.ch;
+      } else {
         width =
           endChar === startChar ? 0 : this.#getCharX(ln, endChar)[0] - left;
       }
-      this.#renderSelectionRange(
-        renderCtx,
-        selection,
-        ln,
-        0,
-        startChar,
-        endChar,
-        width,
-        left
-      );
+      this.#renderSelectionRange(renderCtx, ln, 0, width, left);
     }
   }
 
@@ -1534,17 +1526,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     line: number,
     lineText: string,
     startChar: number,
-    endChar: number,
-    paddingInline: number
+    endChar: number
   ) {
     const wrapOffsets = this.#wrapLineText(line);
     const segmentCount = wrapOffsets.length - 1;
-    const lastSegmentIndex = segmentCount - 1;
-    const offsetLeft = this.#getGutterWidth() + paddingInline;
+    const offsetLeft = this.#getGutterWidth() + this.#metrics.ch;
 
-    for (let w = 0; w < segmentCount; w++) {
-      const segmentStart = wrapOffsets[w];
-      const segmentEnd = wrapOffsets[w + 1];
+    for (let wrapLine = 0; wrapLine < segmentCount; wrapLine++) {
+      const segmentStart = wrapOffsets[wrapLine];
+      const segmentEnd = wrapOffsets[wrapLine + 1];
       const wrapStartChar = Math.max(startChar, segmentStart);
       const wrapEndChar = Math.min(endChar, segmentEnd);
 
@@ -1553,26 +1543,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         continue;
       }
 
-      // Zero-width slices on segment boundaries can appear on two consecutive
-      // segments (end of one, start of the next). Only render at the natural
-      // anchor positions: the very beginning of the first visual line, or the
-      // very end of the last visual line.
-      if (wrapStartChar === wrapEndChar) {
-        const isAtLineStart = wrapStartChar === 0 && w === 0;
-        const isAtLineEnd =
-          wrapEndChar === lineText.length && w === lastSegmentIndex;
-        if (!isAtLineStart && !isAtLineEnd) {
-          continue;
-        }
-      }
-
       let segmentLeft: number;
       let segmentWidth: number;
-      if (wrapStartChar === 0 && wrapEndChar === 0) {
-        // Empty range pinned to line start (e.g. multi-line selection ending
-        // with end.character === 0). Mirrors the non-wrap path.
+      if (wrapStartChar === 0) {
         segmentLeft = offsetLeft;
-        segmentWidth = line === selection.end.line ? 0 : paddingInline;
       } else {
         const prefixInSegment = lineText.slice(segmentStart, wrapStartChar);
         const prefixAsciiColumns = getExpandedAsciiTextColumns(
@@ -1584,32 +1558,27 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           (prefixAsciiColumns !== -1
             ? prefixAsciiColumns * this.#metrics.ch
             : this.#metrics.measureTextWidth(prefixInSegment));
-
-        if (wrapStartChar === wrapEndChar) {
-          segmentWidth = 0;
-        } else {
-          const selectionInSegment = lineText.slice(wrapStartChar, wrapEndChar);
-          const selectionAsciiWidth = getExpandedAsciiTextColumns(
-            selectionInSegment,
-            this.#metrics.tabSize
-          );
-          segmentWidth =
-            selectionAsciiWidth !== -1
-              ? selectionAsciiWidth * this.#metrics.ch
-              : this.#metrics.measureTextWidth(selectionInSegment);
-        }
+      }
+      if (wrapStartChar === wrapEndChar) {
+        segmentWidth = this.#metrics.ch;
+      } else {
+        const selectionInSegment = lineText.slice(wrapStartChar, wrapEndChar);
+        const selectionAsciiWidth = getExpandedAsciiTextColumns(
+          selectionInSegment,
+          this.#metrics.tabSize
+        );
+        segmentWidth =
+          selectionAsciiWidth !== -1
+            ? selectionAsciiWidth * this.#metrics.ch
+            : this.#metrics.measureTextWidth(selectionInSegment);
       }
 
       this.#renderSelectionRange(
         renderCtx,
-        selection,
         line,
-        w,
-        wrapStartChar,
-        wrapEndChar,
+        wrapLine,
         segmentWidth,
-        segmentLeft,
-        w === lastSegmentIndex
+        segmentLeft
       );
     }
   }
@@ -1624,24 +1593,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
     },
-    selection: EditorSelection,
     ln: number,
     wrapLine: number,
-    startChar: number,
-    endChar: number,
     width: number,
     left: number,
-    applyEolSpacing = true
+    _rounded = true
   ) {
-    let spacing = 0;
-    if (applyEolSpacing && ln < selection.end.line && startChar !== endChar) {
-      spacing = this.#metrics.ch;
-    }
-    if (width === 0 && spacing === 0) {
+    if (width === 0) {
       return;
     }
 
-    const css = `width:${width + spacing}px;transform:translateY(${this.#getLineY(ln) + wrapLine * this.#metrics.lineHeight}px) translateX(${left}px);`;
+    const css = `width:${width}px;transform:translateY(${this.#getLineY(ln) + wrapLine * this.#metrics.lineHeight}px) translateX(${left}px);`;
     const cacheKey = 'selection-range-' + css;
     const selectionEls = this.#selectionElements;
 
@@ -1663,6 +1625,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         renderCtx.fragment
       );
     }
+
+    // todo: when the `_rounded` parameter is true,
+    // based on the collapsed state, add the rounded-top-left/right or rounded-bottom-left/right dataset to the element
 
     renderCtx.elements.set(cacheKey, rangeEl);
   }
