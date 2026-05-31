@@ -76,6 +76,23 @@ export const editorCSS: string = /* CSS */ `
     z-index: -10;
     background-color: var(--diffs-editor-selection-bg);
   }
+  [data-selection-corner] {
+    width: 100%;
+    height: 100%;
+    background-color: var(--diffs-bg);
+  }
+  [data-rtl]  {
+    border-top-left-radius: 3px;
+  }
+  [data-rtr] {
+    border-top-right-radius: 3px;
+  }
+  [data-rbl] {
+    border-bottom-left-radius: 3px;
+  }
+  [data-rbr] {
+    border-bottom-right-radius: 3px;
+  }
   [data-editor-overlay] {
     display: contents;
   }

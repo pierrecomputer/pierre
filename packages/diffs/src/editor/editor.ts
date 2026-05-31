@@ -76,6 +76,7 @@ function clampDomOffset(node: Node, offset: number): number {
 }
 
 export interface EditorOptions<LAnnotation> {
+  roundedSelection?: boolean;
   enabledQuickEdit?: boolean;
   renderQuickEdit?: (context: QuickEditContext<LAnnotation>) => HTMLElement;
   onChange?: (
@@ -648,12 +649,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               ) {
                 return;
               }
-              const lineIndex = Number(lineNumber) - 1;
+              const line = Number(lineNumber) - 1;
               const selection: EditorSelection = {
-                start: { line: lineIndex, character: 0 },
+                start: { line, character: 0 },
                 end: {
-                  line: lineIndex,
-                  character: textDocument.getLineText(lineIndex).length,
+                  line,
+                  character: textDocument.getLineText(line).length,
                 },
                 direction: DirectionForward,
               };
@@ -1468,14 +1469,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const { start, end } = selection;
-    for (let ln = start.line; ln <= end.line; ln++) {
-      if (!this.#isLineVisible(ln)) {
+    for (let line = start.line; line <= end.line; line++) {
+      if (!this.#isLineVisible(line)) {
         continue;
       }
 
-      const lineText = this.#textDocument.getLineText(ln);
-      const startChar = ln === start.line ? start.character : 0;
-      const endChar = ln === end.line ? end.character : lineText.length;
+      const isLastLine = line === end.line;
+      const lineText = this.#textDocument.getLineText(line);
+      const startChar = line === start.line ? start.character : 0;
+      const endChar = isLastLine ? end.character : lineText.length;
 
       if (this.#wrap) {
         const contentWidth = this.#getContentWidth();
@@ -1484,11 +1486,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (textWidth > contentWidth) {
           this.#renderWrappedSelection(
             renderCtx,
-            selection,
-            ln,
+            line,
             lineText,
             startChar,
-            endChar
+            endChar,
+            isLastLine
           );
           continue;
         }
@@ -1499,15 +1501,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (startChar === 0) {
         left = this.#getGutterWidth() + this.#metrics.ch; // gutter width + inline padding (1ch)
       } else {
-        left = this.#getCharX(ln, startChar)[0];
+        left = this.#getCharX(line, startChar)[0];
       }
       if (startChar === endChar) {
-        width = ln === end.line ? 0 : this.#metrics.ch;
+        width = isLastLine ? 0 : this.#metrics.ch;
       } else {
         width =
-          endChar === startChar ? 0 : this.#getCharX(ln, endChar)[0] - left;
+          this.#getCharX(line, endChar)[0] -
+          left +
+          (isLastLine ? 0 : this.#metrics.ch);
       }
-      this.#renderSelectionRange(renderCtx, ln, 0, width, left);
+      this.#renderSelectionLine(renderCtx, line, 0, left, width);
     }
   }
 
@@ -1522,11 +1526,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
     },
-    selection: EditorSelection,
     line: number,
     lineText: string,
     startChar: number,
-    endChar: number
+    endChar: number,
+    isLastLine: boolean
   ) {
     const wrapOffsets = this.#wrapLineText(line);
     const segmentCount = wrapOffsets.length - 1;
@@ -1571,14 +1575,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           selectionAsciiWidth !== -1
             ? selectionAsciiWidth * this.#metrics.ch
             : this.#metrics.measureTextWidth(selectionInSegment);
+        if (!isLastLine) {
+          segmentWidth += this.#metrics.ch;
+        }
       }
 
-      this.#renderSelectionRange(
+      this.#renderSelectionLine(
         renderCtx,
         line,
         wrapLine,
-        segmentWidth,
-        segmentLeft
+        segmentLeft,
+        segmentWidth
       );
     }
   }
@@ -1588,30 +1595,142 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // appended at the end. For wrapped logical lines this must be false on every
   // visual segment except the last one, since an intra-line wrap is not a real
   // newline and shouldn't visually extend past the wrapped content.
-  #renderSelectionRange(
+  #renderSelectionLine(
     renderCtx: {
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
+      previousSelectionRange?: {
+        element: HTMLElement;
+        line: number;
+        wrapLine: number;
+        left: number;
+        width: number;
+      };
     },
-    ln: number,
+    line: number,
     wrapLine: number,
-    width: number,
     left: number,
-    _rounded = true
+    width: number
   ) {
     if (width === 0) {
       return;
     }
 
-    const css = `width:${width}px;transform:translateY(${this.#getLineY(ln) + wrapLine * this.#metrics.lineHeight}px) translateX(${left}px);`;
-    const cacheKey = 'selection-range-' + css;
+    const { ch, lineHeight } = this.#metrics;
+    const y = this.#getLineY(line) + wrapLine * lineHeight;
+    const css = `width:${width}px;transform:translateX(${left}px) translateY(${y}px);`;
+    const cacheKey = `selection-line-${left}-${y}-${width}`;
     const selectionEls = this.#selectionElements;
 
-    if (renderCtx.elements.has(cacheKey)) {
+    const rounded = this.#options.roundedSelection ?? true;
+    const addRoundedCorner = (
+      line: number,
+      left: number,
+      radius: 'rtl' | 'rbl' | 'rbr'
+    ) => {
+      const top = this.#getLineY(line) + wrapLine * lineHeight;
+      const css = `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);`;
+      const dataset = {
+        selectionCorner: '',
+        [radius]: '',
+      };
+      const cacheKeyPrefix = `selection-line-${left}-${top}-1ch`;
+      let cacheKey = cacheKeyPrefix + '-' + radius;
+      if (radius === 'rbl') {
+        const prevCornerKey = cacheKeyPrefix + '-rtl';
+        const prevCorner = renderCtx.elements.get(prevCornerKey);
+        if (prevCorner !== undefined) {
+          prevCorner.remove();
+          renderCtx.elements.delete(prevCornerKey);
+          cacheKey += '-rtl';
+          dataset.rtl = '';
+        }
+      }
+      let cornerEl = renderCtx.elements.get(cacheKey);
+      if (cornerEl !== undefined) {
+        return;
+      }
+      if (selectionEls?.has(cacheKey) === true) {
+        cornerEl = selectionEls.get(cacheKey)!;
+        selectionEls.delete(cacheKey);
+      } else {
+        cornerEl = h(
+          'div',
+          {
+            dataset: 'selectionRange',
+            style: { cssText: css },
+            children: [
+              h('div', {
+                dataset: dataset,
+              }),
+            ],
+          },
+          renderCtx.fragment
+        );
+      }
+      renderCtx.elements.set(cacheKey, cornerEl);
+    };
+    const addRadiusStyle = (element: HTMLElement) => {
+      const end = left + width;
+      const dataset = element.dataset;
+      const previousSelectionRange = renderCtx.previousSelectionRange;
+      if (
+        previousSelectionRange === undefined ||
+        previousSelectionRange.line !== line ||
+        previousSelectionRange.wrapLine !== wrapLine
+      ) {
+        renderCtx.previousSelectionRange = {
+          element,
+          line,
+          wrapLine,
+          left,
+          width,
+        };
+      }
+      if (
+        previousSelectionRange === undefined ||
+        end <= previousSelectionRange.left
+      ) {
+        ['rtl', 'rtr', 'rbl', 'rbr'].forEach((key) => {
+          dataset[key] = '';
+        });
+      } else {
+        const prevLine = previousSelectionRange.line;
+        const prevLeft = previousSelectionRange.left;
+        const prevDataset = previousSelectionRange.element.dataset;
+        const prevEnd = prevLeft + previousSelectionRange.width;
+        if (prevLeft > left) {
+          addRoundedCorner(prevLine, prevLeft - ch, 'rbr');
+        }
+        delete prevDataset.rbl;
+        delete dataset.rtl;
+        delete dataset.rtr;
+        if (end >= prevEnd) {
+          delete prevDataset.rbr;
+        }
+        if (end > prevEnd) {
+          addRoundedCorner(prevLine, prevEnd, 'rbl');
+          dataset.rtr = '';
+        }
+        if (end < prevEnd) {
+          addRoundedCorner(line, end, 'rtl');
+        }
+        if (left < prevLeft) {
+          dataset.rtl = '';
+        }
+        dataset.rbl = '';
+        dataset.rbr = '';
+      }
+    };
+
+    let rangeEl = renderCtx.elements.get(cacheKey);
+    if (rangeEl !== undefined) {
+      if (rounded) {
+        addRadiusStyle(rangeEl);
+      }
       return;
     }
 
-    let rangeEl: HTMLElement | undefined;
     if (selectionEls?.has(cacheKey) === true) {
       rangeEl = selectionEls.get(cacheKey)!;
       selectionEls.delete(cacheKey);
@@ -1626,9 +1745,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
 
-    // todo: when the `_rounded` parameter is true,
-    // based on the collapsed state, add the rounded-top-left/right or rounded-bottom-left/right dataset to the element
-
+    if (rounded) {
+      addRadiusStyle(rangeEl);
+    }
     renderCtx.elements.set(cacheKey, rangeEl);
   }
 
@@ -1645,16 +1764,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
     const [left, wrapLine] = this.#getCharX(line, character);
-    const cacheKey = 'caret-' + line + '(' + wrapLine + ')-' + character;
+    const cacheKey = 'caret-' + line + '/' + wrapLine + ':' + character;
     if (renderCtx.elements.has(cacheKey)) {
       return;
     }
+    const x = left - 1;
+    const y = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
     const caretEl = h(
       'div',
       {
         dataset: 'caret',
         style: {
-          transform: `translateY(${this.#getLineY(line) + wrapLine * this.#metrics.lineHeight}px) translateX(${left - 1}px)`,
+          transform: `translateX(${x}px) translateY(${y}px)`,
         },
       },
       renderCtx.fragment
