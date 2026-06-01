@@ -400,11 +400,11 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     expect(inspect(instance).cache.checkpoints.length).toBeGreaterThan(1);
   });
 
-  test('counts trailing fromEnd expansion in render range line totals', () => {
+  test('ignores trailing fromEnd expansion in render range line totals', () => {
     const fileDiff = createTwoHunkDiff();
     const trailingHunkIndex = fileDiff.hunks.length;
-    const expandedHunks = new Map<number, HunkExpansionRegion>([
-      [trailingHunkIndex, { fromStart: 2, fromEnd: 3 }],
+    const fromStartOnly = new Map<number, HunkExpansionRegion>([
+      [trailingHunkIndex, { fromStart: 2, fromEnd: 0 }],
     ]);
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
@@ -412,10 +412,10 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     instance.expandHunk(trailingHunkIndex, 'down', 3);
 
     expect(inspect(instance).getExpandedLineCount(fileDiff, 'split')).toBe(
-      countIteratedRows(fileDiff, 'split', expandedHunks)
+      countIteratedRows(fileDiff, 'split', fromStartOnly)
     );
     expect(inspect(instance).getExpandedLineCount(fileDiff, 'unified')).toBe(
-      countIteratedRows(fileDiff, 'unified', expandedHunks)
+      countIteratedRows(fileDiff, 'unified', fromStartOnly)
     );
   });
 

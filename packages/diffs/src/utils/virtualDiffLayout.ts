@@ -178,13 +178,33 @@ export function getTrailingExpandedRegion({
     return undefined;
   }
 
-  return getExpandedRegion({
-    isPartial: fileDiff.isPartial,
+  if (
+    expandedHunks === true ||
+    trailingRangeSize <= collapsedContextThreshold
+  ) {
+    return {
+      fromStart: trailingRangeSize,
+      fromEnd: 0,
+      rangeSize: trailingRangeSize,
+      collapsedLines: 0,
+      renderAll: true,
+    };
+  }
+
+  // The final trailing separator only exposes upward partial expansion. Treat it
+  // as a bottom-only pseudo-hunk and ignore unsupported downward expansion.
+  const region = expandedHunks?.get(fileDiff.hunks.length);
+  const fromStart = Math.min(
+    Math.max(region?.fromStart ?? 0, 0),
+    trailingRangeSize
+  );
+  return {
+    fromStart,
+    fromEnd: 0,
     rangeSize: trailingRangeSize,
-    expandedHunks,
-    hunkIndex: fileDiff.hunks.length,
-    collapsedContextThreshold,
-  });
+    collapsedLines: trailingRangeSize - fromStart,
+    renderAll: fromStart >= trailingRangeSize,
+  };
 }
 
 export function getHunkSeparatorHeight({

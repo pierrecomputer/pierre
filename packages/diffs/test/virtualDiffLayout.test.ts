@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { HunkSeparators, VirtualFileMetrics } from '../src/types';
+import type {
+  FileDiffMetadata,
+  Hunk,
+  HunkSeparators,
+  VirtualFileMetrics,
+} from '../src/types';
 import {
   getExpandedRegion,
   getLeadingHunkSeparatorLayout,
+  getTrailingExpandedRegion,
   getTrailingHunkSeparatorLayout,
 } from '../src/utils/virtualDiffLayout';
 
@@ -107,6 +113,72 @@ describe('virtual diff layout helpers', () => {
     });
   });
 
+  describe('getTrailingExpandedRegion', () => {
+    test('ignores unsupported final trailing fromEnd expansion', () => {
+      const fileDiff = createTrailingDiff(5);
+
+      expect(
+        getTrailingExpandedRegion({
+          fileDiff,
+          hunkIndex: 0,
+          expandedHunks: new Map([[1, { fromStart: 2, fromEnd: 3 }]]),
+          collapsedContextThreshold: 0,
+          errorPrefix: 'virtualDiffLayout.test',
+        })
+      ).toEqual({
+        fromStart: 2,
+        fromEnd: 0,
+        rangeSize: 5,
+        collapsedLines: 3,
+        renderAll: false,
+      });
+    });
+
+    test('expands all final trailing context from the start', () => {
+      const fileDiff = createTrailingDiff(5);
+
+      expect(
+        getTrailingExpandedRegion({
+          fileDiff,
+          hunkIndex: 0,
+          expandedHunks: true,
+          collapsedContextThreshold: 0,
+          errorPrefix: 'virtualDiffLayout.test',
+        })
+      ).toEqual({
+        fromStart: 5,
+        fromEnd: 0,
+        rangeSize: 5,
+        collapsedLines: 0,
+        renderAll: true,
+      });
+
+      expect(
+        getTrailingExpandedRegion({
+          fileDiff,
+          hunkIndex: 0,
+          expandedHunks: new Map([
+            [
+              1,
+              {
+                fromStart: Number.POSITIVE_INFINITY,
+                fromEnd: Number.POSITIVE_INFINITY,
+              },
+            ],
+          ]),
+          collapsedContextThreshold: 0,
+          errorPrefix: 'virtualDiffLayout.test',
+        })
+      ).toEqual({
+        fromStart: 5,
+        fromEnd: 0,
+        rangeSize: 5,
+        collapsedLines: 0,
+        renderAll: true,
+      });
+    });
+  });
+
   describe('separator layouts', () => {
     test('preserves current leading separator rules', () => {
       const cases: [
@@ -166,3 +238,47 @@ describe('virtual diff layout helpers', () => {
     });
   });
 });
+
+function createTrailingDiff(trailingLineCount: number): FileDiffMetadata {
+  const hunk: Hunk = {
+    collapsedBefore: 0,
+    additionStart: 1,
+    additionCount: 2,
+    additionLines: 0,
+    additionLineIndex: 0,
+    deletionStart: 1,
+    deletionCount: 2,
+    deletionLines: 0,
+    deletionLineIndex: 0,
+    hunkContent: [
+      {
+        type: 'context',
+        lines: 2,
+        deletionLineIndex: 0,
+        additionLineIndex: 0,
+      },
+    ],
+    hunkSpecs: '@@ -1,2 +1,2 @@',
+    splitLineStart: 0,
+    splitLineCount: 2,
+    unifiedLineStart: 0,
+    unifiedLineCount: 2,
+    noEOFCRDeletions: false,
+    noEOFCRAdditions: false,
+  };
+
+  return {
+    name: 'trailing.ts',
+    type: 'change',
+    hunks: [hunk],
+    splitLineCount: 2 + trailingLineCount,
+    unifiedLineCount: 2 + trailingLineCount,
+    isPartial: false,
+    deletionLines: createLines(2 + trailingLineCount),
+    additionLines: createLines(2 + trailingLineCount),
+  };
+}
+
+function createLines(count: number): string[] {
+  return Array.from({ length: count }, (_, index) => `line ${index}\n`);
+}

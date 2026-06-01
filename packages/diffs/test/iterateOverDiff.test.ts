@@ -407,15 +407,9 @@ describe('iterateOverDiff', () => {
       },
       {
         type: 'context-expanded',
-        collapsedAfter: 0,
+        collapsedAfter: 3,
         deletionLineIndex: 3,
         additionLineIndex: 3,
-      },
-      {
-        type: 'context-expanded',
-        collapsedAfter: 2,
-        deletionLineIndex: 4,
-        additionLineIndex: 4,
       },
     ]);
   });
