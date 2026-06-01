@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { parseDiffFromFile } from '../src';
+import type { FileDiffMetadata, Hunk } from '../src/types';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { fileNew, fileOld } from './mocks';
 
@@ -167,4 +168,147 @@ describe('iterateOverDiff', () => {
       expect(results[i]).toBe(results[i - 1] + 1);
     }
   });
+
+  test('windowed expansion does not attach skipped collapsed separators to visible rows', () => {
+    const cases: Array<{
+      name: string;
+      diff: FileDiffMetadata;
+      expandedHunks: Map<number, { fromStart: number; fromEnd: number }>;
+      startingLine: number;
+      expectedType: string;
+    }> = [
+      {
+        name: 'expanded fromEnd context',
+        diff: createWindowedSeparatorDiff([
+          {
+            type: 'context',
+            lines: 1,
+            deletionLineIndex: COLLAPSED_BEFORE,
+            additionLineIndex: COLLAPSED_BEFORE,
+          },
+        ]),
+        expandedHunks: new Map([[0, { fromStart: 2, fromEnd: 3 }]]),
+        startingLine: 3,
+        expectedType: 'context-expanded',
+      },
+      {
+        name: 'hunk context content',
+        diff: createWindowedSeparatorDiff([
+          {
+            type: 'context',
+            lines: 3,
+            deletionLineIndex: COLLAPSED_BEFORE,
+            additionLineIndex: COLLAPSED_BEFORE,
+          },
+        ]),
+        expandedHunks: new Map([[0, { fromStart: 2, fromEnd: 0 }]]),
+        startingLine: 3,
+        expectedType: 'context',
+      },
+      {
+        name: 'hunk change content',
+        diff: createWindowedSeparatorDiff([
+          {
+            type: 'change',
+            deletions: 3,
+            deletionLineIndex: COLLAPSED_BEFORE,
+            additions: 3,
+            additionLineIndex: COLLAPSED_BEFORE,
+          },
+        ]),
+        expandedHunks: new Map([[0, { fromStart: 2, fromEnd: 0 }]]),
+        startingLine: 3,
+        expectedType: 'change',
+      },
+    ];
+
+    for (const testCase of cases) {
+      const rows: Array<{ type: string; collapsedBefore: number }> = [];
+
+      iterateOverDiff({
+        diff: testCase.diff,
+        diffStyle: 'unified',
+        expandedHunks: testCase.expandedHunks,
+        startingLine: testCase.startingLine,
+        totalLines: 1,
+        callback: (props) => {
+          rows.push({
+            type: props.type,
+            collapsedBefore: props.collapsedBefore,
+          });
+        },
+      });
+
+      expect({ name: testCase.name, rows }).toEqual({
+        name: testCase.name,
+        rows: [{ type: testCase.expectedType, collapsedBefore: 0 }],
+      });
+    }
+  });
 });
+
+const COLLAPSED_BEFORE = 10;
+
+// Build a minimal full-file diff where a collapsed leading gap can be partially
+// expanded, letting windowed iteration start after the separator boundary.
+function createWindowedSeparatorDiff(
+  hunkContent: Hunk['hunkContent']
+): FileDiffMetadata {
+  let additionCount = 0;
+  let deletionCount = 0;
+  let additionLines = 0;
+  let deletionLines = 0;
+  let splitLineCount = 0;
+  let unifiedLineCount = 0;
+
+  for (const content of hunkContent) {
+    if (content.type === 'context') {
+      additionCount += content.lines;
+      deletionCount += content.lines;
+      splitLineCount += content.lines;
+      unifiedLineCount += content.lines;
+    } else {
+      additionCount += content.additions;
+      deletionCount += content.deletions;
+      additionLines += content.additions;
+      deletionLines += content.deletions;
+      splitLineCount += Math.max(content.additions, content.deletions);
+      unifiedLineCount += content.additions + content.deletions;
+    }
+  }
+
+  const hunk: Hunk = {
+    collapsedBefore: COLLAPSED_BEFORE,
+    additionStart: COLLAPSED_BEFORE + 1,
+    additionCount,
+    additionLines,
+    additionLineIndex: COLLAPSED_BEFORE,
+    deletionStart: COLLAPSED_BEFORE + 1,
+    deletionCount,
+    deletionLines,
+    deletionLineIndex: COLLAPSED_BEFORE,
+    hunkContent,
+    hunkSpecs: `@@ -${COLLAPSED_BEFORE + 1},${deletionCount} +${COLLAPSED_BEFORE + 1},${additionCount} @@`,
+    splitLineStart: COLLAPSED_BEFORE,
+    splitLineCount,
+    unifiedLineStart: COLLAPSED_BEFORE,
+    unifiedLineCount,
+    noEOFCRDeletions: false,
+    noEOFCRAdditions: false,
+  };
+
+  return {
+    name: 'windowed-separator.ts',
+    type: 'change',
+    hunks: [hunk],
+    splitLineCount: COLLAPSED_BEFORE + splitLineCount,
+    unifiedLineCount: COLLAPSED_BEFORE + unifiedLineCount,
+    isPartial: false,
+    deletionLines: createLines(COLLAPSED_BEFORE + deletionCount),
+    additionLines: createLines(COLLAPSED_BEFORE + additionCount),
+  };
+}
+
+function createLines(count: number): string[] {
+  return Array.from({ length: count }, (_, index) => `line ${index}\n`);
+}
