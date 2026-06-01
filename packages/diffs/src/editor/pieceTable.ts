@@ -237,14 +237,11 @@ export class PieceTable {
     return foundOffset ?? wrappedOffset;
   }
 
-  search(
-    kind: 'findNext' | 'findPrevious' | 'findAll' | 'replace' | 'replaceAll',
-    searchParams: SearchParams,
-    range?: Range
-  ): [start: number, end: number][] {
+  search(searchParams: SearchParams): [start: number, end: number][] {
     if (searchParams.text.length === 0 || this.#length === 0) {
       return [];
     }
+
     // Search currently operates line-by-line, so newline-spanning patterns are unsupported.
     if (
       searchParams.text.includes('\n') ||
@@ -267,50 +264,11 @@ export class PieceTable {
       return [];
     }
 
-    const matches = this.#collectSearchMatchesLineByLine(
+    return this.#collectSearchMatchesLineByLine(
       pattern,
       searchParams.wholeWord,
       MAX_FIND_MATCHES
     );
-
-    if (kind === 'findAll' || kind === 'replaceAll') {
-      return matches;
-    }
-
-    const caretOffset =
-      range === undefined
-        ? 0
-        : kind === 'findPrevious'
-          ? this.offsetAt(range?.start)
-          : this.offsetAt(range?.end);
-
-    if (kind === 'findPrevious') {
-      const refOffset = getSearchFindPreviousReferenceOffset(range, (p) =>
-        this.offsetAt(p)
-      );
-      let best: [number, number] | undefined;
-      for (const m of matches) {
-        if (m[1] <= refOffset) {
-          best = m;
-        } else {
-          break;
-        }
-      }
-      if (best !== undefined) {
-        return [best];
-      }
-      const last = matches[matches.length - 1];
-      return last !== undefined ? [last] : [];
-    }
-
-    // findNext, replace — forward from caret with wrap
-    for (const m of matches) {
-      if (m[0] >= caretOffset) {
-        return [m];
-      }
-    }
-    const first = matches[0];
-    return first !== undefined ? [first] : [];
   }
 
   #collectSearchMatchesLineByLine(
@@ -991,18 +949,4 @@ function advancePastEmptyMatch(text: string, index: number): number {
     }
   }
   return index + 1;
-}
-
-// Returns the leftmost UTF-16 offset of the selection; used for find-previous
-// so we skip the current match.
-function getSearchFindPreviousReferenceOffset(
-  selection: Range | undefined,
-  offsetAt: (p: Position) => number
-): number {
-  if (selection === undefined) {
-    return 0;
-  }
-  const a = offsetAt(selection.start);
-  const b = offsetAt(selection.end);
-  return Math.min(a, b);
 }
