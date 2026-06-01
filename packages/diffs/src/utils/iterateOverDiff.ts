@@ -209,11 +209,6 @@ export function iterateOverDiff({
           state.incrementCounts(0, 1);
         } else {
           state.incrementCounts(1, 1);
-          // FIXME MAYBE
-          // state.incrementCounts(
-          //   state.isInUnifiedWindow(0) ? 1 : 0,
-          //   state.isInSplitWindow(0) ? 1 : 0
-          // );
         }
       }
       return callback(props) ?? false;
@@ -300,13 +295,6 @@ export function iterateOverDiff({
             hunk: hunk,
             collapsedBefore: 0,
             collapsedAfter: 0,
-            // NOTE(amadeus): Pretty sure this is would never return a value,
-            // so lets not call it, but if i notice a bug, i may need to
-            // bring this back.
-            // collapsedAfter: getTrailingCollapsedAfter(
-            //   unifiedRowIndex,
-            //   splitRowIndex
-            // ),
             type: 'context-expanded',
             deletionLine: {
               lineNumber: deletionLineNumber + index,
@@ -346,13 +334,6 @@ export function iterateOverDiff({
               hunk,
               collapsedBefore: consumePendingCollapsed(),
               collapsedAfter: 0,
-              // NOTE(amadeus): Pretty sure this is would never return a value,
-              // so lets not call it, but if i notice a bug, i may need to
-              // bring this back.
-              // collapsedAfter: getTrailingCollapsedAfter(
-              //   unifiedRowIndex,
-              //   splitRowIndex
-              // ),
               type: 'context-expanded',
               deletionLine: {
                 lineNumber: deletionLineNumber + index,
@@ -478,8 +459,8 @@ export function iterateOverDiff({
             // the first visible deletion/addition row.
             consumePendingCollapsed();
           }
-
-          // No need for any skipping because the render ranges skip for us
+          // Change ranges are already clipped to the active window. Counts move
+          // once for the whole change block after the selected rows emit.
           for (const [rangeStart, rangeEnd] of iterationRanges) {
             for (let index = rangeStart; index < rangeEnd; index++) {
               const unifiedRowIndex = unifiedLineIndex + index;
@@ -550,8 +531,6 @@ export function iterateOverDiff({
               collapsedBefore: 0,
               collapsedAfter: isLastLine ? collapsedLines : 0,
               type: 'context-expanded',
-              // NOTE(amadeus): Maybe create an object cache for this to reduce
-              // garbage collection?
               deletionLine: {
                 lineNumber: deletionLineNumber + index,
                 lineIndex: deletionLineIndex + index,
@@ -791,9 +770,9 @@ function walkContextLines(
   return false;
 }
 
-// The intention of this function is to grab the appropriate windowed ranges of
-// the change content.  If diffStyle is both, we will iterate AS split, however
-// we will encompass all needed lines to allow us to render split or unified
+// Clip a change block to the rows that can be visible in the active coordinate
+// space. `diffStyle: both` iterates in split row space, but includes the unified
+// ranges too so either view can render the visible change rows it needs.
 function getChangeIterationRanges(
   state: IterationState,
   content: ChangeContent,
@@ -913,9 +892,8 @@ interface GetChangeLineDataProps {
   splitCount: number;
 }
 
-// NOTE(amadeus): It's quite tedious to grab the appropriate line info and
-// related props for change content regions, so I made it a specialized
-// function to help make the main hunkIterator easy to reason about
+// Build the callback payload for one change row, mapping the selected row index
+// into split/unified coordinates and addition/deletion line metadata.
 function getChangeLineData({
   hunkIndex,
   hunk,
@@ -987,9 +965,7 @@ function getChangeLineData({
     deletionLineIndexValue != null &&
     deletionLineNumberValue != null &&
     unifiedDeletionLineIndex != null
-      ? // NOTE(amadeus): Maybe create an object cache for this to reduce
-        // garbage collection?
-        {
+      ? {
           lineNumber: deletionLineNumberValue,
           lineIndex: deletionLineIndexValue,
           noEOFCR: noEOFCRDeletion,
@@ -1001,9 +977,7 @@ function getChangeLineData({
     additionLineIndexValue != null &&
     additionLineNumberValue != null &&
     unifiedAdditionLineIndex != null
-      ? // NOTE(amadeus): Maybe create an object cache for this to reduce
-        // garbage collection?
-        {
+      ? {
           unifiedLineIndex: unifiedAdditionLineIndex,
           splitLineIndex: resolvedSplitLineIndex,
           lineIndex: additionLineIndexValue,
