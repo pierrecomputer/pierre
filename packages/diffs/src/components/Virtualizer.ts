@@ -325,6 +325,7 @@ export class Virtualizer {
       // NOTE(amadeus): Is this a safe assumption/optimization?
       return;
     }
+    let instancesHaveChanged = this.instancesChanged.size > 0;
 
     // If we got an emitted update from a bunch of instances, we should skip
     // the window check first and attempt to render with existing logic first
@@ -337,10 +338,10 @@ export class Virtualizer {
         overscrollSize: this.config.overscrollSize,
       });
       if (
+        !wrapperDirty &&
         areVirtualWindowSpecsEqual(this.windowSpecs, windowSpecs) &&
         this.renderedObservers === this.observers.size &&
-        !this.visibleInstancesDirty &&
-        this.instancesChanged.size === 0
+        !this.visibleInstancesDirty
       ) {
         return;
       }
@@ -367,17 +368,19 @@ export class Virtualizer {
     }
 
     this.scrollFix(anchor);
-    // Scroll fix may have marked the dom as dirty, but if there instance
-    // changes, we should definitely mark as dirty
-    if (this.instancesChanged.size > 0) {
-      this.markDOMDirty();
-    }
 
     for (const instance of updatedInstances) {
       instance.reconcileHeights();
     }
+    instancesHaveChanged ||= this.instancesChanged.size > 0;
 
-    if (this.instancesChanged.size > 0 || wrapperDirty) {
+    // Reconciliation reads virtualized offsets and can consume dirty geometry
+    // flags, so mark after it when an instance update needs a corrected pass.
+    if (instancesHaveChanged) {
+      this.markDOMDirty();
+    }
+
+    if (instancesHaveChanged || wrapperDirty) {
       queueRender(this.computeRenderRangeAndEmit);
     }
     updatedInstances.clear();
