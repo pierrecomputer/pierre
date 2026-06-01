@@ -644,8 +644,11 @@ export class VirtualizedFileDiff<
       direction,
       expansionLineCountOverride
     );
+    this.forceRenderOverride = true;
     this.resetLayoutCache({ includeEstimatedHeights: true });
-    this.computeApproximateSize();
+    if (this.isSimpleMode()) {
+      this.computeApproximateSize();
+    }
     this.virtualizer.instanceChanged(this, true);
   };
 
