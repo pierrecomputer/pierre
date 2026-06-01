@@ -131,6 +131,11 @@ export class SearchPanelWidget {
       matches.current = nextMatch;
     };
 
+    const close = () => {
+      this.cleanup();
+      onClose();
+    };
+
     const settingsSwitch = h('div', {
       dataset: { icon: 'settings' },
       title: 'Settings',
@@ -224,8 +229,7 @@ export class SearchPanelWidget {
       onkeydown: (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
           e.preventDefault();
-          this.cleanup();
-          onClose();
+          close();
         } else if (e.key === 'Enter') {
           e.preventDefault();
           findNextMatch(false, true);
