@@ -374,6 +374,10 @@ export function iterateOverDiff({
       );
       if (fromEndStartIndex > 0) {
         state.incrementCounts(fromEndStartIndex, fromEndStartIndex);
+        // The collapsed separator belongs before this fromEnd slice. If the
+        // render window starts inside the slice, consume it with the skipped
+        // rows so it is not attached to the first emitted row.
+        getPendingCollapsed();
       }
       index = fromEndStartIndex;
 
@@ -454,6 +458,10 @@ export function iterateOverDiff({
           );
           if (startIndex > 0) {
             state.incrementCounts(startIndex, startIndex);
+            // When windowing starts inside context content, the leading
+            // separator was above the visible range and should not be emitted
+            // on the first rendered context line.
+            getPendingCollapsed();
           }
           let index = startIndex;
           while (index < content.lines) {
@@ -524,6 +532,13 @@ export function iterateOverDiff({
             content,
             diffStyle
           );
+          const firstRangeStart = iterationRanges[0]?.[0] ?? 0;
+          if (firstRangeStart > 0) {
+            // Change rows can be windowed from the middle of the block too. In
+            // that case the leading separator belongs to skipped rows, not to
+            // the first visible deletion/addition row.
+            getPendingCollapsed();
+          }
 
           // No need for any skipping because the render ranges skip for us
           for (const [rangeStart, rangeEnd] of iterationRanges) {
