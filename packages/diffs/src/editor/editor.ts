@@ -76,9 +76,13 @@ function clampDomOffset(node: Node, offset: number): number {
 }
 
 export interface EditorOptions<LAnnotation> {
+  /** Render rounded corners for selection ranges, default is true. */
   roundedSelection?: boolean;
+  /** Show the clickable quick edit icon, default is disabled. */
   enabledQuickEdit?: boolean;
+  /** Render the quick edit widget element. */
   renderQuickEdit?: (context: QuickEditContext<LAnnotation>) => HTMLElement;
+  /** Callback when the editor document changes. */
   onChange?: (
     file: FileContents,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
