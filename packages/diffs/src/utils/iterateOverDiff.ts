@@ -50,9 +50,11 @@ export type DiffLineCallbackProps =
 
 type DiffStyle = 'unified' | 'split' | 'both';
 
-type EqualLineIterationRange = [startIndex: number, endIndex: number];
+type LineIterationBounds = [startIndex: number, endIndex: number];
 
 type ChangeContentSide = 'deletions' | 'additions';
+
+type ContextLineCallback = (index: number) => boolean | void;
 
 interface IterationState {
   isWindowedHighlight: boolean;
@@ -291,60 +293,39 @@ export function iterateOverDiff({
       let deletionLineNumber = hunk.deletionStart - leadingRegion.rangeSize;
       let additionLineNumber = hunk.additionStart - leadingRegion.rangeSize;
 
-      const [startIndex, endIndex] = getEqualLineIterationRange(
-        state,
-        leadingRegion.fromStart,
-        diffStyle
-      );
-      if (startIndex > 0) {
-        state.incrementCounts(startIndex, startIndex);
-      }
-      let index = startIndex;
-      while (index < leadingRegion.fromStart) {
-        if (index >= endIndex) {
-          state.incrementCounts(
-            leadingRegion.fromStart - index,
-            leadingRegion.fromStart - index
-          );
-          break;
-        }
-        if (state.isInWindow(0, 0)) {
-          if (
-            state.emit({
-              hunkIndex,
-              hunk: hunk,
-              collapsedBefore: 0,
-              collapsedAfter: 0,
-              // NOTE(amadeus): Pretty sure this is would never return a value,
-              // so lets not call it, but if i notice a bug, i may need to
-              // bring this back.
-              // collapsedAfter: getTrailingCollapsedAfter(
-              //   unifiedRowIndex,
-              //   splitRowIndex
-              // ),
-              type: 'context-expanded',
-              deletionLine: {
-                lineNumber: deletionLineNumber + index,
-                lineIndex: deletionLineIndex + index,
-                noEOFCR: false,
-                unifiedLineIndex: unifiedLineIndex + index,
-                splitLineIndex: splitLineIndex + index,
-              },
-              additionLine: {
-                unifiedLineIndex: unifiedLineIndex + index,
-                splitLineIndex: splitLineIndex + index,
-                lineIndex: additionLineIndex + index,
-                lineNumber: additionLineNumber + index,
-                noEOFCR: false,
-              },
-            })
-          ) {
-            break hunkIterator;
-          }
-        } else {
-          state.incrementCounts(1, 1);
-        }
-        index++;
+      if (
+        walkContextLines(state, leadingRegion.fromStart, diffStyle, (index) => {
+          return state.emit({
+            hunkIndex,
+            hunk: hunk,
+            collapsedBefore: 0,
+            collapsedAfter: 0,
+            // NOTE(amadeus): Pretty sure this is would never return a value,
+            // so lets not call it, but if i notice a bug, i may need to
+            // bring this back.
+            // collapsedAfter: getTrailingCollapsedAfter(
+            //   unifiedRowIndex,
+            //   splitRowIndex
+            // ),
+            type: 'context-expanded',
+            deletionLine: {
+              lineNumber: deletionLineNumber + index,
+              lineIndex: deletionLineIndex + index,
+              noEOFCR: false,
+              unifiedLineIndex: unifiedLineIndex + index,
+              splitLineIndex: splitLineIndex + index,
+            },
+            additionLine: {
+              unifiedLineIndex: unifiedLineIndex + index,
+              splitLineIndex: splitLineIndex + index,
+              lineIndex: additionLineIndex + index,
+              lineNumber: additionLineNumber + index,
+              noEOFCR: false,
+            },
+          });
+        })
+      ) {
+        break hunkIterator;
       }
 
       unifiedLineIndex = hunk.unifiedLineStart - leadingRegion.fromEnd;
@@ -354,31 +335,13 @@ export function iterateOverDiff({
       additionLineIndex = hunk.additionLineIndex - leadingRegion.fromEnd;
       deletionLineNumber = hunk.deletionStart - leadingRegion.fromEnd;
       additionLineNumber = hunk.additionStart - leadingRegion.fromEnd;
-      const [fromEndStartIndex, fromEndEndIndex] = getEqualLineIterationRange(
-        state,
-        leadingRegion.fromEnd,
-        diffStyle
-      );
-      if (fromEndStartIndex > 0) {
-        state.incrementCounts(fromEndStartIndex, fromEndStartIndex);
-        // The collapsed separator belongs before this fromEnd slice. If the
-        // render window starts inside the slice, consume it with the skipped
-        // rows so it is not attached to the first emitted row.
-        consumePendingCollapsed();
-      }
-      index = fromEndStartIndex;
-
-      while (index < leadingRegion.fromEnd) {
-        if (index >= fromEndEndIndex) {
-          state.incrementCounts(
-            leadingRegion.fromEnd - index,
-            leadingRegion.fromEnd - index
-          );
-          break;
-        }
-        if (state.isInWindow(0, 0)) {
-          if (
-            state.emit({
+      if (
+        walkContextLines(
+          state,
+          leadingRegion.fromEnd,
+          diffStyle,
+          (index) => {
+            return state.emit({
               hunkIndex,
               hunk,
               collapsedBefore: consumePendingCollapsed(),
@@ -405,14 +368,17 @@ export function iterateOverDiff({
                 lineNumber: additionLineNumber + index,
                 noEOFCR: false,
               },
-            })
-          ) {
-            break hunkIterator;
+            });
+          },
+          () => {
+            // The collapsed separator belongs before this fromEnd slice. If the
+            // render window starts inside the slice, consume it with the skipped
+            // rows so it is not attached to the first emitted row.
+            consumePendingCollapsed();
           }
-        } else {
-          state.incrementCounts(1, 1);
-        }
-        index++;
+        )
+      ) {
+        break hunkIterator;
       }
     } else {
       state.incrementCounts(expandedLineCount, expandedLineCount);
@@ -438,33 +404,16 @@ export function iterateOverDiff({
       // Hunk Context Content
       if (content.type === 'context') {
         if (!state.shouldSkip(content.lines, content.lines)) {
-          const [startIndex, endIndex] = getEqualLineIterationRange(
-            state,
-            content.lines,
-            diffStyle
-          );
-          if (startIndex > 0) {
-            state.incrementCounts(startIndex, startIndex);
-            // When windowing starts inside context content, the leading
-            // separator was above the visible range and should not be emitted
-            // on the first rendered context line.
-            consumePendingCollapsed();
-          }
-          let index = startIndex;
-          while (index < content.lines) {
-            if (index >= endIndex) {
-              state.incrementCounts(
-                content.lines - index,
-                content.lines - index
-              );
-              break;
-            }
-            if (state.isInWindow(0, 0)) {
-              const isLastLine = isLastContent && index === content.lines - 1;
-              const unifiedRowIndex = unifiedLineIndex + index;
-              const splitRowIndex = splitLineIndex + index;
-              if (
-                state.emit({
+          if (
+            walkContextLines(
+              state,
+              content.lines,
+              diffStyle,
+              (index) => {
+                const isLastLine = isLastContent && index === content.lines - 1;
+                const unifiedRowIndex = unifiedLineIndex + index;
+                const splitRowIndex = splitLineIndex + index;
+                return state.emit({
                   hunkIndex,
                   hunk,
                   collapsedBefore: consumePendingCollapsed(),
@@ -487,14 +436,17 @@ export function iterateOverDiff({
                     lineNumber: additionLineNumber + index,
                     noEOFCR: isLastLine && hunk.noEOFCRAdditions,
                   },
-                })
-              ) {
-                break hunkIterator;
+                });
+              },
+              () => {
+                // When windowing starts inside context content, the leading
+                // separator was above the visible range and should not be
+                // emitted on the first rendered context line.
+                consumePendingCollapsed();
               }
-            } else {
-              state.incrementCounts(1, 1);
-            }
-            index++;
+            )
+          ) {
+            break hunkIterator;
           }
         } else {
           state.incrementCounts(content.lines, content.lines);
@@ -585,27 +537,14 @@ export function iterateOverDiff({
     if (trailingRegion != null) {
       const { collapsedLines, fromStart, fromEnd } = trailingRegion;
       const len = fromStart + fromEnd;
-      const [startIndex, endIndex] = getEqualLineIterationRange(
-        state,
-        len,
-        diffStyle
-      );
-      if (startIndex > 0) {
-        state.incrementCounts(startIndex, startIndex);
-      }
-      let index = startIndex;
-      while (index < len) {
-        if (state.shouldBreak()) {
-          break hunkIterator;
-        }
-        if (index >= endIndex) {
-          state.incrementCounts(len - index, len - index);
-          break;
-        }
-        if (state.isInWindow(0, 0)) {
-          const isLastLine = index === len - 1;
-          if (
-            state.emit({
+      if (
+        walkContextLines(
+          state,
+          len,
+          diffStyle,
+          (index) => {
+            const isLastLine = index === len - 1;
+            return state.emit({
               hunkIndex: diff.hunks.length,
               hunk: undefined,
               collapsedBefore: 0,
@@ -627,14 +566,13 @@ export function iterateOverDiff({
                 lineNumber: additionLineNumber + index,
                 noEOFCR: false,
               },
-            })
-          ) {
-            break hunkIterator;
-          }
-        } else {
-          state.incrementCounts(1, 1);
-        }
-        index++;
+            });
+          },
+          undefined,
+          () => state.shouldBreak()
+        )
+      ) {
+        break hunkIterator;
       }
     }
   }
@@ -767,20 +705,20 @@ function getHunkPrefixCounts({
   return prefixCounts;
 }
 
-// Clip a run of unchanged rows to the active rendered window. Equal rows advance
-// split and unified counters together, but `diffStyle: both` needs the union of
-// the split and unified visible ranges because either view can make the row
-// worth emitting.
-function getEqualLineIterationRange(
+// Clip a run of context rows to a single bounded hull around the active rendered
+// window. `diffStyle: both` can make split and unified rows visible in disjoint
+// ranges, so these bounds may include interior gaps that still need per-row
+// filtering before emitting.
+function getContextLineIterationBounds(
   state: IterationState,
   count: number,
   diffStyle: DiffStyle
-): EqualLineIterationRange {
+): LineIterationBounds {
   if (!state.isWindowedHighlight || count <= 0) {
     return [0, count];
   }
 
-  const ranges: EqualLineIterationRange[] = [];
+  const ranges: LineIterationBounds[] = [];
   function pushRange(currentCount: number): void {
     const start = Math.max(0, state.viewportStart - currentCount);
     const end = Math.min(count, state.viewportEnd - currentCount);
@@ -809,6 +747,50 @@ function getEqualLineIterationRange(
   }
   return [start, end];
 }
+
+// Walk context rows through the active window while keeping split and
+// unified counters aligned. The callback only runs after the final per-row
+// window check, which keeps `diffStyle: both` gap rows from being emitted.
+function walkContextLines(
+  state: IterationState,
+  count: number,
+  diffStyle: DiffStyle,
+  callback: ContextLineCallback,
+  onSkippedStart?: () => void,
+  shouldBreak?: () => boolean
+): boolean {
+  const [startIndex, endIndex] = getContextLineIterationBounds(
+    state,
+    count,
+    diffStyle
+  );
+  if (startIndex > 0) {
+    state.incrementCounts(startIndex, startIndex);
+    onSkippedStart?.();
+  }
+
+  let index = startIndex;
+  while (index < count) {
+    if (shouldBreak?.() === true) {
+      return true;
+    }
+    if (index >= endIndex) {
+      state.incrementCounts(count - index, count - index);
+      break;
+    }
+    if (state.isInWindow(0, 0)) {
+      if (callback(index) === true) {
+        return true;
+      }
+    } else {
+      state.incrementCounts(1, 1);
+    }
+    index++;
+  }
+
+  return false;
+}
+
 // The intention of this function is to grab the appropriate windowed ranges of
 // the change content.  If diffStyle is both, we will iterate AS split, however
 // we will encompass all needed lines to allow us to render split or unified
@@ -816,7 +798,7 @@ function getChangeIterationRanges(
   state: IterationState,
   content: ChangeContent,
   diffStyle: DiffStyle
-): EqualLineIterationRange[] {
+): LineIterationBounds[] {
   // If not a window highlight, then we should just render the entire range
   if (!state.isWindowedHighlight) {
     return [
@@ -831,11 +813,11 @@ function getChangeIterationRanges(
   const useUnified = diffStyle !== 'split';
   const useSplit = diffStyle !== 'unified';
   const iterationSpace = diffStyle === 'unified' ? 'unified' : 'split';
-  const iterationRanges: EqualLineIterationRange[] = [];
+  const iterationRanges: LineIterationBounds[] = [];
   function getVisibleRange(
     start: number,
     count: number
-  ): EqualLineIterationRange | undefined {
+  ): LineIterationBounds | undefined {
     const end = start + count;
     if (end <= state.viewportStart || start >= state.viewportEnd) {
       return undefined;
@@ -845,9 +827,9 @@ function getChangeIterationRanges(
     return visibleEnd > visibleStart ? [visibleStart, visibleEnd] : undefined;
   }
   function mapRangeToIteration(
-    range: EqualLineIterationRange,
+    range: LineIterationBounds,
     kind: ChangeContentSide
-  ): EqualLineIterationRange {
+  ): LineIterationBounds {
     if (iterationSpace === 'split') {
       // For split iteration, additions/deletions are already in split row space.
       return range;
@@ -857,7 +839,7 @@ function getChangeIterationRanges(
       : range;
   }
   function pushRange(
-    range: EqualLineIterationRange | undefined,
+    range: LineIterationBounds | undefined,
     kind: ChangeContentSide
   ) {
     if (range == null) {
@@ -899,7 +881,7 @@ function getChangeIterationRanges(
   }
 
   iterationRanges.sort((a, b) => a[0] - b[0]);
-  const merged: EqualLineIterationRange[] = [iterationRanges[0]];
+  const merged: LineIterationBounds[] = [iterationRanges[0]];
   for (const [start, end] of iterationRanges.slice(1)) {
     const last = merged[merged.length - 1];
     if (start <= last[1]) {
