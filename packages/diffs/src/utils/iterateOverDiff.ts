@@ -271,13 +271,14 @@ export function iterateOverDiff({
         ? trailingRegion.collapsedLines
         : 0;
     }
-    function getPendingCollapsed() {
-      if (leadingRegion.collapsedLines === 0) {
+
+    let consumedCollapsed = leadingRegion.collapsedLines === 0;
+    function consumePendingCollapsed() {
+      if (consumedCollapsed) {
         return 0;
       }
-      const value = leadingRegion.collapsedLines;
-      leadingRegion.collapsedLines = 0;
-      return value;
+      consumedCollapsed = true;
+      return leadingRegion.collapsedLines;
     }
 
     // Emit for expanded lines
@@ -363,7 +364,7 @@ export function iterateOverDiff({
         // The collapsed separator belongs before this fromEnd slice. If the
         // render window starts inside the slice, consume it with the skipped
         // rows so it is not attached to the first emitted row.
-        getPendingCollapsed();
+        consumePendingCollapsed();
       }
       index = fromEndStartIndex;
 
@@ -380,7 +381,7 @@ export function iterateOverDiff({
             state.emit({
               hunkIndex,
               hunk,
-              collapsedBefore: getPendingCollapsed(),
+              collapsedBefore: consumePendingCollapsed(),
               collapsedAfter: 0,
               // NOTE(amadeus): Pretty sure this is would never return a value,
               // so lets not call it, but if i notice a bug, i may need to
@@ -415,7 +416,7 @@ export function iterateOverDiff({
       }
     } else {
       state.incrementCounts(expandedLineCount, expandedLineCount);
-      getPendingCollapsed();
+      consumePendingCollapsed();
     }
 
     let unifiedLineIndex = hunk.unifiedLineStart;
@@ -447,7 +448,7 @@ export function iterateOverDiff({
             // When windowing starts inside context content, the leading
             // separator was above the visible range and should not be emitted
             // on the first rendered context line.
-            getPendingCollapsed();
+            consumePendingCollapsed();
           }
           let index = startIndex;
           while (index < content.lines) {
@@ -466,7 +467,7 @@ export function iterateOverDiff({
                 state.emit({
                   hunkIndex,
                   hunk,
-                  collapsedBefore: getPendingCollapsed(),
+                  collapsedBefore: consumePendingCollapsed(),
                   collapsedAfter: getTrailingCollapsedAfter(
                     unifiedRowIndex,
                     splitRowIndex
@@ -497,7 +498,7 @@ export function iterateOverDiff({
           }
         } else {
           state.incrementCounts(content.lines, content.lines);
-          getPendingCollapsed();
+          consumePendingCollapsed();
         }
         unifiedLineIndex += content.lines;
         splitLineIndex += content.lines;
@@ -523,7 +524,7 @@ export function iterateOverDiff({
             // Change rows can be windowed from the middle of the block too. In
             // that case the leading separator belongs to skipped rows, not to
             // the first visible deletion/addition row.
-            getPendingCollapsed();
+            consumePendingCollapsed();
           }
 
           // No need for any skipping because the render ranges skip for us
@@ -546,7 +547,7 @@ export function iterateOverDiff({
                   getChangeLineData({
                     hunkIndex,
                     hunk,
-                    collapsedBefore: getPendingCollapsed(),
+                    collapsedBefore: consumePendingCollapsed(),
                     collapsedAfter,
                     diffStyle,
                     index,
@@ -570,7 +571,7 @@ export function iterateOverDiff({
           }
         }
 
-        getPendingCollapsed();
+        consumePendingCollapsed();
         state.incrementCounts(unifiedCount, splitCount);
         unifiedLineIndex += unifiedCount;
         splitLineIndex += splitCount;
