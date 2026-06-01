@@ -89,7 +89,7 @@ export const editorCSS: string = /* CSS */ `
       light-dark(#FF963288, #FF963266)
     );
   }
-  [data-rtl]  {
+  [data-rtl] {
     border-top-left-radius: 3px;
   }
   [data-rtr] {

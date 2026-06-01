@@ -1631,7 +1631,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             : this.#metrics.measureTextWidth(prefixInSegment));
       }
       if (wrapStartChar === wrapEndChar) {
-        segmentWidth = this.#metrics.ch;
+        segmentWidth = wrapLine === segmentCount - 1 ? 0 : this.#metrics.ch;
       } else {
         const selectionInSegment = lineText.slice(wrapStartChar, wrapEndChar);
         const selectionAsciiWidth = getExpandedAsciiTextColumns(
@@ -1642,7 +1642,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           selectionAsciiWidth !== -1
             ? selectionAsciiWidth * this.#metrics.ch
             : this.#metrics.measureTextWidth(selectionInSegment);
-        if (!isLastLine) {
+        if (!isLastLine && wrapLine === segmentCount - 1) {
           segmentWidth += this.#metrics.ch;
         }
       }
@@ -1659,11 +1659,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  // Render one selection range div for a single visual line. `applyEolSpacing`
-  // controls whether the trailing one-character "line continuation" marker is
-  // appended at the end. For wrapped logical lines this must be false on every
-  // visual segment except the last one, since an intra-line wrap is not a real
-  // newline and shouldn't visually extend past the wrapped content.
+  // Render one selection block for a single visual line.
   #renderSelectionBlock(
     renderCtx: {
       fragment: DocumentFragment;
@@ -1697,6 +1693,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       (this.#options.roundedSelection ?? true) && type === 'selection';
     const addRoundedCorner = (
       line: number,
+      wrapLine: number,
       left: number,
       radius: 'rtl' | 'rbl' | 'rbr'
     ) => {
@@ -1768,11 +1765,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         });
       } else {
         const prevLine = previousSelectionRange.line;
+        const prevWrapLine = previousSelectionRange.wrapLine;
         const prevLeft = previousSelectionRange.left;
         const prevDataset = previousSelectionRange.element.dataset;
         const prevEnd = prevLeft + previousSelectionRange.width;
         if (prevLeft > left) {
-          addRoundedCorner(prevLine, prevLeft - ch, 'rbr');
+          addRoundedCorner(prevLine, prevWrapLine, prevLeft - ch, 'rbr');
         }
         delete prevDataset.rbl;
         delete dataset.rtl;
@@ -1781,11 +1779,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           delete prevDataset.rbr;
         }
         if (end > prevEnd) {
-          addRoundedCorner(prevLine, prevEnd, 'rbl');
+          addRoundedCorner(prevLine, prevWrapLine, prevEnd, 'rbl');
           dataset.rtr = '';
         }
         if (end < prevEnd) {
-          addRoundedCorner(line, end, 'rtl');
+          addRoundedCorner(line, wrapLine, end, 'rtl');
         }
         if (left < prevLeft) {
           dataset.rtl = '';
