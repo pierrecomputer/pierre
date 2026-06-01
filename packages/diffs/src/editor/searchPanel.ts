@@ -301,6 +301,8 @@ export class SearchPanelWidget {
     requestAnimationFrame(() => {
       if (initialMatch !== undefined) {
         updateMatches();
+      } else {
+        onUpdate([]);
       }
       this.#inputElement.select();
     });
