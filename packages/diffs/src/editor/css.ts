@@ -84,7 +84,7 @@ export const editorCSS: string = /* CSS */ `
     height: 100%;
     background-color: var(--diffs-bg);
   }
-  [data-rtl]  {
+  [data-rtl] {
     border-top-left-radius: 3px;
   }
   [data-rtr] {
