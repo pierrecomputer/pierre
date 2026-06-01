@@ -105,8 +105,8 @@ describe('computeEstimatedDiffHeights', () => {
     const fileDiff = createTwoHunkDiff();
 
     expect(compute(fileDiff)).toEqual({
-      splitHeight: 326,
-      unifiedHeight: 346,
+      splitHeight: 286,
+      unifiedHeight: 306,
     });
   });
 
@@ -114,8 +114,8 @@ describe('computeEstimatedDiffHeights', () => {
     const fileDiff = createTwoHunkDiff();
 
     expect(compute(fileDiff, { hunkSeparators: 'simple' })).toEqual({
-      splitHeight: 218,
-      unifiedHeight: 238,
+      splitHeight: 178,
+      unifiedHeight: 198,
     });
   });
 
@@ -133,8 +133,8 @@ describe('computeEstimatedDiffHeights', () => {
     const expandedHunks = new Map([[0, { fromStart: 2, fromEnd: 3 }]]);
 
     expect(compute(fileDiff, { expandedHunks })).toEqual({
-      splitHeight: 376,
-      unifiedHeight: 396,
+      splitHeight: 336,
+      unifiedHeight: 356,
     });
   });
 
@@ -145,8 +145,8 @@ describe('computeEstimatedDiffHeights', () => {
     ]);
 
     expect(compute(fileDiff, { expandedHunks })).toEqual({
-      splitHeight: 346,
-      unifiedHeight: 366,
+      splitHeight: 306,
+      unifiedHeight: 326,
     });
   });
 
@@ -154,8 +154,8 @@ describe('computeEstimatedDiffHeights', () => {
     const fileDiff = { ...createTwoHunkDiff(), isPartial: true };
 
     expect(compute(fileDiff)).toEqual({
-      splitHeight: 290,
-      unifiedHeight: 310,
+      splitHeight: 250,
+      unifiedHeight: 270,
     });
   });
 
@@ -163,8 +163,8 @@ describe('computeEstimatedDiffHeights', () => {
     const fileDiff = createTwoHunkDiff();
 
     expect(compute(fileDiff, { hunkSeparators: 'metadata' })).toEqual({
-      splitHeight: 278,
-      unifiedHeight: 298,
+      splitHeight: 238,
+      unifiedHeight: 258,
     });
   });
 });

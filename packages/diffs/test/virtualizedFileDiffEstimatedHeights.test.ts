@@ -206,12 +206,12 @@ describe('VirtualizedFileDiff estimated height cache', () => {
 
     instance.prepareCodeViewItem(createTwoHunkDiff(), 0);
 
-    expect(inspect(instance).cache.estimatedSplitHeight).toBe(326);
-    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(346);
+    expect(inspect(instance).cache.estimatedSplitHeight).toBe(286);
+    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(306);
     expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
     expect(inspect(instance).cache.totalLines).toBe(0);
     expect(inspect(instance).cache.checkpoints).toEqual([]);
-    expect(instance.getVirtualizedHeight()).toBe(326);
+    expect(instance.getVirtualizedHeight()).toBe(286);
   });
 
   test('keeps estimates and measurements for an equivalent diff cache key', () => {
@@ -245,8 +245,8 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     inspect(instance).cache.measuredHeightDeltaTotal = 7;
     instance.prepareCodeViewItem(createTwoHunkDiff('second'), 0);
 
-    expect(inspect(instance).cache.estimatedSplitHeight).toBe(326);
-    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(346);
+    expect(inspect(instance).cache.estimatedSplitHeight).toBe(286);
+    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(306);
     expect(inspect(instance).cache.heightDeltas.size).toBe(0);
     expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
   });
@@ -261,19 +261,19 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     expect(inspect(instance).cache.checkpoints.length).toBeGreaterThan(0);
     instance.setOptions({ diffStyle: 'unified' });
 
-    expect(inspect(instance).cache.estimatedSplitHeight).toBe(326);
-    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(346);
+    expect(inspect(instance).cache.estimatedSplitHeight).toBe(286);
+    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(306);
     expect(inspect(instance).cache.heightDeltas.size).toBe(0);
     expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
     expect(inspect(instance).cache.checkpoints).toEqual([]);
     expect(inspect(instance).cache.totalLines).toBe(0);
-    expect(instance.getVirtualizedHeight()).toBe(346);
+    expect(instance.getVirtualizedHeight()).toBe(306);
 
     instance.setOptions({ diffStyle: 'split' });
 
-    expect(inspect(instance).cache.estimatedSplitHeight).toBe(326);
-    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(346);
-    expect(instance.getVirtualizedHeight()).toBe(326);
+    expect(inspect(instance).cache.estimatedSplitHeight).toBe(286);
+    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(306);
+    expect(instance.getVirtualizedHeight()).toBe(286);
   });
 
   test('keeps paired estimates across collapse changes', () => {
@@ -286,8 +286,8 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     expect(inspect(instance).cache.checkpoints.length).toBeGreaterThan(0);
     instance.setOptions({ collapsed: true });
 
-    expect(inspect(instance).cache.estimatedSplitHeight).toBe(326);
-    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(346);
+    expect(inspect(instance).cache.estimatedSplitHeight).toBe(286);
+    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(306);
     expect(inspect(instance).cache.heightDeltas.size).toBe(0);
     expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
     expect(inspect(instance).cache.checkpoints).toEqual([]);
@@ -296,9 +296,9 @@ describe('VirtualizedFileDiff estimated height cache', () => {
 
     instance.setOptions({ collapsed: false });
 
-    expect(inspect(instance).cache.estimatedSplitHeight).toBe(326);
-    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(346);
-    expect(instance.getVirtualizedHeight()).toBe(326);
+    expect(inspect(instance).cache.estimatedSplitHeight).toBe(286);
+    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(306);
+    expect(instance.getVirtualizedHeight()).toBe(286);
   });
 
   test('recomputes paired estimates when hunk expansion changes', () => {
@@ -311,13 +311,13 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     expect(inspect(instance).cache.checkpoints.length).toBeGreaterThan(0);
     instance.expandHunk(0, 'down', 5);
 
-    expect(inspect(instance).cache.estimatedSplitHeight).toBe(376);
-    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(396);
+    expect(inspect(instance).cache.estimatedSplitHeight).toBe(336);
+    expect(inspect(instance).cache.estimatedUnifiedHeight).toBe(356);
     expect(inspect(instance).cache.heightDeltas.size).toBe(0);
     expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
     expect(inspect(instance).cache.checkpoints).toEqual([]);
     expect(inspect(instance).cache.totalLines).toBe(0);
-    expect(instance.getVirtualizedHeight()).toBe(376);
+    expect(instance.getVirtualizedHeight()).toBe(336);
   });
 
   test('applies measured height deltas without replaying full diff layout', () => {
@@ -343,7 +343,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(7);
       expect(inspect(instance).cache.totalLines).toBe(0);
       expect(inspect(instance).cache.checkpoints).toEqual([]);
-      expect(instance.getVirtualizedHeight()).toBe(333);
+      expect(instance.getVirtualizedHeight()).toBe(293);
 
       measuredHeight = 10;
 
@@ -352,7 +352,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
       expect(inspect(instance).cache.totalLines).toBe(0);
       expect(inspect(instance).cache.checkpoints).toEqual([]);
-      expect(instance.getVirtualizedHeight()).toBe(326);
+      expect(instance.getVirtualizedHeight()).toBe(286);
     } finally {
       cleanup();
     }
