@@ -30,6 +30,8 @@ tsconfig.tsbuildinfo
 .claude/*
 .codemogger/*
 .omx/
+.playwright-mcp/
+.superpowers/
 .env.worktree
 
 #tmp
