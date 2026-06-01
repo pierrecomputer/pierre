@@ -2,7 +2,12 @@ import { describe, expect, test } from 'bun:test';
 
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { DEFAULT_CODE_VIEW_FILE_METRICS } from '../src/constants';
-import type { FileDiffMetadata, VirtualFileMetrics } from '../src/types';
+import type {
+  FileDiffMetadata,
+  HunkExpansionRegion,
+  VirtualFileMetrics,
+} from '../src/types';
+import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 
 const metrics: VirtualFileMetrics = {
@@ -39,6 +44,10 @@ interface InspectableVirtualizedFileDiff {
     checkpoints: unknown[];
     totalLines: number;
   };
+  getExpandedLineCount(
+    fileDiff: FileDiffMetadata,
+    diffStyle: 'split' | 'unified'
+  ): number;
   fileContainer: HTMLElement | undefined;
   codeAdditions: HTMLElement | undefined;
 }
@@ -172,6 +181,23 @@ function createMeasuredCodeGroup(
   content.append(line);
   group.append(gutter, content);
   return group as unknown as HTMLElement;
+}
+
+function countIteratedRows(
+  fileDiff: FileDiffMetadata,
+  diffStyle: 'split' | 'unified',
+  expandedHunks: Map<number, HunkExpansionRegion>
+): number {
+  let count = 0;
+  iterateOverDiff({
+    diff: fileDiff,
+    diffStyle,
+    expandedHunks,
+    callback: () => {
+      count++;
+    },
+  });
+  return count;
 }
 
 describe('VirtualizedFileDiff estimated height cache', () => {
@@ -372,6 +398,25 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     expect(instance.getVirtualizedHeight()).toBe(estimatedHeight);
     expect(inspect(instance).cache.totalLines).toBeGreaterThan(10_000);
     expect(inspect(instance).cache.checkpoints.length).toBeGreaterThan(1);
+  });
+
+  test('counts trailing fromEnd expansion in render range line totals', () => {
+    const fileDiff = createTwoHunkDiff();
+    const trailingHunkIndex = fileDiff.hunks.length;
+    const expandedHunks = new Map<number, HunkExpansionRegion>([
+      [trailingHunkIndex, { fromStart: 2, fromEnd: 3 }],
+    ]);
+    const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
+
+    instance.expandHunk(trailingHunkIndex, 'up', 2);
+    instance.expandHunk(trailingHunkIndex, 'down', 3);
+
+    expect(inspect(instance).getExpandedLineCount(fileDiff, 'split')).toBe(
+      countIteratedRows(fileDiff, 'split', expandedHunks)
+    );
+    expect(inspect(instance).getExpandedLineCount(fileDiff, 'unified')).toBe(
+      countIteratedRows(fileDiff, 'unified', expandedHunks)
+    );
   });
 
   test('checkpoint generation jumps through large uniform blocks', () => {

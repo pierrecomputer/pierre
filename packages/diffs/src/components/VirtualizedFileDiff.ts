@@ -25,9 +25,9 @@ import {
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import {
-  type ExpandedRegionResult,
   getExpandedRegion,
   getLeadingHunkSeparatorLayout,
+  getTrailingExpandedRegion,
   getTrailingHunkSeparatorLayout,
 } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
@@ -918,6 +918,7 @@ export class VirtualizedFileDiff<
       expandUnchanged = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
     } = this.options;
+    const finalHunkIndex = this.fileDiff.hunks.length - 1;
     const diffStyle = this.getDiffStyle();
     const hunkSeparators = this.getHunkSeparatorType();
     const expandedHunks = expandUnchanged
@@ -1031,13 +1032,16 @@ export class VirtualizedFileDiff<
         pendingLeadingSeparatorHeight = 0;
       }
 
-      const trailingRegion = getTrailingExpandedRegion({
-        fileDiff: this.fileDiff,
-        hunk,
-        hunkIndex,
-        expandedHunks,
-        collapsedContextThreshold,
-      });
+      const trailingRegion =
+        hunkIndex === finalHunkIndex
+          ? getTrailingExpandedRegion({
+              fileDiff: this.fileDiff,
+              hunkIndex,
+              expandedHunks,
+              collapsedContextThreshold,
+              errorPrefix: 'VirtualizedFileDiff',
+            })
+          : undefined;
       const trailingSeparatorHeight =
         trailingRegion != null && trailingRegion.collapsedLines > 0
           ? (getTrailingHunkSeparatorLayout({
@@ -1194,30 +1198,15 @@ export class VirtualizedFileDiff<
       }
     }
 
-    const lastHunk = fileDiff.hunks.at(-1);
-    if (lastHunk != null && hasFinalHunk(fileDiff)) {
-      const additionRemaining =
-        fileDiff.additionLines.length -
-        (lastHunk.additionLineIndex + lastHunk.additionCount);
-      const deletionRemaining =
-        fileDiff.deletionLines.length -
-        (lastHunk.deletionLineIndex + lastHunk.deletionCount);
-      if (lastHunk != null && additionRemaining !== deletionRemaining) {
-        throw new Error(
-          `VirtualizedFileDiff: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${fileDiff.name}`
-        );
-      }
-      const trailingRangeSize = Math.min(additionRemaining, deletionRemaining);
-      if (lastHunk != null && trailingRangeSize > 0) {
-        const { fromStart, renderAll } = getExpandedRegion({
-          isPartial: fileDiff.isPartial,
-          rangeSize: trailingRangeSize,
-          expandedHunks,
-          hunkIndex: fileDiff.hunks.length,
-          collapsedContextThreshold,
-        });
-        count += renderAll ? trailingRangeSize : fromStart;
-      }
+    const trailingRegion = getTrailingExpandedRegion({
+      fileDiff,
+      hunkIndex: fileDiff.hunks.length - 1,
+      expandedHunks,
+      collapsedContextThreshold,
+      errorPrefix: 'VirtualizedFileDiff',
+    });
+    if (trailingRegion != null) {
+      count += trailingRegion.fromStart + trailingRegion.fromEnd;
     }
 
     return count;
@@ -1565,45 +1554,6 @@ function getHunkMetadataOffsets({
   return offsets;
 }
 
-function getTrailingExpandedRegion({
-  fileDiff,
-  hunk,
-  hunkIndex,
-  expandedHunks,
-  collapsedContextThreshold,
-}: {
-  fileDiff: FileDiffMetadata;
-  hunk: Hunk;
-  hunkIndex: number;
-  expandedHunks: Parameters<typeof getExpandedRegion>[0]['expandedHunks'];
-  collapsedContextThreshold: number;
-}): ExpandedRegionResult | undefined {
-  if (hunkIndex !== fileDiff.hunks.length - 1 || !hasFinalHunk(fileDiff)) {
-    return undefined;
-  }
-
-  const additionRemaining =
-    fileDiff.additionLines.length -
-    (hunk.additionLineIndex + hunk.additionCount);
-  const deletionRemaining =
-    fileDiff.deletionLines.length -
-    (hunk.deletionLineIndex + hunk.deletionCount);
-
-  if (additionRemaining !== deletionRemaining) {
-    throw new Error(
-      `VirtualizedFileDiff: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${fileDiff.name}`
-    );
-  }
-
-  return getExpandedRegion({
-    isPartial: fileDiff.isPartial,
-    rangeSize: Math.min(additionRemaining, deletionRemaining),
-    expandedHunks,
-    hunkIndex: fileDiff.hunks.length,
-    collapsedContextThreshold,
-  });
-}
-
 function hasDiffLayoutOptionChanged<LAnnotation>(
   previousOptions: FileDiffOptions<LAnnotation>,
   nextOptions: FileDiffOptions<LAnnotation>
@@ -1656,25 +1606,6 @@ function getOptionHunkSeparatorType<LAnnotation>(
   return typeof hunkSeparators === 'function'
     ? 'custom'
     : (hunkSeparators ?? 'line-info');
-}
-
-function hasFinalHunk(fileDiff: FileDiffMetadata): boolean {
-  const lastHunk = fileDiff.hunks.at(-1);
-  if (
-    lastHunk == null ||
-    fileDiff.isPartial ||
-    fileDiff.additionLines.length === 0 ||
-    fileDiff.deletionLines.length === 0
-  ) {
-    return false;
-  }
-
-  return (
-    lastHunk.additionLineIndex + lastHunk.additionCount <
-      fileDiff.additionLines.length ||
-    lastHunk.deletionLineIndex + lastHunk.deletionCount <
-      fileDiff.deletionLines.length
-  );
 }
 
 // Extracts the view-specific line index from the data-line-index attribute.

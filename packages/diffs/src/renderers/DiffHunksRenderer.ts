@@ -64,6 +64,7 @@ import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
+import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 
 interface PushLineWithAnnotation {
@@ -774,7 +775,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         }
       },
     };
-    const trailingRangeSize = calculateTrailingRangeSize(fileDiff);
+    const trailingRangeSize = getTrailingContextRangeSize({
+      fileDiff,
+      errorPrefix: 'DiffHunksRenderer.processDiffResult',
+    });
     const pendingSplitContext: PendingSplitContext = {
       size: 0,
       side: undefined,
@@ -1672,28 +1676,4 @@ function isDiffMassive(
     Math.max(diff.additionLines.length, diff.deletionLines.length) >
     tokenizeMaxLength
   );
-}
-
-function calculateTrailingRangeSize(fileDiff: FileDiffMetadata): number {
-  const lastHunk = fileDiff.hunks.at(-1);
-  if (
-    lastHunk == null ||
-    fileDiff.isPartial ||
-    fileDiff.additionLines.length === 0 ||
-    fileDiff.deletionLines.length === 0
-  ) {
-    return 0;
-  }
-  const additionRemaining =
-    fileDiff.additionLines.length -
-    (lastHunk.additionLineIndex + lastHunk.additionCount);
-  const deletionRemaining =
-    fileDiff.deletionLines.length -
-    (lastHunk.deletionLineIndex + lastHunk.deletionCount);
-  if (additionRemaining !== deletionRemaining) {
-    throw new Error(
-      `DiffHunksRenderer.processDiffResult: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${fileDiff.name}`
-    );
-  }
-  return Math.min(additionRemaining, deletionRemaining);
 }

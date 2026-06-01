@@ -5,7 +5,10 @@ import type {
   Hunk,
   HunkExpansionRegion,
 } from '../types';
-import { getExpandedRegion } from './virtualDiffLayout';
+import {
+  getExpandedRegion,
+  getTrailingExpandedRegion,
+} from './virtualDiffLayout';
 
 export interface DiffLineMetadata {
   unifiedLineIndex: number;
@@ -52,12 +55,12 @@ type EqualLineIterationRange = [startIndex: number, endIndex: number];
 type ChangeContentSide = 'deletions' | 'additions';
 
 interface IterationState {
-  finalHunk: Hunk | undefined;
   isWindowedHighlight: boolean;
   viewportStart: number;
   viewportEnd: number;
   splitCount: number;
   unifiedCount: number;
+  finalHunkIndex: number;
   shouldBreak(): boolean;
   shouldSkip(unifiedHeight: number, splitHeight: number): boolean;
   incrementCounts(unifiedValue: number, splitValue: number): void;
@@ -120,12 +123,12 @@ export function iterateOverDiff({
     collapsedContextThreshold,
   });
   const state: IterationState = {
-    finalHunk: diff.hunks.at(-1),
     viewportStart: startingLine,
     viewportEnd: startingLine + totalLines,
     isWindowedHighlight: startingLine > 0 || totalLines < Infinity,
     splitCount: iterationStart.splitCount,
     unifiedCount: iterationStart.unifiedCount,
+    finalHunkIndex: diff.hunks.length - 1,
     shouldBreak() {
       if (!state.isWindowedHighlight) {
         return false;
@@ -235,33 +238,16 @@ export function iterateOverDiff({
       hunkIndex,
       collapsedContextThreshold,
     });
-    // We only create a trailing region if it's the last hunk
-    const trailingRegion = (() => {
-      if (hunk !== state.finalHunk || !hasFinalCollapsedHunk(diff)) {
-        return undefined;
-      }
-      const additionRemaining =
-        diff.additionLines.length -
-        (hunk.additionLineIndex + hunk.additionCount);
-      const deletionRemaining =
-        diff.deletionLines.length -
-        (hunk.deletionLineIndex + hunk.deletionCount);
-
-      if (additionRemaining !== deletionRemaining) {
-        throw new Error(
-          `iterateOverDiff: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${diff.name}`
-        );
-      }
-      const trailingRangeSize = Math.min(additionRemaining, deletionRemaining);
-      return getExpandedRegion({
-        isPartial: diff.isPartial,
-        rangeSize: trailingRangeSize,
-        expandedHunks,
-        // hunkIndex for trailing region
-        hunkIndex: diff.hunks.length,
-        collapsedContextThreshold,
-      });
-    })();
+    const trailingRegion =
+      hunkIndex === state.finalHunkIndex
+        ? getTrailingExpandedRegion({
+            fileDiff: diff,
+            hunkIndex,
+            expandedHunks,
+            collapsedContextThreshold,
+            errorPrefix: 'iterateOverDiff',
+          })
+        : undefined;
     const expandedLineCount = leadingRegion.fromStart + leadingRegion.fromEnd;
 
     function getTrailingCollapsedAfter(
@@ -758,15 +744,17 @@ function getHunkPrefixCounts({
     splitCount += leadingCount + hunk.splitLineCount;
     unifiedCount += leadingCount + hunk.unifiedLineCount;
 
-    if (index === finalHunkIndex && hasFinalCollapsedHunk(diff)) {
-      const trailingRangeSize = getTrailingRangeSize(diff, hunk);
-      const trailingRegion = getExpandedRegion({
-        isPartial: diff.isPartial,
-        rangeSize: trailingRangeSize,
-        expandedHunks,
-        hunkIndex: diff.hunks.length,
-        collapsedContextThreshold,
-      });
+    const trailingRegion =
+      index === finalHunkIndex
+        ? getTrailingExpandedRegion({
+            fileDiff: diff,
+            hunkIndex: index,
+            expandedHunks,
+            collapsedContextThreshold,
+            errorPrefix: 'iterateOverDiff',
+          })
+        : undefined;
+    if (trailingRegion != null) {
       const trailingCount = trailingRegion.fromStart + trailingRegion.fromEnd;
       splitCount += trailingCount;
       unifiedCount += trailingCount;
@@ -820,42 +808,6 @@ function getEqualLineIterationRange(
   }
   return [start, end];
 }
-
-// Measure the unchanged tail after the final hunk so it can be collapsed or
-// expanded like leading hunk context. Both sides must have the same remaining
-// length because trailing context represents paired unchanged lines.
-function getTrailingRangeSize(diff: FileDiffMetadata, hunk: Hunk): number {
-  const additionRemaining =
-    diff.additionLines.length - (hunk.additionLineIndex + hunk.additionCount);
-  const deletionRemaining =
-    diff.deletionLines.length - (hunk.deletionLineIndex + hunk.deletionCount);
-
-  if (additionRemaining !== deletionRemaining) {
-    throw new Error(
-      `iterateOverDiff: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${diff.name}`
-    );
-  }
-  return Math.min(additionRemaining, deletionRemaining);
-}
-
-function hasFinalCollapsedHunk(diff: FileDiffMetadata): boolean {
-  const lastHunk = diff.hunks.at(-1);
-  if (
-    lastHunk == null ||
-    diff.isPartial ||
-    diff.additionLines.length === 0 ||
-    diff.deletionLines.length === 0
-  ) {
-    return false;
-  }
-  return (
-    lastHunk.additionLineIndex + lastHunk.additionCount <
-      diff.additionLines.length ||
-    lastHunk.deletionLineIndex + lastHunk.deletionCount <
-      diff.deletionLines.length
-  );
-}
-
 // The intention of this function is to grab the appropriate windowed ranges of
 // the change content.  If diffStyle is both, we will iterate AS split, however
 // we will encompass all needed lines to allow us to render split or unified

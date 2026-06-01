@@ -13,6 +13,7 @@ import {
 import {
   getExpandedRegion,
   getLeadingHunkSeparatorLayout,
+  getTrailingExpandedRegion,
   getTrailingHunkSeparatorLayout,
 } from './virtualDiffLayout';
 
@@ -84,14 +85,17 @@ export function computeEstimatedDiffHeights({
     splitHeight += metadataLineCounts.split * metrics.lineHeight;
     unifiedHeight += metadataLineCounts.unified * metrics.lineHeight;
 
-    if (hunkIndex === finalHunkIndex && hasFinalCollapsedHunk(fileDiff)) {
-      const trailingRegion = getExpandedRegion({
-        isPartial: fileDiff.isPartial,
-        rangeSize: getTrailingRangeSize(fileDiff, hunk),
-        expandedHunks,
-        hunkIndex: fileDiff.hunks.length,
-        collapsedContextThreshold,
-      });
+    const trailingRegion =
+      hunkIndex === finalHunkIndex
+        ? getTrailingExpandedRegion({
+            fileDiff,
+            hunkIndex,
+            expandedHunks,
+            collapsedContextThreshold,
+            errorPrefix: 'computeEstimatedDiffHeights',
+          })
+        : undefined;
+    if (trailingRegion != null) {
       const trailingExpandedHeight =
         (trailingRegion.fromStart + trailingRegion.fromEnd) *
         metrics.lineHeight;
@@ -139,7 +143,6 @@ function getNoNewlineMetadataLineCounts(hunk: Hunk): {
 
   return getChangeNoNewlineMetadataLineCounts(hunk, lastContent);
 }
-
 function getChangeNoNewlineMetadataLineCounts(
   hunk: Hunk,
   content: ChangeContent
@@ -154,39 +157,4 @@ function getChangeNoNewlineMetadataLineCounts(
   const split = splitDeletionHasMetadata || splitAdditionHasMetadata ? 1 : 0;
 
   return { split, unified };
-}
-
-function hasFinalCollapsedHunk(fileDiff: FileDiffMetadata): boolean {
-  const lastHunk = fileDiff.hunks.at(-1);
-  if (
-    lastHunk == null ||
-    fileDiff.isPartial ||
-    fileDiff.additionLines.length === 0 ||
-    fileDiff.deletionLines.length === 0
-  ) {
-    return false;
-  }
-
-  return (
-    lastHunk.additionLineIndex + lastHunk.additionCount <
-      fileDiff.additionLines.length ||
-    lastHunk.deletionLineIndex + lastHunk.deletionCount <
-      fileDiff.deletionLines.length
-  );
-}
-
-function getTrailingRangeSize(fileDiff: FileDiffMetadata, hunk: Hunk): number {
-  const additionRemaining =
-    fileDiff.additionLines.length -
-    (hunk.additionLineIndex + hunk.additionCount);
-  const deletionRemaining =
-    fileDiff.deletionLines.length -
-    (hunk.deletionLineIndex + hunk.deletionCount);
-
-  if (additionRemaining !== deletionRemaining) {
-    throw new Error(
-      `computeEstimatedDiffHeights: trailing context mismatch (additions=${additionRemaining}, deletions=${deletionRemaining}) for ${fileDiff.name}`
-    );
-  }
-  return Math.min(additionRemaining, deletionRemaining);
 }
