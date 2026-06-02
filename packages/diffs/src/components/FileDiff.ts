@@ -942,13 +942,13 @@ export class FileDiff<
       const file = this.getAdditionFile();
       if (editor != null && file != null) {
         void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-          editor.syncWithRender(
-            'file-diff',
+          editor.syncToRenderedView(
             highlighter,
             fileContainer,
             file,
             this.lineAnnotations,
-            this.renderRange
+            this.renderRange,
+            'file-diff'
           );
         });
       }
@@ -1037,13 +1037,13 @@ export class FileDiff<
     const file = this.getAdditionFile();
     if (fileContainer != null && file != null) {
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-        editor.syncWithRender(
-          'file-diff',
+        editor.syncToRenderedView(
           highlighter,
           fileContainer,
           file,
           this.lineAnnotations,
-          this.renderRange
+          this.renderRange,
+          'file-diff'
         );
       });
     }

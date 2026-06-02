@@ -471,13 +471,13 @@ export class File<
     const file = this.file;
     if (fileContainer != null && file != null) {
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
-        editor.syncWithRender(
-          'file',
+        editor.syncToRenderedView(
           highlighter,
           fileContainer,
           file,
           this.lineAnnotations,
-          this.renderRange
+          this.renderRange,
+          'file'
         );
       });
     }
@@ -660,13 +660,13 @@ export class File<
 
       if (editor != null) {
         void this.fileRenderer.initializeHighlighter().then((highlighter) => {
-          editor.syncWithRender(
-            'file',
+          editor.syncToRenderedView(
             highlighter,
             fileContainer,
             file,
             this.lineAnnotations,
-            this.renderRange
+            this.renderRange,
+            'file'
           );
         });
       }

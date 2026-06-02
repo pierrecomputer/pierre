@@ -920,13 +920,16 @@ export interface DiffsEditableComponent<
 }
 
 export interface DiffsEditor<LAnnotation> {
-  syncWithRender(
-    componentType: 'file' | 'file-diff',
+  syncToRenderedView(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileContents: FileContents,
-    lineAnnotations: LineAnnotation<LAnnotation>[] | undefined,
-    renderRange: RenderRange | undefined
+    lineAnnotations:
+      | LineAnnotation<LAnnotation>[]
+      | DiffLineAnnotation<LAnnotation>[]
+      | undefined,
+    renderRange: RenderRange | undefined,
+    componentType: 'file' | 'file-diff'
   ): void;
   postponeBackgroundTokenizeToNextFrame(): void;
   cleanUp(): void;

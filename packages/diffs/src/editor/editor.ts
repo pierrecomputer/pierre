@@ -219,13 +219,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return () => this.cleanUp();
   }
 
-  syncWithRender(
-    componentType: 'file' | 'file-diff',
+  syncToRenderedView(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileContents: FileContents,
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
-    renderRange: RenderRange | undefined
+    renderRange: RenderRange | undefined,
+    componentType: 'file' | 'file-diff'
   ): void {
     const shadowRoot = fileContainer.shadowRoot;
     if (shadowRoot == null) {
@@ -307,7 +307,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (
       this.#textDocument === undefined ||
       this.#fileContents === undefined ||
-      this.#fileContents.name !== fileContents.name
+      this.#fileContents.name !== fileContents.name ||
+      this.#fileContents.lang !== fileContents.lang
     ) {
       const textDocument = new TextDocument<LAnnotation>(
         fileContents.name,
