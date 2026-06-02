@@ -1,8 +1,6 @@
-const DEBUG_SELECTION = false;
-
 export const editorCSS: string = /* CSS */ `
   ::selection {
-    background-color: ${DEBUG_SELECTION ? 'rgba(255, 0, 0, 0.1)' : 'transparent'};
+    background-color: transparent;
   }
   @keyframes blinking {
     0% { opacity: 1; }
@@ -22,7 +20,7 @@ export const editorCSS: string = /* CSS */ `
   }
   @media (min-width: 480px) {
     [data-content] {
-      caret-color: ${DEBUG_SELECTION ? 'red' : 'transparent'};
+      caret-color: transparent;
     }
     [data-quick-edit] {
       caret-color: currentColor;
@@ -66,7 +64,12 @@ export const editorCSS: string = /* CSS */ `
   [data-caret] {
     width: 2px;
     height: 1lh;
-    background-color: ${DEBUG_SELECTION ? 'transparent' : 'var(--diffs-bg-caret)'};
+    background-color: var(--diffs-bg-caret-override, var(--diffs-editor-cursor-fg,
+      light-dark(
+        color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg)),
+        color-mix(in lab, var(--diffs-fg) 75%, var(--diffs-bg))
+      ))
+    );
     animation: blinking 1.2s infinite;
     animation-delay: 0.8s;
     visibility: hidden;
@@ -75,6 +78,23 @@ export const editorCSS: string = /* CSS */ `
     height: 1lh;
     z-index: -10;
     background-color: var(--diffs-editor-selection-bg);
+  }
+  [data-selection-corner] {
+    width: 100%;
+    height: 100%;
+    background-color: var(--diffs-bg);
+  }
+  [data-rtl] {
+    border-top-left-radius: 3px;
+  }
+  [data-rtr] {
+    border-top-right-radius: 3px;
+  }
+  [data-rbl] {
+    border-bottom-left-radius: 3px;
+  }
+  [data-rbr] {
+    border-bottom-right-radius: 3px;
   }
   [data-editor-overlay] {
     display: contents;
