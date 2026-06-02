@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 .next
+.svelte-kit
 dist-ssr
 *.local
 tsconfig.tsbuildinfo

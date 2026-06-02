@@ -125,29 +125,31 @@ function createMetadataElement(
 ): HASTElement {
   const children: ElementContent[] = [];
   if (fileDiff != null) {
-    let additions = 0;
-    let deletions = 0;
-    for (const hunk of fileDiff.hunks) {
-      additions += hunk.additionLines;
-      deletions += hunk.deletionLines;
-    }
-    if (deletions > 0 || additions === 0) {
-      children.push(
-        createHastElement({
-          tagName: 'span',
-          children: [createTextNodeElement(`-${deletions}`)],
-          properties: { 'data-deletions-count': '' },
-        })
-      );
-    }
-    if (additions > 0 || deletions === 0) {
-      children.push(
-        createHastElement({
-          tagName: 'span',
-          children: [createTextNodeElement(`+${additions}`)],
-          properties: { 'data-additions-count': '' },
-        })
-      );
+    if (fileDiff.hunks.length > 0) {
+      let additions = 0;
+      let deletions = 0;
+      for (const hunk of fileDiff.hunks) {
+        additions += hunk.additionLines;
+        deletions += hunk.deletionLines;
+      }
+      if (deletions > 0 || additions === 0) {
+        children.push(
+          createHastElement({
+            tagName: 'span',
+            children: [createTextNodeElement(`-${deletions}`)],
+            properties: { 'data-deletions-count': '' },
+          })
+        );
+      }
+      if (additions > 0 || deletions === 0) {
+        children.push(
+          createHastElement({
+            tagName: 'span',
+            children: [createTextNodeElement(`+${additions}`)],
+            properties: { 'data-additions-count': '' },
+          })
+        );
+      }
     }
   }
   children.push(

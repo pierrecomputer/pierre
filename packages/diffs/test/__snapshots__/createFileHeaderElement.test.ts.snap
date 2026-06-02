@@ -325,3 +325,91 @@ exports[`createFileHeaderElement renders sticky file header AST 1`] = `
   "type": "element",
 }
 `;
+
+exports[`createFileHeaderElement omits counts for zero-hunk diffs 1`] = `
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [],
+          "properties": {
+            "name": "header-prefix",
+          },
+          "tagName": "slot",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [],
+              "properties": {
+                "href": "#diffs-icon-symbol-modified",
+              },
+              "tagName": "use",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-change-icon": "change",
+            "height": 16,
+            "viewBox": "0 0 16 16",
+            "width": 16,
+          },
+          "tagName": "svg",
+          "type": "element",
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "text",
+                  "value": "assets/app-icon.png",
+                },
+              ],
+              "properties": {},
+              "tagName": "bdi",
+              "type": "element",
+            },
+          ],
+          "properties": {
+            "data-title": "",
+          },
+          "tagName": "div",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-header-content": "",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+    {
+      "children": [
+        {
+          "children": [],
+          "properties": {
+            "name": "header-metadata",
+          },
+          "tagName": "slot",
+          "type": "element",
+        },
+      ],
+      "properties": {
+        "data-metadata": "",
+      },
+      "tagName": "div",
+      "type": "element",
+    },
+  ],
+  "properties": {
+    "data-change-type": "change",
+    "data-diffs-header": "default",
+    "data-sticky": undefined,
+  },
+  "tagName": "div",
+  "type": "element",
+}
+`;

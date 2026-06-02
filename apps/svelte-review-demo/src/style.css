@@ -1,0 +1,153 @@
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #101114;
+  color: #e5e7eb;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+.review-demo {
+  display: grid;
+  height: 100%;
+  min-width: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 3%), transparent 160px), #101114;
+}
+
+.review-demo__toolbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgb(148 163 184 / 18%);
+  background: #17191f;
+}
+
+.review-demo__scope {
+  display: inline-flex;
+  min-width: 0;
+  gap: 4px;
+}
+
+.review-demo__scope-button,
+.review-demo__icon-button {
+  min-height: 30px;
+  border: 1px solid rgb(148 163 184 / 22%);
+  border-radius: 6px;
+  color: #d8dee9;
+  background: rgb(24 27 34 / 86%);
+  cursor: pointer;
+}
+
+.review-demo__scope-button {
+  padding: 0 10px;
+}
+
+.review-demo__scope-button[aria-pressed='true'] {
+  border-color: rgb(96 165 250 / 55%);
+  background: rgb(37 99 235 / 22%);
+  color: #f8fafc;
+}
+
+.review-demo__icon-button {
+  padding: 0 9px;
+  white-space: nowrap;
+}
+
+.review-demo__icon-button:hover,
+.review-demo__scope-button:hover {
+  border-color: rgb(148 163 184 / 42%);
+  background: rgb(39 44 54 / 92%);
+}
+
+.review-demo__icon-button[aria-pressed='true'] {
+  color: #f8fafc;
+  background: rgb(20 83 45 / 44%);
+}
+
+.review-demo__toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.review-demo__stat {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgb(148 163 184 / 18%);
+  border-radius: 6px;
+  color: #aab2c0;
+  background: rgb(15 17 22 / 64%);
+  font-size: 12px;
+}
+
+.review-demo__deletions {
+  color: #f87171;
+}
+
+.review-demo__additions {
+  color: #34d399;
+}
+
+.review-demo__body {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 8px 12px 12px;
+  overflow: hidden;
+}
+
+.review-demo__refresh-state {
+  min-height: 20px;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.review-demo__diff {
+  height: 100%;
+  min-height: 20rem;
+  border: 1px solid rgb(148 163 184 / 18%);
+  border-radius: 8px;
+  background: #101114;
+  contain: strict;
+  overflow-anchor: none;
+}
+
+@media (width <= 720px) {
+  .review-demo__toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .review-demo__toolbar-spacer {
+    display: none;
+  }
+
+  .review-demo__scope {
+    width: 100%;
+  }
+
+  .review-demo__scope-button {
+    flex: 1 1 0;
+  }
+}

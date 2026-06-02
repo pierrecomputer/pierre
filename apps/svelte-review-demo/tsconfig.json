@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": ["src/**/*", "vite.config.ts"],
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "emitDeclarationOnly": false,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "references": [
+    {
+      "path": "../../packages/diffs/tsconfig.json"
+    }
+  ]
+}

@@ -101,6 +101,7 @@ interface ProcessContext {
   rowCount: number;
   expansionLineCount: number;
   hunkSeparators: HunkSeparators;
+  formatUnmodifiedLines(lines: number): string;
   unifiedContentAST: ElementContent[];
   deletionsContentAST: ElementContent[];
   additionsContentAST: ElementContent[];
@@ -353,6 +354,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       expandUnchanged = false,
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       expansionLineCount = 100,
+      formatUnmodifiedLines = getModifiedLinesString,
       hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
@@ -376,6 +378,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       expandUnchanged,
       collapsedContextThreshold,
       expansionLineCount,
+      formatUnmodifiedLines,
       hunkSeparators,
       lineDiffType,
       maxLineDiffLength,
@@ -733,6 +736,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       expansionLineCount,
       collapsedContextThreshold,
       hunkSeparators,
+      formatUnmodifiedLines,
     } = this.getOptionsWithDefaults();
 
     this.diff = fileDiff;
@@ -747,6 +751,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const context: ProcessContext = {
       rowCount: 0,
       hunkSeparators,
+      formatUnmodifiedLines,
       additionsContentAST,
       deletionsContentAST,
       unifiedContentAST,
@@ -1615,7 +1620,7 @@ function pushSeparator(
     type,
     createSeparator({
       type: context.hunkSeparators,
-      content: getModifiedLinesString(collapsedLines),
+      content: context.formatUnmodifiedLines(collapsedLines),
       expandIndex,
       chunked,
       slotName,
@@ -1626,7 +1631,7 @@ function pushSeparator(
   linesAST.push(
     createSeparator({
       type: context.hunkSeparators,
-      content: getModifiedLinesString(collapsedLines),
+      content: context.formatUnmodifiedLines(collapsedLines),
       expandIndex,
       chunked,
       slotName,

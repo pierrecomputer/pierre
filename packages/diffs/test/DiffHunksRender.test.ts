@@ -148,6 +148,54 @@ describe('DiffHunksRenderer', () => {
     expect(html).not.toContain('data-container-size');
   });
 
+  test('formats collapsed separator labels for split and unified output', async () => {
+    const unchangedLines = Array.from(
+      { length: 30 },
+      (_, index) => `line ${index + 1}`
+    );
+    const oldFile = {
+      name: 'example.ts',
+      contents: [
+        ...unchangedLines.slice(0, 20),
+        'const value = 1;',
+        ...unchangedLines.slice(20),
+      ].join('\n'),
+    };
+    const newFile = {
+      name: 'example.ts',
+      contents: [
+        ...unchangedLines.slice(0, 20),
+        'const value = 2;',
+        ...unchangedLines.slice(20),
+      ].join('\n'),
+    };
+    const diff = parseDiffFromFile(oldFile, newFile);
+    expect(diff.hunks[0]?.collapsedBefore).toBeGreaterThan(0);
+
+    const formatUnmodifiedLines = (lines: number) =>
+      `Hidden unchanged lines: ${lines}`;
+    const splitRenderer = new DiffHunksRenderer({
+      diffStyle: 'split',
+      formatUnmodifiedLines,
+    });
+    const unifiedRenderer = new DiffHunksRenderer({
+      diffStyle: 'unified',
+      formatUnmodifiedLines,
+    });
+
+    const splitHTML = splitRenderer.renderFullHTML(
+      await splitRenderer.asyncRender(diff)
+    );
+    const unifiedHTML = unifiedRenderer.renderFullHTML(
+      await unifiedRenderer.asyncRender(diff)
+    );
+
+    expect(splitHTML).toContain('Hidden unchanged lines: 16');
+    expect(splitHTML).not.toContain('16 unmodified lines');
+    expect(unifiedHTML).toContain('Hidden unchanged lines: 16');
+    expect(unifiedHTML).not.toContain('16 unmodified lines');
+  });
+
   test('skips inline diff decorations for changed lines above maxLineDiffLength', async () => {
     const instance = new DiffHunksRenderer({
       diffStyle: 'split',

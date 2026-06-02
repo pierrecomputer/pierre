@@ -56,4 +56,23 @@ describe('createFileHeaderElement', () => {
     expect(header.properties?.['data-sticky']).toBe('');
     expect(header).toMatchSnapshot();
   });
+
+  test('omits counts for zero-hunk diffs', () => {
+    const header = createFileHeaderElement({
+      fileOrDiff: {
+        name: 'assets/app-icon.png',
+        type: 'change',
+        hunks: [],
+        splitLineCount: 0,
+        unifiedLineCount: 0,
+        isPartial: true,
+        deletionLines: [],
+        additionLines: [],
+      },
+      mode: 'default',
+      stickyHeader: false,
+    });
+
+    expect(header).toMatchSnapshot();
+  });
 });

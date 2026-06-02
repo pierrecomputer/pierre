@@ -12,6 +12,7 @@ const config: UserConfig = defineConfig([
     entry: [
       'src/**/*.ts',
       'src/**/*.tsx',
+      '!src/svelte/**/*.ts',
       '!src/worker/worker.ts',
       '!src/worker/worker-portable.ts',
     ],
