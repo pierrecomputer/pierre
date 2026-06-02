@@ -1,4 +1,5 @@
 import { isPrimaryModifier } from './platform';
+import { getEditorIconSvg } from './sprite';
 import type { TextDocument } from './textDocument';
 import { h } from './utils';
 
@@ -143,15 +144,7 @@ export class SearchPanelWidget {
     const settingsSwitch = h('div', {
       dataset: { icon: 'settings' },
       title: 'Settings',
-      innerHTML: `<svg width="16" height="16" viewBox="0 0 20 20">
-        <line x1="3" y1="6" x2="10" y2="6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-        <circle cx="12.5" cy="6" r="2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></circle>
-        <line x1="15" y1="6" x2="17" y2="6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-        <line x1="17" y1="14" x2="10" y2="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-        <circle cx="7.5" cy="14" r="2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></circle>
-        <line x1="5" y1="14" x2="3" y2="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-      </svg>
-      `,
+      innerHTML: getEditorIconSvg('settings'),
       onclick: () => {
         settingsSwitch.replaceWith(settingsPanel);
       },
@@ -252,21 +245,14 @@ export class SearchPanelWidget {
           children: [
             h('div', {
               dataset: { icon: 'search' },
-              innerHTML: `<svg width="16" height="16" viewBox="0 0 20 20">
-                <line x1="16.5" y1="16.5" x2="12.0355" y2="12.0355" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-                <circle cx="8.5" cy="8.5" r="5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></circle>
-              </svg>
-              `,
+              innerHTML: getEditorIconSvg('search'),
             }),
             this.#inputElement,
             matchResultElement,
             h('div', {
               dataset: { icon: 'arrow-up', disabled: 'true' },
               title: 'Previous',
-              innerHTML: `<svg width="14" height="14" viewBox="0 0 20 20">
-                <polyline points="12.5 3.5 6 10 12.5 16.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></polyline>
-              </svg>
-              `,
+              innerHTML: getEditorIconSvg('arrow-up', 14),
               onclick: () => {
                 findNextMatch(true);
               },
@@ -274,10 +260,7 @@ export class SearchPanelWidget {
             h('div', {
               dataset: { icon: 'arrow-down', disabled: 'true' },
               title: 'Next',
-              innerHTML: `<svg width="14" height="14" viewBox="0 0 20 20">
-                <polyline points="7.5 16.5 14 10 7.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></polyline>
-              </svg>
-              `,
+              innerHTML: getEditorIconSvg('arrow-down', 14),
               onclick: () => {
                 findNextMatch();
               },
@@ -287,11 +270,7 @@ export class SearchPanelWidget {
             h('div', {
               dataset: { icon: 'close' },
               title: 'Close',
-              innerHTML: `<svg width="16" height="16" viewBox="0 0 20 20">
-                <line x1="5" y1="5" x2="15" y2="15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-                <line x1="5" y1="15" x2="15" y2="5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-              </svg>
-              `,
+              innerHTML: getEditorIconSvg('close'),
               onclick: close,
             }),
           ],

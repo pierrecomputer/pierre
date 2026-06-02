@@ -1,4 +1,5 @@
 import type { EditorSelection } from './selection';
+import { getEditorIconSvg } from './sprite';
 import type { TextDocument, TextEdit } from './textDocument';
 import { h } from './utils';
 
@@ -32,10 +33,7 @@ export class QuickEditWidget {
         style: {
           transform: `translateY(${y}px) translateX(${x}px)`,
         },
-        innerHTML: `<svg width="16" height="16" viewBox="0 0 20 20">
-          <polygon points="11 3 9 9 16 9 9 17 11 11 4 11 11 3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" fill="currentColor"></polygon>
-          </svg>
-        `,
+        innerHTML: getEditorIconSvg('quick'),
         onclick,
       },
       container

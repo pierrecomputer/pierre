@@ -20,7 +20,6 @@ import {
   type EditorCommand,
   resolveEditorCommandFromKeyboardEvent,
 } from './command';
-import { editorCSS, editorGlobalCSS } from './css';
 import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import { type QuickEditContext, QuickEditWidget } from './quickEdit';
@@ -55,6 +54,8 @@ import {
   resolveIndentEdits,
   selectionIntersects,
 } from './selection';
+import { SVGSpriteSheet } from './sprite';
+import editorCSS from './style.css';
 import {
   getExpandedAsciiTextColumns,
   getUnicodeMeasurementOffsets,
@@ -122,6 +123,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #globalStyleElement?: HTMLStyleElement;
   #editorStyleElement?: HTMLStyleElement;
   #themeStyleElement?: HTMLStyleElement;
+  #spriteElement?: HTMLElement;
   #componentContainer?: HTMLElement;
   #contentElement?: HTMLElement;
   #overlayElement?: HTMLElement;
@@ -286,6 +288,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#editorStyleElement = undefined;
     this.#themeStyleElement?.remove();
     this.#themeStyleElement = undefined;
+    this.#spriteElement?.remove();
+    this.#spriteElement = undefined;
     this.#componentContainer = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
     this.#contentElement = undefined;
@@ -391,6 +395,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
       if (this.#themeStyleElement !== undefined) {
         shadowRoot.appendChild(this.#themeStyleElement);
+      }
+      if (this.#spriteElement !== undefined) {
+        shadowRoot.appendChild(this.#spriteElement);
       }
     }
 
@@ -812,6 +819,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #initialize(): void {
+    // Safari doesn't support `::selection` for slot elements in ShadowDOM,
+    // Add a global style to disable selection for slot elements
+    this.#globalStyleElement = h('style', {
+      dataset: 'editorGlobalCss',
+      textContent: `
+        [data-annotation-slot] {
+          user-select: none;
+          -webkit-user-select: none;
+        }
+      `,
+    });
+
     this.#editorStyleElement = h('style', {
       dataset: 'editorCss',
       textContent: editorCSS,
@@ -821,10 +840,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       dataset: 'editorThemeCss',
     });
 
-    this.#globalStyleElement = h('style', {
-      dataset: 'editorGlobalCss',
-      textContent: editorGlobalCSS,
-    });
+    const fragment = document.createElement('div');
+    fragment.innerHTML = SVGSpriteSheet;
+    this.#spriteElement = fragment.firstElementChild as HTMLElement;
 
     this.#overlayElement = h('div', {
       dataset: 'editorOverlay',
