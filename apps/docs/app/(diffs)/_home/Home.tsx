@@ -21,6 +21,7 @@ import { FONT_STYLES } from '../_examples/FontStyles/constants';
 import { FontStyles } from '../_examples/FontStyles/FontStyles';
 import { LINE_SELECTION_EXAMPLE } from '../_examples/LineSelection/constants';
 import { LineSelection } from '../_examples/LineSelection/LineSelection';
+import { LIVE_EDITOR_EXAMPLE } from '../_examples/LiveEditor/constants';
 import { LiveEditor } from '../_examples/LiveEditor/LiveEditor';
 import { MERGE_CONFLICT_EXAMPLE } from '../_examples/MergeConflict/constants';
 import { MergeConflict } from '../_examples/MergeConflict/MergeConflict';
@@ -48,7 +49,7 @@ export default function Home() {
         <HeadingAnchors />
         <section className="space-y-12 pb-8">
           <SplitUnifiedSection />
-          <LiveEditor />
+          <LiveEditorSection />
           <ShikiThemesSection />
           <DiffStylesSection />
           <FontStylesSection />
@@ -71,6 +72,14 @@ export default function Home() {
 async function SplitUnifiedSection() {
   return (
     <SplitUnified prerenderedDiff={await preloadMultiFileDiff(SPLIT_UNIFIED)} />
+  );
+}
+
+async function LiveEditorSection() {
+  return (
+    <LiveEditor
+      prerenderedDiff={await preloadMultiFileDiff(LIVE_EDITOR_EXAMPLE)}
+    />
   );
 }
 

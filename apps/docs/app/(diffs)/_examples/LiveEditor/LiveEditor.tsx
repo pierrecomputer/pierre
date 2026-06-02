@@ -2,16 +2,13 @@
 
 import { Editor } from '@pierre/diffs/editor';
 import { EditorProvider, MultiFileDiff } from '@pierre/diffs/react';
+import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { IconRefresh } from '@pierre/icons';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import {
-  LIVE_EDITOR_NEW_FILE,
-  LIVE_EDITOR_OLD_FILE,
-  LIVE_EDITOR_OPTIONS,
-} from './constants';
+import { LIVE_EDITOR_NEW_FILE } from './constants';
 import { FeatureHeader } from '@/components/FeatureHeader';
-import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 // Largest number of undo steps we will replay on reset. The editor keeps a
 // bounded history (100 entries), so anything past that can't be reverted
@@ -31,7 +28,11 @@ function findEditorContentElement(
   );
 }
 
-export function LiveEditor() {
+interface LiveEditorProps {
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+}
+
+export function LiveEditor({ prerenderedDiff }: LiveEditorProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [hasEdits, setHasEdits] = useState(false);
 
@@ -129,36 +130,27 @@ export function LiveEditor() {
         }
       />
 
-      <div className="bg-muted flex flex-col gap-2 rounded-lg p-3 sm:flex-row sm:items-center">
-        <div className="self-start p-2 font-mono text-sm text-nowrap">
-          {hasEdits ? (
-            <span className="font-semibold">Edited</span>
-          ) : (
-            <span className="text-muted-foreground">
-              Start typing to edit the file
-            </span>
-          )}
-        </div>
-        <div className="flex min-w-0 flex-wrap gap-1 sm:ml-auto">
-          <Button
-            variant="outline"
-            onClick={() => void handleReset()}
-            disabled={!hasEdits}
-            title="Revert to the original contents"
-          >
-            <IconRefresh size={16} />
-            Reset
-          </Button>
-        </div>
-      </div>
-
       <div ref={wrapperRef}>
         <EditorProvider editor={editor}>
           <MultiFileDiff
+            {...prerenderedDiff}
             className="diff-container"
-            options={LIVE_EDITOR_OPTIONS}
-            oldFile={LIVE_EDITOR_OLD_FILE}
-            newFile={LIVE_EDITOR_NEW_FILE}
+            renderHeaderMetadata={() => (
+              <button
+                onClick={() => void handleReset()}
+                disabled={!hasEdits}
+                title="Revert to the original contents"
+                className={cn(
+                  'mr-[-6px] ml-1.5 flex items-center gap-1 rounded-md px-2 py-0.5',
+                  hasEdits
+                    ? 'bg-accent/30 text-white'
+                    : 'text-muted-foreground/40 bg-accent/10'
+                )}
+              >
+                <IconRefresh size={12} />
+                Reset
+              </button>
+            )}
             contentEditable
           />
         </EditorProvider>
