@@ -349,9 +349,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         const line = el.dataset.line;
         const lineType = el.dataset.lineType;
         if (line !== undefined) {
-          const lineIndex = Number(line) - 1;
-          startingLine ??= lineIndex;
-          endLine = lineIndex;
+          const lineNumber = parseInt(line, 10);
+          if (!Number.isNaN(lineNumber)) {
+            const lineIndex = lineNumber - 1;
+            startingLine ??= lineIndex;
+            endLine = lineIndex;
+          }
         }
         if (lineType === undefined || !isLineEditable(lineType)) {
           el.contentEditable = 'false';
@@ -375,9 +378,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // inject editor css to the file container
     if (this.#componentContainer !== fileContainer) {
       this.#componentContainer = fileContainer;
-      this.#codePaddingTop = Number(
-        getComputedStyle(codeElement).paddingTop.slice(0, -2)
+      const codePaddingTop = parseInt(
+        getComputedStyle(codeElement).paddingTop.slice(0, -2),
+        10
       );
+      this.#codePaddingTop = Number.isNaN(codePaddingTop) ? 0 : codePaddingTop;
       if (this.#globalStyleElement !== undefined) {
         fileContainer.appendChild(this.#globalStyleElement);
       }
@@ -646,16 +651,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               if (target === undefined || textDocument === undefined) {
                 return;
               }
-              const lineNumber = target.dataset.columnNumber;
+              const columnNumber = target.dataset.columnNumber;
               const lineType = target.dataset.lineType;
               if (
-                lineNumber === undefined ||
+                columnNumber === undefined ||
                 lineType === undefined ||
                 !isLineEditable(lineType)
               ) {
                 return;
               }
-              const line = Number(lineNumber) - 1;
+              const lineNumber = parseInt(columnNumber, 10);
+              if (Number.isNaN(lineNumber)) {
+                return;
+              }
+              const line = lineNumber - 1;
               const selection: EditorSelection = {
                 start: { line, character: 0 },
                 end: {
@@ -684,17 +693,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                     if (target === undefined) {
                       return;
                     }
-                    const lineNumber =
+
+                    const line =
                       target.dataset.columnNumber ?? target.dataset.line;
                     const lineType = target.dataset.lineType;
                     if (
                       this.#isGutterMouseDown &&
                       this.#textDocument !== undefined &&
-                      lineNumber !== undefined &&
+                      line !== undefined &&
                       lineType !== undefined &&
                       isLineEditable(lineType)
                     ) {
-                      const lineIndex = Number(lineNumber) - 1;
+                      const lineNumber = parseInt(line, 10);
+                      if (Number.isNaN(lineNumber)) {
+                        return;
+                      }
+                      const lineIndex = lineNumber - 1;
                       let selection: EditorSelection = {
                         start: { line: lineIndex, character: 0 },
                         end: {
@@ -1133,15 +1147,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           const el = child as HTMLElement;
           const line = el.dataset.line;
           if (line !== undefined) {
-            const lineIndex = Number(el.dataset.line) - 1;
-            const tokens = dirtyLines.get(lineIndex);
-            if (tokens !== undefined) {
-              el.replaceChildren(
-                ...renderLineTokens(tokens, tokenizer.themeType)
-              );
-              dirtyLineIndexes.delete(lineIndex);
-              if (dirtyLineIndexes.size === 0) {
-                break;
+            const lineNumber = parseInt(line, 10);
+            if (!Number.isNaN(lineNumber)) {
+              const lineIndex = lineNumber - 1;
+              const tokens = dirtyLines.get(lineIndex);
+              if (tokens !== undefined) {
+                el.replaceChildren(
+                  ...renderLineTokens(tokens, tokenizer.themeType)
+                );
+                dirtyLineIndexes.delete(lineIndex);
+                if (dirtyLineIndexes.size === 0) {
+                  break;
+                }
               }
             }
           }
@@ -1154,16 +1171,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           i++
         ) {
           const child = children[i] as HTMLElement | undefined;
-          if (child?.dataset.line !== undefined) {
-            const lineIndex = Number(child.dataset.line) - 1;
-            if (dirtyLines.has(lineIndex)) {
-              const tokens = dirtyLines.get(lineIndex)!;
-              child.replaceChildren(
-                ...renderLineTokens(tokens, tokenizer.themeType)
-              );
-              dirtyLineIndexes.delete(lineIndex);
-              if (dirtyLineIndexes.size === 0) {
-                break;
+          if (child !== undefined && child.dataset.line !== undefined) {
+            const lineNumber = parseInt(child.dataset.line, 10);
+            if (!Number.isNaN(lineNumber)) {
+              const lineIndex = lineNumber - 1;
+              if (dirtyLines.has(lineIndex)) {
+                const tokens = dirtyLines.get(lineIndex)!;
+                child.replaceChildren(
+                  ...renderLineTokens(tokens, tokenizer.themeType)
+                );
+                dirtyLineIndexes.delete(lineIndex);
+                if (dirtyLineIndexes.size === 0) {
+                  break;
+                }
               }
             }
           }
@@ -1218,18 +1238,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         const children = parent.children;
         for (let i = children.length - 1; i >= 0; i--) {
           const child = children[i] as HTMLElement;
-          const { lineIndex, lineAnnotation } = child.dataset;
-          if (lineIndex !== undefined || lineAnnotation !== undefined) {
-            const lineIndexNum = Number(
-              lineAnnotation !== undefined
-                ? lineAnnotation.split(',')[1]
-                : lineIndex
-            );
-            if (lineIndexNum < change.lineCount) {
-              break;
-            }
-            child.remove();
+          const { line, columnNumber, lineAnnotation } = child.dataset;
+          if (
+            line === undefined &&
+            columnNumber === undefined &&
+            lineAnnotation === undefined
+          ) {
+            continue;
           }
+          const lineIndex =
+            lineAnnotation !== undefined
+              ? parseInt(lineAnnotation.split(',')[1], 10)
+              : parseInt(line ?? columnNumber!, 10) - 1;
+          if (Number.isNaN(lineIndex)) {
+            continue;
+          }
+          if (lineIndex < change.lineCount) {
+            break;
+          }
+          child.remove();
         }
       }
     }
@@ -2329,7 +2356,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           lineNumber !== undefined &&
           lineType !== undefined &&
           isLineEditable(lineType) &&
-          Number(lineNumber) === line + 1
+          parseInt(lineNumber, 10) === line + 1
         ) {
           return child;
         }
@@ -2369,7 +2396,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         diffsColumnNumberWidth.length > 2 &&
         diffsColumnNumberWidth.endsWith('px')
       ) {
-        this.#gutterWidthCache = Number(diffsColumnNumberWidth.slice(0, -2));
+        this.#gutterWidthCache = parseInt(
+          diffsColumnNumberWidth.slice(0, -2),
+          10
+        );
       } else {
         this.#gutterWidthCache = gutterElement.offsetWidth;
       }
@@ -2393,7 +2423,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         diffsColumnContentWidth.length > 2 &&
         diffsColumnContentWidth.endsWith('px')
       ) {
-        this.#contentWidthCache = Number(diffsColumnContentWidth.slice(0, -2));
+        this.#contentWidthCache = parseFloat(
+          diffsColumnContentWidth.slice(0, -2)
+        );
       } else {
         this.#contentWidthCache = this.#contentElement.offsetWidth;
       }
