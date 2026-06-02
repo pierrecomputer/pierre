@@ -242,24 +242,21 @@ export function EditCodeFile() {
 export const EDITOR_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_file_diff.tsx',
-    contents: `import type { FileContents } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, FileDiff, Virtualizer } from '@pierre/diffs/react';
+    contents: `import { Editor } from '@pierre/diffs/editor';
+import {
+  type FileDiffMetadata,
+  EditorProvider,
+  FileDiff,
+  parseDiffFromFile,
+  Virtualizer,
+} from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
-const oldFile: FileContents = {
-  name: 'example.ts',
-  contents: \`function greet(name: string) {
-  return name;
-}\`,
-};
-
-const newFile: FileContents = {
-  ...oldFile,
-  contents: \`function greet(name: string) {
-  return \\\`Hello, \\\${name}!\\\`;
-}\`,
-};
+// FileDiff takes a pre-parsed FileDiffMetadata object.
+const fileDiff: FileDiffMetadata = parseDiffFromFile(
+  { name: 'example.ts', contents: 'console.log("Hello world")' },
+  { name: 'example.ts', contents: 'console.warn("Updated message")' }
+);
 
 export function EditCodeDiff() {
   const [editable, setEditable] = useState(true);
@@ -287,8 +284,7 @@ export function EditCodeDiff() {
         }}
       >
         <FileDiff
-          oldFile={oldFile}
-          newFile={newFile}
+          fileDiff={fileDiff}
           options={{
             theme: { dark: 'pierre-dark', light: 'pierre-light' },
           }}
