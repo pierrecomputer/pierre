@@ -24,6 +24,7 @@ export interface EditorTokenizerProps {
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
   ) => void;
+  __debug?: boolean;
 }
 
 /** Stoppable code tokenizer for the editor */
@@ -39,6 +40,7 @@ export class EditorTokenizer {
   #tokenizeMaxLineLength: number;
   #setStyle: EditorTokenizerProps['setStyle'];
   #onDeferTokenize: EditorTokenizerProps['onDeferTokenize'];
+  #debug: boolean;
   #disposes?: (() => void)[];
 
   // state
@@ -93,6 +95,7 @@ export class EditorTokenizer {
     textDocument,
     setStyle,
     onDeferTokenize,
+    __debug,
   }: EditorTokenizerProps) {
     const {
       themeType = 'system',
@@ -137,6 +140,7 @@ export class EditorTokenizer {
     this.#tokenizeMaxLineLength = tokenizeMaxLineLength;
     this.#setStyle = setStyle;
     this.#onDeferTokenize = onDeferTokenize;
+    this.#debug = __debug ?? false;
     if (highlighter.getLoadedLanguages().includes(textDocument.languageId)) {
       this.#grammar = highlighter.getLanguage(textDocument.languageId);
     }
@@ -386,6 +390,11 @@ export class EditorTokenizer {
     if (this.#isStopped || this.#isPaused) {
       return;
     }
+    if (this.#debug) {
+      console.log('[diffs/editor] background tokenization paused', {
+        jobId: this.#backgroundJobId,
+      });
+    }
     this.#isPaused = true;
   }
 
@@ -397,6 +406,11 @@ export class EditorTokenizer {
       this.#lastLine < 0
     ) {
       return;
+    }
+    if (this.#debug) {
+      console.log('[diffs/editor] background tokenization resumed', {
+        jobId: this.#backgroundJobId,
+      });
     }
     this.#isPaused = false;
     this.#postTokenizeMessage(this.#backgroundJobId);
@@ -429,6 +443,15 @@ export class EditorTokenizer {
     changedRangeIndex = 0
   ): void {
     const jobId = ++this.#backgroundJobId;
+
+    if (this.#debug) {
+      console.log('[diffs/editor] background tokenization scheduled', {
+        jobId,
+        startLine,
+        changedLineRanges,
+        changedRangeIndex,
+      });
+    }
 
     this.#isStopped = false;
     this.#isPaused = false;

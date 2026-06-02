@@ -325,6 +325,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         setStyle: (css) => {
           this.#themeStyleElement!.textContent = css;
         },
+        __debug: this.#options.__debug,
       });
       this.#shouldIgnoreSelectionChange = false;
       this.#selectionElements?.forEach((el) => el.remove());
