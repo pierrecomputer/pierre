@@ -293,8 +293,17 @@ export class File<
 
     const { overflow = 'scroll' } = this.options;
     this.interactionManager.setup(this.pre);
-    this.resizeManager.setup(this.pre, overflow === 'wrap');
+    this.resizeManager.setup(this.pre, {
+      disableAnnotations: overflow === 'wrap',
+      columnVariables: this.shouldApplyColumnVariables(overflow)
+        ? 'apply'
+        : 'measure',
+    });
     this.managersDirty = false;
+  }
+
+  protected shouldApplyColumnVariables(overflow: 'scroll' | 'wrap'): boolean {
+    return overflow === 'scroll' && this.lineAnnotations.length > 0;
   }
 
   public cleanUp(recycle = false): void {
