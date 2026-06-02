@@ -81,14 +81,15 @@ editing will have no effect.
 ### React
 
 Create one `Editor` instance (typically with `useMemo`), wrap your tree in
-`EditorProvider`, and set `contentEditable` on `File` or `FileDiff` when editing
-should be active. The provider cleans up the editor on unmount. We highly
-recommend using the `Virtualizer` component for best performance when editing
-large files.
+`EditorProvider`, and set `contentEditable` on `File`, `FileDiff`, or
+`MultiFileDiff` when editing should be active. The provider cleans up the editor
+on unmount. We highly recommend using the `Virtualizer` component for best
+performance when editing large files.
 
 <EditorComponentTabs
   fileExample={editorReactExample}
   fileDiffExample={editorReactFileDiffExample}
+  multiFileDiffExample={editorReactMultiFileDiffExample}
 />
 
 ### Lazy Loading

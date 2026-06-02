@@ -301,3 +301,71 @@ export function EditCodeDiff() {
   },
   options,
 };
+
+export const EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> =
+  {
+    file: {
+      name: 'editor_react_multi_file_diff.tsx',
+      contents: `import type { FileContents } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+import {
+  EditorProvider,
+  MultiFileDiff,
+  Virtualizer,
+} from '@pierre/diffs/react';
+import { useMemo, useState } from 'react';
+
+const oldFile: FileContents = {
+  name: 'example.ts',
+  contents: \`function greet(name: string) {
+  return name;
+}\`,
+};
+
+const newFile: FileContents = {
+  ...oldFile,
+  contents: \`function greet(name: string) {
+  return \\\`Hello, \\\${name}!\\\`;
+}\`,
+};
+
+export function EditMultiFileDiff() {
+  const [editable, setEditable] = useState(true);
+  const editor = useMemo(
+    () =>
+      new Editor({
+        onChange(file, lineAnnotations) {
+          console.log('change', file.name, lineAnnotations);
+        },
+      }),
+    []
+  );
+
+  return (
+    <EditorProvider editor={editor}>
+      <button type="button" onClick={() => setEditable((value) => !value)}>
+        {editable ? 'Disable editing' : 'Enable editing'}
+      </button>
+
+      <Virtualizer
+        style={{
+          maxHeight: '16rem',
+          overflow: 'auto',
+          borderRadius: '0.5rem',
+        }}
+      >
+        <MultiFileDiff
+          oldFile={oldFile}
+          newFile={newFile}
+          options={{
+            theme: { dark: 'pierre-dark', light: 'pierre-light' },
+          }}
+          contentEditable={editable}
+        />
+      </Virtualizer>
+    </EditorProvider>
+  );
+}`,
+    },
+    options,
+  };

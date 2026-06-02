@@ -32,6 +32,7 @@ import {
   EDITOR_QUICK_EDIT_EXAMPLE,
   EDITOR_REACT_EXAMPLE,
   EDITOR_REACT_FILE_DIFF_EXAMPLE,
+  EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE,
   EDITOR_VANILLA_FILE_DIFF_EXAMPLE,
   EDITOR_VANILLA_FILE_EXAMPLE,
 } from '../docs/Editor/constants';
@@ -398,6 +399,7 @@ async function EditorSection() {
     editorQuickEditExample,
     editorReactExample,
     editorReactFileDiffExample,
+    editorReactMultiFileDiffExample,
   ] = await Promise.all([
     preloadFile(EDITOR_VANILLA_FILE_EXAMPLE),
     preloadFile(EDITOR_VANILLA_FILE_DIFF_EXAMPLE),
@@ -406,6 +408,7 @@ async function EditorSection() {
     preloadFile(EDITOR_QUICK_EDIT_EXAMPLE),
     preloadFile(EDITOR_REACT_EXAMPLE),
     preloadFile(EDITOR_REACT_FILE_DIFF_EXAMPLE),
+    preloadFile(EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/Editor/content.mdx',
@@ -417,6 +420,7 @@ async function EditorSection() {
       editorQuickEditExample,
       editorReactExample,
       editorReactFileDiffExample,
+      editorReactMultiFileDiffExample,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
