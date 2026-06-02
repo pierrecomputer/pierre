@@ -840,6 +840,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             return;
           }
 
+          // Native selection only tracks one range. focus() and DOM updates while
+          // typing mirror the primary caret there, so selectionchange must not
+          // overwrite multi-cursor editor state outside an active pointer gesture.
+          if (
+            this.#selections !== undefined &&
+            this.#selections.length > 1 &&
+            !this.#isContentMouseDown
+          ) {
+            return;
+          }
+
           const selectionRaw = document.getSelection();
           const composedRange = selectionRaw?.getComposedRanges({
             shadowRoots: [shadowRoot],
