@@ -1460,14 +1460,23 @@ function getLineChildEnd(
 function getLineIndex(el: HTMLElement): number | undefined {
   const { line } = el.dataset;
   if (line !== undefined) {
-    return parseInt(line) - 1;
+    const lineNumber = parseInt(line, 10);
+    if (!Number.isNaN(lineNumber)) {
+      return lineNumber - 1;
+    }
   }
   return undefined;
 }
 
 function getCharacterIndex(el: HTMLElement): number | undefined {
   const { char } = el.dataset;
-  return char !== undefined ? parseInt(char) : undefined;
+  if (char !== undefined) {
+    const charIndex = parseInt(char, 10);
+    if (!Number.isNaN(charIndex)) {
+      return charIndex;
+    }
+  }
+  return undefined;
 }
 
 function getTextOffset(

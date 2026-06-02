@@ -894,19 +894,7 @@ export interface StickySpecs {
   height: number;
 }
 
-export interface DiffsEditor<LAnnotation> {
-  syncWithRender(
-    highlighter: DiffsHighlighter,
-    fileContainer: HTMLElement,
-    fileContents: FileContents,
-    lineAnnotations: LineAnnotation<LAnnotation>[] | undefined,
-    renderRange: RenderRange | undefined,
-    editMode?: 'simple' | 'advanced'
-  ): void;
-  cleanUp(): void;
-}
-
-export interface DiffsEditorOptions extends BaseCodeOptions {
+export interface DiffsComponentOptions extends BaseCodeOptions {
   enableGutterUtility?: boolean;
   enableLineSelection?: boolean;
   expandUnchanged?: boolean;
@@ -915,8 +903,8 @@ export interface DiffsEditorOptions extends BaseCodeOptions {
 
 export interface DiffsBaseComponent {
   readonly top?: number;
-  readonly options: DiffsEditorOptions;
-  setOptions: (options: Partial<DiffsEditorOptions>) => void;
+  readonly options: DiffsComponentOptions;
+  setOptions: (options: Partial<DiffsComponentOptions>) => void;
   setSelectedLines: (range: { start: number; end: number } | null) => void;
   rerender(): void;
   cleanUp(): void;
@@ -937,10 +925,16 @@ export interface DiffsEditableComponent<
   ) => void;
 }
 
-export interface DiffsTextDocument {
-  lineCount: number;
-  getLineText: (lineNumber: number) => string;
-  getText: () => string;
+export interface DiffsEditor<LAnnotation> {
+  syncWithRender(
+    highlighter: DiffsHighlighter,
+    fileContainer: HTMLElement,
+    fileContents: FileContents,
+    lineAnnotations: LineAnnotation<LAnnotation>[] | undefined,
+    renderRange: RenderRange | undefined,
+    editMode?: 'simple' | 'advanced'
+  ): void;
+  cleanUp(): void;
 }
 
 export interface DiffsEditorSelection {
@@ -953,4 +947,10 @@ export interface DiffsEditorSelection {
     character: number;
   };
   direction: 'none' | 'backward' | 'forward';
+}
+
+export interface DiffsTextDocument {
+  readonly lineCount: number;
+  getLineText: (lineNumber: number) => string;
+  getText: () => string;
 }

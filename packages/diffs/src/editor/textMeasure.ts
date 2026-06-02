@@ -33,10 +33,10 @@ export class Metrics {
     const { fontSize, fontFamily, tabSize, lineHeight } =
       getComputedStyle(root);
     if (lineHeight.endsWith('px')) {
-      this.lineHeight = Number(lineHeight.slice(0, -2));
+      this.lineHeight = parseFloat(lineHeight.slice(0, -2));
     } else if (fontSize.endsWith('px')) {
       this.lineHeight = round(
-        Number(fontSize.slice(0, -2)) * Number(lineHeight)
+        parseFloat(fontSize.slice(0, -2)) * parseFloat(lineHeight)
       );
     }
     const font = fontSize + ' ' + fontFamily;
@@ -45,7 +45,7 @@ export class Metrics {
       this.#canvasCtx.font = font;
       this.ch = this.canvasMeasureTextWidth('0');
     }
-    this.tabSize = Number(tabSize);
+    this.tabSize = parseInt(tabSize, 10);
   }
 
   /** measure the width of the text */
