@@ -4,9 +4,21 @@ import {
 } from '@pierre/diffs/svelte/review';
 import { describe, expect, test } from 'bun:test';
 
+import { createInitialReviewCommentThreads } from '../src/reviewComments';
 import { createReviewFiles } from '../src/reviewFiles';
 
 describe('createReviewFiles', () => {
+  test('creates initial review comment threads for rendered demo files', () => {
+    const files = createReviewFiles(2);
+    const fileIds = new Set(files.map((file) => file.id));
+    const threads = createInitialReviewCommentThreads(2);
+
+    expect(threads).toHaveLength(2);
+    expect(threads.every((thread) => fileIds.has(thread.target.fileId))).toBe(
+      true
+    );
+  });
+
   test('builds a large review data set with a folded large file', () => {
     const files = createReviewFiles(3);
     const largeFile = files.find(

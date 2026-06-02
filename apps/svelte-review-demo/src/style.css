@@ -133,6 +133,96 @@ button {
   overflow-anchor: none;
 }
 
+.review-demo-comment {
+  box-sizing: border-box;
+  max-width: min(40rem, 100%);
+  margin: 8px 12px;
+  border: 1px solid rgb(96 165 250 / 28%);
+  border-radius: 8px;
+  color: #dbeafe;
+  background: #0b1220;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 22%);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+
+.review-demo-comment__header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 10px;
+  border-bottom: 1px solid rgb(96 165 250 / 16%);
+  color: #bfdbfe;
+  font-size: 12px;
+}
+
+.review-demo-comment__header span {
+  color: #94a3b8;
+}
+
+.review-demo-comment__body {
+  margin: 0;
+  padding: 10px;
+  color: #e5e7eb;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.review-demo-comment__label {
+  display: block;
+  padding: 9px 10px 0;
+  color: #bfdbfe;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.review-demo-comment__textarea {
+  box-sizing: border-box;
+  width: calc(100% - 20px);
+  min-height: 72px;
+  margin: 8px 10px 0;
+  padding: 8px;
+  border: 1px solid rgb(148 163 184 / 30%);
+  border-radius: 6px;
+  color: #e5e7eb;
+  background: #111827;
+  font: inherit;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.review-demo-comment__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px;
+}
+
+.review-demo-comment__ghost-button,
+.review-demo-comment__primary-button {
+  min-height: 28px;
+  border-radius: 6px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.review-demo-comment__ghost-button {
+  border: 1px solid rgb(148 163 184 / 28%);
+  color: #d8dee9;
+  background: rgb(24 27 34 / 86%);
+}
+
+.review-demo-comment__primary-button {
+  border: 1px solid rgb(37 99 235 / 90%);
+  color: #fff;
+  background: #2563eb;
+}
+
 @media (width <= 720px) {
   .review-demo__toolbar {
     align-items: stretch;
