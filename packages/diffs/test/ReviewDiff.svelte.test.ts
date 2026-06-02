@@ -27,13 +27,27 @@ const COMPILED_COMPONENT_URL = new URL(
   '../src/svelte/review/.ReviewDiff.svelte.test.generated.mjs',
   import.meta.url
 );
+const COMPILED_HARNESS_URL = new URL(
+  '../src/svelte/review/.ReviewDiff.harness.svelte.test.generated.mjs',
+  import.meta.url
+);
+const COMPILED_COMPONENT_IMPORT_PATH =
+  './.ReviewDiff.svelte.test.generated.mjs';
 
 interface InstalledDom {
   cleanup(): void;
 }
 
 let installedDom: InstalledDom | undefined;
-let mountedComponent: ReviewDiffHandle | undefined;
+let nextCompiledModuleVersion = 0;
+interface ReviewDiffTestHarnessHandle {
+  clearCommentThreads?(): void;
+  useSecondRenderer?(): void;
+}
+
+let mountedComponent:
+  | (Partial<ReviewDiffHandle> & ReviewDiffTestHarnessHandle)
+  | undefined;
 
 afterEach(async () => {
   if (mountedComponent != null) {
@@ -46,6 +60,9 @@ afterEach(async () => {
 
   if (existsSync(COMPILED_COMPONENT_URL)) {
     unlinkSync(COMPILED_COMPONENT_URL);
+  }
+  if (existsSync(COMPILED_HARNESS_URL)) {
+    unlinkSync(COMPILED_HARNESS_URL);
   }
 });
 
@@ -102,15 +119,16 @@ describe('ReviewDiff.svelte', () => {
     expect(binaryContainer?.querySelector('[data-deletions-count]')).toBeNull();
     expect(binaryContainer?.querySelector('[data-additions-count]')).toBeNull();
 
-    expect(typeof mountedComponent.hydrateFile).toBe('function');
-    expect(typeof mountedComponent.applyCollapseModeToLoaded).toBe('function');
+    const reviewDiff = mountedComponent as ReviewDiffHandle;
+    expect(typeof reviewDiff.hydrateFile).toBe('function');
+    expect(typeof reviewDiff.applyCollapseModeToLoaded).toBe('function');
 
     const stalePatch = createVirtualReviewFile(
       'src/app.ts',
       'const stale = false;',
       'const stale = true;'
     ).patch;
-    mountedComponent.hydrateFile(
+    reviewDiff.hydrateFile(
       'src/app.ts',
       stalePatch,
       'const stale = false;\n',
@@ -119,14 +137,14 @@ describe('ReviewDiff.svelte', () => {
     await waitFor(() => region?.querySelector('diffs-container') != null);
     expect(getComposedText(region).includes('const stale = true;')).toBe(false);
 
-    mountedComponent.hydrateFile(
+    reviewDiff.hydrateFile(
       'src/app.ts',
       createVirtualReviewFile('src/app.ts').patch,
       'const hydrated = false;\n',
       'const hydrated = true;\n'
     );
     expect(() => {
-      mountedComponent?.applyCollapseModeToLoaded(false);
+      reviewDiff.applyCollapseModeToLoaded(false);
     }).not.toThrow();
     await waitFor(() =>
       getComposedText(region).includes('const hydrated = true;')
@@ -209,6 +227,164 @@ describe('ReviewDiff.svelte', () => {
     );
   });
 
+  test('does not expose controlled comments to renderAnnotation without renderCommentThread', async () => {
+    installedDom = installDom();
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const ReviewDiff = await loadReviewDiffComponent();
+    let renderAnnotationCalls = 0;
+
+    mountedComponent = mount(ReviewDiff, {
+      target,
+      props: {
+        files: [createVirtualReviewFile('src/app.ts')],
+        commentThreads: [
+          {
+            id: 'thread-1',
+            target: {
+              fileId: 'src/app.ts',
+              side: 'additions',
+              lineNumber: 1,
+            },
+            metadata: { body: 'controlled comment' },
+          },
+        ],
+        codeViewOptions: {
+          renderAnnotation: () => {
+            renderAnnotationCalls += 1;
+            const wrapper = document.createElement('article');
+            wrapper.textContent = 'unexpected renderAnnotation comment';
+            return wrapper;
+          },
+        },
+      },
+    });
+    flushSync();
+
+    const region = await waitForElement<HTMLElement>(
+      target,
+      '[data-pierre-review-diff]'
+    );
+    const container = await waitForElement<HTMLElement>(
+      region,
+      'diffs-container[data-file-id="src/app.ts"]'
+    );
+    await waitFor(() => container.shadowRoot?.querySelector('[data-code]'));
+    await tickFrames(2);
+
+    expect(renderAnnotationCalls).toBe(0);
+    expect(getComposedText(region)).not.toContain(
+      'unexpected renderAnnotation comment'
+    );
+  });
+
+  test('updates rendered comments when renderCommentThread changes and clears empty threads', async () => {
+    installedDom = installDom();
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const Harness = await loadReviewDiffHarnessComponent(`
+      <script lang="ts">
+        import ReviewDiff from './.ReviewDiff.svelte.test.generated.mjs';
+
+        const files = [createVirtualReviewFile('src/app.ts')];
+        let commentThreads = $state([
+          {
+            id: 'thread-1',
+            target: {
+              fileId: 'src/app.ts',
+              side: 'additions',
+              lineNumber: 1,
+            },
+            metadata: { body: 'same controlled thread' },
+          },
+        ]);
+        let renderer = $state<'first' | 'second'>('first');
+        const renderCommentThread = $derived(
+          renderer === 'first' ? renderFirstCommentThread : renderSecondCommentThread
+        );
+
+        export function useSecondRenderer(): void {
+          renderer = 'second';
+        }
+
+        export function clearCommentThreads(): void {
+          commentThreads = [];
+        }
+
+        function renderFirstCommentThread(thread): HTMLElement {
+          const wrapper = document.createElement('article');
+          wrapper.dataset.reviewCommentThread = thread.id;
+          wrapper.textContent = 'first:' + thread.metadata.body;
+          return wrapper;
+        }
+
+        function renderSecondCommentThread(thread): HTMLElement {
+          const wrapper = document.createElement('article');
+          wrapper.dataset.reviewCommentThread = thread.id;
+          wrapper.textContent = 'second:' + thread.metadata.body;
+          return wrapper;
+        }
+
+        function createVirtualReviewFile(id: string) {
+          return {
+            id,
+            kind: 'virtual',
+            path: id,
+            oldPath: null,
+            status: 'modified',
+            group: 'unstaged',
+            patch: [
+              'diff --git a/' + id + ' b/' + id,
+              'index 1111111..2222222 100644',
+              '--- a/' + id,
+              '+++ b/' + id,
+              '@@ -1 +1 @@',
+              '-const value = false;',
+              '+const value = true;',
+              '',
+            ].join('\\n'),
+            byteSize: 20,
+            lineCount: 1,
+            contextLines: 3,
+            canExpandContext: true,
+          };
+        }
+      </script>
+
+      <ReviewDiff {files} {commentThreads} {renderCommentThread} />
+    `);
+
+    mountedComponent = mount(Harness, { target });
+    flushSync();
+
+    const region = await waitForElement<HTMLElement>(
+      target,
+      '[data-pierre-review-diff]'
+    );
+    await tickFrames(2);
+    await waitFor(() =>
+      getComposedText(region).includes('first:same controlled thread')
+    );
+
+    mountedComponent?.useSecondRenderer?.();
+    flushSync();
+
+    await waitFor(() =>
+      getComposedText(region).includes('second:same controlled thread')
+    );
+    expect(getComposedText(region)).not.toContain(
+      'first:same controlled thread'
+    );
+
+    mountedComponent?.clearCommentThreads?.();
+    flushSync();
+    await tickFrames(2);
+
+    await waitFor(
+      () => !getComposedText(region).includes('same controlled thread')
+    );
+  });
+
   test('requests a new comment thread from the gutter utility', async () => {
     installedDom = installDom();
     const target = document.createElement('div');
@@ -241,11 +417,18 @@ describe('ReviewDiff.svelte', () => {
     );
     dispatchPointer(additionNumber, 'pointerdown');
     const utilityButton = await waitForElement<HTMLButtonElement>(
-      additionNumber,
+      container,
       '[data-utility-button]'
     );
+
+    expect(utilityButton.getAttribute('aria-label')).toBe(
+      'Add line annotation'
+    );
+
+    utilityButton.click();
     dispatchPointer(utilityButton, 'pointerdown');
     dispatchPointer(utilityButton, 'pointerup');
+    utilityButton.click();
 
     expect(requestedTargets).toEqual([
       {
@@ -253,7 +436,85 @@ describe('ReviewDiff.svelte', () => {
         side: 'additions',
         lineNumber: 1,
       },
+      {
+        fileId: 'src/app.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
     ]);
+  });
+
+  test('does not show the add-comment gutter utility for state files', async () => {
+    installedDom = installDom();
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const ReviewDiff = await loadReviewDiffComponent();
+    const requestedTargets: ReviewDiffCommentTarget[] = [];
+
+    mountedComponent = mount(ReviewDiff, {
+      target,
+      props: {
+        files: [createStateReviewFile('assets/logo.png')],
+        onCommentThreadAddRequested: (commentTarget) => {
+          requestedTargets.push(commentTarget);
+        },
+      },
+    });
+    flushSync();
+
+    const region = target.querySelector('[data-pierre-review-diff]');
+    const container = await waitForElement<HTMLElement>(
+      region,
+      'diffs-container[data-file-id="assets/logo.png"]'
+    );
+    await tickFrames(2);
+
+    expect(container.querySelector('[data-utility-button]')).toBeNull();
+    expect(
+      container.shadowRoot?.querySelector('[data-utility-button]')
+    ).toBeNull();
+    expect(requestedTargets).toEqual([]);
+  });
+
+  test('does not show the add-comment gutter utility for notice items', async () => {
+    installedDom = installDom();
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const ReviewDiff = await loadReviewDiffComponent();
+    const requestedTargets: ReviewDiffCommentTarget[] = [];
+
+    mountedComponent = mount(ReviewDiff, {
+      target,
+      props: {
+        files: [],
+        notices: ['Review notice without line-level comments.'],
+        onCommentThreadAddRequested: (commentTarget) => {
+          requestedTargets.push(commentTarget);
+        },
+      },
+    });
+    flushSync();
+
+    const region = target.querySelector('[data-pierre-review-diff]');
+    const container = await waitForElement<HTMLElement>(
+      region,
+      'diffs-container[data-file-id="__pierre_review_notice:0"]'
+    );
+    await waitFor(() => container.shadowRoot?.querySelector('[data-code]'));
+    await tickFrames(2);
+
+    const lineNumber = await waitForElement<HTMLElement>(
+      container.shadowRoot,
+      '[data-column-number="1"]'
+    );
+    dispatchPointer(lineNumber, 'pointerdown');
+    await tickFrames(1);
+
+    expect(container.querySelector('[data-utility-button]')).toBeNull();
+    expect(
+      container.shadowRoot?.querySelector('[data-utility-button]')
+    ).toBeNull();
+    expect(requestedTargets).toEqual([]);
   });
 
   test('prefers review comment add over a custom gutter utility renderer', async () => {
@@ -300,11 +561,12 @@ describe('ReviewDiff.svelte', () => {
     );
     dispatchPointer(additionNumber, 'pointerdown');
     const utilityButton = await waitForElement<HTMLButtonElement>(
-      additionNumber,
+      container,
       '[data-utility-button]'
     );
     dispatchPointer(utilityButton, 'pointerdown');
     dispatchPointer(utilityButton, 'pointerup');
+    utilityButton.click();
 
     expect(customRendererCalls).toBe(0);
     expect(requestedTargets).toEqual([
@@ -521,9 +783,50 @@ function getComposedText(node: Node | ShadowRoot | null | undefined): string {
   return text;
 }
 
+async function loadReviewDiffHarnessComponent(
+  source: string
+): Promise<
+  Parameters<
+    typeof mount<Record<string, never>, ReviewDiffTestHarnessHandle>
+  >[0]
+> {
+  const componentVersion = writeReviewDiffComponent();
+  const sourceWithCacheBustedReviewDiff = source.replaceAll(
+    COMPILED_COMPONENT_IMPORT_PATH,
+    `${COMPILED_COMPONENT_IMPORT_PATH}?version=${componentVersion}`
+  );
+
+  const compiled = compile(sourceWithCacheBustedReviewDiff, {
+    filename: 'ReviewDiffHarness.svelte',
+    generate: 'client',
+  });
+  writeFileSync(COMPILED_HARNESS_URL, compiled.js.code);
+
+  const compiledModule = (await import(
+    `${COMPILED_HARNESS_URL.href}?version=${++nextCompiledModuleVersion}`
+  )) as {
+    default: Parameters<
+      typeof mount<Record<string, never>, ReviewDiffTestHarnessHandle>
+    >[0];
+  };
+
+  return compiledModule.default;
+}
+
 async function loadReviewDiffComponent(): Promise<
   Parameters<typeof mount<ReviewDiffProps, ReviewDiffHandle>>[0]
 > {
+  const componentVersion = writeReviewDiffComponent();
+  const compiledModule = (await import(
+    `${COMPILED_COMPONENT_URL.href}?version=${componentVersion}`
+  )) as {
+    default: Parameters<typeof mount<ReviewDiffProps, ReviewDiffHandle>>[0];
+  };
+
+  return compiledModule.default;
+}
+
+function writeReviewDiffComponent(): number {
   const source = readFileSync(REVIEW_DIFF_SOURCE_URL, 'utf8');
   const compiled = compile(source, {
     filename: 'ReviewDiff.svelte',
@@ -535,13 +838,7 @@ async function loadReviewDiffComponent(): Promise<
   );
   writeFileSync(COMPILED_COMPONENT_URL, code);
 
-  const compiledModule = (await import(
-    `${COMPILED_COMPONENT_URL.href}?version=${Date.now()}`
-  )) as {
-    default: Parameters<typeof mount<ReviewDiffProps, ReviewDiffHandle>>[0];
-  };
-
-  return compiledModule.default;
+  return ++nextCompiledModuleVersion;
 }
 
 function createVirtualReviewFile(

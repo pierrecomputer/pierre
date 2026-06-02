@@ -1,8 +1,8 @@
 <script lang="ts">
-  import ReviewDiff, {
+  import {
+    createTypedReviewDiff,
     type ReviewDiffCommentAddContext,
     type ReviewDiffCommentTarget,
-    type ReviewDiffCommentThread,
     type ReviewDiffCommentThreadRenderContext,
     type ReviewDiffHandle,
     type ReviewDiffLabels,
@@ -18,6 +18,11 @@
     updateDraftReviewCommentThreadBody,
   } from './reviewComments';
   import { createReviewFiles } from './reviewFiles';
+
+  type ReviewDemoCommentThreadMetadata = ReviewDemoCommentThread['metadata'];
+
+  // Gives Svelte markup concrete comment metadata types without casting callbacks.
+  const ReviewDiff = createTypedReviewDiff<ReviewDemoCommentThreadMetadata>();
 
   const initialSeed = 1;
 
@@ -66,23 +71,9 @@
     commentThreads = addDraftReviewCommentThread(commentThreads, target);
   }
 
-  // Narrows the component's unknown metadata type back to the demo thread type
-  // passed through the controlled commentThreads prop.
-  function renderReviewDiffCommentThread(
-    thread: ReviewDiffCommentThread<unknown>,
-    context: ReviewDiffCommentThreadRenderContext<unknown>
-  ): HTMLElement | undefined {
-    return renderCommentThread(
-      thread as ReviewDemoCommentThread,
-      context as ReviewDiffCommentThreadRenderContext<
-        ReviewDemoCommentThread['metadata']
-      >
-    );
-  }
-
   function renderCommentThread(
     thread: ReviewDemoCommentThread,
-    context: ReviewDiffCommentThreadRenderContext<ReviewDemoCommentThread['metadata']>
+    context: ReviewDiffCommentThreadRenderContext<ReviewDemoCommentThreadMetadata>
   ): HTMLElement | undefined {
     if (thread.metadata.kind === 'draft') {
       return renderDraftCommentThread(thread, context);
@@ -93,7 +84,7 @@
 
   function renderSavedCommentThread(
     thread: ReviewDemoCommentThread,
-    context: ReviewDiffCommentThreadRenderContext<ReviewDemoCommentThread['metadata']>
+    context: ReviewDiffCommentThreadRenderContext<ReviewDemoCommentThreadMetadata>
   ): HTMLElement | undefined {
     if (thread.metadata.kind !== 'saved') {
       return undefined;
@@ -131,7 +122,7 @@
 
   function renderDraftCommentThread(
     thread: ReviewDemoCommentThread,
-    context: ReviewDiffCommentThreadRenderContext<ReviewDemoCommentThread['metadata']>
+    context: ReviewDiffCommentThreadRenderContext<ReviewDemoCommentThreadMetadata>
   ): HTMLElement | undefined {
     if (thread.metadata.kind !== 'draft') {
       return undefined;
@@ -327,7 +318,7 @@
       {diffStyle}
       {labels}
       {commentThreads}
-      renderCommentThread={renderReviewDiffCommentThread}
+      {renderCommentThread}
       onCommentThreadAddRequested={requestCommentThread}
       onHydrationRequested={hydrateFile}
     />

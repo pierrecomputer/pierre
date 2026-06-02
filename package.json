@@ -118,6 +118,8 @@
     "lint-staged": "lint-staged",
     "prepare": "husky",
     "demo:build": "(cd apps/demo && bun run build)",
+    "svelte-review-demo:dev": "(cd apps/svelte-review-demo && bun run dev)",
+    "svelte-review-demo:build": "(cd apps/svelte-review-demo && bun run build)",
     "docs:build": "(cd apps/docs && bun run build)",
     "chrome": "./scripts/chrome-remote-debug.sh"
   },

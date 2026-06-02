@@ -41,7 +41,7 @@
     },
     "./svelte/review": {
       "types": "./dist/svelte/review/index.d.ts",
-      "svelte": "./dist/svelte/review/ReviewDiff.svelte",
+      "svelte": "./dist/svelte/review/index.js",
       "import": "./dist/svelte/review/index.js"
     },
     "./ssr": {

@@ -1,14 +1,18 @@
-<script lang="ts">
+<script lang="ts" generics="TCommentMetadata = unknown">
   import { onMount } from 'svelte';
 
   import { CodeView, type CodeViewOptions } from '../../components/CodeView.js';
+  import { createGutterUtilityButtonElement } from '../../utils/createGutterUtilityElement.js';
   import type {
     CodeViewItem,
     DiffLineAnnotation,
     LineAnnotation,
     SelectedLineRange,
   } from '../../types.js';
-  import { isReviewDiffCommentableFile } from './commentThreads.js';
+  import {
+    applyReviewDiffCommentThreadGroupsToItems,
+    isReviewDiffCommentableFile,
+  } from './commentThreads.js';
   import { createReviewDiffItems } from './fileItems.js';
   import { resolveReviewDiffLabels } from './labels.js';
   import {
@@ -37,7 +41,7 @@
   const MAX_SYNC_UPDATES = 80;
 
   type ReviewDiffCommentMetadata =
-    ReviewDiffCommentAnnotationMetadata<unknown>;
+    ReviewDiffCommentAnnotationMetadata<TCommentMetadata>;
 
   let {
     files,
@@ -49,10 +53,10 @@
     onHydrationRequested,
     class: className = '',
     codeViewOptions,
-    commentThreads = [],
+    commentThreads,
     renderCommentThread,
     onCommentThreadAddRequested,
-  }: ReviewDiffProps<unknown> = $props();
+  }: ReviewDiffProps<TCommentMetadata> = $props();
 
   let host = $state<HTMLDivElement | undefined>(undefined);
   let viewer = $state<CodeView<ReviewDiffCommentMetadata> | undefined>(
@@ -73,20 +77,36 @@
       return hydrated?.patch === file.patch ? hydrated : file;
     })
   );
-  const items: CodeViewItem<ReviewDiffCommentMetadata>[] = $derived(
-    createReviewDiffItems({
+  const resolvedCommentThreads = $derived(commentThreads ?? []);
+  const renderedCommentThreads = $derived(
+    renderCommentThread == null ? [] : resolvedCommentThreads
+  );
+  const baseItems: CodeViewItem<ReviewDiffCommentMetadata>[] = $derived(
+    createReviewDiffItems<TCommentMetadata>({
       files: resolvedFiles,
       notices,
       collapsed,
       labels: resolvedLabels,
-      commentThreads,
     })
+  );
+  const items: CodeViewItem<ReviewDiffCommentMetadata>[] = $derived(
+    applyReviewDiffCommentThreadGroupsToItems(
+      baseItems,
+      resolvedFiles,
+      renderedCommentThreads,
+      renderCommentThread
+    )
   );
   const fileById: Map<string, ReviewDiffFile> = $derived(
     new Map(resolvedFiles.map((file) => [file.id, file]))
   );
   const classValue = $derived(
     className.length > 0 ? `${REVIEW_DIFF_CLASS} ${className}` : REVIEW_DIFF_CLASS
+  );
+  const renderCommentAnnotation = $derived(
+    renderCommentThread == null
+      ? undefined
+      : createRenderCommentAnnotation(renderCommentThread)
   );
 
   type ReviewDiffItemContext = {
@@ -152,12 +172,20 @@
     }
 
     const textFile = createHydratedTextFile(file, patch, oldText, newText);
-    const [item] = createReviewDiffItems({
+    const [baseItem] = createReviewDiffItems<TCommentMetadata>({
       files: [textFile],
       collapsed: loadedItems.get(fileId)?.collapsed ?? collapsed,
       labels: resolvedLabels,
-      commentThreads,
     });
+    const [item] =
+      baseItem == null
+        ? []
+        : applyReviewDiffCommentThreadGroupsToItems(
+            [baseItem],
+            [textFile],
+            renderedCommentThreads,
+            renderCommentThread
+          );
 
     if (item == null) {
       return;
@@ -196,14 +224,11 @@
       onPostRender: handlePostRender,
       renderHeaderPrefix,
       renderHeaderMetadata,
-      renderAnnotation:
-        renderCommentThread == null
-          ? codeViewOptions?.renderAnnotation
-          : renderCommentAnnotation,
+      renderAnnotation: renderCommentAnnotation ?? codeViewOptions?.renderAnnotation,
       renderGutterUtility:
         onCommentThreadAddRequested == null
           ? codeViewOptions?.renderGutterUtility
-          : undefined,
+          : renderCommentGutterUtility,
       enableGutterUtility:
         onCommentThreadAddRequested == null
           ? codeViewOptions?.enableGutterUtility
@@ -216,20 +241,44 @@
   }
 
   // Converts controlled comment annotations into user-provided DOM content.
-  function renderCommentAnnotation(
-    annotation:
-      | DiffLineAnnotation<ReviewDiffCommentMetadata>
-      | LineAnnotation<ReviewDiffCommentMetadata>
+  function createRenderCommentAnnotation(
+    renderThread: NonNullable<
+      ReviewDiffProps<TCommentMetadata>['renderCommentThread']
+    >
+  ): CodeViewOptions<ReviewDiffCommentMetadata>['renderAnnotation'] {
+    return (
+      annotation:
+        | DiffLineAnnotation<ReviewDiffCommentMetadata>
+        | LineAnnotation<ReviewDiffCommentMetadata>
+    ) => {
+      if (!('side' in annotation)) {
+        return undefined;
+      }
+
+      return renderThread(annotation.metadata.thread, {
+        file: annotation.metadata.file,
+        target: annotation.metadata.target,
+        thread: annotation.metadata.thread,
+      });
+    };
+  }
+
+  // Renders ReviewDiff's built-in add-comment button only for line-commentable items.
+  function renderCommentGutterUtility(
+    _getHoveredLine: () => unknown,
+    context: ReviewDiffItemContext
   ): HTMLElement | undefined {
-    if (!('side' in annotation)) {
+    const item = context.item;
+    if (item.type !== 'diff') {
       return undefined;
     }
 
-    return renderCommentThread?.(annotation.metadata.thread, {
-      file: annotation.metadata.file,
-      target: annotation.metadata.target,
-      thread: annotation.metadata.thread,
-    });
+    const file = fileById.get(item.id);
+    if (file == null || !isReviewDiffCommentableFile(file)) {
+      return undefined;
+    }
+
+    return createGutterUtilityButtonElement();
   }
 
   // Normalizes CodeView gutter selections into ReviewDiff comment targets.

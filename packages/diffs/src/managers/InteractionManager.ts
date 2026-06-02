@@ -233,6 +233,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   private gutterUtilityContainer: HTMLDivElement | undefined;
   private gutterUtilityButton: HTMLButtonElement | undefined;
   private gutterUtilitySlot: HTMLSlotElement | undefined;
+  private suppressNextGutterUtilityClick = false;
+  private gutterUtilityClickSuppressionTimer:
+    | ReturnType<typeof setTimeout>
+    | undefined;
 
   private interactiveLinesAttr = false;
   private interactiveLineNumbersAttr = false;
@@ -264,11 +268,16 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     this.pre?.removeAttribute('data-interactive-lines');
     this.pre?.removeAttribute('data-interactive-line-numbers');
     this.pre = undefined;
+    this.gutterUtilityContainer?.removeEventListener(
+      'click',
+      this.handleGutterUtilityButtonClick
+    );
     this.gutterUtilityContainer?.remove();
     this.gutterUtilityLine = undefined;
     this.gutterUtilityContainer = undefined;
     this.gutterUtilityButton = undefined;
     this.gutterUtilitySlot = undefined;
+    this.clearGutterUtilityClickSuppression();
     this.clearHoveredLine();
     this.clearHoveredToken();
     this.detachDocumentPointerListeners();
@@ -296,11 +305,16 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     if (enableGutterUtility) {
       this.ensureGutterUtilityNode(usesCustomGutterUtility);
     } else if (this.gutterUtilityContainer != null) {
+      this.gutterUtilityContainer.removeEventListener(
+        'click',
+        this.handleGutterUtilityButtonClick
+      );
       this.gutterUtilityContainer.remove();
       this.gutterUtilityLine = undefined;
       this.gutterUtilityContainer = undefined;
       this.gutterUtilityButton = undefined;
       this.gutterUtilitySlot = undefined;
+      this.clearGutterUtilityClickSuppression();
       if (this.pointerSession.mode === 'gutterSelecting') {
         this.clearPointerSession();
         this.detachDocumentPointerListeners();
@@ -739,6 +753,68 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     }
   };
 
+  private handleGutterUtilityButtonClick = (event: MouseEvent): void => {
+    if (this.options.onGutterUtilityClick == null) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (this.suppressNextGutterUtilityClick) {
+      this.clearGutterUtilityClickSuppression();
+      return;
+    }
+
+    const range = this.getGutterUtilityClickRange();
+    if (range == null) {
+      return;
+    }
+
+    this.options.onGutterUtilityClick(range);
+  };
+
+  private getGutterUtilityClickRange(): SelectedLineRange | undefined {
+    const selectedEndpoints = this.currentSelectionEnds();
+    if (selectedEndpoints != null) {
+      return this.buildSelectedLineRange(
+        selectedEndpoints.top,
+        selectedEndpoints.bottom
+      );
+    }
+
+    const line = this.gutterUtilityLine;
+    if (line == null) {
+      return undefined;
+    }
+
+    const point: SelectionPoint = {
+      lineNumber: line.lineNumber,
+      side:
+        this.mode === 'diff' && line.type === 'diff-line'
+          ? line.annotationSide
+          : undefined,
+    };
+    return this.buildSelectedLineRange(point, point);
+  }
+
+  private suppressFollowingNativeGutterUtilityClick(): void {
+    this.clearGutterUtilityClickSuppression();
+    this.suppressNextGutterUtilityClick = true;
+    this.gutterUtilityClickSuppressionTimer = setTimeout(() => {
+      this.suppressNextGutterUtilityClick = false;
+      this.gutterUtilityClickSuppressionTimer = undefined;
+    }, 0);
+  }
+
+  private clearGutterUtilityClickSuppression(): void {
+    if (this.gutterUtilityClickSuppressionTimer != null) {
+      clearTimeout(this.gutterUtilityClickSuppressionTimer);
+      this.gutterUtilityClickSuppressionTimer = undefined;
+    }
+    this.suppressNextGutterUtilityClick = false;
+  }
+
   private startLineSelectionFromPointerDown(event: PointerEvent): void {
     const { enableLineSelection = false } = this.options;
     if (!enableLineSelection) {
@@ -946,6 +1022,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
             this.updateSelection(point.lineNumber, point.side);
           }
         }
+        this.suppressFollowingNativeGutterUtilityClick();
         onGutterUtilityClick?.(
           this.buildSelectedLineRange(
             this.pointerSession.anchor,
@@ -1055,6 +1132,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     if (this.gutterUtilityContainer == null) {
       this.gutterUtilityContainer = document.createElement('div');
       this.gutterUtilityContainer.setAttribute('data-gutter-utility-slot', '');
+      this.gutterUtilityContainer.addEventListener(
+        'click',
+        this.handleGutterUtilityButtonClick
+      );
     }
     if (useCustomGutterUtility) {
       if (this.gutterUtilityButton != null) {
@@ -1986,11 +2067,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
 ): InteractionManagerOptions<TMode> {
   return {
     enableTokenInteractionsOnWhitespace,
-    enableGutterUtility: resolveEnableGutterUtilityOption({
-      enableGutterUtility,
-      renderGutterUtility,
-      onGutterUtilityClick,
-    }),
+    enableGutterUtility: resolveEnableGutterUtilityOption(enableGutterUtility),
     usesCustomGutterUtility: renderGutterUtility != null,
     lineHoverHighlight,
 
@@ -2017,21 +2094,9 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
   };
 }
 
-function resolveEnableGutterUtilityOption<
-  TMode extends InteractionManagerMode,
->({
-  enableGutterUtility,
-  renderGutterUtility,
-  onGutterUtilityClick,
-}: Pick<
-  InteractionPluckOptions<TMode>,
-  'enableGutterUtility' | 'renderGutterUtility' | 'onGutterUtilityClick'
->): boolean {
-  if (onGutterUtilityClick != null && renderGutterUtility != null) {
-    throw new Error(
-      "Cannot use both 'onGutterUtilityClick' and 'renderGutterUtility'. Use only one gutter utility API."
-    );
-  }
+function resolveEnableGutterUtilityOption(
+  enableGutterUtility: boolean | undefined
+): boolean {
   return enableGutterUtility ?? false;
 }
 

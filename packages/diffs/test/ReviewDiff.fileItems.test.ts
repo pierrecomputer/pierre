@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { applyReviewDiffCommentThreadGroupsToItems } from '../src/svelte/review/commentThreads';
 import {
   createReviewDiffItems,
   resolveReviewDiffLabels,
@@ -155,6 +156,213 @@ describe('createReviewDiffItems', () => {
     expect(item.annotations?.[0]?.metadata.file.id).toBe('src/app.ts');
   });
 
+  test('clears annotations when the controlled comment thread list is empty', () => {
+    const file = createTextReviewFile('src/app.ts', 'cleared');
+    const [baseItem] = createReviewDiffItems({ files: [file] });
+    const [clearedItem] = createReviewDiffItems({
+      files: [file],
+      commentThreads: [],
+    });
+
+    expect(clearedItem?.type).toBe('diff');
+    if (clearedItem?.type !== 'diff') {
+      throw new Error('expected diff item');
+    }
+
+    expect(clearedItem.annotations).toEqual([]);
+    expect(clearedItem.version).toBe(baseItem?.version);
+  });
+
+  test('overlays comment updates without replacing unparsed base diff data', () => {
+    const files = [
+      createTextReviewFile('a.ts', 'a'),
+      createTextReviewFile('b.ts', 'b'),
+      createTextReviewFile('c.ts', 'c'),
+    ];
+    const aThread: ReviewDiffCommentThread<{ body: string }> = {
+      id: 'thread-a',
+      target: {
+        fileId: 'a.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
+      metadata: { body: 'Comment on a.ts.' },
+    };
+    const bThread: ReviewDiffCommentThread<{ body: string }> = {
+      id: 'thread-b',
+      target: {
+        fileId: 'b.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
+      metadata: { body: 'Comment on b.ts.' },
+    };
+
+    const baseItems = createReviewDiffItems({ files });
+    const baseAItem = getDiffItem(baseItems, 'a.ts');
+    const baseBItem = getDiffItem(baseItems, 'b.ts');
+    const baseCItem = getDiffItem(baseItems, 'c.ts');
+    const withAItems = applyReviewDiffCommentThreadGroupsToItems(
+      baseItems,
+      files,
+      [aThread]
+    );
+    const withABItems = applyReviewDiffCommentThreadGroupsToItems(
+      baseItems,
+      files,
+      [aThread, bThread]
+    );
+    const clearedItems = applyReviewDiffCommentThreadGroupsToItems(
+      baseItems,
+      files,
+      []
+    );
+    const withAAItem = getDiffItem(withAItems, 'a.ts');
+    const withABAItem = getDiffItem(withABItems, 'a.ts');
+    const withABBItem = getDiffItem(withABItems, 'b.ts');
+    const withABCItem = getDiffItem(withABItems, 'c.ts');
+    const clearedAItem = getDiffItem(clearedItems, 'a.ts');
+    const clearedBItem = getDiffItem(clearedItems, 'b.ts');
+    const clearedCItem = getDiffItem(clearedItems, 'c.ts');
+
+    expect(withAAItem.fileDiff).toBe(baseAItem.fileDiff);
+    expect(withABAItem.fileDiff).toBe(baseAItem.fileDiff);
+    expect(withABBItem.fileDiff).toBe(baseBItem.fileDiff);
+    expect(withABCItem).toBe(baseCItem);
+    expect(withAAItem.version).toBe(withABAItem.version);
+    expect(clearedAItem.annotations).toEqual([]);
+    expect(clearedBItem.annotations).toEqual([]);
+    expect(clearedAItem.version).toBe(baseAItem.version);
+    expect(clearedBItem.version).toBe(baseBItem.version);
+    expect(clearedCItem).toBe(baseCItem);
+  });
+
+  test('clears stale annotations when overlaying comments onto fresh base items', () => {
+    const files = [
+      createTextReviewFile('a.ts', 'a'),
+      createTextReviewFile('b.ts', 'b'),
+    ];
+    const aThread: ReviewDiffCommentThread<{ body: string }> = {
+      id: 'thread-a',
+      target: {
+        fileId: 'a.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
+      metadata: { body: 'Comment on a.ts.' },
+    };
+    const bThread: ReviewDiffCommentThread<{ body: string }> = {
+      id: 'thread-b',
+      target: {
+        fileId: 'b.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
+      metadata: { body: 'Comment on b.ts.' },
+    };
+
+    const initialBaseItems = createReviewDiffItems({ files });
+    const withAItems = applyReviewDiffCommentThreadGroupsToItems(
+      initialBaseItems,
+      files,
+      [aThread]
+    );
+    const freshBaseItems = createReviewDiffItems({ files });
+    const freshBaseAItem = getDiffItem(freshBaseItems, 'a.ts');
+    const withBItems = applyReviewDiffCommentThreadGroupsToItems(
+      freshBaseItems,
+      files,
+      [bThread]
+    );
+    const previousAItem = getDiffItem(withAItems, 'a.ts');
+    const nextAItem = getDiffItem(withBItems, 'a.ts');
+    const nextBItem = getDiffItem(withBItems, 'b.ts');
+
+    expect(previousAItem.annotations).toHaveLength(1);
+    expect(nextAItem.annotations).toEqual([]);
+    expect(nextAItem.version).toBe(freshBaseAItem.version);
+    expect(nextAItem.version).not.toBe(previousAItem.version);
+    expect(nextBItem.annotations).toHaveLength(1);
+  });
+
+  test('clears stale annotations when a commented file becomes a state file', () => {
+    const textFile = createTextReviewFile('src/app.ts', 'commented');
+    const stateFile = createStateReviewFile('src/app.ts');
+    const thread: ReviewDiffCommentThread<{ body: string }> = {
+      id: 'thread-a',
+      target: {
+        fileId: 'src/app.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
+      metadata: { body: 'Comment on a file that became binary.' },
+    };
+
+    const textBaseItems = createReviewDiffItems({ files: [textFile] });
+    const withCommentItems = applyReviewDiffCommentThreadGroupsToItems(
+      textBaseItems,
+      [textFile],
+      [thread]
+    );
+    const stateBaseItems = createReviewDiffItems({ files: [stateFile] });
+    const stateBaseItem = getDiffItem(stateBaseItems, 'src/app.ts');
+    const stateOverlayItems = applyReviewDiffCommentThreadGroupsToItems(
+      stateBaseItems,
+      [stateFile],
+      [thread]
+    );
+    const previousTextItem = getDiffItem(withCommentItems, 'src/app.ts');
+    const nextStateItem = getDiffItem(stateOverlayItems, 'src/app.ts');
+
+    expect(previousTextItem.annotations).toHaveLength(1);
+    expect(nextStateItem.annotations).toEqual([]);
+    expect(nextStateItem.version).toBe(stateBaseItem.version);
+    expect(nextStateItem.version).not.toBe(previousTextItem.version);
+  });
+
+  test('keeps overlay versions stable when reapplying to overlaid items', () => {
+    const files = [
+      createTextReviewFile('a.ts', 'a'),
+      createTextReviewFile('b.ts', 'b'),
+    ];
+    const thread: ReviewDiffCommentThread<{ body: string }> = {
+      id: 'thread-a',
+      target: {
+        fileId: 'a.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
+      metadata: { body: 'Comment on a.ts.' },
+    };
+
+    const baseItems = createReviewDiffItems({ files });
+    const baseAItem = getDiffItem(baseItems, 'a.ts');
+    const withAItems = applyReviewDiffCommentThreadGroupsToItems(
+      baseItems,
+      files,
+      [thread]
+    );
+    const withAAgainItems = applyReviewDiffCommentThreadGroupsToItems(
+      withAItems,
+      files,
+      [thread]
+    );
+    const clearedFromWithAItems = applyReviewDiffCommentThreadGroupsToItems(
+      withAItems,
+      files,
+      []
+    );
+    const withAItem = getDiffItem(withAItems, 'a.ts');
+    const withAAgainItem = getDiffItem(withAAgainItems, 'a.ts');
+    const clearedFromWithAItem = getDiffItem(clearedFromWithAItems, 'a.ts');
+
+    expect(withAAgainItem.fileDiff).toBe(baseAItem.fileDiff);
+    expect(withAAgainItem.version).toBe(withAItem.version);
+    expect(clearedFromWithAItem.annotations).toEqual([]);
+    expect(clearedFromWithAItem.version).toBe(baseAItem.version);
+    expect(clearedFromWithAItem.version).not.toBe(withAItem.version);
+  });
+
   test('keeps versions stable for files whose comment threads did not change', () => {
     const files: ReviewDiffFile[] = [
       createTextReviewFile('a.ts', 'a'),
@@ -288,11 +496,11 @@ describe('createReviewDiffItems', () => {
     expect(textItem?.type).toBe('diff');
     expect(
       textItem?.type === 'diff' ? textItem.annotations : undefined
-    ).toBeUndefined();
+    ).toEqual([]);
     expect(stateItem?.type).toBe('diff');
     expect(
       stateItem?.type === 'diff' ? stateItem.annotations : undefined
-    ).toBeUndefined();
+    ).toEqual([]);
   });
 
   test('changes item versions when controlled comment thread arrays change', () => {
@@ -335,6 +543,17 @@ describe('createReviewDiffItems', () => {
   });
 });
 
+function getDiffItem(
+  items: ReturnType<typeof createReviewDiffItems>,
+  itemId: string
+) {
+  const item = items.find((currentItem) => currentItem.id === itemId);
+  if (item?.type !== 'diff') {
+    throw new Error(`expected ${itemId} diff item`);
+  }
+  return item;
+}
+
 function createTextReviewFile(id: string, value: string): ReviewDiffFile {
   return {
     id,
@@ -348,5 +567,19 @@ function createTextReviewFile(id: string, value: string): ReviewDiffFile {
     byteSize: value.length,
     lineCount: 1,
     patch: '',
+  };
+}
+
+function createStateReviewFile(id: string): ReviewDiffFile {
+  return {
+    id,
+    kind: 'state',
+    path: id,
+    oldPath: null,
+    status: 'binary',
+    group: 'unstaged',
+    reason: 'binary_file',
+    byteSize: 256,
+    message: null,
   };
 }

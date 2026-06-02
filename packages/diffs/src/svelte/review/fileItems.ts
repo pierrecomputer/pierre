@@ -1,8 +1,7 @@
 import type { FileContents, FileDiffMetadata } from '../../types.js';
 import { parseDiffFromFile } from '../../utils/parseDiffFromFile.js';
 import { processFile } from '../../utils/parsePatchFiles.js';
-import { createReviewDiffCommentThreadGroups } from './commentThreads.js';
-import type { ReviewDiffCommentThreadGroup } from './commentThreads.js';
+import { applyReviewDiffCommentThreadGroupsToItems } from './commentThreads.js';
 import { resolveReviewDiffLabels } from './labels.js';
 import type {
   CreateReviewDiffItemsOptions,
@@ -25,10 +24,6 @@ export function createReviewDiffItems<TCommentMetadata = unknown>({
   const labels = resolveReviewDiffLabels(unresolvedLabels);
   const items: ReviewDiffItem<TCommentMetadata>[] = [];
   const itemIds = new Set(files.map((file) => file.id));
-  const commentThreadGroups = createReviewDiffCommentThreadGroups(
-    files,
-    commentThreads
-  );
 
   for (let index = 0; index < notices.length; index++) {
     const notice = notices[index] ?? '';
@@ -44,12 +39,12 @@ export function createReviewDiffItems<TCommentMetadata = unknown>({
   }
 
   for (const file of files) {
-    items.push(
-      createFileItem(file, collapsed, labels, commentThreadGroups.get(file.id))
-    );
+    items.push(createFileItem(file, collapsed, labels));
   }
 
-  return items;
+  return commentThreads === undefined
+    ? items
+    : applyReviewDiffCommentThreadGroupsToItems(items, files, commentThreads);
 }
 
 function createNoticeItem<TCommentMetadata>(
@@ -90,25 +85,23 @@ function createNoticeId(index: number, itemIds: ReadonlySet<string>): string {
 function createFileItem<TCommentMetadata>(
   file: ReviewDiffFile,
   collapsed: boolean,
-  labels: ResolvedReviewDiffLabels,
-  commentThreadGroup: ReviewDiffCommentThreadGroup<TCommentMetadata> | undefined
+  labels: ResolvedReviewDiffLabels
 ): ReviewDiffItem<TCommentMetadata> {
   switch (file.kind) {
     case 'text':
-      return createTextItem(file, collapsed, commentThreadGroup);
+      return createTextItem(file, collapsed);
     case 'virtual':
-      return createVirtualItem(file, collapsed, labels, commentThreadGroup);
+      return createVirtualItem(file, collapsed, labels);
     case 'state':
       return createStateItem<TCommentMetadata>(file, collapsed, labels);
     case 'conflict':
-      return createConflictItem(file, collapsed, commentThreadGroup);
+      return createConflictItem(file, collapsed);
   }
 }
 
 function createTextItem<TCommentMetadata>(
   file: ReviewDiffTextFile,
-  collapsed: boolean,
-  commentThreadGroup: ReviewDiffCommentThreadGroup<TCommentMetadata> | undefined
+  collapsed: boolean
 ): ReviewDiffItem<TCommentMetadata> {
   const oldFile = createFileContents(
     file.oldPath ?? file.path,
@@ -120,13 +113,10 @@ function createTextItem<TCommentMetadata>(
     file.newText,
     fingerprintString(file.id, 'new', file.path, file.newText)
   );
-  const annotations = commentThreadGroup?.annotations;
-
   return {
     id: file.id,
     type: 'diff',
     fileDiff: parseDiffFromFile(oldFile, newFile),
-    ...(annotations == null ? {} : { annotations }),
     version: fingerprint(
       file.kind,
       file.id,
@@ -134,8 +124,7 @@ function createTextItem<TCommentMetadata>(
       file.oldPath ?? '',
       file.status,
       file.oldText,
-      file.newText,
-      commentThreadGroup?.version ?? ''
+      file.newText
     ),
     collapsed,
   };
@@ -144,8 +133,7 @@ function createTextItem<TCommentMetadata>(
 function createVirtualItem<TCommentMetadata>(
   file: ReviewDiffVirtualFile,
   collapsed: boolean,
-  labels: ResolvedReviewDiffLabels,
-  commentThreadGroup: ReviewDiffCommentThreadGroup<TCommentMetadata> | undefined
+  labels: ResolvedReviewDiffLabels
 ): ReviewDiffItem<TCommentMetadata> {
   const fileDiff = processFile(file.patch, { cacheKey: file.id });
   const version = fingerprint(
@@ -154,8 +142,7 @@ function createVirtualItem<TCommentMetadata>(
     file.path,
     file.oldPath ?? '',
     file.status,
-    file.patch,
-    commentThreadGroup?.version ?? ''
+    file.patch
   );
 
   if (fileDiff == null) {
@@ -168,13 +155,10 @@ function createVirtualItem<TCommentMetadata>(
     );
   }
 
-  const annotations = commentThreadGroup?.annotations;
-
   return {
     id: file.id,
     type: 'diff',
     fileDiff,
-    ...(annotations == null ? {} : { annotations }),
     version,
     collapsed,
   };
@@ -209,8 +193,7 @@ function createStateItem<TCommentMetadata>(
 
 function createConflictItem<TCommentMetadata>(
   file: ReviewDiffConflictFile,
-  collapsed: boolean,
-  commentThreadGroup: ReviewDiffCommentThreadGroup<TCommentMetadata> | undefined
+  collapsed: boolean
 ): ReviewDiffItem<TCommentMetadata> {
   const oldText = file.oursText ?? file.baseText ?? '';
   const oldFile = createFileContents(
@@ -228,13 +211,10 @@ function createConflictItem<TCommentMetadata>(
     file.worktreeText,
     fingerprintString(file.id, 'conflict-new', file.path, file.worktreeText)
   );
-  const annotations = commentThreadGroup?.annotations;
-
   return {
     id: file.id,
     type: 'diff',
     fileDiff: parseDiffFromFile(oldFile, newFile),
-    ...(annotations == null ? {} : { annotations }),
     version: fingerprint(
       file.kind,
       file.id,
@@ -242,8 +222,7 @@ function createConflictItem<TCommentMetadata>(
       file.oldPath ?? '',
       file.status,
       oldText,
-      file.worktreeText,
-      commentThreadGroup?.version ?? ''
+      file.worktreeText
     ),
     collapsed,
   };

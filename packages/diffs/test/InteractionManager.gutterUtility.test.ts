@@ -235,6 +235,62 @@ describe('InteractionManager gutter utility', () => {
     }
   });
 
+  test('default gutter utility has an accessible label and activates from native click', () => {
+    const { cleanup } = installDom();
+    const clickedRanges: SelectedLineRange[] = [];
+    const manager = new InteractionManager('file', {
+      enableGutterUtility: true,
+      onGutterUtilityClick: (range) => clickedRanges.push(range),
+    });
+    try {
+      const { gutterRows, pre } = createFilePre(3);
+      manager.setup(pre);
+
+      dispatchPointer(gutterRows[1], 'pointerdown', { pointerType: 'touch' });
+      const button = getUtilityButton(gutterRows[1]);
+
+      expect(button.getAttribute('aria-label')).toBe('Add line annotation');
+      expect(button.title).toBe('Add line annotation');
+
+      button.click();
+
+      expect(clickedRanges).toEqual([{ start: 2, end: 2 }]);
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('does not double-fire when pointer activation is followed by native click', () => {
+    const { cleanup } = installDom();
+    const clickedRanges: SelectedLineRange[] = [];
+    const manager = new InteractionManager('file', {
+      enableGutterUtility: true,
+      onGutterUtilityClick: (range) => clickedRanges.push(range),
+    });
+    try {
+      const { gutterRows, pre } = createFilePre(3);
+      manager.setup(pre);
+
+      dispatchPointer(gutterRows[1], 'pointerdown', { pointerType: 'touch' });
+      const button = getUtilityButton(gutterRows[1]);
+      dispatchPointer(button, 'pointerdown', {
+        pointerId: 21,
+        pointerType: 'touch',
+      });
+      dispatchPointer(button, 'pointerup', {
+        pointerId: 21,
+        pointerType: 'touch',
+      });
+      button.click();
+
+      expect(clickedRanges).toEqual([{ start: 2, end: 2 }]);
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
   test('does not reveal the gutter utility from mouse down alone', () => {
     const { cleanup } = installDom();
     const manager = new InteractionManager('file', {
