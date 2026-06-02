@@ -5,6 +5,22 @@ import path, { resolve } from 'path';
 import type { Plugin, PreviewServer, ViteDevServer } from 'vite';
 import { createLogger, defineConfig, type Logger } from 'vite';
 
+import { loadWorktreeEnv } from '../../scripts/load-worktree-env.mjs';
+
+loadWorktreeEnv();
+
+const DEFAULT_DEMO_PORT = 5173;
+
+function readDemoPort(): number {
+  const explicitPort = Number(process.env.DEMO_PORT);
+  if (Number.isFinite(explicitPort)) {
+    return explicitPort;
+  }
+
+  const portOffset = Number(process.env.PIERRE_PORT_OFFSET ?? 0);
+  return DEFAULT_DEMO_PORT + (Number.isFinite(portOffset) ? portOffset : 0);
+}
+
 function escapeRegExp(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -49,6 +65,7 @@ function makeFilteredLogger(folder: string): Logger {
 }
 
 export default defineConfig(() => {
+  const port = readDemoPort();
   const htmlPlugin = (): Plugin => ({
     name: 'html-fallback',
     configureServer(server: ViteDevServer) {
@@ -108,6 +125,16 @@ export default defineConfig(() => {
   return {
     plugins: [react(), htmlPlugin()],
     customLogger: makeFilteredLogger('packages/diffs'),
+    server: {
+      host: '127.0.0.1',
+      port,
+      strictPort: true,
+    },
+    preview: {
+      host: '127.0.0.1',
+      port,
+      strictPort: true,
+    },
     build: {
       rollupOptions: {
         input: {

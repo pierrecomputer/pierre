@@ -36,6 +36,7 @@ const PORT_BASES = {
   docsE2E: 4174,
   treesE2E: 4173,
   pathStoreE2E: 4176,
+  demo: 5173,
   chrome: 9222,
 } as const;
 
@@ -293,6 +294,7 @@ function cmdPs(): number {
     ['docsE2E', 'docsE2E'],
     ['treesE2E', 'treesE2E'],
     ['pathStoreE2E', 'psE2E'],
+    ['demo', 'demo'],
     ['chrome', 'chrome'],
   ];
 
@@ -529,6 +531,7 @@ Worktree: ${slug} (offset ${offset})
   docs E2E:     http://localhost:${ports.docsE2E}
   trees E2E:    http://localhost:${ports.treesE2E}
   path-store:   http://localhost:${ports.pathStoreE2E}
+  demo:         http://localhost:${ports.demo}
   chrome debug: localhost:${ports.chrome} (user-data-dir /tmp/chrome-devtools-${slug})
 
 cd ${path}

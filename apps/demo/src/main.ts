@@ -93,6 +93,40 @@ interface FileStreamCodeConfigsItem {
   options: FileStreamOptions;
 }
 
+interface DiffsDemoProfileSummary {
+  action: {
+    id: string;
+    label: string;
+  };
+  detail: string;
+  diffContainerCount: number;
+  fileCount: number;
+  hunkCount: number;
+  lineCount: number;
+  longTaskCount: number;
+  longTaskTotalMs: number;
+  longestLongTaskMs: number;
+  renderCallMs: number;
+  postPaintReadyMs: number;
+  wrapperChildCount: number;
+}
+
+interface DiffsDemoProfileAPI {
+  prepareLargeDiffProfile(): Promise<{
+    fileCount: number;
+    hunkCount: number;
+    lineCount: number;
+  }>;
+  profileLargeDiffRender(): Promise<DiffsDemoProfileSummary>;
+}
+
+declare global {
+  interface Window {
+    __diffsDemoFixtureReady?: boolean;
+    diffsDemoProfile?: DiffsDemoProfileAPI;
+  }
+}
+
 function cleanupInstances(container: HTMLElement) {
   for (const instances of [
     diffInstances,
@@ -216,6 +250,102 @@ async function handlePreloadDiff() {
   const content = await loadPatchContent();
   parsedPatches = parsePatchFiles(content, 'parsed-patch');
   console.log('preloaded diff', parsedPatches);
+}
+
+async function prepareLargeDiffProfile() {
+  await poolManager?.initialize();
+  await handlePreloadDiff();
+  const wrapper = document.getElementById('wrapper');
+  if (wrapper != null) {
+    cleanupInstances(wrapper);
+  }
+
+  const patches = parsedPatches ?? [];
+  return summarizeLargeDiffWorkload(patches);
+}
+
+function summarizeLargeDiffWorkload(patches: ParsedPatch[]) {
+  let fileCount = 0;
+  let hunkCount = 0;
+  let lineCount = 0;
+
+  for (const patch of patches) {
+    fileCount += patch.files.length;
+    for (const file of patch.files) {
+      hunkCount += file.hunks.length;
+      for (const hunk of file.hunks) {
+        lineCount += hunk.unifiedLineCount;
+      }
+    }
+  }
+
+  return { fileCount, hunkCount, lineCount };
+}
+
+function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        resolve();
+      });
+    });
+  });
+}
+
+async function profileLargeDiffRender(): Promise<DiffsDemoProfileSummary> {
+  const wrapper = document.getElementById('wrapper');
+  if (wrapper == null) {
+    throw new Error('Missing #wrapper element.');
+  }
+
+  const workload = await prepareLargeDiffProfile();
+  const patches = parsedPatches ?? [];
+  const longTasks: PerformanceEntry[] = [];
+  const observer = PerformanceObserver.supportedEntryTypes.includes('longtask')
+    ? new PerformanceObserver((list) => {
+        longTasks.push(...list.getEntries());
+      })
+    : null;
+
+  observer?.observe({ entryTypes: ['longtask'] });
+
+  const startedAt = performance.now();
+  performance.mark('diffs-demo-profile-start');
+  console.timeStamp('diffs-demo-profile-start');
+  renderDiff(patches, poolManager);
+  const renderCallMs = performance.now() - startedAt;
+  await waitForNextPaint();
+  const postPaintReadyMs = performance.now() - startedAt;
+  performance.mark('diffs-demo-profile-end');
+  console.timeStamp('diffs-demo-profile-end');
+  observer?.disconnect();
+
+  const longTaskTotalMs = longTasks.reduce(
+    (total, entry) => total + entry.duration,
+    0
+  );
+  const longestLongTaskMs = longTasks.reduce(
+    (longest, entry) => Math.max(longest, entry.duration),
+    0
+  );
+
+  return {
+    action: {
+      id: 'load-large-diff',
+      label: 'Load Large-ish Diff',
+    },
+    detail: 'Preloaded demo patch rendered through the large diff code path.',
+    diffContainerCount: diffInstances.length,
+    fileCount: workload.fileCount,
+    hunkCount: workload.hunkCount,
+    lineCount: workload.lineCount,
+    longTaskCount: longTasks.length,
+    longTaskTotalMs: Number(longTaskTotalMs.toFixed(3)),
+    longestLongTaskMs: Number(longestLongTaskMs.toFixed(3)),
+    renderCallMs: Number(renderCallMs.toFixed(3)),
+    postPaintReadyMs: Number(postPaintReadyMs.toFixed(3)),
+    wrapperChildCount: wrapper.childElementCount,
+  };
 }
 
 function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
@@ -954,6 +1084,12 @@ cleanButton?.addEventListener('click', () => {
   }
   cleanupInstances(container);
 });
+
+window.diffsDemoProfile = {
+  prepareLargeDiffProfile,
+  profileLargeDiffRender,
+};
+window.__diffsDemoFixtureReady = true;
 
 function createCollapsedToggle(
   checked: boolean,

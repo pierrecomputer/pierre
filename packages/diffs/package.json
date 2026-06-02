@@ -58,6 +58,8 @@
     "build": "tsdown --clean",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "benchmark:parse-merge-conflict": "bun run ./scripts/benchmarkParseMergeConflictDiffFromFile.ts",
+    "profile": "bun run ./scripts/profileDemo.ts",
+    "profile:demo": "bun run ./scripts/profileDemo.ts",
     "test": "bun test",
     "tsc": "tsgo --noEmit --pretty",
     "prepublishOnly": "bun run assert:bun-version && bun run build"

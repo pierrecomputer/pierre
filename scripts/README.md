@@ -207,6 +207,7 @@ Each of our dev/test services has a **base port**:
 | `apps/docs` E2E           | 4174      |
 | `packages/trees` E2E      | 4173      |
 | `packages/path-store` E2E | 4176      |
+| `apps/demo` dev/preview   | 5173      |
 | Chrome remote debug       | 9222      |
 
 Every worktree owns a **port offset** (0, 10, 20, 30, …). Its actual ports are
