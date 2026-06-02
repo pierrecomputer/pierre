@@ -6,9 +6,16 @@ import type {
   ReviewDiffFile,
 } from './types.js';
 
-let nextCommentThreadsVersion = 1;
-const commentThreadsVersions = new WeakMap<
-  readonly ReviewDiffCommentThread<unknown>[],
+export interface ReviewDiffCommentThreadGroup<TMetadata = unknown> {
+  annotations: DiffLineAnnotation<
+    ReviewDiffCommentAnnotationMetadata<TMetadata>
+  >[];
+  version: string;
+}
+
+let nextCommentThreadIdentityId = 1;
+const commentThreadIdentityIds = new WeakMap<
+  ReviewDiffCommentThread<unknown>,
   number
 >();
 
@@ -18,26 +25,44 @@ export function isReviewDiffCommentableFile(
   return file.kind !== 'state';
 }
 
-export function createReviewDiffCommentAnnotations<TMetadata>(
-  file: ReviewDiffCommentableFile,
+// Groups comment threads by rendered file so item creation can attach annotations
+// and calculate versions without scanning every thread for every file.
+export function createReviewDiffCommentThreadGroups<TMetadata>(
+  files: readonly ReviewDiffFile[],
   commentThreads: readonly ReviewDiffCommentThread<TMetadata>[] | undefined
-):
-  | DiffLineAnnotation<ReviewDiffCommentAnnotationMetadata<TMetadata>>[]
-  | undefined {
-  if (commentThreads == null || commentThreads.length === 0) {
-    return undefined;
+): Map<string, ReviewDiffCommentThreadGroup<TMetadata>> {
+  const commentableFilesById = new Map<string, ReviewDiffCommentableFile>();
+
+  for (const file of files) {
+    if (isReviewDiffCommentableFile(file)) {
+      commentableFilesById.set(file.id, file);
+    }
   }
 
-  const annotations: DiffLineAnnotation<
-    ReviewDiffCommentAnnotationMetadata<TMetadata>
-  >[] = [];
+  const groups = new Map<string, ReviewDiffCommentThreadGroup<TMetadata>>();
+
+  if (commentThreads == null || commentThreads.length === 0) {
+    return groups;
+  }
+
+  const versionPartsByFileId = new Map<string, string[]>();
 
   for (const thread of commentThreads) {
-    if (thread.target.fileId !== file.id) {
+    const file = commentableFilesById.get(thread.target.fileId);
+    if (file == null) {
       continue;
     }
 
-    annotations.push({
+    let group = groups.get(file.id);
+    let versionParts = versionPartsByFileId.get(file.id);
+    if (group == null || versionParts == null) {
+      group = { annotations: [], version: '' };
+      versionParts = [];
+      groups.set(file.id, group);
+      versionPartsByFileId.set(file.id, versionParts);
+    }
+
+    group.annotations.push({
       side: thread.target.side,
       lineNumber: thread.target.lineNumber,
       metadata: {
@@ -46,24 +71,42 @@ export function createReviewDiffCommentAnnotations<TMetadata>(
         thread,
       },
     });
+
+    versionParts.push(createCommentThreadVersionPart(thread));
   }
 
-  return annotations.length === 0 ? undefined : annotations;
+  for (const [fileId, group] of groups) {
+    group.version = (versionPartsByFileId.get(fileId) ?? []).join(
+      COMMENT_THREAD_SEPARATOR
+    );
+  }
+
+  return groups;
 }
 
-export function getReviewDiffCommentThreadsVersion(
-  commentThreads: readonly ReviewDiffCommentThread<unknown>[] | undefined
+function createCommentThreadVersionPart<TMetadata>(
+  thread: ReviewDiffCommentThread<TMetadata>
 ): string {
-  if (commentThreads == null || commentThreads.length === 0) {
-    return '';
-  }
-
-  const existingVersion = commentThreadsVersions.get(commentThreads);
-  if (existingVersion != null) {
-    return existingVersion.toString(36);
-  }
-
-  const version = nextCommentThreadsVersion++;
-  commentThreadsVersions.set(commentThreads, version);
-  return version.toString(36);
+  return [
+    thread.id,
+    thread.target.fileId,
+    thread.target.side,
+    thread.target.lineNumber.toString(),
+    getCommentThreadIdentityId(thread),
+  ].join(COMMENT_THREAD_PART_SEPARATOR);
 }
+
+function getCommentThreadIdentityId<TMetadata>(
+  thread: ReviewDiffCommentThread<TMetadata>
+): string {
+  let identityId = commentThreadIdentityIds.get(thread);
+  if (identityId == null) {
+    identityId = nextCommentThreadIdentityId++;
+    commentThreadIdentityIds.set(thread, identityId);
+  }
+
+  return identityId.toString(36);
+}
+
+const COMMENT_THREAD_PART_SEPARATOR = '\u001f';
+const COMMENT_THREAD_SEPARATOR = '\u001e';

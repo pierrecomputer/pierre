@@ -1,16 +1,12 @@
 import type { FileContents, FileDiffMetadata } from '../../types.js';
 import { parseDiffFromFile } from '../../utils/parseDiffFromFile.js';
 import { processFile } from '../../utils/parsePatchFiles.js';
-import {
-  createReviewDiffCommentAnnotations,
-  getReviewDiffCommentThreadsVersion,
-  isReviewDiffCommentableFile,
-} from './commentThreads.js';
+import { createReviewDiffCommentThreadGroups } from './commentThreads.js';
+import type { ReviewDiffCommentThreadGroup } from './commentThreads.js';
 import { resolveReviewDiffLabels } from './labels.js';
 import type {
   CreateReviewDiffItemsOptions,
   ResolvedReviewDiffLabels,
-  ReviewDiffCommentThread,
   ReviewDiffConflictFile,
   ReviewDiffFile,
   ReviewDiffItem,
@@ -29,15 +25,9 @@ export function createReviewDiffItems<TCommentMetadata = unknown>({
   const labels = resolveReviewDiffLabels(unresolvedLabels);
   const items: ReviewDiffItem<TCommentMetadata>[] = [];
   const itemIds = new Set(files.map((file) => file.id));
-  const commentableFileIds = new Set(
-    files.filter(isReviewDiffCommentableFile).map((file) => file.id)
-  );
-  const validCommentThreads = createValidReviewDiffCommentThreads(
-    commentThreads,
-    commentableFileIds
-  );
-  const commentThreadsVersion = getReviewDiffCommentThreadsVersion(
-    validCommentThreads == null ? undefined : commentThreads
+  const commentThreadGroups = createReviewDiffCommentThreadGroups(
+    files,
+    commentThreads
   );
 
   for (let index = 0; index < notices.length; index++) {
@@ -55,47 +45,11 @@ export function createReviewDiffItems<TCommentMetadata = unknown>({
 
   for (const file of files) {
     items.push(
-      createFileItem(
-        file,
-        collapsed,
-        labels,
-        validCommentThreads,
-        commentThreadsVersion
-      )
+      createFileItem(file, collapsed, labels, commentThreadGroups.get(file.id))
     );
   }
 
   return items;
-}
-
-// Drops threads that cannot attach to rendered diff files while preserving the
-// caller's array identity when every supplied thread is valid.
-function createValidReviewDiffCommentThreads<TCommentMetadata>(
-  commentThreads:
-    | readonly ReviewDiffCommentThread<TCommentMetadata>[]
-    | undefined,
-  commentableFileIds: ReadonlySet<string>
-): readonly ReviewDiffCommentThread<TCommentMetadata>[] | undefined {
-  if (commentThreads == null || commentThreads.length === 0) {
-    return undefined;
-  }
-
-  const validCommentThreads: ReviewDiffCommentThread<TCommentMetadata>[] = [];
-  let invalidThreadCount = 0;
-
-  for (const thread of commentThreads) {
-    if (commentableFileIds.has(thread.target.fileId)) {
-      validCommentThreads.push(thread);
-    } else {
-      invalidThreadCount++;
-    }
-  }
-
-  if (validCommentThreads.length === 0) {
-    return undefined;
-  }
-
-  return invalidThreadCount === 0 ? commentThreads : validCommentThreads;
 }
 
 function createNoticeItem<TCommentMetadata>(
@@ -137,46 +91,24 @@ function createFileItem<TCommentMetadata>(
   file: ReviewDiffFile,
   collapsed: boolean,
   labels: ResolvedReviewDiffLabels,
-  commentThreads:
-    | readonly ReviewDiffCommentThread<TCommentMetadata>[]
-    | undefined,
-  commentThreadsVersion: string
+  commentThreadGroup: ReviewDiffCommentThreadGroup<TCommentMetadata> | undefined
 ): ReviewDiffItem<TCommentMetadata> {
   switch (file.kind) {
     case 'text':
-      return createTextItem(
-        file,
-        collapsed,
-        commentThreads,
-        commentThreadsVersion
-      );
+      return createTextItem(file, collapsed, commentThreadGroup);
     case 'virtual':
-      return createVirtualItem(
-        file,
-        collapsed,
-        labels,
-        commentThreads,
-        commentThreadsVersion
-      );
+      return createVirtualItem(file, collapsed, labels, commentThreadGroup);
     case 'state':
       return createStateItem<TCommentMetadata>(file, collapsed, labels);
     case 'conflict':
-      return createConflictItem(
-        file,
-        collapsed,
-        commentThreads,
-        commentThreadsVersion
-      );
+      return createConflictItem(file, collapsed, commentThreadGroup);
   }
 }
 
 function createTextItem<TCommentMetadata>(
   file: ReviewDiffTextFile,
   collapsed: boolean,
-  commentThreads:
-    | readonly ReviewDiffCommentThread<TCommentMetadata>[]
-    | undefined,
-  commentThreadsVersion: string
+  commentThreadGroup: ReviewDiffCommentThreadGroup<TCommentMetadata> | undefined
 ): ReviewDiffItem<TCommentMetadata> {
   const oldFile = createFileContents(
     file.oldPath ?? file.path,
@@ -188,7 +120,7 @@ function createTextItem<TCommentMetadata>(
     file.newText,
     fingerprintString(file.id, 'new', file.path, file.newText)
   );
-  const annotations = createReviewDiffCommentAnnotations(file, commentThreads);
+  const annotations = commentThreadGroup?.annotations;
 
   return {
     id: file.id,
@@ -203,7 +135,7 @@ function createTextItem<TCommentMetadata>(
       file.status,
       file.oldText,
       file.newText,
-      commentThreadsVersion
+      commentThreadGroup?.version ?? ''
     ),
     collapsed,
   };
@@ -213,10 +145,7 @@ function createVirtualItem<TCommentMetadata>(
   file: ReviewDiffVirtualFile,
   collapsed: boolean,
   labels: ResolvedReviewDiffLabels,
-  commentThreads:
-    | readonly ReviewDiffCommentThread<TCommentMetadata>[]
-    | undefined,
-  commentThreadsVersion: string
+  commentThreadGroup: ReviewDiffCommentThreadGroup<TCommentMetadata> | undefined
 ): ReviewDiffItem<TCommentMetadata> {
   const fileDiff = processFile(file.patch, { cacheKey: file.id });
   const version = fingerprint(
@@ -226,7 +155,7 @@ function createVirtualItem<TCommentMetadata>(
     file.oldPath ?? '',
     file.status,
     file.patch,
-    commentThreadsVersion
+    commentThreadGroup?.version ?? ''
   );
 
   if (fileDiff == null) {
@@ -239,7 +168,7 @@ function createVirtualItem<TCommentMetadata>(
     );
   }
 
-  const annotations = createReviewDiffCommentAnnotations(file, commentThreads);
+  const annotations = commentThreadGroup?.annotations;
 
   return {
     id: file.id,
@@ -281,10 +210,7 @@ function createStateItem<TCommentMetadata>(
 function createConflictItem<TCommentMetadata>(
   file: ReviewDiffConflictFile,
   collapsed: boolean,
-  commentThreads:
-    | readonly ReviewDiffCommentThread<TCommentMetadata>[]
-    | undefined,
-  commentThreadsVersion: string
+  commentThreadGroup: ReviewDiffCommentThreadGroup<TCommentMetadata> | undefined
 ): ReviewDiffItem<TCommentMetadata> {
   const oldText = file.oursText ?? file.baseText ?? '';
   const oldFile = createFileContents(
@@ -302,7 +228,7 @@ function createConflictItem<TCommentMetadata>(
     file.worktreeText,
     fingerprintString(file.id, 'conflict-new', file.path, file.worktreeText)
   );
-  const annotations = createReviewDiffCommentAnnotations(file, commentThreads);
+  const annotations = commentThreadGroup?.annotations;
 
   return {
     id: file.id,
@@ -317,7 +243,7 @@ function createConflictItem<TCommentMetadata>(
       file.status,
       oldText,
       file.worktreeText,
-      commentThreadsVersion
+      commentThreadGroup?.version ?? ''
     ),
     collapsed,
   };

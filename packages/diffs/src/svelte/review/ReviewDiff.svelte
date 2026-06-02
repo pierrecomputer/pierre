@@ -42,6 +42,7 @@
     onHydrationRequested,
     class: className = '',
     codeViewOptions,
+    commentThreads = [],
   }: ReviewDiffProps<unknown> = $props();
 
   let host = $state<HTMLDivElement | undefined>(undefined);
@@ -69,6 +70,7 @@
       notices,
       collapsed,
       labels: resolvedLabels,
+      commentThreads,
     })
   );
   const fileById: Map<string, ReviewDiffFile> = $derived(
@@ -145,6 +147,7 @@
       files: [textFile],
       collapsed: loadedItems.get(fileId)?.collapsed ?? collapsed,
       labels: resolvedLabels,
+      commentThreads,
     });
 
     if (item == null) {

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   createReviewDiffItems,
   resolveReviewDiffLabels,
+  type ReviewDiffCommentThread,
   type ReviewDiffFile,
 } from '../src/svelte/review/index';
 
@@ -152,6 +153,95 @@ describe('createReviewDiffItems', () => {
     expect(item.annotations?.[0]?.metadata.thread).toBe(thread);
     expect(item.annotations?.[0]?.metadata.target).toEqual(thread.target);
     expect(item.annotations?.[0]?.metadata.file.id).toBe('src/app.ts');
+  });
+
+  test('keeps versions stable for files whose comment threads did not change', () => {
+    const files: ReviewDiffFile[] = [
+      createTextReviewFile('a.ts', 'a'),
+      createTextReviewFile('b.ts', 'b'),
+    ];
+    const aThread: ReviewDiffCommentThread<{ body: string }> = {
+      id: 'thread-a',
+      target: {
+        fileId: 'a.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
+      metadata: { body: 'Comment on a.ts.' },
+    };
+    const bThread: ReviewDiffCommentThread<{ body: string }> = {
+      id: 'thread-b',
+      target: {
+        fileId: 'b.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
+      metadata: { body: 'Comment on b.ts.' },
+    };
+
+    const firstItems = createReviewDiffItems({
+      files,
+      commentThreads: [aThread],
+    });
+    const secondItems = createReviewDiffItems({
+      files,
+      commentThreads: [aThread, bThread],
+    });
+    const firstAItem = firstItems.find((item) => item.id === 'a.ts');
+    const secondAItem = secondItems.find((item) => item.id === 'a.ts');
+    const secondBItem = secondItems.find((item) => item.id === 'b.ts');
+
+    expect(firstAItem?.version).toBe(secondAItem?.version);
+    expect(secondBItem?.type).toBe('diff');
+    if (secondBItem?.type !== 'diff') {
+      throw new Error('expected b.ts diff item');
+    }
+
+    expect(secondBItem.annotations).toHaveLength(1);
+    expect(secondBItem.annotations?.[0]?.metadata.thread).toBe(bThread);
+  });
+
+  test('changes same-file versions when a thread is pushed into the same array', () => {
+    const file = createTextReviewFile('src/app.ts', 'commented');
+    const commentThreads: ReviewDiffCommentThread<{ body: string }>[] = [
+      {
+        id: 'thread-1',
+        target: {
+          fileId: 'src/app.ts',
+          side: 'additions',
+          lineNumber: 1,
+        },
+        metadata: { body: 'First body.' },
+      },
+    ];
+
+    const [firstItem] = createReviewDiffItems({
+      files: [file],
+      commentThreads,
+    });
+
+    commentThreads.push({
+      id: 'thread-2',
+      target: {
+        fileId: 'src/app.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
+      metadata: { body: 'Second body.' },
+    });
+
+    const [secondItem] = createReviewDiffItems({
+      files: [file],
+      commentThreads,
+    });
+
+    expect(firstItem?.version).not.toBe(secondItem?.version);
+    expect(secondItem?.type).toBe('diff');
+    if (secondItem?.type !== 'diff') {
+      throw new Error('expected diff item');
+    }
+
+    expect(secondItem.annotations).toHaveLength(2);
   });
 
   test('ignores comment threads for missing files and state files', () => {
