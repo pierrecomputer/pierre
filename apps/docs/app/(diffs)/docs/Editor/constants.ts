@@ -199,7 +199,7 @@ const file: FileContents = {
 export { greet };\`,
 };
 
-export function EditCodeFile() {
+export function EditorComponent() {
   const [editable, setEditable] = useState(true);
   const editor = useMemo(
     () =>
@@ -258,7 +258,7 @@ const fileDiff: FileDiffMetadata = parseDiffFromFile(
   { name: 'example.ts', contents: 'console.warn("Updated message")' }
 );
 
-export function EditCodeDiff() {
+export function EditorComponent() {
   const [editable, setEditable] = useState(true);
   const editor = useMemo(
     () =>
@@ -311,21 +311,20 @@ import {
 } from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
+// Keep file objects stable (useState/useMemo) to avoid re-renders.
+// The component uses reference equality for change detection.
 const oldFile: FileContents = {
   name: 'example.ts',
-  contents: \`function greet(name: string) {
-  return name;
-}\`,
+  contents: 'console.log("Hello world")',
 };
 
 const newFile: FileContents = {
-  ...oldFile,
-  contents: \`function greet(name: string) {
-  return \\\`Hello, \\\${name}!\\\`;
-}\`,
+  name: 'example.ts',
+  contents: 'console.warn("Updated message")',
 };
 
-export function EditMultiFileDiff() {
+
+export function EditorComponent() {
   const [editable, setEditable] = useState(true);
   const editor = useMemo(
     () =>
