@@ -460,6 +460,95 @@ describe('EditorTokenizer', () => {
     }
   });
 
+  test('pauses and resumes background tokenization', () => {
+    const originalAddEventListener = globalThis.addEventListener;
+    const originalRemoveEventListener = globalThis.removeEventListener;
+    const originalPostMessage = globalThis.postMessage;
+    let messageListener: ((event: MessageEvent) => void) | undefined;
+    const postedMessages: unknown[] = [];
+
+    globalThis.addEventListener = ((
+      type: string,
+      listener: EventListenerOrEventListenerObject
+    ) => {
+      if (type === 'message' && typeof listener === 'function') {
+        messageListener = listener as (event: MessageEvent) => void;
+      }
+    }) as typeof globalThis.addEventListener;
+    globalThis.removeEventListener = ((
+      type: string,
+      listener: EventListenerOrEventListenerObject
+    ) => {
+      if (type === 'message' && listener === messageListener) {
+        messageListener = undefined;
+      }
+    }) as typeof globalThis.removeEventListener;
+    globalThis.postMessage = ((message: unknown) => {
+      postedMessages.push(message);
+    }) as typeof globalThis.postMessage;
+
+    try {
+      let tokenizeLineCount = 0;
+      const state = { equals: () => false } as unknown as StateStack;
+      const grammar = {
+        tokenizeLine2() {
+          tokenizeLineCount++;
+          return {
+            tokens: new Uint32Array([0, 0]),
+            ruleStack: state,
+            stoppedEarly: false,
+          };
+        },
+      } as unknown as IGrammar;
+      const textDocument = new TextDocument(
+        'test.ts',
+        ['line 0', 'line 1', 'line 2'].join('\n'),
+        'typescript'
+      );
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({
+          getLanguage: () => grammar,
+        }),
+        textDocument,
+        codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+      const change: TextDocumentChange = {
+        startLine: 0,
+        startCharacter: 0,
+        endLine: 0,
+        previousLineCount: textDocument.lineCount,
+        lineCount: textDocument.lineCount,
+        lineDelta: 0,
+        changedLineRanges: [[0, 0]],
+      };
+      const renderRange = {
+        startingLine: 0,
+        totalLines: 1,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      };
+
+      tokenizer.tokenize(change, renderRange);
+      const queuedMessage = postedMessages.at(-1);
+      tokenizeLineCount = 0;
+
+      tokenizer.pauseBackgroundTokenize();
+      messageListener?.({ data: queuedMessage } as MessageEvent);
+      expect(tokenizeLineCount).toBe(0);
+
+      tokenizer.resumeBackgroundTokenize();
+      const resumedMessage = postedMessages.at(-1);
+      messageListener?.({ data: resumedMessage } as MessageEvent);
+      expect(tokenizeLineCount).toBeGreaterThan(0);
+    } finally {
+      globalThis.addEventListener = originalAddEventListener;
+      globalThis.removeEventListener = originalRemoveEventListener;
+      globalThis.postMessage = originalPostMessage;
+    }
+  });
+
   test('jumps between exact changed ranges for multi-cursor edits', () => {
     let tokenizeLineCount = 0;
     const grammar = {

@@ -46,6 +46,7 @@ export class EditorTokenizer {
   #stateStackCache: StateStack[] = [INITIAL];
   #lastLine: number = -1;
   #isStopped: boolean = true;
+  #isPaused: boolean = false;
   #backgroundJobId: number = 0;
   #backgroundChangedLineRanges: readonly [number, number][] | undefined;
   #backgroundChangedRangeIndex: number = 0;
@@ -366,9 +367,32 @@ export class EditorTokenizer {
   stopBackgroundTokenize(): void {
     removeEventListener('message', this.#onMessage);
     this.#isStopped = true;
+    this.#isPaused = false;
     this.#lastLine = -1;
     this.#backgroundChangedLineRanges = undefined;
     this.#backgroundChangedRangeIndex = 0;
+  }
+
+  pauseBackgroundTokenize(): void {
+    if (this.#isStopped || this.#isPaused) {
+      return;
+    }
+    removeEventListener('message', this.#onMessage);
+    this.#isPaused = true;
+  }
+
+  resumeBackgroundTokenize(): void {
+    if (
+      this.#isStopped ||
+      !this.#isPaused ||
+      this.#grammar === undefined ||
+      this.#lastLine < 0
+    ) {
+      return;
+    }
+    this.#isPaused = false;
+    globalThis.addEventListener('message', this.#onMessage);
+    this.#postBackgroundTokenizeMessage(this.#backgroundJobId);
   }
 
   #scheduleBackgroundTokenize(
@@ -379,6 +403,7 @@ export class EditorTokenizer {
     const jobId = ++this.#backgroundJobId;
 
     this.#isStopped = false;
+    this.#isPaused = false;
     this.#lastLine = startLine;
     this.#backgroundChangedLineRanges = changedLineRanges;
     this.#backgroundChangedRangeIndex = changedRangeIndex;
@@ -456,6 +481,7 @@ export class EditorTokenizer {
   #backgroundTokenize(jobId: number) {
     if (
       this.#isStopped ||
+      this.#isPaused ||
       this.#grammar === undefined ||
       jobId !== this.#backgroundJobId
     ) {
