@@ -163,22 +163,24 @@
 /* Search Panel Widget */
 [data-search-panel] {
   position: sticky;
-  top: 8px;
-  left: 0;
+  top: 12px;
   z-index: 100;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-inline: 1ch;
+  width: fit-content;
+  min-width: 300px;
+  max-width: calc(100% - 24px);
+  margin-inline: auto 12px;
   margin-bottom: 4px;
+  display: flex;
+  gap: 4px;
+  background-clip: padding-box;
   background-color: color-mix(
     in lab,
     color-mix(in lab, var(--diffs-fg) 4%, var(--diffs-bg)),
     transparent 40%
   );
-  border: 1px solid color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
-  padding: 6px;
-  border-radius: 6px;
+  border: 1px solid color-mix(in lab, var(--diffs-fg) 15%, var(--diffs-bg));
+  padding: 6px 6px 6px 10px;
+  border-radius: 8px;
   box-shadow: 0 0 12px 0 color-mix(in lab, var(--diffs-fg) 16%, var(--diffs-bg));
   backdrop-filter: blur(8px);
 }
@@ -186,14 +188,15 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 2px;
+  gap: 1px;
+  width: 100%;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 14px;
 }
 [data-search-panel-row] input {
   font-size: 14px;
   line-height: 24px;
-  max-width: 50%;
+  min-width: 120px;
   padding-inline: 4px;
   border: none;
   outline: none;
@@ -205,20 +208,27 @@
   background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
 }
 [data-search-panel-row] [data-matches] {
+  min-width: 10ch;
+  margin-right: auto;
   font-size: 12px;
   font-weight: 500;
   line-height: 20px;
-  padding-inline: 4px 8px;
+  padding-inline: 4px;
   color: color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg));
 }
 [data-search-panel-row] [data-matches][data-no-matches] {
   color: color-mix(in lab, var(--diffs-deletion-base) 90%, var(--diffs-bg));
 }
+[data-search-panel-row] svg {
+  display: block;
+  fill: currentColor;
+}
 [data-search-panel-row] [data-icon] {
+  flex-shrink: 0;
   width: 24px;
   height: 24px;
   display: flex;
-  color: color-mix(in lab, var(--diffs-fg) 40%, var(--diffs-bg));
+  color: color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg));
   align-items: center;
   justify-content: center;
   border-radius: 4px;
@@ -227,36 +237,29 @@
     background-color 0.1s ease-in-out,
     color 0.1s ease-in-out;
 }
+[data-search-panel-row] [data-icon='search'] {
+  width: 16px;
+  margin-right: 2px;
+  color: color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg));
+  cursor: default;
+}
 [data-search-panel-row] [data-icon][data-disabled='true'] {
-  visibility: hidden;
+  opacity: 0.25;
+  pointer-events: none;
 }
 [data-search-panel-row] [data-icon]:not([data-icon='search']):hover {
   background-color: color-mix(in lab, var(--diffs-fg) 6%, var(--diffs-bg));
   color: var(--diffs-fg);
 }
-[data-search-panel-row] [data-settings] {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 100%;
-  padding: 0 8px;
-}
-[data-search-panel-row] [data-checkbox] {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  font-size: 12px;
-  color: color-mix(in lab, var(--diffs-fg) 60%, var(--diffs-bg));
-}
-[data-search-panel-row] [data-checkbox] input {
-  margin: 0;
-}
-[data-search-panel-row] [data-checkbox]:hover,
-[data-search-panel-row] [data-checkbox]:has(input:checked) {
+[data-search-panel-row] [data-icon][data-active='true'] {
+  background-color: color-mix(in lab, var(--diffs-fg) 10%, var(--diffs-bg));
   color: var(--diffs-fg);
 }
-[data-search-panel-row] [data-spacer] {
-  flex: 1;
+[data-search-panel-row] [data-divider] {
+  flex-shrink: 0;
+  align-self: center;
+  width: 1px;
+  height: 16px;
+  margin-inline: 8px;
+  background-color: color-mix(in lab, var(--diffs-fg) 10%, var(--diffs-bg));
 }

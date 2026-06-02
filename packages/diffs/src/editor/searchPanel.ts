@@ -1,5 +1,5 @@
 import { isPrimaryModifier } from './platform';
-import { getEditorIconSvg } from './sprite';
+import { getEditorIconSvg, type SVGSpriteNames } from './sprite';
 import type { TextDocument } from './textDocument';
 import { h } from './utils';
 
@@ -26,7 +26,6 @@ export interface SearchPanelOptions {
 export class SearchPanelWidget {
   #container: HTMLDivElement;
   #inputElement: HTMLInputElement;
-  #closeSettingsPanelTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: SearchPanelOptions) {
     const {
@@ -141,77 +140,34 @@ export class SearchPanelWidget {
       onClose();
     };
 
-    const settingsSwitch = h('div', {
-      dataset: { icon: 'settings' },
-      title: 'Settings',
-      innerHTML: getEditorIconSvg('settings'),
-      onclick: () => {
-        settingsSwitch.replaceWith(settingsPanel);
-      },
-    });
-    const settingsPanel = h('div', {
-      dataset: 'settings',
-      children: [
-        h('label', {
-          dataset: 'checkbox',
-          children: [
-            h('input', {
-              type: 'checkbox',
-              checked: searchParams.caseSensitive,
-              onchange: (e: Event) => {
-                updateSearchParam(
-                  'caseSensitive',
-                  (e.target as HTMLInputElement).checked
-                );
-              },
-            }),
-            'Match Case',
-          ],
-        }),
-        h('label', {
-          dataset: 'checkbox',
-          children: [
-            h('input', {
-              type: 'checkbox',
-              checked: searchParams.wholeWord,
-              onchange: (e: Event) => {
-                updateSearchParam(
-                  'wholeWord',
-                  (e.target as HTMLInputElement).checked
-                );
-              },
-            }),
-            'Whole Word',
-          ],
-        }),
-        h('label', {
-          dataset: 'checkbox',
-          children: [
-            h('input', {
-              type: 'checkbox',
-              checked: searchParams.regex,
-              onchange: (e: Event) => {
-                updateSearchParam(
-                  'regex',
-                  (e.target as HTMLInputElement).checked
-                );
-              },
-            }),
-            'Regexp',
-          ],
-        }),
-      ],
-      onmouseleave: () => {
-        this.#closeSettingsPanelTimeout = setTimeout(() => {
-          this.#closeSettingsPanelTimeout = undefined;
-          settingsPanel.replaceWith(settingsSwitch);
-        }, 500);
-      },
-      onmouseenter: () => {
-        clearTimeout(this.#closeSettingsPanelTimeout);
-        this.#closeSettingsPanelTimeout = undefined;
-      },
-    });
+    // Builds an always-visible icon button that toggles one boolean search
+    // option (case/whole-word/regex). The button reflects its on/off state via
+    // the `data-active` attribute so the stylesheet can highlight it.
+    const makeToggle = (
+      icon: SVGSpriteNames,
+      title: string,
+      key: 'caseSensitive' | 'wholeWord' | 'regex'
+    ) => {
+      const button = h('div', {
+        dataset: { icon, active: String(searchParams[key]) },
+        title,
+        innerHTML: getEditorIconSvg(icon),
+        onclick: () => {
+          const next = !searchParams[key];
+          button.dataset.active = String(next);
+          updateSearchParam(key, next);
+        },
+      });
+      return button;
+    };
+
+    const caseSensitiveToggle = makeToggle(
+      'case',
+      'Match Case',
+      'caseSensitive'
+    );
+    const wholeWordToggle = makeToggle('whole-word', 'Whole Word', 'wholeWord');
+    const regexToggle = makeToggle('regex', 'Regexp', 'regex');
 
     this.#inputElement = h('input', {
       type: 'text',
@@ -249,6 +205,10 @@ export class SearchPanelWidget {
             }),
             this.#inputElement,
             matchResultElement,
+            caseSensitiveToggle,
+            wholeWordToggle,
+            regexToggle,
+            h('div', { dataset: 'divider' }),
             h('div', {
               dataset: { icon: 'arrow-up', disabled: 'true' },
               title: 'Previous',
@@ -265,8 +225,6 @@ export class SearchPanelWidget {
                 findNextMatch();
               },
             }),
-            h('div', { dataset: 'spacer' }),
-            settingsSwitch,
             h('div', {
               dataset: { icon: 'close' },
               title: 'Close',
@@ -296,10 +254,6 @@ export class SearchPanelWidget {
   }
 
   cleanup(): void {
-    if (this.#closeSettingsPanelTimeout !== undefined) {
-      clearTimeout(this.#closeSettingsPanelTimeout);
-      this.#closeSettingsPanelTimeout = undefined;
-    }
     this.#container.remove();
   }
 }
