@@ -137,16 +137,20 @@
       return undefined;
     }
 
+    const textareaId = `review-demo-comment-${thread.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
     const form = document.createElement('form');
     form.className = 'review-demo-comment review-demo-comment--draft';
     form.dataset.reviewCommentThread = thread.id;
 
     const label = document.createElement('label');
     label.className = 'review-demo-comment__label';
+    label.htmlFor = textareaId;
     label.textContent = `New comment on ${formatReviewCommentTarget(context.target)}`;
 
     const textarea = document.createElement('textarea');
     textarea.className = 'review-demo-comment__textarea';
+    textarea.id = textareaId;
     textarea.value = thread.metadata.body;
     textarea.placeholder = 'Leave a comment…';
     textarea.rows = 3;
