@@ -2061,7 +2061,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       onUpdate: (allMatches: MatchRange[]): MatchRange | undefined => {
         if (allMatches.length === 0) {
           this.#matches = undefined;
-          this.#updateSelections([]);
+          this.#updateSelections(this.#selections ?? []);
           return;
         }
 
@@ -2089,9 +2089,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#searchPanel = undefined;
         this.#retainSearchPanelFocus = false;
         this.#matches = undefined;
-        if (this.#selections !== undefined) {
-          this.#updateSelections(this.#selections);
-        }
+        this.#updateSelections(this.#selections ?? []);
       },
     });
 

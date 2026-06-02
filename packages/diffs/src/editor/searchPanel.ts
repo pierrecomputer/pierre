@@ -73,7 +73,11 @@ export class SearchPanelWidget {
       } else {
         delete matchResultElement.dataset.noMatches;
         updateCurrentMatch(onUpdate(matches.all));
+        return;
       }
+
+      matches.current = undefined;
+      onUpdate([]);
     };
 
     const updateCurrentMatch = (currentMatch: MatchRange | undefined) => {
