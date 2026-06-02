@@ -18,6 +18,7 @@ import { CustomHunkSeparators } from '../app/(diffs)/_examples/CustomHunkSeparat
 import { CodeViewExampleTabs } from '../app/(diffs)/docs/CodeView/ExampleTabs';
 import { EditorComponentTabs } from '../app/(diffs)/docs/Editor/ComponentTabs';
 import { EditorDemo } from '../app/(diffs)/docs/Editor/EditorDemo';
+import { EditorWorkerPoolTabs } from '../app/(diffs)/docs/Editor/WorkerPoolTabs';
 import { PackageManagerTabs } from '../app/(diffs)/docs/Installation/PackageManagerTabs';
 import { CodeToggle } from '../app/(diffs)/docs/Overview/CodeToggle';
 import {
@@ -91,6 +92,7 @@ const defaultComponents = {
   CodeViewExampleTabs,
   EditorComponentTabs,
   EditorDemo,
+  EditorWorkerPoolTabs,
   CustomHunkSeparators,
   OverviewFileTree,
   MultiFileDiff,

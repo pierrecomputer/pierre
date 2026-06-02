@@ -92,6 +92,22 @@ performance when editing large files.
   multiFileDiffExample={editorReactMultiFileDiffExample}
 />
 
+### Using Worker Pool
+
+When you offload syntax highlighting to a worker pool, the
+editor still needs the token transformer pipeline to re-highlight lines as you
+type. Set `useTokenTransformer: true` on the pool's `highlighterOptions`.
+
+See [Worker Pool](#worker-pool) for worker factory setup and pool options. In
+vanilla JS, pass the pool as the second argument to `File` or `FileDiff`. In
+React, wrap your tree in `WorkerPoolContextProvider`. Then attach the editor as
+usual.
+
+<EditorWorkerPoolTabs
+  vanillaExample={editorWorkerPoolVanillaExample}
+  reactExample={editorWorkerPoolReactExample}
+/>
+
 ### Lazy Loading
 
 Because `@pierre/diffs/editor` is a standalone entry point, you can

@@ -298,6 +298,75 @@ export function EditorComponent() {
   options,
 };
 
+export const EDITOR_WORKER_POOL_VANILLA_EXAMPLE: PreloadFileOptions<undefined> =
+  {
+    file: {
+      name: 'editor_worker_pool_vanilla.ts',
+      contents: `import { File } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker';
+import { workerFactory } from './utils/workerFactory';
+
+const workerPool = getOrCreateWorkerPoolSingleton({
+  poolOptions: { workerFactory },
+  highlighterOptions: {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    useTokenTransformer: true,
+  },
+});
+
+const fileInstance = new File(
+  { theme: { dark: 'pierre-dark', light: 'pierre-light' } },
+  workerPool
+);
+fileInstance.render({
+  file: { name: 'example.ts', contents: 'export const x = 1;' },
+  containerWrapper: document.body,
+});
+
+const editor = new Editor();
+editor.edit(fileInstance);`,
+    },
+    options,
+  };
+
+export const EDITOR_WORKER_POOL_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_worker_pool_react.tsx',
+    contents: `'use client';
+
+import { Editor } from '@pierre/diffs/editor';
+import {
+  EditorProvider,
+  File,
+  WorkerPoolContextProvider,
+} from '@pierre/diffs/react';
+import { workerFactory } from '@/utils/workerFactory';
+
+const editor = new Editor();
+
+export function EditorWithWorkerPool() {
+  return (
+    <WorkerPoolContextProvider
+      poolOptions={{ workerFactory }}
+      highlighterOptions={{
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        useTokenTransformer: true,
+      }}
+    >
+      <EditorProvider editor={editor}>
+        <File
+          file={{ name: 'example.ts', contents: 'export const x = 1;' }}
+          contentEditable
+        />
+      </EditorProvider>
+    </WorkerPoolContextProvider>
+  );
+}`,
+  },
+  options,
+};
+
 export const EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> =
   {
     file: {
