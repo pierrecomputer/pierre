@@ -34,8 +34,7 @@ export const SVGSpriteSheet = `<svg data-editor-icon-sprite aria-hidden="true" w
   </symbol>
 </svg>`;
 
-export const getEditorIconSvg = (name: SVGSpriteNames, size = 16): string => `
-<svg width="${size}" height="${size}">
-  <use href="#diffs-editor-icon-${name}"></use>
-</svg>
-`;
+export const getEditorIconSvg = (name: SVGSpriteNames, size = 16): string =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+<use href="#diffs-editor-icon-${name}"></use>
+</svg>`;

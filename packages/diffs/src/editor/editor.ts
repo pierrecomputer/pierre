@@ -123,7 +123,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #globalStyleElement?: HTMLStyleElement;
   #editorStyleElement?: HTMLStyleElement;
   #themeStyleElement?: HTMLStyleElement;
-  #spriteElement?: HTMLElement;
+  #spriteElement?: SVGSVGElement;
   #componentContainer?: HTMLElement;
   #contentElement?: HTMLElement;
   #overlayElement?: HTMLElement;
@@ -842,7 +842,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     const fragment = document.createElement('div');
     fragment.innerHTML = SVGSpriteSheet;
-    this.#spriteElement = fragment.firstElementChild as HTMLElement;
+    const sprite = fragment.firstElementChild;
+    this.#spriteElement = sprite instanceof SVGSVGElement ? sprite : undefined;
 
     this.#overlayElement = h('div', {
       dataset: 'editorOverlay',

@@ -179,7 +179,7 @@
   border: 1px solid color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
   padding: 6px;
   border-radius: 6px;
-  box-shadow: 0 0 12px 0 color-mix(in lab, var(--diffs-fg) 16% var(--diffs-bg));
+  box-shadow: 0 0 12px 0 color-mix(in lab, var(--diffs-fg) 16%, var(--diffs-bg));
   backdrop-filter: blur(8px);
 }
 [data-search-panel-row] {
