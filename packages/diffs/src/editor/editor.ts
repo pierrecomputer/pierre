@@ -20,6 +20,7 @@ import {
   type EditorCommand,
   resolveEditorCommandFromKeyboardEvent,
 } from './command';
+import editorCSS from './editor.css';
 import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import { type QuickEditContext, QuickEditWidget } from './quickEdit';
@@ -55,7 +56,6 @@ import {
   selectionIntersects,
 } from './selection';
 import { SVGSpriteSheet } from './sprite';
-import editorCSS from './style.css';
 import {
   getExpandedAsciiTextColumns,
   getUnicodeMeasurementOffsets,
