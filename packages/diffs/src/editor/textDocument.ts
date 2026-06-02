@@ -204,12 +204,8 @@ export class TextDocument<LAnnotation> {
     return this.#pieceTable.findNextNonOverlappingSubstring(needle, occupied);
   }
 
-  search(
-    kind: 'findNext' | 'findPrevious' | 'findAll' | 'replace' | 'replaceAll',
-    searchParams: SearchParams,
-    selection?: Range
-  ): [start: number, end: number][] {
-    return this.#pieceTable.search(kind, searchParams, selection);
+  search(searchParams: SearchParams): [start: number, end: number][] {
+    return this.#pieceTable.search(searchParams);
   }
 
   applyEdits(
