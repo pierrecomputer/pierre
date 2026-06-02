@@ -191,6 +191,107 @@ async function renderItems(
 }
 
 describe('CodeView scroll anchoring', () => {
+  test('keeps the visible item anchored when updateItem grows a previous item', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    const root = createClampingRoot();
+    const growingItem = { ...makeFileItem('file:growing', 20), version: 0 };
+    const anchorItem = { ...makeFileItem('file:anchor', 90), version: 0 };
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [growingItem, anchorItem]);
+
+      const initialAnchorTop =
+        DEFAULT_CODE_VIEW_LAYOUT.paddingTop +
+        (viewer.getTopForItem(anchorItem.id) ?? 0);
+      root.scrollTop = initialAnchorTop;
+      dispatchScroll(root);
+      viewer.render(true);
+
+      // Reading an externally supplied item can run userland accessors, so the
+      // visual anchor has to be captured before updateItem touches input.id.
+      const updatedGrowingItem: CodeViewItem = {
+        get id() {
+          root.scrollTop = 0;
+          return growingItem.id;
+        },
+        type: 'file',
+        file: makeFile(`${growingItem.id}.ts`, 140),
+        version: 1,
+      };
+      expect(viewer.updateItem(updatedGrowingItem)).toBe(true);
+      viewer.render(true);
+
+      const updatedAnchorTop =
+        DEFAULT_CODE_VIEW_LAYOUT.paddingTop +
+        (viewer.getTopForItem(anchorItem.id) ?? 0);
+      expect(updatedAnchorTop).toBeGreaterThan(initialAnchorTop);
+      expect(root.scrollTop).toBe(updatedAnchorTop);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('does not keep a pending anchor when updateItem exits without changes', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    const root = createClampingRoot();
+    const growingItem = { ...makeFileItem('file:growing', 20), version: 0 };
+    const anchorItem = { ...makeFileItem('file:anchor', 90), version: 0 };
+    const originalConsoleError = console.error;
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [growingItem, anchorItem]);
+
+      const initialAnchorTop =
+        DEFAULT_CODE_VIEW_LAYOUT.paddingTop +
+        (viewer.getTopForItem(anchorItem.id) ?? 0);
+      root.scrollTop = initialAnchorTop;
+      dispatchScroll(root);
+      viewer.render(true);
+
+      console.error = () => {};
+      const missingItem: CodeViewItem = {
+        get id() {
+          root.scrollTop = 0;
+          return 'file:missing';
+        },
+        type: 'file',
+        file: makeFile('missing.ts', 140),
+        version: 1,
+      };
+      expect(viewer.updateItem(missingItem)).toBe(false);
+      viewer.render(true);
+      expect(root.scrollTop).toBe(0);
+
+      root.scrollTop = initialAnchorTop;
+      dispatchScroll(root);
+      viewer.render(true);
+
+      const sameVersionItem: CodeViewItem = {
+        get id() {
+          root.scrollTop = 0;
+          return growingItem.id;
+        },
+        type: 'file',
+        file: makeFile(`${growingItem.id}.ts`, 140),
+        version: 0,
+      };
+      expect(viewer.updateItem(sameVersionItem)).toBe(false);
+      viewer.render(true);
+      expect(root.scrollTop).toBe(0);
+    } finally {
+      console.error = originalConsoleError;
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('keeps an item anchor fixed when split to unified grows past the old scroll range', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({ diffStyle: 'split' });

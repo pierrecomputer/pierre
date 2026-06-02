@@ -397,6 +397,7 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   diffIndicators?: DiffIndicators; // bars is default
   disableBackground?: boolean;
   hunkSeparators?: HunkSeparators; // line-info is default
+  formatUnmodifiedLines?: (lines: number) => string;
   expandUnchanged?: boolean; // false is default
   // Auto-expand collapsed context at or below this size.
   collapsedContextThreshold?: number; // 2 is default

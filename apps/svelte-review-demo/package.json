@@ -1,0 +1,25 @@
+{
+  "name": "@pierre/svelte-review-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run build:deps && vite build",
+    "build:deps": "bun run build:deps:diffs",
+    "build:deps:diffs": "output=$(cd ../../packages/diffs && bun run build 2>&1) && echo '[diffs] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
+    "dev": "bun run build:deps && vite --host --clearScreen=false",
+    "preview": "vite preview",
+    "start": "vite preview",
+    "tsc": "bun run build:deps && svelte-check --tsconfig ./tsconfig.json && tsgo --noEmit --pretty"
+  },
+  "dependencies": {
+    "@pierre/diffs": "workspace:*",
+    "svelte": "catalog:"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "svelte-check": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

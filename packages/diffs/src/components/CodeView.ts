@@ -244,6 +244,7 @@ const CODE_VIEW_DIFF_OPTION_KEYS = [
   'diffStyle',
   'diffIndicators',
   'disableBackground',
+  'formatUnmodifiedLines',
   'expandUnchanged',
   'collapsedContextThreshold',
   'lineDiffType',
@@ -1157,9 +1158,11 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   public updateItem(input: CodeViewItem<LAnnotation>): boolean {
-    const item = this.idToItem.get(input.id);
+    const pendingLayoutAnchor = this.getPendingLayoutAnchor();
+    const id = input.id;
+    const item = this.idToItem.get(id);
     if (item == null) {
-      console.error(`CodeView.updateItem: unknown item id "${input.id}"`);
+      console.error(`CodeView.updateItem: unknown item id "${id}"`);
       return false;
     }
 
@@ -1167,6 +1170,7 @@ export class CodeView<LAnnotation = undefined> {
       return false;
     }
 
+    this.pendingLayoutAnchor = pendingLayoutAnchor;
     this.markItemLayoutDirty(item);
     this.scrollDirty = true;
     this.render();
@@ -1340,16 +1344,20 @@ export class CodeView<LAnnotation = undefined> {
     }
   }
 
-  private capturePendingLayoutAnchor(): void {
+  private getPendingLayoutAnchor(): ScrollAnchor | undefined {
     if (
       this.root == null ||
       this.items.length === 0 ||
       this.pendingScrollTarget != null
     ) {
-      return;
+      return undefined;
     }
 
-    this.pendingLayoutAnchor = this.getScrollAnchor(this.getScrollTop());
+    return this.getScrollAnchor(this.getScrollTop());
+  }
+
+  private capturePendingLayoutAnchor(): void {
+    this.pendingLayoutAnchor = this.getPendingLayoutAnchor();
   }
 
   public render(immediate = false): void {

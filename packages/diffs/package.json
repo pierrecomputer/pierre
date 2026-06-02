@@ -19,6 +19,9 @@
       "react": [
         "dist/react/index.d.ts"
       ],
+      "svelte/review": [
+        "dist/svelte/review/index.d.ts"
+      ],
       "ssr": [
         "dist/ssr/index.d.ts"
       ],
@@ -35,6 +38,11 @@
     "./react": {
       "types": "./dist/react/index.d.ts",
       "import": "./dist/react/index.js"
+    },
+    "./svelte/review": {
+      "types": "./dist/svelte/review/index.d.ts",
+      "svelte": "./dist/svelte/review/ReviewDiff.svelte",
+      "import": "./dist/svelte/review/index.js"
     },
     "./ssr": {
       "types": "./dist/ssr/index.d.ts",
@@ -54,11 +62,14 @@
     }
   },
   "scripts": {
-    "build": "tsdown --clean",
+    "build": "bun run build:ts && bun run build:svelte",
+    "build:ts": "tsdown --clean",
+    "build:svelte": "svelte-package --input src/svelte --output dist/svelte --tsconfig ./tsconfig.svelte.json",
+    "check:svelte": "svelte-check --tsconfig ./tsconfig.svelte.json",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "benchmark:parse-merge-conflict": "bun run ./scripts/benchmarkParseMergeConflictDiffFromFile.ts",
     "test": "bun test",
-    "tsc": "tsgo --noEmit --pretty",
+    "tsc": "bun run check:svelte && tsgo --noEmit --pretty",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
@@ -71,6 +82,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",
+    "@sveltejs/package": "catalog:",
     "@types/hast": "catalog:",
     "@types/jsdom": "catalog:",
     "@types/react": "catalog:",
@@ -83,11 +95,25 @@
     "postcss-nesting": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "svelte": "catalog:",
+    "svelte-check": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
     "react": "^18.3.1 || ^19.0.0",
-    "react-dom": "^18.3.1 || ^19.0.0"
+    "react-dom": "^18.3.1 || ^19.0.0",
+    "svelte": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    }
   }
 }

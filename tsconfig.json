@@ -6,6 +6,9 @@
       "path": "apps/demo/tsconfig.json"
     },
     {
+      "path": "apps/svelte-review-demo/tsconfig.json"
+    },
+    {
       "path": "apps/docs/tsconfig.json"
     },
     {

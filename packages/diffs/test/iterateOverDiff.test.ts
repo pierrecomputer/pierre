@@ -548,6 +548,71 @@ describe('iterateOverDiff', () => {
       });
     }
   });
+
+  test('windowed expansion does not attach skipped collapsed separators in split mode', () => {
+    const rows = collectRows({
+      diff: createWindowedSeparatorDiff([
+        {
+          type: 'context',
+          lines: 3,
+          deletionLineIndex: COLLAPSED_BEFORE,
+          additionLineIndex: COLLAPSED_BEFORE,
+        },
+      ]),
+      diffStyle: 'split',
+      expandedHunks: new Map([[0, { fromStart: 2, fromEnd: 0 }]]),
+      startingLine: 3,
+      totalLines: 1,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        type: 'context',
+        collapsedBefore: 0,
+      }),
+    ]);
+  });
+
+  test('windowed expansion does not attach skipped collapsed separators in both mode uneven changes', () => {
+    const rows = collectRows({
+      diff: createWindowedSeparatorDiff([
+        {
+          type: 'change',
+          deletions: 4,
+          deletionLineIndex: COLLAPSED_BEFORE,
+          additions: 1,
+          additionLineIndex: COLLAPSED_BEFORE,
+        },
+      ]),
+      diffStyle: 'both',
+      expandedHunks: new Map([[0, { fromStart: 2, fromEnd: 0 }]]),
+      startingLine: 6,
+      totalLines: 1,
+    });
+
+    expect(rows).toEqual([
+      {
+        type: 'change',
+        hunkIndex: 0,
+        collapsedBefore: 0,
+        collapsedAfter: 0,
+        deletionLine: {
+          unifiedLineIndex: COLLAPSED_BEFORE,
+          splitLineIndex: COLLAPSED_BEFORE,
+          lineIndex: COLLAPSED_BEFORE,
+          lineNumber: COLLAPSED_BEFORE + 1,
+          noEOFCR: false,
+        },
+        additionLine: {
+          unifiedLineIndex: COLLAPSED_BEFORE + 4,
+          splitLineIndex: COLLAPSED_BEFORE,
+          lineIndex: COLLAPSED_BEFORE,
+          lineNumber: COLLAPSED_BEFORE + 1,
+          noEOFCR: false,
+        },
+      },
+    ]);
+  });
 });
 
 const COLLAPSED_BEFORE = 10;
