@@ -9,6 +9,8 @@ import { compile } from 'svelte/compiler';
 // @ts-expect-error Svelte does not publish declarations for this source path.
 import * as svelteClient from '../node_modules/svelte/src/index-client.js';
 import {
+  type ReviewDiffCommentTarget,
+  type ReviewDiffCommentThread,
   type ReviewDiffHandle,
   type ReviewDiffProps,
   type ReviewDiffStateFile,
@@ -165,7 +167,112 @@ describe('ReviewDiff.svelte', () => {
     );
     expect(requestedHydration).toEqual(['src/app.ts', 'src/app.ts']);
   });
+
+  test('renders controlled comment threads through renderCommentThread', async () => {
+    installedDom = installDom();
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const ReviewDiff = await loadReviewDiffComponent();
+    const thread: ReviewDiffCommentThread<{ body: string }> = {
+      id: 'thread-1',
+      target: {
+        fileId: 'src/app.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
+      metadata: { body: 'Please keep this review note visible.' },
+    };
+
+    mountedComponent = mount(ReviewDiff, {
+      target,
+      props: {
+        files: [createVirtualReviewFile('src/app.ts')],
+        commentThreads: [thread],
+        renderCommentThread: (currentThread, context) => {
+          const metadata = currentThread.metadata as { body: string };
+          const wrapper = document.createElement('article');
+          wrapper.dataset.reviewCommentThread = currentThread.id;
+          wrapper.textContent = `${context.file.id}:${context.target.side}:${metadata.body}`;
+          return wrapper;
+        },
+      },
+    });
+    flushSync();
+
+    const region = target.querySelector('[data-pierre-review-diff]');
+    await waitFor(() =>
+      getComposedText(region).includes('Please keep this review note visible.')
+    );
+
+    expect(getComposedText(region)).toContain(
+      'src/app.ts:additions:Please keep this review note visible.'
+    );
+  });
+
+  test('requests a new comment thread from the gutter utility', async () => {
+    installedDom = installDom();
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const ReviewDiff = await loadReviewDiffComponent();
+    const requestedTargets: ReviewDiffCommentTarget[] = [];
+
+    mountedComponent = mount(ReviewDiff, {
+      target,
+      props: {
+        files: [createVirtualReviewFile('src/app.ts')],
+        onCommentThreadAddRequested: (commentTarget) => {
+          requestedTargets.push(commentTarget);
+        },
+      },
+    });
+    flushSync();
+
+    const region = target.querySelector('[data-pierre-review-diff]');
+    const container = await waitForElement<HTMLElement>(
+      region,
+      'diffs-container[data-file-id="src/app.ts"]'
+    );
+    await waitFor(() => container.shadowRoot?.querySelector('[data-code]'));
+    await tickFrames(2);
+
+    const additionNumber = await waitForElement<HTMLElement>(
+      container.shadowRoot,
+      '[data-column-number="1"][data-line-type="change-addition"]'
+    );
+    dispatchPointer(additionNumber, 'pointerdown');
+    const utilityButton = await waitForElement<HTMLButtonElement>(
+      additionNumber,
+      '[data-utility-button]'
+    );
+    dispatchPointer(utilityButton, 'pointerdown');
+    dispatchPointer(utilityButton, 'pointerup');
+
+    expect(requestedTargets).toEqual([
+      {
+        fileId: 'src/app.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
+    ]);
+  });
 });
+
+function dispatchPointer(
+  target: EventTarget,
+  type: string,
+  init: PointerEventInit = {}
+): PointerEvent {
+  const event = new window.PointerEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    pointerId: 1,
+    pointerType: 'touch',
+    ...init,
+  });
+  target.dispatchEvent(event);
+  return event;
+}
 
 function installDom(): InstalledDom {
   const dom = new JSDOM('<!doctype html><html><body></body></html>', {
@@ -183,8 +290,10 @@ function installDom(): InstalledDom {
     HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
     HTMLPreElement: Reflect.get(globalThis, 'HTMLPreElement'),
     HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
+    MouseEvent: Reflect.get(globalThis, 'MouseEvent'),
     navigator: Reflect.get(globalThis, 'navigator'),
     Node: Reflect.get(globalThis, 'Node'),
+    PointerEvent: Reflect.get(globalThis, 'PointerEvent'),
     requestAnimationFrame: Reflect.get(globalThis, 'requestAnimationFrame'),
     ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
     SVGElement: Reflect.get(globalThis, 'SVGElement'),
@@ -200,6 +309,17 @@ function installDom(): InstalledDom {
 
   class MockCSSStyleSheet {
     replaceSync(_css: string): void {}
+  }
+
+  class MockPointerEvent extends dom.window.MouseEvent {
+    readonly pointerId: number;
+    readonly pointerType: string;
+
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 0;
+      this.pointerType = init.pointerType ?? '';
+    }
   }
 
   let nextFrameId = 0;
@@ -246,8 +366,10 @@ function installDom(): InstalledDom {
     HTMLElement: dom.window.HTMLElement,
     HTMLPreElement: dom.window.HTMLPreElement,
     HTMLStyleElement: dom.window.HTMLStyleElement,
+    MouseEvent: dom.window.MouseEvent,
     navigator: dom.window.navigator,
     Node: dom.window.Node,
+    PointerEvent: MockPointerEvent,
     requestAnimationFrame: ((callback: FrameRequestCallback) => {
       const id = ++nextFrameId;
       const timeout = setTimeout(() => {
@@ -262,6 +384,8 @@ function installDom(): InstalledDom {
     Text: dom.window.Text,
     window: dom.window,
   });
+
+  Object.assign(dom.window, { PointerEvent: MockPointerEvent });
 
   return {
     cleanup() {

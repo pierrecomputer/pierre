@@ -2,7 +2,13 @@
   import { onMount } from 'svelte';
 
   import { CodeView, type CodeViewOptions } from '../../components/CodeView.js';
-  import type { CodeViewItem } from '../../types.js';
+  import type {
+    CodeViewItem,
+    DiffLineAnnotation,
+    LineAnnotation,
+    SelectedLineRange,
+  } from '../../types.js';
+  import { isReviewDiffCommentableFile } from './commentThreads.js';
   import { createReviewDiffItems } from './fileItems.js';
   import { resolveReviewDiffLabels } from './labels.js';
   import {
@@ -16,6 +22,7 @@
   import type {
     ResolvedReviewDiffLabels,
     ReviewDiffCommentAnnotationMetadata,
+    ReviewDiffCommentTarget,
     ReviewDiffFile,
     ReviewDiffProps,
     ReviewDiffStateFile,
@@ -29,7 +36,7 @@
 
   const MAX_SYNC_UPDATES = 80;
 
-  type ReviewDiffAnnotationMetadata =
+  type ReviewDiffCommentMetadata =
     ReviewDiffCommentAnnotationMetadata<unknown>;
 
   let {
@@ -43,14 +50,16 @@
     class: className = '',
     codeViewOptions,
     commentThreads = [],
+    renderCommentThread,
+    onCommentThreadAddRequested,
   }: ReviewDiffProps<unknown> = $props();
 
   let host = $state<HTMLDivElement | undefined>(undefined);
-  let viewer = $state<CodeView<ReviewDiffAnnotationMetadata> | undefined>(
+  let viewer = $state<CodeView<ReviewDiffCommentMetadata> | undefined>(
     undefined
   );
   let hydratedFilesById = $state(new Map<string, ReviewDiffTextFile>());
-  let loadedItems = new Map<string, CodeViewItem<ReviewDiffAnnotationMetadata>>();
+  let loadedItems = new Map<string, CodeViewItem<ReviewDiffCommentMetadata>>();
 
   const resolvedLabels: ResolvedReviewDiffLabels = $derived(
     resolveReviewDiffLabels(labels)
@@ -64,7 +73,7 @@
       return hydrated?.patch === file.patch ? hydrated : file;
     })
   );
-  const items: CodeViewItem<ReviewDiffAnnotationMetadata>[] = $derived(
+  const items: CodeViewItem<ReviewDiffCommentMetadata>[] = $derived(
     createReviewDiffItems({
       files: resolvedFiles,
       notices,
@@ -81,7 +90,7 @@
   );
 
   type ReviewDiffItemContext = {
-    item: CodeViewItem<ReviewDiffAnnotationMetadata>;
+    item: CodeViewItem<ReviewDiffCommentMetadata>;
   };
 
   onMount(() => {
@@ -90,7 +99,7 @@
     }
 
     const workerPool = acquireReviewWorkerPool();
-    const nextViewer = new CodeView<ReviewDiffAnnotationMetadata>(
+    const nextViewer = new CodeView<ReviewDiffCommentMetadata>(
       createCodeViewOptions(),
       workerPool
     );
@@ -172,7 +181,7 @@
     viewer.render(true);
   }
 
-  function createCodeViewOptions(): CodeViewOptions<ReviewDiffAnnotationMetadata> {
+  function createCodeViewOptions(): CodeViewOptions<ReviewDiffCommentMetadata> {
     return {
       ...codeViewOptions,
       unsafeCSS: mergeUnsafeCSS(
@@ -187,10 +196,69 @@
       onPostRender: handlePostRender,
       renderHeaderPrefix,
       renderHeaderMetadata,
+      renderAnnotation:
+        renderCommentThread == null
+          ? codeViewOptions?.renderAnnotation
+          : renderCommentAnnotation,
+      enableGutterUtility:
+        onCommentThreadAddRequested == null
+          ? codeViewOptions?.enableGutterUtility
+          : true,
+      onGutterUtilityClick:
+        onCommentThreadAddRequested == null
+          ? codeViewOptions?.onGutterUtilityClick
+          : handleCommentThreadAddRequested,
     };
   }
+
+  // Converts controlled comment annotations into user-provided DOM content.
+  function renderCommentAnnotation(
+    annotation:
+      | DiffLineAnnotation<ReviewDiffCommentMetadata>
+      | LineAnnotation<ReviewDiffCommentMetadata>
+  ): HTMLElement | undefined {
+    if (!('side' in annotation)) {
+      return undefined;
+    }
+
+    return renderCommentThread?.(annotation.metadata.thread, {
+      file: annotation.metadata.file,
+      target: annotation.metadata.target,
+      thread: annotation.metadata.thread,
+    });
+  }
+
+  // Normalizes CodeView gutter selections into ReviewDiff comment targets.
+  function handleCommentThreadAddRequested(
+    range: SelectedLineRange,
+    context?: ReviewDiffItemContext
+  ): void {
+    const item = context?.item;
+    if (item == null) {
+      return;
+    }
+
+    const file = fileById.get(item.id);
+    if (file == null || !isReviewDiffCommentableFile(file)) {
+      return;
+    }
+
+    const side = range.endSide ?? range.side;
+    if (side == null) {
+      return;
+    }
+
+    const target: ReviewDiffCommentTarget = {
+      fileId: file.id,
+      side,
+      lineNumber: range.end,
+    };
+
+    onCommentThreadAddRequested?.(target, { file, target });
+  }
+
   function applyItems(
-    nextItems: readonly CodeViewItem<ReviewDiffAnnotationMetadata>[]
+    nextItems: readonly CodeViewItem<ReviewDiffCommentMetadata>[]
   ): void {
     if (viewer == null) {
       return;
@@ -381,8 +449,8 @@
   }
 
   function createLoadedItemMap(
-    nextItems: readonly CodeViewItem<ReviewDiffAnnotationMetadata>[]
-  ): Map<string, CodeViewItem<ReviewDiffAnnotationMetadata>> {
+    nextItems: readonly CodeViewItem<ReviewDiffCommentMetadata>[]
+  ): Map<string, CodeViewItem<ReviewDiffCommentMetadata>> {
     return new Map(nextItems.map((item) => [item.id, item]));
   }
 
