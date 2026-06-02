@@ -76,8 +76,13 @@ function clampDomOffset(node: Node, offset: number): number {
 }
 
 export interface EditorOptions<LAnnotation> {
+  /** Render rounded corners for selection ranges, default is true. */
+  roundedSelection?: boolean;
+  /** Show the clickable quick edit icon, default is disabled. */
   enabledQuickEdit?: boolean;
+  /** Render the quick edit widget element. */
   renderQuickEdit?: (context: QuickEditContext<LAnnotation>) => HTMLElement;
+  /** Callback when the editor document changes. */
   onChange?: (
     file: FileContents,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
@@ -342,9 +347,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         const line = el.dataset.line;
         const lineType = el.dataset.lineType;
         if (line !== undefined) {
-          const lineIndex = Number(line) - 1;
-          startingLine ??= lineIndex;
-          endLine = lineIndex;
+          const lineNumber = parseInt(line, 10);
+          if (!Number.isNaN(lineNumber)) {
+            const lineIndex = lineNumber - 1;
+            startingLine ??= lineIndex;
+            endLine = lineIndex;
+          }
         }
         if (lineType === undefined || !isLineEditable(lineType)) {
           el.contentEditable = 'false';
@@ -368,9 +376,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // inject editor css to the file container
     if (this.#componentContainer !== fileContainer) {
       this.#componentContainer = fileContainer;
-      this.#codePaddingTop = Number(
-        getComputedStyle(codeElement).paddingTop.slice(0, -2)
+      const codePaddingTop = parseInt(
+        getComputedStyle(codeElement).paddingTop.slice(0, -2),
+        10
       );
+      this.#codePaddingTop = Number.isNaN(codePaddingTop) ? 0 : codePaddingTop;
       if (this.#globalStyleElement !== undefined) {
         fileContainer.appendChild(this.#globalStyleElement);
       }
@@ -639,21 +649,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               if (target === undefined || textDocument === undefined) {
                 return;
               }
-              const lineNumber = target.dataset.columnNumber;
+              const columnNumber = target.dataset.columnNumber;
               const lineType = target.dataset.lineType;
               if (
-                lineNumber === undefined ||
+                columnNumber === undefined ||
                 lineType === undefined ||
                 !isLineEditable(lineType)
               ) {
                 return;
               }
-              const lineIndex = Number(lineNumber) - 1;
+              const lineNumber = parseInt(columnNumber, 10);
+              if (Number.isNaN(lineNumber)) {
+                return;
+              }
+              const line = lineNumber - 1;
               const selection: EditorSelection = {
-                start: { line: lineIndex, character: 0 },
+                start: { line, character: 0 },
                 end: {
-                  line: lineIndex,
-                  character: textDocument.getLineText(lineIndex).length,
+                  line,
+                  character: textDocument.getLineText(line).length,
                 },
                 direction: DirectionForward,
               };
@@ -677,17 +691,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                     if (target === undefined) {
                       return;
                     }
-                    const lineNumber =
+
+                    const line =
                       target.dataset.columnNumber ?? target.dataset.line;
                     const lineType = target.dataset.lineType;
                     if (
                       this.#isGutterMouseDown &&
                       this.#textDocument !== undefined &&
-                      lineNumber !== undefined &&
+                      line !== undefined &&
                       lineType !== undefined &&
                       isLineEditable(lineType)
                     ) {
-                      const lineIndex = Number(lineNumber) - 1;
+                      const lineNumber = parseInt(line, 10);
+                      if (Number.isNaN(lineNumber)) {
+                        return;
+                      }
+                      const lineIndex = lineNumber - 1;
                       let selection: EditorSelection = {
                         start: { line: lineIndex, character: 0 },
                         end: {
@@ -1118,15 +1137,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           const el = child as HTMLElement;
           const line = el.dataset.line;
           if (line !== undefined) {
-            const lineIndex = Number(el.dataset.line) - 1;
-            const tokens = dirtyLines.get(lineIndex);
-            if (tokens !== undefined) {
-              el.replaceChildren(
-                ...renderLineTokens(tokens, tokenizer.themeType)
-              );
-              dirtyLineIndexes.delete(lineIndex);
-              if (dirtyLineIndexes.size === 0) {
-                break;
+            const lineNumber = parseInt(line, 10);
+            if (!Number.isNaN(lineNumber)) {
+              const lineIndex = lineNumber - 1;
+              const tokens = dirtyLines.get(lineIndex);
+              if (tokens !== undefined) {
+                el.replaceChildren(
+                  ...renderLineTokens(tokens, tokenizer.themeType)
+                );
+                dirtyLineIndexes.delete(lineIndex);
+                if (dirtyLineIndexes.size === 0) {
+                  break;
+                }
               }
             }
           }
@@ -1139,16 +1161,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           i++
         ) {
           const child = children[i] as HTMLElement | undefined;
-          if (child?.dataset.line !== undefined) {
-            const lineIndex = Number(child.dataset.line) - 1;
-            if (dirtyLines.has(lineIndex)) {
-              const tokens = dirtyLines.get(lineIndex)!;
-              child.replaceChildren(
-                ...renderLineTokens(tokens, tokenizer.themeType)
-              );
-              dirtyLineIndexes.delete(lineIndex);
-              if (dirtyLineIndexes.size === 0) {
-                break;
+          if (child !== undefined && child.dataset.line !== undefined) {
+            const lineNumber = parseInt(child.dataset.line, 10);
+            if (!Number.isNaN(lineNumber)) {
+              const lineIndex = lineNumber - 1;
+              if (dirtyLines.has(lineIndex)) {
+                const tokens = dirtyLines.get(lineIndex)!;
+                child.replaceChildren(
+                  ...renderLineTokens(tokens, tokenizer.themeType)
+                );
+                dirtyLineIndexes.delete(lineIndex);
+                if (dirtyLineIndexes.size === 0) {
+                  break;
+                }
               }
             }
           }
@@ -1203,18 +1228,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         const children = parent.children;
         for (let i = children.length - 1; i >= 0; i--) {
           const child = children[i] as HTMLElement;
-          const { lineIndex, lineAnnotation } = child.dataset;
-          if (lineIndex !== undefined || lineAnnotation !== undefined) {
-            const lineIndexNum = Number(
-              lineAnnotation !== undefined
-                ? lineAnnotation.split(',')[1]
-                : lineIndex
-            );
-            if (lineIndexNum < change.lineCount) {
-              break;
-            }
-            child.remove();
+          const { line, columnNumber, lineAnnotation } = child.dataset;
+          if (
+            line === undefined &&
+            columnNumber === undefined &&
+            lineAnnotation === undefined
+          ) {
+            continue;
           }
+          const lineIndex =
+            lineAnnotation !== undefined
+              ? parseInt(lineAnnotation.split(',')[1], 10)
+              : parseInt(line ?? columnNumber!, 10) - 1;
+          if (Number.isNaN(lineIndex)) {
+            continue;
+          }
+          if (lineIndex < change.lineCount) {
+            break;
+          }
+          child.remove();
         }
       }
     }
@@ -1468,29 +1500,28 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const { start, end } = selection;
-    for (let ln = start.line; ln <= end.line; ln++) {
-      if (!this.#isLineVisible(ln)) {
+    for (let line = start.line; line <= end.line; line++) {
+      if (!this.#isLineVisible(line)) {
         continue;
       }
 
-      const lineText = this.#textDocument.getLineText(ln);
-      const startChar = ln === start.line ? start.character : 0;
-      const endChar = ln === end.line ? end.character : lineText.length;
+      const isLastLine = line === end.line;
+      const lineText = this.#textDocument.getLineText(line);
+      const startChar = line === start.line ? start.character : 0;
+      const endChar = isLastLine ? end.character : lineText.length;
 
       if (this.#wrap) {
-        const paddingInline = this.#metrics.ch; // 1ch, align to diff css: padding-inline: 1ch
         const contentWidth = this.#getContentWidth();
         const textWidth =
-          2 * paddingInline + this.#metrics.measureTextWidth(lineText);
+          2 * this.#metrics.ch + this.#metrics.measureTextWidth(lineText);
         if (textWidth > contentWidth) {
           this.#renderWrappedSelection(
             renderCtx,
-            selection,
-            ln,
+            line,
             lineText,
             startChar,
             endChar,
-            paddingInline
+            isLastLine
           );
           continue;
         }
@@ -1498,24 +1529,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
       let left = 0;
       let width = 0;
-      if (startChar === endChar && startChar === 0) {
+      if (startChar === 0) {
         left = this.#getGutterWidth() + this.#metrics.ch; // gutter width + inline padding (1ch)
-        width = ln === end.line ? 0 : this.#metrics.ch;
       } else {
-        left = this.#getCharX(ln, startChar)[0];
-        width =
-          endChar === startChar ? 0 : this.#getCharX(ln, endChar)[0] - left;
+        left = this.#getCharX(line, startChar)[0];
       }
-      this.#renderSelectionRange(
-        renderCtx,
-        selection,
-        ln,
-        0,
-        startChar,
-        endChar,
-        width,
-        left
-      );
+      if (startChar === endChar) {
+        width = isLastLine ? 0 : this.#metrics.ch;
+      } else {
+        width =
+          this.#getCharX(line, endChar)[0] -
+          left +
+          (isLastLine ? 0 : this.#metrics.ch);
+      }
+      this.#renderSelectionLine(renderCtx, line, 0, left, width);
     }
   }
 
@@ -1530,21 +1557,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
     },
-    selection: EditorSelection,
     line: number,
     lineText: string,
     startChar: number,
     endChar: number,
-    paddingInline: number
+    isLastLine: boolean
   ) {
     const wrapOffsets = this.#wrapLineText(line);
     const segmentCount = wrapOffsets.length - 1;
-    const lastSegmentIndex = segmentCount - 1;
-    const offsetLeft = this.#getGutterWidth() + paddingInline;
+    const offsetLeft = this.#getGutterWidth() + this.#metrics.ch;
 
-    for (let w = 0; w < segmentCount; w++) {
-      const segmentStart = wrapOffsets[w];
-      const segmentEnd = wrapOffsets[w + 1];
+    for (let wrapLine = 0; wrapLine < segmentCount; wrapLine++) {
+      const segmentStart = wrapOffsets[wrapLine];
+      const segmentEnd = wrapOffsets[wrapLine + 1];
       const wrapStartChar = Math.max(startChar, segmentStart);
       const wrapEndChar = Math.min(endChar, segmentEnd);
 
@@ -1553,26 +1578,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         continue;
       }
 
-      // Zero-width slices on segment boundaries can appear on two consecutive
-      // segments (end of one, start of the next). Only render at the natural
-      // anchor positions: the very beginning of the first visual line, or the
-      // very end of the last visual line.
-      if (wrapStartChar === wrapEndChar) {
-        const isAtLineStart = wrapStartChar === 0 && w === 0;
-        const isAtLineEnd =
-          wrapEndChar === lineText.length && w === lastSegmentIndex;
-        if (!isAtLineStart && !isAtLineEnd) {
-          continue;
-        }
-      }
-
       let segmentLeft: number;
       let segmentWidth: number;
-      if (wrapStartChar === 0 && wrapEndChar === 0) {
-        // Empty range pinned to line start (e.g. multi-line selection ending
-        // with end.character === 0). Mirrors the non-wrap path.
+      if (wrapStartChar === 0) {
         segmentLeft = offsetLeft;
-        segmentWidth = line === selection.end.line ? 0 : paddingInline;
       } else {
         const prefixInSegment = lineText.slice(segmentStart, wrapStartChar);
         const prefixAsciiColumns = getExpandedAsciiTextColumns(
@@ -1584,70 +1593,172 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           (prefixAsciiColumns !== -1
             ? prefixAsciiColumns * this.#metrics.ch
             : this.#metrics.measureTextWidth(prefixInSegment));
-
-        if (wrapStartChar === wrapEndChar) {
-          segmentWidth = 0;
-        } else {
-          const selectionInSegment = lineText.slice(wrapStartChar, wrapEndChar);
-          const selectionAsciiWidth = getExpandedAsciiTextColumns(
-            selectionInSegment,
-            this.#metrics.tabSize
-          );
-          segmentWidth =
-            selectionAsciiWidth !== -1
-              ? selectionAsciiWidth * this.#metrics.ch
-              : this.#metrics.measureTextWidth(selectionInSegment);
+      }
+      if (wrapStartChar === wrapEndChar) {
+        segmentWidth = wrapLine === segmentCount - 1 ? 0 : this.#metrics.ch;
+      } else {
+        const selectionInSegment = lineText.slice(wrapStartChar, wrapEndChar);
+        const selectionAsciiWidth = getExpandedAsciiTextColumns(
+          selectionInSegment,
+          this.#metrics.tabSize
+        );
+        segmentWidth =
+          selectionAsciiWidth !== -1
+            ? selectionAsciiWidth * this.#metrics.ch
+            : this.#metrics.measureTextWidth(selectionInSegment);
+        if (!isLastLine && wrapLine === segmentCount - 1) {
+          segmentWidth += this.#metrics.ch;
         }
       }
 
-      this.#renderSelectionRange(
+      this.#renderSelectionLine(
         renderCtx,
-        selection,
         line,
-        w,
-        wrapStartChar,
-        wrapEndChar,
-        segmentWidth,
+        wrapLine,
         segmentLeft,
-        w === lastSegmentIndex
+        segmentWidth
       );
     }
   }
 
-  // Render one selection range div for a single visual line. `applyEolSpacing`
-  // controls whether the trailing one-character "line continuation" marker is
-  // appended at the end. For wrapped logical lines this must be false on every
-  // visual segment except the last one, since an intra-line wrap is not a real
-  // newline and shouldn't visually extend past the wrapped content.
-  #renderSelectionRange(
+  #renderSelectionLine(
     renderCtx: {
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
+      previousSelectionRange?: {
+        element: HTMLElement;
+        line: number;
+        wrapLine: number;
+        left: number;
+        width: number;
+      };
     },
-    selection: EditorSelection,
-    ln: number,
+    line: number,
     wrapLine: number,
-    startChar: number,
-    endChar: number,
-    width: number,
     left: number,
-    applyEolSpacing = true
+    width: number
   ) {
-    const spacing =
-      !applyEolSpacing ||
-      selection.end.line === ln ||
-      (startChar === endChar && ln !== selection.start.line)
-        ? 0
-        : this.#metrics.ch;
-    const css = `width:${width + spacing}px;transform:translateY(${this.#getLineY(ln) + wrapLine * this.#metrics.lineHeight}px) translateX(${left}px);`;
-    const cacheKey = 'selection-range-' + css;
-    const selectionEls = this.#selectionElements;
-
-    if (renderCtx.elements.has(cacheKey)) {
+    if (width === 0) {
       return;
     }
 
-    let rangeEl: HTMLElement | undefined;
+    const { ch, lineHeight } = this.#metrics;
+    const y = this.#getLineY(line) + wrapLine * lineHeight;
+    const css = `width:${width}px;transform:translateX(${left}px) translateY(${y}px);`;
+    const cacheKey = `selection-line-${left}-${y}-${width}`;
+    const selectionEls = this.#selectionElements;
+
+    const rounded = this.#options.roundedSelection ?? true;
+    const addRoundedCorner = (
+      line: number,
+      wrapLine: number,
+      left: number,
+      radius: 'rtl' | 'rbl' | 'rbr'
+    ) => {
+      const top = this.#getLineY(line) + wrapLine * lineHeight;
+      const css = `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);`;
+      const dataset = {
+        selectionCorner: '',
+        [radius]: '',
+      };
+      const cacheKeyPrefix = `selection-line-${left}-${top}-1ch`;
+      let cacheKey = cacheKeyPrefix + '-' + radius;
+      if (radius === 'rbl') {
+        const prevCornerKey = cacheKeyPrefix + '-rtl';
+        const prevCorner = renderCtx.elements.get(prevCornerKey);
+        if (prevCorner !== undefined) {
+          prevCorner.remove();
+          renderCtx.elements.delete(prevCornerKey);
+          cacheKey += '-rtl';
+          dataset.rtl = '';
+        }
+      }
+      let cornerEl = renderCtx.elements.get(cacheKey);
+      if (cornerEl !== undefined) {
+        return;
+      }
+      if (selectionEls?.has(cacheKey) === true) {
+        cornerEl = selectionEls.get(cacheKey)!;
+        selectionEls.delete(cacheKey);
+      } else {
+        cornerEl = h(
+          'div',
+          {
+            dataset: 'selectionRange',
+            style: { cssText: css },
+            children: [
+              h('div', {
+                dataset: dataset,
+              }),
+            ],
+          },
+          renderCtx.fragment
+        );
+      }
+      renderCtx.elements.set(cacheKey, cornerEl);
+    };
+    const addRadiusStyle = (element: HTMLElement) => {
+      const end = left + width;
+      const dataset = element.dataset;
+      const previousSelectionRange = renderCtx.previousSelectionRange;
+      if (
+        previousSelectionRange === undefined ||
+        previousSelectionRange.line !== line ||
+        previousSelectionRange.wrapLine !== wrapLine
+      ) {
+        renderCtx.previousSelectionRange = {
+          element,
+          line,
+          wrapLine,
+          left,
+          width,
+        };
+      }
+      if (
+        previousSelectionRange === undefined ||
+        end <= previousSelectionRange.left
+      ) {
+        ['rtl', 'rtr', 'rbl', 'rbr'].forEach((key) => {
+          dataset[key] = '';
+        });
+      } else {
+        const prevLine = previousSelectionRange.line;
+        const prevWrapLine = previousSelectionRange.wrapLine;
+        const prevLeft = previousSelectionRange.left;
+        const prevDataset = previousSelectionRange.element.dataset;
+        const prevEnd = prevLeft + previousSelectionRange.width;
+        if (prevLeft > left) {
+          addRoundedCorner(prevLine, prevWrapLine, prevLeft - ch, 'rbr');
+        }
+        delete prevDataset.rbl;
+        delete dataset.rtl;
+        delete dataset.rtr;
+        if (end >= prevEnd) {
+          delete prevDataset.rbr;
+        }
+        if (end > prevEnd) {
+          addRoundedCorner(prevLine, prevWrapLine, prevEnd, 'rbl');
+          dataset.rtr = '';
+        }
+        if (end < prevEnd) {
+          addRoundedCorner(line, wrapLine, end, 'rtl');
+        }
+        if (left < prevLeft) {
+          dataset.rtl = '';
+        }
+        dataset.rbl = '';
+        dataset.rbr = '';
+      }
+    };
+
+    let rangeEl = renderCtx.elements.get(cacheKey);
+    if (rangeEl !== undefined) {
+      if (rounded) {
+        addRadiusStyle(rangeEl);
+      }
+      return;
+    }
+
     if (selectionEls?.has(cacheKey) === true) {
       rangeEl = selectionEls.get(cacheKey)!;
       selectionEls.delete(cacheKey);
@@ -1662,6 +1773,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
 
+    if (rounded) {
+      addRadiusStyle(rangeEl);
+    }
     renderCtx.elements.set(cacheKey, rangeEl);
   }
 
@@ -1678,16 +1792,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
     const [left, wrapLine] = this.#getCharX(line, character);
-    const cacheKey = 'caret-' + line + '(' + wrapLine + ')-' + character;
+    const cacheKey = 'caret-' + line + '/' + wrapLine + ':' + character;
     if (renderCtx.elements.has(cacheKey)) {
       return;
     }
+    const x = left - 1;
+    const y = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
     const caretEl = h(
       'div',
       {
         dataset: 'caret',
         style: {
-          transform: `translateY(${this.#getLineY(line) + wrapLine * this.#metrics.lineHeight}px) translateX(${left - 1}px)`,
+          transform: `translateX(${x}px) translateY(${y}px)`,
         },
       },
       renderCtx.fragment
@@ -2145,7 +2261,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           lineNumber !== undefined &&
           lineType !== undefined &&
           isLineEditable(lineType) &&
-          Number(lineNumber) === line + 1
+          parseInt(lineNumber, 10) === line + 1
         ) {
           return child;
         }
@@ -2185,7 +2301,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         diffsColumnNumberWidth.length > 2 &&
         diffsColumnNumberWidth.endsWith('px')
       ) {
-        this.#gutterWidthCache = Number(diffsColumnNumberWidth.slice(0, -2));
+        this.#gutterWidthCache = parseInt(
+          diffsColumnNumberWidth.slice(0, -2),
+          10
+        );
       } else {
         this.#gutterWidthCache = gutterElement.offsetWidth;
       }
@@ -2209,7 +2328,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         diffsColumnContentWidth.length > 2 &&
         diffsColumnContentWidth.endsWith('px')
       ) {
-        this.#contentWidthCache = Number(diffsColumnContentWidth.slice(0, -2));
+        this.#contentWidthCache = parseFloat(
+          diffsColumnContentWidth.slice(0, -2)
+        );
       } else {
         this.#contentWidthCache = this.#contentElement.offsetWidth;
       }

@@ -132,14 +132,6 @@
       var(--diffs-fg-number)
     );
 
-    --diffs-bg-caret: var(
-      --diffs-bg-caret-override,
-      light-dark(
-        color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg)),
-        color-mix(in lab, var(--diffs-fg) 75%, var(--diffs-bg))
-      )
-    );
-
     --diffs-deletion-base: var(
       --diffs-deletion-color-override,
       light-dark(
