@@ -7,9 +7,6 @@ export const editorCSS: string = /* CSS */ `
     50% { opacity: 0; }
     100% { opacity: 1; }
   }
-  [data-editor-overlay] {
-    display: contents;
-  }
   :host, /* for scroll anchor */
   [data-code], /* for editor overlay */
   [data-content] /* for wrap line measurement */
@@ -48,6 +45,10 @@ export const editorCSS: string = /* CSS */ `
     background-color: var(--diffs-line-bg);
     -webkit-user-select: none;
     user-select: none;
+  }
+
+  [data-editor-overlay] {
+    display: contents;
   }
   [data-caret], [data-selection-range], [data-match-range] {
     position: absolute;
