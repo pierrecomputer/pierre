@@ -64,7 +64,7 @@
   "scripts": {
     "build": "bun run build:ts && bun run build:svelte",
     "build:ts": "tsdown --clean",
-    "build:svelte": "svelte-package --input src/svelte --output dist/svelte --tsconfig ./tsconfig.svelte.json",
+    "build:svelte": "svelte-package --input src/svelte --output .svelte-review-package --tsconfig ./tsconfig.svelte.json && bun ./scripts/copySveltePackage.ts",
     "check:svelte": "svelte-check --tsconfig ./tsconfig.svelte.json",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
     "benchmark:parse-merge-conflict": "bun run ./scripts/benchmarkParseMergeConflictDiffFromFile.ts",

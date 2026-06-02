@@ -11,6 +11,7 @@ node_modules
 dist
 .next
 .svelte-kit
+.svelte-review-package
 dist-ssr
 *.local
 tsconfig.tsbuildinfo
