@@ -200,6 +200,10 @@
         renderCommentThread == null
           ? codeViewOptions?.renderAnnotation
           : renderCommentAnnotation,
+      renderGutterUtility:
+        onCommentThreadAddRequested == null
+          ? codeViewOptions?.renderGutterUtility
+          : undefined,
       enableGutterUtility:
         onCommentThreadAddRequested == null
           ? codeViewOptions?.enableGutterUtility

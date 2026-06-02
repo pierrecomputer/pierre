@@ -255,6 +255,66 @@ describe('ReviewDiff.svelte', () => {
       },
     ]);
   });
+
+  test('prefers review comment add over a custom gutter utility renderer', async () => {
+    installedDom = installDom();
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const ReviewDiff = await loadReviewDiffComponent();
+    const requestedTargets: ReviewDiffCommentTarget[] = [];
+    let customRendererCalls = 0;
+
+    expect(() => {
+      mountedComponent = mount(ReviewDiff, {
+        target,
+        props: {
+          files: [createVirtualReviewFile('src/app.ts')],
+          codeViewOptions: {
+            renderGutterUtility: () => {
+              customRendererCalls += 1;
+              const button = document.createElement('button');
+              button.type = 'button';
+              button.dataset.customGutterUtility = '';
+              return button;
+            },
+          },
+          onCommentThreadAddRequested: (commentTarget) => {
+            requestedTargets.push(commentTarget);
+          },
+        },
+      });
+      flushSync();
+    }).not.toThrow();
+
+    const region = target.querySelector('[data-pierre-review-diff]');
+    const container = await waitForElement<HTMLElement>(
+      region,
+      'diffs-container[data-file-id="src/app.ts"]'
+    );
+    await waitFor(() => container.shadowRoot?.querySelector('[data-code]'));
+    await tickFrames(2);
+
+    const additionNumber = await waitForElement<HTMLElement>(
+      container.shadowRoot,
+      '[data-column-number="1"][data-line-type="change-addition"]'
+    );
+    dispatchPointer(additionNumber, 'pointerdown');
+    const utilityButton = await waitForElement<HTMLButtonElement>(
+      additionNumber,
+      '[data-utility-button]'
+    );
+    dispatchPointer(utilityButton, 'pointerdown');
+    dispatchPointer(utilityButton, 'pointerup');
+
+    expect(customRendererCalls).toBe(0);
+    expect(requestedTargets).toEqual([
+      {
+        fileId: 'src/app.ts',
+        side: 'additions',
+        lineNumber: 1,
+      },
+    ]);
+  });
 });
 
 function dispatchPointer(
