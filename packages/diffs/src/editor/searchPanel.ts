@@ -1,13 +1,8 @@
 import { isPrimaryModifier } from './platform';
-import type { Range, TextDocument } from './textDocument';
+import type { TextDocument } from './textDocument';
 import { h } from './utils';
 
-export type SearchKind =
-  | 'findNext'
-  | 'findPrevious'
-  | 'findAll'
-  | 'replace'
-  | 'replaceAll';
+export type MatchRange = [startOffset: number, endOffset: number];
 
 export interface SearchParams {
   text: string;
@@ -21,29 +16,16 @@ export interface SearchPanelOptions {
   textDocument: TextDocument<unknown>;
   containerElement: HTMLElement;
   defaultQuery: string;
-  initialMatch?: [number, number];
-  postSearch: (
-    kind: SearchKind,
-    match: [number, number],
-    retainFocus?: boolean
-  ) => void;
-  getCurrentSearchRange: () => Range | undefined;
+  initialMatch?: MatchRange;
+  scrollToMatch: (nextMatch: MatchRange, retainFocus: boolean) => void;
+  onUpdate: (matches: MatchRange[]) => MatchRange | undefined;
   onClose: () => void;
 }
 
 export class SearchPanelWidget {
-  #textDocument: TextDocument<unknown>;
   #container: HTMLDivElement;
   #inputElement: HTMLInputElement;
-  #matchesElement: HTMLDivElement;
-  #searchParams: SearchParams = {
-    text: '',
-    replaceText: '',
-    caseSensitive: false,
-    wholeWord: false,
-    regex: false,
-  };
-  #allMatches: [number, number][] = [];
+  #closeSettingsPanelTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: SearchPanelOptions) {
     const {
@@ -51,63 +33,125 @@ export class SearchPanelWidget {
       containerElement,
       defaultQuery,
       initialMatch,
-      postSearch,
-      getCurrentSearchRange,
+      scrollToMatch,
+      onUpdate,
       onClose,
     } = options;
 
-    const close = () => {
-      this.cleanup();
-      onClose();
+    const searchParams: SearchParams = {
+      text: defaultQuery,
+      replaceText: '',
+      caseSensitive: false,
+      wholeWord: false,
+      regex: false,
+    };
+
+    const matches = {
+      all: [] as MatchRange[],
+      current: undefined as MatchRange | undefined,
+    };
+
+    const matchResultElement = h('div', { dataset: 'matches' });
+    const updateMatches = () => {
+      matches.all =
+        searchParams.text !== '' ? textDocument.search(searchParams) : [];
+      this.#container
+        .querySelectorAll<HTMLElement>('[data-disabled]')
+        .forEach((element) => {
+          element.dataset.disabled = String(matches.all.length === 0);
+        });
+
+      if (searchParams.text === '') {
+        matchResultElement.textContent = '';
+        delete matchResultElement.dataset.noMatches;
+        return;
+      }
+
+      if (matches.all.length === 0) {
+        matchResultElement.textContent = 'No results';
+        matchResultElement.dataset.noMatches = '';
+      } else {
+        delete matchResultElement.dataset.noMatches;
+        updateCurrentMatch(onUpdate(matches.all));
+        return;
+      }
+
+      matches.current = undefined;
+      onUpdate([]);
+    };
+
+    const updateCurrentMatch = (currentMatch: MatchRange | undefined) => {
+      if (currentMatch === undefined) {
+        matchResultElement.textContent = `${matches.all.length} results`;
+      } else {
+        const [start, end] = currentMatch;
+        const index = matches.all.findIndex(
+          (m) => m[0] === start && m[1] === end
+        );
+        matchResultElement.textContent = `${index + 1} of ${matches.all.length}`;
+      }
+      matches.current = currentMatch;
     };
 
     const updateSearchParam = <K extends keyof SearchParams>(
       key: K,
       value: SearchParams[K]
     ) => {
-      this.#searchParams[key] = value;
-      updateAllMatches();
-      this.updateMatches();
+      searchParams[key] = value;
+      updateMatches();
     };
 
-    const updateAllMatches = () => {
-      this.#allMatches =
-        this.#searchParams.text !== ''
-          ? this.#textDocument.search('findAll', this.#searchParams)
-          : [];
-      this.#container
-        .querySelectorAll<HTMLElement>('[data-disabled]')
-        .forEach((element) => {
-          element.dataset.disabled = String(this.#allMatches.length === 0);
-        });
-    };
-
-    const search = (kind: SearchKind, retainFocus?: boolean) => {
-      const matches = this.#textDocument.search(
-        kind,
-        this.#searchParams,
-        getCurrentSearchRange()
-      );
-      if (matches.length === 0) {
-        return;
+    const findNextMatch = (
+      findPrevious: boolean = false,
+      retainFocus: boolean = false
+    ) => {
+      const allMatches = matches.all;
+      let nextMatch: MatchRange | undefined = allMatches[0];
+      if (allMatches.length > 0) {
+        if (findPrevious) {
+          const searchOffset = matches.current?.[0] ?? 0;
+          nextMatch = allMatches.at(-1);
+          for (const m of allMatches) {
+            if (m[1] <= searchOffset) {
+              nextMatch = m;
+            } else {
+              break;
+            }
+          }
+        } else {
+          const searchOffset = matches.current?.[1] ?? 0;
+          for (const m of allMatches) {
+            if (m[0] >= searchOffset) {
+              nextMatch = m;
+              break;
+            }
+          }
+        }
       }
-      const firstMatch = matches[0];
-      this.updateMatches(firstMatch);
-      postSearch(kind, firstMatch, retainFocus);
+      if (nextMatch !== undefined) {
+        updateCurrentMatch(nextMatch);
+        scrollToMatch(nextMatch, retainFocus);
+      }
+      matches.current = nextMatch;
+    };
+
+    const close = () => {
+      this.cleanup();
+      onClose();
     };
 
     const settingsSwitch = h('div', {
       dataset: { icon: 'settings' },
       title: 'Settings',
       innerHTML: `<svg width="16" height="16" viewBox="0 0 20 20">
-      <line x1="3" y1="6" x2="10" y2="6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-      <circle cx="12.5" cy="6" r="2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></circle>
-      <line x1="15" y1="6" x2="17" y2="6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-      <line x1="17" y1="14" x2="10" y2="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-      <circle cx="7.5" cy="14" r="2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></circle>
-      <line x1="5" y1="14" x2="3" y2="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-    </svg>
-    `,
+        <line x1="3" y1="6" x2="10" y2="6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
+        <circle cx="12.5" cy="6" r="2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></circle>
+        <line x1="15" y1="6" x2="17" y2="6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
+        <line x1="17" y1="14" x2="10" y2="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
+        <circle cx="7.5" cy="14" r="2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></circle>
+        <line x1="5" y1="14" x2="3" y2="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
+      </svg>
+      `,
       onclick: () => {
         settingsSwitch.replaceWith(settingsPanel);
       },
@@ -120,7 +164,7 @@ export class SearchPanelWidget {
           children: [
             h('input', {
               type: 'checkbox',
-              checked: this.#searchParams.caseSensitive,
+              checked: searchParams.caseSensitive,
               onchange: (e: Event) => {
                 updateSearchParam(
                   'caseSensitive',
@@ -136,7 +180,7 @@ export class SearchPanelWidget {
           children: [
             h('input', {
               type: 'checkbox',
-              checked: this.#searchParams.wholeWord,
+              checked: searchParams.wholeWord,
               onchange: (e: Event) => {
                 updateSearchParam(
                   'wholeWord',
@@ -152,7 +196,7 @@ export class SearchPanelWidget {
           children: [
             h('input', {
               type: 'checkbox',
-              checked: this.#searchParams.regex,
+              checked: searchParams.regex,
               onchange: (e: Event) => {
                 updateSearchParam(
                   'regex',
@@ -165,20 +209,16 @@ export class SearchPanelWidget {
         }),
       ],
       onmouseleave: () => {
-        closeSettingsPanelTimeout = setTimeout(() => {
+        this.#closeSettingsPanelTimeout = setTimeout(() => {
+          this.#closeSettingsPanelTimeout = undefined;
           settingsPanel.replaceWith(settingsSwitch);
         }, 500);
       },
       onmouseenter: () => {
-        clearTimeout(closeSettingsPanelTimeout);
-        closeSettingsPanelTimeout = undefined;
+        clearTimeout(this.#closeSettingsPanelTimeout);
+        this.#closeSettingsPanelTimeout = undefined;
       },
     });
-
-    let closeSettingsPanelTimeout: ReturnType<typeof setTimeout> | undefined;
-
-    this.#textDocument = textDocument;
-    this.#searchParams.text = defaultQuery;
 
     this.#inputElement = h('input', {
       type: 'text',
@@ -186,9 +226,9 @@ export class SearchPanelWidget {
       dataset: 'search',
       value: defaultQuery,
       oninput: (e: Event) => {
-        this.#searchParams.text = (e.target as HTMLInputElement).value;
-        updateAllMatches();
-        this.updateMatches();
+        searchParams.text = (e.target as HTMLInputElement).value;
+        matches.current = undefined;
+        updateMatches();
       },
       onkeydown: (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
@@ -196,14 +236,14 @@ export class SearchPanelWidget {
           close();
         } else if (e.key === 'Enter') {
           e.preventDefault();
-          search('findNext', true);
+          findNextMatch(false, true);
         } else if (e.key === 'f' && isPrimaryModifier(e)) {
           // prevent the default browser search panel open behavior
           e.preventDefault();
         }
       },
     });
-    this.#matchesElement = h('div', { dataset: 'matches' });
+
     this.#container = h('div', {
       dataset: 'searchPanel',
       children: [
@@ -215,20 +255,20 @@ export class SearchPanelWidget {
               innerHTML: `<svg width="16" height="16" viewBox="0 0 20 20">
                 <line x1="16.5" y1="16.5" x2="12.0355" y2="12.0355" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
                 <circle cx="8.5" cy="8.5" r="5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></circle>
-                </svg>
+              </svg>
               `,
             }),
             this.#inputElement,
-            this.#matchesElement,
+            matchResultElement,
             h('div', {
               dataset: { icon: 'arrow-up', disabled: 'true' },
               title: 'Previous',
               innerHTML: `<svg width="14" height="14" viewBox="0 0 20 20">
                 <polyline points="12.5 3.5 6 10 12.5 16.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></polyline>
-                </svg>
+              </svg>
               `,
               onclick: () => {
-                search('findPrevious');
+                findNextMatch(true);
               },
             }),
             h('div', {
@@ -236,10 +276,10 @@ export class SearchPanelWidget {
               title: 'Next',
               innerHTML: `<svg width="14" height="14" viewBox="0 0 20 20">
                 <polyline points="7.5 16.5 14 10 7.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></polyline>
-                </svg>
+              </svg>
               `,
               onclick: () => {
-                search('findNext');
+                findNextMatch();
               },
             }),
             h('div', { dataset: 'spacer' }),
@@ -250,7 +290,7 @@ export class SearchPanelWidget {
               innerHTML: `<svg width="16" height="16" viewBox="0 0 20 20">
                 <line x1="5" y1="5" x2="15" y2="15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
                 <line x1="5" y1="15" x2="15" y2="5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-                </svg>
+              </svg>
               `,
               onclick: close,
             }),
@@ -258,45 +298,29 @@ export class SearchPanelWidget {
         }),
       ],
     });
+
+    matches.current = initialMatch;
     containerElement.before(this.#container);
 
     requestAnimationFrame(() => {
       if (initialMatch !== undefined) {
-        updateAllMatches();
-        this.updateMatches(initialMatch);
+        updateMatches();
+      } else {
+        onUpdate([]);
       }
       this.#inputElement.select();
     });
   }
 
-  updateMatches(currentMatch: [number, number] = this.#allMatches[0]): void {
-    const allMatches = this.#allMatches;
-    const searchText = this.#searchParams.text;
-
-    if (searchText === '') {
-      this.#matchesElement.textContent = '';
-      delete this.#matchesElement.dataset.noMatches;
-      return;
-    }
-
-    if (allMatches.length === 0) {
-      this.#matchesElement.textContent = 'No results';
-      this.#matchesElement.dataset.noMatches = '';
-    } else {
-      delete this.#matchesElement.dataset.noMatches;
-      const index = allMatches.findIndex(
-        (m) => m[0] === currentMatch[0] && m[1] === currentMatch[1]
-      );
-      this.#matchesElement.textContent =
-        index !== -1 ? `${index + 1} of ${allMatches.length}` : 'No results';
-    }
-  }
-
   focus(): void {
-    this.#inputElement.select();
+    this.#inputElement.focus();
   }
 
   cleanup(): void {
+    if (this.#closeSettingsPanelTimeout !== undefined) {
+      clearTimeout(this.#closeSettingsPanelTimeout);
+      this.#closeSettingsPanelTimeout = undefined;
+    }
     this.#container.remove();
   }
 }

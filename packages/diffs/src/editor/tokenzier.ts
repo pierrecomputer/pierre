@@ -93,6 +93,9 @@ export class EditorTokenizer {
     const gutterForeground = colors['editorLineNumber.foreground'];
     const gutterActiveForeground = colors['editorLineNumber.activeForeground'];
     const cursorForeground = colors['editorCursor.foreground'];
+    const findMatchBackground = colors['editor.findMatchBackground'];
+    const findMatchHighlightBackground =
+      colors['editor.findMatchHighlightBackground'];
     this.#setStyle(`:host {
       --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
       --diffs-editor-line-highlight-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg)'};
@@ -100,6 +103,8 @@ export class EditorTokenizer {
       --diffs-editor-line-number-active-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg, var(--diffs-bg))'};
       --diffs-editor-line-number-active-fg: ${gutterActiveForeground ?? 'var(--diffs-selection-number-fg)'};
       ${cursorForeground !== undefined ? '--diffs-editor-cursor-fg: ' + cursorForeground : ''};
+      ${findMatchBackground !== undefined ? '--diffs-editor-find-match-bg: ' + findMatchBackground : ''};
+      ${findMatchHighlightBackground !== undefined ? '--diffs-editor-find-match-highlight-bg: ' + findMatchHighlightBackground : ''};
     }`);
   };
 

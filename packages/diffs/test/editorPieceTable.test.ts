@@ -291,8 +291,7 @@ describe('PieceTable', () => {
       regex: false,
     };
 
-    expect(table.search('findAll', searchParams)).toEqual([]);
-    expect(table.search('findNext', searchParams)).toEqual([]);
+    expect(table.search(searchParams)).toEqual([]);
   });
 
   test('search does not match literal newline regex patterns', () => {
@@ -305,7 +304,7 @@ describe('PieceTable', () => {
       regex: true,
     };
 
-    expect(table.search('findAll', searchParams)).toEqual([]);
+    expect(table.search(searchParams)).toEqual([]);
   });
 
   test('tracks trailing newline as an empty final line', () => {
