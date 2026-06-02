@@ -634,9 +634,6 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public async initializeHighlighter(): Promise<DiffsHighlighter> {
-    if (this.highlighter != null) {
-      return this.highlighter;
-    }
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, this.options)
     );

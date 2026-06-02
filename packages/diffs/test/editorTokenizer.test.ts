@@ -305,6 +305,86 @@ describe('EditorTokenizer', () => {
     }
   });
 
+  test('registers global message listener only while background tokenization runs', () => {
+    const originalAddEventListener = globalThis.addEventListener;
+    const originalRemoveEventListener = globalThis.removeEventListener;
+    const originalPostMessage = globalThis.postMessage;
+    const addedListeners: EventListenerOrEventListenerObject[] = [];
+    const removedListeners: EventListenerOrEventListenerObject[] = [];
+
+    globalThis.addEventListener = ((
+      type: string,
+      listener: EventListenerOrEventListenerObject
+    ) => {
+      if (type === 'message') {
+        addedListeners.push(listener);
+      }
+    }) as typeof globalThis.addEventListener;
+    globalThis.removeEventListener = ((
+      type: string,
+      listener: EventListenerOrEventListenerObject
+    ) => {
+      if (type === 'message') {
+        removedListeners.push(listener);
+      }
+    }) as typeof globalThis.removeEventListener;
+    globalThis.postMessage = (() => {}) as typeof globalThis.postMessage;
+
+    try {
+      const grammar = {
+        tokenizeLine2(lineText: string, ruleStack: StateStack) {
+          return {
+            tokens: new Uint32Array([0, 0]),
+            ruleStack,
+            stoppedEarly: false,
+            lineText,
+          };
+        },
+      } as unknown as IGrammar;
+      const textDocument = new TextDocument(
+        'test.ts',
+        ['line 0', 'line 1', 'line 2'].join('\n'),
+        'typescript'
+      );
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({
+          getLanguage: () => grammar,
+        }),
+        textDocument,
+        codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+      expect(addedListeners).toHaveLength(0);
+
+      tokenizer.tokenize(
+        {
+          startLine: 0,
+          startCharacter: 0,
+          endLine: 0,
+          previousLineCount: textDocument.lineCount,
+          lineCount: textDocument.lineCount,
+          lineDelta: 0,
+          changedLineRanges: [[0, 0]],
+        },
+        { startingLine: 0, totalLines: 1, bufferBefore: 0, bufferAfter: 0 }
+      );
+      expect(addedListeners).toHaveLength(1);
+      expect(removedListeners).toHaveLength(0);
+
+      tokenizer.stopBackgroundTokenize();
+      expect(removedListeners).toHaveLength(1);
+      expect(removedListeners[0]).toBe(addedListeners[0]);
+
+      tokenizer.cleanUp();
+      expect(removedListeners).toHaveLength(1);
+    } finally {
+      globalThis.addEventListener = originalAddEventListener;
+      globalThis.removeEventListener = originalRemoveEventListener;
+      globalThis.postMessage = originalPostMessage;
+    }
+  });
+
   test('settles zero-line edits before the viewport without rebuilding to the viewport', () => {
     let tokenizeLineCount = 0;
     const grammar = {
@@ -542,6 +622,85 @@ describe('EditorTokenizer', () => {
       const resumedMessage = postedMessages.at(-1);
       messageListener?.({ data: resumedMessage } as MessageEvent);
       expect(tokenizeLineCount).toBeGreaterThan(0);
+    } finally {
+      globalThis.addEventListener = originalAddEventListener;
+      globalThis.removeEventListener = originalRemoveEventListener;
+      globalThis.postMessage = originalPostMessage;
+    }
+  });
+
+  test('ignores non-tokenize and non-object message payloads safely', () => {
+    const originalAddEventListener = globalThis.addEventListener;
+    const originalRemoveEventListener = globalThis.removeEventListener;
+    const originalPostMessage = globalThis.postMessage;
+    let messageListener: ((event: MessageEvent) => void) | undefined;
+
+    globalThis.addEventListener = ((
+      type: string,
+      listener: EventListenerOrEventListenerObject
+    ) => {
+      if (type === 'message' && typeof listener === 'function') {
+        messageListener = listener as (event: MessageEvent) => void;
+      }
+    }) as typeof globalThis.addEventListener;
+    globalThis.removeEventListener = ((
+      type: string,
+      listener: EventListenerOrEventListenerObject
+    ) => {
+      if (type === 'message' && listener === messageListener) {
+        messageListener = undefined;
+      }
+    }) as typeof globalThis.removeEventListener;
+    globalThis.postMessage = (() => {}) as typeof globalThis.postMessage;
+
+    try {
+      let tokenizeLineCount = 0;
+      const state = { equals: () => false } as unknown as StateStack;
+      const grammar = {
+        tokenizeLine2() {
+          tokenizeLineCount++;
+          return {
+            tokens: new Uint32Array([0, 0]),
+            ruleStack: state,
+            stoppedEarly: false,
+          };
+        },
+      } as unknown as IGrammar;
+      const textDocument = new TextDocument(
+        'test.ts',
+        ['line 0', 'line 1', 'line 2'].join('\n'),
+        'typescript'
+      );
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({
+          getLanguage: () => grammar,
+        }),
+        textDocument,
+        codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+
+      tokenizer.tokenize(
+        {
+          startLine: 0,
+          startCharacter: 0,
+          endLine: 0,
+          previousLineCount: textDocument.lineCount,
+          lineCount: textDocument.lineCount,
+          lineDelta: 0,
+          changedLineRanges: [[0, 0]],
+        },
+        { startingLine: 0, totalLines: 1, bufferBefore: 0, bufferAfter: 0 }
+      );
+
+      tokenizeLineCount = 0;
+      messageListener?.({ data: 'not-an-object' } as MessageEvent);
+      messageListener?.({ data: { type: 'other', jobId: 1 } } as MessageEvent);
+      messageListener?.({
+        data: { type: 'tokenize', jobId: '1' },
+      } as MessageEvent);
+      expect(tokenizeLineCount).toBe(0);
     } finally {
       globalThis.addEventListener = originalAddEventListener;
       globalThis.removeEventListener = originalRemoveEventListener;

@@ -11,7 +11,6 @@ import type {
   DiffsHighlighter,
   HighlightedToken,
   RenderRange,
-  ThemesType,
 } from '../types';
 import type { TextDocument, TextDocumentChange } from './textDocument';
 import { addEventListener, debounce, h } from './utils';
@@ -50,6 +49,7 @@ export class EditorTokenizer {
   #backgroundJobId: number = 0;
   #backgroundChangedLineRanges: readonly [number, number][] | undefined;
   #backgroundChangedRangeIndex: number = 0;
+  #isMessageListenerAttached: boolean = false;
 
   #prebuildStateStackMap = debounce(async (renderRange?: RenderRange) => {
     const { startingLine = 0, totalLines = Infinity } = renderRange ?? {};
@@ -66,75 +66,21 @@ export class EditorTokenizer {
     this.#buildStateStackMap(endLine);
   }, 500);
 
-  #onMessage = ({
-    data,
-  }: MessageEvent<{ type: 'tokenize'; jobId: number }>) => {
-    if (data.type === 'tokenize' && data.jobId === this.#backgroundJobId) {
-      this.#backgroundTokenize(data.jobId);
+  #onMessage = ({ data }: MessageEvent<unknown>) => {
+    if (typeof data !== 'object' || data === null) {
+      return;
     }
-  };
-
-  // By default, diffs components support dual themes, but the tokenizer only renders
-  // the preferred theme. When the theme type is changed, the tokenizer will re-tokenize the document.
-  #onThemeChange = (themeName: string, themeType: 'light' | 'dark') => {
-    this.#themeType = themeType;
-    this.#setTheme(themeName);
-    this.stopBackgroundTokenize();
-    this.#stateStackCache = [INITIAL];
-    if (this.#grammar !== undefined && this.#textDocument.lineCount > 0) {
-      this.#scheduleBackgroundTokenize(0);
+    const { type, jobId } = data as {
+      type?: unknown;
+      jobId?: unknown;
+    };
+    if (
+      type === 'tokenize' &&
+      typeof jobId === 'number' &&
+      jobId === this.#backgroundJobId
+    ) {
+      this.#backgroundTokenize(jobId);
     }
-  };
-
-  #setTheme = (themeName: string): void => {
-    this.#colorMap = this.#highlighter.setTheme(themeName).colorMap;
-    const { colors = {} } = this.#highlighter.getTheme(themeName);
-    const selectionBackground = colors['editor.selectionBackground'];
-    const lineHighlightBackground = colors['editor.lineHighlightBackground'];
-    const gutterForeground = colors['editorLineNumber.foreground'];
-    const gutterActiveForeground = colors['editorLineNumber.activeForeground'];
-    const cursorForeground = colors['editorCursor.foreground'];
-    const findMatchBackground = colors['editor.findMatchBackground'];
-    const findMatchHighlightBackground =
-      colors['editor.findMatchHighlightBackground'];
-    this.#setStyle(`:host {
-      --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
-      --diffs-editor-line-highlight-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg)'};
-      --diffs-editor-line-number-fg: ${gutterForeground ?? 'var(--diffs-fg-number)'};
-      --diffs-editor-line-number-active-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg, var(--diffs-bg))'};
-      --diffs-editor-line-number-active-fg: ${gutterActiveForeground ?? 'var(--diffs-selection-number-fg)'};
-      ${cursorForeground !== undefined ? '--diffs-editor-cursor-fg: ' + cursorForeground : ''};
-      ${findMatchBackground !== undefined ? '--diffs-editor-find-match-bg: ' + findMatchBackground : ''};
-      ${findMatchHighlightBackground !== undefined ? '--diffs-editor-find-match-highlight-bg: ' + findMatchHighlightBackground : ''};
-    }`);
-  };
-
-  #watchColorScheme = (theme: ThemesType) => {
-    const observer = new MutationObserver((mutations) => {
-      for (const { type, attributeName } of mutations) {
-        if (
-          type === 'attributes' &&
-          attributeName !== null &&
-          (attributeName === 'class' || attributeName.startsWith('data-'))
-        ) {
-          const themeType =
-            getComputedStyle(document.body).colorScheme === 'dark'
-              ? 'dark'
-              : 'light';
-          this.#onThemeChange(theme[themeType], themeType);
-          break;
-        }
-      }
-    });
-    observer.observe(document.documentElement, { attributes: true });
-    observer.observe(document.body, { attributes: true });
-    this.#disposes = [
-      addEventListener(this.#mediaQueryList, 'change', (e) => {
-        const themeType = e.matches ? 'dark' : 'light';
-        this.#onThemeChange(theme[themeType], themeType);
-      }),
-      () => observer.disconnect(),
-    ];
   };
 
   get themeType(): 'light' | 'dark' {
@@ -160,7 +106,31 @@ export class EditorTokenizer {
       this.#themeType = themeType;
     }
     if (typeof theme !== 'string') {
-      this.#watchColorScheme(theme);
+      const observer = new MutationObserver((mutations) => {
+        for (const { type, attributeName } of mutations) {
+          if (
+            type === 'attributes' &&
+            attributeName !== null &&
+            (attributeName === 'class' || attributeName.startsWith('data-'))
+          ) {
+            const themeType =
+              getComputedStyle(document.body).colorScheme === 'dark'
+                ? 'dark'
+                : 'light';
+            this.#emitThemeChange(theme[themeType], themeType);
+            break;
+          }
+        }
+      });
+      observer.observe(document.documentElement, { attributes: true });
+      observer.observe(document.body, { attributes: true });
+      this.#disposes = [
+        addEventListener(this.#mediaQueryList, 'change', (e) => {
+          const themeType = e.matches ? 'dark' : 'light';
+          this.#emitThemeChange(theme[themeType], themeType);
+        }),
+        () => observer.disconnect(),
+      ];
     }
     this.#highlighter = highlighter;
     this.#textDocument = textDocument;
@@ -172,11 +142,45 @@ export class EditorTokenizer {
     }
     this.#colorMap = [];
     this.#setTheme(typeof theme === 'string' ? theme : theme[this.#themeType]);
-    globalThis.addEventListener('message', this.#onMessage);
+  }
+
+  // By default, diffs components support dual themes, but the tokenizer only renders
+  // the preferred theme. When the theme type is changed, the tokenizer will re-tokenize the document.
+  #emitThemeChange(themeName: string, themeType: 'light' | 'dark') {
+    this.#themeType = themeType;
+    this.#setTheme(themeName);
+    this.stopBackgroundTokenize();
+    this.#stateStackCache = [INITIAL];
+    if (this.#grammar !== undefined && this.#textDocument.lineCount > 0) {
+      this.#scheduleBackgroundTokenize(0);
+    }
+  }
+
+  #setTheme(themeName: string) {
+    this.#colorMap = this.#highlighter.setTheme(themeName).colorMap;
+    const { colors = {} } = this.#highlighter.getTheme(themeName);
+    const selectionBackground = colors['editor.selectionBackground'];
+    const lineHighlightBackground = colors['editor.lineHighlightBackground'];
+    const gutterForeground = colors['editorLineNumber.foreground'];
+    const gutterActiveForeground = colors['editorLineNumber.activeForeground'];
+    const cursorForeground = colors['editorCursor.foreground'];
+    const findMatchBackground = colors['editor.findMatchBackground'];
+    const findMatchHighlightBackground =
+      colors['editor.findMatchHighlightBackground'];
+    this.#setStyle(`:host {
+      --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
+      --diffs-editor-line-highlight-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg)'};
+      --diffs-editor-line-number-fg: ${gutterForeground ?? 'var(--diffs-fg-number)'};
+      --diffs-editor-line-number-active-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg, var(--diffs-bg))'};
+      --diffs-editor-line-number-active-fg: ${gutterActiveForeground ?? 'var(--diffs-selection-number-fg)'};
+      ${cursorForeground !== undefined ? '--diffs-editor-cursor-fg: ' + cursorForeground : ''};
+      ${findMatchBackground !== undefined ? '--diffs-editor-find-match-bg: ' + findMatchBackground : ''};
+      ${findMatchHighlightBackground !== undefined ? '--diffs-editor-find-match-highlight-bg: ' + findMatchHighlightBackground : ''};
+    }`);
   }
 
   cleanUp(): void {
-    globalThis.removeEventListener('message', this.#onMessage);
+    this.#detachMessageListener();
     this.stopBackgroundTokenize();
     this.#disposes?.forEach((dispose) => dispose());
     this.#disposes = undefined;
@@ -375,13 +379,13 @@ export class EditorTokenizer {
     this.#lastLine = -1;
     this.#backgroundChangedLineRanges = undefined;
     this.#backgroundChangedRangeIndex = 0;
+    this.#detachMessageListener();
   }
 
   pauseBackgroundTokenize(): void {
     if (this.#isStopped || this.#isPaused) {
       return;
     }
-    console.log('pauseBackgroundTokenize', this.#backgroundJobId);
     this.#isPaused = true;
   }
 
@@ -394,9 +398,29 @@ export class EditorTokenizer {
     ) {
       return;
     }
-    console.log('resumeBackgroundTokenize', this.#backgroundJobId);
     this.#isPaused = false;
     this.#postTokenizeMessage(this.#backgroundJobId);
+  }
+
+  #attachMessageListener(): void {
+    if (this.#isMessageListenerAttached) {
+      return;
+    }
+    globalThis.addEventListener('message', this.#onMessage);
+    this.#isMessageListenerAttached = true;
+  }
+
+  #detachMessageListener(): void {
+    if (!this.#isMessageListenerAttached) {
+      return;
+    }
+    globalThis.removeEventListener('message', this.#onMessage);
+    this.#isMessageListenerAttached = false;
+  }
+
+  #postTokenizeMessage(jobId: number): void {
+    // use `postMessage` instead of `setTimeout(fn, 0)` to avoid 4ms delay
+    globalThis.postMessage({ type: 'tokenize', jobId });
   }
 
   #scheduleBackgroundTokenize(
@@ -411,13 +435,8 @@ export class EditorTokenizer {
     this.#lastLine = startLine;
     this.#backgroundChangedLineRanges = changedLineRanges;
     this.#backgroundChangedRangeIndex = changedRangeIndex;
-
+    this.#attachMessageListener();
     this.#postTokenizeMessage(jobId);
-  }
-
-  #postTokenizeMessage(jobId: number): void {
-    // use `postMessage` instead of `setTimeout(fn, 0)` to avoid 4ms delay
-    globalThis.postMessage({ type: 'tokenize', jobId });
   }
 
   #tokenizeLineAt(
