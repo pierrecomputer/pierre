@@ -472,6 +472,7 @@ export class File<
     if (fileContainer != null && file != null) {
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
         editor.syncWithRender(
+          'file',
           highlighter,
           fileContainer,
           file,
@@ -519,12 +520,20 @@ export class File<
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
-    const { collapsed = false, themeType = 'system' } = this.options;
     if (!this.enabled) {
       throw new Error(
         'File.render: attempting to call render after cleaned up'
       );
     }
+
+    const editor = this.editor;
+    if (editor != null) {
+      // postpone background tokenizing to next frame for avoiding UI freeze
+      // during render
+      editor.postponeBackgroundTokenizeToNextFrame();
+    }
+
+    const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
     const previousRenderRange = this.renderRange;
     const themeChanged = this.hasThemeChanged();
@@ -649,10 +658,10 @@ export class File<
       this.renderAnnotations();
       this.renderGutterUtility();
 
-      const editor = this.editor;
       if (editor != null) {
         void this.fileRenderer.initializeHighlighter().then((highlighter) => {
           editor.syncWithRender(
+            'file',
             highlighter,
             fileContainer,
             file,

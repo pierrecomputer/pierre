@@ -92,7 +92,6 @@ export interface EditorOptions<LAnnotation> {
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #options: EditorOptions<LAnnotation>;
-  #editMode: 'simple' | 'advanced' = 'simple';
   #wrap = false;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
@@ -105,6 +104,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   // file
   #component?: DiffsEditableComponent<LAnnotation>;
+  #componentType?: 'file' | 'file-diff';
   #fileContents?: FileContents;
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
@@ -219,103 +219,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return () => this.cleanUp();
   }
 
-  setSelections(selections: DiffsEditorSelection[]): void {
-    const textDocument = this.#textDocument;
-    if (textDocument !== undefined) {
-      const resolvedSelections = selections.map<EditorSelection>(
-        (selection) => {
-          const start = textDocument.normalizePosition(selection.start);
-          const end = textDocument.normalizePosition(selection.end);
-          const direction =
-            selection.direction === 'none'
-              ? DirectionNone
-              : selection.direction === 'backward'
-                ? DirectionBackward
-                : DirectionForward;
-          return { direction, start, end };
-        }
-      );
-      this.#updateSelections(resolvedSelections);
-      this.#scrollToPrimaryCaret();
-    } else {
-      this.#initSelections = selections;
-    }
-  }
-
-  focus(options?: FocusOptions): void {
-    const preventScroll = options?.preventScroll ?? false;
-    const primarySelection = this.#selections?.at(-1);
-    if (primarySelection !== undefined) {
-      const pos =
-        primarySelection.direction === DirectionBackward
-          ? primarySelection.end
-          : primarySelection.start;
-      this.#focus(pos, preventScroll);
-    } else {
-      this.#focus(undefined, preventScroll);
-    }
-  }
-
-  cleanUp(): void {
-    this.#tokenizer?.cleanUp();
-    this.#tokenizer = undefined;
-
-    this.#globalEventDisposes?.forEach((dispose) => dispose());
-    this.#globalEventDisposes = undefined;
-    this.#editorEventDisposes?.forEach((dispose) => dispose());
-    this.#editorEventDisposes = undefined;
-
-    this.#detach?.();
-    this.#detach = undefined;
-    this.#component?.setSelectedLines(null);
-    this.#component = undefined;
-    this.#fileContents = undefined;
-    this.#lineAnnotations = undefined;
-    this.#textDocument = undefined;
-    this.#renderRange = undefined;
-
-    this.#gutterWidthCache = undefined;
-    this.#contentWidthCache = undefined;
-    this.#lineYCache.clear();
-    this.#wrapLineOffsetsCache.clear();
-    this.#lastCharX = undefined;
-
-    this.#globalStyleElement?.remove();
-    this.#globalStyleElement = undefined;
-    this.#editorStyleElement?.remove();
-    this.#editorStyleElement = undefined;
-    this.#themeStyleElement?.remove();
-    this.#themeStyleElement = undefined;
-    this.#componentContainer = undefined;
-    this.#contentElement?.removeAttribute('contentEditable');
-    this.#contentElement = undefined;
-    this.#overlayElement?.remove();
-    this.#overlayElement = undefined;
-    this.#primaryCaretElement?.remove();
-    this.#primaryCaretElement = undefined;
-    this.#selectionElements?.forEach((el) => el.remove());
-    this.#selectionElements?.clear();
-    this.#selectionElements = undefined;
-    this.#searchPanel?.cleanup();
-    this.#searchPanel = undefined;
-    this.#quickEdit?.cleanup();
-    this.#quickEdit = undefined;
-    this.#resizeObserver?.disconnect();
-    this.#resizeObserver = undefined;
-
-    this.#shouldIgnoreSelectionChange = false;
-    this.#selectionStart = undefined;
-    this.#selections = undefined;
-    this.#reservedSelections = undefined;
-  }
-
   syncWithRender(
+    componentType: 'file' | 'file-diff',
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileContents: FileContents,
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
-    renderRange: RenderRange | undefined,
-    editMode?: 'simple' | 'advanced'
+    renderRange: RenderRange | undefined
   ): void {
     const shadowRoot = fileContainer.shadowRoot;
     if (shadowRoot == null) {
@@ -338,10 +248,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    this.#editMode = editMode ?? 'simple';
+    this.#componentType = componentType;
     this.#wrap = this.#component?.options.overflow === 'wrap';
 
-    if (editMode === 'advanced' || (lineAnnotations?.length ?? 0) > 0) {
+    if (componentType === 'file-diff' || (lineAnnotations?.length ?? 0) > 0) {
       let startingLine: number | undefined;
       let endLine: number | undefined;
       for (const child of contentEl.children) {
@@ -431,12 +341,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     if (this.#contentElement !== contentEl) {
-      const guttterEl = contentEl.previousElementSibling as HTMLElement | null;
-      const targetIsContentElement = (e: Event) => {
-        const target = e.composedPath()[0] as HTMLElement;
-        return target === contentEl || contentEl.contains(target);
-      };
-
       this.#metrics.init(contentEl);
       this.#contentElement = extend(contentEl, {
         contentEditable: 'true',
@@ -451,301 +355,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (this.#overlayElement !== undefined) {
         contentEl.after(this.#overlayElement);
       }
-      this.#editorEventDisposes?.forEach((dispose) => dispose());
-      this.#editorEventDisposes = [
-        addEventListener(
-          contentEl,
-          'pointerdown',
-          (e) => {
-            if (e.pointerType !== 'mouse') {
-              return;
-            }
-
-            // this is a workaround for the selection rendering glitch
-            // happens when selecting content in shadow DOM on Safari
-            if (
-              isSafari() &&
-              this.#lineAnnotations !== undefined &&
-              this.#lineAnnotations.length > 0
-            ) {
-              this.#mouseUpDisposes = [
-                ...contentEl.querySelectorAll<HTMLElement>(
-                  '[data-line-annotation]'
-                ),
-              ]
-                .map((el) => [
-                  addEventListener(el, 'mouseenter', () => {
-                    this.#shouldIgnoreSelectionChange = true;
-                  }),
-                  addEventListener(el, 'mouseleave', () => {
-                    this.#shouldIgnoreSelectionChange = false;
-                  }),
-                ])
-                .flat();
-            }
-
-            this.#isContentMouseDown = true;
-            this.#selectionStart = undefined;
-            if (e.button === 0 && isPrimaryModifier(e)) {
-              this.#reservedSelections = this.#selections?.map((selection) => ({
-                ...selection,
-              }));
-            }
-            if (e.shiftKey) {
-              const primarySelection = this.#selections?.at(-1);
-              if (primarySelection !== undefined) {
-                const pos =
-                  primarySelection.direction === DirectionBackward
-                    ? primarySelection.end
-                    : primarySelection.start;
-                // fix the window selection for shift mode
-                this.#setWindowSelection({
-                  start: pos,
-                  end: pos,
-                  direction: DirectionNone,
-                });
-              }
-              this.#shiftKeyPressed = true;
-            }
-          },
-          { passive: true }
-        ),
-
-        addEventListener(contentEl, 'keydown', (e) => {
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            this.#searchPanel?.cleanup();
-            this.#searchPanel = undefined;
-            this.#retainSearchPanelFocus = false;
-            this.#quickEdit?.cleanup();
-            this.#quickEdit = undefined;
-            if (this.#selections !== undefined && this.#selections.length > 0) {
-              const primarySelection = this.#selections.at(-1)!;
-              if (
-                !isCollapsedSelection(primarySelection) ||
-                this.#selections.length > 1
-              ) {
-                const pos = getCaretPosition(primarySelection);
-                this.#updateSelections([
-                  {
-                    start: pos,
-                    end: pos,
-                    direction: DirectionNone,
-                  },
-                ]);
-                this.#focus(pos);
-              }
-            }
-            return;
-          }
-          if (!targetIsContentElement(e)) {
-            return;
-          }
-
-          // handle the cursor move events manually for multiple selections and virtual viewport
-          const mvShortcut = isMoveCursorShortcut(e);
-          const textDocument = this.#textDocument;
-          if (
-            this.#selections !== undefined &&
-            this.#selections.length > 0 &&
-            mvShortcut !== undefined &&
-            textDocument !== undefined
-          ) {
-            if (e.shiftKey) {
-              this.#updateSelections(
-                mapSelectionShift(textDocument, this.#selections, mvShortcut)
-              );
-            } else {
-              this.#updateSelections(
-                mapCursorMove(textDocument, this.#selections, mvShortcut)
-              );
-            }
-            this.#scrollToPrimaryCaret();
-            e.preventDefault();
-            return;
-          }
-
-          const command = resolveEditorCommandFromKeyboardEvent(e);
-          if (command !== undefined) {
-            e.preventDefault();
-            this.#runCommand(command);
-          }
-        }),
-
-        addEventListener(contentEl, 'copy', (e) => {
-          if (!targetIsContentElement(e)) {
-            return;
-          }
-          e.preventDefault();
-          e.clipboardData?.setData('text', this.#getSelectionText());
-        }),
-
-        addEventListener(contentEl, 'cut', (e) => {
-          if (!targetIsContentElement(e)) {
-            return;
-          }
-          e.preventDefault();
-          e.clipboardData?.setData('text', this.#getSelectionText());
-          this.#replaceSelectionText('');
-        }),
-
-        addEventListener(contentEl, 'paste', (e) => {
-          if (!targetIsContentElement(e)) {
-            return;
-          }
-          e.preventDefault();
-          const text = e.clipboardData?.getData('text');
-          if (text !== undefined) {
-            // TODO(@ije): Add support of multiple selections copy&paste
-            // TODO(@ije): normalize the pasted text with textDocument.EOF
-            this.#replaceSelectionText(text);
-          }
-        }),
-
-        addEventListener(contentEl, 'beforeinput', (e) => {
-          if (!targetIsContentElement(e)) {
-            return;
-          }
-          e.preventDefault();
-          this.#handleInput(e.inputType, e.data);
-        }),
-
-        addEventListener(
-          contentEl,
-          'compositionstart',
-          (e) => {
-            if (!targetIsContentElement(e)) {
-              return;
-            }
-            this.#shouldIgnoreSelectionChange = true;
-          },
-          { passive: true }
-        ),
-
-        addEventListener(
-          contentEl,
-          'compositionend',
-          (e) => {
-            if (!targetIsContentElement(e)) {
-              return;
-            }
-            this.#shouldIgnoreSelectionChange = false;
-            this.#handleInput('insertText', e.data);
-          },
-          { passive: true }
-        ),
-      ];
-      if (guttterEl !== null && guttterEl.dataset.gutter !== undefined) {
-        this.#editorEventDisposes.push(
-          addEventListener(
-            guttterEl,
-            'pointerdown',
-            (e) => {
-              let target = e.composedPath()[0] as HTMLElement | undefined;
-              if (target?.dataset.lineNumberContent !== undefined) {
-                target =
-                  target.parentElement ??
-                  (undefined as HTMLElement | undefined);
-              }
-              const textDocument = this.#textDocument;
-              if (target === undefined || textDocument === undefined) {
-                return;
-              }
-              const columnNumber = target.dataset.columnNumber;
-              const lineType = target.dataset.lineType;
-              if (
-                columnNumber === undefined ||
-                lineType === undefined ||
-                !isLineEditable(lineType)
-              ) {
-                return;
-              }
-              const lineNumber = parseInt(columnNumber, 10);
-              if (Number.isNaN(lineNumber)) {
-                return;
-              }
-              const line = lineNumber - 1;
-              const selection: EditorSelection = {
-                start: { line, character: 0 },
-                end: {
-                  line,
-                  character: textDocument.getLineText(line).length,
-                },
-                direction: DirectionForward,
-              };
-              this.#isGutterMouseDown = true;
-              this.#selectionStart = selection;
-              this.#updateSelections([selection]);
-              this.#focus(selection.end);
-              this.#mouseUpDisposes = [
-                addEventListener(
-                  document,
-                  'mousemove',
-                  (e) => {
-                    let target = e.composedPath()[0] as HTMLElement | undefined;
-                    if (target?.dataset.lineNumberContent !== undefined) {
-                      target = target?.parentElement ?? undefined;
-                    } else if (target?.tagName === 'SPAN') {
-                      target = target?.closest('[data-line]') as
-                        | HTMLElement
-                        | undefined;
-                    }
-                    if (target === undefined) {
-                      return;
-                    }
-
-                    const line =
-                      target.dataset.columnNumber ?? target.dataset.line;
-                    const lineType = target.dataset.lineType;
-                    if (
-                      this.#isGutterMouseDown &&
-                      this.#textDocument !== undefined &&
-                      line !== undefined &&
-                      lineType !== undefined &&
-                      isLineEditable(lineType)
-                    ) {
-                      const lineNumber = parseInt(line, 10);
-                      if (Number.isNaN(lineNumber)) {
-                        return;
-                      }
-                      const lineIndex = lineNumber - 1;
-                      let selection: EditorSelection = {
-                        start: { line: lineIndex, character: 0 },
-                        end: {
-                          line: lineIndex,
-                          character:
-                            this.#textDocument.getLineText(lineIndex).length,
-                        },
-                        direction: DirectionForward,
-                      };
-                      if (this.#selectionStart !== undefined) {
-                        selection = createSelectionFrom(
-                          this.#selectionStart,
-                          selection
-                        );
-                      } else {
-                        this.#selectionStart = selection;
-                      }
-                      this.#updateSelections([selection]);
-                      this.#focus(selection.end);
-                    }
-                  },
-                  { passive: true }
-                ),
-              ];
-            },
-            { passive: true }
-          )
-        );
-      }
-      this.#resizeObserver?.disconnect();
-      this.#resizeObserver = new ResizeObserver(() => {
-        requestAnimationFrame(() => {
-          this.#handleLayoutResize();
-        });
-      });
-      this.#resizeObserver.observe(contentEl);
-      this.#resizeObserver.observe(contentEl.parentElement!);
+      this.#listenContentElement(contentEl);
     }
 
     this.#lineYCache.clear();
@@ -809,6 +419,106 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     ) {
       this.#quickEdit.render(this.#contentElement);
     }
+  }
+
+  postponeBackgroundTokenizeToNextFrame(): void {
+    const tokenizer = this.#tokenizer;
+    if (tokenizer !== undefined) {
+      tokenizer.pauseBackgroundTokenize();
+      requestAnimationFrame(() => {
+        tokenizer.resumeBackgroundTokenize();
+      });
+    }
+  }
+
+  setSelections(selections: DiffsEditorSelection[]): void {
+    const textDocument = this.#textDocument;
+    if (textDocument !== undefined) {
+      const resolvedSelections = selections.map<EditorSelection>(
+        (selection) => {
+          const start = textDocument.normalizePosition(selection.start);
+          const end = textDocument.normalizePosition(selection.end);
+          const direction =
+            selection.direction === 'none'
+              ? DirectionNone
+              : selection.direction === 'backward'
+                ? DirectionBackward
+                : DirectionForward;
+          return { direction, start, end };
+        }
+      );
+      this.#updateSelections(resolvedSelections);
+      this.#scrollToPrimaryCaret();
+    } else {
+      this.#initSelections = selections;
+    }
+  }
+
+  focus(options?: FocusOptions): void {
+    const preventScroll = options?.preventScroll ?? false;
+    const primarySelection = this.#selections?.at(-1);
+    if (primarySelection !== undefined) {
+      const pos =
+        primarySelection.direction === DirectionBackward
+          ? primarySelection.end
+          : primarySelection.start;
+      this.#focus(pos, preventScroll);
+    } else {
+      this.#focus(undefined, preventScroll);
+    }
+  }
+
+  cleanUp(): void {
+    this.#tokenizer?.cleanUp();
+    this.#tokenizer = undefined;
+
+    this.#globalEventDisposes?.forEach((dispose) => dispose());
+    this.#globalEventDisposes = undefined;
+    this.#editorEventDisposes?.forEach((dispose) => dispose());
+    this.#editorEventDisposes = undefined;
+
+    this.#detach?.();
+    this.#detach = undefined;
+    this.#component?.setSelectedLines(null);
+    this.#component = undefined;
+    this.#fileContents = undefined;
+    this.#lineAnnotations = undefined;
+    this.#textDocument = undefined;
+    this.#renderRange = undefined;
+
+    this.#gutterWidthCache = undefined;
+    this.#contentWidthCache = undefined;
+    this.#lineYCache.clear();
+    this.#wrapLineOffsetsCache.clear();
+    this.#lastCharX = undefined;
+
+    this.#globalStyleElement?.remove();
+    this.#globalStyleElement = undefined;
+    this.#editorStyleElement?.remove();
+    this.#editorStyleElement = undefined;
+    this.#themeStyleElement?.remove();
+    this.#themeStyleElement = undefined;
+    this.#componentContainer = undefined;
+    this.#contentElement?.removeAttribute('contentEditable');
+    this.#contentElement = undefined;
+    this.#overlayElement?.remove();
+    this.#overlayElement = undefined;
+    this.#primaryCaretElement?.remove();
+    this.#primaryCaretElement = undefined;
+    this.#selectionElements?.forEach((el) => el.remove());
+    this.#selectionElements?.clear();
+    this.#selectionElements = undefined;
+    this.#searchPanel?.cleanup();
+    this.#searchPanel = undefined;
+    this.#quickEdit?.cleanup();
+    this.#quickEdit = undefined;
+    this.#resizeObserver?.disconnect();
+    this.#resizeObserver = undefined;
+
+    this.#shouldIgnoreSelectionChange = false;
+    this.#selectionStart = undefined;
+    this.#selections = undefined;
+    this.#reservedSelections = undefined;
   }
 
   #initialize(): void {
@@ -960,6 +670,309 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         { passive: true }
       ),
     ];
+  }
+
+  #listenContentElement(contentEl: HTMLElement): void {
+    const guttterEl = contentEl.previousElementSibling as HTMLElement | null;
+    const targetIsContentElement = (e: Event) => {
+      const target = e.composedPath()[0] as HTMLElement;
+      return target === contentEl || contentEl.contains(target);
+    };
+
+    this.#editorEventDisposes?.forEach((dispose) => dispose());
+    this.#editorEventDisposes = [
+      addEventListener(
+        contentEl,
+        'pointerdown',
+        (e) => {
+          if (e.pointerType !== 'mouse') {
+            return;
+          }
+
+          // this is a workaround for the selection rendering glitch
+          // happens when selecting content in shadow DOM on Safari
+          if (
+            isSafari() &&
+            this.#lineAnnotations !== undefined &&
+            this.#lineAnnotations.length > 0
+          ) {
+            this.#mouseUpDisposes = [
+              ...contentEl.querySelectorAll<HTMLElement>(
+                '[data-line-annotation]'
+              ),
+            ]
+              .map((el) => [
+                addEventListener(el, 'mouseenter', () => {
+                  this.#shouldIgnoreSelectionChange = true;
+                }),
+                addEventListener(el, 'mouseleave', () => {
+                  this.#shouldIgnoreSelectionChange = false;
+                }),
+              ])
+              .flat();
+          }
+
+          this.#isContentMouseDown = true;
+          this.#selectionStart = undefined;
+          if (e.button === 0 && isPrimaryModifier(e)) {
+            this.#reservedSelections = this.#selections?.map((selection) => ({
+              ...selection,
+            }));
+          }
+          if (e.shiftKey) {
+            const primarySelection = this.#selections?.at(-1);
+            if (primarySelection !== undefined) {
+              const pos =
+                primarySelection.direction === DirectionBackward
+                  ? primarySelection.end
+                  : primarySelection.start;
+              // fix the window selection for shift mode
+              this.#setWindowSelection({
+                start: pos,
+                end: pos,
+                direction: DirectionNone,
+              });
+            }
+            this.#shiftKeyPressed = true;
+          }
+        },
+        { passive: true }
+      ),
+
+      addEventListener(contentEl, 'keydown', (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          this.#searchPanel?.cleanup();
+          this.#searchPanel = undefined;
+          this.#retainSearchPanelFocus = false;
+          this.#quickEdit?.cleanup();
+          this.#quickEdit = undefined;
+          if (this.#selections !== undefined && this.#selections.length > 0) {
+            const primarySelection = this.#selections.at(-1)!;
+            if (
+              !isCollapsedSelection(primarySelection) ||
+              this.#selections.length > 1
+            ) {
+              const pos = getCaretPosition(primarySelection);
+              this.#updateSelections([
+                {
+                  start: pos,
+                  end: pos,
+                  direction: DirectionNone,
+                },
+              ]);
+              this.#focus(pos);
+            }
+          }
+          return;
+        }
+        if (!targetIsContentElement(e)) {
+          return;
+        }
+
+        // handle the cursor move events manually for multiple selections and virtual viewport
+        const mvShortcut = isMoveCursorShortcut(e);
+        const textDocument = this.#textDocument;
+        if (
+          this.#selections !== undefined &&
+          this.#selections.length > 0 &&
+          mvShortcut !== undefined &&
+          textDocument !== undefined
+        ) {
+          if (e.shiftKey) {
+            this.#updateSelections(
+              mapSelectionShift(textDocument, this.#selections, mvShortcut)
+            );
+          } else {
+            this.#updateSelections(
+              mapCursorMove(textDocument, this.#selections, mvShortcut)
+            );
+          }
+          this.#scrollToPrimaryCaret();
+          e.preventDefault();
+          return;
+        }
+
+        const command = resolveEditorCommandFromKeyboardEvent(e);
+        if (command !== undefined) {
+          e.preventDefault();
+          this.#runCommand(command);
+        }
+      }),
+
+      addEventListener(contentEl, 'copy', (e) => {
+        if (!targetIsContentElement(e)) {
+          return;
+        }
+        e.preventDefault();
+        e.clipboardData?.setData('text', this.#getSelectionText());
+      }),
+
+      addEventListener(contentEl, 'cut', (e) => {
+        if (!targetIsContentElement(e)) {
+          return;
+        }
+        e.preventDefault();
+        e.clipboardData?.setData('text', this.#getSelectionText());
+        this.#replaceSelectionText('');
+      }),
+
+      addEventListener(contentEl, 'paste', (e) => {
+        if (!targetIsContentElement(e)) {
+          return;
+        }
+        e.preventDefault();
+        const text = e.clipboardData?.getData('text');
+        if (text !== undefined) {
+          // TODO(@ije): Add support of multiple selections copy&paste
+          // TODO(@ije): normalize the pasted text with textDocument.EOF
+          this.#replaceSelectionText(text);
+        }
+      }),
+
+      addEventListener(contentEl, 'beforeinput', (e) => {
+        if (!targetIsContentElement(e)) {
+          return;
+        }
+        e.preventDefault();
+        this.#handleInput(e.inputType, e.data);
+      }),
+
+      addEventListener(
+        contentEl,
+        'compositionstart',
+        (e) => {
+          if (!targetIsContentElement(e)) {
+            return;
+          }
+          this.#shouldIgnoreSelectionChange = true;
+        },
+        { passive: true }
+      ),
+
+      addEventListener(
+        contentEl,
+        'compositionend',
+        (e) => {
+          if (!targetIsContentElement(e)) {
+            return;
+          }
+          this.#shouldIgnoreSelectionChange = false;
+          this.#handleInput('insertText', e.data);
+        },
+        { passive: true }
+      ),
+    ];
+    if (guttterEl !== null && guttterEl.dataset.gutter !== undefined) {
+      this.#editorEventDisposes.push(
+        addEventListener(
+          guttterEl,
+          'pointerdown',
+          (e) => {
+            let target = e.composedPath()[0] as HTMLElement | undefined;
+            if (target?.dataset.lineNumberContent !== undefined) {
+              target =
+                target.parentElement ?? (undefined as HTMLElement | undefined);
+            }
+            const textDocument = this.#textDocument;
+            if (target === undefined || textDocument === undefined) {
+              return;
+            }
+            const columnNumber = target.dataset.columnNumber;
+            const lineType = target.dataset.lineType;
+            if (
+              columnNumber === undefined ||
+              lineType === undefined ||
+              !isLineEditable(lineType)
+            ) {
+              return;
+            }
+            const lineNumber = parseInt(columnNumber, 10);
+            if (Number.isNaN(lineNumber)) {
+              return;
+            }
+            const line = lineNumber - 1;
+            const selection: EditorSelection = {
+              start: { line, character: 0 },
+              end: {
+                line,
+                character: textDocument.getLineText(line).length,
+              },
+              direction: DirectionForward,
+            };
+            this.#isGutterMouseDown = true;
+            this.#selectionStart = selection;
+            this.#updateSelections([selection]);
+            this.#focus(selection.end);
+            this.#mouseUpDisposes = [
+              addEventListener(
+                document,
+                'mousemove',
+                (e) => {
+                  let target = e.composedPath()[0] as HTMLElement | undefined;
+                  if (target?.dataset.lineNumberContent !== undefined) {
+                    target = target?.parentElement ?? undefined;
+                  } else if (target?.tagName === 'SPAN') {
+                    target = target?.closest('[data-line]') as
+                      | HTMLElement
+                      | undefined;
+                  }
+                  if (target === undefined) {
+                    return;
+                  }
+
+                  const line =
+                    target.dataset.columnNumber ?? target.dataset.line;
+                  const lineType = target.dataset.lineType;
+                  if (
+                    this.#isGutterMouseDown &&
+                    this.#textDocument !== undefined &&
+                    line !== undefined &&
+                    lineType !== undefined &&
+                    isLineEditable(lineType)
+                  ) {
+                    const lineNumber = parseInt(line, 10);
+                    if (Number.isNaN(lineNumber)) {
+                      return;
+                    }
+                    const lineIndex = lineNumber - 1;
+                    let selection: EditorSelection = {
+                      start: { line: lineIndex, character: 0 },
+                      end: {
+                        line: lineIndex,
+                        character:
+                          this.#textDocument.getLineText(lineIndex).length,
+                      },
+                      direction: DirectionForward,
+                    };
+                    if (this.#selectionStart !== undefined) {
+                      selection = createSelectionFrom(
+                        this.#selectionStart,
+                        selection
+                      );
+                    } else {
+                      this.#selectionStart = selection;
+                    }
+                    this.#updateSelections([selection]);
+                    this.#focus(selection.end);
+                  }
+                },
+                { passive: true }
+              ),
+            ];
+          },
+          { passive: true }
+        )
+      );
+    }
+    this.#resizeObserver?.disconnect();
+    this.#resizeObserver = new ResizeObserver(() => {
+      requestAnimationFrame(() => {
+        this.#handleLayoutResize();
+      });
+    });
+    this.#resizeObserver.observe(contentEl);
+    this.#resizeObserver.observe(contentEl.parentElement!);
   }
 
   // TODO(@ije): add command registry
@@ -1144,7 +1157,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     tokenizer.stopBackgroundTokenize();
 
     const t = performance.now();
-    const isAdvancedMode = this.#editMode === 'advanced';
+    const isFileDiff = this.#componentType === 'file-diff';
     const dirtyLines = tokenizer.tokenize(change, renderRange);
     const t2 = performance.now();
 
@@ -1153,7 +1166,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const dirtyLineIndexes = new Set<number>(dirtyLines.keys());
 
       // update line elements that have been changed in the document
-      if (isAdvancedMode) {
+      if (isFileDiff) {
         for (const child of children) {
           const el = child as HTMLElement;
           const line = el.dataset.line;
@@ -1279,12 +1292,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     component.applyLineChange?.(dirtyLines, tokenizer.themeType);
-    if (change.lineDelta !== 0 || isAdvancedMode) {
+    if (change.lineDelta !== 0 || isFileDiff) {
       component.applyLayoutChange(
         textDocument,
         newLineAnnotations,
         shouldUpdateBuffer
       );
+    }
+
+    // if in advanced(diff) mode, we don't need to tokenize the rest line in the background
+    // ideally we should tokenize the rest line in the background,
+    // but currently we just call the `rerender` method of the diff component
+    if (isFileDiff) {
+      this.#tokenizer?.stopBackgroundTokenize();
     }
 
     if (this.#options.__debug === true) {
@@ -1325,6 +1345,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #updateSelections(selections: EditorSelection[]) {
+    this.postponeBackgroundTokenizeToNextFrame();
+
     const gutterBuffer = this.#contentElement?.previousElementSibling;
     this.#primaryCaretElement = undefined;
     this.#component?.setSelectedLines(null);
@@ -1507,6 +1529,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #scrollToLine(line: number, char = 0, noFocus = false) {
+    this.postponeBackgroundTokenizeToNextFrame();
+
     const virtualCaret = h('div', {
       style: {
         position: 'absolute',
@@ -1526,11 +1550,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (!noFocus) {
         this.#focus({ line, character: char });
       }
-      requestAnimationFrame(() => virtualCaret.remove());
     }
-    // if the line is not rendered yet(virtualized),
-    // scroll to the approximate line position to trigger
-    // the line to be rendered, then recall this function
+    // if the line is not rendered yet(virtualized), scroll to the approximate
+    // line position to trigger the line to be rendered, then recall this function
     // to ensure the line is scrolled into view
     else {
       const lineAnnotations = (this.#lineAnnotations ?? []).filter(
@@ -1544,8 +1566,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#scrollingToLineChar = char;
       this.#scrollingToLineNoFocus = noFocus;
       virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
-      requestAnimationFrame(() => virtualCaret.remove());
     }
+    virtualCaret.remove();
   }
 
   #renderSelection(
@@ -2354,7 +2376,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return undefined;
     }
     // check if the line is within the render range
-    if (this.#renderRange !== undefined && this.#editMode === 'simple') {
+    if (this.#renderRange !== undefined && this.#componentType === 'file') {
       const { startingLine } = this.#renderRange;
       const { children } = contentElement;
       for (let i = line - startingLine; i <= children.length; i++) {
@@ -2372,7 +2394,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     // fallback to query selector (ignoring `change-deletion` lines)
-    if (this.#editMode === 'advanced') {
+    if (this.#componentType === 'file-diff') {
       return (
         contentElement.querySelector<HTMLElement>(
           `[data-line="${line + 1}"]:not([data-line-type="change-deletion"])`

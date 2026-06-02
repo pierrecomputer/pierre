@@ -40,7 +40,7 @@ export class EditorTokenizer {
   #tokenizeMaxLineLength: number;
   #setStyle: EditorTokenizerProps['setStyle'];
   #onDeferTokenize: EditorTokenizerProps['onDeferTokenize'];
-  #editorEventDisposes?: (() => void)[];
+  #disposes?: (() => void)[];
 
   // state
   #stateStackCache: StateStack[] = [INITIAL];
@@ -128,7 +128,7 @@ export class EditorTokenizer {
     });
     observer.observe(document.documentElement, { attributes: true });
     observer.observe(document.body, { attributes: true });
-    this.#editorEventDisposes = [
+    this.#disposes = [
       addEventListener(this.#mediaQueryList, 'change', (e) => {
         const themeType = e.matches ? 'dark' : 'light';
         this.#onThemeChange(theme[themeType], themeType);
@@ -172,12 +172,14 @@ export class EditorTokenizer {
     }
     this.#colorMap = [];
     this.#setTheme(typeof theme === 'string' ? theme : theme[this.#themeType]);
+    globalThis.addEventListener('message', this.#onMessage);
   }
 
   cleanUp(): void {
+    globalThis.removeEventListener('message', this.#onMessage);
     this.stopBackgroundTokenize();
-    this.#editorEventDisposes?.forEach((dispose) => dispose());
-    this.#editorEventDisposes = undefined;
+    this.#disposes?.forEach((dispose) => dispose());
+    this.#disposes = undefined;
   }
 
   // to use `tokenize`, call `prebuildStateStackMap` first to prebuild
@@ -365,7 +367,9 @@ export class EditorTokenizer {
   }
 
   stopBackgroundTokenize(): void {
-    removeEventListener('message', this.#onMessage);
+    if (this.#isStopped) {
+      return;
+    }
     this.#isStopped = true;
     this.#isPaused = false;
     this.#lastLine = -1;
@@ -377,7 +381,7 @@ export class EditorTokenizer {
     if (this.#isStopped || this.#isPaused) {
       return;
     }
-    removeEventListener('message', this.#onMessage);
+    console.log('pauseBackgroundTokenize', this.#backgroundJobId);
     this.#isPaused = true;
   }
 
@@ -390,9 +394,9 @@ export class EditorTokenizer {
     ) {
       return;
     }
+    console.log('resumeBackgroundTokenize', this.#backgroundJobId);
     this.#isPaused = false;
-    globalThis.addEventListener('message', this.#onMessage);
-    this.#postBackgroundTokenizeMessage(this.#backgroundJobId);
+    this.#postTokenizeMessage(this.#backgroundJobId);
   }
 
   #scheduleBackgroundTokenize(
@@ -408,11 +412,10 @@ export class EditorTokenizer {
     this.#backgroundChangedLineRanges = changedLineRanges;
     this.#backgroundChangedRangeIndex = changedRangeIndex;
 
-    globalThis.addEventListener('message', this.#onMessage);
-    this.#postBackgroundTokenizeMessage(jobId);
+    this.#postTokenizeMessage(jobId);
   }
 
-  #postBackgroundTokenizeMessage(jobId: number): void {
+  #postTokenizeMessage(jobId: number): void {
     // use `postMessage` instead of `setTimeout(fn, 0)` to avoid 4ms delay
     globalThis.postMessage({ type: 'tokenize', jobId });
   }
@@ -549,14 +552,14 @@ export class EditorTokenizer {
         }
       }
 
-      // limit the time of partial tokenize to 2ms
-      if (performance.now() - t > 2) {
+      // limit the time of partial tokenize to 1ms
+      if (performance.now() - t > 1) {
         break;
       }
     }
 
     this.#onDeferTokenize(lines, this.#themeType);
-    if (this.#isStopped || jobId !== this.#backgroundJobId) {
+    if (this.#isStopped || this.#isPaused || jobId !== this.#backgroundJobId) {
       return;
     }
 
@@ -567,7 +570,7 @@ export class EditorTokenizer {
 
     this.#lastLine = line;
     this.#backgroundChangedRangeIndex = changedRangeIndex;
-    this.#postBackgroundTokenizeMessage(jobId);
+    this.#postTokenizeMessage(jobId);
   }
 }
 
