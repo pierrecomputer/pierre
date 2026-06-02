@@ -32,7 +32,9 @@ import {
   VanillaPropTabs,
 } from '../app/(diffs)/docs/VanillaAPI/ComponentTabs';
 import { OverviewFileTree } from '../app/(trees)/docs/Overview/OverviewFileTree';
+import { BetaBadge } from '../components/BetaBadge';
 import { DocsCodeExample } from '../components/docs/DocsCodeExample';
+import { Shortcut } from '../components/Shortcut';
 import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
 import remarkTocIgnore from './remark-toc-ignore';
 import { Button } from '@/components/ui/button';
@@ -52,12 +54,34 @@ function MdxLink(props: ComponentPropsWithoutRef<'a'>) {
   return <a target="_blank" rel="noopener noreferrer" {...props} />;
 }
 
+// Section headings whose `## ` slug should render a "Beta" badge. The badge is
+// appended after the heading text (not part of the markdown) so the slug—and
+// therefore the anchor and any child heading ids—stays unchanged.
+const BETA_DOC_HEADING_IDS = new Set(['editor', 'virtualization']);
+
+function MdxHeading2({
+  id,
+  children,
+  ...props
+}: ComponentPropsWithoutRef<'h2'>) {
+  return (
+    <h2 id={id} {...props}>
+      {children}
+      {id != null && BETA_DOC_HEADING_IDS.has(id) ? (
+        <BetaBadge className="ml-2 align-middle" />
+      ) : null}
+    </h2>
+  );
+}
+
 /** Default components available in all MDX content */
 const defaultComponents = {
   a: MdxLink,
+  h2: MdxHeading2,
   Link,
   Button,
   Notice,
+  Shortcut,
   IconArrowRight,
   IconCiWarningFill,
   IconInfoFill,
