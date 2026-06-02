@@ -33,6 +33,7 @@ const WORKTREES_HOME = join(homedir(), 'pierre', 'pierre-worktrees');
 const PORT_BASES = {
   docsDiffs: 3690,
   docsTrees: 3691,
+  docsDiffshub: 3692,
   docsE2E: 4174,
   treesE2E: 4173,
   pathStoreE2E: 4176,
@@ -290,6 +291,7 @@ function cmdPs(): number {
   const services: Array<[keyof typeof PORT_BASES, string]> = [
     ['docsDiffs', 'diffs'],
     ['docsTrees', 'trees'],
+    ['docsDiffshub', 'diffshub'],
     ['docsE2E', 'docsE2E'],
     ['treesE2E', 'treesE2E'],
     ['pathStoreE2E', 'psE2E'],
@@ -461,7 +463,7 @@ function killPorts(ports: number[]): void {
 
 // The main clone has no `.env.worktree` and therefore no offset, but it still
 // owns the default ports (offset 0). Treat it as offset 0 so `wt clean` on the
-// main clone terminates stale servers on 3690/3691/4173/4174/4176/9222.
+// main clone terminates stale servers on 3690/3691/3692/4173/4174/4176/9222.
 function killWorktreePorts(wt: Worktree): void {
   const offset = wt.offset ?? (wt.isMain ? 0 : null);
   if (offset === null) return;

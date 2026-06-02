@@ -200,14 +200,15 @@ clone (shown as `(main)`, offset `—`) and unmanaged/agent worktrees (shown as
 
 Each of our dev/test services has a **base port**:
 
-| Service                   | Base port |
-| ------------------------- | --------- |
-| `apps/docs` diffs dev     | 3690      |
-| `apps/docs` trees dev     | 3691      |
-| `apps/docs` E2E           | 4174      |
-| `packages/trees` E2E      | 4173      |
-| `packages/path-store` E2E | 4176      |
-| Chrome remote debug       | 9222      |
+| Service                       | Base port |
+| ----------------------------- | --------- |
+| `apps/docs` diffs dev         | 3690      |
+| `apps/docs` trees dev         | 3691      |
+| `apps/docs` diffshub dev/prod | 3692      |
+| `apps/docs` E2E               | 4174      |
+| `packages/trees` E2E          | 4173      |
+| `packages/path-store` E2E     | 4176      |
+| Chrome remote debug           | 9222      |
 
 Every worktree owns a **port offset** (0, 10, 20, 30, …). Its actual ports are
 `base + offset`. Main clone is always offset 0 — its ports are unchanged.
