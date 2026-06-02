@@ -73,6 +73,43 @@ export type ReviewDiffFile =
   | ReviewDiffStateFile
   | ReviewDiffConflictFile;
 
+export type ReviewDiffCommentSide = 'additions' | 'deletions';
+
+export interface ReviewDiffCommentTarget {
+  fileId: string;
+  side: ReviewDiffCommentSide;
+  lineNumber: number;
+}
+
+export interface ReviewDiffCommentThread<TMetadata = unknown> {
+  /** Stable unique id for this thread within the review diff. */
+  id: string;
+  target: ReviewDiffCommentTarget;
+  metadata: TMetadata;
+}
+
+export type ReviewDiffCommentableFile = Exclude<
+  ReviewDiffFile,
+  ReviewDiffStateFile
+>;
+
+export interface ReviewDiffCommentAnnotationMetadata<TMetadata = unknown> {
+  file: ReviewDiffCommentableFile;
+  target: ReviewDiffCommentTarget;
+  thread: ReviewDiffCommentThread<TMetadata>;
+}
+
+export interface ReviewDiffCommentThreadRenderContext<TMetadata = unknown> {
+  file: ReviewDiffCommentableFile;
+  target: ReviewDiffCommentTarget;
+  thread: ReviewDiffCommentThread<TMetadata>;
+}
+
+export interface ReviewDiffCommentAddContext {
+  file: ReviewDiffCommentableFile;
+  target: ReviewDiffCommentTarget;
+}
+
 export interface ReviewDiffLabels {
   ariaLabel?: string;
   collapseFile?: string;
@@ -97,7 +134,7 @@ export interface ResolvedReviewDiffLabels {
   formatUnmodifiedLines: (count: number) => string;
 }
 
-export interface ReviewDiffProps {
+export interface ReviewDiffProps<TCommentMetadata = unknown> {
   files: readonly ReviewDiffFile[];
   notices?: readonly string[];
   wrap?: boolean;
@@ -106,7 +143,18 @@ export interface ReviewDiffProps {
   labels?: ReviewDiffLabels;
   onHydrationRequested?: (fileId: string) => void;
   class?: string;
-  codeViewOptions?: Partial<CodeViewOptions<undefined>>;
+  codeViewOptions?: Partial<
+    CodeViewOptions<ReviewDiffCommentAnnotationMetadata<TCommentMetadata>>
+  >;
+  commentThreads?: readonly ReviewDiffCommentThread<TCommentMetadata>[];
+  renderCommentThread?: (
+    thread: ReviewDiffCommentThread<TCommentMetadata>,
+    context: ReviewDiffCommentThreadRenderContext<TCommentMetadata>
+  ) => HTMLElement | undefined;
+  onCommentThreadAddRequested?: (
+    target: ReviewDiffCommentTarget,
+    context: ReviewDiffCommentAddContext
+  ) => void;
 }
 
 export interface ReviewDiffHandle {
@@ -119,11 +167,14 @@ export interface ReviewDiffHandle {
   ): void;
 }
 
-export interface CreateReviewDiffItemsOptions {
+export interface CreateReviewDiffItemsOptions<TCommentMetadata = unknown> {
   files: readonly ReviewDiffFile[];
   notices?: readonly string[];
   collapsed?: boolean;
   labels?: ReviewDiffLabels | ResolvedReviewDiffLabels;
+  commentThreads?: readonly ReviewDiffCommentThread<TCommentMetadata>[];
 }
 
-export type ReviewDiffItem = CodeViewItem<undefined>;
+export type ReviewDiffItem<TCommentMetadata = unknown> = CodeViewItem<
+  ReviewDiffCommentAnnotationMetadata<TCommentMetadata>
+>;

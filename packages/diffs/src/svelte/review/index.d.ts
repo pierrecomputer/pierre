@@ -13,9 +13,9 @@ import type {
 
 export type * from './types.js';
 
-export declare function createReviewDiffItems(
-  options: CreateReviewDiffItemsOptions
-): ReviewDiffItem[];
+export declare function createReviewDiffItems<TCommentMetadata = unknown>(
+  options: CreateReviewDiffItemsOptions<TCommentMetadata>
+): ReviewDiffItem<TCommentMetadata>[];
 
 export declare function resolveReviewDiffLabels(
   labels?: ReviewDiffLabels | null
@@ -31,6 +31,6 @@ export declare function acquireReviewWorkerPool(
 
 export declare function releaseReviewWorkerPool(): void;
 
-declare const ReviewDiff: Component<ReviewDiffProps, ReviewDiffHandle>;
+declare const ReviewDiff: Component<ReviewDiffProps<unknown>, ReviewDiffHandle>;
 
 export default ReviewDiff;

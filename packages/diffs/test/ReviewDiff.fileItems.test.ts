@@ -123,6 +123,126 @@ describe('createReviewDiffItems', () => {
     expect(Number.isSafeInteger(secondItem?.version)).toBe(true);
     expect(firstItem?.version).not.toBe(secondItem?.version);
   });
+
+  test('attaches comment threads to commentable diff items', () => {
+    const file = createTextReviewFile('src/app.ts', 'commented');
+    const thread = {
+      id: 'thread-1',
+      target: {
+        fileId: 'src/app.ts',
+        side: 'additions' as const,
+        lineNumber: 1,
+      },
+      metadata: { body: 'Looks good from the review thread.' },
+    };
+
+    const [item] = createReviewDiffItems({
+      files: [file],
+      commentThreads: [thread],
+    });
+
+    expect(item?.type).toBe('diff');
+    if (item?.type !== 'diff') {
+      throw new Error('expected diff item');
+    }
+
+    expect(item.annotations).toHaveLength(1);
+    expect(item.annotations?.[0]?.side).toBe('additions');
+    expect(item.annotations?.[0]?.lineNumber).toBe(1);
+    expect(item.annotations?.[0]?.metadata.thread).toBe(thread);
+    expect(item.annotations?.[0]?.metadata.target).toEqual(thread.target);
+    expect(item.annotations?.[0]?.metadata.file.id).toBe('src/app.ts');
+  });
+
+  test('ignores comment threads for missing files and state files', () => {
+    const textFile = createTextReviewFile('src/app.ts', 'commented');
+    const stateFile: ReviewDiffFile = {
+      id: 'assets/logo.png',
+      kind: 'state',
+      path: 'assets/logo.png',
+      oldPath: null,
+      status: 'binary',
+      group: 'staged',
+      reason: 'binary_file',
+      byteSize: 256,
+      message: null,
+    };
+
+    const items = createReviewDiffItems({
+      files: [textFile, stateFile],
+      commentThreads: [
+        {
+          id: 'missing-thread',
+          target: {
+            fileId: 'src/missing.ts',
+            side: 'additions',
+            lineNumber: 1,
+          },
+          metadata: { body: 'This file is not in the review.' },
+        },
+        {
+          id: 'state-thread',
+          target: {
+            fileId: 'assets/logo.png',
+            side: 'additions',
+            lineNumber: 1,
+          },
+          metadata: { body: 'Binary files do not have line comments.' },
+        },
+      ],
+    });
+
+    const textItem = items.find((item) => item.id === 'src/app.ts');
+    const stateItem = items.find((item) => item.id === 'assets/logo.png');
+
+    expect(textItem?.type).toBe('diff');
+    expect(
+      textItem?.type === 'diff' ? textItem.annotations : undefined
+    ).toBeUndefined();
+    expect(stateItem?.type).toBe('diff');
+    expect(
+      stateItem?.type === 'diff' ? stateItem.annotations : undefined
+    ).toBeUndefined();
+  });
+
+  test('changes item versions when controlled comment thread arrays change', () => {
+    const file = createTextReviewFile('src/app.ts', 'commented');
+    const firstThreads = [
+      {
+        id: 'thread-1',
+        target: {
+          fileId: 'src/app.ts',
+          side: 'additions' as const,
+          lineNumber: 1,
+        },
+        metadata: { body: 'First body.' },
+      },
+    ];
+    const secondThreads = [
+      {
+        id: 'thread-1',
+        target: {
+          fileId: 'src/app.ts',
+          side: 'additions' as const,
+          lineNumber: 1,
+        },
+        metadata: { body: 'Updated body.' },
+      },
+    ];
+
+    const [firstItem] = createReviewDiffItems({
+      files: [file],
+      commentThreads: firstThreads,
+    });
+    const [secondItem] = createReviewDiffItems({
+      files: [file],
+      commentThreads: secondThreads,
+    });
+
+    expect(typeof firstItem?.version).toBe('number');
+    expect(typeof secondItem?.version).toBe('number');
+    expect(firstItem?.version).not.toBe(secondItem?.version);
+  });
 });
 
 function createTextReviewFile(id: string, value: string): ReviewDiffFile {

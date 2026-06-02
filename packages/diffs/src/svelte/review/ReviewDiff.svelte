@@ -15,6 +15,7 @@
   } from './syncReviewDiffItems.js';
   import type {
     ResolvedReviewDiffLabels,
+    ReviewDiffCommentAnnotationMetadata,
     ReviewDiffFile,
     ReviewDiffProps,
     ReviewDiffStateFile,
@@ -28,6 +29,9 @@
 
   const MAX_SYNC_UPDATES = 80;
 
+  type ReviewDiffAnnotationMetadata =
+    ReviewDiffCommentAnnotationMetadata<unknown>;
+
   let {
     files,
     notices = [],
@@ -38,12 +42,14 @@
     onHydrationRequested,
     class: className = '',
     codeViewOptions,
-  }: ReviewDiffProps = $props();
+  }: ReviewDiffProps<unknown> = $props();
 
   let host = $state<HTMLDivElement | undefined>(undefined);
-  let viewer = $state<CodeView<undefined> | undefined>(undefined);
+  let viewer = $state<CodeView<ReviewDiffAnnotationMetadata> | undefined>(
+    undefined
+  );
   let hydratedFilesById = $state(new Map<string, ReviewDiffTextFile>());
-  let loadedItems = new Map<string, CodeViewItem<undefined>>();
+  let loadedItems = new Map<string, CodeViewItem<ReviewDiffAnnotationMetadata>>();
 
   const resolvedLabels: ResolvedReviewDiffLabels = $derived(
     resolveReviewDiffLabels(labels)
@@ -57,7 +63,7 @@
       return hydrated?.patch === file.patch ? hydrated : file;
     })
   );
-  const items: CodeViewItem<undefined>[] = $derived(
+  const items: CodeViewItem<ReviewDiffAnnotationMetadata>[] = $derived(
     createReviewDiffItems({
       files: resolvedFiles,
       notices,
@@ -72,7 +78,9 @@
     className.length > 0 ? `${REVIEW_DIFF_CLASS} ${className}` : REVIEW_DIFF_CLASS
   );
 
-  type ReviewDiffItemContext = { item: CodeViewItem<undefined> };
+  type ReviewDiffItemContext = {
+    item: CodeViewItem<ReviewDiffAnnotationMetadata>;
+  };
 
   onMount(() => {
     if (host == null) {
@@ -80,7 +88,7 @@
     }
 
     const workerPool = acquireReviewWorkerPool();
-    const nextViewer = new CodeView<undefined>(
+    const nextViewer = new CodeView<ReviewDiffAnnotationMetadata>(
       createCodeViewOptions(),
       workerPool
     );
@@ -161,7 +169,7 @@
     viewer.render(true);
   }
 
-  function createCodeViewOptions(): CodeViewOptions<undefined> {
+  function createCodeViewOptions(): CodeViewOptions<ReviewDiffAnnotationMetadata> {
     return {
       ...codeViewOptions,
       unsafeCSS: mergeUnsafeCSS(
@@ -178,7 +186,9 @@
       renderHeaderMetadata,
     };
   }
-  function applyItems(nextItems: readonly CodeViewItem<undefined>[]): void {
+  function applyItems(
+    nextItems: readonly CodeViewItem<ReviewDiffAnnotationMetadata>[]
+  ): void {
     if (viewer == null) {
       return;
     }
@@ -368,8 +378,8 @@
   }
 
   function createLoadedItemMap(
-    nextItems: readonly CodeViewItem<undefined>[]
-  ): Map<string, CodeViewItem<undefined>> {
+    nextItems: readonly CodeViewItem<ReviewDiffAnnotationMetadata>[]
+  ): Map<string, CodeViewItem<ReviewDiffAnnotationMetadata>> {
     return new Map(nextItems.map((item) => [item.id, item]));
   }
 
