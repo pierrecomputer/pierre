@@ -27,6 +27,11 @@ export function applyDocumentChangeToLineAnnotations<T>(
 
   let changed = false;
   for (const annotation of lineAnnotations) {
+    if (annotation.side === 'deletions') {
+      nextLineAnnotations.push(annotation);
+      continue;
+    }
+
     const line = annotation.lineNumber - 1;
     if (
       deletedStartLine !== undefined &&
