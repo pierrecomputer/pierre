@@ -1,0 +1,264 @@
+::selection {
+  background-color: transparent;
+}
+
+@keyframes blinking {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+:host, /* for scroll anchor */
+[data-code], /* for editor overlay */
+[data-content] /* for wrap line measurement */ {
+  position: relative;
+}
+[data-content] {
+  background-color: transparent;
+  caret-color: var(--diffs-bg-caret);
+  outline: none;
+}
+[data-column-number] {
+  color: var(--diffs-editor-line-number-fg);
+}
+[data-column-number]:is([data-selected-line]),
+[data-gutter-buffer]:is([data-selected-line]) {
+  background-color: var(--diffs-editor-line-number-active-bg);
+  color: var(--diffs-editor-line-number-active-fg);
+}
+[data-column-number]:is([data-active]) {
+  color: var(--diffs-editor-line-number-active-fg);
+}
+[data-line] {
+  cursor: text;
+}
+[data-line]:not([data-selected-line]),
+[data-line]:not([data-selected-line]) span {
+  background-color: transparent;
+}
+[data-line]:is([data-selected-line]),
+[data-line]:is([data-selected-line]) span,
+[data-line-annotation]:is([data-selected-line]) {
+  background-color: var(--diffs-editor-line-highlight-bg);
+}
+[data-line]:is([data-line-type='change-deletion']) {
+  background-color: var(--diffs-line-bg);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Editor Overlay */
+[data-editor-overlay] {
+  display: contents;
+}
+[data-caret],
+[data-selection-range],
+[data-match-range] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 1lh;
+  line-height: var(--diffs-line-height);
+  pointer-events: none;
+}
+[data-caret] {
+  width: 2px;
+  background-color: var(
+    --diffs-bg-caret-override,
+    var(
+      --diffs-editor-cursor-fg,
+      light-dark(
+        color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg)),
+        color-mix(in lab, var(--diffs-fg) 75%, var(--diffs-bg))
+      )
+    )
+  );
+  animation: blinking 1.2s infinite;
+  animation-delay: 0.8s;
+  visibility: hidden;
+}
+[data-selection-range] {
+  z-index: -10;
+  background-color: var(--diffs-editor-selection-bg);
+}
+[data-selection-corner] {
+  width: 100%;
+  height: 100%;
+  background-color: var(--diffs-bg);
+}
+[data-match-range] {
+  background-color: var(
+    --diffs-editor-match-bg,
+    var(--diffs-editor-selection-bg)
+  );
+  z-index: -10;
+}
+[data-match-range]:not([data-focus]) {
+  background-color: var(
+    --diffs-editor-match-highlight-bg,
+    light-dark(#ff963288, #ff963266)
+  );
+}
+[data-rtl] {
+  border-top-left-radius: 3px;
+}
+[data-rtr] {
+  border-top-right-radius: 3px;
+}
+[data-rbl] {
+  border-bottom-left-radius: 3px;
+}
+[data-rbr] {
+  border-bottom-right-radius: 3px;
+}
+
+@media (width >= 480px) {
+  [data-content] {
+    caret-color: transparent;
+  }
+  [data-quick-edit] {
+    caret-color: currentColor;
+  }
+  [data-content]:focus ~ [data-editor-overlay] [data-caret] {
+    visibility: visible;
+  }
+}
+
+/* Quick Edit Widget */
+[data-quick-edit-icon] {
+  position: absolute;
+  top: 0;
+  left: -1lh;
+  z-index: 10;
+  width: 1lh;
+  height: 1lh;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in lab, var(--diffs-fg) 40%, var(--diffs-bg));
+  transition:
+    background-color 0.1s ease-in-out,
+    color 0.1s ease-in-out;
+  cursor: pointer;
+  visibility: hidden;
+}
+[data-quick-edit-icon][data-visible='true'] {
+  visibility: visible;
+}
+[data-quick-edit-icon]:hover {
+  background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
+  color: var(--diffs-fg);
+}
+[data-quick-edit] {
+  padding-inline-end: 1ch;
+}
+
+/* Search Panel Widget */
+[data-search-panel] {
+  position: sticky;
+  top: 12px;
+  z-index: 100;
+  width: fit-content;
+  min-width: 300px;
+  max-width: calc(100% - 24px);
+  margin-inline: auto 12px;
+  margin-bottom: 4px;
+  display: flex;
+  gap: 4px;
+  background-clip: padding-box;
+  background-color: color-mix(
+    in lab,
+    color-mix(in lab, var(--diffs-fg) 4%, var(--diffs-bg)),
+    transparent 40%
+  );
+  border: 1px solid color-mix(in lab, var(--diffs-fg) 15%, var(--diffs-bg));
+  padding: 6px 6px 6px 10px;
+  border-radius: 8px;
+  box-shadow: 0 0 12px 0 color-mix(in lab, var(--diffs-fg) 10%, var(--diffs-bg));
+  backdrop-filter: blur(8px);
+}
+[data-search-panel-row] {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1px;
+  width: 100%;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+}
+[data-search-panel-row] input {
+  font-size: 14px;
+  line-height: 24px;
+  width: 120px;
+  padding-inline: 4px;
+  border: none;
+  outline: none;
+  background-color: transparent;
+  color: var(--diffs-fg);
+}
+[data-search-panel-row] input::selection {
+  background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
+}
+[data-search-panel-row] [data-matches] {
+  min-width: 10ch;
+  margin-right: auto;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  padding-inline: 4px;
+  color: color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg));
+}
+[data-search-panel-row] [data-matches][data-no-matches] {
+  color: color-mix(in lab, var(--diffs-deletion-base) 90%, var(--diffs-bg));
+}
+[data-search-panel-row] svg {
+  display: block;
+  fill: currentColor;
+}
+[data-search-panel-row] [data-icon] {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  color: color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg));
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background-color 0.1s ease-in-out,
+    color 0.1s ease-in-out;
+}
+[data-search-panel-row] [data-icon='search'] {
+  width: 16px;
+  margin-right: 2px;
+  color: color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg));
+  cursor: default;
+}
+[data-search-panel-row] [data-icon][data-disabled='true'] {
+  opacity: 0.25;
+  pointer-events: none;
+}
+[data-search-panel-row] [data-icon]:not([data-icon='search']):hover {
+  background-color: color-mix(in lab, var(--diffs-fg) 6%, var(--diffs-bg));
+  color: var(--diffs-fg);
+}
+[data-search-panel-row] [data-icon][data-active='true'] {
+  background-color: color-mix(in lab, var(--diffs-fg) 10%, var(--diffs-bg));
+  color: var(--diffs-fg);
+}
+[data-search-panel-row] [data-divider] {
+  flex-shrink: 0;
+  align-self: center;
+  width: 1px;
+  height: 16px;
+  margin-inline: 8px;
+  background-color: color-mix(in lab, var(--diffs-fg) 10%, var(--diffs-bg));
+}
