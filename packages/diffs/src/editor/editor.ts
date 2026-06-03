@@ -315,6 +315,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (this.#themeStyleElement !== undefined) {
         shadowRoot.appendChild(this.#themeStyleElement);
       }
+      if (this.#spriteElement !== undefined) {
+        shadowRoot.appendChild(this.#spriteElement);
+      }
     }
 
     if (
@@ -910,17 +913,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             if (target === undefined || textDocument === undefined) {
               return;
             }
-            const columnNumber = target.dataset.columnNumber;
             const lineType = target.dataset.lineType;
+            const lineNumber = getLineNumberAttr(target, 'columnNumber');
             if (
-              columnNumber === undefined ||
+              lineNumber === undefined ||
               lineType === undefined ||
               !isLineEditable(lineType)
             ) {
-              return;
-            }
-            const lineNumber = parseInt(columnNumber, 10);
-            if (Number.isNaN(lineNumber)) {
               return;
             }
             const line = lineNumber - 1;
@@ -953,20 +952,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                     return;
                   }
 
-                  const line =
-                    target.dataset.columnNumber ?? target.dataset.line;
                   const lineType = target.dataset.lineType;
+                  const lineNumber =
+                    getLineNumberAttr(target) ??
+                    getLineNumberAttr(target, 'columnNumber');
                   if (
                     this.#isGutterMouseDown &&
                     this.#textDocument !== undefined &&
-                    line !== undefined &&
+                    lineNumber !== undefined &&
                     lineType !== undefined &&
                     isLineEditable(lineType)
                   ) {
-                    const lineNumber = parseInt(line, 10);
-                    if (Number.isNaN(lineNumber)) {
-                      return;
-                    }
                     const lineIndex = lineNumber - 1;
                     let selection: EditorSelection = {
                       start: { line: lineIndex, character: 0 },
@@ -1266,15 +1262,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         const children = parent.children;
         for (let i = children.length - 1; i >= 0; i--) {
           const child = children[i] as HTMLElement;
-          const { line, columnNumber } = child.dataset;
-          if (line === undefined && columnNumber === undefined) {
+          const lineNumber =
+            getLineNumberAttr(child) ??
+            getLineNumberAttr(child, 'columnNumber');
+          if (lineNumber === undefined) {
             continue;
           }
-          const lineIndex = parseInt(line ?? columnNumber!, 10) - 1;
-          if (Number.isNaN(lineIndex)) {
-            continue;
-          }
-          if (lineIndex < change.lineCount) {
+          if (lineNumber - 1 < change.lineCount) {
             break;
           }
           child.remove();
@@ -2432,13 +2426,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const { children } = contentElement;
       for (let i = line - startingLine; i <= children.length; i++) {
         const child = children[i] as HTMLElement | undefined;
-        const lineNumber = child?.dataset.line;
-        const lineType = child?.dataset.lineType;
+        if (child === undefined) {
+          continue;
+        }
+        const lineNumber =
+          getLineNumberAttr(child) ?? getLineNumberAttr(child, 'columnNumber');
+        const lineType = child.dataset.lineType;
         if (
           lineNumber !== undefined &&
           lineType !== undefined &&
           isLineEditable(lineType) &&
-          parseInt(lineNumber, 10) === line + 1
+          lineNumber === line + 1
         ) {
           return child;
         }
