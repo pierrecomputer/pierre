@@ -1,5 +1,6 @@
 'use client';
 
+import type { CodeViewHandle } from '@pierre/diffs/react';
 import {
   IconComment,
   IconFileTree,
@@ -46,6 +47,7 @@ import { getDiffsHubFileTreeAvailableStatuses } from '@/lib/getDiffsHubFileTreeA
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import { getDropdownThemeStyle } from '@/lib/theme/dropdownChromeStyle';
 import type {
+  CommentMetadata,
   DiffsHubDiffStats as DiffsHubDiffStatsData,
   DiffsHubFileTreeSource,
   DiffsHubSavedCommentEntry,
@@ -69,6 +71,7 @@ interface DiffsHubSidebarProps {
   source: DiffsHubFileTreeSource;
   streaming: boolean;
   themeCycle: ThemeCycleControls;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
 }
 
 export const DiffsHubSidebar = memo(function DiffsHubSidebar({
@@ -83,6 +86,7 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
   source,
   streaming,
   themeCycle,
+  viewerRef,
 }: DiffsHubSidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
   let totalCommentCount = 0;
@@ -314,7 +318,7 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
         <WorkerPoolStatus
           expanded={activeStatusPanel === 'systemMonitor'}
           onToggle={() => toggleStatusPanel('systemMonitor')}
-          scrollRef={scrollRef}
+          viewerRef={viewerRef}
           themeCycle={themeCycle}
         />
       </SidebarWrapper>
