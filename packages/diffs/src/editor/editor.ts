@@ -55,7 +55,7 @@ import {
   resolveIndentEdits,
   selectionIntersects,
 } from './selection';
-import { SVGSpriteSheet } from './sprite';
+import { createSpriteElement } from './sprite';
 import {
   getExpandedAsciiTextColumns,
   getUnicodeMeasurementOffsets,
@@ -195,14 +195,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       enableGutterUtility,
       enableLineSelection,
       expandUnchanged,
+      diffStyle,
       lineHoverHighlight,
       ...rest
     } = component.options;
+    const isDiff = Object.hasOwn(component, 'fileDiff');
     if (
       useTokenTransformer !== true ||
       enableGutterUtility === true ||
       enableLineSelection === true ||
-      (expandUnchanged !== true && Object.hasOwn(component, 'fileDiff')) ||
+      (expandUnchanged !== true && isDiff) ||
+      diffStyle === 'unified' ||
       lineHoverHighlight !== 'disabled'
     ) {
       component.setOptions({
@@ -211,6 +214,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         enableGutterUtility: false,
         enableLineSelection: false,
         expandUnchanged: true,
+        diffStyle: 'split',
         lineHoverHighlight: 'disabled',
       });
       component.rerender();
@@ -552,10 +556,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       dataset: 'editorThemeCss',
     });
 
-    const fragment = document.createElement('div');
-    fragment.innerHTML = SVGSpriteSheet;
-    const sprite = fragment.firstElementChild;
-    this.#spriteElement = sprite instanceof SVGSVGElement ? sprite : undefined;
+    this.#spriteElement = createSpriteElement();
 
     this.#overlayElement = h('div', {
       dataset: 'editorOverlay',

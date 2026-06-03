@@ -892,6 +892,7 @@ export interface DiffsComponentOptions extends BaseCodeOptions {
   enableGutterUtility?: boolean;
   enableLineSelection?: boolean;
   expandUnchanged?: boolean;
+  diffStyle?: 'unified' | 'split'; // split is default
   lineHoverHighlight?: 'disabled' | 'both' | 'number' | 'line';
 }
 

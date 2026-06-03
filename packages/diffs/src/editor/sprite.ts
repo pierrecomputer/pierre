@@ -46,6 +46,16 @@ export const SVGSpriteSheet = `<svg data-editor-icon-sprite aria-hidden="true" w
   </symbol>
 </svg>`;
 
+export const createSpriteElement = (): SVGSVGElement => {
+  const fragment = document.createElement('div');
+  fragment.innerHTML = SVGSpriteSheet;
+  const sprite = fragment.firstElementChild;
+  if (sprite === null || !(sprite instanceof SVGSVGElement)) {
+    throw new Error('Failed to create sprite element');
+  }
+  return sprite;
+};
+
 export const getEditorIconSvg = (name: SVGSpriteNames, size = 16): string =>
   `<svg width="${size}" height="${size}" aria-hidden="true" focusable="false">
 <use href="#diffs-editor-icon-${name}"></use>
