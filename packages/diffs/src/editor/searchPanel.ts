@@ -1,4 +1,5 @@
 import { isPrimaryModifier } from './platform';
+import { getEditorIconSvg, type SVGSpriteNames } from './sprite';
 import type { TextDocument } from './textDocument';
 import { h } from './utils';
 
@@ -25,7 +26,6 @@ export interface SearchPanelOptions {
 export class SearchPanelWidget {
   #container: HTMLDivElement;
   #inputElement: HTMLInputElement;
-  #closeSettingsPanelTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: SearchPanelOptions) {
     const {
@@ -140,85 +140,34 @@ export class SearchPanelWidget {
       onClose();
     };
 
-    const settingsSwitch = h('div', {
-      dataset: { icon: 'settings' },
-      title: 'Settings',
-      innerHTML: `<svg width="16" height="16" viewBox="0 0 20 20">
-        <line x1="3" y1="6" x2="10" y2="6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-        <circle cx="12.5" cy="6" r="2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></circle>
-        <line x1="15" y1="6" x2="17" y2="6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-        <line x1="17" y1="14" x2="10" y2="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-        <circle cx="7.5" cy="14" r="2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></circle>
-        <line x1="5" y1="14" x2="3" y2="14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-      </svg>
-      `,
-      onclick: () => {
-        settingsSwitch.replaceWith(settingsPanel);
-      },
-    });
-    const settingsPanel = h('div', {
-      dataset: 'settings',
-      children: [
-        h('label', {
-          dataset: 'checkbox',
-          children: [
-            h('input', {
-              type: 'checkbox',
-              checked: searchParams.caseSensitive,
-              onchange: (e: Event) => {
-                updateSearchParam(
-                  'caseSensitive',
-                  (e.target as HTMLInputElement).checked
-                );
-              },
-            }),
-            'Match Case',
-          ],
-        }),
-        h('label', {
-          dataset: 'checkbox',
-          children: [
-            h('input', {
-              type: 'checkbox',
-              checked: searchParams.wholeWord,
-              onchange: (e: Event) => {
-                updateSearchParam(
-                  'wholeWord',
-                  (e.target as HTMLInputElement).checked
-                );
-              },
-            }),
-            'Whole Word',
-          ],
-        }),
-        h('label', {
-          dataset: 'checkbox',
-          children: [
-            h('input', {
-              type: 'checkbox',
-              checked: searchParams.regex,
-              onchange: (e: Event) => {
-                updateSearchParam(
-                  'regex',
-                  (e.target as HTMLInputElement).checked
-                );
-              },
-            }),
-            'Regexp',
-          ],
-        }),
-      ],
-      onmouseleave: () => {
-        this.#closeSettingsPanelTimeout = setTimeout(() => {
-          this.#closeSettingsPanelTimeout = undefined;
-          settingsPanel.replaceWith(settingsSwitch);
-        }, 500);
-      },
-      onmouseenter: () => {
-        clearTimeout(this.#closeSettingsPanelTimeout);
-        this.#closeSettingsPanelTimeout = undefined;
-      },
-    });
+    // Builds an always-visible icon button that toggles one boolean search
+    // option (case/whole-word/regex). The button reflects its on/off state via
+    // the `data-active` attribute so the stylesheet can highlight it.
+    const makeToggle = (
+      icon: SVGSpriteNames,
+      title: string,
+      key: 'caseSensitive' | 'wholeWord' | 'regex'
+    ) => {
+      const button = h('div', {
+        dataset: { icon, active: String(searchParams[key]) },
+        title,
+        innerHTML: getEditorIconSvg(icon),
+        onclick: () => {
+          const next = !searchParams[key];
+          button.dataset.active = String(next);
+          updateSearchParam(key, next);
+        },
+      });
+      return button;
+    };
+
+    const caseSensitiveToggle = makeToggle(
+      'case',
+      'Match Case',
+      'caseSensitive'
+    );
+    const wholeWordToggle = makeToggle('whole-word', 'Whole Word', 'wholeWord');
+    const regexToggle = makeToggle('regex', 'Regexp', 'regex');
 
     this.#inputElement = h('input', {
       type: 'text',
@@ -252,21 +201,18 @@ export class SearchPanelWidget {
           children: [
             h('div', {
               dataset: { icon: 'search' },
-              innerHTML: `<svg width="16" height="16" viewBox="0 0 20 20">
-                <line x1="16.5" y1="16.5" x2="12.0355" y2="12.0355" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-                <circle cx="8.5" cy="8.5" r="5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></circle>
-              </svg>
-              `,
+              innerHTML: getEditorIconSvg('search'),
             }),
             this.#inputElement,
             matchResultElement,
+            caseSensitiveToggle,
+            wholeWordToggle,
+            regexToggle,
+            h('div', { dataset: 'divider' }),
             h('div', {
               dataset: { icon: 'arrow-up', disabled: 'true' },
               title: 'Previous',
-              innerHTML: `<svg width="14" height="14" viewBox="0 0 20 20">
-                <polyline points="12.5 3.5 6 10 12.5 16.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></polyline>
-              </svg>
-              `,
+              innerHTML: getEditorIconSvg('arrow-up'),
               onclick: () => {
                 findNextMatch(true);
               },
@@ -274,24 +220,15 @@ export class SearchPanelWidget {
             h('div', {
               dataset: { icon: 'arrow-down', disabled: 'true' },
               title: 'Next',
-              innerHTML: `<svg width="14" height="14" viewBox="0 0 20 20">
-                <polyline points="7.5 16.5 14 10 7.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></polyline>
-              </svg>
-              `,
+              innerHTML: getEditorIconSvg('arrow-down'),
               onclick: () => {
                 findNextMatch();
               },
             }),
-            h('div', { dataset: 'spacer' }),
-            settingsSwitch,
             h('div', {
               dataset: { icon: 'close' },
               title: 'Close',
-              innerHTML: `<svg width="16" height="16" viewBox="0 0 20 20">
-                <line x1="5" y1="5" x2="15" y2="15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-                <line x1="5" y1="15" x2="15" y2="5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></line>
-              </svg>
-              `,
+              innerHTML: getEditorIconSvg('close'),
               onclick: close,
             }),
           ],
@@ -317,10 +254,6 @@ export class SearchPanelWidget {
   }
 
   cleanup(): void {
-    if (this.#closeSettingsPanelTimeout !== undefined) {
-      clearTimeout(this.#closeSettingsPanelTimeout);
-      this.#closeSettingsPanelTimeout = undefined;
-    }
     this.#container.remove();
   }
 }
