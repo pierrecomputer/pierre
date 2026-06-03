@@ -212,7 +212,7 @@ export class SearchPanelWidget {
             h('div', {
               dataset: { icon: 'arrow-up', disabled: 'true' },
               title: 'Previous',
-              innerHTML: getEditorIconSvg('arrow-up', 14),
+              innerHTML: getEditorIconSvg('arrow-up'),
               onclick: () => {
                 findNextMatch(true);
               },
@@ -220,7 +220,7 @@ export class SearchPanelWidget {
             h('div', {
               dataset: { icon: 'arrow-down', disabled: 'true' },
               title: 'Next',
-              innerHTML: getEditorIconSvg('arrow-down', 14),
+              innerHTML: getEditorIconSvg('arrow-down'),
               onclick: () => {
                 findNextMatch();
               },
