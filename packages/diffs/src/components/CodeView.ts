@@ -571,6 +571,7 @@ export class CodeView<LAnnotation = undefined> {
   //   scrollTop — there is no layout-dependent destination to chase.
   private pendingScrollTarget: PendingScrollTarget | undefined;
   private pendingLayoutAnchor: ScrollAnchor | undefined;
+  private shouldFixContainerFocus = false;
 
   // Active smooth-scroll animation state. Only populated while a scrollTo
   // with `behavior: 'smooth'` is in flight; cleared on settle (position +
@@ -813,6 +814,9 @@ export class CodeView<LAnnotation = undefined> {
     this.workerManager?.subscribeToThemeChanges(this);
     this.root = root;
     this.root.style.overflowAnchor = 'none';
+    if (!this.root.hasAttribute('tabindex')) {
+      this.root.tabIndex = -1;
+    }
     this.container ??= document.createElement('div');
     // NOTE(amadeus): We can't put `size` in here or it breaks
     // Firefox's sticky headers
@@ -890,6 +894,7 @@ export class CodeView<LAnnotation = undefined> {
     this.containerHeight = -1;
     this.windowSpecs = { top: 0, bottom: 0 };
     this.pendingLayoutAnchor = undefined;
+    this.shouldFixContainerFocus = false;
     this.height = 0;
     this.scrollTop = 0;
     this.scrollPageOffset = 0;
@@ -982,6 +987,10 @@ export class CodeView<LAnnotation = undefined> {
 
   private releaseRenderedItem(item: CodeViewContextItem<LAnnotation>): void {
     const { element } = item;
+    if (element != null && this.renderedItemOwnsFocus(element)) {
+      this.shouldFixContainerFocus = true;
+    }
+
     item.instance.cleanUp(true);
     item.element = undefined;
     if (element == null) {
@@ -991,6 +1000,22 @@ export class CodeView<LAnnotation = undefined> {
     element.remove();
     this.cleanElement(element);
     this.queueElementForPool(element);
+  }
+
+  private renderedItemOwnsFocus(element: HTMLElement): boolean {
+    const { activeElement } = document;
+    return (
+      activeElement === element ||
+      element.contains(activeElement) ||
+      element.shadowRoot?.activeElement != null
+    );
+  }
+
+  private fixContainerFocus(): void {
+    if (this.shouldFixContainerFocus) {
+      this.shouldFixContainerFocus = false;
+      this.root?.focus({ preventScroll: true });
+    }
   }
 
   // Strip item-specific DOM while keeping the expensive shared shell assets
@@ -2720,6 +2745,7 @@ export class CodeView<LAnnotation = undefined> {
     this.flushManagers(updatedItems);
 
     this.validateStickyContainerHeight();
+    this.fixContainerFocus();
 
     // If we are hitting a fitPerfectly heuristic, we should queue up another
     // render to fill out content. If we are performing a scroll animation we'll
