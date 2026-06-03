@@ -47,7 +47,8 @@
 [data-line-annotation]:is([data-selected-line]) {
   background-color: var(--diffs-editor-line-highlight-bg);
 }
-[data-line]:is([data-line-type='change-deletion']) {
+[data-line]:is([data-line-type='change-deletion']),
+[data-line]:is([data-line-type='change-addition']) {
   background-color: var(--diffs-line-bg);
   -webkit-user-select: none;
   user-select: none;
