@@ -415,6 +415,7 @@
   background-repeat: repeat;
   background-size: 2px 2px;
   background-size: calc(1lh / round(1lh / 2px)) calc(1lh / round(1lh / 2px));
+  border-radius: 4px 0 0 4px;
 }
 
 /* Docs sidebar: shares mobile popover styles, adds desktop sticky overrides */
