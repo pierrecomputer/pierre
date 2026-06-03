@@ -102,9 +102,9 @@ export class EditorTokenizer {
       --diffs-editor-line-number-fg: ${gutterForeground ?? 'var(--diffs-fg-number)'};
       --diffs-editor-line-number-active-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg, var(--diffs-bg))'};
       --diffs-editor-line-number-active-fg: ${gutterActiveForeground ?? 'var(--diffs-selection-number-fg)'};
-      ${cursorForeground !== undefined ? '--diffs-editor-cursor-fg: ' + cursorForeground : ''};
-      ${findMatchBackground !== undefined ? '--diffs-editor-find-match-bg: ' + findMatchBackground : ''};
-      ${findMatchHighlightBackground !== undefined ? '--diffs-editor-find-match-highlight-bg: ' + findMatchHighlightBackground : ''};
+      ${cursorForeground !== undefined ? `--diffs-editor-cursor-fg: ${cursorForeground};` : ''}
+      ${findMatchBackground !== undefined ? `--diffs-editor-match-bg: ${findMatchBackground};` : ''}
+      ${findMatchHighlightBackground !== undefined ? `--diffs-editor-match-highlight-bg: ${findMatchHighlightBackground};` : ''}
     }`);
   };
 
