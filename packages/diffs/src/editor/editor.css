@@ -181,7 +181,7 @@
   border: 1px solid color-mix(in lab, var(--diffs-fg) 15%, var(--diffs-bg));
   padding: 6px 6px 6px 10px;
   border-radius: 8px;
-  box-shadow: 0 0 12px 0 color-mix(in lab, var(--diffs-fg) 16%, var(--diffs-bg));
+  box-shadow: 0 0 12px 0 color-mix(in lab, var(--diffs-fg) 10%, var(--diffs-bg));
   backdrop-filter: blur(8px);
 }
 [data-search-panel-row] {
@@ -196,13 +196,12 @@
 [data-search-panel-row] input {
   font-size: 14px;
   line-height: 24px;
-  min-width: 120px;
+  width: 120px;
   padding-inline: 4px;
   border: none;
   outline: none;
   background-color: transparent;
   color: var(--diffs-fg);
-  field-sizing: content;
 }
 [data-search-panel-row] input::selection {
   background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
