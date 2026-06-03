@@ -994,7 +994,8 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
-  applyLayoutChange(
+  // normally triggered by the editor when the document line count changes
+  applyDocumentChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {

@@ -892,7 +892,7 @@ export interface DiffsComponentOptions extends BaseCodeOptions {
   enableGutterUtility?: boolean;
   enableLineSelection?: boolean;
   expandUnchanged?: boolean;
-  diffStyle?: 'unified' | 'split'; // split is default
+  diffStyle?: 'unified' | 'split';
   lineHoverHighlight?: 'disabled' | 'both' | 'number' | 'line';
 }
 
@@ -909,12 +909,12 @@ export interface DiffsEditableComponent<
   LAnnotation,
 > extends DiffsBaseComponent {
   attachEditor: (editor: DiffsEditor<LAnnotation>) => () => void;
-  applyLayoutChange: (
+  applyDocumentChange: (
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     shouldUpdateBuffer?: boolean
   ) => void;
-  applyLineChange?: (
+  updateRenderCache?: (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
   ) => void;

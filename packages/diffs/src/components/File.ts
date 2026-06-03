@@ -487,28 +487,27 @@ export class File<
     };
   }
 
-  public applyLineChange(
+  public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
   ): void {
-    this.fileRenderer.applyDirtyLines(dirtyLines, themeType);
+    this.fileRenderer.updateRenderCache(dirtyLines, themeType);
   }
 
-  public applyLayoutChange(
+  // normally triggered by the editor when the document line count changes
+  public applyDocumentChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {
-    this.fileRenderer.applyLayoutChange(textDocument, newLineAnnotations);
+    this.fileRenderer.applyDocumentChange(textDocument, newLineAnnotations);
     if (
       newLineAnnotations != null &&
       newLineAnnotations !== this.lineAnnotations &&
       this.file != null
     ) {
-      this.render({
-        file: this.file,
-        renderRange: this.renderRange,
-        lineAnnotations: newLineAnnotations,
-      });
+      this.setLineAnnotations(newLineAnnotations);
+      this.fileRenderer.setLineAnnotations(this.lineAnnotations);
+      this.renderAnnotations();
     }
   }
 

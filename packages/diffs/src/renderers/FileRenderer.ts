@@ -238,7 +238,7 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
-  public applyDirtyLines(
+  public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
   ): void {
@@ -285,7 +285,8 @@ export class FileRenderer<LAnnotation = undefined> {
     this.renderCache.isDirty = true;
   }
 
-  public applyLayoutChange(
+  // normally triggered by the editor when the document line count changes
+  public applyDocumentChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {

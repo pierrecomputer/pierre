@@ -63,7 +63,14 @@ import {
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
 import { EditorTokenizer, renderLineTokens } from './tokenzier';
-import { addEventListener, debounce, extend, h, round } from './utils';
+import {
+  addEventListener,
+  debounce,
+  extend,
+  getLineNumberAttr,
+  h,
+  round,
+} from './utils';
 
 function clampDomOffset(node: Node, offset: number): number {
   if (node.nodeType === 3) {
@@ -162,7 +169,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
   ) => {
-    this.#fileInstance?.applyLineChange?.(lines, themeType);
+    this.#fileInstance?.updateRenderCache?.(lines, themeType);
     // update the view if the render range is updated by scrolling
     // and the deferred tokenized lines inside the render range
     if (
@@ -265,15 +272,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       let endLine: number | undefined;
       for (const child of contentEl.children) {
         const el = child as HTMLElement;
-        const line = el.dataset.line;
+        const lineNumber = getLineNumberAttr(el);
         const lineType = el.dataset.lineType;
-        if (line !== undefined) {
-          const lineNumber = parseInt(line, 10);
-          if (!Number.isNaN(lineNumber)) {
-            const lineIndex = lineNumber - 1;
-            startingLine ??= lineIndex;
-            endLine = lineIndex;
-          }
+        if (lineNumber !== undefined) {
+          const lineIndex = lineNumber - 1;
+          startingLine ??= lineIndex;
+          endLine = lineIndex;
         }
         if (lineType === undefined || !isLineEditable(lineType)) {
           el.contentEditable = 'false';
@@ -352,6 +356,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     if (this.#contentElement !== contentEl) {
+      if (
+        this.#contentElement !== undefined &&
+        this.#options.__debug === true
+      ) {
+        console.warn('[diffs/editor] full re-render triggered');
+      }
       this.#metrics.init(contentEl);
       this.#contentElement = extend(contentEl, {
         contentEditable: 'true',
@@ -1179,7 +1189,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     tokenizer.stopBackgroundTokenize();
 
     const t = performance.now();
-    const isFileDiff = this.#fileInstanceType === 'diff';
     const dirtyLines = tokenizer.tokenize(change, renderRange);
     const t2 = performance.now();
 
@@ -1188,55 +1197,28 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const dirtyLineIndexes = new Set<number>(dirtyLines.keys());
 
       // update line elements that have been changed in the document
-      if (isFileDiff) {
-        for (const child of children) {
-          const el = child as HTMLElement;
-          const line = el.dataset.line;
-          if (line !== undefined) {
-            const lineNumber = parseInt(line, 10);
-            if (!Number.isNaN(lineNumber)) {
-              const lineIndex = lineNumber - 1;
-              const tokens = dirtyLines.get(lineIndex);
-              if (tokens !== undefined) {
-                el.replaceChildren(
-                  ...renderLineTokens(tokens, tokenizer.themeType)
-                );
-                dirtyLineIndexes.delete(lineIndex);
-                if (dirtyLineIndexes.size === 0) {
-                  break;
-                }
-              }
-            }
-          }
-        }
-      } else {
-        const startingLine = renderRange?.startingLine ?? 0;
-        for (
-          let i = change.startLine - startingLine;
-          i < children.length;
-          i++
-        ) {
-          const child = children[i] as HTMLElement | undefined;
-          if (child !== undefined && child.dataset.line !== undefined) {
-            const lineNumber = parseInt(child.dataset.line, 10);
-            if (!Number.isNaN(lineNumber)) {
-              const lineIndex = lineNumber - 1;
-              if (dirtyLines.has(lineIndex)) {
-                const tokens = dirtyLines.get(lineIndex)!;
-                child.replaceChildren(
-                  ...renderLineTokens(tokens, tokenizer.themeType)
-                );
-                dirtyLineIndexes.delete(lineIndex);
-                if (dirtyLineIndexes.size === 0) {
-                  break;
-                }
+      const startingLine = renderRange?.startingLine ?? 0;
+      for (let i = change.startLine - startingLine; i < children.length; i++) {
+        const child = children[i] as HTMLElement | undefined;
+        if (child !== undefined) {
+          const lineNumber = getLineNumberAttr(child);
+          if (lineNumber !== undefined) {
+            const lineIndex = lineNumber - 1;
+            if (dirtyLines.has(lineIndex)) {
+              const tokens = dirtyLines.get(lineIndex)!;
+              child.replaceChildren(
+                ...renderLineTokens(tokens, tokenizer.themeType)
+              );
+              dirtyLineIndexes.delete(lineIndex);
+              if (dirtyLineIndexes.size === 0) {
+                break;
               }
             }
           }
         }
       }
 
-      // create new line elements for new lines
+      // create new line elements for the new lines
       if (dirtyLineIndexes.size > 0) {
         for (const lineIndex of dirtyLineIndexes) {
           const tokens = dirtyLines.get(lineIndex)!;
@@ -1280,22 +1262,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     // remove line elements that have been deleted in the document
     if (change.lineDelta < 0) {
-      for (const parent of [contentEl, gutterEl]) {
+      for (const parent of [gutterEl, contentEl]) {
         const children = parent.children;
         for (let i = children.length - 1; i >= 0; i--) {
           const child = children[i] as HTMLElement;
-          const { line, columnNumber, lineAnnotation } = child.dataset;
-          if (
-            line === undefined &&
-            columnNumber === undefined &&
-            lineAnnotation === undefined
-          ) {
+          const { line, columnNumber } = child.dataset;
+          if (line === undefined && columnNumber === undefined) {
             continue;
           }
-          const lineIndex =
-            lineAnnotation !== undefined
-              ? parseInt(lineAnnotation.split(',')[1], 10)
-              : parseInt(line ?? columnNumber!, 10) - 1;
+          const lineIndex = parseInt(line ?? columnNumber!, 10) - 1;
           if (Number.isNaN(lineIndex)) {
             continue;
           }
@@ -1307,15 +1282,69 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
+    if (newLineAnnotations !== undefined) {
+      const lineAnnotationIndexes = new Set<number>(
+        newLineAnnotations.map((annotation) => annotation.lineNumber)
+      );
+
+      // remove all previous line annotation buffer/slot element
+      for (const parent of [gutterEl, contentEl]) {
+        for (const el of parent.children) {
+          const child = el as HTMLElement;
+          const { gutterBuffer, lineAnnotation } = child.dataset;
+          if (gutterBuffer === 'annotation' || lineAnnotation !== undefined) {
+            el.remove();
+          }
+        }
+      }
+      for (const el of gutterEl.children) {
+        const lineNumber = getLineNumberAttr(el as HTMLElement, 'columnNumber');
+        if (lineNumber !== undefined && lineAnnotationIndexes.has(lineNumber)) {
+          const bufferEl = h('div', {
+            dataset: {
+              gutterBuffer: 'annotation',
+              bufferSize: '1',
+            },
+            style: {
+              gridRow: 'span 1',
+            },
+          });
+          el.after(bufferEl);
+        }
+      }
+      for (const el of contentEl.children) {
+        const lineNumber = getLineNumberAttr(el as HTMLElement);
+        if (lineNumber !== undefined && lineAnnotationIndexes.has(lineNumber)) {
+          const lineEl = h('div', {
+            dataset: {
+              lineAnnotation: '0,' + lineNumber,
+            },
+            children: [
+              h('div', {
+                dataset: 'annotationContent',
+                children: [
+                  h('slot', {
+                    name: 'annotation-' + lineNumber,
+                  }),
+                ],
+              }),
+            ],
+          });
+          el.after(lineEl);
+        }
+      }
+      this.#lineAnnotations = newLineAnnotations;
+    }
+
     // fix grid layout
     if (change.lineDelta !== 0) {
       gutterEl.style.gridRow = 'span ' + gutterEl.children.length;
       contentEl.style.gridRow = 'span ' + contentEl.children.length;
     }
 
-    component.applyLineChange?.(dirtyLines, tokenizer.themeType);
-    if (change.lineDelta !== 0 || isFileDiff) {
-      component.applyLayoutChange(
+    component.updateRenderCache?.(dirtyLines, tokenizer.themeType);
+    if (change.lineDelta !== 0 || this.#fileInstanceType === 'diff') {
+      component.applyDocumentChange(
         textDocument,
         newLineAnnotations,
         shouldUpdateBuffer
@@ -1325,7 +1354,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // if in advanced(diff) mode, we don't need to tokenize the rest line in the background
     // ideally we should tokenize the rest line in the background,
     // but currently we just call the `rerender` method of the diff component
-    if (isFileDiff) {
+    if (this.#fileInstanceType === 'diff') {
       this.#tokenizer?.stopBackgroundTokenize();
     }
 
