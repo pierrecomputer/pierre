@@ -4,6 +4,7 @@ import { Editor } from '@pierre/diffs/editor';
 import { EditorProvider, MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import { IconRefresh } from '@pierre/icons';
+import Link from 'next/link';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { LIVE_EDITOR_NEW_FILE } from './constants';
@@ -124,8 +125,11 @@ export function LiveEditor({ prerenderedDiff }: LiveEditorProps) {
           <>
             Editor mode (experimental) makes any code surface—<code>File</code>{' '}
             or <code>FileDiff</code>—editable in place. Start typing in the code
-            below and it updates as you edit. Select text to try the custom
-            Quick Edit action.
+            below and it updates as you edit. Select text to try the custom{' '}
+            <Link href="/docs#editor-quick-edit" className="inline-link">
+              Quick Edit
+            </Link>{' '}
+            action.
           </>
         }
       />
