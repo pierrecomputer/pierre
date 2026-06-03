@@ -642,8 +642,8 @@ export function getCaretPosition(selection: EditorSelection): Position {
 export function isLineEditable(lineType: string): boolean {
   return (
     lineType === 'context' ||
-    lineType === 'change-addition' ||
-    lineType === 'context-expanded'
+    lineType === 'context-expanded' ||
+    lineType === 'change-addition'
   );
 }
 

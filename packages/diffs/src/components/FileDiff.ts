@@ -56,6 +56,7 @@ import { areHunkDataEqual } from '../utils/areHunkDataEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
+import { cleanLastNewline } from '../utils/cleanLastNewline';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
@@ -944,7 +945,6 @@ export class FileDiff<
         void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
           editor.syncToRenderedView(
             highlighter,
-            'diff',
             fileContainer,
             file,
             this.lineAnnotations,
@@ -1005,30 +1005,7 @@ export class FileDiff<
     ) {
       this.setLineAnnotations(newLineAnnotations);
       this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
-    }
-
-    const deletionFile = this.getDeletionFile();
-    if (deletionFile != null) {
-      const { name, lang } = deletionFile;
-      const newFile = {
-        name,
-        lang,
-        cacheKey: name + '-' + Date.now(),
-      } as FileContents;
-      Object.defineProperty(newFile, 'contents', {
-        get: () => textDocument.getText(),
-      });
-      if (this.rerenderTimeout !== undefined) {
-        clearTimeout(this.rerenderTimeout);
-      }
-      this.rerenderTimeout = setTimeout(() => {
-        this.fileDiff = parseDiffFromFile(
-          deletionFile,
-          newFile,
-          this.options.parseDiffOptions
-        );
-        this.hunksRenderer.renderDiff(this.fileDiff, this.renderRange);
-      }, 500);
+      this.renderAnnotations();
     }
   }
 
@@ -1040,7 +1017,6 @@ export class FileDiff<
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
         editor.syncToRenderedView(
           highlighter,
-          'diff',
           fileContainer,
           file,
           this.lineAnnotations,
@@ -1054,25 +1030,26 @@ export class FileDiff<
     };
   }
 
-  private getDeletionFile(): FileContents | undefined {
-    if (this.deletionFile != null) {
-      return this.deletionFile;
-    }
-    const fileDiff = this.fileDiff;
-    if (fileDiff != null && !fileDiff.isPartial) {
-      const { name, lang, cacheKey } = fileDiff;
-      const file = {
-        name,
-        lang,
-        cacheKey,
-      } as FileContents;
-      Object.defineProperty(file, 'contents', {
-        get: () => fileDiff.deletionLines.join(''),
-      });
-      return file;
-    }
-    return undefined;
-  }
+  // private getDeletionFile(): FileContents | undefined {
+  //   if (this.deletionFile != null) {
+  //     return this.deletionFile;
+  //   }
+  //   const fileDiff = this.fileDiff;
+  //   if (fileDiff != null && !fileDiff.isPartial) {
+  //     const { name, lang, cacheKey } = fileDiff;
+  //     const file = {
+  //       name,
+  //       lang,
+  //       cacheKey,
+  //     } as FileContents;
+  //     Object.defineProperty(file, 'contents', {
+  //       get: () => cleanLastNewline(fileDiff.deletionLines.join('')),
+  //     });
+  //     this.deletionFile = file;
+  //     return file;
+  //   }
+  //   return undefined;
+  // }
 
   private getAdditionFile(): FileContents | undefined {
     if (this.additionFile != null) {
@@ -1087,8 +1064,9 @@ export class FileDiff<
         cacheKey,
       } as FileContents;
       Object.defineProperty(file, 'contents', {
-        get: () => fileDiff.additionLines.join(''),
+        get: () => cleanLastNewline(fileDiff.additionLines.join('')),
       });
+      this.additionFile = file;
       return file;
     }
     return undefined;

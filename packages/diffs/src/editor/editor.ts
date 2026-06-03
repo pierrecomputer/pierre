@@ -112,7 +112,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   // file
   #fileInstance?: DiffsEditableComponent<LAnnotation>;
-  #fileInstanceType?: 'file' | 'diff';
   #fileContents?: FileContents;
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
@@ -124,7 +123,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #contentWidthCache?: number;
   #lineYCache = new Map<number, number>();
   #wrapLineOffsetsCache = new Map<number, Uint32Array>();
-  #lastCharX?: [line: number, character: number, x: number, wrapLine: number];
+  #lastAccessedLineElement?: [number, HTMLElement];
+  #lastAccessedCharX?: [
+    line: number,
+    character: number,
+    x: number,
+    wrapLine: number,
+  ];
 
   // dom
   #globalStyleElement?: HTMLStyleElement;
@@ -234,7 +239,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   syncToRenderedView(
     highlighter: DiffsHighlighter,
-    fileInstanceType: 'file' | 'diff',
     fileContainer: HTMLElement,
     fileContents: FileContents,
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
@@ -261,42 +265,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    this.#fileInstanceType = fileInstanceType;
     this.#wrap = this.#fileInstance?.options.overflow === 'wrap';
-
-    if (
-      fileInstanceType === 'diff' ||
-      (lineAnnotations !== undefined && lineAnnotations.length > 0)
-    ) {
-      let startingLine: number | undefined;
-      let endLine: number | undefined;
-      for (const child of contentEl.children) {
-        const el = child as HTMLElement;
-        const lineNumber = getLineNumberAttr(el);
-        const lineType = el.dataset.lineType;
-        if (lineNumber !== undefined) {
-          const lineIndex = lineNumber - 1;
-          startingLine ??= lineIndex;
-          endLine = lineIndex;
-        }
-        if (lineType === undefined || !isLineEditable(lineType)) {
-          el.contentEditable = 'false';
-        }
-      }
-      if (endLine !== undefined && renderRange !== undefined) {
-        const { startingLine, totalLines } = renderRange;
-        endLine = Math.max(endLine, startingLine + totalLines);
-      }
-      // normalize the render range
-      if (startingLine !== undefined && endLine !== undefined) {
-        renderRange = {
-          startingLine: startingLine,
-          totalLines: endLine - startingLine,
-          bufferBefore: 0,
-          bufferAfter: 0,
-        };
-      }
-    }
 
     // inject editor&theme style to the file container
     if (this.#fileContainer !== fileContainer) {
@@ -316,7 +285,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         shadowRoot.appendChild(this.#themeStyleElement);
       }
       if (this.#spriteElement !== undefined) {
-        shadowRoot.appendChild(this.#spriteElement);
+        shadowRoot.prepend(this.#spriteElement);
       }
     }
 
@@ -363,7 +332,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#contentElement !== undefined &&
         this.#options.__debug === true
       ) {
-        console.warn('[diffs/editor] full re-render triggered');
+        console.log('[diffs/editor] full re-render triggered !!!');
       }
       this.#metrics.init(contentEl);
       this.#contentElement = extend(contentEl, {
@@ -384,7 +353,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#lineYCache.clear();
     this.#wrapLineOffsetsCache.clear();
-    this.#lastCharX = undefined;
+    this.#lastAccessedLineElement = undefined;
+    this.#lastAccessedCharX = undefined;
 
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
@@ -419,9 +389,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#scrollingToLineChar,
         this.#scrollingToLineNoFocus
       );
-      this.#scrollingToLine = undefined;
-      this.#scrollingToLineChar = undefined;
-      this.#scrollingToLineNoFocus = false;
     } else if (
       this.#selections !== undefined &&
       this.#selections.length > 0 &&
@@ -514,7 +481,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#contentWidthCache = undefined;
     this.#lineYCache.clear();
     this.#wrapLineOffsetsCache.clear();
-    this.#lastCharX = undefined;
+    this.#lastAccessedLineElement = undefined;
+    this.#lastAccessedCharX = undefined;
 
     this.#globalStyleElement?.remove();
     this.#globalStyleElement = undefined;
@@ -1145,7 +1113,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    this.#lastCharX = undefined;
+    this.#lastAccessedLineElement = undefined;
+    this.#lastAccessedCharX = undefined;
     if (contentWidthChanged && (this.#wrap || lineAnnotations > 0)) {
       this.#lineYCache.clear();
       this.#wrapLineOffsetsCache.clear();
@@ -1337,19 +1306,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     component.updateRenderCache?.(dirtyLines, tokenizer.themeType);
-    if (change.lineDelta !== 0 || this.#fileInstanceType === 'diff') {
+    if (change.lineDelta !== 0) {
       component.applyDocumentChange(
         textDocument,
         newLineAnnotations,
         shouldUpdateBuffer
       );
-    }
-
-    // if in advanced(diff) mode, we don't need to tokenize the rest line in the background
-    // ideally we should tokenize the rest line in the background,
-    // but currently we just call the `rerender` method of the diff component
-    if (this.#fileInstanceType === 'diff') {
-      this.#tokenizer?.stopBackgroundTokenize();
     }
 
     if (this.#options.__debug === true) {
@@ -1595,22 +1557,50 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (!noFocus) {
         this.#focus({ line, character: char });
       }
+      this.#scrollingToLine = undefined;
+      this.#scrollingToLineChar = undefined;
+      this.#scrollingToLineNoFocus = false;
     }
     // if the line is not rendered yet(virtualized), scroll to the approximate
     // line position to trigger the line to be rendered, then recall this function
     // to ensure the line is scrolled into view
     else {
+      let yFix = 0;
+      if (
+        this.#scrollingToLine === line &&
+        this.#contentElement !== undefined
+      ) {
+        for (let i = this.#contentElement.childElementCount - 1; i >= 0; i--) {
+          const child = this.#contentElement.children[i] as HTMLElement;
+          const lineType = child.dataset.lineType;
+          const lineNumber = getLineNumberAttr(child);
+          if (
+            lineType !== undefined &&
+            isLineEditable(lineType) &&
+            lineNumber !== undefined
+          ) {
+            yFix = (line - lineNumber) * this.#metrics.lineHeight;
+            break;
+          }
+        }
+      }
       const lineAnnotations = (this.#lineAnnotations ?? []).filter(
         (annotation) => annotation.lineNumber < line
       ).length;
       const approximateLineY =
-        (lineAnnotations + line) * this.#metrics.lineHeight;
+        (lineAnnotations + line) * this.#metrics.lineHeight + yFix;
       virtualCaret.style.top = approximateLineY + 'px';
       this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
-      this.#scrollingToLine = line;
-      this.#scrollingToLineChar = char;
-      this.#scrollingToLineNoFocus = noFocus;
       virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
+      if (this.#scrollingToLine === line && yFix === 0) {
+        this.#scrollingToLine = undefined;
+        this.#scrollingToLineChar = undefined;
+        this.#scrollingToLineNoFocus = false;
+      } else {
+        this.#scrollingToLine = line;
+        this.#scrollingToLineChar = char;
+        this.#scrollingToLineNoFocus = noFocus;
+      }
     }
     virtualCaret.remove();
   }
@@ -2351,7 +2341,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
       }
     }
-    this.#lastCharX = undefined;
+    this.#lastAccessedCharX = undefined;
 
     let renderRange = this.#renderRange;
     let shouldUpdateBuffer: boolean | undefined;
@@ -2416,44 +2406,56 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #getLineElement(line: number): HTMLElement | undefined {
+    const lastAccessed = this.#lastAccessedLineElement;
+    if (lastAccessed !== undefined && lastAccessed[0] === line) {
+      return lastAccessed[1];
+    }
+
     const contentElement = this.#contentElement;
     if (contentElement === undefined) {
       return undefined;
     }
-    // check if the line is within the render range
-    if (this.#renderRange !== undefined && this.#fileInstanceType === 'file') {
+
+    let lineElement: HTMLElement | null = null;
+
+    // check if the line is within the render range (fast)
+    if (this.#renderRange !== undefined) {
       const { startingLine } = this.#renderRange;
       const { children } = contentElement;
       for (let i = line - startingLine; i <= children.length; i++) {
         const child = children[i] as HTMLElement | undefined;
         if (child === undefined) {
-          continue;
+          break;
         }
-        const lineNumber =
-          getLineNumberAttr(child) ?? getLineNumberAttr(child, 'columnNumber');
+        const lineNumber = getLineNumberAttr(child);
         const lineType = child.dataset.lineType;
         if (
           lineNumber !== undefined &&
+          lineNumber === line + 1 &&
           lineType !== undefined &&
-          isLineEditable(lineType) &&
-          lineNumber === line + 1
+          isLineEditable(lineType)
         ) {
-          return child;
+          lineElement = child;
+          break;
         }
       }
     }
-    // fallback to query selector (ignoring `change-deletion` lines)
-    if (this.#fileInstanceType === 'diff') {
-      return (
-        contentElement.querySelector<HTMLElement>(
-          `[data-line="${line + 1}"]:not([data-line-type="change-deletion"])`
-        ) ?? undefined
+
+    // fallback to query selector
+    lineElement ??= contentElement.querySelector<HTMLElement>(
+        `[data-line="${line + 1}"]`
       );
+
+    if (lineElement !== null) {
+      if (lastAccessed !== undefined) {
+        lastAccessed[0] = line;
+        lastAccessed[1] = lineElement;
+      } else {
+        this.#lastAccessedLineElement = [line, lineElement];
+      }
+      return lineElement;
     }
-    return (
-      contentElement.querySelector<HTMLElement>(`[data-line="${line + 1}"]`) ??
-      undefined
-    );
+    return undefined;
   }
 
   #getGutterWidth(): number {
@@ -2535,11 +2537,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // visual line index so carets can be placed on the correct row.
   #getCharX(line: number, char: number): [x: number, wrapLine: number] {
     if (
-      this.#lastCharX !== undefined &&
-      this.#lastCharX[0] === line &&
-      this.#lastCharX[1] === char
+      this.#lastAccessedCharX !== undefined &&
+      this.#lastAccessedCharX[0] === line &&
+      this.#lastAccessedCharX[1] === char
     ) {
-      return [this.#lastCharX[2], this.#lastCharX[3]];
+      return [this.#lastAccessedCharX[2], this.#lastAccessedCharX[3]];
     }
 
     const lineText = this.#textDocument?.getLineText(line);
@@ -2597,13 +2599,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    if (this.#lastCharX !== undefined) {
-      this.#lastCharX[0] = line;
-      this.#lastCharX[1] = char;
-      this.#lastCharX[2] = left;
-      this.#lastCharX[3] = wrapLine;
+    if (this.#lastAccessedCharX !== undefined) {
+      this.#lastAccessedCharX[0] = line;
+      this.#lastAccessedCharX[1] = char;
+      this.#lastAccessedCharX[2] = left;
+      this.#lastAccessedCharX[3] = wrapLine;
     } else {
-      this.#lastCharX = [line, char, left, wrapLine];
+      this.#lastAccessedCharX = [line, char, left, wrapLine];
     }
 
     return [left, wrapLine];

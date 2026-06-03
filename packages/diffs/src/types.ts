@@ -923,7 +923,6 @@ export interface DiffsEditableComponent<
 export interface DiffsEditor<LAnnotation> {
   syncToRenderedView(
     highlighter: DiffsHighlighter,
-    fileInstanceType: 'file' | 'diff',
     fileContainer: HTMLElement,
     fileContents: FileContents,
     lineAnnotations:

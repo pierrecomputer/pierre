@@ -473,7 +473,6 @@ export class File<
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
         editor.syncToRenderedView(
           highlighter,
-          'file',
           fileContainer,
           file,
           this.lineAnnotations,
@@ -663,7 +662,6 @@ export class File<
         void this.fileRenderer.initializeHighlighter().then((highlighter) => {
           editor.syncToRenderedView(
             highlighter,
-            'file',
             fileContainer,
             file,
             this.lineAnnotations,
