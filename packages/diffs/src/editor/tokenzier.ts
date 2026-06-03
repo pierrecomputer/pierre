@@ -44,7 +44,7 @@ export class EditorTokenizer {
   #disposes?: (() => void)[];
 
   // state
-  #stateStackCache: StateStack[] = [INITIAL];
+  #stateStack: StateStack[] = [INITIAL]; // cached state stack by line index
   #lastLine: number = -1;
   #isStopped: boolean = true;
   #isPaused: boolean = false;
@@ -53,7 +53,7 @@ export class EditorTokenizer {
   #backgroundChangedRangeIndex: number = 0;
   #isMessageListenerAttached: boolean = false;
 
-  #prebuildStateStackMap = debounce(async (renderRange?: RenderRange) => {
+  #prebuildStateStack = debounce(async (renderRange?: RenderRange) => {
     const { startingLine = 0, totalLines = Infinity } = renderRange ?? {};
     const endLine = Math.min(
       totalLines === Infinity ? Infinity : startingLine + totalLines,
@@ -65,7 +65,7 @@ export class EditorTokenizer {
         this.#textDocument.languageId
       );
     }
-    this.#buildStateStackMap(endLine);
+    this.#buildStateStack(endLine);
   }, 500);
 
   #onMessage = ({ data }: MessageEvent<unknown>) => {
@@ -154,7 +154,7 @@ export class EditorTokenizer {
     this.#themeType = themeType;
     this.#setTheme(themeName);
     this.stopBackgroundTokenize();
-    this.#stateStackCache = [INITIAL];
+    this.#stateStack = [INITIAL];
     if (this.#grammar !== undefined && this.#textDocument.lineCount > 0) {
       this.#scheduleBackgroundTokenize(0);
     }
@@ -238,14 +238,14 @@ export class EditorTokenizer {
       offscreenSyncEnd >= dirtyStart &&
       (canReuseCachedStates || change.lineDelta < 0);
     if (canReuseCachedStates) {
-      this.#buildStateStackMap(dirtyStart);
+      this.#buildStateStack(dirtyStart);
     } else {
-      this.#stateStackCache.length = Math.min(
-        this.#stateStackCache.length,
+      this.#stateStack.length = Math.min(
+        this.#stateStack.length,
         dirtyStart + 1
       );
       if (renderRange === undefined || dirtyStart >= viewStart) {
-        this.#buildStateStackMap(viewStart);
+        this.#buildStateStack(viewStart);
       }
     }
 
@@ -256,7 +256,7 @@ export class EditorTokenizer {
     let line = canReuseCachedStates
       ? changedLineRanges[changedRangeIndex][0]
       : viewStart;
-    let state = this.#stateStackCache[line] ?? INITIAL;
+    let state = this.#stateStack[line] ?? INITIAL;
     let settled = false;
     const dirtyLines: Map<number, Array<HighlightedToken>> = new Map();
     const offscreenDirtyLines:
@@ -269,25 +269,25 @@ export class EditorTokenizer {
         renderRangeEndLine
       );
       if (offscreenEnd > dirtyStart) {
-        this.#buildStateStackMap(offscreenEnd);
+        this.#buildStateStack(offscreenEnd);
         let offscreenLine = dirtyStart;
-        let offscreenState = this.#stateStackCache[offscreenLine] ?? INITIAL;
+        let offscreenState = this.#stateStack[offscreenLine] ?? INITIAL;
         for (; offscreenLine < offscreenEnd; offscreenLine++) {
           const resolved = this.#tokenizeLineAt(offscreenLine, offscreenState);
           offscreenState = resolved.state;
           offscreenDirtyLines.set(offscreenLine, resolved.resolvedTokens);
         }
         if (canCacheTokenizedStates) {
-          this.#stateStackCache[offscreenEnd] = offscreenState;
+          this.#stateStack[offscreenEnd] = offscreenState;
         }
       }
     }
     for (; line < renderRangeEndLine; ) {
       const previousNextState = canReuseCachedStates
-        ? this.#stateStackCache[line + 1]
+        ? this.#stateStack[line + 1]
         : undefined;
       if (canCacheTokenizedStates) {
-        this.#stateStackCache[line] = state;
+        this.#stateStack[line] = state;
       }
 
       const { resolvedTokens, state: nextState } = this.#tokenizeLineAt(
@@ -303,7 +303,7 @@ export class EditorTokenizer {
       }
 
       if (canCacheTokenizedStates) {
-        this.#stateStackCache[line + 1] = state;
+        this.#stateStack[line + 1] = state;
       }
       settled =
         line >= currentChangedRangeEnd &&
@@ -321,12 +321,12 @@ export class EditorTokenizer {
           backgroundChangedRangeIndex = changedRangeIndex;
           break;
         }
-        if (this.#stateStackCache[nextRange[0]] === undefined) {
+        if (this.#stateStack[nextRange[0]] === undefined) {
           currentChangedRangeEnd = nextRange[1];
           line++;
         } else {
           line = nextRange[0];
-          state = this.#stateStackCache[line] ?? state;
+          state = this.#stateStack[line] ?? state;
           currentChangedRangeEnd = nextRange[1];
         }
         settled = false;
@@ -337,9 +337,9 @@ export class EditorTokenizer {
 
     if (canCacheTokenizedStates) {
       if (line < renderRangeEndLine) {
-        this.#stateStackCache[line + 1] = state;
+        this.#stateStack[line + 1] = state;
       } else {
-        this.#stateStackCache[line] = state;
+        this.#stateStack[line] = state;
       }
     }
 
@@ -370,8 +370,8 @@ export class EditorTokenizer {
     return dirtyLines;
   }
 
-  prebuildStateStackMap(renderRange?: RenderRange): void {
-    this.#prebuildStateStackMap(renderRange);
+  prebuildStateStack(renderRange?: RenderRange): void {
+    this.#prebuildStateStack(renderRange);
   }
 
   stopBackgroundTokenize(): void {
@@ -492,21 +492,18 @@ export class EditorTokenizer {
     };
   }
 
-  #buildStateStackMap(endAt: number) {
+  #buildStateStack(endAt: number) {
     const boundedEndAt = Math.min(
       Math.max(0, endAt),
       this.#textDocument.lineCount
     );
-    if (
-      this.#stateStackCache.length > boundedEndAt ||
-      this.#grammar === undefined
-    ) {
+    if (this.#stateStack.length > boundedEndAt || this.#grammar === undefined) {
       return;
     }
-    let line = this.#stateStackCache.length - 1;
-    let state = this.#stateStackCache[line] ?? INITIAL;
+    let line = this.#stateStack.length - 1;
+    let state = this.#stateStack[line] ?? INITIAL;
     for (; line < boundedEndAt; line++) {
-      this.#stateStackCache[line] = state;
+      this.#stateStack[line] = state;
       const lineText = this.#textDocument.getLineText(line);
       if (
         lineText.length <= this.#tokenizeMaxLineLength &&
@@ -520,7 +517,7 @@ export class EditorTokenizer {
         ).ruleStack;
       }
     }
-    this.#stateStackCache[line] = state;
+    this.#stateStack[line] = state;
   }
 
   #backgroundTokenize(jobId: number) {
@@ -539,16 +536,16 @@ export class EditorTokenizer {
     const changedLineRanges = this.#backgroundChangedLineRanges;
 
     let line = this.#lastLine;
-    let state = this.#stateStackCache[line] ?? INITIAL;
+    let state = this.#stateStack[line] ?? INITIAL;
     let settled = false;
     let changedRangeIndex = this.#backgroundChangedRangeIndex;
     let currentChangedRangeEnd = changedLineRanges?.[changedRangeIndex]?.[1];
     for (; line < totalLines; ) {
-      this.#stateStackCache[line] = state;
+      this.#stateStack[line] = state;
 
       const previousNextState =
         currentChangedRangeEnd !== undefined
-          ? this.#stateStackCache[line + 1]
+          ? this.#stateStack[line + 1]
           : undefined;
       const lineText = this.#textDocument.getLineText(line);
       if (lineText.length > this.#tokenizeMaxLineLength) {
@@ -570,7 +567,7 @@ export class EditorTokenizer {
         state = ret.ruleStack;
       }
 
-      this.#stateStackCache[line + 1] = state;
+      this.#stateStack[line + 1] = state;
       settled =
         currentChangedRangeEnd !== undefined &&
         line >= currentChangedRangeEnd &&
@@ -584,11 +581,11 @@ export class EditorTokenizer {
           break;
         }
         currentChangedRangeEnd = nextRange[1];
-        if (this.#stateStackCache[nextRange[0]] === undefined) {
+        if (this.#stateStack[nextRange[0]] === undefined) {
           settled = false;
         } else {
           line = nextRange[0];
-          state = this.#stateStackCache[line] ?? state;
+          state = this.#stateStack[line] ?? state;
           settled = false;
           continue;
         }

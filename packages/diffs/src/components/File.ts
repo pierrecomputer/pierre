@@ -473,11 +473,11 @@ export class File<
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
         editor.syncToRenderedView(
           highlighter,
+          'file',
           fileContainer,
           file,
           this.lineAnnotations,
-          this.renderRange,
-          'file'
+          this.renderRange
         );
       });
     }
@@ -501,12 +501,14 @@ export class File<
     this.fileRenderer.applyLayoutChange(textDocument, newLineAnnotations);
     if (
       newLineAnnotations != null &&
-      newLineAnnotations !== this.lineAnnotations
+      newLineAnnotations !== this.lineAnnotations &&
+      this.file != null
     ) {
-      this.annotationCache.forEach(({ element }) => element.remove());
-      this.annotationCache.clear();
-      this.lineAnnotations = newLineAnnotations;
-      this.rerender();
+      this.render({
+        file: this.file,
+        renderRange: this.renderRange,
+        lineAnnotations: newLineAnnotations,
+      });
     }
   }
 
@@ -662,11 +664,11 @@ export class File<
         void this.fileRenderer.initializeHighlighter().then((highlighter) => {
           editor.syncToRenderedView(
             highlighter,
+            'file',
             fileContainer,
             file,
             this.lineAnnotations,
-            this.renderRange,
-            'file'
+            this.renderRange
           );
         });
       }

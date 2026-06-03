@@ -944,11 +944,11 @@ export class FileDiff<
         void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
           editor.syncToRenderedView(
             highlighter,
+            'diff',
             fileContainer,
             file,
             this.lineAnnotations,
-            this.renderRange,
-            'file-diff'
+            this.renderRange
           );
         });
       }
@@ -1039,11 +1039,11 @@ export class FileDiff<
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
         editor.syncToRenderedView(
           highlighter,
+          'diff',
           fileContainer,
           file,
           this.lineAnnotations,
-          this.renderRange,
-          'file-diff'
+          this.renderRange
         );
       });
     }

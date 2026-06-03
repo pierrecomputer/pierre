@@ -104,8 +104,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #detach?: () => void;
 
   // file
-  #component?: DiffsEditableComponent<LAnnotation>;
-  #componentType?: 'file' | 'file-diff';
+  #fileInstance?: DiffsEditableComponent<LAnnotation>;
+  #fileInstanceType?: 'file' | 'diff';
   #fileContents?: FileContents;
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
@@ -124,7 +124,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #editorStyleElement?: HTMLStyleElement;
   #themeStyleElement?: HTMLStyleElement;
   #spriteElement?: SVGSVGElement;
-  #componentContainer?: HTMLElement;
+  #fileContainer?: HTMLElement;
   #contentElement?: HTMLElement;
   #overlayElement?: HTMLElement;
   #primaryCaretElement?: HTMLElement;
@@ -162,7 +162,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
   ) => {
-    this.#component?.applyLineChange?.(lines, themeType);
+    this.#fileInstance?.applyLineChange?.(lines, themeType);
     // update the view if the render range is updated by scrolling
     // and the deferred tokenized lines inside the render range
     if (
@@ -215,7 +215,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       });
       component.rerender();
     }
-    this.#component = component;
+    this.#fileInstance = component;
     this.#initialize();
     this.#detach = component.attachEditor(this);
     return () => this.cleanUp();
@@ -223,11 +223,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   syncToRenderedView(
     highlighter: DiffsHighlighter,
+    fileInstanceType: 'file' | 'diff',
     fileContainer: HTMLElement,
     fileContents: FileContents,
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
-    renderRange: RenderRange | undefined,
-    componentType: 'file' | 'file-diff'
+    renderRange: RenderRange | undefined
   ): void {
     const shadowRoot = fileContainer.shadowRoot;
     if (shadowRoot == null) {
@@ -246,14 +246,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
     const contentEl = codeElement.children[1] as HTMLElement | undefined;
-    if (contentEl === undefined) {
+    if (contentEl === undefined || contentEl.dataset.content === undefined) {
       return;
     }
 
-    this.#componentType = componentType;
-    this.#wrap = this.#component?.options.overflow === 'wrap';
+    this.#fileInstanceType = fileInstanceType;
+    this.#wrap = this.#fileInstance?.options.overflow === 'wrap';
 
-    if (componentType === 'file-diff' || (lineAnnotations?.length ?? 0) > 0) {
+    if (
+      fileInstanceType === 'diff' ||
+      (lineAnnotations !== undefined && lineAnnotations.length > 0)
+    ) {
       let startingLine: number | undefined;
       let endLine: number | undefined;
       for (const child of contentEl.children) {
@@ -287,9 +290,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    // inject editor css to the file container
-    if (this.#componentContainer !== fileContainer) {
-      this.#componentContainer = fileContainer;
+    // inject editor&theme style to the file container
+    if (this.#fileContainer !== fileContainer) {
+      this.#fileContainer = fileContainer;
       const codePaddingTop = parseInt(
         getComputedStyle(codeElement).paddingTop.slice(0, -2),
         10
@@ -323,7 +326,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#tokenizer = new EditorTokenizer({
         highlighter,
         textDocument,
-        codeOptions: this.#component?.options ?? {},
+        codeOptions: this.#fileInstance?.options ?? {},
         onDeferTokenize: this.#onDeferTokenize,
         setStyle: (css) => {
           this.#themeStyleElement!.textContent = css;
@@ -333,7 +336,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#shouldIgnoreSelectionChange = false;
       this.#selectionElements?.forEach((el) => el.remove());
       this.#selectionElements?.clear();
-      this.#component?.setSelectedLines(null);
+      this.#fileInstance?.setSelectedLines(null);
       this.#selectionElements = undefined;
       this.#selections = undefined;
       this.#scrollingToLine = undefined;
@@ -368,7 +371,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
-    this.#tokenizer?.prebuildStateStackMap(renderRange);
+    this.#tokenizer?.prebuildStateStack(renderRange);
 
     if (this.#initSelections !== undefined) {
       this.setSelections(this.#initSelections);
@@ -483,8 +486,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#detach?.();
     this.#detach = undefined;
-    this.#component?.setSelectedLines(null);
-    this.#component = undefined;
+    this.#fileInstance?.setSelectedLines(null);
+    this.#fileInstance = undefined;
     this.#fileContents = undefined;
     this.#lineAnnotations = undefined;
     this.#textDocument = undefined;
@@ -504,7 +507,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#themeStyleElement = undefined;
     this.#spriteElement?.remove();
     this.#spriteElement = undefined;
-    this.#componentContainer = undefined;
+    this.#fileContainer = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
     this.#contentElement = undefined;
     this.#overlayElement?.remove();
@@ -563,7 +566,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         document,
         'selectionchange',
         () => {
-          const shadowRoot = this.#componentContainer?.shadowRoot;
+          const shadowRoot = this.#fileContainer?.shadowRoot;
           if (this.#shouldIgnoreSelectionChange || shadowRoot == null) {
             return;
           }
@@ -1153,7 +1156,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     shouldUpdateBuffer?: boolean
   ) {
     const tokenizer = this.#tokenizer;
-    const component = this.#component;
+    const component = this.#fileInstance;
     const fileContents = this.#fileContents;
     const textDocument = this.#textDocument;
     const contentEl = this.#contentElement;
@@ -1175,7 +1178,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     tokenizer.stopBackgroundTokenize();
 
     const t = performance.now();
-    const isFileDiff = this.#componentType === 'file-diff';
+    const isFileDiff = this.#fileInstanceType === 'diff';
     const dirtyLines = tokenizer.tokenize(change, renderRange);
     const t2 = performance.now();
 
@@ -1367,7 +1370,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     const gutterBuffer = this.#contentElement?.previousElementSibling;
     this.#primaryCaretElement = undefined;
-    this.#component?.setSelectedLines(null);
+    this.#fileInstance?.setSelectedLines(null);
     gutterBuffer
       ?.querySelectorAll('[data-active]')
       .forEach((el) => el.removeAttribute('data-active'));
@@ -1392,7 +1395,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#selections = normalizedSelections;
       if (isCollapsedSelection(primarySelection)) {
         const line = primarySelection.start.line + 1;
-        this.#component?.setSelectedLines({
+        this.#fileInstance?.setSelectedLines({
           start: line,
           end: line,
         });
@@ -1539,7 +1542,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // add scroll margin to the primary caret element to prevent
   // the caret from being hidden by the gutter
   #getScrollMargin() {
-    const componentTop = this.#component?.top ?? 0;
+    const componentTop = this.#fileInstance?.top ?? 0;
     const top = this.#searchPanel !== undefined ? 48 : 0;
     const start = this.#getGutterWidth() + this.#metrics.ch;
     const end = this.#metrics.ch;
@@ -1579,7 +1582,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const approximateLineY =
         (lineAnnotations + line) * this.#metrics.lineHeight;
       virtualCaret.style.top = approximateLineY + 'px';
-      this.#componentContainer?.shadowRoot?.appendChild(virtualCaret);
+      this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
       this.#scrollingToLine = line;
       this.#scrollingToLineChar = char;
       this.#scrollingToLineNoFocus = noFocus;
@@ -1980,7 +1983,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
         const textDocument = this.#textDocument;
         const renderQuickEdit = this.#options.renderQuickEdit;
-        const fileContainer = this.#componentContainer;
+        const fileContainer = this.#fileContainer;
         if (
           textDocument === undefined ||
           renderQuickEdit === undefined ||
@@ -2050,7 +2053,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     const textDocument = this.#textDocument;
     const preElement =
-      this.#componentContainer?.shadowRoot?.querySelector<HTMLElement>('pre');
+      this.#fileContainer?.shadowRoot?.querySelector<HTMLElement>('pre');
     const selections = this.#selections;
     if (textDocument === undefined || preElement == null) {
       return;
@@ -2394,7 +2397,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return undefined;
     }
     // check if the line is within the render range
-    if (this.#renderRange !== undefined && this.#componentType === 'file') {
+    if (this.#renderRange !== undefined && this.#fileInstanceType === 'file') {
       const { startingLine } = this.#renderRange;
       const { children } = contentElement;
       for (let i = line - startingLine; i <= children.length; i++) {
@@ -2412,7 +2415,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     // fallback to query selector (ignoring `change-deletion` lines)
-    if (this.#componentType === 'file-diff') {
+    if (this.#fileInstanceType === 'diff') {
       return (
         contentElement.querySelector<HTMLElement>(
           `[data-line="${line + 1}"]:not([data-line-type="change-deletion"])`
