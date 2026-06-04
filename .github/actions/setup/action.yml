@@ -1,0 +1,39 @@
+name: Set up Bun and dependencies
+description: >-
+  Install the Bun version pinned in .prototools, restore the Bun install cache,
+  and install workspace dependencies with a frozen lockfile. Shared by every CI
+  job so the toolchain version and the dependency fast-path live in one place.
+
+runs:
+  using: composite
+  steps:
+    # Single source of truth for the Bun version: the same .prototools pin proto
+    # uses locally and assert-bun-version enforces on publish. Bump it there and
+    # every CI job follows automatically — there is no per-job version to sync.
+    - name: Resolve pinned Bun version
+      id: bun-version
+      shell: bash
+      run: |
+        version=$(awk -F'"' '/^bun[[:space:]]*=/ { print $2; exit }' .prototools)
+        if [ -z "$version" ]; then
+          echo "::error::Could not read the pinned Bun version from .prototools"
+          exit 1
+        fi
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ steps.bun-version.outputs.version }}
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-bun-
+
+    - name: Install dependencies
+      shell: bash
+      run: bun install --frozen-lockfile
