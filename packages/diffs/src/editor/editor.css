@@ -46,6 +46,9 @@
 [data-line]:is([data-selected-line]) {
   background-color: var(--diffs-editor-line-highlight-bg);
 }
+[data-line]:is([data-line-type='change-deletion']) {
+  background-color: var(--diffs-line-bg);
+}
 
 /* Editor Overlay */
 [data-editor-overlay] {

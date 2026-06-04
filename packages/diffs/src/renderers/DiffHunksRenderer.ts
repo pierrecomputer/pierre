@@ -23,9 +23,11 @@ import type {
   CustomPreProperties,
   DiffLineAnnotation,
   DiffsHighlighter,
+  DiffsTextDocument,
   ExpansionDirections,
   FileDiffMetadata,
   FileHeaderRenderMode,
+  HighlightedToken,
   HunkData,
   HunkExpansionRegion,
   HunkSeparators,
@@ -40,6 +42,7 @@ import type {
 import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
+import { cleanLastNewline } from '../utils/cleanLastNewline';
 import { createAnnotationElement as createDefaultAnnotationElement } from '../utils/createAnnotationElement';
 import { createContentColumn } from '../utils/createContentColumn';
 import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
@@ -64,6 +67,7 @@ import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
+import { recomputeDiffHunks, updateDiffHunks } from '../utils/updateDiffHunks';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 
@@ -243,7 +247,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   public clearRenderCache(): void {
+    const renderCache = this.renderCache;
     this.renderCache = undefined;
+    if (
+      renderCache != null &&
+      renderCache.isDirty === true &&
+      renderCache.diff.cacheKey != null
+    ) {
+      this.workerManager?.evictDiffFromCache(renderCache.diff.cacheKey);
+    }
   }
 
   public setOptions(options: DiffHunksRendererOptions): void {
@@ -306,6 +318,128 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       map[annotation.lineNumber] = arr;
       arr.push(annotation);
     }
+  }
+
+  public updateRenderCache(
+    dirtyLines: Map<number, Array<HighlightedToken>>,
+    themeType: 'dark' | 'light'
+  ): void {
+    if (this.renderCache == null) {
+      return;
+    }
+    const { result, diff } = this.renderCache;
+    if (result == null) {
+      return;
+    }
+
+    const additionLines = result.code.additionLines;
+    const changedAdditionLines: number[] = [];
+    for (const [line, tokens] of dirtyLines) {
+      const prev = additionLines[line] as HASTElement | undefined;
+      const prevProps = prev?.properties ?? {};
+      const prevLine = diff.additionLines[line] ?? '';
+      const prevText = cleanLastNewline(prevLine);
+      const lineText = tokens.map((a) => a[2]).join('');
+      diff.additionLines[line] = applyLineTextWithNewline(prevLine, lineText);
+      if (prevText !== lineText) {
+        changedAdditionLines.push(line);
+      }
+      const lineType =
+        prevText !== lineText
+          ? 'change-addition'
+          : (prevProps['data-line-type-original'] ?? 'context');
+      additionLines[line] = {
+        type: 'element',
+        tagName: 'div',
+        properties: {
+          'data-line': prevProps['data-line'] ?? line + 1,
+          'data-line-index': prevProps['data-line-index'] ?? line,
+          'data-line-type-original':
+            prevProps['data-line-type-original'] ?? prevProps['data-line-type'],
+          'data-line-type': lineType,
+        },
+        children: tokens.map(([char, fg, text]) => {
+          if (char === 0 && fg === '') {
+            if (text === '') {
+              return {
+                type: 'element',
+                tagName: 'br',
+                properties: {},
+                children: [],
+              };
+            }
+            return { type: 'text', value: text };
+          }
+          return {
+            type: 'element',
+            tagName: 'span',
+            properties: {
+              'data-char': char,
+              style: `--diffs-token-${themeType}:${fg};`,
+            },
+            children: [{ type: 'text', value: text }],
+          };
+        }),
+      };
+    }
+
+    if (changedAdditionLines.length > 0 && !diff.isPartial) {
+      Object.assign(
+        diff,
+        updateDiffHunks(
+          diff,
+          changedAdditionLines,
+          this.options.parseDiffOptions
+        )
+      );
+    }
+
+    result.baseThemeType = themeType;
+    this.renderCache.isDirty = true;
+  }
+
+  // Normally triggered by the editor when the document line count changes.
+  public applyDocumentChange(textDocument: DiffsTextDocument): void {
+    if (this.renderCache == null) {
+      return;
+    }
+    const { diff, result } = this.renderCache;
+    if (result == null) {
+      return;
+    }
+
+    const previousLength = diff.additionLines.length;
+    const newLength = textDocument.lineCount;
+    if (previousLength === newLength) {
+      return;
+    }
+
+    const nextAdditionLines = diff.additionLines.slice(0, newLength);
+    for (let i = 0; i < newLength; i++) {
+      const prevLine = nextAdditionLines[i] ?? nextAdditionLines[i - 1] ?? '';
+      nextAdditionLines[i] = applyLineTextWithNewline(
+        prevLine,
+        textDocument.getLineText(i)
+      );
+    }
+    diff.additionLines = nextAdditionLines;
+
+    const additionLines = result.code.additionLines;
+    if (newLength < additionLines.length) {
+      additionLines.length = newLength;
+    }
+    for (let i = 0; i < newLength; i++) {
+      additionLines[i] ??= createPlainAdditionLineElement(i, textDocument);
+    }
+
+    if (!diff.isPartial) {
+      Object.assign(
+        diff,
+        recomputeDiffHunks(diff, this.options.parseDiffOptions)
+      );
+    }
+
+    this.renderCache.isDirty = true;
   }
 
   protected getUnifiedLineDecoration({
@@ -1666,6 +1800,50 @@ function withContentProperties(
       ...contentProperties,
     },
   };
+}
+
+function createPlainAdditionLineElement(
+  lineIndex: number,
+  textDocument: DiffsTextDocument
+): HASTElement {
+  return {
+    type: 'element',
+    tagName: 'div',
+    properties: {
+      'data-line': lineIndex + 1,
+      'data-line-index': lineIndex,
+      'data-line-type': 'context',
+    },
+    children: [
+      {
+        type: 'element',
+        tagName: 'span',
+        properties: {
+          'data-char': 0,
+        },
+        children: [
+          {
+            type: 'text',
+            value: textDocument.getLineText(lineIndex),
+          },
+        ],
+      },
+    ],
+  };
+}
+
+// Editor line text omits line endings; diff line arrays keep the suffix from parsing.
+function applyLineTextWithNewline(line: string, lineText: string): string {
+  if (line.endsWith('\r\n')) {
+    return lineText + '\r\n';
+  }
+  if (line.endsWith('\r')) {
+    return lineText + '\r';
+  }
+  if (line.endsWith('\n')) {
+    return lineText + '\n';
+  }
+  return lineText;
 }
 
 function isDiffMassive(

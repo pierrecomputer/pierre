@@ -297,7 +297,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#textDocument === undefined ||
       this.#fileContents === undefined ||
       this.#fileContents.name !== fileContents.name ||
-      this.#fileContents.lang !== fileContents.lang
+      this.#fileContents.lang !== fileContents.lang ||
+      this.#fileContents.contents !== fileContents.contents
     ) {
       const textDocument = new TextDocument<LAnnotation>(
         fileContents.name,

@@ -751,6 +751,9 @@ export interface RenderedDiffASTCache {
   options: RenderDiffOptions;
   result: ThemedDiffResult | undefined;
   renderRange: RenderRange | undefined;
+  /** Live addition-side text from the editor; `diff.additionLines` stays parse-time. */
+  editedAdditionLines?: string[];
+  isDirty?: boolean;
 }
 
 export interface RenderRange {
@@ -914,7 +917,7 @@ export interface DiffsEditableComponent<
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     shouldUpdateBuffer?: boolean
   ) => void;
-  updateRenderCache?: (
+  updateRenderCache: (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
   ) => void;

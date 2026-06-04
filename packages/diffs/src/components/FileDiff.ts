@@ -39,6 +39,7 @@ import type {
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
+  HighlightedToken,
   HunkData,
   HunkSeparators,
   PostRenderPhase,
@@ -992,11 +993,21 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
+  public updateRenderCache(
+    dirtyLines: Map<number, Array<HighlightedToken>>,
+    themeType: 'dark' | 'light'
+  ): void {
+    this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
+    this.rerender();
+  }
+
   // normally triggered by the editor when the document line count changes
   applyDocumentChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
+    this.hunksRenderer.applyDocumentChange(textDocument);
+    this.rerender();
     if (
       newLineAnnotations !== undefined &&
       newLineAnnotations !== this.lineAnnotations
@@ -2282,6 +2293,12 @@ export class FileDiff<
       return deletions != null || additions != null
         ? [deletions, additions]
         : undefined;
+    }
+  }
+
+  protected updateBuffers(renderRange: RenderRange): void {
+    if (this.pre != null) {
+      this.applyBuffers(this.pre, renderRange);
     }
   }
 
