@@ -14,7 +14,10 @@ import {
   resolveEditorCommandFromKeyboardEvent,
 } from './command';
 import editorCSS from './editor.css';
-import { applyDocumentChangeToLineAnnotations } from './lineAnnotations';
+import {
+  applyDocumentChangeToLineAnnotations,
+  renderLineAnnotations,
+} from './lineAnnotations';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import { type QuickEditContext, QuickEditWidget } from './quickEdit';
 import { type MatchRange, SearchPanelWidget } from './searchPanel';
@@ -137,6 +140,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #themeStyleElement?: HTMLStyleElement;
   #spriteElement?: SVGSVGElement;
   #fileContainer?: HTMLElement;
+  #gutterElement?: HTMLElement;
   #contentElement?: HTMLElement;
   #overlayElement?: HTMLElement;
   #primaryCaretElement?: HTMLElement;
@@ -251,30 +255,30 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     let codeElement: HTMLElement | undefined;
+    let gutterEl: HTMLElement | undefined;
+    let contentEl: HTMLElement | undefined;
     for (const el of shadowRoot.querySelectorAll<HTMLElement>('[data-code]')) {
       if (el.dataset.deletions === undefined) {
         codeElement = el;
+        for (const child of el.children) {
+          const el = child as HTMLElement;
+          const { gutter, content } = el.dataset;
+          if (gutter !== undefined) {
+            gutterEl = el;
+          } else if (content !== undefined) {
+            contentEl = el;
+          }
+        }
         break;
       }
     }
-    if (codeElement === undefined) {
+    if (codeElement === undefined || contentEl === undefined) {
       return;
     }
-    const contentEl = codeElement.children[1] as HTMLElement | undefined;
-    if (contentEl === undefined || contentEl.dataset.content === undefined) {
-      return;
-    }
-
-    this.#wrap = this.#fileInstance?.options.overflow === 'wrap';
 
     // inject editor&theme style to the file container
     if (this.#fileContainer !== fileContainer) {
       this.#fileContainer = fileContainer;
-      const codePaddingTop = parseInt(
-        getComputedStyle(codeElement).paddingTop.slice(0, -2),
-        10
-      );
-      this.#codePaddingTop = Number.isNaN(codePaddingTop) ? 0 : codePaddingTop;
       if (this.#globalStyleElement !== undefined) {
         fileContainer.appendChild(this.#globalStyleElement);
       }
@@ -334,7 +338,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ) {
         console.log('[diffs/editor] full re-render triggered !!!');
       }
-      this.#metrics.init(contentEl);
+      const codePaddingTop = parseInt(
+        getComputedStyle(codeElement).paddingTop.slice(0, -2),
+        10
+      );
+      this.#codePaddingTop = Number.isNaN(codePaddingTop) ? 0 : codePaddingTop;
+      this.#gutterWidthCache = undefined;
+      this.#contentWidthCache = undefined;
+      this.#gutterElement = gutterEl;
       this.#contentElement = extend(contentEl, {
         contentEditable: 'true',
         role: 'textbox',
@@ -348,7 +359,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (this.#overlayElement !== undefined) {
         contentEl.after(this.#overlayElement);
       }
-      this.#listenContentElement(contentEl);
+      this.#metrics.init(contentEl);
+      this.#listenContentElement(contentEl, gutterEl);
     }
 
     this.#lineYCache.clear();
@@ -356,6 +368,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#lastAccessedLineElement = undefined;
     this.#lastAccessedCharX = undefined;
 
+    this.#wrap = this.#fileInstance?.options.overflow === 'wrap';
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
     this.#tokenizer?.prebuildStateStack(renderRange);
@@ -491,6 +504,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#spriteElement?.remove();
     this.#spriteElement = undefined;
     this.#fileContainer = undefined;
+    this.#gutterElement = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
     this.#contentElement = undefined;
     this.#overlayElement?.remove();
@@ -673,8 +687,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     ];
   }
 
-  #listenContentElement(contentEl: HTMLElement): void {
-    const gutterEl = contentEl.previousElementSibling as HTMLElement | null;
+  #listenContentElement(contentEl: HTMLElement, gutterEl?: HTMLElement): void {
     const targetIsContentElement = (e: Event) => {
       const target = e.composedPath()[0] as HTMLElement;
       return target === contentEl || contentEl.contains(target);
@@ -864,7 +877,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         { passive: true }
       ),
     ];
-    if (gutterEl !== null && gutterEl.dataset.gutter !== undefined) {
+    if (gutterEl !== undefined) {
       this.#editorEventDisposes.push(
         addEventListener(
           gutterEl,
@@ -1131,17 +1144,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const component = this.#fileInstance;
     const fileContents = this.#fileContents;
     const textDocument = this.#textDocument;
+    const gutterEl = this.#gutterElement;
     const contentEl = this.#contentElement;
-    const gutterEl = this.#contentElement?.previousElementSibling ?? undefined;
     if (
       tokenizer === undefined ||
       component === undefined ||
       fileContents === undefined ||
       textDocument === undefined ||
-      contentEl === undefined ||
-      gutterEl === undefined ||
-      !(gutterEl instanceof HTMLElement) ||
-      gutterEl.dataset.gutter === undefined
+      contentEl === undefined
     ) {
       return;
     }
@@ -1197,34 +1207,35 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             },
             contentEl
           );
-          h(
-            'div',
-            {
-              dataset: {
-                lineType: 'context',
-                columnNumber: lineNumber,
-                lineIndex: lineIndex.toString(),
+          if (gutterEl !== undefined) {
+            h(
+              'div',
+              {
+                dataset: {
+                  lineType: 'context',
+                  columnNumber: lineNumber,
+                  lineIndex: lineIndex.toString(),
+                },
+                // oxlint-disable-next-line react/no-children-prop
+                children: [
+                  h('span', {
+                    dataset: {
+                      lineNumberContent: '',
+                    },
+                    textContent: lineNumber,
+                  }),
+                ],
               },
-              // oxlint-disable-next-line react/no-children-prop
-              children: [
-                h('span', {
-                  dataset: {
-                    lineNumberContent: '',
-                  },
-                  textContent: lineNumber,
-                }),
-              ],
-            },
-            gutterEl
-          );
+              gutterEl
+            );
+          }
         }
       }
     }
 
     // remove line elements that have been deleted in the document
     if (change.lineDelta < 0) {
-      for (const parent of [gutterEl, contentEl]) {
-        const children = parent.children;
+      for (const children of [contentEl.children, gutterEl?.children ?? []]) {
         for (let i = children.length - 1; i >= 0; i--) {
           const child = children[i] as HTMLElement;
           const lineNumber =
@@ -1241,64 +1252,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    if (newLineAnnotations !== undefined) {
-      const lineAnnotationIndexes = new Set<number>(
-        newLineAnnotations.map((annotation) => annotation.lineNumber)
-      );
-
-      // remove all previous line annotation buffer/slot element
-      for (const parent of [gutterEl, contentEl]) {
-        for (const el of parent.children) {
-          const child = el as HTMLElement;
-          const { gutterBuffer, lineAnnotation } = child.dataset;
-          if (gutterBuffer === 'annotation' || lineAnnotation !== undefined) {
-            el.remove();
-          }
-        }
-      }
-      for (const el of gutterEl.children) {
-        const lineNumber = getLineNumberAttr(el as HTMLElement, 'columnNumber');
-        if (lineNumber !== undefined && lineAnnotationIndexes.has(lineNumber)) {
-          const bufferEl = h('div', {
-            dataset: {
-              gutterBuffer: 'annotation',
-              bufferSize: '1',
-            },
-            style: {
-              gridRow: 'span 1',
-            },
-          });
-          el.after(bufferEl);
-        }
-      }
-      for (const el of contentEl.children) {
-        const lineNumber = getLineNumberAttr(el as HTMLElement);
-        if (lineNumber !== undefined && lineAnnotationIndexes.has(lineNumber)) {
-          const lineEl = h('div', {
-            dataset: {
-              lineAnnotation: '0,' + lineNumber,
-            },
-            children: [
-              h('div', {
-                dataset: 'annotationContent',
-                children: [
-                  h('slot', {
-                    name: 'annotation-' + lineNumber,
-                  }),
-                ],
-              }),
-            ],
-          });
-          el.after(lineEl);
-        }
-      }
-      this.#lineAnnotations = newLineAnnotations;
-    }
-
     // fix grid layout
     if (change.lineDelta !== 0) {
-      gutterEl.style.gridRow = 'span ' + gutterEl.children.length;
-      contentEl.style.gridRow = 'span ' + contentEl.children.length;
+      let gridRow = contentEl.children.length;
+      for (const child of contentEl.children) {
+        const { bufferSize } = (child as HTMLElement).dataset;
+        if (bufferSize !== undefined) {
+          gridRow += parseInt(bufferSize) - 1;
+        }
+      }
+      contentEl.style.gridRow = 'span ' + gridRow;
+      if (gutterEl !== undefined) {
+        gutterEl.style.gridRow = 'span ' + gridRow;
+      }
     }
 
     component.updateRenderCache?.(dirtyLines, tokenizer.themeType);
@@ -1308,6 +1274,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         newLineAnnotations,
         shouldUpdateBuffer
       );
+    }
+
+    if (newLineAnnotations !== undefined) {
+      this.#lineAnnotations = newLineAnnotations;
+      renderLineAnnotations(newLineAnnotations, contentEl, gutterEl);
     }
 
     if (this.#options.__debug === true) {
@@ -1350,10 +1321,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #updateSelections(selections: EditorSelection[]) {
     this.postponeBackgroundTokenizeToNextFrame();
 
-    const gutterBuffer = this.#contentElement?.previousElementSibling;
     this.#primaryCaretElement = undefined;
     this.#fileInstance?.setSelectedLines(null);
-    gutterBuffer
+    this.#gutterElement
       ?.querySelectorAll('[data-active]')
       .forEach((el) => el.removeAttribute('data-active'));
 
@@ -1382,9 +1352,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           end: line,
         });
       } else {
-        if (gutterBuffer !== undefined && gutterBuffer instanceof HTMLElement) {
+        if (this.#gutterElement !== undefined) {
           const pos = getCaretPosition(primarySelection);
-          gutterBuffer
+          this.#gutterElement
             .querySelector(`[data-column-number="${pos.line + 1}"]`)
             ?.setAttribute('data-active', '');
         }
@@ -2439,8 +2409,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     // fallback to query selector
     lineElement ??= contentElement.querySelector<HTMLElement>(
-        `[data-line="${line + 1}"]`
-      );
+      `[data-line="${line + 1}"]`
+    );
 
     if (lineElement !== null) {
       if (lastAccessed !== undefined) {
@@ -2455,12 +2425,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #getGutterWidth(): number {
-    const gutterElement = this.#contentElement?.previousElementSibling;
-    if (
-      gutterElement == null ||
-      !(gutterElement instanceof HTMLElement) ||
-      !gutterElement.hasAttribute('data-gutter')
-    ) {
+    if (this.#gutterElement === undefined) {
       return 0;
     }
 
@@ -2479,7 +2444,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           10
         );
       } else {
-        this.#gutterWidthCache = gutterElement.offsetWidth;
+        this.#gutterWidthCache = this.#gutterElement.offsetWidth;
       }
     }
 
