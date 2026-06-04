@@ -414,9 +414,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     if (this.#retainSearchPanelFocus) {
-      requestAnimationFrame(() => {
-        this.#searchPanel?.focus();
-      });
+      this.#searchPanel?.focus();
     }
 
     if (
@@ -988,9 +986,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = new ResizeObserver(() => {
-      requestAnimationFrame(() => {
-        this.#handleLayoutResize();
-      });
+      this.#handleLayoutResize();
     });
     this.#resizeObserver.observe(contentEl);
     this.#resizeObserver.observe(contentEl.parentElement!);
@@ -1502,6 +1498,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         end: position,
         direction: DirectionNone,
       });
+      // call focus in a request animation frame to prevent conflict with
+      // the `setBaseAndExtent` method
       requestAnimationFrame(() => {
         this.#contentElement?.focus({ preventScroll });
         // another request animation frame since the `focus` call
@@ -1511,9 +1509,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         });
       });
     } else {
-      requestAnimationFrame(() => {
-        this.#contentElement?.focus({ preventScroll });
-      });
+      this.#contentElement?.focus({ preventScroll });
     }
   }
 
@@ -2358,18 +2354,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       // re-render selection range and caret, focus to the editor to update the window selection,
       // and scroll to the crate to mock the 'contenteditable' behavior
       this.#updateSelections(selections);
+      if (this.#primaryCaretElement !== undefined) {
+        this.#primaryCaretElement.scrollIntoView({
+          block: 'nearest',
+          inline: 'nearest',
+        });
+      } else if (selections.length > 0) {
+        const pos = getCaretPosition(selections.at(-1)!);
+        this.#scrollToLine(pos.line, pos.character);
+      }
       this.focus({ preventScroll: true });
-      requestAnimationFrame(() => {
-        if (this.#primaryCaretElement !== undefined) {
-          this.#primaryCaretElement.scrollIntoView({
-            block: 'nearest',
-            inline: 'nearest',
-          });
-        } else if (selections.length > 0) {
-          const pos = getCaretPosition(selections.at(-1)!);
-          this.#scrollToLine(pos.line, pos.character);
-        }
-      });
     }
   }
 
