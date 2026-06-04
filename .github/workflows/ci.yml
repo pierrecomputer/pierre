@@ -44,10 +44,7 @@ jobs:
         with:
           name: build-output
           path: |
-            packages/diffs/dist/
-            packages/trees/dist/
-            packages/storage-elements/dist/
-            packages/storage-elements-next/dist/
+            packages/*/dist/
             apps/docs/.source/
             apps/docs/.next/
           retention-days: 1
@@ -167,14 +164,8 @@ jobs:
         with:
           name: build-output
 
-      - name: Run tests - precision-diffs
-        run: bun ws diffs test
-
-      - name: Run tests - trees
-        run: bun ws trees test
-
-      - name: Run tests - path-store
-        run: bun ws path-store test
+      - name: Run unit tests (all packages)
+        run: bun ws "packages/*" test --sequential
 
       - name: Mount Playwright browsers
         uses: useblacksmith/stickydisk@v1
