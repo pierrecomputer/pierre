@@ -498,7 +498,7 @@ export class File<
     textDocument: DiffsTextDocument,
     newLineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {
-    this.fileRenderer.applyDocumentChange(textDocument, newLineAnnotations);
+    this.fileRenderer.applyDocumentChange(textDocument);
     if (
       newLineAnnotations != null &&
       newLineAnnotations !== this.lineAnnotations &&

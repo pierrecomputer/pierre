@@ -286,10 +286,7 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   // normally triggered by the editor when the document line count changes
-  public applyDocumentChange(
-    textDocument: DiffsTextDocument,
-    newLineAnnotations?: LineAnnotation<LAnnotation>[]
-  ): void {
+  public applyDocumentChange(textDocument: DiffsTextDocument): void {
     if (this.renderCache == null) {
       return undefined;
     }
@@ -323,9 +320,6 @@ export class FileRenderer<LAnnotation = undefined> {
         });
       }
       this.renderCache.isDirty = true;
-    }
-    if (newLineAnnotations != null) {
-      this.setLineAnnotations(newLineAnnotations);
     }
     this.textDoucmentCache.set(file, textDocument);
   }
