@@ -1,10 +1,3 @@
-import {
-  type Position,
-  type ResolvedTextEdit,
-  TextDocument,
-  type TextDocumentChange,
-  type TextEdit,
-} from '../editor/textDocument';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
@@ -56,6 +49,13 @@ import {
   selectionIntersects,
 } from './selection';
 import { SVGSpriteSheet } from './sprite';
+import {
+  type Position,
+  type ResolvedTextEdit,
+  TextDocument,
+  type TextDocumentChange,
+  type TextEdit,
+} from './textDocument';
 import {
   getExpandedAsciiTextColumns,
   getUnicodeMeasurementOffsets,
@@ -694,7 +694,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #listenContentElement(contentEl: HTMLElement): void {
-    const guttterEl = contentEl.previousElementSibling as HTMLElement | null;
+    const gutterEl = contentEl.previousElementSibling as HTMLElement | null;
     const targetIsContentElement = (e: Event) => {
       const target = e.composedPath()[0] as HTMLElement;
       return target === contentEl || contentEl.contains(target);
@@ -884,10 +884,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         { passive: true }
       ),
     ];
-    if (guttterEl !== null && guttterEl.dataset.gutter !== undefined) {
+    if (gutterEl !== null && gutterEl.dataset.gutter !== undefined) {
       this.#editorEventDisposes.push(
         addEventListener(
-          guttterEl,
+          gutterEl,
           'pointerdown',
           (e) => {
             let target = e.composedPath()[0] as HTMLElement | undefined;
@@ -1504,6 +1504,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       });
       requestAnimationFrame(() => {
         this.#contentElement?.focus({ preventScroll });
+        // another request animation frame since the `focus` call
+        // may trigger a selectionchange event, which we want to ignore
         requestAnimationFrame(() => {
           this.#shouldIgnoreSelectionChange = false;
         });

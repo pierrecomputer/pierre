@@ -528,12 +528,9 @@ export class File<
       );
     }
 
-    const editor = this.editor;
-    if (editor != null) {
-      // postpone background tokenizing to next frame for avoiding UI freeze
-      // during render
-      editor.postponeBackgroundTokenizeToNextFrame();
-    }
+    // postpone background tokenizing to next frame for avoiding UI freeze
+    // during render
+    this.editor?.postponeBackgroundTokenizeToNextFrame();
 
     const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
@@ -660,6 +657,7 @@ export class File<
       this.renderAnnotations();
       this.renderGutterUtility();
 
+      const editor = this.editor;
       if (editor != null) {
         void this.fileRenderer.initializeHighlighter().then((highlighter) => {
           editor.syncToRenderedView(
