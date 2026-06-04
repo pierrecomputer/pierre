@@ -1,14 +1,18 @@
 'use client';
 
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, MultiFileDiff } from '@pierre/diffs/react';
-import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
+import { EditorProvider, File, MultiFileDiff } from '@pierre/diffs/react';
+import type {
+  PreloadedFileResult,
+  PreloadMultiFileDiffResult,
+} from '@pierre/diffs/ssr';
 import { IconRefresh } from '@pierre/icons';
 import Link from 'next/link';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { LIVE_EDITOR_NEW_FILE } from './constants';
 import { FeatureHeader } from '@/components/FeatureHeader';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { cn } from '@/lib/utils';
 
 // Largest number of undo steps we will replay on reset. The editor keeps a
@@ -31,11 +35,21 @@ function findEditorContentElement(
 
 interface LiveEditorProps {
   prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+  prerenderedFile: PreloadedFileResult<undefined>;
 }
 
-export function LiveEditor({ prerenderedDiff }: LiveEditorProps) {
+type EditorMode = 'file' | 'diff';
+
+export function LiveEditor({
+  prerenderedDiff,
+  prerenderedFile,
+}: LiveEditorProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [hasEdits, setHasEdits] = useState(false);
+  // Default to the File surface: it edits through the editor's simple mode,
+  // which has a clean 1:1 line model and avoids the diff-mode rendering
+  // glitches. Users can opt into the FileDiff surface via the toggle.
+  const [mode, setMode] = useState<EditorMode>('file');
 
   const editor = useMemo(
     () =>
@@ -115,6 +129,28 @@ export function LiveEditor({ prerenderedDiff }: LiveEditorProps) {
     setHasEdits(false);
   }, []);
 
+  // The Reset button lives in the surface header for both File and FileDiff
+  // views, so it's defined once and reused by each `renderHeaderMetadata`.
+  const renderResetButton = useCallback(
+    () => (
+      <button
+        onClick={() => void handleReset()}
+        disabled={!hasEdits}
+        title="Revert to the original contents"
+        className={cn(
+          'mr-[-6px] ml-1.5 flex items-center gap-1 rounded-md px-2 py-0.5',
+          hasEdits
+            ? 'bg-accent/30 text-white'
+            : 'text-muted-foreground/40 bg-accent/10'
+        )}
+      >
+        <IconRefresh size={12} />
+        Reset
+      </button>
+    ),
+    [handleReset, hasEdits]
+  );
+
   return (
     <div className="space-y-5">
       <FeatureHeader
@@ -134,29 +170,35 @@ export function LiveEditor({ prerenderedDiff }: LiveEditorProps) {
         }
       />
 
+      <ButtonGroup
+        value={mode}
+        onValueChange={(value) => setMode(value as EditorMode)}
+        aria-label="Editor surface"
+      >
+        {(['file', 'diff'] as const).map((value) => (
+          <ButtonGroupItem key={value} value={value} className="capitalize">
+            {value}
+          </ButtonGroupItem>
+        ))}
+      </ButtonGroup>
+
       <div ref={wrapperRef}>
         <EditorProvider editor={editor}>
-          <MultiFileDiff
-            {...prerenderedDiff}
-            className="diff-container"
-            renderHeaderMetadata={() => (
-              <button
-                onClick={() => void handleReset()}
-                disabled={!hasEdits}
-                title="Revert to the original contents"
-                className={cn(
-                  'mr-[-6px] ml-1.5 flex items-center gap-1 rounded-md px-2 py-0.5',
-                  hasEdits
-                    ? 'bg-accent/30 text-white'
-                    : 'text-muted-foreground/40 bg-accent/10'
-                )}
-              >
-                <IconRefresh size={12} />
-                Reset
-              </button>
-            )}
-            contentEditable
-          />
+          {mode === 'diff' ? (
+            <MultiFileDiff
+              {...prerenderedDiff}
+              className="diff-container"
+              renderHeaderMetadata={renderResetButton}
+              contentEditable
+            />
+          ) : (
+            <File
+              {...prerenderedFile}
+              className="diff-container"
+              renderHeaderMetadata={renderResetButton}
+              contentEditable
+            />
+          )}
         </EditorProvider>
       </div>
     </div>
