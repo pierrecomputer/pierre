@@ -15,24 +15,6 @@ import { FeatureHeader } from '@/components/FeatureHeader';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { cn } from '@/lib/utils';
 
-// Largest number of undo steps we will replay on reset. The editor keeps a
-// bounded history (100 entries), so anything past that can't be reverted
-// anyway; extra dispatches are harmless no-ops once the undo stack is empty.
-const MAX_UNDO_STEPS = 200;
-
-// Find the editor's contentEditable surface inside the rendered File. The File
-// renders into a `diffs-container` custom element with a shadow root; the editor
-// attaches its contentEditable to the (non-deletion) code content element there.
-function findEditorContentElement(
-  wrapper: HTMLElement | null
-): HTMLElement | null {
-  const host = wrapper?.querySelector('diffs-container');
-  return (
-    host?.shadowRoot?.querySelector<HTMLElement>('[contenteditable="true"]') ??
-    null
-  );
-}
-
 interface LiveEditorProps {
   prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
   prerenderedFile: PreloadedFileResult<undefined>;
@@ -44,12 +26,20 @@ export function LiveEditor({
   prerenderedDiff,
   prerenderedFile,
 }: LiveEditorProps) {
-  const wrapperRef = useRef<HTMLDivElement>(null);
   const [hasEdits, setHasEdits] = useState(false);
   // Default to the File surface: it edits through the editor's simple mode,
   // which has a clean 1:1 line model and avoids the diff-mode rendering
   // glitches. Users can opt into the FileDiff surface via the toggle.
   const [mode, setMode] = useState<EditorMode>('file');
+  // Bumping this value remounts the editable surface, which is how Reset works
+  // (see `handleReset`).
+  const [resetKey, setResetKey] = useState(0);
+  // Edits emit through the editor's debounced `onChange`. After a reset we
+  // remount the surface, but a change scheduled just before the click can still
+  // fire ~500ms later carrying the pre-reset (edited) contents, which would
+  // flip `hasEdits` back on. We drop any `onChange` inside a short window after
+  // a reset so a late straggler can't re-enable the button.
+  const ignoreChangesUntilRef = useRef(0);
 
   const editor = useMemo(
     () =>
@@ -75,58 +65,30 @@ export function LiveEditor({
         },
         // `onChange` is debounced internally, so we derive "edited" state by
         // comparing the live contents to the original rather than latching a
-        // boolean. This is what lets Reset settle the button back to disabled:
-        // after the undo replay restores the original text, the trailing
-        // debounced change reports contents equal to the original again. The
-        // editable surface of a diff is its new-file side, so we compare against
-        // that.
+        // boolean. The editable surface of a diff is its new-file side, so we
+        // compare against that.
         onChange(file) {
+          if (Date.now() < ignoreChangesUntilRef.current) {
+            return;
+          }
           setHasEdits(file.contents !== LIVE_EDITOR_NEW_FILE.contents);
         },
       }),
     []
   );
 
-  // Reset by replaying the editor's own undo history rather than remounting.
-  // We synthesize Cmd/Ctrl+Z keydown events on the content element; the editor's
-  // existing handler runs each undo through the same re-tokenize pipeline as
-  // typing, so syntax highlighting is preserved (a remount would tear down and
-  // rebuild the shared highlighter, which dropped the colors). The editor
-  // applies each undo asynchronously, so we wait a frame between steps and stop
-  // once the text stops changing (undo stack exhausted).
-  const handleReset = useCallback(async () => {
-    const contentEl = findEditorContentElement(wrapperRef.current);
-    if (contentEl == null) {
-      return;
-    }
-    const isMac = /Mac|iP(?:hone|ad|od)/i.test(navigator.platform);
-    const nextFrame = () =>
-      new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-      );
-
-    contentEl.focus();
-    for (let step = 0; step < MAX_UNDO_STEPS; step++) {
-      const before = contentEl.textContent;
-      contentEl.dispatchEvent(
-        new KeyboardEvent('keydown', {
-          key: 'z',
-          metaKey: isMac,
-          ctrlKey: !isMac,
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-        })
-      );
-      await nextFrame();
-      // Once an undo no longer changes the text, the stack is exhausted.
-      if (contentEl.textContent === before) {
-        break;
-      }
-    }
-    // Optimistically clear; the debounced onChange will confirm by comparing
-    // the restored contents to the original.
+  // Reset by remounting the editable surface. Bumping `resetKey` unmounts the
+  // current File/FileDiff — whose teardown runs the editor's detach
+  // (`editor.cleanUp()`), dropping the edited TextDocument and undo history —
+  // and mounts a fresh one that re-hydrates the original prerendered HTML and
+  // re-attaches the editor with a clean document. This reverts instantly in
+  // both modes, and editing keeps working afterward because the editor rebuilds
+  // from the now-original surface. The shared highlighter is module-global and
+  // survives the remount, so syntax colors are preserved.
+  const handleReset = useCallback(() => {
+    setResetKey((key) => key + 1);
     setHasEdits(false);
+    ignoreChangesUntilRef.current = Date.now() + 600;
   }, []);
 
   // The Reset button lives in the surface header for both File and FileDiff
@@ -134,7 +96,7 @@ export function LiveEditor({
   const renderResetButton = useCallback(
     () => (
       <button
-        onClick={() => void handleReset()}
+        onClick={handleReset}
         disabled={!hasEdits}
         title="Revert to the original contents"
         className={cn(
@@ -182,10 +144,11 @@ export function LiveEditor({
         ))}
       </ButtonGroup>
 
-      <div ref={wrapperRef}>
+      <div>
         <EditorProvider editor={editor}>
           {mode === 'diff' ? (
             <MultiFileDiff
+              key={resetKey}
               {...prerenderedDiff}
               className="diff-container"
               renderHeaderMetadata={renderResetButton}
@@ -193,6 +156,7 @@ export function LiveEditor({
             />
           ) : (
             <File
+              key={resetKey}
               {...prerenderedFile}
               className="diff-container"
               renderHeaderMetadata={renderResetButton}
