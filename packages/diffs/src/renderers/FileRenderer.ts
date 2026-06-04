@@ -134,10 +134,15 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public recycle(): void {
-    const renderCache = this.renderCache;
     this.clearRenderCache();
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
+    this.lineCache = undefined;
+  }
+
+  public clearRenderCache(): void {
+    const renderCache = this.renderCache;
+    this.renderCache = undefined;
     if (
       renderCache != null &&
       renderCache.isDirty === true &&
@@ -145,11 +150,6 @@ export class FileRenderer<LAnnotation = undefined> {
     ) {
       this.workerManager?.evictFileFromCache(renderCache.file.cacheKey);
     }
-    this.lineCache = undefined;
-  }
-
-  public clearRenderCache(): void {
-    this.renderCache = undefined;
   }
 
   public hydrate(file: FileContents): void {

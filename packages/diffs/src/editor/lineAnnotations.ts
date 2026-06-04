@@ -1,5 +1,6 @@
 import type { DiffLineAnnotation } from '../types';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { getDeletionsCode } from './diff';
 import type { TextDocumentChange } from './textDocument';
 import { getLineNumberAttr, h } from './utils';
 
@@ -82,28 +83,14 @@ export function renderLineAnnotations<LAnnotation>(
     map.get(lineNumber)!.push(getLineAnnotationName(annotation));
   }
 
-  let leftCodeElement = contentEl.parentElement?.previousElementSibling;
-  let leftGutterEl: HTMLElement | undefined;
-  let leftContentEl: HTMLElement | undefined;
-  if (
-    leftCodeElement != null &&
-    leftCodeElement instanceof HTMLElement &&
-    leftCodeElement.dataset.deletions !== undefined
-  ) {
-    for (const child of leftCodeElement.children) {
-      const el = child as HTMLElement;
-      const { gutter, content } = el.dataset;
-      if (gutter !== undefined) {
-        leftGutterEl = el;
-      } else if (content !== undefined) {
-        leftContentEl = el;
-      }
-    }
-  }
+  const deletionsCode = getDeletionsCode(contentEl);
 
   cleanLineAnnotationElements(contentEl, gutterEl);
-  if (leftContentEl !== undefined) {
-    cleanLineAnnotationElements(leftContentEl, leftGutterEl);
+  if (deletionsCode !== null) {
+    cleanLineAnnotationElements(
+      deletionsCode.contentElement,
+      deletionsCode.gutterElement
+    );
   }
 
   const addtionsAnnotationElements = createLineAnnotationElements(
@@ -111,14 +98,14 @@ export function renderLineAnnotations<LAnnotation>(
     contentEl,
     gutterEl
   );
-  if (leftContentEl === undefined) {
+  if (deletionsCode === null) {
     return;
   }
 
   const deletionsAnnotationElements = createLineAnnotationElements(
     deletionsAnnotations,
-    leftContentEl,
-    leftGutterEl
+    deletionsCode.contentElement,
+    deletionsCode.gutterElement
   );
 
   requestAnimationFrame(() => {

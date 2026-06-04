@@ -109,7 +109,7 @@ export interface TextDocumentChange {
   /** Difference between the old and new line counts. */
   readonly lineDelta: number;
   /** Exact rendered line ranges touched by each edit after the edit was applied. */
-  readonly changedLineRanges?: readonly [startLine: number, endLine: number][];
+  readonly changedLineRanges: readonly [startLine: number, endLine: number][];
 }
 
 /**
