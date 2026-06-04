@@ -754,12 +754,9 @@ export class FileDiff<
       );
     }
 
-    const editor = this.editor;
-    if (editor != null) {
-      // postpone background tokenizing to next frame for avoiding UI freeze
-      // during render
-      editor.postponeBackgroundTokenizeToNextFrame();
-    }
+    // postpone background tokenizing to next frame for avoiding UI freeze
+    // during render
+    this.editor?.postponeBackgroundTokenizeToNextFrame();
 
     const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
@@ -940,6 +937,7 @@ export class FileDiff<
         this.flushManagers();
       }
 
+      const editor = this.editor;
       const file = this.getAdditionFile();
       if (editor != null && file != null) {
         void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
