@@ -445,19 +445,29 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   protected getUnifiedLineDecoration({
     lineType,
   }: UnifiedLineDecorationProps): LineDecoration {
-    return { gutterLineType: lineType };
+    return {
+      gutterLineType: lineType,
+      contentProperties: {
+        'data-line-type': lineType,
+      },
+    };
   }
 
   protected getSplitLineDecoration({
     side,
     type,
   }: SplitLineDecorationProps): LineDecoration {
-    if (type !== 'change') {
-      return { gutterLineType: type };
-    }
+    const lineType: LineTypes =
+      type === 'change'
+        ? side === 'deletions'
+          ? 'change-deletion'
+          : 'change-addition'
+        : type;
     return {
-      gutterLineType:
-        side === 'deletions' ? 'change-deletion' : 'change-addition',
+      gutterLineType: lineType,
+      contentProperties: {
+        'data-line-type': lineType,
+      },
     };
   }
 

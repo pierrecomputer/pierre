@@ -84,6 +84,7 @@ export interface FileDiffRenderProps<LAnnotation> {
   oldFile?: FileContents;
   newFile?: FileContents;
   deferManagers?: boolean;
+  didEdit?: boolean;
   forceRender?: boolean;
   preventEmit?: boolean;
   fileContainer?: HTMLElement;
@@ -446,8 +447,13 @@ export class FileDiff<
   private canPartiallyRender(
     forceRender: boolean,
     annotationsChanged: boolean,
-    didContentChange: boolean
+    didContentChange: boolean,
+    didEdit: boolean
   ): boolean {
+    if (didEdit) {
+      // The editor has already rendered the diff, so we can avoid full-render
+      return true;
+    }
     if (
       forceRender ||
       annotationsChanged ||
@@ -740,6 +746,7 @@ export class FileDiff<
     newFile,
     fileDiff,
     deferManagers = false,
+    didEdit = false,
     forceRender = false,
     preventEmit = false,
     lineAnnotations,
@@ -777,6 +784,7 @@ export class FileDiff<
     if (
       !collapsed &&
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
+      !didEdit &&
       !forceRender &&
       !annotationsChanged &&
       !themeChanged &&
@@ -883,7 +891,8 @@ export class FileDiff<
         this.canPartiallyRender(
           forceRender,
           annotationsChanged,
-          filesDidChange || diffDidChange || themeChanged
+          filesDidChange || diffDidChange || themeChanged,
+          didEdit
         ) &&
         this.applyPartialRender({
           previousRenderRange,
@@ -926,6 +935,8 @@ export class FileDiff<
           this.pre = undefined;
         }
         this.renderSeparators(hunksResult.hunkData);
+      } else if (didEdit && nextRenderRange != null) {
+        this.updateLineType(nextRenderRange);
       }
 
       this.applyBuffers(pre, nextRenderRange);
@@ -1001,7 +1012,7 @@ export class FileDiff<
   ): void {
     this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
     if (shouldRerender === true) {
-      this.rerender();
+      this.render({ didEdit: true, renderRange: this.renderRange });
     }
   }
 
@@ -1011,6 +1022,7 @@ export class FileDiff<
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
     this.hunksRenderer.applyDocumentChange(textDocument);
+    // TODO(@ije): can we avoid full-render here?
     this.rerender();
     if (
       newLineAnnotations !== undefined &&
@@ -1890,6 +1902,69 @@ export class FileDiff<
         'FileDiff.insertPartialHTML: Invalid argument composition'
       );
     }
+  }
+
+  // Editor owns additions content; sync deletions column and both gutters to the updated diff.
+  private updateLineType(renderRange: RenderRange): void {
+    if (this.options.diffStyle === 'unified') {
+      return;
+    }
+
+    const hunksResult = this.hunksRenderer.renderDiff(
+      this.fileDiff,
+      renderRange
+    );
+    if (hunksResult == null) {
+      return;
+    }
+
+    const columns = this.getCodeColumns(
+      'split',
+      this.codeUnified,
+      this.codeDeletions,
+      this.codeAdditions
+    );
+    if (columns == null || !Array.isArray(columns)) {
+      return;
+    }
+
+    const applyLineType = (
+      type: 'deletions' | 'additions',
+      column: ColumnElements | undefined
+    ) => {
+      if (column == null) {
+        return;
+      }
+      const ast = this.hunksRenderer.renderCodeAST(type, hunksResult);
+      const gutterChildren = getElementChildren(ast?.[0]);
+      const contentChildren = getElementChildren(ast?.[1]);
+      for (const [el, astChildren] of [
+        [column.gutter, gutterChildren],
+        [column.content, contentChildren],
+      ] as const) {
+        if (
+          astChildren != null &&
+          el.childElementCount === astChildren.length
+        ) {
+          for (let i = 0; i < astChildren.length; i++) {
+            const gutterElement = el.children[i] as HTMLElement;
+            const gutterChild = astChildren[i] as HASTElement;
+            const lineType = gutterChild.properties['data-line-type'] as
+              | string
+              | undefined;
+            if (
+              lineType != null &&
+              gutterElement.dataset.lineType !== lineType
+            ) {
+              gutterElement.dataset.lineType = lineType;
+            }
+          }
+        }
+      }
+    };
+
+    applyLineType('deletions', columns[0]);
+    applyLineType('additions', columns[1]);
   }
 
   private renderPartialColumn(
