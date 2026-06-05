@@ -57,7 +57,6 @@ import { areHunkDataEqual } from '../utils/areHunkDataEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
-import { cleanLastNewline } from '../utils/cleanLastNewline';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
@@ -1078,7 +1077,7 @@ export class FileDiff<
       } as FileContents;
       Object.defineProperty(file, 'contents', {
         enumerable: true,
-        get: () => cleanLastNewline(fileDiff.additionLines.join('')),
+        get: () => fileDiff.additionLines.join(''),
       });
       this.additionFile = file;
       return file;

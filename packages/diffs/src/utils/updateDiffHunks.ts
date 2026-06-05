@@ -189,7 +189,36 @@ function reparseHunkRegion(
   }
 
   applyReparsedHunk(hunk, reparsedHunk);
+  syncHunkNoEOFCRFromFullFile(diff, hunkIndex);
   return true;
+}
+
+function syncHunkNoEOFCRFromFullFile(
+  diff: FileDiffMetadata,
+  hunkIndex: number
+): void {
+  const hunk = diff.hunks[hunkIndex];
+  if (hunk == null) {
+    return;
+  }
+
+  const isLastHunk = hunkIndex === diff.hunks.length - 1;
+  if (!isLastHunk) {
+    hunk.noEOFCRAdditions = false;
+    hunk.noEOFCRDeletions = false;
+    return;
+  }
+
+  const lastAdditionLine = diff.additionLines.at(-1);
+  const lastDeletionLine = diff.deletionLines.at(-1);
+  hunk.noEOFCRAdditions =
+    lastAdditionLine != null &&
+    lastAdditionLine !== '' &&
+    !lastAdditionLine.endsWith('\n');
+  hunk.noEOFCRDeletions =
+    lastDeletionLine != null &&
+    lastDeletionLine !== '' &&
+    !lastDeletionLine.endsWith('\n');
 }
 
 function applyReparsedHunk(target: Hunk, parsed: Hunk): void {

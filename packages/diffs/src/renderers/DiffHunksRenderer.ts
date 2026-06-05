@@ -67,6 +67,7 @@ import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
+import { splitFileContents } from '../utils/splitFileContents';
 import { recomputeDiffHunks, updateDiffHunks } from '../utils/updateDiffHunks';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
@@ -414,25 +415,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     // updateRenderCache may already have extended diff.additionLines for the
     // same edit pass, so never bail out purely on matching lengths here.
-    const newLength = textDocument.lineCount;
-    const nextAdditionLines = diff.additionLines.slice(0, newLength);
-    for (let i = 0; i < newLength; i++) {
-      const prevLine = nextAdditionLines[i] ?? nextAdditionLines[i - 1] ?? '';
-      nextAdditionLines[i] = applyLineTextWithNewline(
-        prevLine,
-        textDocument.getLineText(i)
-      );
-    }
-    diff.additionLines = nextAdditionLines;
+    diff.additionLines = splitFileContents(textDocument.getText());
+    const newLength = diff.additionLines.length;
 
     const additionHastLines = result.code.additionLines;
-    if (newLength < additionHastLines.length) {
+    const prevLen = additionHastLines.length;
+    if (newLength < prevLen) {
       additionHastLines.length = newLength;
     }
-    for (let i = 0; i < newLength; i++) {
+    for (let i = prevLen; i < newLength; i++) {
       additionHastLines[i] ??= createPlainAdditionLineElement(i, textDocument);
     }
-
     if (!diff.isPartial) {
       Object.assign(
         diff,

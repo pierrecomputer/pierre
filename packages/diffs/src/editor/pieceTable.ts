@@ -82,7 +82,9 @@ export class PieceTable {
   #piecesCache: Piece[] = [];
   #length = 0;
   #lineCount = 0;
-  #lastVisitedLine: [number, string] | null = null;
+  #lastVisitedLine:
+    | [line: number, includeLineBreak: boolean, text: string]
+    | null = null;
 
   constructor(originalText: string) {
     this.#original = new TextBuffer(originalText);
@@ -105,15 +107,19 @@ export class PieceTable {
   }
 
   getLineText(line: number, includeLineBreak = false): string {
-    if (this.#lastVisitedLine !== null && this.#lastVisitedLine[0] === line) {
-      return this.#lastVisitedLine[1];
+    if (
+      this.#lastVisitedLine !== null &&
+      this.#lastVisitedLine[0] === line &&
+      this.#lastVisitedLine[1] === includeLineBreak
+    ) {
+      return this.#lastVisitedLine[2];
     }
     const offset = this.#getLineOffset(line);
     if (offset === undefined) {
       throw new Error(`Line index out of range: ${line}`);
     }
     const text = this.getTextSlice(offset[0], offset[1], !includeLineBreak);
-    this.#lastVisitedLine = [line, text];
+    this.#lastVisitedLine = [line, includeLineBreak, text];
     return text;
   }
 

@@ -220,4 +220,22 @@ describe('updateDiffHunks', () => {
     expect(fromHelper.splitLineCount).toBe(fromParse.splitLineCount);
     expect(fromHelper.unifiedLineCount).toBe(fromParse.unifiedLineCount);
   });
+
+  test('does not mark noEOFCR on non-final hunks after incremental reparse', () => {
+    const old = 'a\n'.repeat(20) + 'old1\n' + 'b\n'.repeat(20) + 'old-final';
+    const neu = 'a\n'.repeat(20) + 'new1\n' + 'b\n'.repeat(20) + 'new-final\n';
+    const base = parseDiffFromFile(
+      { name: 'f.txt', contents: old },
+      { name: 'f.txt', contents: neu },
+      { context: 3 }
+    );
+    const diff = cloneDiff(base);
+    const line = findAdditionLineIndex(diff, 'new1');
+    setAdditionLineText(diff, line, 'new1 edited');
+
+    updateDiffHunks(diff, [line], { context: 3 });
+
+    expect(diff.hunks[0]?.noEOFCRAdditions).toBe(false);
+    expect(diff.hunks.at(-1)?.noEOFCRAdditions).toBe(false);
+  });
 });
