@@ -1837,7 +1837,7 @@ function createPlainAdditionLineElement(
     tagName: 'div',
     properties: {
       'data-line': lineIndex + 1,
-      'data-line-index': lineIndex,
+      'data-line-index': `${lineIndex},${lineIndex}`,
       'data-line-type': 'context',
     },
     children: [
