@@ -471,8 +471,9 @@ export class File<
     const file = this.file;
     if (fileContainer != null && file != null) {
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
-        editor.syncWithRender(
+        editor.syncToRenderedView(
           highlighter,
+          'file',
           fileContainer,
           file,
           this.lineAnnotations,
@@ -500,12 +501,14 @@ export class File<
     this.fileRenderer.applyLayoutChange(textDocument, newLineAnnotations);
     if (
       newLineAnnotations != null &&
-      newLineAnnotations !== this.lineAnnotations
+      newLineAnnotations !== this.lineAnnotations &&
+      this.file != null
     ) {
-      this.annotationCache.forEach(({ element }) => element.remove());
-      this.annotationCache.clear();
-      this.lineAnnotations = newLineAnnotations;
-      this.rerender();
+      this.render({
+        file: this.file,
+        renderRange: this.renderRange,
+        lineAnnotations: newLineAnnotations,
+      });
     }
   }
 
@@ -519,12 +522,17 @@ export class File<
     lineAnnotations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
-    const { collapsed = false, themeType = 'system' } = this.options;
     if (!this.enabled) {
       throw new Error(
         'File.render: attempting to call render after cleaned up'
       );
     }
+
+    // postpone background tokenizing to next frame for avoiding UI freeze
+    // during render
+    this.editor?.postponeBackgroundTokenizeToNextFrame();
+
+    const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
     const previousRenderRange = this.renderRange;
     const themeChanged = this.hasThemeChanged();
@@ -652,8 +660,9 @@ export class File<
       const editor = this.editor;
       if (editor != null) {
         void this.fileRenderer.initializeHighlighter().then((highlighter) => {
-          editor.syncWithRender(
+          editor.syncToRenderedView(
             highlighter,
+            'file',
             fileContainer,
             file,
             this.lineAnnotations,

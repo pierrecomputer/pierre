@@ -11,7 +11,6 @@ import type {
   DiffsHighlighter,
   HighlightedToken,
   RenderRange,
-  ThemesType,
 } from '../types';
 import type { TextDocument, TextDocumentChange } from './textDocument';
 import { addEventListener, debounce, h } from './utils';
@@ -25,6 +24,7 @@ export interface EditorTokenizerProps {
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
   ) => void;
+  __debug?: boolean;
 }
 
 /** Stoppable code tokenizer for the editor */
@@ -40,17 +40,20 @@ export class EditorTokenizer {
   #tokenizeMaxLineLength: number;
   #setStyle: EditorTokenizerProps['setStyle'];
   #onDeferTokenize: EditorTokenizerProps['onDeferTokenize'];
-  #editorEventDisposes?: (() => void)[];
+  #debug: boolean;
+  #disposes?: (() => void)[];
 
   // state
-  #stateStackCache: StateStack[] = [INITIAL];
+  #stateStack: StateStack[] = [INITIAL]; // cached state stack by line index
   #lastLine: number = -1;
   #isStopped: boolean = true;
+  #isPaused: boolean = false;
   #backgroundJobId: number = 0;
   #backgroundChangedLineRanges: readonly [number, number][] | undefined;
   #backgroundChangedRangeIndex: number = 0;
+  #isMessageListenerAttached: boolean = false;
 
-  #prebuildStateStackMap = debounce(async (renderRange?: RenderRange) => {
+  #prebuildStateStack = debounce(async (renderRange?: RenderRange) => {
     const { startingLine = 0, totalLines = Infinity } = renderRange ?? {};
     const endLine = Math.min(
       totalLines === Infinity ? Infinity : startingLine + totalLines,
@@ -62,30 +65,102 @@ export class EditorTokenizer {
         this.#textDocument.languageId
       );
     }
-    this.#buildStateStackMap(endLine);
+    this.#buildStateStack(endLine);
   }, 500);
 
-  #onMessage = ({
-    data,
-  }: MessageEvent<{ type: 'tokenize'; jobId: number }>) => {
-    if (data.type === 'tokenize' && data.jobId === this.#backgroundJobId) {
-      this.#backgroundTokenize(data.jobId);
+  #onMessage = ({ data }: MessageEvent<unknown>) => {
+    if (typeof data !== 'object' || data === null) {
+      return;
+    }
+    const { type, jobId } = data as {
+      type?: unknown;
+      jobId?: unknown;
+    };
+    if (
+      type === 'tokenize' &&
+      typeof jobId === 'number' &&
+      jobId === this.#backgroundJobId
+    ) {
+      this.#backgroundTokenize(jobId);
     }
   };
+
+  get themeType(): 'light' | 'dark' {
+    return this.#themeType;
+  }
+
+  constructor({
+    codeOptions,
+    highlighter,
+    textDocument,
+    setStyle,
+    onDeferTokenize,
+    __debug,
+  }: EditorTokenizerProps) {
+    const {
+      themeType = 'system',
+      theme = DEFAULT_THEMES,
+      tokenizeMaxLineLength = 1000,
+    } = codeOptions;
+    this.#mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
+    if (themeType === 'system') {
+      this.#themeType = this.#mediaQueryList.matches ? 'dark' : 'light';
+    } else {
+      this.#themeType = themeType;
+    }
+    if (typeof theme !== 'string') {
+      const observer = new MutationObserver((mutations) => {
+        for (const { type, attributeName } of mutations) {
+          if (
+            type === 'attributes' &&
+            attributeName !== null &&
+            (attributeName === 'class' || attributeName.startsWith('data-'))
+          ) {
+            const themeType =
+              getComputedStyle(document.body).colorScheme === 'dark'
+                ? 'dark'
+                : 'light';
+            this.#emitThemeChange(theme[themeType], themeType);
+            break;
+          }
+        }
+      });
+      observer.observe(document.documentElement, { attributes: true });
+      observer.observe(document.body, { attributes: true });
+      this.#disposes = [
+        addEventListener(this.#mediaQueryList, 'change', (e) => {
+          const themeType = e.matches ? 'dark' : 'light';
+          this.#emitThemeChange(theme[themeType], themeType);
+        }),
+        () => observer.disconnect(),
+      ];
+    }
+    this.#highlighter = highlighter;
+    this.#textDocument = textDocument;
+    this.#tokenizeMaxLineLength = tokenizeMaxLineLength;
+    this.#setStyle = setStyle;
+    this.#onDeferTokenize = onDeferTokenize;
+    this.#debug = __debug ?? false;
+    if (highlighter.getLoadedLanguages().includes(textDocument.languageId)) {
+      this.#grammar = highlighter.getLanguage(textDocument.languageId);
+    }
+    this.#colorMap = [];
+    this.#setTheme(typeof theme === 'string' ? theme : theme[this.#themeType]);
+  }
 
   // By default, diffs components support dual themes, but the tokenizer only renders
   // the preferred theme. When the theme type is changed, the tokenizer will re-tokenize the document.
-  #onThemeChange = (themeName: string, themeType: 'light' | 'dark') => {
+  #emitThemeChange(themeName: string, themeType: 'light' | 'dark') {
     this.#themeType = themeType;
     this.#setTheme(themeName);
     this.stopBackgroundTokenize();
-    this.#stateStackCache = [INITIAL];
+    this.#stateStack = [INITIAL];
     if (this.#grammar !== undefined && this.#textDocument.lineCount > 0) {
       this.#scheduleBackgroundTokenize(0);
     }
-  };
+  }
 
-  #setTheme = (themeName: string): void => {
+  #setTheme(themeName: string) {
     this.#colorMap = this.#highlighter.setTheme(themeName).colorMap;
     const { colors = {} } = this.#highlighter.getTheme(themeName);
     const selectionBackground = colors['editor.selectionBackground'];
@@ -106,77 +181,13 @@ export class EditorTokenizer {
       ${findMatchBackground !== undefined ? `--diffs-editor-match-bg: ${findMatchBackground};` : ''}
       ${findMatchHighlightBackground !== undefined ? `--diffs-editor-match-highlight-bg: ${findMatchHighlightBackground};` : ''}
     }`);
-  };
-
-  #watchColorScheme = (theme: ThemesType) => {
-    const observer = new MutationObserver((mutations) => {
-      for (const { type, attributeName } of mutations) {
-        if (
-          type === 'attributes' &&
-          attributeName !== null &&
-          (attributeName === 'class' || attributeName.startsWith('data-'))
-        ) {
-          const themeType =
-            getComputedStyle(document.body).colorScheme === 'dark'
-              ? 'dark'
-              : 'light';
-          this.#onThemeChange(theme[themeType], themeType);
-          break;
-        }
-      }
-    });
-    observer.observe(document.documentElement, { attributes: true });
-    observer.observe(document.body, { attributes: true });
-    this.#editorEventDisposes = [
-      addEventListener(this.#mediaQueryList, 'change', (e) => {
-        const themeType = e.matches ? 'dark' : 'light';
-        this.#onThemeChange(theme[themeType], themeType);
-      }),
-      () => observer.disconnect(),
-    ];
-  };
-
-  get themeType(): 'light' | 'dark' {
-    return this.#themeType;
-  }
-
-  constructor({
-    codeOptions,
-    highlighter,
-    textDocument,
-    setStyle,
-    onDeferTokenize,
-  }: EditorTokenizerProps) {
-    const {
-      themeType = 'system',
-      theme = DEFAULT_THEMES,
-      tokenizeMaxLineLength = 1000,
-    } = codeOptions;
-    this.#mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
-    if (themeType === 'system') {
-      this.#themeType = this.#mediaQueryList.matches ? 'dark' : 'light';
-    } else {
-      this.#themeType = themeType;
-    }
-    if (typeof theme !== 'string') {
-      this.#watchColorScheme(theme);
-    }
-    this.#highlighter = highlighter;
-    this.#textDocument = textDocument;
-    this.#tokenizeMaxLineLength = tokenizeMaxLineLength;
-    this.#setStyle = setStyle;
-    this.#onDeferTokenize = onDeferTokenize;
-    if (highlighter.getLoadedLanguages().includes(textDocument.languageId)) {
-      this.#grammar = highlighter.getLanguage(textDocument.languageId);
-    }
-    this.#colorMap = [];
-    this.#setTheme(typeof theme === 'string' ? theme : theme[this.#themeType]);
   }
 
   cleanUp(): void {
+    this.#detachMessageListener();
     this.stopBackgroundTokenize();
-    this.#editorEventDisposes?.forEach((dispose) => dispose());
-    this.#editorEventDisposes = undefined;
+    this.#disposes?.forEach((dispose) => dispose());
+    this.#disposes = undefined;
   }
 
   // to use `tokenize`, call `prebuildStateStackMap` first to prebuild
@@ -227,14 +238,14 @@ export class EditorTokenizer {
       offscreenSyncEnd >= dirtyStart &&
       (canReuseCachedStates || change.lineDelta < 0);
     if (canReuseCachedStates) {
-      this.#buildStateStackMap(dirtyStart);
+      this.#buildStateStack(dirtyStart);
     } else {
-      this.#stateStackCache.length = Math.min(
-        this.#stateStackCache.length,
+      this.#stateStack.length = Math.min(
+        this.#stateStack.length,
         dirtyStart + 1
       );
       if (renderRange === undefined || dirtyStart >= viewStart) {
-        this.#buildStateStackMap(viewStart);
+        this.#buildStateStack(viewStart);
       }
     }
 
@@ -245,7 +256,7 @@ export class EditorTokenizer {
     let line = canReuseCachedStates
       ? changedLineRanges[changedRangeIndex][0]
       : viewStart;
-    let state = this.#stateStackCache[line] ?? INITIAL;
+    let state = this.#stateStack[line] ?? INITIAL;
     let settled = false;
     const dirtyLines: Map<number, Array<HighlightedToken>> = new Map();
     const offscreenDirtyLines:
@@ -258,25 +269,25 @@ export class EditorTokenizer {
         renderRangeEndLine
       );
       if (offscreenEnd > dirtyStart) {
-        this.#buildStateStackMap(offscreenEnd);
+        this.#buildStateStack(offscreenEnd);
         let offscreenLine = dirtyStart;
-        let offscreenState = this.#stateStackCache[offscreenLine] ?? INITIAL;
+        let offscreenState = this.#stateStack[offscreenLine] ?? INITIAL;
         for (; offscreenLine < offscreenEnd; offscreenLine++) {
           const resolved = this.#tokenizeLineAt(offscreenLine, offscreenState);
           offscreenState = resolved.state;
           offscreenDirtyLines.set(offscreenLine, resolved.resolvedTokens);
         }
         if (canCacheTokenizedStates) {
-          this.#stateStackCache[offscreenEnd] = offscreenState;
+          this.#stateStack[offscreenEnd] = offscreenState;
         }
       }
     }
     for (; line < renderRangeEndLine; ) {
       const previousNextState = canReuseCachedStates
-        ? this.#stateStackCache[line + 1]
+        ? this.#stateStack[line + 1]
         : undefined;
       if (canCacheTokenizedStates) {
-        this.#stateStackCache[line] = state;
+        this.#stateStack[line] = state;
       }
 
       const { resolvedTokens, state: nextState } = this.#tokenizeLineAt(
@@ -292,7 +303,7 @@ export class EditorTokenizer {
       }
 
       if (canCacheTokenizedStates) {
-        this.#stateStackCache[line + 1] = state;
+        this.#stateStack[line + 1] = state;
       }
       settled =
         line >= currentChangedRangeEnd &&
@@ -310,12 +321,12 @@ export class EditorTokenizer {
           backgroundChangedRangeIndex = changedRangeIndex;
           break;
         }
-        if (this.#stateStackCache[nextRange[0]] === undefined) {
+        if (this.#stateStack[nextRange[0]] === undefined) {
           currentChangedRangeEnd = nextRange[1];
           line++;
         } else {
           line = nextRange[0];
-          state = this.#stateStackCache[line] ?? state;
+          state = this.#stateStack[line] ?? state;
           currentChangedRangeEnd = nextRange[1];
         }
         settled = false;
@@ -326,9 +337,9 @@ export class EditorTokenizer {
 
     if (canCacheTokenizedStates) {
       if (line < renderRangeEndLine) {
-        this.#stateStackCache[line + 1] = state;
+        this.#stateStack[line + 1] = state;
       } else {
-        this.#stateStackCache[line] = state;
+        this.#stateStack[line] = state;
       }
     }
 
@@ -359,16 +370,71 @@ export class EditorTokenizer {
     return dirtyLines;
   }
 
-  prebuildStateStackMap(renderRange?: RenderRange): void {
-    this.#prebuildStateStackMap(renderRange);
+  prebuildStateStack(renderRange?: RenderRange): void {
+    this.#prebuildStateStack(renderRange);
   }
 
   stopBackgroundTokenize(): void {
-    removeEventListener('message', this.#onMessage);
+    if (this.#isStopped) {
+      return;
+    }
     this.#isStopped = true;
+    this.#isPaused = false;
     this.#lastLine = -1;
     this.#backgroundChangedLineRanges = undefined;
     this.#backgroundChangedRangeIndex = 0;
+    this.#detachMessageListener();
+  }
+
+  pauseBackgroundTokenize(): void {
+    if (this.#isStopped || this.#isPaused) {
+      return;
+    }
+    if (this.#debug) {
+      console.log('[diffs/editor] background tokenization paused', {
+        jobId: this.#backgroundJobId,
+      });
+    }
+    this.#isPaused = true;
+  }
+
+  resumeBackgroundTokenize(): void {
+    if (
+      this.#isStopped ||
+      !this.#isPaused ||
+      this.#grammar === undefined ||
+      this.#lastLine < 0
+    ) {
+      return;
+    }
+    if (this.#debug) {
+      console.log('[diffs/editor] background tokenization resumed', {
+        jobId: this.#backgroundJobId,
+      });
+    }
+    this.#isPaused = false;
+    this.#postTokenizeMessage(this.#backgroundJobId);
+  }
+
+  #attachMessageListener(): void {
+    if (this.#isMessageListenerAttached) {
+      return;
+    }
+    globalThis.addEventListener('message', this.#onMessage);
+    this.#isMessageListenerAttached = true;
+  }
+
+  #detachMessageListener(): void {
+    if (!this.#isMessageListenerAttached) {
+      return;
+    }
+    globalThis.removeEventListener('message', this.#onMessage);
+    this.#isMessageListenerAttached = false;
+  }
+
+  #postTokenizeMessage(jobId: number): void {
+    // use `postMessage` instead of `setTimeout(fn, 0)` to avoid 4ms delay
+    globalThis.postMessage({ type: 'tokenize', jobId });
   }
 
   #scheduleBackgroundTokenize(
@@ -378,18 +444,22 @@ export class EditorTokenizer {
   ): void {
     const jobId = ++this.#backgroundJobId;
 
+    if (this.#debug) {
+      console.log('[diffs/editor] background tokenization scheduled', {
+        jobId,
+        startLine,
+        changedLineRanges,
+        changedRangeIndex,
+      });
+    }
+
     this.#isStopped = false;
+    this.#isPaused = false;
     this.#lastLine = startLine;
     this.#backgroundChangedLineRanges = changedLineRanges;
     this.#backgroundChangedRangeIndex = changedRangeIndex;
-
-    globalThis.addEventListener('message', this.#onMessage);
-    this.#postBackgroundTokenizeMessage(jobId);
-  }
-
-  #postBackgroundTokenizeMessage(jobId: number): void {
-    // use `postMessage` instead of `setTimeout(fn, 0)` to avoid 4ms delay
-    globalThis.postMessage({ type: 'tokenize', jobId });
+    this.#attachMessageListener();
+    this.#postTokenizeMessage(jobId);
   }
 
   #tokenizeLineAt(
@@ -422,21 +492,18 @@ export class EditorTokenizer {
     };
   }
 
-  #buildStateStackMap(endAt: number) {
+  #buildStateStack(endAt: number) {
     const boundedEndAt = Math.min(
       Math.max(0, endAt),
       this.#textDocument.lineCount
     );
-    if (
-      this.#stateStackCache.length > boundedEndAt ||
-      this.#grammar === undefined
-    ) {
+    if (this.#stateStack.length > boundedEndAt || this.#grammar === undefined) {
       return;
     }
-    let line = this.#stateStackCache.length - 1;
-    let state = this.#stateStackCache[line] ?? INITIAL;
+    let line = this.#stateStack.length - 1;
+    let state = this.#stateStack[line] ?? INITIAL;
     for (; line < boundedEndAt; line++) {
-      this.#stateStackCache[line] = state;
+      this.#stateStack[line] = state;
       const lineText = this.#textDocument.getLineText(line);
       if (
         lineText.length <= this.#tokenizeMaxLineLength &&
@@ -450,12 +517,13 @@ export class EditorTokenizer {
         ).ruleStack;
       }
     }
-    this.#stateStackCache[line] = state;
+    this.#stateStack[line] = state;
   }
 
   #backgroundTokenize(jobId: number) {
     if (
       this.#isStopped ||
+      this.#isPaused ||
       this.#grammar === undefined ||
       jobId !== this.#backgroundJobId
     ) {
@@ -468,16 +536,16 @@ export class EditorTokenizer {
     const changedLineRanges = this.#backgroundChangedLineRanges;
 
     let line = this.#lastLine;
-    let state = this.#stateStackCache[line] ?? INITIAL;
+    let state = this.#stateStack[line] ?? INITIAL;
     let settled = false;
     let changedRangeIndex = this.#backgroundChangedRangeIndex;
     let currentChangedRangeEnd = changedLineRanges?.[changedRangeIndex]?.[1];
     for (; line < totalLines; ) {
-      this.#stateStackCache[line] = state;
+      this.#stateStack[line] = state;
 
       const previousNextState =
         currentChangedRangeEnd !== undefined
-          ? this.#stateStackCache[line + 1]
+          ? this.#stateStack[line + 1]
           : undefined;
       const lineText = this.#textDocument.getLineText(line);
       if (lineText.length > this.#tokenizeMaxLineLength) {
@@ -499,7 +567,7 @@ export class EditorTokenizer {
         state = ret.ruleStack;
       }
 
-      this.#stateStackCache[line + 1] = state;
+      this.#stateStack[line + 1] = state;
       settled =
         currentChangedRangeEnd !== undefined &&
         line >= currentChangedRangeEnd &&
@@ -513,24 +581,24 @@ export class EditorTokenizer {
           break;
         }
         currentChangedRangeEnd = nextRange[1];
-        if (this.#stateStackCache[nextRange[0]] === undefined) {
+        if (this.#stateStack[nextRange[0]] === undefined) {
           settled = false;
         } else {
           line = nextRange[0];
-          state = this.#stateStackCache[line] ?? state;
+          state = this.#stateStack[line] ?? state;
           settled = false;
           continue;
         }
       }
 
-      // limit the time of partial tokenize to 2ms
-      if (performance.now() - t > 2) {
+      // limit the time of partial tokenize to 1ms
+      if (performance.now() - t > 1) {
         break;
       }
     }
 
     this.#onDeferTokenize(lines, this.#themeType);
-    if (this.#isStopped || jobId !== this.#backgroundJobId) {
+    if (this.#isStopped || this.#isPaused || jobId !== this.#backgroundJobId) {
       return;
     }
 
@@ -541,7 +609,7 @@ export class EditorTokenizer {
 
     this.#lastLine = line;
     this.#backgroundChangedRangeIndex = changedRangeIndex;
-    this.#postBackgroundTokenizeMessage(jobId);
+    this.#postTokenizeMessage(jobId);
   }
 }
 
