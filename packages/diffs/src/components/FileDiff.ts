@@ -754,6 +754,11 @@ export class FileDiff<
         'FileDiff.render: attempting to call render after cleaned up'
       );
     }
+
+    // postpone background tokenizing to next frame for avoiding UI freeze
+    // during render
+    this.editor?.postponeBackgroundTokenizeToNextFrame();
+
     const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
     const themeChanged = this.hasThemeChanged();
@@ -937,13 +942,13 @@ export class FileDiff<
       const file = this.getAdditionFile();
       if (editor != null && file != null) {
         void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-          editor.syncWithRender(
+          editor.syncToRenderedView(
             highlighter,
+            'diff',
             fileContainer,
             file,
             this.lineAnnotations,
-            this.renderRange,
-            'advanced'
+            this.renderRange
           );
         });
       }
@@ -1032,13 +1037,13 @@ export class FileDiff<
     const file = this.getAdditionFile();
     if (fileContainer != null && file != null) {
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-        editor.syncWithRender(
+        editor.syncToRenderedView(
           highlighter,
+          'diff',
           fileContainer,
           file,
           this.lineAnnotations,
-          this.renderRange,
-          'advanced'
+          this.renderRange
         );
       });
     }

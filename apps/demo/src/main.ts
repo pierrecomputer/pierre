@@ -250,7 +250,9 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
     const patchAnnotations = FAKE_DIFF_LINE_ANNOTATIONS[patchIndex] ?? [];
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
-      const editor = new Editor<LineCommentMetadata>();
+      const editor = new Editor<LineCommentMetadata>({
+        __debug: true,
+      });
       const fileAnnotations = patchAnnotations[hunkIndex];
       let isEditing = false;
       const options: FileDiffOptions<LineCommentMetadata> = {
@@ -805,6 +807,7 @@ if (renderFileButton != null) {
       onChange: (file, lineAnnotations) => {
         console.log('change', file, lineAnnotations);
       },
+      __debug: true,
     });
     const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
