@@ -131,3 +131,30 @@ jobs:
 
       - name: Type check all workspaces
         run: bun run ws "*" tsc
+
+  actions-pinned:
+    name: Actions pinned to SHA
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Verify external actions are pinned to a full commit SHA
+        run: |
+          # Supply-chain guard: every external action must be pinned to a
+          # 40-character commit SHA, never a movable tag/branch. Local actions
+          # (uses: ./...) ship with the repo and are exempt. Scans the workflows
+          # and the shared composite action manifest alike.
+          set -euo pipefail
+          unpinned=$(
+            grep -rEn '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*[^.[:space:]]' .github \
+              | grep -vE 'uses:[[:space:]]*[^[:space:]]+@[0-9a-fA-F]{40}([[:space:]]|#|"|'"'"'|$)' \
+              || true
+          )
+          if [ -n "$unpinned" ]; then
+            echo "::error::These actions are not pinned to a full commit SHA:"
+            echo "$unpinned"
+            echo "Pin each to a 40-character commit SHA, e.g. owner/repo@<sha> # vX.Y.Z"
+            exit 1
+          fi
+          echo "All external actions are pinned to a full commit SHA."
