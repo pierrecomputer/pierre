@@ -65,20 +65,20 @@ export function renderLineAnnotations<LAnnotation>(
   contentEl: HTMLElement,
   gutterEl?: HTMLElement
 ): void {
-  const addtionsAnnotations = new Map<number, string[]>();
-  const deletionsAnnotations = new Map<number, string[]>();
+  const additionAnnotations = new Map<number, string[]>();
+  const deletionAnnotations = new Map<number, string[]>();
   for (const annotation of lineAnnotations) {
     const lineNumber = annotation.lineNumber;
-    if (!addtionsAnnotations.has(lineNumber)) {
-      addtionsAnnotations.set(lineNumber, []);
+    if (!additionAnnotations.has(lineNumber)) {
+      additionAnnotations.set(lineNumber, []);
     }
-    if (!deletionsAnnotations.has(lineNumber)) {
-      deletionsAnnotations.set(lineNumber, []);
+    if (!deletionAnnotations.has(lineNumber)) {
+      deletionAnnotations.set(lineNumber, []);
     }
     const map =
       annotation.side === 'deletions'
-        ? deletionsAnnotations
-        : addtionsAnnotations;
+        ? deletionAnnotations
+        : additionAnnotations;
     map.get(lineNumber)!.push(getLineAnnotationName(annotation));
   }
 
@@ -106,8 +106,8 @@ export function renderLineAnnotations<LAnnotation>(
     cleanLineAnnotationElements(leftContentElement, leftGutterElement);
   }
 
-  const addtionsAnnotationElements = createLineAnnotationElements(
-    addtionsAnnotations,
+  const additionsAnnotationElements = createLineAnnotationElements(
+    additionAnnotations,
     contentEl,
     gutterEl
   );
@@ -116,16 +116,16 @@ export function renderLineAnnotations<LAnnotation>(
   }
 
   const deletionsAnnotationElements = createLineAnnotationElements(
-    deletionsAnnotations,
+    deletionAnnotations,
     leftContentElement,
     leftGutterElement
   );
 
   requestAnimationFrame(() => {
     syncPairedLineAnnotationHeights(
-      addtionsAnnotations,
-      deletionsAnnotations,
-      addtionsAnnotationElements,
+      additionAnnotations,
+      deletionAnnotations,
+      additionsAnnotationElements,
       deletionsAnnotationElements
     );
   });
@@ -201,14 +201,14 @@ function createLineAnnotationElements(
 }
 
 function syncPairedLineAnnotationHeights(
-  addtionsAnnotations: Map<number, string[]>,
-  deletionsAnnotations: Map<number, string[]>,
-  addtionsAnnotationElements: Map<number, HTMLElement>,
-  deletionsAnnotationElements: Map<number, HTMLElement>
+  additionAnnotations: Map<number, string[]>,
+  deletionAnnotations: Map<number, string[]>,
+  additionAnnotationElements: Map<number, HTMLElement>,
+  deletionAnnotationElements: Map<number, HTMLElement>
 ): void {
   const offsetHeights = new Map<number, number>();
-  for (const [lineNumber, annotations] of addtionsAnnotations.entries()) {
-    const annotationElement = deletionsAnnotationElements.get(lineNumber);
+  for (const [lineNumber, annotations] of additionAnnotations.entries()) {
+    const annotationElement = deletionAnnotationElements.get(lineNumber);
     if (annotations.length === 0 && annotationElement !== undefined) {
       const height = measureAnnotationContentHeight(annotationElement);
       if (height > 0) {
@@ -216,8 +216,8 @@ function syncPairedLineAnnotationHeights(
       }
     }
   }
-  for (const [lineNumber, annotations] of deletionsAnnotations.entries()) {
-    const annotationElement = addtionsAnnotationElements.get(lineNumber);
+  for (const [lineNumber, annotations] of deletionAnnotations.entries()) {
+    const annotationElement = additionAnnotationElements.get(lineNumber);
     if (annotations.length === 0 && annotationElement !== undefined) {
       const height = measureAnnotationContentHeight(annotationElement);
       if (height > 0) {
@@ -226,13 +226,13 @@ function syncPairedLineAnnotationHeights(
     }
   }
   applyLineAnnotationMinHeights(
-    addtionsAnnotations,
-    addtionsAnnotationElements,
+    additionAnnotations,
+    additionAnnotationElements,
     offsetHeights
   );
   applyLineAnnotationMinHeights(
-    deletionsAnnotations,
-    deletionsAnnotationElements,
+    deletionAnnotations,
+    deletionAnnotationElements,
     offsetHeights
   );
 }
