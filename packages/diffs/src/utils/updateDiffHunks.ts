@@ -66,7 +66,16 @@ export function updateDiffHunks(
     );
   }
 
-  for (const line of changedAdditionLineIndexes) {
+  const changedLines = Array.from(changedAdditionLineIndexes);
+  if (changedLines.length === 0) {
+    return applyHunkUpdateResult(diff, {
+      hunks: diff.hunks,
+      splitLineCount: diff.splitLineCount,
+      unifiedLineCount: diff.unifiedLineCount,
+      type: diff.type,
+    });
+  }
+  for (const line of changedLines) {
     const additionLine = diff.additionLines[line];
     const deletionLine = diff.deletionLines[line];
     if (additionLine == null || deletionLine == null) {
@@ -84,10 +93,7 @@ export function updateDiffHunks(
     }
   }
 
-  const affectedHunkIndexes = getAffectedHunkIndexes(
-    diff,
-    changedAdditionLineIndexes
-  );
+  const affectedHunkIndexes = getAffectedHunkIndexes(diff, changedLines);
   if (affectedHunkIndexes.size === 0) {
     return applyHunkUpdateResult(
       diff,
