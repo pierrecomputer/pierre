@@ -751,8 +751,6 @@ export interface RenderedDiffASTCache {
   options: RenderDiffOptions;
   result: ThemedDiffResult | undefined;
   renderRange: RenderRange | undefined;
-  /** Live addition-side text from the editor; `diff.additionLines` stays parse-time. */
-  editedAdditionLines?: string[];
   isDirty?: boolean;
 }
 
@@ -928,6 +926,7 @@ export interface DiffsEditor<LAnnotation> {
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileContents: FileContents,
+    didFileChange: boolean,
     lineAnnotations:
       | LineAnnotation<LAnnotation>[]
       | DiffLineAnnotation<LAnnotation>[]

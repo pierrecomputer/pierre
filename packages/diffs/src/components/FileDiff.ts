@@ -946,6 +946,7 @@ export class FileDiff<
             highlighter,
             fileContainer,
             file,
+            diffDidChange,
             this.lineAnnotations,
             this.renderRange
           );
@@ -1028,6 +1029,7 @@ export class FileDiff<
           highlighter,
           fileContainer,
           file,
+          false,
           this.lineAnnotations,
           this.renderRange
         );
@@ -1073,6 +1075,7 @@ export class FileDiff<
         cacheKey,
       } as FileContents;
       Object.defineProperty(file, 'contents', {
+        enumerable: true,
         get: () => cleanLastNewline(fileDiff.additionLines.join('')),
       });
       this.additionFile = file;

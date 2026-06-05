@@ -475,6 +475,7 @@ export class File<
           highlighter,
           fileContainer,
           file,
+          false,
           this.lineAnnotations,
           this.renderRange
         );
@@ -656,12 +657,13 @@ export class File<
       this.renderGutterUtility();
 
       const editor = this.editor;
-      if (editor != null) {
+      if (editor != null && file != null) {
         void this.fileRenderer.initializeHighlighter().then((highlighter) => {
           editor.syncToRenderedView(
             highlighter,
             fileContainer,
             file,
+            didFileChange,
             this.lineAnnotations,
             this.renderRange
           );
