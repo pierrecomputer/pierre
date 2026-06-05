@@ -246,6 +246,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.workerManager?.cleanUpTasks(this);
   }
 
+  public getRenderDiff(): FileDiffMetadata | undefined {
+    return this.renderCache?.diff ?? this.diff;
+  }
+
   public clearRenderCache(): void {
     const renderCache = this.renderCache;
     this.renderCache = undefined;
@@ -408,12 +412,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
 
-    const previousLength = diff.additionLines.length;
+    // updateRenderCache may already have extended diff.additionLines for the
+    // same edit pass, so never bail out purely on matching lengths here.
     const newLength = textDocument.lineCount;
-    if (previousLength === newLength) {
-      return;
-    }
-
     const nextAdditionLines = diff.additionLines.slice(0, newLength);
     for (let i = 0; i < newLength; i++) {
       const prevLine = nextAdditionLines[i] ?? nextAdditionLines[i - 1] ?? '';
@@ -1078,12 +1079,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           if (additionLineContent != null) {
             additionLineContent = withContentProperties(
               additionLineContent,
-              lineDecoration.contentProperties
+              lineDecoration.contentProperties,
+              additionLine != null
+                ? {
+                    'data-line': additionLine.lineNumber,
+                    'data-line-index': `${unifiedLineIndex},${splitLineIndex}`,
+                  }
+                : undefined
             );
           } else if (deletionLineContent != null) {
             deletionLineContent = withContentProperties(
               deletionLineContent,
-              lineDecoration.contentProperties
+              lineDecoration.contentProperties,
+              deletionLine != null
+                ? {
+                    'data-line': deletionLine.lineNumber,
+                    'data-line-index': `${unifiedLineIndex},${splitLineIndex}`,
+                  }
+                : undefined
             );
           }
           pushLineWithAnnotation({
@@ -1180,7 +1193,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           if (deletionLine != null) {
             const deletionLineDecorated = withContentProperties(
               deletionLineContent,
-              deletionLineDecoration.contentProperties
+              deletionLineDecoration.contentProperties,
+              {
+                'data-line': deletionLine.lineNumber,
+                'data-line-index': `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
+              }
             );
             pushGutterLineNumber(
               'deletions',
@@ -1196,7 +1213,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           if (additionLine != null) {
             const additionLineDecorated = withContentProperties(
               additionLineContent,
-              additionLineDecoration.contentProperties
+              additionLineDecoration.contentProperties,
+              {
+                'data-line': additionLine.lineNumber,
+                'data-line-index': `${additionLine.unifiedLineIndex},${splitLineIndex}`,
+              }
             );
             pushGutterLineNumber(
               'additions',
@@ -1794,12 +1815,13 @@ function pushSeparator(
 
 function withContentProperties(
   lineNode: ElementContent | undefined,
-  contentProperties: Properties | undefined
+  contentProperties?: Properties,
+  extendProperties?: Properties
 ): ElementContent | undefined {
   if (
     lineNode == null ||
     lineNode.type !== 'element' ||
-    contentProperties == null
+    (contentProperties == null && extendProperties == null)
   ) {
     return lineNode;
   }
@@ -1808,6 +1830,7 @@ function withContentProperties(
     properties: {
       ...lineNode.properties,
       ...contentProperties,
+      ...extendProperties,
     },
   };
 }

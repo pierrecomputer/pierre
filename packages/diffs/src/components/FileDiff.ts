@@ -287,13 +287,16 @@ export class FileDiff<
     lineNumber: number,
     side: SelectionSide = 'additions'
   ) => {
-    if (this.fileDiff == null) {
+    // use the fileDiff from the hunksRenderer if it exists, it maybe updated
+    // by the editor
+    const fileDiff = this.hunksRenderer.getRenderDiff() ?? this.fileDiff;
+    if (fileDiff == null) {
       return undefined;
     }
-    const lastHunk = this.fileDiff.hunks.at(-1);
+    const lastHunk = fileDiff.hunks.at(-1);
     let targetUnifiedIndex: number | undefined;
     let targetSplitIndex: number | undefined;
-    hunkIterator: for (const hunk of this.fileDiff.hunks) {
+    hunkIterator: for (const hunk of fileDiff.hunks) {
       let currentLineNumber =
         side === 'deletions' ? hunk.deletionStart : hunk.additionStart;
       const hunkCount =
@@ -1022,8 +1025,13 @@ export class FileDiff<
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
     this.hunksRenderer.applyDocumentChange(textDocument);
+    const renderDiff = this.hunksRenderer.getRenderDiff();
+    if (renderDiff != null) {
+      this.fileDiff = renderDiff;
+    }
     // TODO(@ije): can we avoid full-render here?
     this.rerender();
+    this.interactionManager.setSelectionDirty();
     if (
       newLineAnnotations !== undefined &&
       newLineAnnotations !== this.lineAnnotations
