@@ -30,6 +30,7 @@ tsconfig.tsbuildinfo
 .claude/*
 .codemogger/*
 .omx/
+.agents/ignore/
 .env.worktree
 
 #tmp
