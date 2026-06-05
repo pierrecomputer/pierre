@@ -178,7 +178,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
   ) => {
-    this.#fileInstance?.updateRenderCache?.(lines, themeType);
+    this.#fileInstance?.updateRenderCache(lines, themeType);
     // update the view if the render range is updated by scrolling
     // and the deferred tokenized lines inside the render range
     if (
@@ -1141,14 +1141,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     shouldUpdateBuffer?: boolean
   ) {
     const tokenizer = this.#tokenizer;
-    const component = this.#fileInstance;
+    const fileInstance = this.#fileInstance;
     const fileContents = this.#fileContents;
     const textDocument = this.#textDocument;
     const gutterEl = this.#gutterElement;
     const contentEl = this.#contentElement;
     if (
       tokenizer === undefined ||
-      component === undefined ||
+      fileInstance === undefined ||
       fileContents === undefined ||
       textDocument === undefined ||
       contentEl === undefined
@@ -1252,8 +1252,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
+    const isDiff = Object.hasOwn(fileInstance, 'fileDiff');
+    const didLineCountChange = change.lineDelta !== 0;
+
     // fix grid layout
-    if (change.lineDelta !== 0) {
+    if (didLineCountChange) {
       let gridRow = contentEl.children.length;
       for (const child of contentEl.children) {
         const { bufferSize } = (child as HTMLElement).dataset;
@@ -1267,9 +1270,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    component.updateRenderCache?.(dirtyLines, tokenizer.themeType);
-    if (change.lineDelta !== 0) {
-      component.applyDocumentChange(
+    fileInstance.updateRenderCache(
+      dirtyLines,
+      tokenizer.themeType,
+      isDiff ? !didLineCountChange : undefined
+    );
+    if (didLineCountChange) {
+      fileInstance.applyDocumentChange(
         textDocument,
         newLineAnnotations,
         shouldUpdateBuffer

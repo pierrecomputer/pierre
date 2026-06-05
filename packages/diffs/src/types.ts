@@ -917,7 +917,8 @@ export interface DiffsEditableComponent<
   ) => void;
   updateRenderCache: (
     lines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
+    themeType: 'dark' | 'light',
+    shouldRerender?: boolean
   ) => void;
 }
 

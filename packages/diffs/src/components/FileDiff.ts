@@ -996,10 +996,13 @@ export class FileDiff<
 
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
+    themeType: 'dark' | 'light',
+    shouldRerender?: boolean
   ): void {
     this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
-    this.rerender();
+    if (shouldRerender === true) {
+      this.rerender();
+    }
   }
 
   // normally triggered by the editor when the document line count changes
@@ -1040,27 +1043,6 @@ export class FileDiff<
       this.editor = undefined;
     };
   }
-
-  // private getDeletionFile(): FileContents | undefined {
-  //   if (this.deletionFile != null) {
-  //     return this.deletionFile;
-  //   }
-  //   const fileDiff = this.fileDiff;
-  //   if (fileDiff != null && !fileDiff.isPartial) {
-  //     const { name, lang, cacheKey } = fileDiff;
-  //     const file = {
-  //       name,
-  //       lang,
-  //       cacheKey,
-  //     } as FileContents;
-  //     Object.defineProperty(file, 'contents', {
-  //       get: () => cleanLastNewline(fileDiff.deletionLines.join('')),
-  //     });
-  //     this.deletionFile = file;
-  //     return file;
-  //   }
-  //   return undefined;
-  // }
 
   private getAdditionFile(): FileContents | undefined {
     if (this.additionFile != null) {
