@@ -180,8 +180,8 @@ export class TextDocument<LAnnotation> {
     return this.#pieceTable.getText(range);
   }
 
-  getLineText(line: number, trimEOF = true): string {
-    return this.#pieceTable.getLineText(line, trimEOF);
+  getLineText(line: number, includeLineBreak?: boolean): string {
+    return this.#pieceTable.getLineText(line, includeLineBreak);
   }
 
   charAt(offset: number): string;

@@ -104,7 +104,7 @@ export class PieceTable {
     return this.getTextSlice(start, end);
   }
 
-  getLineText(line: number, trimEOF = true): string {
+  getLineText(line: number, includeLineBreak = false): string {
     if (this.#lastVisitedLine !== null && this.#lastVisitedLine[0] === line) {
       return this.#lastVisitedLine[1];
     }
@@ -112,7 +112,7 @@ export class PieceTable {
     if (offset === undefined) {
       throw new Error(`Line index out of range: ${line}`);
     }
-    const text = this.getTextSlice(offset[0], offset[1], trimEOF);
+    const text = this.getTextSlice(offset[0], offset[1], !includeLineBreak);
     this.#lastVisitedLine = [line, text];
     return text;
   }

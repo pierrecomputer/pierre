@@ -952,6 +952,6 @@ export interface DiffsEditorSelection {
 
 export interface DiffsTextDocument {
   readonly lineCount: number;
-  getLineText: (lineNumber: number) => string;
+  getLineText: (lineNumber: number, includeLineBreak?: boolean) => string;
   getText: () => string;
 }
