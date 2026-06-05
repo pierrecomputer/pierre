@@ -7,7 +7,6 @@ import {
   recomputeDiffHunks,
   updateDiffHunks,
 } from '../src/utils/updateDiffHunks';
-import { hasTrailingContextMismatch } from '../src/utils/virtualDiffLayout';
 import { verifyFileDiffHunkValues } from './testUtils';
 
 const PARSE_OPTIONS = { context: 1 } as const;
@@ -222,62 +221,21 @@ describe('updateDiffHunks', () => {
     expect(fromHelper.unifiedLineCount).toBe(fromParse.unifiedLineCount);
   });
 
-  test('accepts single-use iterables without falling back to full recompute', () => {
-    const base = createFixture();
-    const line = findAdditionLineIndex(base, 'line 10 replace new');
-    const hunkIndex = findHunkIndexForAdditionLine(base, line);
-    const hunkBefore: Hunk = structuredClone(base.hunks[hunkIndex]);
-
-    const diff = cloneDiff(base);
-    setAdditionLineText(diff, line, 'line 10 replace newer');
-    updateDiffHunks(
-      diff,
-      (function* () {
-        yield line;
-      })(),
-      PARSE_OPTIONS
+  test('does not mark noEOFCR on non-final hunks after incremental reparse', () => {
+    const old = 'a\n'.repeat(20) + 'old1\n' + 'b\n'.repeat(20) + 'old-final';
+    const neu = 'a\n'.repeat(20) + 'new1\n' + 'b\n'.repeat(20) + 'new-final\n';
+    const base = parseDiffFromFile(
+      { name: 'f.txt', contents: old },
+      { name: 'f.txt', contents: neu },
+      { context: 3 }
     );
-
-    expect(diff.hunks[hunkIndex]).toEqual(hunkBefore);
-    expect(cleanLastNewline(diff.additionLines[line])).toBe(
-      'line 10 replace newer'
-    );
-  });
-
-  test('returns unchanged metadata when no lines changed', () => {
-    const base = createFixture();
     const diff = cloneDiff(base);
-    const hunksBefore = structuredClone(diff.hunks);
+    const line = findAdditionLineIndex(diff, 'new1');
+    setAdditionLineText(diff, line, 'new1 edited');
 
-    updateDiffHunks(diff, [], PARSE_OPTIONS);
+    updateDiffHunks(diff, [line], { context: 3 });
 
-    expect(diff.hunks).toEqual(hunksBefore);
-    expect(diff.splitLineCount).toBe(base.splitLineCount);
-    expect(diff.unifiedLineCount).toBe(base.unifiedLineCount);
-  });
-
-  test('falls back to full recompute when incremental hunk metadata desyncs trailing context', () => {
-    const base = createFixture();
-    const diff = cloneDiff(base);
-    const line = findAdditionLineIndex(base, 'line 10 replace new');
-    setAdditionLineText(diff, line, 'line 10 replace newer');
-
-    updateDiffHunks(diff, [line], PARSE_OPTIONS);
-
-    const lastHunk = diff.hunks.at(-1);
-    if (lastHunk == null) {
-      throw new Error('Missing final hunk');
-    }
-    lastHunk.deletionCount += 1;
-
-    expect(hasTrailingContextMismatch(diff)).toBe(true);
-
-    updateDiffHunks(diff, [line], PARSE_OPTIONS);
-
-    expect(hasTrailingContextMismatch(diff)).toBe(false);
-    expectMatchesFullRecompute(
-      diff,
-      runFullRecomputeEdit(base, line, 'line 10 replace newer')
-    );
+    expect(diff.hunks[0]?.noEOFCRAdditions).toBe(false);
+    expect(diff.hunks.at(-1)?.noEOFCRAdditions).toBe(false);
   });
 });

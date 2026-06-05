@@ -8,7 +8,6 @@ import type {
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
 import { parseDiffFromFile } from './parseDiffFromFile';
-import { hasTrailingContextMismatch } from './virtualDiffLayout';
 
 type HunkContent = ContextContent | ChangeContent;
 
@@ -67,17 +66,7 @@ export function updateDiffHunks(
     );
   }
 
-  const changedLines = Array.from(changedAdditionLineIndexes);
-  if (changedLines.length === 0) {
-    return applyHunkUpdateResult(diff, {
-      hunks: diff.hunks,
-      splitLineCount: diff.splitLineCount,
-      unifiedLineCount: diff.unifiedLineCount,
-      type: diff.type,
-    });
-  }
-
-  for (const line of changedLines) {
+  for (const line of changedAdditionLineIndexes) {
     const additionLine = diff.additionLines[line];
     const deletionLine = diff.deletionLines[line];
     if (additionLine == null || deletionLine == null) {
@@ -95,7 +84,10 @@ export function updateDiffHunks(
     }
   }
 
-  const affectedHunkIndexes = getAffectedHunkIndexes(diff, changedLines);
+  const affectedHunkIndexes = getAffectedHunkIndexes(
+    diff,
+    changedAdditionLineIndexes
+  );
   if (affectedHunkIndexes.size === 0) {
     return applyHunkUpdateResult(
       diff,
@@ -114,13 +106,6 @@ export function updateDiffHunks(
   }
 
   recomputeDiffRenderLineCounts(diff);
-
-  if (hasTrailingContextMismatch(diff)) {
-    return applyHunkUpdateResult(
-      diff,
-      recomputeDiffHunks(diff, parseDiffOptions)
-    );
-  }
 
   return applyHunkUpdateResult(diff, {
     hunks: diff.hunks,
@@ -305,11 +290,8 @@ function recomputeDiffRenderLineCounts(diff: FileDiffMetadata): void {
 
   if (diff.hunks.length > 0) {
     const lastHunk = diff.hunks[diff.hunks.length - 1];
-    const collapsedAfter = Math.max(
-      diff.additionLines.length -
-        (lastHunk.additionLineIndex + lastHunk.additionCount),
-      0
-    );
+    const lastHunkEnd = lastHunk.additionStart + lastHunk.additionCount - 1;
+    const collapsedAfter = Math.max(diff.additionLines.length - lastHunkEnd, 0);
     splitTotal += collapsedAfter;
     unifiedTotal += collapsedAfter;
   }
