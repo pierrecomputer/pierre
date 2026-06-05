@@ -336,10 +336,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
 
-    const additionLines = result.code.additionLines;
+    const hastLines = result.code.additionLines;
     const changedAdditionLines: number[] = [];
     for (const [line, tokens] of dirtyLines) {
-      const prev = additionLines[line] as HASTElement | undefined;
+      const prev = hastLines[line] as HASTElement | undefined;
       const prevProps = prev?.properties ?? {};
       const prevLine = diff.additionLines[line] ?? '';
       const prevText = cleanLastNewline(prevLine);
@@ -352,7 +352,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         prevText !== lineText
           ? 'change-addition'
           : (prevProps['data-line-type-original'] ?? 'context');
-      additionLines[line] = {
+      hastLines[line] = {
         type: 'element',
         tagName: 'div',
         properties: {
@@ -425,12 +425,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     diff.additionLines = nextAdditionLines;
 
-    const additionLines = result.code.additionLines;
-    if (newLength < additionLines.length) {
-      additionLines.length = newLength;
+    const additionHastLines = result.code.additionLines;
+    if (newLength < additionHastLines.length) {
+      additionHastLines.length = newLength;
     }
     for (let i = 0; i < newLength; i++) {
-      additionLines[i] ??= createPlainAdditionLineElement(i, textDocument);
+      additionHastLines[i] ??= createPlainAdditionLineElement(i, textDocument);
     }
 
     if (!diff.isPartial) {
