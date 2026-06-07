@@ -23,7 +23,10 @@ Use the following commit message template:
 - The <scope> can be a project, package, or app name; omit the scope and its
   wrapped parens if none is clear.
 - The <subject> and <description> should explain the motivations and changes.
-- All line lengths must be 72 characters or fewer; hard-wrap to 72 columns
+- Include a description body for every commit unless the staged change is truly
+  mechanical or trivial and the subject fully explains it.
+- Keep every commit message line 72 characters or fewer. Hard-wrap body text to
+  72 columns before committing; do not leave long single-line descriptions.
 - Use imperative mood; be concise
 - Include user-provided context when it improves the message
 - Do not include AI attribution in or after the description
@@ -67,8 +70,16 @@ git diff --cached
 git commit -m "<message>"
 ```
 
-Use a commit body for non-obvious changes:
+Include a wrapped commit body for ordinary source changes:
 
 ```bash
-git commit -m "fix(diffs): Fix virtualized scroll focus" -m "Keep focus anchored when rows are recycled during scroll so keyboard navigation does not lose the active item."
+git commit -F - <<'COMMIT'
+fix(diffs): Keep scroll focus stable
+
+Keep focus anchored when rows are recycled during scroll so keyboard
+navigation does not lose the active item.
+COMMIT
 ```
+
+Use a subject-only commit only for changes where no useful description exists,
+such as a typo fix or a purely mechanical formatting commit.
