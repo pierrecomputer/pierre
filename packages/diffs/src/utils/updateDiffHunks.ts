@@ -8,6 +8,7 @@ import type {
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
 import { parseDiffFromFile } from './parseDiffFromFile';
+import { hasTrailingContextMismatch } from './virtualDiffLayout';
 
 type HunkContent = ContextContent | ChangeContent;
 
@@ -112,6 +113,13 @@ export function updateDiffHunks(
   }
 
   recomputeDiffRenderLineCounts(diff);
+
+  if (hasTrailingContextMismatch(diff)) {
+    return applyHunkUpdateResult(
+      diff,
+      recomputeDiffHunks(diff, parseDiffOptions)
+    );
+  }
 
   return applyHunkUpdateResult(diff, {
     hunks: diff.hunks,
@@ -296,8 +304,11 @@ function recomputeDiffRenderLineCounts(diff: FileDiffMetadata): void {
 
   if (diff.hunks.length > 0) {
     const lastHunk = diff.hunks[diff.hunks.length - 1];
-    const lastHunkEnd = lastHunk.additionStart + lastHunk.additionCount - 1;
-    const collapsedAfter = Math.max(diff.additionLines.length - lastHunkEnd, 0);
+    const collapsedAfter = Math.max(
+      diff.additionLines.length -
+        (lastHunk.additionLineIndex + lastHunk.additionCount),
+      0
+    );
     splitTotal += collapsedAfter;
     unifiedTotal += collapsedAfter;
   }

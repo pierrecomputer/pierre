@@ -342,26 +342,26 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     for (const [line, tokens] of dirtyLines) {
       const prev = hastLines[line] as HASTElement | undefined;
       const prevProps = prev?.properties ?? {};
-      const prevLine = diff.additionLines[line] ?? '';
-      const prevText = cleanLastNewline(prevLine);
       const lineText = tokens.map((a) => a[2]).join('');
-      diff.additionLines[line] = applyLineTextWithNewline(prevLine, lineText);
-      if (prevText !== lineText) {
-        changedAdditionLines.push(line);
+      const canSyncDiffLine = line < diff.additionLines.length;
+      const prevLine = canSyncDiffLine ? (diff.additionLines[line] ?? '') : '';
+      const prevText = cleanLastNewline(prevLine);
+      // The editor text document can expose one extra trailing empty line when
+      // the file ends with a newline. Deferred tokenization must not grow
+      // additionLines from that mismatch or hunk trailing context desyncs.
+      if (canSyncDiffLine) {
+        diff.additionLines[line] = applyLineTextWithNewline(prevLine, lineText);
+        if (prevText !== lineText) {
+          changedAdditionLines.push(line);
+        }
       }
-      const lineType =
-        prevText !== lineText
-          ? 'change-addition'
-          : (prevProps['data-line-type-original'] ?? 'context');
       hastLines[line] = {
         type: 'element',
         tagName: 'div',
         properties: {
           'data-line': prevProps['data-line'] ?? line + 1,
           'data-line-index': prevProps['data-line-index'] ?? line,
-          'data-line-type-original':
-            prevProps['data-line-type-original'] ?? prevProps['data-line-type'],
-          'data-line-type': lineType,
+          'data-line-type': prevProps['data-line-type'] ?? 'context',
         },
         children: tokens.map(([char, fg, text]) => {
           if (char === 0 && fg === '') {

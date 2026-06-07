@@ -7,6 +7,7 @@ import {
   recomputeDiffHunks,
   updateDiffHunks,
 } from '../src/utils/updateDiffHunks';
+import { hasTrailingContextMismatch } from '../src/utils/virtualDiffLayout';
 import { verifyFileDiffHunkValues } from './testUtils';
 
 const PARSE_OPTIONS = { context: 1 } as const;
@@ -219,6 +220,63 @@ describe('updateDiffHunks', () => {
     expect(fromHelper.hunks).toEqual(fromParse.hunks);
     expect(fromHelper.splitLineCount).toBe(fromParse.splitLineCount);
     expect(fromHelper.unifiedLineCount).toBe(fromParse.unifiedLineCount);
+  });
+
+  test('accepts single-use iterables without falling back to full recompute', () => {
+    const base = createFixture();
+    const line = findAdditionLineIndex(base, 'line 10 replace new');
+    const hunkIndex = findHunkIndexForAdditionLine(base, line);
+    const hunkBefore: Hunk = structuredClone(base.hunks[hunkIndex]);
+
+    const diff = cloneDiff(base);
+    setAdditionLineText(diff, line, 'line 10 replace newer');
+    updateDiffHunks(
+      diff,
+      (function* () {
+        yield line;
+      })(),
+      PARSE_OPTIONS
+    );
+
+    expect(diff.hunks[hunkIndex]).toEqual(hunkBefore);
+    expect(cleanLastNewline(diff.additionLines[line])).toBe(
+      'line 10 replace newer'
+    );
+  });
+
+  test('returns unchanged metadata when no lines changed', () => {
+    const base = createFixture();
+    const diff = cloneDiff(base);
+    const hunksBefore = structuredClone(diff.hunks);
+
+    updateDiffHunks(diff, [], PARSE_OPTIONS);
+
+    expect(diff.hunks).toEqual(hunksBefore);
+    expect(diff.splitLineCount).toBe(base.splitLineCount);
+    expect(diff.unifiedLineCount).toBe(base.unifiedLineCount);
+  });
+
+  test('falls back to full recompute when incremental hunk metadata desyncs trailing context', () => {
+    const base = createFixture();
+    const diff = cloneDiff(base);
+    const line = findAdditionLineIndex(base, 'line 10 replace new');
+    setAdditionLineText(diff, line, 'line 10 replace newer');
+
+    updateDiffHunks(diff, [line], PARSE_OPTIONS);
+
+    // Simulate deferred tokenization growing additionLines for an editor-only
+    // trailing line without updating hunk metadata.
+    diff.additionLines.push('');
+
+    expect(hasTrailingContextMismatch(diff)).toBe(true);
+
+    updateDiffHunks(diff, [line], PARSE_OPTIONS);
+
+    expect(hasTrailingContextMismatch(diff)).toBe(false);
+    expectMatchesFullRecompute(
+      diff,
+      runFullRecomputeEdit(base, line, 'line 10 replace newer')
+    );
   });
 
   test('does not mark noEOFCR on non-final hunks after incremental reparse', () => {
