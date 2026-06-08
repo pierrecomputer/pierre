@@ -18,6 +18,7 @@ import {
   applyDocumentChangeToLineAnnotations,
   renderLineAnnotations,
 } from './lineAnnotations';
+import { type Marker, markerSeverityDatasetKey } from './marker';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import { type QuickEditContext, QuickEditWidget } from './quickEdit';
 import { type MatchRange, SearchPanelWidget } from './searchPanel';
@@ -54,6 +55,7 @@ import {
 import { createSpriteElement } from './sprite';
 import {
   type Position,
+  type Range,
   type ResolvedTextEdit,
   TextDocument,
   type TextDocumentChange,
@@ -68,23 +70,13 @@ import {
 import { EditorTokenizer, renderLineTokens } from './tokenzier';
 import {
   addEventListener,
+  clampDomOffset,
   debounce,
   extend,
   getLineNumberAttr,
   h,
   round,
 } from './utils';
-
-function clampDomOffset(node: Node, offset: number): number {
-  if (node.nodeType === 3) {
-    const length = (node as Text).textContent?.length ?? 0;
-    return Math.max(0, Math.min(offset, length));
-  }
-  if (node.nodeType === 1) {
-    return Math.max(0, Math.min(offset, node.childNodes.length));
-  }
-  return 0;
-}
 
 export interface EditorOptions<LAnnotation> {
   /** Render rounded corners for selection ranges, default is true. */
@@ -144,7 +136,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #contentElement?: HTMLElement;
   #overlayElement?: HTMLElement;
   #primaryCaretElement?: HTMLElement;
-  #selectionElements?: Map<string, HTMLElement>;
+  #overlayElements?: Map<string, HTMLElement>;
   #quickEdit?: QuickEditWidget;
   #searchPanel?: SearchPanelWidget;
   #resizeObserver?: ResizeObserver;
@@ -159,6 +151,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #selections?: EditorSelection[];
   #initSelections?: DiffsEditorSelection[];
   #matches?: MatchRange[];
+  #markers?: Marker[];
   #scrollingToLine?: number;
   #scrollingToLineChar?: number;
   #scrollingToLineNoFocus = false;
@@ -317,11 +310,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         },
         __debug: this.#options.__debug,
       });
-      this.#shouldIgnoreSelectionChange = false;
-      this.#selectionElements?.forEach((el) => el.remove());
-      this.#selectionElements?.clear();
       this.#fileInstance?.setSelectedLines(null);
-      this.#selectionElements = undefined;
+      this.#shouldIgnoreSelectionChange = false;
+      this.#overlayElements?.forEach((el) => el.remove());
+      this.#overlayElements?.clear();
+      this.#overlayElements = undefined;
       this.#selections = undefined;
       this.#scrollingToLine = undefined;
       this.#reservedSelections = undefined;
@@ -377,10 +370,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.setSelections(this.#initSelections);
       this.#scrollToPrimaryCaret();
       this.#initSelections = undefined;
-    } else if (this.#selections !== undefined && this.#selections.length > 0) {
+    } else if (
+      (this.#selections !== undefined && this.#selections.length > 0) ||
+      this.#matches !== undefined ||
+      (this.#markers !== undefined && this.#markers.length > 0)
+    ) {
       // when re-rendering triggered by virtual viewport scroll,
-      // re-render the existing selections
-      this.#updateSelections(this.#selections);
+      // re-render the existing overlay ranges
+      this.#updateSelections(this.#selections ?? []);
     }
 
     if (this.#options.__debug === true && renderRange !== undefined) {
@@ -456,6 +453,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  setMarkers(markers: Marker[]): void {
+    const textDocument = this.#textDocument;
+    if (textDocument === undefined) {
+      throw new Error('Text document is not initialized');
+    }
+    this.#markers = markers.map((marker) => ({
+      ...marker,
+      start: textDocument.normalizePosition(marker.start),
+      end: textDocument.normalizePosition(marker.end),
+    }));
+    this.#updateSelections(this.#selections ?? []);
+  }
+
   focus(options?: FocusOptions): void {
     const preventScroll = options?.preventScroll ?? false;
     const primarySelection = this.#selections?.at(-1);
@@ -511,9 +521,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#overlayElement = undefined;
     this.#primaryCaretElement?.remove();
     this.#primaryCaretElement = undefined;
-    this.#selectionElements?.forEach((el) => el.remove());
-    this.#selectionElements?.clear();
-    this.#selectionElements = undefined;
+    this.#overlayElements?.forEach((el) => el.remove());
+    this.#overlayElements?.clear();
+    this.#overlayElements = undefined;
     this.#searchPanel?.cleanup();
     this.#searchPanel = undefined;
     this.#quickEdit?.cleanup();
@@ -525,6 +535,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#selectionStart = undefined;
     this.#selections = undefined;
     this.#reservedSelections = undefined;
+    this.#markers = undefined;
   }
 
   #initialize(): void {
@@ -654,7 +665,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#shiftKeyPressed = false;
           this.#selectionStart = undefined;
           this.#reservedSelections = undefined;
-          this.#selectionElements?.forEach((el, key) => {
+          this.#overlayElements?.forEach((el, key) => {
             if (key.startsWith('quickEditIcon-')) {
               el.dataset.visible = 'true';
             }
@@ -1128,9 +1139,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#lineYCache.clear();
       this.#wrapLineOffsetsCache.clear();
     }
-    if (this.#selections !== undefined) {
-      this.#updateSelections(this.#selections);
-      this.focus();
+    if (
+      this.#selections !== undefined ||
+      this.#matches !== undefined ||
+      (this.#markers !== undefined && this.#markers.length > 0)
+    ) {
+      this.#updateSelections(this.#selections ?? []);
+      if (this.#selections !== undefined) {
+        this.focus();
+      }
     }
   }
 
@@ -1325,89 +1342,27 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #updateSelections(selections: EditorSelection[]) {
-    this.postponeBackgroundTokenizeToNextFrame();
-
-    this.#primaryCaretElement = undefined;
-    this.#fileInstance?.setSelectedLines(null);
-    this.#gutterElement
-      ?.querySelectorAll('[data-active]')
-      .forEach((el) => el.removeAttribute('data-active'));
-
-    if (selections.length === 0 && this.#matches === undefined) {
-      this.#selections = undefined;
-      this.#matches = undefined;
-      this.#selectionElements?.forEach((el) => el.remove());
-      this.#selectionElements?.clear();
-      return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    const renderCtx = {
-      fragment,
-      elements: new Map<string, HTMLElement>(),
-    };
-
-    if (selections.length > 0) {
-      const normalizedSelections = mergeOverlappingSelections(selections);
-      const primarySelection = normalizedSelections.at(-1)!;
-      this.#selections = normalizedSelections;
-      if (isCollapsedSelection(primarySelection)) {
-        const line = primarySelection.start.line + 1;
-        this.#fileInstance?.setSelectedLines({
-          start: line,
-          end: line,
+  #focus(position?: Position, preventScroll = true) {
+    if (position !== undefined) {
+      this.#shouldIgnoreSelectionChange = true;
+      this.#setWindowSelection({
+        start: position,
+        end: position,
+        direction: DirectionNone,
+      });
+      // call focus in a request animation frame to prevent conflict with
+      // the `setBaseAndExtent` method
+      requestAnimationFrame(() => {
+        this.#contentElement?.focus({ preventScroll });
+        // another request animation frame since the `focus` call
+        // may trigger a selectionchange event, which we want to ignore
+        requestAnimationFrame(() => {
+          this.#shouldIgnoreSelectionChange = false;
         });
-      } else {
-        if (this.#gutterElement !== undefined) {
-          const pos = getCaretPosition(primarySelection);
-          this.#gutterElement
-            .querySelector(`[data-column-number="${pos.line + 1}"]`)
-            ?.setAttribute('data-active', '');
-        }
-      }
-
-      for (const selection of normalizedSelections) {
-        if (!isCollapsedSelection(selection)) {
-          this.#renderSelection(renderCtx, selection, 'selection');
-        }
-        this.#renderCaret(renderCtx, selection, selection === primarySelection);
-      }
-      if (
-        this.#options.enabledQuickEdit === true &&
-        !isCollapsedSelection(primarySelection)
-      ) {
-        this.#renderQuickEditIcon(renderCtx, primarySelection);
-      }
+      });
+    } else {
+      this.#contentElement?.focus({ preventScroll });
     }
-
-    const textDocument = this.#textDocument;
-    if (this.#matches !== undefined && textDocument !== undefined) {
-      const primarySelection = this.#selections?.at(-1);
-      const primaryStartOffset =
-        primarySelection !== undefined
-          ? textDocument.offsetAt(primarySelection.start)
-          : -1;
-      const primaryEndOffset =
-        primarySelection !== undefined
-          ? textDocument.offsetAt(primarySelection.end)
-          : -1;
-      for (const [startOffset, endOffset] of this.#matches) {
-        const selection: EditorSelection = {
-          start: textDocument.positionAt(startOffset),
-          end: textDocument.positionAt(endOffset),
-          direction: DirectionNone,
-        };
-        const isFocused =
-          primaryStartOffset === startOffset && primaryEndOffset === endOffset;
-        this.#renderSelection(renderCtx, selection, 'match', isFocused);
-      }
-    }
-
-    this.#overlayElement?.appendChild(fragment);
-    this.#selectionElements?.forEach((el) => el.remove());
-    this.#selectionElements?.clear();
-    this.#selectionElements = renderCtx.elements;
   }
 
   // set window native selection to match the selection
@@ -1450,29 +1405,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     } catch (err) {
       console.error('[diffs/editor] failed to update window selection:', err);
-    }
-  }
-
-  #focus(position?: Position, preventScroll = true) {
-    if (position !== undefined) {
-      this.#shouldIgnoreSelectionChange = true;
-      this.#setWindowSelection({
-        start: position,
-        end: position,
-        direction: DirectionNone,
-      });
-      // call focus in a request animation frame to prevent conflict with
-      // the `setBaseAndExtent` method
-      requestAnimationFrame(() => {
-        this.#contentElement?.focus({ preventScroll });
-        // another request animation frame since the `focus` call
-        // may trigger a selectionchange event, which we want to ignore
-        requestAnimationFrame(() => {
-          this.#shouldIgnoreSelectionChange = false;
-        });
-      });
-    } else {
-      this.#contentElement?.focus({ preventScroll });
     }
   }
 
@@ -1580,20 +1512,124 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     virtualCaret.remove();
   }
 
+  #updateSelections(selections: EditorSelection[]) {
+    this.postponeBackgroundTokenizeToNextFrame();
+
+    this.#primaryCaretElement = undefined;
+    this.#fileInstance?.setSelectedLines(null);
+    this.#gutterElement
+      ?.querySelectorAll('[data-active]')
+      .forEach((el) => el.removeAttribute('data-active'));
+
+    if (
+      selections.length === 0 &&
+      this.#matches === undefined &&
+      this.#markers === undefined
+    ) {
+      this.#selections = undefined;
+      this.#overlayElements?.forEach((el) => el.remove());
+      this.#overlayElements?.clear();
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    const renderCtx = {
+      fragment,
+      elements: new Map<string, HTMLElement>(),
+    };
+
+    if (selections.length > 0) {
+      const normalizedSelections = mergeOverlappingSelections(selections);
+      const primarySelection = normalizedSelections.at(-1)!;
+      this.#selections = normalizedSelections;
+      if (isCollapsedSelection(primarySelection)) {
+        const line = primarySelection.start.line + 1;
+        this.#fileInstance?.setSelectedLines({
+          start: line,
+          end: line,
+        });
+      } else {
+        if (this.#gutterElement !== undefined) {
+          const pos = getCaretPosition(primarySelection);
+          this.#gutterElement
+            .querySelector(`[data-column-number="${pos.line + 1}"]`)
+            ?.setAttribute('data-active', '');
+        }
+      }
+
+      for (const selection of normalizedSelections) {
+        if (!isCollapsedSelection(selection)) {
+          this.#renderSelection(renderCtx, 'selection', selection);
+        }
+        this.#renderCaret(renderCtx, selection, selection === primarySelection);
+      }
+      if (
+        this.#options.enabledQuickEdit === true &&
+        !isCollapsedSelection(primarySelection)
+      ) {
+        this.#renderQuickEditIcon(renderCtx, primarySelection);
+      }
+    }
+
+    const textDocument = this.#textDocument;
+    if (this.#matches !== undefined && textDocument !== undefined) {
+      const primarySelection = this.#selections?.at(-1);
+      const primaryStartOffset =
+        primarySelection !== undefined
+          ? textDocument.offsetAt(primarySelection.start)
+          : -1;
+      const primaryEndOffset =
+        primarySelection !== undefined
+          ? textDocument.offsetAt(primarySelection.end)
+          : -1;
+      for (const [startOffset, endOffset] of this.#matches) {
+        const range: Range = {
+          start: textDocument.positionAt(startOffset),
+          end: textDocument.positionAt(endOffset),
+        };
+        const isFocused =
+          primaryStartOffset === startOffset && primaryEndOffset === endOffset;
+        this.#renderSelection(renderCtx, 'match', range, isFocused);
+      }
+    }
+
+    if (
+      this.#markers !== undefined &&
+      this.#markers.length > 0 &&
+      textDocument !== undefined
+    ) {
+      for (const marker of this.#markers) {
+        this.#renderSelection(
+          renderCtx,
+          'marker',
+          marker,
+          false,
+          markerSeverityDatasetKey(marker.severity)
+        );
+      }
+    }
+
+    this.#overlayElement?.appendChild(fragment);
+    this.#overlayElements?.forEach((el) => el.remove());
+    this.#overlayElements?.clear();
+    this.#overlayElements = renderCtx.elements;
+  }
+
   #renderSelection(
     renderCtx: {
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
     },
-    selection: EditorSelection,
-    type: 'selection' | 'match',
-    isFocused?: boolean
+    type: 'selection' | 'match' | 'marker',
+    range: Range,
+    isFocused?: boolean,
+    extraDataset?: string
   ) {
     if (this.#textDocument === undefined) {
       return;
     }
 
-    const { start, end } = selection;
+    const { start, end } = range;
     for (let line = start.line; line <= end.line; line++) {
       if (!this.#isLineVisible(line)) {
         continue;
@@ -1617,7 +1653,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             endChar,
             isLastLine,
             type,
-            isFocused
+            isFocused,
+            extraDataset
           );
           continue;
         }
@@ -1625,27 +1662,29 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
       let left = 0;
       let width = 0;
+      let paddingEnd = 0;
       if (startChar === 0) {
         left = this.#getGutterWidth() + this.#metrics.ch; // gutter width + inline padding (1ch)
       } else {
         left = this.#getCharX(line, startChar)[0];
       }
+      if (!isLastLine && type === 'selection') {
+        paddingEnd = this.#metrics.ch;
+      }
       if (startChar === endChar) {
-        width = isLastLine ? 0 : this.#metrics.ch;
+        width = paddingEnd;
       } else {
-        width =
-          this.#getCharX(line, endChar)[0] -
-          left +
-          (isLastLine ? 0 : this.#metrics.ch);
+        width = this.#getCharX(line, endChar)[0] - left + paddingEnd;
       }
       this.#renderSelectionBlock(
         renderCtx,
+        type,
         line,
         0,
         left,
         width,
-        type,
-        isFocused
+        isFocused,
+        extraDataset
       );
     }
   }
@@ -1666,8 +1705,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     startChar: number,
     endChar: number,
     isLastLine: boolean,
-    type: 'selection' | 'match',
-    isFocused: boolean = false
+    type: 'selection' | 'match' | 'marker',
+    isFocused: boolean = false,
+    extraDataset?: string
   ) {
     const wrapOffsets = this.#wrapLineText(line);
     const segmentCount = wrapOffsets.length - 1;
@@ -1686,6 +1726,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
       let segmentLeft: number;
       let segmentWidth: number;
+      let paddingEnd = 0;
       if (wrapStartChar === 0) {
         segmentLeft = offsetLeft;
       } else {
@@ -1700,8 +1741,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             ? prefixAsciiColumns * this.#metrics.ch
             : this.#metrics.measureTextWidth(prefixInSegment));
       }
+      if (
+        !isLastLine &&
+        wrapLine === segmentCount - 1 &&
+        type === 'selection'
+      ) {
+        paddingEnd = this.#metrics.ch;
+      }
       if (wrapStartChar === wrapEndChar) {
-        segmentWidth = wrapLine === segmentCount - 1 ? 0 : this.#metrics.ch;
+        segmentWidth = paddingEnd;
       } else {
         const selectionInSegment = lineText.slice(wrapStartChar, wrapEndChar);
         const selectionAsciiWidth = getExpandedAsciiTextColumns(
@@ -1712,19 +1760,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           selectionAsciiWidth !== -1
             ? selectionAsciiWidth * this.#metrics.ch
             : this.#metrics.measureTextWidth(selectionInSegment);
-        if (!isLastLine && wrapLine === segmentCount - 1) {
-          segmentWidth += this.#metrics.ch;
-        }
+        segmentWidth += paddingEnd;
       }
 
       this.#renderSelectionBlock(
         renderCtx,
+        type,
         line,
         wrapLine,
         segmentLeft,
         segmentWidth,
-        type,
-        isFocused
+        isFocused,
+        extraDataset
       );
     }
   }
@@ -1742,12 +1789,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         width: number;
       };
     },
+    type: 'selection' | 'match' | 'marker',
     line: number,
     wrapLine: number,
     left: number,
     width: number,
-    type: 'selection' | 'match',
-    isFocused: boolean = false
+    isFocused: boolean = false,
+    extraDataset?: string
   ) {
     if (width === 0) {
       return;
@@ -1756,8 +1804,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const { ch, lineHeight } = this.#metrics;
     const y = this.#getLineY(line) + wrapLine * lineHeight;
     const css = `width:${width}px;transform:translateX(${left}px) translateY(${y}px);`;
-    const cacheKey = `${type}-block-${left}-${y}-${width}-${isFocused ? 'f' : ''}`;
-    const selectionEls = this.#selectionElements;
+    const cacheKey = `${type}-${left}-${y}-${width}${isFocused ? 'f' : ''}${extraDataset ?? ''}`;
+    const overlayEls = this.#overlayElements;
 
     const rounded =
       (this.#options.roundedSelection ?? true) && type === 'selection';
@@ -1789,9 +1837,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (cornerEl !== undefined) {
         return;
       }
-      if (selectionEls?.has(cacheKey) === true) {
-        cornerEl = selectionEls.get(cacheKey)!;
-        selectionEls.delete(cacheKey);
+      if (overlayEls?.has(cacheKey) === true) {
+        cornerEl = overlayEls.get(cacheKey)!;
+        overlayEls.delete(cacheKey);
       } else {
         cornerEl = h(
           'div',
@@ -1871,14 +1919,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    if (selectionEls?.has(cacheKey) === true) {
-      rangeEl = selectionEls.get(cacheKey)!;
-      selectionEls.delete(cacheKey);
+    if (overlayEls?.has(cacheKey) === true) {
+      rangeEl = overlayEls.get(cacheKey)!;
+      overlayEls.delete(cacheKey);
     } else {
       rangeEl = h(
         'div',
         {
-          dataset: type + 'Range',
+          dataset: extraDataset
+            ? [type + 'Range', extraDataset]
+            : type + 'Range',
           style: { cssText: css },
         },
         renderCtx.fragment

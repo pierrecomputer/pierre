@@ -86,6 +86,17 @@ export function getLineNumberAttr(
   return lineNumber;
 }
 
+export function clampDomOffset(node: Node, offset: number): number {
+  if (node.nodeType === 3) {
+    const length = (node as Text).textContent?.length ?? 0;
+    return Math.max(0, Math.min(offset, length));
+  }
+  if (node.nodeType === 1) {
+    return Math.max(0, Math.min(offset, node.childNodes.length));
+  }
+  return 0;
+}
+
 export function extend<T extends object>(obj: T, attrs: Partial<T>): T {
   return Object.assign(obj, attrs);
 }

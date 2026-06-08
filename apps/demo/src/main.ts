@@ -868,6 +868,22 @@ if (renderFileButton != null) {
                   direction: 'none',
                 },
               ]);
+              requestAnimationFrame(() => {
+                editor.setMarkers([
+                  {
+                    start: {
+                      line: 1,
+                      character: 2,
+                    },
+                    end: {
+                      line: 1,
+                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
+                    },
+                    severity: 'info',
+                    message: 'Test marker',
+                  },
+                ]);
+              });
             } else {
               editor.cleanUp();
             }
