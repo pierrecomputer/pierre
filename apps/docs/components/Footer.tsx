@@ -90,6 +90,16 @@ export default function Footer() {
           </nav>
         </div>
         <div>
+          <h4 className="mb-2 text-sm font-medium">DiffsHub</h4>
+          <nav className="flex flex-col gap-1">
+            {/* diffshub is a separate app on its own domain, so this is
+                always an external link. */}
+            <a href="https://diffshub.com" className={linkClass}>
+              Home
+            </a>
+          </nav>
+        </div>
+        <div>
           <h4 className="mb-2 text-sm font-medium">Community</h4>
           <nav className="flex flex-col gap-1">
             <Link

@@ -71,6 +71,11 @@ export function HeaderMobileMenu({
             {PRODUCTS[id].name}
           </MobileNavLink>
         ))}
+        {/* diffshub is a separate app on its own domain; hardcoded external
+            link, matching the desktop nav. */}
+        <MobileNavLink href="https://diffshub.com" external>
+          DiffsHub
+        </MobileNavLink>
         {/* Theme lives only on the diffs site. From any other site, link out
             to it; on the diffs site itself we already rendered it above via
             `product.themePath`. */}

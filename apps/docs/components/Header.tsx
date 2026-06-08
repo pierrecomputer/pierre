@@ -186,6 +186,23 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
               </Link>
             </Button>
           ))}
+          {/* diffshub is a separate app on its own domain, so it's a
+              hardcoded external link rather than a product in this app. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="text-muted-foreground gap-0.5 px-2 font-normal"
+          >
+            <Link
+              href="https://diffshub.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              DiffsHub
+              <IconArrowUpRight />
+            </Link>
+          </Button>
 
           <div className="border-border mx-2 h-5 w-px border-l" />
         </div>
