@@ -242,9 +242,15 @@ function applyReparsedHunk(target: Hunk, parsed: Hunk): void {
   target.hunkContent = parsed.hunkContent.map((content) =>
     offsetHunkContent(content, additionOffset, deletionOffset)
   );
+  target.additionLineIndex = additionOffset + parsed.additionLineIndex;
+  target.additionStart = target.additionStart + parsed.additionLineIndex;
   target.additionCount = parsed.additionCount;
-  target.deletionCount = parsed.deletionCount;
   target.additionLines = parsed.additionLines;
+  if (parsed.deletionLineIndex >= 0) {
+    target.deletionLineIndex = deletionOffset + parsed.deletionLineIndex;
+    target.deletionStart = target.deletionStart + parsed.deletionLineIndex;
+  }
+  target.deletionCount = parsed.deletionCount;
   target.deletionLines = parsed.deletionLines;
   target.noEOFCRAdditions = parsed.noEOFCRAdditions;
   target.noEOFCRDeletions = parsed.noEOFCRDeletions;

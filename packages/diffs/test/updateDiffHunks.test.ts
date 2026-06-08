@@ -279,6 +279,53 @@ describe('updateDiffHunks', () => {
     );
   });
 
+  test('translates reparsed hunk coordinates when context lines become changes', () => {
+    const oldContents = [
+      'ctx01',
+      'ctx02',
+      'ctx03',
+      'old line',
+      'ctx04',
+      'ctx05',
+      'ctx06',
+    ].join('\n');
+    const newContents = [
+      'ctx01',
+      'ctx02',
+      'ctx03',
+      'new line',
+      'ctx04',
+      'ctx05',
+      'ctx06',
+    ].join('\n');
+    const base = parseDiffFromFile(
+      { name: 'example.ts', contents: oldContents },
+      { name: 'example.ts', contents: newContents },
+      { context: 3 }
+    );
+    const line = findAdditionLineIndex(base, 'ctx03');
+    const hunkIndex = findHunkIndexForAdditionLine(base, line);
+
+    const diff = runUpdateDiffHunksEdit(base, line, 'ctx03-edited');
+
+    const hunk = diff.hunks[hunkIndex];
+    expect(hunk?.additionLineIndex).toBe(2);
+    expect(hunk?.additionStart).toBe(3);
+    expect(hunk?.additionCount).toBe(2);
+    expect(hunk?.deletionLineIndex).toBe(2);
+    expect(hunk?.deletionStart).toBe(3);
+    expect(hunk?.deletionCount).toBe(2);
+    expect(hunk?.hunkContent[0]).toMatchObject({
+      type: 'change',
+      additionLineIndex: 2,
+      deletionLineIndex: 2,
+    });
+    expect(verifyFileDiffHunkValues(diff)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
+
   test('does not mark noEOFCR on non-final hunks after incremental reparse', () => {
     const old = 'a\n'.repeat(20) + 'old1\n' + 'b\n'.repeat(20) + 'old-final';
     const neu = 'a\n'.repeat(20) + 'new1\n' + 'b\n'.repeat(20) + 'new-final\n';
