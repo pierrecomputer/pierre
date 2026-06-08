@@ -261,7 +261,7 @@ export default function RootLayout({
       <body className={SITE}>
         <ScrollbarGutterVariables />
         <WrapperContext>
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <ThemeProvider attribute="class">
             {children}
             <Toaster />
             <div

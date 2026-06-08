@@ -1,5 +1,6 @@
 'use client';
 
+import type { ColorMode } from '@pierre/theme-kit';
 import {
   createContext,
   type ReactNode,
@@ -8,36 +9,30 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
 } from 'react';
 
+import { themeController } from './themeController';
+
 type ResolvedTheme = 'light' | 'dark';
-type Theme = ResolvedTheme | 'system';
 
 interface ThemeProviderProps {
   attribute?: 'class' | `data-${string}` | Array<'class' | `data-${string}`>;
   children: ReactNode;
-  defaultTheme?: Theme;
   enableColorScheme?: boolean;
-  enableSystem?: boolean;
-  forcedTheme?: Theme;
-  storageKey?: string;
-  themes?: ResolvedTheme[];
-  value?: Partial<Record<Theme, string>>;
+  value?: Partial<Record<ResolvedTheme, string>>;
 }
 
 interface ThemeContextValue {
-  forcedTheme?: Theme;
   resolvedTheme?: ResolvedTheme;
-  setTheme: (theme: Theme) => void;
+  setTheme: (theme: ColorMode) => void;
   systemTheme?: ResolvedTheme;
-  theme?: Theme;
-  themes: Theme[];
+  theme?: ColorMode;
+  themes: ColorMode[];
 }
 
-const DEFAULT_THEMES: ResolvedTheme[] = ['light', 'dark'];
-const DEFAULT_STORAGE_KEY = 'theme';
-const DEFAULT_ATTRIBUTE = 'data-theme';
-const THEME_QUERY = '(prefers-color-scheme: dark)';
+const RESOLVED_THEMES: ResolvedTheme[] = ['light', 'dark'];
+const AVAILABLE_MODES: ColorMode[] = ['light', 'dark', 'system'];
 
 // Navbar tint (iOS Safari's <meta name="theme-color">) for each resolved
 // color mode. These match the global body `--background` (oklch(1)/oklch(0.145))
@@ -66,53 +61,25 @@ function setThemeColorMeta(color: string) {
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-function getSystemTheme(): ResolvedTheme {
-  return window.matchMedia(THEME_QUERY).matches ? 'dark' : 'light';
-}
-
-function resolveTheme(
-  theme: Theme,
-  enableSystem: boolean,
-  systemTheme: ResolvedTheme | undefined
-): ResolvedTheme {
-  if (theme === 'system' && enableSystem) {
-    return systemTheme ?? getSystemTheme();
-  }
-
-  return theme === 'dark' ? 'dark' : 'light';
-}
-
-function getAttributeThemeValues(
-  themes: ResolvedTheme[],
-  value: Partial<Record<Theme, string>> | undefined
-): string[] {
-  return themes.map((theme) => value?.[theme] ?? theme);
-}
-
-// Mirrors the small class/data-attribute contract the docs need, without
-// rendering an inline script from a Client Component.
+// Applies the already-resolved color mode to <html>: the class/data-attribute
+// contract, the native color-scheme, and the iOS navbar tint. The resolved
+// 'light'/'dark' comes straight from the theme controller, so this no longer
+// re-derives it from a raw mode + system preference.
 function applyTheme({
   attribute,
   enableColorScheme,
-  enableSystem,
-  systemTheme,
-  theme,
-  themes,
+  resolvedTheme,
   value,
 }: {
   attribute: ThemeProviderProps['attribute'];
   enableColorScheme: boolean;
-  enableSystem: boolean;
-  systemTheme: ResolvedTheme | undefined;
-  theme: Theme;
-  themes: ResolvedTheme[];
-  value: Partial<Record<Theme, string>> | undefined;
+  resolvedTheme: ResolvedTheme;
+  value: Partial<Record<ResolvedTheme, string>> | undefined;
 }) {
   const root = document.documentElement;
-  const resolvedTheme = resolveTheme(theme, enableSystem, systemTheme);
   const resolvedValue = value?.[resolvedTheme] ?? resolvedTheme;
   const attributes = Array.isArray(attribute) ? attribute : [attribute];
-  const classValues = getAttributeThemeValues(themes, value);
+  const classValues = RESOLVED_THEMES.map((theme) => value?.[theme] ?? theme);
 
   for (const currentAttribute of attributes) {
     if (currentAttribute === 'class') {
@@ -120,7 +87,6 @@ function applyTheme({
       root.classList.add(resolvedValue);
       continue;
     }
-
     if (currentAttribute != null) {
       root.setAttribute(currentAttribute, resolvedValue);
     }
@@ -134,114 +100,59 @@ function applyTheme({
   setThemeColorMeta(MODE_THEME_COLOR[resolvedTheme]);
 }
 
-function isTheme(value: string | null, themes: Theme[]): value is Theme {
-  return value != null && themes.includes(value as Theme);
-}
-
-function readStoredTheme(storageKey: string): string | null {
-  try {
-    return window.localStorage.getItem(storageKey);
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredTheme(storageKey: string, theme: Theme) {
-  try {
-    window.localStorage.setItem(storageKey, theme);
-  } catch {
-    // The in-memory state still updates when storage is unavailable.
-  }
-}
-
+// Thin React binding over the @pierre/theme-kit controller (the single owner of
+// theming state). It subscribes to the controller for mode +
+// resolvedColorScheme, applies the resolved mode to the DOM, and exposes the
+// useTheme() API the app already depends on. Selection and persistence live in
+// the controller — this component holds no theming state of its own.
 export function ThemeProvider({
-  attribute = DEFAULT_ATTRIBUTE,
+  attribute = 'data-theme',
   children,
-  defaultTheme,
   enableColorScheme = true,
-  enableSystem = true,
-  forcedTheme,
-  storageKey = DEFAULT_STORAGE_KEY,
-  themes = DEFAULT_THEMES,
   value,
 }: ThemeProviderProps) {
-  const defaultResolvedTheme =
-    defaultTheme ?? (enableSystem ? 'system' : 'light');
-  const availableThemes = useMemo(
-    () => (enableSystem ? [...themes, 'system' as const] : themes),
-    [enableSystem, themes]
-  );
-  const [theme, setThemeState] = useState<Theme | undefined>(undefined);
-  const [systemTheme, setSystemTheme] = useState<ResolvedTheme | undefined>(
-    undefined
+  const state = useSyncExternalStore(
+    themeController.subscribe,
+    themeController.getState,
+    themeController.getState
   );
 
+  // The controller reads persisted state synchronously on module load, so on
+  // the client useSyncExternalStore would surface the stored mode on the very
+  // first render — but the server rendered the defaults. Expose the resolved
+  // values to consumers only after mount, so any render output derived from
+  // useTheme() (e.g. diffshub's chrome) matches the SSR markup first, then
+  // flips. The DOM application below still uses the real resolved mode (the
+  // pre-paint bootstrap script already painted it), so this gate is invisible.
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    const storedTheme = readStoredTheme(storageKey);
-    setThemeState(
-      isTheme(storedTheme, availableThemes) ? storedTheme : defaultResolvedTheme
-    );
-  }, [availableThemes, defaultResolvedTheme, storageKey]);
+    setMounted(true);
+  }, []);
 
-  useEffect(() => {
-    if (!enableSystem) {
-      return;
-    }
-
-    const media = window.matchMedia(THEME_QUERY);
-    const updateSystemTheme = () => {
-      setSystemTheme(media.matches ? 'dark' : 'light');
-    };
-
-    updateSystemTheme();
-    media.addEventListener('change', updateSystemTheme);
-    return () => media.removeEventListener('change', updateSystemTheme);
-  }, [enableSystem]);
+  const theme = mounted ? state.mode : undefined;
+  const resolvedTheme = mounted ? state.resolvedColorScheme : undefined;
 
   useEffect(() => {
-    const activeTheme = forcedTheme ?? theme ?? defaultResolvedTheme;
-
     applyTheme({
       attribute,
       enableColorScheme,
-      enableSystem,
-      systemTheme,
-      theme: activeTheme,
-      themes,
+      resolvedTheme: state.resolvedColorScheme,
       value,
     });
-  }, [
-    attribute,
-    defaultResolvedTheme,
-    enableColorScheme,
-    enableSystem,
-    forcedTheme,
-    systemTheme,
-    theme,
-    themes,
-    value,
-  ]);
+  }, [attribute, enableColorScheme, state.resolvedColorScheme, value]);
 
-  const setTheme = useCallback(
-    (nextTheme: Theme) => {
-      setThemeState(nextTheme);
-      writeStoredTheme(storageKey, nextTheme);
-    },
-    [storageKey]
-  );
+  const setTheme = useCallback((next: ColorMode) => {
+    themeController.setColorMode(next);
+  }, []);
 
-  const resolvedTheme =
-    theme == null ? undefined : resolveTheme(theme, enableSystem, systemTheme);
   const contextValue = useMemo<ThemeContextValue>(
     () => ({
-      forcedTheme,
       resolvedTheme,
       setTheme,
-      systemTheme,
       theme,
-      themes: availableThemes,
+      themes: AVAILABLE_MODES,
     }),
-    [availableThemes, forcedTheme, resolvedTheme, setTheme, systemTheme, theme]
+    [resolvedTheme, setTheme, theme]
   );
 
   return (

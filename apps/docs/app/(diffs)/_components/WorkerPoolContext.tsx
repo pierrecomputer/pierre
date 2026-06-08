@@ -49,6 +49,9 @@ const PoolOptions: WorkerPoolOptions = {
 const SITE = process.env.NEXT_PUBLIC_SITE;
 
 const HighlighterOptions: WorkerInitializationRenderOptions = {
+  // diffshub intentionally previews on the soft Pierre pair (a deliberate
+  // product choice) even though the canonical default is the non-soft pair.
+  // Every other site preloads the shared default.
   theme:
     SITE === 'diffshub'
       ? { dark: 'pierre-dark-soft', light: 'pierre-light-soft' }

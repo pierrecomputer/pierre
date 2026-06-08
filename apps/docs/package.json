@@ -5,10 +5,7 @@
   "scripts": {
     "build": "bun run build:deps && bun run generate-llms-txt && bun run build:next",
     "build:next": "next build",
-    "build:deps": "bun run build:deps:diffs && bun run build:deps:truncate && bun run build:deps:tree",
-    "build:deps:diffs": "output=$(cd ../../packages/diffs && bun run build 2>&1) && echo '[diffs] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
-    "build:deps:tree": "output=$(cd ../../packages/trees && bun run build 2>&1) && echo '[trees] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
-    "build:deps:truncate": "output=$(cd ../../packages/truncate && bun run build 2>&1) && echo '[truncate] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
+    "build:deps": "cd ../.. && bun ws \"packages/*\" build",
     "diffs:dev": "export NEXT_PUBLIC_SITE=diffs PORT=$((${PIERRE_PORT_OFFSET:-0} + 3690)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run _dev",
     "trees:dev": "export NEXT_PUBLIC_SITE=trees PORT=$((${PIERRE_PORT_OFFSET:-0} + 3691)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run _dev",
     "diffshub:dev": "export NEXT_PUBLIC_SITE=diffshub PORT=$((${PIERRE_PORT_OFFSET:-0} + 3692)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run _dev",
@@ -31,6 +28,7 @@
     "@pierre/diffs": "workspace:*",
     "@pierre/icons": "catalog:",
     "@pierre/theme": "catalog:",
+    "@pierre/theme-kit": "workspace:*",
     "@pierre/tree-test-data": "workspace:*",
     "@pierre/trees": "workspace:*",
     "@pierre/truncate": "workspace:*",
@@ -77,11 +75,13 @@
     "@playwright/test": "catalog:",
     "@tailwindcss/postcss": "catalog:",
     "@types/hast": "catalog:",
+    "@types/jsdom": "catalog:",
     "@types/mdast": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "concurrently": "catalog:",
+    "jsdom": "catalog:",
     "typescript": "catalog:"
   },
   "overrides": {
