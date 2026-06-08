@@ -465,13 +465,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#markerManager = undefined;
     } else {
       this.#markerManager ??= new MarkerManager({
-        getRenderMarkerMessage: () => this.#options.renderMarkerMessage,
+        getEditorOptions: () => this.#options,
+        getMetrics: () => this.#metrics,
         getFileContainer: () => this.#fileContainer,
         getCharX: (line, character) => this.#getCharX(line, character),
         getLineY: (line) => this.#getLineY(line),
-        getLineHeight: () => this.#metrics.lineHeight,
-        isPointerGestureActive: () =>
-          this.#isContentMouseDown || this.#isGutterMouseDown,
+        isMouseDown: () => this.#isContentMouseDown || this.#isGutterMouseDown,
       });
       this.#markerManager.setMarkers(markers, textDocument);
       if (this.#contentElement !== undefined) {
@@ -733,6 +732,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             return;
           }
 
+          this.#markerManager?.removePopup();
+
           // this is a workaround for the selection rendering glitch
           // happens when selecting content in shadow DOM on Safari
           if (
@@ -931,6 +932,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             ) {
               return;
             }
+            this.#markerManager?.removePopup();
             const line = lineNumber - 1;
             const selection: EditorSelection = {
               start: { line, character: 0 },

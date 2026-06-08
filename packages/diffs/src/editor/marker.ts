@@ -14,17 +14,21 @@ export interface Marker extends Range {
   metadata?: Record<string, unknown>;
 }
 
-export interface MarkerManagerContext {
-  getRenderMarkerMessage?: () => ((marker: Marker) => HTMLElement) | undefined;
+export interface EditorStub {
+  getEditorOptions: () => {
+    readonly renderMarkerMessage?: (marker: Marker) => HTMLElement;
+  };
+  getMetrics: () => {
+    readonly lineHeight: number;
+  };
   getFileContainer: () => HTMLElement | undefined;
   getCharX: (line: number, character: number) => [number, number];
   getLineY: (line: number) => number;
-  getLineHeight: () => number;
-  isPointerGestureActive: () => boolean;
+  isMouseDown: () => boolean;
 }
 
 export class MarkerManager {
-  #context: MarkerManagerContext;
+  #editor: EditorStub;
   #markers: Marker[] = [];
   #markerSlotElements?: HTMLElement[];
   #markerPopupElement?: HTMLElement;
@@ -36,8 +40,8 @@ export class MarkerManager {
   #hoveredMarkerIndex?: number;
   #isMarkerPopupHovered = false;
 
-  constructor(context: MarkerManagerContext) {
-    this.#context = context;
+  constructor(editor: EditorStub) {
+    this.#editor = editor;
   }
 
   get markers(): readonly Marker[] {
@@ -65,8 +69,8 @@ export class MarkerManager {
       return;
     }
 
-    const renderMarkerMessage = this.#context.getRenderMarkerMessage?.();
-    const fileContainer = this.#context.getFileContainer();
+    const { renderMarkerMessage } = this.#editor.getEditorOptions();
+    const fileContainer = this.#editor.getFileContainer();
     if (renderMarkerMessage === undefined || fileContainer === undefined) {
       return;
     }
@@ -94,7 +98,7 @@ export class MarkerManager {
 
     this.#markerEventDisposes = [
       addEventListener(contentEl, 'mouseover', (e) => {
-        if (this.#context.isPointerGestureActive()) {
+        if (this.#editor.isMouseDown()) {
           return;
         }
         const target = e.composedPath()[0] as HTMLElement | undefined;
@@ -199,8 +203,9 @@ export class MarkerManager {
 
     this.#cancelMarkerPopupShow();
     this.#cancelMarkerPopupHide();
-    if (this.#hoveredMarkerIndex !== undefined) {
-      this.#dismissMarkerPopup();
+    if (this.#markerPopupElement !== undefined) {
+      this.#renderMarkerPopup(markerIndex);
+      return;
     }
 
     this.#pendingMarkerPopupIndex = markerIndex;
@@ -239,7 +244,7 @@ export class MarkerManager {
       return;
     }
 
-    const fileContainer = this.#context.getFileContainer();
+    const fileContainer = this.#editor.getFileContainer();
     const preElement =
       fileContainer?.shadowRoot?.querySelector<HTMLElement>('pre');
     const codeElement = preElement?.querySelector<HTMLElement>('[data-code]');
@@ -253,18 +258,35 @@ export class MarkerManager {
 
     const { start, message } = this.#markers[hoveredMarkerIndex];
     const { line, character } = start;
-    const [left, wrapLine] = this.#context.getCharX(line, character);
-    const lineHeight = this.#context.getLineHeight();
-    const y = this.#context.getLineY(line) + wrapLine * lineHeight + lineHeight;
-    const renderMarkerMessage = this.#context.getRenderMarkerMessage?.();
+    const { getCharX, getLineY, getEditorOptions, getMetrics } = this.#editor;
+    const [left, wrapLine] = getCharX(line, character);
+    const { lineHeight } = getMetrics();
+    const { renderMarkerMessage } = getEditorOptions();
+    const y = getLineY(line) + wrapLine * lineHeight + lineHeight;
+    const transform = `translateX(${codeElement.offsetLeft + left}px) translateY(${codeElement.offsetTop + y}px)`;
+    const popup = this.#markerPopupElement;
+
+    if (popup !== undefined) {
+      popup.style.transform = transform;
+      const content = popup.firstElementChild as HTMLElement | null;
+      if (renderMarkerMessage !== undefined) {
+        content?.setAttribute('name', 'marker-' + hoveredMarkerIndex);
+      } else if (content?.dataset.markerMessage !== undefined) {
+        if (typeof message === 'string') {
+          content.textContent = message;
+        } else {
+          content.innerHTML = message.html;
+        }
+      }
+      this.#hoveredMarkerIndex = hoveredMarkerIndex;
+      return;
+    }
 
     this.#markerPopupElement = h(
       'div',
       {
         dataset: ['editorWidget', 'markerPopup'],
-        style: {
-          transform: `translateX(${codeElement.offsetLeft + left}px) translateY(${codeElement.offsetTop + y}px)`,
-        },
+        style: { transform },
         children: [
           renderMarkerMessage !== undefined
             ? h('slot', { name: 'marker-' + hoveredMarkerIndex })
