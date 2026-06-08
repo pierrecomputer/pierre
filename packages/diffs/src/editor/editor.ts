@@ -460,22 +460,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (textDocument === undefined) {
       throw new Error('Text document is not initialized');
     }
+
     if (markers.length === 0) {
       this.#markerManager?.cleanup();
       this.#markerManager = undefined;
-    } else {
-      this.#markerManager ??= new MarkerManager({
-        getEditorOptions: () => this.#options,
-        getMetrics: () => this.#metrics,
-        getFileContainer: () => this.#fileContainer,
-        getCharX: (line, character) => this.#getCharX(line, character),
-        getLineY: (line) => this.#getLineY(line),
-        isMouseDown: () => this.#isContentMouseDown || this.#isGutterMouseDown,
-      });
-      this.#markerManager.setMarkers(markers, textDocument);
-      if (this.#contentElement !== undefined) {
-        this.#markerManager.listenHover(this.#contentElement);
-      }
+      this.#updateSelections(this.#selections ?? []);
+      return;
+    }
+
+    this.#markerManager ??= new MarkerManager({
+      getEditorOptions: () => this.#options,
+      getMetrics: () => this.#metrics,
+      getFileContainer: () => this.#fileContainer,
+      getCharX: (line, character) => this.#getCharX(line, character),
+      getLineY: (line) => this.#getLineY(line),
+      isMouseDown: () => this.#isContentMouseDown || this.#isGutterMouseDown,
+    });
+    this.#markerManager.setMarkers(markers, textDocument);
+    if (this.#contentElement !== undefined) {
+      this.#markerManager.listenHover(this.#contentElement);
     }
     this.#updateSelections(this.#selections ?? []);
   }
@@ -909,36 +912,58 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ),
     ];
     if (gutterEl !== undefined) {
+      const resolveGutterTarget = (
+        eventTarget: HTMLElement | undefined,
+        includeContentLine = false
+      ) => {
+        let target = eventTarget;
+        if (target?.dataset.lineNumberContent !== undefined) {
+          target = target.parentElement ?? undefined;
+        } else if (includeContentLine && target?.tagName === 'SPAN') {
+          target = target.closest('[data-line]') as HTMLElement | undefined;
+        }
+        return target;
+      };
+
+      const resolveEditableLine = (target: HTMLElement | undefined) => {
+        if (target === undefined) {
+          return;
+        }
+        const lineType = target.dataset.lineType;
+        const lineNumber =
+          getLineNumberAttr(target) ??
+          getLineNumberAttr(target, 'columnNumber');
+        if (
+          lineNumber === undefined ||
+          lineType === undefined ||
+          !isLineEditable(lineType)
+        ) {
+          return;
+        }
+        return lineNumber - 1;
+      };
+
       this.#editorEventDisposes.push(
         addEventListener(
           gutterEl,
           'pointerdown',
           (e) => {
-            let target = e.composedPath()[0] as HTMLElement | undefined;
-            if (target?.dataset.lineNumberContent !== undefined) {
-              target =
-                target.parentElement ?? (undefined as HTMLElement | undefined);
-            }
             const textDocument = this.#textDocument;
-            if (target === undefined || textDocument === undefined) {
+            const lineIndex = resolveEditableLine(
+              resolveGutterTarget(
+                e.composedPath()[0] as HTMLElement | undefined
+              )
+            );
+            if (lineIndex === undefined || textDocument === undefined) {
               return;
             }
-            const lineType = target.dataset.lineType;
-            const lineNumber = getLineNumberAttr(target, 'columnNumber');
-            if (
-              lineNumber === undefined ||
-              lineType === undefined ||
-              !isLineEditable(lineType)
-            ) {
-              return;
-            }
+
             this.#markerManager?.removePopup();
-            const line = lineNumber - 1;
             const selection: EditorSelection = {
-              start: { line, character: 0 },
+              start: { line: lineIndex, character: 0 },
               end: {
-                line,
-                character: textDocument.getLineText(line).length,
+                line: lineIndex,
+                character: textDocument.getLineText(lineIndex).length,
               },
               direction: DirectionForward,
             };
@@ -951,50 +976,38 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 document,
                 'mousemove',
                 (e) => {
-                  let target = e.composedPath()[0] as HTMLElement | undefined;
-                  if (target?.dataset.lineNumberContent !== undefined) {
-                    target = target?.parentElement ?? undefined;
-                  } else if (target?.tagName === 'SPAN') {
-                    target = target?.closest('[data-line]') as
-                      | HTMLElement
-                      | undefined;
+                  if (!this.#isGutterMouseDown) {
+                    return;
                   }
-                  if (target === undefined) {
+                  const textDocument = this.#textDocument;
+                  const lineIndex = resolveEditableLine(
+                    resolveGutterTarget(
+                      e.composedPath()[0] as HTMLElement | undefined,
+                      true
+                    )
+                  );
+                  if (lineIndex === undefined || textDocument === undefined) {
                     return;
                   }
 
-                  const lineType = target.dataset.lineType;
-                  const lineNumber =
-                    getLineNumberAttr(target) ??
-                    getLineNumberAttr(target, 'columnNumber');
-                  if (
-                    this.#isGutterMouseDown &&
-                    this.#textDocument !== undefined &&
-                    lineNumber !== undefined &&
-                    lineType !== undefined &&
-                    isLineEditable(lineType)
-                  ) {
-                    const lineIndex = lineNumber - 1;
-                    let selection: EditorSelection = {
-                      start: { line: lineIndex, character: 0 },
-                      end: {
-                        line: lineIndex,
-                        character:
-                          this.#textDocument.getLineText(lineIndex).length,
-                      },
-                      direction: DirectionForward,
-                    };
-                    if (this.#selectionStart !== undefined) {
-                      selection = createSelectionFrom(
-                        this.#selectionStart,
-                        selection
-                      );
-                    } else {
-                      this.#selectionStart = selection;
-                    }
-                    this.#updateSelections([selection]);
-                    this.#focus(selection.end);
+                  let selection: EditorSelection = {
+                    start: { line: lineIndex, character: 0 },
+                    end: {
+                      line: lineIndex,
+                      character: textDocument.getLineText(lineIndex).length,
+                    },
+                    direction: DirectionForward,
+                  };
+                  if (this.#selectionStart !== undefined) {
+                    selection = createSelectionFrom(
+                      this.#selectionStart,
+                      selection
+                    );
+                  } else {
+                    this.#selectionStart = selection;
                   }
+                  this.#updateSelections([selection]);
+                  this.#focus(selection.end);
                 },
                 { passive: true }
               ),
@@ -1029,8 +1042,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
       case 'findNextMatch': {
         const selections = this.#selections;
-        const textDocument = this.#textDocument;
-        if (selections === undefined || textDocument === undefined) {
+        if (selections === undefined) {
           break;
         }
         const hasCollapsed = selections.some(isCollapsedSelection);
@@ -1173,9 +1185,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.focus();
       }
     }
-    if (this.#markerManager?.isPopupVisible() === true) {
-      this.#markerManager.removePopup();
-    }
+    this.#markerManager?.removePopup();
   }
 
   #rerender(
@@ -2185,9 +2195,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
         if (nextMatch !== undefined) {
           scrollToMatch(nextMatch, true);
+        } else {
+          this.#updateSelections(this.#selections ?? []);
         }
-        this.#matches = allMatches;
-        this.#updateSelections(this.#selections ?? []);
         return nextMatch;
       },
       onClose: () => {
@@ -2262,23 +2272,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    const edit = isCollapsedSelection(primarySelection)
-      ? (() => {
-          const offset = textDocument.offsetAt(primarySelection.start);
-          const nextOffset = forward
-            ? Math.min(textDocument.getText().length, offset + 1)
-            : Math.max(0, offset - 1);
-          return {
-            start: Math.min(offset, nextOffset),
-            end: Math.max(offset, nextOffset),
-            text: '',
-          };
-        })()
-      : {
-          start: textDocument.offsetAt(primarySelection.start),
-          end: textDocument.offsetAt(primarySelection.end),
-          text: '',
-        };
+    let edit: ResolvedTextEdit;
+    if (isCollapsedSelection(primarySelection)) {
+      const offset = textDocument.offsetAt(primarySelection.start);
+      const nextOffset = forward
+        ? Math.min(textDocument.getText().length, offset + 1)
+        : Math.max(0, offset - 1);
+      edit = {
+        start: Math.min(offset, nextOffset),
+        end: Math.max(offset, nextOffset),
+        text: '',
+      };
+    } else {
+      edit = {
+        start: textDocument.offsetAt(primarySelection.start),
+        end: textDocument.offsetAt(primarySelection.end),
+        text: '',
+      };
+    }
 
     this.#applyResolvedTextEdit(edit);
   }
