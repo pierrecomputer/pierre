@@ -1,0 +1,49 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/**/types/**/*.ts",
+    "types/**/*.d.ts"
+  ],
+  "exclude": ["node_modules", ".next"],
+  "references": [
+    {
+      "path": "../../packages/diffs/tsconfig.json"
+    },
+    {
+      "path": "../../packages/trees/tsconfig.json"
+    },
+    {
+      "path": "../../packages/truncate/tsconfig.json"
+    },
+    {
+      "path": "../../packages/theming/tsconfig.json"
+    }
+  ],
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "allowArbitraryExtensions": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "composite": false,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"]
+    }
+  }
+}

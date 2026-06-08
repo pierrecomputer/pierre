@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import type { CSSProperties } from 'react';
 
-import { buildAnnotationThemeStyle } from '../app/(diffshub)/(view)/_components/CodeViewWrapper';
+import { buildAnnotationThemeStyle } from '../app/_components/CodeViewWrapper';
 
 // The byte-for-byte chrome parity for the default Pierre soft themes now lives in
-// app/(diffshub)/(view)/_components/_theming/test/chromeThemeProps.test.ts (same
+// app/_components/_theming/test/chromeThemeProps.test.ts (same
 // golden fixtures, via chromeThemeProps + diffshubChromeMapping). This file keeps
 // the unique coverage for buildAnnotationThemeStyle, the app-local helper that
 // scopes the inline comment surface vars without leaking the code-view chrome.

@@ -16,7 +16,7 @@ const isDiffs = siteProduct === 'diffs';
 
 // Order matches Header.tsx so the desktop and mobile navs render the same
 // list of cross-site links.
-const OTHER_PRODUCT_IDS: ProductId[] = ['diffs', 'trees', 'diffshub'];
+const OTHER_PRODUCT_IDS: ProductId[] = ['diffs', 'trees'];
 
 export interface HeaderMobileMenuProps {
   isOpen: boolean;
@@ -62,9 +62,7 @@ export function HeaderMobileMenu({
         <MobileNavLink href={product.basePath !== '' ? product.basePath : '/'}>
           Home
         </MobileNavLink>
-        {product.id !== 'diffshub' && (
-          <MobileNavLink href={product.docsPath}>Docs</MobileNavLink>
-        )}
+        <MobileNavLink href={product.docsPath}>Docs</MobileNavLink>
         {product.themePath != null && (
           <MobileNavLink href={product.themePath}>Theme</MobileNavLink>
         )}

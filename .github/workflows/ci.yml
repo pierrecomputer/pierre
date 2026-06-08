@@ -20,7 +20,7 @@ jobs:
       - name: Build workspace packages
         run: bun ws "packages/*" build
 
-      # Build each site variant so all three are build-verified. Every variant
+      # Build each docs site variant so both are build-verified. Every variant
       # writes to the same `.next/` dir (the per-site `distDir` in
       # next.config.mjs is dev-only), so these run sequentially.
       - name: Build docs (diffs, generates .source)
@@ -29,8 +29,9 @@ jobs:
       - name: Build docs (trees)
         run: NEXT_PUBLIC_SITE=trees bun ws docs build
 
-      - name: Build docs (diffshub)
-        run: NEXT_PUBLIC_SITE=diffshub bun ws docs build
+      # diffshub is now its own standalone app rather than a docs site variant.
+      - name: Build diffshub
+        run: bun ws diffshub build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -40,6 +41,7 @@ jobs:
             packages/*/dist/
             apps/docs/.source/
             apps/docs/.next/
+            apps/diffshub/.next/
           retention-days: 1
 
   lint:

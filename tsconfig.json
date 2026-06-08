@@ -6,6 +6,9 @@
       "path": "apps/demo/tsconfig.json"
     },
     {
+      "path": "apps/diffshub/tsconfig.json"
+    },
+    {
       "path": "apps/docs/tsconfig.json"
     },
     {

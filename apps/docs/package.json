@@ -8,8 +8,6 @@
     "build:deps": "cd ../.. && bun ws \"packages/*\" build",
     "diffs:dev": "export NEXT_PUBLIC_SITE=diffs PORT=$((${PIERRE_PORT_OFFSET:-0} + 3690)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run _dev",
     "trees:dev": "export NEXT_PUBLIC_SITE=trees PORT=$((${PIERRE_PORT_OFFSET:-0} + 3691)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run _dev",
-    "diffshub:dev": "export NEXT_PUBLIC_SITE=diffshub PORT=$((${PIERRE_PORT_OFFSET:-0} + 3692)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run _dev",
-    "diffshub:prod": "export NEXT_PUBLIC_SITE=diffshub PORT=$((${PIERRE_PORT_OFFSET:-0} + 3692)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run prod",
     "_dev": "bun run build:deps && bun concurrently \"bun run dev:deps:diffs\" \"bun run dev:deps:tree\" \"bun run dev:deps:truncate\" \"bun run dev:next\" --names \"diffs,trees,truncate,docs\" --prefix-colors \"blue,green,yellow,purple\"",
     "dev:next": "next dev",
     "dev:deps:diffs": "(cd ../../packages/diffs && bun run dev)",

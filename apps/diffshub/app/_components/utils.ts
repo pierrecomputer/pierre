@@ -131,7 +131,6 @@ export function getPatchViewerHref(input: string): string | undefined {
 }
 
 export type DiffshubViewerRoute =
-  | { kind: 'notFound' }
   | { kind: 'redirect'; target: string }
   | {
       kind: 'render';
@@ -148,13 +147,8 @@ export type DiffshubViewerRoute =
 // hosts are passed through unchanged because their canonical form is unknown.
 export function resolveDiffshubViewerRoute(
   pathSegments: readonly string[],
-  requestedDomainInput: string | undefined,
-  site: string | undefined = 'diffshub'
+  requestedDomainInput: string | undefined
 ): DiffshubViewerRoute {
-  if (site !== 'diffshub') {
-    return { kind: 'notFound' };
-  }
-
   if (pathSegments.length === 0) {
     return { kind: 'redirect', target: '/' };
   }

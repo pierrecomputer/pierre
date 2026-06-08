@@ -20,8 +20,7 @@ if (
 
 const site = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
 const isTrees = site === 'trees';
-const isDiffshub = site === 'diffshub';
-const isDiffs = !isTrees && !isDiffshub;
+const isDiffs = !isTrees;
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -31,9 +30,7 @@ const nextConfig = {
   ...(process.env.NODE_ENV === 'development' && {
     distDir: `.next/${site}`,
   }),
-  // Lets just disable strict mode in the diffshub project to avoid github
-  // request thrash in dev...
-  reactStrictMode: !isDiffshub,
+  reactStrictMode: true,
   reactCompiler: true,
   devIndicators: false,
   experimental: {
@@ -71,10 +68,6 @@ const nextConfig = {
         { source: '/trees/:path*', destination: '/:path*', permanent: true },
         { source: '/new', destination: '/', permanent: true },
       ];
-    }
-    if (isDiffshub) {
-      // DiffsHub is a focused stub microsite; no legacy URLs to bounce yet.
-      return [];
     }
     if (isDiffs) {
       // On the diffs site, anything that used to live under `/trees` belongs

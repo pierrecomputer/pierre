@@ -29,10 +29,10 @@ import {
   useState,
 } from 'react';
 
-import { DiffUrlForm } from '../../_components/DiffUrlForm';
 import { diffshubChromeMapping } from './_theming/js/diffshubChromeMapping';
 import { useChromeThemeProps } from './_theming/react/useChromeThemeProps';
 import { DiffsHubLogo } from './DiffsHubLogo';
+import { DiffUrlForm } from './DiffUrlForm';
 import { docsThemeCatalog } from '@/components/themeCatalog';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';

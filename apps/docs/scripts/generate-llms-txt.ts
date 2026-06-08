@@ -144,7 +144,7 @@ const EXCLUDED_CONSTANTS = new Set([
   'THEMING_PALETTE_DARK',
 ]);
 
-const SEE_ALSO: Record<Exclude<ProductId, 'diffshub'>, Product['seeAlso']> = {
+const SEE_ALSO: Record<ProductId, Product['seeAlso']> = {
   diffs: [
     {
       label: '@pierre/trees',
@@ -493,27 +493,22 @@ function generateLlmsFullTxt(product: Product): string {
 
 // ── Main ────────────────────────────────────────────────────────────────────
 
-// Only the products that actually ship docs need llms.txt output. Stub
-// microsites (e.g. `diffshub`) have nothing to generate and intentionally
-// don't appear in these records or the SEE_ALSO map above.
-type LlmsProductId = Exclude<ProductId, 'diffshub'>;
-
-const PRODUCT_SECTIONS: Record<LlmsProductId, readonly string[]> = {
+const PRODUCT_SECTIONS: Record<ProductId, readonly string[]> = {
   diffs: DIFFS_SECTIONS,
   trees: TREES_SECTIONS,
 };
 
-const DOCS_PREFIX: Record<LlmsProductId, string> = {
+const DOCS_PREFIX: Record<ProductId, string> = {
   diffs: '(diffs)/docs',
   trees: '(trees)/docs',
 };
 
-const LLMS_DOCS_URL: Record<LlmsProductId, string> = {
+const LLMS_DOCS_URL: Record<ProductId, string> = {
   diffs: 'https://diffs.com/docs',
   trees: 'https://trees.software/docs',
 };
 
-function resolveProductId(): LlmsProductId {
+function resolveProductId(): ProductId {
   const site = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
   if (site !== 'diffs' && site !== 'trees') {
     throw new Error(
@@ -524,13 +519,6 @@ function resolveProductId(): LlmsProductId {
 }
 
 async function main() {
-  // Diffshub is a stub microsite with no MDX docs, so there is nothing to
-  // generate. Exit cleanly so the build pipeline succeeds for that site.
-  if ((process.env.NEXT_PUBLIC_SITE ?? 'diffs') === 'diffshub') {
-    console.log('diffshub has no docs; skipping llms.txt generation.');
-    return;
-  }
-
   // Each Vercel deployment (diffs.com vs trees.software) builds from the same
   // codebase with NEXT_PUBLIC_SITE selecting the active product. Both sites
   // share `public/`, so we generate exactly one product's files per build and

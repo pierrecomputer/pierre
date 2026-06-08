@@ -7,7 +7,6 @@ import { getExternalUrl, PRODUCTS } from '@/lib/product-config';
 const siteProduct = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
 const isDiffs = siteProduct === 'diffs';
 const isTrees = siteProduct === 'trees';
-const isDiffshub = siteProduct === 'diffshub';
 
 const linkClass =
   'text-muted-foreground hover:text-foreground text-sm transition-colors';
@@ -15,7 +14,6 @@ const linkClass =
 export default function Footer() {
   const diffsExternal = getExternalUrl('diffs');
   const treesExternal = getExternalUrl('trees');
-  const diffshubExternal = getExternalUrl('diffshub');
 
   return (
     <footer className="pt-12 pb-12">
@@ -88,20 +86,6 @@ export default function Footer() {
                   Docs
                 </a>
               </>
-            )}
-          </nav>
-        </div>
-        <div>
-          <h4 className="mb-2 text-sm font-medium">DiffsHub</h4>
-          <nav className="flex flex-col gap-1">
-            {isDiffshub ? (
-              <Link href="/" className={linkClass}>
-                Home
-              </Link>
-            ) : (
-              <a href={diffshubExternal} className={linkClass}>
-                Home
-              </a>
             )}
           </nav>
         </div>

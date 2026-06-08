@@ -1,26 +1,15 @@
 // sort-imports-ignore
 import type { Metadata, Viewport } from 'next';
-import {
-  Fira_Code,
-  Geist,
-  Geist_Mono,
-  IBM_Plex_Mono,
-  Inter,
-  JetBrains_Mono,
-} from 'next/font/google';
+import { Geist } from 'next/font/google';
 import localFont from 'next/font/local';
 
 import './globals.css';
+import { WorkerPoolContext } from './_components/WorkerPoolContext';
 import { PreloadHighlighter } from '@/components/PreloadHighlighter';
 import { ScrollbarGutterVariables } from '@/components/ScrollbarGutterVariables';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
-import { type ProductId, PRODUCTS } from '@/lib/product-config';
-
-const inter = Inter({
-  variable: '--font-inter',
-  subsets: ['latin'],
-});
+import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -32,36 +21,18 @@ const berkeleyMono = localFont({
   variable: '--font-berkeley-mono',
 });
 
-const firaMono = Fira_Code({
-  weight: ['400'],
-  variable: '--font-fira-mono',
-  subsets: ['latin'],
-});
-
-const ibmPlexMono = IBM_Plex_Mono({
-  weight: ['400'],
-  variable: '--font-ibm-plex-mono',
-  subsets: ['latin'],
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  weight: ['400'],
-  variable: '--font-jetbrains-mono',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
-
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   userScalable: false,
+  maximumScale: 1,
+  viewportFit: 'cover',
+  // diffshub body uses --diffshub-sidebar-bg (#f7f7f7 / #101010) rather than
+  // the plain neutral background, so it gets its own theme-color pair for the
+  // browser chrome address bar.
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#252525' },
+    { media: '(prefers-color-scheme: light)', color: '#f7f7f7' },
+    { media: '(prefers-color-scheme: dark)', color: '#101010' },
   ],
 };
 
@@ -94,54 +65,24 @@ function worktreeTitlePrefix(): string {
 
 const WORKTREE_PREFIX = worktreeTitlePrefix();
 
-// Per-site branding (icons, OG/twitter) is set here explicitly so the
-// dispatcher route at `app/page.tsx` (outside the route groups) inherits it.
-const SITE = (process.env.NEXT_PUBLIC_SITE ?? 'diffs') as ProductId;
-const SITE_PRODUCT = PRODUCTS[SITE];
-const PROD_ORIGIN_BY_SITE: Record<ProductId, string> = {
-  diffs: 'https://diffs.com',
-  trees: 'https://trees.software',
-};
-const DEV_PORT_BY_SITE: Record<ProductId, string> = {
-  diffs: '3690',
-  trees: '3691',
-};
-const PROD_ORIGIN = PROD_ORIGIN_BY_SITE[SITE];
+const PROD_ORIGIN = 'https://diffshub.com';
 // In dev, point `metadataBase` at localhost so OG previewers fetch
 // in-progress assets instead of whatever's deployed.
 const isDev = process.env.NODE_ENV !== 'production';
-const DEV_PORT = process.env.PORT ?? DEV_PORT_BY_SITE[SITE];
+const DEV_PORT = process.env.PORT ?? '3692';
 const SITE_ORIGIN = isDev ? `http://localhost:${DEV_PORT}` : PROD_ORIGIN;
-const baseTitle = `${SITE_PRODUCT.name}, from Pierre`;
+const baseTitle = `${SITE_NAME}, from Pierre`;
 const taggedTitle = `${WORKTREE_PREFIX}${baseTitle}`;
-const description = SITE_PRODUCT.description;
-const SITE_ICONS_BY_SITE: Record<ProductId, Metadata['icons']> = {
-  diffs: {
-    icon: [
-      { url: '/diffs-brand/icon.svg', type: 'image/svg+xml' },
-      { url: '/diffs-brand/icon.ico', sizes: '32x32' },
-    ],
-    apple: '/diffs-brand/apple-icon.png',
-  },
-  trees: {
-    icon: [
-      { url: '/trees-brand/icon.svg', type: 'image/svg+xml' },
-      { url: '/trees-brand/icon.ico', sizes: '32x32' },
-    ],
-    apple: '/trees-brand/apple-icon.png',
-  },
+const description = SITE_DESCRIPTION;
+const SITE_ICONS: Metadata['icons'] = {
+  icon: [
+    { url: '/diffshub-brand/icon.svg', type: 'image/svg+xml' },
+    { url: '/diffshub-brand/icon.ico', sizes: '32x32' },
+  ],
+  apple: '/diffshub-brand/apple-icon.png',
 };
-const SITE_OG_IMAGE_BY_SITE: Record<ProductId, string> = {
-  diffs: '/diffs-brand/opengraph-image.png',
-  trees: '/trees-brand/opengraph-image.png',
-};
-const SITE_TWITTER_IMAGE_BY_SITE: Record<ProductId, string> = {
-  diffs: '/diffs-brand/twitter-image.png',
-  trees: '/trees-brand/twitter-image.png',
-};
-const SITE_ICONS = SITE_ICONS_BY_SITE[SITE];
-const SITE_OG_IMAGE = SITE_OG_IMAGE_BY_SITE[SITE];
-const SITE_TWITTER_IMAGE = SITE_TWITTER_IMAGE_BY_SITE[SITE];
+const SITE_OG_IMAGE = '/diffshub-brand/opengraph-image.png';
+const SITE_TWITTER_IMAGE = '/diffshub-brand/twitter-image.png';
 const themeBootstrapScript = `(${String(function applyInitialTheme() {
   try {
     const storedTheme = window.localStorage.getItem('theme');
@@ -217,7 +158,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${berkeleyMono.variable} ${geistSans.variable} ${geistMono.variable} ${firaMono.variable} ${ibmPlexMono.variable} ${jetbrainsMono.variable} ${inter.variable}`}
+      className={`${berkeleyMono.variable} ${geistSans.variable}`}
     >
       <head>
         {/* The iOS navbar tint <meta name="theme-color"> is created and
@@ -229,22 +170,24 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
         />
       </head>
-      <body className={SITE}>
+      <body className="diffshub">
         <ScrollbarGutterVariables />
-        <ThemeProvider attribute="class">
-          {children}
-          <Toaster />
-          <div
-            id="dark-mode-portal-container"
-            className="dark"
-            data-theme="dark"
-          ></div>
-          <div
-            id="light-mode-portal-container"
-            className="light"
-            data-theme="light"
-          ></div>
-        </ThemeProvider>
+        <WorkerPoolContext>
+          <ThemeProvider attribute="class">
+            {children}
+            <Toaster />
+            <div
+              id="dark-mode-portal-container"
+              className="dark"
+              data-theme="dark"
+            ></div>
+            <div
+              id="light-mode-portal-container"
+              className="light"
+              data-theme="light"
+            ></div>
+          </ThemeProvider>
+        </WorkerPoolContext>
         <PreloadHighlighter />
       </body>
     </html>

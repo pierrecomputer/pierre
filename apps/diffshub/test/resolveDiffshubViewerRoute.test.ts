@@ -1,22 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolveDiffshubViewerRoute } from '../app/(diffshub)/(view)/_components/utils';
+import { resolveDiffshubViewerRoute } from '../app/_components/utils';
 
 describe('resolveDiffshubViewerRoute', () => {
-  describe('site gating', () => {
-    test('returns notFound outside the diffshub site', () => {
-      expect(
-        resolveDiffshubViewerRoute(
-          ['owner', 'repo', 'pull', '123'],
-          undefined,
-          'diffs'
-        )
-      ).toEqual({
-        kind: 'notFound',
-      });
-    });
-  });
-
   describe('empty path', () => {
     test('redirects to home', () => {
       expect(resolveDiffshubViewerRoute([], undefined)).toEqual({

@@ -13,7 +13,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
-import { getPatchViewerHref } from '../(view)/_components/utils';
+import { getPatchViewerHref } from './utils';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

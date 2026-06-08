@@ -9,7 +9,7 @@ import type {
 import { useFileTree } from '@pierre/trees/react';
 import { type CSSProperties, memo, useEffect, useRef, useState } from 'react';
 
-import type { FileTreePublicId } from '../../../../../../packages/trees/dist/model/publicTypes';
+import type { FileTreePublicId } from '../../../../packages/trees/dist/model/publicTypes';
 import { ThemedFileTree } from './_theming/react/ThemedFileTree';
 import {
   BASE_FILE_TREE_OPTIONS,
