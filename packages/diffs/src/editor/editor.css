@@ -191,17 +191,11 @@
   margin-bottom: 4px;
   display: flex;
   gap: 4px;
-  background-clip: padding-box;
-  background-color: color-mix(
-    in lab,
-    color-mix(in lab, var(--diffs-fg) 4%, var(--diffs-bg)),
-    transparent 40%
-  );
+  padding: 5px;
   border: 1px solid color-mix(in lab, var(--diffs-fg) 15%, var(--diffs-bg));
-  padding: 6px 6px 6px 10px;
   border-radius: 8px;
-  box-shadow: 0 0 12px 0 color-mix(in lab, var(--diffs-fg) 10%, var(--diffs-bg));
-  backdrop-filter: blur(8px);
+  background-color: var(--diffs-bg);
+  background-clip: padding-box;
 }
 [data-search-panel-row] {
   display: flex;
@@ -256,8 +250,6 @@
     color 0.1s ease-in-out;
 }
 [data-search-panel-row] [data-icon='search'] {
-  width: 16px;
-  margin-right: 2px;
   color: color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg));
   cursor: default;
 }
