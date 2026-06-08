@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { themeToTreeStyles } from '../src/utils/themeToTreeStyles';
 
 const HOVER_KEY = '--trees-theme-list-hover-bg';
+const SELECTION_KEY = '--trees-theme-list-active-selection-bg';
 
 describe('themeToTreeStyles list.hoverBackground heuristic', () => {
   test('drops a near-foreground hover bg that would erase row text', () => {
@@ -78,5 +79,81 @@ describe('themeToTreeStyles list.hoverBackground heuristic', () => {
       },
     });
     expect(styles[HOVER_KEY]).toBe('rgba(255, 255, 255, 0.1)');
+  });
+});
+
+// The selection lookup is trees' own opinion (normalizeThemeColors leaves the
+// raw selection keys untouched). These pin trees' exact lookup order:
+//   same-surface selection → list.focusBackground ?? editor.selectionBackground
+//   otherwise              → list.activeSelectionBackground ?? editor.selectionBackground
+// The var is 'transparent' when nothing resolves.
+describe('themeToTreeStyles selection lookup', () => {
+  test('keeps a selection bg that differs from the sidebar surface', () => {
+    const styles = themeToTreeStyles({
+      type: 'dark',
+      colors: {
+        'sideBar.background': '#2D3E4C',
+        'list.activeSelectionBackground': '#3B556E',
+      },
+    });
+    expect(styles[SELECTION_KEY]).toBe('#3B556E');
+  });
+
+  test('distinct list.activeSelectionBackground wins over editor.selectionBackground', () => {
+    const styles = themeToTreeStyles({
+      colors: {
+        'sideBar.background': '#1E1E1E',
+        'list.activeSelectionBackground': '#094771',
+        'editor.selectionBackground': '#264f78',
+      },
+    });
+    expect(styles[SELECTION_KEY]).toBe('#094771');
+  });
+
+  test('falls back to editor.selectionBackground when list.activeSelectionBackground absent', () => {
+    const styles = themeToTreeStyles({
+      colors: { 'editor.selectionBackground': '#ff000080' },
+    });
+    expect(styles[SELECTION_KEY]).toBe('#ff000080');
+  });
+
+  test('same-surface selection uses list.focusBackground', () => {
+    const styles = themeToTreeStyles({
+      colors: {
+        'sideBar.background': '#1E1E1E',
+        'list.activeSelectionBackground': '#1e1e1e',
+        'list.focusBackground': '#2a2d2e',
+        'editor.selectionBackground': '#264f78',
+      },
+    });
+    expect(styles[SELECTION_KEY]).toBe('#2a2d2e');
+  });
+
+  test('same-surface selection falls back to editor.selectionBackground when focusBackground absent', () => {
+    const styles = themeToTreeStyles({
+      colors: {
+        'sideBar.background': '#1E1E1E',
+        'list.activeSelectionBackground': '#1e1e1e',
+        'editor.selectionBackground': '#264f78',
+      },
+    });
+    expect(styles[SELECTION_KEY]).toBe('#264f78');
+  });
+
+  test('absent selection with no surface does not pick up list.focusBackground', () => {
+    const styles = themeToTreeStyles({
+      colors: {
+        'list.focusBackground': '#shouldNotAppear',
+        'editor.selectionBackground': '#correctFallback',
+      },
+    });
+    expect(styles[SELECTION_KEY]).toBe('#correctFallback');
+  });
+
+  test("is 'transparent' when no selection key resolves", () => {
+    const styles = themeToTreeStyles({
+      colors: { 'sideBar.background': '#1E1E1E' },
+    });
+    expect(styles[SELECTION_KEY]).toBe('transparent');
   });
 });
