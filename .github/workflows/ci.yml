@@ -20,8 +20,14 @@ jobs:
       - name: Build workspace packages
         run: bun ws "packages/*" build
 
-      - name: Build docs (generates .source)
+      # Build each site variant so all three are build-verified. Every variant
+      # writes to the same `.next/` dir (the per-site `distDir` in
+      # next.config.mjs is dev-only), so these run sequentially.
+      - name: Build docs (diffs, generates .source)
         run: bun ws docs build
+
+      - name: Build docs (trees)
+        run: NEXT_PUBLIC_SITE=trees bun ws docs build
 
       - name: Build docs (diffshub)
         run: NEXT_PUBLIC_SITE=diffshub bun ws docs build
