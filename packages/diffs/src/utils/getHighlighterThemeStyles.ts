@@ -1,3 +1,5 @@
+import { normalizeThemeColors } from '@pierre/theme-kit/color';
+
 import { DEFAULT_THEMES } from '../constants';
 import type {
   DiffsHighlighter,
@@ -16,6 +18,13 @@ interface GetHighlighterThemeStylesProps {
 // FIXME(amadeus): We'll probably need to
 // re-think this when it comes to removing inline
 // styles
+//
+// The base foreground/background now flow through @pierre/theme-kit's
+// normalizeThemeColors, which preserves the theme's top-level fg/bg. The git
+// colors deliberately stay on the diffs-local 2-link lookup below (see
+// getGitVariables) to keep this output byte-identical; adopting
+// normalizeThemeColors' longer git chain is a separate, independently verified
+// follow-up rather than a side effect of this migration.
 export function getHighlighterThemeStyles({
   theme = DEFAULT_THEMES,
   highlighter,
@@ -24,26 +33,36 @@ export function getHighlighterThemeStyles({
   let styles = '';
   if (typeof theme === 'string') {
     const themeData = highlighter.getTheme(theme);
-    styles += `color:${themeData.fg};`;
-    styles += `background-color:${themeData.bg};`;
-    styles += `${formatCSSVariablePrefix('global')}fg:${themeData.fg};`;
-    styles += `${formatCSSVariablePrefix('global')}bg:${themeData.bg};`;
-    styles += getThemeVariables(themeData, prefix);
+    const normalized = normalizeThemeColors(themeData);
+    styles += `color:${normalized.fg};`;
+    styles += `background-color:${normalized.bg};`;
+    styles += `${formatCSSVariablePrefix('global')}fg:${normalized.fg};`;
+    styles += `${formatCSSVariablePrefix('global')}bg:${normalized.bg};`;
+    styles += getGitVariables(themeData, prefix);
   } else {
     let themeData = highlighter.getTheme(theme.dark);
-    styles += `${formatCSSVariablePrefix('global')}dark:${themeData.fg};`;
-    styles += `${formatCSSVariablePrefix('global')}dark-bg:${themeData.bg};`;
-    styles += getThemeVariables(themeData, 'dark');
+    let normalized = normalizeThemeColors(themeData);
+    styles += `${formatCSSVariablePrefix('global')}dark:${normalized.fg};`;
+    styles += `${formatCSSVariablePrefix('global')}dark-bg:${normalized.bg};`;
+    styles += getGitVariables(themeData, 'dark');
 
     themeData = highlighter.getTheme(theme.light);
-    styles += `${formatCSSVariablePrefix('global')}light:${themeData.fg};`;
-    styles += `${formatCSSVariablePrefix('global')}light-bg:${themeData.bg};`;
-    styles += getThemeVariables(themeData, 'light');
+    normalized = normalizeThemeColors(themeData);
+    styles += `${formatCSSVariablePrefix('global')}light:${normalized.fg};`;
+    styles += `${formatCSSVariablePrefix('global')}light-bg:${normalized.bg};`;
+    styles += getGitVariables(themeData, 'light');
   }
   return styles;
 }
 
-function getThemeVariables(
+// Emits the diffs git-status CSS variables (addition/deletion/modified colors)
+// for a resolved theme. This intentionally uses the diffs-local 2-link lookup
+// (gitDecoration.* → terminal.ansi*) and STOPS before the editorGutter.* tail
+// that @pierre/theme-kit's normalizeThemeColors adds, so the emitted string stays
+// byte-identical to the pre-theme-kit output. Adopting the gutter fallback for
+// diffs is a deliberate follow-up. A variable is omitted entirely when neither
+// source key is present, matching the previous behavior.
+function getGitVariables(
   themeData: ThemeRegistrationResolved,
   modePrefix?: string
 ) {

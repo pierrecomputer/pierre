@@ -1,3 +1,5 @@
+import type { ThemeLoader } from '@pierre/theme-kit';
+import { pierreThemes } from '@pierre/theme-kit/themes';
 import {
   createHighlighter,
   createJavaScriptRegexEngine,
@@ -18,7 +20,7 @@ import { getResolvedOrResolveLanguage } from './languages/getResolvedOrResolveLa
 import { attachResolvedThemes } from './themes/attachResolvedThemes';
 import { cleanUpResolvedThemes } from './themes/cleanUpResolvedThemes';
 import { getResolvedOrResolveTheme } from './themes/getResolvedOrResolveTheme';
-import { registerCustomTheme } from './themes/registerCustomTheme';
+import { themeResolver } from './themes/themeResolver';
 
 type CachedOrLoadingHighlighterType =
   | Promise<DiffsHighlighter>
@@ -127,22 +129,9 @@ export async function disposeHighlighter(): Promise<void> {
   highlighter = undefined;
 }
 
-registerCustomTheme('pierre-dark', async () => {
-  const { default: theme } = await import('@pierre/theme/pierre-dark');
-  return { ...theme, name: 'pierre-dark' } as ThemeRegistrationResolved;
-});
-
-registerCustomTheme('pierre-dark-soft', async () => {
-  const { default: theme } = await import('@pierre/theme/pierre-dark-soft');
-  return { ...theme, name: 'pierre-dark-soft' } as ThemeRegistrationResolved;
-});
-
-registerCustomTheme('pierre-light', async () => {
-  const { default: theme } = await import('@pierre/theme/pierre-light');
-  return { ...theme, name: 'pierre-light' } as ThemeRegistrationResolved;
-});
-
-registerCustomTheme('pierre-light-soft', async () => {
-  const { default: theme } = await import('@pierre/theme/pierre-light-soft');
-  return { ...theme, name: 'pierre-light-soft' } as ThemeRegistrationResolved;
-});
+for (const descriptor of pierreThemes.getThemes()) {
+  themeResolver.registerThemeIfAbsent(
+    descriptor.name,
+    descriptor.load as ThemeLoader<ThemeRegistrationResolved>
+  );
+}

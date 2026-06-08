@@ -1,30 +1,20 @@
 import type { DiffsThemeNames, ThemeRegistrationResolved } from '../../types';
-import { getResolvedOrResolveTheme } from './getResolvedOrResolveTheme';
-import { resolveTheme } from './resolveTheme';
+import {
+  prepareThemeResolution,
+  validateResolvedThemeName,
+} from './themeResolution';
+import { themeResolver } from './themeResolver';
 
 export async function resolveThemes(
   themes: DiffsThemeNames[]
 ): Promise<ThemeRegistrationResolved[]> {
-  const resolvedThemes: ThemeRegistrationResolved[] = [];
-  const themesToResolve: Promise<ThemeRegistrationResolved | undefined>[] = [];
   for (const themeName of themes) {
-    const themeData =
-      getResolvedOrResolveTheme(themeName) ?? resolveTheme(themeName);
-    if ('then' in themeData) {
-      themesToResolve.push(themeData);
-    } else {
-      resolvedThemes.push(themeData);
-    }
+    prepareThemeResolution(themeName);
   }
 
-  if (themesToResolve.length > 0) {
-    await Promise.all(themesToResolve).then((resolved) => {
-      for (const theme of resolved) {
-        if (theme != null) {
-          resolvedThemes.push(theme);
-        }
-      }
-    });
+  const resolvedThemes = await themeResolver.resolveThemes(themes);
+  for (let i = 0; i < themes.length; i++) {
+    validateResolvedThemeName(themes[i], resolvedThemes[i]);
   }
 
   return resolvedThemes;
