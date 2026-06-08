@@ -236,7 +236,6 @@ export class FileDiff<
   protected enabled = true;
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
-  protected rerenderTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -453,7 +452,7 @@ export class FileDiff<
     didEdit: boolean
   ): boolean {
     if (didEdit) {
-      // The editor has already rendered the diff, so we can avoid full-render
+      // The editor is tokenizing the diff in background, so we can partially render
       return true;
     }
     if (
@@ -553,10 +552,6 @@ export class FileDiff<
 
     this.editor?.cleanUp();
     this.editor = undefined;
-    if (this.rerenderTimeout !== undefined) {
-      clearTimeout(this.rerenderTimeout);
-    }
-    this.rerenderTimeout = undefined;
   }
 
   public virtualizedSetup(): void {
@@ -1079,7 +1074,6 @@ export class FileDiff<
         enumerable: true,
         get: () => fileDiff.additionLines.join(''),
       });
-      this.additionFile = file;
       return file;
     }
     return undefined;
@@ -1911,7 +1905,7 @@ export class FileDiff<
     }
   }
 
-  // Editor owns additions content; sync deletions column and both gutters to the updated diff.
+  // Update split-view `data-line-type` after an edit.
   private updateLineType(renderRange: RenderRange): void {
     if (this.options.diffStyle === 'unified') {
       return;

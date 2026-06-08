@@ -657,7 +657,7 @@ export class File<
       this.renderGutterUtility();
 
       const editor = this.editor;
-      if (editor != null && file != null) {
+      if (editor != null) {
         void this.fileRenderer.initializeHighlighter().then((highlighter) => {
           editor.syncToRenderedView(
             highlighter,
