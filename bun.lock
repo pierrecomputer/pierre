@@ -28,6 +28,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@pierre/diffs": "workspace:*",
+        "@pierre/icons": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
         "shiki": "catalog:",
@@ -105,7 +106,7 @@
     },
     "packages/diffs": {
       "name": "@pierre/diffs",
-      "version": "1.2.0-beta.6",
+      "version": "1.3.0-beta.2",
       "dependencies": {
         "@pierre/theme": "catalog:",
         "@shikijs/transformers": "^3.0.0",
@@ -197,7 +198,7 @@
     },
     "packages/trees": {
       "name": "@pierre/trees",
-      "version": "1.0.0-beta.3",
+      "version": "1.0.0-beta.4",
       "dependencies": {
         "@pierre/path-store": "workspace:*",
         "preact": "catalog:",
