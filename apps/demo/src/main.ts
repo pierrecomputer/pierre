@@ -880,7 +880,37 @@ if (renderFileButton != null) {
                       character: 1000, // will be normalized to the end of the line(< 1000 chars)
                     },
                     severity: 'info',
-                    message: 'Test marker',
+                    message: {
+                      html: '<span style="background-color: blue; color: white; padding: 2px 4px; border-radius: 4px; line-height: 1; margin-inline-end: 4px; font-size: 90%">INFO</span><code>CodeOptionsMultipleThemes</code> - <span style="color: gray;">Code options of multiple themes.</span>',
+                    },
+                  },
+                  {
+                    start: {
+                      line: 2,
+                      character: 2,
+                    },
+                    end: {
+                      line: 2,
+                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
+                    },
+                    severity: 'warning',
+                    message: {
+                      html: '<span style="background-color: #ffa500; color: white; padding: 2px 4px; border-radius: 4px; line-height: 1; margin-inline-end: 4px; font-size: 90%">WARNING</span><code>CodeToHastOptions</code> - <span style="color: gray;">Code to Hast Options is deprecated.</span>',
+                    },
+                  },
+                  {
+                    start: {
+                      line: 3,
+                      character: 2,
+                    },
+                    end: {
+                      line: 3,
+                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
+                    },
+                    severity: 'error',
+                    message: {
+                      html: '<span style="background-color: red; color: white; padding: 2px 4px; border-radius: 4px; line-height: 1; margin-inline-end: 4px; font-size: 90%">ERROR</span><code>DecorationItem</code> - <span style="color: gray;">Type not defined.</span>',
+                    },
                   },
                 ]);
               });

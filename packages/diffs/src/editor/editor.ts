@@ -18,7 +18,7 @@ import {
   applyDocumentChangeToLineAnnotations,
   renderLineAnnotations,
 } from './lineAnnotations';
-import { type Marker, markerSeverityDatasetKey } from './marker';
+import { type Marker, MarkerManager, markerSeverityDatasetKey } from './marker';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import { type QuickEditContext, QuickEditWidget } from './quickEdit';
 import { type MatchRange, SearchPanelWidget } from './searchPanel';
@@ -85,6 +85,8 @@ export interface EditorOptions<LAnnotation> {
   enabledQuickEdit?: boolean;
   /** Render the quick edit widget element. */
   renderQuickEdit?: (context: QuickEditContext<LAnnotation>) => HTMLElement;
+  /** Render custom marker message content. Falls back to a default when omitted. */
+  renderMarkerMessage?: (marker: Marker) => HTMLElement;
   /** Callback when the editor document changes. */
   onChange?: (
     file: FileContents,
@@ -98,11 +100,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #wrap = false;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
+  #markerManager?: MarkerManager;
 
-  // event handlers
+  // event disposes
   #editorEventDisposes?: (() => void)[];
   #globalEventDisposes?: (() => void)[];
-  #mouseUpDisposes?: (() => void)[];
+  #selectEventDisposes?: (() => void)[];
   #detach?: () => void;
 
   // file
@@ -151,7 +154,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #selections?: EditorSelection[];
   #initSelections?: DiffsEditorSelection[];
   #matches?: MatchRange[];
-  #markers?: Marker[];
   #scrollingToLine?: number;
   #scrollingToLineChar?: number;
   #scrollingToLineNoFocus = false;
@@ -371,9 +373,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#scrollToPrimaryCaret();
       this.#initSelections = undefined;
     } else if (
-      (this.#selections !== undefined && this.#selections.length > 0) ||
+      this.#selections !== undefined ||
       this.#matches !== undefined ||
-      (this.#markers !== undefined && this.#markers.length > 0)
+      this.#markerManager !== undefined
     ) {
       // when re-rendering triggered by virtual viewport scroll,
       // re-render the existing overlay ranges
@@ -458,11 +460,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (textDocument === undefined) {
       throw new Error('Text document is not initialized');
     }
-    this.#markers = markers.map((marker) => ({
-      ...marker,
-      start: textDocument.normalizePosition(marker.start),
-      end: textDocument.normalizePosition(marker.end),
-    }));
+    if (markers.length === 0) {
+      this.#markerManager?.cleanup();
+      this.#markerManager = undefined;
+    } else {
+      this.#markerManager ??= new MarkerManager({
+        getRenderMarkerMessage: () => this.#options.renderMarkerMessage,
+        getFileContainer: () => this.#fileContainer,
+        getCharX: (line, character) => this.#getCharX(line, character),
+        getLineY: (line) => this.#getLineY(line),
+        getLineHeight: () => this.#metrics.lineHeight,
+        isPointerGestureActive: () =>
+          this.#isContentMouseDown || this.#isGutterMouseDown,
+      });
+      this.#markerManager.setMarkers(markers, textDocument);
+      if (this.#contentElement !== undefined) {
+        this.#markerManager.listenHover(this.#contentElement);
+      }
+    }
     this.#updateSelections(this.#selections ?? []);
   }
 
@@ -488,6 +503,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#globalEventDisposes = undefined;
     this.#editorEventDisposes?.forEach((dispose) => dispose());
     this.#editorEventDisposes = undefined;
+    this.#selectEventDisposes?.forEach((dispose) => dispose());
+    this.#selectEventDisposes = undefined;
+    this.#markerManager?.cleanup();
+    this.#markerManager = undefined;
 
     this.#detach?.();
     this.#detach = undefined;
@@ -519,11 +538,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#contentElement = undefined;
     this.#overlayElement?.remove();
     this.#overlayElement = undefined;
-    this.#primaryCaretElement?.remove();
-    this.#primaryCaretElement = undefined;
     this.#overlayElements?.forEach((el) => el.remove());
-    this.#overlayElements?.clear();
     this.#overlayElements = undefined;
+    this.#primaryCaretElement = undefined;
     this.#searchPanel?.cleanup();
     this.#searchPanel = undefined;
     this.#quickEdit?.cleanup();
@@ -535,7 +552,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#selectionStart = undefined;
     this.#selections = undefined;
     this.#reservedSelections = undefined;
-    this.#markers = undefined;
   }
 
   #initialize(): void {
@@ -653,8 +669,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             return;
           }
 
-          this.#mouseUpDisposes?.forEach((dispose) => dispose());
-          this.#mouseUpDisposes = undefined;
+          this.#selectEventDisposes?.forEach((dispose) => dispose());
+          this.#selectEventDisposes = undefined;
 
           if (this.#isGutterMouseDown) {
             this.#isGutterMouseDown = false;
@@ -700,8 +716,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   #listenContentElement(contentEl: HTMLElement, gutterEl?: HTMLElement): void {
     const targetIsContentElement = (e: Event) => {
-      const target = e.composedPath()[0] as HTMLElement;
-      return target === contentEl || contentEl.contains(target);
+      const target = e.composedPath()[0] as HTMLElement | undefined;
+      return (
+        target !== undefined &&
+        (target === contentEl || contentEl.contains(target))
+      );
     };
 
     this.#editorEventDisposes?.forEach((dispose) => dispose());
@@ -721,7 +740,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#lineAnnotations !== undefined &&
             this.#lineAnnotations.length > 0
           ) {
-            this.#mouseUpDisposes = [
+            this.#selectEventDisposes = [
               ...contentEl.querySelectorAll<HTMLElement>(
                 '[data-line-annotation]'
               ),
@@ -925,7 +944,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#selectionStart = selection;
             this.#updateSelections([selection]);
             this.#focus(selection.end);
-            this.#mouseUpDisposes = [
+            this.#selectEventDisposes = [
               addEventListener(
                 document,
                 'mousemove',
@@ -983,6 +1002,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         )
       );
     }
+
+    this.#markerManager?.listenHover(contentEl);
+
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = new ResizeObserver(() => {
       this.#handleLayoutResize();
@@ -1142,12 +1164,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (
       this.#selections !== undefined ||
       this.#matches !== undefined ||
-      (this.#markers !== undefined && this.#markers.length > 0)
+      this.#markerManager !== undefined
     ) {
       this.#updateSelections(this.#selections ?? []);
       if (this.#selections !== undefined) {
         this.focus();
       }
+    }
+    if (this.#markerManager?.isPopupVisible() === true) {
+      this.#markerManager.removePopup();
     }
   }
 
@@ -1524,7 +1549,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (
       selections.length === 0 &&
       this.#matches === undefined &&
-      this.#markers === undefined
+      this.#markerManager === undefined
     ) {
       this.#selections = undefined;
       this.#overlayElements?.forEach((el) => el.remove());
@@ -1593,12 +1618,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    if (
-      this.#markers !== undefined &&
-      this.#markers.length > 0 &&
-      textDocument !== undefined
-    ) {
-      for (const marker of this.#markers) {
+    if (this.#markerManager !== undefined && textDocument !== undefined) {
+      for (const marker of this.#markerManager.markers) {
         this.#renderSelection(
           renderCtx,
           'marker',

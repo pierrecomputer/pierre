@@ -148,6 +148,29 @@
     visibility: visible;
   }
 }
+[data-editor-widget] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  border: 1px solid color-mix(in lab, var(--diffs-fg) 20%, var(--diffs-bg));
+  border-radius: 8px;
+  background-color: var(--diffs-bg);
+  background-clip: padding-box;
+}
+[data-marker-popup] {
+  padding: 8px;
+  min-width: 160px;
+  pointer-events: auto;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+[data-marker-popup] code {
+  display: inline;
+}
 
 /* Quick Edit Widget */
 [data-quick-edit-icon] {
@@ -181,21 +204,14 @@
 
 /* Search Panel Widget */
 [data-search-panel] {
+  display: flex;
+  gap: 6px;
   position: sticky;
   top: 12px;
-  z-index: 100;
-  width: fit-content;
   min-width: 300px;
-  max-width: calc(100% - 24px);
   margin-inline: auto 12px;
   margin-bottom: 4px;
-  display: flex;
-  gap: 4px;
-  padding: 5px;
-  border: 1px solid color-mix(in lab, var(--diffs-fg) 15%, var(--diffs-bg));
-  border-radius: 8px;
-  background-color: var(--diffs-bg);
-  background-clip: padding-box;
+  padding: 4px;
 }
 [data-search-panel-row] {
   display: flex;
