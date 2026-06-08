@@ -10,11 +10,7 @@ import {
   type SelectedLineRange,
   type ThemeTypes,
 } from '@pierre/diffs';
-import {
-  CodeView,
-  type CodeViewHandle,
-  useStableCallback,
-} from '@pierre/diffs/react';
+import { type CodeViewHandle, useStableCallback } from '@pierre/diffs/react';
 import { IconChevronSm } from '@pierre/icons';
 import {
   type CSSProperties,
@@ -25,6 +21,9 @@ import {
   useState,
 } from 'react';
 
+import { diffshubChromeMapping } from './_theming/js/diffshubChromeMapping';
+import { ThemedCodeView } from './_theming/react/ThemedCodeView';
+import { useChromeThemeProps } from './_theming/react/useChromeThemeProps';
 import type { AvatarName } from './annotation-shared';
 import { CODE_VIEW_CUSTOM_CSS, CODE_VIEW_LAYOUT } from './constants';
 import { DraftAnnotation } from './DraftAnnotation';
@@ -34,7 +33,6 @@ import type {
   CodeViewSavedCommentEvent,
   CommentMetadata,
 } from './types';
-import { useThemeChromeStyle } from './useResolvedTreeThemeStyles';
 import {
   classifyCommentLineType,
   isDiffItem,
@@ -73,9 +71,7 @@ interface ActiveDraftComment {
 
 interface CodeViewWrapperProps {
   className?: string;
-  darkTheme: string;
   diffStyle: 'split' | 'unified';
-  lightTheme: string;
   onCommentDeleted(comment: CodeViewDeletedCommentEvent): void;
   onCommentSaved(comment: CodeViewSavedCommentEvent): void;
   overflow: 'wrap' | 'scroll';
@@ -92,9 +88,7 @@ interface CodeViewWrapperProps {
 
 export const CodeViewWrapper = memo(function CodeViewWrapper({
   className,
-  darkTheme,
   diffStyle,
-  lightTheme,
   onCommentDeleted,
   onCommentSaved,
   overflow,
@@ -112,7 +106,11 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
   const activeDraftRef = useRef<ActiveDraftComment | null>(null);
   const [selectedLines, setSelectedLines] =
     useState<CodeViewLineSelection | null>(null);
-  const themeChromeStyle = useThemeChromeStyle(lightTheme, darkTheme);
+  const { style: chromeStyle } = useChromeThemeProps(diffshubChromeMapping);
+  // Preserve the previous `undefined`-means-not-resolved contract that
+  // buildAnnotationThemeStyle and the className fallbacks depend on.
+  const themeChromeStyle =
+    Object.keys(chromeStyle).length > 0 ? chromeStyle : undefined;
   const annotationThemeStyle = useMemo(
     () => buildAnnotationThemeStyle(themeChromeStyle),
     [themeChromeStyle]
@@ -472,7 +470,7 @@ export const CodeViewWrapper = memo(function CodeViewWrapper({
     ]
   );
   return (
-    <CodeView<CommentMetadata>
+    <ThemedCodeView<CommentMetadata>
       ref={handleViewerRef}
       containerRef={scrollRef}
       initialItems={initialItems}

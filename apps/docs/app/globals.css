@@ -277,8 +277,8 @@
 }
 
 .cv-scrollbar {
-  /* Themed thumb from useThemeChromeStyle; light-dark fallback for
-     non-themed contexts. */
+  /* Themed thumb from the diffshub chrome mapping (deriveChromeTokens);
+     light-dark fallback for non-themed contexts. */
   --cv-scrollbar-thumb-bg: var(
     --diffshub-scrollbar-thumb-bg,
     light-dark(

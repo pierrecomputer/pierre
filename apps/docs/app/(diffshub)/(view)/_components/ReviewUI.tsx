@@ -2,29 +2,23 @@
 
 import { type DiffIndicators } from '@pierre/diffs';
 import { type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
+import { type ColorMode } from '@pierre/theme-kit';
+import { useThemeController } from '@pierre/theme-kit/react';
 import {
   type ReactNode,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
 
+import { ThemeProvider } from './_theming/react/ThemeProvider';
 import { preloadAvatars } from './annotation-shared';
 import { CodeViewHeader } from './CodeViewHeader';
 import { CodeViewSidebar } from './CodeViewSidebar';
 import { CodeViewStatusPanel } from './CodeViewStatusPanel';
 import { CodeViewWrapper } from './CodeViewWrapper';
-import {
-  type ColorMode,
-  DARK_THEMES,
-  type DarkTheme,
-  DEFAULT_DARK_THEME,
-  DEFAULT_LIGHT_THEME,
-  LIGHT_THEMES,
-  type LightTheme,
-} from './themes';
+import type { DarkThemeName, LightThemeName } from './themeNames';
 import type {
   CodeViewDeletedCommentEvent,
   CodeViewSavedCommentEntry,
@@ -32,16 +26,15 @@ import type {
   CommentMetadata,
 } from './types';
 import { usePatchLoader } from './usePatchLoader';
-import { usePersistedState } from './usePersistedState';
 import { useThemeCycle } from './useThemeCycle';
 import {
   removeSavedCommentSidebarEntry,
   upsertSavedCommentSidebarEntry,
 } from './utils';
-import { useTheme } from '@/components/theme-provider';
-
-const LIGHT_THEME_STORAGE_KEY = 'diffshub-light-theme';
-const DARK_THEME_STORAGE_KEY = 'diffshub-dark-theme';
+import {
+  docsThemeCatalog,
+  themeController,
+} from '@/components/themeController';
 
 interface ReviewUIProps {
   domain?: string;
@@ -50,10 +43,19 @@ interface ReviewUIProps {
 }
 
 export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
+  // Provide the diffshub-scoped theme context, then render the body BELOW it so
+  // the diffs hook + selection hook can read the controller context.
+  return (
+    <ThemeProvider controller={themeController}>
+      <ReviewUIInner domain={domain} initialUrl={initialUrl} path={path} />
+    </ThemeProvider>
+  );
+}
+
+function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   useEffect(preloadAvatars, []);
 
   const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
-  const workerPool = useWorkerPool();
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [collapseMode, setCollapseMode] = useState<'expanded' | 'collapsed'>(
     'expanded'
@@ -63,78 +65,58 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   const [showBackgrounds, setShowBackgrounds] = useState(true);
   const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
   const [lineNumbers, setLineNumbers] = useState(true);
-  // Light/dark theme picks persist across reloads via localStorage. The
-  // hook reads after mount (not during render) so the SSR markup always
-  // uses the defaults and React's hydration check stays happy. The
-  // `*Hydrated` flags let downstream effects wait for the real values
-  // before pushing them through to long-lived singletons.
-  const [lightTheme, setLightTheme, lightThemeHydrated] =
-    usePersistedState<LightTheme>(
-      LIGHT_THEME_STORAGE_KEY,
-      DEFAULT_LIGHT_THEME,
-      LIGHT_THEMES
-    );
-  const [darkTheme, setDarkTheme, darkThemeHydrated] =
-    usePersistedState<DarkTheme>(
-      DARK_THEME_STORAGE_KEY,
-      DEFAULT_DARK_THEME,
-      DARK_THEMES
-    );
-  const themesHydrated = lightThemeHydrated && darkThemeHydrated;
-  // The diffshub UI shares its color mode with the surrounding ThemeProvider
-  // so picking Auto/Light/Dark flips both the CodeView's `themeType` and the
-  // app's <html> light/dark class (the tree sidebar, header, etc.).
-  // `theme` from useTheme() can briefly be undefined during initial mount
-  // before localStorage is read; fall back to 'system' so the header doesn't
-  // render an empty selection.
-  const {
-    theme: appTheme,
-    resolvedTheme: appResolvedTheme,
-    setTheme: setColorMode,
-  } = useTheme();
-  const colorMode: ColorMode = (appTheme as ColorMode | undefined) ?? 'system';
+  // All theming state — color mode and the light/dark theme-name picks — lives
+  // in the single @pierre/theme-kit controller (the same instance the app-wide
+  // ThemeProvider is bound to). Reading it here means picking Auto/Light/Dark
+  // flips both the CodeView's `themeType` and the app's <html> class, and the
+  // theme-name picks persist with no separate local state.
+  const themeState = useThemeController(themeController);
+
+  // The controller reads persisted values synchronously when its module loads
+  // on the client, so useSyncExternalStore would surface them on the very first
+  // client render — but the server rendered the defaults. Gate every
+  // theme-derived value (rendered into inline chrome styles + the CodeView
+  // themeType) behind a client-mounted flag so the first client render matches
+  // the SSR markup, then flips to the user's selection. This also keeps the
+  // long-lived WorkerPool and the CodeView from mounting against the default
+  // palette before the persisted values apply.
+  const [themesHydrated, setThemesHydrated] = useState(false);
+  useEffect(() => {
+    setThemesHydrated(true);
+  }, []);
+
+  const colorMode: ColorMode = themesHydrated ? themeState.mode : 'system';
+  const appResolvedTheme = themesHydrated
+    ? themeState.resolvedColorScheme
+    : undefined;
+  const lightThemeName = themesHydrated
+    ? themeState.lightThemeName
+    : docsThemeCatalog.defaultLightThemeName;
+  const darkThemeName = themesHydrated
+    ? themeState.darkThemeName
+    : docsThemeCatalog.defaultDarkThemeName;
+  const setColorMode = useCallback((mode: ColorMode) => {
+    themeController.setColorMode(mode);
+  }, []);
+  const setLightThemeName = useCallback((name: LightThemeName) => {
+    themeController.setThemeNameForScheme('light', name);
+  }, []);
+  const setDarkThemeName = useCallback((name: DarkThemeName) => {
+    themeController.setThemeNameForScheme('dark', name);
+  }, []);
   // The cycle button in the System Monitor sweeps through every Shiki
   // theme so reviewers can preview the full set without manually picking
   // each one. The hook captures the user's current pick when cycling
   // starts so the visible theme anchors the rotation.
   const themeCycle = useThemeCycle({
-    lightTheme,
-    darkTheme,
+    lightThemeName,
+    darkThemeName,
     resolvedThemeMode: appResolvedTheme,
-    setLightTheme,
-    setDarkTheme,
+    setLightThemeName,
+    setDarkThemeName,
     setColorMode,
   });
 
-  // Push theme changes through the WorkerPool so background tokenizers reload
-  // the active light/dark Shiki themes. Without this, workers keep using the
-  // pair they were initialized with and the diff continues to render with the
-  // old theme even though the option object changed.
-  //
-  // The hydration gate is critical for client-side navigation: the WorkerPool
-  // is a long-lived singleton that survives across routes. On a second visit
-  // to a diff (e.g. logo → home → another PR) ReviewUI remounts with the
-  // theme state at DEFAULT_*_THEME for one render until usePersistedState
-  // rehydrates from localStorage. Without the gate, that initial pass would
-  // call setRenderOptions(DEFAULT) — clearing the pool's caches and kicking
-  // off a re-tokenization with the wrong theme — before the rehydration
-  // pass corrected it. Waiting until both themes are hydrated keeps the
-  // pool on the user's selection through the whole mount.
-  //
-  // useLayoutEffect (not useEffect) so the worker pool's synchronous
-  // rerender — which writes the new themeStyles CSS into the diff
-  // containers' shadow roots — happens in the same commit/paint as the
-  // sidebar's inline-style update. A plain useEffect runs after paint,
-  // which made the diff side trail the chrome by one frame and was
-  // visible as a flicker on the comment cards and tab badge during fast
-  // theme cycling.
-  useLayoutEffect(() => {
-    if (workerPool == null) return;
-    if (!themesHydrated) return;
-    void workerPool.setRenderOptions({
-      theme: { dark: darkTheme, light: lightTheme },
-    });
-  }, [workerPool, darkTheme, lightTheme, themesHydrated]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
   const handlePatchLoadStart = useCallback(() => {
@@ -242,7 +224,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   );
   // Withhold the viewer until the persisted themes have been read from
   // localStorage. Otherwise on client-side navigation back into a diff the
-  // CodeView would mount during the brief render where lightTheme/darkTheme
+  // CodeView would mount during the brief render where lightThemeName/darkThemeName
   // are still at their `DEFAULT_*_THEME` initial values and tokenize the
   // first batch of files against the wrong palette.
   const viewerAvailable =
@@ -257,11 +239,11 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
         className="[grid-area:header]"
         collapseMode={collapseMode}
         colorMode={colorMode}
-        darkTheme={darkTheme}
+        darkThemeName={darkThemeName}
         diffIndicators={diffIndicators}
         diffStyle={diffStyle}
         initialUrl={initialUrl}
-        lightTheme={lightTheme}
+        lightThemeName={lightThemeName}
         lineNumbers={lineNumbers}
         overflow={overflow}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
@@ -269,10 +251,10 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
         onToggleCollapseMode={handleToggleCollapseMode}
         onToggleFileTreeOverlay={handleToggleFileTreeOverlay}
         setColorMode={setColorMode}
-        setDarkTheme={setDarkTheme}
+        setDarkThemeName={setDarkThemeName}
         setDiffIndicators={setDiffIndicators}
         setDiffStyle={setDiffStyle}
-        setLightTheme={setLightTheme}
+        setLightThemeName={setLightThemeName}
         setLineNumbers={setLineNumbers}
         setOverflow={setOverflow}
         setShowBackgrounds={setShowBackgrounds}
@@ -283,9 +265,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
           <CodeViewSidebar
             className="[grid-area:viewer] md:[grid-area:tree]"
             commentSections={commentSections}
-            darkTheme={darkTheme}
             diffStats={diffStats}
-            lightTheme={lightTheme}
             mobileOverlayOpen={fileTreeOverlayOpen}
             onMobileClose={handleCloseFileTreeOverlay}
             onSelectComment={handleSelectComment}
@@ -298,9 +278,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
           <CodeViewWrapper
             key={viewerKey}
             className="[grid-area:viewer]"
-            darkTheme={darkTheme}
             diffStyle={diffStyle}
-            lightTheme={lightTheme}
             overflow={overflow}
             showBackgrounds={showBackgrounds}
             diffIndicators={diffIndicators}
@@ -317,9 +295,7 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
         </>
       ) : (
         <CodeViewStatusPanel
-          darkTheme={darkTheme}
           errorMessage={errorMessage}
-          lightTheme={lightTheme}
           onRetry={retryLoad}
           state={loadState}
         />

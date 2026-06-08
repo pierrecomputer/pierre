@@ -1,30 +1,22 @@
 'use client';
 
-import { type DiffsThemeNames } from '@pierre/diffs';
 import { useStableCallback } from '@pierre/diffs/react';
 import type {
   FileTreeBatchOperation,
   FileTree as FileTreeModel,
   FileTreeOptions,
 } from '@pierre/trees';
-import { FileTree, useFileTree } from '@pierre/trees/react';
-import {
-  type CSSProperties,
-  memo,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useFileTree } from '@pierre/trees/react';
+import { type CSSProperties, memo, useEffect, useRef, useState } from 'react';
 
 import type { FileTreePublicId } from '../../../../../../packages/trees/dist/model/publicTypes';
+import { ThemedFileTree } from './_theming/react/ThemedFileTree';
 import {
   BASE_FILE_TREE_OPTIONS,
   CODE_VIEW_FILE_TREE_ITEM_HEIGHT,
   getInitialBatchSize,
 } from './constants';
 import type { CodeViewFileTreeSource } from './types';
-import { useResolvedTreeThemeStyles } from './useResolvedTreeThemeStyles';
 type FileTreeSortComparator = Exclude<
   NonNullable<FileTreeOptions['sort']>,
   'default'
@@ -45,11 +37,6 @@ const DENSITY_OVERRIDE_STYLES = {
 } as CSSProperties;
 
 interface CodeViewFileTreeProps {
-  // Themes selected in the header's theme switcher. Resolved via shiki
-  // (cached after first use) and mapped to tree CSS variables so the
-  // sidebar tracks the same Shiki theme as the diff viewer.
-  darkTheme: DiffsThemeNames;
-  lightTheme: DiffsThemeNames;
   // Callback invoked with the underlying tree model once it's mounted, and
   // again with `null` on unmount. Lets parents drive imperative APIs like
   // search open/close without owning the model creation.
@@ -59,17 +46,10 @@ interface CodeViewFileTreeProps {
 }
 
 export const CodeViewFileTree = memo(function CodeViewFileTree({
-  darkTheme,
-  lightTheme,
   onModelReady,
   onSelectItem,
   source,
 }: CodeViewFileTreeProps) {
-  const activeStyles = useResolvedTreeThemeStyles(lightTheme, darkTheme);
-  const themeStyles = useMemo(
-    () => ({ ...activeStyles, ...DENSITY_OVERRIDE_STYLES }),
-    [activeStyles]
-  );
   const sourceRef = useRef(source);
   const previousSourceRef = useRef(source);
   const [initialVisibleRowCount] = useState(getInitialBatchSize);
@@ -153,10 +133,11 @@ export const CodeViewFileTree = memo(function CodeViewFileTree({
   }, [model, onModelReady]);
 
   return (
-    <FileTree
+    <ThemedFileTree
       className="h-full min-h-0 overflow-auto overscroll-contain md:ml-3"
       model={model}
-      style={themeStyles}
+      reconcileForegroundFromChrome
+      style={DENSITY_OVERRIDE_STYLES}
     />
   );
 });

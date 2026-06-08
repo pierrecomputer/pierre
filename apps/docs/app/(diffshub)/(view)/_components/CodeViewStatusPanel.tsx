@@ -1,31 +1,30 @@
 import { IconCiWarningFill, IconRefresh } from '@pierre/icons';
 
+import { diffshubChromeMapping } from './_theming/js/diffshubChromeMapping';
+import { useChromeThemeProps } from './_theming/react/useChromeThemeProps';
 import type { ViewerLoadState } from './types';
-import { useThemeChromeStyle } from './useResolvedTreeThemeStyles';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface CodeViewStatusPanelProps {
-  darkTheme: string;
   errorMessage: string | null;
-  lightTheme: string;
   onRetry(): void;
   state: ViewerLoadState;
 }
 
 export function CodeViewStatusPanel({
-  darkTheme,
   errorMessage,
-  lightTheme,
   onRetry,
   state,
 }: CodeViewStatusPanelProps) {
   // Mirror the rest of the diffshub chrome so the loading screen sits on the
   // active Shiki theme's surface instead of the global light/dark palette.
-  // Mounted before the viewer is available, so we lean on the same hook the
-  // header/sidebar use — the resolved-theme cache keeps subsequent renders
-  // synchronous.
-  const themeChromeStyle = useThemeChromeStyle(lightTheme, darkTheme);
+  // Mounted before the viewer is available, so we lean on the same provider
+  // useChromeThemeProps the header/sidebar use — the controller source keeps the
+  // last-resolved theme, so this stays on-palette without flashing the default.
+  const { style: chromeStyle } = useChromeThemeProps(diffshubChromeMapping);
+  const themeChromeStyle =
+    Object.keys(chromeStyle).length > 0 ? chromeStyle : undefined;
   const isError = state === 'error';
   const title = isError
     ? 'Couldn’t load diff'

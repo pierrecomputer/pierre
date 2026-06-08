@@ -18,6 +18,8 @@ import {
   useState,
 } from 'react';
 
+import { diffshubChromeMapping } from './_theming/js/diffshubChromeMapping';
+import { useChromeThemeProps } from './_theming/react/useChromeThemeProps';
 import { CodeViewCommentsList } from './CodeViewCommentsList';
 import { CodeViewDiffStats } from './CodeViewDiffStats';
 import { CodeViewFileTree } from './CodeViewFileTree';
@@ -27,7 +29,6 @@ import type {
   CodeViewSavedCommentEntry,
   CodeViewSavedCommentItem,
 } from './types';
-import { useThemeChromeStyle } from './useResolvedTreeThemeStyles';
 import type { ThemeCycleControls } from './useThemeCycle';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/ui/button';
@@ -42,9 +43,7 @@ const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 interface CodeViewSidebarProps {
   className?: string;
   commentSections: readonly CodeViewSavedCommentItem[];
-  darkTheme: string;
   diffStats: CodeViewDiffStatsData | null;
-  lightTheme: string;
   mobileOverlayOpen?: boolean;
   onMobileClose(): void;
   onSelectComment(comment: CodeViewSavedCommentEntry): void;
@@ -58,9 +57,7 @@ interface CodeViewSidebarProps {
 export const CodeViewSidebar = memo(function CodeViewSidebar({
   className,
   commentSections,
-  darkTheme,
   diffStats,
-  lightTheme,
   mobileOverlayOpen = false,
   onMobileClose,
   onSelectComment,
@@ -80,7 +77,11 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   // and its chrome text follows the theme's own foreground tokens
   // instead of an opacity-derived fade of the file-tree's muted text.
   // Shared with the header so both chrome surfaces stay in sync.
-  const sidebarStyle = useThemeChromeStyle(lightTheme, darkTheme);
+  const { style: sidebarChromeStyle } = useChromeThemeProps(
+    diffshubChromeMapping
+  );
+  const sidebarStyle =
+    Object.keys(sidebarChromeStyle).length > 0 ? sidebarChromeStyle : undefined;
   const [activeStatusPanel, setActiveStatusPanel] =
     useState<SidebarStatusPanel | null>('diffStats');
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
@@ -210,8 +211,6 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
             className="h-full min-h-0"
           >
             <CodeViewFileTree
-              darkTheme={darkTheme}
-              lightTheme={lightTheme}
               source={source}
               onModelReady={handleModelReady}
               onSelectItem={onSelectItem}

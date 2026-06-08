@@ -16,6 +16,7 @@ import {
   IconShare,
   IconSymbolDiffstat,
 } from '@pierre/icons';
+import { type ColorMode } from '@pierre/theme-kit';
 import Link from 'next/link';
 import {
   type CSSProperties,
@@ -29,17 +30,10 @@ import {
 } from 'react';
 
 import { DiffUrlForm } from '../../_components/DiffUrlForm';
+import { diffshubChromeMapping } from './_theming/js/diffshubChromeMapping';
+import { useChromeThemeProps } from './_theming/react/useChromeThemeProps';
 import { DiffsHubLogo } from './DiffsHubLogo';
-import {
-  type ColorMode,
-  DARK_THEMES,
-  type DarkTheme,
-  DEFAULT_DARK_THEME,
-  DEFAULT_LIGHT_THEME,
-  LIGHT_THEMES,
-  type LightTheme,
-} from './themes';
-import { useThemeChromeStyle } from './useResolvedTreeThemeStyles';
+import { docsThemeCatalog } from '@/components/themeCatalog';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -51,6 +45,9 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
+type LightThemeName = string;
+type DarkThemeName = string;
+
 const SETTING_ROW_CLASS =
   'w-full flex cursor-pointer items-center justify-between gap-4 px-2 py-1.5 text-sm';
 const THEMED_DROPDOWN_CONTENT_CLASS =
@@ -60,22 +57,22 @@ interface HeaderProps {
   className?: string;
   collapseMode: 'expanded' | 'collapsed';
   colorMode: ColorMode;
-  darkTheme: DarkTheme;
+  darkThemeName: DarkThemeName;
   diffIndicators: DiffIndicators;
   diffStyle: 'split' | 'unified';
   fileTreeAvailable: boolean;
   fileTreeOverlayOpen: boolean;
   initialUrl: string;
-  lightTheme: LightTheme;
+  lightThemeName: LightThemeName;
   lineNumbers: boolean;
   overflow: 'wrap' | 'scroll';
   onToggleCollapseMode(): void;
   onToggleFileTreeOverlay(): void;
   setColorMode(mode: ColorMode): void;
-  setDarkTheme: Dispatch<SetStateAction<DarkTheme>>;
+  setDarkThemeName(name: DarkThemeName): void;
   setDiffIndicators: Dispatch<SetStateAction<DiffIndicators>>;
   setDiffStyle: Dispatch<SetStateAction<'split' | 'unified'>>;
-  setLightTheme: Dispatch<SetStateAction<LightTheme>>;
+  setLightThemeName(name: LightThemeName): void;
   setLineNumbers: Dispatch<SetStateAction<boolean>>;
   setOverflow: Dispatch<SetStateAction<'wrap' | 'scroll'>>;
   setShowBackgrounds: Dispatch<SetStateAction<boolean>>;
@@ -86,22 +83,22 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   className,
   collapseMode,
   colorMode,
-  darkTheme,
+  darkThemeName,
   diffIndicators,
   diffStyle,
   fileTreeAvailable,
   fileTreeOverlayOpen,
   initialUrl,
-  lightTheme,
+  lightThemeName,
   lineNumbers,
   overflow,
   onToggleCollapseMode,
   onToggleFileTreeOverlay,
   setColorMode,
-  setDarkTheme,
+  setDarkThemeName,
   setDiffIndicators,
   setDiffStyle,
-  setLightTheme,
+  setLightThemeName,
   setLineNumbers,
   setOverflow,
   setShowBackgrounds,
@@ -115,7 +112,11 @@ export const CodeViewHeader = memo(function CodeViewHeader({
   // Shiki surface (background, text, icons, borders) instead of the global
   // light/dark palette. Falls back to the diffshub-sidebar-bg CSS variable
   // on first render while the theme is still resolving.
-  const themeChromeStyle = useThemeChromeStyle(lightTheme, darkTheme);
+  const { style: headerChromeStyle } = useChromeThemeProps(
+    diffshubChromeMapping
+  );
+  const themeChromeStyle =
+    Object.keys(headerChromeStyle).length > 0 ? headerChromeStyle : undefined;
   const dropdownThemeStyle = useMemo(
     () => getDropdownThemeStyle(themeChromeStyle),
     [themeChromeStyle]
@@ -216,11 +217,11 @@ export const CodeViewHeader = memo(function CodeViewHeader({
             </Button>
             <ThemeDropdown
               colorMode={colorMode}
-              darkTheme={darkTheme}
-              lightTheme={lightTheme}
+              darkThemeName={darkThemeName}
+              lightThemeName={lightThemeName}
               setColorMode={setColorMode}
-              setDarkTheme={setDarkTheme}
-              setLightTheme={setLightTheme}
+              setDarkThemeName={setDarkThemeName}
+              setLightThemeName={setLightThemeName}
               themeDropdownStyle={dropdownThemeStyle}
             />
             <DropdownMenu>
@@ -335,11 +336,11 @@ function getDropdownThemeStyle(
 
 interface ThemeDropdownProps {
   colorMode: ColorMode;
-  darkTheme: DarkTheme;
-  lightTheme: LightTheme;
+  darkThemeName: DarkThemeName;
+  lightThemeName: LightThemeName;
   setColorMode(mode: ColorMode): void;
-  setDarkTheme: Dispatch<SetStateAction<DarkTheme>>;
-  setLightTheme: Dispatch<SetStateAction<LightTheme>>;
+  setDarkThemeName(name: DarkThemeName): void;
+  setLightThemeName(name: LightThemeName): void;
   themeDropdownStyle?: CSSProperties;
 }
 
@@ -352,19 +353,20 @@ interface ThemeDropdownProps {
 // always starts from the top.
 function ThemeDropdown({
   colorMode,
-  darkTheme,
-  lightTheme,
+  darkThemeName,
+  lightThemeName,
   setColorMode,
-  setDarkTheme,
-  setLightTheme,
+  setDarkThemeName,
+  setLightThemeName,
   themeDropdownStyle,
 }: ThemeDropdownProps) {
   const TriggerIcon = colorModeIcon(colorMode);
   const [view, setView] = useState<'main' | 'light' | 'dark'>('main');
   // Only offer a reset when at least one slot drifts from the default
-  // pierre-soft pair, so the link stays out of the way until it's useful.
+  // pierre pair, so the link stays out of the way until it's useful.
   const themesAreCustom =
-    lightTheme !== DEFAULT_LIGHT_THEME || darkTheme !== DEFAULT_DARK_THEME;
+    lightThemeName !== docsThemeCatalog.defaultLightThemeName ||
+    darkThemeName !== docsThemeCatalog.defaultDarkThemeName;
   return (
     // `modal={false}` lets the user scroll and click the code view while the
     // theme picker is open. The default Radix DropdownMenu blocks pointer
@@ -433,7 +435,7 @@ function ThemeDropdown({
               }}
             >
               <IconColorLight />
-              <span className="min-w-0 flex-1 truncate">{lightTheme}</span>
+              <span className="min-w-0 flex-1 truncate">{lightThemeName}</span>
               <IconChevronSm
                 aria-hidden
                 className="text-muted-foreground -rotate-90"
@@ -447,7 +449,7 @@ function ThemeDropdown({
               }}
             >
               <IconColorDark />
-              <span className="min-w-0 flex-1 truncate">{darkTheme}</span>
+              <span className="min-w-0 flex-1 truncate">{darkThemeName}</span>
               <IconChevronSm
                 aria-hidden
                 className="text-muted-foreground -rotate-90"
@@ -458,8 +460,8 @@ function ThemeDropdown({
                 className="text-muted-foreground hover:text-foreground mt-1 cursor-pointer justify-center text-xs focus:bg-transparent"
                 onSelect={(event) => {
                   event.preventDefault();
-                  setLightTheme(DEFAULT_LIGHT_THEME);
-                  setDarkTheme(DEFAULT_DARK_THEME);
+                  setLightThemeName(docsThemeCatalog.defaultLightThemeName);
+                  setDarkThemeName(docsThemeCatalog.defaultDarkThemeName);
                 }}
               >
                 Reset to default themes
@@ -469,16 +471,16 @@ function ThemeDropdown({
         ) : (
           <ThemeList
             view={view}
-            currentLight={lightTheme}
-            currentDark={darkTheme}
+            currentLight={lightThemeName}
+            currentDark={darkThemeName}
             onBack={() => setView('main')}
             onPickLight={(theme) => {
-              setLightTheme(theme);
+              setLightThemeName(theme);
               setColorMode('light');
               setView('main');
             }}
             onPickDark={(theme) => {
-              setDarkTheme(theme);
+              setDarkThemeName(theme);
               setColorMode('dark');
               setView('main');
             }}
@@ -491,11 +493,11 @@ function ThemeDropdown({
 
 interface ThemeListProps {
   view: 'light' | 'dark';
-  currentLight: LightTheme;
-  currentDark: DarkTheme;
+  currentLight: LightThemeName;
+  currentDark: DarkThemeName;
   onBack(): void;
-  onPickLight(theme: LightTheme): void;
-  onPickDark(theme: DarkTheme): void;
+  onPickLight(theme: LightThemeName): void;
+  onPickDark(theme: DarkThemeName): void;
 }
 
 // Inline list of theme names shown after the user enters the light or dark
@@ -511,7 +513,9 @@ function ThemeList({
   onPickDark,
 }: ThemeListProps) {
   const isLight = view === 'light';
-  const themes = isLight ? LIGHT_THEMES : DARK_THEMES;
+  const themes = docsThemeCatalog.getThemeNames({
+    colorScheme: isLight ? 'light' : 'dark',
+  });
   const current = isLight ? currentLight : currentDark;
   const HeaderIcon = isLight ? IconColorLight : IconColorDark;
   // Auto-scroll so the currently-selected row sits at the second visible
@@ -566,9 +570,9 @@ function ThemeList({
             onSelect={(event) => {
               event.preventDefault();
               if (isLight) {
-                onPickLight(theme as LightTheme);
+                onPickLight(theme);
               } else {
-                onPickDark(theme as DarkTheme);
+                onPickDark(theme);
               }
             }}
             selected={current === theme}
