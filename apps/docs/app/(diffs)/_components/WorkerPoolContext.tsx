@@ -66,6 +66,7 @@ const HighlighterOptions: WorkerInitializationRenderOptions = {
     'zig',
   ],
   preferredHighlighter: 'shiki-wasm',
+  useTokenTransformer: true,
 };
 
 interface WorkerPoolProps {
