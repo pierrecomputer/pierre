@@ -179,12 +179,16 @@
   textarea {
     @apply outline-offset-1;
   }
-  code {
+  code,
+  kbd {
     font-family: var(--diffs-font-family);
     font-size: 95%;
     font-weight: 500;
     color: var(--color-primary);
     letter-spacing: -0.025em;
+  }
+  kbd {
+    @apply text-muted-foreground bg-accent shadow-[inset_0_-1px_0_var(--color-border)] px-1.25 py-0.25 rounded-sm text-center min-w-[1.75em];
   }
 
   h2,

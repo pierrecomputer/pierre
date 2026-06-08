@@ -1,4 +1,5 @@
 import {
+  preloadFile,
   preloadFileDiff,
   preloadMultiFileDiff,
   preloadUnresolvedFile,
@@ -21,6 +22,11 @@ import { FONT_STYLES } from '../_examples/FontStyles/constants';
 import { FontStyles } from '../_examples/FontStyles/FontStyles';
 import { LINE_SELECTION_EXAMPLE } from '../_examples/LineSelection/constants';
 import { LineSelection } from '../_examples/LineSelection/LineSelection';
+import {
+  LIVE_EDITOR_EXAMPLE,
+  LIVE_EDITOR_FILE_EXAMPLE,
+} from '../_examples/LiveEditor/constants';
+import { LiveEditor } from '../_examples/LiveEditor/LiveEditor';
 import { MERGE_CONFLICT_EXAMPLE } from '../_examples/MergeConflict/constants';
 import { MergeConflict } from '../_examples/MergeConflict/MergeConflict';
 import { SHIKI_THEMES } from '../_examples/ShikiThemes/constants';
@@ -47,6 +53,7 @@ export default function Home() {
         <HeadingAnchors />
         <section className="space-y-12 pb-8">
           <SplitUnifiedSection />
+          <LiveEditorSection />
           <ShikiThemesSection />
           <DiffStylesSection />
           <FontStylesSection />
@@ -69,6 +76,19 @@ export default function Home() {
 async function SplitUnifiedSection() {
   return (
     <SplitUnified prerenderedDiff={await preloadMultiFileDiff(SPLIT_UNIFIED)} />
+  );
+}
+
+async function LiveEditorSection() {
+  const [prerenderedDiff, prerenderedFile] = await Promise.all([
+    preloadMultiFileDiff(LIVE_EDITOR_EXAMPLE),
+    preloadFile(LIVE_EDITOR_FILE_EXAMPLE),
+  ]);
+  return (
+    <LiveEditor
+      prerenderedDiff={prerenderedDiff}
+      prerenderedFile={prerenderedFile}
+    />
   );
 }
 

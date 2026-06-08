@@ -1,17 +1,13 @@
 ## Editor
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>
-  The editor API is experimental and subject to change.
+  Editor is experimental and subject to change.
 </Notice>
 
 The editor is a pluggable editing layer for `File`-style code surfaces. It adds
 keyboard-driven editing to an already-rendered `File` or `FileDiff` while the
 existing renderer continues to own syntax highlighting, layout, annotations, and
-virtualization.
-
-To attach the editor to a `File` instance, import it from
-`@pierre/diffs/editor`. It is intentionally separate from the core bundle so you
-can lazy-load it when editing is optional.
+virtualization. Editor includes:
 
 - Text editing
 - Selection management, including multiple cursors
@@ -19,8 +15,12 @@ can lazy-load it when editing is optional.
 - History (undo and redo)
 - Find-in-file search
 - [Quick Edit](#editor-quick-edit) (opt-in, custom UI)
-- SSR supported
+- SSR support
 - Mobile-friendly
+
+To attach the editor to a `File` instance, import it from
+`@pierre/diffs/editor`. It is intentionally separate from the core bundle so you
+can lazy-load it when editing is optional.
 
 <EditorDemo />
 
@@ -60,11 +60,11 @@ using `VirtualizedFile` and `VirtualizedFileDiff`.
   fileDiffExample={editorVanillaFileDiffExample}
 />
 
-<Notice icon={<IconInfoFill />}>
-  Editing a `FileDiff` requires the full file contents of both sides. The editor
-  targets the addition side (the new version of the file) and cannot reconstruct
-  it from a partial diff. Make sure one of the following is true before attaching
-  the editor:
+<Notice variant="warning" icon={<IconInfoFill />}>
+  Editing a `FileDiff` requires the full file contents. The editor targets the
+  addition side (the new version of the file) and cannot reconstruct it from a
+  partial diff. Make sure one of the following is true before attaching the
+  editor:
 
 - You rendered the diff by passing `oldFile` and `newFile` as `FileContents`
   objects directly (the common case).
@@ -73,7 +73,7 @@ using `VirtualizedFile` and `VirtualizedFileDiff`.
   context lines).
 
 If neither condition is met — for example, when the diff was parsed from a raw
-patch with no accompanying source files — `editor.edit()` will attach but
+patch with no accompanying source files — `editor.edit()` will attach, but
 editing will have no effect.
 
 </Notice>
@@ -81,21 +81,39 @@ editing will have no effect.
 ### React
 
 Create one `Editor` instance (typically with `useMemo`), wrap your tree in
-`EditorProvider`, and set `contentEditable` on `File` or `FileDiff` when editing
-should be active. The provider cleans up the editor on unmount. We highly
-recommend using the `Virtualizer` component for best performance when editing
-large files.
+`EditorProvider`, and set `contentEditable` on `File`, `FileDiff`, or
+`MultiFileDiff` when editing should be active. The provider cleans up the editor
+on unmount. We highly recommend using the `Virtualizer` component for best
+performance when editing large files.
 
 <EditorComponentTabs
   fileExample={editorReactExample}
   fileDiffExample={editorReactFileDiffExample}
+  multiFileDiffExample={editorReactMultiFileDiffExample}
+/>
+
+### Using Worker Pool
+
+When you offload syntax highlighting to a worker pool, the editor still needs
+the token transformer pipeline to re-highlight lines as you type. Set
+`useTokenTransformer: true` on the pool's `highlighterOptions`.
+
+See [Worker Pool](#worker-pool) for worker factory setup and pool options. In
+vanilla JS, pass the pool as the second argument to `File` or `FileDiff`. In
+React, wrap your tree in `WorkerPoolContextProvider`. Then attach the editor as
+usual.
+
+<EditorWorkerPoolTabs
+  vanillaExample={editorWorkerPoolVanillaExample}
+  reactExample={editorWorkerPoolReactExample}
 />
 
 ### Lazy Loading
 
 Because `@pierre/diffs/editor` is a standalone entry point, you can
 dynamic-import it only when the user enters edit mode. That keeps the initial
-page bundle smaller and can improve LCP on pages where editing is rare.
+page bundle smaller and can improve LCP (Largest Contentful Paint) on pages
+where editing is rare.
 
 <DocsCodeExample {...editorLazyFileExample} />
 
@@ -116,22 +134,23 @@ Edit UI:
 
 ### Keyboard Shortcuts
 
-Shortcuts use the primary modifier: **⌘ on macOS**, **Ctrl on Windows and
-Linux**. On macOS, document start/end use ↑ and ↓ with the modifier; on other
-platforms, **Home** and **End** are used instead.
+Shortcuts use <kbd>Cmd</kbd> on macOS and <kbd>Ctrl</kbd> on Windows and Linux.
+On macOS, jumping to the start or end of the document uses ↑ and ↓ arrows with
+the modifier while other platforms use <kbd>Home</kbd> and <kbd>End</kbd>
+instead.
 
-| Command                   | Shortcut           |
-| ------------------------- | ------------------ |
-| `selectAll`               | Cmd + A            |
-| `copy`                    | Cmd + C            |
-| `cut`                     | Cmd + X            |
-| `paste`                   | Cmd + V/Y          |
-| `findNextMatch`           | Cmd + D            |
-| `indent`                  | Tab                |
-| `outdent`                 | Shift + Tab        |
-| `moveCursorToDocStart`    | Cmd + Up           |
-| `moveCursorToDocEnd`      | Cmd + Down         |
-| `expandSelectionDocStart` | Cmd + Shift + Up   |
-| `expandSelectionDocEnd`   | Cmd + Shift + Down |
-| `undo`                    | Cmd + Z            |
-| `redo`                    | Cmd + Shift + Z    |
+| Command                   | Shortcut                                                    |
+| ------------------------- | ----------------------------------------------------------- |
+| `selectAll`               | <Shortcut>A</Shortcut>                                      |
+| `copy`                    | <Shortcut>C</Shortcut>                                      |
+| `cut`                     | <Shortcut>X</Shortcut>                                      |
+| `paste`                   | <Shortcut>V/Y</Shortcut>                                    |
+| `findNextMatch`           | <Shortcut>D</Shortcut>                                      |
+| `indent`                  | <Shortcut meta={false}>Tab</Shortcut>                       |
+| `outdent`                 | <Shortcut meta={false} modifiers={['Shift']}>Tab</Shortcut> |
+| `moveCursorToDocStart`    | <Shortcut>Up</Shortcut>                                     |
+| `moveCursorToDocEnd`      | <Shortcut>Down</Shortcut>                                   |
+| `expandSelectionDocStart` | <Shortcut modifiers={['Shift']}>Up</Shortcut>               |
+| `expandSelectionDocEnd`   | <Shortcut modifiers={['Shift']}>Down</Shortcut>             |
+| `undo`                    | <Shortcut>Z</Shortcut>                                      |
+| `redo`                    | <Shortcut modifiers={['Shift']}>Z</Shortcut>                |

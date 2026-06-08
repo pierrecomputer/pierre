@@ -13,6 +13,7 @@ const HASH_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" fill="currentcolo
 export function HeadingAnchors() {
   useEffect(() => {
     const headings = document.querySelectorAll('h2[id], h3[id], h4[id]');
+    const observers: MutationObserver[] = [];
 
     for (const heading of headings) {
       if (!(heading instanceof HTMLElement)) continue;
@@ -36,7 +37,28 @@ export function HeadingAnchors() {
       });
 
       heading.appendChild(anchor);
+
+      // The heading is React-managed (e.g. headings that also render a Beta
+      // badge), so when React re-renders it can re-insert its own children
+      // after our foreign anchor node, pushing the "#" in front of the rest of
+      // the heading content. Watch the heading's direct children and keep the
+      // anchor pinned as the very last element so it always appears after the
+      // entire heading content. Re-appending triggers one more mutation, but on
+      // that pass the anchor is already last, so it settles immediately.
+      const observer = new MutationObserver(() => {
+        if (heading.lastElementChild !== anchor) {
+          heading.appendChild(anchor);
+        }
+      });
+      observer.observe(heading, { childList: true });
+      observers.push(observer);
     }
+
+    return () => {
+      for (const observer of observers) {
+        observer.disconnect();
+      }
+    };
   }, []);
 
   return null;
