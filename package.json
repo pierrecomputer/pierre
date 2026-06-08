@@ -34,6 +34,7 @@
       "@radix-ui/react-use-controllable-state": "1.2.2",
       "@shikijs/core": "4.0.2",
       "@shikijs/engine-javascript": "4.0.2",
+      "@shikijs/themes": "4.0.2",
       "@shikijs/transformers": "4.0.2",
       "@tailwindcss/postcss": "4.1.13",
       "@types/bun": "1.3.12",
@@ -138,6 +139,7 @@
   "overrides": {
     "@shikijs/core": "catalog:",
     "@shikijs/engine-javascript": "catalog:",
+    "@shikijs/themes": "catalog:",
     "@shikijs/transformers": "catalog:",
     "baseline-browser-mapping": "catalog:",
     "next": "catalog:",

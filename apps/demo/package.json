@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "bun run build:deps && vite build",
-    "build:deps": "bun run build:deps:diffs",
-    "build:deps:diffs": "output=$(cd ../../packages/diffs && bun run build 2>&1) && echo '[diffs] Successfully cleaned and built.' || (echo \"$output\" >&2 && exit 1)",
+    "build:deps": "cd ../.. && bun ws \"packages/*\" build",
     "build-types": "bun run build:deps && tsgo --build",
     "dev": "bun run build:deps && concurrently \"bun run dev:deps:diffs\" \"bun run dev:vite\" --names \"diffs,vite\" --prefix-colors \"blue,green\"",
     "dev:deps:diffs": "(cd ../../packages/diffs && bun run dev)",
