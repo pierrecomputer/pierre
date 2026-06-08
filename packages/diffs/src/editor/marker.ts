@@ -2,23 +2,10 @@ import { selectionIntersects } from './selection';
 import type { Position, Range, TextDocument } from './textDocument';
 import { addEventListener, getLineNumberAttr, h } from './utils';
 
-export type MarkerSeverity = 'error' | 'warning' | 'info' | 'hint';
-
 const MARKER_POPUP_SHOW_DELAY_MS = 300;
 const MARKER_POPUP_HIDE_DELAY_MS = 100;
 
-export function markerSeverityDatasetKey(severity: MarkerSeverity): string {
-  switch (severity) {
-    case 'error':
-      return 'markerError';
-    case 'warning':
-      return 'markerWarning';
-    case 'info':
-      return 'markerInfo';
-    case 'hint':
-      return 'markerHint';
-  }
-}
+export type MarkerSeverity = 'error' | 'warning' | 'info' | 'hint';
 
 export interface Marker extends Range {
   severity: MarkerSeverity;
@@ -57,10 +44,6 @@ export class MarkerManager {
     return this.#markers;
   }
 
-  hasMarkers(): boolean {
-    return this.#markers.length > 0;
-  }
-
   isPopupVisible(): boolean {
     return this.#hoveredMarkerIndex !== undefined;
   }
@@ -84,28 +67,28 @@ export class MarkerManager {
 
     const renderMarkerMessage = this.#context.getRenderMarkerMessage?.();
     const fileContainer = this.#context.getFileContainer();
-    if (renderMarkerMessage !== undefined && fileContainer !== undefined) {
-      this.#markerSlotElements = this.#markers.map((marker, index) =>
-        h(
-          'div',
-          {
-            dataset: 'markerSlot',
-            slot: 'marker-' + index,
-            style: {
-              whiteSpace: 'normal',
-            },
-            children: [renderMarkerMessage(marker)],
-          },
-          fileContainer
-        )
-      );
+    if (renderMarkerMessage === undefined || fileContainer === undefined) {
+      return;
     }
+
+    this.#markerSlotElements = this.#markers.map((marker, index) =>
+      h(
+        'div',
+        {
+          dataset: 'markerSlot',
+          slot: 'marker-' + index,
+          style: { whiteSpace: 'normal' },
+          children: [renderMarkerMessage(marker)],
+        },
+        fileContainer
+      )
+    );
   }
 
   listenHover(contentEl: HTMLElement): void {
     this.#markerEventDisposes?.forEach((dispose) => dispose());
     this.#markerEventDisposes = undefined;
-    if (!this.hasMarkers()) {
+    if (this.#markers.length === 0) {
       return;
     }
 
@@ -119,9 +102,8 @@ export class MarkerManager {
           return;
         }
 
-        const hoverMarkerIndex =
-          this.#findHoveredMarkerIndex(target, this.#markers) ?? -1;
-        if (hoverMarkerIndex > -1) {
+        const hoverMarkerIndex = this.#findHoveredMarkerIndex(target);
+        if (hoverMarkerIndex !== undefined) {
           this.#scheduleMarkerPopup(hoverMarkerIndex);
         } else {
           this.#cancelMarkerPopupShow();
@@ -150,44 +132,41 @@ export class MarkerManager {
     this.#markers = [];
   }
 
-  #findHoveredMarkerIndex(
-    target: HTMLElement,
-    markers: readonly Marker[]
-  ): number | undefined {
-    const lineElement = target.closest('[data-line]') as
-      | HTMLElement
-      | null
-      | undefined;
+  #findHoveredMarkerIndex(target: HTMLElement): number | undefined {
+    const lineElement = target.closest('[data-line]');
     if (lineElement == null) {
       return;
     }
 
-    const lineNumber = getLineNumberAttr(lineElement);
+    const lineNumber = getLineNumberAttr(lineElement as HTMLElement);
     if (lineNumber === undefined) {
       return;
     }
 
-    let position: Position | undefined;
+    let character: number | undefined;
     if (target.tagName === 'SPAN') {
-      const { char } = target.dataset;
+      const char = target.dataset.char;
       if (char === undefined) {
         return;
       }
-      const character = parseInt(char, 10);
+      character = parseInt(char, 10);
       if (Number.isNaN(character)) {
         return;
       }
-      position = { line: lineNumber - 1, character };
     } else if (target.tagName === 'BR') {
-      position = { line: lineNumber - 1, character: 0 };
-    }
-    if (position === undefined) {
+      character = 0;
+    } else {
       return;
     }
 
-    for (let i = markers.length - 1; i >= 0; i--) {
-      const marker = markers[i];
-      if (selectionIntersects({ start: position, end: position }, marker)) {
+    const position: Position = { line: lineNumber - 1, character };
+    for (let i = this.#markers.length - 1; i >= 0; i--) {
+      if (
+        selectionIntersects(
+          { start: position, end: position },
+          this.#markers[i]
+        )
+      ) {
         return i;
       }
     }
@@ -210,11 +189,10 @@ export class MarkerManager {
   }
 
   #scheduleMarkerPopup(markerIndex: number): void {
-    if (markerIndex === this.#hoveredMarkerIndex) {
-      this.#cancelMarkerPopupHide();
-      return;
-    }
-    if (markerIndex === this.#pendingMarkerPopupIndex) {
+    if (
+      markerIndex === this.#hoveredMarkerIndex ||
+      markerIndex === this.#pendingMarkerPopupIndex
+    ) {
       this.#cancelMarkerPopupHide();
       return;
     }
@@ -278,8 +256,6 @@ export class MarkerManager {
     const [left, wrapLine] = this.#context.getCharX(line, character);
     const lineHeight = this.#context.getLineHeight();
     const y = this.#context.getLineY(line) + wrapLine * lineHeight + lineHeight;
-    const offsetLeft = codeElement.offsetLeft;
-    const offsetTop = codeElement.offsetTop;
     const renderMarkerMessage = this.#context.getRenderMarkerMessage?.();
 
     this.#markerPopupElement = h(
@@ -287,7 +263,7 @@ export class MarkerManager {
       {
         dataset: ['editorWidget', 'markerPopup'],
         style: {
-          transform: `translateX(${offsetLeft + left}px) translateY(${offsetTop + y}px)`,
+          transform: `translateX(${codeElement.offsetLeft + left}px) translateY(${codeElement.offsetTop + y}px)`,
         },
         children: [
           renderMarkerMessage !== undefined
@@ -313,5 +289,18 @@ export class MarkerManager {
         this.#scheduleMarkerPopupHide();
       }),
     ];
+  }
+}
+
+export function markerSeverityDatasetKey(severity: MarkerSeverity): string {
+  switch (severity) {
+    case 'error':
+      return 'markerError';
+    case 'warning':
+      return 'markerWarning';
+    case 'info':
+      return 'markerInfo';
+    case 'hint':
+      return 'markerHint';
   }
 }
