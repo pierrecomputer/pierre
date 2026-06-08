@@ -3,6 +3,7 @@
 // Worktree command suite for this monorepo.
 //
 //   bun run wt new <slug> [--branch <name>] [--base <ref>]
+//   bun run wt setup [<slug>]
 //   bun run wt rm <slug> [--keep-branch] [--force]
 //   bun run wt clean [<slug>|--all]
 //   bun run wt ps
@@ -25,7 +26,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const WORKTREES_HOME = join(homedir(), 'pierre', 'pierre-worktrees');
 
@@ -54,15 +55,30 @@ interface Worktree {
   isMain: boolean;
 }
 
+export interface SetupWorktreeOptions {
+  /** Directory inside the worktree to initialize. Defaults to the current working directory. */
+  path?: string;
+  /** Slug to write into `.env.worktree`. Defaults to the existing env slug or worktree directory name. */
+  slug?: string;
+  /** Run `bun install` in the worktree after writing `.env.worktree`. Defaults to true. */
+  install?: boolean;
+  /** Print the port summary and cd command after setup. Defaults to true. */
+  printSummary?: boolean;
+}
+
+export interface SetupWorktreeResult {
+  path: string;
+  slug: string;
+  offset: number;
+}
+
 // -----------------------------------------------------------------------------
 // Entry point
 // -----------------------------------------------------------------------------
 
-const args = process.argv.slice(2);
-const sub = args[0];
-
 const commands: Record<string, (rest: string[]) => Promise<number> | number> = {
   new: cmdNew,
+  setup: cmdSetup,
   rm: cmdRm,
   clean: cmdClean,
   ps: cmdPs,
@@ -72,18 +88,23 @@ const commands: Record<string, (rest: string[]) => Promise<number> | number> = {
   '-h': cmdHelp,
 };
 
-if (!sub || !(sub in commands)) {
-  cmdHelp();
-  process.exit(sub ? 1 : 0);
-}
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  const sub = args[0];
 
-Promise.resolve(commands[sub](args.slice(1))).then(
-  (code) => process.exit(code ?? 0),
-  (err) => {
-    console.error(err instanceof Error ? err.message : String(err));
-    process.exit(1);
+  if (!sub || !(sub in commands)) {
+    cmdHelp();
+    process.exit(sub ? 1 : 0);
   }
-);
+
+  Promise.resolve(commands[sub](args.slice(1))).then(
+    (code) => process.exit(code ?? 0),
+    (err) => {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+  );
+}
 
 function cmdHelp(): number {
   console.log(`Usage: bun run wt <subcommand> [args]
@@ -93,6 +114,12 @@ Subcommands:
       Create a new worktree at ~/pierre/pierre-worktrees/<slug>.
       Branch defaults to "$USER/<slug>". --branch attaches an existing branch.
       --base selects the starting ref (default: main).
+
+  setup [<slug>]
+      Run post-add setup for an existing worktree: write .env.worktree,
+      run bun install, and print the worktree's ports. With <slug>, targets
+      ~/pierre/pierre-worktrees/<slug>. Without <slug>, targets the current
+      linked worktree.
 
   rm <slug> [--keep-branch] [--force]
       Kill any processes bound to the worktree's ports, then remove it.
@@ -141,11 +168,6 @@ async function cmdNew(rest: string[]): Promise<number> {
 
   mkdirSync(WORKTREES_HOME, { recursive: true });
 
-  const offset = allocateOffset(
-    slug,
-    worktrees.map((w) => w.offset).filter((o): o is number => o !== null)
-  );
-
   // Decide how to invoke `git worktree add`:
   //   - If --branch was passed, the branch may already exist locally: use
   //     `git worktree add <path> <branch>` (no -b).
@@ -160,25 +182,7 @@ async function cmdNew(rest: string[]): Promise<number> {
     return gitResult.status ?? 1;
   }
 
-  writeFileSync(
-    join(worktreePath, '.env.worktree'),
-    `PIERRE_WORKTREE_SLUG=${slug}\nPIERRE_PORT_OFFSET=${offset}\n`,
-    'utf8'
-  );
-
-  console.log(`\nInstalling dependencies in ${worktreePath}...`);
-  const bunInstall = spawnSync('bun', ['install'], {
-    cwd: worktreePath,
-    stdio: 'inherit',
-  });
-  if (bunInstall.status !== 0) {
-    console.error(
-      'wt new: bun install failed; the worktree was created but may be incomplete'
-    );
-    return bunInstall.status ?? 1;
-  }
-
-  printPortMap(slug, offset, worktreePath);
+  await setupWorktree({ path: worktreePath, slug });
   return 0;
 }
 
@@ -201,6 +205,74 @@ function parseNewArgs(rest: string[]): {
     }
   }
   return { slug, branch, base };
+}
+
+// -----------------------------------------------------------------------------
+// wt setup
+// -----------------------------------------------------------------------------
+
+async function cmdSetup(rest: string[]): Promise<number> {
+  const slug = rest.find((a) => !a.startsWith('--'));
+  const path = slug ? join(WORKTREES_HOME, slugify(slug)) : process.cwd();
+  await setupWorktree({ path, slug });
+  return 0;
+}
+
+// Initialize the generated worktree metadata and dependencies for a linked
+// worktree. The path-first shape lets other scripts call this after they have
+// already changed into the worktree they created.
+export async function setupWorktree(
+  options: SetupWorktreeOptions = {}
+): Promise<SetupWorktreeResult> {
+  const inputPath = resolve(options.path ?? process.cwd());
+  const worktreeRoot = resolveGitWorktreeRoot(inputPath);
+  const worktrees = enumerateWorktrees(worktreeRoot);
+  const worktree = findWorktreeByPath(worktrees, worktreeRoot);
+
+  if (!worktree) {
+    throw new Error(
+      `wt setup: ${worktreeRoot} is not listed as a git worktree`
+    );
+  }
+  if (worktree.isMain) {
+    throw new Error('wt setup: refusing to initialize the main clone');
+  }
+
+  const envPath = join(worktreeRoot, '.env.worktree');
+  const existingEnv = existsSync(envPath) ? parseEnvFile(envPath) : {};
+  const slug =
+    options.slug ?? existingEnv.PIERRE_WORKTREE_SLUG ?? basename(worktreeRoot);
+  const existingOffset = parseOffset(existingEnv.PIERRE_PORT_OFFSET);
+  const offset =
+    existingOffset ??
+    allocateOffset(
+      slug,
+      worktrees.map((w) => w.offset).filter((o): o is number => o !== null)
+    );
+
+  const envText = `PIERRE_WORKTREE_SLUG=${slug}\nPIERRE_PORT_OFFSET=${offset}\n`;
+  if (!existsSync(envPath) || readFileSync(envPath, 'utf8') !== envText) {
+    writeFileSync(envPath, envText, 'utf8');
+  }
+
+  if (options.install ?? true) {
+    console.log(`\nInstalling dependencies in ${worktreeRoot}...`);
+    const bunInstall = spawnSync('bun', ['install'], {
+      cwd: worktreeRoot,
+      stdio: 'inherit',
+    });
+    if (bunInstall.status !== 0) {
+      throw new Error(
+        'wt setup: bun install failed; the worktree may be incomplete'
+      );
+    }
+  }
+
+  if (options.printSummary ?? true) {
+    printPortMap(slug, offset, worktreeRoot);
+  }
+
+  return { path: worktreeRoot, slug, offset };
 }
 
 // -----------------------------------------------------------------------------
@@ -349,10 +421,14 @@ function cmdList(): number {
 // Parse `git worktree list --porcelain`. Each record is terminated by a blank
 // line. Fields we care about: `worktree <path>`, `HEAD <sha>`, `branch
 // refs/heads/<name>` (or `detached`).
-function enumerateWorktrees(): Worktree[] {
-  const result = spawnSync('git', ['worktree', 'list', '--porcelain'], {
-    encoding: 'utf8',
-  });
+function enumerateWorktrees(cwd = process.cwd()): Worktree[] {
+  const result = spawnSync(
+    'git',
+    ['-C', cwd, 'worktree', 'list', '--porcelain'],
+    {
+      encoding: 'utf8',
+    }
+  );
   if (result.status !== 0) {
     throw new Error(`git worktree list failed:\n${result.stderr}`);
   }
@@ -413,6 +489,34 @@ function enumerateWorktrees(): Worktree[] {
 
 function findWorktreeBySlug(slug: string): Worktree | undefined {
   return enumerateWorktrees().find((w) => w.slug === slug);
+}
+
+function findWorktreeByPath(
+  worktrees: Worktree[],
+  path: string
+): Worktree | undefined {
+  const targetPath = resolve(path);
+  return worktrees.find((w) => resolve(w.path) === targetPath);
+}
+
+function resolveGitWorktreeRoot(path: string): string {
+  const result = spawnSync(
+    'git',
+    ['-C', path, 'rev-parse', '--show-toplevel'],
+    {
+      encoding: 'utf8',
+    }
+  );
+  if (result.status !== 0) {
+    throw new Error(`wt setup: ${path} is not inside a git worktree`);
+  }
+  return resolve(result.stdout.trim());
+}
+
+function parseOffset(value: string | undefined): number | null {
+  if (value === undefined) return null;
+  const offset = Number(value);
+  return Number.isFinite(offset) ? offset : null;
 }
 
 // Stable, deterministic offset candidate from slug. Steps by 10 so ports in

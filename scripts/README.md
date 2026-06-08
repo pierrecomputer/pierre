@@ -97,6 +97,7 @@ tool didn't create (e.g. agent-spawned ones under `.omx/worktrees/` or
 
 ```bash
 bun run wt new <slug> [--branch <name>] [--base <ref>]
+bun run wt setup [<slug>]
 bun run wt rm  <slug> [--keep-branch] [--force]
 bun run wt clean [<slug>|--all]
 bun run wt ps
@@ -124,6 +125,9 @@ By default:
 - `bun install` runs automatically so husky hooks regenerate and the worktree's
   `node_modules` is ready.
 - A summary of the worktree's URLs and the `cd` command is printed.
+
+Internally, `wt new` creates the git worktree and then runs the same post-add
+setup as `wt setup`.
 
 Flags:
 
@@ -154,6 +158,43 @@ copy-paste it. If you want true auto-cd, wrap `wt new` in a shell function of
 your own (out of scope for this repo, deliberately — we don't force anyone to
 install anything).
 
+### `wt setup [<slug>]` — initialize an existing worktree
+
+Runs the post-add setup that `wt new` runs automatically:
+
+- Resolves the target worktree.
+- Writes or reuses `.env.worktree` with `PIERRE_WORKTREE_SLUG` and
+  `PIERRE_PORT_OFFSET`.
+- Runs `bun install` in the target worktree.
+- Prints the worktree's URLs and `cd` command.
+
+With a slug, `wt setup` targets the managed worktree path:
+
+```bash
+bun run wt setup drag-drop-fix
+# → initializes ~/pierre/pierre-worktrees/drag-drop-fix/
+```
+
+Without a slug, it targets the current linked worktree. This is intended for
+scripts that create or enter a worktree themselves before running setup:
+
+```bash
+git worktree add ~/pierre/pierre-worktrees/manual-branch manual-branch
+cd ~/pierre/pierre-worktrees/manual-branch
+bun run wt setup
+```
+
+`wt setup` refuses to initialize the main clone, because the main clone should
+not have a `.env.worktree` and should keep offset 0.
+
+Other TypeScript scripts can call the path-first setup function directly:
+
+```ts
+import { setupWorktree } from './wt.ts';
+
+await setupWorktree({ path: process.cwd(), slug: 'manual-branch' });
+```
+
 ### `wt rm <slug>` — tear down a worktree
 
 Runs `wt clean <slug>` first (kills any processes bound to the worktree's
@@ -178,8 +219,7 @@ launch a duplicate. `wt clean` fixes this on demand.
   `.env.worktree` are skipped — `wt` doesn't know their ports.)
 - `bun run wt clean <slug>` — same, but only for that worktree.
 
-Agents in particular should run `bun run wt clean` before ending their turn
-(this is documented in `AGENTS.md`).
+Agents in particular should run `bun run wt clean` before ending their turn.
 
 ### `wt ps` — see what's listening
 
@@ -215,16 +255,18 @@ Every worktree owns a **port offset** (0, 10, 20, 30, …). Its actual ports are
 
 ### How the offset is chosen
 
-`wt new` picks an offset deterministically from the slug's hash (so recreating a
-worktree with the same slug tends to give you the same ports and preserve your
-browser bookmarks). If that candidate collides with another live worktree's
-offset, it bumps by 10 until it finds a free slot. Discovery of live offsets is
-stateless — `git worktree list` + each worktree's `.env.worktree` is the source
-of truth. There is no central registry file.
+`wt setup` picks an offset deterministically from the slug's hash (so recreating
+a worktree with the same slug tends to give you the same ports and preserve your
+browser bookmarks). `wt new` runs `wt setup` after adding the worktree. If that
+candidate collides with another live worktree's offset, it bumps by 10 until it
+finds a free slot. Discovery of live offsets is stateless: `git worktree list`
+combined with each worktree's `.env.worktree` is the source of truth. There is
+no central registry file.
 
 ### How the offset reaches your dev scripts
 
-1. `wt new` writes `.env.worktree` at the worktree root:
+1. `wt setup` writes `.env.worktree` at the worktree root. `wt new` runs setup
+   automatically after adding the worktree:
    ```
    PIERRE_WORKTREE_SLUG=drag-drop-fix
    PIERRE_PORT_OFFSET=30
@@ -335,7 +377,13 @@ bun run wt rm drag-drop-fix --force
 git fetch
 bun run wt new review-mdos-pr --branch mdo/new-feature
 cd ~/pierre/pierre-worktrees/review-mdos-pr
-bun install
+```
+
+### Need to initialize a worktree another script already created
+
+```bash
+cd ~/pierre/pierre-worktrees/generated-by-script
+bun run wt setup
 ```
 
 ---
@@ -355,18 +403,18 @@ bun install
   dev server binds the main clone's port. Configs that run _after_ the shell
   (Next's `next.config.mjs`, Playwright configs) will still pick up
   `.env.worktree` on their own — but `PORT` arithmetic in a package.json script
-  is resolved by the shell, so always prefer `bun ws …` from the worktree root
-  (this is already the convention in `AGENTS.md`).
+  is resolved by the shell, so always prefer `bun ws …` from the worktree root.
 - **Port offsets can't be manually re-used between worktrees.** If you want two
-  worktrees on deterministic sibling ports, just let `wt new` pick — the hash is
-  stable per slug.
+  worktrees on deterministic sibling ports, let `wt setup` pick — `wt new` runs
+  setup automatically, and the hash is stable per slug.
 - **Unmanaged worktrees are visible but ignored for offset accounting.** Agent
   worktrees under `.omx/worktrees/` or `/private/tmp/pierre-*` show up in
   `wt list` and `wt ps`, but they don't claim offsets and `wt clean --all`
   doesn't try to guess their ports.
 - **Hooks / generated files.** Fresh worktrees don't have `.husky/_/` (it's
-  regenerated by husky's `prepare` script on install). `wt new` runs
-  `bun install` automatically so this is usually invisible.
+  regenerated by husky's `prepare` script on install). `wt setup` runs
+  `bun install` automatically, and `wt new` runs setup after creating the
+  worktree, so this is usually invisible.
 
 ---
 
