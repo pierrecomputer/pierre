@@ -1,5 +1,5 @@
-import { DuplicateThemeError, type ThemeLoader } from '@pierre/theme-kit';
-import { createTheme } from '@pierre/theme-kit/themes';
+import { DuplicateThemeError, type ThemeLoader } from '@pierre/theming';
+import { createTheme } from '@pierre/theming/themes';
 
 import type { ThemeRegistration, ThemeRegistrationResolved } from '../../types';
 import { themeResolver } from './themeResolver';

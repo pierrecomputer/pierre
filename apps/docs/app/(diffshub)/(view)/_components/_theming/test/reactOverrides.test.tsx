@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 
 import type { CodeViewHandle } from '@pierre/diffs/react';
-import type { ThemeLike } from '@pierre/theme-kit';
+import type { ThemeLike } from '@pierre/theming';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 import { act, createRef } from 'react';

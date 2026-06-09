@@ -1,5 +1,5 @@
 /**
- * Bundled theme collections for @pierre/theme-kit.
+ * Bundled theme collections for @pierre/theming.
  * This is the only public package entry that imports Shiki normalization,
  * Shiki-packaged theme modules, or first-party Pierre theme modules.
  */

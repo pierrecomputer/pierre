@@ -1,4 +1,4 @@
-# @pierre/theme-kit
+# @pierre/theming
 
 The theming toolkit for Pierre's open-source UI packages. It provides catalog
 primitives, the loader/cache for resolving theme JSON, a normalizer plus color
@@ -50,19 +50,19 @@ around that code.
 
 ## Entry points
 
-theme-kit ships one implementation through four public entry points.
+theming ships one implementation through four public entry points.
 
-| Import                     | Peer dep                                    | Purpose                                                            |
-| -------------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
-| `@pierre/theme-kit`        | —                                           | Catalog/resolver/controller primitives and types                   |
-| `@pierre/theme-kit/color`  | —                                           | `normalizeThemeColors` plus the `colorUtils` color transforms      |
-| `@pierre/theme-kit/react`  | `react`                                     | hooks over a controller                                            |
-| `@pierre/theme-kit/themes` | `@pierre/theme`, `@shikijs/themes`, `shiki` | Bundled Pierre/Shiki collections and Shiki / VS Code normalization |
+| Import                   | Peer dep                                    | Purpose                                                            |
+| ------------------------ | ------------------------------------------- | ------------------------------------------------------------------ |
+| `@pierre/theming`        | —                                           | Catalog/resolver/controller primitives and types                   |
+| `@pierre/theming/color`  | —                                           | `normalizeThemeColors` plus the `colorUtils` color transforms      |
+| `@pierre/theming/react`  | `react`                                     | hooks over a controller                                            |
+| `@pierre/theming/themes` | `@pierre/theme`, `@shikijs/themes`, `shiki` | Bundled Pierre/Shiki collections and Shiki / VS Code normalization |
 
 ## Install
 
 ```bash
-bun add @pierre/theme-kit
+bun add @pierre/theming
 ```
 
 Add the optional peers only for the entries you use, e.g., `react` for `/react`,
@@ -84,8 +84,8 @@ only carries a loader function, so it is safe to render a full theme picker on a
 page that never resolves a theme.
 
 ```ts
-import { createThemeCatalog } from '@pierre/theme-kit';
-import { themes } from '@pierre/theme-kit/themes';
+import { createThemeCatalog } from '@pierre/theming';
+import { themes } from '@pierre/theming/themes';
 
 const catalog = createThemeCatalog({
   themes,
@@ -107,7 +107,7 @@ const opinionatedCatalog = createThemeCatalog({
 });
 ```
 
-Apps that want a local default different from theme-kit's canonical Pierre pair
+Apps that want a local default different from theming's canonical Pierre pair
 should set it on their catalog, then let the controller read those defaults:
 
 ```ts
@@ -127,12 +127,8 @@ Collections can be passed anywhere descriptors can be passed, so larger
 collections are just wrappers around smaller collections:
 
 ```ts
-import { createThemeCollection } from '@pierre/theme-kit';
-import {
-  pierreThemes,
-  shikiThemes,
-  createTheme,
-} from '@pierre/theme-kit/themes';
+import { createThemeCollection } from '@pierre/theming';
+import { pierreThemes, shikiThemes, createTheme } from '@pierre/theming/themes';
 
 const appThemes = createThemeCollection({
   themes: [
@@ -182,7 +178,7 @@ Pass plain descriptors for custom loaders that already return a usable
 Code/Shiki theme that should be normalized before consumers use it:
 
 ```ts
-import { createTheme } from '@pierre/theme-kit/themes';
+import { createTheme } from '@pierre/theming/themes';
 
 const acmeDark = createTheme({
   name: 'acme-dark',
@@ -215,7 +211,7 @@ knows nothing about Shiki or theme JSON — it just caches whatever a loader
 returns.
 
 ```ts
-import { createThemeResolver } from '@pierre/theme-kit';
+import { createThemeResolver } from '@pierre/theming';
 
 // An isolated instance with its own registry and cache.
 const resolver = createThemeResolver();
@@ -262,7 +258,7 @@ Collections register themselves into a resolver with the per-name lazy imports.
 Many themes can be registered without generating a large initial bundle to load.
 
 ```ts
-import { createTheme, themes } from '@pierre/theme-kit/themes';
+import { createTheme, themes } from '@pierre/theming/themes';
 
 // Register exactly the themes an opinionated app exposes.
 themes.pick(['github-light', 'solarized-dark']).registerInto(resolver);
@@ -290,8 +286,8 @@ apps can let `createThemeController({ catalog })` do this automatically; use
 manual registration when lower-level code owns the resolver directly.
 
 ```ts
-import { createThemeCatalog, createThemeResolver } from '@pierre/theme-kit';
-import { themes } from '@pierre/theme-kit/themes';
+import { createThemeCatalog, createThemeResolver } from '@pierre/theming';
+import { themes } from '@pierre/theming/themes';
 
 const catalog = createThemeCatalog({
   themes,
@@ -305,7 +301,7 @@ catalog.registerInto(resolver);
 
 ## Reading theme colors
 
-Once you have a resolved theme object, the `@pierre/theme-kit/color` entry gives
+Once you have a resolved theme object, the `@pierre/theming/color` entry gives
 you two things for working with its colors: `normalizeThemeColors` to read the
 colors a theme actually defines, and a `colorUtils` bag of color transforms to
 derive new colors from them. They live in their own entry so apps that only need
@@ -314,7 +310,7 @@ the catalog/controller don't pay for the color math.
 Both exist because a raw Shiki theme is not a UI component API. Each theme may
 use different workbench keys, omit optional keys, or ship a value that works in
 the editor but not in a tree, popover, or app shell. Rather than make every
-consumer rediscover the same fallback chains and repairs, theme-kit centralizes
+consumer rediscover the same fallback chains and repairs, theming centralizes
 them in `normalizeThemeColors` and ships the contrast/color math as standalone
 transforms.
 
@@ -362,7 +358,7 @@ The result is pure, frozen, WeakMap-memoized per input theme, and idempotent. It
 runs lazily at read time by default.
 
 ```ts
-import { normalizeThemeColors } from '@pierre/theme-kit/color';
+import { normalizeThemeColors } from '@pierre/theming/color';
 
 const { colors } = normalizeThemeColors(theme);
 // colors['sideBar.background'], colors['gitDecoration.addedResourceForeground'],
@@ -384,7 +380,7 @@ derive **new** colors from a theme's colors. Its methods:
 - `deriveMutedFg` — a muted foreground derived from fg and surface.
 
 ```ts
-import { colorUtils, normalizeThemeColors } from '@pierre/theme-kit/color';
+import { colorUtils, normalizeThemeColors } from '@pierre/theming/color';
 
 const { colors } = normalizeThemeColors(theme);
 const surface = colors['sideBar.background'];
@@ -394,22 +390,22 @@ const fg = colorUtils.pickReadableForeground(surface, [
 const mutedFg = colorUtils.deriveMutedFg(fg, surface);
 ```
 
-### `normalizeTheme` (Shiki) vs `normalizeThemeColors` (theme-kit)
+### `normalizeTheme` (Shiki) vs `normalizeThemeColors` (theming)
 
 These are two different normalizers; do not wire them up backwards.
 
 - Shiki's `normalizeTheme` (from `shiki/core`, applied at load by `createTheme`)
   normalizes the **whole** theme, including syntax token colors and the base
   `fg` / `bg` / `type`.
-- theme-kit's `normalizeThemeColors` only resolves the workbench `colors` map
-  and **assumes** a theme that has already been Shiki-normalized.
+- theming's `normalizeThemeColors` only resolves the workbench `colors` map and
+  **assumes** a theme that has already been Shiki-normalized.
 
 So `normalizeTheme` runs first, at load; `normalizeThemeColors` runs after, on
 the already-normalized theme.
 
 ### Assembled token sets are consumer-owned
 
-theme-kit ships no assembled token object. The opinionated, presentation-ready
+theming ships no assembled token object. The opinionated, presentation-ready
 token sets live with their consumers:
 
 - `@pierre/trees`' `themeToTreeStyles()` builds its tree CSS variables on
@@ -446,9 +442,9 @@ guarded, so it constructs and runs on the server (persistence and the
 prefers-color-scheme listener no-op) and hydrates on the client.
 
 ```ts
-import { createThemeCatalog } from '@pierre/theme-kit';
-import { createThemeController } from '@pierre/theme-kit';
-import { themes } from '@pierre/theme-kit/themes';
+import { createThemeCatalog } from '@pierre/theming';
+import { createThemeController } from '@pierre/theming';
+import { themes } from '@pierre/theming/themes';
 
 const catalog = createThemeCatalog({
   themes,
@@ -498,7 +494,7 @@ Pass `resolver` explicitly when several controllers, vanilla widgets, workers,
 or tests intentionally need to share one registry/cache:
 
 ```ts
-import { createThemeResolver } from '@pierre/theme-kit';
+import { createThemeResolver } from '@pierre/theming';
 
 const resolver = createThemeResolver();
 const controller = createThemeController({ catalog, resolver });
@@ -520,7 +516,7 @@ example mapping the selection onto pre-existing keys, or a non-`localStorage`
 store — pass a `persistence` adapter, which takes precedence over `storageKey`:
 
 ```ts
-import type { ThemePersistence } from '@pierre/theme-kit';
+import type { ThemePersistence } from '@pierre/theming';
 
 const persistence: ThemePersistence = {
   load() {
@@ -545,7 +541,7 @@ once (a module singleton is fine) and pass it in. `useThemeController` returns
 the full controller state, including `resolvedTheme`.
 
 ```tsx
-import { useThemeController } from '@pierre/theme-kit/react';
+import { useThemeController } from '@pierre/theming/react';
 
 function ThemeToolbar() {
   const { mode, resolvedColorScheme } = useThemeController(controller);

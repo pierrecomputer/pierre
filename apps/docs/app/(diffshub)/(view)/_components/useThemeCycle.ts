@@ -1,6 +1,6 @@
 'use client';
 
-import { type ColorMode } from '@pierre/theme-kit';
+import { type ColorMode } from '@pierre/theming';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DarkThemeName, LightThemeName } from './themeNames';

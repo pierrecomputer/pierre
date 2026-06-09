@@ -28,7 +28,7 @@
     "@pierre/diffs": "workspace:*",
     "@pierre/icons": "catalog:",
     "@pierre/theme": "catalog:",
-    "@pierre/theme-kit": "workspace:*",
+    "@pierre/theming": "workspace:*",
     "@pierre/tree-test-data": "workspace:*",
     "@pierre/trees": "workspace:*",
     "@pierre/truncate": "workspace:*",

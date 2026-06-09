@@ -1,11 +1,11 @@
-import type { ThemeLoader } from '@pierre/theme-kit';
-import { shikiThemes } from '@pierre/theme-kit/themes';
+import type { ThemeLoader } from '@pierre/theming';
+import { shikiThemes } from '@pierre/theming/themes';
 
 import type { DiffsThemeNames, ThemeRegistrationResolved } from '../../types';
 import { isWorkerContext } from '../../utils/isWorkerContext';
 import { themeResolver } from './themeResolver';
 
-// Shared diffs-specific checks for resolving themes. The generic theme-kit
+// Shared diffs-specific checks for resolving themes. The generic theming
 // resolver owns cache/registry mechanics; diffs still owns worker restrictions,
 // Shiki fallback registration, and validating theme.name against the requested
 // registry key.

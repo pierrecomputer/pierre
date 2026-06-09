@@ -1,4 +1,4 @@
-// Build-time guard: asserts that the core @pierre/theme-kit entry point
+// Build-time guard: asserts that the core @pierre/theming entry point
 // (dist/index.js and every file it transitively imports) does not pull in
 // Shiki, @pierre/theme, React, Preact, DOM APIs, or tokenColors.
 //

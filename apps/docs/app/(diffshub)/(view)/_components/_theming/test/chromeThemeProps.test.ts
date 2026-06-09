@@ -1,13 +1,13 @@
-import type { ThemeLike } from '@pierre/theme-kit';
 import darkSoftTheme from '@pierre/theme/pierre-dark-soft';
 import lightSoftTheme from '@pierre/theme/pierre-light-soft';
+import type { ThemeLike } from '@pierre/theming';
 import { describe, expect, test } from 'bun:test';
 import type { CSSProperties } from 'react';
 
 import { chromeThemeProps } from '../js/chromeThemeProps';
 import { diffshubChromeMapping } from '../js/diffshubChromeMapping';
 
-// Golden chrome styles captured from the pre-theme-kit buildThemeChromeStyle for
+// Golden chrome styles captured from the pre-theming buildThemeChromeStyle for
 // the two default Pierre soft themes. These are identical to the fixtures in
 // apps/docs/test/themeChromeStyle.test.ts and lock that the new
 // chromeThemeProps + diffshubChromeMapping pipeline is byte-for-byte identical.
@@ -140,7 +140,7 @@ const DARK_SOFT_CHROME: Record<string, string> = {
 };
 
 describe('chromeThemeProps + diffshubChromeMapping', () => {
-  test('matches the pre-theme-kit chrome byte-for-byte (pierre-light-soft)', () => {
+  test('matches the pre-theming chrome byte-for-byte (pierre-light-soft)', () => {
     const { style } = chromeThemeProps(
       { theme: lightSoftTheme as ThemeLike, colorScheme: 'light' },
       diffshubChromeMapping
@@ -148,7 +148,7 @@ describe('chromeThemeProps + diffshubChromeMapping', () => {
     expect(style).toEqual(LIGHT_SOFT_CHROME as CSSProperties);
   });
 
-  test('matches the pre-theme-kit chrome byte-for-byte (pierre-dark-soft)', () => {
+  test('matches the pre-theming chrome byte-for-byte (pierre-dark-soft)', () => {
     const { style } = chromeThemeProps(
       { theme: darkSoftTheme as ThemeLike, colorScheme: 'dark' },
       diffshubChromeMapping

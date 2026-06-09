@@ -1,5 +1,5 @@
-import { createThemeCatalog } from '@pierre/theme-kit';
-import { themes } from '@pierre/theme-kit/themes';
+import { createThemeCatalog } from '@pierre/theming';
+import { themes } from '@pierre/theming/themes';
 
 export const docsThemeCatalog = createThemeCatalog({
   themes,

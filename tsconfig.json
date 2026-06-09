@@ -15,7 +15,7 @@
       "path": "packages/path-store/tsconfig.json"
     },
     {
-      "path": "packages/theme-kit/tsconfig.json"
+      "path": "packages/theming/tsconfig.json"
     },
     {
       "path": "packages/trees/tsconfig.json"

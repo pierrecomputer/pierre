@@ -17,7 +17,7 @@ const config: UserConfig = defineConfig([
     },
     unbundle: true,
     platform: 'neutral',
-    noExternal: ['@pierre/path-store', '@pierre/theme-kit'],
+    noExternal: ['@pierre/path-store', '@pierre/theming'],
     plugins: [
       {
         name: 'postcss-autoprefixer',

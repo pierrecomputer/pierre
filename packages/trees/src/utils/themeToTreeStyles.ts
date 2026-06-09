@@ -1,10 +1,10 @@
-import type { ThemeLike } from '@pierre/theme-kit';
-import { colorUtils, normalizeThemeColors } from '@pierre/theme-kit/color';
+import type { ThemeLike } from '@pierre/theming';
+import { colorUtils, normalizeThemeColors } from '@pierre/theming/color';
 
 /**
  * Theme-like shape compatible with Shiki/VS Code theme format (e.g. from
  * highlighter.getTheme() or resolveTheme()). No dependency on shiki; use with
- * resolved themes from @pierre/diffs or shiki. Aliased to theme-kit's
+ * resolved themes from @pierre/diffs or shiki. Aliased to theming's
  * `ThemeLike` — a structural superset of the keys trees reads — so existing
  * callers and tests keep typechecking unchanged.
  */
@@ -20,7 +20,7 @@ export type TreeThemeStyles = Record<string, string>;
  * Maps a Shiki/VS Code–style theme to CSS for FileTree. The shared
  * fallback/repair work — surface chains, the git-color chain, the
  * transparent-focus repair, and dropping a text-erasing hover background — now
- * lives in @pierre/theme-kit's `normalizeThemeColors`, which returns a theme in
+ * lives in @pierre/theming's `normalizeThemeColors`, which returns a theme in
  * the same workbench-key vocabulary with those keys resolved. This function
  * reads those resolved keys and maps them onto trees' `--trees-theme-*`
  * variables, applying trees' own presentation defaults where a key is absent.

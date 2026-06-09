@@ -1,6 +1,6 @@
 'use client';
 
-import { createThemeResolver } from '@pierre/theme-kit';
+import { createThemeResolver } from '@pierre/theming';
 import type { TreeThemeStyles } from '@pierre/trees';
 import { useMemo } from 'react';
 

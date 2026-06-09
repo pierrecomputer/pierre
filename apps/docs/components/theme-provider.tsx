@@ -1,6 +1,6 @@
 'use client';
 
-import type { ColorMode } from '@pierre/theme-kit';
+import type { ColorMode } from '@pierre/theming';
 import {
   createContext,
   type ReactNode,
@@ -100,7 +100,7 @@ function applyTheme({
   setThemeColorMeta(MODE_THEME_COLOR[resolvedTheme]);
 }
 
-// Thin React binding over the @pierre/theme-kit controller (the single owner of
+// Thin React binding over the @pierre/theming controller (the single owner of
 // theming state). It subscribes to the controller for mode +
 // resolvedColorScheme, applies the resolved mode to the DOM, and exposes the
 // useTheme() API the app already depends on. Selection and persistence live in

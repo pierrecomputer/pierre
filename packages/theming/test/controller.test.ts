@@ -304,7 +304,7 @@ describe('createThemeController', () => {
 
       expect(loggedErrors).toHaveLength(1);
       expect(loggedErrors[0]?.[0]).toBe(
-        '[theme-kit] Failed to resolve theme "broken-dark" for dark color scheme'
+        '[theming] Failed to resolve theme "broken-dark" for dark color scheme'
       );
       expect(loggedErrors[0]?.[1]).toBe(error);
     } finally {
@@ -323,7 +323,7 @@ describe('createThemeController', () => {
 
     const first = createThemeController({
       resolver: makeResolver(),
-      storageKey: 'theme-kit-test',
+      storageKey: 'theming-test',
       defaultMode: 'light',
       defaultLightThemeName: 'test-light',
       defaultDarkThemeName: 'test-dark',
@@ -335,7 +335,7 @@ describe('createThemeController', () => {
     // A fresh controller with the same storageKey rehydrates the selection.
     const second = createThemeController({
       resolver: makeResolver(),
-      storageKey: 'theme-kit-test',
+      storageKey: 'theming-test',
       defaultMode: 'light',
       defaultLightThemeName: 'test-light',
       defaultDarkThemeName: 'test-dark',

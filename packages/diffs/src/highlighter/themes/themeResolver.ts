@@ -1,11 +1,11 @@
-import { createThemeResolver } from '@pierre/theme-kit';
+import { createThemeResolver } from '@pierre/theming';
 
 import type { ThemeRegistrationResolved } from '../../types';
 
 // The single diffs-owned theme resolver. It replaces the former hand-rolled
 // ResolvedThemes (sync cache) + ResolvingThemes (in-flight dedupe) +
 // RegisteredCustomThemes (loader registry) trio with one shared
-// @pierre/theme-kit resolver: the resolver owns the cache, the concurrent-load
+// @pierre/theming resolver: the resolver owns the cache, the concurrent-load
 // dedupe, and the name→loader registry internally.
 //
 // This module is intentionally NOT re-exported from the package index — the

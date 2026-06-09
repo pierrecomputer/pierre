@@ -52,7 +52,7 @@ export type {
 };
 
 // Diffs accepts Shiki's bundled theme names and any additional theme name a
-// consumer registers through the highlighter/theme-kit catalog.
+// consumer registers through the highlighter/theming catalog.
 export type DiffsThemeNames = BundledTheme | (string & {});
 
 export type ThemesType = Record<'dark' | 'light', DiffsThemeNames>;

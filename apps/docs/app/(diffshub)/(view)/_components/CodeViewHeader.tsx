@@ -16,7 +16,7 @@ import {
   IconShare,
   IconSymbolDiffstat,
 } from '@pierre/icons';
-import { type ColorMode } from '@pierre/theme-kit';
+import { type ColorMode } from '@pierre/theming';
 import Link from 'next/link';
 import {
   type CSSProperties,

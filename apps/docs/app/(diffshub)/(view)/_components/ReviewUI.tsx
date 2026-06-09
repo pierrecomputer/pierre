@@ -2,8 +2,8 @@
 
 import { type DiffIndicators } from '@pierre/diffs';
 import { type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
-import { type ColorMode } from '@pierre/theme-kit';
-import { useThemeController } from '@pierre/theme-kit/react';
+import { type ColorMode } from '@pierre/theming';
+import { useThemeController } from '@pierre/theming/react';
 import {
   type ReactNode,
   useCallback,
@@ -66,7 +66,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
   const [lineNumbers, setLineNumbers] = useState(true);
   // All theming state — color mode and the light/dark theme-name picks — lives
-  // in the single @pierre/theme-kit controller (the same instance the app-wide
+  // in the single @pierre/theming controller (the same instance the app-wide
   // ThemeProvider is bound to). Reading it here means picking Auto/Light/Dark
   // flips both the CodeView's `themeType` and the app's <html> class, and the
   // theme-name picks persist with no separate local state.

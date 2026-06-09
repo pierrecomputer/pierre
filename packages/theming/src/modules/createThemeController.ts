@@ -294,7 +294,7 @@ export function createThemeController(
       return;
     }
     console.error(
-      `[theme-kit] Failed to resolve theme "${context.name}" for ${context.colorScheme} color scheme`,
+      `[theming] Failed to resolve theme "${context.name}" for ${context.colorScheme} color scheme`,
       error
     );
   }

@@ -1,5 +1,5 @@
-import type { ThemeLoader } from '@pierre/theme-kit';
-import { pierreThemes } from '@pierre/theme-kit/themes';
+import type { ThemeLoader } from '@pierre/theming';
+import { pierreThemes } from '@pierre/theming/themes';
 import {
   createHighlighter,
   createJavaScriptRegexEngine,

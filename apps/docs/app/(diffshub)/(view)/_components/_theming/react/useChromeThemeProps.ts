@@ -1,6 +1,6 @@
 'use client';
 
-import { createThemeResolver } from '@pierre/theme-kit';
+import { createThemeResolver } from '@pierre/theming';
 import { type CSSProperties, useMemo } from 'react';
 
 import { type ChromeMapping, chromeThemeProps } from '../js/chromeThemeProps';

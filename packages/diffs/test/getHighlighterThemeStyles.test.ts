@@ -8,7 +8,7 @@ import type { DiffsHighlighter } from '../src/types';
 import { getHighlighterThemeStyles } from '../src/utils/getHighlighterThemeStyles';
 
 // Byte-for-byte parity fixtures. These lock the exact --diffs-* string that the
-// pre-theme-kit getHighlighterThemeStyles produced for the Pierre themes, so the
+// pre-theming getHighlighterThemeStyles produced for the Pierre themes, so the
 // refactor onto normalizeThemeColors cannot drift the output. The values were
 // captured from the legacy implementation. Any change here is a real behavior
 // change and must be intentional.

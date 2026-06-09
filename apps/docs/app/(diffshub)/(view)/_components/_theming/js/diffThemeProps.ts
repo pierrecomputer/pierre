@@ -12,7 +12,7 @@ import {
   type ThemesType,
   type ThemeTypes,
 } from '@pierre/diffs';
-import type { ThemeLike } from '@pierre/theme-kit';
+import type { ThemeLike } from '@pierre/theming';
 
 import {
   isThemePair,

@@ -4,8 +4,8 @@
 // the app-only --diffshub-card-* (6/12/12) and annotation-hover-border (28%)
 // mixes). Only the handful of diffshub-specific surfaces the neutral set does
 // not carry are derived locally from the same foreground/surface pair.
-import type { ThemeLike } from '@pierre/theme-kit';
-import { normalizeThemeColors } from '@pierre/theme-kit/color';
+import type { ThemeLike } from '@pierre/theming';
+import { normalizeThemeColors } from '@pierre/theming/color';
 import type { CSSProperties } from 'react';
 
 import type { ChromeTokens } from './deriveChromeTokens';

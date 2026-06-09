@@ -1,4 +1,4 @@
-import type { ThemeLike } from '@pierre/theme-kit';
+import type { ThemeLike } from '@pierre/theming';
 import { describe, expect, test } from 'bun:test';
 
 import {

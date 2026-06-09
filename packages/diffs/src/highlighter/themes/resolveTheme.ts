@@ -7,7 +7,7 @@ import { themeResolver } from './themeResolver';
 
 // Resolves a theme by name to a normalized Shiki theme, delegating the cache,
 // concurrent-load dedupe, normalization, and registry to the shared
-// @pierre/theme-kit resolver. The diffs-specific behavior layered on top:
+// @pierre/theming resolver. The diffs-specific behavior layered on top:
 //   1. Worker-context guard — themes must be pre-resolved on the main thread
 //      and handed to the worker, which seeds them via attachResolvedThemes.
 //   2. Bundled-theme fallback — a name with no registered loader that matches a

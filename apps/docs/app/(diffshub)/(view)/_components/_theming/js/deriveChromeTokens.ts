@@ -8,11 +8,11 @@
  * pass can compare sideBar.foreground vs editor.foreground vs theme.fg against
  * each other (the resolved/collapsed sidebar fg has already discarded that).
  */
-import type { ThemeLike } from '@pierre/theme-kit';
-import { colorUtils, normalizeThemeColors } from '@pierre/theme-kit/color';
+import type { ThemeLike } from '@pierre/theming';
+import { colorUtils, normalizeThemeColors } from '@pierre/theming/color';
 
 // The opinionated app-chrome token set diffshubChromeMapping maps onto its CSS
-// variables. Moved out of @pierre/theme-kit (which now stays neutral); the shape
+// variables. Moved out of @pierre/theming (which now stays neutral); the shape
 // is unchanged from the token set the package used to ship.
 export interface ChromeTokens {
   additionFg: string;

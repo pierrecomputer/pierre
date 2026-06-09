@@ -1,4 +1,4 @@
-// → future @pierre/theme-kit. The vanilla-JS contract for reading the active
+// → future @pierre/theming. The vanilla-JS contract for reading the active
 // resolved theme, plus the two adapters that produce one. React context simply
 // carries the current ThemeSource; the override precedence (prop > provider)
 // falls out because a `theme` prop constructs a local fixedSource.
@@ -7,7 +7,7 @@ import type {
   ThemeController,
   ThemeLike,
   ThemeResolver,
-} from '@pierre/theme-kit';
+} from '@pierre/theming';
 
 export interface ActiveThemeSnapshot {
   // The resolved active theme object (full: colors + tokenColors). Undefined
@@ -86,7 +86,7 @@ export function requireThemeValueName(value: ThemeValue): string {
   return name;
 }
 
-// Wraps the theme-kit controller — the stateful, "follows the selector" source.
+// Wraps the theming controller — the stateful, "follows the selector" source.
 // Maps controller state to a singular ActiveThemeSnapshot. Reproduces the
 // no-flash "keep previous resolved theme until the cold one settles" semantics:
 // when the controller's resolvedTheme is momentarily undefined (a cold swap in

@@ -49,7 +49,7 @@
         "@pierre/diffs": "workspace:*",
         "@pierre/icons": "catalog:",
         "@pierre/theme": "catalog:",
-        "@pierre/theme-kit": "workspace:*",
+        "@pierre/theming": "workspace:*",
         "@pierre/tree-test-data": "workspace:*",
         "@pierre/trees": "workspace:*",
         "@pierre/truncate": "workspace:*",
@@ -111,7 +111,7 @@
       "version": "1.2.7",
       "dependencies": {
         "@pierre/theme": "catalog:",
-        "@pierre/theme-kit": "workspace:*",
+        "@pierre/theming": "workspace:*",
         "@shikijs/transformers": "^3.0.0",
         "diff": "catalog:",
         "hast-util-to-html": "catalog:",
@@ -195,8 +195,8 @@
         "next": ">=15",
       },
     },
-    "packages/theme-kit": {
-      "name": "@pierre/theme-kit",
+    "packages/theming": {
+      "name": "@pierre/theming",
       "version": "0.0.1",
       "devDependencies": {
         "@pierre/theme": "catalog:",
@@ -233,7 +233,7 @@
       "version": "1.0.0-beta.4",
       "dependencies": {
         "@pierre/path-store": "workspace:*",
-        "@pierre/theme-kit": "workspace:*",
+        "@pierre/theming": "workspace:*",
         "preact": "catalog:",
         "preact-render-to-string": "catalog:",
       },
@@ -688,7 +688,7 @@
 
     "@pierre/theme": ["@pierre/theme@1.0.3", "", {}, "sha512-sWHv11TMoqKxKDgTIk5VbhQjdPhs8DCcBxbjh3mRlS3YOM/OcrWoGX6MM8eBGn9cUu3M46Py0JnxsG2nJaFTuA=="],
 
-    "@pierre/theme-kit": ["@pierre/theme-kit@workspace:packages/theme-kit"],
+    "@pierre/theming": ["@pierre/theming@workspace:packages/theming"],
 
     "@pierre/tree-test-data": ["@pierre/tree-test-data@workspace:packages/tree-test-data"],
 

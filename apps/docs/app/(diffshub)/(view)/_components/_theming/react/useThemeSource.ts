@@ -1,6 +1,6 @@
 'use client';
 
-import type { ThemeController, ThemeResolver } from '@pierre/theme-kit';
+import type { ThemeController, ThemeResolver } from '@pierre/theming';
 import { createContext, useContext, useRef, useSyncExternalStore } from 'react';
 
 import type { ActiveThemeSnapshot, ThemeSource } from '../js/ThemeSource';

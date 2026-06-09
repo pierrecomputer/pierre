@@ -4,9 +4,9 @@ import type {
   ColorMode,
   ThemeController,
   ThemeControllerState,
-} from '@pierre/theme-kit';
-import { createThemeResolver } from '@pierre/theme-kit';
-import { useThemeController } from '@pierre/theme-kit/react';
+} from '@pierre/theming';
+import { createThemeResolver } from '@pierre/theming';
+import { useThemeController } from '@pierre/theming/react';
 import { useContext, useMemo } from 'react';
 
 import { ThemeControllerContext } from './useThemeSource';

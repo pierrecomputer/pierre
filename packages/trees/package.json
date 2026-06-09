@@ -71,7 +71,7 @@
   },
   "dependencies": {
     "@pierre/path-store": "workspace:*",
-    "@pierre/theme-kit": "workspace:*",
+    "@pierre/theming": "workspace:*",
     "preact": "catalog:",
     "preact-render-to-string": "catalog:"
   },

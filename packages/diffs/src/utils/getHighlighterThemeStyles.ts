@@ -1,4 +1,4 @@
-import { normalizeThemeColors } from '@pierre/theme-kit/color';
+import { normalizeThemeColors } from '@pierre/theming/color';
 
 import { DEFAULT_THEMES } from '../constants';
 import type {
@@ -19,7 +19,7 @@ interface GetHighlighterThemeStylesProps {
 // re-think this when it comes to removing inline
 // styles
 //
-// The base foreground/background now flow through @pierre/theme-kit's
+// The base foreground/background now flow through @pierre/theming's
 // normalizeThemeColors, which preserves the theme's top-level fg/bg. The git
 // colors deliberately stay on the diffs-local 2-link lookup below (see
 // getGitVariables) to keep this output byte-identical; adopting
@@ -58,8 +58,8 @@ export function getHighlighterThemeStyles({
 // Emits the diffs git-status CSS variables (addition/deletion/modified colors)
 // for a resolved theme. This intentionally uses the diffs-local 2-link lookup
 // (gitDecoration.* → terminal.ansi*) and STOPS before the editorGutter.* tail
-// that @pierre/theme-kit's normalizeThemeColors adds, so the emitted string stays
-// byte-identical to the pre-theme-kit output. Adopting the gutter fallback for
+// that @pierre/theming's normalizeThemeColors adds, so the emitted string stays
+// byte-identical to the pre-theming output. Adopting the gutter fallback for
 // diffs is a deliberate follow-up. A variable is omitted entirely when neither
 // source key is present, matching the previous behavior.
 function getGitVariables(

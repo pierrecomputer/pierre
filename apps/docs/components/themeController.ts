@@ -1,7 +1,4 @@
-import {
-  createThemeController,
-  type ThemePersistence,
-} from '@pierre/theme-kit';
+import { createThemeController, type ThemePersistence } from '@pierre/theming';
 
 import { docsThemeCatalog } from './themeCatalog';
 
@@ -21,7 +18,7 @@ export { docsThemeCatalog } from './themeCatalog';
 // Persistence keys, kept exactly as they were before the unification so the
 // pre-paint no-flash bootstrap script (which reads `theme`) and existing users'
 // saved selections both keep working.
-// TODO(theme-kit): When docs can migrate away from these legacy keys, remove the
+// TODO(theming): When docs can migrate away from these legacy keys, remove the
 // custom adapter below and use createThemeController's built-in `storageKey`
 // persistence shape instead.
 const MODE_KEY = 'theme';

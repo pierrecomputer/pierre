@@ -2,7 +2,7 @@ import type {
   ThemeController,
   ThemeControllerState,
   ThemeResolver,
-} from '@pierre/theme-kit';
+} from '@pierre/theming';
 import { describe, expect, test } from 'bun:test';
 
 import {

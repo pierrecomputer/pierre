@@ -4,7 +4,7 @@ import {
   createThemeResolver,
   type ThemeController,
   type ThemeResolver,
-} from '@pierre/theme-kit';
+} from '@pierre/theming';
 import { type ReactNode, useMemo } from 'react';
 
 import {
