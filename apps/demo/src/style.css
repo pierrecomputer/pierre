@@ -254,7 +254,7 @@ diffs-container {
   gap: 4px;
 }
 
-[data-quick-edit-slot] button {
+[data-selection-action-slot] button {
   border-color: rgba(128, 128, 128, 0.4);
 
   &:hover {

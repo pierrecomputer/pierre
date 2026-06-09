@@ -44,8 +44,12 @@ export function LiveEditor({
   const editor = useMemo(
     () =>
       new Editor({
-        enabledQuickEdit: true,
-        renderQuickEdit({ close, replaceSelectionText, getSelectionText }) {
+        enabledSelectionAction: true,
+        renderSelectionAction({
+          close,
+          replaceSelectionText,
+          getSelectionText,
+        }) {
           const container = document.createElement('div');
           const button = document.createElement('button');
 
@@ -124,10 +128,10 @@ export function LiveEditor({
             Editor mode (experimental) makes any code surface—<code>File</code>{' '}
             or <code>FileDiff</code>—editable in place. Start typing in the code
             below and it updates as you edit. Select text to try the custom{' '}
-            <Link href="/docs#editor-quick-edit" className="inline-link">
-              Quick Edit
+            <Link href="/docs#editor-selection-action" className="inline-link">
+              Selection Action
             </Link>{' '}
-            action.
+            widget.
           </>
         }
       />
