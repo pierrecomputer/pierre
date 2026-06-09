@@ -431,30 +431,77 @@ export function applyTextReplaceToSelections<LAnnotation>(
       return a.index - b.index;
     });
   }
-  const edits: ResolvedTextEdit[] = [];
+  const allDeletes = texts.every((text) => text === '');
+  let edits: ResolvedTextEdit[];
   const nextSelectionOffsets: number[] = Array.from({
     length: selections.length,
   });
-  let offsetDelta = 0;
-  let previousEditEnd = -1;
-  for (const entry of ordered) {
-    if (entry.start < previousEditEnd) {
-      throw new Error('Overlapping multi-selection edits are not supported');
+  if (allDeletes) {
+    edits = [];
+    let hasEffect = false;
+    for (const entry of ordered) {
+      nextSelectionOffsets[entry.index] = entry.end;
+      if (entry.start >= entry.end) {
+        continue;
+      }
+      hasEffect = true;
+      const last = edits[edits.length - 1];
+      if (last !== undefined && entry.start < last.end) {
+        edits[edits.length - 1] = {
+          start: last.start,
+          end: Math.max(last.end, entry.end),
+          text: '',
+        };
+      } else {
+        edits.push({ start: entry.start, end: entry.end, text: '' });
+      }
     }
-    previousEditEnd = entry.end;
-    const newText = expandSingleNewlineInsert(
-      textDocument,
-      entry.text,
-      entry.start
-    );
-    edits.push({
-      start: entry.start,
-      end: entry.end,
-      text: newText,
-    });
-    nextSelectionOffsets[entry.index] =
-      entry.start + offsetDelta + newText.length;
-    offsetDelta += newText.length - (entry.end - entry.start);
+    if (!hasEffect) {
+      return { nextSelections: selections };
+    }
+    for (const entry of ordered) {
+      const caret = entry.end;
+      let delta = 0;
+      let next = caret;
+      for (const edit of edits) {
+        if (caret <= edit.start) {
+          break;
+        }
+        if (caret >= edit.end) {
+          delta -= edit.end - edit.start;
+          continue;
+        }
+        next = edit.start + delta;
+        break;
+      }
+      if (next === caret) {
+        next += delta;
+      }
+      nextSelectionOffsets[entry.index] = next;
+    }
+  } else {
+    edits = [];
+    let offsetDelta = 0;
+    let previousEditEnd = -1;
+    for (const entry of ordered) {
+      if (entry.start < previousEditEnd) {
+        throw new Error('Overlapping multi-selection edits are not supported');
+      }
+      previousEditEnd = entry.end;
+      const newText = expandSingleNewlineInsert(
+        textDocument,
+        entry.text,
+        entry.start
+      );
+      edits.push({
+        start: entry.start,
+        end: entry.end,
+        text: newText,
+      });
+      nextSelectionOffsets[entry.index] =
+        entry.start + offsetDelta + newText.length;
+      offsetDelta += newText.length - (entry.end - entry.start);
+    }
   }
 
   const change = textDocument.applyResolvedEdits(edits, true, selections);
@@ -597,19 +644,12 @@ export function applyDeleteHardLineForwardToSelections<LAnnotation>(
 } {
   const deleteSelections: EditorSelection[] = selections.map((selection) => {
     const range = resolveDeleteHardLineForwardRange(textDocument, selection);
-    const deleteSelection: EditorSelection = {
+    return {
       start: range.start,
       end: range.end,
       direction: DirectionNone,
     };
-    return deleteSelection;
   });
-  const hasEffect = deleteSelections.some(
-    (selection) => comparePosition(selection.start, selection.end) !== 0
-  );
-  if (!hasEffect) {
-    return { nextSelections: selections };
-  }
   return applyTextReplaceToSelections(
     textDocument,
     deleteSelections,
@@ -631,43 +671,41 @@ export function applyDeleteSoftLineBackwardToSelections<LAnnotation>(
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
 } {
-  const deleteSelections: [Position, Position][] = selections.map(
-    (selection) => {
-      if (!isCollapsedSelection(selection)) {
-        return [selection.start, selection.end];
-      }
-      const caretPos = getCaretPosition(selection);
-      const { line, character } = caretPos;
-      const softLineStart = getSoftLineStart?.(line, character) ?? 0;
-      if (character > softLineStart) {
-        return [
-          { line, character: softLineStart },
-          { line, character },
-        ];
-      }
-      if (line === 0) {
-        return [caretPos, caretPos];
-      }
-      const prevLineLength = textDocument.getLineText(line - 1).length;
-      return [
-        { line: line - 1, character: prevLineLength },
-        { line, character: 0 },
-      ];
+  const deleteSelections: EditorSelection[] = selections.map((selection) => {
+    if (!isCollapsedSelection(selection)) {
+      return {
+        start: selection.start,
+        end: selection.end,
+        direction: DirectionNone,
+      };
     }
-  );
-  const hasEffect = deleteSelections.some(
-    ([start, end]) => comparePosition(start, end) !== 0
-  );
-  if (!hasEffect) {
-    return { nextSelections: selections };
-  }
+    const caret = getCaretPosition(selection);
+    const { line, character } = caret;
+    const softLineStart = getSoftLineStart?.(line, character) ?? 0;
+    if (character > softLineStart) {
+      return {
+        start: { line, character: softLineStart },
+        end: { line, character },
+        direction: DirectionNone,
+      };
+    }
+    if (line === 0) {
+      return {
+        start: caret,
+        end: caret,
+        direction: DirectionNone,
+      };
+    }
+    const prevLineLength = textDocument.getLineText(line - 1).length;
+    return {
+      start: { line: line - 1, character: prevLineLength },
+      end: { line, character: 0 },
+      direction: DirectionNone,
+    };
+  });
   return applyTextReplaceToSelections(
     textDocument,
-    deleteSelections.map(([start, end]) => ({
-      start,
-      end,
-      direction: DirectionNone,
-    })),
+    deleteSelections,
     deleteSelections.map(() => ''),
     lineAnnotations
   );
@@ -696,12 +734,6 @@ export function applyDeleteWordBackwardToSelections<LAnnotation>(
       direction: DirectionNone,
     };
   });
-  const hasEffect = deleteSelections.some(
-    (selection) => comparePosition(selection.start, selection.end) !== 0
-  );
-  if (!hasEffect) {
-    return { nextSelections: selections };
-  }
   return applyTextReplaceToSelections(
     textDocument,
     deleteSelections,

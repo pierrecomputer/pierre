@@ -1282,6 +1282,25 @@ describe('applyDeleteHardLineForwardToSelections', () => {
       createSelection(2, 1, 2, 1),
     ]);
   });
+
+  test('merges overlapping delete ranges from multiple carets on the same line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [
+      createSelection(0, 5, 0, 5),
+      createSelection(0, 8, 0, 8),
+    ];
+    const { nextSelections, change } = applyDeleteHardLineForwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('hello');
+    expect(nextSelections).toEqual([
+      createSelection(0, 5, 0, 5),
+      createSelection(0, 5, 0, 5),
+    ]);
+  });
 });
 
 describe('applyDeleteSoftLineBackwardToSelections', () => {
@@ -1348,6 +1367,25 @@ describe('applyDeleteSoftLineBackwardToSelections', () => {
 
     expect(textDocument.getText()).toBe('hello ');
     expect(nextSelections).toEqual([createSelection(0, 6, 0, 6)]);
+  });
+
+  test('merges overlapping delete ranges from multiple carets on the same line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [
+      createSelection(0, 8, 0, 8),
+      createSelection(0, 11, 0, 11),
+    ];
+    const { nextSelections, change } = applyDeleteSoftLineBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('');
+    expect(nextSelections).toEqual([
+      createSelection(0, 0, 0, 0),
+      createSelection(0, 0, 0, 0),
+    ]);
   });
 });
 
@@ -1460,6 +1498,25 @@ describe('applyDeleteWordBackwardToSelections', () => {
 
     expect(textDocument.getText()).toBe(' world');
     expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
+  });
+
+  test('merges overlapping delete ranges from multiple carets in the same word', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [
+      createSelection(0, 8, 0, 8),
+      createSelection(0, 11, 0, 11),
+    ];
+    const { nextSelections, change } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('hello ');
+    expect(nextSelections).toEqual([
+      createSelection(0, 6, 0, 6),
+      createSelection(0, 6, 0, 6),
+    ]);
   });
 });
 
