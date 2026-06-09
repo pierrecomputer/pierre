@@ -877,6 +877,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       collapsedContextThreshold,
       hunkSeparators,
     } = this.getOptionsWithDefaults();
+    const isRenderCacheDirty = this.renderCache?.isDirty ?? false;
 
     this.diff = fileDiff;
     const unified = diffStyle === 'unified';
@@ -1078,7 +1079,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             additionLineContent = withContentProperties(
               additionLineContent,
               lineDecoration.contentProperties,
-              additionLine != null
+              isRenderCacheDirty && additionLine != null
                 ? {
                     'data-line': additionLine.lineNumber,
                     'data-line-index': `${unifiedLineIndex},${splitLineIndex}`,
@@ -1089,7 +1090,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             deletionLineContent = withContentProperties(
               deletionLineContent,
               lineDecoration.contentProperties,
-              deletionLine != null
+              isRenderCacheDirty && deletionLine != null
                 ? {
                     'data-line': deletionLine.lineNumber,
                     'data-line-index': `${unifiedLineIndex},${splitLineIndex}`,
@@ -1192,10 +1193,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             const deletionLineDecorated = withContentProperties(
               deletionLineContent,
               deletionLineDecoration.contentProperties,
-              {
-                'data-line': deletionLine.lineNumber,
-                'data-line-index': `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
-              }
+              isRenderCacheDirty
+                ? {
+                    'data-line': deletionLine.lineNumber,
+                    'data-line-index': `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
+                  }
+                : undefined
             );
             pushGutterLineNumber(
               'deletions',
@@ -1212,10 +1215,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             const additionLineDecorated = withContentProperties(
               additionLineContent,
               additionLineDecoration.contentProperties,
-              {
-                'data-line': additionLine.lineNumber,
-                'data-line-index': `${additionLine.unifiedLineIndex},${splitLineIndex}`,
-              }
+              isRenderCacheDirty
+                ? {
+                    'data-line': additionLine.lineNumber,
+                    'data-line-index': `${additionLine.unifiedLineIndex},${splitLineIndex}`,
+                  }
+                : undefined
             );
             pushGutterLineNumber(
               'additions',
