@@ -375,7 +375,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#markerManager !== undefined
     ) {
       // when re-rendering triggered by virtual viewport scroll,
-      // re-render the existing overlay ranges
+      // re-render the existing selections, matches, and markers
       this.#updateSelections(this.#selections ?? []);
     }
 
@@ -1638,7 +1638,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         };
         const isFocused =
           primaryStartOffset === startOffset && primaryEndOffset === endOffset;
-        this.#renderSelection(renderCtx, 'match', range, isFocused);
+        this.#renderSelection(
+          renderCtx,
+          'match',
+          range,
+          isFocused ? 'focus' : undefined
+        );
       }
     }
 
@@ -1648,7 +1653,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           renderCtx,
           'marker',
           marker,
-          false,
           markerSeverityDatasetKey(marker.severity)
         );
       }
@@ -1667,7 +1671,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     },
     type: 'selection' | 'match' | 'marker',
     range: Range,
-    isFocused?: boolean,
     extraDataset?: string
   ) {
     if (this.#textDocument === undefined) {
@@ -1698,7 +1701,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             endChar,
             isLastLine,
             type,
-            isFocused,
             extraDataset
           );
           continue;
@@ -1728,7 +1730,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         0,
         left,
         width,
-        isFocused,
         extraDataset
       );
     }
@@ -1751,7 +1752,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     endChar: number,
     isLastLine: boolean,
     type: 'selection' | 'match' | 'marker',
-    isFocused: boolean = false,
     extraDataset?: string
   ) {
     const wrapOffsets = this.#wrapLineText(line);
@@ -1815,7 +1815,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         wrapLine,
         segmentLeft,
         segmentWidth,
-        isFocused,
         extraDataset
       );
     }
@@ -1839,7 +1838,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     wrapLine: number,
     left: number,
     width: number,
-    isFocused: boolean = false,
     extraDataset?: string
   ) {
     if (width === 0) {
@@ -1849,7 +1847,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const { ch, lineHeight } = this.#metrics;
     const y = this.#getLineY(line) + wrapLine * lineHeight;
     const css = `width:${width}px;transform:translateX(${left}px) translateY(${y}px);`;
-    const cacheKey = `${type}-${left}-${y}-${width}${isFocused ? 'f' : ''}${extraDataset ?? ''}`;
+    const cacheKey = `${type}-${left}-${y}-${width}${extraDataset ?? ''}`;
     const overlayEls = this.#overlayElements;
 
     const rounded =
@@ -1978,9 +1976,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         },
         renderCtx.fragment
       );
-      if (type === 'match' && isFocused === true) {
-        rangeEl.dataset.focus = '';
-      }
     }
 
     if (rounded) {
