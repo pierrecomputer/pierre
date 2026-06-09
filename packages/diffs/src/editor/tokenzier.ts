@@ -181,7 +181,7 @@ export class EditorTokenizer {
       --diffs-editor-line-number-fg: ${gutterForeground ?? 'var(--diffs-fg-number)'};
       --diffs-editor-line-number-active-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg, var(--diffs-bg))'};
       --diffs-editor-line-number-active-fg: ${gutterActiveForeground ?? 'var(--diffs-selection-number-fg)'};
-      --diffs-editor-match-bg: ${findMatchBackground ?? 'var(--diffs-editor-selection-bg)'};
+      --diffs-editor-match-bg: ${findMatchBackground ?? 'unset'};
       --diffs-editor-match-highlight-bg: ${findMatchHighlightBackground ?? 'unset'};
       --diffs-editor-cursor-fg: ${cursorForeground ?? 'unset'};
       --diffs-editor-hint-fg: ${hintForeground ?? 'unset'};

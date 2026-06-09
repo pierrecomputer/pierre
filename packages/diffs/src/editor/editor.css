@@ -91,8 +91,11 @@
   background-color: var(--diffs-bg);
 }
 [data-match-range] {
-  background-color: var(--diffs-editor-match-bg);
   z-index: -10;
+  background-color: var(
+    --diffs-editor-match-bg,
+    var(--diffs-editor-selection-bg)
+  );
 }
 [data-match-range]:not([data-focus]) {
   background-color: var(
