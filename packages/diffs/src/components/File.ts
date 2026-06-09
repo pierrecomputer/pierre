@@ -473,9 +473,9 @@ export class File<
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
         editor.syncToRenderedView(
           highlighter,
-          'file',
           fileContainer,
           file,
+          false,
           this.lineAnnotations,
           this.renderRange
         );
@@ -487,29 +487,28 @@ export class File<
     };
   }
 
-  public applyLineChange(
-    dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
-  ): void {
-    this.fileRenderer.applyDirtyLines(dirtyLines, themeType);
-  }
-
-  public applyLayoutChange(
+  // normally triggered by the editor when the document line count changes
+  public applyDocumentChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {
-    this.fileRenderer.applyLayoutChange(textDocument, newLineAnnotations);
+    this.fileRenderer.applyDocumentChange(textDocument);
     if (
       newLineAnnotations != null &&
       newLineAnnotations !== this.lineAnnotations &&
       this.file != null
     ) {
-      this.render({
-        file: this.file,
-        renderRange: this.renderRange,
-        lineAnnotations: newLineAnnotations,
-      });
+      this.setLineAnnotations(newLineAnnotations);
+      this.fileRenderer.setLineAnnotations(this.lineAnnotations);
+      this.renderAnnotations();
     }
+  }
+
+  public updateRenderCache(
+    dirtyLines: Map<number, Array<HighlightedToken>>,
+    themeType: 'dark' | 'light'
+  ): void {
+    this.fileRenderer.updateRenderCache(dirtyLines, themeType);
   }
 
   public render({
@@ -662,9 +661,9 @@ export class File<
         void this.fileRenderer.initializeHighlighter().then((highlighter) => {
           editor.syncToRenderedView(
             highlighter,
-            'file',
             fileContainer,
             file,
+            didFileChange,
             this.lineAnnotations,
             this.renderRange
           );

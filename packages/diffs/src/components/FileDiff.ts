@@ -39,6 +39,7 @@ import type {
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
+  HighlightedToken,
   HunkData,
   HunkSeparators,
   PostRenderPhase,
@@ -82,6 +83,7 @@ export interface FileDiffRenderProps<LAnnotation> {
   oldFile?: FileContents;
   newFile?: FileContents;
   deferManagers?: boolean;
+  didEdit?: boolean;
   forceRender?: boolean;
   preventEmit?: boolean;
   fileContainer?: HTMLElement;
@@ -234,7 +236,6 @@ export class FileDiff<
   protected enabled = true;
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
-  protected rerenderTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -284,13 +285,16 @@ export class FileDiff<
     lineNumber: number,
     side: SelectionSide = 'additions'
   ) => {
-    if (this.fileDiff == null) {
+    // use the fileDiff from the hunksRenderer if it exists, it maybe updated
+    // by the editor
+    const fileDiff = this.hunksRenderer.getRenderDiff() ?? this.fileDiff;
+    if (fileDiff == null) {
       return undefined;
     }
-    const lastHunk = this.fileDiff.hunks.at(-1);
+    const lastHunk = fileDiff.hunks.at(-1);
     let targetUnifiedIndex: number | undefined;
     let targetSplitIndex: number | undefined;
-    hunkIterator: for (const hunk of this.fileDiff.hunks) {
+    hunkIterator: for (const hunk of fileDiff.hunks) {
       let currentLineNumber =
         side === 'deletions' ? hunk.deletionStart : hunk.additionStart;
       const hunkCount =
@@ -444,8 +448,13 @@ export class FileDiff<
   private canPartiallyRender(
     forceRender: boolean,
     annotationsChanged: boolean,
-    didContentChange: boolean
+    didContentChange: boolean,
+    didEdit: boolean
   ): boolean {
+    if (didEdit) {
+      // The editor is tokenizing the diff in background, so we can partially render
+      return true;
+    }
     if (
       forceRender ||
       annotationsChanged ||
@@ -543,10 +552,6 @@ export class FileDiff<
 
     this.editor?.cleanUp();
     this.editor = undefined;
-    if (this.rerenderTimeout !== undefined) {
-      clearTimeout(this.rerenderTimeout);
-    }
-    this.rerenderTimeout = undefined;
   }
 
   public virtualizedSetup(): void {
@@ -738,6 +743,7 @@ export class FileDiff<
     newFile,
     fileDiff,
     deferManagers = false,
+    didEdit = false,
     forceRender = false,
     preventEmit = false,
     lineAnnotations,
@@ -775,6 +781,7 @@ export class FileDiff<
     if (
       !collapsed &&
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
+      !didEdit &&
       !forceRender &&
       !annotationsChanged &&
       !themeChanged &&
@@ -881,7 +888,8 @@ export class FileDiff<
         this.canPartiallyRender(
           forceRender,
           annotationsChanged,
-          filesDidChange || diffDidChange || themeChanged
+          filesDidChange || diffDidChange || themeChanged,
+          didEdit
         ) &&
         this.applyPartialRender({
           previousRenderRange,
@@ -924,6 +932,8 @@ export class FileDiff<
           this.pre = undefined;
         }
         this.renderSeparators(hunksResult.hunkData);
+      } else if (didEdit && nextRenderRange != null) {
+        this.updateLineType(nextRenderRange);
       }
 
       this.applyBuffers(pre, nextRenderRange);
@@ -942,9 +952,9 @@ export class FileDiff<
         void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
           editor.syncToRenderedView(
             highlighter,
-            'diff',
             fileContainer,
             file,
+            diffDidChange,
             this.lineAnnotations,
             this.renderRange
           );
@@ -992,44 +1002,7 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
-  applyLayoutChange(
-    textDocument: DiffsTextDocument,
-    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
-  ): void {
-    if (
-      newLineAnnotations !== undefined &&
-      newLineAnnotations !== this.lineAnnotations
-    ) {
-      this.setLineAnnotations(newLineAnnotations);
-      this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
-    }
-
-    const deletionFile = this.getDeletionFile();
-    if (deletionFile != null) {
-      const { name, lang } = deletionFile;
-      const newFile = {
-        name,
-        lang,
-        cacheKey: name + '-' + Date.now(),
-      } as FileContents;
-      Object.defineProperty(newFile, 'contents', {
-        get: () => textDocument.getText(),
-      });
-      if (this.rerenderTimeout !== undefined) {
-        clearTimeout(this.rerenderTimeout);
-      }
-      this.rerenderTimeout = setTimeout(() => {
-        this.fileDiff = parseDiffFromFile(
-          deletionFile,
-          newFile,
-          this.options.parseDiffOptions
-        );
-        this.hunksRenderer.renderDiff(this.fileDiff, this.renderRange);
-      }, 500);
-    }
-  }
-
-  attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     const fileContainer = this.fileContainer;
     const file = this.getAdditionFile();
@@ -1037,9 +1010,9 @@ export class FileDiff<
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
         editor.syncToRenderedView(
           highlighter,
-          'diff',
           fileContainer,
           file,
+          false,
           this.lineAnnotations,
           this.renderRange
         );
@@ -1051,24 +1024,38 @@ export class FileDiff<
     };
   }
 
-  private getDeletionFile(): FileContents | undefined {
-    if (this.deletionFile != null) {
-      return this.deletionFile;
+  // normally triggered by the editor when the document line count changes
+  public applyDocumentChange(
+    textDocument: DiffsTextDocument,
+    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  ): void {
+    this.hunksRenderer.applyDocumentChange(textDocument);
+    const renderDiff = this.hunksRenderer.getRenderDiff();
+    if (renderDiff != null) {
+      this.fileDiff = renderDiff;
     }
-    const fileDiff = this.fileDiff;
-    if (fileDiff != null && !fileDiff.isPartial) {
-      const { name, lang, cacheKey } = fileDiff;
-      const file = {
-        name,
-        lang,
-        cacheKey,
-      } as FileContents;
-      Object.defineProperty(file, 'contents', {
-        get: () => fileDiff.deletionLines.join(''),
-      });
-      return file;
+    // TODO(@ije): can we avoid full-render here?
+    this.rerender();
+    this.interactionManager.setSelectionDirty();
+    if (
+      newLineAnnotations !== undefined &&
+      newLineAnnotations !== this.lineAnnotations
+    ) {
+      this.setLineAnnotations(newLineAnnotations);
+      this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
+      this.renderAnnotations();
     }
-    return undefined;
+  }
+
+  public updateRenderCache(
+    dirtyLines: Map<number, Array<HighlightedToken>>,
+    themeType: 'dark' | 'light',
+    shouldRerender?: boolean
+  ): void {
+    this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
+    if (shouldRerender === true) {
+      this.render({ didEdit: true, renderRange: this.renderRange });
+    }
   }
 
   private getAdditionFile(): FileContents | undefined {
@@ -1084,6 +1071,7 @@ export class FileDiff<
         cacheKey,
       } as FileContents;
       Object.defineProperty(file, 'contents', {
+        enumerable: true,
         get: () => fileDiff.additionLines.join(''),
       });
       return file;
@@ -1917,6 +1905,69 @@ export class FileDiff<
     }
   }
 
+  // Update split-view `data-line-type` after an edit.
+  private updateLineType(renderRange: RenderRange): void {
+    if (this.options.diffStyle === 'unified') {
+      return;
+    }
+
+    const hunksResult = this.hunksRenderer.renderDiff(
+      this.fileDiff,
+      renderRange
+    );
+    if (hunksResult == null) {
+      return;
+    }
+
+    const columns = this.getCodeColumns(
+      'split',
+      this.codeUnified,
+      this.codeDeletions,
+      this.codeAdditions
+    );
+    if (columns == null || !Array.isArray(columns)) {
+      return;
+    }
+
+    const applyLineType = (
+      type: 'deletions' | 'additions',
+      column: ColumnElements | undefined
+    ) => {
+      if (column == null) {
+        return;
+      }
+      const ast = this.hunksRenderer.renderCodeAST(type, hunksResult);
+      const gutterChildren = getElementChildren(ast?.[0]);
+      const contentChildren = getElementChildren(ast?.[1]);
+      for (const [el, astChildren] of [
+        [column.gutter, gutterChildren],
+        [column.content, contentChildren],
+      ] as const) {
+        if (
+          astChildren != null &&
+          el.childElementCount === astChildren.length
+        ) {
+          for (let i = 0; i < astChildren.length; i++) {
+            const gutterElement = el.children[i] as HTMLElement;
+            const gutterChild = astChildren[i] as HASTElement;
+            const lineType = gutterChild.properties['data-line-type'] as
+              | string
+              | undefined;
+            if (
+              lineType != null &&
+              gutterElement.dataset.lineType !== lineType
+            ) {
+              gutterElement.dataset.lineType = lineType;
+            }
+          }
+        }
+      }
+    };
+
+    applyLineType('deletions', columns[0]);
+    applyLineType('additions', columns[1]);
+  }
+
   private renderPartialColumn(
     column: ColumnElements | undefined,
     ast: ElementContent[] | undefined,
@@ -2303,6 +2354,12 @@ export class FileDiff<
       return deletions != null || additions != null
         ? [deletions, additions]
         : undefined;
+    }
+  }
+
+  protected updateBuffers(renderRange: RenderRange): void {
+    if (this.pre != null) {
+      this.applyBuffers(this.pre, renderRange);
     }
   }
 
