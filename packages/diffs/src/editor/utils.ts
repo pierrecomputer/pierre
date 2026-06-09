@@ -71,6 +71,21 @@ export function addEventListener(
   return () => el.removeEventListener(event, listener);
 }
 
+export function getLineNumberAttr(
+  el: HTMLElement,
+  key = 'line'
+): number | undefined {
+  const value = el.dataset[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  const lineNumber = parseInt(value, 10);
+  if (Number.isNaN(lineNumber)) {
+    return undefined;
+  }
+  return lineNumber;
+}
+
 export function extend<T extends object>(obj: T, attrs: Partial<T>): T {
   return Object.assign(obj, attrs);
 }

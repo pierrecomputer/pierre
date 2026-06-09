@@ -285,6 +285,19 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
               isEditing = checked;
               if (isEditing) {
                 editor.edit(instance);
+                editor.setSelections([
+                  {
+                    start: {
+                      line: 3,
+                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
+                    },
+                    end: {
+                      line: 3,
+                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
+                    },
+                    direction: 'none',
+                  },
+                ]);
               } else {
                 editor.cleanUp();
               }

@@ -549,15 +549,30 @@ export class VirtualizedFile<
     this.virtualizer.instanceChanged(this, false);
   }
 
-  override applyLayoutChange(
+  // normally triggered by the editor when the document line count changes
+  override applyDocumentChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: LineAnnotation<LAnnotation>[],
     shouldUpdateBuffer = false
   ): void {
+    const { heights, checkpoints } = this.cache;
     const previousRenderRange = this.renderRange;
-    super.applyLayoutChange(textDocument, newLineAnnotations);
+
+    super.applyDocumentChange(textDocument, newLineAnnotations);
+
+    // reset the layout cache
     this.getSimpleVirtualizer()?.markDOMDirty();
-    this.resetLayoutCache(true);
+    this.layoutDirty = true;
+    if (heights.size > 0) {
+      heights.clear();
+    }
+    if (checkpoints.length > 0) {
+      checkpoints.length = 0;
+    }
+    if (this.isSimpleMode()) {
+      this.computeApproximateSize();
+    }
+
     // Update the buffers caused by the line-count change to ensure the editor
     // scrolls to the correct position before re-rendering
     if (
