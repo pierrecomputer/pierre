@@ -619,6 +619,98 @@ export function applyDeleteHardLineForwardToSelections<LAnnotation>(
 }
 
 /**
+ * Deletes from each selection back to the start of its soft (visual) line.
+ * Non-collapsed selections delete their selected text instead.
+ */
+export function applyDeleteSoftLineBackwardToSelections<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  selections: EditorSelection[],
+  getSoftLineStart?: (line: number, character: number) => number,
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+): {
+  nextSelections: EditorSelection[];
+  change?: TextDocumentChange;
+} {
+  const deleteSelections: [Position, Position][] = selections.map(
+    (selection) => {
+      if (!isCollapsedSelection(selection)) {
+        return [selection.start, selection.end];
+      }
+      const caretPos = getCaretPosition(selection);
+      const { line, character } = caretPos;
+      const softLineStart = getSoftLineStart?.(line, character) ?? 0;
+      if (character > softLineStart) {
+        return [
+          { line, character: softLineStart },
+          { line, character },
+        ];
+      }
+      if (line === 0) {
+        return [caretPos, caretPos];
+      }
+      const prevLineLength = textDocument.getLineText(line - 1).length;
+      return [
+        { line: line - 1, character: prevLineLength },
+        { line, character: 0 },
+      ];
+    }
+  );
+  const hasEffect = deleteSelections.some(
+    ([start, end]) => comparePosition(start, end) !== 0
+  );
+  if (!hasEffect) {
+    return { nextSelections: selections };
+  }
+  return applyTextReplaceToSelections(
+    textDocument,
+    deleteSelections.map(([start, end]) => ({
+      start,
+      end,
+      direction: DirectionNone,
+    })),
+    deleteSelections.map(() => ''),
+    lineAnnotations
+  );
+}
+
+/**
+ * Deletes the word or separator group immediately before each selection.
+ * Non-collapsed selections delete their selected text instead.
+ */
+export function applyDeleteWordBackwardToSelections<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  selections: EditorSelection[],
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+): {
+  nextSelections: EditorSelection[];
+  change?: TextDocumentChange;
+} {
+  const deleteSelections: EditorSelection[] = selections.map((selection) => {
+    const [start, end] = resolveDeleteWordBackwardRange(
+      textDocument,
+      selection
+    );
+    return {
+      start,
+      end,
+      direction: DirectionNone,
+    };
+  });
+  const hasEffect = deleteSelections.some(
+    (selection) => comparePosition(selection.start, selection.end) !== 0
+  );
+  if (!hasEffect) {
+    return { nextSelections: selections };
+  }
+  return applyTextReplaceToSelections(
+    textDocument,
+    deleteSelections,
+    deleteSelections.map(() => ''),
+    lineAnnotations
+  );
+}
+
+/**
  * Checks if a selection is collapsed.
  */
 export function isCollapsedSelection(selection: EditorSelection): boolean {
@@ -1072,6 +1164,81 @@ function expandCollapsedLineWord(
     }
   }
   return undefined;
+}
+
+// Resolves the range removed by deleteWordBackward for one selection.
+function resolveDeleteWordBackwardRange(
+  textDocument: TextDocument<unknown>,
+  selection: EditorSelection
+): [start: Position, end: Position] {
+  if (!isCollapsedSelection(selection)) {
+    return [selection.start, selection.end];
+  }
+  const caret = getCaretPosition(selection);
+  const { line, character: head } = caret;
+  if (head === 0) {
+    if (line === 0) {
+      return [caret, caret];
+    }
+    const prevLineLength = textDocument.getLineText(line - 1).length;
+    return [
+      { line: line - 1, character: prevLineLength },
+      { line, character: 0 },
+    ];
+  }
+  const lineText = textDocument.getLineText(line);
+  const graphemeStarts = [0];
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+  for (const segment of segmenter.segment(lineText)) {
+    if (segment.index > 0) {
+      graphemeStarts.push(segment.index);
+    }
+  }
+  let pos = head;
+  let match: number | undefined;
+  while (pos > 0) {
+    const prev = findClusterBreak(lineText, pos, false, graphemeStarts);
+    const nextChar = lineText.slice(prev, pos);
+    const nextMatch = !/\S/.test(nextChar)
+      ? 0
+      : /\p{Alphabetic}|\p{Number}|_/u.test(nextChar)
+        ? 1
+        : 2;
+    if (match !== undefined && nextMatch !== match) {
+      break;
+    }
+    if (nextChar !== ' ' || pos !== head) {
+      match = nextMatch;
+    }
+    pos = prev;
+  }
+  return [
+    { line, character: pos },
+    { line, character: head },
+  ];
+}
+
+function findClusterBreak(
+  text: string,
+  pos: number,
+  forward: boolean,
+  graphemeStarts: number[]
+): number {
+  if (forward) {
+    for (const start of graphemeStarts) {
+      if (start > pos) {
+        return start;
+      }
+    }
+    return text.length;
+  }
+  for (let i = graphemeStarts.length - 1; i >= 0; i--) {
+    const start = graphemeStarts[i];
+    if (start < pos) {
+      return start;
+    }
+  }
+  return 0;
 }
 
 function getSelectionAnchorAndFocusOffsets(
