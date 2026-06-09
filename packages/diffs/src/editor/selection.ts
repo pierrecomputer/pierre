@@ -431,30 +431,77 @@ export function applyTextReplaceToSelections<LAnnotation>(
       return a.index - b.index;
     });
   }
-  const edits: ResolvedTextEdit[] = [];
+  const allDeletes = texts.every((text) => text === '');
+  let edits: ResolvedTextEdit[];
   const nextSelectionOffsets: number[] = Array.from({
     length: selections.length,
   });
-  let offsetDelta = 0;
-  let previousEditEnd = -1;
-  for (const entry of ordered) {
-    if (entry.start < previousEditEnd) {
-      throw new Error('Overlapping multi-selection edits are not supported');
+  if (allDeletes) {
+    edits = [];
+    let hasEffect = false;
+    for (const entry of ordered) {
+      nextSelectionOffsets[entry.index] = entry.end;
+      if (entry.start >= entry.end) {
+        continue;
+      }
+      hasEffect = true;
+      const last = edits[edits.length - 1];
+      if (last !== undefined && entry.start < last.end) {
+        edits[edits.length - 1] = {
+          start: last.start,
+          end: Math.max(last.end, entry.end),
+          text: '',
+        };
+      } else {
+        edits.push({ start: entry.start, end: entry.end, text: '' });
+      }
     }
-    previousEditEnd = entry.end;
-    const newText = expandSingleNewlineInsert(
-      textDocument,
-      entry.text,
-      entry.start
-    );
-    edits.push({
-      start: entry.start,
-      end: entry.end,
-      text: newText,
-    });
-    nextSelectionOffsets[entry.index] =
-      entry.start + offsetDelta + newText.length;
-    offsetDelta += newText.length - (entry.end - entry.start);
+    if (!hasEffect) {
+      return { nextSelections: selections };
+    }
+    for (const entry of ordered) {
+      const caret = entry.end;
+      let delta = 0;
+      let next = caret;
+      for (const edit of edits) {
+        if (caret <= edit.start) {
+          break;
+        }
+        if (caret >= edit.end) {
+          delta -= edit.end - edit.start;
+          continue;
+        }
+        next = edit.start + delta;
+        break;
+      }
+      if (next === caret) {
+        next += delta;
+      }
+      nextSelectionOffsets[entry.index] = next;
+    }
+  } else {
+    edits = [];
+    let offsetDelta = 0;
+    let previousEditEnd = -1;
+    for (const entry of ordered) {
+      if (entry.start < previousEditEnd) {
+        throw new Error('Overlapping multi-selection edits are not supported');
+      }
+      previousEditEnd = entry.end;
+      const newText = expandSingleNewlineInsert(
+        textDocument,
+        entry.text,
+        entry.start
+      );
+      edits.push({
+        start: entry.start,
+        end: entry.end,
+        text: newText,
+      });
+      nextSelectionOffsets[entry.index] =
+        entry.start + offsetDelta + newText.length;
+      offsetDelta += newText.length - (entry.end - entry.start);
+    }
   }
 
   const change = textDocument.applyResolvedEdits(edits, true, selections);
@@ -597,19 +644,96 @@ export function applyDeleteHardLineForwardToSelections<LAnnotation>(
 } {
   const deleteSelections: EditorSelection[] = selections.map((selection) => {
     const range = resolveDeleteHardLineForwardRange(textDocument, selection);
-    const deleteSelection: EditorSelection = {
+    return {
       start: range.start,
       end: range.end,
       direction: DirectionNone,
     };
-    return deleteSelection;
   });
-  const hasEffect = deleteSelections.some(
-    (selection) => comparePosition(selection.start, selection.end) !== 0
+  return applyTextReplaceToSelections(
+    textDocument,
+    deleteSelections,
+    deleteSelections.map(() => ''),
+    lineAnnotations
   );
-  if (!hasEffect) {
-    return { nextSelections: selections };
-  }
+}
+
+/**
+ * Deletes from each selection back to the start of its soft (visual) line.
+ * Non-collapsed selections delete their selected text instead.
+ */
+export function applyDeleteSoftLineBackwardToSelections<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  selections: EditorSelection[],
+  getSoftLineStart?: (line: number, character: number) => number,
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+): {
+  nextSelections: EditorSelection[];
+  change?: TextDocumentChange;
+} {
+  const deleteSelections: EditorSelection[] = selections.map((selection) => {
+    if (!isCollapsedSelection(selection)) {
+      return {
+        start: selection.start,
+        end: selection.end,
+        direction: DirectionNone,
+      };
+    }
+    const caret = getCaretPosition(selection);
+    const { line, character } = caret;
+    const softLineStart = getSoftLineStart?.(line, character) ?? 0;
+    if (character > softLineStart) {
+      return {
+        start: { line, character: softLineStart },
+        end: { line, character },
+        direction: DirectionNone,
+      };
+    }
+    if (line === 0) {
+      return {
+        start: caret,
+        end: caret,
+        direction: DirectionNone,
+      };
+    }
+    const prevLineLength = textDocument.getLineText(line - 1).length;
+    return {
+      start: { line: line - 1, character: prevLineLength },
+      end: { line, character: 0 },
+      direction: DirectionNone,
+    };
+  });
+  return applyTextReplaceToSelections(
+    textDocument,
+    deleteSelections,
+    deleteSelections.map(() => ''),
+    lineAnnotations
+  );
+}
+
+/**
+ * Deletes the word or separator group immediately before each selection.
+ * Non-collapsed selections delete their selected text instead.
+ */
+export function applyDeleteWordBackwardToSelections<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  selections: EditorSelection[],
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+): {
+  nextSelections: EditorSelection[];
+  change?: TextDocumentChange;
+} {
+  const deleteSelections: EditorSelection[] = selections.map((selection) => {
+    const [start, end] = resolveDeleteWordBackwardRange(
+      textDocument,
+      selection
+    );
+    return {
+      start,
+      end,
+      direction: DirectionNone,
+    };
+  });
   return applyTextReplaceToSelections(
     textDocument,
     deleteSelections,
@@ -1072,6 +1196,81 @@ function expandCollapsedLineWord(
     }
   }
   return undefined;
+}
+
+// Resolves the range removed by deleteWordBackward for one selection.
+function resolveDeleteWordBackwardRange(
+  textDocument: TextDocument<unknown>,
+  selection: EditorSelection
+): [start: Position, end: Position] {
+  if (!isCollapsedSelection(selection)) {
+    return [selection.start, selection.end];
+  }
+  const caret = getCaretPosition(selection);
+  const { line, character: head } = caret;
+  if (head === 0) {
+    if (line === 0) {
+      return [caret, caret];
+    }
+    const prevLineLength = textDocument.getLineText(line - 1).length;
+    return [
+      { line: line - 1, character: prevLineLength },
+      { line, character: 0 },
+    ];
+  }
+  const lineText = textDocument.getLineText(line);
+  const graphemeStarts = [0];
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+  for (const segment of segmenter.segment(lineText)) {
+    if (segment.index > 0) {
+      graphemeStarts.push(segment.index);
+    }
+  }
+  let pos = head;
+  let match: number | undefined;
+  while (pos > 0) {
+    const prev = findClusterBreak(lineText, pos, false, graphemeStarts);
+    const nextChar = lineText.slice(prev, pos);
+    const nextMatch = !/\S/.test(nextChar)
+      ? 0
+      : /\p{Alphabetic}|\p{Number}|_/u.test(nextChar)
+        ? 1
+        : 2;
+    if (match !== undefined && nextMatch !== match) {
+      break;
+    }
+    if (nextChar !== ' ' || pos !== head) {
+      match = nextMatch;
+    }
+    pos = prev;
+  }
+  return [
+    { line, character: pos },
+    { line, character: head },
+  ];
+}
+
+function findClusterBreak(
+  text: string,
+  pos: number,
+  forward: boolean,
+  graphemeStarts: number[]
+): number {
+  if (forward) {
+    for (const start of graphemeStarts) {
+      if (start > pos) {
+        return start;
+      }
+    }
+    return text.length;
+  }
+  for (let i = graphemeStarts.length - 1; i >= 0; i--) {
+    const start = graphemeStarts[i];
+    if (start < pos) {
+      return start;
+    }
+  }
+  return 0;
 }
 
 function getSelectionAnchorAndFocusOffsets(

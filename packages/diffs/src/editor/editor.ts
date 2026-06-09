@@ -21,6 +21,8 @@ import { type MatchRange, SearchPanelWidget } from './searchPanel';
 import type { EditorSelection } from './selection';
 import {
   applyDeleteHardLineForwardToSelections,
+  applyDeleteSoftLineBackwardToSelections,
+  applyDeleteWordBackwardToSelections,
   applyTextChangeToSelections,
   applyTextReplaceToSelections,
   applyTransposeToSelections,
@@ -857,6 +859,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#handleInput(e.inputType, e.data);
       }),
 
+      addEventListener(contentEl, 'drop', (e) => {
+        if (!targetIsContentElement(e)) {
+          return;
+        }
+        e.preventDefault();
+        // TODO(@ije): Add support of drag move selection
+      }),
+
       addEventListener(
         contentEl,
         'compositionstart',
@@ -1332,6 +1342,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  // input type doc: https://developer.mozilla.org/en-US/docs/Web/API/InputEvent/inputType
   #handleInput(inputType: string, data: string | null) {
     switch (inputType) {
       case 'insertText':
@@ -1347,16 +1358,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       case 'deleteContentForward':
         this.#deleteSelectionText(true);
         break;
-      // TODO(@ije): Safari and Firefox does not support this input type
-      // use command instead
+      case 'deleteSoftLineBackward':
+        this.#deleteSoftLineBackward();
+        break;
       case 'deleteHardLineForward':
+        // TODO(@ije): Safari and Firefox does not support this input type
+        // use command instead
         this.#deleteHardLineForward();
+        break;
+      case 'deleteWordBackward':
+        this.#deleteWordBackward();
         break;
       case 'insertTranspose':
         this.#insertTranspose();
         break;
       default:
-        console.warn(`[diffs] Unknown input type: ${inputType}`);
+        console.warn(`[diffs] Unknown input type: ${inputType}`, data);
         break;
     }
   }
@@ -2217,6 +2234,62 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         };
 
     this.#applyResolvedTextEdit(edit);
+  }
+
+  #deleteSoftLineBackward() {
+    const selections = this.#selections;
+    const textDocument = this.#textDocument;
+    if (selections === undefined || textDocument === undefined) {
+      return;
+    }
+    const getSoftLineStart = this.#wrap
+      ? (line: number, character: number) => {
+          const wrapOffsets = this.#wrapLineText(line);
+          for (let w = 0; w + 1 < wrapOffsets.length; w++) {
+            const segmentStart = wrapOffsets[w];
+            const segmentEnd = wrapOffsets[w + 1];
+            if (character >= segmentStart && character <= segmentEnd) {
+              return segmentStart;
+            }
+          }
+          return 0;
+        }
+      : undefined;
+    const { nextSelections, change } =
+      applyDeleteSoftLineBackwardToSelections<LAnnotation>(
+        textDocument,
+        selections,
+        getSoftLineStart,
+        this.#lineAnnotations
+      );
+    if (change !== undefined) {
+      this.#applyChange(
+        change,
+        nextSelections,
+        this.#applyChangeToLineAnnotations(change)
+      );
+    }
+  }
+
+  #deleteWordBackward() {
+    const selections = this.#selections;
+    const textDocument = this.#textDocument;
+    if (selections === undefined || textDocument === undefined) {
+      return;
+    }
+    const { nextSelections, change } =
+      applyDeleteWordBackwardToSelections<LAnnotation>(
+        textDocument,
+        selections,
+        this.#lineAnnotations
+      );
+    if (change !== undefined) {
+      this.#applyChange(
+        change,
+        nextSelections,
+        this.#applyChangeToLineAnnotations(change)
+      );
+    }
   }
 
   #deleteHardLineForward() {

@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   applyDeleteHardLineForwardToSelections,
+  applyDeleteSoftLineBackwardToSelections,
+  applyDeleteWordBackwardToSelections,
   applyTextChangeToSelections,
   applyTextReplaceToSelections,
   applyTransposeToSelections,
@@ -1278,6 +1280,242 @@ describe('applyDeleteHardLineForwardToSelections', () => {
       createSelection(0, 1, 0, 1),
       createSelection(1, 1, 1, 1),
       createSelection(2, 1, 2, 1),
+    ]);
+  });
+
+  test('merges overlapping delete ranges from multiple carets on the same line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [
+      createSelection(0, 5, 0, 5),
+      createSelection(0, 8, 0, 8),
+    ];
+    const { nextSelections, change } = applyDeleteHardLineForwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('hello');
+    expect(nextSelections).toEqual([
+      createSelection(0, 5, 0, 5),
+      createSelection(0, 5, 0, 5),
+    ]);
+  });
+});
+
+describe('applyDeleteSoftLineBackwardToSelections', () => {
+  test('deletes from the caret to the start of the line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [createSelection(0, 5, 0, 5)];
+    const { nextSelections, change } = applyDeleteSoftLineBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe(' world');
+    expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
+  });
+
+  test('deletes the newline when the caret is at the start of a line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello\nworld');
+    const selections = [createSelection(1, 0, 1, 0)];
+    const { nextSelections } = applyDeleteSoftLineBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe('helloworld');
+    expect(nextSelections).toEqual([createSelection(0, 5, 0, 5)]);
+  });
+
+  test('is a no-op at the start of the first line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello');
+    const selections = [createSelection(0, 0, 0, 0)];
+    const { nextSelections, change } = applyDeleteSoftLineBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(change).toBeUndefined();
+    expect(textDocument.getText()).toBe('hello');
+    expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
+  });
+
+  test('deletes an explicit selection instead of the rest of the line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [createSelection(0, 0, 0, 5, DirectionForward)];
+    const { nextSelections } = applyDeleteSoftLineBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe(' world');
+    expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
+  });
+
+  test('uses a soft-line start callback for wrapped visual lines', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [createSelection(0, 11, 0, 11)];
+    const getSoftLineStart = (line: number, character: number) =>
+      line === 0 && character > 6 ? 6 : 0;
+    const { nextSelections } = applyDeleteSoftLineBackwardToSelections(
+      textDocument,
+      selections,
+      getSoftLineStart
+    );
+
+    expect(textDocument.getText()).toBe('hello ');
+    expect(nextSelections).toEqual([createSelection(0, 6, 0, 6)]);
+  });
+
+  test('merges overlapping delete ranges from multiple carets on the same line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [
+      createSelection(0, 8, 0, 8),
+      createSelection(0, 11, 0, 11),
+    ];
+    const { nextSelections, change } = applyDeleteSoftLineBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('');
+    expect(nextSelections).toEqual([
+      createSelection(0, 0, 0, 0),
+      createSelection(0, 0, 0, 0),
+    ]);
+  });
+});
+
+describe('applyDeleteWordBackwardToSelections', () => {
+  test('deletes the word before the caret', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [createSelection(0, 11, 0, 11)];
+    const { nextSelections, change } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('hello ');
+    expect(nextSelections).toEqual([createSelection(0, 6, 0, 6)]);
+  });
+
+  test('deletes from the start of the current word when the caret is inside it', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [createSelection(0, 8, 0, 8)];
+    const { nextSelections } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe('hello rld');
+    expect(nextSelections).toEqual([createSelection(0, 6, 0, 6)]);
+  });
+
+  test('deletes the preceding word and whitespace when the caret is after them', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [createSelection(0, 6, 0, 6)];
+    const { nextSelections } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe('world');
+    expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
+  });
+
+  test('deletes a multi-space run as its own group', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello  world');
+    const selections = [createSelection(0, 7, 0, 7)];
+    const { nextSelections } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe('helloworld');
+    expect(nextSelections).toEqual([createSelection(0, 5, 0, 5)]);
+  });
+
+  test('deletes punctuation and a single preceding space together before a word', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello, world');
+    const selections = [createSelection(0, 7, 0, 7)];
+    const { nextSelections } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe('helloworld');
+    expect(nextSelections).toEqual([createSelection(0, 5, 0, 5)]);
+  });
+
+  test('deletes only the current word group when the caret is on whitespace', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello, world');
+    const selections = [createSelection(0, 5, 0, 5)];
+    const { nextSelections } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe(', world');
+    expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
+  });
+
+  test('deletes the newline when the caret is at the start of a line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello\nworld');
+    const selections = [createSelection(1, 0, 1, 0)];
+    const { nextSelections } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe('helloworld');
+    expect(nextSelections).toEqual([createSelection(0, 5, 0, 5)]);
+  });
+
+  test('is a no-op at the start of the first line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello');
+    const selections = [createSelection(0, 0, 0, 0)];
+    const { nextSelections, change } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(change).toBeUndefined();
+    expect(textDocument.getText()).toBe('hello');
+    expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
+  });
+
+  test('deletes an explicit selection instead of the preceding word', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [createSelection(0, 0, 0, 5, DirectionForward)];
+    const { nextSelections } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe(' world');
+    expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
+  });
+
+  test('merges overlapping delete ranges from multiple carets in the same word', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [
+      createSelection(0, 8, 0, 8),
+      createSelection(0, 11, 0, 11),
+    ];
+    const { nextSelections, change } = applyDeleteWordBackwardToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('hello ');
+    expect(nextSelections).toEqual([
+      createSelection(0, 6, 0, 6),
+      createSelection(0, 6, 0, 6),
     ]);
   });
 });
