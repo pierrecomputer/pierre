@@ -1,0 +1,23 @@
+version: 2
+
+updates:
+  # Keep the SHA-pinned actions fresh across the CI workflows and every local
+  # composite action. Dependabot rewrites both the commit SHA and the trailing
+  # `# vX.Y.Z` comment, grouped into a single weekly PR.
+  #
+  # `directories` (plural) is required for the glob: `directory: /` only scans
+  # .github/workflows, and the singular key supports no wildcards. The `*`
+  # matches each local action's directory (.github/actions/<name>/action.yml);
+  # `**` is avoided on purpose — it has a duplicate-PR bug for github-actions.
+  - package-ecosystem: github-actions
+    directories:
+      - '/' # .github/workflows
+      - '/.github/actions/*' # every local composite action's action.yml
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+    commit-message:
+      prefix: '[ci]'

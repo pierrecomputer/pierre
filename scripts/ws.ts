@@ -301,6 +301,18 @@ if (verboseIndex !== -1) {
   args.splice(verboseIndex, 1);
 }
 
+// Pull `--parallel` / `--sequential` out of the args so they reach `bun run` as
+// run-mode options instead of being forwarded to the underlying script. They
+// switch bun's filtered output from the live (redrawn) tree to ordered
+// Foreman-style logs; `--sequential` runs one package at a time, which keeps
+// each package's output contiguous and readable instead of interleaved.
+const runModeFlag = ['--parallel', '--sequential'].find((flag) =>
+  args.includes(flag)
+);
+if (runModeFlag) {
+  args.splice(args.indexOf(runModeFlag), 1);
+}
+
 const [pkgArg, ...scriptArgs] = args;
 
 if (!pkgArg || scriptArgs.length === 0) {
@@ -313,6 +325,12 @@ if (!pkgArg || scriptArgs.length === 0) {
   console.log('');
   console.log('Options:');
   console.log('  -v, --verbose    Show full output (no line elision)');
+  console.log(
+    '  --parallel       Concurrent Foreman-style output (globs only)'
+  );
+  console.log(
+    '  --sequential     Run matched packages one at a time, in order'
+  );
   console.log('');
   console.log('Examples:');
   console.log('  bun ws diffs build');
@@ -352,9 +370,13 @@ if (pkgArg.includes('*')) {
     filter = `@pierre/${pkgArg}`;
   }
 
+  // With a run-mode flag, bun owns the output format (Foreman-style); otherwise
+  // fall back to the live tree with elision disabled so full output is shown.
+  const outputFlags = runModeFlag ? [runModeFlag] : ['--elide-lines=0'];
+
   const proc = spawn(
     'bun',
-    ['run', '-F', filter, '--elide-lines=0', ...scriptArgs],
+    ['run', '-F', filter, ...outputFlags, ...scriptArgs],
     {
       stdio: 'inherit',
       cwd,

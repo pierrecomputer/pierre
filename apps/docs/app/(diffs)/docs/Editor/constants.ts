@@ -199,7 +199,7 @@ const file: FileContents = {
 export { greet };\`,
 };
 
-export function EditCodeFile() {
+export function EditorComponent() {
   const [editable, setEditable] = useState(true);
   const editor = useMemo(
     () =>
@@ -242,26 +242,23 @@ export function EditCodeFile() {
 export const EDITOR_REACT_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react_file_diff.tsx',
-    contents: `import type { FileContents } from '@pierre/diffs';
-import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, FileDiff, Virtualizer } from '@pierre/diffs/react';
+    contents: `import { Editor } from '@pierre/diffs/editor';
+import {
+  type FileDiffMetadata,
+  EditorProvider,
+  FileDiff,
+  parseDiffFromFile,
+  Virtualizer,
+} from '@pierre/diffs/react';
 import { useMemo, useState } from 'react';
 
-const oldFile: FileContents = {
-  name: 'example.ts',
-  contents: \`function greet(name: string) {
-  return name;
-}\`,
-};
+// FileDiff takes a pre-parsed FileDiffMetadata object.
+const fileDiff: FileDiffMetadata = parseDiffFromFile(
+  { name: 'example.ts', contents: 'console.log("Hello world")' },
+  { name: 'example.ts', contents: 'console.warn("Updated message")' }
+);
 
-const newFile: FileContents = {
-  ...oldFile,
-  contents: \`function greet(name: string) {
-  return \\\`Hello, \\\${name}!\\\`;
-}\`,
-};
-
-export function EditCodeDiff() {
+export function EditorComponent() {
   const [editable, setEditable] = useState(true);
   const editor = useMemo(
     () =>
@@ -287,8 +284,7 @@ export function EditCodeDiff() {
         }}
       >
         <FileDiff
-          oldFile={oldFile}
-          newFile={newFile}
+          fileDiff={fileDiff}
           options={{
             theme: { dark: 'pierre-dark', light: 'pierre-light' },
           }}
@@ -301,3 +297,139 @@ export function EditCodeDiff() {
   },
   options,
 };
+
+export const EDITOR_WORKER_POOL_VANILLA_EXAMPLE: PreloadFileOptions<undefined> =
+  {
+    file: {
+      name: 'editor_worker_pool_vanilla.ts',
+      contents: `import { File } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker';
+import { workerFactory } from './utils/workerFactory';
+
+const workerPool = getOrCreateWorkerPoolSingleton({
+  poolOptions: { workerFactory },
+  highlighterOptions: {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    useTokenTransformer: true,
+  },
+});
+
+const fileInstance = new File(
+  { theme: { dark: 'pierre-dark', light: 'pierre-light' } },
+  workerPool
+);
+fileInstance.render({
+  file: { name: 'example.ts', contents: 'export const x = 1;' },
+  containerWrapper: document.body,
+});
+
+const editor = new Editor();
+editor.edit(fileInstance);`,
+    },
+    options,
+  };
+
+export const EDITOR_WORKER_POOL_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_worker_pool_react.tsx',
+    contents: `'use client';
+
+import { Editor } from '@pierre/diffs/editor';
+import {
+  EditorProvider,
+  File,
+  WorkerPoolContextProvider,
+} from '@pierre/diffs/react';
+import { workerFactory } from '@/utils/workerFactory';
+
+const editor = new Editor();
+
+export function EditorWithWorkerPool() {
+  return (
+    <WorkerPoolContextProvider
+      poolOptions={{ workerFactory }}
+      highlighterOptions={{
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        useTokenTransformer: true,
+      }}
+    >
+      <EditorProvider editor={editor}>
+        <File
+          file={{ name: 'example.ts', contents: 'export const x = 1;' }}
+          contentEditable
+        />
+      </EditorProvider>
+    </WorkerPoolContextProvider>
+  );
+}`,
+  },
+  options,
+};
+
+export const EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> =
+  {
+    file: {
+      name: 'editor_react_multi_file_diff.tsx',
+      contents: `import type { FileContents } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+import {
+  EditorProvider,
+  MultiFileDiff,
+  Virtualizer,
+} from '@pierre/diffs/react';
+import { useMemo, useState } from 'react';
+
+// Keep file objects stable (useState/useMemo) to avoid re-renders.
+// The component uses reference equality for change detection.
+const oldFile: FileContents = {
+  name: 'example.ts',
+  contents: 'console.log("Hello world")',
+};
+
+const newFile: FileContents = {
+  name: 'example.ts',
+  contents: 'console.warn("Updated message")',
+};
+
+
+export function EditorComponent() {
+  const [editable, setEditable] = useState(true);
+  const editor = useMemo(
+    () =>
+      new Editor({
+        onChange(file, lineAnnotations) {
+          console.log('change', file.name, lineAnnotations);
+        },
+      }),
+    []
+  );
+
+  return (
+    <EditorProvider editor={editor}>
+      <button type="button" onClick={() => setEditable((value) => !value)}>
+        {editable ? 'Disable editing' : 'Enable editing'}
+      </button>
+
+      <Virtualizer
+        style={{
+          maxHeight: '16rem',
+          overflow: 'auto',
+          borderRadius: '0.5rem',
+        }}
+      >
+        <MultiFileDiff
+          oldFile={oldFile}
+          newFile={newFile}
+          options={{
+            theme: { dark: 'pierre-dark', light: 'pierre-light' },
+          }}
+          contentEditable={editable}
+        />
+      </Virtualizer>
+    </EditorProvider>
+  );
+}`,
+    },
+    options,
+  };
