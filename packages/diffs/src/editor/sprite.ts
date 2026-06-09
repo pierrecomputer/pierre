@@ -15,7 +15,7 @@ export type SVGSpriteNames =
 // hand-authored glyph and uses its own 0 0 20 20 viewBox; `getEditorIconSvg`
 // omits an outer viewBox so each symbol scales to fill the requested size
 // regardless of its intrinsic coordinate system.
-export const SVGSpriteSheet = `<svg data-editor-icon-sprite aria-hidden="true" width="0" height="0">
+export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0" height="0">
   <symbol id="diffs-editor-icon-search" viewBox="0 0 16 16">
     <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M10.7747 12.8961C9.68558 13.5948 8.39011 14 7 14C3.13401 14 0 10.866 0 7C0 3.13401 3.13401 0 7 0C10.866 0 14 3.13401 14 7C14 8.39011 13.5948 9.68558 12.8961 10.7747L15.5607 13.4393C16.1464 14.0251 16.1464 14.9749 15.5607 15.5607C14.9749 16.1464 14.0251 16.1464 13.4393 15.5607L10.7747 12.8961ZM7 1.5C10.0376 1.5 12.5 3.96243 12.5 7C12.5 10.0376 10.0376 12.5 7 12.5C3.96243 12.5 1.5 10.0376 1.5 7C1.5 3.96243 3.96243 1.5 7 1.5Z"></path>
   </symbol>
@@ -45,6 +45,16 @@ export const SVGSpriteSheet = `<svg data-editor-icon-sprite aria-hidden="true" w
     <polygon points="11 3 9 9 16 9 9 17 11 11 4 11 11 3" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></polygon>
   </symbol>
 </svg>`;
+
+export const createSpriteElement = (): SVGSVGElement => {
+  const fragment = document.createElement('div');
+  fragment.innerHTML = SVGSpriteSheet;
+  const sprite = fragment.firstElementChild;
+  if (sprite === null || !(sprite instanceof SVGSVGElement)) {
+    throw new Error('Failed to create sprite element');
+  }
+  return sprite;
+};
 
 export const getEditorIconSvg = (name: SVGSpriteNames, size = 16): string =>
   `<svg width="${size}" height="${size}" aria-hidden="true" focusable="false">

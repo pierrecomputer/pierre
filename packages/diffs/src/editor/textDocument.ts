@@ -109,7 +109,7 @@ export interface TextDocumentChange {
   /** Difference between the old and new line counts. */
   readonly lineDelta: number;
   /** Exact rendered line ranges touched by each edit after the edit was applied. */
-  readonly changedLineRanges?: readonly [startLine: number, endLine: number][];
+  readonly changedLineRanges: readonly [startLine: number, endLine: number][];
 }
 
 /**
@@ -180,8 +180,8 @@ export class TextDocument<LAnnotation> {
     return this.#pieceTable.getText(range);
   }
 
-  getLineText(line: number, trimEOF = true): string {
-    return this.#pieceTable.getLineText(line, trimEOF);
+  getLineText(line: number, includeLineBreak?: boolean): string {
+    return this.#pieceTable.getLineText(line, includeLineBreak);
   }
 
   charAt(offset: number): string;

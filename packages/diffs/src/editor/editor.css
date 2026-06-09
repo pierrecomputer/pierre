@@ -24,11 +24,16 @@
   caret-color: var(--diffs-bg-caret);
   outline: none;
 }
+[data-gutter-buffer],
+[data-line]:not([data-selected-line]),
+[data-line]:not([data-selected-line]) span,
+[data-line-annotation] {
+  background-color: transparent;
+}
 [data-column-number] {
   color: var(--diffs-editor-line-number-fg);
 }
-[data-column-number]:is([data-selected-line]),
-[data-gutter-buffer]:is([data-selected-line]) {
+[data-column-number]:is([data-selected-line]) {
   background-color: var(--diffs-editor-line-number-active-bg);
   color: var(--diffs-editor-line-number-active-fg);
 }
@@ -38,19 +43,11 @@
 [data-line] {
   cursor: text;
 }
-[data-line]:not([data-selected-line]),
-[data-line]:not([data-selected-line]) span {
-  background-color: transparent;
-}
-[data-line]:is([data-selected-line]),
-[data-line]:is([data-selected-line]) span,
-[data-line-annotation]:is([data-selected-line]) {
+[data-line]:is([data-selected-line]) {
   background-color: var(--diffs-editor-line-highlight-bg);
 }
 [data-line]:is([data-line-type='change-deletion']) {
   background-color: var(--diffs-line-bg);
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 /* Editor Overlay */

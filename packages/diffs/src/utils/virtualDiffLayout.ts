@@ -124,6 +124,34 @@ export function hasTrailingContext(fileDiff: FileDiffMetadata): boolean {
   return additionRemaining > 0 || deletionRemaining > 0;
 }
 
+// Returns true when trailing-context line counts disagree between sides.
+export function hasTrailingContextMismatch(
+  fileDiff: FileDiffMetadata
+): boolean {
+  const lastHunk = fileDiff.hunks[fileDiff.hunks.length - 1];
+  if (
+    lastHunk == null ||
+    fileDiff.isPartial ||
+    fileDiff.additionLines.length === 0 ||
+    fileDiff.deletionLines.length === 0
+  ) {
+    return false;
+  }
+
+  const additionRemaining =
+    fileDiff.additionLines.length -
+    (lastHunk.additionLineIndex + lastHunk.additionCount);
+  const deletionRemaining =
+    fileDiff.deletionLines.length -
+    (lastHunk.deletionLineIndex + lastHunk.deletionCount);
+
+  if (additionRemaining <= 0 && deletionRemaining <= 0) {
+    return false;
+  }
+
+  return additionRemaining !== deletionRemaining;
+}
+
 // Measures the unchanged tail after the final hunk. Both sides must have the
 // same remaining length because trailing context represents paired lines.
 export function getTrailingContextRangeSize({

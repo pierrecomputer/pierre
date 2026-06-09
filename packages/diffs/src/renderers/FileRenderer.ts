@@ -140,22 +140,24 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public recycle(): void {
-    const renderCache = this.renderCache;
     this.clearRenderCache();
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
+    this.lineCache = undefined;
+  }
+
+  public clearRenderCache(): void {
+    const renderCache = this.renderCache;
+    this.renderCache = undefined;
     if (
       renderCache != null &&
       renderCache.isDirty === true &&
       renderCache.file.cacheKey != null
     ) {
+      // The render cache has been updated by the editor, let's purge it
+      // from the worker manager cache.
       this.workerManager?.evictFileFromCache(renderCache.file.cacheKey);
     }
-    this.lineCache = undefined;
-  }
-
-  public clearRenderCache(): void {
-    this.renderCache = undefined;
   }
 
   public hydrate(file: FileContents): void {
@@ -244,7 +246,7 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
-  public applyDirtyLines(
+  public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
   ): void {
@@ -288,13 +290,13 @@ export class FileRenderer<LAnnotation = undefined> {
         }),
       };
     }
+
+    result.baseThemeType = themeType;
     this.renderCache.isDirty = true;
   }
 
-  public applyLayoutChange(
-    textDocument: DiffsTextDocument,
-    newLineAnnotations?: LineAnnotation<LAnnotation>[]
-  ): void {
+  // normally triggered by the editor when the document line count changes
+  public applyDocumentChange(textDocument: DiffsTextDocument): void {
     if (this.renderCache == null) {
       return undefined;
     }
@@ -328,9 +330,6 @@ export class FileRenderer<LAnnotation = undefined> {
         });
       }
       this.renderCache.isDirty = true;
-    }
-    if (newLineAnnotations != null) {
-      this.setLineAnnotations(newLineAnnotations);
     }
     this.textDoucmentCache.set(file, textDocument);
   }
