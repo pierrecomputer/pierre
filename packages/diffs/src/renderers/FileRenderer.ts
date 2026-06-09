@@ -148,6 +148,8 @@ export class FileRenderer<LAnnotation = undefined> {
       renderCache.isDirty === true &&
       renderCache.file.cacheKey != null
     ) {
+      // The render cache has been updated by the editor, let's purge it
+      // from the worker manager cache.
       this.workerManager?.evictFileFromCache(renderCache.file.cacheKey);
     }
   }
@@ -282,6 +284,8 @@ export class FileRenderer<LAnnotation = undefined> {
         }),
       };
     }
+
+    result.baseThemeType = themeType;
     this.renderCache.isDirty = true;
   }
 

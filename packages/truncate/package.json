@@ -27,7 +27,7 @@
   "scripts": {
     "build": "tsdown --clean",
     "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
-    "test": "bun test",
+    "test": "bun test --pass-with-no-tests",
     "tsc": "tsgo --noEmit --pretty",
     "prepublishOnly": "bun run build"
   },

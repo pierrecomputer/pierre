@@ -66,6 +66,19 @@ export const viewport: Viewport = {
     maximumScale: 1,
     viewportFit: 'cover',
   }),
+  // diffshub body uses --diffshub-sidebar-bg (#f7f7f7 / #101010) rather than
+  // the plain neutral background shared by diffs and trees, so it gets its
+  // own theme-color pair for the browser chrome address bar.
+  themeColor:
+    process.env.NEXT_PUBLIC_SITE === 'diffshub'
+      ? [
+          { media: '(prefers-color-scheme: light)', color: '#f7f7f7' },
+          { media: '(prefers-color-scheme: dark)', color: '#101010' },
+        ]
+      : [
+          { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+          { media: '(prefers-color-scheme: dark)', color: '#252525' },
+        ],
 };
 
 // When running in a worktree, prefix the title with a stable emoji + slug so
@@ -123,22 +136,22 @@ const description = SITE_PRODUCT.description;
 const SITE_ICONS_BY_SITE: Record<ProductId, Metadata['icons']> = {
   diffs: {
     icon: [
-      { url: '/favicon.svg', type: 'image/svg+xml' },
-      { url: '/favicon.png', type: 'image/png' },
+      { url: '/diffs-brand/icon.svg', type: 'image/svg+xml' },
+      { url: '/diffs-brand/icon.ico', sizes: '32x32' },
     ],
     apple: '/diffs-brand/apple-icon.png',
   },
   trees: {
     icon: [
       { url: '/trees-brand/icon.svg', type: 'image/svg+xml' },
-      { url: '/trees-brand/icon.ico', sizes: 'any' },
+      { url: '/trees-brand/icon.ico', sizes: '32x32' },
     ],
     apple: '/trees-brand/apple-icon.png',
   },
   diffshub: {
     icon: [
       { url: '/diffshub-brand/icon.svg', type: 'image/svg+xml' },
-      { url: '/diffshub-brand/icon.ico', sizes: 'any' },
+      { url: '/diffshub-brand/icon.ico', sizes: '32x32' },
     ],
     apple: '/diffshub-brand/apple-icon.png',
   },

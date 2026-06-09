@@ -1002,19 +1002,30 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
-  public updateRenderCache(
-    dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light',
-    shouldRerender?: boolean
-  ): void {
-    this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
-    if (shouldRerender === true) {
-      this.render({ didEdit: true, renderRange: this.renderRange });
+  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+    this.editor?.cleanUp();
+    const fileContainer = this.fileContainer;
+    const file = this.getAdditionFile();
+    if (fileContainer != null && file != null) {
+      void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
+        editor.syncToRenderedView(
+          highlighter,
+          fileContainer,
+          file,
+          false,
+          this.lineAnnotations,
+          this.renderRange
+        );
+      });
     }
+    this.editor = editor;
+    return () => {
+      this.editor = undefined;
+    };
   }
 
   // normally triggered by the editor when the document line count changes
-  applyDocumentChange(
+  public applyDocumentChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
@@ -1036,26 +1047,15 @@ export class FileDiff<
     }
   }
 
-  attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
-    this.editor?.cleanUp();
-    const fileContainer = this.fileContainer;
-    const file = this.getAdditionFile();
-    if (fileContainer != null && file != null) {
-      void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-        editor.syncToRenderedView(
-          highlighter,
-          fileContainer,
-          file,
-          false,
-          this.lineAnnotations,
-          this.renderRange
-        );
-      });
+  public updateRenderCache(
+    dirtyLines: Map<number, Array<HighlightedToken>>,
+    themeType: 'dark' | 'light',
+    shouldRerender?: boolean
+  ): void {
+    this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
+    if (shouldRerender === true) {
+      this.render({ didEdit: true, renderRange: this.renderRange });
     }
-    this.editor = editor;
-    return () => {
-      this.editor = undefined;
-    };
   }
 
   private getAdditionFile(): FileContents | undefined {

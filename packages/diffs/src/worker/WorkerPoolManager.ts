@@ -188,11 +188,11 @@ export class WorkerPoolManager {
   }
 
   async setRenderOptions({
-    theme = DEFAULT_THEMES,
-    useTokenTransformer = false,
-    lineDiffType = 'word-alt',
-    maxLineDiffLength = 1000,
-    tokenizeMaxLineLength = 1000,
+    theme = this.renderOptions.theme ?? DEFAULT_THEMES,
+    useTokenTransformer = this.renderOptions.useTokenTransformer ?? false,
+    lineDiffType = this.renderOptions.lineDiffType ?? 'word-alt',
+    maxLineDiffLength = this.renderOptions.maxLineDiffLength ?? 1000,
+    tokenizeMaxLineLength = this.renderOptions.tokenizeMaxLineLength ?? 1000,
   }: Partial<WorkerRenderingOptions>): Promise<void> {
     const { lifecycleGeneration } = this;
     const renderOptionsRequestVersion = ++this.renderOptionsRequestVersion;

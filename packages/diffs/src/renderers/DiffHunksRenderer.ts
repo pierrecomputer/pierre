@@ -259,6 +259,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       renderCache.isDirty === true &&
       renderCache.diff.cacheKey != null
     ) {
+      // The render cache has been updated by the editor, let's purge it
+      // from the worker manager cache.
       this.workerManager?.evictDiffFromCache(renderCache.diff.cacheKey);
     }
   }
@@ -336,6 +338,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (result == null) {
       return;
     }
+    if (diff.isPartial) {
+      throw new Error('Could not update render cache for partial diff');
+    }
 
     const hastLines = result.code.additionLines;
     const changedAdditionLines: number[] = [];
@@ -388,7 +393,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     }
 
-    if (changedAdditionLines.length > 0 && !diff.isPartial) {
+    if (changedAdditionLines.length > 0) {
       Object.assign(
         diff,
         updateDiffHunks(
@@ -872,6 +877,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       collapsedContextThreshold,
       hunkSeparators,
     } = this.getOptionsWithDefaults();
+    const isRenderCacheDirty = this.renderCache?.isDirty ?? false;
 
     this.diff = fileDiff;
     const unified = diffStyle === 'unified';
@@ -1073,7 +1079,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             additionLineContent = withContentProperties(
               additionLineContent,
               lineDecoration.contentProperties,
-              additionLine != null
+              isRenderCacheDirty && additionLine != null
                 ? {
                     'data-line': additionLine.lineNumber,
                     'data-line-index': `${unifiedLineIndex},${splitLineIndex}`,
@@ -1084,7 +1090,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             deletionLineContent = withContentProperties(
               deletionLineContent,
               lineDecoration.contentProperties,
-              deletionLine != null
+              isRenderCacheDirty && deletionLine != null
                 ? {
                     'data-line': deletionLine.lineNumber,
                     'data-line-index': `${unifiedLineIndex},${splitLineIndex}`,
@@ -1187,10 +1193,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             const deletionLineDecorated = withContentProperties(
               deletionLineContent,
               deletionLineDecoration.contentProperties,
-              {
-                'data-line': deletionLine.lineNumber,
-                'data-line-index': `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
-              }
+              isRenderCacheDirty
+                ? {
+                    'data-line': deletionLine.lineNumber,
+                    'data-line-index': `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
+                  }
+                : undefined
             );
             pushGutterLineNumber(
               'deletions',
@@ -1207,10 +1215,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             const additionLineDecorated = withContentProperties(
               additionLineContent,
               additionLineDecoration.contentProperties,
-              {
-                'data-line': additionLine.lineNumber,
-                'data-line-index': `${additionLine.unifiedLineIndex},${splitLineIndex}`,
-              }
+              isRenderCacheDirty
+                ? {
+                    'data-line': additionLine.lineNumber,
+                    'data-line-index': `${additionLine.unifiedLineIndex},${splitLineIndex}`,
+                  }
+                : undefined
             );
             pushGutterLineNumber(
               'additions',

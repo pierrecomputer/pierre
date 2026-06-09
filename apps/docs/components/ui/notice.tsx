@@ -31,7 +31,7 @@ function Notice({ className, variant, icon, children, ...props }: NoticeProps) {
       {icon != null && (
         <div className="mt-[2px] flex-shrink-0 md:mt-[4px]">{icon}</div>
       )}
-      <div className="leading-[1.5]">{children}</div>
+      <div className="flex flex-col gap-3 leading-[1.5]">{children}</div>
     </div>
   );
 }

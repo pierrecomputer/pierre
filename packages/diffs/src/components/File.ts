@@ -487,13 +487,6 @@ export class File<
     };
   }
 
-  public updateRenderCache(
-    dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
-  ): void {
-    this.fileRenderer.updateRenderCache(dirtyLines, themeType);
-  }
-
   // normally triggered by the editor when the document line count changes
   public applyDocumentChange(
     textDocument: DiffsTextDocument,
@@ -509,6 +502,13 @@ export class File<
       this.fileRenderer.setLineAnnotations(this.lineAnnotations);
       this.renderAnnotations();
     }
+  }
+
+  public updateRenderCache(
+    dirtyLines: Map<number, Array<HighlightedToken>>,
+    themeType: 'dark' | 'light'
+  ): void {
+    this.fileRenderer.updateRenderCache(dirtyLines, themeType);
   }
 
   public render({
