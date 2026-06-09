@@ -30,8 +30,12 @@ export function EditorDemo() {
   const editor = useMemo(
     () =>
       new Editor({
-        enabledQuickEdit: true,
-        renderQuickEdit({ close, replaceSelectionText, getSelectionText }) {
+        enabledSelectionAction: true,
+        renderSelectionAction({
+          close,
+          replaceSelectionText,
+          getSelectionText,
+        }) {
           const container = document.createElement('div');
           const button = document.createElement('button');
 

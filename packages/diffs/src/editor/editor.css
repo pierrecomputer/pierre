@@ -119,7 +119,7 @@
   [data-content] {
     caret-color: transparent;
   }
-  [data-quick-edit] {
+  [data-selection-action] {
     caret-color: currentColor;
   }
   [data-content]:focus ~ [data-editor-overlay] [data-caret] {
@@ -127,8 +127,8 @@
   }
 }
 
-/* Quick Edit Widget */
-[data-quick-edit-icon] {
+/* Selection Action Widget */
+[data-selection-action-icon] {
   position: absolute;
   top: 0;
   left: -1lh;
@@ -146,14 +146,14 @@
   cursor: pointer;
   visibility: hidden;
 }
-[data-quick-edit-icon][data-visible='true'] {
+[data-selection-action-icon][data-visible='true'] {
   visibility: visible;
 }
-[data-quick-edit-icon]:hover {
+[data-selection-action-icon]:hover {
   background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
   color: var(--diffs-fg);
 }
-[data-quick-edit] {
+[data-selection-action] {
   padding-inline-end: 1ch;
 }
 

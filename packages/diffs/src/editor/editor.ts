@@ -6,6 +6,7 @@ import type {
   DiffsHighlighter,
   FileContents,
   HighlightedToken,
+  LineAnnotation,
   RenderRange,
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
@@ -19,7 +20,6 @@ import {
   renderLineAnnotations,
 } from './lineAnnotations';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
-import { type QuickEditContext, QuickEditWidget } from './quickEdit';
 import { type MatchRange, SearchPanelWidget } from './searchPanel';
 import type { EditorSelection } from './selection';
 import {
@@ -53,6 +53,10 @@ import {
   resolveIndentEdits,
   selectionIntersects,
 } from './selection';
+import {
+  type SelectionActionContext,
+  SelectionActionWidget,
+} from './selectionAction';
 import { createSpriteElement } from './sprite';
 import {
   type Position,
@@ -68,14 +72,7 @@ import {
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
 import { EditorTokenizer, renderLineTokens } from './tokenzier';
-import {
-  addEventListener,
-  debounce,
-  extend,
-  getLineNumberAttr,
-  h,
-  round,
-} from './utils';
+import { addEventListener, extend, getLineNumberAttr, h, round } from './utils';
 
 function clampDomOffset(node: Node, offset: number): number {
   if (node.nodeType === 3) {
@@ -91,14 +88,16 @@ function clampDomOffset(node: Node, offset: number): number {
 export interface EditorOptions<LAnnotation> {
   /** Render rounded corners for selection ranges, default is true. */
   roundedSelection?: boolean;
-  /** Show the clickable quick edit icon, default is disabled. */
-  enabledQuickEdit?: boolean;
-  /** Render the quick edit widget element. */
-  renderQuickEdit?: (context: QuickEditContext<LAnnotation>) => HTMLElement;
+  /** Show the clickable selection action icon, default is disabled. */
+  enabledSelectionAction?: boolean;
+  /** Render the selection action widget element. */
+  renderSelectionAction?: (
+    context: SelectionActionContext<LAnnotation>
+  ) => HTMLElement;
   /** Callback when the editor document changes. */
   onChange?: (
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    lineAnnotations?: DiffLineAnnotation<LAnnotation>[] | LineAnnotation<any>[]
   ) => void;
   __debug?: boolean;
 }
@@ -147,7 +146,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #overlayElement?: HTMLElement;
   #primaryCaretElement?: HTMLElement;
   #selectionElements?: Map<string, HTMLElement>;
-  #quickEdit?: QuickEditWidget;
+  #selectionAction?: SelectionActionWidget;
   #searchPanel?: SearchPanelWidget;
   #resizeObserver?: ResizeObserver;
 
@@ -165,16 +164,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #scrollingToLineChar?: number;
   #scrollingToLineNoFocus = false;
   #retainSearchPanelFocus = false;
-
-  #emitChange = debounce(
-    (
-      fileContents: FileContents,
-      lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
-    ) => {
-      this.#options.onChange?.(fileContents, lineAnnotations);
-    },
-    500
-  );
 
   #onDeferTokenize = (
     lines: Map<number, Array<HighlightedToken>>,
@@ -329,8 +318,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#reservedSelections = undefined;
       this.#searchPanel?.cleanup();
       this.#searchPanel = undefined;
-      this.#quickEdit?.cleanup();
-      this.#quickEdit = undefined;
+      this.#selectionAction?.cleanup();
+      this.#selectionAction = undefined;
     }
 
     if (this.#contentElement !== contentEl) {
@@ -417,11 +406,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     if (
-      this.#quickEdit !== undefined &&
-      this.#isLineVisible(this.#quickEdit.line) &&
+      this.#selectionAction !== undefined &&
+      this.#isLineVisible(this.#selectionAction.line) &&
       this.#contentElement !== undefined
     ) {
-      this.#quickEdit.render(this.#contentElement);
+      this.#selectionAction.render(this.#contentElement);
     }
   }
 
@@ -518,8 +507,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#selectionElements = undefined;
     this.#searchPanel?.cleanup();
     this.#searchPanel = undefined;
-    this.#quickEdit?.cleanup();
-    this.#quickEdit = undefined;
+    this.#selectionAction?.cleanup();
+    this.#selectionAction = undefined;
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = undefined;
 
@@ -657,7 +646,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#selectionStart = undefined;
           this.#reservedSelections = undefined;
           this.#selectionElements?.forEach((el, key) => {
-            if (key.startsWith('quickEditIcon-')) {
+            if (key.startsWith('selectionActionIcon-')) {
               el.dataset.visible = 'true';
             }
           });
@@ -761,8 +750,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#searchPanel?.cleanup();
           this.#searchPanel = undefined;
           this.#retainSearchPanelFocus = false;
-          this.#quickEdit?.cleanup();
-          this.#quickEdit = undefined;
+          this.#selectionAction?.cleanup();
+          this.#selectionAction = undefined;
           if (this.#selections !== undefined && this.#selections.length > 0) {
             const primarySelection = this.#selections.at(-1)!;
             if (
@@ -1391,10 +1380,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#renderCaret(renderCtx, selection, selection === primarySelection);
       }
       if (
-        this.#options.enabledQuickEdit === true &&
+        this.#options.enabledSelectionAction === true &&
         !isCollapsedSelection(primarySelection)
       ) {
-        this.#renderQuickEditIcon(renderCtx, primarySelection);
+        this.#renderSelectionActionIcon(renderCtx, primarySelection);
       }
     }
 
@@ -1947,7 +1936,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #renderQuickEditIcon(
+  #renderSelectionActionIcon(
     renderCtx: {
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
@@ -1960,19 +1949,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const [left, wrapLine] = this.#getCharX(line, 0);
-    const cacheKey = 'quickEditIcon-' + line + '(' + wrapLine + ')';
+    const cacheKey = 'selectionActionIcon-' + line + '(' + wrapLine + ')';
     if (renderCtx.elements.has(cacheKey)) {
       return;
     }
 
-    const quickEditIcon = QuickEditWidget.renderIcon(
+    const selectionActionIcon = SelectionActionWidget.renderIcon(
       left,
       this.#getLineY(line) + wrapLine * this.#metrics.lineHeight,
       renderCtx.fragment,
       () => {
-        const cleanUpQuickEdit = () => {
-          this.#quickEdit?.cleanup();
-          this.#quickEdit = undefined;
+        const cleanUpSelectionAction = () => {
+          this.#selectionAction?.cleanup();
+          this.#selectionAction = undefined;
         };
 
         const handleWidgetDomResize = () => {
@@ -1984,15 +1973,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           }
         };
 
-        // remove the existing quick edit element
-        cleanUpQuickEdit();
+        // remove the existing selection action element
+        cleanUpSelectionAction();
 
         const textDocument = this.#textDocument;
-        const renderQuickEdit = this.#options.renderQuickEdit;
+        const renderSelectionAction = this.#options.renderSelectionAction;
         const fileContainer = this.#fileContainer;
         if (
           textDocument === undefined ||
-          renderQuickEdit === undefined ||
+          renderSelectionAction === undefined ||
           fileContainer == null
         ) {
           return;
@@ -2000,7 +1989,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
         const line = selection.end.line;
         const lineText = textDocument.getLineText(line);
-        const quickEditElement = renderQuickEdit({
+        const selectionActionElement = renderSelectionAction({
           textDocument,
           selection,
           applyEdits: (edits: TextEdit[]) => {
@@ -2020,7 +2009,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#replaceSelectionText(text);
           },
           close: () => {
-            cleanUpQuickEdit();
+            cleanUpSelectionAction();
             handleWidgetDomResize();
             this.#scrollToPrimaryCaret();
           },
@@ -2036,20 +2025,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             break;
           }
         }
-        this.#quickEdit = new QuickEditWidget(
+        this.#selectionAction = new SelectionActionWidget(
           line,
-          quickEditElement,
+          selectionActionElement,
           fileContainer,
           leadingWhitespaces,
           handleWidgetDomResize
         );
         this.#updateSelections([selection]);
         if (this.#isLineVisible(line) && this.#contentElement !== undefined) {
-          this.#quickEdit.render(this.#contentElement);
+          this.#selectionAction.render(this.#contentElement);
         }
       }
     );
-    renderCtx.elements.set(cacheKey, quickEditIcon);
+    renderCtx.elements.set(cacheKey, selectionActionIcon);
   }
 
   // TODO(@ije): render search highlight
@@ -2358,15 +2347,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       onChange !== undefined
     ) {
       const { contents: _, ...file } = fileContents;
-      let contents: string | undefined;
-      // tradeoff: using a getter for the 'contents' property
-      // to avoid pre-concactinating the text content of the textDocument
-      // but the user may get newer contents when accessing
-      // the 'contents' property
       Object.defineProperty(file, 'contents', {
-        get: () => (contents ??= textDocument.getText()),
+        enumerable: true,
+        get: () => textDocument.getText(),
       });
-      this.#emitChange(
+      onChange(
         file as FileContents,
         newLineAnnotations ?? this.#lineAnnotations
       );

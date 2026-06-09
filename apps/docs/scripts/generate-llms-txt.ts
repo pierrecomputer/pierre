@@ -83,7 +83,7 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     VanillaAPI:
       'FileDiff and File classes, props, deprecated vanilla custom hunk separators, and low-level renderers',
     Editor:
-      'Pluggable editing for File surfaces, including text editing, native selections, history, search, quick edit, and shortcuts',
+      'Pluggable editing for File surfaces, including text editing, native selections, history, search, selection action, and shortcuts',
     Virtualization: 'Virtual scrolling for large diffs and files',
     CustomHunkSeparators:
       'Built-in separator presets, CSS customization hooks, and the discouraged vanilla escape hatch',
