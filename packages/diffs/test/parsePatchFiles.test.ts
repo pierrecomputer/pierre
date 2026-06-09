@@ -81,6 +81,40 @@ describe('parsePatchFiles', () => {
     }
   });
 
+  test('parses deleted SQL comment lines as hunk content in unified patches', () => {
+    const result = parsePatchFiles(
+      [
+        '--- sql/test.sql\n',
+        '+++ sql/test.sql\n',
+        '@@ -1,5 +1,4 @@\n',
+        ' -- This is a test sql file\n',
+        '--- This is an sql comment\n',
+        ' \n',
+        ' CREATE TABLE users (\n',
+        ' id BIGSERIAL PRIMARY KEY,\n',
+      ].join(''),
+      undefined,
+      true
+    );
+
+    const file = result[0]?.files[0];
+    expect(result[0]?.files).toHaveLength(1);
+    expect(file?.name).toBe('sql/test.sql');
+    expect(file?.deletionLines).toEqual([
+      '-- This is a test sql file\n',
+      '-- This is an sql comment\n',
+      '\n',
+      'CREATE TABLE users (\n',
+      'id BIGSERIAL PRIMARY KEY,\n',
+    ]);
+    expect(file?.additionLines).toEqual([
+      '-- This is a test sql file\n',
+      '\n',
+      'CREATE TABLE users (\n',
+      'id BIGSERIAL PRIMARY KEY,\n',
+    ]);
+  });
+
   test('preserves leading BOM characters in parsed hunk lines', () => {
     const result = parsePatchFiles(
       [
