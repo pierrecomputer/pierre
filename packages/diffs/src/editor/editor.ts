@@ -67,7 +67,7 @@ import {
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
 import { EditorTokenizer, renderLineTokens } from './tokenzier';
-import { addEventListener, debounce, extend, h, round } from './utils';
+import { addEventListener, extend, h, round } from './utils';
 
 function clampDomOffset(node: Node, offset: number): number {
   if (node.nodeType === 3) {
@@ -153,16 +153,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #scrollingToLineChar?: number;
   #scrollingToLineNoFocus = false;
   #retainSearchPanelFocus = false;
-
-  #emitChange = debounce(
-    (
-      fileContents: FileContents,
-      lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
-    ) => {
-      this.#options.onChange?.(fileContents, lineAnnotations);
-    },
-    100
-  );
 
   #onDeferTokenize = (
     lines: Map<number, Array<HighlightedToken>>,
@@ -2304,7 +2294,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         enumerable: true,
         get: () => textDocument.getText(),
       });
-      this.#emitChange(
+      onChange(
         file as FileContents,
         newLineAnnotations ?? this.#lineAnnotations
       );
