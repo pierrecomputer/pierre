@@ -859,6 +859,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#handleInput(e.inputType, e.data);
       }),
 
+      addEventListener(contentEl, 'drop', (e) => {
+        if (!targetIsContentElement(e)) {
+          return;
+        }
+        e.preventDefault();
+        // TODO(@ije): Add support of drag move selection
+      }),
+
       addEventListener(
         contentEl,
         'compositionstart',
