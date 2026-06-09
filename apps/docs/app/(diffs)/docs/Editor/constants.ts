@@ -135,14 +135,14 @@ button.addEventListener('click', () => {
   options,
 };
 
-export const EDITOR_QUICK_EDIT_EXAMPLE: PreloadFileOptions<undefined> = {
+export const EDITOR_SELECTION_ACTION_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
-    name: 'editor_quick_edit.ts',
+    name: 'editor_selection_action.ts',
     contents: `import { Editor } from '@pierre/diffs/editor';
 
 const editor = new Editor({
-  enabledQuickEdit: true,
-  renderQuickEdit: (context) => {
+  enabledSelectionAction: true,
+  renderSelectionAction: (context) => {
     const container = document.createElement('div');
     const button = document.createElement('button');
 
@@ -161,10 +161,11 @@ const editor = new Editor({
   options,
 };
 
-export const EDITOR_QUICK_EDIT_CONTEXT_TYPE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'quick_edit_context.ts',
-    contents: `export interface QuickEditContext<LAnnotation> {
+export const EDITOR_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined> =
+  {
+    file: {
+      name: 'selection_action_context.ts',
+      contents: `export interface SelectionActionContext<LAnnotation> {
   /** The current selection. */
   selection: EditorSelection;
   /** The text document. */
@@ -175,12 +176,12 @@ export const EDITOR_QUICK_EDIT_CONTEXT_TYPE: PreloadFileOptions<undefined> = {
   getSelectionText: () => string;
   /** Replaces the text of the current selection. */
   replaceSelectionText: (text: string) => void;
-  /** Closes the quick edit. */
+  /** Closes the selection action. */
   close: () => void;
 }`,
-  },
-  options,
-};
+    },
+    options,
+  };
 
 export const EDITOR_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {

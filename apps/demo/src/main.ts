@@ -800,8 +800,8 @@ if (renderFileButton != null) {
     virtualizer?.setup(globalThis.document);
     const wrap = getWrapped();
     const editor = new Editor<LineCommentMetadata>({
-      enabledQuickEdit: true,
-      renderQuickEdit: (ctx) => {
+      enabledSelectionAction: true,
+      renderSelectionAction: (ctx) => {
         const div = document.createElement('div');
         const button = document.createElement('button');
         button.innerText = `Comment the selection`;

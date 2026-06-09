@@ -14,7 +14,7 @@ virtualization. Editor includes:
 - Automatic indentation
 - History (undo and redo)
 - Find-in-file search
-- [Quick Edit](#editor-quick-edit) (opt-in, custom UI)
+- [Selection Action](#editor-selection-action) (opt-in, custom UI)
 - SSR support
 - Mobile-friendly
 
@@ -117,20 +117,22 @@ where editing is rare.
 
 <DocsCodeExample {...editorLazyFileExample} />
 
-### Quick Edit
+### Selection Action
 
-Quick Edit helps you quickly change the active selection without breaking your
-flow. Enable it with `enabledQuickEdit: true`, define the UI in
-`renderQuickEdit`, then click the gutter icon on the active selection to open
-it.
+Selection Action is an opt-in editor feature for showing custom UI inline with
+the current selection—useful for quick transforms, refactor prompts, or other
+selection-scoped tools. Set `enabledSelectionAction: true`, return your UI from
+`renderSelectionAction`, and open it from the gutter icon that appears on the
+active selection.
 
-<DocsCodeExample {...editorQuickEditExample} />
+<DocsCodeExample {...editorSelectionActionExample} />
 
-The `renderQuickEdit` callback receives a context object with the current
-selection, editable text document, and helpers for updating or closing the Quick
-Edit UI:
+`renderSelectionAction` runs when the user opens the action. Its context
+includes the active `selection`, the editable `textDocument`, helpers to read or
+modify the selection (`getSelectionText`, `replaceSelectionText`, `applyEdits`),
+and `close` to dismiss the panel:
 
-<DocsCodeExample {...editorQuickEditContextType} />
+<DocsCodeExample {...editorSelectionActionContextType} />
 
 ### Keyboard Shortcuts
 
