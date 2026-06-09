@@ -20,11 +20,34 @@ const cleanupByNode = new WeakMap<HTMLElement, () => void>();
   options={{
     onPostRender(node, _instance, phase) {
       if (phase === 'mount') {
-        const observer = new ResizeObserver(() => {
-          console.log(node.getBoundingClientRect().height);
+        const selectionRoot = node.shadowRoot ?? node;
+
+        const handleSelectStart = () => {
+          console.log('selection started in diff');
+        };
+
+        const handleSelectionChange = () => {
+          const selection = document.getSelection();
+          if (selection == null || selection.isCollapsed) {
+            return;
+          }
+
+          if (
+            !containsSelectionNode(selectionRoot, selection.anchorNode) &&
+            !containsSelectionNode(selectionRoot, selection.focusNode)
+          ) {
+            return;
+          }
+
+          console.log('selected text', selection.toString());
+        };
+
+        selectionRoot.addEventListener('selectstart', handleSelectStart);
+        document.addEventListener('selectionchange', handleSelectionChange);
+        cleanupByNode.set(node, () => {
+          selectionRoot.removeEventListener('selectstart', handleSelectStart);
+          document.removeEventListener('selectionchange', handleSelectionChange);
         });
-        observer.observe(node);
-        cleanupByNode.set(node, () => observer.disconnect());
         return;
       }
 
@@ -34,7 +57,11 @@ const cleanupByNode = new WeakMap<HTMLElement, () => void>();
       }
     },
   }}
-/>`,
+/>
+
+function containsSelectionNode(root: Node, node: Node | null) {
+  return node != null && root.contains(node);
+}`,
   },
   options,
 };

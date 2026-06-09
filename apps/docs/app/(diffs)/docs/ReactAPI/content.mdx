@@ -72,10 +72,10 @@ a container node, `phase: 'update'` after later DOM-committing renders, and
 `phase: 'unmount'` before a mounted container node is removed, replaced, cleaned
 up, or recycled.
 
-Use this callback for DOM-node-associated work such as observers, measurements,
-or imperative integrations. Treat `unmount` as node-centric: if you need
-teardown state, capture it by `node` when the node mounts instead of depending
-on mutable instance fields.
+Use this callback when native DOM selection listeners need access to the
+rendered diff node or its shadow DOM. Attach listeners such as `selectstart` and
+`selectionchange` during `mount`, and remove them during `unmount` with teardown
+state captured by `node`.
 
 <DocsCodeExample {...postRenderLifecycleExample} />
 
