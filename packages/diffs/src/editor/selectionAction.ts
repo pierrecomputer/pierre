@@ -3,7 +3,7 @@ import { getEditorIconSvg } from './sprite';
 import type { TextDocument, TextEdit } from './textDocument';
 import { h } from './utils';
 
-export interface QuickEditContext<LAnnotation> {
+export interface SelectionActionContext<LAnnotation> {
   /** The current selection. */
   selection: EditorSelection;
   /** The text document. */
@@ -14,11 +14,11 @@ export interface QuickEditContext<LAnnotation> {
   getSelectionText: () => string;
   /** Replaces the text of the current selection. */
   replaceSelectionText: (text: string) => void;
-  /** Closes the quick edit. */
+  /** Closes the selection action. */
   close: () => void;
 }
 
-export class QuickEditWidget {
+export class SelectionActionWidget {
   static renderIcon(
     x: number,
     y: number,
@@ -28,8 +28,8 @@ export class QuickEditWidget {
     return h(
       'div',
       {
-        dataset: { quickEditIcon: '', visible: 'false' },
-        title: 'Quick Edit',
+        dataset: { selectionActionIcon: '', visible: 'false' },
+        title: 'Selection Action',
         style: {
           transform: `translateY(${y}px) translateX(${x}px)`,
         },
@@ -41,35 +41,35 @@ export class QuickEditWidget {
   }
 
   #gutterBuffer: HTMLElement;
-  #quickEditContainer: HTMLElement;
+  #selectionActionContainer: HTMLElement;
   #slot: HTMLElement;
   #observer: ResizeObserver;
   #handleDomResize: () => void;
 
   constructor(
     public line: number,
-    quickEditElement: HTMLElement,
+    selectionActionElement: HTMLElement,
     fileContainer: HTMLElement,
     leadingWhitespaces = 0,
     handleDomResize: () => void
   ) {
-    const slotName = 'quick-edit-' + line;
+    const slotName = 'selection-action-' + line;
     this.#slot = h(
       'div',
       {
-        dataset: 'quickEditSlot',
+        dataset: 'selectionActionSlot',
         slot: slotName,
         style: 'white-space: normal',
-        children: [quickEditElement],
+        children: [selectionActionElement],
       },
       fileContainer
     );
     this.#gutterBuffer = h('div', {
-      dataset: { gutterBuffer: 'quickEdit', bufferSize: '1' },
+      dataset: { gutterBuffer: 'selectionAction', bufferSize: '1' },
       style: 'grid-row: span 1',
     });
-    this.#quickEditContainer = h('div', {
-      dataset: { quickEdit: String(line) },
+    this.#selectionActionContainer = h('div', {
+      dataset: { selectionAction: String(line) },
       style: {
         paddingInlineStart: leadingWhitespaces + 1 + 'ch', // +1 align css `padding-inline`
       },
@@ -97,7 +97,7 @@ export class QuickEditWidget {
       contentLineElement != null
     ) {
       gutterLineElement.after(this.#gutterBuffer);
-      contentLineElement.after(this.#quickEditContainer);
+      contentLineElement.after(this.#selectionActionContainer);
       gutterElement.style.gridRow = 'span ' + gutterElement.children.length;
       containerElement.style.gridRow =
         'span ' + containerElement.children.length;
@@ -107,10 +107,10 @@ export class QuickEditWidget {
 
   cleanup(): void {
     const gutter = this.#gutterBuffer.parentElement;
-    const content = this.#quickEditContainer.parentElement;
+    const content = this.#selectionActionContainer.parentElement;
 
     this.#gutterBuffer.remove();
-    this.#quickEditContainer.remove();
+    this.#selectionActionContainer.remove();
 
     if (gutter != null && content != null) {
       gutter.style.gridRow = 'span ' + gutter.children.length;
