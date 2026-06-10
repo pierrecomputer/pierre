@@ -138,6 +138,19 @@ describe('PieceTable', () => {
     expect(() => table.getLineText(99)).toThrow('Line index out of range: 99');
   });
 
+  test('getLineLength matches getLineText without slicing', () => {
+    const table = new PieceTable('first\r\nsecond\n');
+
+    expect(table.getLineLength(0)).toBe(table.getLineText(0).length);
+    expect(table.getLineLength(1)).toBe(table.getLineText(1).length);
+    expect(table.getLineLength(2)).toBe(0);
+    expect(table.getLineLength(0, true)).toBe(7);
+    expect(table.getLineLength(1, true)).toBe(7);
+    expect(() => table.getLineLength(99)).toThrow(
+      'Line index out of range: 99'
+    );
+  });
+
   test('maps between offsets and positions', () => {
     const table = new PieceTable('ab\nc');
 

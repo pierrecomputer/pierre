@@ -184,6 +184,10 @@ export class TextDocument<LAnnotation> {
     return this.#pieceTable.getLineText(line, includeLineBreak);
   }
 
+  getLineLength(line: number, includeLineBreak?: boolean): number {
+    return this.#pieceTable.getLineLength(line, includeLineBreak);
+  }
+
   charAt(offset: number): string;
   charAt(position: Position): string;
   charAt(positionOrOffset: Position | number): string {
@@ -330,7 +334,7 @@ export class TextDocument<LAnnotation> {
       line,
       character: Math.max(
         0,
-        Math.min(position.character, this.getLineText(line).length)
+        Math.min(position.character, this.getLineLength(line))
       ),
     };
   }
