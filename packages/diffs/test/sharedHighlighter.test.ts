@@ -10,7 +10,7 @@ afterEach(async () => {
   await disposeHighlighter();
 });
 
-describe('shared highlighter engine selection', () => {
+describe('shared highlighter cache lifecycle', () => {
   test('returns a cached highlighter instance until disposed', async () => {
     const first = await getSharedHighlighter({
       themes: ['pierre-dark'],
@@ -28,7 +28,10 @@ describe('shared highlighter engine selection', () => {
     expect(getHighlighterIfLoaded()).toBe(first);
   });
 
-  test('can dispose and reinitialize with a different preferredHighlighter', async () => {
+  // The differing preferredHighlighter values are smoke inputs that exercise
+  // both engine creation paths; instance identity cannot tell the engines
+  // apart, so this test only verifies the dispose-then-recreate contract.
+  test('disposeHighlighter clears the cache so the next getSharedHighlighter creates a fresh instance', async () => {
     const jsHighlighter = await getSharedHighlighter({
       themes: ['pierre-dark'],
       langs: ['text'],

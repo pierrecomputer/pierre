@@ -1,17 +1,23 @@
 import { describe, expect, test } from 'bun:test';
 
 import { parseDiffFromFile } from '../src';
-import type { FileDiffMetadata, Hunk } from '../src/types';
+import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../src/constants';
+import type { ChangeContent, FileDiffMetadata, Hunk } from '../src/types';
 import {
   type DiffLineCallbackProps,
   type DiffLineMetadata,
   iterateOverDiff,
 } from '../src/utils/iterateOverDiff';
 import { fileNew, fileOld } from './mocks';
+import { assertDefined, countDeclaredRows } from './testUtils';
 
 // NOTE(amadeus): These tests were written by an AI and they are probably
 // pretty sloppy, but keeping them for now until we can have better tests
 describe('iterateOverDiff', () => {
+  // Fixture geometry the big-fixture tests rely on: this diff parses to 14
+  // hunks; hunk 0 has collapsedBefore 3, and three other hunks have
+  // single-line collapsed gaps that fall at DEFAULT_COLLAPSED_CONTEXT_THRESHOLD
+  // and are therefore emitted as auto-expanded context rows.
   const diff = parseDiffFromFile(
     { name: 'test.txt', contents: fileOld },
     { name: 'test.txt', contents: fileNew }
@@ -19,13 +25,9 @@ describe('iterateOverDiff', () => {
 
   test('unified iteration produces expected sequence', () => {
     const results: Array<{
-      lineIndex: number;
-      hunkIndex: number;
       type: string;
-      additionLineIndex: number | undefined;
-      deletionLineIndex: number | undefined;
-      additionLineNumber: number | undefined;
-      deletionLineNumber: number | undefined;
+      hunkIndex: number;
+      unifiedLineIndex: number;
       collapsedBefore: number;
     }> = [];
 
@@ -34,43 +36,44 @@ describe('iterateOverDiff', () => {
       diffStyle: 'unified',
       callback: (props) => {
         results.push({
-          lineIndex: (() => {
-            return (
-              props.additionLine?.unifiedLineIndex ??
-              props.deletionLine?.unifiedLineIndex ??
-              0
-            );
-          })(),
-          hunkIndex: props.hunkIndex,
           type: props.type,
-          additionLineIndex: props.additionLine?.lineIndex,
-          deletionLineIndex: props.deletionLine?.lineIndex,
-          additionLineNumber: props.additionLine?.lineNumber,
-          deletionLineNumber: props.deletionLine?.lineNumber,
+          hunkIndex: props.hunkIndex,
+          unifiedLineIndex:
+            props.additionLine?.unifiedLineIndex ??
+            props.deletionLine?.unifiedLineIndex ??
+            0,
           collapsedBefore: props.collapsedBefore,
         });
       },
     });
 
-    // Check total lines matches expected
-    expect(results.length).toBe(517);
+    // The iterator must emit exactly the rows the hunk metadata declares plus
+    // every collapsed gap at or under DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    // which is emitted as auto-expanded context rows. For this fixture that is
+    // 514 declared unified rows + 3 single-line gaps = 517.
+    expect(results.length).toBe(countDeclaredRows(diff, 'unified'));
 
-    // First hunk starts at its unifiedLineStart (which is 3 because collapsedBefore=3)
-    // The lineIndex is the actual unified line index, not a sequential counter
-    expect(results[0].lineIndex).toBe(diff.hunks[0].unifiedLineStart);
-    expect(results[0].hunkIndex).toBe(0);
-
-    // First line should be context with collapsedBefore = 3 (from hunk 0)
-    // Actually, hunk 0 has collapsedBefore=3, so first rendered line should signal this
-    expect(results[0].collapsedBefore).toBe(3);
+    // Hunk 0's collapsedBefore (3) exceeds the threshold, so its gap stays
+    // collapsed: the first emitted row is hunk 0's first declared context row,
+    // positioned at unifiedLineStart (not a sequential counter) and carrying
+    // the collapsed separator size.
+    const firstHunk = diff.hunks[0];
+    expect(firstHunk.collapsedBefore).toBeGreaterThan(
+      DEFAULT_COLLAPSED_CONTEXT_THRESHOLD
+    );
+    expect(results[0]).toEqual({
+      type: 'context',
+      hunkIndex: 0,
+      unifiedLineIndex: firstHunk.unifiedLineStart,
+      collapsedBefore: firstHunk.collapsedBefore,
+    });
   });
 
   test('split iteration produces expected sequence', () => {
     const results: Array<{
-      lineIndex: number;
       type: string;
-      additionLineIndex: number | undefined;
-      deletionLineIndex: number | undefined;
+      deletionSplitLineIndex: number | undefined;
+      additionSplitLineIndex: number | undefined;
     }> = [];
 
     iterateOverDiff({
@@ -78,70 +81,67 @@ describe('iterateOverDiff', () => {
       diffStyle: 'split',
       callback: (props) => {
         results.push({
-          lineIndex: (() => {
-            return (
-              props.additionLine?.unifiedLineIndex ??
-              props.deletionLine?.unifiedLineIndex ??
-              0
-            );
-          })(),
           type: props.type,
-          additionLineIndex: props.additionLine?.lineIndex,
-          deletionLineIndex: props.deletionLine?.lineIndex,
+          deletionSplitLineIndex: props.deletionLine?.splitLineIndex,
+          additionSplitLineIndex: props.additionLine?.splitLineIndex,
         });
       },
     });
 
-    // Check total lines matches expected for split mode
-    expect(results.length).toBe(490);
-  });
+    // Same row contract as unified mode, in split coordinates: 487 declared
+    // split rows across the 14 hunks + 3 auto-expanded single-line gaps = 490.
+    expect(results.length).toBe(countDeclaredRows(diff, 'split'));
 
-  test('expanded hunks work correctly', () => {
-    const expandedHunks = new Map<
-      number,
-      { fromStart: number; fromEnd: number }
-    >();
-    expandedHunks.set(0, { fromStart: 2, fromEnd: 1 });
+    // Split-specific pairing: a change block emits max(deletions, additions)
+    // rows, the deletion and addition sides of one row share a splitLineIndex,
+    // and the longer side then continues alone. Hunk 0's only change block is
+    // a pure addition, so locate the first change block that pairs both sides
+    // and derive its emitted-row position from hunk metadata.
+    const pairedHunkIndex = diff.hunks.findIndex((hunk) =>
+      hunk.hunkContent.some(isPairedChangeBlock)
+    );
+    const pairedHunk = diff.hunks[pairedHunkIndex];
+    assertDefined(pairedHunk, 'fixture must contain a paired change block');
 
-    const results: Array<{
-      lineIndex: number;
-      type: string;
-      collapsedBefore: number;
-    }> = [];
+    let blockRowOffset = 0;
+    let pairedBlock: ChangeContent | undefined;
+    for (const content of pairedHunk.hunkContent) {
+      if (content.type === 'change' && isPairedChangeBlock(content)) {
+        pairedBlock = content;
+        break;
+      }
+      blockRowOffset +=
+        content.type === 'context'
+          ? content.lines
+          : Math.max(content.deletions, content.additions);
+    }
+    assertDefined(pairedBlock, 'paired change block must exist in this hunk');
+    const { deletions, additions } = pairedBlock;
 
-    iterateOverDiff({
-      diff,
-      diffStyle: 'unified',
-      expandedHunks,
-      callback: (props) => {
-        results.push({
-          lineIndex: (() => {
-            return (
-              props.additionLine?.unifiedLineIndex ??
-              props.deletionLine?.unifiedLineIndex ??
-              0
-            );
-          })(),
-          type: props.type,
-          collapsedBefore: props.collapsedBefore,
-        });
-      },
-    });
+    // Rows emitted before the block: every earlier hunk's declared split rows
+    // and auto-expanded gaps, this hunk's own gap if it auto-expands, then the
+    // hunk-content rows preceding the block.
+    const blockRowStart =
+      countDeclaredRows(
+        { ...diff, hunks: diff.hunks.slice(0, pairedHunkIndex) },
+        'split'
+      ) +
+      (pairedHunk.collapsedBefore <= DEFAULT_COLLAPSED_CONTEXT_THRESHOLD
+        ? pairedHunk.collapsedBefore
+        : 0) +
+      blockRowOffset;
+    const blockSplitStart = pairedHunk.splitLineStart + blockRowOffset;
+    const blockRowCount = Math.max(deletions, additions);
 
-    // With 3 collapsedBefore and fromStart=2, fromEnd=1, we should have:
-    // - 2 context-expanded lines (fromStart)
-    // - collapsedBefore = 0 (3 - 2 - 1 = 0, fully expanded)
-    // - 1 context-expanded line (fromEnd)
-    // - then hunk content
-
-    // First 2 lines should be context-expanded with collapsedBefore=0
-    expect(results[0].type).toBe('context-expanded');
-    expect(results[0].collapsedBefore).toBe(0);
-    expect(results[1].type).toBe('context-expanded');
-    expect(results[1].collapsedBefore).toBe(0);
-    // Third line should also be context-expanded (fromEnd)
-    expect(results[2].type).toBe('context-expanded');
-    expect(results[2].collapsedBefore).toBe(0);
+    expect(results.slice(blockRowStart, blockRowStart + blockRowCount)).toEqual(
+      Array.from({ length: blockRowCount }, (_, index) => ({
+        type: 'change',
+        deletionSplitLineIndex:
+          index < deletions ? blockSplitStart + index : undefined,
+        additionSplitLineIndex:
+          index < additions ? blockSplitStart + index : undefined,
+      }))
+    );
   });
 
   test('windowing skips lines correctly', () => {
@@ -608,6 +608,14 @@ function serializeLine(
     lineNumber: line.lineNumber,
     noEOFCR: line.noEOFCR,
   };
+}
+
+// A change block that pairs at least one deletion row with an addition row,
+// which is what exercises split-mode row pairing (shared splitLineIndex).
+function isPairedChangeBlock(content: Hunk['hunkContent'][number]): boolean {
+  return (
+    content.type === 'change' && content.deletions > 0 && content.additions > 0
+  );
 }
 
 function createSingleHunkDiff({

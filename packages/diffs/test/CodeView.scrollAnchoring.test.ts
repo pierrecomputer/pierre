@@ -15,6 +15,20 @@ import {
 
 const ROOT_HEIGHT = 800;
 
+// Test-local mirrors of the private scroll rebase tuning constants of the same
+// names in src/components/CodeView.ts. If the source constants are retuned,
+// update these mirrors to match.
+const SCROLL_REBASE_CONTAINER_HEIGHT = 12_000_000;
+const SCROLL_REBASE_TRIGGER_TOP = 1_000_000;
+const SCROLL_REBASE_TARGET_TOP = 2_000_000;
+// Paged scrollTop above which CodeView rebases the DOM scroll window, derived
+// the same way as SCROLL_REBASE_THRESHOLD in src/components/CodeView.ts.
+const SCROLL_REBASE_THRESHOLD =
+  SCROLL_REBASE_CONTAINER_HEIGHT - SCROLL_REBASE_TRIGGER_TOP;
+// Logical scroll position slightly past the rebase threshold, so scrolling or
+// jumping to it forces a rebase.
+const PAST_REBASE_SCROLL_TOP = SCROLL_REBASE_THRESHOLD + 100_000;
+
 // Unlike the shared createRoot, this root clamps scrollTop writes to the
 // container's current max scroll range, mimicking real browser behavior so
 // rebase/anchoring logic can be exercised.
@@ -148,20 +162,25 @@ describe('CodeView scroll anchoring', () => {
       await renderItems(viewer, items);
 
       expect(viewer.getScrollHeight()).toBeGreaterThan(20_000_000);
-      expect(getRootMaxScrollTop(root)).toBeLessThan(12_000_000);
+      expect(getRootMaxScrollTop(root)).toBeLessThan(
+        SCROLL_REBASE_CONTAINER_HEIGHT
+      );
 
-      root.scrollTop = 11_100_000;
+      root.scrollTop = PAST_REBASE_SCROLL_TOP;
       dispatchScroll(root);
       viewer.render(true);
 
-      expect(viewer.getScrollTop()).toBe(11_100_000);
-      expect(root.scrollTop).toBe(2_000_000);
+      expect(viewer.getScrollTop()).toBe(PAST_REBASE_SCROLL_TOP);
+      expect(root.scrollTop).toBe(SCROLL_REBASE_TARGET_TOP);
 
-      root.scrollTop = 3_000_000;
+      // Scrolling the rebased DOM window by a delta must advance the logical
+      // scroll position by the same delta.
+      const scrollDelta = 1_000_000;
+      root.scrollTop = SCROLL_REBASE_TARGET_TOP + scrollDelta;
       dispatchScroll(root);
       viewer.render(true);
 
-      expect(viewer.getScrollTop()).toBe(12_100_000);
+      expect(viewer.getScrollTop()).toBe(PAST_REBASE_SCROLL_TOP + scrollDelta);
 
       viewer.scrollTo({
         type: 'item',
@@ -209,7 +228,9 @@ describe('CodeView scroll anchoring', () => {
 
       const container = root.firstElementChild;
       expect(container).toBeInstanceOf(HTMLElement);
-      expect((container as HTMLElement).style.height).toBe('12000000px');
+      expect((container as HTMLElement).style.height).toBe(
+        `${SCROLL_REBASE_CONTAINER_HEIGHT}px`
+      );
 
       viewer.setItems([]);
       expect((container as HTMLElement).style.height).toBe('');
@@ -217,8 +238,12 @@ describe('CodeView scroll anchoring', () => {
       await renderItems(viewer, secondItems);
 
       expect(viewer.getScrollHeight()).toBeGreaterThan(20_000_000);
-      expect((container as HTMLElement).style.height).toBe('12000000px');
-      expect(getRootMaxScrollTop(root)).toBeGreaterThan(11_000_000);
+      expect((container as HTMLElement).style.height).toBe(
+        `${SCROLL_REBASE_CONTAINER_HEIGHT}px`
+      );
+      expect(getRootMaxScrollTop(root)).toBeGreaterThan(
+        SCROLL_REBASE_THRESHOLD
+      );
     } finally {
       viewer.cleanUp();
       await wait(0);
@@ -265,15 +290,24 @@ describe('CodeView scroll anchoring', () => {
 
       viewer.scrollTo({
         type: 'position',
-        position: 11_100_000,
+        position: PAST_REBASE_SCROLL_TOP,
         behavior: 'instant',
       });
       viewer.render(true);
 
-      const rebaseWrite = scrollWrites.find((write) => write.top === 2_000_000);
+      const rebaseWrite = scrollWrites.find(
+        (write) => write.top === SCROLL_REBASE_TARGET_TOP
+      );
       expect(rebaseWrite).toBeDefined();
-      expect(rebaseWrite?.spacerHeight).toBeGreaterThan(1_900_000);
-      expect(rebaseWrite?.spacerHeight).toBeLessThan(2_100_000);
+      // The spacer height tracks where the rendered window starts, which must
+      // already sit near the rebase target when the scroll write happens.
+      const spacerTolerance = 100_000;
+      expect(rebaseWrite?.spacerHeight).toBeGreaterThan(
+        SCROLL_REBASE_TARGET_TOP - spacerTolerance
+      );
+      expect(rebaseWrite?.spacerHeight).toBeLessThan(
+        SCROLL_REBASE_TARGET_TOP + spacerTolerance
+      );
     } finally {
       viewer.cleanUp();
       await wait(0);

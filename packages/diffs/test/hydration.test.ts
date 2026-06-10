@@ -18,7 +18,11 @@ import {
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import type { Virtualizer } from '../src/components/Virtualizer';
+import { DEFAULT_VIRTUAL_FILE_METRICS } from '../src/constants';
 import type { FileContents, FileDiffMetadata } from '../src/types';
+import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import { splitFileContents } from '../src/utils/splitFileContents';
+import { assertDefined } from './testUtils';
 
 function installDomConstructors() {
   class FakeHTMLElement {
@@ -191,6 +195,16 @@ function createVirtualizer() {
   };
 }
 
+// Mirrors the virtualized placeholder height estimate for the default options
+// used in these tests: the header region (diffHeaderHeight with no top padding
+// because the file header is enabled), one lineHeight per content row, and the
+// bottom padding (spacing).
+function getExpectedPlaceholderHeight(rowCount: number): string {
+  const { diffHeaderHeight, lineHeight, spacing } =
+    DEFAULT_VIRTUAL_FILE_METRICS;
+  return `${diffHeaderHeight + rowCount * lineHeight + spacing}px`;
+}
+
 function getPlaceholderHeight(fileContainer: HTMLElement): string | undefined {
   const placeholder = Array.from(fileContainer.shadowRoot?.children ?? []).find(
     (element) =>
@@ -206,6 +220,11 @@ function getPlaceholderHeight(fileContainer: HTMLElement): string | undefined {
 const file: FileContents = {
   name: 'file.ts',
   contents: 'const value = 1;\n',
+};
+
+const modifiedFile: FileContents = {
+  ...file,
+  contents: 'const value = 2;\n',
 };
 
 const unresolvedFile: FileContents = {
@@ -304,7 +323,14 @@ describe('collapsed hydration', () => {
       instance.hydrate(props);
 
       expect(virtualizerState.connectCalls).toBe(1);
-      expect(getPlaceholderHeight(fileContainer)).not.toBe('0px');
+      const placeholderHeight = getPlaceholderHeight(fileContainer);
+      assertDefined(
+        placeholderHeight,
+        'expected hydration to render a placeholder for the off-screen file'
+      );
+      expect(placeholderHeight).toBe(
+        getExpectedPlaceholderHeight(splitFileContents(file.contents).length)
+      );
     } finally {
       dom.cleanup();
     }
@@ -383,17 +409,25 @@ describe('collapsed hydration', () => {
       const fileContainer = dom.createHydrationContainer();
       const props: FileDiffHydrationProps<undefined> = {
         oldFile: file,
-        newFile: {
-          ...file,
-          contents: 'const value = 2;\n',
-        },
+        newFile: modifiedFile,
         fileContainer,
       };
 
       instance.hydrate(props);
 
       expect(virtualizerState.connectCalls).toBe(1);
-      expect(getPlaceholderHeight(fileContainer)).not.toBe('0px');
+      const placeholderHeight = getPlaceholderHeight(fileContainer);
+      assertDefined(
+        placeholderHeight,
+        'expected hydration to render a placeholder for the off-screen file diff'
+      );
+      // The default diff style is split, so the placeholder reserves one row
+      // per split line of the parsed old/new diff.
+      expect(placeholderHeight).toBe(
+        getExpectedPlaceholderHeight(
+          parseDiffFromFile(file, modifiedFile).splitLineCount
+        )
+      );
     } finally {
       dom.cleanup();
     }

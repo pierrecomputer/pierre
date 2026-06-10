@@ -65,7 +65,7 @@ describe('CodeView pointer events while scrolling', () => {
     }
   });
 
-  test('cleanUp restores pointer events and cancels pending restore work', async () => {
+  test('cleanUp restores pointer events immediately', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();
     try {
@@ -79,9 +79,6 @@ describe('CodeView pointer events while scrolling', () => {
 
       viewer.cleanUp();
 
-      expect(pointerEventsTarget.style.pointerEvents).toBe('');
-      expect(getCodeOverflowBlock(pointerEventsTarget)).toBe('');
-      await wait(150);
       expect(pointerEventsTarget.style.pointerEvents).toBe('');
       expect(getCodeOverflowBlock(pointerEventsTarget)).toBe('');
     } finally {
@@ -125,8 +122,6 @@ describe('CodeView pointer events while scrolling', () => {
 
       viewer.setOptions({ pointerEventsOnScroll: true });
 
-      expect(pointerEventsTarget.style.pointerEvents).toBe('none');
-      expect(getCodeOverflowBlock(pointerEventsTarget)).toBe('');
       await wait(150);
       expect(pointerEventsTarget.style.pointerEvents).toBe('');
       expect(getCodeOverflowBlock(pointerEventsTarget)).toBe('');

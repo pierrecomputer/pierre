@@ -13,7 +13,7 @@ import {
 import { UnresolvedFileHunksRenderer } from '../src/renderers/UnresolvedFileHunksRenderer';
 import { createGutterGap, createHastElement } from '../src/utils/hast_utils';
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
-import { assertDefined, isHastElement } from './testUtils';
+import { assertDefined, collectAllElements, isHastElement } from './testUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -64,25 +64,6 @@ function getTopLevelBufferIndex(rows: ElementContent[]): number {
       isHastElement(row) && row.properties?.['data-content-buffer'] != null
     );
   });
-}
-
-function findFirstElementWithProperty(
-  rows: ElementContent[],
-  property: string
-): ElementContent | undefined {
-  for (const row of rows) {
-    if (!isHastElement(row)) {
-      continue;
-    }
-    if (row.properties?.[property] != null) {
-      return row;
-    }
-    const child = findFirstElementWithProperty(row.children, property);
-    if (child != null) {
-      return child;
-    }
-  }
-  return undefined;
 }
 
 class UnifiedInjectedRowTestRenderer extends DiffHunksRenderer {
@@ -218,9 +199,8 @@ describe('injected row hooks', () => {
         row.properties?.['data-merge-conflict-actions'] != null
       );
     });
-    const actionButton = findFirstElementWithProperty(
-      result.unifiedContentAST,
-      'data-merge-conflict-action'
+    const actionButtons = collectAllElements(result.unifiedContentAST).filter(
+      (el) => el.properties?.['data-merge-conflict-action'] != null
     );
     const actionAnchorIndex = getTopLevelLineIndex(result.unifiedContentAST, 1);
     const markerRows = result.unifiedContentAST.filter((row) => {
@@ -230,12 +210,30 @@ describe('injected row hooks', () => {
       );
     });
 
+    // The fixture declares one conflict region with three marker lines
+    // (<<<<<<<, =======, >>>>>>>), so the parser reports one action row and
+    // three marker rows; the renderer must emit exactly those rows on top of
+    // the diff's own unified lines.
+    expect(actions).toHaveLength(1);
+    expect(conflictMarkerRows).toHaveLength(3);
+    expect(markerRows).toHaveLength(conflictMarkerRows.length);
     expect(result.rowCount).toBe(
-      fileDiff.unifiedLineCount + actions.length + markerRows.length
+      fileDiff.unifiedLineCount + actions.length + conflictMarkerRows.length
     );
-    expect(markerRows).toHaveLength(3);
     expect(actionRowIndex).toBe(actionAnchorIndex + 1);
-    assertDefined(actionButton, 'expected merge conflict action button');
-    expect(isHastElement(actionButton)).toBe(true);
+    // The action row carries the three default resolution buttons, each tagged
+    // with the conflict (index 0, the fixture's only one) it resolves.
+    expect(
+      actionButtons.map((button) => ({
+        tagName: button.tagName,
+        action: button.properties?.['data-merge-conflict-action'],
+        conflictIndex:
+          button.properties?.['data-merge-conflict-conflict-index'],
+      }))
+    ).toEqual([
+      { tagName: 'button', action: 'current', conflictIndex: '0' },
+      { tagName: 'button', action: 'incoming', conflictIndex: '0' },
+      { tagName: 'button', action: 'both', conflictIndex: '0' },
+    ]);
   });
 });

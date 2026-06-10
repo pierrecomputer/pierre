@@ -75,14 +75,14 @@ function makeFile(lineCount = 10): FileContents {
   };
 }
 
-// A window entirely below the item: its content is below, so the header
-// renders at the item's top.
+// A window entirely above the item: the item's content is below the window,
+// so the header renders at the item's top.
 function trailingWindow() {
   return { top: 0, bottom: ITEM_TOP - 1 };
 }
 
-// A window entirely above the item: its content is above, so the header must
-// sit at the item's bottom so the next item connects.
+// A window entirely below the item: the item's content is above the window,
+// so the header must sit at the item's bottom so the next item connects.
 function leadingWindow(height: number) {
   return { top: ITEM_TOP + height + 1, bottom: ITEM_TOP + height + 100 };
 }

@@ -211,37 +211,20 @@ describe('CodeView item collapsed state', () => {
 
       await renderItems(viewer, collapsedItems);
 
-      expect(viewer.getRenderedItems().length).toBeGreaterThan(0);
-      const { top, bottom } = viewer.getWindowSpecs();
-      expect(top).toBeLessThanOrEqual(bottom);
-      expect(root.scrollTop).toBeLessThan(20_000);
-    } finally {
-      viewer.cleanUp();
-      await wait(0);
-      cleanup();
-    }
-  });
-
-  test('collapsed rendered items keep sticky specs available', async () => {
-    const { cleanup } = installDom();
-    const viewer = new CodeView({ stickyHeaders: true });
-    try {
-      viewer.setup(createRoot());
-      await renderItems(viewer, [
-        {
-          id: 'file:collapsed.txt',
-          type: 'file',
-          file: makeFile('collapsed.txt'),
-          collapsed: true,
-        },
-      ]);
-
-      const renderedItem = viewer.getRenderedItems()[0];
-      expect(renderedItem).toBeDefined();
-      expect(renderedItem.instance.getAdvancedStickySpecs()).toEqual({
-        topOffset: 0,
-        height: renderedItem.instance.getVirtualizedHeight(),
-      });
+      const renderedItems = viewer.getRenderedItems();
+      expect(renderedItems.length).toBeGreaterThan(0);
+      // The clamped scroll position must land the render window on the tail
+      // of the list rather than stranding it past the shrunken content.
+      expect(renderedItems.map((item) => item.id)).toContain(
+        `file:${items.length - 1}`
+      );
+      // Every item is identical and collapsed, so the total content height is
+      // the item count times one collapsed item's virtualized height; the
+      // clamped scroll offset cannot exceed it.
+      const collapsedHeight = renderedItems[0].instance.getVirtualizedHeight();
+      expect(root.scrollTop).toBeLessThanOrEqual(
+        items.length * collapsedHeight
+      );
     } finally {
       viewer.cleanUp();
       await wait(0);

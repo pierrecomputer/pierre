@@ -75,6 +75,12 @@ describe('CodeView range scrolling', () => {
       viewer.render(true);
       const lineScrollTop = root.scrollTop;
 
+      // Anchor the equivalence on the exact derived center position so it
+      // cannot pass vacuously with both scroll paths silently no-oping at 0.
+      const lineTop = getViewportTopForLocalTop(getFileLineTop(50));
+      const lineHeight = DEFAULT_CODE_VIEW_FILE_METRICS.lineHeight;
+      expect(lineScrollTop).toBe(lineTop - (ROOT_HEIGHT - lineHeight) / 2);
+
       viewer.scrollTo({ type: 'position', position: 0, behavior: 'instant' });
       viewer.render(true);
 

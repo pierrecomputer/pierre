@@ -15,7 +15,12 @@ async function waitForRenderedCode(container: HTMLElement): Promise<void> {
 }
 
 describe('FileDiff partial render', () => {
-  test('keeps split columns aligned when trimming annotated deleted lines', async () => {
+  // Crash regression guard: re-rendering a narrower range over an annotated
+  // deleted line exercises the partial-render trim path. disableErrorHandling
+  // surfaces applyPartialRender's internal invariant errors as throws, so the
+  // not.toThrow assertion catches trim crashes. It does not inspect the
+  // resulting DOM, so column alignment itself is not verified here.
+  test('re-rendering a narrower range over an annotated deleted line does not throw', async () => {
     const { cleanup } = installDom();
     let instance: FileDiff<string> | undefined;
     try {

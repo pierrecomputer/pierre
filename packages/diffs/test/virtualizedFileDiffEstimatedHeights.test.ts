@@ -10,6 +10,10 @@ import type {
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 
+// Mirrors LAYOUT_CHECKPOINT_INTERVAL in src/components/VirtualizedFileDiff.ts:
+// the source emits one layout checkpoint per this many diff rows.
+const LAYOUT_CHECKPOINT_INTERVAL = 5_000;
+
 const metrics: VirtualFileMetrics = {
   ...DEFAULT_CODE_VIEW_FILE_METRICS,
   hunkLineCount: 2,
@@ -431,7 +435,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     });
     expect(inspect(instance).cache.totalLines).toBe(lineCount);
     expect(inspect(instance).cache.checkpoints.length).toBe(
-      Math.floor((lineCount - 1) / 5_000) + 1
+      Math.floor((lineCount - 1) / LAYOUT_CHECKPOINT_INTERVAL) + 1
     );
   });
 });
