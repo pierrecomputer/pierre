@@ -670,6 +670,7 @@ function splitUnifiedDiffFiles(contents: string): string[] {
   let lineStartIndex = 0;
   let remainingDeletionLines = 0;
   let remainingAdditionLines = 0;
+  let hasOpenedUnifiedFile = false;
 
   while (lineStartIndex < contents.length) {
     const nextLineStartIndex = getNextLineStartIndex(contents, lineStartIndex);
@@ -679,11 +680,12 @@ function splitUnifiedDiffFiles(contents: string): string[] {
           parts.push(contents.slice(partStartIndex, lineStartIndex));
         }
         partStartIndex = lineStartIndex;
+        hasOpenedUnifiedFile = true;
         lineStartIndex = getNextLineStartIndex(contents, nextLineStartIndex);
         continue;
       }
 
-      if (contents.startsWith('@@ -', lineStartIndex)) {
+      if (hasOpenedUnifiedFile && contents.startsWith('@@ -', lineStartIndex)) {
         const fileHeader = parseHunkHeader(
           contents.slice(lineStartIndex, nextLineStartIndex)
         );

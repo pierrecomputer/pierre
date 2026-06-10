@@ -137,6 +137,29 @@ describe('parsePatchFiles', () => {
     }
   });
 
+  test('ignores hunk-looking patch metadata before unified file headers', () => {
+    const result = parsePatchFiles(
+      [
+        'Patch metadata mentions @@ -1 +1 @@ before the file header.\n',
+        '@@ -1 +1 @@ is here.\n',
+        '\n',
+        '--- metadata.txt\n',
+        '+++ metadata.txt\n',
+        '@@ -1 +1 @@\n',
+        '-old line\n',
+        '+new line\n',
+      ].join(''),
+      undefined,
+      true
+    );
+
+    expect(result[0]?.patchMetadata).toBe(
+      'Patch metadata mentions @@ -1 +1 @@ before the file header.\n@@ -1 +1 @@ is here.\n\n'
+    );
+    expect(result[0]?.files).toHaveLength(1);
+    expect(result[0]?.files[0]?.name).toBe('metadata.txt');
+  });
+
   test('parses deleted SQL comment lines as hunk content in unified patches', () => {
     const result = parsePatchFiles(
       [
