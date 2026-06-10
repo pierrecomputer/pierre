@@ -1,89 +1,23 @@
 import { describe, expect, test } from 'bun:test';
-import { JSDOM } from 'jsdom';
 
 import { CodeView } from '../src/components/CodeView';
 import { DEFAULT_CODE_VIEW_LAYOUT } from '../src/constants';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import {
+  dispatchScroll,
+  installDom,
+  makeFile,
+  makeFileItem,
+  renderItems,
+  wait,
+} from './domHarness';
 
 const ROOT_HEIGHT = 800;
 
-function installDom() {
-  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
-    url: 'http://localhost',
-  });
-  const originalValues = {
-    cancelAnimationFrame: Reflect.get(globalThis, 'cancelAnimationFrame'),
-    document: Reflect.get(globalThis, 'document'),
-    DocumentFragment: Reflect.get(globalThis, 'DocumentFragment'),
-    Element: Reflect.get(globalThis, 'Element'),
-    HTMLDivElement: Reflect.get(globalThis, 'HTMLDivElement'),
-    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
-    HTMLPreElement: Reflect.get(globalThis, 'HTMLPreElement'),
-    Node: Reflect.get(globalThis, 'Node'),
-    requestAnimationFrame: Reflect.get(globalThis, 'requestAnimationFrame'),
-    ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
-    SVGElement: Reflect.get(globalThis, 'SVGElement'),
-    window: Reflect.get(globalThis, 'window'),
-  };
-
-  class MockResizeObserver {
-    observe(_target: Element): void {}
-    unobserve(_target: Element): void {}
-    disconnect(): void {}
-  }
-
-  let nextFrameId = 0;
-  const frames = new Map<number, ReturnType<typeof setTimeout>>();
-
-  Object.assign(globalThis, {
-    cancelAnimationFrame: ((id: number) => {
-      const timeout = frames.get(id);
-      if (timeout != null) {
-        clearTimeout(timeout);
-        frames.delete(id);
-      }
-    }) as typeof cancelAnimationFrame,
-    document: dom.window.document,
-    DocumentFragment: dom.window.DocumentFragment,
-    Element: dom.window.Element,
-    HTMLDivElement: dom.window.HTMLDivElement,
-    HTMLElement: dom.window.HTMLElement,
-    HTMLPreElement: dom.window.HTMLPreElement,
-    Node: dom.window.Node,
-    requestAnimationFrame: ((callback: FrameRequestCallback) => {
-      const id = ++nextFrameId;
-      const timeout = setTimeout(() => {
-        frames.delete(id);
-        callback(performance.now());
-      }, 0);
-      frames.set(id, timeout);
-      return id;
-    }) as typeof requestAnimationFrame,
-    ResizeObserver: MockResizeObserver,
-    SVGElement: dom.window.SVGElement,
-    window: dom.window,
-  });
-
-  return {
-    cleanup() {
-      for (const timeout of frames.values()) {
-        clearTimeout(timeout);
-      }
-      frames.clear();
-
-      for (const [key, value] of Object.entries(originalValues)) {
-        if (value === undefined) {
-          Reflect.deleteProperty(globalThis, key);
-        } else {
-          Object.assign(globalThis, { [key]: value });
-        }
-      }
-      dom.window.close();
-    },
-  };
-}
-
+// Unlike the shared createRoot, this root clamps scrollTop writes to the
+// container's current max scroll range, mimicking real browser behavior so
+// rebase/anchoring logic can be exercised.
 function createClampingRoot(): HTMLDivElement {
   const root = document.createElement('div');
   root.scrollTo = (options?: ScrollToOptions | number, y?: number) => {
@@ -128,37 +62,11 @@ function getRootMaxScrollTop(root: HTMLElement): number {
   return Math.max(contentHeight + marginTop + marginBottom - ROOT_HEIGHT, 0);
 }
 
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function dispatchScroll(root: HTMLElement): void {
-  root.dispatchEvent(new window.Event('scroll'));
-}
-
 function getScrollToTop(
   options?: ScrollToOptions | number,
   y?: number
 ): number {
   return typeof options === 'number' ? (y ?? 0) : (options?.top ?? 0);
-}
-
-function makeFile(name: string, lineCount: number): FileContents {
-  return {
-    name,
-    contents: Array.from(
-      { length: lineCount },
-      (_, index) => `line ${index + 1}`
-    ).join('\n'),
-  };
-}
-
-function makeFileItem(id: string, lineCount: number): CodeViewItem<undefined> {
-  return {
-    id,
-    type: 'file',
-    file: makeFile(`${id}.ts`, lineCount),
-  };
 }
 
 function makeReplacementDiffItem(
@@ -179,15 +87,6 @@ function makeReplacementDiffItem(
     type: 'diff',
     fileDiff: parseDiffFromFile(oldFile, newFile),
   };
-}
-
-async function renderItems(
-  viewer: CodeView,
-  items: readonly CodeViewItem[]
-): Promise<void> {
-  viewer.setItems(items);
-  viewer.render(true);
-  await wait(0);
 }
 
 describe('CodeView scroll anchoring', () => {

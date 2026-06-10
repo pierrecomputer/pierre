@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { JSDOM } from 'jsdom';
 
 import { CodeView } from '../src/components/CodeView';
 import { File } from '../src/components/File';
@@ -12,122 +11,18 @@ import type {
   FileDiffMetadata,
   PostRenderPhase,
 } from '../src/types';
-
-function installDom() {
-  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
-    url: 'http://localhost',
-  });
-  const originalValues = {
-    cancelAnimationFrame: Reflect.get(globalThis, 'cancelAnimationFrame'),
-    document: Reflect.get(globalThis, 'document'),
-    DocumentFragment: Reflect.get(globalThis, 'DocumentFragment'),
-    Element: Reflect.get(globalThis, 'Element'),
-    HTMLDivElement: Reflect.get(globalThis, 'HTMLDivElement'),
-    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
-    HTMLPreElement: Reflect.get(globalThis, 'HTMLPreElement'),
-    HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
-    Node: Reflect.get(globalThis, 'Node'),
-    requestAnimationFrame: Reflect.get(globalThis, 'requestAnimationFrame'),
-    ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
-    SVGElement: Reflect.get(globalThis, 'SVGElement'),
-    window: Reflect.get(globalThis, 'window'),
-  };
-
-  class MockResizeObserver {
-    observe(_target: Element): void {}
-    unobserve(_target: Element): void {}
-    disconnect(): void {}
-  }
-
-  let nextFrameId = 0;
-  const frames = new Map<number, ReturnType<typeof setTimeout>>();
-
-  Object.assign(globalThis, {
-    cancelAnimationFrame: ((id: number) => {
-      const timeout = frames.get(id);
-      if (timeout != null) {
-        clearTimeout(timeout);
-        frames.delete(id);
-      }
-    }) as typeof cancelAnimationFrame,
-    document: dom.window.document,
-    DocumentFragment: dom.window.DocumentFragment,
-    Element: dom.window.Element,
-    HTMLDivElement: dom.window.HTMLDivElement,
-    HTMLElement: dom.window.HTMLElement,
-    HTMLPreElement: dom.window.HTMLPreElement,
-    HTMLStyleElement: dom.window.HTMLStyleElement,
-    Node: dom.window.Node,
-    requestAnimationFrame: ((callback: FrameRequestCallback) => {
-      const id = ++nextFrameId;
-      const timeout = setTimeout(() => {
-        frames.delete(id);
-        callback(performance.now());
-      }, 0);
-      frames.set(id, timeout);
-      return id;
-    }) as typeof requestAnimationFrame,
-    ResizeObserver: MockResizeObserver,
-    SVGElement: dom.window.SVGElement,
-    window: dom.window,
-  });
-
-  return {
-    cleanup() {
-      for (const timeout of frames.values()) {
-        clearTimeout(timeout);
-      }
-      frames.clear();
-
-      for (const [key, value] of Object.entries(originalValues)) {
-        if (value === undefined) {
-          Reflect.deleteProperty(globalThis, key);
-        } else {
-          Object.assign(globalThis, { [key]: value });
-        }
-      }
-      dom.window.close();
-    },
-  };
-}
+import {
+  createRoot,
+  dispatchScroll,
+  installDom,
+  renderItems,
+  wait,
+} from './domHarness';
 
 function createHydrationContainer(): HTMLElement {
   const container = document.createElement('div');
   container.attachShadow({ mode: 'open' });
   return container;
-}
-
-function createRoot(height: number): HTMLDivElement {
-  const root = document.createElement('div');
-  root.scrollTo = (options?: ScrollToOptions | number, y?: number) => {
-    root.scrollTop =
-      typeof options === 'number' ? (y ?? 0) : (options?.top ?? root.scrollTop);
-  };
-  Object.defineProperty(root, 'getBoundingClientRect', {
-    value: () => ({
-      bottom: height,
-      height,
-      left: 0,
-      right: 1000,
-      top: 0,
-      width: 1000,
-      x: 0,
-      y: 0,
-      toJSON() {
-        return {};
-      },
-    }),
-  });
-  document.body.appendChild(root);
-  return root;
-}
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function dispatchScroll(root: HTMLElement): void {
-  root.dispatchEvent(new window.Event('scroll'));
 }
 
 function makeFile(
@@ -154,15 +49,6 @@ function makeFileItem(
     type: 'file',
     file: makeFile(`${id}.ts`, label, lineCount),
   };
-}
-
-async function renderItems(
-  viewer: CodeView,
-  items: readonly CodeViewItem[]
-): Promise<void> {
-  viewer.setItems(items);
-  viewer.render(true);
-  await wait(0);
 }
 
 async function waitForPhases(
@@ -395,7 +281,7 @@ describe('onPostRender phases', () => {
         phases.push({ id: context.item.id, phase });
       },
     });
-    const root = createRoot(120);
+    const root = createRoot({ height: 120 });
     const items = [
       makeFileItem('file:first', 'first content', 100),
       makeFileItem('file:second', 'second content', 100),

@@ -1,143 +1,23 @@
 import { describe, expect, test } from 'bun:test';
-import { JSDOM } from 'jsdom';
 
 import { CodeView } from '../src/components/CodeView';
 import {
   DEFAULT_CODE_VIEW_FILE_METRICS,
   DEFAULT_CODE_VIEW_LAYOUT,
 } from '../src/constants';
-import type { CodeViewItem, FileContents } from '../src/types';
+import type { CodeViewItem } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import {
+  createRoot,
+  dispatchScroll,
+  installDom,
+  makeFileItem,
+  renderItems,
+  wait,
+} from './domHarness';
 
 const ROOT_HEIGHT = 800;
 const ROOT_WIDTH = 1000;
-
-function installDom() {
-  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
-    url: 'http://localhost',
-  });
-  const originalValues = {
-    cancelAnimationFrame: Reflect.get(globalThis, 'cancelAnimationFrame'),
-    document: Reflect.get(globalThis, 'document'),
-    DocumentFragment: Reflect.get(globalThis, 'DocumentFragment'),
-    Element: Reflect.get(globalThis, 'Element'),
-    HTMLDivElement: Reflect.get(globalThis, 'HTMLDivElement'),
-    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
-    HTMLPreElement: Reflect.get(globalThis, 'HTMLPreElement'),
-    Node: Reflect.get(globalThis, 'Node'),
-    requestAnimationFrame: Reflect.get(globalThis, 'requestAnimationFrame'),
-    ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
-    SVGElement: Reflect.get(globalThis, 'SVGElement'),
-    window: Reflect.get(globalThis, 'window'),
-  };
-
-  class MockResizeObserver {
-    observe(_target: Element): void {}
-    unobserve(_target: Element): void {}
-    disconnect(): void {}
-  }
-
-  let nextFrameId = 0;
-  const frames = new Map<number, ReturnType<typeof setTimeout>>();
-
-  Object.assign(globalThis, {
-    cancelAnimationFrame: ((id: number) => {
-      const timeout = frames.get(id);
-      if (timeout != null) {
-        clearTimeout(timeout);
-        frames.delete(id);
-      }
-    }) as typeof cancelAnimationFrame,
-    document: dom.window.document,
-    DocumentFragment: dom.window.DocumentFragment,
-    Element: dom.window.Element,
-    HTMLDivElement: dom.window.HTMLDivElement,
-    HTMLElement: dom.window.HTMLElement,
-    HTMLPreElement: dom.window.HTMLPreElement,
-    Node: dom.window.Node,
-    requestAnimationFrame: ((callback: FrameRequestCallback) => {
-      const id = ++nextFrameId;
-      const timeout = setTimeout(() => {
-        frames.delete(id);
-        callback(performance.now());
-      }, 0);
-      frames.set(id, timeout);
-      return id;
-    }) as typeof requestAnimationFrame,
-    ResizeObserver: MockResizeObserver,
-    SVGElement: dom.window.SVGElement,
-    window: dom.window,
-  });
-
-  return {
-    cleanup() {
-      for (const timeout of frames.values()) {
-        clearTimeout(timeout);
-      }
-      frames.clear();
-
-      for (const [key, value] of Object.entries(originalValues)) {
-        if (value === undefined) {
-          Reflect.deleteProperty(globalThis, key);
-        } else {
-          Object.assign(globalThis, { [key]: value });
-        }
-      }
-      dom.window.close();
-    },
-  };
-}
-
-function createRoot(): HTMLDivElement {
-  const root = document.createElement('div');
-  root.scrollTo = (options?: ScrollToOptions | number, y?: number) => {
-    root.scrollTop =
-      typeof options === 'number' ? (y ?? 0) : (options?.top ?? root.scrollTop);
-  };
-  Object.defineProperty(root, 'getBoundingClientRect', {
-    value: () => ({
-      bottom: ROOT_HEIGHT,
-      height: ROOT_HEIGHT,
-      left: 0,
-      right: ROOT_WIDTH,
-      top: 0,
-      width: ROOT_WIDTH,
-      x: 0,
-      y: 0,
-      toJSON() {
-        return {};
-      },
-    }),
-  });
-  document.body.appendChild(root);
-  return root;
-}
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function dispatchScroll(root: HTMLElement): void {
-  root.dispatchEvent(new window.Event('scroll'));
-}
-
-function makeFile(name: string, lineCount: number): FileContents {
-  return {
-    name,
-    contents: Array.from(
-      { length: lineCount },
-      (_, index) => `line ${index + 1}`
-    ).join('\n'),
-  };
-}
-
-function makeFileItem(id: string, lineCount: number): CodeViewItem<undefined> {
-  return {
-    id,
-    type: 'file',
-    file: makeFile(`${id}.ts`, lineCount),
-  };
-}
 
 function makeInsertedDiffItem(id: string): CodeViewItem<undefined> {
   const oldLines = Array.from(
@@ -164,15 +44,6 @@ function makeInsertedDiffItem(id: string): CodeViewItem<undefined> {
   };
 }
 
-async function renderItems(
-  viewer: CodeView,
-  items: readonly CodeViewItem[]
-): Promise<void> {
-  viewer.setItems(items);
-  viewer.render(true);
-  await wait(0);
-}
-
 function getFileLineTop(lineNumber: number): number {
   return (
     DEFAULT_CODE_VIEW_FILE_METRICS.diffHeaderHeight +
@@ -188,7 +59,7 @@ describe('CodeView range scrolling', () => {
   test('scrolls a single-line range to the same position as a line target', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();
-    const root = createRoot();
+    const root = createRoot({ height: ROOT_HEIGHT, width: ROOT_WIDTH });
 
     try {
       viewer.setup(root);
@@ -227,7 +98,7 @@ describe('CodeView range scrolling', () => {
   test('centers a multi-line range as a single region', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();
-    const root = createRoot();
+    const root = createRoot({ height: ROOT_HEIGHT, width: ROOT_WIDTH });
 
     try {
       viewer.setup(root);
@@ -256,7 +127,7 @@ describe('CodeView range scrolling', () => {
   test('keeps nearest alignment still when the full range is visible', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();
-    const root = createRoot();
+    const root = createRoot({ height: ROOT_HEIGHT, width: ROOT_WIDTH });
 
     try {
       viewer.setup(root);
@@ -286,7 +157,7 @@ describe('CodeView range scrolling', () => {
   test('moves nearest alignment when the range starts above the viewport', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();
-    const root = createRoot();
+    const root = createRoot({ height: ROOT_HEIGHT, width: ROOT_WIDTH });
 
     try {
       viewer.setup(root);
@@ -318,7 +189,7 @@ describe('CodeView range scrolling', () => {
   test('falls back to start alignment when a centered range is taller than the viewport', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();
-    const root = createRoot();
+    const root = createRoot({ height: ROOT_HEIGHT, width: ROOT_WIDTH });
 
     try {
       viewer.setup(root);
@@ -346,7 +217,7 @@ describe('CodeView range scrolling', () => {
   test('resolves split-view range endpoints against their requested sides', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({ diffStyle: 'split', expandUnchanged: true });
-    const root = createRoot();
+    const root = createRoot({ height: ROOT_HEIGHT, width: ROOT_WIDTH });
 
     try {
       viewer.setup(root);

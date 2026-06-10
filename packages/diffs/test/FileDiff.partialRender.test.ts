@@ -1,56 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { JSDOM } from 'jsdom';
 
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
 import type { DiffLineAnnotation } from '../src/types';
-
-function installDom() {
-  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
-    url: 'http://localhost',
-  });
-  const originalValues = {
-    document: Reflect.get(globalThis, 'document'),
-    Element: Reflect.get(globalThis, 'Element'),
-    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
-    HTMLPreElement: Reflect.get(globalThis, 'HTMLPreElement'),
-    HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
-    Node: Reflect.get(globalThis, 'Node'),
-    ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
-    SVGElement: Reflect.get(globalThis, 'SVGElement'),
-    window: Reflect.get(globalThis, 'window'),
-  };
-
-  class MockResizeObserver {
-    observe(_target: Element): void {}
-    unobserve(_target: Element): void {}
-    disconnect(): void {}
-  }
-
-  Object.assign(globalThis, {
-    document: dom.window.document,
-    Element: dom.window.Element,
-    HTMLElement: dom.window.HTMLElement,
-    HTMLPreElement: dom.window.HTMLPreElement,
-    HTMLStyleElement: dom.window.HTMLStyleElement,
-    Node: dom.window.Node,
-    ResizeObserver: MockResizeObserver,
-    SVGElement: dom.window.SVGElement,
-    window: dom.window,
-  });
-
-  return {
-    cleanup() {
-      for (const [key, value] of Object.entries(originalValues)) {
-        if (value === undefined) {
-          Reflect.deleteProperty(globalThis, key);
-        } else {
-          Object.assign(globalThis, { [key]: value });
-        }
-      }
-      dom.window.close();
-    },
-  };
-}
+import { installDom } from './domHarness';
 
 async function waitForRenderedCode(container: HTMLElement): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {

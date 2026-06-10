@@ -1,146 +1,18 @@
 import { describe, expect, test } from 'bun:test';
-import { JSDOM } from 'jsdom';
 
 import { CodeView } from '../src/components/CodeView';
 import { DEFAULT_THEMES } from '../src/constants';
-import type { CodeViewItem, FileContents } from '../src/types';
+import type { CodeViewItem } from '../src/types';
+import {
+  createRoot,
+  installDom,
+  makeFile,
+  renderItems,
+  wait,
+} from './domHarness';
 
-function installDom() {
-  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
-    url: 'http://localhost',
-  });
-  const originalValues = {
-    cancelAnimationFrame: Reflect.get(globalThis, 'cancelAnimationFrame'),
-    document: Reflect.get(globalThis, 'document'),
-    Element: Reflect.get(globalThis, 'Element'),
-    HTMLDivElement: Reflect.get(globalThis, 'HTMLDivElement'),
-    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
-    HTMLPreElement: Reflect.get(globalThis, 'HTMLPreElement'),
-    HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
-    MouseEvent: Reflect.get(globalThis, 'MouseEvent'),
-    Node: Reflect.get(globalThis, 'Node'),
-    PointerEvent: Reflect.get(globalThis, 'PointerEvent'),
-    requestAnimationFrame: Reflect.get(globalThis, 'requestAnimationFrame'),
-    ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
-    SVGElement: Reflect.get(globalThis, 'SVGElement'),
-    window: Reflect.get(globalThis, 'window'),
-  };
-
-  class MockPointerEvent extends dom.window.MouseEvent {
-    pointerId: number;
-    pointerType: string;
-
-    constructor(type: string, init: PointerEventInit = {}) {
-      super(type, {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        ...init,
-      });
-      this.pointerId = init.pointerId ?? 1;
-      this.pointerType = init.pointerType ?? 'mouse';
-    }
-  }
-
-  class MockResizeObserver {
-    observe(_target: Element): void {}
-    unobserve(_target: Element): void {}
-    disconnect(): void {}
-  }
-
-  let nextFrameId = 0;
-  const frames = new Map<number, ReturnType<typeof setTimeout>>();
-
-  Object.assign(globalThis, {
-    cancelAnimationFrame: ((id: number) => {
-      const timeout = frames.get(id);
-      if (timeout != null) {
-        clearTimeout(timeout);
-        frames.delete(id);
-      }
-    }) as typeof cancelAnimationFrame,
-    document: dom.window.document,
-    Element: dom.window.Element,
-    HTMLDivElement: dom.window.HTMLDivElement,
-    HTMLElement: dom.window.HTMLElement,
-    HTMLPreElement: dom.window.HTMLPreElement,
-    HTMLStyleElement: dom.window.HTMLStyleElement,
-    MouseEvent: dom.window.MouseEvent,
-    Node: dom.window.Node,
-    PointerEvent: MockPointerEvent,
-    requestAnimationFrame: ((callback: FrameRequestCallback) => {
-      const id = ++nextFrameId;
-      const timeout = setTimeout(() => {
-        frames.delete(id);
-        callback(performance.now());
-      }, 0);
-      frames.set(id, timeout);
-      return id;
-    }) as typeof requestAnimationFrame,
-    ResizeObserver: MockResizeObserver,
-    SVGElement: dom.window.SVGElement,
-    window: dom.window,
-  });
-  Object.assign(dom.window, { PointerEvent: MockPointerEvent });
-
-  return {
-    cleanup() {
-      for (const timeout of frames.values()) {
-        clearTimeout(timeout);
-      }
-      frames.clear();
-
-      for (const [key, value] of Object.entries(originalValues)) {
-        if (value === undefined) {
-          Reflect.deleteProperty(globalThis, key);
-        } else {
-          Object.assign(globalThis, { [key]: value });
-        }
-      }
-      dom.window.close();
-    },
-  };
-}
-
-function createRoot(): HTMLDivElement {
-  const root = document.createElement('div');
-  root.scrollTo = (options?: ScrollToOptions | number, y?: number) => {
-    root.scrollTop =
-      typeof options === 'number' ? (y ?? 0) : (options?.top ?? root.scrollTop);
-  };
-  Object.defineProperty(root, 'getBoundingClientRect', {
-    value: () => ({
-      bottom: 400,
-      height: 400,
-      left: 0,
-      right: 800,
-      top: 0,
-      width: 800,
-      x: 0,
-      y: 0,
-      toJSON() {
-        return {};
-      },
-    }),
-  });
-  document.body.appendChild(root);
-  return root;
-}
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function makeFile(name: string, lineCount: number): FileContents {
-  return {
-    name,
-    contents: Array.from(
-      { length: lineCount },
-      (_, index) => `line ${index + 1}`
-    ).join('\n'),
-  };
-}
-
+// Differs from the shared makeFileItem: these tests use 8-line .txt fixtures
+// rather than the harness default of 20-line .ts files.
 function makeFileItem(id: string, lineCount = 8): CodeViewItem<undefined> {
   return {
     id,
@@ -150,9 +22,7 @@ function makeFileItem(id: string, lineCount = 8): CodeViewItem<undefined> {
 }
 
 async function renderFileItem(viewer: CodeView, item = makeFileItem('file')) {
-  viewer.setItems([item]);
-  viewer.render(true);
-  await wait(0);
+  await renderItems(viewer, [item]);
 }
 
 function getRenderedPre(viewer: CodeView): HTMLPreElement {
@@ -188,7 +58,7 @@ describe('CodeView interaction option updates', () => {
     });
 
     try {
-      viewer.setup(createRoot());
+      viewer.setup(createRoot({ width: 800, height: 400 }));
       await renderFileItem(viewer);
 
       let pre = getRenderedPre(viewer);
@@ -229,7 +99,7 @@ describe('CodeView interaction option updates', () => {
     });
 
     try {
-      viewer.setup(createRoot());
+      viewer.setup(createRoot({ width: 800, height: 400 }));
       await renderFileItem(viewer);
 
       let pre = getRenderedPre(viewer);
@@ -259,7 +129,7 @@ describe('CodeView interaction option updates', () => {
     });
 
     try {
-      viewer.setup(createRoot());
+      viewer.setup(createRoot({ width: 800, height: 400 }));
       await renderFileItem(viewer);
 
       viewer.setOptions({
@@ -297,7 +167,7 @@ describe('CodeView interaction option updates', () => {
     });
 
     try {
-      viewer.setup(createRoot());
+      viewer.setup(createRoot({ width: 800, height: 400 }));
       await renderFileItem(viewer);
 
       viewer.setOptions({
