@@ -1,69 +1,28 @@
-import { bundledThemes, normalizeTheme } from 'shiki';
-
 import type { DiffsThemeNames, ThemeRegistrationResolved } from '../../types';
-import { isWorkerContext } from '../../utils/isWorkerContext';
 import {
-  RegisteredCustomThemes,
-  ResolvedThemes,
-  ResolvingThemes,
-} from './constants';
+  prepareThemeResolution,
+  validateResolvedThemeName,
+} from './themeResolution';
+import { themeResolver } from './themeResolver';
 
+// Resolves a theme by name to a normalized Shiki theme, delegating the cache,
+// concurrent-load dedupe, normalization, and registry to the shared
+// @pierre/theming resolver. The diffs-specific behavior layered on top:
+//   1. Worker-context guard — themes must be pre-resolved on the main thread
+//      and handed to the worker, which seeds them via attachResolvedThemes.
+//   2. Bundled-theme fallback — a name with no registered loader that matches a
+//      Shiki bundled theme is registered on demand (per-name dynamic import),
+//      so callers never have to pre-register the full Shiki theme set.
+//   3. theme.name validation — the resolved theme's own name must match the
+//      requested name, catching mismatched registrations early.
 export async function resolveTheme(
   themeName: DiffsThemeNames
 ): Promise<ThemeRegistrationResolved> {
-  if (isWorkerContext()) {
-    throw new Error(
-      `resolveTheme("${themeName}") cannot be called from a worker context. ` +
-        'Themes must be pre-resolved on the main thread and passed to the worker via the resolvedLanguages parameter.'
-    );
-  }
+  prepareThemeResolution(themeName);
 
-  const resolver = ResolvingThemes.get(themeName);
-  if (resolver != null) {
-    return resolver;
-  }
+  const theme = await themeResolver.resolveTheme(themeName);
 
-  try {
-    const loader =
-      RegisteredCustomThemes.get(themeName) ??
-      bundledThemes[themeName as keyof typeof bundledThemes];
+  validateResolvedThemeName(themeName, theme);
 
-    if (loader == null) {
-      throw new Error(`resolveTheme: No valid loader for ${themeName}`);
-    }
-
-    const resolver = loader().then((result) => {
-      return normalizeAndCacheResolvedTheme(
-        themeName,
-        ('default' in result
-          ? result.default
-          : result) as ThemeRegistrationResolved
-      );
-    });
-
-    ResolvingThemes.set(themeName, resolver);
-    const theme = await resolver;
-    if (theme.name !== themeName) {
-      throw new Error(
-        `resolvedTheme: themeName: ${themeName} does not match theme.name: ${theme.name}`
-      );
-    }
-    ResolvedThemes.set(theme.name, theme);
-    return theme;
-  } finally {
-    ResolvingThemes.delete(themeName);
-  }
-}
-
-function normalizeAndCacheResolvedTheme(
-  themeName: string,
-  themeData: ThemeRegistrationResolved
-): ThemeRegistrationResolved {
-  const resolvedTheme = ResolvedThemes.get(themeName);
-  if (resolvedTheme != null) {
-    return resolvedTheme;
-  }
-  themeData = normalizeTheme(themeData);
-  ResolvedThemes.set(themeName, themeData);
-  return themeData;
+  return theme;
 }

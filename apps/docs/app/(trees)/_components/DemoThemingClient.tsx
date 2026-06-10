@@ -27,6 +27,7 @@ import { getDefaultFileTreePanelClass } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { FeatureHeader } from '@/components/FeatureHeader';
 import { PierreThemeFootnote } from '@/components/footnotes/PierreThemeFootnote';
+import { docsThemeCatalog } from '@/components/themeCatalog';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -37,78 +38,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PRODUCTS } from '@/lib/product-config';
 
-const LIGHT_THEMES = [
-  'pierre-light',
-  'pierre-light-soft',
-  'catppuccin-latte',
-  'everforest-light',
-  'github-light',
-  'github-light-default',
-  'github-light-high-contrast',
-  'gruvbox-light-hard',
-  'gruvbox-light-medium',
-  'gruvbox-light-soft',
-  'kanagawa-lotus',
-  'light-plus',
-  'material-theme-lighter',
-  'min-light',
-  'one-light',
-  'rose-pine-dawn',
-  'slack-ochin',
-  'snazzy-light',
-  'solarized-light',
-  'vitesse-light',
-] as const;
-
-const DARK_THEMES = [
-  'pierre-dark',
-  'pierre-dark-soft',
-  'andromeeda',
-  'aurora-x',
-  'ayu-dark',
-  'catppuccin-frappe',
-  'catppuccin-macchiato',
-  'catppuccin-mocha',
-  'dark-plus',
-  'dracula',
-  'dracula-soft',
-  'everforest-dark',
-  'github-dark',
-  'github-dark-default',
-  'github-dark-dimmed',
-  'github-dark-high-contrast',
-  'gruvbox-dark-hard',
-  'gruvbox-dark-medium',
-  'gruvbox-dark-soft',
-  'houston',
-  'kanagawa-dragon',
-  'kanagawa-wave',
-  'laserwave',
-  'material-theme',
-  'material-theme-darker',
-  'material-theme-ocean',
-  'material-theme-palenight',
-  'min-dark',
-  'monokai',
-  'night-owl',
-  'nord',
-  'one-dark-pro',
-  'plastic',
-  'poimandres',
-  'red',
-  'rose-pine',
-  'rose-pine-moon',
-  'slack-dark',
-  'solarized-dark',
-  'synthwave-84',
-  'tokyo-night',
-  'vesper',
-  'vitesse-black',
-  'vitesse-dark',
-] as const;
-
-type LightTheme = (typeof LIGHT_THEMES)[number];
-type DarkTheme = (typeof DARK_THEMES)[number];
+type LightThemeName = string;
+type DarkThemeName = string;
 
 interface DemoThemingClientProps {
   initialThemeStyles: TreeThemeStyles;
@@ -129,9 +60,9 @@ export function DemoThemingClient({
     initialVisibleRowCount: TREE_NEW_VIEWPORT_HEIGHTS.theming / 30,
   });
   const [selectedLightTheme, setSelectedLightTheme] =
-    useState<LightTheme>('pierre-light');
+    useState<LightThemeName>('pierre-light');
   const [selectedDarkTheme, setSelectedDarkTheme] =
-    useState<DarkTheme>('pierre-dark');
+    useState<DarkThemeName>('pierre-dark');
   const [colorMode, setColorMode] = useState<'system' | 'light' | 'dark'>(
     'system'
   );
@@ -215,21 +146,23 @@ export function DemoThemingClient({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" scrollSelectedIntoView>
-              {LIGHT_THEMES.map((theme) => (
-                <DropdownMenuItem
-                  key={theme}
-                  onClick={() => {
-                    setSelectedLightTheme(theme);
-                    setColorMode('light');
-                  }}
-                  selected={selectedLightTheme === theme}
-                >
-                  {theme}
-                  {selectedLightTheme === theme ? (
-                    <IconCheck className="ml-auto" />
-                  ) : null}
-                </DropdownMenuItem>
-              ))}
+              {docsThemeCatalog
+                .getThemeNames({ colorScheme: 'light' })
+                .map((theme) => (
+                  <DropdownMenuItem
+                    key={theme}
+                    onClick={() => {
+                      setSelectedLightTheme(theme);
+                      setColorMode('light');
+                    }}
+                    selected={selectedLightTheme === theme}
+                  >
+                    {theme}
+                    {selectedLightTheme === theme ? (
+                      <IconCheck className="ml-auto" />
+                    ) : null}
+                  </DropdownMenuItem>
+                ))}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -246,23 +179,25 @@ export function DemoThemingClient({
               className="max-h-[550px] overflow-auto"
               scrollSelectedIntoView
             >
-              {DARK_THEMES.map((theme) => (
-                <DropdownMenuItem
-                  key={theme}
-                  onClick={() => {
-                    setSelectedDarkTheme(theme);
-                    setColorMode('dark');
-                  }}
-                  selected={selectedDarkTheme === theme}
-                >
-                  {theme}
-                  {selectedDarkTheme === theme ? (
-                    <IconCheck className="ml-auto" />
-                  ) : (
-                    <div className="ml-2 h-4 w-4" />
-                  )}
-                </DropdownMenuItem>
-              ))}
+              {docsThemeCatalog
+                .getThemeNames({ colorScheme: 'dark' })
+                .map((theme) => (
+                  <DropdownMenuItem
+                    key={theme}
+                    onClick={() => {
+                      setSelectedDarkTheme(theme);
+                      setColorMode('dark');
+                    }}
+                    selected={selectedDarkTheme === theme}
+                  >
+                    {theme}
+                    {selectedDarkTheme === theme ? (
+                      <IconCheck className="ml-auto" />
+                    ) : (
+                      <div className="ml-2 h-4 w-4" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

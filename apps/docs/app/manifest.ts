@@ -8,21 +8,16 @@ const SITE = (process.env.NEXT_PUBLIC_SITE ?? 'diffs') as ProductId;
 // prompt and ≥512px splash-screen requirements.
 const APPLE_ICON_SIZE = '640x640';
 
-// diffshub is a full standalone app (viewport-fit cover); diffs and trees are
-// documentation sites that benefit from keeping browser navigation visible.
+// diffs and trees are documentation sites that benefit from keeping browser
+// navigation visible.
 const DISPLAY_BY_SITE: Record<ProductId, MetadataRoute.Manifest['display']> = {
   diffs: 'minimal-ui',
   trees: 'minimal-ui',
-  diffshub: 'standalone',
 };
 
-// diffshub body uses --diffshub-sidebar-bg (#f7f7f7) rather than plain white.
-// The manifest only accepts a single theme_color, so we use the light value;
-// dark-mode tinting is handled via themeColor in the viewport export.
 const THEME_COLOR_BY_SITE: Record<ProductId, string> = {
   diffs: '#ffffff',
   trees: '#ffffff',
-  diffshub: '#f7f7f7',
 };
 
 export default function manifest(): MetadataRoute.Manifest {

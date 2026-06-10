@@ -157,15 +157,7 @@ function TreesIcon() {
   );
 }
 
-// Placeholder hero icon for the diffshub stub microsite. Reuses the diffs
-// glyph so the brand looks coherent until we ship real artwork. Swap this
-// out once design lands.
-function DiffshubIcon() {
-  return <DiffsIcon />;
-}
-
 function HeroIcon({ productId }: { productId: ProductId }) {
   if (productId === 'trees') return <TreesIcon />;
-  if (productId === 'diffshub') return <DiffshubIcon />;
   return <DiffsIcon />;
 }

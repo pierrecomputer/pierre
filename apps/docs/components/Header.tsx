@@ -59,10 +59,8 @@ function NavLink({ href, basePath, children }: NavLinkProps) {
   );
 }
 
-// Order in which we render cross-site links in the desktop nav. DiffsHub is
-// intentionally last so the long-standing Diffs↔Trees pair stays first when
-// viewed from either of those two sites.
-const OTHER_PRODUCT_IDS: ProductId[] = ['diffs', 'trees', 'diffshub'];
+// Order in which we render cross-site links in the desktop nav.
+const OTHER_PRODUCT_IDS: ProductId[] = ['diffs', 'trees'];
 
 interface IconLinkProps {
   href: string;
@@ -167,11 +165,9 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
           <NavLink href="/" basePath={product.basePath}>
             Home
           </NavLink>
-          {product.id !== 'diffshub' && (
-            <NavLink href="/docs" basePath={product.basePath}>
-              Docs
-            </NavLink>
-          )}
+          <NavLink href="/docs" basePath={product.basePath}>
+            Docs
+          </NavLink>
           {OTHER_PRODUCT_IDS.filter((id) => id !== product.id).map((id) => (
             <Button
               key={id}
@@ -190,6 +186,23 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
               </Link>
             </Button>
           ))}
+          {/* diffshub is a separate app on its own domain, so it's a
+              hardcoded external link rather than a product in this app. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="text-muted-foreground gap-0.5 px-2 font-normal"
+          >
+            <Link
+              href="https://diffshub.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              DiffsHub
+              <IconArrowUpRight />
+            </Link>
+          </Button>
 
           <div className="border-border mx-2 h-5 w-px border-l" />
         </div>

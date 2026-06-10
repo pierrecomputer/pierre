@@ -9,6 +9,7 @@ import type {
   LanguageRegistration,
   ShikiTransformer,
   ThemedToken,
+  ThemeRegistration,
   ThemeRegistrationResolved,
 } from 'shiki';
 
@@ -48,16 +49,13 @@ export type {
   LanguageRegistration,
   ShikiTransformer,
   ThemeRegistrationResolved,
+  ThemeRegistration,
   ThemedToken,
 };
 
-export type DiffsThemeNames =
-  | BundledTheme
-  | 'pierre-dark'
-  | 'pierre-dark-soft'
-  | 'pierre-light'
-  | 'pierre-light-soft'
-  | (string & {});
+// Diffs accepts Shiki's bundled theme names and any additional theme name a
+// consumer registers through the highlighter/theming catalog.
+export type DiffsThemeNames = BundledTheme | (string & {});
 
 export type ThemesType = Record<'dark' | 'light', DiffsThemeNames>;
 

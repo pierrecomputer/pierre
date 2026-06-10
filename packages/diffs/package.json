@@ -72,6 +72,7 @@
   },
   "dependencies": {
     "@pierre/theme": "catalog:",
+    "@pierre/theming": "workspace:*",
     "@shikijs/transformers": "^3.0.0",
     "diff": "catalog:",
     "hast-util-to-html": "catalog:",

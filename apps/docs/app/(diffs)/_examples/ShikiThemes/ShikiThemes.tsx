@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 
 import { FeatureHeader } from '@/components/FeatureHeader';
 import { PierreThemeFootnote } from '@/components/footnotes/PierreThemeFootnote';
+import { docsThemeCatalog } from '@/components/themeCatalog';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -23,75 +24,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const LIGHT_THEMES = [
-  'pierre-light',
-  'pierre-light-soft',
-  'catppuccin-latte',
-  'everforest-light',
-  'github-light',
-  'github-light-default',
-  'github-light-high-contrast',
-  'gruvbox-light-hard',
-  'gruvbox-light-medium',
-  'gruvbox-light-soft',
-  'kanagawa-lotus',
-  'light-plus',
-  'material-theme-lighter',
-  'min-light',
-  'one-light',
-  'rose-pine-dawn',
-  'slack-ochin',
-  'snazzy-light',
-  'solarized-light',
-  'vitesse-light',
-] as const;
-
-const DARK_THEMES = [
-  'pierre-dark',
-  'pierre-dark-soft',
-  'andromeeda',
-  'aurora-x',
-  'ayu-dark',
-  'catppuccin-frappe',
-  'catppuccin-macchiato',
-  'catppuccin-mocha',
-  'dark-plus',
-  'dracula',
-  'dracula-soft',
-  'everforest-dark',
-  'github-dark',
-  'github-dark-default',
-  'github-dark-dimmed',
-  'github-dark-high-contrast',
-  'gruvbox-dark-hard',
-  'gruvbox-dark-medium',
-  'gruvbox-dark-soft',
-  'houston',
-  'kanagawa-dragon',
-  'kanagawa-wave',
-  'laserwave',
-  'material-theme',
-  'material-theme-darker',
-  'material-theme-ocean',
-  'material-theme-palenight',
-  'min-dark',
-  'monokai',
-  'night-owl',
-  'nord',
-  'one-dark-pro',
-  'plastic',
-  'poimandres',
-  'red',
-  'rose-pine',
-  'rose-pine-moon',
-  'slack-dark',
-  'solarized-dark',
-  'synthwave-84',
-  'tokyo-night',
-  'vesper',
-  'vitesse-black',
-  'vitesse-dark',
-] as const;
+type LightThemeName = string;
+type DarkThemeName = string;
 
 interface ShikiThemesProps {
   prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
@@ -114,12 +48,12 @@ export function ShikiThemes({
   }, []);
 
   const themeObj = typeof options?.theme === 'object' ? options.theme : null;
-  const [selectedLightTheme, setSelectedLightTheme] = useState<
-    (typeof LIGHT_THEMES)[number]
-  >((themeObj?.light as 'pierre-light') ?? 'pierre-light');
-  const [selectedDarkTheme, setSelectedDarkTheme] = useState<
-    (typeof DARK_THEMES)[number]
-  >((themeObj?.dark as 'pierre-dark') ?? 'pierre-dark');
+  const [selectedLightTheme, setSelectedLightTheme] = useState<LightThemeName>(
+    (themeObj?.light as 'pierre-light') ?? 'pierre-light'
+  );
+  const [selectedDarkTheme, setSelectedDarkTheme] = useState<DarkThemeName>(
+    (themeObj?.dark as 'pierre-dark') ?? 'pierre-dark'
+  );
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
   >('system');
@@ -148,21 +82,23 @@ export function ShikiThemes({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" scrollSelectedIntoView>
-              {LIGHT_THEMES.map((theme) => (
-                <DropdownMenuItem
-                  key={theme}
-                  onClick={() => {
-                    setSelectedLightTheme(theme);
-                    setSelectedColorMode('light');
-                  }}
-                  selected={selectedLightTheme === theme}
-                >
-                  {theme}
-                  {selectedLightTheme === theme && (
-                    <IconCheck className="ml-auto" />
-                  )}
-                </DropdownMenuItem>
-              ))}
+              {docsThemeCatalog
+                .getThemeNames({ colorScheme: 'light' })
+                .map((theme) => (
+                  <DropdownMenuItem
+                    key={theme}
+                    onClick={() => {
+                      setSelectedLightTheme(theme);
+                      setSelectedColorMode('light');
+                    }}
+                    selected={selectedLightTheme === theme}
+                  >
+                    {theme}
+                    {selectedLightTheme === theme && (
+                      <IconCheck className="ml-auto" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -179,23 +115,25 @@ export function ShikiThemes({
               className="max-h-[550px] overflow-auto"
               scrollSelectedIntoView
             >
-              {DARK_THEMES.map((theme) => (
-                <DropdownMenuItem
-                  key={theme}
-                  onClick={() => {
-                    setSelectedDarkTheme(theme);
-                    setSelectedColorMode('dark');
-                  }}
-                  selected={selectedDarkTheme === theme}
-                >
-                  {theme}
-                  {selectedDarkTheme === theme ? (
-                    <IconCheck className="ml-auto" />
-                  ) : (
-                    <div className="ml-2 h-4 w-4" />
-                  )}
-                </DropdownMenuItem>
-              ))}
+              {docsThemeCatalog
+                .getThemeNames({ colorScheme: 'dark' })
+                .map((theme) => (
+                  <DropdownMenuItem
+                    key={theme}
+                    onClick={() => {
+                      setSelectedDarkTheme(theme);
+                      setSelectedColorMode('dark');
+                    }}
+                    selected={selectedDarkTheme === theme}
+                  >
+                    {theme}
+                    {selectedDarkTheme === theme ? (
+                      <IconCheck className="ml-auto" />
+                    ) : (
+                      <div className="ml-2 h-4 w-4" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

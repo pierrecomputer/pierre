@@ -1,11 +1,6 @@
 import type { DiffsThemeNames } from '../../types';
-import { ResolvedThemes } from './constants';
+import { themeResolver } from './themeResolver';
 
 export function hasResolvedThemes(themeNames: DiffsThemeNames[]): boolean {
-  for (const themeName of themeNames) {
-    if (!ResolvedThemes.has(themeName)) {
-      return false;
-    }
-  }
-  return true;
+  return themeResolver.hasResolvedThemes(themeNames);
 }
