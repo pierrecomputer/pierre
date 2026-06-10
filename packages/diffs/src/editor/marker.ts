@@ -9,18 +9,13 @@ export type MarkerSeverity = 'error' | 'warning' | 'info' | 'hint';
 
 export interface Marker extends Range {
   severity: MarkerSeverity;
-  message: string | { html: string };
+  message: string | { html: string } | HTMLElement;
   source?: string;
   metadata?: Record<string, unknown>;
 }
 
 export interface EditorStub {
-  getEditorOptions: () => {
-    readonly renderMarkerMessage?: (marker: Marker) => HTMLElement;
-  };
-  getMetrics: () => {
-    readonly lineHeight: number;
-  };
+  getLineHeight: () => number;
   getFileContainer: () => HTMLElement | undefined;
   getCharX: (line: number, character: number) => [number, number];
   getLineY: (line: number) => number;
@@ -30,7 +25,6 @@ export interface EditorStub {
 export class MarkerManager {
   #editor: EditorStub;
   #markers: Marker[] = [];
-  #markerSlotElements?: HTMLElement[];
   #markerPopupElement?: HTMLElement;
   #markerPopupEventDisposes?: (() => void)[];
   #markerEventDisposes?: (() => void)[];
@@ -61,32 +55,7 @@ export class MarkerManager {
       start: textDocument.normalizePosition(marker.start),
       end: textDocument.normalizePosition(marker.end),
     }));
-    this.#markerSlotElements?.forEach((el) => el.remove());
-    this.#markerSlotElements = undefined;
     this.removePopup();
-
-    if (this.#markers.length === 0) {
-      return;
-    }
-
-    const { renderMarkerMessage } = this.#editor.getEditorOptions();
-    const fileContainer = this.#editor.getFileContainer();
-    if (renderMarkerMessage === undefined || fileContainer === undefined) {
-      return;
-    }
-
-    this.#markerSlotElements = this.#markers.map((marker, index) =>
-      h(
-        'div',
-        {
-          dataset: 'markerSlot',
-          slot: 'marker-' + index,
-          style: { whiteSpace: 'normal' },
-          children: [renderMarkerMessage(marker)],
-        },
-        fileContainer
-      )
-    );
   }
 
   listenHover(contentEl: HTMLElement): void {
@@ -131,8 +100,6 @@ export class MarkerManager {
     this.#markerEventDisposes?.forEach((dispose) => dispose());
     this.#markerEventDisposes = undefined;
     this.removePopup();
-    this.#markerSlotElements?.forEach((slot) => slot.remove());
-    this.#markerSlotElements = undefined;
     this.#markers = [];
   }
 
@@ -258,10 +225,9 @@ export class MarkerManager {
 
     const { start, message } = this.#markers[hoveredMarkerIndex];
     const { line, character } = start;
-    const { getCharX, getLineY, getEditorOptions, getMetrics } = this.#editor;
+    const { getCharX, getLineY, getLineHeight } = this.#editor;
     const [left, wrapLine] = getCharX(line, character);
-    const { lineHeight } = getMetrics();
-    const { renderMarkerMessage } = getEditorOptions();
+    const lineHeight = getLineHeight();
     const y = getLineY(line) + wrapLine * lineHeight + lineHeight;
     const transform = `translateX(${codeElement.offsetLeft + left}px) translateY(${codeElement.offsetTop + y}px)`;
     const popup = this.#markerPopupElement;
@@ -269,11 +235,11 @@ export class MarkerManager {
     if (popup !== undefined) {
       popup.style.transform = transform;
       const content = popup.firstElementChild as HTMLElement | null;
-      if (renderMarkerMessage !== undefined) {
-        content?.setAttribute('name', 'marker-' + hoveredMarkerIndex);
-      } else if (content?.dataset.markerMessage !== undefined) {
+      if (content?.dataset.markerMessage !== undefined) {
         if (typeof message === 'string') {
           content.textContent = message;
+        } else if (message instanceof HTMLElement) {
+          content.replaceChildren(message);
         } else {
           content.innerHTML = message.html;
         }
@@ -288,14 +254,14 @@ export class MarkerManager {
         dataset: ['editorWidget', 'markerPopup'],
         style: { transform },
         children: [
-          renderMarkerMessage !== undefined
-            ? h('slot', { name: 'marker-' + hoveredMarkerIndex })
-            : h('div', {
-                dataset: 'markerMessage',
-                ...(typeof message === 'string'
-                  ? { textContent: message }
-                  : { innerHTML: message.html }),
-              }),
+          h('div', {
+            dataset: 'markerMessage',
+            ...(typeof message === 'string'
+              ? { textContent: message }
+              : message instanceof HTMLElement
+                ? { children: [message] }
+                : { innerHTML: message.html }),
+          }),
         ],
       },
       preElement

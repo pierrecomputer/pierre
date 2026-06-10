@@ -92,8 +92,6 @@ export interface EditorOptions<LAnnotation> {
   renderSelectionAction?: (
     context: SelectionActionContext<LAnnotation>
   ) => HTMLElement;
-  /** Render custom marker message content. Falls back to a default when omitted. */
-  renderMarkerMessage?: (marker: Marker) => HTMLElement;
   /** Callback when the editor document changes. */
   onChange?: (
     file: FileContents,
@@ -466,8 +464,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     this.#markerManager ??= new MarkerManager({
-      getEditorOptions: () => this.#options,
-      getMetrics: () => this.#metrics,
+      getLineHeight: () => this.#metrics.lineHeight,
       getFileContainer: () => this.#fileContainer,
       getCharX: (line, character) => this.#getCharX(line, character),
       getLineY: (line) => this.#getLineY(line),
