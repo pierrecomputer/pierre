@@ -10,9 +10,11 @@ import { fileNew, fileOld } from './mocks';
 import {
   assertDefined,
   collectAllElements,
+  collectRowSourceMismatches,
+  countDeclaredRows,
   countRenderedLines,
   extractLineNumbers,
-  findBufferElements,
+  projectColumn,
 } from './testUtils';
 
 afterAll(async () => {
@@ -25,6 +27,8 @@ describe('DiffHunksRenderer - Virtualization', () => {
     { name: 'test.txt', contents: fileOld },
     { name: 'test.txt', contents: fileNew }
   );
+  const oldFileLines = fileOld.split('\n');
+  const newFileLines = fileNew.split('\n');
 
   const unifiedRenderer = new DiffHunksRenderer({
     diffStyle: 'unified',
@@ -58,19 +62,26 @@ describe('DiffHunksRenderer - Virtualization', () => {
     });
   }
 
-  // Diff structure from fileOld/fileNew:
-  // - 14 hunks total
-  // - Total unified lines: 514
-  // - Total split lines: 487
-  // - Notable hunks for testing:
-  //   - Hunk 0: unified 0-8 (9 lines), split 0-8 (9 lines), collapsedBefore: 3
-  //   - Hunk 3: unified 34-55 (22 lines), split 34-52 (19 lines), collapsedBefore: 50
-  //   - Hunk 7: unified 114-243 (130 lines), split 108-237 (130 lines), collapsedBefore: 44 - LARGEST HUNK
-  //   - Hunk 11: unified 315-450 (136 lines), split 301-423 (123 lines), collapsedBefore: 5
-  //   - Hunk 13: unified 478-513 (36 lines), split 451-486 (36 lines), collapsedBefore: 56 - FINAL HUNK
+  // Render-range semantics: startingLine/totalLines index the sequence of
+  // renderable rows, NOT data-line-index values (which number the virtual
+  // line space where collapsed gaps still occupy indices).
+  //
+  // Diff structure from fileOld/fileNew (regenerate with parseDiffFromFile if
+  // the fixtures change):
+  // - 14 hunks declaring 514 unified / 487 split rows. The single-line
+  //   collapsed gaps before hunks 4, 6, and 10 (virtual unified indices 129,
+  //   171, 442) auto-expand because they are at or under
+  //   DEFAULT_COLLAPSED_CONTEXT_THRESHOLD, so full renders emit 517 unified
+  //   and 490 split rows.
+  // - Notable hunks (virtual unified indices / full-render row offsets):
+  //   - Hunk 0: indices 3-11, rows 0-8 (9 lines), collapsedBefore: 3
+  //   - Hunk 3: indices 107-128, rows 34-55 (22 lines), collapsedBefore: 50
+  //     (collapsed region at indices 57-106)
+  //   - Hunk 7: indices 244-373, rows 116-245 (130 lines) - LARGEST HUNK
+  //   - Hunk 13: indices 718-753, rows 481-516 (36 lines) - FINAL HUNK
 
-  describe('buffer rendering', () => {
-    test('1.1: No buffers (baseline) - unified mode', async () => {
+  describe('full render baselines', () => {
+    test('1.1: Zero buffers - unified mode', async () => {
       const result = await unifiedRenderer.asyncRender(fileDiff, {
         startingLine: 0,
         totalLines: Infinity,
@@ -83,15 +94,18 @@ describe('DiffHunksRenderer - Virtualization', () => {
         'unifiedContentAST should be defined'
       );
 
-      const buffers = findBufferElements(result.unifiedContentAST);
-      expect(buffers).toHaveLength(0);
+      // The renderer passes the requested buffer sizes through on the result;
+      // buffer DOM elements are created by File/FileDiff, not the renderer.
+      expect(result.bufferBefore).toBe(0);
+      expect(result.bufferAfter).toBe(0);
 
       const lineCount = countRenderedLines(result.unifiedContentAST);
-      // Total unified lines that are rendered
+      // 514 hunk-declared rows + 3 auto-expanded single-line gaps
       expect(lineCount).toBe(517);
+      expect(lineCount).toBe(countDeclaredRows(fileDiff, 'unified'));
     });
 
-    test('1.2: No buffers (baseline) - split mode', async () => {
+    test('1.2: Zero buffers - split mode', async () => {
       const result = await splitRenderer.asyncRender(fileDiff, {
         startingLine: 0,
         totalLines: Infinity,
@@ -108,17 +122,14 @@ describe('DiffHunksRenderer - Virtualization', () => {
         'deletionsContentAST should be defined'
       );
 
-      const additionBuffers = findBufferElements(result.additionsContentAST);
-      const deletionBuffers = findBufferElements(result.deletionsContentAST);
-
-      expect(additionBuffers).toHaveLength(0);
-      expect(deletionBuffers).toHaveLength(0);
+      expect(result.bufferBefore).toBe(0);
+      expect(result.bufferAfter).toBe(0);
 
       const additionLines = countRenderedLines(result.additionsContentAST);
       const deletionLines = countRenderedLines(result.deletionsContentAST);
 
-      // These are somewhat arbitrary because there's lots of stuff collapsed
-      // between change hunks
+      // Exact per-column row counts for the fixture: each column renders only
+      // the rows its own side participates in (context plus its change rows)
       expect(deletionLines).toBe(267);
       expect(additionLines).toBe(431);
     });
@@ -181,49 +192,6 @@ describe('DiffHunksRenderer - Virtualization', () => {
   });
 
   describe('line count math', () => {
-    test('2.1: No windowing - full render', async () => {
-      const unifiedResult = await unifiedRenderer.asyncRender(fileDiff, {
-        startingLine: 0,
-        totalLines: Infinity,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-
-      const splitResult = await splitRenderer.asyncRender(fileDiff, {
-        startingLine: 0,
-        totalLines: Infinity,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-
-      assertDefined(
-        unifiedResult.unifiedContentAST,
-        'unifiedContentAST should be defined'
-      );
-      assertDefined(
-        splitResult.additionsContentAST,
-        'additionsContentAST should be defined'
-      );
-      assertDefined(
-        splitResult.deletionsContentAST,
-        'deletionsContentAST should be defined'
-      );
-
-      const unifiedLines = countRenderedLines(unifiedResult.unifiedContentAST);
-      expect(unifiedLines).toBe(517);
-
-      // In split mode, total lines across both columns
-      const splitAdditionLines = countRenderedLines(
-        splitResult.additionsContentAST
-      );
-      const splitDeletionLines = countRenderedLines(
-        splitResult.deletionsContentAST
-      );
-
-      // Verify against expected totals
-      expect(splitAdditionLines + splitDeletionLines).toBeGreaterThan(0);
-    });
-
     test('2.2: Basic window - first N lines', async () => {
       // Render first 30 lines
       const result = await unifiedRenderer.asyncRender(fileDiff, {
@@ -396,7 +364,6 @@ describe('DiffHunksRenderer - Virtualization', () => {
       expect(expandedLines.length).toBe(20);
       expect(expandedLines[0]).toBe(57);
       expect(expandedLines[19]).toBe(76);
-      expect(result).toMatchSnapshot('expansion fromStart 20 lines');
     });
 
     test('3.3: Partially expanded - fromEnd only', async () => {
@@ -455,7 +422,6 @@ describe('DiffHunksRenderer - Virtualization', () => {
       for (let i = 1; i < unifiedIndices.length; i++) {
         expect(unifiedIndices[i]).toBeGreaterThanOrEqual(unifiedIndices[i - 1]);
       }
-      expect(result).toMatchSnapshot('expansion fromEnd 15 lines');
     });
 
     test('3.4: Partially expanded - both fromStart and fromEnd', async () => {
@@ -517,14 +483,13 @@ describe('DiffHunksRenderer - Virtualization', () => {
       expect(expandedFromEnd.length).toBe(10);
       expect(expandedFromEnd[0]).toBe(97);
       expect(expandedFromEnd[9]).toBe(106);
-      expect(result).toMatchSnapshot('expansion both directions 10 lines each');
     });
 
     test('3.5: Windowing with expanded regions (tests a9ff17b7 fix)', async () => {
-      // This is the critical test for the bug fix
-      // Hunk 3 has collapsedBefore: 50, unified range: 34-55
-      // Expand 20 from start, so total is hunk.unifiedLineCount (22) + 20 = 42
-      // Window starts at line 30, should NOT skip this hunk
+      // Hunk 3 occupies rows 34-55 (indices 107-128) with collapsedBefore: 50
+      // (collapsed indices 57-106). Expanding 20 from start makes indices
+      // 57-76 renderable. A window starting at row 30 must NOT skip the
+      // expanded hunk — the a9ff17b7 bug did exactly that.
       const expandedRenderer = new DiffHunksRenderer({
         diffStyle: 'unified',
         expansionLineCount: 20,
@@ -545,12 +510,34 @@ describe('DiffHunksRenderer - Virtualization', () => {
         'unifiedContentAST should be defined'
       );
 
-      const lineCount = countRenderedLines(result.unifiedContentAST);
+      const windowedIndices = extractLineNumbers(
+        result.unifiedContentAST
+      ).unifiedIndices;
 
-      // Should have rendered content (not skipped)
-      expect(lineCount).toBeGreaterThan(0);
-      expect(lineCount).toBeLessThanOrEqual(50);
-      expect(result).toMatchSnapshot('expansion with windowing');
+      // Differential oracle: the windowed render must emit exactly rows
+      // 30..79 of the full render with the same expansion state
+      const fullResult = await expandedRenderer.asyncRender(fileDiff, {
+        startingLine: 0,
+        totalLines: Infinity,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      assertDefined(
+        fullResult.unifiedContentAST,
+        'fullResult.unifiedContentAST should be defined'
+      );
+      const fullIndices = extractLineNumbers(
+        fullResult.unifiedContentAST
+      ).unifiedIndices;
+
+      expect(windowedIndices).toHaveLength(50);
+      expect(windowedIndices).toEqual(fullIndices.slice(30, 80));
+      // The 20 expanded lines (indices 57-76) fall inside this window. This
+      // containment check catches the regression even if a full render were
+      // to skip the expanded hunk the same way.
+      expect(
+        windowedIndices.filter((idx) => idx >= 57 && idx <= 76)
+      ).toHaveLength(20);
     });
 
     test('3.6: Fully expanded single hunk range', async () => {
@@ -609,8 +596,8 @@ describe('DiffHunksRenderer - Virtualization', () => {
 
   describe('window boundary edge cases', () => {
     test('4.1: Window ends at exact hunk boundary', async () => {
-      // Hunk 0: unified 0-8 (9 lines), but starts at index 3 due to collapsedBefore: 3
-      // Window of 9 lines should render exactly hunk 0
+      // Hunk 0 occupies rows 0-8 (indices 3-11 due to collapsedBefore: 3);
+      // a 9-row window renders exactly hunk 0
       const result = await unifiedRenderer.asyncRender(fileDiff, {
         startingLine: 0,
         totalLines: 9,
@@ -628,7 +615,7 @@ describe('DiffHunksRenderer - Virtualization', () => {
     });
 
     test('4.2: Window starts at exact hunk boundary', async () => {
-      // Hunk 1 starts at unified line 9
+      // Hunk 1 starts at row offset 9 (hunk 0 occupies rows 0-8)
       const result = await unifiedRenderer.asyncRender(fileDiff, {
         startingLine: 9,
         totalLines: 20,
@@ -672,7 +659,8 @@ describe('DiffHunksRenderer - Virtualization', () => {
     });
 
     test('4.4: Window entirely past content', async () => {
-      // Total unified lines is 514, so start at 1000
+      // The full render emits 517 rows, so a window starting at 1000 is
+      // entirely past the content
       const result = await unifiedRenderer.asyncRender(fileDiff, {
         startingLine: 1000,
         totalLines: 20,
@@ -680,19 +668,13 @@ describe('DiffHunksRenderer - Virtualization', () => {
         bufferAfter: 0,
       });
 
-      // When window is entirely past content, AST may be undefined
-      if (result.unifiedContentAST != null) {
-        const lineCount = countRenderedLines(result.unifiedContentAST);
-        expect(lineCount).toBe(0);
-      } else {
-        // AST is undefined when no lines to render
-        expect(result.unifiedContentAST).toBeUndefined();
-      }
+      // The renderer returns no AST when there is nothing to render
+      expect(result.unifiedContentAST).toBeUndefined();
     });
 
     test('4.5: Partial hunk - window starts mid-hunk', async () => {
-      // Hunk 7: unified 114-243 (130 lines) - our largest hunk
-      // Start window at 150, halfway through
+      // Hunk 7: rows 116-245 (130 lines) - our largest hunk
+      // Start window at row 150, partway through
       const result = await unifiedRenderer.asyncRender(fileDiff, {
         startingLine: 150,
         totalLines: 50,
@@ -715,8 +697,8 @@ describe('DiffHunksRenderer - Virtualization', () => {
     });
 
     test('4.6: Partial hunk - window ends mid-hunk', async () => {
-      // Hunk 7: unified 114-243 (130 lines)
-      // Start at 114, but only render 50 lines
+      // Hunk 7: rows 116-245 (130 lines)
+      // Start at row 114, but only render 50 lines
       const result = await unifiedRenderer.asyncRender(fileDiff, {
         startingLine: 114,
         totalLines: 50,
@@ -740,8 +722,8 @@ describe('DiffHunksRenderer - Virtualization', () => {
 
   describe('multiple hunks in window', () => {
     test('5.1: Skip entire hunks before window', async () => {
-      // Hunks 0-2 cover unified lines 0-33
-      // Start window at 100, should skip first 3 hunks entirely
+      // Hunks 0-2 cover rows 0-33 (indices 3-56)
+      // Start window at row 100, should skip first 3 hunks entirely
       const result = await unifiedRenderer.asyncRender(fileDiff, {
         startingLine: 100,
         totalLines: 50,
@@ -758,8 +740,8 @@ describe('DiffHunksRenderer - Virtualization', () => {
       expect(lineCount).toBeGreaterThan(0);
 
       const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
-      // Should not include any lines from first 3 hunks (< 34)
-      expect(unifiedIndices.every((idx) => idx >= 34)).toBe(true);
+      // Hunks 0-2 only contain indices 3-56, none of which may appear
+      expect(unifiedIndices.every((idx) => idx > 56)).toBe(true);
     });
 
     test('5.2: Window spans multiple hunks', async () => {
@@ -781,8 +763,9 @@ describe('DiffHunksRenderer - Virtualization', () => {
       expect(lineCount).toBe(34);
 
       const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
-      // Should have 34 lines total
+      // Should have 34 lines total, ending at hunk 2's last index
       expect(unifiedIndices.length).toBe(34);
+      expect(unifiedIndices.at(-1)).toBe(56);
     });
 
     test('5.3: Window includes partial hunks at boundaries', async () => {
@@ -822,15 +805,31 @@ describe('DiffHunksRenderer - Virtualization', () => {
         'unifiedContentAST should be defined'
       );
 
-      const lineCount = countRenderedLines(result.unifiedContentAST);
-      expect(lineCount).toBe(10);
+      const rows = projectColumn(result.unifiedContentAST).filter(
+        (row) => row.kind === 'line'
+      );
+      expect(rows).toHaveLength(10);
 
-      // Verify we got exactly 10 lines
-      const { unifiedIndices } = extractLineNumbers(result.unifiedContentAST);
-      expect(unifiedIndices.length).toBe(10);
+      // The window must be exactly rows 10-19 of the full render
+      const fullResult = await unifiedRenderer.asyncRender(fileDiff, {
+        startingLine: 0,
+        totalLines: Infinity,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      assertDefined(
+        fullResult.unifiedContentAST,
+        'fullResult.unifiedContentAST should be defined'
+      );
+      const fullRows = projectColumn(fullResult.unifiedContentAST).filter(
+        (row) => row.kind === 'line'
+      );
+      expect(rows).toEqual(fullRows.slice(10, 20));
 
-      // Snapshot test to verify content structure
-      expect(result).toMatchSnapshot('unified window 10-20');
+      // Every rendered row carries the exact text of its source line
+      expect(
+        collectRowSourceMismatches(rows, 'unified', oldFileLines, newFileLines)
+      ).toEqual([]);
     });
 
     test('6.2: Rendered content matches source - split', async () => {
@@ -850,32 +849,75 @@ describe('DiffHunksRenderer - Virtualization', () => {
         'deletionsContentAST should be defined'
       );
 
-      const additionLines = countRenderedLines(result.additionsContentAST);
-      const deletionLines = countRenderedLines(result.deletionsContentAST);
-
-      expect(additionLines + deletionLines).toBeGreaterThan(0);
-
-      // Verify total lines rendered
-      const { splitIndices: additionIndices } = extractLineNumbers(
-        result.additionsContentAST
+      const additionRows = projectColumn(result.additionsContentAST).filter(
+        (row) => row.kind === 'line'
       );
-      const { splitIndices: deletionIndices } = extractLineNumbers(
-        result.deletionsContentAST
+      const deletionRows = projectColumn(result.deletionsContentAST).filter(
+        (row) => row.kind === 'line'
       );
 
-      expect(additionIndices.length + deletionIndices.length).toBeGreaterThan(
-        0
+      // The window covers split row positions 10-19 of the full render; each
+      // column must contain exactly its rows at those positions
+      const fullResult = await splitRenderer.asyncRender(fileDiff, {
+        startingLine: 0,
+        totalLines: Infinity,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      assertDefined(
+        fullResult.additionsContentAST,
+        'fullResult.additionsContentAST should be defined'
+      );
+      assertDefined(
+        fullResult.deletionsContentAST,
+        'fullResult.deletionsContentAST should be defined'
+      );
+      const fullAdditionRows = projectColumn(
+        fullResult.additionsContentAST
+      ).filter((row) => row.kind === 'line');
+      const fullDeletionRows = projectColumn(
+        fullResult.deletionsContentAST
+      ).filter((row) => row.kind === 'line');
+      const splitPositions = [
+        ...new Set(
+          [...fullAdditionRows, ...fullDeletionRows].map(
+            (row) => row.splitIndex
+          )
+        ),
+      ].sort((a, b) => (a ?? 0) - (b ?? 0));
+      const windowPositions = new Set(splitPositions.slice(10, 20));
+
+      expect(additionRows).toEqual(
+        fullAdditionRows.filter((row) => windowPositions.has(row.splitIndex))
+      );
+      expect(deletionRows).toEqual(
+        fullDeletionRows.filter((row) => windowPositions.has(row.splitIndex))
       );
 
-      // Snapshot test
-      expect(result).toMatchSnapshot('split window 10-20');
+      // Each column carries the exact text of its own side's source lines
+      expect(
+        collectRowSourceMismatches(
+          additionRows,
+          'additions',
+          oldFileLines,
+          newFileLines
+        )
+      ).toEqual([]);
+      expect(
+        collectRowSourceMismatches(
+          deletionRows,
+          'deletions',
+          oldFileLines,
+          newFileLines
+        )
+      ).toEqual([]);
     });
   });
 
   describe('final hunk handling', () => {
     test('7.1: Final hunk with early break', async () => {
-      // Hunk 13 (final): unified 478-513 (36 lines)
-      // Window ends mid-final-hunk
+      // Hunk 13 (final) occupies rows 481-516; a window ending mid-final-hunk
+      // must render without throwing (tests 1ea14dbf fix)
       const result = await unifiedRenderer.asyncRender(fileDiff, {
         startingLine: 478,
         totalLines: 20,
@@ -890,45 +932,6 @@ describe('DiffHunksRenderer - Virtualization', () => {
 
       const lineCount = countRenderedLines(result.unifiedContentAST);
       expect(lineCount).toBe(20);
-
-      // No errors should occur (tests 1ea14dbf fix)
-      expect(result).toBeDefined();
-    });
-
-    test('7.2: Final hunk fully in window', async () => {
-      // Render entire diff to ensure final hunk is fully rendered
-      const result = await unifiedRenderer.asyncRender(fileDiff, {
-        startingLine: 0,
-        totalLines: Infinity,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-
-      assertDefined(
-        result.unifiedContentAST,
-        'unifiedContentAST should be defined'
-      );
-
-      const fullCount = countRenderedLines(result.unifiedContentAST);
-      expect(fullCount).toBe(517);
-
-      // Compare to partial render
-      const partialResult = await unifiedRenderer.asyncRender(fileDiff, {
-        startingLine: 478,
-        totalLines: 20,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-
-      assertDefined(
-        partialResult.unifiedContentAST,
-        'partialResult.unifiedContentAST should be defined'
-      );
-
-      const partialCount = countRenderedLines(partialResult.unifiedContentAST);
-
-      // Full render should have more lines
-      expect(fullCount).toBeGreaterThan(partialCount);
     });
   });
 });

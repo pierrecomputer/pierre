@@ -1,5 +1,6 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 
+import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../src/constants';
 import type { HunksRenderResult } from '../src/renderers/DiffHunksRenderer';
 import type { FileDiffMetadata, ParsedPatch } from '../src/types';
 
@@ -84,6 +85,13 @@ export interface VerifyResult {
   errors: string[];
 }
 
+// Checks the cross-field consistency invariants of parsed hunk metadata: the
+// per-hunk counts (additionCount, splitLineCount, unifiedLineCount, ...) must
+// agree with what the hunkContent blocks declare, and the cumulative
+// line-start/collapsedBefore bookkeeping must chain correctly across hunks.
+// This intentionally looks like a second implementation of the parser's
+// arithmetic — it validates that independently-written fields stay in sync,
+// not that the parser matches itself.
 export function verifyHunkLineValues(
   file: FileDiffMetadata,
   prefix: string = 'file'
@@ -281,30 +289,299 @@ export function countSplitRows(result: HunksRenderResult): number {
   return lineIndices.size;
 }
 
-// Virtualization buffer helpers
+// Behavioral projections
+//
+// These flatten rendered HAST columns and parsed diffs into small, readable
+// structures so tests can assert (or snapshot) just the behavior they own —
+// row order, line numbers, types, text — instead of pinning entire render
+// results that churn on every theme or tokenizer change.
 
-export interface BufferElement {
-  position: 'before' | 'after';
-  height: number;
+// Recursively concatenates the text nodes under a HAST node.
+export function hastTextContent(node: ElementContent): string {
+  if (node.type === 'text') {
+    return node.value;
+  }
+  if (!isHastElement(node)) {
+    return '';
+  }
+  let text = '';
+  for (const child of node.children) {
+    text += hastTextContent(child);
+  }
+  return text;
 }
 
-export function findBufferElements(ast: ElementContent[]): BufferElement[] {
-  const buffers: BufferElement[] = [];
-  const allElements = collectAllElements(ast);
+export interface ProjectedRow {
+  kind: 'line' | 'buffer' | 'no-newline' | 'separator' | 'annotation' | 'other';
+  unifiedIndex?: number;
+  splitIndex?: number;
+  lineNumber?: number;
+  altLineNumber?: number;
+  lineType?: string;
+  text?: string;
+  bufferSize?: number;
+  separator?: string;
+  annotationIndex?: string;
+}
 
-  for (const node of allElements) {
-    const position = node.properties?.['data-virtualizer-buffer'];
-    if (position === 'before' || position === 'after') {
-      const style = node.properties?.['style'];
-      const heightMatch =
-        typeof style === 'string' ? style.match(/height:\s*(\d+)px/) : null;
-      const height =
-        heightMatch != null ? Number.parseInt(heightMatch[1], 10) : 0;
-      buffers.push({ position, height });
+// Projects the top-level nodes of a rendered content column into one
+// ProjectedRow per visual row. Line rows capture their indices, numbers, type,
+// and exact text (processLine pads empty rows with a lone newline for
+// copy/paste; that padding is stripped so text matches the source verbatim).
+export function projectColumn(ast: ElementContent[]): ProjectedRow[] {
+  const rows: ProjectedRow[] = [];
+  for (const node of ast) {
+    if (!isHastElement(node)) {
+      continue;
+    }
+    const props = node.properties ?? {};
+    if (props['data-line'] != null) {
+      const lineIndex =
+        typeof props['data-line-index'] === 'string'
+          ? props['data-line-index']
+          : '';
+      const [unifiedStr, splitStr] = lineIndex.split(',');
+      const unifiedIndex = Number.parseInt(unifiedStr, 10);
+      const splitIndex = Number.parseInt(splitStr, 10);
+      let text = hastTextContent(node);
+      if (text.endsWith('\n')) {
+        text = text.slice(0, -1);
+      }
+      rows.push({
+        kind: 'line',
+        unifiedIndex: Number.isNaN(unifiedIndex) ? undefined : unifiedIndex,
+        splitIndex: Number.isNaN(splitIndex) ? undefined : splitIndex,
+        lineNumber: Number(props['data-line']),
+        altLineNumber:
+          props['data-alt-line'] != null
+            ? Number(props['data-alt-line'])
+            : undefined,
+        lineType:
+          typeof props['data-line-type'] === 'string'
+            ? props['data-line-type']
+            : undefined,
+        text,
+      });
+    } else if ('data-content-buffer' in props) {
+      rows.push({
+        kind: 'buffer',
+        bufferSize: Number(props['data-buffer-size']),
+      });
+    } else if ('data-no-newline' in props) {
+      rows.push({ kind: 'no-newline' });
+    } else if (props['data-separator'] != null) {
+      rows.push({
+        kind: 'separator',
+        separator: String(props['data-separator']),
+      });
+    } else if (props['data-line-annotation'] != null) {
+      rows.push({
+        kind: 'annotation',
+        annotationIndex: String(props['data-line-annotation']),
+      });
+    } else {
+      rows.push({ kind: 'other' });
     }
   }
+  return rows;
+}
 
-  return buffers;
+export interface RenderResultProjection {
+  unified: ProjectedRow[] | undefined;
+  deletions: ProjectedRow[] | undefined;
+  additions: ProjectedRow[] | undefined;
+  bufferBefore: number;
+  bufferAfter: number;
+}
+
+export function projectRenderResult(
+  result: HunksRenderResult
+): RenderResultProjection {
+  return {
+    unified:
+      result.unifiedContentAST != null
+        ? projectColumn(result.unifiedContentAST)
+        : undefined,
+    deletions:
+      result.deletionsContentAST != null
+        ? projectColumn(result.deletionsContentAST)
+        : undefined,
+    additions:
+      result.additionsContentAST != null
+        ? projectColumn(result.additionsContentAST)
+        : undefined,
+    bufferBefore: result.bufferBefore,
+    bufferAfter: result.bufferAfter,
+  };
+}
+
+// Renders each projected row as one short reviewable line, for compact
+// snapshots whose diffs a human (or review agent) can actually read.
+export function rowDigests(rows: ProjectedRow[]): string[] {
+  return rows.map((row) => {
+    switch (row.kind) {
+      case 'line': {
+        const alt =
+          row.altLineNumber != null && row.altLineNumber !== row.lineNumber
+            ? `(alt ${row.altLineNumber})`
+            : '';
+        return `u${row.unifiedIndex}/s${row.splitIndex} ${row.lineType} #${row.lineNumber}${alt} |${row.text}|`;
+      }
+      case 'buffer':
+        return `buffer x${row.bufferSize}`;
+      case 'separator':
+        return `separator ${row.separator}`;
+      case 'annotation':
+        return `annotation ${row.annotationIndex}`;
+      default:
+        return row.kind;
+    }
+  });
+}
+
+export interface AnnotationProjectionEntry {
+  lineIndex: string | undefined;
+  annotationIndex: string;
+  slotNames: (string | undefined)[];
+}
+
+// Walks a rendered column in document order and pairs every annotation
+// element with the data-line-index of the line row preceding it.
+export function annotationProjection(
+  ast: ElementContent[]
+): AnnotationProjectionEntry[] {
+  const entries: AnnotationProjectionEntry[] = [];
+  let lastLineIndex: string | undefined;
+  for (const node of collectAllElements(ast)) {
+    if (isHastLineElement(node)) {
+      lastLineIndex = getHastLineIndex(node);
+      continue;
+    }
+    if (!isHastAnnotationElement(node)) {
+      continue;
+    }
+    const annotationIndex = getHastAnnotationIndex(node);
+    if (annotationIndex == null) {
+      continue;
+    }
+    entries.push({
+      lineIndex: lastLineIndex,
+      annotationIndex,
+      slotNames: findHastSlotElements(node).map((slot) =>
+        typeof slot.properties?.name === 'string'
+          ? slot.properties.name
+          : undefined
+      ),
+    });
+  }
+  return entries;
+}
+
+// Compares rendered line-row text against the original source lines and
+// returns one message per mismatch. Side semantics: split columns are
+// single-sided (deletions = old file, additions = new file); the unified
+// column carries the old-file line number on change-deletion rows and the
+// new-file number on every other row type.
+export function collectRowSourceMismatches(
+  rows: ProjectedRow[],
+  column: 'unified' | 'deletions' | 'additions',
+  oldLines: string[],
+  newLines: string[]
+): string[] {
+  const mismatches: string[] = [];
+  for (const row of rows) {
+    if (row.kind !== 'line' || row.lineNumber == null) {
+      continue;
+    }
+    const fromOld =
+      column === 'deletions' ||
+      (column === 'unified' && row.lineType === 'change-deletion');
+    const source = fromOld ? oldLines : newLines;
+    const expected = source[row.lineNumber - 1];
+    if (row.text !== expected) {
+      mismatches.push(
+        `${column} #${row.lineNumber} (${row.lineType}): rendered ${JSON.stringify(row.text)} !== source ${JSON.stringify(expected)}`
+      );
+    }
+  }
+  return mismatches;
+}
+
+// Number of rows a full render or iteration emits for a diff: each hunk's
+// declared rows plus any collapsed gap at or under the collapsed-context
+// threshold, which is rendered as auto-expanded context rows instead of being
+// hidden behind a separator.
+export function countDeclaredRows(
+  diff: FileDiffMetadata,
+  style: 'split' | 'unified',
+  collapsedContextThreshold: number = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD
+): number {
+  let count = 0;
+  for (const hunk of diff.hunks) {
+    count += style === 'split' ? hunk.splitLineCount : hunk.unifiedLineCount;
+    if (
+      hunk.collapsedBefore > 0 &&
+      hunk.collapsedBefore <= collapsedContextThreshold
+    ) {
+      count += hunk.collapsedBefore;
+    }
+  }
+  return count;
+}
+
+export interface HunkDigest {
+  additionStart: number;
+  additionCount: number;
+  deletionStart: number;
+  deletionCount: number;
+  splitLineCount: number;
+  unifiedLineCount: number;
+  collapsedBefore: number;
+}
+
+// Compact, reviewable summary of a parsed file diff for snapshots: hunk
+// geometry and file totals without the full line arrays or rendered output.
+export function hunkDigest(file: FileDiffMetadata): {
+  name: string;
+  prevName: string | undefined;
+  type: string;
+  hunks: HunkDigest[];
+  totals: {
+    splitLineCount: number;
+    unifiedLineCount: number;
+    additionLines: number;
+    deletionLines: number;
+  };
+} {
+  return {
+    name: file.name,
+    prevName: file.prevName,
+    type: file.type,
+    hunks: file.hunks.map((hunk) => ({
+      additionStart: hunk.additionStart,
+      additionCount: hunk.additionCount,
+      deletionStart: hunk.deletionStart,
+      deletionCount: hunk.deletionCount,
+      splitLineCount: hunk.splitLineCount,
+      unifiedLineCount: hunk.unifiedLineCount,
+      collapsedBefore: hunk.collapsedBefore,
+    })),
+    totals: {
+      splitLineCount: file.splitLineCount,
+      unifiedLineCount: file.unifiedLineCount,
+      additionLines: file.additionLines.length,
+      deletionLines: file.deletionLines.length,
+    },
+  };
+}
+
+export function patchDigest(
+  patches: ParsedPatch[]
+): Array<{ patchIndex: number; files: ReturnType<typeof hunkDigest>[] }> {
+  return patches.map((patch, patchIndex) => ({
+    patchIndex,
+    files: patch.files.map(hunkDigest),
+  }));
 }
 
 export function extractLineNumbers(ast: ElementContent[]): {
