@@ -19,6 +19,7 @@ import {
   applyDocumentChangeToLineAnnotations,
   renderLineAnnotations,
 } from './lineAnnotations';
+import { type Marker, MarkerManager, markerSeverityDatasetKey } from './marker';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import { type MatchRange, SearchPanelWidget } from './searchPanel';
 import type { EditorSelection } from './selection';
@@ -60,6 +61,7 @@ import {
 import { createSpriteElement } from './sprite';
 import {
   type Position,
+  type Range,
   type ResolvedTextEdit,
   TextDocument,
   type TextDocumentChange,
@@ -72,18 +74,14 @@ import {
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
 import { EditorTokenizer, renderLineTokens } from './tokenzier';
-import { addEventListener, extend, getLineNumberAttr, h, round } from './utils';
-
-function clampDomOffset(node: Node, offset: number): number {
-  if (node.nodeType === 3) {
-    const length = (node as Text).textContent?.length ?? 0;
-    return Math.max(0, Math.min(offset, length));
-  }
-  if (node.nodeType === 1) {
-    return Math.max(0, Math.min(offset, node.childNodes.length));
-  }
-  return 0;
-}
+import {
+  addEventListener,
+  clampDomOffset,
+  extend,
+  getLineNumberAttr,
+  h,
+  round,
+} from './utils';
 
 export interface EditorOptions<LAnnotation> {
   /** Render rounded corners for selection ranges, default is true. */
@@ -107,11 +105,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #wrap = false;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
+  #markerManager?: MarkerManager;
 
-  // event handlers
+  // event disposes
   #editorEventDisposes?: (() => void)[];
   #globalEventDisposes?: (() => void)[];
-  #mouseUpDisposes?: (() => void)[];
+  #selectEventDisposes?: (() => void)[];
   #detach?: () => void;
 
   // file
@@ -145,7 +144,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #contentElement?: HTMLElement;
   #overlayElement?: HTMLElement;
   #primaryCaretElement?: HTMLElement;
-  #selectionElements?: Map<string, HTMLElement>;
+  #overlayElements?: Map<string, HTMLElement>;
   #selectionAction?: SelectionActionWidget;
   #searchPanel?: SearchPanelWidget;
   #resizeObserver?: ResizeObserver;
@@ -308,11 +307,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         },
         __debug: this.#options.__debug,
       });
-      this.#shouldIgnoreSelectionChange = false;
-      this.#selectionElements?.forEach((el) => el.remove());
-      this.#selectionElements?.clear();
       this.#fileInstance?.setSelectedLines(null);
-      this.#selectionElements = undefined;
+      this.#shouldIgnoreSelectionChange = false;
+      this.#overlayElements?.forEach((el) => el.remove());
+      this.#overlayElements?.clear();
+      this.#overlayElements = undefined;
       this.#selections = undefined;
       this.#scrollingToLine = undefined;
       this.#reservedSelections = undefined;
@@ -368,10 +367,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.setSelections(this.#initSelections);
       this.#scrollToPrimaryCaret();
       this.#initSelections = undefined;
-    } else if (this.#selections !== undefined && this.#selections.length > 0) {
+    } else if (
+      this.#selections !== undefined ||
+      this.#matches !== undefined ||
+      this.#markerManager !== undefined
+    ) {
       // when re-rendering triggered by virtual viewport scroll,
-      // re-render the existing selections
-      this.#updateSelections(this.#selections);
+      // re-render the existing selections, matches, and markers
+      this.#updateSelections(this.#selections ?? []);
     }
 
     if (this.#options.__debug === true && renderRange !== undefined) {
@@ -447,6 +450,33 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  setMarkers(markers: Marker[]): void {
+    const textDocument = this.#textDocument;
+    if (textDocument === undefined) {
+      throw new Error('Text document is not initialized');
+    }
+
+    if (markers.length === 0) {
+      this.#markerManager?.cleanup();
+      this.#markerManager = undefined;
+      this.#updateSelections(this.#selections ?? []);
+      return;
+    }
+
+    this.#markerManager ??= new MarkerManager({
+      getLineHeight: () => this.#metrics.lineHeight,
+      getFileContainer: () => this.#fileContainer,
+      getCharX: (line, character) => this.#getCharX(line, character),
+      getLineY: (line) => this.#getLineY(line),
+      isMouseDown: () => this.#isContentMouseDown || this.#isGutterMouseDown,
+    });
+    this.#markerManager.setMarkers(markers, textDocument);
+    if (this.#contentElement !== undefined) {
+      this.#markerManager.listenHover(this.#contentElement);
+    }
+    this.#updateSelections(this.#selections ?? []);
+  }
+
   focus(options?: FocusOptions): void {
     const preventScroll = options?.preventScroll ?? false;
     const primarySelection = this.#selections?.at(-1);
@@ -469,6 +499,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#globalEventDisposes = undefined;
     this.#editorEventDisposes?.forEach((dispose) => dispose());
     this.#editorEventDisposes = undefined;
+    this.#selectEventDisposes?.forEach((dispose) => dispose());
+    this.#selectEventDisposes = undefined;
+    this.#markerManager?.cleanup();
+    this.#markerManager = undefined;
 
     this.#detach?.();
     this.#detach = undefined;
@@ -500,11 +534,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#contentElement = undefined;
     this.#overlayElement?.remove();
     this.#overlayElement = undefined;
-    this.#primaryCaretElement?.remove();
+    this.#overlayElements?.forEach((el) => el.remove());
+    this.#overlayElements = undefined;
     this.#primaryCaretElement = undefined;
-    this.#selectionElements?.forEach((el) => el.remove());
-    this.#selectionElements?.clear();
-    this.#selectionElements = undefined;
     this.#searchPanel?.cleanup();
     this.#searchPanel = undefined;
     this.#selectionAction?.cleanup();
@@ -633,8 +665,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             return;
           }
 
-          this.#mouseUpDisposes?.forEach((dispose) => dispose());
-          this.#mouseUpDisposes = undefined;
+          this.#selectEventDisposes?.forEach((dispose) => dispose());
+          this.#selectEventDisposes = undefined;
 
           if (this.#isGutterMouseDown) {
             this.#isGutterMouseDown = false;
@@ -645,7 +677,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#shiftKeyPressed = false;
           this.#selectionStart = undefined;
           this.#reservedSelections = undefined;
-          this.#selectionElements?.forEach((el, key) => {
+          this.#overlayElements?.forEach((el, key) => {
             if (key.startsWith('selectionActionIcon-')) {
               el.dataset.visible = 'true';
             }
@@ -680,8 +712,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   #listenContentElement(contentEl: HTMLElement, gutterEl?: HTMLElement): void {
     const targetIsContentElement = (e: Event) => {
-      const target = e.composedPath()[0] as HTMLElement;
-      return target === contentEl || contentEl.contains(target);
+      const target = e.composedPath()[0] as HTMLElement | undefined;
+      return (
+        target !== undefined &&
+        (target === contentEl || contentEl.contains(target))
+      );
     };
 
     this.#editorEventDisposes?.forEach((dispose) => dispose());
@@ -694,6 +729,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             return;
           }
 
+          this.#markerManager?.removePopup();
+
           // this is a workaround for the selection rendering glitch
           // happens when selecting content in shadow DOM on Safari
           if (
@@ -701,7 +738,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#lineAnnotations !== undefined &&
             this.#lineAnnotations.length > 0
           ) {
-            this.#mouseUpDisposes = [
+            this.#selectEventDisposes = [
               ...contentEl.querySelectorAll<HTMLElement>(
                 '[data-line-annotation]'
               ),
@@ -877,35 +914,58 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ),
     ];
     if (gutterEl !== undefined) {
+      const resolveGutterTarget = (
+        eventTarget: HTMLElement | undefined,
+        includeContentLine = false
+      ) => {
+        let target = eventTarget;
+        if (target?.dataset.lineNumberContent !== undefined) {
+          target = target.parentElement ?? undefined;
+        } else if (includeContentLine && target?.tagName === 'SPAN') {
+          target = target.closest('[data-line]') as HTMLElement | undefined;
+        }
+        return target;
+      };
+
+      const resolveEditableLine = (target: HTMLElement | undefined) => {
+        if (target === undefined) {
+          return;
+        }
+        const lineType = target.dataset.lineType;
+        const lineNumber =
+          getLineNumberAttr(target) ??
+          getLineNumberAttr(target, 'columnNumber');
+        if (
+          lineNumber === undefined ||
+          lineType === undefined ||
+          !isLineEditable(lineType)
+        ) {
+          return;
+        }
+        return lineNumber - 1;
+      };
+
       this.#editorEventDisposes.push(
         addEventListener(
           gutterEl,
           'pointerdown',
           (e) => {
-            let target = e.composedPath()[0] as HTMLElement | undefined;
-            if (target?.dataset.lineNumberContent !== undefined) {
-              target =
-                target.parentElement ?? (undefined as HTMLElement | undefined);
-            }
             const textDocument = this.#textDocument;
-            if (target === undefined || textDocument === undefined) {
+            const lineIndex = resolveEditableLine(
+              resolveGutterTarget(
+                e.composedPath()[0] as HTMLElement | undefined
+              )
+            );
+            if (lineIndex === undefined || textDocument === undefined) {
               return;
             }
-            const lineType = target.dataset.lineType;
-            const lineNumber = getLineNumberAttr(target, 'columnNumber');
-            if (
-              lineNumber === undefined ||
-              lineType === undefined ||
-              !isLineEditable(lineType)
-            ) {
-              return;
-            }
-            const line = lineNumber - 1;
+
+            this.#markerManager?.removePopup();
             const selection: EditorSelection = {
-              start: { line, character: 0 },
+              start: { line: lineIndex, character: 0 },
               end: {
-                line,
-                character: textDocument.getLineText(line).length,
+                line: lineIndex,
+                character: textDocument.getLineText(lineIndex).length,
               },
               direction: DirectionForward,
             };
@@ -913,55 +973,43 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#selectionStart = selection;
             this.#updateSelections([selection]);
             this.#focus(selection.end);
-            this.#mouseUpDisposes = [
+            this.#selectEventDisposes = [
               addEventListener(
                 document,
                 'mousemove',
                 (e) => {
-                  let target = e.composedPath()[0] as HTMLElement | undefined;
-                  if (target?.dataset.lineNumberContent !== undefined) {
-                    target = target?.parentElement ?? undefined;
-                  } else if (target?.tagName === 'SPAN') {
-                    target = target?.closest('[data-line]') as
-                      | HTMLElement
-                      | undefined;
+                  if (!this.#isGutterMouseDown) {
+                    return;
                   }
-                  if (target === undefined) {
+                  const textDocument = this.#textDocument;
+                  const lineIndex = resolveEditableLine(
+                    resolveGutterTarget(
+                      e.composedPath()[0] as HTMLElement | undefined,
+                      true
+                    )
+                  );
+                  if (lineIndex === undefined || textDocument === undefined) {
                     return;
                   }
 
-                  const lineType = target.dataset.lineType;
-                  const lineNumber =
-                    getLineNumberAttr(target) ??
-                    getLineNumberAttr(target, 'columnNumber');
-                  if (
-                    this.#isGutterMouseDown &&
-                    this.#textDocument !== undefined &&
-                    lineNumber !== undefined &&
-                    lineType !== undefined &&
-                    isLineEditable(lineType)
-                  ) {
-                    const lineIndex = lineNumber - 1;
-                    let selection: EditorSelection = {
-                      start: { line: lineIndex, character: 0 },
-                      end: {
-                        line: lineIndex,
-                        character:
-                          this.#textDocument.getLineText(lineIndex).length,
-                      },
-                      direction: DirectionForward,
-                    };
-                    if (this.#selectionStart !== undefined) {
-                      selection = createSelectionFrom(
-                        this.#selectionStart,
-                        selection
-                      );
-                    } else {
-                      this.#selectionStart = selection;
-                    }
-                    this.#updateSelections([selection]);
-                    this.#focus(selection.end);
+                  let selection: EditorSelection = {
+                    start: { line: lineIndex, character: 0 },
+                    end: {
+                      line: lineIndex,
+                      character: textDocument.getLineText(lineIndex).length,
+                    },
+                    direction: DirectionForward,
+                  };
+                  if (this.#selectionStart !== undefined) {
+                    selection = createSelectionFrom(
+                      this.#selectionStart,
+                      selection
+                    );
+                  } else {
+                    this.#selectionStart = selection;
                   }
+                  this.#updateSelections([selection]);
+                  this.#focus(selection.end);
                 },
                 { passive: true }
               ),
@@ -971,6 +1019,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         )
       );
     }
+
+    this.#markerManager?.listenHover(contentEl);
+
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = new ResizeObserver(() => {
       this.#handleLayoutResize();
@@ -993,8 +1044,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
       case 'findNextMatch': {
         const selections = this.#selections;
-        const textDocument = this.#textDocument;
-        if (selections === undefined || textDocument === undefined) {
+        if (selections === undefined) {
           break;
         }
         const hasCollapsed = selections.some(isCollapsedSelection);
@@ -1127,10 +1177,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#lineYCache.clear();
       this.#wrapLineOffsetsCache.clear();
     }
-    if (this.#selections !== undefined) {
-      this.#updateSelections(this.#selections);
-      this.focus();
+    if (
+      this.#selections !== undefined ||
+      this.#matches !== undefined ||
+      this.#markerManager !== undefined
+    ) {
+      this.#updateSelections(this.#selections ?? []);
+      if (this.#selections !== undefined) {
+        this.focus();
+      }
     }
+    this.#markerManager?.removePopup();
   }
 
   #rerender(
@@ -1331,89 +1388,27 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #updateSelections(selections: EditorSelection[]) {
-    this.postponeBackgroundTokenizeToNextFrame();
-
-    this.#primaryCaretElement = undefined;
-    this.#fileInstance?.setSelectedLines(null);
-    this.#gutterElement
-      ?.querySelectorAll('[data-active]')
-      .forEach((el) => el.removeAttribute('data-active'));
-
-    if (selections.length === 0 && this.#matches === undefined) {
-      this.#selections = undefined;
-      this.#matches = undefined;
-      this.#selectionElements?.forEach((el) => el.remove());
-      this.#selectionElements?.clear();
-      return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    const renderCtx = {
-      fragment,
-      elements: new Map<string, HTMLElement>(),
-    };
-
-    if (selections.length > 0) {
-      const normalizedSelections = mergeOverlappingSelections(selections);
-      const primarySelection = normalizedSelections.at(-1)!;
-      this.#selections = normalizedSelections;
-      if (isCollapsedSelection(primarySelection)) {
-        const line = primarySelection.start.line + 1;
-        this.#fileInstance?.setSelectedLines({
-          start: line,
-          end: line,
+  #focus(position?: Position, preventScroll = true) {
+    if (position !== undefined) {
+      this.#shouldIgnoreSelectionChange = true;
+      this.#setWindowSelection({
+        start: position,
+        end: position,
+        direction: DirectionNone,
+      });
+      // call focus in a request animation frame to prevent conflict with
+      // the `setBaseAndExtent` method
+      requestAnimationFrame(() => {
+        this.#contentElement?.focus({ preventScroll });
+        // another request animation frame since the `focus` call
+        // may trigger a selectionchange event, which we want to ignore
+        requestAnimationFrame(() => {
+          this.#shouldIgnoreSelectionChange = false;
         });
-      } else {
-        if (this.#gutterElement !== undefined) {
-          const pos = getCaretPosition(primarySelection);
-          this.#gutterElement
-            .querySelector(`[data-column-number="${pos.line + 1}"]`)
-            ?.setAttribute('data-active', '');
-        }
-      }
-
-      for (const selection of normalizedSelections) {
-        if (!isCollapsedSelection(selection)) {
-          this.#renderSelection(renderCtx, selection, 'selection');
-        }
-        this.#renderCaret(renderCtx, selection, selection === primarySelection);
-      }
-      if (
-        this.#options.enabledSelectionAction === true &&
-        !isCollapsedSelection(primarySelection)
-      ) {
-        this.#renderSelectionActionIcon(renderCtx, primarySelection);
-      }
+      });
+    } else {
+      this.#contentElement?.focus({ preventScroll });
     }
-
-    const textDocument = this.#textDocument;
-    if (this.#matches !== undefined && textDocument !== undefined) {
-      const primarySelection = this.#selections?.at(-1);
-      const primaryStartOffset =
-        primarySelection !== undefined
-          ? textDocument.offsetAt(primarySelection.start)
-          : -1;
-      const primaryEndOffset =
-        primarySelection !== undefined
-          ? textDocument.offsetAt(primarySelection.end)
-          : -1;
-      for (const [startOffset, endOffset] of this.#matches) {
-        const selection: EditorSelection = {
-          start: textDocument.positionAt(startOffset),
-          end: textDocument.positionAt(endOffset),
-          direction: DirectionNone,
-        };
-        const isFocused =
-          primaryStartOffset === startOffset && primaryEndOffset === endOffset;
-        this.#renderSelection(renderCtx, selection, 'match', isFocused);
-      }
-    }
-
-    this.#overlayElement?.appendChild(fragment);
-    this.#selectionElements?.forEach((el) => el.remove());
-    this.#selectionElements?.clear();
-    this.#selectionElements = renderCtx.elements;
   }
 
   // set window native selection to match the selection
@@ -1456,29 +1451,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     } catch (err) {
       console.error('[diffs/editor] failed to update window selection:', err);
-    }
-  }
-
-  #focus(position?: Position, preventScroll = true) {
-    if (position !== undefined) {
-      this.#shouldIgnoreSelectionChange = true;
-      this.#setWindowSelection({
-        start: position,
-        end: position,
-        direction: DirectionNone,
-      });
-      // call focus in a request animation frame to prevent conflict with
-      // the `setBaseAndExtent` method
-      requestAnimationFrame(() => {
-        this.#contentElement?.focus({ preventScroll });
-        // another request animation frame since the `focus` call
-        // may trigger a selectionchange event, which we want to ignore
-        requestAnimationFrame(() => {
-          this.#shouldIgnoreSelectionChange = false;
-        });
-      });
-    } else {
-      this.#contentElement?.focus({ preventScroll });
     }
   }
 
@@ -1586,20 +1558,123 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     virtualCaret.remove();
   }
 
+  #updateSelections(selections: EditorSelection[]) {
+    this.postponeBackgroundTokenizeToNextFrame();
+
+    this.#primaryCaretElement = undefined;
+    this.#fileInstance?.setSelectedLines(null);
+    this.#gutterElement
+      ?.querySelectorAll('[data-active]')
+      .forEach((el) => el.removeAttribute('data-active'));
+
+    if (
+      selections.length === 0 &&
+      this.#matches === undefined &&
+      this.#markerManager === undefined
+    ) {
+      this.#selections = undefined;
+      this.#overlayElements?.forEach((el) => el.remove());
+      this.#overlayElements?.clear();
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    const renderCtx = {
+      fragment,
+      elements: new Map<string, HTMLElement>(),
+    };
+
+    if (selections.length > 0) {
+      const normalizedSelections = mergeOverlappingSelections(selections);
+      const primarySelection = normalizedSelections.at(-1)!;
+      this.#selections = normalizedSelections;
+      if (isCollapsedSelection(primarySelection)) {
+        const line = primarySelection.start.line + 1;
+        this.#fileInstance?.setSelectedLines({
+          start: line,
+          end: line,
+        });
+      } else {
+        if (this.#gutterElement !== undefined) {
+          const pos = getCaretPosition(primarySelection);
+          this.#gutterElement
+            .querySelector(`[data-column-number="${pos.line + 1}"]`)
+            ?.setAttribute('data-active', '');
+        }
+      }
+
+      for (const selection of normalizedSelections) {
+        if (!isCollapsedSelection(selection)) {
+          this.#renderSelection(renderCtx, 'selection', selection);
+        }
+        this.#renderCaret(renderCtx, selection, selection === primarySelection);
+      }
+      if (
+        this.#options.enabledSelectionAction === true &&
+        !isCollapsedSelection(primarySelection)
+      ) {
+        this.#renderSelectionActionIcon(renderCtx, primarySelection);
+      }
+    }
+
+    const textDocument = this.#textDocument;
+    if (this.#matches !== undefined && textDocument !== undefined) {
+      const primarySelection = this.#selections?.at(-1);
+      const primaryStartOffset =
+        primarySelection !== undefined
+          ? textDocument.offsetAt(primarySelection.start)
+          : -1;
+      const primaryEndOffset =
+        primarySelection !== undefined
+          ? textDocument.offsetAt(primarySelection.end)
+          : -1;
+      for (const [startOffset, endOffset] of this.#matches) {
+        const range: Range = {
+          start: textDocument.positionAt(startOffset),
+          end: textDocument.positionAt(endOffset),
+        };
+        const isFocused =
+          primaryStartOffset === startOffset && primaryEndOffset === endOffset;
+        this.#renderSelection(
+          renderCtx,
+          'match',
+          range,
+          isFocused ? 'focus' : undefined
+        );
+      }
+    }
+
+    if (this.#markerManager !== undefined && textDocument !== undefined) {
+      for (const marker of this.#markerManager.markers) {
+        this.#renderSelection(
+          renderCtx,
+          'marker',
+          marker,
+          markerSeverityDatasetKey(marker.severity)
+        );
+      }
+    }
+
+    this.#overlayElement?.appendChild(fragment);
+    this.#overlayElements?.forEach((el) => el.remove());
+    this.#overlayElements?.clear();
+    this.#overlayElements = renderCtx.elements;
+  }
+
   #renderSelection(
     renderCtx: {
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
     },
-    selection: EditorSelection,
-    type: 'selection' | 'match',
-    isFocused?: boolean
+    type: 'selection' | 'match' | 'marker',
+    range: Range,
+    extraDataset?: string
   ) {
     if (this.#textDocument === undefined) {
       return;
     }
 
-    const { start, end } = selection;
+    const { start, end } = range;
     for (let line = start.line; line <= end.line; line++) {
       if (!this.#isLineVisible(line)) {
         continue;
@@ -1623,7 +1698,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             endChar,
             isLastLine,
             type,
-            isFocused
+            extraDataset
           );
           continue;
         }
@@ -1631,27 +1706,28 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
       let left = 0;
       let width = 0;
+      let paddingEnd = 0;
       if (startChar === 0) {
         left = this.#getGutterWidth() + this.#metrics.ch; // gutter width + inline padding (1ch)
       } else {
         left = this.#getCharX(line, startChar)[0];
       }
+      if (!isLastLine && type === 'selection') {
+        paddingEnd = this.#metrics.ch;
+      }
       if (startChar === endChar) {
-        width = isLastLine ? 0 : this.#metrics.ch;
+        width = paddingEnd;
       } else {
-        width =
-          this.#getCharX(line, endChar)[0] -
-          left +
-          (isLastLine ? 0 : this.#metrics.ch);
+        width = this.#getCharX(line, endChar)[0] - left + paddingEnd;
       }
       this.#renderSelectionBlock(
         renderCtx,
+        type,
         line,
         0,
         left,
         width,
-        type,
-        isFocused
+        extraDataset
       );
     }
   }
@@ -1672,8 +1748,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     startChar: number,
     endChar: number,
     isLastLine: boolean,
-    type: 'selection' | 'match',
-    isFocused: boolean = false
+    type: 'selection' | 'match' | 'marker',
+    extraDataset?: string
   ) {
     const wrapOffsets = this.#wrapLineText(line);
     const segmentCount = wrapOffsets.length - 1;
@@ -1692,6 +1768,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
       let segmentLeft: number;
       let segmentWidth: number;
+      let paddingEnd = 0;
       if (wrapStartChar === 0) {
         segmentLeft = offsetLeft;
       } else {
@@ -1706,8 +1783,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             ? prefixAsciiColumns * this.#metrics.ch
             : this.#metrics.measureTextWidth(prefixInSegment));
       }
+      if (
+        !isLastLine &&
+        wrapLine === segmentCount - 1 &&
+        type === 'selection'
+      ) {
+        paddingEnd = this.#metrics.ch;
+      }
       if (wrapStartChar === wrapEndChar) {
-        segmentWidth = wrapLine === segmentCount - 1 ? 0 : this.#metrics.ch;
+        segmentWidth = paddingEnd;
       } else {
         const selectionInSegment = lineText.slice(wrapStartChar, wrapEndChar);
         const selectionAsciiWidth = getExpandedAsciiTextColumns(
@@ -1718,19 +1802,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           selectionAsciiWidth !== -1
             ? selectionAsciiWidth * this.#metrics.ch
             : this.#metrics.measureTextWidth(selectionInSegment);
-        if (!isLastLine && wrapLine === segmentCount - 1) {
-          segmentWidth += this.#metrics.ch;
-        }
+        segmentWidth += paddingEnd;
       }
 
       this.#renderSelectionBlock(
         renderCtx,
+        type,
         line,
         wrapLine,
         segmentLeft,
         segmentWidth,
-        type,
-        isFocused
+        extraDataset
       );
     }
   }
@@ -1748,12 +1830,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         width: number;
       };
     },
+    type: 'selection' | 'match' | 'marker',
     line: number,
     wrapLine: number,
     left: number,
     width: number,
-    type: 'selection' | 'match',
-    isFocused: boolean = false
+    extraDataset?: string
   ) {
     if (width === 0) {
       return;
@@ -1762,8 +1844,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const { ch, lineHeight } = this.#metrics;
     const y = this.#getLineY(line) + wrapLine * lineHeight;
     const css = `width:${width}px;transform:translateX(${left}px) translateY(${y}px);`;
-    const cacheKey = `${type}-block-${left}-${y}-${width}-${isFocused ? 'f' : ''}`;
-    const selectionEls = this.#selectionElements;
+    const cacheKey = `${type}-${left}-${y}-${width}${extraDataset ?? ''}`;
+    const overlayEls = this.#overlayElements;
 
     const rounded =
       (this.#options.roundedSelection ?? true) && type === 'selection';
@@ -1795,9 +1877,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if (cornerEl !== undefined) {
         return;
       }
-      if (selectionEls?.has(cacheKey) === true) {
-        cornerEl = selectionEls.get(cacheKey)!;
-        selectionEls.delete(cacheKey);
+      if (overlayEls?.has(cacheKey) === true) {
+        cornerEl = overlayEls.get(cacheKey)!;
+        overlayEls.delete(cacheKey);
       } else {
         cornerEl = h(
           'div',
@@ -1877,21 +1959,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    if (selectionEls?.has(cacheKey) === true) {
-      rangeEl = selectionEls.get(cacheKey)!;
-      selectionEls.delete(cacheKey);
+    if (overlayEls?.has(cacheKey) === true) {
+      rangeEl = overlayEls.get(cacheKey)!;
+      overlayEls.delete(cacheKey);
     } else {
       rangeEl = h(
         'div',
         {
-          dataset: type + 'Range',
+          dataset: extraDataset
+            ? [type + 'Range', extraDataset]
+            : type + 'Range',
           style: { cssText: css },
         },
         renderCtx.fragment
       );
-      if (type === 'match' && isFocused === true) {
-        rangeEl.dataset.focus = '';
-      }
     }
 
     if (rounded) {
@@ -2118,9 +2199,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
         if (nextMatch !== undefined) {
           scrollToMatch(nextMatch, true);
+        } else {
+          this.#updateSelections(this.#selections ?? []);
         }
-        this.#matches = allMatches;
-        this.#updateSelections(this.#selections ?? []);
         return nextMatch;
       },
       onClose: () => {
@@ -2195,23 +2276,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    const edit = isCollapsedSelection(primarySelection)
-      ? (() => {
-          const offset = textDocument.offsetAt(primarySelection.start);
-          const nextOffset = forward
-            ? Math.min(textDocument.getText().length, offset + 1)
-            : Math.max(0, offset - 1);
-          return {
-            start: Math.min(offset, nextOffset),
-            end: Math.max(offset, nextOffset),
-            text: '',
-          };
-        })()
-      : {
-          start: textDocument.offsetAt(primarySelection.start),
-          end: textDocument.offsetAt(primarySelection.end),
-          text: '',
-        };
+    let edit: ResolvedTextEdit;
+    if (isCollapsedSelection(primarySelection)) {
+      const offset = textDocument.offsetAt(primarySelection.start);
+      const nextOffset = forward
+        ? Math.min(textDocument.getText().length, offset + 1)
+        : Math.max(0, offset - 1);
+      edit = {
+        start: Math.min(offset, nextOffset),
+        end: Math.max(offset, nextOffset),
+        text: '',
+      };
+    } else {
+      edit = {
+        start: textDocument.offsetAt(primarySelection.start),
+        end: textDocument.offsetAt(primarySelection.end),
+        text: '',
+      };
+    }
 
     this.#applyResolvedTextEdit(edit);
   }

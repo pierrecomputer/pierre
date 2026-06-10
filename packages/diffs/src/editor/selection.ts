@@ -745,7 +745,9 @@ export function applyDeleteWordBackwardToSelections<LAnnotation>(
 /**
  * Checks if a selection is collapsed.
  */
-export function isCollapsedSelection(selection: EditorSelection): boolean {
+export function isCollapsedSelection(
+  selection: EditorSelection | Range
+): boolean {
   return (
     selection.start.line === selection.end.line &&
     selection.start.character === selection.end.character
@@ -775,8 +777,8 @@ export function isLineEditable(lineType: string): boolean {
  * Checks whether selections `a` and `b` intersect.
  */
 export function selectionIntersects(
-  a: EditorSelection,
-  b: EditorSelection
+  a: EditorSelection | Range,
+  b: EditorSelection | Range
 ): boolean {
   const aCollapsed = isCollapsedSelection(a);
   const bCollapsed = isCollapsedSelection(b);

@@ -194,7 +194,7 @@ export class SearchPanelWidget {
     });
 
     this.#container = h('div', {
-      dataset: 'searchPanel',
+      dataset: ['searchPanel', 'editorWidget'],
       children: [
         h('div', {
           dataset: 'searchPanelRow',

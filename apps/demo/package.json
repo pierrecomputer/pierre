@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@pierre/diffs": "workspace:*",
+    "@pierre/icons": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "shiki": "catalog:"

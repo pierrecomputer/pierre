@@ -23,6 +23,13 @@ import {
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
 import type { WorkerPoolManager } from '@pierre/diffs/worker';
+import {
+  IconCiFailedOctagonFill,
+  IconCiWarningFill,
+  IconInfoFill,
+} from '@pierre/icons';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 import {
   cleanupCodeView,
@@ -58,6 +65,33 @@ const VIRTUALIZE = true;
 const CRAZY_FILE = false;
 const LARGE_CONFLICT_FILE = false;
 const CODE_VIEW_OLD_NEW_FILE = true;
+
+// Pre-render the @pierre/icons SVG markup once so it can be embedded into the
+// `message.html` strings the editor injects for markers. The icons default to
+// `fill: currentcolor`, so each one inherits the surrounding text color.
+const MARKER_INFO_ICON = renderToStaticMarkup(
+  createElement(IconInfoFill, { size: 16 })
+);
+const MARKER_WARNING_ICON = renderToStaticMarkup(
+  createElement(IconCiWarningFill, { size: 16 })
+);
+const MARKER_ERROR_ICON = renderToStaticMarkup(
+  createElement(IconCiFailedOctagonFill, { size: 16 })
+);
+
+// Builds the HTML for a single marker overlay: a severity-colored leading icon
+// next to a message, with an additional description indented below the message
+// (aligned with the message text, not the icon).
+function markerMessage(opts: {
+  color: string;
+  icon: string;
+  message: string;
+  description: string;
+}): string {
+  const iconCol = `<span style="color:${opts.color};display:inline-flex;flex:none;margin-top:2px">${opts.icon}</span>`;
+  const textCol = `<div style="display:flex;flex-direction:column;gap:2px">${opts.message}<div style="color:gray">${opts.description}</div></div>`;
+  return `<div style="display:flex;align-items:flex-start;gap:8px">${iconCol}${textCol}</div>`;
+}
 
 const FileStreamCodeConfigs: FileStreamCodeConfigsItem[] = [
   {
@@ -864,6 +898,67 @@ if (renderFileButton != null) {
                   direction: 'none',
                 },
               ]);
+              requestAnimationFrame(() => {
+                editor.setMarkers([
+                  {
+                    start: {
+                      line: 1,
+                      character: 2,
+                    },
+                    end: {
+                      line: 1,
+                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
+                    },
+                    severity: 'info',
+                    message: {
+                      html: markerMessage({
+                        color: 'var(--diffs-editor-info-fg, #3794ff)',
+                        icon: MARKER_INFO_ICON,
+                        message: '<code>CodeOptionsMultipleThemes</code>',
+                        description: 'Code options of multiple themes.',
+                      }),
+                    },
+                  },
+                  {
+                    start: {
+                      line: 2,
+                      character: 2,
+                    },
+                    end: {
+                      line: 2,
+                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
+                    },
+                    severity: 'warning',
+                    message: {
+                      html: markerMessage({
+                        color: 'var(--diffs-editor-warning-fg, #cca700)',
+                        icon: MARKER_WARNING_ICON,
+                        message: '<code>CodeToHastOptions</code>',
+                        description: 'Code to Hast Options is deprecated.',
+                      }),
+                    },
+                  },
+                  {
+                    start: {
+                      line: 3,
+                      character: 2,
+                    },
+                    end: {
+                      line: 3,
+                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
+                    },
+                    severity: 'error',
+                    message: {
+                      html: markerMessage({
+                        color: 'var(--diffs-editor-error-fg, red)',
+                        icon: MARKER_ERROR_ICON,
+                        message: '<code>DecorationItem</code>',
+                        description: 'Type not defined.',
+                      }),
+                    },
+                  },
+                ]);
+              });
             } else {
               editor.cleanUp();
             }
