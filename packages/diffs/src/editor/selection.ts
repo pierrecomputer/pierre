@@ -134,8 +134,7 @@ export function mapCursorMove(
         const indent = getLeadingSpaces(textDocument.getLineText(line));
         character = character === indent ? 0 : indent;
       } else {
-        character =
-          shortcut === 'start' ? 0 : textDocument.getLineText(line).length;
+        character = shortcut === 'start' ? 0 : textDocument.getLineLength(line);
       }
       if (selection.direction === DirectionBackward) {
         line = selection.start.line;
@@ -147,6 +146,8 @@ export function mapCursorMove(
     } else if (shortcut === 'down') {
       line = Math.min(Math.max(lineCount - 1, 0), line + 1);
     } else if (isCollapsedSelection(selection)) {
+      const lineLength = textDocument.getLineLength(line);
+      character = Math.min(character, lineLength);
       if (shortcut === 'left') {
         character--;
 
@@ -155,12 +156,12 @@ export function mapCursorMove(
             character = 0;
           } else {
             line = Math.max(0, line - 1);
-            character = textDocument.getLineText(line).length;
+            character = textDocument.getLineLength(line);
           }
         }
       } else {
         character++;
-        if (character > textDocument.getLineText(line).length) {
+        if (character > lineLength) {
           if (line === lineCount - 1) {
             character--;
           } else {
@@ -234,7 +235,9 @@ export function applyTextChangeToSelections<LAnnotation>(
   for (const selection of selections) {
     selectionPositions.push(selection.start, selection.end);
   }
-  const selectionOffsets = textDocument.offsetsAt(selectionPositions);
+  const selectionOffsets = selectionPositions.map((position) =>
+    textDocument.offsetAt(position)
+  );
   const primaryStartOffset = selectionOffsets[(selections.length - 1) * 2];
   const primaryEndOffset = selectionOffsets[(selections.length - 1) * 2 + 1];
   const ordered: Array<{
@@ -393,7 +396,9 @@ export function applyTextReplaceToSelections<LAnnotation>(
   for (const selection of selections) {
     selectionPositions.push(selection.start, selection.end);
   }
-  const selectionOffsets = textDocument.offsetsAt(selectionPositions);
+  const selectionOffsets = selectionPositions.map((position) =>
+    textDocument.offsetAt(position)
+  );
   const ordered: Array<{
     index: number;
     start: number;
@@ -554,7 +559,7 @@ export function applyTransposeToSelections<LAnnotation>(
 
     const { line, character } = selection.start;
     const offset = anchor;
-    const lineLength = textDocument.getLineText(line).length;
+    const lineLength = textDocument.getLineLength(line);
     let edit: ResolvedTextEdit | undefined;
 
     if (character > 0 && character < lineLength) {
@@ -573,7 +578,7 @@ export function applyTransposeToSelections<LAnnotation>(
       nextOffsetPairs.push([offset, offset]);
     } else if (character === 0 && line > 0 && lineLength > 0) {
       const prevLine = line - 1;
-      const prevLength = textDocument.getLineText(prevLine).length;
+      const prevLength = textDocument.getLineLength(prevLine);
       const prevEnd = textDocument.offsetAt({
         line: prevLine,
         character: prevLength,
@@ -696,7 +701,7 @@ export function applyDeleteSoftLineBackwardToSelections<LAnnotation>(
         direction: DirectionNone,
       };
     }
-    const prevLineLength = textDocument.getLineText(line - 1).length;
+    const prevLineLength = textDocument.getLineLength(line - 1);
     return {
       start: { line: line - 1, character: prevLineLength },
       end: { line, character: 0 },
@@ -1042,7 +1047,7 @@ export function getDocumentFullSelection(
   textDocument: TextDocument<unknown>
 ): EditorSelection {
   const lastLine = textDocument.lineCount - 1;
-  const lastCharacter = textDocument.getLineText(lastLine)?.length ?? 0;
+  const lastCharacter = textDocument.getLineLength(lastLine);
   return {
     start: { line: 0, character: 0 },
     end: { line: lastLine, character: lastCharacter },
@@ -1058,7 +1063,7 @@ export function getDocumentBoundarySelection(
   atEnd: boolean
 ): EditorSelection {
   const line = atEnd ? textDocument.lineCount - 1 : 0;
-  const character = atEnd ? (textDocument.getLineText(line)?.length ?? 0) : 0;
+  const character = atEnd ? textDocument.getLineLength(line) : 0;
   const start = { line, character };
   return {
     start: start,
@@ -1214,7 +1219,7 @@ function resolveDeleteWordBackwardRange(
     if (line === 0) {
       return [caret, caret];
     }
-    const prevLineLength = textDocument.getLineText(line - 1).length;
+    const prevLineLength = textDocument.getLineLength(line - 1);
     return [
       { line: line - 1, character: prevLineLength },
       { line, character: 0 },

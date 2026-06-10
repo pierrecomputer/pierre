@@ -169,11 +169,7 @@ export class TextDocument<LAnnotation> {
   }
 
   offsetAt(position: Position): number {
-    return this.#pieceTable.offsetAt(position);
-  }
-
-  offsetsAt(positions: readonly Position[]): number[] {
-    return this.#pieceTable.offsetsAt(positions);
+    return this.#pieceTable.offsetAt(this.normalizePosition(position));
   }
 
   getText(range?: Range): string {
@@ -182,6 +178,10 @@ export class TextDocument<LAnnotation> {
 
   getLineText(line: number, includeLineBreak?: boolean): string {
     return this.#pieceTable.getLineText(line, includeLineBreak);
+  }
+
+  getLineLength(line: number, includeLineBreak?: boolean): number {
+    return this.#pieceTable.getLineLength(line, includeLineBreak);
   }
 
   charAt(offset: number): string;
@@ -330,7 +330,7 @@ export class TextDocument<LAnnotation> {
       line,
       character: Math.max(
         0,
-        Math.min(position.character, this.getLineText(line).length)
+        Math.min(position.character, this.getLineLength(line))
       ),
     };
   }

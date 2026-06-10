@@ -82,9 +82,8 @@ export class PieceTable {
   #piecesCache: Piece[] = [];
   #length = 0;
   #lineCount = 0;
-  #lastVisitedLine:
-    | [line: number, includeLineBreak: boolean, text: string]
-    | null = null;
+  #lastVisitedLine: [number, boolean, string] | null = null;
+  #lastVisitedLineLength: [number, boolean, number] | null = null;
 
   constructor(originalText: string) {
     this.#original = new TextBuffer(originalText);
@@ -120,7 +119,45 @@ export class PieceTable {
     }
     const text = this.getTextSlice(offset[0], offset[1], !includeLineBreak);
     this.#lastVisitedLine = [line, includeLineBreak, text];
+    this.#lastVisitedLineLength = [line, includeLineBreak, text.length];
     return text;
+  }
+
+  getLineLength(line: number, includeLineBreak = false): number {
+    const lastVisitedLineLength = this.#lastVisitedLineLength;
+    const lastVisitedLine = this.#lastVisitedLine;
+    if (
+      lastVisitedLineLength !== null &&
+      lastVisitedLineLength[0] === line &&
+      lastVisitedLineLength[1] === includeLineBreak
+    ) {
+      return lastVisitedLineLength[2];
+    }
+    if (
+      lastVisitedLine !== null &&
+      lastVisitedLine[0] === line &&
+      lastVisitedLine[1] === includeLineBreak
+    ) {
+      const length = lastVisitedLine[2].length;
+      this.#lastVisitedLineLength = [line, includeLineBreak, length];
+      return length;
+    }
+    const offset = this.#getLineOffset(line);
+    if (offset === undefined) {
+      throw new Error(`Line index out of range: ${line}`);
+    }
+    const [start, end] = offset;
+    let length = end - start;
+    if (!includeLineBreak) {
+      while (
+        length > 0 &&
+        isEOL(this.charAt(start + length - 1).charCodeAt(0))
+      ) {
+        length--;
+      }
+    }
+    this.#lastVisitedLineLength = [line, includeLineBreak, length];
+    return length;
   }
 
   getTextSlice(start: number, end: number, trimEOF = false): string {
@@ -367,6 +404,7 @@ export class PieceTable {
 
     this.#setPieces(nextPieces);
     this.#lastVisitedLine = null;
+    this.#lastVisitedLineLength = null;
   }
 
   delete(offset: number, length: number): void {
@@ -407,6 +445,7 @@ export class PieceTable {
 
     this.#setPieces(nextPieces);
     this.#lastVisitedLine = null;
+    this.#lastVisitedLineLength = null;
   }
 
   applyEdits(edits: readonly ResolvedTextEdit[]): void {
@@ -487,6 +526,7 @@ export class PieceTable {
 
     this.#setPieces(nextPieces);
     this.#lastVisitedLine = null;
+    this.#lastVisitedLineLength = null;
   }
 
   positionAt(offset: number): Position {
@@ -531,22 +571,6 @@ export class PieceTable {
     }
     const character = clamp(position.character, 0, offset[1] - offset[0]);
     return offset[0] + character;
-  }
-
-  offsetsAt(positions: readonly Position[]): number[] {
-    const offsets: number[] = Array.from({ length: positions.length });
-    if (positions.length === 0) {
-      return offsets;
-    }
-    if (this.#length === 0) {
-      return offsets.fill(0);
-    }
-
-    for (let i = 0; i < positions.length; i++) {
-      offsets[i] = this.offsetAt(positions[i]);
-    }
-
-    return offsets;
   }
 
   #findPieceAtOffset(

@@ -1157,6 +1157,69 @@ describe('mapSelectionMove', () => {
       createSelection(0, 4, 0, 4),
     ]);
   });
+
+  test('moves left from a goal column past a shorter line end', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'this is a much longer line\nshort\n'
+    );
+    const onShortLine = mapCursorMove(
+      textDocument,
+      [createSelection(0, 20, 0, 20)],
+      'down'
+    );
+
+    expect(onShortLine).toEqual([createSelection(1, 20, 1, 20)]);
+
+    expect(mapCursorMove(textDocument, onShortLine, 'left')).toEqual([
+      createSelection(1, 4, 1, 4),
+    ]);
+  });
+
+  test('preserves goal column across short and empty lines', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'this is a much longer line here\nshort\n\nanother much longer line here\n'
+    );
+    const onShortLine = mapCursorMove(
+      textDocument,
+      [createSelection(0, 20, 0, 20)],
+      'down'
+    );
+    const onEmptyLine = mapCursorMove(textDocument, onShortLine, 'down');
+    const onLongLine = mapCursorMove(textDocument, onEmptyLine, 'down');
+
+    expect(onShortLine).toEqual([createSelection(1, 20, 1, 20)]);
+    expect(onEmptyLine).toEqual([createSelection(2, 20, 2, 20)]);
+    expect(onLongLine).toEqual([createSelection(3, 20, 3, 20)]);
+  });
+
+  test('inserts at the clamped caret after moving onto a shorter line', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'this is a much longer line\nshort\nnext\n'
+    );
+    const onShortLine = mapCursorMove(
+      textDocument,
+      [createSelection(0, 20, 0, 20)],
+      'down'
+    );
+    const { nextSelections, change } = applyTextChangeToSelections(
+      textDocument,
+      onShortLine,
+      {
+        start: textDocument.offsetAt(onShortLine[0].start),
+        end: textDocument.offsetAt(onShortLine[0].end),
+        text: 'X',
+      }
+    );
+
+    expect(textDocument.getText()).toBe(
+      'this is a much longer line\nshortX\nnext\n'
+    );
+    expect(nextSelections).toEqual([createSelection(1, 6, 1, 6)]);
+    expect(change).toBeDefined();
+  });
 });
 
 describe('mapSelectionRangeMove', () => {

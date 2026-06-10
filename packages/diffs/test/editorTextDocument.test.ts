@@ -84,6 +84,9 @@ describe('TextDocument', () => {
     expect(d.getLineText(0)).toBe('first');
     expect(d.getLineText(1)).toBe('second');
     expect(d.getLineText(2)).toBe('');
+    expect(d.getLineLength(0)).toBe(5);
+    expect(d.getLineLength(1)).toBe(6);
+    expect(d.getLineLength(2)).toBe(0);
     expect(
       d.getText({
         start: { line: 0, character: 0 },
