@@ -1,4 +1,6 @@
 import 'server-only';
+import { cacheSignal } from 'react';
+
 import type { InitialDiffshubPatchResponse } from './diffshubPatchTypes';
 
 const CACHE_CONTROL = 'no-store';
@@ -55,7 +57,7 @@ export interface DiffshubPatchRequestInput {
 // stream through React Flight so the client can consume bytes earlier.
 export async function createDiffshubPatchResponse(
   { domain = null, path = null, url = null }: DiffshubPatchRequestInput,
-  requestSignal: AbortSignal
+  requestSignal: AbortSignal | null
 ): Promise<Response> {
   if (path == null && url == null) {
     return createTextResponse('Path or URL parameter is required', {
@@ -94,10 +96,7 @@ export async function loadInitialDiffshubPatchResponse(
   input: DiffshubPatchRequestInput
 ): Promise<InitialDiffshubPatchResponse> {
   try {
-    const response = await createDiffshubPatchResponse(
-      input,
-      new AbortController().signal
-    );
+    const response = await createDiffshubPatchResponse(input, cacheSignal());
 
     if (!response.ok || response.body == null) {
       return {
@@ -350,12 +349,14 @@ function createPatchTextResponse(
 // error documents.
 async function createPatchStreamResponse(
   patchURL: string,
-  requestSignal: AbortSignal,
+  requestSignal: AbortSignal | null,
   options: Omit<TextResponseOptions, 'status'>
 ): Promise<Response> {
   const upstreamController = new AbortController();
-  const abortUpstream = () => upstreamController.abort();
-  requestSignal.addEventListener('abort', abortUpstream, { once: true });
+  const removeRequestAbortListener = forwardAbortSignal(
+    requestSignal,
+    upstreamController
+  );
 
   let response: Response;
   try {
@@ -365,13 +366,13 @@ async function createPatchStreamResponse(
       signal: upstreamController.signal,
     });
   } catch {
-    requestSignal.removeEventListener('abort', abortUpstream);
+    removeRequestAbortListener();
     return createTextResponse('Failed to fetch patch.', { status: 502 });
   }
 
   if (!response.ok) {
     const status = response.status >= 400 ? response.status : 502;
-    requestSignal.removeEventListener('abort', abortUpstream);
+    removeRequestAbortListener();
     return createTextResponse(
       `Failed to fetch patch: ${response.status} ${response.statusText}`,
       { status }
@@ -380,12 +381,12 @@ async function createPatchStreamResponse(
 
   const contentType = response.headers.get('Content-Type');
   if (contentType == null || !contentType.startsWith('text/plain')) {
-    requestSignal.removeEventListener('abort', abortUpstream);
+    removeRequestAbortListener();
     return createTextResponse(NON_DIFF_RESPONSE_MESSAGE, { status: 415 });
   }
 
   if (response.headers.get('Content-Length') === '0') {
-    requestSignal.removeEventListener('abort', abortUpstream);
+    removeRequestAbortListener();
     return createTextResponse(EMPTY_PATCH_MESSAGE, { status: 422 });
   }
 
@@ -395,23 +396,43 @@ async function createPatchStreamResponse(
       const patchText = await response.text();
       return createPatchTextResponse(patchText, options);
     } finally {
-      requestSignal.removeEventListener('abort', abortUpstream);
+      removeRequestAbortListener();
     }
   }
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       void pumpPatchBody(responseBody, controller).finally(() => {
-        requestSignal.removeEventListener('abort', abortUpstream);
+        removeRequestAbortListener();
       });
     },
     cancel() {
-      abortUpstream();
-      requestSignal.removeEventListener('abort', abortUpstream);
+      upstreamController.abort();
+      removeRequestAbortListener();
     },
   });
 
   return createTextResponse(stream, options);
+}
+
+// Connects request/render cancellation to the upstream fetch without requiring
+// callers outside React rendering to invent a never-aborted signal.
+function forwardAbortSignal(
+  requestSignal: AbortSignal | null,
+  upstreamController: AbortController
+): () => void {
+  if (requestSignal == null) {
+    return () => {};
+  }
+
+  const abortUpstream = () => upstreamController.abort();
+  if (requestSignal.aborted) {
+    abortUpstream();
+    return () => {};
+  }
+
+  requestSignal.addEventListener('abort', abortUpstream, { once: true });
+  return () => requestSignal.removeEventListener('abort', abortUpstream);
 }
 
 // Forwards each validated upstream diff chunk into the client stream.
