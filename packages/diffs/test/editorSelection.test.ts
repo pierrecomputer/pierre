@@ -1204,13 +1204,12 @@ describe('mapSelectionMove', () => {
       [createSelection(0, 20, 0, 20)],
       'down'
     );
-    const caret = textDocument.normalizePosition(onShortLine[0].start);
     const { nextSelections, change } = applyTextChangeToSelections(
       textDocument,
       onShortLine,
       {
-        start: textDocument.offsetAt(caret),
-        end: textDocument.offsetAt(caret),
+        start: textDocument.offsetAt(onShortLine[0].start),
+        end: textDocument.offsetAt(onShortLine[0].end),
         text: 'X',
       }
     );

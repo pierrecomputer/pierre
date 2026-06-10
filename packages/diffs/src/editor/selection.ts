@@ -233,10 +233,7 @@ export function applyTextChangeToSelections<LAnnotation>(
   }
   const selectionPositions: Position[] = [];
   for (const selection of selections) {
-    selectionPositions.push(
-      textDocument.normalizePosition(selection.start),
-      textDocument.normalizePosition(selection.end)
-    );
+    selectionPositions.push(selection.start, selection.end);
   }
   const selectionOffsets = selectionPositions.map((position) =>
     textDocument.offsetAt(position)
@@ -397,10 +394,7 @@ export function applyTextReplaceToSelections<LAnnotation>(
   }
   const selectionPositions: Position[] = [];
   for (const selection of selections) {
-    selectionPositions.push(
-      textDocument.normalizePosition(selection.start),
-      textDocument.normalizePosition(selection.end)
-    );
+    selectionPositions.push(selection.start, selection.end);
   }
   const selectionOffsets = selectionPositions.map((position) =>
     textDocument.offsetAt(position)

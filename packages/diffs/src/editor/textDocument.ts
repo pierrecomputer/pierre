@@ -169,7 +169,7 @@ export class TextDocument<LAnnotation> {
   }
 
   offsetAt(position: Position): number {
-    return this.#pieceTable.offsetAt(position);
+    return this.#pieceTable.offsetAt(this.normalizePosition(position));
   }
 
   getText(range?: Range): string {

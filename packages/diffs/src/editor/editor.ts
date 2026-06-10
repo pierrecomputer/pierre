@@ -2248,12 +2248,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             textDocument,
             selections,
             {
-              start: textDocument.offsetAt(
-                textDocument.normalizePosition(primarySelection.start)
-              ),
-              end: textDocument.offsetAt(
-                textDocument.normalizePosition(primarySelection.end)
-              ),
+              start: textDocument.offsetAt(primarySelection.start),
+              end: textDocument.offsetAt(primarySelection.end),
               text: Array.isArray(text) ? text.join('\n') : text,
             },
             this.#lineAnnotations
@@ -2282,9 +2278,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     let edit: ResolvedTextEdit;
     if (isCollapsedSelection(primarySelection)) {
-      const offset = textDocument.offsetAt(
-        textDocument.normalizePosition(primarySelection.start)
-      );
+      const offset = textDocument.offsetAt(primarySelection.start);
       const nextOffset = forward
         ? Math.min(textDocument.getText().length, offset + 1)
         : Math.max(0, offset - 1);
@@ -2295,12 +2289,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       };
     } else {
       edit = {
-        start: textDocument.offsetAt(
-          textDocument.normalizePosition(primarySelection.start)
-        ),
-        end: textDocument.offsetAt(
-          textDocument.normalizePosition(primarySelection.end)
-        ),
+        start: textDocument.offsetAt(primarySelection.start),
+        end: textDocument.offsetAt(primarySelection.end),
         text: '',
       };
     }
