@@ -5,7 +5,6 @@ import {
   FILENAME_HEADER_REGEX_GIT,
   GIT_DIFF_FILE_BREAK_REGEX,
   INDEX_LINE_METADATA,
-  UNIFIED_DIFF_FILE_BREAK_REGEX,
 } from '../constants';
 import type {
   ChangeContent,
@@ -46,8 +45,8 @@ function _processPatch(
 ): ParsedPatch {
   const isGitDiff = isGitDiffPatch(data);
   const rawFiles = isGitDiff
-    ? splitAtLinePrefix(data, 'diff --git')
-    : data.split(UNIFIED_DIFF_FILE_BREAK_REGEX);
+    ? splitGitDiffFiles(data)
+    : splitUnifiedDiffFiles(data);
   let patchMetadata: string | undefined;
   const files: FileDiffMetadata[] = [];
   for (const fileOrPatchMetadata of rawFiles) {
@@ -69,7 +68,7 @@ function _processPatch(
       continue;
     } else if (
       !isGitDiff &&
-      !UNIFIED_DIFF_FILE_BREAK_REGEX.test(fileOrPatchMetadata)
+      !startsWithUnifiedDiffFileHeader(fileOrPatchMetadata)
     ) {
       if (patchMetadata == null) {
         patchMetadata = detachString(fileOrPatchMetadata);
@@ -341,6 +340,13 @@ function _processFile(
         parsedDeletionLines >= hunkData.deletionCount &&
         !rawLine.startsWith('\\')
       ) {
+        if (
+          throwOnError &&
+          isHunkBodyLine(rawLine) &&
+          !isFormatPatchVersionSeparator(rawLine)
+        ) {
+          throw Error('parsePatchContent: hunk has more lines than expected');
+        }
         break;
       }
 
@@ -354,6 +360,9 @@ function _processFile(
         firstChar !== ' ' &&
         firstChar !== '\\'
       ) {
+        if (throwOnError) {
+          throw Error('parsePatchContent: invalid hunk line');
+        }
         console.error(
           `parseLineType: Invalid firstChar: "${firstChar}", full line: "${rawLine}"`
         );
@@ -363,6 +372,9 @@ function _processFile(
 
       const type = parseRawLineType(firstChar);
       if (type === 'addition') {
+        if (throwOnError && parsedAdditionLines >= hunkData.additionCount) {
+          throw Error('parsePatchContent: hunk has too many addition lines');
+        }
         const line = getParsedLineContent(rawLine);
         if (currentContent == null || currentContent.type !== 'change') {
           currentContent = createContentGroup(
@@ -381,6 +393,9 @@ function _processFile(
         additionLines++;
         lastLineType = 'addition';
       } else if (type === 'deletion') {
+        if (throwOnError && parsedDeletionLines >= hunkData.deletionCount) {
+          throw Error('parsePatchContent: hunk has too many deletion lines');
+        }
         const line = getParsedLineContent(rawLine);
         if (currentContent == null || currentContent.type !== 'change') {
           currentContent = createContentGroup(
@@ -399,6 +414,13 @@ function _processFile(
         deletionLines++;
         lastLineType = 'deletion';
       } else if (type === 'context') {
+        if (
+          throwOnError &&
+          (parsedDeletionLines >= hunkData.deletionCount ||
+            parsedAdditionLines >= hunkData.additionCount)
+        ) {
+          throw Error('parsePatchContent: hunk has too many context lines');
+        }
         const line = getParsedLineContent(rawLine);
         if (currentContent == null || currentContent.type !== 'context') {
           currentContent = createContentGroup(
@@ -454,6 +476,14 @@ function _processFile(
       }
     }
 
+    if (
+      throwOnError &&
+      (parsedAdditionLines !== hunkData.additionCount ||
+        parsedDeletionLines !== hunkData.deletionCount)
+    ) {
+      throw Error('parsePatchContent: hunk line count mismatch');
+    }
+
     hunkData.additionLines = additionLines;
     hunkData.deletionLines = deletionLines;
 
@@ -487,6 +517,14 @@ function _processFile(
   }
   if (currentFile == null) {
     return undefined;
+  }
+  if (
+    throwOnError &&
+    isPartial &&
+    !isGitDiff &&
+    currentFile.hunks.length === 0
+  ) {
+    throw Error('parsePatchContent: unified file has no hunks');
   }
 
   // Account for collapsed lines after the final hunk and increment the
@@ -616,6 +654,136 @@ function splitWithNewlines(contents: string): string[] {
     lines.push(contents.slice(startIndex));
   }
   return lines;
+}
+
+function splitGitDiffFiles(contents: string): string[] {
+  return splitAtLinePrefix(contents, 'diff --git');
+}
+
+function splitUnifiedDiffFiles(contents: string): string[] {
+  if (contents.length === 0) {
+    return [''];
+  }
+
+  const parts: string[] = [];
+  let partStartIndex = 0;
+  let lineStartIndex = 0;
+  let remainingDeletionLines = 0;
+  let remainingAdditionLines = 0;
+
+  while (lineStartIndex < contents.length) {
+    const nextLineStartIndex = getNextLineStartIndex(contents, lineStartIndex);
+    if (remainingDeletionLines <= 0 && remainingAdditionLines <= 0) {
+      if (isUnifiedDiffFileHeaderAt(contents, lineStartIndex)) {
+        if (lineStartIndex > partStartIndex) {
+          parts.push(contents.slice(partStartIndex, lineStartIndex));
+        }
+        partStartIndex = lineStartIndex;
+        lineStartIndex = getNextLineStartIndex(contents, nextLineStartIndex);
+        continue;
+      }
+
+      if (contents.startsWith('@@ -', lineStartIndex)) {
+        const fileHeader = parseHunkHeader(
+          contents.slice(lineStartIndex, nextLineStartIndex)
+        );
+        if (fileHeader != null) {
+          remainingDeletionLines = fileHeader.deletionCount;
+          remainingAdditionLines = fileHeader.additionCount;
+        }
+      }
+      lineStartIndex = nextLineStartIndex;
+      continue;
+    }
+
+    const firstChar = contents[lineStartIndex];
+    if (firstChar === '\\') {
+      lineStartIndex = nextLineStartIndex;
+      continue;
+    }
+
+    if (firstChar === ' ') {
+      remainingDeletionLines = Math.max(remainingDeletionLines - 1, 0);
+      remainingAdditionLines = Math.max(remainingAdditionLines - 1, 0);
+    } else if (firstChar === '-') {
+      remainingDeletionLines = Math.max(remainingDeletionLines - 1, 0);
+    } else if (firstChar === '+') {
+      remainingAdditionLines = Math.max(remainingAdditionLines - 1, 0);
+    }
+    lineStartIndex = nextLineStartIndex;
+  }
+
+  parts.push(contents.slice(partStartIndex));
+  return parts;
+}
+
+function startsWithUnifiedDiffFileHeader(contents: string): boolean {
+  return isUnifiedDiffFileHeaderAt(contents, 0);
+}
+
+function isUnifiedDiffFileHeaderAt(contents: string, lineStartIndex: number) {
+  const nextLineStartIndex = getNextLineStartIndex(contents, lineStartIndex);
+  return (
+    isUnifiedDiffHeaderLineAt(contents, lineStartIndex, '---') &&
+    isUnifiedDiffHeaderLineAt(contents, nextLineStartIndex, '+++')
+  );
+}
+
+function isUnifiedDiffHeaderLineAt(
+  contents: string,
+  lineStartIndex: number,
+  prefix: '---' | '+++'
+): boolean {
+  if (!contents.startsWith(prefix, lineStartIndex)) {
+    return false;
+  }
+
+  const separator = contents[lineStartIndex + prefix.length];
+  if (separator !== ' ' && separator !== '\t') {
+    return false;
+  }
+
+  for (
+    let index = lineStartIndex + prefix.length + 1;
+    index < contents.length;
+    index++
+  ) {
+    const char = contents[index];
+    if (char === '\n' || char === '\r') {
+      break;
+    }
+    if (char !== ' ' && char !== '\t') {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getNextLineStartIndex(
+  contents: string,
+  lineStartIndex: number
+): number {
+  const newlineIndex = contents.indexOf('\n', lineStartIndex);
+  return newlineIndex === -1 ? contents.length : newlineIndex + 1;
+}
+
+function isHunkBodyLine(line: string): boolean {
+  const firstChar = line[0];
+  return firstChar === '+' || firstChar === '-' || firstChar === ' ';
+}
+
+function isFormatPatchVersionSeparator(line: string): boolean {
+  if (!line.startsWith('--')) {
+    return false;
+  }
+
+  for (let index = 2; index < line.length; index++) {
+    const char = line[index];
+    if (char !== ' ' && char !== '\t' && char !== '\n' && char !== '\r') {
+      return false;
+    }
+  }
+  return true;
 }
 
 function parseHunkHeader(line: string): ParsedHunkHeader | undefined {

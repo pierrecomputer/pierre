@@ -63,6 +63,62 @@ describe('parsePatchFiles', () => {
     }
   });
 
+  test('throws in strict mode for malformed patch with bare newline in hunk', () => {
+    expect(() => parsePatchFiles(malformedPatch, undefined, true)).toThrow(
+      'invalid hunk line'
+    );
+  });
+
+  test('throws in strict mode when a hunk has too few lines', () => {
+    expect(() =>
+      parsePatchFiles(
+        [
+          '--- incomplete.txt\n',
+          '+++ incomplete.txt\n',
+          '@@ -1 +1 @@\n',
+          '-old line\n',
+        ].join(''),
+        undefined,
+        true
+      )
+    ).toThrow('hunk line count mismatch');
+  });
+
+  test('throws in strict mode when a hunk has extra content lines', () => {
+    expect(() =>
+      parsePatchFiles(
+        [
+          '--- extra.txt\n',
+          '+++ extra.txt\n',
+          '@@ -1 +1 @@\n',
+          '-old line\n',
+          '+new line\n',
+          '-extra old line\n',
+        ].join(''),
+        undefined,
+        true
+      )
+    ).toThrow('hunk has more lines than expected');
+  });
+
+  test('throws in strict mode when a fake unified header creates a file without hunks', () => {
+    expect(() =>
+      parsePatchFiles(
+        [
+          '--- markers.txt\n',
+          '+++ markers.txt\n',
+          '@@ -1 +1 @@\n',
+          '--- old marker\n',
+          '+++ new marker\n',
+          '--- fake-old-marker\n',
+          '+++ fake-new-marker\n',
+        ].join(''),
+        undefined,
+        true
+      )
+    ).toThrow('unified file has no hunks');
+  });
+
   test('ignores format-patch version trailers after the final hunk', () => {
     const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     try {
@@ -113,6 +169,26 @@ describe('parsePatchFiles', () => {
       'CREATE TABLE users (\n',
       'id BIGSERIAL PRIMARY KEY,\n',
     ]);
+  });
+
+  test('does not split hunk content that resembles unified file headers', () => {
+    const result = parsePatchFiles(
+      [
+        '--- markers.txt\n',
+        '+++ markers.txt\n',
+        '@@ -1 +1 @@\n',
+        '--- old marker\n',
+        '+++ new marker\n',
+      ].join(''),
+      undefined,
+      true
+    );
+
+    const file = result[0]?.files[0];
+    expect(result[0]?.files).toHaveLength(1);
+    expect(file?.name).toBe('markers.txt');
+    expect(file?.deletionLines).toEqual(['-- old marker\n']);
+    expect(file?.additionLines).toEqual(['++ new marker\n']);
   });
 
   test('preserves leading BOM characters in parsed hunk lines', () => {
