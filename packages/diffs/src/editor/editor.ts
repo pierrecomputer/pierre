@@ -2280,29 +2280,30 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    const edit = isCollapsedSelection(primarySelection)
-      ? (() => {
-          const offset = textDocument.offsetAt(
-            textDocument.normalizePosition(primarySelection.start)
-          );
-          const nextOffset = forward
-            ? Math.min(textDocument.getText().length, offset + 1)
-            : Math.max(0, offset - 1);
-          return {
-            start: Math.min(offset, nextOffset),
-            end: Math.max(offset, nextOffset),
-            text: '',
-          };
-        })()
-      : {
-          start: textDocument.offsetAt(
-            textDocument.normalizePosition(primarySelection.start)
-          ),
-          end: textDocument.offsetAt(
-            textDocument.normalizePosition(primarySelection.end)
-          ),
-          text: '',
-        };
+    let edit: ResolvedTextEdit;
+    if (isCollapsedSelection(primarySelection)) {
+      const offset = textDocument.offsetAt(
+        textDocument.normalizePosition(primarySelection.start)
+      );
+      const nextOffset = forward
+        ? Math.min(textDocument.getText().length, offset + 1)
+        : Math.max(0, offset - 1);
+      edit = {
+        start: Math.min(offset, nextOffset),
+        end: Math.max(offset, nextOffset),
+        text: '',
+      };
+    } else {
+      edit = {
+        start: textDocument.offsetAt(
+          textDocument.normalizePosition(primarySelection.start)
+        ),
+        end: textDocument.offsetAt(
+          textDocument.normalizePosition(primarySelection.end)
+        ),
+        text: '',
+      };
+    }
 
     this.#applyResolvedTextEdit(edit);
   }
