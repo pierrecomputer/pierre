@@ -573,22 +573,6 @@ export class PieceTable {
     return offset[0] + character;
   }
 
-  offsetsAt(positions: readonly Position[]): number[] {
-    const offsets: number[] = Array.from({ length: positions.length });
-    if (positions.length === 0) {
-      return offsets;
-    }
-    if (this.#length === 0) {
-      return offsets.fill(0);
-    }
-
-    for (let i = 0; i < positions.length; i++) {
-      offsets[i] = this.offsetAt(positions[i]);
-    }
-
-    return offsets;
-  }
-
   #findPieceAtOffset(
     offset: number
   ): [node: PieceNode, offsetInPiece: number] | undefined {

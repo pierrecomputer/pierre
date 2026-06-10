@@ -238,7 +238,9 @@ export function applyTextChangeToSelections<LAnnotation>(
       textDocument.normalizePosition(selection.end)
     );
   }
-  const selectionOffsets = textDocument.offsetsAt(selectionPositions);
+  const selectionOffsets = selectionPositions.map((position) =>
+    textDocument.offsetAt(position)
+  );
   const primaryStartOffset = selectionOffsets[(selections.length - 1) * 2];
   const primaryEndOffset = selectionOffsets[(selections.length - 1) * 2 + 1];
   const ordered: Array<{
@@ -400,7 +402,9 @@ export function applyTextReplaceToSelections<LAnnotation>(
       textDocument.normalizePosition(selection.end)
     );
   }
-  const selectionOffsets = textDocument.offsetsAt(selectionPositions);
+  const selectionOffsets = selectionPositions.map((position) =>
+    textDocument.offsetAt(position)
+  );
   const ordered: Array<{
     index: number;
     start: number;

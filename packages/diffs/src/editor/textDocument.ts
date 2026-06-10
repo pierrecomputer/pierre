@@ -172,10 +172,6 @@ export class TextDocument<LAnnotation> {
     return this.#pieceTable.offsetAt(position);
   }
 
-  offsetsAt(positions: readonly Position[]): number[] {
-    return this.#pieceTable.offsetsAt(positions);
-  }
-
   getText(range?: Range): string {
     return this.#pieceTable.getText(range);
   }
