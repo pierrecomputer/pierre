@@ -141,30 +141,35 @@ describe('FileRenderer AST Structure', () => {
   test('should generate correct totalLines count', async () => {
     const instance = new FileRenderer();
 
-    // Test file1 (TypeScript)
-    const result1 = await instance.asyncRender(mockFiles.file1);
+    // file2's totalLines is asserted in the AST structure test above; this
+    // covers the TypeScript fixture
+    const result = await instance.asyncRender(mockFiles.file1);
     const file1Lines = mockFiles.file1.contents.split('\n').length;
-    expect(result1.totalLines).toBe(file1Lines);
-
-    // Test file2 (JavaScript)
-    const result2 = await instance.asyncRender(mockFiles.file2);
-    const file2Lines = mockFiles.file2.contents.split('\n').length;
-    expect(result2.totalLines).toBe(file2Lines);
+    expect(result.totalLines).toBe(file1Lines);
   });
 
-  test('should include CSS property in result', async () => {
+  test('css is always empty in the non-worker render path', async () => {
     const instance = new FileRenderer();
     const result = await instance.asyncRender(mockFiles.file2);
-    assertDefined(result.css, 'result.css should be defined');
-    expect(result.css).toBeString();
-    // CSS may be empty string depending on theme configuration
+    // processFileResult hardcodes css: '' here; only the worker pipeline
+    // produces theme CSS. If this ever changes, the renderer contract changed
+    expect(result.css).toBe('');
   });
 
   test('should create preNode with correct properties', async () => {
     const instance = new FileRenderer();
-    const { preAST } = await instance.asyncRender(mockFiles.file2);
+    const { preAST, totalLines } = await instance.asyncRender(mockFiles.file2);
     expect(preAST.type).toBe('element');
     expect(preAST.tagName).toBe('pre');
     assertDefined(preAST.properties, 'preAST.properties should be defined');
+    // File renders are marked data-file (not data-diff) and scrollable
+    expect(preAST.properties['data-file']).toBe('');
+    expect(preAST.properties['data-diff']).toBeUndefined();
+    expect(preAST.properties['data-overflow']).toBe('scroll');
+    expect(preAST.properties.tabIndex).toBe(0);
+    // The gutter width var reserves one ch per digit of the line count
+    expect(preAST.properties.style).toBe(
+      `--diffs-min-number-column-width-default:${`${totalLines}`.length}ch;`
+    );
   });
 });
