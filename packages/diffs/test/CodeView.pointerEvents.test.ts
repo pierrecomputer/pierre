@@ -108,7 +108,10 @@ describe('CodeView pointer events while scrolling', () => {
     }
   });
 
-  test('setOptions preserves the pending pointer events restore timer', async () => {
+  // Opting out mid-scroll must not strand the view at pointer-events: none;
+  // whether setOptions restores immediately or lets the pending timer fire is
+  // an implementation choice this test deliberately does not pin.
+  test('pointer events are restored after opting out mid-scroll', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();
     try {
