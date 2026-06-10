@@ -535,49 +535,26 @@ export function countDeclaredRows(
   return count;
 }
 
-export interface HunkDigest {
-  additionStart: number;
-  additionCount: number;
-  deletionStart: number;
-  deletionCount: number;
-  splitLineCount: number;
-  unifiedLineCount: number;
-  collapsedBefore: number;
-}
-
 // Compact, reviewable summary of a parsed file diff for snapshots: hunk
 // geometry and file totals without the full line arrays or rendered output.
+// Each hunk renders as one line — additions/deletions as count@start, then
+// the split/unified row counts and the collapsed run preceding the hunk.
 export function hunkDigest(file: FileDiffMetadata): {
   name: string;
   prevName: string | undefined;
   type: string;
-  hunks: HunkDigest[];
-  totals: {
-    splitLineCount: number;
-    unifiedLineCount: number;
-    additionLines: number;
-    deletionLines: number;
-  };
+  hunks: string[];
+  totals: string;
 } {
   return {
     name: file.name,
     prevName: file.prevName,
     type: file.type,
-    hunks: file.hunks.map((hunk) => ({
-      additionStart: hunk.additionStart,
-      additionCount: hunk.additionCount,
-      deletionStart: hunk.deletionStart,
-      deletionCount: hunk.deletionCount,
-      splitLineCount: hunk.splitLineCount,
-      unifiedLineCount: hunk.unifiedLineCount,
-      collapsedBefore: hunk.collapsedBefore,
-    })),
-    totals: {
-      splitLineCount: file.splitLineCount,
-      unifiedLineCount: file.unifiedLineCount,
-      additionLines: file.additionLines.length,
-      deletionLines: file.deletionLines.length,
-    },
+    hunks: file.hunks.map(
+      (hunk) =>
+        `a${hunk.additionCount}@${hunk.additionStart} d${hunk.deletionCount}@${hunk.deletionStart} split:${hunk.splitLineCount} unified:${hunk.unifiedLineCount} collapsedBefore:${hunk.collapsedBefore}`
+    ),
+    totals: `split:${file.splitLineCount} unified:${file.unifiedLineCount} additionLines:${file.additionLines.length} deletionLines:${file.deletionLines.length}`,
   };
 }
 

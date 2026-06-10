@@ -4,6 +4,7 @@ import { resolve } from 'path';
 
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
 import { splitFileContents } from '../src/utils/splitFileContents';
+import { hunkDigest, verifyHunkLineValues } from './testUtils';
 
 const fileConflictLarge = readFileSync(
   resolve(__dirname, '../../../apps/demo/src/mocks/fileConflictLarge.txt'),
@@ -152,17 +153,51 @@ describe('parseMergeConflictDiffFromFile', () => {
     ]);
   });
 
-  test('large conflict harness snapshots and timing for multiple maxContentLines', () => {
-    const maxContentLinesCases = [10, 3, Infinity] as const;
+  test('large conflict harness stays consistent across maxContextLines', () => {
+    const maxContextLinesCases = [3, 10, Infinity] as const;
+    const hunkRowTotals = new Map<number, number>();
 
-    for (const maxContextLines of maxContentLinesCases) {
-      const result = parseMergeConflictDiffFromFile(
-        { name: 'fileConflictLarge.ts', contents: fileConflictLarge },
-        maxContextLines
+    for (const maxContextLines of maxContextLinesCases) {
+      const { currentFile, incomingFile, fileDiff, actions } =
+        parseMergeConflictDiffFromFile(
+          { name: 'fileConflictLarge.ts', contents: fileConflictLarge },
+          maxContextLines
+        );
+
+      // Hunk metadata must be internally consistent at every context width
+      expect(verifyHunkLineValues(fileDiff)).toEqual([]);
+
+      // The diff sides are exactly the conflict-free current/incoming texts
+      expect(fileDiff.deletionLines).toEqual(
+        splitFileContents(currentFile.contents)
       );
-      expect(result).toMatchSnapshot(
-        `fileConflictLarge raw-result maxContentLines=${maxContextLines}`
+      expect(fileDiff.additionLines).toEqual(
+        splitFileContents(incomingFile.contents)
+      );
+      expect(currentFile.contents).not.toMatch(/^<{7} /m);
+      expect(currentFile.contents).not.toMatch(/^={7}$/m);
+      expect(currentFile.contents).not.toMatch(/^>{7} /m);
+      expect(incomingFile.contents).not.toMatch(/^<{7} /m);
+      expect(incomingFile.contents).not.toMatch(/^={7}$/m);
+      expect(incomingFile.contents).not.toMatch(/^>{7} /m);
+
+      // One resolvable action per conflict region in the fixture
+      expect(actions).toHaveLength(44);
+
+      hunkRowTotals.set(
+        maxContextLines,
+        fileDiff.hunks.reduce((sum, hunk) => sum + hunk.unifiedLineCount, 0)
+      );
+
+      // Compact geometry lock; the full parse result is covered by the
+      // invariants above
+      expect(hunkDigest(fileDiff)).toMatchSnapshot(
+        `fileConflictLarge digest maxContextLines=${maxContextLines}`
       );
     }
+
+    // Wider context windows can only grow the rows that hunks occupy
+    expect(hunkRowTotals.get(3)!).toBeLessThan(hunkRowTotals.get(10)!);
+    expect(hunkRowTotals.get(10)!).toBeLessThan(hunkRowTotals.get(Infinity)!);
   });
 });

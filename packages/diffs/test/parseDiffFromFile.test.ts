@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { fileNew, fileOld } from './mocks';
-import { assertDefined, verifyFileDiffHunkValues } from './testUtils';
+import { assertDefined, hunkDigest, verifyHunkLineValues } from './testUtils';
 
 describe('parseDiffFromFile', () => {
   const result = parseDiffFromFile(
@@ -10,17 +10,15 @@ describe('parseDiffFromFile', () => {
     { name: 'fileNew.txt', contents: fileNew }
   );
 
-  test('should parse diff from fileOld and fileNew and match snapshot', () => {
+  test('should parse diff from fileOld and fileNew and match its digest', () => {
     expect(result.hunks.length).toBeGreaterThan(0);
-    expect(result).toMatchSnapshot();
+    // Compact geometry lock; line-level accuracy is covered by the invariant
+    // test below and the renderer's content tests
+    expect(hunkDigest(result)).toMatchSnapshot('parsed diff digest');
   });
 
   test('should have accurate hunk line values', () => {
-    const { valid, errors } = verifyFileDiffHunkValues(result);
-    if (!valid) {
-      console.error('Hunk line value errors:', errors);
-    }
-    expect(valid).toBe(true);
+    expect(verifyHunkLineValues(result)).toEqual([]);
   });
 
   test('should correctly set oldLines and newLines', () => {

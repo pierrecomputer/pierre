@@ -13,6 +13,7 @@ import {
   assertDefined,
   countRenderedLines,
   countSplitRows,
+  patchDigest,
   verifyPatchHunkValues,
 } from './testUtils';
 
@@ -22,8 +23,10 @@ afterAll(async () => {
 
 describe('parsePatchFiles', () => {
   const result = parsePatchFiles(diffPatch);
-  test('should parse diff.patch and match snapshot', () => {
-    expect(result).toMatchSnapshot('git pr patch file');
+  test('should parse diff.patch and match its digest snapshot', () => {
+    // Per-file hunk geometry of the whole 400KB patch; line-level accuracy
+    // is covered by the invariant and render-count tests below
+    expect(patchDigest(result)).toMatchSnapshot('git pr patch digest');
   });
 
   test('patches with a final blank line should have a \\n added', () => {
@@ -32,11 +35,7 @@ describe('parsePatchFiles', () => {
   });
 
   test('should have accurate hunk line values', () => {
-    const { valid, errors } = verifyPatchHunkValues(result);
-    if (!valid) {
-      console.error('Hunk line value errors:', errors);
-    }
-    expect(valid).toBe(true);
+    expect(verifyPatchHunkValues(result).errors).toEqual([]);
   });
 
   test('should warn on malformed patch with bare newline in hunk', () => {
@@ -123,13 +122,9 @@ describe('parsePatchFiles', () => {
     const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     try {
       const result = parsePatchFiles(formatPatchWithVersionTrailer);
-      const { valid, errors } = verifyPatchHunkValues(result);
-      if (!valid) {
-        console.error('Hunk line value errors:', errors);
-      }
 
       expect(consoleError).not.toHaveBeenCalled();
-      expect(valid).toBe(true);
+      expect(verifyPatchHunkValues(result).errors).toEqual([]);
       expect(result[0].files[0].hunks[0].additionLines).toBe(1);
       expect(result[0].files[0].hunks[0].deletionLines).toBe(0);
     } finally {

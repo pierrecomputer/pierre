@@ -6,24 +6,11 @@ exports[`file.patch fixture parses and renders the patch file: patch digest 1`] 
     "files": [
       {
         "hunks": [
-          {
-            "additionCount": 1,
-            "additionStart": 3720,
-            "collapsedBefore": 3719,
-            "deletionCount": 32,
-            "deletionStart": 3720,
-            "splitLineCount": 32,
-            "unifiedLineCount": 32,
-          },
+          "a1@3720 d32@3720 split:32 unified:32 collapsedBefore:3719",
         ],
         "name": "/Users/shijie.rao/code/openai/project/oai-airflow-shared/oai_airflow_shared/applied_data_platform/lodestone/lodestone_config_notifications.yaml",
         "prevName": undefined,
-        "totals": {
-          "additionLines": 1,
-          "deletionLines": 32,
-          "splitLineCount": 3751,
-          "unifiedLineCount": 3751,
-        },
+        "totals": "split:3751 unified:3751 additionLines:1 deletionLines:32",
         "type": "change",
       },
     ],
