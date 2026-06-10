@@ -144,9 +144,13 @@ export function mapCursorMove(
       }
     } else if (shortcut === 'up') {
       line = Math.max(0, line - 1);
+      character = Math.min(character, textDocument.getLineText(line).length);
     } else if (shortcut === 'down') {
       line = Math.min(Math.max(lineCount - 1, 0), line + 1);
+      character = Math.min(character, textDocument.getLineText(line).length);
     } else if (isCollapsedSelection(selection)) {
+      const lineLength = textDocument.getLineText(line).length;
+      character = Math.min(character, lineLength);
       if (shortcut === 'left') {
         character--;
 
@@ -160,7 +164,7 @@ export function mapCursorMove(
         }
       } else {
         character++;
-        if (character > textDocument.getLineText(line).length) {
+        if (character > lineLength) {
           if (line === lineCount - 1) {
             character--;
           } else {

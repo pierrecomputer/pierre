@@ -1157,6 +1157,51 @@ describe('mapSelectionMove', () => {
       createSelection(0, 4, 0, 4),
     ]);
   });
+
+  test('moves left from a goal column past a shorter line end', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'this is a much longer line\nshort\n'
+    );
+    const onShortLine = mapCursorMove(
+      textDocument,
+      [createSelection(0, 20, 0, 20)],
+      'down'
+    );
+
+    expect(onShortLine).toEqual([createSelection(1, 5, 1, 5)]);
+
+    expect(mapCursorMove(textDocument, onShortLine, 'left')).toEqual([
+      createSelection(1, 4, 1, 4),
+    ]);
+  });
+
+  test('inserts at the clamped caret after moving onto a shorter line', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'this is a much longer line\nshort\nnext\n'
+    );
+    const onShortLine = mapCursorMove(
+      textDocument,
+      [createSelection(0, 20, 0, 20)],
+      'down'
+    );
+    const { nextSelections, change } = applyTextChangeToSelections(
+      textDocument,
+      onShortLine,
+      {
+        start: textDocument.offsetAt(onShortLine[0].start),
+        end: textDocument.offsetAt(onShortLine[0].end),
+        text: 'X',
+      }
+    );
+
+    expect(textDocument.getText()).toBe(
+      'this is a much longer line\nshortX\nnext\n'
+    );
+    expect(nextSelections).toEqual([createSelection(1, 6, 1, 6)]);
+    expect(change).toBeDefined();
+  });
 });
 
 describe('mapSelectionRangeMove', () => {
