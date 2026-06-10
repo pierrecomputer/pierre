@@ -28,6 +28,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@pierre/diffs": "workspace:*",
+        "@pierre/icons": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
         "shiki": "catalog:",
