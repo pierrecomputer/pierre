@@ -9,6 +9,7 @@ import {
 import type { DiffLineAnnotation, LineTypes } from '../src/types';
 import { fileNew, fileOld } from './mocks';
 import {
+  annotationProjection,
   assertDefined,
   collectAllElements,
   countHastAnnotationElements,
@@ -76,7 +77,11 @@ describe('Annotation Rendering', () => {
         expect(unifiedIdx).toBe(lineIdx);
       }
       expect(foundAnnotationCount).toBe(annotations.length);
-      expect(unifiedAST).toMatchSnapshot('unified with annotations');
+      // Compact placement record: which line each annotation follows and
+      // which slots it exposes
+      expect(annotationProjection(unifiedAST)).toMatchSnapshot(
+        'unified annotation placement'
+      );
     });
 
     test('annotation lineIndex matches preceding line in split style', async () => {
@@ -165,8 +170,12 @@ describe('Annotation Rendering', () => {
       expect(additionsAnnotationIndices.size).toBe(
         deletionsAnnotationIndices.size
       );
-      expect(additionsAST).toMatchSnapshot('split additions with annotations');
-      expect(deletionsAST).toMatchSnapshot('split deletions with annotations');
+      expect(annotationProjection(additionsAST)).toMatchSnapshot(
+        'split additions annotation placement'
+      );
+      expect(annotationProjection(deletionsAST)).toMatchSnapshot(
+        'split deletions annotation placement'
+      );
     });
   });
 

@@ -5,8 +5,16 @@ import {
   disposeHighlighter,
   parseDiffFromFile,
 } from '../src';
+import type { FileDiffMetadata } from '../src/types';
 import { mockDiffs } from './mocks';
-import { assertDefined, collectAllElements, countSplitRows } from './testUtils';
+import {
+  assertDefined,
+  collectAllElements,
+  countSplitRows,
+  projectColumn,
+  rowDigests,
+  verifyHunkLineValues,
+} from './testUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -23,6 +31,31 @@ function countInlineDiffSpans(
   ].filter((element) => element.properties?.['data-diff-span'] != null).length;
 }
 
+// Expected split-alignment buffer sizes, derived from the parsed change
+// blocks: a block deleting more lines than it adds leaves a gap in the
+// additions column (and vice versa), which the renderer fills with one
+// buffer row of the surplus size.
+function changeBlockSurpluses(diff: FileDiffMetadata): {
+  additionsColumn: number[];
+  deletionsColumn: number[];
+} {
+  const additionsColumn: number[] = [];
+  const deletionsColumn: number[] = [];
+  for (const hunk of diff.hunks) {
+    for (const content of hunk.hunkContent) {
+      if (content.type !== 'change') {
+        continue;
+      }
+      if (content.deletions > content.additions) {
+        additionsColumn.push(content.deletions - content.additions);
+      } else if (content.additions > content.deletions) {
+        deletionsColumn.push(content.additions - content.deletions);
+      }
+    }
+  }
+  return { additionsColumn, deletionsColumn };
+}
+
 describe('DiffHunksRenderer', () => {
   test('proper buffers should be prepended to additions colum in split style', async () => {
     const instance = new DiffHunksRenderer(mockDiffs.diffRowBufferTest.options);
@@ -30,7 +63,7 @@ describe('DiffHunksRenderer', () => {
       mockDiffs.diffRowBufferTest.oldFile,
       mockDiffs.diffRowBufferTest.newFile
     );
-    expect(diff).toMatchSnapshot('parsed diff');
+    expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
     assertDefined(
       result.additionsContentAST,
@@ -41,7 +74,28 @@ describe('DiffHunksRenderer', () => {
       'result.deletionsContentAST should be defined'
     );
     expect(result.unifiedContentAST).toBeUndefined();
-    expect(result).toMatchSnapshot('rendered result');
+
+    const additionRows = projectColumn(result.additionsContentAST);
+    const deletionRows = projectColumn(result.deletionsContentAST);
+    const surpluses = changeBlockSurpluses(diff);
+    // The fixture has at least one block deleting more than it adds, so the
+    // additions column must receive buffer rows of exactly those sizes
+    expect(surpluses.additionsColumn.length).toBeGreaterThan(0);
+    expect(
+      additionRows
+        .filter((row) => row.kind === 'buffer')
+        .map((row) => row.bufferSize)
+    ).toEqual(surpluses.additionsColumn);
+    expect(
+      deletionRows
+        .filter((row) => row.kind === 'buffer')
+        .map((row) => row.bufferSize)
+    ).toEqual(surpluses.deletionsColumn);
+
+    expect({
+      additions: rowDigests(additionRows),
+      deletions: rowDigests(deletionRows),
+    }).toMatchSnapshot('rendered rows');
   });
 
   test('proper buffers should be prepended to deletions colum in split style', async () => {
@@ -50,7 +104,7 @@ describe('DiffHunksRenderer', () => {
       mockDiffs.diffRowBufferTest.newFile,
       mockDiffs.diffRowBufferTest.oldFile
     );
-    expect(diff).toMatchSnapshot('parsed diff');
+    expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
     assertDefined(
       result.additionsContentAST,
@@ -61,7 +115,28 @@ describe('DiffHunksRenderer', () => {
       'result.deletionsContentAST should be defined'
     );
     expect(result.unifiedContentAST).toBeUndefined();
-    expect(result).toMatchSnapshot('rendered result');
+
+    const additionRows = projectColumn(result.additionsContentAST);
+    const deletionRows = projectColumn(result.deletionsContentAST);
+    const surpluses = changeBlockSurpluses(diff);
+    // Reversed fixture: at least one block adds more than it deletes, so the
+    // deletions column must receive buffer rows of exactly those sizes
+    expect(surpluses.deletionsColumn.length).toBeGreaterThan(0);
+    expect(
+      deletionRows
+        .filter((row) => row.kind === 'buffer')
+        .map((row) => row.bufferSize)
+    ).toEqual(surpluses.deletionsColumn);
+    expect(
+      additionRows
+        .filter((row) => row.kind === 'buffer')
+        .map((row) => row.bufferSize)
+    ).toEqual(surpluses.additionsColumn);
+
+    expect({
+      additions: rowDigests(additionRows),
+      deletions: rowDigests(deletionRows),
+    }).toMatchSnapshot('rendered rows');
   });
 
   test('additions and deletions should be empty when unified', async () => {
@@ -73,7 +148,7 @@ describe('DiffHunksRenderer', () => {
       mockDiffs.diffRowBufferTest.oldFile,
       mockDiffs.diffRowBufferTest.newFile
     );
-    expect(diff).toMatchSnapshot('parsed diff');
+    expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
     expect(result.additionsContentAST).toBeUndefined();
     expect(result.deletionsContentAST).toBeUndefined();
@@ -81,7 +156,9 @@ describe('DiffHunksRenderer', () => {
       result.unifiedContentAST,
       'result.unifiedContentAST should be defined'
     );
-    expect(result).toMatchSnapshot('rendered result');
+    expect(rowDigests(projectColumn(result.unifiedContentAST))).toMatchSnapshot(
+      'rendered rows'
+    );
   });
 
   test('a diff with only additions should have an empty deletions column', async () => {
@@ -91,7 +168,7 @@ describe('DiffHunksRenderer', () => {
       mockDiffs.diffRowBufferTest.newFile
     );
     expect(diff.hunks[0]?.collapsedBefore).toBe(0);
-    expect(diff).toMatchSnapshot('parsed diff');
+    expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
     expect(result.preNode.properties?.['data-diff-type']).toBe('single');
     assertDefined(
@@ -101,7 +178,9 @@ describe('DiffHunksRenderer', () => {
     expect(countSplitRows(result)).toBe(diff.splitLineCount);
     expect(result.deletionsContentAST).toBeUndefined();
     expect(result.unifiedContentAST).toBeUndefined();
-    expect(result).toMatchSnapshot('rendered result');
+    expect(
+      rowDigests(projectColumn(result.additionsContentAST))
+    ).toMatchSnapshot('rendered rows');
   });
 
   test('a diff with only deletions should have an empty additions column', async () => {
@@ -111,7 +190,7 @@ describe('DiffHunksRenderer', () => {
       contents: '',
     });
     expect(diff.hunks[0]?.collapsedBefore).toBe(0);
-    expect(diff).toMatchSnapshot('parsed diff');
+    expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
     expect(result.preNode.properties?.['data-diff-type']).toBe('single');
     assertDefined(
@@ -121,7 +200,9 @@ describe('DiffHunksRenderer', () => {
     expect(countSplitRows(result)).toBe(diff.splitLineCount);
     expect(result.additionsContentAST).toBeUndefined();
     expect(result.unifiedContentAST).toBeUndefined();
-    expect(result).toMatchSnapshot('rendered result');
+    expect(
+      rowDigests(projectColumn(result.deletionsContentAST))
+    ).toMatchSnapshot('rendered rows');
   });
 
   test('adds data-container-size for line-info separators', async () => {
@@ -166,7 +247,6 @@ describe('DiffHunksRenderer', () => {
     const result = await instance.asyncRender(diff);
 
     expect(countInlineDiffSpans(result)).toBe(0);
-    expect(result).toMatchSnapshot('rendered result without inline diff spans');
   });
 
   test('keeps inline diff decorations for changed lines below maxLineDiffLength', async () => {
@@ -187,6 +267,5 @@ describe('DiffHunksRenderer', () => {
     const result = await instance.asyncRender(diff);
 
     expect(countInlineDiffSpans(result)).toBeGreaterThan(0);
-    expect(result).toMatchSnapshot('rendered result with inline diff spans');
   });
 });

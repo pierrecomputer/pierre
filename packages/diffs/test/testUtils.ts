@@ -220,7 +220,13 @@ export function verifyHunkLineValues(
   // Account for collapsed lines after the final hunk (only for non-partial diffs)
   if (file.hunks.length > 0 && !file.isPartial) {
     const lastHunk = file.hunks[file.hunks.length - 1];
-    const lastHunkEnd = lastHunk.additionStart + lastHunk.additionCount - 1;
+    // Clamp to 0: a diff whose addition side is empty (file deleted to
+    // nothing) has additionStart 0 / additionCount 0, and without the clamp
+    // the -1 end would invent a phantom trailing context line
+    const lastHunkEnd = Math.max(
+      lastHunk.additionStart + lastHunk.additionCount - 1,
+      0
+    );
     const totalFileLines = file.additionLines.length;
     const collapsedAfter = Math.max(totalFileLines - lastHunkEnd, 0);
 
