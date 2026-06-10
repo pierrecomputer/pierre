@@ -1169,11 +1169,29 @@ describe('mapSelectionMove', () => {
       'down'
     );
 
-    expect(onShortLine).toEqual([createSelection(1, 5, 1, 5)]);
+    expect(onShortLine).toEqual([createSelection(1, 20, 1, 20)]);
 
     expect(mapCursorMove(textDocument, onShortLine, 'left')).toEqual([
       createSelection(1, 4, 1, 4),
     ]);
+  });
+
+  test('preserves goal column across short and empty lines', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'this is a much longer line here\nshort\n\nanother much longer line here\n'
+    );
+    const onShortLine = mapCursorMove(
+      textDocument,
+      [createSelection(0, 20, 0, 20)],
+      'down'
+    );
+    const onEmptyLine = mapCursorMove(textDocument, onShortLine, 'down');
+    const onLongLine = mapCursorMove(textDocument, onEmptyLine, 'down');
+
+    expect(onShortLine).toEqual([createSelection(1, 20, 1, 20)]);
+    expect(onEmptyLine).toEqual([createSelection(2, 20, 2, 20)]);
+    expect(onLongLine).toEqual([createSelection(3, 20, 3, 20)]);
   });
 
   test('inserts at the clamped caret after moving onto a shorter line', () => {
@@ -1186,12 +1204,13 @@ describe('mapSelectionMove', () => {
       [createSelection(0, 20, 0, 20)],
       'down'
     );
+    const caret = textDocument.normalizePosition(onShortLine[0].start);
     const { nextSelections, change } = applyTextChangeToSelections(
       textDocument,
       onShortLine,
       {
-        start: textDocument.offsetAt(onShortLine[0].start),
-        end: textDocument.offsetAt(onShortLine[0].end),
+        start: textDocument.offsetAt(caret),
+        end: textDocument.offsetAt(caret),
         text: 'X',
       }
     );

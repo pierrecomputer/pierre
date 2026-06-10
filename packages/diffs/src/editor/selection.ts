@@ -144,10 +144,8 @@ export function mapCursorMove(
       }
     } else if (shortcut === 'up') {
       line = Math.max(0, line - 1);
-      character = Math.min(character, textDocument.getLineText(line).length);
     } else if (shortcut === 'down') {
       line = Math.min(Math.max(lineCount - 1, 0), line + 1);
-      character = Math.min(character, textDocument.getLineText(line).length);
     } else if (isCollapsedSelection(selection)) {
       const lineLength = textDocument.getLineText(line).length;
       character = Math.min(character, lineLength);
@@ -236,7 +234,10 @@ export function applyTextChangeToSelections<LAnnotation>(
   }
   const selectionPositions: Position[] = [];
   for (const selection of selections) {
-    selectionPositions.push(selection.start, selection.end);
+    selectionPositions.push(
+      textDocument.normalizePosition(selection.start),
+      textDocument.normalizePosition(selection.end)
+    );
   }
   const selectionOffsets = textDocument.offsetsAt(selectionPositions);
   const primaryStartOffset = selectionOffsets[(selections.length - 1) * 2];
@@ -395,7 +396,10 @@ export function applyTextReplaceToSelections<LAnnotation>(
   }
   const selectionPositions: Position[] = [];
   for (const selection of selections) {
-    selectionPositions.push(selection.start, selection.end);
+    selectionPositions.push(
+      textDocument.normalizePosition(selection.start),
+      textDocument.normalizePosition(selection.end)
+    );
   }
   const selectionOffsets = textDocument.offsetsAt(selectionPositions);
   const ordered: Array<{
