@@ -1,6 +1,4 @@
 import 'server-only';
-import { cacheSignal } from 'react';
-
 import type { InitialDiffshubPatchResponse } from './diffshubPatchTypes';
 
 const CACHE_CONTROL = 'no-store';
@@ -96,7 +94,7 @@ export async function loadInitialDiffshubPatchResponse(
   input: DiffshubPatchRequestInput
 ): Promise<InitialDiffshubPatchResponse> {
   try {
-    const response = await createDiffshubPatchResponse(input, cacheSignal());
+    const response = await createDiffshubPatchResponse(input, null);
 
     if (!response.ok || response.body == null) {
       return {
@@ -415,8 +413,8 @@ async function createPatchStreamResponse(
   return createTextResponse(stream, options);
 }
 
-// Connects request/render cancellation to the upstream fetch without requiring
-// callers outside React rendering to invent a never-aborted signal.
+// Connects request cancellation to the upstream fetch without requiring callers
+// without a request signal to invent a never-aborted signal.
 function forwardAbortSignal(
   requestSignal: AbortSignal | null,
   upstreamController: AbortController
