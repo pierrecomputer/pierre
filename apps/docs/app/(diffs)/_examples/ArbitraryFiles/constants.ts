@@ -9,6 +9,11 @@ export const ARBITRARY_DIFF_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
     contents: `.pizza {
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #fff;
 }
 `,
   },
@@ -16,6 +21,11 @@ export const ARBITRARY_DIFF_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
     name: 'example.css',
     contents: `.pizza {
   display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--surface);
 }
 `,
   },

@@ -21,7 +21,7 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
   diffs: {
     id: 'diffs',
     name: 'Diffs',
-    tagline: 'Render diffs and code',
+    tagline: 'Render diffs and\u00A0code, now with edit',
     description:
       '@pierre/diffs is an open source diff and code rendering library. Built on Shiki for syntax highlighting and theming, super customizable, and packed with features.',
     llmsDescription:

@@ -1,6 +1,5 @@
 import { DEFAULT_THEMES } from '@pierre/diffs';
 import {
-  preloadFile,
   preloadFileDiff,
   preloadMultiFileDiff,
   preloadUnresolvedFile,
@@ -23,11 +22,6 @@ import { FONT_STYLES } from '../_examples/FontStyles/constants';
 import { FontStyles } from '../_examples/FontStyles/FontStyles';
 import { LINE_SELECTION_EXAMPLE } from '../_examples/LineSelection/constants';
 import { LineSelection } from '../_examples/LineSelection/LineSelection';
-import {
-  LIVE_EDITOR_EXAMPLE,
-  LIVE_EDITOR_FILE_EXAMPLE,
-} from '../_examples/LiveEditor/constants';
-import { LiveEditor } from '../_examples/LiveEditor/LiveEditor';
 import { MERGE_CONFLICT_EXAMPLE } from '../_examples/MergeConflict/constants';
 import { MergeConflict } from '../_examples/MergeConflict/MergeConflict';
 import { SHIKI_THEMES } from '../_examples/ShikiThemes/constants';
@@ -46,7 +40,6 @@ import { PierreCompanySection } from '@/components/PierreCompanySection';
 import type { ProductId } from '@/lib/product-config';
 
 const PRODUCT_ID: ProductId = 'diffs';
-
 export default function Home() {
   return (
     <WorkerPoolContext>
@@ -54,22 +47,22 @@ export default function Home() {
         <Header className="-mb-[1px]" />
         <Hero productId={PRODUCT_ID} />
         <HeadingAnchors />
-        <section className="pb-12">
-          <AgentReviewSection />
-        </section>
         <section className="space-y-12 pb-8">
+          <EditorSection />
           <SplitUnifiedSection />
-          <LiveEditorSection />
-          <ShikiThemesSection />
           <DiffStylesSection />
-          <FontStylesSection />
-          <CustomHunkSeparatorsSection />
-          <CustomHeaderSection />
           <MergeConflictSection />
           <AnnotationsSection />
           <AcceptRejectSection />
           <LineSelectionSection />
           <TokenHoverSection />
+
+          <hr />
+
+          <ShikiThemesSection />
+          <FontStylesSection />
+          <CustomHunkSeparatorsSection />
+          <CustomHeaderSection />
           <ArbitraryFilesSection />
         </section>
         <PierreCompanySection />
@@ -79,10 +72,10 @@ export default function Home() {
   );
 }
 
-// Server-renders the embedded agent-review demo's diffs. We pick the live AUI
+// Server-renders the embedded editor demo's diffs. We pick the live AUI
 // session and prerender each changed file's diff with the demo's default dark
 // theme so the card paints highlighted on first load and hydrates cleanly.
-async function AgentReviewSection() {
+async function EditorSection() {
   const session = AUI_SESSIONS[0];
   const entries = await Promise.all(
     session.changedFiles.map(async (file) => {
@@ -105,19 +98,6 @@ async function AgentReviewSection() {
 async function SplitUnifiedSection() {
   return (
     <SplitUnified prerenderedDiff={await preloadMultiFileDiff(SPLIT_UNIFIED)} />
-  );
-}
-
-async function LiveEditorSection() {
-  const [prerenderedDiff, prerenderedFile] = await Promise.all([
-    preloadMultiFileDiff(LIVE_EDITOR_EXAMPLE),
-    preloadFile(LIVE_EDITOR_FILE_EXAMPLE),
-  ]);
-  return (
-    <LiveEditor
-      prerenderedDiff={prerenderedDiff}
-      prerenderedFile={prerenderedFile}
-    />
   );
 }
 

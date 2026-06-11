@@ -21,16 +21,15 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
         title="Diff arbitrary files"
         description={
           <>
-            In addition to rendering standard Git diffs and patches, you can
-            pass any two files in <code>@pierre/diffs</code> and get a diff
-            between them. This is especially useful when comparing across
+            You can also pass any two files in <code>@pierre/diffs</code> to
+            diff them. This is especially useful when comparing across
             generative snapshots where linear history isn't always available.
-            Edit the css below to see the diff.
+            Edit the CSS files below to see the diff.
           </>
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="flex flex-col gap-4">
         <div className="relative">
           <FileLabel>before.css</FileLabel>
           <FileTextarea
@@ -54,7 +53,7 @@ export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
         {...prerenderedDiff}
         oldFile={oldFile}
         newFile={newFile}
-        className="diff-container"
+        className="diff-container min-h-80"
       />
     </div>
   );
@@ -84,7 +83,7 @@ function FileTextarea({ value, onChange, className = '' }: FileTextareaProps) {
     <textarea
       value={value}
       onChange={onChange}
-      className={`bg-muted h-40 w-full resize-none rounded-lg border px-4 pt-10 font-mono text-sm ${className}`}
+      className={`bg-muted field-sizing-content min-h-40 w-full resize-none rounded-lg border px-4 pt-10 font-mono text-sm ${className}`}
       spellCheck={false}
     />
   );

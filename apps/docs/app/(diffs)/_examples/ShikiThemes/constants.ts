@@ -37,7 +37,7 @@ fn add(a: i32, b: i32) -> i32 {
 `,
   },
   options: {
-    diffStyle: 'split',
+    diffStyle: 'unified',
     theme: DEFAULT_THEMES,
     unsafeCSS: CustomScrollbarCSS,
     enableLineSelection: true,

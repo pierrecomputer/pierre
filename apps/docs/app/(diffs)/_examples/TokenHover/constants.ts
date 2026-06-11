@@ -11,9 +11,8 @@ export const TOKEN_HOVER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
   flex-direction: column;
   flex-wrap: wrap;
   gap: 1rem;
-  padding: 2rem 1.5rem;
   max-width: 960px;
-  margin: 0 auto;
+  margin-inline: auto;
 }
 
 .card-grid .card {
@@ -24,14 +23,6 @@ export const TOKEN_HOVER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
   background-color: var(--color-surface);
   border-radius: 8px;
   border: 1px solid transparent;
-  transition: box-shadow 0.2s, border-color 0.2s;
-  cursor: pointer;
-}
-
-.card-grid .card h3 {
-  font-size: 1rem;
-  line-height: 1.4;
-  margin: 0;
 }
 
 .card-grid .card:hover {
@@ -60,10 +51,8 @@ export const TOKEN_HOVER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
     display: grid;
     grid-template-columns: 1fr;
     gap: 1rem;
-    padding-block: 2rem;
-    padding-inline: 1.5rem;
     max-width: 960px;
-    margin: 0 auto;
+    margin-inline: auto;
     margin-trim: in-flow;
   }
 
@@ -75,8 +64,6 @@ export const TOKEN_HOVER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
     background-color: var(--color-surface);
     border-radius: 8px;
     border: 1px solid transparent;
-    transition: box-shadow 0.2s, border-color 0.2s;
-    cursor: pointer;
 
     &:hover {
       border: 1px solid var(--color-border);
@@ -85,15 +72,6 @@ export const TOKEN_HOVER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
 
     &:focus-visible {
       outline: 2px solid var(--color-accent);
-    }
-
-    h3 {
-      font-size: 1rem;
-      line-height: 1.4;
-      margin: 0;
-      text-wrap: balance;
-      text-box-trim: trim-start;
-      text-box-edge: cap alphabetic;
     }
   }
 

@@ -41,8 +41,10 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
         title="Custom headers"
         description={
           <>
-            Switch between lightweight header metadata and a fully custom header
-            rendered inside the built-in <code>data-diffs-header</code> shell.
+            Customize your <code>File</code> or <code>FileDiff</code> headers
+            with two options: inserting additional header metadata, or a fully
+            custom header rendered inside the built-in{' '}
+            <code>data-diffs-header</code> shell.
           </>
         }
       />
