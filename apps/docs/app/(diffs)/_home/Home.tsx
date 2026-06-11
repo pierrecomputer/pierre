@@ -1,3 +1,4 @@
+import { DEFAULT_THEMES } from '@pierre/diffs';
 import {
   preloadFile,
   preloadFileDiff,
@@ -35,6 +36,8 @@ import { SPLIT_UNIFIED } from '../_examples/SplitUnified/constants';
 import { SplitUnified } from '../_examples/SplitUnified/SplitUnified';
 import { TOKEN_HOVER_EXAMPLE } from '../_examples/TokenHover/constants';
 import { TokenHover } from '../_examples/TokenHover/TokenHover';
+import { AgentDemoSection } from './AgentDemoSection';
+import { AUI_SESSIONS, getFileDiff } from './mockData';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
@@ -51,6 +54,9 @@ export default function Home() {
         <Header className="-mb-[1px]" />
         <Hero productId={PRODUCT_ID} />
         <HeadingAnchors />
+        <section className="pb-12">
+          <AgentReviewSection />
+        </section>
         <section className="space-y-12 pb-8">
           <SplitUnifiedSection />
           <LiveEditorSection />
@@ -71,6 +77,29 @@ export default function Home() {
       </div>
     </WorkerPoolContext>
   );
+}
+
+// Server-renders the embedded agent-review demo's diffs. We pick the live AUI
+// session and prerender each changed file's diff with the demo's default dark
+// theme so the card paints highlighted on first load and hydrates cleanly.
+async function AgentReviewSection() {
+  const session = AUI_SESSIONS[0];
+  const entries = await Promise.all(
+    session.changedFiles.map(async (file) => {
+      const result = await preloadFileDiff({
+        fileDiff: getFileDiff(file),
+        options: {
+          theme: DEFAULT_THEMES,
+          themeType: 'dark',
+          disableFileHeader: true,
+          overflow: 'wrap',
+          diffStyle: 'unified',
+        },
+      });
+      return [file.path, result.prerenderedHTML] as const;
+    })
+  );
+  return <AgentDemoSection prerenderedDiffs={Object.fromEntries(entries)} />;
 }
 
 async function SplitUnifiedSection() {

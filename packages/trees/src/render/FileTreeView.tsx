@@ -783,6 +783,17 @@ function renderRowDecoration(
   }
 
   if ('text' in decoration) {
+    if (decoration.parts != null) {
+      return (
+        <span title={decoration.title}>
+          {decoration.parts.map((part, index) => (
+            <span key={index} style={{ color: part.color }}>
+              {part.text}
+            </span>
+          ))}
+        </span>
+      );
+    }
     return <span title={decoration.title}>{decoration.text}</span>;
   }
 
