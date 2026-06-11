@@ -53,17 +53,44 @@ export BASE_SLUG=css-perf-base
 export TEST_SLUG=css-perf-test
 ```
 
+Put benchmark worktrees under the global temporary directory, not under the
+home-directory Pierre worktree root:
+
+```bash
+export BENCHMARK_WORKTREE_ROOT=/tmp/pierre-css-benchmark-worktrees
+export BASE_WORKTREE=$BENCHMARK_WORKTREE_ROOT/$BASE_SLUG
+export TEST_WORKTREE=$BENCHMARK_WORKTREE_ROOT/$TEST_SLUG
+```
+
+This is appropriate for short-lived benchmark runs. Do not use `/tmp` for
+long-lived worktrees because the OS or cleanup jobs may remove temporary files.
+
 ## Create Worktrees
 
-Create two temporary Pierre-managed worktrees from the repo root:
+Create two temporary worktrees from the repo root, then initialize Pierre's
+worktree metadata in each one:
 
 ```bash
 export AGENT=1
-bun run wt new "$BASE_SLUG" --base "$BASE_SHA"
-bun run wt new "$TEST_SLUG" --base "$TEST_SHA"
+mkdir -p "$BENCHMARK_WORKTREE_ROOT"
+git worktree add --detach "$BASE_WORKTREE" "$BASE_SHA"
+git worktree add --detach "$TEST_WORKTREE" "$TEST_SHA"
 ```
 
-The helper prints each worktree's port offset. DiffsHub runs on:
+```bash
+cd "$BASE_WORKTREE"
+export AGENT=1
+bun run wt setup
+```
+
+```bash
+cd "$TEST_WORKTREE"
+export AGENT=1
+bun run wt setup
+```
+
+`wt setup` writes each worktree's `.env.worktree`, installs dependencies, and
+prints each worktree's port offset. DiffsHub runs on:
 
 ```text
 3692 + PIERRE_PORT_OFFSET
@@ -123,13 +150,13 @@ Do not commit this patch. Revert it during cleanup.
 Build both worktrees from their roots:
 
 ```bash
-cd ~/pierre/pierre-worktrees/$BASE_SLUG
+cd "$BASE_WORKTREE"
 export AGENT=1
 bun ws diffshub build
 ```
 
 ```bash
-cd ~/pierre/pierre-worktrees/$TEST_SLUG
+cd "$TEST_WORKTREE"
 export AGENT=1
 bun ws diffshub build
 ```
@@ -139,13 +166,13 @@ bun ws diffshub build
 Start each production server from its DiffsHub app directory:
 
 ```bash
-cd ~/pierre/pierre-worktrees/$BASE_SLUG/apps/diffshub
+cd "$BASE_WORKTREE/apps/diffshub"
 nohup env AGENT=1 bun run start -- -p "$BASE_PORT" > /tmp/diffshub-base.log 2>&1 &
 export BASE_SERVER_PID=$!
 ```
 
 ```bash
-cd ~/pierre/pierre-worktrees/$TEST_SLUG/apps/diffshub
+cd "$TEST_WORKTREE/apps/diffshub"
 nohup env AGENT=1 bun run start -- -p "$TEST_PORT" > /tmp/diffshub-test.log 2>&1 &
 export TEST_SERVER_PID=$!
 ```
@@ -550,6 +577,7 @@ Remove worktrees:
 cd <main-repo-root>
 bun run wt rm "$BASE_SLUG" --force
 bun run wt rm "$TEST_SLUG" --force
+rmdir "$BENCHMARK_WORKTREE_ROOT" 2>/dev/null || true
 ```
 
 If isolated plain-text mode was used, make sure any temporary highlight stubs
