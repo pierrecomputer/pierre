@@ -7,6 +7,11 @@ The benchmark records Chrome performance traces while DiffsHub's autoscroll
 button scrolls a large rendered diff. It is intended for CSS selector, layout,
 containment, paint, and scrollbar changes.
 
+## Requirements
+
+Chrome DevTools MCP is required. Use it for browser navigation, stable-page
+checks, performance trace recording, page-script execution, and trace export.
+
 ## Choose The Mode
 
 Use one mode for both SHAs.
@@ -172,9 +177,8 @@ land during the trace.
 
 ## Record Traces
 
-Use Chrome DevTools MCP when available. Playwright CDP tracing is acceptable if
-Chrome DevTools MCP is unavailable, as long as trace files include renderer-main
-events such as `UpdateLayoutTree` and `Layout`.
+Use Chrome DevTools MCP. Trace files must include renderer-main events such as
+`UpdateLayoutTree` and `Layout`.
 
 Use a fixed viewport for every run, for example `1440x1000`.
 
