@@ -192,8 +192,8 @@ export class EditorTokenizer {
   }
 
   cleanUp(): void {
-    this.#detachMessageListener();
     this.stopBackgroundTokenize();
+    this.#detachMessageListener();
     this.#disposes?.forEach((dispose) => dispose());
     this.#disposes = undefined;
   }

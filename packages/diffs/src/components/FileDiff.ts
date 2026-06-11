@@ -763,7 +763,7 @@ export class FileDiff<
 
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
-    this.editor?.postponeBackgroundTokenizeToNextFrame();
+    this.editor?.__postponeBackgroundTokenizeToNextFrame();
 
     const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
@@ -952,7 +952,7 @@ export class FileDiff<
       const file = this.getAdditionFile();
       if (editor != null && file != null) {
         void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-          editor.syncToRenderedView(
+          editor.__resetEditState(
             highlighter,
             fileContainer,
             file,
@@ -1010,7 +1010,7 @@ export class FileDiff<
     const file = this.getAdditionFile();
     if (fileContainer != null && file != null) {
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-        editor.syncToRenderedView(
+        editor.__resetEditState(
           highlighter,
           fileContainer,
           file,

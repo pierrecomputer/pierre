@@ -908,6 +908,12 @@ export interface DiffsBaseComponent {
   readonly options: DiffsComponentOptions;
   setOptions: (options: Partial<DiffsComponentOptions>) => void;
   setSelectedLines: (range: { start: number; end: number } | null) => void;
+  render(options: {
+    containerWrapper?: HTMLElement;
+    file?: FileContents;
+    fileDiff?: FileDiffMetadata;
+    renderRange?: RenderRange;
+  }): void;
   rerender(): void;
   cleanUp(): void;
 }
@@ -929,7 +935,8 @@ export interface DiffsEditableComponent<
 }
 
 export interface DiffsEditor<LAnnotation> {
-  syncToRenderedView(
+  __postponeBackgroundTokenizeToNextFrame(): void;
+  __resetEditState(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileContents: FileContents,
@@ -940,7 +947,6 @@ export interface DiffsEditor<LAnnotation> {
       | undefined,
     renderRange: RenderRange | undefined
   ): void;
-  postponeBackgroundTokenizeToNextFrame(): void;
   cleanUp(): void;
 }
 

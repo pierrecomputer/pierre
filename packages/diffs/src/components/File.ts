@@ -473,7 +473,7 @@ export class File<
     const file = this.file;
     if (fileContainer != null && file != null) {
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
-        editor.syncToRenderedView(
+        editor.__resetEditState(
           highlighter,
           fileContainer,
           file,
@@ -531,7 +531,7 @@ export class File<
 
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
-    this.editor?.postponeBackgroundTokenizeToNextFrame();
+    this.editor?.__postponeBackgroundTokenizeToNextFrame();
 
     const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
@@ -661,7 +661,7 @@ export class File<
       const editor = this.editor;
       if (editor != null) {
         void this.fileRenderer.initializeHighlighter().then((highlighter) => {
-          editor.syncToRenderedView(
+          editor.__resetEditState(
             highlighter,
             fileContainer,
             file,
