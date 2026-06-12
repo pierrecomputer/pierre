@@ -96,7 +96,14 @@ export function renderFileWithHighlighter(
       const decoration = spanDecorations[index];
       const line = decoration.lineNumber - 1 - startingLine;
       const lineContent = fileLines[decoration.lineNumber - 1];
-      if (line < 0 || line >= renderedLineCount || lineContent == null) {
+      if (
+        line < 0 ||
+        line >= renderedLineCount ||
+        lineContent == null ||
+        // Negative offsets (e.g. indexOf misses) are invalid addressing, not
+        // clampable ranges — Shiki would treat them as from-end-of-line.
+        decoration.spanStart < 0
+      ) {
         continue;
       }
       const lineLength = cleanLastNewline(lineContent).length;

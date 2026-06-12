@@ -60,10 +60,12 @@ describe('Span Decorations', () => {
       expect(flattenText(decorated[0])).toBe('beta');
     });
 
-    test('drops zero/negative-length spans and out-of-range lines', async () => {
+    test('drops zero/negative-length spans, negative offsets and out-of-range lines', async () => {
       const decorations: SpanDecoration[] = [
         { lineNumber: 1, spanStart: 0, spanLength: 0, className: 'noop' },
         { lineNumber: 99, spanStart: 0, spanLength: 1, className: 'noop' },
+        // e.g. indexOf returning -1 — must not wrap from end-of-line
+        { lineNumber: 1, spanStart: -1, spanLength: 4, className: 'noop' },
       ];
       const renderer = new FileRenderer();
       renderer.setSpanDecorations(decorations);
@@ -141,6 +143,14 @@ describe('Span Decorations', () => {
           lineNumber: 999,
           spanStart: 0,
           spanLength: 1,
+          className: 'noop',
+        },
+        // e.g. indexOf returning -1 — must not wrap from end-of-line
+        {
+          side: 'additions',
+          lineNumber: 2,
+          spanStart: -1,
+          spanLength: 4,
           className: 'noop',
         },
       ];

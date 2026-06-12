@@ -324,6 +324,11 @@ function pushSpanDecorations(
   }
   const lineLength = cleanLastNewline(lineContent).length;
   for (const { decoration, index } of decorations) {
+    // Negative offsets (e.g. indexOf misses) are invalid addressing, not
+    // clampable ranges — Shiki would treat them as from-end-of-line.
+    if (decoration.spanStart < 0) {
+      continue;
+    }
     const spanStart = Math.min(decoration.spanStart, lineLength);
     const spanEnd = Math.min(
       decoration.spanStart + decoration.spanLength,
