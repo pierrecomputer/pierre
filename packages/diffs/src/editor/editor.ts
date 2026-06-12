@@ -254,18 +254,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       fileDiff?: FileDiffMetadata;
     }
   ): void {
-    const { file, fileDiff } = options;
     const virtualizer = new Virtualizer();
+    let { file, fileDiff } = options;
     let fileInstance: DiffsEditableComponent<LAnnotation> | undefined;
-    if (file !== undefined) {
-      fileInstance = new VirtualizedFile<LAnnotation>(
-        {
-          ...options,
-          useTokenTransformer: true,
-        },
-        virtualizer
-      );
-    } else if (fileDiff !== undefined) {
+    if (fileDiff !== undefined) {
       fileInstance = new VirtualizedFileDiff<LAnnotation>(
         {
           ...options,
@@ -275,7 +267,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         virtualizer
       );
     } else {
-      throw new Error('Either file or fileDiff must be provided');
+      fileInstance = new VirtualizedFile<LAnnotation>(
+        {
+          ...options,
+          useTokenTransformer: true,
+        },
+        virtualizer
+      );
+      file ??= { name: 'inmemory:', contents: '', lang: 'text' };
     }
     fileInstance.render({
       containerWrapper: container,
@@ -308,12 +307,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
    * Apply edits to the file.
    */
   applyEdits(filename: string, edits: TextEdit[], updateHistory = false): void {
-    const fileContents = this.#fileContents;
     const textDocument = this.#textDocument;
     if (
-      fileContents === undefined ||
       textDocument === undefined ||
-      fileContents.name !== filename
+      textDocument.uri !== new URL(filename, 'file://').toString()
     ) {
       return;
     }
@@ -323,7 +320,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#selections
     );
     if (change !== undefined) {
-      this.#applyChangeToView(
+      this.#applyChange(
         change,
         undefined,
         this.#applyChangeToLineAnnotations(change)
@@ -332,18 +329,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   getState(): EditorState {
-    const fileContents = this.#fileContents;
-    const textDocument = this.#textDocument;
-    if (fileContents === undefined || textDocument === undefined) {
+    const fileRef = this.#getFileRef();
+    if (fileRef === undefined) {
       throw new Error('Editor is not attached to a file instance');
     }
-    const { contents: _, ...file } = fileContents;
-    Object.defineProperty(file, 'contents', {
-      enumerable: true,
-      get: () => textDocument.getText(),
-    });
     return {
-      file: file as FileContents,
+      file: fileRef,
       selections: this.#selections,
     };
   }
@@ -1241,7 +1232,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             nextSelections
           );
           if (change !== undefined) {
-            this.#applyChangeToView(change, nextSelections);
+            this.#applyChange(change, nextSelections);
           }
         }
         break;
@@ -1283,7 +1274,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (this.#textDocument?.canUndo === true) {
           const undoResult = this.#textDocument.undo();
           if (undoResult !== undefined) {
-            this.#applyChangeToView(...undoResult);
+            this.#applyChange(...undoResult);
           }
         }
         break;
@@ -1292,7 +1283,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (this.#textDocument?.canRedo === true) {
           const redoResult = this.#textDocument.redo();
           if (redoResult !== undefined) {
-            this.#applyChangeToView(...redoResult);
+            this.#applyChange(...redoResult);
           }
         }
         break;
@@ -2390,7 +2381,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           );
 
     if (change !== undefined) {
-      this.#applyChangeToView(
+      this.#applyChange(
         change,
         nextSelections,
         this.#applyChangeToLineAnnotations(change)
@@ -2459,7 +2450,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#lineAnnotations
       );
     if (change !== undefined) {
-      this.#applyChangeToView(
+      this.#applyChange(
         change,
         nextSelections,
         this.#applyChangeToLineAnnotations(change)
@@ -2480,7 +2471,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#lineAnnotations
       );
     if (change !== undefined) {
-      this.#applyChangeToView(
+      this.#applyChange(
         change,
         nextSelections,
         this.#applyChangeToLineAnnotations(change)
@@ -2501,7 +2492,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#lineAnnotations
       );
     if (change !== undefined) {
-      this.#applyChangeToView(
+      this.#applyChange(
         change,
         nextSelections,
         this.#applyChangeToLineAnnotations(change)
@@ -2521,7 +2512,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#lineAnnotations
     );
     if (change !== undefined) {
-      this.#applyChangeToView(
+      this.#applyChange(
         change,
         nextSelections,
         this.#applyChangeToLineAnnotations(change)
@@ -2541,7 +2532,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#metrics.tabSize
     );
     if (change !== undefined) {
-      this.#applyChangeToView(
+      this.#applyChange(
         change,
         nextSelections,
         this.#applyChangeToLineAnnotations(change)
@@ -2549,28 +2540,29 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #applyChangeToView(
+  #getFileRef(): FileContents | undefined {
+    const fileContents = this.#fileContents;
+    const textDocument = this.#textDocument;
+    if (fileContents === undefined || textDocument === undefined) {
+      return undefined;
+    }
+    const { contents: _, ...file } = fileContents;
+    Object.defineProperty(file, 'contents', {
+      enumerable: true,
+      get: () => textDocument.getText(),
+    });
+    return file as FileContents;
+  }
+
+  #applyChange(
     change: TextDocumentChange,
     selections?: EditorSelection[],
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ) {
-    const fileContents = this.#fileContents;
-    const textDocument = this.#textDocument;
+    const fileRef = this.#getFileRef();
     const onChange = this.#options.onChange;
-    if (
-      fileContents !== undefined &&
-      textDocument !== undefined &&
-      onChange !== undefined
-    ) {
-      const { contents: _, ...file } = fileContents;
-      Object.defineProperty(file, 'contents', {
-        enumerable: true,
-        get: () => textDocument.getText(),
-      });
-      onChange(
-        file as FileContents,
-        newLineAnnotations ?? this.#lineAnnotations
-      );
+    if (fileRef !== undefined && onChange !== undefined) {
+      onChange(fileRef, newLineAnnotations ?? this.#lineAnnotations);
     }
 
     // Invalidate layout caches touched by the edit.
