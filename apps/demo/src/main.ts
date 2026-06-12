@@ -857,6 +857,7 @@ if (renderFileButton != null) {
       },
       __debug: true,
     });
+    Object.assign(window, { editor });
     const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
     let instance:
@@ -1224,5 +1225,3 @@ function createToggle(
 //   const parsed = parseDiffFromFile(oldFile, newFile);
 //   renderDiff([{ files: [parsed] }], poolManager);
 // })();
-
-Object.assign(window, { Editor });

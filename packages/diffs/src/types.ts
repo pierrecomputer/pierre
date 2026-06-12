@@ -909,11 +909,10 @@ export interface DiffsBaseComponent {
   setOptions: (options: Partial<DiffsComponentOptions>) => void;
   setSelectedLines: (range: { start: number; end: number } | null) => void;
   render(options: {
-    containerWrapper?: HTMLElement;
     file?: FileContents;
     fileDiff?: FileDiffMetadata;
+    lineAnnotations?: any[];
     renderRange?: RenderRange;
-    forceRender?: boolean;
   }): void;
   rerender(): void;
   cleanUp(): void;

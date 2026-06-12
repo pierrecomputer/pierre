@@ -1,22 +1,14 @@
-import {
-  getFiletypeFromFileName,
-  VirtualizedFile,
-  VirtualizedFileDiff,
-  Virtualizer,
-} from '..';
 import type {
-  BaseCodeOptions,
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
   DiffsEditorSelection,
   DiffsHighlighter,
   FileContents,
-  FileDiffMetadata,
   HighlightedToken,
-  LineAnnotation,
   RenderRange,
 } from '../types';
+import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import {
   type EditorCommand,
   resolveEditorCommandFromKeyboardEvent,
@@ -105,15 +97,16 @@ export interface EditorOptions<LAnnotation> {
   /** Callback when the editor document changes. */
   onChange?: (
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[] | LineAnnotation<any>[]
+    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ) => void;
   __debug?: boolean;
 }
 
-export interface EditorState {
-  file?: FileContents;
-  diff?: FileDiffMetadata;
+export interface EditorState<LAnnotation> {
+  file: FileContents;
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   selections?: EditorSelection[];
+  renderRange?: RenderRange;
 }
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
@@ -247,64 +240,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return () => this.cleanUp();
   }
 
-  render(
-    container: HTMLElement,
-    options?: BaseCodeOptions & {
-      file?: FileContents;
-      fileDiff?: FileDiffMetadata;
-    }
-  ): void {
-    const virtualizer = new Virtualizer();
-    let { file, fileDiff } = options ?? {};
-    let fileInstance: DiffsEditableComponent<LAnnotation> | undefined;
-    if (fileDiff !== undefined) {
-      fileInstance = new VirtualizedFileDiff<LAnnotation>(
-        {
-          ...options,
-          useTokenTransformer: true,
-          expandUnchanged: true,
-        },
-        virtualizer
-      );
-    } else {
-      fileInstance = new VirtualizedFile<LAnnotation>(
-        {
-          ...options,
-          useTokenTransformer: true,
-        },
-        virtualizer
-      );
-      file ??= { name: 'Untitled-1', contents: '', lang: 'text' };
-    }
-    fileInstance.render({
-      containerWrapper: container,
-      file,
-      fileDiff,
-    });
-    virtualizer.setup(container);
-    this.edit(fileInstance);
-  }
-
-  openFile(file: FileContents): void {
-    if (this.#fileInstance === undefined) {
-      throw new Error('Editor is not attached');
-    }
-    this.#fileInstance.render({
-      file,
-      forceRender: true,
-    });
-  }
-
-  openDiff(diff: FileDiffMetadata): void {
-    if (this.#fileInstance === undefined) {
-      throw new Error('Editor is not attached');
-    }
-    this.#fileInstance.render({
-      fileDiff: diff,
-      forceRender: true,
-    });
-  }
-
   /**
    * Apply edits to the file.
    */
@@ -330,32 +265,35 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  getState(): EditorState {
+  getState(): EditorState<LAnnotation> {
     const fileRef = this.#getFileRef();
     if (fileRef === undefined) {
       throw new Error('Editor is not attached');
     }
     return {
-      file: fileRef,
+      file: { ...fileRef },
       selections: this.#selections,
+      lineAnnotations: this.#lineAnnotations,
+      renderRange: this.#renderRange,
     };
   }
 
-  setState({ file, diff: fileDiff, selections = [] }: EditorState): void {
-    this.#selections = selections;
-    if (fileDiff !== undefined) {
-      this.openDiff(fileDiff);
-    } else if (file !== undefined) {
-      this.openFile(file);
-    } else {
-      throw new Error('Neither file nor fileDiff is provided');
-    }
-    // requestAnimationFrame(() => {
-    //   this.#updateSelections(selections);
-    //   if (selections.length > 0) {
-    //     this.#scrollToPrimaryCaret();
-    //   }
-    // });
+  setState({
+    file,
+    lineAnnotations,
+    renderRange,
+    selections = [],
+  }: EditorState<LAnnotation>): void {
+    this.#selections = undefined;
+    this.#fileInstance?.render({
+      file,
+      lineAnnotations,
+      renderRange,
+    });
+    requestAnimationFrame(() => {
+      this.#updateSelections(selections);
+      this.#scrollToPrimaryCaret(false, 'center');
+    });
   }
 
   setSelections(selections: DiffsEditorSelection[]): void {
@@ -375,7 +313,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
       );
       this.#updateSelections(resolvedSelections);
-      this.#scrollToPrimaryCaret();
+      this.#scrollToPrimaryCaret(false, 'center');
     } else {
       this.#initSelections = selections;
     }
@@ -1589,7 +1527,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #scrollToPrimaryCaret(noFocus = false) {
+  #scrollToPrimaryCaret(
+    noFocus = false,
+    scrollPosition: ScrollLogicalPosition = 'nearest'
+  ) {
     const primarySelection = this.#selections?.at(-1);
     if (primarySelection === undefined) {
       return;
@@ -1597,7 +1538,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const primaryCaretElement = this.#primaryCaretElement;
     if (primaryCaretElement !== undefined) {
       primaryCaretElement.scrollIntoView({
-        block: 'nearest',
+        block: scrollPosition,
         inline: 'nearest',
       });
       if (!noFocus) {
