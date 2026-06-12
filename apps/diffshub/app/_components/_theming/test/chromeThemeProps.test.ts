@@ -32,14 +32,14 @@ const LIGHT_SOFT_CHROME: Record<string, string> = {
   '--diffshub-popover-selected-bg': 'color-mix(in srgb, #737373 20%, #f7f7f7)',
   '--diffshub-popover-border': 'color-mix(in srgb, #737373 18%, #f7f7f7)',
   '--diffshub-popover-shadow':
-    '0 10px 30px rgb(0 0 0 / 0.18), 0 3px 8px rgb(0 0 0 / 0.12)',
+    '0 8px 16px rgb(0 0 0 / 0.1), 0 2px 4px rgb(0 0 0 / 0.08)',
   '--diffshub-annotation-bg': 'color-mix(in srgb, #737373 7%, #f7f7f7)',
   '--diffshub-annotation-fg': '#737373',
   '--diffshub-annotation-border': 'color-mix(in srgb, #737373 18%, #f7f7f7)',
   '--diffshub-annotation-hover-border':
     'color-mix(in srgb, #737373 28%, #f7f7f7)',
   '--diffshub-annotation-shadow':
-    '0 10px 30px rgb(0 0 0 / 0.18), 0 3px 8px rgb(0 0 0 / 0.12)',
+    '0 8px 16px rgb(0 0 0 / 0.07), 0 2px 4px rgb(0 0 0 / 0.05)',
   '--color-popover': 'color-mix(in srgb, #737373 7%, #f7f7f7)',
   '--popover': 'color-mix(in srgb, #737373 7%, #f7f7f7)',
   '--color-popover-foreground': '#737373',
@@ -96,14 +96,14 @@ const DARK_SOFT_CHROME: Record<string, string> = {
   '--diffshub-popover-selected-bg': 'color-mix(in srgb, #8a8a8a 20%, #101010)',
   '--diffshub-popover-border': 'color-mix(in srgb, #8a8a8a 18%, #101010)',
   '--diffshub-popover-shadow':
-    '0 10px 30px rgb(0 0 0 / 0.18), 0 3px 8px rgb(0 0 0 / 0.12)',
+    '0 8px 16px rgb(0 0 0 / 0.07), 0 2px 4px rgb(0 0 0 / 0.05)',
   '--diffshub-annotation-bg': 'color-mix(in srgb, #8a8a8a 7%, #101010)',
   '--diffshub-annotation-fg': '#8a8a8a',
   '--diffshub-annotation-border': 'color-mix(in srgb, #8a8a8a 18%, #101010)',
   '--diffshub-annotation-hover-border':
     'color-mix(in srgb, #8a8a8a 28%, #101010)',
   '--diffshub-annotation-shadow':
-    '0 10px 30px rgb(0 0 0 / 0.18), 0 3px 8px rgb(0 0 0 / 0.12)',
+    '0 8px 16px rgb(0 0 0 / 0.07), 0 2px 4px rgb(0 0 0 / 0.05)',
   '--color-popover': 'color-mix(in srgb, #8a8a8a 7%, #101010)',
   '--popover': 'color-mix(in srgb, #8a8a8a 7%, #101010)',
   '--color-popover-foreground': '#8a8a8a',

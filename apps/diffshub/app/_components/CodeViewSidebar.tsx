@@ -23,7 +23,9 @@ import {
 } from 'react';
 
 import { diffshubChromeMapping } from './_theming/js/diffshubChromeMapping';
+import { getDropdownThemeStyle } from './_theming/js/dropdownChromeStyle';
 import { useChromeThemeProps } from './_theming/react/useChromeThemeProps';
+import { CHROME_ICON_BUTTON_CLASS } from './chromeButtonStyles';
 import { CodeViewCommentsList } from './CodeViewCommentsList';
 import { CodeViewDiffStats } from './CodeViewDiffStats';
 import { CodeViewFileTree } from './CodeViewFileTree';
@@ -99,10 +101,20 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   );
   const sidebarStyle =
     Object.keys(sidebarChromeStyle).length > 0 ? sidebarChromeStyle : undefined;
+  // Portaled dropdowns (the Git-status filter) render outside the sidebar
+  // wrapper, so the chrome variables set on it don't cascade. Re-apply the
+  // resolved chrome on the menu surface itself, mirroring the header dropdowns.
+  const dropdownThemeStyle = useMemo(
+    () => getDropdownThemeStyle(sidebarStyle),
+    [sidebarStyle]
+  );
   const [activeStatusPanel, setActiveStatusPanel] =
     useState<SidebarStatusPanel | null>('diffStats');
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
-  const [excludedStatuses, setExcludedStatuses] = useState<
+  // Inclusion filter: the statuses the tree should show. Empty means "no
+  // filter" — every file is shown — so the menu opens with nothing checked and
+  // checking statuses narrows the tree to just those.
+  const [selectedStatuses, setSelectedStatuses] = useState<
     ReadonlySet<GitStatus>
   >(() => new Set());
   const availableStatuses = useMemo(
@@ -110,8 +122,8 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
     [source]
   );
   const filteredSource = useMemo(
-    () => filterCodeViewFileTreeSource(source, excludedStatuses),
-    [source, excludedStatuses]
+    () => filterCodeViewFileTreeSource(source, selectedStatuses),
+    [source, selectedStatuses]
   );
   const handleModelReady = useCallback((model: FileTree | null) => {
     setFileTreeModel(model);
@@ -121,11 +133,11 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
   }, []);
 
   const clearStatusFilter = useCallback(() => {
-    setExcludedStatuses(new Set());
+    setSelectedStatuses(new Set());
   }, []);
 
-  const toggleExcludedStatus = useCallback((status: GitStatus) => {
-    setExcludedStatuses((prev) => {
+  const toggleSelectedStatus = useCallback((status: GitStatus) => {
+    setSelectedStatuses((prev) => {
       const next = new Set(prev);
       if (next.has(status)) {
         next.delete(status);
@@ -136,20 +148,17 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
     });
   }, []);
 
-  // Alt+click "isolate": exclude everything except the clicked status.
-  // If that status is already the only visible one, clear the filter instead.
-  const isolateStatus = useCallback(
-    (status: GitStatus) => {
-      setExcludedStatuses((prev) => {
-        const visible = [...availableStatuses].filter((s) => !prev.has(s));
-        if (visible.length === 1 && visible[0] === status) {
-          return new Set();
-        }
-        return new Set([...availableStatuses].filter((s) => s !== status));
-      });
-    },
-    [availableStatuses]
-  );
+  // Alt+click "isolate": narrow the filter to only the clicked status. If it's
+  // already the sole selection, clear the filter instead so the tree returns to
+  // showing everything.
+  const isolateStatus = useCallback((status: GitStatus) => {
+    setSelectedStatuses((prev) => {
+      if (prev.size === 1 && prev.has(status)) {
+        return new Set();
+      }
+      return new Set([status]);
+    });
+  }, []);
 
   useEffect(() => {
     if (mobileOverlayOpen && window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
@@ -253,17 +262,18 @@ export const CodeViewSidebar = memo(function CodeViewSidebar({
           {activeTab === 'files' && availableStatuses.size > 1 && (
             <FileTreeFilterButton
               availableStatuses={availableStatuses}
-              excludedStatuses={excludedStatuses}
+              selectedStatuses={selectedStatuses}
               onClear={clearStatusFilter}
-              onToggle={toggleExcludedStatus}
+              onToggle={toggleSelectedStatus}
               onIsolate={isolateStatus}
+              dropdownThemeStyle={dropdownThemeStyle}
             />
           )}
           {onMobileClose != null && (
             <Button
               variant="ghost"
               size="icon-only"
-              className="md:hidden"
+              className={cn(CHROME_ICON_BUTTON_CLASS, 'md:hidden')}
               aria-label="Close file tree"
               onClick={onMobileClose}
             >
@@ -384,20 +394,22 @@ const DIFF_STATUS_ITEMS: {
 
 interface FileTreeFilterButtonProps {
   availableStatuses: ReadonlySet<GitStatus>;
-  excludedStatuses: ReadonlySet<GitStatus>;
+  dropdownThemeStyle?: CSSProperties;
   onClear(): void;
   onIsolate(status: GitStatus): void;
   onToggle(status: GitStatus): void;
+  selectedStatuses: ReadonlySet<GitStatus>;
 }
 
 function FileTreeFilterButton({
   availableStatuses,
-  excludedStatuses,
+  dropdownThemeStyle,
   onClear,
   onIsolate,
   onToggle,
+  selectedStatuses,
 }: FileTreeFilterButtonProps) {
-  const isFiltered = excludedStatuses.size > 0;
+  const isFiltered = selectedStatuses.size > 0;
   const visibleItems = DIFF_STATUS_ITEMS.filter(({ status }) =>
     availableStatuses.has(status)
   );
@@ -416,7 +428,7 @@ function FileTreeFilterButton({
           size="icon-only"
           aria-label="Filter by Git status"
           aria-pressed={isFiltered}
-          className="relative"
+          className={cn(CHROME_ICON_BUTTON_CLASS, 'relative')}
         >
           <IconFilter className="size-4 md:size-3" />
           {isFiltered && (
@@ -424,18 +436,23 @@ function FileTreeFilterButton({
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="p-2">
+      <DropdownMenuContent
+        align="end"
+        className="p-2"
+        style={dropdownThemeStyle}
+      >
         <DropdownMenuLabel className="flex flex-col px-2 font-normal">
           Filter by Git status
           <small className="text-muted-foreground text-xs">
-            {isMac ? 'Option' : 'Alt'}-click to filter a single status
+            {isMac ? 'Option' : 'Alt'}-click to show only one status
           </small>
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="mx-2" />
         {visibleItems.map(({ status, label, short, color }) => (
           <DropdownMenuCheckboxItem
             key={status}
-            checked={!excludedStatuses.has(status)}
+            checked={selectedStatuses.has(status)}
+            indicatorSide="right"
             onPointerDown={(e) => {
               altKeyRef.current = e.altKey;
             }}
@@ -447,7 +464,11 @@ function FileTreeFilterButton({
                 onToggle(status);
               }
             }}
-            className={`${!excludedStatuses.has(status) ? '' : 'text-muted-foreground'} px-2`}
+            className={
+              isFiltered && !selectedStatuses.has(status)
+                ? 'text-muted-foreground'
+                : ''
+            }
           >
             <span
               className="mr-2 w-4 shrink-0 rounded-sm text-center font-mono text-xs font-semibold"
@@ -486,6 +507,7 @@ function FileTreeSearchToggle({ model }: { model: FileTree }) {
       size="icon-only"
       aria-label={search.isOpen ? 'Hide file search' : 'Show file search'}
       aria-pressed={search.isOpen}
+      className={CHROME_ICON_BUTTON_CLASS}
       // Avoid focus moving to this button before click: the tree search input
       // closes on blur, so without preventDefault the blur runs first, then
       // click sees isOpen false and calls open() again.

@@ -191,25 +191,44 @@ DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
 
 const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
->(({ className, children, checked, ...props }, ref) => (
-  <DropdownMenuPrimitive.CheckboxItem
-    ref={ref}
-    className={cn(
-      'focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 text-sm transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-      className
-    )}
-    checked={checked}
-    {...props}
-  >
-    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-      <DropdownMenuPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
-      </DropdownMenuPrimitive.ItemIndicator>
-    </span>
-    {children}
-  </DropdownMenuPrimitive.CheckboxItem>
-));
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem> & {
+    // 'left' (default) keeps the conventional checkmark gutter on the leading
+    // edge. 'right' renders the checkmark inline at the trailing edge instead,
+    // which suits items that already carry their own leading icon/badge (where
+    // the absolute left gutter would otherwise overlap that icon).
+    indicatorSide?: 'left' | 'right';
+  }
+>(({ className, children, checked, indicatorSide = 'left', ...props }, ref) => {
+  const indicator = (
+    <DropdownMenuPrimitive.ItemIndicator>
+      <Check className="h-4 w-4" />
+    </DropdownMenuPrimitive.ItemIndicator>
+  );
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      ref={ref}
+      className={cn(
+        'focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center rounded-sm py-1.5 text-sm transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        indicatorSide === 'left' ? 'pr-2 pl-8' : 'px-2',
+        className
+      )}
+      checked={checked}
+      {...props}
+    >
+      {indicatorSide === 'left' && (
+        <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+          {indicator}
+        </span>
+      )}
+      {children}
+      {indicatorSide === 'right' && (
+        <span className="ml-auto flex h-3.5 w-3.5 items-center justify-center">
+          {indicator}
+        </span>
+      )}
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+});
 DropdownMenuCheckboxItem.displayName =
   DropdownMenuPrimitive.CheckboxItem.displayName;
 

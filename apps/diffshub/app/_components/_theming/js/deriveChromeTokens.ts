@@ -137,7 +137,7 @@ export function deriveChromeTokens(theme: ThemeLike): ChromeTokens | undefined {
     surfaceBorder: `color-mix(in srgb, ${fg} 18%, ${cardBase})`,
     surfaceHover: `color-mix(in srgb, ${fg} 14%, ${cardBase})`,
     surfaceSelected: `color-mix(in srgb, ${fg} 20%, ${cardBase})`,
-    surfaceShadow: '0 10px 30px rgb(0 0 0 / 0.18), 0 3px 8px rgb(0 0 0 / 0.12)',
+    surfaceShadow: '0 8px 16px rgb(0 0 0 / 0.07), 0 2px 4px rgb(0 0 0 / 0.05)',
   });
   cache.set(theme, tokens);
   return tokens;

@@ -332,15 +332,16 @@ export function upsertSavedCommentSidebarEntry(
 }
 
 // Returns a filtered copy of the source keeping only paths whose effective git
-// status is not in `excludedStatuses`. Paths absent from gitStatus are treated
-// as 'modified' (the accumulator intentionally omits them so the tree renders
-// them as the visual default). Patch order is preserved because the filtered
-// `paths` keep their original relative order from the source.
+// status is in `selectedStatuses`. An empty selection means "no filter" and
+// returns the source unchanged (all paths shown). Paths absent from gitStatus
+// are treated as 'modified' (the accumulator intentionally omits them so the
+// tree renders them as the visual default). Patch order is preserved because
+// the filtered `paths` keep their original relative order from the source.
 export function filterCodeViewFileTreeSource(
   source: CodeViewFileTreeSource,
-  excludedStatuses: ReadonlySet<GitStatus>
+  selectedStatuses: ReadonlySet<GitStatus>
 ): CodeViewFileTreeSource {
-  if (excludedStatuses.size === 0) return source;
+  if (selectedStatuses.size === 0) return source;
 
   const pathStatusMap = new Map<string, GitStatus>(
     source.gitStatus.map((e) => [e.path, e.status])
@@ -348,11 +349,11 @@ export function filterCodeViewFileTreeSource(
 
   const filteredPaths = source.paths.filter((path) => {
     const status = pathStatusMap.get(path) ?? 'modified';
-    return !excludedStatuses.has(status);
+    return selectedStatuses.has(status);
   });
 
-  const filteredGitStatus = source.gitStatus.filter(
-    (e) => !excludedStatuses.has(e.status)
+  const filteredGitStatus = source.gitStatus.filter((e) =>
+    selectedStatuses.has(e.status)
   );
 
   const filteredPathToItemId = new Map<string, string>();

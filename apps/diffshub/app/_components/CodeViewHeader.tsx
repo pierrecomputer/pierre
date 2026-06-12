@@ -30,7 +30,9 @@ import {
 } from 'react';
 
 import { diffshubChromeMapping } from './_theming/js/diffshubChromeMapping';
+import { getDropdownThemeStyle } from './_theming/js/dropdownChromeStyle';
 import { useChromeThemeProps } from './_theming/react/useChromeThemeProps';
+import { CHROME_ICON_BUTTON_CLASS } from './chromeButtonStyles';
 import { DiffsHubLogo } from './DiffsHubLogo';
 import { DiffUrlForm } from './DiffUrlForm';
 import { docsThemeCatalog } from '@/components/themeCatalog';
@@ -50,8 +52,6 @@ type DarkThemeName = string;
 
 const SETTING_ROW_CLASS =
   'w-full flex cursor-pointer items-center justify-between gap-4 px-2 py-1.5 text-sm';
-const THEMED_DROPDOWN_CONTENT_CLASS =
-  'border-[var(--diffshub-popover-border,var(--color-border))] bg-[var(--diffshub-popover-bg,var(--color-popover))] text-[var(--diffshub-popover-fg,var(--color-popover-foreground))] shadow-[var(--diffshub-popover-shadow,0_10px_30px_rgb(0_0_0_/_0.15))]';
 
 interface HeaderProps {
   className?: string;
@@ -152,7 +152,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
           aria-pressed={fileTreeOverlayOpen}
           disabled={!fileTreeAvailable}
           title={fileTreeOverlayOpen ? 'Hide file tree' : 'Show file tree'}
-          className="hover:text-muted-foreground hover:bg-transparent md:hidden"
+          className={cn(CHROME_ICON_BUTTON_CLASS, 'md:hidden')}
           onClick={onToggleFileTreeOverlay}
         >
           <IconFileTreeFill className="size-4 md:size-3" />
@@ -166,7 +166,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
                 size="icon-md"
                 aria-label="Open source in new tab"
                 title="Open source in new tab"
-                className="hover:text-muted-foreground hidden hover:bg-transparent md:flex"
+                className={cn(CHROME_ICON_BUTTON_CLASS, 'hidden md:flex')}
               >
                 <a href={initialUrl} target="_blank" rel="noreferrer noopener">
                   <IconShare className="size-4 md:size-3" />
@@ -185,7 +185,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
                   ? 'Switch to unified view'
                   : 'Switch to split view'
               }
-              className="hover:text-muted-foreground hidden hover:bg-transparent md:flex"
+              className={cn(CHROME_ICON_BUTTON_CLASS, 'hidden md:flex')}
               onClick={() =>
                 setDiffStyle(diffStyle === 'split' ? 'unified' : 'split')
               }
@@ -206,7 +206,7 @@ export const CodeViewHeader = memo(function CodeViewHeader({
                   ? 'Collapse all files'
                   : 'Expand all files'
               }
-              className="hover:text-muted-foreground hover:bg-transparent"
+              className={CHROME_ICON_BUTTON_CLASS}
               onClick={onToggleCollapseMode}
             >
               {collapseMode === 'expanded' ? (
@@ -231,14 +231,14 @@ export const CodeViewHeader = memo(function CodeViewHeader({
                   size="icon-md"
                   aria-label="Display settings"
                   title="Display settings"
-                  className="hover:text-muted-foreground hover:bg-transparent"
+                  className={CHROME_ICON_BUTTON_CLASS}
                 >
                   <IconGearFill className="size-4 md:size-3" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className={cn('w-58 p-2', THEMED_DROPDOWN_CONTENT_CLASS)}
+                className="w-58 p-2"
                 style={dropdownThemeStyle}
               >
                 <DropdownMenuItem
@@ -318,22 +318,6 @@ function colorModeIcon(colorMode: ColorMode) {
   return IconColorAuto;
 }
 
-function getDropdownThemeStyle(
-  themeChromeStyle: CSSProperties | undefined
-): CSSProperties | undefined {
-  if (themeChromeStyle == null) {
-    return undefined;
-  }
-
-  return {
-    ...themeChromeStyle,
-    backgroundColor: 'var(--diffshub-popover-bg, var(--color-popover))',
-    borderColor: 'var(--diffshub-popover-border, var(--color-border))',
-    boxShadow: 'var(--diffshub-popover-shadow, 0 10px 30px rgb(0 0 0 / 0.15))',
-    color: 'var(--diffshub-popover-fg, var(--color-popover-foreground))',
-  };
-}
-
 interface ThemeDropdownProps {
   colorMode: ColorMode;
   darkThemeName: DarkThemeName;
@@ -384,14 +368,14 @@ function ThemeDropdown({
           size="icon-md"
           aria-label="Theme settings"
           title="Theme settings"
-          className="hover:text-muted-foreground hover:bg-transparent"
+          className={CHROME_ICON_BUTTON_CLASS}
         >
           <TriggerIcon className="size-4 md:size-3" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className={cn('w-72 p-2', THEMED_DROPDOWN_CONTENT_CLASS)}
+        className="w-72 p-2"
         style={themeDropdownStyle}
       >
         {view === 'main' ? (
