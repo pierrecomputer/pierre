@@ -11,14 +11,14 @@ import { useDiffThemeProps } from './useDiffThemeProps';
 import { useWorkerDiffTheme } from './useWorkerDiffTheme';
 import type { DiffThemeInput } from '@/lib/theme/diffThemeProps';
 
-type ThemedDiffsHubViewerComponent = <LAnnotation = undefined>(
+type ThemedCodeViewComponent = <LAnnotation = undefined>(
   props: CodeViewProps<LAnnotation> & {
     ref?: Ref<CodeViewHandle<LAnnotation>>;
     theme?: DiffThemeInput;
   }
 ) => React.JSX.Element;
 
-export const ThemedDiffsHubViewer: ThemedDiffsHubViewerComponent = <
+export const ThemedCodeView: ThemedCodeViewComponent = <
   LAnnotation = undefined,
 >({
   disableWorkerPool = false,

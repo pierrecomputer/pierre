@@ -8,7 +8,7 @@ import { act, createRef } from 'react';
 import type { CSSProperties } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-import { ThemedDiffsHubViewer } from '../../components/ThemedDiffsHubViewer';
+import { ThemedCodeView } from '../../components/ThemedCodeView';
 import { ThemedSurface } from '../../components/ThemedSurface';
 import { ThemeSourceProvider } from '../../components/ThemeSourceProvider';
 import type { ChromeMapping } from '../theme/chromeThemeProps';
@@ -97,7 +97,7 @@ async function flushReact(): Promise<void> {
 }
 
 describe('React themed component overrides', () => {
-  test('ThemedDiffsHubViewer preserves caller themeType while applying the active theme pair', async () => {
+  test('ThemedCodeView preserves caller themeType while applying the active theme pair', async () => {
     const container = document.createElement('div');
     document.body.append(container);
     const codeViewRef = createRef<CodeViewHandle<undefined>>();
@@ -106,7 +106,7 @@ describe('React themed component overrides', () => {
     await act(async () => {
       root = createRoot(container);
       root.render(
-        <ThemedDiffsHubViewer
+        <ThemedCodeView
           ref={codeViewRef}
           disableWorkerPool
           options={{

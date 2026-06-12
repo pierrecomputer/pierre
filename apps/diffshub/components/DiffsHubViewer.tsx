@@ -16,7 +16,7 @@ import { memo, type RefObject, useMemo, useRef, useState } from 'react';
 
 import { DraftAnnotation } from './DraftAnnotation';
 import { ExampleAnnotation } from './ExampleAnnotation';
-import { ThemedDiffsHubViewer } from './ThemedDiffsHubViewer';
+import { ThemedCodeView } from './ThemedCodeView';
 import { useChromeThemeProps } from './useChromeThemeProps';
 import type { AvatarName } from '@/lib/annotation';
 import { buildAnnotationThemeStyle } from '@/lib/annotationThemeStyle';
@@ -462,7 +462,7 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
     ]
   );
   return (
-    <ThemedDiffsHubViewer<CommentMetadata>
+    <ThemedCodeView<CommentMetadata>
       ref={handleViewerRef}
       containerRef={scrollRef}
       initialItems={initialItems}
