@@ -16,7 +16,7 @@ import { DiffsHubHeader } from './DiffsHubHeader';
 import { DiffsHubSidebar } from './DiffsHubSidebar';
 import { DiffsHubStatusPanel } from './DiffsHubStatusPanel';
 import { DiffsHubViewer } from './DiffsHubViewer';
-import { ThemeProvider } from './ThemeProvider';
+import { ThemeSourceProvider } from './ThemeSourceProvider';
 import { usePatchLoader } from './usePatchLoader';
 import { useThemeCycle } from './useThemeCycle';
 import {
@@ -44,9 +44,9 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
   // Provide the diffshub-scoped theme context, then render the body BELOW it so
   // the diffs hook + selection hook can read the controller context.
   return (
-    <ThemeProvider controller={themeController}>
+    <ThemeSourceProvider controller={themeController}>
       <ReviewUIInner domain={domain} initialUrl={initialUrl} path={path} />
-    </ThemeProvider>
+    </ThemeSourceProvider>
   );
 }
 

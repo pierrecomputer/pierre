@@ -10,7 +10,7 @@ import { createRoot, type Root } from 'react-dom/client';
 
 import { ThemedDiffsHubViewer } from '../../components/ThemedDiffsHubViewer';
 import { ThemedSurface } from '../../components/ThemedSurface';
-import { ThemeProvider } from '../../components/ThemeProvider';
+import { ThemeSourceProvider } from '../../components/ThemeSourceProvider';
 import type { ChromeMapping } from '../theme/chromeThemeProps';
 
 const originalGlobals = {
@@ -147,12 +147,12 @@ describe('React themed component overrides', () => {
     await act(async () => {
       root = createRoot(container);
       root.render(
-        <ThemeProvider theme={darkTheme}>
+        <ThemeSourceProvider theme={darkTheme}>
           <ThemedSurface
             mapping={themeNameMapping}
             theme={{ light: lightTheme, dark: darkTheme }}
           />
-        </ThemeProvider>
+        </ThemeSourceProvider>
       );
       await flushReact();
     });
