@@ -14,7 +14,7 @@ const geistSans = Geist({
 });
 
 const berkeleyMono = localFont({
-  src: './BerkeleyMonoVariable.woff2',
+  src: '../app/BerkeleyMonoVariable.woff2',
   variable: '--font-berkeley-mono',
 });
 

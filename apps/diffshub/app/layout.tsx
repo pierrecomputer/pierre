@@ -93,4 +93,4 @@ export const metadata: Metadata = {
   },
 };
 
-export { RootLayout as default } from './RootLayout';
+export { RootLayout as default } from '@/components/RootLayout';
