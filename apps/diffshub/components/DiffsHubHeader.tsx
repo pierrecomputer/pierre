@@ -43,9 +43,9 @@ import {
 } from '@/components/DropdownMenu';
 import { Switch } from '@/components/Switch';
 import { docsThemeCatalog } from '@/components/themeCatalog';
+import { cn } from '@/lib/cn';
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import { getDropdownThemeStyle } from '@/lib/theme/dropdownChromeStyle';
-import { cn } from '@/lib/utils';
 
 type LightThemeName = string;
 type DarkThemeName = string;

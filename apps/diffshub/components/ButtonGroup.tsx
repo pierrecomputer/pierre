@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { Button, type ButtonProps } from './Button';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/cn';
 
 interface ButtonGroupContextValue {
   selectedValue?: string;

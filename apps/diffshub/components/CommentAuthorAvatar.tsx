@@ -1,5 +1,5 @@
 import { getCommentPersona } from '@/lib/annotation';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/cn';
 
 interface CommentAuthorAvatarProps {
   // A stable seed (e.g. comment key or a fixed name) used to pick the avatar.

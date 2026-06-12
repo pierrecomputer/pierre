@@ -2,9 +2,9 @@ import { IconCiWarningFill, IconRefresh } from '@pierre/icons';
 
 import { useChromeThemeProps } from './useChromeThemeProps';
 import { Button } from '@/components/Button';
+import { cn } from '@/lib/cn';
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import type { ViewerLoadState } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
 interface DiffsHubStatusPanelProps {
   errorMessage: string | null;

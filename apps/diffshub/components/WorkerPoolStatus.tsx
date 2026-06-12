@@ -28,7 +28,7 @@ import {
 import { StatItem } from './StatItem';
 import { StatusRow } from './StatusRow';
 import type { ThemeCycleControls } from './useThemeCycle';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/cn';
 
 class AutoScrollTester {
   private running: 0 | 1 | 2 = 0;

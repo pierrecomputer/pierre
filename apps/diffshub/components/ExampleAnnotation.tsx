@@ -5,8 +5,8 @@ import { memo } from 'react';
 import { CommentAuthorAvatar } from './CommentAuthorAvatar';
 import { Button } from '@/components/Button';
 import { annotationCardBase } from '@/lib/annotation';
+import { cn } from '@/lib/cn';
 import type { SavedCommentMetadata } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
 interface ExampleAnnotationProps {
   annotation: DiffLineAnnotation<SavedCommentMetadata>;

@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/cn';
 
 export function DiffsHubLogo({ className }: { className?: string }) {
   return (

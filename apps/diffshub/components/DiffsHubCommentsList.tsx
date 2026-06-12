@@ -5,12 +5,12 @@ import { IconConvoFill, IconPlus } from '@pierre/icons';
 import { memo, type MouseEvent } from 'react';
 
 import { CommentAuthorAvatar } from './CommentAuthorAvatar';
+import { cn } from '@/lib/cn';
 import type {
   CommentLineType,
   DiffsHubSavedCommentEntry,
   DiffsHubSavedCommentItem,
 } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
 interface DiffsHubCommentsListProps {
   commentSections: readonly DiffsHubSavedCommentItem[];

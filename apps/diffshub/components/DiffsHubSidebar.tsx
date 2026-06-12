@@ -40,6 +40,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/DropdownMenu';
+import { cn } from '@/lib/cn';
 import { filterDiffsHubFileTreeSource } from '@/lib/filterDiffsHubFileTreeSource';
 import { getDiffsHubFileTreeAvailableStatuses } from '@/lib/getDiffsHubFileTreeAvailableStatuses';
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
@@ -50,7 +51,6 @@ import type {
   DiffsHubSavedCommentEntry,
   DiffsHubSavedCommentItem,
 } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
 type SidebarTab = 'files' | 'comments';
 type SidebarStatusPanel = 'diffStats' | 'systemMonitor';

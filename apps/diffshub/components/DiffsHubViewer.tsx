@@ -21,6 +21,7 @@ import { useChromeThemeProps } from './useChromeThemeProps';
 import type { AvatarName } from '@/lib/annotation';
 import { buildAnnotationThemeStyle } from '@/lib/annotationThemeStyle';
 import { classifyCommentLineType } from '@/lib/classifyCommentLineType';
+import { cn } from '@/lib/cn';
 import { CODE_VIEW_CUSTOM_CSS, CODE_VIEW_LAYOUT } from '@/lib/constants';
 import { isDiffItem } from '@/lib/isDiffItem';
 import { isDraftAnnotation } from '@/lib/isDraftAnnotation';
@@ -32,7 +33,6 @@ import type {
   DiffsHubDeletedCommentEvent,
   DiffsHubSavedCommentEvent,
 } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
 function getNextItemVersion(item: CodeViewItem<CommentMetadata>): number {
   return typeof item.version === 'number' ? item.version + 1 : 1;

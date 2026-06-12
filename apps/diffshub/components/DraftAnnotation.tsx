@@ -9,8 +9,8 @@ import {
   type AvatarName,
   getRandomPersona,
 } from '@/lib/annotation';
+import { cn } from '@/lib/cn';
 import type { DraftCommentMetadata } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
 interface DraftAnnotationProps {
   annotation: DiffLineAnnotation<DraftCommentMetadata>;

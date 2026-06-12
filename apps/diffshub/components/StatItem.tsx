@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/cn';
 
 const NUMBER_FORMATTER = new Intl.NumberFormat('en-US');
 
