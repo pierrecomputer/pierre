@@ -51,6 +51,10 @@ import {
   REACT_API_UNRESOLVED_FILE,
 } from '../docs/ReactAPI/constants';
 import {
+  SPAN_DECORATIONS_REACT,
+  SPAN_DECORATIONS_VANILLA,
+} from '../docs/SpanDecorations/constants';
+import {
   SSR_PRELOAD_FILE,
   SSR_PRELOAD_FILE_DIFF,
   SSR_PRELOAD_MULTI_FILE_DIFF,
@@ -169,6 +173,7 @@ export default function DocsPage() {
           <StylingSection />
           <ThemingSection />
           <TokenHooksSection />
+          <SpanDecorationsSection />
           <WorkerPoolSection />
           <SSRSection />
         </div>
@@ -498,6 +503,21 @@ async function TokenHooksSection() {
     scope: {
       reactTokenHooks,
       vanillaTokenHooks,
+    },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function SpanDecorationsSection() {
+  const [reactSpanDecorations, vanillaSpanDecorations] = await Promise.all([
+    preloadFile(SPAN_DECORATIONS_REACT),
+    preloadFile(SPAN_DECORATIONS_VANILLA),
+  ]);
+  const content = await renderMDX({
+    filePath: '(diffs)/docs/SpanDecorations/content.mdx',
+    scope: {
+      reactSpanDecorations,
+      vanillaSpanDecorations,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;

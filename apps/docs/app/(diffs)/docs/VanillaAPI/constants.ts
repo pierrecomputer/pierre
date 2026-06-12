@@ -553,6 +553,10 @@ instance.render({
   oldFile: { name: 'file.ts', contents: '...' },
   newFile: { name: 'file.ts', contents: '...' },
   lineAnnotations: [{ side: 'additions', lineNumber: 5, metadata: {} }],
+  // Sub-line range styling - see the Span Decorations section
+  spanDecorations: [
+    { side: 'additions', lineNumber: 5, spanStart: 4, spanLength: 9, className: 'hl' },
+  ],
   containerWrapper: document.body,
 });
 
@@ -796,6 +800,10 @@ const instance = new File({
 instance.render({
   file: { name: 'example.ts', contents: '...' },
   lineAnnotations: [{ lineNumber: 5, metadata: {} }],
+  // Sub-line range styling - see the Span Decorations section
+  spanDecorations: [
+    { lineNumber: 5, spanStart: 4, spanLength: 9, className: 'hl' },
+  ],
   containerWrapper: document.body,
 });
 

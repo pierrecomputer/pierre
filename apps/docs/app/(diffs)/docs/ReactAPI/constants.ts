@@ -365,6 +365,25 @@ interface ThreadMetadata {
   )}
 
   // ─────────────────────────────────────────────────────────────
+  // SPAN DECORATIONS
+  // ─────────────────────────────────────────────────────────────
+
+  // Style arbitrary character ranges within a line. lineNumber is
+  // 1-based, spanStart is a 0-based character offset. className is
+  // applied to the rendered span; style it with options.unsafeCSS.
+  // Keep arrays stable (useState/useMemo) - changes re-highlight.
+  // See the Span Decorations section for interaction callbacks.
+  spanDecorations={[
+    {
+      side: 'additions', // or 'deletions'
+      lineNumber: 16,
+      spanStart: 4,
+      spanLength: 9,
+      className: 'hl-risk',
+    },
+  ]}
+
+  // ─────────────────────────────────────────────────────────────
   // HEADER CALLBACKS
   // ─────────────────────────────────────────────────────────────
 
@@ -987,6 +1006,23 @@ interface CommentMetadata {
   renderAnnotation={(annotation) => (
     <Comment commentId={annotation.metadata.commentId} />
   )}
+
+  // ─────────────────────────────────────────────────────────────
+  // SPAN DECORATIONS
+  // ─────────────────────────────────────────────────────────────
+
+  // Style arbitrary character ranges within a line. Like
+  // lineAnnotations, the File variant has no 'side' property.
+  // className is applied to the rendered span; style it with
+  // options.unsafeCSS. See the Span Decorations section.
+  spanDecorations={[
+    {
+      lineNumber: 5,
+      spanStart: 4,
+      spanLength: 9,
+      className: 'hl-match',
+    },
+  ]}
 
   // ─────────────────────────────────────────────────────────────
   // HEADER CALLBACKS

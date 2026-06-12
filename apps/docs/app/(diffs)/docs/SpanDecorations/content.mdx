@@ -1,0 +1,46 @@
+## Span Decorations
+
+Span decorations style arbitrary character ranges within a line — without
+touching tokenization. Use them for review-assist overlays like flagging
+high-risk spans, search match highlighting, diagnostics squiggles, muting
+low-relevance code, or anchoring assist UI to sub-line selections.
+
+Where [annotations](#react-api) attach content to whole lines, span decorations
+address `{ lineNumber, spanStart, spanLength }` character ranges and wrap them
+in a span carrying your `className`. They ride the same Shiki decorations
+pipeline as the built-in intra-line diff highlighting.
+
+Available on:
+
+- React: `MultiFileDiff`, `PatchDiff`, `FileDiff`, `File`, `UnresolvedFile`, and
+  `CodeView` (per item)
+- Vanilla JS: `FileDiff`, `File`, `UnresolvedFile`, and `CodeView` (per item)
+- SSR: all `preload*` helpers accept a `spanDecorations` option
+
+Shared behavior:
+
+- `lineNumber` is 1-based; `spanStart` is a 0-based character offset;
+  `spanLength` is end-exclusive. Diff variants (`DiffSpanDecoration`) also take
+  `side: 'deletions' | 'additions'`, matching `DiffLineAnnotation`.
+- Decorations are content-coupled, so they are render props / item fields (like
+  `lineAnnotations`), not options. Keep arrays stable to avoid re-highlights —
+  changing them re-runs highlighting for that file.
+- `className` resolves to classes on the rendered span (plus a
+  `data-span-decoration` attribute). Spans render inside the shadow DOM, so
+  style the classes with `unsafeCSS`. Structured input only — no raw HTML.
+- Ranges are clamped to the rendered line length; zero-length and out-of-range
+  decorations are dropped rather than throwing.
+- When a decoration overlaps the built-in intra-line diff highlight, the
+  consumer span nests inside the `data-diff-span` wrapper and both classes apply
+  — built-in styling wins by default, and you can layer on top with CSS
+  specificity.
+- `onDecorationClick`, `onDecorationEnter`, and `onDecorationLeave` options
+  mirror the [Token Hooks](#token-hooks) callbacks: they receive your original
+  decoration object, the rendered `decorationElement`, `lineNumber`, and (for
+  diffs) `side`, plus the raw pointer event. Unlike token hooks, they work
+  without `useTokenTransformer` and add no DOM overhead when unused.
+
+<SpanDecorationTabs
+  reactExample={reactSpanDecorations}
+  vanillaExample={vanillaSpanDecorations}
+/>

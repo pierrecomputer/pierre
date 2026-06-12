@@ -20,6 +20,7 @@ JavaScript and React components.
 - Flexible annotation framework for injecting comments, annotations, and more
 - Add your own accept/reject changes UI
 - Select and highlight lines
+- Span decorations for styling and interacting with sub-line character ranges
 
 ## Install
 

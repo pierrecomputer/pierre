@@ -22,6 +22,7 @@ import {
   ComponentTabs,
   SharedPropTabs,
 } from '../app/(diffs)/docs/ReactAPI/ComponentTabs';
+import { SpanDecorationTabs } from '../app/(diffs)/docs/SpanDecorations/ComponentTabs';
 import { TokenHookTabs } from '../app/(diffs)/docs/TokenHooks/ComponentTabs';
 import { AcceptRejectTabs } from '../app/(diffs)/docs/Utilities/AcceptRejectTabs';
 import {
@@ -72,6 +73,7 @@ const defaultComponents = {
   ComponentTabs,
   SharedPropTabs,
   TokenHookTabs,
+  SpanDecorationTabs,
   AcceptRejectTabs,
   DiffHunksTabs,
   VanillaComponentTabs,
