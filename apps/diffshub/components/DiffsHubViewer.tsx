@@ -14,26 +14,26 @@ import { type CodeViewHandle, useStableCallback } from '@pierre/diffs/react';
 import { IconChevronSm } from '@pierre/icons';
 import { memo, type RefObject, useMemo, useRef, useState } from 'react';
 
-import type { AvatarName } from './_lib/annotation';
-import { buildAnnotationThemeStyle } from './_lib/annotationThemeStyle';
-import { CODE_VIEW_CUSTOM_CSS, CODE_VIEW_LAYOUT } from './_lib/constants';
-import { diffshubChromeMapping } from './_lib/theme/diffshubChromeMapping';
-import type {
-  CommentMetadata,
-  DiffsHubDeletedCommentEvent,
-  DiffsHubSavedCommentEvent,
-} from './_lib/types';
+import { DraftAnnotation } from './DraftAnnotation';
+import { ExampleAnnotation } from './ExampleAnnotation';
+import { ThemedDiffsHubViewer } from './ThemedDiffsHubViewer';
+import { useChromeThemeProps } from './useChromeThemeProps';
+import type { AvatarName } from '@/lib/annotation';
+import { buildAnnotationThemeStyle } from '@/lib/annotationThemeStyle';
+import { CODE_VIEW_CUSTOM_CSS, CODE_VIEW_LAYOUT } from '@/lib/constants';
 import {
   classifyCommentLineType,
   isDiffItem,
   isDraftAnnotation,
   isDraftMetadata,
   isSavedAnnotation,
-} from './_lib/utils';
-import { DraftAnnotation } from './DraftAnnotation';
-import { ExampleAnnotation } from './ExampleAnnotation';
-import { ThemedDiffsHubViewer } from './ThemedDiffsHubViewer';
-import { useChromeThemeProps } from './useChromeThemeProps';
+} from '@/lib/diffsHubUtils';
+import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
+import type {
+  CommentMetadata,
+  DiffsHubDeletedCommentEvent,
+  DiffsHubSavedCommentEvent,
+} from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 function getNextItemVersion(item: CodeViewItem<CommentMetadata>): number {

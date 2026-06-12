@@ -6,6 +6,7 @@ import {
 } from '@pierre/diffs';
 import type { FileTreeGitStatusPatch, GitStatusEntry } from '@pierre/trees';
 
+import { mapChangeTypeToGitStatus } from './diffsHubUtils';
 import { getPatchTreePathPrefix } from './gitPatchMetadata';
 import type {
   CommentMetadata,
@@ -14,7 +15,6 @@ import type {
   DiffsHubDiffStats,
   DiffsHubFileTreeSource,
 } from './types';
-import { mapChangeTypeToGitStatus } from './utils';
 
 export interface DiffsHubDataAccumulator {
   diffStats: DiffsHubDiffStats;

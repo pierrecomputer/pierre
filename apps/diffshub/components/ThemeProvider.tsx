@@ -8,17 +8,17 @@ import {
 import { type ReactNode, useMemo } from 'react';
 
 import {
-  controllerSource,
-  fixedSource,
-  type ThemeInput,
-} from './_lib/theme/ThemeSource';
-import {
   ThemeControllerContext,
   ThemeResolverContext,
   ThemeSourceContext,
   useThemeResolver,
   useThemeSource,
 } from './useThemeSource';
+import {
+  controllerSource,
+  fixedSource,
+  type ThemeInput,
+} from '@/lib/theme/ThemeSource';
 
 interface ControllerProviderProps {
   controller: ThemeController;

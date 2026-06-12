@@ -12,18 +12,6 @@ import {
   useState,
 } from 'react';
 
-import { preloadAvatars } from './_lib/annotation';
-import type { DarkThemeName, LightThemeName } from './_lib/themeNames';
-import type {
-  CommentMetadata,
-  DiffsHubDeletedCommentEvent,
-  DiffsHubSavedCommentEntry,
-  DiffsHubSavedCommentEvent,
-} from './_lib/types';
-import {
-  removeSavedCommentSidebarEntry,
-  upsertSavedCommentSidebarEntry,
-} from './_lib/utils';
 import { DiffsHubHeader } from './DiffsHubHeader';
 import { DiffsHubSidebar } from './DiffsHubSidebar';
 import { DiffsHubStatusPanel } from './DiffsHubStatusPanel';
@@ -35,6 +23,18 @@ import {
   docsThemeCatalog,
   themeController,
 } from '@/components/themeController';
+import { preloadAvatars } from '@/lib/annotation';
+import {
+  removeSavedCommentSidebarEntry,
+  upsertSavedCommentSidebarEntry,
+} from '@/lib/diffsHubUtils';
+import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
+import type {
+  CommentMetadata,
+  DiffsHubDeletedCommentEvent,
+  DiffsHubSavedCommentEntry,
+  DiffsHubSavedCommentEvent,
+} from '@/lib/types';
 
 interface ReviewUIProps {
   domain?: string;

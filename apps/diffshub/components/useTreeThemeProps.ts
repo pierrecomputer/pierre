@@ -4,12 +4,12 @@ import { createThemeResolver } from '@pierre/theming';
 import type { TreeThemeStyles } from '@pierre/trees';
 import { useMemo } from 'react';
 
-import { fixedSource, type ThemeInput } from './_lib/theme/ThemeSource';
+import { useThemeResolver, useThemeSource } from './useThemeSource';
+import { fixedSource, type ThemeInput } from '@/lib/theme/ThemeSource';
 import {
   treeThemeProps,
   type TreeThemePropsOptions,
-} from './_lib/theme/treeThemeProps';
-import { useThemeResolver, useThemeSource } from './useThemeSource';
+} from '@/lib/theme/treeThemeProps';
 
 // Returns the spreadable FileTree style props for the active theme (provider, or
 // the per-component `theme` override). Pass reconcileForegroundFromChrome to

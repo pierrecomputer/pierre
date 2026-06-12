@@ -6,8 +6,8 @@ import {
 } from '@pierre/icons';
 import Link from 'next/link';
 
-import { getGitHubPath } from '../_components/_lib/utils';
-import { DiffsHubLogo } from '../_components/DiffsHubLogo';
+import { DiffsHubLogo } from '@/components/DiffsHubLogo';
+import { getGitHubPath } from '@/lib/diffsHubUtils';
 
 const DIFF_LINE_BADGE = 'inline-flex rounded-r py-0.25 pr-1.5 pl-1.5';
 const DIFF_LINE_DELETED_BADGE = `${DIFF_LINE_BADGE} bg-[#ff6762]/15 text-[#ff2e3f] dark:bg-[#ff6762]/10 dark:text-[#ff6762]`;

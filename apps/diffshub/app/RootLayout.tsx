@@ -2,11 +2,11 @@ import { Geist } from 'next/font/google';
 import localFont from 'next/font/local';
 import type { ReactNode } from 'react';
 
-import { WorkerPoolContext } from './_components/WorkerPoolContext';
 import { PreloadHighlighter } from '@/components/PreloadHighlighter';
 import { ScrollbarGutterVariables } from '@/components/ScrollbarGutterVariables';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
+import { WorkerPoolContext } from '@/components/WorkerPoolContext';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',

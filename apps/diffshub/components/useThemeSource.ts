@@ -3,10 +3,7 @@
 import type { ThemeController, ThemeResolver } from '@pierre/theming';
 import { createContext, useContext, useRef, useSyncExternalStore } from 'react';
 
-import type {
-  ActiveThemeSnapshot,
-  ThemeSource,
-} from './_lib/theme/ThemeSource';
+import type { ActiveThemeSnapshot, ThemeSource } from '@/lib/theme/ThemeSource';
 
 export const ThemeSourceContext = createContext<ThemeSource | undefined>(
   undefined

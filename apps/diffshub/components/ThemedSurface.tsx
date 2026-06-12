@@ -2,10 +2,10 @@
 
 import type { CSSProperties, ElementType, ReactNode } from 'react';
 
-import type { ChromeMapping } from './_lib/theme/chromeThemeProps';
-import { diffshubChromeMapping } from './_lib/theme/diffshubChromeMapping';
-import type { ThemeInput } from './_lib/theme/ThemeSource';
 import { useChromeThemeProps } from './useChromeThemeProps';
+import type { ChromeMapping } from '@/lib/theme/chromeThemeProps';
+import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
+import type { ThemeInput } from '@/lib/theme/ThemeSource';
 
 interface ThemedSurfaceProps {
   as?: ElementType;

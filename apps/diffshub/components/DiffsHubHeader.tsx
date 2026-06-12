@@ -29,8 +29,6 @@ import {
   useState,
 } from 'react';
 
-import { diffshubChromeMapping } from './_lib/theme/diffshubChromeMapping';
-import { getDropdownThemeStyle } from './_lib/theme/dropdownChromeStyle';
 import { CHROME_ICON_BUTTON_CLASS } from './chromeButtonStyles';
 import { DiffsHubLogo } from './DiffsHubLogo';
 import { DiffUrlForm } from './DiffUrlForm';
@@ -45,6 +43,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
+import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
+import { getDropdownThemeStyle } from '@/lib/theme/dropdownChromeStyle';
 import { cn } from '@/lib/utils';
 
 type LightThemeName = string;

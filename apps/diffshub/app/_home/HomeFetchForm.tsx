@@ -3,7 +3,7 @@
 import { IconArrow } from '@pierre/icons';
 import { memo } from 'react';
 
-import { DiffUrlForm } from '../_components/DiffUrlForm';
+import { DiffUrlForm } from '@/components/DiffUrlForm';
 import { Button } from '@/components/ui/button';
 
 // Submitting the home form should move to the shareable viewer URL first. The

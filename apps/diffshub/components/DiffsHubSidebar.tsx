@@ -22,14 +22,6 @@ import {
   useState,
 } from 'react';
 
-import { diffshubChromeMapping } from './_lib/theme/diffshubChromeMapping';
-import { getDropdownThemeStyle } from './_lib/theme/dropdownChromeStyle';
-import type {
-  DiffsHubDiffStats as DiffsHubDiffStatsData,
-  DiffsHubFileTreeSource,
-  DiffsHubSavedCommentEntry,
-  DiffsHubSavedCommentItem,
-} from './_lib/types';
 import { CHROME_ICON_BUTTON_CLASS } from './chromeButtonStyles';
 import { DiffsHubCommentsList } from './DiffsHubCommentsList';
 import { DiffsHubDiffStats } from './DiffsHubDiffStats';
@@ -52,6 +44,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
+import { getDropdownThemeStyle } from '@/lib/theme/dropdownChromeStyle';
+import type {
+  DiffsHubDiffStats as DiffsHubDiffStatsData,
+  DiffsHubFileTreeSource,
+  DiffsHubSavedCommentEntry,
+  DiffsHubSavedCommentItem,
+} from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 type SidebarTab = 'files' | 'comments';

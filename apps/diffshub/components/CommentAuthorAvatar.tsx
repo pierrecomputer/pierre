@@ -1,4 +1,4 @@
-import { getCommentPersona } from './_lib/annotation';
+import { getCommentPersona } from '@/lib/annotation';
 import { cn } from '@/lib/utils';
 
 interface CommentAuthorAvatarProps {

@@ -9,14 +9,14 @@ import type {
 import { useFileTree } from '@pierre/trees/react';
 import { type CSSProperties, memo, useEffect, useRef, useState } from 'react';
 
-import type { FileTreePublicId } from '../../../../packages/trees/dist/model/publicTypes';
+import type { FileTreePublicId } from '../../../packages/trees/dist/model/publicTypes';
+import { ThemedFileTree } from './ThemedFileTree';
 import {
   BASE_FILE_TREE_OPTIONS,
   CODE_VIEW_FILE_TREE_ITEM_HEIGHT,
   getInitialBatchSize,
-} from './_lib/constants';
-import type { DiffsHubFileTreeSource } from './_lib/types';
-import { ThemedFileTree } from './ThemedFileTree';
+} from '@/lib/constants';
+import type { DiffsHubFileTreeSource } from '@/lib/types';
 type FileTreeSortComparator = Exclude<
   NonNullable<FileTreeOptions['sort']>,
   'default'

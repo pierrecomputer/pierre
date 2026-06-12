@@ -3,12 +3,12 @@
 import { createThemeResolver } from '@pierre/theming';
 import { type CSSProperties, useMemo } from 'react';
 
+import { useThemeResolver, useThemeSource } from './useThemeSource';
 import {
   type ChromeMapping,
   chromeThemeProps,
-} from './_lib/theme/chromeThemeProps';
-import { fixedSource, type ThemeInput } from './_lib/theme/ThemeSource';
-import { useThemeResolver, useThemeSource } from './useThemeSource';
+} from '@/lib/theme/chromeThemeProps';
+import { fixedSource, type ThemeInput } from '@/lib/theme/ThemeSource';
 
 // Returns the spreadable chrome style props for the active theme, mapped to the
 // app's CSS variables by the supplied mapping (diffshub passes diffshubChromeMapping).

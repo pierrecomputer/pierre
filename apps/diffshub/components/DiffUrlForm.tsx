@@ -13,8 +13,8 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
-import { getPatchViewerHref } from './_lib/utils';
 import { Button } from '@/components/ui/button';
+import { getPatchViewerHref } from '@/lib/diffsHubUtils';
 import { cn } from '@/lib/utils';
 
 interface DiffUrlFormProps {

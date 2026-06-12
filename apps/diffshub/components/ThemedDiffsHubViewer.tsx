@@ -7,9 +7,9 @@ import {
 } from '@pierre/diffs/react';
 import { type Ref, useMemo } from 'react';
 
-import type { DiffThemeInput } from './_lib/theme/diffThemeProps';
 import { useDiffThemeProps } from './useDiffThemeProps';
 import { useWorkerDiffTheme } from './useWorkerDiffTheme';
+import type { DiffThemeInput } from '@/lib/theme/diffThemeProps';
 
 type ThemedDiffsHubViewerComponent = <LAnnotation = undefined>(
   props: CodeViewProps<LAnnotation> & {

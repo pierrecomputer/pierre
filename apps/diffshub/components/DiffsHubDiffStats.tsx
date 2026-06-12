@@ -3,9 +3,9 @@
 import { IconSymbolDiffstatFill } from '@pierre/icons';
 import { memo, useEffect } from 'react';
 
-import type { DiffsHubDiffStats as DiffsHubDiffStatsData } from './_lib/types';
 import { StatItem } from './StatItem';
 import { StatusRow } from './StatusRow';
+import type { DiffsHubDiffStats as DiffsHubDiffStatsData } from '@/lib/types';
 
 interface DiffsHubDiffStatsProps {
   expanded: boolean;

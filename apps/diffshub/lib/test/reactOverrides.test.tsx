@@ -8,9 +8,9 @@ import { act, createRef } from 'react';
 import type { CSSProperties } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-import { ThemedDiffsHubViewer } from '../../ThemedDiffsHubViewer';
-import { ThemedSurface } from '../../ThemedSurface';
-import { ThemeProvider } from '../../ThemeProvider';
+import { ThemedDiffsHubViewer } from '../../components/ThemedDiffsHubViewer';
+import { ThemedSurface } from '../../components/ThemedSurface';
+import { ThemeProvider } from '../../components/ThemeProvider';
 import type { ChromeMapping } from '../theme/chromeThemeProps';
 
 const originalGlobals = {

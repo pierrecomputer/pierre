@@ -17,7 +17,7 @@ import {
   useState,
 } from 'react';
 
-import { CODE_VIEW_BATCH_COUNT, getInitialBatchSize } from './_lib/constants';
+import { CODE_VIEW_BATCH_COUNT, getInitialBatchSize } from '@/lib/constants';
 import {
   appendFileDiffToDiffsHubData,
   buildDiffsHubData,
@@ -25,17 +25,17 @@ import {
   type DiffsHubItemIdRename,
   snapshotDiffsHubTreeSource,
   takePendingDiffsHubItems,
-} from './_lib/diffsHubDataAccumulator';
-import { getPatchTreePathPrefix } from './_lib/gitPatchMetadata';
+} from '@/lib/diffsHubDataAccumulator';
+import { getPatchTreePathPrefix } from '@/lib/gitPatchMetadata';
 import {
   type DiffsHubLineHashTarget,
   formatDiffsHubLineHash,
   parseDiffsHubLineHash,
-} from './_lib/lineHash';
+} from '@/lib/lineHash';
 import {
   getStreamedPatchMetadata,
   streamGitPatchFiles,
-} from './_lib/streamGitPatchFiles';
+} from '@/lib/streamGitPatchFiles';
 import type {
   CommentMetadata,
   DiffsHubCommentFileByItemId,
@@ -43,7 +43,7 @@ import type {
   DiffsHubFileTreeSource,
   DiffsHubSavedCommentItem,
   ViewerLoadState,
-} from './_lib/types';
+} from '@/lib/types';
 
 const STREAM_PUBLISH_INTERVAL_MS = 100;
 const STREAM_INITIAL_PUBLISH_INTERVAL_MS = 500;
