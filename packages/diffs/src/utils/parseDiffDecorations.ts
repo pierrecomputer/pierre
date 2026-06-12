@@ -26,10 +26,10 @@ interface CreateSpanDecorationProps extends CreateDiffSpanDecorationProps {
   index?: number;
 }
 
-// Consumer-facing variant of createDiffSpanDecoration: same shiki shape, but
+// Consumer-facing variant of createDiffSpanDecoration: same Shiki shape, but
 // applies a caller-supplied class instead of the internal data-diff-span
-// attribute so consumer styles compose with (rather than replace) the engine's
-// own intra-line diff highlighting. The data-span-decoration attribute carries
+// attribute so consumer styles compose with (rather than replace) the built-in
+// intra-line diff highlighting. The data-span-decoration attribute carries
 // the decoration's index in the consumer's spanDecorations array so the
 // InteractionManager can resolve pointer events back to the original object.
 export function createSpanDecoration({

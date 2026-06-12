@@ -478,7 +478,7 @@ export type DiffLineAnnotation<T = undefined> = {
 
 /**
  * Consumer-facing sub-line decoration. Wraps the [spanStart, spanStart +
- * spanLength) character range on the given 1-indexed line in a span carrying
+ * spanLength) character range on the given 1-based line in a span carrying
  * `className`. Ranges are addressed against the rendered line text (no diff
  * indicator prefix, no trailing newline). Out-of-range spans are dropped.
  */

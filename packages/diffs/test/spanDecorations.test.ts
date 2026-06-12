@@ -125,7 +125,7 @@ describe('Span Decorations', () => {
       expect(flattenText(add)).toBe('b');
       expect(flattenText(del)).toBe('b');
 
-      // The engine's own intra-line diff highlight (data-diff-span) must still
+      // The built-in intra-line diff highlight (data-diff-span) must still
       // be present on the same change line — consumer spans compose, not
       // replace.
       const diffSpans = all.filter(

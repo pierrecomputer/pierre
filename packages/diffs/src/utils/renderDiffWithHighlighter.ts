@@ -303,10 +303,10 @@ function groupSpanDecorations(
   return map;
 }
 
-// Translate consumer span decorations addressed by file line number into shiki
+// Translate consumer span decorations addressed by file line number into Shiki
 // DecorationItems addressed by bucket-local 0-based line index, clamped to the
-// rendered line length. Pushed after the engine's own intra-line diff spans so
-// shiki nests consumer wrappers inside the data-diff-span wrapper when ranges
+// rendered line length. Pushed after the built-in intra-line diff spans so
+// Shiki nests consumer wrappers inside the data-diff-span wrapper when ranges
 // overlap, leaving both classes applied.
 function pushSpanDecorations(
   map: SpanDecorationLineMap | undefined,
