@@ -18,19 +18,17 @@ import {
 } from '@pierre/icons';
 import Link from 'next/link';
 import {
-  type ComponentType,
   memo,
   type MouseEvent,
-  type ReactNode,
   type RefObject,
   useEffect,
   useState,
 } from 'react';
 
+import { StatItem } from './StatItem';
+import { StatusRow } from './StatusRow';
 import type { ThemeCycleControls } from './useThemeCycle';
 import { cn } from '@/lib/utils';
-
-const NUMBER_FORMATTER = new Intl.NumberFormat('en-US');
 
 class AutoScrollTester {
   private running: 0 | 1 | 2 = 0;
@@ -134,32 +132,6 @@ export const WorkerPoolStatus = memo(function WorkerPoolStatus({
   );
 });
 
-export interface StatItemProps {
-  label: string;
-  value: string | number;
-  valueClassName?: string;
-}
-
-export function StatItem({ label, value, valueClassName }: StatItemProps) {
-  const isZero = value === 0 || value === '0';
-  const formatted =
-    typeof value === 'number' ? NUMBER_FORMATTER.format(value) : value;
-  return (
-    <div className="border-border/75 flex items-center justify-between border-t py-1 pr-4 text-[12px] md:pr-0">
-      <div className="text-muted-foreground">{label}</div>
-      <span
-        className={cn('pl-[1ch] text-right tabular-nums', valueClassName)}
-        style={{
-          fontFamily: 'var(--font-berkeley-mono)',
-          opacity: isZero ? 0.5 : 1,
-        }}
-      >
-        {formatted}
-      </span>
-    </div>
-  );
-}
-
 interface StatsDisplayProps {
   expanded: boolean;
   onToggle(): void;
@@ -181,26 +153,6 @@ function getStatusIcon(stats: WorkerStats) {
     return { Icon: IconCircleFill, className: 'text-green-400' };
   }
   return { Icon: IconCircleFill, className: 'text-muted-foreground' };
-}
-
-export interface StatusRowProps {
-  icon: ComponentType<{ className?: string }>;
-  children: ReactNode;
-  className?: string;
-}
-
-export function StatusRow({ icon: Icon, children, className }: StatusRowProps) {
-  return (
-    <div
-      className={cn(
-        'text-muted-foreground border-border flex min-w-0 items-center gap-2 border-t px-4 py-2 md:mx-3 md:px-2',
-        className
-      )}
-    >
-      <Icon className="size-3 shrink-0 opacity-50" />
-      {children}
-    </div>
-  );
 }
 
 function StatsDisplay({

@@ -17,33 +17,33 @@ import {
   useState,
 } from 'react';
 
+import { CODE_VIEW_BATCH_COUNT, getInitialBatchSize } from './_lib/constants';
 import {
-  appendFileDiffToCodeViewData,
-  buildCodeViewData,
-  type CodeViewItemIdRename,
-  createCodeViewDataAccumulator,
-  snapshotCodeViewTreeSource,
-  takePendingCodeViewItems,
-} from './codeViewDataAccumulator';
-import { CODE_VIEW_BATCH_COUNT, getInitialBatchSize } from './constants';
-import { getPatchTreePathPrefix } from './gitPatchMetadata';
+  appendFileDiffToDiffsHubData,
+  buildDiffsHubData,
+  createDiffsHubDataAccumulator,
+  type DiffsHubItemIdRename,
+  snapshotDiffsHubTreeSource,
+  takePendingDiffsHubItems,
+} from './_lib/diffsHubDataAccumulator';
+import { getPatchTreePathPrefix } from './_lib/gitPatchMetadata';
 import {
-  type CodeViewLineHashTarget,
-  formatCodeViewLineHash,
-  parseCodeViewLineHash,
-} from './lineHash';
+  type DiffsHubLineHashTarget,
+  formatDiffsHubLineHash,
+  parseDiffsHubLineHash,
+} from './_lib/lineHash';
 import {
   getStreamedPatchMetadata,
   streamGitPatchFiles,
-} from './streamGitPatchFiles';
+} from './_lib/streamGitPatchFiles';
 import type {
-  CodeViewCommentFileByItemId,
-  CodeViewDiffStats,
-  CodeViewFileTreeSource,
-  CodeViewSavedCommentItem,
   CommentMetadata,
+  DiffsHubCommentFileByItemId,
+  DiffsHubDiffStats,
+  DiffsHubFileTreeSource,
+  DiffsHubSavedCommentItem,
   ViewerLoadState,
-} from './types';
+} from './_lib/types';
 
 const STREAM_PUBLISH_INTERVAL_MS = 100;
 const STREAM_INITIAL_PUBLISH_INTERVAL_MS = 500;
@@ -63,17 +63,17 @@ interface UsePatchLoaderOptions {
 
 interface UsePatchLoaderResult {
   applyCollapseModeToLoaded(mode: 'expanded' | 'collapsed'): void;
-  commentFileByItemId: CodeViewCommentFileByItemId | null;
-  commentSections: CodeViewSavedCommentItem[];
-  diffStats: CodeViewDiffStats | null;
+  commentFileByItemId: DiffsHubCommentFileByItemId | null;
+  commentSections: DiffsHubSavedCommentItem[];
+  diffStats: DiffsHubDiffStats | null;
   errorMessage: string | null;
   initialItems: CodeViewItem<CommentMetadata>[];
   loadState: ViewerLoadState;
   onLineLinkChange(selection: CodeViewLineSelection | null): void;
   onViewerReady(): void;
   retryLoad(): void;
-  setCommentSections: Dispatch<SetStateAction<CodeViewSavedCommentItem[]>>;
-  treeSource: CodeViewFileTreeSource | null;
+  setCommentSections: Dispatch<SetStateAction<DiffsHubSavedCommentItem[]>>;
+  treeSource: DiffsHubFileTreeSource | null;
   viewerKey: number;
 }
 
@@ -90,14 +90,14 @@ export function usePatchLoader({
   // Tree data is intentionally stored separately from items so annotation
   // updates do not cascade into the file tree and trigger needless rebuilds.
   // It is updated by fetch/stream batches in this viewer route.
-  const [treeSource, setTreeSource] = useState<CodeViewFileTreeSource | null>(
+  const [treeSource, setTreeSource] = useState<DiffsHubFileTreeSource | null>(
     null
   );
-  const [diffStats, setDiffStats] = useState<CodeViewDiffStats | null>(null);
+  const [diffStats, setDiffStats] = useState<DiffsHubDiffStats | null>(null);
   const [commentFileByItemId, setCommentFileByItemId] =
-    useState<CodeViewCommentFileByItemId | null>(null);
+    useState<DiffsHubCommentFileByItemId | null>(null);
   const [commentSections, setCommentSections] = useState<
-    CodeViewSavedCommentItem[]
+    DiffsHubSavedCommentItem[]
   >([]);
   const [loadState, setLoadState] = useState<ViewerLoadState>('fetching');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -179,7 +179,7 @@ export function usePatchLoader({
 
   const tryApplyLineHashTarget = useStableCallback(() => {
     const { hash } = window.location;
-    const target = parseCodeViewLineHash(hash);
+    const target = parseDiffsHubLineHash(hash);
     if (target == null) {
       return;
     }
@@ -194,7 +194,7 @@ export function usePatchLoader({
       return;
     }
 
-    if (applyCodeViewLineHashTarget(viewer, target)) {
+    if (applyDiffsHubLineHashTarget(viewer, target)) {
       appliedLineHashKeyRef.current = applyKey;
     }
   });
@@ -202,7 +202,7 @@ export function usePatchLoader({
   const handleLineLinkChange = useStableCallback(
     (selection: CodeViewLineSelection | null) => {
       const nextHash =
-        selection == null ? null : formatCodeViewLineHash(selection);
+        selection == null ? null : formatDiffsHubLineHash(selection);
       appliedLineHashKeyRef.current =
         nextHash == null
           ? null
@@ -250,7 +250,7 @@ export function usePatchLoader({
           if (!isCurrentRequest()) {
             return;
           }
-          const loadedData = buildCodeViewData(patchContent, patchRequestKey);
+          const loadedData = buildDiffsHubData(patchContent, patchRequestKey);
           if (!isCurrentRequest()) {
             return;
           }
@@ -299,7 +299,7 @@ export function usePatchLoader({
           return;
         }
 
-        const accumulator = createCodeViewDataAccumulator();
+        const accumulator = createDiffsHubDataAccumulator();
         let streamPatchIndex = 0;
         let streamTreePathPrefix: string | undefined;
         let pendingPublishFileCount = 0;
@@ -322,7 +322,7 @@ export function usePatchLoader({
           lastTreePublishTime = performance.now();
           setCommentFileByItemId(accumulator.itemIdToFile);
           setDiffStats({ ...accumulator.diffStats });
-          setTreeSource(snapshotCodeViewTreeSource(accumulator));
+          setTreeSource(snapshotDiffsHubTreeSource(accumulator));
         };
 
         const publishPendingData = async () => {
@@ -332,7 +332,7 @@ export function usePatchLoader({
 
           pendingPublishFileCount = 0;
           lastPublishTime = performance.now();
-          const pendingItems = takePendingCodeViewItems(accumulator);
+          const pendingItems = takePendingDiffsHubItems(accumulator);
           prepareItemsForViewer(pendingItems);
           if (!hasPublishedInitialItems) {
             hasPublishedInitialItems = true;
@@ -423,13 +423,13 @@ export function usePatchLoader({
             return;
           }
 
-          const itemIdRename = appendFileDiffToCodeViewData(
+          const itemIdRename = appendFileDiffToDiffsHubData(
             accumulator,
             fileDiff,
             streamTreePathPrefix
           );
           if (itemIdRename != null) {
-            applyCodeViewItemIdRename(viewerRef.current, itemIdRename);
+            applyDiffsHubItemIdRename(viewerRef.current, itemIdRename);
             if (loadedItemIdsRef.current.delete(itemIdRename.oldId)) {
               loadedItemIdsRef.current.add(itemIdRename.newId);
             }
@@ -528,9 +528,9 @@ function getLineHashApplyKey(viewerKey: number, hash: string): string {
   return `${viewerKey}:${hash}`;
 }
 
-function applyCodeViewLineHashTarget(
+function applyDiffsHubLineHashTarget(
   viewer: CodeViewHandle<CommentMetadata>,
-  target: CodeViewLineHashTarget
+  target: DiffsHubLineHashTarget
 ): boolean {
   const item = viewer.getItem(target.itemId);
   if (item == null) {
@@ -565,9 +565,9 @@ function applyCodeViewLineHashTarget(
   return true;
 }
 
-function applyCodeViewItemIdRename(
+function applyDiffsHubItemIdRename(
   viewer: CodeViewHandle<CommentMetadata> | null,
-  rename: CodeViewItemIdRename
+  rename: DiffsHubItemIdRename
 ): void {
   viewer?.updateItemId(rename.oldId, rename.newId);
 }

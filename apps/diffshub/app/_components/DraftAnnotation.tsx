@@ -5,10 +5,10 @@ import { useEffect, useRef, useState } from 'react';
 import {
   annotationCardBase,
   type AvatarName,
-  CommentAuthorAvatar,
   getRandomPersona,
-} from './annotation-shared';
-import type { DraftCommentMetadata } from './types';
+} from './_lib/annotation';
+import type { DraftCommentMetadata } from './_lib/types';
+import { CommentAuthorAvatar } from './CommentAuthorAvatar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

@@ -12,25 +12,25 @@ import {
   useState,
 } from 'react';
 
-import { ThemeProvider } from './_theming/react/ThemeProvider';
-import { preloadAvatars } from './annotation-shared';
-import { CodeViewHeader } from './CodeViewHeader';
-import { CodeViewSidebar } from './CodeViewSidebar';
-import { CodeViewStatusPanel } from './CodeViewStatusPanel';
-import { CodeViewWrapper } from './CodeViewWrapper';
-import type { DarkThemeName, LightThemeName } from './themeNames';
+import { preloadAvatars } from './_lib/annotation';
+import type { DarkThemeName, LightThemeName } from './_lib/themeNames';
 import type {
-  CodeViewDeletedCommentEvent,
-  CodeViewSavedCommentEntry,
-  CodeViewSavedCommentEvent,
   CommentMetadata,
-} from './types';
-import { usePatchLoader } from './usePatchLoader';
-import { useThemeCycle } from './useThemeCycle';
+  DiffsHubDeletedCommentEvent,
+  DiffsHubSavedCommentEntry,
+  DiffsHubSavedCommentEvent,
+} from './_lib/types';
 import {
   removeSavedCommentSidebarEntry,
   upsertSavedCommentSidebarEntry,
-} from './utils';
+} from './_lib/utils';
+import { DiffsHubHeader } from './DiffsHubHeader';
+import { DiffsHubSidebar } from './DiffsHubSidebar';
+import { DiffsHubStatusPanel } from './DiffsHubStatusPanel';
+import { DiffsHubViewer } from './DiffsHubViewer';
+import { ThemeProvider } from './ThemeProvider';
+import { usePatchLoader } from './usePatchLoader';
+import { useThemeCycle } from './useThemeCycle';
 import {
   docsThemeCatalog,
   themeController,
@@ -183,7 +183,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     applyCollapseModeToLoaded(next);
   }, [applyCollapseModeToLoaded, collapseMode]);
   const handleCommentSaved = useCallback(
-    (comment: CodeViewSavedCommentEvent) => {
+    (comment: DiffsHubSavedCommentEvent) => {
       setCommentSections((prev) =>
         upsertSavedCommentSidebarEntry(prev, commentFileByItemId, comment)
       );
@@ -191,7 +191,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     [commentFileByItemId, setCommentSections]
   );
   const handleCommentDeleted = useCallback(
-    (comment: CodeViewDeletedCommentEvent) => {
+    (comment: DiffsHubDeletedCommentEvent) => {
       setCommentSections((prev) =>
         removeSavedCommentSidebarEntry(prev, comment)
       );
@@ -205,7 +205,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     setFileTreeOverlayOpen(false);
   }, []);
   const handleSelectComment = useCallback(
-    (comment: CodeViewSavedCommentEntry) => {
+    (comment: DiffsHubSavedCommentEntry) => {
       setFileTreeOverlayOpen(false);
       viewerRef.current?.setSelectedLines({
         id: comment.itemId,
@@ -235,7 +235,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
 
   return (
     <ReviewGrid>
-      <CodeViewHeader
+      <DiffsHubHeader
         className="[grid-area:header]"
         collapseMode={collapseMode}
         colorMode={colorMode}
@@ -262,7 +262,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
       />
       {viewerAvailable && treeSource != null ? (
         <>
-          <CodeViewSidebar
+          <DiffsHubSidebar
             className="[grid-area:viewer] md:[grid-area:tree]"
             commentSections={commentSections}
             diffStats={diffStats}
@@ -275,7 +275,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
             themeCycle={themeCycle}
             onSelectItem={handleSelectTreeItem}
           />
-          <CodeViewWrapper
+          <DiffsHubViewer
             key={viewerKey}
             className="[grid-area:viewer]"
             diffStyle={diffStyle}
@@ -294,7 +294,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
           />
         </>
       ) : (
-        <CodeViewStatusPanel
+        <DiffsHubStatusPanel
           errorMessage={errorMessage}
           onRetry={retryLoad}
           state={loadState}
