@@ -3,8 +3,8 @@
 import { IconArrow } from '@pierre/icons';
 import { memo } from 'react';
 
+import { Button } from '@/components/Button';
 import { DiffUrlForm } from '@/components/DiffUrlForm';
-import { Button } from '@/components/ui/button';
 
 // Submitting the home form should move to the shareable viewer URL first. The
 // viewer route owns fetching and renders its own loading state there.

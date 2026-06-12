@@ -3,7 +3,7 @@ import { IconArrowRight } from '@pierre/icons';
 import { useEffect, useRef, useState } from 'react';
 
 import { CommentAuthorAvatar } from './CommentAuthorAvatar';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/Button';
 import {
   annotationCardBase,
   type AvatarName,

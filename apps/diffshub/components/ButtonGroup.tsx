@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { Button, type ButtonProps } from './button';
+import { Button, type ButtonProps } from './Button';
 import { cn } from '@/lib/utils';
 
 interface ButtonGroupContextValue {

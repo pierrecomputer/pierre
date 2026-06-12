@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { PreloadHighlighter } from '@/components/PreloadHighlighter';
 import { ScrollbarGutterVariables } from '@/components/ScrollbarGutterVariables';
 import { ThemeProvider } from '@/components/theme-provider';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@/components/Toaster';
 import { WorkerPoolContext } from '@/components/WorkerPoolContext';
 
 const geistSans = Geist({

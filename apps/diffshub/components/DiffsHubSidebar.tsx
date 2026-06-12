@@ -33,8 +33,8 @@ import {
   getDiffsHubFileTreeAvailableStatuses,
 } from './utils';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { Button } from '@/components/Button';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ButtonGroup';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -43,7 +43,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@/components/DropdownMenu';
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import { getDropdownThemeStyle } from '@/lib/theme/dropdownChromeStyle';
 import type {

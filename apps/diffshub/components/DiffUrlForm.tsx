@@ -13,7 +13,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/Button';
 import { getPatchViewerHref } from '@/lib/diffsHubUtils';
 import { cn } from '@/lib/utils';
 

@@ -3,7 +3,7 @@ import { IconX } from '@pierre/icons';
 import { memo } from 'react';
 
 import { CommentAuthorAvatar } from './CommentAuthorAvatar';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/Button';
 import { annotationCardBase } from '@/lib/annotation';
 import type { SavedCommentMetadata } from '@/lib/types';
 import { cn } from '@/lib/utils';

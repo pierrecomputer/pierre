@@ -33,16 +33,16 @@ import { CHROME_ICON_BUTTON_CLASS } from './chromeButtonStyles';
 import { DiffsHubLogo } from './DiffsHubLogo';
 import { DiffUrlForm } from './DiffUrlForm';
 import { useChromeThemeProps } from './useChromeThemeProps';
-import { docsThemeCatalog } from '@/components/themeCatalog';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { Button } from '@/components/Button';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ButtonGroup';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
+} from '@/components/DropdownMenu';
+import { Switch } from '@/components/Switch';
+import { docsThemeCatalog } from '@/components/themeCatalog';
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import { getDropdownThemeStyle } from '@/lib/theme/dropdownChromeStyle';
 import { cn } from '@/lib/utils';
