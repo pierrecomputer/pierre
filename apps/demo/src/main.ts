@@ -1224,3 +1224,5 @@ function createToggle(
 //   const parsed = parseDiffFromFile(oldFile, newFile);
 //   renderDiff([{ files: [parsed] }], poolManager);
 // })();
+
+Object.assign(window, { Editor });

@@ -477,7 +477,6 @@ export class File<
           highlighter,
           fileContainer,
           file,
-          false,
           this.lineAnnotations,
           this.renderRange
         );
@@ -665,7 +664,6 @@ export class File<
             highlighter,
             fileContainer,
             file,
-            didFileChange,
             this.lineAnnotations,
             this.renderRange
           );

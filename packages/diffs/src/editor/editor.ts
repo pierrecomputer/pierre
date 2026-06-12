@@ -249,13 +249,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   render(
     container: HTMLElement,
-    options: BaseCodeOptions & {
+    options?: BaseCodeOptions & {
       file?: FileContents;
       fileDiff?: FileDiffMetadata;
     }
   ): void {
     const virtualizer = new Virtualizer();
-    let { file, fileDiff } = options;
+    let { file, fileDiff } = options ?? {};
     let fileInstance: DiffsEditableComponent<LAnnotation> | undefined;
     if (fileDiff !== undefined) {
       fileInstance = new VirtualizedFileDiff<LAnnotation>(
@@ -274,7 +274,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         },
         virtualizer
       );
-      file ??= { name: 'inmemory:', contents: '', lang: 'text' };
+      file ??= { name: 'Untitled-1', contents: '', lang: 'text' };
     }
     fileInstance.render({
       containerWrapper: container,
@@ -287,19 +287,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   openFile(file: FileContents): void {
     if (this.#fileInstance === undefined) {
-      throw new Error('Editor is not attached to a file instance');
+      throw new Error('Editor is not attached');
     }
     this.#fileInstance.render({
       file,
+      forceRender: true,
     });
   }
 
   openDiff(diff: FileDiffMetadata): void {
     if (this.#fileInstance === undefined) {
-      throw new Error('Editor is not attached to a file instance');
+      throw new Error('Editor is not attached');
     }
     this.#fileInstance.render({
       fileDiff: diff,
+      forceRender: true,
     });
   }
 
@@ -331,7 +333,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   getState(): EditorState {
     const fileRef = this.#getFileRef();
     if (fileRef === undefined) {
-      throw new Error('Editor is not attached to a file instance');
+      throw new Error('Editor is not attached');
     }
     return {
       file: fileRef,
@@ -340,19 +342,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   setState({ file, diff: fileDiff, selections = [] }: EditorState): void {
-    if (file !== undefined) {
-      this.openFile(file);
-    } else if (fileDiff !== undefined) {
+    this.#selections = selections;
+    if (fileDiff !== undefined) {
       this.openDiff(fileDiff);
+    } else if (file !== undefined) {
+      this.openFile(file);
     } else {
-      throw new Error('Invalid editor state');
+      throw new Error('Neither file nor fileDiff is provided');
     }
-    requestAnimationFrame(() => {
-      this.#updateSelections(selections);
-      if (selections.length > 0) {
-        this.#scrollToPrimaryCaret();
-      }
-    });
+    // requestAnimationFrame(() => {
+    //   this.#updateSelections(selections);
+    //   if (selections.length > 0) {
+    //     this.#scrollToPrimaryCaret();
+    //   }
+    // });
   }
 
   setSelections(selections: DiffsEditorSelection[]): void {
@@ -494,7 +497,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileContents: FileContents,
-    didFileChange: boolean,
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
     renderRange: RenderRange | undefined
   ): void {
@@ -546,7 +548,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (
       this.#textDocument === undefined ||
       this.#fileContents === undefined ||
-      didFileChange
+      this.#fileContents.name !== fileContents.name ||
+      this.#fileContents.contents !== fileContents.contents ||
+      this.#fileContents.lang !== fileContents.lang
     ) {
       const editStack = new EditStack<LAnnotation>({
         maxEntries: this.#options.historyMaxEntries,

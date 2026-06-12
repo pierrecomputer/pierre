@@ -956,7 +956,6 @@ export class FileDiff<
             highlighter,
             fileContainer,
             file,
-            diffDidChange,
             this.lineAnnotations,
             this.renderRange
           );
@@ -1014,7 +1013,6 @@ export class FileDiff<
           highlighter,
           fileContainer,
           file,
-          false,
           this.lineAnnotations,
           this.renderRange
         );

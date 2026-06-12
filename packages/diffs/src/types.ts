@@ -913,6 +913,7 @@ export interface DiffsBaseComponent {
     file?: FileContents;
     fileDiff?: FileDiffMetadata;
     renderRange?: RenderRange;
+    forceRender?: boolean;
   }): void;
   rerender(): void;
   cleanUp(): void;
@@ -940,7 +941,6 @@ export interface DiffsEditor<LAnnotation> {
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileContents: FileContents,
-    didFileChange: boolean,
     lineAnnotations:
       | LineAnnotation<LAnnotation>[]
       | DiffLineAnnotation<LAnnotation>[]
