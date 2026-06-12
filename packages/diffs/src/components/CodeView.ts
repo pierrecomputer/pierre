@@ -341,6 +341,9 @@ const CODE_VIEW_SHARED_CALLBACK_KEYS = [
   'onTokenClick',
   'onTokenEnter',
   'onTokenLeave',
+  'onDecorationClick',
+  'onDecorationEnter',
+  'onDecorationLeave',
 ] as const;
 
 const CODE_VIEW_SELECTION_CALLBACK_KEYS = [

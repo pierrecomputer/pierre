@@ -215,8 +215,20 @@ export class File<LAnnotation = undefined> {
   }
 
   protected syncInteractionOptions(): void {
-    this.interactionManager.setOptions(pluckInteractionOptions(this.options));
+    this.interactionManager.setOptions(
+      pluckInteractionOptions(
+        this.options,
+        undefined,
+        undefined,
+        undefined,
+        this.getSpanDecoration
+      )
+    );
   }
+
+  protected getSpanDecoration = (index: number): SpanDecoration | undefined => {
+    return this.spanDecorations?.[index];
+  };
 
   private mergeOptions(options: Partial<FileOptions<LAnnotation>>): void {
     this.options = { ...this.options, ...options };

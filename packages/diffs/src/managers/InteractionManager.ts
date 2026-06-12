@@ -2,7 +2,10 @@ import { toHtml } from 'hast-util-to-html';
 
 import type {
   AnnotationSide,
+  DecorationEventBaseProps,
+  DiffDecorationEventBaseProps,
   DiffLineEventBaseProps,
+  DiffSpanDecoration,
   DiffTokenEventBaseProps,
   ExpansionDirections,
   LineEventBaseProps,
@@ -11,6 +14,7 @@ import type {
   SelectedLineRange,
   SelectionPoint,
   SelectionSide,
+  SpanDecoration,
   TokenEventBase,
 } from '../types';
 import { areSelectionPointsEqual } from '../utils/areSelectionPointsEqual';
@@ -22,6 +26,11 @@ interface TokenCache {
   lineCharStart: number;
   lineCharEnd: number;
   tokenText: string;
+}
+
+interface DecorationCache {
+  decorationElement: HTMLElement;
+  decorationIndex: number;
 }
 
 interface ExpandCache {
@@ -72,6 +81,15 @@ type EventBaseProps<TMode extends InteractionManagerMode> = TMode extends 'file'
 export type OnTokenEventProps<TMode extends InteractionManagerMode> =
   TMode extends 'file' ? TokenEventBase : DiffTokenEventBaseProps;
 
+export type OnDecorationEventProps<TMode extends InteractionManagerMode> =
+  TMode extends 'file'
+    ? DecorationEventBaseProps
+    : DiffDecorationEventBaseProps;
+
+export type GetSpanDecorationUtility = (
+  index: number
+) => SpanDecoration | DiffSpanDecoration | undefined;
+
 interface ExpandoEventProps {
   type: 'line-info';
   hunkIndex: number;
@@ -115,6 +133,7 @@ interface ResolvedLineTarget<TMode extends InteractionManagerMode> {
   numberElement: HTMLElement;
   side: TMode extends 'diff' ? AnnotationSide : undefined;
   splitLineIndex: number | undefined;
+  decoration?: DecorationCache;
 }
 
 interface ResolvedTokenTarget<TMode extends InteractionManagerMode> {
@@ -130,6 +149,7 @@ interface ResolvedTokenTarget<TMode extends InteractionManagerMode> {
   tokenText: string;
   lineCharStart: number;
   lineCharEnd: number;
+  decoration?: DecorationCache;
 }
 
 export interface MergeConflictActionTarget {
@@ -197,6 +217,18 @@ export interface InteractionManagerBaseOptions<
   onTokenClick?(props: OnTokenEventProps<TMode>, event: MouseEvent): unknown;
   onTokenEnter?(props: OnTokenEventProps<TMode>, event: PointerEvent): unknown;
   onTokenLeave?(props: OnTokenEventProps<TMode>, event: PointerEvent): unknown;
+  onDecorationClick?(
+    props: OnDecorationEventProps<TMode>,
+    event: MouseEvent
+  ): unknown;
+  onDecorationEnter?(
+    props: OnDecorationEventProps<TMode>,
+    event: PointerEvent
+  ): unknown;
+  onDecorationLeave?(
+    props: OnDecorationEventProps<TMode>,
+    event: PointerEvent
+  ): unknown;
   __debugPointerEvents?: LogTypes;
   enableLineSelection?: boolean;
   controlledSelection?: boolean;
@@ -217,6 +249,9 @@ export interface InteractionManagerOptions<
     expansionLineCountOverride?: number
   ): unknown;
   onMergeConflictActionClick?(target: MergeConflictActionTarget): void;
+  // Resolves a data-span-decoration index back to the consumer's decoration
+  // object. Wired by File/FileDiff, which own the spanDecorations array.
+  getSpanDecoration?: GetSpanDecorationUtility;
 }
 
 interface HandlePointerEventProps {
@@ -227,6 +262,7 @@ interface HandlePointerEventProps {
 export class InteractionManager<TMode extends InteractionManagerMode> {
   private hoveredLine: EventBaseProps<TMode> | undefined;
   private hoveredToken: OnTokenEventProps<TMode> | undefined;
+  private hoveredDecoration: OnDecorationEventProps<TMode> | undefined;
   private pre: HTMLPreElement | undefined;
 
   private gutterUtilityLine: EventBaseProps<TMode> | undefined;
@@ -271,6 +307,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     this.gutterUtilitySlot = undefined;
     this.clearHoveredLine();
     this.clearHoveredToken();
+    this.hoveredDecoration = undefined;
     this.detachDocumentPointerListeners();
     this.clearPointerSession();
     if (this.queuedSelectionRender != null) {
@@ -369,6 +406,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onLineClick,
       onLineNumberClick,
       onTokenClick,
+      onDecorationClick,
       onMergeConflictActionClick,
     } = this.options;
     if (
@@ -376,7 +414,8 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onLineClick == null &&
       onLineNumberClick == null &&
       onMergeConflictActionClick == null &&
-      onTokenClick == null
+      onTokenClick == null &&
+      onDecorationClick == null
     ) {
       return;
     }
@@ -408,6 +447,8 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onLineLeave,
       onTokenEnter,
       onTokenLeave,
+      onDecorationEnter,
+      onDecorationLeave,
       enableGutterUtility = false,
     } = this.options;
     if (
@@ -416,7 +457,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onLineEnter == null &&
       onLineLeave == null &&
       onTokenEnter == null &&
-      onTokenLeave == null
+      onTokenLeave == null &&
+      onDecorationEnter == null &&
+      onDecorationLeave == null
     ) {
       return;
     }
@@ -438,7 +481,11 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       'move',
       'FileDiff.DEBUG.handlePointerLeave: no event'
     );
-    if (this.hoveredLine == null && this.hoveredToken == null) {
+    if (
+      this.hoveredLine == null &&
+      this.hoveredToken == null &&
+      this.hoveredDecoration == null
+    ) {
       debugLogIfEnabled(
         __debugPointerEvents,
         'move',
@@ -449,6 +496,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     if (this.hoveredToken != null) {
       this.options.onTokenLeave?.(this.hoveredToken, event);
       this.clearHoveredToken();
+    }
+    if (this.hoveredDecoration != null) {
+      this.options.onDecorationLeave?.(this.hoveredDecoration, event);
+      this.hoveredDecoration = undefined;
     }
 
     if (this.hoveredLine != null) {
@@ -486,6 +537,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenClick,
       onTokenEnter,
       onTokenLeave,
+      onDecorationClick,
+      onDecorationEnter,
+      onDecorationLeave,
       onHunkExpand,
       onMergeConflictActionClick,
     } = this.options;
@@ -498,6 +552,22 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         const sameToken =
           isTokenPointerTarget(target) &&
           this.hoveredToken?.tokenElement === target.tokenElement;
+        const nextDecoration = this.toDecorationEventProps(target);
+        const sameDecoration =
+          this.hoveredDecoration?.decorationElement ===
+          nextDecoration?.decorationElement;
+
+        // Handle decoration transitions
+        if (!sameDecoration) {
+          if (this.hoveredDecoration != null) {
+            onDecorationLeave?.(this.hoveredDecoration, event as PointerEvent);
+            this.hoveredDecoration = undefined;
+          }
+          if (nextDecoration != null) {
+            this.hoveredDecoration = nextDecoration;
+            onDecorationEnter?.(nextDecoration, event as PointerEvent);
+          }
+        }
 
         // Handle token transitions
         if (!sameToken) {
@@ -560,6 +630,13 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           break;
         }
 
+        if (onDecorationClick != null) {
+          const decorationProps = this.toDecorationEventProps(target);
+          if (decorationProps != null) {
+            onDecorationClick(decorationProps, event as MouseEvent);
+          }
+        }
+
         if (isTokenPointerTarget(target) && onTokenClick != null) {
           onTokenClick(this.toTokenEventBaseProps(target), event as MouseEvent);
         }
@@ -592,6 +669,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenClick,
       onTokenEnter,
       onTokenLeave,
+      onDecorationClick,
+      onDecorationEnter,
+      onDecorationLeave,
       onHunkExpand,
       onMergeConflictActionClick,
       enableGutterUtility = false,
@@ -608,6 +688,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenClick != null ||
       onTokenEnter != null ||
       onTokenLeave != null ||
+      onDecorationClick != null ||
+      onDecorationEnter != null ||
+      onDecorationLeave != null ||
       onHunkExpand != null ||
       onMergeConflictActionClick != null ||
       enableGutterUtility ||
@@ -1639,6 +1722,42 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     } as EventBaseProps<TMode>;
   }
 
+  // Builds the consumer-facing decoration event props for a resolved pointer
+  // target, or undefined when the target carries no decoration or the index
+  // no longer resolves (e.g. decorations changed between render and event).
+  private toDecorationEventProps(
+    target: ResolvedPointerTarget<TMode> | undefined
+  ): OnDecorationEventProps<TMode> | undefined {
+    if (
+      target == null ||
+      !isHoverableLinePointerTarget(target) ||
+      target.decoration == null
+    ) {
+      return undefined;
+    }
+    const decoration = this.options.getSpanDecoration?.(
+      target.decoration.decorationIndex
+    );
+    if (decoration == null) {
+      return undefined;
+    }
+    if (this.mode === 'file') {
+      return {
+        type: 'decoration',
+        lineNumber: target.lineNumber,
+        decoration,
+        decorationElement: target.decoration.decorationElement,
+      } as OnDecorationEventProps<TMode>;
+    }
+    return {
+      type: 'decoration',
+      lineNumber: target.lineNumber,
+      side: target.side,
+      decoration,
+      decorationElement: target.decoration.decorationElement,
+    } as OnDecorationEventProps<TMode>;
+  }
+
   private toTokenEventBaseProps({
     lineCharEnd,
     lineCharStart,
@@ -1706,6 +1825,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     let numberElement: HTMLElement | undefined;
     let tokenElement: HTMLElement | undefined;
     let tokenInfo: TokenCache | undefined;
+    let decorationInfo: DecorationCache | undefined;
     let expandInfo: ExpandCache | undefined;
     let lineNumber: number | undefined;
     let mergeConflictActionTarget: MergeConflictActionTarget | undefined;
@@ -1737,6 +1857,20 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
             resolution: resolutionValue,
             conflictIndex,
           };
+        }
+      }
+
+      if (
+        decorationInfo == null &&
+        element.hasAttribute('data-span-decoration')
+      ) {
+        const indexValue = element.getAttribute('data-span-decoration');
+        const decorationIndex =
+          indexValue != null && indexValue !== ''
+            ? Number.parseInt(indexValue, 10)
+            : Number.NaN;
+        if (Number.isFinite(decorationIndex)) {
+          decorationInfo = { decorationElement: element, decorationIndex };
         }
       }
 
@@ -1881,6 +2015,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           numberElement,
           side: undefined,
           splitLineIndex,
+          decoration: decorationInfo,
           ...tokenInfo,
         } as ResolvedPointerTarget<TMode>;
       }
@@ -1894,6 +2029,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         numberElement,
         side: getAnnotationSide(lineType, codeElement),
         splitLineIndex,
+        decoration: decorationInfo,
         ...tokenInfo,
       } as ResolvedPointerTarget<TMode>;
     }
@@ -1909,6 +2045,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         numberElement,
         side: undefined,
         splitLineIndex,
+        decoration: decorationInfo,
       } as ResolvedPointerTarget<TMode>;
     }
 
@@ -1921,6 +2058,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       numberElement,
       side: getAnnotationSide(lineType, codeElement),
       splitLineIndex,
+      decoration: decorationInfo,
     } as ResolvedPointerTarget<TMode>;
   }
 
@@ -1967,6 +2105,9 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     onTokenClick,
     onTokenEnter,
     onTokenLeave,
+    onDecorationClick,
+    onDecorationEnter,
+    onDecorationLeave,
     renderGutterUtility,
     __debugPointerEvents,
     enableLineSelection,
@@ -1982,7 +2123,8 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     expansionLineCountOverride?: number
   ) => unknown,
   getLineIndex?: GetLineIndexUtility,
-  onMergeConflictActionClick?: (target: MergeConflictActionTarget) => void
+  onMergeConflictActionClick?: (target: MergeConflictActionTarget) => void,
+  getSpanDecoration?: GetSpanDecorationUtility
 ): InteractionManagerOptions<TMode> {
   return {
     enableTokenInteractionsOnWhitespace,
@@ -2004,6 +2146,9 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     onTokenClick,
     onTokenEnter,
     onTokenLeave,
+    onDecorationClick,
+    onDecorationEnter,
+    onDecorationLeave,
     __debugPointerEvents,
 
     enableLineSelection,
@@ -2014,6 +2159,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     onLineSelectionEnd,
 
     getLineIndex,
+    getSpanDecoration,
   };
 }
 

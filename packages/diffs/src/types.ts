@@ -645,6 +645,21 @@ export interface DiffTokenEventBaseProps extends TokenEventBase {
   side: AnnotationSide;
 }
 
+export interface DecorationEventBaseProps {
+  type: 'decoration';
+  lineNumber: number;
+  decoration: SpanDecoration;
+  decorationElement: HTMLElement;
+}
+
+export interface DiffDecorationEventBaseProps extends Omit<
+  DecorationEventBaseProps,
+  'decoration'
+> {
+  side: AnnotationSide;
+  decoration: DiffSpanDecoration;
+}
+
 export interface ObservedAnnotationNodes {
   type: 'annotations';
   column1: {

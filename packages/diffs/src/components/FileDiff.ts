@@ -379,10 +379,18 @@ export class FileDiff<LAnnotation = undefined> {
           this.options.hunkSeparators === 'line-info-basic'
           ? this.handleExpandHunk
           : undefined,
-        this.getLineIndex
+        this.getLineIndex,
+        undefined,
+        this.getSpanDecoration
       )
     );
   }
+
+  protected getSpanDecoration = (
+    index: number
+  ): DiffSpanDecoration | undefined => {
+    return this.spanDecorations?.[index];
+  };
 
   private mergeOptions(options: Partial<FileDiffOptions<LAnnotation>>): void {
     this.options = { ...this.options, ...options };

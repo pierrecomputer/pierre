@@ -92,7 +92,8 @@ export function renderFileWithHighlighter(
       ? Math.min(totalLines, fileLines.length - startingLine)
       : fileLines.length;
     hastConfig.decorations = [];
-    for (const decoration of spanDecorations) {
+    for (let index = 0; index < spanDecorations.length; index++) {
+      const decoration = spanDecorations[index];
       const line = decoration.lineNumber - 1 - startingLine;
       const lineContent = fileLines[decoration.lineNumber - 1];
       if (line < 0 || line >= renderedLineCount || lineContent == null) {
@@ -113,6 +114,7 @@ export function renderFileWithHighlighter(
           spanStart,
           spanLength: spanEnd - spanStart,
           className: decoration.className,
+          index,
         })
       );
     }

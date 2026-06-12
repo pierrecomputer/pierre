@@ -169,7 +169,8 @@ export class UnresolvedFile<
           ? this.expandHunk
           : undefined,
         this.getLineIndex,
-        this.handleMergeConflictActionClick
+        this.handleMergeConflictActionClick,
+        this.getSpanDecoration
       )
     );
   }

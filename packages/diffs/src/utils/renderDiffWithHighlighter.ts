@@ -269,7 +269,17 @@ export function renderDiffWithHighlighter(
   return { code, themeStyles, baseThemeType };
 }
 
-type SpanDecorationLineMap = Record<number, DiffSpanDecoration[] | undefined>;
+interface IndexedSpanDecoration {
+  decoration: DiffSpanDecoration;
+  // Position in the consumer's spanDecorations array, stamped into the DOM so
+  // pointer events can be resolved back to the original decoration object.
+  index: number;
+}
+
+type SpanDecorationLineMap = Record<
+  number,
+  IndexedSpanDecoration[] | undefined
+>;
 
 // Index consumer span decorations by 1-based file line number for one side so
 // the iterateOverDiff callback can resolve them in O(1) per rendered line.
@@ -281,13 +291,14 @@ function groupSpanDecorations(
     return undefined;
   }
   const map: SpanDecorationLineMap = {};
-  for (const decoration of spanDecorations) {
+  for (let index = 0; index < spanDecorations.length; index++) {
+    const decoration = spanDecorations[index];
     if (decoration.side !== side) {
       continue;
     }
     const arr = map[decoration.lineNumber] ?? [];
     map[decoration.lineNumber] = arr;
-    arr.push(decoration);
+    arr.push({ decoration, index });
   }
   return map;
 }
@@ -312,7 +323,7 @@ function pushSpanDecorations(
     return;
   }
   const lineLength = cleanLastNewline(lineContent).length;
-  for (const decoration of decorations) {
+  for (const { decoration, index } of decorations) {
     const spanStart = Math.min(decoration.spanStart, lineLength);
     const spanEnd = Math.min(
       decoration.spanStart + decoration.spanLength,
@@ -327,6 +338,7 @@ function pushSpanDecorations(
         spanStart,
         spanLength: spanEnd - spanStart,
         className: decoration.className,
+        index,
       })
     );
   }
