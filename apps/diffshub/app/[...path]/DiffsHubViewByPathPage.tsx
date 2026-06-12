@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { ReviewUI } from '@/components/ReviewUI';
-import { resolveDiffshubViewerRoute } from '@/lib/diffsHubUtils';
+import { resolveDiffshubViewerRoute } from '@/lib/resolveDiffshubViewerRoute';
 
 // Viewer route that mirrors the upstream path. GitHub is the public default,
 // while hidden alternate domains can opt in through the `domain` query param.

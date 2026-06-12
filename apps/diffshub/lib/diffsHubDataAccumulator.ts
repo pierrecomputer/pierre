@@ -6,8 +6,8 @@ import {
 } from '@pierre/diffs';
 import type { FileTreeGitStatusPatch, GitStatusEntry } from '@pierre/trees';
 
-import { mapChangeTypeToGitStatus } from './diffsHubUtils';
 import { getPatchTreePathPrefix } from './gitPatchMetadata';
+import { mapChangeTypeToGitStatus } from './mapChangeTypeToGitStatus';
 import type {
   CommentMetadata,
   DiffsHubCommentFileByItemId,

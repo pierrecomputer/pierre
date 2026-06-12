@@ -24,10 +24,7 @@ import {
   themeController,
 } from '@/components/themeController';
 import { preloadAvatars } from '@/lib/annotation';
-import {
-  removeSavedCommentSidebarEntry,
-  upsertSavedCommentSidebarEntry,
-} from '@/lib/diffsHubUtils';
+import { removeSavedCommentSidebarEntry } from '@/lib/removeSavedCommentSidebarEntry';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 import type {
   CommentMetadata,
@@ -35,6 +32,7 @@ import type {
   DiffsHubSavedCommentEntry,
   DiffsHubSavedCommentEvent,
 } from '@/lib/types';
+import { upsertSavedCommentSidebarEntry } from '@/lib/upsertSavedCommentSidebarEntry';
 
 interface ReviewUIProps {
   domain?: string;

@@ -20,14 +20,12 @@ import { ThemedDiffsHubViewer } from './ThemedDiffsHubViewer';
 import { useChromeThemeProps } from './useChromeThemeProps';
 import type { AvatarName } from '@/lib/annotation';
 import { buildAnnotationThemeStyle } from '@/lib/annotationThemeStyle';
+import { classifyCommentLineType } from '@/lib/classifyCommentLineType';
 import { CODE_VIEW_CUSTOM_CSS, CODE_VIEW_LAYOUT } from '@/lib/constants';
-import {
-  classifyCommentLineType,
-  isDiffItem,
-  isDraftAnnotation,
-  isDraftMetadata,
-  isSavedAnnotation,
-} from '@/lib/diffsHubUtils';
+import { isDiffItem } from '@/lib/isDiffItem';
+import { isDraftAnnotation } from '@/lib/isDraftAnnotation';
+import { isDraftMetadata } from '@/lib/isDraftMetadata';
+import { isSavedAnnotation } from '@/lib/isSavedAnnotation';
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import type {
   CommentMetadata,

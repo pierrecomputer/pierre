@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { getPatchViewerHref } from '../lib/diffsHubUtils';
+import { getPatchViewerHref } from '../lib/getPatchViewerHref';
 
 describe('getPatchViewerHref', () => {
   describe('full GitHub URLs', () => {
