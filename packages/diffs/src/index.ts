@@ -54,6 +54,7 @@ export * from './utils/areOptionsEqual';
 export * from './utils/arePrePropertiesEqual';
 export * from './utils/areRenderRangesEqual';
 export * from './utils/areSelectionsEqual';
+export * from './utils/areSpanDecorationsEqual';
 export * from './utils/areThemesEqual';
 export * from './utils/areVirtualWindowSpecsEqual';
 export * from './utils/areWorkerStatsEqual';

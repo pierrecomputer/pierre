@@ -32,6 +32,7 @@ import type {
   RenderFileMetadata,
   RenderRange,
   SelectedLineRange,
+  SpanDecoration,
   ThemeTypes,
 } from '../types';
 import { areFilesEqual } from '../utils/areFilesEqual';
@@ -69,6 +70,7 @@ export interface FileRenderProps<LAnnotation> {
   forceRender?: boolean;
   preventEmit?: boolean;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
+  spanDecorations?: SpanDecoration[];
   renderRange?: RenderRange;
 }
 
@@ -119,6 +121,7 @@ interface ColumnElements {
 interface HydrationSetup<LAnnotation> {
   file: FileContents;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+  spanDecorations?: SpanDecoration[];
 }
 
 let instanceId = -1;
@@ -161,6 +164,7 @@ export class File<LAnnotation = undefined> {
   protected annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
     new Map();
   protected lineAnnotations: LineAnnotation<LAnnotation>[] = [];
+  protected spanDecorations: SpanDecoration[] | undefined;
   protected managersDirty = false;
 
   public file: FileContents | undefined;
@@ -267,6 +271,12 @@ export class File<LAnnotation = undefined> {
     this.lineAnnotations = lineAnnotations;
   }
 
+  public setSpanDecorations(
+    spanDecorations: SpanDecoration[] | undefined
+  ): void {
+    this.spanDecorations = spanDecorations;
+  }
+
   public setSelectedLines(
     range: SelectedLineRange | null,
     options?: SelectionWriteOptions
@@ -301,6 +311,7 @@ export class File<LAnnotation = undefined> {
     this.fileContainer = undefined;
     this.mounted = false;
     this.lineAnnotations = [];
+    this.spanDecorations = undefined;
     this.annotationCache.clear();
     this.pre = undefined;
     this.bufferBefore = undefined;
@@ -347,6 +358,7 @@ export class File<LAnnotation = undefined> {
       preventEmit = false,
       file,
       lineAnnotations,
+      spanDecorations,
     } = props;
     this.hydrateElements(fileContainer, prerenderedHTML);
     if (
@@ -361,7 +373,7 @@ export class File<LAnnotation = undefined> {
     }
     // Otherwise orchestrate our setup.
     else {
-      this.hydrationSetup({ file, lineAnnotations });
+      this.hydrationSetup({ file, lineAnnotations, spanDecorations });
     }
     if (!preventEmit) {
       this.emitPostRender();
@@ -423,8 +435,11 @@ export class File<LAnnotation = undefined> {
   protected hydrationSetup({
     file,
     lineAnnotations,
+    spanDecorations,
   }: HydrationSetup<LAnnotation>): void {
     this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+    this.spanDecorations = spanDecorations ?? this.spanDecorations;
+    this.fileRenderer.setSpanDecorations(this.spanDecorations);
     this.file = file;
     this.fileRenderer.setOptions(getFileRendererOptions(this.options));
     this.syncInteractionOptions();
@@ -455,6 +470,7 @@ export class File<LAnnotation = undefined> {
     containerWrapper,
     deferManagers = false,
     lineAnnotations,
+    spanDecorations,
     renderRange,
   }: FileRenderProps<LAnnotation>): boolean {
     const { collapsed = false, themeType = 'system' } = this.options;
@@ -471,6 +487,8 @@ export class File<LAnnotation = undefined> {
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
         ? lineAnnotations !== this.lineAnnotations
         : false;
+    const spanDecorationsChanged =
+      spanDecorations !== undefined && spanDecorations !== this.spanDecorations;
     const didFileChange = !areFilesEqual(this.file, file);
     if (
       !collapsed &&
@@ -478,6 +496,7 @@ export class File<LAnnotation = undefined> {
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !didFileChange &&
       !annotationsChanged &&
+      !spanDecorationsChanged &&
       !themeChanged
     ) {
       return this.applyCachedThemeState(themeType);
@@ -494,6 +513,10 @@ export class File<LAnnotation = undefined> {
       this.setLineAnnotations(lineAnnotations);
     }
     this.fileRenderer.setLineAnnotations(this.lineAnnotations);
+    if (spanDecorations !== undefined) {
+      this.setSpanDecorations(spanDecorations);
+    }
+    this.fileRenderer.setSpanDecorations(this.spanDecorations);
 
     const { disableErrorHandling = false, disableFileHeader = false } =
       this.options;

@@ -11,6 +11,7 @@ import { VirtualizedFileDiff } from '../../components/VirtualizedFileDiff';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
+  DiffSpanDecoration,
   FileDiffMetadata,
   SelectedLineRange,
   VirtualFileMetrics,
@@ -28,6 +29,7 @@ interface UseFileDiffInstanceProps<LAnnotation> {
   fileDiff: FileDiffMetadata;
   options: FileDiffOptions<LAnnotation> | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  spanDecorations: DiffSpanDecoration[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   metrics?: VirtualFileMetrics;
@@ -45,6 +47,7 @@ export function useFileDiffInstance<LAnnotation>({
   fileDiff,
   options,
   lineAnnotations,
+  spanDecorations,
   selectedLines,
   prerenderedHTML,
   metrics,
@@ -94,6 +97,7 @@ export function useFileDiffInstance<LAnnotation>({
         fileDiff,
         fileContainer,
         lineAnnotations,
+        spanDecorations,
         prerenderedHTML,
       });
     } else {
@@ -122,6 +126,7 @@ export function useFileDiffInstance<LAnnotation>({
       forceRender,
       fileDiff,
       lineAnnotations,
+      spanDecorations,
     });
     if (selectedLines !== undefined) {
       instance.setSelectedLines(selectedLines);

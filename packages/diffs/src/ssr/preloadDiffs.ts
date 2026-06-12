@@ -11,6 +11,7 @@ import {
 import { UnresolvedFileHunksRenderer } from '../renderers/UnresolvedFileHunksRenderer';
 import type {
   DiffLineAnnotation,
+  DiffSpanDecoration,
   FileContents,
   FileDiffMetadata,
 } from '../types';
@@ -30,6 +31,7 @@ export interface PreloadDiffOptions<LAnnotation> {
   newFile?: FileContents;
   options?: FileDiffOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
+  spanDecorations?: DiffSpanDecoration[];
 }
 
 export async function preloadDiffHTML<LAnnotation = undefined>({
@@ -38,6 +40,7 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
   newFile,
   options,
   annotations,
+  spanDecorations,
 }: PreloadDiffOptions<LAnnotation>): Promise<string> {
   if (fileDiff == null && oldFile != null && newFile != null) {
     fileDiff = parseDiffFromFile(oldFile, newFile, options?.parseDiffOptions);
@@ -53,6 +56,7 @@ export async function preloadDiffHTML<LAnnotation = undefined>({
   if (annotations != null && annotations.length > 0) {
     renderer.setLineAnnotations(annotations);
   }
+  renderer.setSpanDecorations(spanDecorations);
   return renderHTML(
     processHunkResult(
       await renderer.asyncRender(fileDiff),
@@ -67,6 +71,7 @@ export async function preloadUnresolvedFileHTML<LAnnotation = undefined>({
   file,
   options,
   annotations,
+  spanDecorations,
 }: PreloadUnresolvedFileOptions<LAnnotation>): Promise<string> {
   const { fileDiff, actions, markerRows } = parseMergeConflictDiffFromFile(
     file,
@@ -78,6 +83,7 @@ export async function preloadUnresolvedFileHTML<LAnnotation = undefined>({
   if (annotations != null && annotations.length > 0) {
     renderer.setLineAnnotations(annotations);
   }
+  renderer.setSpanDecorations(spanDecorations);
   renderer.setConflictState(actions, markerRows, fileDiff);
   return renderHTML(
     processHunkResult(
@@ -94,6 +100,7 @@ export interface PreloadMultiFileDiffOptions<LAnnotation> {
   newFile: FileContents;
   options?: FileDiffOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
+  spanDecorations?: DiffSpanDecoration[];
 }
 
 export interface PreloadMultiFileDiffResult<
@@ -107,6 +114,7 @@ export async function preloadMultiFileDiff<LAnnotation = undefined>({
   newFile,
   options,
   annotations,
+  spanDecorations,
 }: PreloadMultiFileDiffOptions<LAnnotation>): Promise<
   PreloadMultiFileDiffResult<LAnnotation>
 > {
@@ -115,11 +123,13 @@ export async function preloadMultiFileDiff<LAnnotation = undefined>({
     oldFile,
     options,
     annotations,
+    spanDecorations,
     prerenderedHTML: await preloadDiffHTML({
       oldFile,
       newFile,
       options,
       annotations,
+      spanDecorations,
     }),
   };
 }
@@ -128,6 +138,7 @@ export interface PreloadFileDiffOptions<LAnnotation> {
   fileDiff: FileDiffMetadata;
   options?: FileDiffOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
+  spanDecorations?: DiffSpanDecoration[];
 }
 
 export interface PreloadFileDiffResult<
@@ -140,6 +151,7 @@ export async function preloadFileDiff<LAnnotation = undefined>({
   fileDiff,
   options,
   annotations,
+  spanDecorations,
 }: PreloadFileDiffOptions<LAnnotation>): Promise<
   PreloadFileDiffResult<LAnnotation>
 > {
@@ -147,10 +159,12 @@ export async function preloadFileDiff<LAnnotation = undefined>({
     fileDiff,
     options,
     annotations,
+    spanDecorations,
     prerenderedHTML: await preloadDiffHTML({
       fileDiff,
       options,
       annotations,
+      spanDecorations,
     }),
   };
 }
@@ -162,6 +176,7 @@ export interface PreloadUnresolvedFileOptions<LAnnotation> {
     'onMergeConflictAction' | 'onMergeConflictResolve' | 'onPostRender'
   >;
   annotations?: DiffLineAnnotation<LAnnotation>[];
+  spanDecorations?: DiffSpanDecoration[];
 }
 
 export interface PreloadUnresolvedFileResult<
@@ -174,6 +189,7 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
   file,
   options,
   annotations,
+  spanDecorations,
 }: PreloadUnresolvedFileOptions<LAnnotation>): Promise<
   PreloadUnresolvedFileResult<LAnnotation>
 > {
@@ -181,10 +197,12 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
     file,
     options,
     annotations,
+    spanDecorations,
     prerenderedHTML: await preloadUnresolvedFileHTML({
       file,
       options,
       annotations,
+      spanDecorations,
     }),
   };
 }
@@ -193,6 +211,7 @@ export interface PreloadPatchDiffOptions<LAnnotation> {
   patch: string;
   options?: FileDiffOptions<LAnnotation>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
+  spanDecorations?: DiffSpanDecoration[];
 }
 
 export interface PreloadPatchDiffResult<
@@ -205,6 +224,7 @@ export async function preloadPatchDiff<LAnnotation = undefined>({
   patch,
   options,
   annotations,
+  spanDecorations,
 }: PreloadPatchDiffOptions<LAnnotation>): Promise<
   PreloadPatchDiffResult<LAnnotation>
 > {
@@ -213,10 +233,12 @@ export async function preloadPatchDiff<LAnnotation = undefined>({
     patch,
     options,
     annotations,
+    spanDecorations,
     prerenderedHTML: await preloadDiffHTML({
       fileDiff,
       options,
       annotations,
+      spanDecorations,
     }),
   };
 }

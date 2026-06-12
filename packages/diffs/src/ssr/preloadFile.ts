@@ -1,6 +1,6 @@
 import type { FileOptions } from '../components/File';
 import { FileRenderer } from '../renderers/FileRenderer';
-import type { FileContents, LineAnnotation } from '../types';
+import type { FileContents, LineAnnotation, SpanDecoration } from '../types';
 import {
   createStyleElement,
   createThemeStyleElement,
@@ -12,12 +12,14 @@ export type PreloadFileOptions<LAnnotation> = {
   file: FileContents;
   options?: FileOptions<LAnnotation>;
   annotations?: LineAnnotation<LAnnotation>[];
+  spanDecorations?: SpanDecoration[];
 };
 
 export interface PreloadedFileResult<LAnnotation> {
   file: FileContents;
   options?: FileOptions<LAnnotation>;
   annotations?: LineAnnotation<LAnnotation>[];
+  spanDecorations?: SpanDecoration[];
   prerenderedHTML: string;
 }
 
@@ -25,6 +27,7 @@ export async function preloadFile<LAnnotation = undefined>({
   file,
   options,
   annotations,
+  spanDecorations,
 }: PreloadFileOptions<LAnnotation>): Promise<PreloadedFileResult<LAnnotation>> {
   const fileRenderer = new FileRenderer<LAnnotation>({
     ...options,
@@ -36,6 +39,7 @@ export async function preloadFile<LAnnotation = undefined>({
   if (annotations !== undefined && annotations.length > 0) {
     fileRenderer.setLineAnnotations(annotations);
   }
+  fileRenderer.setSpanDecorations(spanDecorations);
 
   const fileResult = await fileRenderer.asyncRender(file);
   const children = [createStyleElement(fileResult.css, true)];
@@ -64,6 +68,7 @@ export async function preloadFile<LAnnotation = undefined>({
     file,
     options,
     annotations,
+    spanDecorations,
     prerenderedHTML: renderHTML(children),
   };
 }

@@ -3450,6 +3450,7 @@ function renderItem<LAnnotation>(
       fileDiff: item.item.fileDiff,
       forceRender,
       lineAnnotations: item.item.annotations,
+      spanDecorations: item.item.spanDecorations,
     });
   } else {
     return item.instance.render({
@@ -3458,6 +3459,7 @@ function renderItem<LAnnotation>(
       file: item.item.file,
       forceRender,
       lineAnnotations: item.item.annotations,
+      spanDecorations: item.item.spanDecorations,
     });
   }
 }

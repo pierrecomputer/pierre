@@ -23,6 +23,7 @@ import type {
   RenderFileOptions,
   RenderFileResult,
   RenderRange,
+  SpanDecoration,
   SupportedLanguages,
   ThemedFileResult,
 } from '../types';
@@ -92,6 +93,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private renderCache: RenderedFileASTCache | undefined;
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private spanDecorations: SpanDecoration[] | undefined;
   private lineCache: LineCache | undefined;
 
   constructor(
@@ -125,6 +127,15 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   }
 
+  public setSpanDecorations(
+    spanDecorations: SpanDecoration[] | undefined
+  ): void {
+    this.spanDecorations =
+      spanDecorations != null && spanDecorations.length > 0
+        ? spanDecorations
+        : undefined;
+  }
+
   public cleanUp(): void {
     this.recycle();
     this.workerManager = undefined;
@@ -136,6 +147,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
     this.lineCache = undefined;
+    this.spanDecorations = undefined;
   }
 
   public clearRenderCache(): void {
@@ -187,6 +199,11 @@ export class FileRenderer<LAnnotation = undefined> {
         tokenizeMaxLineLength,
       };
     })();
+    // Span decorations are per-file content (not pool-level config), so they
+    // are layered onto the options bag here regardless of whether a worker
+    // supplied the rest. The areFileRenderOptionsEqual check below then
+    // invalidates worker-produced ASTs that were highlighted without them.
+    options.spanDecorations = this.spanDecorations;
     const { renderCache } = this;
     if (renderCache?.result == null) {
       return { options, forceHighlight: true };

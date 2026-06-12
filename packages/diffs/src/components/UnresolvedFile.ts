@@ -345,6 +345,7 @@ export class UnresolvedFile<
       actions,
       markerRows,
       lineAnnotations,
+      spanDecorations,
       fileContainer,
       prerenderedHTML,
       preventEmit = false,
@@ -374,7 +375,11 @@ export class UnresolvedFile<
     }
     // Otherwise orchestrate our setup
     else {
-      this.hydrationSetup({ fileDiff: source.fileDiff, lineAnnotations });
+      this.hydrationSetup({
+        fileDiff: source.fileDiff,
+        lineAnnotations,
+        spanDecorations,
+      });
       if (this.pre != null) {
         this.renderMergeConflictActionSlots();
       }

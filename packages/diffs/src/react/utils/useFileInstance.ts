@@ -13,6 +13,7 @@ import type {
   FileContents,
   LineAnnotation,
   SelectedLineRange,
+  SpanDecoration,
   VirtualFileMetrics,
 } from '../../types';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
@@ -28,6 +29,7 @@ interface UseFileInstanceProps<LAnnotation> {
   file: FileContents;
   options: FileOptions<LAnnotation> | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+  spanDecorations: SpanDecoration[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   metrics?: VirtualFileMetrics;
@@ -45,6 +47,7 @@ export function useFileInstance<LAnnotation>({
   file,
   options,
   lineAnnotations,
+  spanDecorations,
   selectedLines,
   prerenderedHTML,
   metrics,
@@ -94,6 +97,7 @@ export function useFileInstance<LAnnotation>({
         file,
         fileContainer: node,
         lineAnnotations,
+        spanDecorations,
         prerenderedHTML,
       });
     } else {
@@ -118,7 +122,12 @@ export function useFileInstance<LAnnotation>({
       newOptions
     );
     instanceRef.current.setOptions(newOptions);
-    void instanceRef.current.render({ file, lineAnnotations, forceRender });
+    void instanceRef.current.render({
+      file,
+      lineAnnotations,
+      spanDecorations,
+      forceRender,
+    });
     if (selectedLines !== undefined) {
       instanceRef.current.setSelectedLines(selectedLines);
     }

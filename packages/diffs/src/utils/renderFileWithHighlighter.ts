@@ -15,6 +15,7 @@ import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 import { getLineNodes } from './getLineNodes';
 import { iterateOverFile } from './iterateOverFile';
+import { createSpanDecoration } from './parseDiffDecorations';
 import { splitFileContents } from './splitFileContents';
 
 const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
@@ -28,6 +29,7 @@ export function renderFileWithHighlighter(
     theme = DEFAULT_THEMES,
     tokenizeMaxLineLength,
     useTokenTransformer,
+    spanDecorations,
   }: RenderFileOptions,
   {
     forcePlainText,
@@ -84,6 +86,37 @@ export function renderFileWithHighlighter(
       tokenizeMaxLineLength,
     };
   })();
+  if (spanDecorations != null && spanDecorations.length > 0) {
+    const fileLines = lines ?? splitFileContents(file.contents);
+    const renderedLineCount = isWindowedHighlight
+      ? Math.min(totalLines, fileLines.length - startingLine)
+      : fileLines.length;
+    hastConfig.decorations = [];
+    for (const decoration of spanDecorations) {
+      const line = decoration.lineNumber - 1 - startingLine;
+      const lineContent = fileLines[decoration.lineNumber - 1];
+      if (line < 0 || line >= renderedLineCount || lineContent == null) {
+        continue;
+      }
+      const lineLength = cleanLastNewline(lineContent).length;
+      const spanStart = Math.min(decoration.spanStart, lineLength);
+      const spanEnd = Math.min(
+        decoration.spanStart + decoration.spanLength,
+        lineLength
+      );
+      if (spanEnd <= spanStart) {
+        continue;
+      }
+      hastConfig.decorations.push(
+        createSpanDecoration({
+          line,
+          spanStart,
+          spanLength: spanEnd - spanStart,
+          className: decoration.className,
+        })
+      );
+    }
+  }
   const highlightedLines = getLineNodes(
     highlighter.codeToHast(
       isWindowedHighlight

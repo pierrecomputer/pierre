@@ -23,6 +23,7 @@ import type {
   CustomPreProperties,
   DiffLineAnnotation,
   DiffsHighlighter,
+  DiffSpanDecoration,
   ExpansionDirections,
   FileDiffMetadata,
   FileHeaderRenderMode,
@@ -210,6 +211,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private spanDecorations: DiffSpanDecoration[] | undefined;
 
   private computedLang: SupportedLanguages = 'text';
   private renderCache: RenderedDiffASTCache | undefined;
@@ -239,6 +241,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.clearRenderCache();
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
+    this.spanDecorations = undefined;
     this.workerManager?.cleanUpTasks(this);
   }
 
@@ -306,6 +309,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       map[annotation.lineNumber] = arr;
       arr.push(annotation);
     }
+  }
+
+  public setSpanDecorations(
+    spanDecorations: DiffSpanDecoration[] | undefined
+  ): void {
+    this.spanDecorations =
+      spanDecorations != null && spanDecorations.length > 0
+        ? spanDecorations
+        : undefined;
   }
 
   protected getUnifiedLineDecoration({
@@ -443,6 +455,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         maxLineDiffLength,
       };
     })();
+    // Span decorations are per-diff content, layered onto whichever options
+    // source (worker pool or local) produced the rest so the cache comparator
+    // sees them and re-highlights when they change.
+    options.spanDecorations = this.spanDecorations;
     this.getOptionsWithDefaults();
     const { renderCache } = this;
     if (renderCache?.result == null) {

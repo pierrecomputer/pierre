@@ -476,11 +476,29 @@ export type DiffLineAnnotation<T = undefined> = {
   lineNumber: number;
 } & OptionalMetadata<T>;
 
+/**
+ * Consumer-facing sub-line decoration. Wraps the [spanStart, spanStart +
+ * spanLength) character range on the given 1-indexed line in a span carrying
+ * `className`. Ranges are addressed against the rendered line text (no diff
+ * indicator prefix, no trailing newline). Out-of-range spans are dropped.
+ */
+export interface SpanDecoration {
+  lineNumber: number;
+  spanStart: number;
+  spanLength: number;
+  className: string;
+}
+
+export interface DiffSpanDecoration extends SpanDecoration {
+  side: AnnotationSide;
+}
+
 export type CodeViewFileItem<T = undefined> = {
   id: string;
   type: 'file';
   file: FileContents;
   annotations?: LineAnnotation<T>[];
+  spanDecorations?: SpanDecoration[];
   version?: number;
   collapsed?: boolean;
 };
@@ -490,6 +508,7 @@ export type CodeViewDiffItem<T = undefined> = {
   type: 'diff';
   fileDiff: FileDiffMetadata;
   annotations?: DiffLineAnnotation<T>[];
+  spanDecorations?: DiffSpanDecoration[];
   version?: number;
   collapsed?: boolean;
 };
@@ -712,6 +731,7 @@ export interface RenderFileOptions {
   theme: DiffsThemeNames | Record<'dark' | 'light', DiffsThemeNames>;
   useTokenTransformer: boolean;
   tokenizeMaxLineLength: number;
+  spanDecorations?: SpanDecoration[];
 }
 
 export interface RenderDiffOptions {
@@ -720,6 +740,7 @@ export interface RenderDiffOptions {
   tokenizeMaxLineLength: number;
   lineDiffType: LineDiffTypes;
   maxLineDiffLength: number;
+  spanDecorations?: DiffSpanDecoration[];
 }
 
 export interface RenderFileResult {

@@ -12,6 +12,7 @@ export type { FileOptions };
 export function File<LAnnotation = undefined>({
   file,
   lineAnnotations,
+  spanDecorations,
   selectedLines,
   options,
   metrics,
@@ -30,6 +31,7 @@ export function File<LAnnotation = undefined>({
     options,
     metrics,
     lineAnnotations,
+    spanDecorations,
     selectedLines,
     prerenderedHTML,
     hasGutterRenderUtility: renderGutterUtility != null,

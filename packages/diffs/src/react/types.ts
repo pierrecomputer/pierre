@@ -5,10 +5,12 @@ import type { FileDiffOptions } from '../components/FileDiff';
 import type { GetHoveredLineResult } from '../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
+  DiffSpanDecoration,
   FileContents,
   FileDiffMetadata,
   LineAnnotation,
   SelectedLineRange,
+  SpanDecoration,
   VirtualFileMetrics,
 } from '../types';
 
@@ -16,6 +18,7 @@ export interface DiffBasePropsReact<LAnnotation> {
   options?: FileDiffOptions<LAnnotation>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+  spanDecorations?: DiffSpanDecoration[];
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
   renderCustomHeader?(fileDiff: FileDiffMetadata): ReactNode;
@@ -34,6 +37,7 @@ export interface FileProps<LAnnotation> {
   options?: FileOptions<LAnnotation>;
   metrics?: VirtualFileMetrics;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
+  spanDecorations?: SpanDecoration[];
   selectedLines?: SelectedLineRange | null;
   renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
   renderCustomHeader?(file: FileContents): ReactNode;

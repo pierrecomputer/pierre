@@ -8,6 +8,7 @@ import type {
   CodeToHastOptions,
   DecorationItem,
   DiffsHighlighter,
+  DiffSpanDecoration,
   DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
@@ -28,6 +29,7 @@ import { getLineNodes } from './getLineNodes';
 import { iterateOverDiff } from './iterateOverDiff';
 import {
   createDiffSpanDecoration,
+  createSpanDecoration,
   pushOrJoinSpan,
 } from './parseDiffDecorations';
 
@@ -84,7 +86,15 @@ export function renderDiffWithHighlighter(
     additionLines: [],
   };
 
-  const { maxLineDiffLength } = options;
+  const { maxLineDiffLength, spanDecorations } = options;
+  const deletionSpanDecorations = groupSpanDecorations(
+    spanDecorations,
+    'deletions'
+  );
+  const additionSpanDecorations = groupSpanDecorations(
+    spanDecorations,
+    'additions'
+  );
   const shouldGroupAll = !forcePlainText && !diff.isPartial;
   const expandedHunksForIteration = forcePlainText ? expandedHunks : undefined;
   const buckets = new Map<number, RenderBucket>();
@@ -147,6 +157,13 @@ export function renderDiffWithHighlighter(
       }
 
       if (deletionLine != null) {
+        pushSpanDecorations(
+          deletionSpanDecorations,
+          deletionLine.lineNumber,
+          bucket.deletionContent.length,
+          diff.deletionLines[deletionLine.lineIndex],
+          bucket.deletionDecorations
+        );
         appendContent(
           diff.deletionLines[deletionLine.lineIndex],
           deletionLine.lineIndex,
@@ -165,6 +182,13 @@ export function renderDiffWithHighlighter(
       }
 
       if (additionLine != null) {
+        pushSpanDecorations(
+          additionSpanDecorations,
+          additionLine.lineNumber,
+          bucket.additionContent.length,
+          diff.additionLines[additionLine.lineIndex],
+          bucket.additionDecorations
+        );
         appendContent(
           diff.additionLines[additionLine.lineIndex],
           additionLine.lineIndex,
@@ -243,6 +267,69 @@ export function renderDiffWithHighlighter(
   }
 
   return { code, themeStyles, baseThemeType };
+}
+
+type SpanDecorationLineMap = Record<number, DiffSpanDecoration[] | undefined>;
+
+// Index consumer span decorations by 1-based file line number for one side so
+// the iterateOverDiff callback can resolve them in O(1) per rendered line.
+function groupSpanDecorations(
+  spanDecorations: DiffSpanDecoration[] | undefined,
+  side: DiffSpanDecoration['side']
+): SpanDecorationLineMap | undefined {
+  if (spanDecorations == null || spanDecorations.length === 0) {
+    return undefined;
+  }
+  const map: SpanDecorationLineMap = {};
+  for (const decoration of spanDecorations) {
+    if (decoration.side !== side) {
+      continue;
+    }
+    const arr = map[decoration.lineNumber] ?? [];
+    map[decoration.lineNumber] = arr;
+    arr.push(decoration);
+  }
+  return map;
+}
+
+// Translate consumer span decorations addressed by file line number into shiki
+// DecorationItems addressed by bucket-local 0-based line index, clamped to the
+// rendered line length. Pushed after the engine's own intra-line diff spans so
+// shiki nests consumer wrappers inside the data-diff-span wrapper when ranges
+// overlap, leaving both classes applied.
+function pushSpanDecorations(
+  map: SpanDecorationLineMap | undefined,
+  lineNumber: number | undefined,
+  bucketLineIndex: number,
+  lineContent: string,
+  target: DecorationItem[]
+): void {
+  if (map == null || lineNumber == null) {
+    return;
+  }
+  const decorations = map[lineNumber];
+  if (decorations == null) {
+    return;
+  }
+  const lineLength = cleanLastNewline(lineContent).length;
+  for (const decoration of decorations) {
+    const spanStart = Math.min(decoration.spanStart, lineLength);
+    const spanEnd = Math.min(
+      decoration.spanStart + decoration.spanLength,
+      lineLength
+    );
+    if (spanEnd <= spanStart) {
+      continue;
+    }
+    target.push(
+      createSpanDecoration({
+        line: bucketLineIndex,
+        spanStart,
+        spanLength: spanEnd - spanStart,
+        className: decoration.className,
+      })
+    );
+  }
 }
 
 interface ProcessLineDiffProps {

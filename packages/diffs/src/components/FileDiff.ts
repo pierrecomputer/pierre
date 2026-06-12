@@ -33,6 +33,7 @@ import type {
   BaseDiffOptions,
   CustomPreProperties,
   DiffLineAnnotation,
+  DiffSpanDecoration,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -84,6 +85,7 @@ export interface FileDiffRenderProps<LAnnotation> {
   fileContainer?: HTMLElement;
   containerWrapper?: HTMLElement;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+  spanDecorations?: DiffSpanDecoration[];
   renderRange?: RenderRange;
 }
 
@@ -169,6 +171,7 @@ interface ApplyPartialRenderProps {
 interface HydrationSetup<LAnnotation> {
   fileDiff: FileDiffMetadata | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  spanDecorations?: DiffSpanDecoration[];
   oldFile?: FileContents;
   newFile?: FileContents;
 }
@@ -214,6 +217,7 @@ export class FileDiff<LAnnotation = undefined> {
   protected annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
     new Map();
   protected lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
+  protected spanDecorations: DiffSpanDecoration[] | undefined;
   protected managersDirty = false;
 
   protected deletionFile: FileContents | undefined;
@@ -433,6 +437,12 @@ export class FileDiff<LAnnotation = undefined> {
     this.lineAnnotations = lineAnnotations;
   }
 
+  public setSpanDecorations(
+    spanDecorations: DiffSpanDecoration[] | undefined
+  ): void {
+    this.spanDecorations = spanDecorations;
+  }
+
   private canPartiallyRender(
     forceRender: boolean,
     annotationsChanged: boolean,
@@ -493,6 +503,7 @@ export class FileDiff<LAnnotation = undefined> {
     this.fileContainer = undefined;
     this.mounted = false;
     this.lineAnnotations = [];
+    this.spanDecorations = undefined;
     this.clearAuxiliaryNodes();
     this.annotationCache.clear();
     this.pre = undefined;
@@ -545,6 +556,7 @@ export class FileDiff<LAnnotation = undefined> {
       prerenderedHTML,
       preventEmit = false,
       lineAnnotations,
+      spanDecorations,
       oldFile,
       newFile,
       fileDiff,
@@ -571,6 +583,7 @@ export class FileDiff<LAnnotation = undefined> {
         oldFile,
         newFile,
         lineAnnotations,
+        spanDecorations,
       });
     }
     if (!preventEmit) {
@@ -648,10 +661,13 @@ export class FileDiff<LAnnotation = undefined> {
     oldFile,
     newFile,
     lineAnnotations,
+    spanDecorations,
   }: HydrationSetup<LAnnotation>): void {
     // It's possible we are hydrating a pure-rename and therefore there will be
     // no pre element
     this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+    this.spanDecorations = spanDecorations ?? this.spanDecorations;
+    this.hunksRenderer.setSpanDecorations(this.spanDecorations);
     this.additionFile = newFile;
     this.deletionFile = oldFile;
     this.fileDiff =
@@ -726,6 +742,7 @@ export class FileDiff<LAnnotation = undefined> {
     forceRender = false,
     preventEmit = false,
     lineAnnotations,
+    spanDecorations,
     fileContainer,
     containerWrapper,
     renderRange,
@@ -751,12 +768,15 @@ export class FileDiff<LAnnotation = undefined> {
       (lineAnnotations.length > 0 || this.lineAnnotations.length > 0)
         ? lineAnnotations !== this.lineAnnotations
         : false;
+    const spanDecorationsChanged =
+      spanDecorations !== undefined && spanDecorations !== this.spanDecorations;
 
     if (
       !collapsed &&
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !forceRender &&
       !annotationsChanged &&
+      !spanDecorationsChanged &&
       !themeChanged &&
       // If using the fileDiff API, lets check to see if they are equal to
       // avoid doing work
@@ -797,6 +817,10 @@ export class FileDiff<LAnnotation = undefined> {
     this.syncInteractionOptions();
 
     this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
+    if (spanDecorations !== undefined) {
+      this.setSpanDecorations(spanDecorations);
+    }
+    this.hunksRenderer.setSpanDecorations(this.spanDecorations);
 
     const { disableErrorHandling = false, disableFileHeader = false } =
       this.options;

@@ -15,6 +15,7 @@ import {
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
+  DiffSpanDecoration,
   FileContents,
   FileDiffMetadata,
   MergeConflictActionPayload,
@@ -38,6 +39,7 @@ interface UseUnresolvedFileInstanceProps<LAnnotation> {
   file: FileContents;
   options?: UnresolvedFileReactOptions<LAnnotation>;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+  spanDecorations: DiffSpanDecoration[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   hasConflictUtility: boolean;
@@ -59,6 +61,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
   file,
   options,
   lineAnnotations,
+  spanDecorations,
   selectedLines,
   prerenderedHTML,
   hasConflictUtility,
@@ -124,6 +127,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
         markerRows,
         fileContainer,
         lineAnnotations,
+        spanDecorations,
         prerenderedHTML,
       });
     } else {
@@ -155,6 +159,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
       actions,
       markerRows,
       lineAnnotations,
+      spanDecorations,
       forceRender,
     });
     if (selectedLines !== undefined) {
