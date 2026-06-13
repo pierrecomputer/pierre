@@ -13,13 +13,13 @@ runs:
     # Sticky disks restore in seconds and persist per-key across runs, which
     # is what makes moon's local cache behave like a warm remote cache in CI.
     - name: Mount proto toolchain cache
-      uses: useblacksmith/stickydisk@2b7a836cbb2b48f4780ae76a7b6fd79d545fb54a # v1.3.0
+      uses: useblacksmith/stickydisk@4c034ba57b706cf0e3b4b0ce098c2a3b1071580c # v1.4.0
       with:
         key: ${{ github.repository }}-proto-${{ runner.os }}
         path: ~/.proto
 
     - name: Mount bun download cache
-      uses: useblacksmith/stickydisk@2b7a836cbb2b48f4780ae76a7b6fd79d545fb54a # v1.3.0
+      uses: useblacksmith/stickydisk@4c034ba57b706cf0e3b4b0ce098c2a3b1071580c # v1.4.0
       with:
         key: ${{ github.repository }}-bun-install-${{ runner.os }}
         path: ~/.bun/install/cache
@@ -28,13 +28,13 @@ runs:
     # `hashes` and `outputs` as safe to share between environments, while
     # `states` holds machine-specific run state that must be rebuilt per run.
     - name: Mount moon hash cache
-      uses: useblacksmith/stickydisk@2b7a836cbb2b48f4780ae76a7b6fd79d545fb54a # v1.3.0
+      uses: useblacksmith/stickydisk@4c034ba57b706cf0e3b4b0ce098c2a3b1071580c # v1.4.0
       with:
         key: ${{ github.repository }}-moon-hashes-${{ runner.os }}
         path: ${{ github.workspace }}/.moon/cache/hashes
 
     - name: Mount moon output cache
-      uses: useblacksmith/stickydisk@2b7a836cbb2b48f4780ae76a7b6fd79d545fb54a # v1.3.0
+      uses: useblacksmith/stickydisk@4c034ba57b706cf0e3b4b0ce098c2a3b1071580c # v1.4.0
       with:
         key: ${{ github.repository }}-moon-outputs-${{ runner.os }}
         path: ${{ github.workspace }}/.moon/cache/outputs
