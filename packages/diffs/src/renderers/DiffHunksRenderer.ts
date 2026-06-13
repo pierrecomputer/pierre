@@ -47,11 +47,6 @@ import { createFileHeaderElement } from '../utils/createFileHeaderElement';
 import { createNoNewlineElement } from '../utils/createNoNewlineElement';
 import { createPreElement } from '../utils/createPreElement';
 import { createSeparator } from '../utils/createSeparator';
-import {
-  FILE_LEVEL_ANNOTATION_LINE_NUMBER,
-  getFileLevelAnnotations,
-  shouldRenderFileLevelAnnotations,
-} from '../utils/fileLevelAnnotations';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
@@ -63,6 +58,11 @@ import {
   createGutterWrapper,
   createHastElement,
 } from '../utils/hast_utils';
+import {
+  FILE_ANNOTATION_LINE_NUMBER,
+  getFileAnnotations,
+  shouldRenderFileAnnotations,
+} from '../utils/includesFileAnnotations';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import type { DiffLineMetadata } from '../utils/iterateOverDiff';
@@ -1358,17 +1358,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     renderRange: RenderRange,
     context: ProcessContext
   ): void {
-    if (!shouldRenderFileLevelAnnotations(renderRange)) {
+    if (!shouldRenderFileAnnotations(renderRange)) {
       return;
     }
 
     const deletionAnnotationNames =
       fileDiff.type !== 'new'
-        ? getAnnotationNames(getFileLevelAnnotations(this.deletionAnnotations))
+        ? getAnnotationNames(getFileAnnotations(this.deletionAnnotations))
         : [];
     const additionAnnotationNames =
       fileDiff.type !== 'deleted'
-        ? getAnnotationNames(getFileLevelAnnotations(this.additionAnnotations))
+        ? getAnnotationNames(getFileAnnotations(this.additionAnnotations))
         : [];
     if (
       deletionAnnotationNames.length === 0 &&
@@ -1377,7 +1377,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
 
-    const lineIndex = FILE_LEVEL_ANNOTATION_LINE_NUMBER;
+    const lineIndex = FILE_ANNOTATION_LINE_NUMBER;
     const { createAnnotationElement } = this;
 
     if (diffStyle === 'unified') {

@@ -349,7 +349,14 @@ interface ThreadMetadata {
   // Keep annotation arrays stable (useState/useMemo) to avoid re-renders.
   // Annotation metadata can be typed any way you'd like.
   // Multiple annotations can target the same side/line.
+  // Use lineNumber: 0 for a file-level annotation rendered above the first
+  // hunk separator or diff row.
   lineAnnotations={[
+    {
+      side: 'additions',
+      lineNumber: 0,
+      metadata: { threadId: 'file-summary' },
+    },
     {
       side: 'additions', // or 'deletions'
       lineNumber: 16,    // visual line number in the diff
@@ -621,6 +628,8 @@ export function CodeFile() {
       //
       // Key difference: File uses LineAnnotation (no 'side' property)
       // instead of DiffLineAnnotation since there's only one column.
+      // Use lineNumber: 0 for a file-level annotation rendered above the
+      // first file line.
       //
       // See "Shared Props" section above for details on these props.
       // File-specific options exclude diff-only settings like diffStyle,
@@ -974,7 +983,13 @@ interface CommentMetadata {
   //
   // Note: Unlike diff components, File uses LineAnnotation which
   // has no 'side' property since there's only one column.
+  // Use lineNumber: 0 for a file-level annotation rendered above the
+  // first file line.
   lineAnnotations={[
+    {
+      lineNumber: 0,
+      metadata: { commentId: 'file-summary' },
+    },
     {
       lineNumber: 5,    // visual line number in the file
       metadata: { commentId: 'comment-123' },

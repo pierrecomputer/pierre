@@ -33,11 +33,6 @@ import { createAnnotationElement } from '../utils/createAnnotationElement';
 import { createContentColumn } from '../utils/createContentColumn';
 import { createFileHeaderElement } from '../utils/createFileHeaderElement';
 import { createPreElement } from '../utils/createPreElement';
-import {
-  FILE_LEVEL_ANNOTATION_LINE_NUMBER,
-  getFileLevelAnnotations,
-  shouldRenderFileLevelAnnotations,
-} from '../utils/fileLevelAnnotations';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
@@ -48,6 +43,11 @@ import {
   createGutterWrapper,
   createHastElement,
 } from '../utils/hast_utils';
+import {
+  FILE_ANNOTATION_LINE_NUMBER,
+  getFileAnnotations,
+  shouldRenderFileAnnotations,
+} from '../utils/includesFileAnnotations';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { iterateOverFile } from '../utils/iterateOverFile';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
@@ -409,8 +409,8 @@ export class FileRenderer<LAnnotation = undefined> {
     const lines = this.getOrCreateLineCache(file);
     let rowCount = 0;
 
-    const fileLevelAnnotations = shouldRenderFileLevelAnnotations(renderRange)
-      ? getFileLevelAnnotations(this.lineAnnotations)
+    const fileLevelAnnotations = shouldRenderFileAnnotations(renderRange)
+      ? getFileAnnotations(this.lineAnnotations)
       : undefined;
     if (fileLevelAnnotations != null) {
       gutter.children.push(createGutterGap('context', 'annotation', 1));
@@ -418,7 +418,7 @@ export class FileRenderer<LAnnotation = undefined> {
         createAnnotationElement({
           type: 'annotation',
           hunkIndex: 0,
-          lineIndex: FILE_LEVEL_ANNOTATION_LINE_NUMBER,
+          lineIndex: FILE_ANNOTATION_LINE_NUMBER,
           annotations: fileLevelAnnotations.map((annotation) =>
             getLineAnnotationName(annotation)
           ),

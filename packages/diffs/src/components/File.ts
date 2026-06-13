@@ -300,7 +300,9 @@ export class File<LAnnotation = undefined> {
     }
     this.fileContainer = undefined;
     this.mounted = false;
-    this.lineAnnotations = [];
+    if (!recycle) {
+      this.lineAnnotations = [];
+    }
     this.annotationCache.clear();
     this.pre = undefined;
     this.bufferBefore = undefined;

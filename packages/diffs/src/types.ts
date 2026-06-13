@@ -467,10 +467,18 @@ type OptionalMetadata<T> = T extends undefined
   ? { metadata?: undefined }
   : { metadata: T };
 
+/**
+ * Annotation rendered for a file line. Use `lineNumber: 0` to render a
+ * file-level annotation above the first rendered file line.
+ */
 export type LineAnnotation<T = undefined> = {
   lineNumber: number;
 } & OptionalMetadata<T>;
 
+/**
+ * Annotation rendered for one side of a diff line. Use `lineNumber: 0` to
+ * render a side-specific file-level annotation above the first hunk/separator.
+ */
 export type DiffLineAnnotation<T = undefined> = {
   side: AnnotationSide;
   lineNumber: number;

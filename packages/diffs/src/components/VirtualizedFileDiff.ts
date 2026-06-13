@@ -1,5 +1,6 @@
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
+  DiffLineAnnotation,
   ExpansionDirections,
   FileDiffMetadata,
   Hunk,
@@ -22,6 +23,11 @@ import {
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
+import {
+  FILE_ANNOTATION_LINE_NUMBER,
+  includesFileAnnotations,
+  shouldRenderFileAnnotations,
+} from '../utils/includesFileAnnotations';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import {
@@ -49,6 +55,8 @@ interface DiffLayoutCache {
   // Sparse map: view-specific line index -> measured height delta from the
   // baseline line height. Only stores lines that differ from the estimate.
   heightDeltas: Map<number, number>;
+  // Aggregate delta from estimated height, including source row deltas and the
+  // zero-baseline file annotation row height.
   measuredHeightDeltaTotal: number;
   // Baseline estimated heights for the active diff content. These are preserved
   // across style/collapse toggles and cleared only when estimate inputs change.
@@ -60,6 +68,9 @@ interface DiffLayoutCache {
   checkpoints: DiffLayoutCheckpoint[];
   // Total renderable diff rows for the current diff style and expansion state.
   totalLines: number;
+  // Measured height for the file annotation row. Starts at 0 so
+  // unmeasured annotations behave like all other unmeasured annotations.
+  fileAnnotationHeight: number;
 }
 
 interface ResetLayoutCacheOptions {
@@ -86,6 +97,7 @@ export class VirtualizedFileDiff<
     estimatedUnifiedHeight: undefined,
     checkpoints: [],
     totalLines: 0,
+    fileAnnotationHeight: 0,
   };
   private isVisible: boolean = false;
   private isSetup: boolean = false;
@@ -117,6 +129,60 @@ export class VirtualizedFileDiff<
 
     this.metrics = nextMetrics;
     this.resetLayoutCache({ includeEstimatedHeights: true });
+  }
+
+  override setLineAnnotations(
+    lineAnnotations: DiffLineAnnotation<LAnnotation>[]
+  ): void {
+    if (this.syncLineAnnotations(lineAnnotations)) {
+      this.resetLayoutCache({ includeEstimatedHeights: false });
+    }
+  }
+
+  private syncLineAnnotations(
+    lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined
+  ): boolean {
+    if (
+      lineAnnotations == null ||
+      lineAnnotations === this.lineAnnotations ||
+      (lineAnnotations.length === 0 && this.lineAnnotations.length === 0)
+    ) {
+      return false;
+    }
+    super.setLineAnnotations(lineAnnotations);
+    return true;
+  }
+
+  private setFileAnnotationHeight(nextHeight: number): boolean {
+    const previousHeight = this.cache.fileAnnotationHeight;
+    if (nextHeight === previousHeight) {
+      return false;
+    }
+
+    this.cache.fileAnnotationHeight = nextHeight;
+    this.cache.measuredHeightDeltaTotal += nextHeight - previousHeight;
+    return true;
+  }
+
+  private hasFileAnnotations(
+    fileDiff: FileDiffMetadata | undefined = this.fileDiff
+  ): boolean {
+    if (fileDiff == null || !includesFileAnnotations(this.lineAnnotations)) {
+      return false;
+    }
+    return this.lineAnnotations.some((annotation) => {
+      if (annotation.lineNumber !== FILE_ANNOTATION_LINE_NUMBER) {
+        return false;
+      }
+      // Lets ensure for singled sided diffs that the sides match
+      if (fileDiff.type === 'new') {
+        return annotation.side === 'additions';
+      }
+      if (fileDiff.type === 'deleted') {
+        return annotation.side === 'deletions';
+      }
+      return true;
+    });
   }
 
   // Get the height for a line, using cached value if available.
@@ -182,6 +248,7 @@ export class VirtualizedFileDiff<
     includeEstimatedHeights = false,
   }: ResetLayoutCacheOptions = {}): void {
     this.layoutDirty = true;
+    this.cache.fileAnnotationHeight = 0;
     if (this.cache.heightDeltas.size > 0) {
       this.cache.heightDeltas.clear();
     }
@@ -239,6 +306,21 @@ export class VirtualizedFileDiff<
       diffStyle === 'split'
         ? [this.codeDeletions, this.codeAdditions]
         : [this.codeUnified];
+
+    const hasFileAnnotations = this.hasFileAnnotations(this.fileDiff);
+    if (
+      this.renderRange != null &&
+      hasFileAnnotations &&
+      shouldRenderFileAnnotations(this.renderRange)
+    ) {
+      const fileAnnotationHeight = measureFileAnnotationHeight(codeGroups);
+      const nextFileAnnotationHeight = fileAnnotationHeight ?? 0;
+      if (this.setFileAnnotationHeight(nextFileAnnotationHeight)) {
+        hasHeightChange = true;
+      }
+    } else if (!hasFileAnnotations && this.setFileAnnotationHeight(0)) {
+      hasHeightChange = true;
+    }
 
     for (const codeGroup of codeGroups) {
       if (codeGroup == null) continue;
@@ -307,11 +389,15 @@ export class VirtualizedFileDiff<
   public prepareCodeViewItem(
     fileDiff: FileDiffMetadata,
     top: number,
-    reset?: PendingCodeViewLayoutReset
+    reset?: PendingCodeViewLayoutReset,
+    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): number {
     const targetChanged = !areDiffTargetsEqual(this.fileDiff, fileDiff);
+    const annotationsChanged = this.syncLineAnnotations(lineAnnotations);
     let shouldResetLayoutCache =
-      reset?.resetDiffLayoutCache === true || targetChanged;
+      reset?.resetDiffLayoutCache === true ||
+      targetChanged ||
+      annotationsChanged;
     let includeEstimatedHeights =
       targetChanged ||
       (reset?.resetDiffLayoutCache === true &&
@@ -342,7 +428,7 @@ export class VirtualizedFileDiff<
     lineNumber: number,
     side: SelectionSide = 'additions'
   ): { top: number; height: number } | undefined {
-    if (this.fileDiff == null) {
+    if (this.fileDiff == null || lineNumber < 1) {
       return undefined;
     }
 
@@ -362,13 +448,15 @@ export class VirtualizedFileDiff<
     const targetLineIndex =
       diffStyle === 'split' ? targetLineIndexes[1] : targetLineIndexes[0];
     this.approximateLayoutCheckpoints();
+    const headerRegion = getVirtualFileHeaderRegion(
+      this.metrics,
+      disableFileHeader
+    );
     const checkpoint = this.getLayoutCheckpointBeforeLineIndex(targetLineIndex);
-    let top =
-      checkpoint?.top ??
-      getVirtualFileHeaderRegion(this.metrics, disableFileHeader);
+    let top = checkpoint?.top ?? headerRegion + this.cache.fileAnnotationHeight;
 
     if (collapsed) {
-      return { top, height: 0 };
+      return { top: headerRegion, height: 0 };
     }
 
     let position: { top: number; height: number } | undefined;
@@ -486,7 +574,8 @@ export class VirtualizedFileDiff<
     const checkpoint = this.getLayoutCheckpointBeforeTop(localViewportTop);
     let top =
       checkpoint?.top ??
-      getVirtualFileHeaderRegion(this.metrics, disableFileHeader);
+      getVirtualFileHeaderRegion(this.metrics, disableFileHeader) +
+        this.cache.fileAnnotationHeight;
     let anchor: NumericScrollLineAnchor | undefined;
 
     // This may end up being quite expensive on extremely large files, we may
@@ -793,10 +882,15 @@ export class VirtualizedFileDiff<
     newFile,
     fileDiff,
     forceRender = false,
+    lineAnnotations,
     ...props
   }: FileDiffRenderProps<LAnnotation> = {}): boolean {
     const { forceRenderOverride, isSetup } = this;
     this.forceRenderOverride = undefined;
+    const annotationsChanged = this.syncLineAnnotations(lineAnnotations);
+    if (annotationsChanged) {
+      this.resetLayoutCache({ includeEstimatedHeights: false });
+    }
 
     this.fileDiff ??=
       fileDiff ??
@@ -857,7 +951,8 @@ export class VirtualizedFileDiff<
       renderRange,
       oldFile,
       newFile,
-      forceRender: forceRenderOverride ?? forceRender,
+      lineAnnotations,
+      forceRender: (forceRenderOverride ?? forceRender) || annotationsChanged,
       ...props,
     });
   }
@@ -925,7 +1020,9 @@ export class VirtualizedFileDiff<
       ? true
       : this.hunksRenderer.getExpandedHunksMap();
     const heightDeltaPrefix = createHeightDeltaPrefix(this.cache.heightDeltas);
-    let top = getVirtualFileHeaderRegion(this.metrics, disableFileHeader);
+    let top =
+      getVirtualFileHeaderRegion(this.metrics, disableFileHeader) +
+      this.cache.fileAnnotationHeight;
     let renderedLineIndex = 0;
 
     const processRows = ({
@@ -1237,6 +1334,12 @@ export class VirtualizedFileDiff<
     );
     const paddingBottom =
       fileDiff.hunks.length > 0 ? getVirtualFilePaddingBottom(this.metrics) : 0;
+    const { fileAnnotationHeight } = this.cache;
+    const codeRegionTop = headerRegion + fileAnnotationHeight;
+    const codeHeight = Math.max(
+      0,
+      fileHeight - headerRegion - fileAnnotationHeight - paddingBottom
+    );
 
     // File is outside render window
     if (fileTop < top - fileHeight || fileTop > bottom) {
@@ -1280,7 +1383,7 @@ export class VirtualizedFileDiff<
       hunkLineCount
     );
 
-    let absoluteLineTop = fileTop + (checkpoint?.top ?? headerRegion);
+    let absoluteLineTop = fileTop + (checkpoint?.top ?? codeRegionTop);
     let currentLine = checkpoint?.renderedLineIndex ?? 0;
     let firstVisibleHunk: number | undefined;
     let centerHunk: number | undefined;
@@ -1331,7 +1434,7 @@ export class VirtualizedFileDiff<
         // Track the boundary positional offset at a hunk
         if (isAtHunkBoundary) {
           hunkOffsets[currentHunk] =
-            absoluteLineTop - (fileTop + headerRegion + gapAdjustment);
+            absoluteLineTop - (fileTop + codeRegionTop + gapAdjustment);
 
           // Check if we should bail (overflow complete)
           if (overflowCounter != null) {
@@ -1416,30 +1519,44 @@ export class VirtualizedFileDiff<
         : totalLines;
 
     // Use hunkOffsets array for efficient buffer calculations
-    const bufferBefore = hunkOffsets[startHunk] ?? 0;
+    const codeBufferBefore = hunkOffsets[startHunk] ?? 0;
+    const bufferBefore =
+      startingLine === 0 ? 0 : fileAnnotationHeight + codeBufferBefore;
 
     // Calculate bufferAfter using hunkOffset if available, otherwise use cumulative height
     const finalHunkIndex = startHunk + clampedTotalLines / hunkLineCount;
     const bufferAfter =
       finalHunkIndex < hunkOffsets.length
-        ? fileHeight -
-          headerRegion -
-          hunkOffsets[finalHunkIndex] -
-          // We gotta subtract the bottom padding off of the buffer
-          paddingBottom
+        ? codeHeight - hunkOffsets[finalHunkIndex]
         : // We stopped early, calculate from current position
-          fileHeight -
-          (absoluteLineTop - fileTop) -
-          // We gotta subtract the bottom padding off of the buffer
-          paddingBottom;
+          codeHeight - (absoluteLineTop - fileTop - codeRegionTop);
 
     return {
       startingLine,
       totalLines: clampedTotalLines,
       bufferBefore,
-      bufferAfter,
+      bufferAfter: Math.max(0, bufferAfter),
     };
   }
+}
+
+function measureFileAnnotationHeight(
+  codeGroups: (HTMLElement | undefined)[]
+): number | undefined {
+  let height: number | undefined;
+  for (const codeGroup of codeGroups) {
+    if (codeGroup == null) continue;
+    const content = codeGroup.children[1];
+    if (!(content instanceof HTMLElement)) continue;
+    for (const child of content.children) {
+      if (!(child instanceof HTMLElement)) continue;
+      if (child.dataset.lineAnnotation !== `0,${FILE_ANNOTATION_LINE_NUMBER}`) {
+        continue;
+      }
+      height = Math.max(height ?? 0, child.getBoundingClientRect().height);
+    }
+  }
+  return height;
 }
 
 interface HeightDeltaPrefix {

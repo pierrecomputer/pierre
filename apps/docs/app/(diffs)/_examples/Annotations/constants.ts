@@ -70,6 +70,14 @@ def verify_token(token: str) -> Optional[dict]:
     annotations: [
       {
         side: 'additions',
+        lineNumber: 0,
+        metadata: {
+          key: 'additions-file',
+          isThread: true,
+        },
+      },
+      {
+        side: 'additions',
         lineNumber: 20,
         metadata: {
           key: 'additions-20',

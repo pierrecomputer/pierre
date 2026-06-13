@@ -3298,13 +3298,15 @@ export class CodeView<LAnnotation = undefined> {
         item.height = item.instance.prepareCodeViewItem(
           item.item.fileDiff,
           runningTop,
-          reset
+          reset,
+          item.item.annotations ?? []
         );
       } else {
         item.height = item.instance.prepareCodeViewItem(
           item.item.file,
           runningTop,
-          reset
+          reset,
+          item.item.annotations ?? []
         );
       }
       runningTop += item.height;
@@ -3343,9 +3345,19 @@ function prepareItemInstance<LAnnotation>(
 ): number {
   item.instance.cleanUp(true);
   if (item.type === 'diff') {
-    return item.instance.prepareCodeViewItem(item.item.fileDiff, item.top);
+    return item.instance.prepareCodeViewItem(
+      item.item.fileDiff,
+      item.top,
+      undefined,
+      item.item.annotations ?? []
+    );
   } else {
-    return item.instance.prepareCodeViewItem(item.item.file, item.top);
+    return item.instance.prepareCodeViewItem(
+      item.item.file,
+      item.top,
+      undefined,
+      item.item.annotations ?? []
+    );
   }
 }
 
@@ -3449,7 +3461,7 @@ function renderItem<LAnnotation>(
       fileContainer,
       fileDiff: item.item.fileDiff,
       forceRender,
-      lineAnnotations: item.item.annotations,
+      lineAnnotations: item.item.annotations ?? [],
     });
   } else {
     return item.instance.render({
@@ -3457,7 +3469,7 @@ function renderItem<LAnnotation>(
       fileContainer,
       file: item.item.file,
       forceRender,
-      lineAnnotations: item.item.annotations,
+      lineAnnotations: item.item.annotations ?? [],
     });
   }
 }
