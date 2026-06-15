@@ -904,6 +904,7 @@ export interface DiffsComponentOptions extends BaseCodeOptions {
 }
 
 export interface DiffsBaseComponent {
+  readonly type: 'file' | 'file-diff' | 'unresolved-file';
   readonly top?: number;
   readonly options: DiffsComponentOptions;
   setOptions: (options: Partial<DiffsComponentOptions>) => void;

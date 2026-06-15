@@ -658,7 +658,7 @@ export class File<
       this.renderGutterUtility();
 
       const editor = this.editor;
-      if (editor != null) {
+      if (editor != null && this.fileRenderer.isHighlighted) {
         void this.fileRenderer.initializeHighlighter().then((highlighter) => {
           editor.__resetEditState(
             highlighter,

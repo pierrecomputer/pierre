@@ -12,6 +12,8 @@ export class Metrics {
   /** Height of the code line. */
   lineHeight: number = 20;
 
+  paddingTop: number = 0;
+
   /** initialize the metrics */
   init(root: HTMLElement): void {
     if (
@@ -28,6 +30,14 @@ export class Metrics {
       document.createElement('canvas').getContext('2d') ?? undefined;
     if (this.#canvasCtx === undefined) {
       throw new Error('Could not get canvas context');
+    }
+
+    const parent = root.parentElement;
+    if (parent !== null) {
+      const { paddingTop } = getComputedStyle(parent);
+      if (paddingTop.endsWith('px')) {
+        this.paddingTop = parseFloat(paddingTop.slice(0, -2));
+      }
     }
 
     const { fontSize, fontFamily, tabSize, lineHeight } =

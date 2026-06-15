@@ -22,7 +22,7 @@ export interface EditorStub {
   isMouseDown: () => boolean;
 }
 
-export class MarkerManager {
+export class MarkerRenderer {
   #editor: EditorStub;
   #markers: Marker[] = [];
   #markerPopupElement?: HTMLElement;

@@ -855,6 +855,83 @@ if (renderFileButton != null) {
       onChange: (file, lineAnnotations) => {
         console.log('change', file, lineAnnotations);
       },
+      onAttach: (editor) => {
+        const { selections } = editor.getState();
+        if (selections === undefined || selections.length === 0) {
+          editor.setSelections([
+            {
+              start: {
+                line: 0,
+                character: 1000, // will be normalized to the end of the line(< 1000 chars)
+              },
+              end: {
+                line: 0,
+                character: 1000, // will be normalized to the end of the line(< 1000 chars)
+              },
+              direction: 'none',
+            },
+          ]);
+          editor.setMarkers([
+            {
+              start: {
+                line: 1,
+                character: 2,
+              },
+              end: {
+                line: 1,
+                character: 1000, // will be normalized to the end of the line(< 1000 chars)
+              },
+              severity: 'info',
+              message: {
+                html: markerMessage({
+                  color: 'var(--diffs-editor-info-fg, #3794ff)',
+                  icon: MARKER_INFO_ICON,
+                  message: '<code>CodeOptionsMultipleThemes</code>',
+                  description: 'Code options of multiple themes.',
+                }),
+              },
+            },
+            {
+              start: {
+                line: 2,
+                character: 2,
+              },
+              end: {
+                line: 2,
+                character: 1000, // will be normalized to the end of the line(< 1000 chars)
+              },
+              severity: 'warning',
+              message: {
+                html: markerMessage({
+                  color: 'var(--diffs-editor-warning-fg, #cca700)',
+                  icon: MARKER_WARNING_ICON,
+                  message: '<code>CodeToHastOptions</code>',
+                  description: 'Code to Hast Options is deprecated.',
+                }),
+              },
+            },
+            {
+              start: {
+                line: 3,
+                character: 2,
+              },
+              end: {
+                line: 3,
+                character: 1000, // will be normalized to the end of the line(< 1000 chars)
+              },
+              severity: 'error',
+              message: {
+                html: markerMessage({
+                  color: 'var(--diffs-editor-error-fg, red)',
+                  icon: MARKER_ERROR_ICON,
+                  message: '<code>DecorationItem</code>',
+                  description: 'Type not defined.',
+                }),
+              },
+            },
+          ]);
+        }
+      },
       __debug: true,
     });
     Object.assign(window, { editor });
@@ -890,80 +967,6 @@ if (renderFileButton != null) {
             isEditing = checked;
             if (isEditing) {
               editor.edit(instance);
-              editor.setSelections([
-                {
-                  start: {
-                    line: 0,
-                    character: 1000, // will be normalized to the end of the line(< 1000 chars)
-                  },
-                  end: {
-                    line: 0,
-                    character: 1000, // will be normalized to the end of the line(< 1000 chars)
-                  },
-                  direction: 'none',
-                },
-              ]);
-              requestAnimationFrame(() => {
-                editor.setMarkers([
-                  {
-                    start: {
-                      line: 1,
-                      character: 2,
-                    },
-                    end: {
-                      line: 1,
-                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
-                    },
-                    severity: 'info',
-                    message: {
-                      html: markerMessage({
-                        color: 'var(--diffs-editor-info-fg, #3794ff)',
-                        icon: MARKER_INFO_ICON,
-                        message: '<code>CodeOptionsMultipleThemes</code>',
-                        description: 'Code options of multiple themes.',
-                      }),
-                    },
-                  },
-                  {
-                    start: {
-                      line: 2,
-                      character: 2,
-                    },
-                    end: {
-                      line: 2,
-                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
-                    },
-                    severity: 'warning',
-                    message: {
-                      html: markerMessage({
-                        color: 'var(--diffs-editor-warning-fg, #cca700)',
-                        icon: MARKER_WARNING_ICON,
-                        message: '<code>CodeToHastOptions</code>',
-                        description: 'Code to Hast Options is deprecated.',
-                      }),
-                    },
-                  },
-                  {
-                    start: {
-                      line: 3,
-                      character: 2,
-                    },
-                    end: {
-                      line: 3,
-                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
-                    },
-                    severity: 'error',
-                    message: {
-                      html: markerMessage({
-                        color: 'var(--diffs-editor-error-fg, red)',
-                        icon: MARKER_ERROR_ICON,
-                        message: '<code>DecorationItem</code>',
-                        description: 'Type not defined.',
-                      }),
-                    },
-                  },
-                ]);
-              });
             } else {
               editor.cleanUp();
             }
