@@ -529,11 +529,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
+    this.#resetCache();
+
     this.#wrap = this.#fileInstance?.options.overflow === 'wrap';
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
     this.#tokenizer?.prebuildStateStack(renderRange);
-    this.#resetCache();
 
     // re-render the existing selections, matches, and markers
     if (
@@ -544,7 +545,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#updateSelections(this.#selections ?? []);
     }
 
-    if (this.#scrollingToLine !== undefined) {
+    if (
+      this.#initSelections !== undefined &&
+      this.#primaryCaretElement !== undefined
+    ) {
+      this.#initSelections = undefined;
+      this.#scrollToPrimaryCaret(false, 'center');
+    } else if (this.#scrollingToLine !== undefined) {
       this.#scrollToLine(
         this.#scrollingToLine,
         this.#scrollingToLineChar,

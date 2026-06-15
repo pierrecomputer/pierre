@@ -285,6 +285,21 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
       const editor = new Editor<LineCommentMetadata>({
+        onAttach: (editor) => {
+          editor.setSelections([
+            {
+              start: {
+                line: 3,
+                character: 1000, // will be normalized to the end of the line(< 1000 chars)
+              },
+              end: {
+                line: 3,
+                character: 1000, // will be normalized to the end of the line(< 1000 chars)
+              },
+              direction: 'none',
+            },
+          ]);
+        },
         __debug: true,
       });
       const fileAnnotations = patchAnnotations[hunkIndex];
@@ -319,19 +334,6 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
               isEditing = checked;
               if (isEditing) {
                 editor.edit(instance);
-                editor.setSelections([
-                  {
-                    start: {
-                      line: 3,
-                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
-                    },
-                    end: {
-                      line: 3,
-                      character: 1000, // will be normalized to the end of the line(< 1000 chars)
-                    },
-                    direction: 'none',
-                  },
-                ]);
               } else {
                 editor.cleanUp();
               }
