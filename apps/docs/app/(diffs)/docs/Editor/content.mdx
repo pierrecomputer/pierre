@@ -49,35 +49,6 @@ When attaching, the editor may normalize component options (for example,
 enabling the token transformer and disabling gutter utilities that conflict with
 editing) and trigger a re-render.
 
-### Vanilla JS
-
-For vanilla integrations, render with `File` or `FileDiff` first, then attach
-the editor. For best performance when editing large files, we strongly recommend
-using `VirtualizedFile` and `VirtualizedFileDiff`.
-
-<EditorComponentTabs
-  fileExample={editorVanillaFileExample}
-  fileDiffExample={editorVanillaFileDiffExample}
-/>
-
-<Notice variant="warning" icon={<IconInfoFill />}>
-  Editing a `FileDiff` requires the full file contents. The editor targets the
-  addition side (the new version of the file) and cannot reconstruct it from a
-  partial diff. Make sure one of the following is true before attaching the
-  editor:
-
-- You rendered the diff by passing `oldFile` and `newFile` as `FileContents`
-  objects directly (the common case).
-- You rendered from a `FileDiff` object where `isPartial` is `false`, meaning
-  `additionLines` contains the complete new-file contents (not just the patch
-  context lines).
-
-If neither condition is met — for example, when the diff was parsed from a raw
-patch with no accompanying source files — `editor.edit()` will attach, but
-editing will have no effect.
-
-</Notice>
-
 ### React
 
 Create one `Editor` instance (typically with `useMemo`), wrap your tree in
@@ -91,6 +62,31 @@ performance when editing large files.
   fileDiffExample={editorReactFileDiffExample}
   multiFileDiffExample={editorReactMultiFileDiffExample}
 />
+
+### Vanilla JS
+
+For vanilla integrations, render with `File` or `FileDiff` first, then attach
+the editor. For best performance when editing large files, we strongly recommend
+using `VirtualizedFile` and `VirtualizedFileDiff`.
+
+<EditorComponentTabs
+  fileExample={editorVanillaFileExample}
+  fileDiffExample={editorVanillaFileDiffExample}
+/>
+
+### Editor Options
+
+Pass these when constructing `new Editor({ ... })`.
+
+<DocsCodeExample {...editorOptionsType} />
+
+### API Reference
+
+These methods are available after you create an `Editor` instance. Attach the
+editor to a rendered `File` or `FileDiff` first, then use the methods below to
+query state, apply edits, and control selections programmatically.
+
+<DocsCodeExample {...editorPublicApi} />
 
 ### Using Worker Pool
 
