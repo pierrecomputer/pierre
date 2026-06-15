@@ -558,25 +558,16 @@ function shouldAutoSurroundChar(
   autoSurround: AutoSurround | undefined,
   char: string
 ): boolean {
-  const mode =
-    autoSurround === undefined || autoSurround === 'default'
-      ? 'default'
-      : autoSurround === 'languageDefined' || autoSurround === 'never'
-        ? 'never'
-        : autoSurround;
-
-  if (mode === 'never') {
+  if (autoSurround === 'never') {
     return false;
   }
-  if (mode === 'brackets') {
+  if (autoSurround === 'brackets') {
     return AUTO_SURROUND_BRACKET_CHARS.has(char);
   }
-  if (mode === 'quotes') {
+  if (autoSurround === 'quotes') {
     return AUTO_SURROUND_QUOTE_CHARS.has(char);
   }
-  return (
-    AUTO_SURROUND_QUOTE_CHARS.has(char) || AUTO_SURROUND_BRACKET_CHARS.has(char)
-  );
+  return true;
 }
 
 /**
