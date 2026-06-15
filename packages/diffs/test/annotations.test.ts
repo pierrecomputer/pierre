@@ -71,6 +71,12 @@ function getSlotNames(node: ElementContent): string[] {
   });
 }
 
+function getAnnotationIndexes(nodes: ElementContent[]): string[] {
+  return nodes
+    .map((node) => getHastAnnotationIndex(node))
+    .filter((index): index is string => index != null);
+}
+
 describe('Annotation Rendering', () => {
   const diff = parseDiffFromFile(oldFile, newFile);
 
@@ -138,6 +144,43 @@ describe('Annotation Rendering', () => {
       expect(getHastAnnotationIndex(firstDeletion)).toBe('-1,-1');
       expect(getSlotNames(firstAddition)).toEqual(['annotation-additions-0']);
       expect(getSlotNames(firstDeletion)).toEqual(['annotation-deletions-0']);
+    });
+
+    test('do not collide with first-row annotation keys in split style', async () => {
+      const renderer = new DiffHunksRenderer<string>({ diffStyle: 'split' });
+      renderer.setLineAnnotations([
+        { side: 'deletions', lineNumber: 0, metadata: 'old-file' },
+        { side: 'additions', lineNumber: 0, metadata: 'new-file' },
+        { side: 'deletions', lineNumber: 1, metadata: 'old-first-line' },
+        { side: 'additions', lineNumber: 1, metadata: 'new-first-line' },
+      ]);
+
+      const { additionsContentAST, deletionsContentAST } =
+        await renderer.asyncRender(
+          parseDiffFromFile(
+            { name: 'first-row.ts', contents: 'old\n' },
+            { name: 'first-row.ts', contents: 'new\n' }
+          )
+        );
+      assertDefined(
+        additionsContentAST,
+        'additionsContentAST should be defined'
+      );
+      assertDefined(
+        deletionsContentAST,
+        'deletionsContentAST should be defined'
+      );
+
+      const annotationIndexes = getAnnotationIndexes(
+        deletionsContentAST
+      ).concat(getAnnotationIndexes(additionsContentAST));
+
+      expect(
+        annotationIndexes.filter((index) => index === '-1,-1')
+      ).toHaveLength(2);
+      expect(annotationIndexes.filter((index) => index === '0,0')).toHaveLength(
+        2
+      );
     });
 
     test('render code columns for no-hunk diffs with only file-level annotations', async () => {

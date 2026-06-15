@@ -237,6 +237,26 @@ function createMeasuredCodeGroupWithFileLevelAnnotation(
   return group as unknown as HTMLElement;
 }
 
+function createMeasuredCodeGroupWithCompetingAnnotationKeys(
+  lineIndex: string,
+  getFileAnnotationHeight: () => number,
+  getFirstRowAnnotationHeight: () => number,
+  getMeasuredHeight: () => number
+): HTMLElement {
+  const group = new FakeHTMLElement();
+  const gutter = new FakeHTMLElement();
+  const content = new FakeHTMLElement();
+  const fileAnnotation = new FakeHTMLElement(getFileAnnotationHeight);
+  const firstRowAnnotation = new FakeHTMLElement(getFirstRowAnnotationHeight);
+  const line = new FakeHTMLElement(getMeasuredHeight);
+  fileAnnotation.dataset.lineAnnotation = '-1,-1';
+  firstRowAnnotation.dataset.lineAnnotation = '0,0';
+  line.dataset.lineIndex = lineIndex;
+  content.append(fileAnnotation, firstRowAnnotation, line);
+  group.append(gutter, content);
+  return group as unknown as HTMLElement;
+}
+
 function countIteratedRows(
   fileDiff: FileDiffMetadata,
   diffStyle: 'split' | 'unified',
@@ -565,6 +585,34 @@ describe('VirtualizedFileDiff estimated height cache', () => {
       expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(
         metrics.lineHeight
       );
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('ignores first-row annotation keys when measuring file-level annotation height', () => {
+    const { cleanup } = installFakeHTMLElement();
+    try {
+      const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
+
+      instance.prepareCodeViewItem(createTwoHunkDiff(), 0, undefined, [
+        { side: 'additions', lineNumber: 0 },
+      ]);
+      inspect(instance).renderRange = createRenderRange();
+      inspect(instance).fileContainer =
+        new FakeHTMLElement() as unknown as HTMLElement;
+      inspect(instance).codeAdditions =
+        createMeasuredCodeGroupWithCompetingAnnotationKeys(
+          '0,0',
+          () => 25,
+          () => 100,
+          () => metrics.lineHeight
+        );
+
+      expect(instance.reconcileHeights()).toBe(true);
+      expect(inspect(instance).cache.fileAnnotationHeight).toBe(25);
+      expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(25);
+      expect(instance.getVirtualizedHeight()).toBe(351);
     } finally {
       cleanup();
     }
