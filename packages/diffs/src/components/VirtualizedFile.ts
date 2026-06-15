@@ -833,6 +833,13 @@ export class VirtualizedFile<
       0,
       fileHeight - headerRegion - fileAnnotationHeight - paddingBottom
     );
+    const hasFileAnnotations = includesFileAnnotations(this.lineAnnotations);
+    const fileAnnotationTop = fileTop + headerRegion;
+    const measuredFileAnnotationVisible =
+      fileAnnotationHeight > 0 &&
+      hasFileAnnotations &&
+      fileAnnotationTop < bottom &&
+      fileAnnotationTop + fileAnnotationHeight > top;
 
     // File is outside render window
     if (fileTop < top - fileHeight || fileTop > bottom) {
@@ -867,7 +874,9 @@ export class VirtualizedFile<
     if (overflow === 'scroll' && !this.hasLineAnnotations()) {
       const sourceRowsTop = fileTop + codeRegionTop;
       const sourceRowsBottom = sourceRowsTop + codeRowsHeight;
-      if (sourceRowsTop >= bottom || sourceRowsBottom <= top) {
+      const sourceRowsVisible =
+        sourceRowsTop < bottom && sourceRowsBottom > top;
+      if (!measuredFileAnnotationVisible && !sourceRowsVisible) {
         return {
           startingLine: 0,
           totalLines: 0,
@@ -878,7 +887,10 @@ export class VirtualizedFile<
 
       // Find which line is at viewport center
       const centerLine = Math.floor(
-        (viewportCenter - (fileTop + codeRegionTop)) / lineHeight
+        measuredFileAnnotationVisible &&
+          viewportCenter < fileTop + codeRegionTop
+          ? 0
+          : (viewportCenter - (fileTop + codeRegionTop)) / lineHeight
       );
       const centerHunk = Math.floor(centerLine / hunkLineCount);
 
@@ -980,12 +992,17 @@ export class VirtualizedFile<
 
     // No visible lines found
     if (firstVisibleHunk == null) {
-      return {
-        startingLine: 0,
-        totalLines: 0,
-        bufferBefore: 0,
-        bufferAfter: fileHeight - headerRegion - paddingBottom,
-      };
+      if (measuredFileAnnotationVisible) {
+        firstVisibleHunk = 0;
+        centerHunk = 0;
+      } else {
+        return {
+          startingLine: 0,
+          totalLines: 0,
+          bufferBefore: 0,
+          bufferAfter: fileHeight - headerRegion - paddingBottom,
+        };
+      }
     }
 
     // Calculate balanced startingLine centered around the viewport center

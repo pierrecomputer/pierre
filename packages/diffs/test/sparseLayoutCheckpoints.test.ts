@@ -307,6 +307,23 @@ describe('sparse layout checkpoints', () => {
     expect(range.totalLines).toBeGreaterThan(0);
   });
 
+  test('VirtualizedFile does not require measured file-level annotation height to render top content', () => {
+    const file = createLargeFile();
+    const instance = new VirtualizedFile({}, virtualizer, metrics);
+
+    instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+    inspectFile(instance).cache.fileAnnotationHeight = 0;
+
+    const range = inspectFile(instance).computeRenderRangeFromWindow(file, 0, {
+      top: metrics.diffHeaderHeight + 1,
+      bottom: metrics.diffHeaderHeight + 2,
+    });
+
+    expect(range.startingLine).toBe(0);
+    expect(range.totalLines).toBeGreaterThan(0);
+    expect(range.bufferBefore).toBe(0);
+  });
+
   test('VirtualizedFile applies measured file-level annotation height', () => {
     const { cleanup } = installFakeHTMLElement();
     try {
