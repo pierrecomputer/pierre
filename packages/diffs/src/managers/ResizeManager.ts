@@ -140,7 +140,7 @@ export class ResizeManager {
         }
         const lineAnnotation =
           element.getAttribute('data-line-annotation') ?? '';
-        if (!/^\d+,\d+$/.test(lineAnnotation)) {
+        if (!/^-?\d+,-?\d+$/.test(lineAnnotation)) {
           console.error(
             'DiffFileRenderer.setupResizeObserver: Invalid element or annotation',
             { lineAnnotation, element }

@@ -172,7 +172,7 @@ describe('FileRenderer AST Structure', () => {
     const secondContent = contentColumn.children[1] as Element;
     const firstGutter = gutter.children[0] as Element;
 
-    expect(firstContent.properties?.['data-line-annotation']).toBe('0,0');
+    expect(firstContent.properties?.['data-line-annotation']).toBe('-1,-1');
     expect(
       findHastSlotElements(firstContent).map((slot) => slot.properties?.name)
     ).toEqual(['annotation-0']);
@@ -199,7 +199,7 @@ describe('FileRenderer AST Structure', () => {
       contentColumn.children.some(
         (child) =>
           child.type === 'element' &&
-          child.properties?.['data-line-annotation'] === '0,0'
+          child.properties?.['data-line-annotation'] === '-1,-1'
       )
     ).toBe(false);
   });

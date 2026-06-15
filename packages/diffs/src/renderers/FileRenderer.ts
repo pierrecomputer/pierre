@@ -44,7 +44,8 @@ import {
   createHastElement,
 } from '../utils/hast_utils';
 import {
-  FILE_ANNOTATION_LINE_NUMBER,
+  FILE_ANNOTATION_HUNK_INDEX,
+  FILE_ANNOTATION_LINE_INDEX,
   getFileAnnotations,
   shouldRenderFileAnnotations,
 } from '../utils/includesFileAnnotations';
@@ -417,8 +418,8 @@ export class FileRenderer<LAnnotation = undefined> {
       contentArray.push(
         createAnnotationElement({
           type: 'annotation',
-          hunkIndex: 0,
-          lineIndex: FILE_ANNOTATION_LINE_NUMBER,
+          hunkIndex: FILE_ANNOTATION_HUNK_INDEX,
+          lineIndex: FILE_ANNOTATION_LINE_INDEX,
           annotations: fileLevelAnnotations.map((annotation) =>
             getLineAnnotationName(annotation)
           ),

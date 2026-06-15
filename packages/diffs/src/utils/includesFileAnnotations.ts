@@ -1,6 +1,9 @@
 import type { RenderRange } from '../types';
 
 export const FILE_ANNOTATION_LINE_NUMBER = 0;
+export const FILE_ANNOTATION_HUNK_INDEX = -1;
+export const FILE_ANNOTATION_LINE_INDEX = -1;
+export const FILE_ANNOTATION_DOM_KEY: string = `${FILE_ANNOTATION_HUNK_INDEX},${FILE_ANNOTATION_LINE_INDEX}`;
 
 type AnnotationLineMap<TAnnotation> = Record<number, TAnnotation[] | undefined>;
 type FileLevelAnnotationLike = { lineNumber: number };

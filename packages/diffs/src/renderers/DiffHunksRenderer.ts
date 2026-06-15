@@ -59,7 +59,8 @@ import {
   createHastElement,
 } from '../utils/hast_utils';
 import {
-  FILE_ANNOTATION_LINE_NUMBER,
+  FILE_ANNOTATION_HUNK_INDEX,
+  FILE_ANNOTATION_LINE_INDEX,
   getFileAnnotations,
   shouldRenderFileAnnotations,
 } from '../utils/includesFileAnnotations';
@@ -1377,7 +1378,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
 
-    const lineIndex = FILE_ANNOTATION_LINE_NUMBER;
+    const hunkIndex = FILE_ANNOTATION_HUNK_INDEX;
+    const lineIndex = FILE_ANNOTATION_LINE_INDEX;
     const { createAnnotationElement } = this;
 
     if (diffStyle === 'unified') {
@@ -1386,7 +1388,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         type: 'context',
         unifiedSpan: {
           type: 'annotation',
-          hunkIndex: 0,
+          hunkIndex,
           lineIndex,
           annotations: deletionAnnotationNames.concat(additionAnnotationNames),
         },
@@ -1401,13 +1403,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       type: 'context',
       deletionSpan: {
         type: 'annotation',
-        hunkIndex: 0,
+        hunkIndex,
         lineIndex,
         annotations: deletionAnnotationNames,
       },
       additionSpan: {
         type: 'annotation',
-        hunkIndex: 0,
+        hunkIndex,
         lineIndex,
         annotations: additionAnnotationNames,
       },

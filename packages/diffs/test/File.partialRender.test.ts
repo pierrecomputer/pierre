@@ -36,7 +36,7 @@ async function waitForAnnotationCount(
 ): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {
     const count = container.shadowRoot?.querySelectorAll(
-      '[data-line-annotation="0,0"]'
+      '[data-line-annotation="-1,-1"]'
     ).length;
     if (count === expected) {
       return;
@@ -83,7 +83,7 @@ describe('File partial render', () => {
 
       const content = fileContainer.shadowRoot?.querySelector('[data-content]');
       expect(content?.children[0]?.getAttribute('data-line-annotation')).toBe(
-        '0,0'
+        '-1,-1'
       );
       expect(content?.querySelectorAll('[data-line-index]').length).toBe(100);
     } finally {

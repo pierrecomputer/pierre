@@ -24,6 +24,7 @@ import {
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
 import {
+  FILE_ANNOTATION_DOM_KEY,
   FILE_ANNOTATION_LINE_NUMBER,
   includesFileAnnotations,
   shouldRenderFileAnnotations,
@@ -1562,7 +1563,7 @@ function measureFileAnnotationHeight(
     if (!(content instanceof HTMLElement)) continue;
     for (const child of content.children) {
       if (!(child instanceof HTMLElement)) continue;
-      if (child.dataset.lineAnnotation !== `0,${FILE_ANNOTATION_LINE_NUMBER}`) {
+      if (child.dataset.lineAnnotation !== FILE_ANNOTATION_DOM_KEY) {
         continue;
       }
       height = Math.max(height ?? 0, child.getBoundingClientRect().height);

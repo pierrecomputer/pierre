@@ -101,7 +101,7 @@ describe('Annotation Rendering', () => {
 
       expect(firstAnnotationIndex).toBe(0);
       expect(firstSeparatorIndex).toBeGreaterThan(firstAnnotationIndex);
-      expect(getHastAnnotationIndex(firstAnnotation)).toBe('0,0');
+      expect(getHastAnnotationIndex(firstAnnotation)).toBe('-1,-1');
       expect(getSlotNames(firstAnnotation)).toEqual([
         'annotation-deletions-0',
         'annotation-additions-0',
@@ -134,8 +134,8 @@ describe('Annotation Rendering', () => {
       assertDefined(firstAddition, 'firstAddition should be defined');
       assertDefined(firstDeletion, 'firstDeletion should be defined');
 
-      expect(getHastAnnotationIndex(firstAddition)).toBe('0,0');
-      expect(getHastAnnotationIndex(firstDeletion)).toBe('0,0');
+      expect(getHastAnnotationIndex(firstAddition)).toBe('-1,-1');
+      expect(getHastAnnotationIndex(firstDeletion)).toBe('-1,-1');
       expect(getSlotNames(firstAddition)).toEqual(['annotation-additions-0']);
       expect(getSlotNames(firstDeletion)).toEqual(['annotation-deletions-0']);
     });
@@ -187,7 +187,9 @@ describe('Annotation Rendering', () => {
       assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
 
       expect(
-        unifiedContentAST.some((node) => getHastAnnotationIndex(node) === '0,0')
+        unifiedContentAST.some(
+          (node) => getHastAnnotationIndex(node) === '-1,-1'
+        )
       ).toBe(false);
     });
   });

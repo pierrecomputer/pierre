@@ -109,7 +109,7 @@ describe('FileDiff partial render', () => {
 
       expect(
         fileContainer.shadowRoot?.querySelectorAll(
-          '[data-line-annotation="0,0"]'
+          '[data-line-annotation="-1,-1"]'
         ).length
       ).toBe(2);
 
@@ -130,7 +130,7 @@ describe('FileDiff partial render', () => {
 
       expect(
         fileContainer.shadowRoot?.querySelectorAll(
-          '[data-line-annotation="0,0"]'
+          '[data-line-annotation="-1,-1"]'
         ).length
       ).toBe(0);
     } finally {

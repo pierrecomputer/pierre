@@ -230,7 +230,7 @@ function createMeasuredCodeGroupWithFileLevelAnnotation(
   const content = new FakeHTMLElement();
   const annotation = new FakeHTMLElement(getAnnotationHeight);
   const line = new FakeHTMLElement(getMeasuredHeight);
-  annotation.dataset.lineAnnotation = '0,0';
+  annotation.dataset.lineAnnotation = '-1,-1';
   line.dataset.lineIndex = lineIndex;
   content.append(annotation, line);
   group.append(gutter, content);
