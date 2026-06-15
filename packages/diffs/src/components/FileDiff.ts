@@ -952,7 +952,7 @@ export class FileDiff<
       const file = this.getAdditionFile();
       if (editor != null && file != null) {
         void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-          editor.__resetEditState(
+          editor.__syncRenderView(
             highlighter,
             fileContainer,
             file,
@@ -1009,7 +1009,7 @@ export class FileDiff<
     const file = this.getAdditionFile();
     if (fileContainer != null && file != null) {
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-        editor.__resetEditState(
+        editor.__syncRenderView(
           highlighter,
           fileContainer,
           file,

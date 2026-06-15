@@ -937,7 +937,7 @@ export interface DiffsEditableComponent<
 
 export interface DiffsEditor<LAnnotation> {
   __postponeBackgroundTokenizeToNextFrame(): void;
-  __resetEditState(
+  __syncRenderView(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileContents: FileContents,

@@ -81,7 +81,6 @@ import { EditorTokenizer, renderLineTokens } from './tokenzier';
 import {
   addEventListener,
   clampDomOffset,
-  debounce,
   extend,
   getLineNumberAttr,
   h,
@@ -172,6 +171,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #shiftKeyPressed = false;
   #selectionStart: EditorSelection | undefined;
   #reservedSelections?: EditorSelection[];
+  #initSelections?: EditorSelection[];
   #selections?: EditorSelection[];
   #matches?: MatchRange[];
   #scrollingToLine?: number;
@@ -289,7 +289,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }: EditorState<LAnnotation>): void {
     this.#resetCache();
     this.#resetState();
-    this.#selections = selections;
+    this.#initSelections = selections;
     this.#fileInstance?.render({
       file: { ...file, cacheKey: 'edited-at-' + Date.now() },
       lineAnnotations,
@@ -413,180 +413,176 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   /** @internal */
-  __resetEditState: DiffsEditor<LAnnotation>['__resetEditState'] = debounce(
-    (
-      highlighter: DiffsHighlighter,
-      fileContainer: HTMLElement,
-      fileContents: FileContents,
-      lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
-      renderRange: RenderRange | undefined
-    ): void => {
-      const shadowRoot = fileContainer.shadowRoot;
-      if (shadowRoot == null) {
-        console.error('[editor] Could not find the shadow root.');
-        return;
-      }
+  __syncRenderView: DiffsEditor<LAnnotation>['__syncRenderView'] = (
+    highlighter: DiffsHighlighter,
+    fileContainer: HTMLElement,
+    fileContents: FileContents,
+    lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
+    renderRange: RenderRange | undefined
+  ) => {
+    const shadowRoot = fileContainer.shadowRoot;
+    if (shadowRoot == null) {
+      console.error('[editor] Could not find the shadow root.');
+      return;
+    }
 
-      let codeElement: HTMLElement | undefined;
-      let gutterEl: HTMLElement | undefined;
-      let contentEl: HTMLElement | undefined;
-      for (const el of shadowRoot.querySelectorAll<HTMLElement>(
-        '[data-code]'
-      )) {
-        if (el.dataset.deletions === undefined) {
-          codeElement = el;
-          for (const child of el.children) {
-            const el = child as HTMLElement;
-            const { gutter, content } = el.dataset;
-            if (gutter !== undefined) {
-              gutterEl = el;
-            } else if (content !== undefined) {
-              contentEl = el;
-            }
+    let codeElement: HTMLElement | undefined;
+    let gutterEl: HTMLElement | undefined;
+    let contentEl: HTMLElement | undefined;
+    for (const el of shadowRoot.querySelectorAll<HTMLElement>('[data-code]')) {
+      if (el.dataset.deletions === undefined) {
+        codeElement = el;
+        for (const child of el.children) {
+          const el = child as HTMLElement;
+          const { gutter, content } = el.dataset;
+          if (gutter !== undefined) {
+            gutterEl = el;
+          } else if (content !== undefined) {
+            contentEl = el;
           }
-          break;
         }
+        break;
       }
-      if (codeElement === undefined || contentEl === undefined) {
-        return;
-      }
+    }
+    if (codeElement === undefined || contentEl === undefined) {
+      return;
+    }
 
-      // inject editor&theme style to the file container
-      if (this.#fileContainer !== fileContainer) {
-        this.#fileContainer = fileContainer;
-        if (this.#globalStyleElement !== undefined) {
-          fileContainer.appendChild(this.#globalStyleElement);
-        }
-        if (this.#editorStyleElement !== undefined) {
-          shadowRoot.appendChild(this.#editorStyleElement);
-        }
-        if (this.#themeStyleElement !== undefined) {
-          shadowRoot.appendChild(this.#themeStyleElement);
-        }
-        if (this.#spriteElement !== undefined) {
-          shadowRoot.prepend(this.#spriteElement);
-        }
+    // inject editor&theme style to the file container
+    if (this.#fileContainer !== fileContainer) {
+      this.#fileContainer = fileContainer;
+      if (this.#globalStyleElement !== undefined) {
+        fileContainer.appendChild(this.#globalStyleElement);
       }
+      if (this.#editorStyleElement !== undefined) {
+        shadowRoot.appendChild(this.#editorStyleElement);
+      }
+      if (this.#themeStyleElement !== undefined) {
+        shadowRoot.appendChild(this.#themeStyleElement);
+      }
+      if (this.#spriteElement !== undefined) {
+        shadowRoot.prepend(this.#spriteElement);
+      }
+    }
 
+    if (
+      this.#textDocument === undefined ||
+      this.#fileContents === undefined ||
+      this.#fileContents.name !== fileContents.name ||
+      this.#fileContents.contents !== fileContents.contents ||
+      this.#fileContents.lang !== fileContents.lang ||
+      this.#fileContents.cacheKey !== fileContents.cacheKey
+    ) {
+      const editStack = new EditStack<LAnnotation>({
+        maxEntries: this.#options.historyMaxEntries,
+      });
+      const textDocument = new TextDocument<LAnnotation>(
+        fileContents.name,
+        fileContents.contents,
+        fileContents.lang ?? getFiletypeFromFileName(fileContents.name),
+        0,
+        editStack
+      );
+      this.#fileContents = fileContents;
+      this.#textDocument = textDocument;
+      this.#tokenizer?.cleanUp();
+      this.#tokenizer = new EditorTokenizer({
+        highlighter,
+        textDocument,
+        codeOptions: this.#fileInstance?.options ?? {},
+        onDeferTokenize: this.#onDeferTokenize,
+        setStyle: (css) => {
+          this.#themeStyleElement!.textContent = css;
+        },
+        __debug: this.#options.__debug,
+      });
+      this.#resetState();
+      this.#selections = this.#initSelections;
+      this.#options.onAttach?.(this, this.#fileInstance!);
+      if (this.#textDocument !== undefined && this.#options.__debug === true) {
+        console.log('[diffs/editor] text document changed !!!');
+      }
+    }
+
+    if (this.#contentElement !== contentEl) {
+      this.#gutterElement = gutterEl;
+      this.#contentElement = extend(contentEl, {
+        contentEditable: 'true',
+        role: 'textbox',
+        ariaMultiLine: 'true',
+        autocapitalize: 'off',
+        writingSuggestions: 'off',
+        autocorrect: false,
+        spellcheck: false,
+        translate: false,
+      });
+      if (this.#overlayElement !== undefined) {
+        contentEl.after(this.#overlayElement);
+      }
+      this.#metrics.init(contentEl);
+      this.#listenContentElement(contentEl, gutterEl);
       if (
-        this.#textDocument === undefined ||
-        this.#fileContents === undefined ||
-        this.#fileContents.name !== fileContents.name ||
-        this.#fileContents.contents !== fileContents.contents ||
-        this.#fileContents.lang !== fileContents.lang ||
-        this.#fileContents.cacheKey !== fileContents.cacheKey
+        this.#contentElement !== undefined &&
+        this.#options.__debug === true
       ) {
-        const editStack = new EditStack<LAnnotation>({
-          maxEntries: this.#options.historyMaxEntries,
-        });
-        const textDocument = new TextDocument<LAnnotation>(
-          fileContents.name,
-          fileContents.contents,
-          fileContents.lang ?? getFiletypeFromFileName(fileContents.name),
-          0,
-          editStack
-        );
-        this.#fileContents = fileContents;
-        this.#textDocument = textDocument;
-        this.#tokenizer?.cleanUp();
-        this.#tokenizer = new EditorTokenizer({
-          highlighter,
-          textDocument,
-          codeOptions: this.#fileInstance?.options ?? {},
-          onDeferTokenize: this.#onDeferTokenize,
-          setStyle: (css) => {
-            this.#themeStyleElement!.textContent = css;
-          },
-          __debug: this.#options.__debug,
-        });
-        this.#resetState();
-        this.#options.onAttach?.(this, this.#fileInstance!);
+        console.log('[diffs/editor] full re-render triggered !!!');
       }
+    }
 
-      if (this.#contentElement !== contentEl) {
-        if (
-          this.#contentElement !== undefined &&
-          this.#options.__debug === true
-        ) {
-          console.log('[diffs/editor] full re-render triggered !!!');
-        }
-        this.#gutterWidthCache = undefined;
-        this.#contentWidthCache = undefined;
-        this.#gutterElement = gutterEl;
-        this.#contentElement = extend(contentEl, {
-          contentEditable: 'true',
-          role: 'textbox',
-          ariaMultiLine: 'true',
-          autocapitalize: 'off',
-          writingSuggestions: 'off',
-          autocorrect: false,
-          spellcheck: false,
-          translate: false,
-        });
-        if (this.#overlayElement !== undefined) {
-          contentEl.after(this.#overlayElement);
-        }
-        this.#metrics.init(contentEl);
-        this.#listenContentElement(contentEl, gutterEl);
-      }
+    this.#wrap = this.#fileInstance?.options.overflow === 'wrap';
+    this.#lineAnnotations = lineAnnotations;
+    this.#renderRange = renderRange;
+    this.#tokenizer?.prebuildStateStack(renderRange);
+    this.#resetCache();
 
-      this.#resetCache();
+    // re-render the existing selections, matches, and markers
+    if (
+      this.#selections !== undefined ||
+      this.#matches !== undefined ||
+      this.#markerRenderer !== undefined
+    ) {
+      this.#updateSelections(this.#selections ?? []);
+    }
 
-      this.#wrap = this.#fileInstance?.options.overflow === 'wrap';
-      this.#lineAnnotations = lineAnnotations;
-      this.#renderRange = renderRange;
-      this.#tokenizer?.prebuildStateStack(renderRange);
+    if (this.#scrollingToLine !== undefined) {
+      this.#scrollToLine(
+        this.#scrollingToLine,
+        this.#scrollingToLineChar,
+        this.#scrollingToLineNoFocus
+      );
+    } else if (
+      this.#selections !== undefined &&
+      this.#selections.length > 0 &&
+      !this.#retainSearchPanelFocus
+    ) {
+      this.focus({ preventScroll: true });
+    }
 
-      // re-render the existing selections, matches, and markers
-      if (
-        this.#selections !== undefined ||
-        this.#matches !== undefined ||
-        this.#markerRenderer !== undefined
-      ) {
-        this.#updateSelections(this.#selections ?? []);
-      }
+    if (this.#retainSearchPanelFocus) {
+      this.#searchPanel?.focus();
+    }
 
-      if (this.#options.__debug === true && renderRange !== undefined) {
-        const { startingLine, totalLines } = renderRange;
-        console.log(
-          '[diffs/editor] render file:',
-          fileContents.name,
-          'RenderRange:',
-          startingLine + '-' + (startingLine + totalLines),
-          'of',
-          this.#textDocument.lineCount,
-          'lines'
-        );
-      }
+    if (
+      this.#selectionAction !== undefined &&
+      this.#isLineVisible(this.#selectionAction.line) &&
+      this.#contentElement !== undefined
+    ) {
+      this.#selectionAction.render(this.#contentElement);
+    }
 
-      if (this.#scrollingToLine !== undefined) {
-        this.#scrollToLine(
-          this.#scrollingToLine,
-          this.#scrollingToLineChar,
-          this.#scrollingToLineNoFocus
-        );
-      } else if (
-        this.#selections !== undefined &&
-        this.#selections.length > 0 &&
-        !this.#retainSearchPanelFocus
-      ) {
-        this.focus({ preventScroll: true });
-      }
-
-      if (this.#retainSearchPanelFocus) {
-        this.#searchPanel?.focus();
-      }
-
-      if (
-        this.#selectionAction !== undefined &&
-        this.#isLineVisible(this.#selectionAction.line) &&
-        this.#contentElement !== undefined
-      ) {
-        this.#selectionAction.render(this.#contentElement);
-      }
-    },
-    50
-  );
+    if (this.#options.__debug === true && renderRange !== undefined) {
+      const { startingLine, totalLines } = renderRange;
+      console.log(
+        '[diffs/editor] render file:',
+        fileContents.name,
+        'RenderRange:',
+        startingLine + '-' + (startingLine + totalLines),
+        'of',
+        this.#textDocument.lineCount,
+        'lines'
+      );
+    }
+  };
 
   #resetCache(): void {
     this.#lineYCache.clear();
@@ -596,6 +592,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #resetState(): void {
+    this.#gutterWidthCache = undefined;
+    this.#contentWidthCache = undefined;
     this.#fileInstance?.setSelectedLines(null);
     this.#shouldIgnoreSelectionChange = false;
     this.#overlayElements?.forEach((el) => el.remove());

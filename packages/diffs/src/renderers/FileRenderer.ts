@@ -160,20 +160,6 @@ export class FileRenderer<LAnnotation = undefined> {
     }
   }
 
-  public get isHighlighted(): boolean {
-    const cache = this.renderCache;
-    if (cache?.file == null) {
-      return false;
-    }
-    const lines = this.getOrCreateLineCache(cache.file);
-    const hasContent = cache.file.contents.length > 0;
-    const forcePlainText =
-      !hasContent ||
-      isFilePlainText(cache.file) ||
-      isFileMassive(lines.length, this.getTokenizeMaxLength());
-    return cache.highlighted || forcePlainText;
-  }
-
   public hydrate(file: FileContents): void {
     const { options } = this.getRenderOptions(file);
     const lines = this.getOrCreateLineCache(file);
