@@ -358,6 +358,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  blur(): void {
+    this.#contentElement?.blur();
+  }
+
   cleanUp(): void {
     this.#tokenizer?.cleanUp();
     this.#tokenizer = undefined;
