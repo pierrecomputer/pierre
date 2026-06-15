@@ -435,7 +435,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     });
   });
 
-  test('does not use file-level annotation height to force top render ranges', () => {
+  test('uses a top render range when measured file-level annotations are visible', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
     const fileDiff = createTwoHunkDiff();
 
@@ -449,6 +449,27 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     const range = inspect(instance).computeRenderRangeFromWindow(fileDiff, 0, {
       top: metrics.diffHeaderHeight + 1,
       bottom: metrics.diffHeaderHeight + 24,
+    });
+
+    expect(range.startingLine).toBe(0);
+    expect(range.totalLines).toBeGreaterThan(0);
+    expect(range.bufferBefore).toBe(0);
+  });
+
+  test('does not use file-level annotation height to force top render ranges when only the header is visible', () => {
+    const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
+    const fileDiff = createTwoHunkDiff();
+
+    instance.prepareCodeViewItem(fileDiff, 0, undefined, [
+      { side: 'additions', lineNumber: 0 },
+    ]);
+    inspect(instance).cache.fileAnnotationHeight = 25;
+    inspect(instance).cache.measuredHeightDeltaTotal = 25;
+    instance.height = 351;
+
+    const range = inspect(instance).computeRenderRangeFromWindow(fileDiff, 0, {
+      top: 1,
+      bottom: metrics.diffHeaderHeight,
     });
 
     expect(range.totalLines).toBe(0);

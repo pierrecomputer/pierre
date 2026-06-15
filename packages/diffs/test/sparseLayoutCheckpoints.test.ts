@@ -250,7 +250,7 @@ describe('sparse layout checkpoints', () => {
     );
   });
 
-  test('VirtualizedFile does not use file-level annotation height to force top render ranges', () => {
+  test('VirtualizedFile uses a top render range when measured file-level annotations are visible', () => {
     const file = createLargeFile();
     const instance = new VirtualizedFile({}, virtualizer, metrics);
 
@@ -265,6 +265,28 @@ describe('sparse layout checkpoints', () => {
     const range = inspectFile(instance).computeRenderRangeFromWindow(file, 0, {
       top: metrics.diffHeaderHeight + 1,
       bottom: metrics.diffHeaderHeight + 24,
+    });
+
+    expect(range.startingLine).toBe(0);
+    expect(range.totalLines).toBeGreaterThan(0);
+    expect(range.bufferBefore).toBe(0);
+  });
+
+  test('VirtualizedFile does not use file-level annotation height to force top render ranges when only the header is visible', () => {
+    const file = createLargeFile();
+    const instance = new VirtualizedFile({}, virtualizer, metrics);
+
+    instance.prepareCodeViewItem(file, 0, undefined, [{ lineNumber: 0 }]);
+    inspectFile(instance).cache.fileAnnotationHeight = 25;
+    instance.height =
+      metrics.diffHeaderHeight +
+      25 +
+      12_000 * metrics.lineHeight +
+      metrics.spacing;
+
+    const range = inspectFile(instance).computeRenderRangeFromWindow(file, 0, {
+      top: 1,
+      bottom: metrics.diffHeaderHeight,
     });
 
     expect(range.totalLines).toBe(0);
