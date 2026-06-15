@@ -12,23 +12,23 @@ const PIERRE_COLLECTION = 'pierre';
  * Pierre theme order
  */
 
-const LIGHT_PIERRE_THEMES = [
-  'pierre-light',
-  'pierre-light-soft',
-  // 'pierre-light-vibrant',
-] as const;
 const DARK_PIERRE_THEMES = [
   'pierre-dark',
   'pierre-dark-soft',
-  // 'pierre-dark-vibrant',
+  'pierre-dark-vibrant',
+  'pierre-dark-protanopia-deuteranopia',
+  'pierre-dark-tritanopia',
+] as const;
+const LIGHT_PIERRE_THEMES = [
+  'pierre-light',
+  'pierre-light-soft',
+  'pierre-light-vibrant',
+  'pierre-light-protanopia-deuteranopia',
+  'pierre-light-tritanopia',
 ] as const;
 const PIERRE_THEMES = [...LIGHT_PIERRE_THEMES, ...DARK_PIERRE_THEMES] as const;
 
 type PierreThemeName = (typeof PIERRE_THEMES)[number];
-type AvailablePierreThemeName =
-  | PierreThemeName
-  | 'pierre-dark-vibrant'
-  | 'pierre-light-vibrant';
 
 const LIGHT_PIERRE_THEME_NAMES = new Set<string>(LIGHT_PIERRE_THEMES);
 
@@ -45,10 +45,16 @@ const PIERRE_THEME_DISPLAY_NAMES = {
   'pierre-dark': 'Pierre Dark',
   'pierre-dark-soft': 'Pierre Dark Soft',
   'pierre-dark-vibrant': 'Pierre Dark Vibrant',
+  'pierre-dark-protanopia-deuteranopia':
+    'Pierre Dark Protanopia & Deuteranopia',
+  'pierre-dark-tritanopia': 'Pierre Dark Tritanopia',
   'pierre-light': 'Pierre Light',
   'pierre-light-soft': 'Pierre Light Soft',
   'pierre-light-vibrant': 'Pierre Light Vibrant',
-} as const satisfies Record<AvailablePierreThemeName, string>;
+  'pierre-light-protanopia-deuteranopia':
+    'Pierre Light Protanopia & Deuteranopia',
+  'pierre-light-tritanopia': 'Pierre Light Tritanopia',
+} as const satisfies Record<PierreThemeName, string>;
 
 /*
  * Pierre theme loaders
@@ -58,24 +64,21 @@ const PIERRE_THEME_IMPORTS = {
   'pierre-dark': () => import('@pierre/theme/pierre-dark'),
   'pierre-dark-soft': () => import('@pierre/theme/pierre-dark-soft'),
   'pierre-dark-vibrant': () => import('@pierre/theme/pierre-dark-vibrant'),
+  'pierre-dark-protanopia-deuteranopia': () =>
+    import('@pierre/theme/pierre-dark-protanopia-deuteranopia'),
+  'pierre-dark-tritanopia': () =>
+    import('@pierre/theme/pierre-dark-tritanopia'),
   'pierre-light': () => import('@pierre/theme/pierre-light'),
   'pierre-light-soft': () => import('@pierre/theme/pierre-light-soft'),
   'pierre-light-vibrant': () => import('@pierre/theme/pierre-light-vibrant'),
+  'pierre-light-protanopia-deuteranopia': () =>
+    import('@pierre/theme/pierre-light-protanopia-deuteranopia'),
+  'pierre-light-tritanopia': () =>
+    import('@pierre/theme/pierre-light-tritanopia'),
 } as const satisfies Record<
-  AvailablePierreThemeName,
+  PierreThemeName,
   () => Promise<{ default: ThemeLike }>
 >;
-
-function loadPierreTheme(name: PierreThemeName) {
-  return async () => {
-    const m = await PIERRE_THEME_IMPORTS[name]();
-    // TODO(@pierre/theme): publish each first-party theme with `name` set to
-    // its registry slug (e.g. "pierre-dark") instead of its display label
-    // ("Pierre Dark"). Until then, preserve the label as displayName metadata
-    // and patch the resolved theme's machine name before Shiki normalizes it.
-    return { ...m.default, name };
-  };
-}
 
 function createPierreTheme(name: PierreThemeName): ThemeDescriptor {
   return createTheme({
@@ -83,7 +86,7 @@ function createPierreTheme(name: PierreThemeName): ThemeDescriptor {
     collection: PIERRE_COLLECTION,
     colorScheme: pierreColorScheme(name),
     displayName: PIERRE_THEME_DISPLAY_NAMES[name],
-    load: loadPierreTheme(name),
+    load: PIERRE_THEME_IMPORTS[name],
   });
 }
 

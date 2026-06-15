@@ -8,16 +8,28 @@ describe('pierreThemes', () => {
     expect(pierreThemes.getThemeNames()).toEqual([
       'pierre-light',
       'pierre-light-soft',
+      'pierre-light-vibrant',
+      'pierre-light-protanopia-deuteranopia',
+      'pierre-light-tritanopia',
       'pierre-dark',
       'pierre-dark-soft',
+      'pierre-dark-vibrant',
+      'pierre-dark-protanopia-deuteranopia',
+      'pierre-dark-tritanopia',
     ]);
     expect(pierreThemes.getThemeNames({ colorScheme: 'light' })).toEqual([
       'pierre-light',
       'pierre-light-soft',
+      'pierre-light-vibrant',
+      'pierre-light-protanopia-deuteranopia',
+      'pierre-light-tritanopia',
     ]);
     expect(pierreThemes.getThemeNames({ colorScheme: 'dark' })).toEqual([
       'pierre-dark',
       'pierre-dark-soft',
+      'pierre-dark-vibrant',
+      'pierre-dark-protanopia-deuteranopia',
+      'pierre-dark-tritanopia',
     ]);
     expect(pierreThemes.getThemes()[0]).toMatchObject({
       name: 'pierre-light',

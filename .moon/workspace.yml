@@ -21,9 +21,14 @@ vcs:
   sync: true
   hooks:
     pre-commit:
-      # Typecheck the projects affected by staged files (and their
-      # dependents), then let lint-staged fix and re-stage style issues.
+      # Typecheck the projects affected by staged files (and their dependents).
+      # Some affected checks build committed generated files first. Run the
+      # repo formatter over the post-build worktree, including generated files
+      # that were not staged. lint-staged still runs after that because it only
+      # sees staged paths and re-stages formatter/linter fixes for files that
+      # are included in the commit.
       - 'moon exec :typecheck --affected --status staged'
+      - 'moon run root:format'
       - 'bun lint-staged'
     pre-push:
       # Git LFS guard: forwards the hook arguments and stdin to git-lfs.

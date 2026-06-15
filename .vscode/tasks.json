@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "moon: theme build",
+      "type": "shell",
+      "command": "moon",
+      "args": ["run", "theme:build"],
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

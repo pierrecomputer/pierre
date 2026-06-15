@@ -51,7 +51,7 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "@pierre/theme": "catalog:",
+    "@pierre/theme": "workspace:*",
     "@shikijs/themes": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
@@ -62,7 +62,7 @@
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "@pierre/theme": "^1.0.0",
+    "@pierre/theme": "^1.1.0",
     "@shikijs/themes": "^3.0.0 || ^4.0.0",
     "react": "^18.3.1 || ^19.0.0",
     "react-dom": "^18.3.1 || ^19.0.0",

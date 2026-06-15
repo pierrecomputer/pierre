@@ -1,0 +1,159 @@
+{
+  "name": "@pierre/theme",
+  "displayName": "Pierre Theme",
+  "version": "1.1.0",
+  "description": "Pierre theme for Shiki, VS Code, and more",
+  "categories": [
+    "Themes"
+  ],
+  "keywords": [
+    "dark",
+    "light",
+    "pierre",
+    "theme"
+  ],
+  "homepage": "https://github.com/pierrecomputer/pierre/tree/main/packages/theme",
+  "bugs": {
+    "url": "https://github.com/pierrecomputer/pierre/issues"
+  },
+  "license": "MIT",
+  "author": "Pierre Computer <support@pierre.co>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pierrecomputer/pierre.git",
+    "directory": "packages/theme"
+  },
+  "publisher": "pierrecomputer",
+  "files": [
+    "dist",
+    "themes",
+    "icon.png",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./pierre-light": {
+      "types": "./dist/pierre-light.d.mts",
+      "import": "./dist/pierre-light.mjs",
+      "default": "./dist/pierre-light.mjs"
+    },
+    "./pierre-light-protanopia-deuteranopia": {
+      "types": "./dist/pierre-light-protanopia-deuteranopia.d.mts",
+      "import": "./dist/pierre-light-protanopia-deuteranopia.mjs",
+      "default": "./dist/pierre-light-protanopia-deuteranopia.mjs"
+    },
+    "./pierre-light-soft": {
+      "types": "./dist/pierre-light-soft.d.mts",
+      "import": "./dist/pierre-light-soft.mjs",
+      "default": "./dist/pierre-light-soft.mjs"
+    },
+    "./pierre-light-tritanopia": {
+      "types": "./dist/pierre-light-tritanopia.d.mts",
+      "import": "./dist/pierre-light-tritanopia.mjs",
+      "default": "./dist/pierre-light-tritanopia.mjs"
+    },
+    "./pierre-light-vibrant": {
+      "types": "./dist/pierre-light-vibrant.d.mts",
+      "import": "./dist/pierre-light-vibrant.mjs",
+      "default": "./dist/pierre-light-vibrant.mjs"
+    },
+    "./pierre-dark": {
+      "types": "./dist/pierre-dark.d.mts",
+      "import": "./dist/pierre-dark.mjs",
+      "default": "./dist/pierre-dark.mjs"
+    },
+    "./pierre-dark-protanopia-deuteranopia": {
+      "types": "./dist/pierre-dark-protanopia-deuteranopia.d.mts",
+      "import": "./dist/pierre-dark-protanopia-deuteranopia.mjs",
+      "default": "./dist/pierre-dark-protanopia-deuteranopia.mjs"
+    },
+    "./pierre-dark-soft": {
+      "types": "./dist/pierre-dark-soft.d.mts",
+      "import": "./dist/pierre-dark-soft.mjs",
+      "default": "./dist/pierre-dark-soft.mjs"
+    },
+    "./pierre-dark-tritanopia": {
+      "types": "./dist/pierre-dark-tritanopia.d.mts",
+      "import": "./dist/pierre-dark-tritanopia.mjs",
+      "default": "./dist/pierre-dark-tritanopia.mjs"
+    },
+    "./pierre-dark-vibrant": {
+      "types": "./dist/pierre-dark-vibrant.d.mts",
+      "import": "./dist/pierre-dark-vibrant.mjs",
+      "default": "./dist/pierre-dark-vibrant.mjs"
+    },
+    "./themes/*": "./themes/*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "moon run theme:prepublish"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/culori": "catalog:",
+    "@vscode/vsce": "catalog:",
+    "culori": "catalog:",
+    "ovsx": "catalog:",
+    "typescript": "catalog:"
+  },
+  "contributes": {
+    "themes": [
+      {
+        "label": "Pierre Light",
+        "uiTheme": "vs",
+        "path": "./themes/pierre-light.json"
+      },
+      {
+        "label": "Pierre Light Protanopia & Deuteranopia",
+        "uiTheme": "vs",
+        "path": "./themes/pierre-light-protanopia-deuteranopia.json"
+      },
+      {
+        "label": "Pierre Light Soft",
+        "uiTheme": "vs",
+        "path": "./themes/pierre-light-soft.json"
+      },
+      {
+        "label": "Pierre Light Tritanopia",
+        "uiTheme": "vs",
+        "path": "./themes/pierre-light-tritanopia.json"
+      },
+      {
+        "label": "Pierre Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/pierre-dark.json"
+      },
+      {
+        "label": "Pierre Dark Protanopia & Deuteranopia",
+        "uiTheme": "vs-dark",
+        "path": "./themes/pierre-dark-protanopia-deuteranopia.json"
+      },
+      {
+        "label": "Pierre Dark Soft",
+        "uiTheme": "vs-dark",
+        "path": "./themes/pierre-dark-soft.json"
+      },
+      {
+        "label": "Pierre Dark Tritanopia",
+        "uiTheme": "vs-dark",
+        "path": "./themes/pierre-dark-tritanopia.json"
+      }
+    ]
+  },
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#141415",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.0.0"
+  }
+}

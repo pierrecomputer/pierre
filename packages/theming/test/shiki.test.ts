@@ -133,31 +133,49 @@ describe('shikiThemes descriptors', () => {
 
 describe('themes', () => {
   test('combines Pierre first, then Shiki, preserving filtered order', () => {
-    expect(themes.getThemeNames().slice(0, 6)).toEqual([
+    expect(themes.getThemeNames().slice(0, 12)).toEqual([
       'pierre-light',
       'pierre-light-soft',
+      'pierre-light-vibrant',
+      'pierre-light-protanopia-deuteranopia',
+      'pierre-light-tritanopia',
       'pierre-dark',
       'pierre-dark-soft',
+      'pierre-dark-vibrant',
+      'pierre-dark-protanopia-deuteranopia',
+      'pierre-dark-tritanopia',
       'ayu-light',
       'catppuccin-latte',
     ]);
-    expect(themes.getThemeNames({ colorScheme: 'light' }).slice(0, 4)).toEqual([
+    expect(themes.getThemeNames({ colorScheme: 'light' }).slice(0, 7)).toEqual([
       'pierre-light',
       'pierre-light-soft',
+      'pierre-light-vibrant',
+      'pierre-light-protanopia-deuteranopia',
+      'pierre-light-tritanopia',
       'ayu-light',
       'catppuccin-latte',
     ]);
-    expect(themes.getThemeNames({ colorScheme: 'dark' }).slice(0, 4)).toEqual([
+    expect(themes.getThemeNames({ colorScheme: 'dark' }).slice(0, 7)).toEqual([
       'pierre-dark',
       'pierre-dark-soft',
+      'pierre-dark-vibrant',
+      'pierre-dark-protanopia-deuteranopia',
+      'pierre-dark-tritanopia',
       'andromeeda',
       'aurora-x',
     ]);
     expect(themes.getThemeNames({ collection: 'pierre' })).toEqual([
       'pierre-light',
       'pierre-light-soft',
+      'pierre-light-vibrant',
+      'pierre-light-protanopia-deuteranopia',
+      'pierre-light-tritanopia',
       'pierre-dark',
       'pierre-dark-soft',
+      'pierre-dark-vibrant',
+      'pierre-dark-protanopia-deuteranopia',
+      'pierre-dark-tritanopia',
     ]);
   });
 

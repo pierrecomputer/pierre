@@ -75,12 +75,15 @@ jobs:
       # --summary detailed appends an end-of-log recap naming every action
       # with status, duration, and cache hash, so a failed target is readable
       # from the log tail without scrolling through interleaved task output.
+      - name: Run format
+        run: >-
+          moon run root:format-check
+
       - name: Run affected tasks
         run: >-
           moon ci --include-relations --summary detailed :build demo:build
           diffshub:build docs:build docs:build-trees-site path-store:build-demo
           :test :typecheck trees:test-e2e root:lint root:lint-css
-          root:format-check
 
   actions-pinned:
     name: Actions pinned to SHA

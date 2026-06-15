@@ -1,0 +1,75 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+tags: ['publishable']
+
+tasks:
+  build:
+    command: 'bun scripts/build.ts'
+    inputs:
+      - 'src/**/*'
+      - 'scripts/build.ts'
+      - 'tsconfig.json'
+    outputs:
+      - 'dist'
+      - 'themes/*.json'
+      - 'zed/themes/pierre.json'
+
+  # The generated-output suite reads themes/ and dist/ directly, so the
+  # package build must run before tests just like the theming dist guards.
+  test:
+    deps:
+      - 'build'
+
+  preview:
+    command: 'bun scripts/createPreviews.ts'
+    deps:
+      - 'build'
+    inputs:
+      - 'src/previews/**/*'
+      - 'scripts/createPreviews.ts'
+    outputs:
+      - 'preview'
+    options:
+      runInCI: 'skip'
+
+  dev:
+    command: 'bun --watch scripts/build.ts'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+
+  package-vsix:
+    command: 'bun scripts/buildVsCodePackage.ts'
+    deps:
+      - 'build'
+    inputs:
+      - 'package.json'
+      - 'scripts/buildVsCodePackage.ts'
+      - 'scripts/vsixPackageShim.ts'
+      - 'scripts/README.package.md'
+      - '.vscodeignore'
+      - 'themes/*.json'
+      - 'icon.png'
+    outputs:
+      - '*.vsix'
+    options:
+      runInCI: 'skip'
+
+  publish-extensions:
+    command: 'bun scripts/publishExtensions.ts'
+    deps:
+      - 'build'
+    inputs:
+      - 'package.json'
+      - 'scripts/publishExtensions.ts'
+      - 'scripts/vsixPackageShim.ts'
+      - 'scripts/README.package.md'
+      - '.vscodeignore'
+      - 'themes/*.json'
+      - 'icon.png'
+    options:
+      cache: false
+      runInCI: 'skip'

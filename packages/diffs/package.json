@@ -57,7 +57,7 @@
     "prepublishOnly": "moon run diffs:prepublish"
   },
   "dependencies": {
-    "@pierre/theme": "catalog:",
+    "@pierre/theme": "workspace:*",
     "@pierre/theming": "workspace:*",
     "@shikijs/transformers": "^3.0.0 || ^4.0.0",
     "diff": "catalog:",

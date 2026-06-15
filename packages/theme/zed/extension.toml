@@ -1,0 +1,7 @@
+id = "pierre-theme"
+name = "Pierre"
+description = "Modern light and dark color themes built by Pierre for Diffs.com, and now for you."
+version = "0.0.30"
+schema_version = 1
+authors = ["pierrecomputer"]
+repository = "https://github.com/pierrecomputer/pierre-theme"
