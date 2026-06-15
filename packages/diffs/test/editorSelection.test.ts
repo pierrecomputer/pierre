@@ -15,6 +15,7 @@ import {
   expandCollapsedSelectionToWord,
   extendSelection,
   findNexMatch,
+  getAutoSurroundReplacementTexts,
   getCaretPosition,
   getSelectionAnchor,
   mapCursorMove,
@@ -765,6 +766,104 @@ describe('createSelectionFrom', () => {
     expect(createSelectionFrom(start, current)).toEqual(
       createSelection(1, 0, 1, 6, DirectionBackward)
     );
+  });
+});
+
+describe('getAutoSurroundReplacementTexts', () => {
+  test('wraps selected text with matching quote pairs', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [createSelection(0, 0, 0, 5, DirectionForward)];
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '"')
+    ).toEqual(['"hello"']);
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, "'")
+    ).toEqual(["'hello'"]);
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '`')
+    ).toEqual(['`hello`']);
+  });
+
+  test('wraps selected text with bracket pairs', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [createSelection(0, 0, 0, 5, DirectionForward)];
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '{')
+    ).toEqual(['{hello}']);
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '[')
+    ).toEqual(['[hello]']);
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '(')
+    ).toEqual(['(hello)']);
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '<')
+    ).toEqual(['<hello>']);
+  });
+
+  test('returns undefined for collapsed selections', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello');
+    const selections = [createSelection(0, 2, 0, 2)];
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '"')
+    ).toBeUndefined();
+  });
+
+  test('returns undefined for unsupported characters', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello');
+    const selections = [createSelection(0, 0, 0, 5, DirectionForward)];
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, 'x')
+    ).toBeUndefined();
+  });
+
+  test('applies auto-surround across multiple non-collapsed selections', () => {
+    const textDocument = new TextDocument('inmemory://1', 'foo bar baz');
+    const selections = [
+      createSelection(0, 0, 0, 3, DirectionForward),
+      createSelection(0, 4, 0, 7, DirectionForward),
+    ];
+    const texts = getAutoSurroundReplacementTexts(
+      textDocument,
+      selections,
+      '"'
+    );
+    expect(texts).toEqual(['"foo"', '"bar"']);
+    const { nextSelections } = applyTextReplaceToSelections(
+      textDocument,
+      selections,
+      texts!
+    );
+    expect(textDocument.getText()).toBe('"foo" "bar" baz');
+    expect(nextSelections).toEqual([
+      createSelection(0, 5, 0, 5),
+      createSelection(0, 11, 0, 11),
+    ]);
+  });
+
+  test('places carets before closing auto-surround characters', () => {
+    const textDocument = new TextDocument('inmemory://1', 'foo bar baz');
+    const selections = [
+      createSelection(0, 0, 0, 3, DirectionForward),
+      createSelection(0, 4, 0, 7, DirectionForward),
+    ];
+    const texts = getAutoSurroundReplacementTexts(
+      textDocument,
+      selections,
+      '"'
+    );
+    const { nextSelections } = applyTextReplaceToSelections(
+      textDocument,
+      selections,
+      texts!,
+      undefined,
+      { caretOffsetFromEnd: 1 }
+    );
+    expect(textDocument.getText()).toBe('"foo" "bar" baz');
+    expect(nextSelections).toEqual([
+      createSelection(0, 4, 0, 4),
+      createSelection(0, 10, 0, 10),
+    ]);
   });
 });
 

@@ -382,7 +382,8 @@ export function applyTextReplaceToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
   texts: string[],
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+  options?: { caretOffsetFromEnd?: number }
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -488,6 +489,7 @@ export function applyTextReplaceToSelections<LAnnotation>(
     edits = [];
     let offsetDelta = 0;
     let previousEditEnd = -1;
+    const caretOffsetFromEnd = options?.caretOffsetFromEnd ?? 0;
     for (const entry of ordered) {
       if (entry.start < previousEditEnd) {
         throw new Error('Overlapping multi-selection edits are not supported');
@@ -504,7 +506,7 @@ export function applyTextReplaceToSelections<LAnnotation>(
         text: newText,
       });
       nextSelectionOffsets[entry.index] =
-        entry.start + offsetDelta + newText.length;
+        entry.start + offsetDelta + newText.length - caretOffsetFromEnd;
       offsetDelta += newText.length - (entry.end - entry.start);
     }
   }
@@ -529,6 +531,42 @@ export function applyTextReplaceToSelections<LAnnotation>(
     }
   }
   return { nextSelections, change };
+}
+
+const AUTO_SURROUND_CLOSE_CHARS: Readonly<Record<string, string>> = {
+  "'": "'",
+  '"': '"',
+  '`': '`',
+  '{': '}',
+  '[': ']',
+  '<': '>',
+  '(': ')',
+};
+
+/**
+ * Returns per-selection replacement text when typing a surround character over
+ * non-collapsed selections, matching VS Code auto-surround behavior.
+ */
+export function getAutoSurroundReplacementTexts<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  selections: EditorSelection[],
+  char: string
+): string[] | undefined {
+  if (char.length !== 1 || selections.length === 0) {
+    return undefined;
+  }
+  const closeChar = AUTO_SURROUND_CLOSE_CHARS[char];
+  if (closeChar === undefined) {
+    return undefined;
+  }
+  const replacements: string[] = [];
+  for (const selection of selections) {
+    if (isCollapsedSelection(selection)) {
+      return undefined;
+    }
+    replacements.push(char + textDocument.getText(selection) + closeChar);
+  }
+  return replacements;
 }
 
 /**
