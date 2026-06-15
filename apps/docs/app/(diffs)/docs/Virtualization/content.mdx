@@ -1,10 +1,5 @@
 ## Virtualization
 
-<Notice variant="warning" icon={<IconCiWarningFill />}>
-  Virtualization is in beta and subject to change. It is opt-in and best used
-  when rendering very large files or many diffs in one scroll view.
-</Notice>
-
 Virtualization in Diffs uses estimated line and file heights to keep large
 renders fast. It renders placeholders and spacer buffers for off-screen content,
 then renders visible lines in hunk-sized batches as you scroll.
