@@ -877,7 +877,7 @@ describe('getAutoSurroundReplacementTexts', () => {
     ).toBeUndefined();
   });
 
-  test('languageDefined is reserved and disables auto-surround', () => {
+  test('languageDefined behaves like default', () => {
     const textDocument = new TextDocument('inmemory://1', 'hello');
     const selections = [createSelection(0, 0, 0, 5, DirectionForward)];
     expect(
@@ -887,7 +887,9 @@ describe('getAutoSurroundReplacementTexts', () => {
         '"',
         'languageDefined'
       )
-    ).toBeUndefined();
+    ).toEqual(
+      getAutoSurroundReplacementTexts(textDocument, selections, '"', 'default')
+    );
     expect(
       getAutoSurroundReplacementTexts(
         textDocument,
@@ -895,7 +897,9 @@ describe('getAutoSurroundReplacementTexts', () => {
         '{',
         'languageDefined'
       )
-    ).toBeUndefined();
+    ).toEqual(
+      getAutoSurroundReplacementTexts(textDocument, selections, '{', 'default')
+    );
   });
 
   test('brackets mode only auto-surrounds bracket pairs', () => {
