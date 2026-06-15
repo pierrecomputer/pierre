@@ -1340,6 +1340,13 @@ export class VirtualizedFileDiff<
       0,
       fileHeight - headerRegion - fileAnnotationHeight - paddingBottom
     );
+    const hasFileAnnotations = this.hasFileAnnotations(fileDiff);
+    const fileAnnotationTop = fileTop + headerRegion;
+    const measuredFileAnnotationVisible =
+      fileAnnotationHeight > 0 &&
+      hasFileAnnotations &&
+      fileAnnotationTop < bottom &&
+      fileAnnotationTop + fileAnnotationHeight > top;
 
     // File is outside render window
     if (fileTop < top - fileHeight || fileTop > bottom) {
@@ -1491,12 +1498,17 @@ export class VirtualizedFileDiff<
 
     // No visible lines found
     if (firstVisibleHunk == null) {
-      return {
-        startingLine: 0,
-        totalLines: 0,
-        bufferBefore: 0,
-        bufferAfter: fileHeight - headerRegion - paddingBottom,
-      };
+      if (measuredFileAnnotationVisible) {
+        firstVisibleHunk = 0;
+        centerHunk = 0;
+      } else {
+        return {
+          startingLine: 0,
+          totalLines: 0,
+          bufferBefore: 0,
+          bufferAfter: fileHeight - headerRegion - paddingBottom,
+        };
+      }
     }
 
     // Calculate balanced startingLine centered around the viewport center

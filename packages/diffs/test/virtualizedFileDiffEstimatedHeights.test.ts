@@ -492,6 +492,25 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     expect(range.totalLines).toBeGreaterThan(0);
   });
 
+  test('does not require measured file-level annotation height to render top content', () => {
+    const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
+    const fileDiff = createHugeSingleBlockDiff(1_000_000);
+
+    instance.prepareCodeViewItem(fileDiff, 0, undefined, [
+      { side: 'additions', lineNumber: 0 },
+    ]);
+    inspect(instance).cache.fileAnnotationHeight = 0;
+
+    const range = inspect(instance).computeRenderRangeFromWindow(fileDiff, 0, {
+      top: metrics.diffHeaderHeight + 1,
+      bottom: metrics.diffHeaderHeight + 2,
+    });
+
+    expect(range.startingLine).toBe(0);
+    expect(range.totalLines).toBeGreaterThan(0);
+    expect(range.bufferBefore).toBe(0);
+  });
+
   test('uses a top render range for no-hunk diffs with file-level annotations', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
     const fileDiff = createNoHunkDiff();
