@@ -865,6 +865,60 @@ describe('getAutoSurroundReplacementTexts', () => {
       createSelection(0, 10, 0, 10),
     ]);
   });
+
+  test('never disables auto-surround for quotes and brackets', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello');
+    const selections = [createSelection(0, 0, 0, 5, DirectionForward)];
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '"', 'never')
+    ).toBeUndefined();
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '{', 'never')
+    ).toBeUndefined();
+  });
+
+  test('languageDefined is reserved and disables auto-surround', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello');
+    const selections = [createSelection(0, 0, 0, 5, DirectionForward)];
+    expect(
+      getAutoSurroundReplacementTexts(
+        textDocument,
+        selections,
+        '"',
+        'languageDefined'
+      )
+    ).toBeUndefined();
+    expect(
+      getAutoSurroundReplacementTexts(
+        textDocument,
+        selections,
+        '{',
+        'languageDefined'
+      )
+    ).toBeUndefined();
+  });
+
+  test('brackets mode only auto-surrounds bracket pairs', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello');
+    const selections = [createSelection(0, 0, 0, 5, DirectionForward)];
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '{', 'brackets')
+    ).toEqual(['{hello}']);
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '"', 'brackets')
+    ).toBeUndefined();
+  });
+
+  test('quotes mode only auto-surrounds quote pairs', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello');
+    const selections = [createSelection(0, 0, 0, 5, DirectionForward)];
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '"', 'quotes')
+    ).toEqual(['"hello"']);
+    expect(
+      getAutoSurroundReplacementTexts(textDocument, selections, '{', 'quotes')
+    ).toBeUndefined();
+  });
 });
 
 describe('applyTextChangeToSelections', () => {

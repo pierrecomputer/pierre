@@ -533,15 +533,51 @@ export function applyTextReplaceToSelections<LAnnotation>(
   return { nextSelections, change };
 }
 
-const AUTO_SURROUND_CLOSE_CHARS: Readonly<Record<string, string>> = {
-  "'": "'",
-  '"': '"',
-  '`': '`',
-  '{': '}',
-  '[': ']',
-  '<': '>',
-  '(': ')',
-};
+const SURROUNDING_PAIRS: Array<[openChar: string, closeChar: string]> = [
+  ["'", "'"],
+  ['"', '"'],
+  ['`', '`'],
+  ['{', '}'],
+  ['[', ']'],
+  ['<', '>'],
+  ['(', ')'],
+];
+
+const AUTO_SURROUND_CLOSE_CHARS = new Map(SURROUNDING_PAIRS);
+const AUTO_SURROUND_QUOTE_CHARS = new Set(["'", '"', '`']);
+const AUTO_SURROUND_BRACKET_CHARS = new Set(['{', '[', '(', '<']);
+
+export type AutoSurround =
+  | 'default'
+  | 'never'
+  | 'brackets'
+  | 'quotes'
+  | 'languageDefined';
+
+function shouldAutoSurroundChar(
+  autoSurround: AutoSurround | undefined,
+  char: string
+): boolean {
+  const mode =
+    autoSurround === undefined || autoSurround === 'default'
+      ? 'default'
+      : autoSurround === 'languageDefined' || autoSurround === 'never'
+        ? 'never'
+        : autoSurround;
+
+  if (mode === 'never') {
+    return false;
+  }
+  if (mode === 'brackets') {
+    return AUTO_SURROUND_BRACKET_CHARS.has(char);
+  }
+  if (mode === 'quotes') {
+    return AUTO_SURROUND_QUOTE_CHARS.has(char);
+  }
+  return (
+    AUTO_SURROUND_QUOTE_CHARS.has(char) || AUTO_SURROUND_BRACKET_CHARS.has(char)
+  );
+}
 
 /**
  * Returns per-selection replacement text when typing a surround character over
@@ -550,13 +586,14 @@ const AUTO_SURROUND_CLOSE_CHARS: Readonly<Record<string, string>> = {
 export function getAutoSurroundReplacementTexts<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
-  char: string
+  char: string,
+  autoSurround?: AutoSurround
 ): string[] | undefined {
   if (char.length !== 1 || selections.length === 0) {
     return undefined;
   }
-  const closeChar = AUTO_SURROUND_CLOSE_CHARS[char];
-  if (closeChar === undefined) {
+  const closeChar = AUTO_SURROUND_CLOSE_CHARS.get(char);
+  if (closeChar === undefined || !shouldAutoSurroundChar(autoSurround, char)) {
     return undefined;
   }
   const replacements: string[] = [];

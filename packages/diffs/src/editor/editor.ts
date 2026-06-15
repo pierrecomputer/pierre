@@ -22,7 +22,7 @@ import {
 import { type Marker, MarkerManager, markerSeverityDatasetKey } from './marker';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import { type MatchRange, SearchPanelWidget } from './searchPanel';
-import type { EditorSelection } from './selection';
+import type { AutoSurround, EditorSelection } from './selection';
 import {
   applyDeleteHardLineForwardToSelections,
   applyDeleteSoftLineBackwardToSelections,
@@ -87,6 +87,11 @@ import {
 export interface EditorOptions<LAnnotation> {
   /** Render rounded corners for selection ranges, default is true. */
   roundedSelection?: boolean;
+  /**
+   * Controls auto-surround when typing quotes or brackets over a selection.
+   * Default is `"default"` (both quotes and brackets).
+   */
+  autoSurround?: AutoSurround;
   /** Show the clickable selection action icon, default is disabled. */
   enabledSelectionAction?: boolean;
   /** Render the selection action widget element. */
@@ -1362,7 +1367,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         const selections = this.#selections;
         const autoSurroundTexts =
           textDocument !== undefined && selections !== undefined
-            ? getAutoSurroundReplacementTexts(textDocument, selections, text)
+            ? getAutoSurroundReplacementTexts(
+                textDocument,
+                selections,
+                text,
+                this.#options.autoSurround
+              )
             : undefined;
         this.#replaceSelectionText(
           autoSurroundTexts ?? text,
