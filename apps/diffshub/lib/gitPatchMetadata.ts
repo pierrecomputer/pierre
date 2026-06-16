@@ -1,4 +1,4 @@
-export const COMMIT_HASH_METADATA_PATTERN = /^From\s+([a-f0-9]+)\s/im;
+import { COMMIT_HASH_METADATA_PATTERN } from '@pierre/diffs';
 
 const commitPrefixEncoder = new TextEncoder();
 const commitPrefixDecoder = new TextDecoder();

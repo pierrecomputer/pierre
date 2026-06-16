@@ -97,6 +97,7 @@ export * from './utils/parseDiffDecorations';
 export * from './utils/parseDiffFromFile';
 export * from './utils/parseLineType';
 export * from './utils/parsePatchFiles';
+export * from './utils/parsePatchStream';
 export * from './utils/prefersReducedMotion';
 export * from './utils/prerenderHTMLIfNecessary';
 export * from './utils/processLine';

@@ -21,6 +21,8 @@
 // step, since there is no prototype to drop. Read a line with `lineAt` (or the
 // whole side with `joinLines`); build a `string[]` then seal it with `finishLines`
 
+import { CARRIAGE_RETURN, NEWLINE } from './byteScan';
+
 export type DiffLines = {
   /** Number of lines (useful for compatibility between the two forms) */
   length: number;
@@ -248,11 +250,6 @@ export function finishLines(
     offsets,
   };
 }
-
-// Byte values the side builder compares against while accumulating lines
-// oxfmt-ignore
-const NEWLINE         = '\n'.charCodeAt(0), // 10
-      CARRIAGE_RETURN = '\r'.charCodeAt(0); // 13
 
 // Accumulates one side's line content during a byte parse: content bytes are
 // appended into `scratch` and each line's end offset lands in `offsets`

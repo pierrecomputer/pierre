@@ -14,6 +14,16 @@ import type {
   Hunk,
   ParsedPatch,
 } from '../types';
+import {
+  BACKSLASH,
+  findNextLineStartingWith,
+  isBlankLine,
+  lineEndExclusive,
+  matchesAscii,
+  MINUS,
+  PLUS,
+  SPACE,
+} from './byteScan';
 import { cleanLastNewline } from './cleanLastNewline';
 import { detachString, releaseStringDetachBuffer } from './detachString';
 import {
@@ -1132,79 +1142,32 @@ function createContentGroup(
   };
 }
 
-// oxfmt-ignore
-const NEWLINE         = '\n'.charCodeAt(0), // 10
-      CARRIAGE_RETURN = '\r'.charCodeAt(0), // 13
-      SPACE           = ' '.charCodeAt(0),  // 32
-      PLUS            = '+'.charCodeAt(0),  // 43
-      MINUS           = '-'.charCodeAt(0),  // 45
-      AT              = '@'.charCodeAt(0),  // 64
-      BACKSLASH       = '\\'.charCodeAt(0); // 92
-
 // Only metadata slices go through this decoder; `ignoreBOM` keeps a U+FEFF at
-// the start of a slice intact, because mid-patch text can legitimately hold
-// one (only a whole-stream decode should strip the stream-leading BOM)
+// the start of a slice intact, because mid-patch text can truly hold one
+// (only a whole-stream decode should strip the stream-leading BOM)
 const metadataDecoder = new TextDecoder('utf-8', { ignoreBOM: true });
 
+// A hunk header line begins with `@@ `
 function isHunkLineAt(
   bytes: Uint8Array,
   index: number,
   length: number
 ): boolean {
-  return (
-    index + 2 < length &&
-    bytes[index] === AT &&
-    bytes[index + 1] === AT &&
-    bytes[index + 2] === SPACE
-  );
-}
-
-// End of the line starting at `index`, exclusive and including the newline
-// Adapted from: https://github.com/pierrecomputer/pierre/blob/844cf495ae18d43c45cc8bd4455224480017241a/packages/diffs/src/utils/parsePatchFiles.ts#L764-L770
-function lineEndExclusive(
-  bytes: Uint8Array,
-  index: number,
-  length: number
-): number {
-  const newlineIndex = bytes.indexOf(NEWLINE, index);
-  return newlineIndex === -1 ? length : newlineIndex + 1;
+  return matchesAscii(bytes, index, length, '@@ ');
 }
 
 // First line at or after `index` (itself a line start) that begins a hunk
 // (`@@ `), or `length` when there is none. Hunk chunks span from one such
 // line to the next
-// Adapted from: https://github.com/pierrecomputer/pierre/blob/844cf495ae18d43c45cc8bd4455224480017241a/packages/diffs/src/utils/parsePatchFiles.ts#L910-L918
 function findNextHunkLine(
   bytes: Uint8Array,
   index: number,
   length: number
 ): number {
-  let lineStart = index;
-  while (lineStart < length) {
-    if (isHunkLineAt(bytes, lineStart, length)) {
-      return lineStart;
-    }
-    lineStart = lineEndExclusive(bytes, lineStart, length);
-  }
-  return length;
+  return findNextLineStartingWith(bytes, index, length, '@@ ');
 }
 
-// A line that is only a line terminator (or empty at EOF). A run of these
-// closing a hunk chunk (format-patch separators) is dropped silently;
-// anywhere else they fall through to the invalid-line handling
-// Adapted from: https://github.com/pierrecomputer/pierre/blob/844cf495ae18d43c45cc8bd4455224480017241a/packages/diffs/src/utils/parsePatchFiles.ts#L777-L790
-function isBlankLine(bytes: Uint8Array, start: number, end: number): boolean {
-  const lineLength = end - start;
-  if (lineLength === 1) {
-    return bytes[start] === NEWLINE || bytes[start] === CARRIAGE_RETURN;
-  }
-  if (lineLength === 2) {
-    return bytes[start] === CARRIAGE_RETURN && bytes[start + 1] === NEWLINE;
-  }
-  return lineLength === 0;
-}
-
-// Adapted from: https://github.com/pierrecomputer/pierre/blob/844cf495ae18d43c45cc8bd4455224480017241a/packages/diffs/src/utils/parsePatchFiles.ts#L345-L346
+// True when every line from `index` to the next hunk header (or end) is blank
 function restOfChunkIsBlank(
   bytes: Uint8Array,
   index: number,
@@ -1228,34 +1191,5 @@ function restOfChunkIsBlank(
 // line start
 // Adapted from: https://github.com/pierrecomputer/pierre/blob/844cf495ae18d43c45cc8bd4455224480017241a/packages/diffs/src/utils/parsePatchFiles.ts#L889-L891
 function isGitDiffBytes(bytes: Uint8Array, length: number): boolean {
-  const prefix = 'diff --git';
-  let lineStart = 0;
-  while (lineStart < length) {
-    if (matchesAscii(bytes, lineStart, length, prefix)) {
-      return true;
-    }
-    const newlineIndex = bytes.indexOf(NEWLINE, lineStart);
-    if (newlineIndex === -1) {
-      return false;
-    }
-    lineStart = newlineIndex + 1;
-  }
-  return false;
-}
-
-function matchesAscii(
-  bytes: Uint8Array,
-  index: number,
-  length: number,
-  text: string
-): boolean {
-  if (index + text.length > length) {
-    return false;
-  }
-  for (let offset = 0; offset < text.length; offset++) {
-    if (bytes[index + offset] !== text.charCodeAt(offset)) {
-      return false;
-    }
-  }
-  return true;
+  return findNextLineStartingWith(bytes, 0, length, 'diff --git') < length;
 }
