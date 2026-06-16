@@ -25,7 +25,11 @@ import {
   markerSeverityDatasetKey,
 } from './marker';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
-import { type MatchRange, SearchPanelWidget } from './searchPanel';
+import {
+  type MatchRange,
+  type SearchPanelMode,
+  SearchPanelWidget,
+} from './searchPanel';
 import type { EditorSelection } from './selection';
 import {
   applyDeleteHardLineForwardToSelections,
@@ -1109,7 +1113,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     switch (command) {
       case 'openSearchPanel':
-        this.#renderSearchPanel();
+        this.#openSearchPanel('find');
+        break;
+
+      case 'openSearchReplacePanel':
+        this.#openSearchPanel('replace');
         break;
 
       case 'findNextMatch': {
@@ -2186,8 +2194,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     renderCtx.elements.set(cacheKey, selectionActionIcon);
   }
 
+  // Opens the search panel in the requested mode. If a panel is already open,
+  // it switches that panel's mode in place (preserving the current query)
+  // rather than recreating it.
+  #openSearchPanel(mode: SearchPanelMode) {
+    if (this.#searchPanel !== undefined) {
+      this.#searchPanel.setMode(mode);
+      return;
+    }
+    this.#renderSearchPanel(mode);
+  }
+
   // TODO(@ije): render search highlight
-  #renderSearchPanel() {
+  #renderSearchPanel(mode: SearchPanelMode) {
     // cleanup the existing search panel
     this.#searchPanel?.cleanup();
 
@@ -2239,9 +2258,37 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       textDocument,
       containerElement: preElement,
       defaultQuery,
+      mode,
       initialMatch,
       scrollToMatch,
-      onUpdate: (allMatches: MatchRange[]): MatchRange | undefined => {
+      applyReplace: (edits: ResolvedTextEdit[]) => {
+        if (edits.length === 0) {
+          return;
+        }
+        const change = textDocument.applyEdits(
+          edits.map((edit) => ({
+            range: {
+              start: textDocument.positionAt(edit.start),
+              end: textDocument.positionAt(edit.end),
+            },
+            newText: edit.text,
+          })),
+          true,
+          this.#selections
+        );
+        if (change !== undefined) {
+          this.#applyChange(
+            change,
+            undefined,
+            this.#applyChangeToLineAnnotations(change),
+            { skipSearchRefresh: true }
+          );
+        }
+      },
+      onUpdate: (
+        allMatches: MatchRange[],
+        options?: { syncSelection?: boolean }
+      ): MatchRange | undefined => {
         if (allMatches.length === 0) {
           this.#matches = undefined;
           this.#updateSelections(this.#selections ?? []);
@@ -2249,6 +2296,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
 
         this.#matches = allMatches;
+        if (options?.syncSelection === false) {
+          this.#updateSelections(this.#selections ?? []);
+          const primarySelection = this.#selections?.at(-1);
+          if (primarySelection !== undefined) {
+            const startOffset = textDocument.offsetAt(primarySelection.start);
+            const endOffset = textDocument.offsetAt(primarySelection.end);
+            for (const match of allMatches) {
+              if (match[0] === startOffset && match[1] === endOffset) {
+                return match;
+              }
+            }
+          }
+          return undefined;
+        }
+
         const primarySelection = this.#selections?.at(-1);
         let searchOffset = 0;
         let nextMatch: MatchRange | undefined;
@@ -2498,7 +2560,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #applyChange(
     change: TextDocumentChange,
     selections?: EditorSelection[],
-    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+    options?: { skipSearchRefresh?: boolean }
   ) {
     const fileRef = this.#getFileRef();
     const onChange = this.#options.onChange;
@@ -2547,6 +2610,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     this.#rerender(change, newLineAnnotations, renderRange, shouldUpdateBuffer);
+
+    if (
+      options?.skipSearchRefresh !== true &&
+      this.#searchPanel !== undefined &&
+      this.#matches !== undefined
+    ) {
+      this.#searchPanel.updateMatches({ syncSelection: false });
+    }
 
     if (selections !== undefined) {
       // re-render selection range and caret, focus to the editor to update the window selection,

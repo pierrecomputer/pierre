@@ -965,6 +965,64 @@ function compileSearchRegExp(
   return new RegExp(body, flags);
 }
 
+/** Expands `$&`, `$1`, `$$`, etc. in a regex replace string using a match. */
+function expandReplaceString(
+  replacement: string,
+  match: RegExpExecArray
+): string {
+  return replacement.replace(/\$([$&]|\d+)/g, (_token, group: string) => {
+    if (group === '$') {
+      return '$';
+    }
+    if (group === '&') {
+      return match[0] ?? '';
+    }
+    const index = Number(group);
+    return match[index] ?? '';
+  });
+}
+
+/**
+ * Builds the text to insert for one search match, including regex capture
+ * substitution when regex mode is enabled.
+ */
+export function buildSearchReplacementText(
+  positionAt: (offset: number) => Position,
+  offsetAt: (position: Position) => number,
+  getLineText: (line: number) => string,
+  searchParams: SearchParams,
+  matchStart: number,
+  matchEnd: number
+): string {
+  if (!searchParams.regex) {
+    return searchParams.replaceText;
+  }
+
+  const position = positionAt(matchStart);
+  const lineText = getLineText(position.line);
+  const lineStart = offsetAt({ line: position.line, character: 0 });
+  const relStart = matchStart - lineStart;
+  const matched = lineText.slice(relStart, relStart + (matchEnd - matchStart));
+
+  let pattern: RegExp;
+  try {
+    pattern = compileSearchRegExp(
+      searchParams.text,
+      true,
+      searchParams.caseSensitive
+    );
+  } catch {
+    return searchParams.replaceText;
+  }
+
+  const re = new RegExp(pattern.source, pattern.flags.replace('g', ''));
+  const match = re.exec(matched);
+  if (match === null || match[0].length !== matched.length) {
+    return searchParams.replaceText;
+  }
+  return expandReplaceString(searchParams.replaceText, match);
+}
+
 function advancePastEmptyMatch(text: string, index: number): number {
   if (index + 1 < text.length) {
     const first = text.charCodeAt(index);
