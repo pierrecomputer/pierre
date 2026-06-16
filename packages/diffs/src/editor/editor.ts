@@ -10,6 +10,7 @@ import type {
   HighlightedToken,
   RenderRange,
 } from '../types';
+import { joinLines } from '../utils/diffLines';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import {
   type EditorCommand,
@@ -611,7 +612,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       if ('contents' in fileOrDiff) {
         contents = fileOrDiff.contents;
       } else {
-        contents = fileOrDiff.additionLines.join('');
+        contents = joinLines(fileOrDiff.additionLines);
       }
       const editStack = new EditStack<LAnnotation>({
         maxEntries: this.#options.historyMaxEntries,

@@ -17,6 +17,12 @@ import type {
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
 import { detachString, releaseStringDetachBuffer } from './detachString';
+import {
+  EMPTY_DIFF_LINES,
+  finishLines,
+  isWellFormed,
+  releaseLineScratch,
+} from './diffLines';
 
 interface ParsedHunkHeader {
   additionCount: number;
@@ -35,6 +41,7 @@ export function processPatch(
     return _processPatch(data, cacheKeyPrefix, throwOnError);
   } finally {
     releaseStringDetachBuffer();
+    releaseLineScratch();
   }
 }
 
@@ -115,6 +122,7 @@ export function processFile(
     return _processFile(fileDiffString, options);
   } finally {
     releaseStringDetachBuffer();
+    releaseLineScratch();
   }
 }
 
@@ -134,6 +142,8 @@ function _processFile(
   const isPartial = oldFile == null || newFile == null;
   let deletionLineIndex = 0;
   let additionLineIndex = 0;
+  let additionLineList: string[] = [];
+  let deletionLineList: string[] = [];
   for (const hunk of hunks) {
     const lines = splitWithNewlines(hunk);
     const firstLine = lines[0];
@@ -159,6 +169,22 @@ function _processFile(
         }
         continue;
       }
+      additionLineList =
+        !isPartial && oldFile != null && newFile != null
+          ? splitWithNewlines(newFile.contents)
+          : [];
+      deletionLineList =
+        !isPartial && oldFile != null && newFile != null
+          ? splitWithNewlines(oldFile.contents)
+          : [];
+      // If either file is technically empty, then we should empty the
+      // arrays respectively
+      if (additionLineList.length === 1 && newFile?.contents === '') {
+        additionLineList.length = 0;
+      }
+      if (deletionLineList.length === 1 && oldFile?.contents === '') {
+        deletionLineList.length = 0;
+      }
       currentFile = {
         name: '',
         type: 'change',
@@ -166,24 +192,10 @@ function _processFile(
         splitLineCount: 0,
         unifiedLineCount: 0,
         isPartial,
-        additionLines:
-          !isPartial && oldFile != null && newFile != null
-            ? splitFileContents(newFile.contents)
-            : [],
-        deletionLines:
-          !isPartial && oldFile != null && newFile != null
-            ? splitFileContents(oldFile.contents)
-            : [],
+        additionLines: EMPTY_DIFF_LINES,
+        deletionLines: EMPTY_DIFF_LINES,
         cacheKey: maybeDetachOptionalString(cacheKey),
       };
-      // If either file is technically empty, then we should empty the
-      // arrays respectively
-      if (currentFile.additionLines.length === 1 && newFile?.contents === '') {
-        currentFile.additionLines.length = 0;
-      }
-      if (currentFile.deletionLines.length === 1 && oldFile?.contents === '') {
-        currentFile.deletionLines.length = 0;
-      }
 
       for (const line of lines) {
         if (line.startsWith('diff --git')) {
@@ -387,7 +399,7 @@ function _processFile(
         additionLineIndex++;
         parsedAdditionLines++;
         if (isPartial) {
-          currentFile.additionLines.push(line);
+          additionLineList.push(line);
         }
         currentContent.additions++;
         additionLines++;
@@ -408,7 +420,7 @@ function _processFile(
         deletionLineIndex++;
         parsedDeletionLines++;
         if (isPartial) {
-          currentFile.deletionLines.push(line);
+          deletionLineList.push(line);
         }
         currentContent.deletions++;
         deletionLines++;
@@ -435,8 +447,8 @@ function _processFile(
         parsedAdditionLines++;
         parsedDeletionLines++;
         if (isPartial) {
-          currentFile.deletionLines.push(line);
-          currentFile.additionLines.push(line);
+          deletionLineList.push(line);
+          additionLineList.push(line);
         }
         currentContent.lines++;
         lastLineType = 'context';
@@ -455,10 +467,10 @@ function _processFile(
           isPartial &&
           (lastLineType === 'addition' || lastLineType === 'context')
         ) {
-          const lastIndex = currentFile.additionLines.length - 1;
+          const lastIndex = additionLineList.length - 1;
           if (lastIndex >= 0) {
-            currentFile.additionLines[lastIndex] = cleanLastNewline(
-              currentFile.additionLines[lastIndex]
+            additionLineList[lastIndex] = cleanLastNewline(
+              additionLineList[lastIndex]
             );
           }
         }
@@ -466,10 +478,10 @@ function _processFile(
           isPartial &&
           (lastLineType === 'deletion' || lastLineType === 'context')
         ) {
-          const lastIndex = currentFile.deletionLines.length - 1;
+          const lastIndex = deletionLineList.length - 1;
           if (lastIndex >= 0) {
-            currentFile.deletionLines[lastIndex] = cleanLastNewline(
-              currentFile.deletionLines[lastIndex]
+            deletionLineList[lastIndex] = cleanLastNewline(
+              deletionLineList[lastIndex]
             );
           }
         }
@@ -532,12 +544,12 @@ function _processFile(
   if (
     currentFile.hunks.length > 0 &&
     !isPartial &&
-    currentFile.additionLines.length > 0 &&
-    currentFile.deletionLines.length > 0
+    additionLineList.length > 0 &&
+    deletionLineList.length > 0
   ) {
     const lastHunk = currentFile.hunks[currentFile.hunks.length - 1];
     const lastHunkEnd = lastHunk.additionStart + lastHunk.additionCount - 1;
-    const totalFileLines = currentFile.additionLines.length;
+    const totalFileLines = additionLineList.length;
     const collapsedAfter = Math.max(totalFileLines - lastHunkEnd, 0);
     currentFile.splitLineCount += collapsedAfter;
     currentFile.unifiedLineCount += collapsedAfter;
@@ -577,6 +589,21 @@ function _processFile(
   ) {
     currentFile.prevName = undefined;
   }
+  // A lone surrogate can't survive the UTF-8 round-trip; checking the whole file
+  // once here lets `finishLines` skip the per-line check on the common path
+  const losslessFileDiff = isWellFormed(fileDiffString);
+  // Seal each side's lines into one compact byte arena per file. On the
+  // partial-patch path every line is a slice of `fileDiffString` so the
+  // single surrogate check above lets the seal skip per-line checks; a
+  // full-file diff is rarer and falls back to the safe per-line check
+  currentFile.additionLines = finishLines(
+    additionLineList,
+    isPartial && losslessFileDiff
+  );
+  currentFile.deletionLines = finishLines(
+    deletionLineList,
+    isPartial && losslessFileDiff
+  );
   return currentFile;
 }
 
@@ -623,14 +650,6 @@ export function parsePatchFiles(
 
 function hasCommitMetadataBoundary(data: string): boolean {
   return data.startsWith('From ') || data.includes('\nFrom ');
-}
-
-function splitFileContents(contents: string): string[] {
-  const lines = splitWithNewlines(contents);
-  for (let index = 0; index < lines.length; index++) {
-    lines[index] = detachString(lines[index]);
-  }
-  return lines;
 }
 
 function splitWithNewlines(contents: string): string[] {
@@ -953,7 +972,7 @@ function parseRawLineType(
 
 function getParsedLineContent(rawLine: string): string {
   const processedLine = rawLine.slice(1);
-  return detachString(processedLine === '' ? '\n' : processedLine);
+  return processedLine === '' ? '\n' : processedLine;
 }
 
 function createContentGroup(

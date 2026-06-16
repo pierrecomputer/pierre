@@ -50,6 +50,7 @@ import { createFileHeaderElement } from '../utils/createFileHeaderElement';
 import { createNoNewlineElement } from '../utils/createNoNewlineElement';
 import { createPreElement } from '../utils/createPreElement';
 import { createSeparator } from '../utils/createSeparator';
+import { mutableLines, plainLines } from '../utils/diffLines';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
@@ -360,18 +361,25 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const hastLines = result.code.additionLines;
     const changedAdditionLines: number[] = [];
+    // Line edits land in the plain-string form of the side; an arena side is
+    // decoded once on the first edit and stays plain from then on
+    const additionLines = mutableLines(diff.additionLines);
+    diff.additionLines = additionLines;
     for (const [line, tokens] of dirtyLines) {
       const prev = hastLines[line] as HASTElement | undefined;
       const prevProps = prev?.properties ?? {};
       const lineText = tokens.map((a) => a[2]).join('');
-      const canSyncDiffLine = line < diff.additionLines.length;
-      const prevLine = canSyncDiffLine ? (diff.additionLines[line] ?? '') : '';
+      const canSyncDiffLine = line < additionLines.length;
+      const prevLine = canSyncDiffLine ? (additionLines.lines[line] ?? '') : '';
       const prevText = cleanLastNewline(prevLine);
       // The editor text document can expose one extra trailing empty line when
       // the file ends with a newline. Deferred tokenization must not grow
       // additionLines from that mismatch or hunk trailing context desyncs.
       if (canSyncDiffLine) {
-        diff.additionLines[line] = applyLineTextWithNewline(prevLine, lineText);
+        additionLines.lines[line] = applyLineTextWithNewline(
+          prevLine,
+          lineText
+        );
         if (prevText !== lineText) {
           changedAdditionLines.push(line);
         }
@@ -436,7 +444,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     // updateRenderCache may already have extended diff.additionLines for the
     // same edit pass, so never bail out purely on matching lengths here.
-    diff.additionLines = splitFileContents(textDocument.getText());
+    diff.additionLines = plainLines(splitFileContents(textDocument.getText()));
     const newLength = diff.additionLines.length;
 
     const additionHastLines = result.code.additionLines;

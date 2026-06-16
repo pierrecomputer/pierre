@@ -47,6 +47,7 @@ import type {
   MergeConflictRegion,
   ProcessFileConflictData,
 } from '../types';
+import { plainLines } from './diffLines';
 
 export interface ParseMergeConflictDiffFromFileResult {
   fileDiff: FileDiffMetadata;
@@ -310,8 +311,8 @@ export function parseMergeConflictDiffFromFile(
     splitLineCount: s.splitLineCount,
     unifiedLineCount: s.unifiedLineCount,
     isPartial: false,
-    deletionLines: s.deletionLines,
-    additionLines: s.additionLines,
+    deletionLines: plainLines(s.deletionLines),
+    additionLines: plainLines(s.additionLines),
     cacheKey:
       file.cacheKey != null
         ? `${file.cacheKey}:merge-conflict-diff`

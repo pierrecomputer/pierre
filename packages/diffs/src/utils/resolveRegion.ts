@@ -4,6 +4,7 @@ import type {
   FileDiffMetadata,
   Hunk,
 } from '../types';
+import { type DiffLines, finishLines, lineAt } from './diffLines';
 
 interface RegionResolutionTarget {
   hunkIndex: number;
@@ -21,6 +22,14 @@ interface CursorState {
   splitLineCount: number;
   unifiedLineCount: number;
 }
+
+type ResolvedDiffBuilder = Omit<
+  FileDiffMetadata,
+  'additionLines' | 'deletionLines'
+> & {
+  additionLines: string[];
+  deletionLines: string[];
+};
 
 export function resolveRegion(
   diff: FileDiffMetadata,
@@ -50,7 +59,7 @@ export function resolveRegion(
   }
 
   const { hunks, additionLines, deletionLines } = diff;
-  const resolvedDiff: FileDiffMetadata = {
+  const resolvedDiff: ResolvedDiffBuilder = {
     ...diff,
     hunks: [],
     deletionLines: [],
@@ -78,8 +87,9 @@ export function resolveRegion(
 
   for (const [index, hunk] of hunks.entries()) {
     processCollapsedContext(
-      diff,
       resolvedDiff,
+      deletionLines,
+      additionLines,
       cursor,
       hunk.deletionLineIndex - hunk.collapsedBefore,
       hunk.additionLineIndex - hunk.collapsedBefore,
@@ -208,20 +218,24 @@ export function resolveRegion(
   resolvedDiff.splitLineCount = cursor.splitLineCount;
   resolvedDiff.unifiedLineCount = cursor.unifiedLineCount;
 
-  return resolvedDiff;
+  return {
+    ...resolvedDiff,
+    deletionLines: finishLines(resolvedDiff.deletionLines),
+    additionLines: finishLines(resolvedDiff.additionLines),
+  };
 }
 
 function pushCollapsedContextLines(
-  diff: FileDiffMetadata,
-  deletionLines: string[],
-  additionLines: string[],
+  diff: ResolvedDiffBuilder,
+  deletionLines: DiffLines,
+  additionLines: DiffLines,
   deletionLineIndex: number,
   additionLineIndex: number,
   lineCount: number
 ) {
   for (let index = 0; index < lineCount; index++) {
-    const deletionLine = deletionLines[deletionLineIndex + index];
-    const additionLine = additionLines[additionLineIndex + index];
+    const deletionLine = lineAt(deletionLines, deletionLineIndex + index);
+    const additionLine = lineAt(additionLines, additionLineIndex + index);
     if (deletionLine == null || additionLine == null) {
       throw new Error(
         'pushCollapsedContextLines: missing collapsed context line'
@@ -236,8 +250,9 @@ function pushCollapsedContextLines(
 // not exist in the diff's line arrays. Keep the virtual row counts and file
 // positions in sync without inventing hidden lines.
 function processCollapsedContext(
-  sourceDiff: FileDiffMetadata,
-  resolvedDiff: FileDiffMetadata,
+  diff: ResolvedDiffBuilder,
+  sourceDeletionLines: DiffLines,
+  sourceAdditionLines: DiffLines,
   cursor: CursorState,
   deletionLineIndex: number,
   additionLineIndex: number,
@@ -250,9 +265,9 @@ function processCollapsedContext(
 
   if (shouldProcessContent) {
     pushCollapsedContextLines(
-      resolvedDiff,
-      sourceDiff.deletionLines,
-      sourceDiff.additionLines,
+      diff,
+      sourceDeletionLines,
+      sourceAdditionLines,
       deletionLineIndex,
       additionLineIndex,
       lineCount
@@ -269,13 +284,13 @@ function processCollapsedContext(
 
 function pushContentLinesToDiff(
   content: ContextContent | ChangeContent,
-  diff: FileDiffMetadata,
-  deletionLines: string[],
-  additionLines: string[]
+  diff: ResolvedDiffBuilder,
+  deletionLines: DiffLines,
+  additionLines: DiffLines
 ) {
   if (content.type === 'context') {
     for (let i = 0; i < content.lines; i++) {
-      const line = additionLines[content.additionLineIndex + i];
+      const line = lineAt(additionLines, content.additionLineIndex + i);
       if (line == null) {
         console.error({ additionLines, content, i });
         throw new Error('pushContentLinesToDiff: Context line does not exist');
@@ -287,7 +302,7 @@ function pushContentLinesToDiff(
     const len = Math.max(content.deletions, content.additions);
     for (let i = 0; i < len; i++) {
       if (i < content.deletions) {
-        const line = deletionLines[content.deletionLineIndex + i];
+        const line = lineAt(deletionLines, content.deletionLineIndex + i);
         if (line == null) {
           console.error({ deletionLines, content, i });
           throw new Error(
@@ -297,7 +312,7 @@ function pushContentLinesToDiff(
         diff.deletionLines.push(line);
       }
       if (i < content.additions) {
-        const line = additionLines[content.additionLineIndex + i];
+        const line = lineAt(additionLines, content.additionLineIndex + i);
         if (line == null) {
           console.error({ additionLines, content, i });
           throw new Error(
@@ -313,13 +328,13 @@ function pushContentLinesToDiff(
 function pushResolveLinesToDiff(
   resolution: 'deletions' | 'additions' | 'both',
   content: ChangeContent,
-  diff: FileDiffMetadata,
-  deletionLines: string[],
-  additionLines: string[]
+  diff: ResolvedDiffBuilder,
+  deletionLines: DiffLines,
+  additionLines: DiffLines
 ) {
   if (resolution === 'deletions' || resolution === 'both') {
     for (let i = 0; i < content.deletions; i++) {
-      const line = deletionLines[content.deletionLineIndex + i];
+      const line = lineAt(deletionLines, content.deletionLineIndex + i);
       if (line == null) {
         console.error({ deletionLines, content, i });
         throw new Error('pushResolveLinesToDiff: Deletion line does not exist');
@@ -330,7 +345,7 @@ function pushResolveLinesToDiff(
   }
   if (resolution === 'additions' || resolution === 'both') {
     for (let i = 0; i < content.additions; i++) {
-      const line = additionLines[content.additionLineIndex + i];
+      const line = lineAt(additionLines, content.additionLineIndex + i);
       if (line == null) {
         console.error({ additionLines, content, i });
         throw new Error('pushResolveLinesToDiff: Addition line does not exist');

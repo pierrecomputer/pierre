@@ -7,6 +7,7 @@ import type {
   Hunk,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
+import { joinLineRange, joinLines, lineAt } from './diffLines';
 import { parseDiffFromFile } from './parseDiffFromFile';
 import { hasTrailingContextMismatch } from './virtualDiffLayout';
 
@@ -28,11 +29,11 @@ export function recomputeDiffHunks(
   const recomputed = parseDiffFromFile(
     {
       name: diff.prevName ?? diff.name,
-      contents: diff.deletionLines.join(''),
+      contents: joinLines(diff.deletionLines),
     },
     {
       name: diff.name,
-      contents: diff.additionLines.join(''),
+      contents: joinLines(diff.additionLines),
       lang: diff.lang,
     },
     parseDiffOptions
@@ -119,8 +120,8 @@ export function updateDiffHunks(
     });
   }
   for (const line of changedLines) {
-    const additionLine = diff.additionLines[line];
-    const deletionLine = diff.deletionLines[line];
+    const additionLine = lineAt(diff.additionLines, line);
+    const deletionLine = lineAt(diff.deletionLines, line);
     if (additionLine == null || deletionLine == null) {
       return applyHunkUpdateResult(
         diff,
@@ -217,11 +218,13 @@ function reparseHunkRegion(
     return false;
   }
 
-  const deletionSlice = diff.deletionLines.slice(
+  const deletionSlice = joinLineRange(
+    diff.deletionLines,
     hunk.deletionLineIndex,
     hunk.deletionLineIndex + hunk.deletionCount
   );
-  const additionSlice = diff.additionLines.slice(
+  const additionSlice = joinLineRange(
+    diff.additionLines,
     hunk.additionLineIndex,
     hunk.additionLineIndex + hunk.additionCount
   );
@@ -229,11 +232,11 @@ function reparseHunkRegion(
   const reparsed = parseDiffFromFile(
     {
       name: diff.prevName ?? diff.name,
-      contents: deletionSlice.join(''),
+      contents: deletionSlice,
     },
     {
       name: diff.name,
-      contents: additionSlice.join(''),
+      contents: additionSlice,
       lang: diff.lang,
     },
     { ...parseDiffOptions, context: 0 }
@@ -265,8 +268,14 @@ function syncHunkNoEOFCRFromFullFile(
     return;
   }
 
-  const lastAdditionLine = diff.additionLines.at(-1);
-  const lastDeletionLine = diff.deletionLines.at(-1);
+  const lastAdditionLine = lineAt(
+    diff.additionLines,
+    diff.additionLines.length - 1
+  );
+  const lastDeletionLine = lineAt(
+    diff.deletionLines,
+    diff.deletionLines.length - 1
+  );
   hunk.noEOFCRAdditions =
     lastAdditionLine != null &&
     lastAdditionLine !== '' &&

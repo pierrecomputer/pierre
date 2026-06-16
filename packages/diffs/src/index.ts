@@ -76,6 +76,7 @@ export * from './utils/createWindowFromScrollPosition';
 export * from './utils/cssWrappers';
 export * from './utils/detachString';
 export * from './utils/diffAcceptRejectHunk';
+export * from './utils/diffLines';
 export * from './utils/formatCSSVariablePrefix';
 export * from './utils/getFiletypeFromFileName';
 export * from './utils/getHighlighterOptions';

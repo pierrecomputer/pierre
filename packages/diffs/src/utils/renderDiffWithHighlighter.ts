@@ -21,6 +21,7 @@ import type {
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
 import { createTransformerWithState } from './createTransformerWithState';
+import { lineAt } from './diffLines';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
@@ -135,8 +136,8 @@ export function renderDiffWithHighlighter(
 
       if (type === 'change' && additionLine != null && deletionLine != null) {
         computeLineDiffDecorations({
-          additionLine: diff.additionLines[additionLine.lineIndex],
-          deletionLine: diff.deletionLines[deletionLine.lineIndex],
+          additionLine: lineAt(diff.additionLines, additionLine.lineIndex),
+          deletionLine: lineAt(diff.deletionLines, deletionLine.lineIndex),
           deletionLineIndex: bucket.deletionContent.length,
           additionLineIndex: bucket.additionContent.length,
           deletionDecorations: bucket.deletionDecorations,
@@ -148,7 +149,7 @@ export function renderDiffWithHighlighter(
 
       if (deletionLine != null) {
         appendContent(
-          diff.deletionLines[deletionLine.lineIndex],
+          lineAt(diff.deletionLines, deletionLine.lineIndex),
           deletionLine.lineIndex,
           bucket.deletionSegments,
           bucket.deletionContent
@@ -166,7 +167,7 @@ export function renderDiffWithHighlighter(
 
       if (additionLine != null) {
         appendContent(
-          diff.additionLines[additionLine.lineIndex],
+          lineAt(diff.additionLines, additionLine.lineIndex),
           additionLine.lineIndex,
           bucket.additionSegments,
           bucket.additionContent
