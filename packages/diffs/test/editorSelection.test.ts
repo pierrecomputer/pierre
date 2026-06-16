@@ -836,17 +836,14 @@ describe('getAutoSurroundReplacementTexts', () => {
     );
     expect(textDocument.getText()).toBe('"foo" "bar" baz');
     expect(nextSelections).toEqual([
-      createSelection(0, 5, 0, 5),
-      createSelection(0, 11, 0, 11),
+      createSelection(0, 1, 0, 4, DirectionForward),
+      createSelection(0, 7, 0, 10, DirectionForward),
     ]);
   });
 
-  test('places carets before closing auto-surround characters', () => {
-    const textDocument = new TextDocument('inmemory://1', 'foo bar baz');
-    const selections = [
-      createSelection(0, 0, 0, 3, DirectionForward),
-      createSelection(0, 4, 0, 7, DirectionForward),
-    ];
+  test('reselects wrapped text after auto-surround', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello world');
+    const selections = [createSelection(0, 0, 0, 11, DirectionForward)];
     const texts = getAutoSurroundReplacementTexts(
       textDocument,
       selections,
@@ -855,14 +852,11 @@ describe('getAutoSurroundReplacementTexts', () => {
     const { nextSelections } = applyTextReplaceToSelections(
       textDocument,
       selections,
-      texts!,
-      undefined,
-      { caretOffsetFromEnd: 1 }
+      texts!
     );
-    expect(textDocument.getText()).toBe('"foo" "bar" baz');
+    expect(textDocument.getText()).toBe('"hello world"');
     expect(nextSelections).toEqual([
-      createSelection(0, 4, 0, 4),
-      createSelection(0, 10, 0, 10),
+      createSelection(0, 1, 0, 12, DirectionForward),
     ]);
   });
 

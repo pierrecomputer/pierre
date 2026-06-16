@@ -1374,12 +1374,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 this.#options.autoSurround
               )
             : undefined;
-        this.#replaceSelectionText(
-          autoSurroundTexts ?? text,
-          autoSurroundTexts !== undefined
-            ? { caretOffsetFromEnd: 1 }
-            : undefined
-        );
+        this.#replaceSelectionText(autoSurroundTexts ?? text);
         break;
       }
       case 'insertParagraph':
@@ -2256,10 +2251,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   // replace the selection text
-  #replaceSelectionText(
-    text: string | string[],
-    options?: { caretOffsetFromEnd?: number }
-  ) {
+  #replaceSelectionText(text: string | string[]) {
     const selections = this.#selections;
     if (selections === undefined) {
       return;
@@ -2275,8 +2267,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             textDocument,
             selections,
             text,
-            this.#lineAnnotations,
-            options
+            this.#lineAnnotations
           )
         : applyTextChangeToSelections<LAnnotation>(
             textDocument,
