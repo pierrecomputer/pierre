@@ -212,13 +212,14 @@
   top: 0;
   left: -1lh;
   z-index: 10;
-  width: 1lh;
-  height: 1lh;
-  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: color-mix(in lab, var(--diffs-fg) 40%, var(--diffs-bg));
+  width: 1lh;
+  height: 1lh;
+  color: color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg));
+  background-color: color-mix(in lab, var(--diffs-fg) 12%, var(--diffs-bg));
+  border-radius: 6px;
   transition:
     background-color 0.1s ease-in-out,
     color 0.1s ease-in-out;
@@ -229,8 +230,8 @@
   visibility: visible;
 }
 [data-selection-action-icon]:hover {
-  background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
   color: var(--diffs-fg);
+  background-color: color-mix(in lab, var(--diffs-fg) 18%, var(--diffs-bg));
 }
 [data-selection-action] {
   padding-inline-end: 1ch;
