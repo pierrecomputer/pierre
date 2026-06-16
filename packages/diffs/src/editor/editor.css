@@ -270,7 +270,7 @@
 }
 /* Reserve room on the right of the find input for the overlaid toggles. */
 [data-input-box][data-find] input {
-  padding-inline-end: 70px;
+  padding-inline-end: 72px;
 }
 [data-input-box] input::selection {
   background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
@@ -300,7 +300,6 @@
 [data-search-nav] {
   display: flex;
   align-items: center;
-  gap: 1px;
 }
 [data-search-panel] svg {
   display: block;
