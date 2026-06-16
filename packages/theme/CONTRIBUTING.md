@@ -103,6 +103,21 @@ normal-vs-simulated CVD proof sheet.
 | `moonx theme:package-vsix --ignore-ci-checks` | Temporarily applies the VSIX package name/README shim, then writes the `.vsix` file at the project root |
 | `moonx theme:dev --ignore-ci-checks`          | Rebuilds themes on file change                                                                          |
 
+## Publishing
+
+Publishing is manual and deliberate: there is no release-triggered workflow, so
+nothing ships without a maintainer running it. Release each target on its own
+with the relevant token in the environment:
+
+- [ ] Bump the version in `package.json`
+- [ ] **npm** — `moonx theme:publish-npm`
+- [ ] **VS Marketplace** — `VSCE_PAT=<token> moonx theme:publish-vsce`
+- [ ] **Open VSX** — `OVSX_PAT=<token> moonx theme:publish-ovsx`
+
+`build` runs automatically as a dependency of each task. The two extension
+targets reuse the VSIX shim, so they publish the unscoped `pierre-theme`
+extension with the package README.
+
 ## Credit
 
 This theme was built on top of

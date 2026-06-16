@@ -58,13 +58,39 @@ tasks:
     options:
       runInCI: 'skip'
 
-  publish-extensions:
-    command: 'bun scripts/publishExtensions.ts'
+  # Publishing is manual: there is no release-triggered workflow. A maintainer
+  # runs these directly with the relevant token in the environment.
+  publish-npm:
+    command: 'bun publish --access public'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  publish-vsce:
+    command: 'bun scripts/publishVsce.ts'
     deps:
       - 'build'
     inputs:
       - 'package.json'
-      - 'scripts/publishExtensions.ts'
+      - 'scripts/publishVsce.ts'
+      - 'scripts/vsixPackageShim.ts'
+      - 'scripts/README.package.md'
+      - '.vscodeignore'
+      - 'themes/*.json'
+      - 'icon.png'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  publish-ovsx:
+    command: 'bun scripts/publishOvsx.ts'
+    deps:
+      - 'build'
+    inputs:
+      - 'package.json'
+      - 'scripts/publishOvsx.ts'
       - 'scripts/vsixPackageShim.ts'
       - 'scripts/README.package.md'
       - '.vscodeignore'

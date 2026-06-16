@@ -2,28 +2,19 @@ import { execFileSync } from 'node:child_process';
 
 import { packageRoot, withVsixPackageShim } from './vsixPackageShim';
 
+// Manual VS Marketplace publish. Publishing is intentionally not automated on
+// release: it runs only when a maintainer invokes `moon run theme:publish-vsce`
+// with a VS Marketplace token in VSCE_PAT.
 const vscePat = process.env.VSCE_PAT;
-const ovsxPat = process.env.OVSX_PAT;
 
 if (vscePat === undefined || vscePat.length === 0) {
   throw new Error('VSCE_PAT must be set to publish the VS Code extension');
 }
 
-if (ovsxPat === undefined || ovsxPat.length === 0) {
-  throw new Error('OVSX_PAT must be set to publish the Open VSX extension');
-}
-
 withVsixPackageShim(() => {
-  const env = { ...process.env, OVSX_PAT: ovsxPat, VSCE_PAT: vscePat };
-
   execFileSync('bunx', ['vsce', 'publish', '--no-dependencies'], {
     cwd: packageRoot,
-    env,
-    stdio: 'inherit',
-  });
-  execFileSync('bunx', ['ovsx', 'publish', '--no-dependencies'], {
-    cwd: packageRoot,
-    env,
+    env: { ...process.env, VSCE_PAT: vscePat },
     stdio: 'inherit',
   });
 });
