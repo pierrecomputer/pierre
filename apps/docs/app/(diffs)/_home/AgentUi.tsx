@@ -316,7 +316,7 @@ export function AgentUi({
                     themeType: 'dark',
                     disableFileHeader: true,
                     overflow: 'wrap',
-                    diffStyle: 'unified',
+                    diffStyle: 'split',
                   }}
                   prerenderedHTML={activePrerenderedHTML}
                   contentEditable
