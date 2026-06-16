@@ -838,4 +838,56 @@ describe('EditorTokenizer', () => {
     expect(tokenizeLineCount).toBe(2);
     expect([...dirtyLines.keys()]).toEqual([0, 750]);
   });
+
+  test('pins a dual-theme surface to an explicit themeType instead of following the page', () => {
+    const originalMatchMedia = globalThis.window.matchMedia;
+    let mediaListenerCount = 0;
+    globalThis.window.matchMedia = (() =>
+      ({
+        addEventListener: () => {
+          mediaListenerCount++;
+        },
+        addListener: () => {},
+        dispatchEvent: () => false,
+        // The page prefers dark, but the surface is forced light: the tokenizer
+        // must ignore this and emit the light theme so its tokens match the
+        // forced-light SSR markup.
+        matches: true,
+        media: '(prefers-color-scheme: dark)',
+        onchange: null,
+        removeEventListener: () => {},
+        removeListener: () => {},
+      }) as MediaQueryList) as typeof window.matchMedia;
+
+    try {
+      const grammar = {
+        tokenizeLine2(lineText: string, ruleStack: StateStack) {
+          return {
+            tokens: new Uint32Array([0, 0]),
+            ruleStack,
+            stoppedEarly: false,
+            lineText,
+          };
+        },
+      } as unknown as IGrammar;
+      const textDocument = new TextDocument('test.ts', 'line 0', 'typescript');
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({
+          getLanguage: () => grammar,
+        }),
+        textDocument,
+        codeOptions: {
+          theme: { light: 'light-theme', dark: 'dark-theme' },
+          themeType: 'light',
+        },
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+
+      expect(tokenizer.themeType).toBe('light');
+      expect(mediaListenerCount).toBe(0);
+    } finally {
+      globalThis.window.matchMedia = originalMatchMedia;
+    }
+  });
 });

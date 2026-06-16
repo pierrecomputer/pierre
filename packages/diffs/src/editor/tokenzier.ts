@@ -111,7 +111,12 @@ export class EditorTokenizer {
     } else {
       this.#themeType = themeType;
     }
-    if (typeof theme !== 'string') {
+    // Only track the document/system color scheme when the surface follows it
+    // (`themeType: 'system'`). A surface pinned to an explicit 'dark'/'light'
+    // theme keeps that theme regardless of the page, so re-tokenizing after an
+    // edit must emit the same `--diffs-token-{theme}` variable the SSR markup
+    // used; otherwise the edited tokens fall back to the default foreground.
+    if (typeof theme !== 'string' && themeType === 'system') {
       const observer = new MutationObserver((mutations) => {
         for (const { type, attributeName } of mutations) {
           if (
