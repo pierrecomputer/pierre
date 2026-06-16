@@ -248,3 +248,146 @@ export function finishLines(
     offsets,
   };
 }
+
+// Byte values the side builder compares against while accumulating lines
+// oxfmt-ignore
+const NEWLINE         = '\n'.charCodeAt(0), // 10
+      CARRIAGE_RETURN = '\r'.charCodeAt(0); // 13
+
+// Accumulates one side's line content during a byte parse: content bytes are
+// appended into `scratch` and each line's end offset lands in `offsets`
+// (entry 0 stays 0), so sealing is a copy of exactly the bytes written plus
+// an offsets downcast to the smallest element width that fits
+export interface SideBuilder {
+  // acutal byte buffer for a side's content
+  scratch: Uint8Array;
+  // line-end offsets into `scratch` (always 0 at index 0, then the end of each line)
+  offsets: Uint32Array;
+  // line count
+  count: number;
+  // next write position in `scratch`
+  position: number;
+}
+
+function createSideBuilder(byteCapacity: number): SideBuilder {
+  return {
+    scratch: new Uint8Array(byteCapacity),
+    offsets: new Uint32Array(256),
+    count: 0,
+    position: 0,
+  };
+}
+
+// Streamed parses call processFileBytes once per file, so we keep the two
+// side builders at module scope and reuse them across calls: the typical file
+// is a few KB and would otherwise pay a fresh zeroed allocation per side per
+// file. Files larger than the cap get a throwaway builder instead, so the
+// persistent footprint stays bounded (at most ~2MB across both sides) without
+// needing a release hook
+const SIDE_SCRATCH_BYTE_CAP = 1 << 20; // 1 MiB
+// we start with 64KiB scratch buffers, which should be enough for most files (?)
+const persistentAdditionSide = createSideBuilder(1 << 16);
+const persistentDeletionSide = createSideBuilder(1 << 16);
+
+// When a file's content is getting parsed, the builder is reset to empty
+// (count = 0, position = 0) and its scratch buffer is grown if necessary, but
+// never shrunk (up to the cap). Larger files get disposable builders instead,
+// see comments above
+export function acquireSideBuilder(
+  side: 'addition' | 'deletion',
+  byteCapacity: number
+): SideBuilder {
+  // Disposable builders, will get GC'd after the file is done
+  if (byteCapacity > SIDE_SCRATCH_BYTE_CAP) {
+    return createSideBuilder(byteCapacity);
+  }
+  const persistent =
+    side === 'addition' ? persistentAdditionSide : persistentDeletionSide;
+  if (persistent.scratch.length < byteCapacity) {
+    let capacity = persistent.scratch.length * 2;
+    while (capacity < byteCapacity) {
+      capacity *= 2;
+    }
+    persistent.scratch = new Uint8Array(capacity);
+  }
+  persistent.count = 0;
+  persistent.position = 0;
+  return persistent;
+}
+
+function ensureOffsetCapacity(builder: SideBuilder): void {
+  if (builder.count + 2 > builder.offsets.length) {
+    const grown = new Uint32Array(builder.offsets.length * 2);
+    grown.set(builder.offsets);
+    builder.offsets = grown;
+  }
+}
+
+// Append one line's content bytes. An empty content slice stores a single
+// newline, so a bare `+` line reads back as '\n' like every other line-end
+export function appendLine(
+  builder: SideBuilder,
+  source: Uint8Array,
+  start: number,
+  end: number
+): void {
+  ensureOffsetCapacity(builder);
+  const { scratch } = builder;
+  let { position } = builder;
+  if (start === end) {
+    scratch[position++] = NEWLINE;
+  } else {
+    // This will allocate a new Uint8Array for each line (+ call cost). We
+    // could avoid that by copying the bytes one by one with a loop, but that's
+    // not very readable and it's probably not worth on huge lines, so probably
+    // not worth the micro-optimization. I don't know what I think about this
+    // tradeoff of having only this though
+    scratch.set(source.subarray(start, end), position);
+    position += end - start;
+  }
+  builder.position = position;
+  builder.offsets[++builder.count] = position;
+}
+
+// Strip one trailing newline (and a preceding carriage return) from the last
+// appended line (the byte equivalent of running `cleanLastNewline` on the
+// last entry of the side's line list when a `\ No newline at end of file`
+// marker arrives)
+// Adapted from: https://github.com/pierrecomputer/pierre/blob/844cf495ae18d43c45cc8bd4455224480017241a/packages/diffs/src/utils/cleanLastNewline.ts#L1-L10
+export function trimLastLineNewline(builder: SideBuilder): void {
+  if (builder.count === 0) {
+    return;
+  }
+  const lineStart = builder.offsets[builder.count - 1];
+  let { position } = builder;
+  if (position > lineStart && builder.scratch[position - 1] === NEWLINE) {
+    position--;
+    if (
+      position > lineStart &&
+      builder.scratch[position - 1] === CARRIAGE_RETURN
+    ) {
+      position--;
+    }
+  }
+  builder.position = position;
+  builder.offsets[builder.count] = position;
+}
+
+export function sealSide(builder: SideBuilder): DiffLines {
+  const { count, position } = builder;
+  // Same width thresholds as `finishLines`, but chosen from the actual byte
+  // length instead of its `charTotal * 3` upper bound, so a side never gets a
+  // bigger table than it needs
+  const offsets =
+    position < 0x100
+      ? new Uint8Array(count + 1)
+      : position < 0x10000
+        ? new Uint16Array(count + 1)
+        : new Uint32Array(count + 1);
+  offsets.set(builder.offsets.subarray(0, count + 1));
+  return {
+    length: count,
+    bytes: builder.scratch.slice(0, position),
+    offsets,
+  };
+}
