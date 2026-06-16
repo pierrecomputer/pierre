@@ -5,8 +5,9 @@ export type SVGSpriteNames =
   | 'close'
   | 'quick'
   | 'regex'
-  | 'search'
-  | 'whole-word';
+  | 'whole-word'
+  | 'replace'
+  | 'replace-all';
 
 // Icon artwork is sourced from `@pierre/icons` (IconSearch, IconX,
 // IconArrowRightShort, IconType, IconTypeWord, IconRegex) so the editor matches
@@ -16,9 +17,6 @@ export type SVGSpriteNames =
 // omits an outer viewBox so each symbol scales to fill the requested size
 // regardless of its intrinsic coordinate system.
 export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0" height="0">
-  <symbol id="diffs-editor-icon-search" viewBox="0 0 16 16">
-    <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M10.7747 12.8961C9.68558 13.5948 8.39011 14 7 14C3.13401 14 0 10.866 0 7C0 3.13401 3.13401 0 7 0C10.866 0 14 3.13401 14 7C14 8.39011 13.5948 9.68558 12.8961 10.7747L15.5607 13.4393C16.1464 14.0251 16.1464 14.9749 15.5607 15.5607C14.9749 16.1464 14.0251 16.1464 13.4393 15.5607L10.7747 12.8961ZM7 1.5C10.0376 1.5 12.5 3.96243 12.5 7C12.5 10.0376 10.0376 12.5 7 12.5C3.96243 12.5 1.5 10.0376 1.5 7C1.5 3.96243 3.96243 1.5 7 1.5Z"></path>
-  </symbol>
   <symbol id="diffs-editor-icon-close" viewBox="0 0 16 16">
     <path fill="currentColor" d="M3.21967 3.21967C3.51256 2.92678 3.98744 2.92678 4.28033 3.21967L8 6.93934L11.7197 3.21967C12.0126 2.92678 12.4874 2.92678 12.7803 3.21967C13.0732 3.51256 13.0732 3.98744 12.7803 4.28033L9.06066 8L12.7803 11.7197C13.0732 12.0126 13.0732 12.4874 12.7803 12.7803C12.4874 13.0732 12.0126 13.0732 11.7197 12.7803L8 9.06066L4.28033 12.7803C3.98744 13.0732 3.51256 13.0732 3.21967 12.7803C2.92678 12.4874 2.92678 12.0126 3.21967 11.7197L6.93934 8L3.21967 4.28033C2.92678 3.98744 2.92678 3.51256 3.21967 3.21967Z"></path>
   </symbol>
@@ -43,6 +41,16 @@ export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0
   </symbol>
   <symbol id="diffs-editor-icon-quick" viewBox="0 0 20 20">
     <polygon points="11 3 9 9 16 9 9 17 11 11 4 11 11 3" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></polygon>
+  </symbol>
+  <symbol id="diffs-editor-icon-replace" viewBox="0 0 20 20">
+   <path d="m3,11h11c1.657,0,3-1.343,3-3v-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+   <polyline points="7 7 3 11 7 15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></polyline>
+  </symbol>
+  <symbol id="diffs-editor-icon-replace-all" viewBox="0 0 20 20">
+    <path d="m16,6H6c-1.657,0-3,1.343-3,3v1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    <polyline points="13.25 8.75 16 6 13.25 3.25" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></polyline>
+    <path d="m4,14h10c1.657,0,3-1.343,3-3v-1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+    <polyline points="6.75 11.25 4 14 6.75 16.75" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></polyline>
   </symbol>
 </svg>`;
 
