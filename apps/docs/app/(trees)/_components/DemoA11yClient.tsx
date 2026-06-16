@@ -13,6 +13,7 @@ import { TREE_NEW_VIEWPORT_HEIGHTS } from '../_lib/dimensions';
 import { getDefaultFileTreePanelClass } from './tree-examples/demo-data';
 import { TreeExampleSection } from './tree-examples/TreeExampleSection';
 import { FeatureHeader } from '@/components/FeatureHeader';
+import { ShortcutKeys } from '@/components/Shortcut';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 const a11yStyle: CSSProperties = {
@@ -21,24 +22,33 @@ const a11yStyle: CSSProperties = {
 };
 const PRESELECTED_PATH = 'package.json';
 
-type KeyboardShortcut = {
+interface KeyboardShortcut {
+  // Keys shown in order, each as its own `<kbd>`; the last is the main key.
+  keys: readonly string[];
   description: string;
-} & ({ key: string; keys?: never } | { key?: never; keys: readonly string[] });
+  // When true, lead with the platform modifier (Cmd on macOS, Ctrl elsewhere),
+  // resolved client-side by `ShortcutKeys`.
+  mod?: boolean;
+}
 
 const KEYBOARD_SHORTCUTS: readonly KeyboardShortcut[] = [
   { keys: ['↑', '↓'], description: 'Move focus between items' },
-  { key: '→', description: 'Expand folder or move to first child' },
-  { key: '←', description: 'Collapse folder or move to parent' },
+  { keys: ['→'], description: 'Expand folder or move to first child' },
+  { keys: ['←'], description: 'Collapse folder or move to parent' },
   {
     keys: ['Enter', 'Space'],
     description: 'Select focused item; toggle folder',
   },
   {
-    keys: ['⌘/Ctrl', 'Space'],
+    keys: ['Space'],
+    mod: true,
     description: 'Add or remove focused item from selection',
   },
-  { key: 'a–z', description: 'Type-ahead to jump by name' },
-  { key: 'Tab', description: 'Focus in/out of tree, between search and tree' },
+  { keys: ['a–z'], description: 'Type-ahead to jump by name' },
+  {
+    keys: ['Tab'],
+    description: 'Focus in/out of tree, between search and tree',
+  },
 ];
 
 interface DemoA11yClientProps {
@@ -100,31 +110,19 @@ export function DemoA11yClient({ preloadedData }: DemoA11yClientProps) {
               </tr>
             </thead>
             <tbody>
-              {KEYBOARD_SHORTCUTS.map(({ key, keys, description }) => {
-                const shortcutKeys = keys ?? [key];
-                return (
-                  <tr
-                    key={shortcutKeys.join('+')}
-                    className="border-b border-[var(--color-border)] last:border-b-0"
-                  >
-                    <td className="px-4 py-2">
-                      <span className="inline-flex flex-wrap gap-1">
-                        {shortcutKeys.map((k) => (
-                          <kbd
-                            key={k}
-                            className="bg-muted rounded-sm border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-xs shadow-[0_1px_0_var(--color-border)]"
-                          >
-                            {k}
-                          </kbd>
-                        ))}
-                      </span>
-                    </td>
-                    <td className="text-muted-foreground px-4 py-2">
-                      {description}
-                    </td>
-                  </tr>
-                );
-              })}
+              {KEYBOARD_SHORTCUTS.map(({ keys, mod, description }) => (
+                <tr
+                  key={keys.join('+')}
+                  className="border-b border-[var(--color-border)] last:border-b-0"
+                >
+                  <td className="px-4 py-2">
+                    <ShortcutKeys keys={keys} mod={mod} />
+                  </td>
+                  <td className="text-muted-foreground px-4 py-2">
+                    {description}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
