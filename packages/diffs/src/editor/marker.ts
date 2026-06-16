@@ -223,7 +223,7 @@ export class MarkerRenderer {
       return;
     }
 
-    const { start, message } = this.#markers[hoveredMarkerIndex];
+    const { start, message, severity } = this.#markers[hoveredMarkerIndex];
     const { line, character } = start;
     const { getCharX, getLineY, getLineHeight } = this.#editor;
     const [left, wrapLine] = getCharX(line, character);
@@ -234,6 +234,7 @@ export class MarkerRenderer {
 
     if (popup !== undefined) {
       popup.style.transform = transform;
+      popup.dataset.markerSeverity = severity;
       const content = popup.firstElementChild as HTMLElement | null;
       if (content?.dataset.markerMessage !== undefined) {
         if (typeof message === 'string') {
@@ -251,7 +252,11 @@ export class MarkerRenderer {
     this.#markerPopupElement = h(
       'div',
       {
-        dataset: ['editorWidget', 'markerPopup'],
+        dataset: {
+          editorWidget: '',
+          markerPopup: '',
+          markerSeverity: severity,
+        },
         style: { transform },
         children: [
           h('div', {

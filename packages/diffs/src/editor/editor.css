@@ -181,6 +181,30 @@
   display: inline;
   background-color: transparent;
 }
+/* Severity-colored popover: solid fill in the marker's severity color with
+   white text, mirroring the underline. The inset 1px ring (normally painted in
+   the surface background) is dropped so the fill reads as one solid chip. */
+[data-marker-popup][data-marker-severity] {
+  color: #fff;
+  border-color: transparent;
+  --diffs-widget-shadow:
+    0 4px 8px rgb(0 0 0 / 0.15), 0 6px 18px rgb(0 0 0 / 0.15);
+}
+[data-marker-popup][data-marker-severity] code {
+  color: inherit;
+}
+[data-marker-popup][data-marker-severity='error'] {
+  --diffs-widget-bg: var(--diffs-editor-error-fg, #e5484d);
+}
+[data-marker-popup][data-marker-severity='warning'] {
+  --diffs-widget-bg: var(--diffs-editor-warning-fg, #cca700);
+}
+[data-marker-popup][data-marker-severity='info'] {
+  --diffs-widget-bg: var(--diffs-editor-info-fg, #3794ff);
+}
+[data-marker-popup][data-marker-severity='hint'] {
+  --diffs-widget-bg: var(--diffs-editor-hint-fg, #6a6a6a);
+}
 
 /* Selection Action Widget */
 [data-selection-action-icon] {
