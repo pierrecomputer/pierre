@@ -2,6 +2,12 @@ import { describe, expect, test } from 'bun:test';
 
 import type { FileDiffMetadata, Hunk } from '../src/types';
 import { cleanLastNewline } from '../src/utils/cleanLastNewline';
+import {
+  joinLines,
+  lineAt,
+  linesToArray,
+  plainLines,
+} from '../src/utils/diffLines';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
   recomputeDiffHunks,
@@ -66,7 +72,7 @@ function findAdditionLineIndex(
   diff: FileDiffMetadata,
   lineText: string
 ): number {
-  const line = diff.additionLines.findIndex(
+  const line = linesToArray(diff.additionLines).findIndex(
     (value) => cleanLastNewline(value) === lineText
   );
   if (line < 0) {
@@ -93,19 +99,21 @@ function setAdditionLineText(
   line: number,
   lineText: string
 ): void {
-  const prevLine = diff.additionLines[line];
+  const lines = linesToArray(diff.additionLines);
+  const prevLine = lines[line];
   if (prevLine == null) {
     throw new Error(`Missing addition line ${line}`);
   }
   if (prevLine.endsWith('\r\n')) {
-    diff.additionLines[line] = `${lineText}\r\n`;
+    lines[line] = `${lineText}\r\n`;
   } else if (prevLine.endsWith('\n')) {
-    diff.additionLines[line] = `${lineText}\n`;
+    lines[line] = `${lineText}\n`;
   } else if (prevLine.endsWith('\r')) {
-    diff.additionLines[line] = `${lineText}\r`;
+    lines[line] = `${lineText}\r`;
   } else {
-    diff.additionLines[line] = lineText;
+    lines[line] = lineText;
   }
+  diff.additionLines = plainLines(lines);
 }
 
 function cloneDiff(diff: FileDiffMetadata): FileDiffMetadata {
@@ -192,7 +200,7 @@ describe('updateDiffHunks', () => {
     const diff = runUpdateDiffHunksEdit(base, line, 'line 10 replace newer');
 
     expect(diff.hunks[hunkIndex]).toEqual(hunkBefore);
-    expect(cleanLastNewline(diff.additionLines[line])).toBe(
+    expect(cleanLastNewline(lineAt(diff.additionLines, line))).toBe(
       'line 10 replace newer'
     );
   });
@@ -207,11 +215,11 @@ describe('updateDiffHunks', () => {
     const fromParse = parseDiffFromFile(
       {
         name: diff.prevName ?? diff.name,
-        contents: diff.deletionLines.join(''),
+        contents: joinLines(diff.deletionLines),
       },
       {
         name: diff.name,
-        contents: diff.additionLines.join(''),
+        contents: joinLines(diff.additionLines),
         lang: diff.lang,
       },
       PARSE_OPTIONS
@@ -239,7 +247,7 @@ describe('updateDiffHunks', () => {
     );
 
     expect(diff.hunks[hunkIndex]).toEqual(hunkBefore);
-    expect(cleanLastNewline(diff.additionLines[line])).toBe(
+    expect(cleanLastNewline(lineAt(diff.additionLines, line))).toBe(
       'line 10 replace newer'
     );
   });
@@ -266,7 +274,7 @@ describe('updateDiffHunks', () => {
 
     // Simulate deferred tokenization growing additionLines for an editor-only
     // trailing line without updating hunk metadata.
-    diff.additionLines.push('');
+    diff.additionLines = plainLines([...linesToArray(diff.additionLines), '']);
 
     expect(hasTrailingContextMismatch(diff)).toBe(true);
 

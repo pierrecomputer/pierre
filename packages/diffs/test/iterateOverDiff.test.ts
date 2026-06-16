@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { parseDiffFromFile } from '../src';
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../src/constants';
 import type { ChangeContent, FileDiffMetadata, Hunk } from '../src/types';
+import { type DiffLines, plainLines } from '../src/utils/diffLines';
 import {
   type DiffLineCallbackProps,
   type DiffLineMetadata,
@@ -746,6 +747,8 @@ function getHunkContentCounts(hunkContent: Hunk['hunkContent']): {
   };
 }
 
-function createLines(count: number): string[] {
-  return Array.from({ length: count }, (_, index) => `line ${index}\n`);
+function createLines(count: number): DiffLines {
+  return plainLines(
+    Array.from({ length: count }, (_, index) => `line ${index}\n`)
+  );
 }
