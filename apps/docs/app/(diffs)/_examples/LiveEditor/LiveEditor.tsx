@@ -1,11 +1,8 @@
 'use client';
 
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, File, MultiFileDiff } from '@pierre/diffs/react';
-import type {
-  PreloadedFileResult,
-  PreloadMultiFileDiffResult,
-} from '@pierre/diffs/ssr';
+import { EditorProvider, File } from '@pierre/diffs/react';
+import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { IconRefresh } from '@pierre/icons';
 import Link from 'next/link';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -16,21 +13,18 @@ import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { cn } from '@/lib/utils';
 
 interface LiveEditorProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
   prerenderedFile: PreloadedFileResult<undefined>;
 }
 
-type EditorMode = 'file' | 'diff';
+// Review renders the File read-only (how diffs renders by default); Edit
+// attaches the editor and makes the same surface editable in place.
+type EditorMode = 'review' | 'edit';
 
-export function LiveEditor({
-  prerenderedDiff,
-  prerenderedFile,
-}: LiveEditorProps) {
+export function LiveEditor({ prerenderedFile }: LiveEditorProps) {
   const [hasEdits, setHasEdits] = useState(false);
-  // Default to the File surface: it edits through the editor's simple mode,
-  // which has a clean 1:1 line model and avoids the diff-mode rendering
-  // glitches. Users can opt into the FileDiff surface via the toggle.
-  const [mode, setMode] = useState<EditorMode>('file');
+  // Default to Edit so the editor is live on first paint; the toggle drops back
+  // to a read-only Review of the same surface.
+  const [mode, setMode] = useState<EditorMode>('edit');
   // Bumping this value remounts the editable surface, which is how Reset works
   // (see `handleReset`).
   const [resetKey, setResetKey] = useState(0);
@@ -126,8 +120,10 @@ export function LiveEditor({
         description={
           <>
             Editor mode (experimental) makes any code surface—<code>File</code>{' '}
-            or <code>FileDiff</code>—editable in place. Start typing in the code
-            below and it updates as you edit. Select text to try the custom{' '}
+            or <code>FileDiff</code>—editable in place. Switch from{' '}
+            <strong>Review</strong> (read-only) to <strong>Edit</strong>, then
+            start typing in the code below and it updates as you edit. Select
+            text to try the custom{' '}
             <Link href="/docs#editor-selection-action" className="inline-link">
               Selection Action
             </Link>{' '}
@@ -139,9 +135,9 @@ export function LiveEditor({
       <ButtonGroup
         value={mode}
         onValueChange={(value) => setMode(value as EditorMode)}
-        aria-label="Editor surface"
+        aria-label="Editor mode"
       >
-        {(['file', 'diff'] as const).map((value) => (
+        {(['review', 'edit'] as const).map((value) => (
           <ButtonGroupItem key={value} value={value} className="capitalize">
             {value}
           </ButtonGroupItem>
@@ -150,23 +146,15 @@ export function LiveEditor({
 
       <div>
         <EditorProvider editor={editor}>
-          {mode === 'diff' ? (
-            <MultiFileDiff
-              key={resetKey}
-              {...prerenderedDiff}
-              className="diff-container"
-              renderHeaderMetadata={renderResetButton}
-              contentEditable
-            />
-          ) : (
-            <File
-              key={resetKey}
-              {...prerenderedFile}
-              className="diff-container"
-              renderHeaderMetadata={renderResetButton}
-              contentEditable
-            />
-          )}
+          <File
+            key={resetKey}
+            {...prerenderedFile}
+            className="diff-container"
+            renderHeaderMetadata={
+              mode === 'edit' ? renderResetButton : undefined
+            }
+            contentEditable={mode === 'edit'}
+          />
         </EditorProvider>
       </div>
     </div>

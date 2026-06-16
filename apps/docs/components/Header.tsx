@@ -165,6 +165,11 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
           <NavLink href="/" basePath={product.basePath}>
             Home
           </NavLink>
+          {product.id === 'diffs' && (
+            <NavLink href="/edit" basePath={product.basePath}>
+              Edit
+            </NavLink>
+          )}
           <NavLink href="/docs" basePath={product.basePath}>
             Docs
           </NavLink>

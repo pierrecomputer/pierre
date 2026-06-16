@@ -1,3 +1,6 @@
+import { IconArrowUpRight } from '@pierre/icons';
+import Link from 'next/link';
+
 import { AgentUi } from './AgentUi';
 import { FeatureHeader } from '@/components/FeatureHeader';
 
@@ -26,12 +29,26 @@ export function AgentDemoSection({ prerenderedDiffs }: AgentDemoSectionProps) {
             selection management, auto-indention, undo history, find-in-file,
             lint markers, and more. Pairs nicely with <code>@pierre/trees</code>{' '}
             for <abbr title="Agentic User Interface">AUI</abbr> style
-            experiences.
+            experiences.{' '}
+            <Link href="/edit" className="inline-link">
+              Explore everything edit can do
+            </Link>
+            .
           </>
         }
       />
 
       <AgentUi prerenderedDiffs={prerenderedDiffs} />
+
+      <div>
+        <Link
+          href="/edit"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 text-sm transition-colors"
+        >
+          See the edit feature page
+          <IconArrowUpRight />
+        </Link>
+      </div>
     </div>
   );
 }
