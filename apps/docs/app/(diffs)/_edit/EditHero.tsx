@@ -1,6 +1,10 @@
 'use client';
 
+import { IconBook } from '@pierre/icons';
+import Link from 'next/link';
+
 import { BetaBadge } from '@/components/BetaBadge';
+import { Button } from '@/components/ui/button';
 
 export function EditHero() {
   return (
@@ -16,6 +20,17 @@ export function EditHero() {
         ergonomics and customization of <code>@pierre/diffs</code>, with
         everything you need to edit in place.
       </p>
+      <Button
+        variant="secondary"
+        asChild
+        size="xl"
+        className="md:text-md h-10 self-start rounded-lg px-4 text-sm"
+      >
+        <Link href="/docs#editor">
+          <IconBook className="opacity-65" />
+          Explore the docs
+        </Link>
+      </Button>
     </section>
   );
 }

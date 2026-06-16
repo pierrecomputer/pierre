@@ -1,5 +1,4 @@
-import { DEFAULT_THEMES } from '@pierre/diffs';
-import { preloadFile, preloadFileDiff } from '@pierre/diffs/ssr';
+import { preloadFile } from '@pierre/diffs/ssr';
 import type { Metadata } from 'next';
 
 import {
@@ -11,7 +10,6 @@ import {
 } from '../_edit/constants';
 import { EditPage } from '../_edit/EditPage';
 import { LIVE_EDITOR_FILE_EXAMPLE } from '../_examples/LiveEditor/constants';
-import { AUI_SESSIONS, getFileDiff } from '../_home/mockData';
 
 const editTitle = 'Pierre Diffs — now with edit';
 const editDescription =
@@ -32,13 +30,10 @@ export const metadata: Metadata = {
 };
 
 // Server-renders every edit demo so they all paint highlighted on first load
-// and hydrate cleanly (no flash): the AUI diffs (matching the homepage
-// EditorSection), the "Live editing" File surface, and the lint-marker,
-// find-in-file, and undo-history files.
+// and hydrate cleanly (no flash): the "Live editing" File surface, and the
+// lint-marker, find-in-file, undo-history, shortcuts, and selection files.
 export default async function EditRoute() {
-  const session = AUI_SESSIONS[0];
   const [
-    auiEntries,
     liveFile,
     markerFile,
     findFile,
@@ -46,21 +41,6 @@ export default async function EditRoute() {
     shortcutsFile,
     selectionFile,
   ] = await Promise.all([
-    Promise.all(
-      session.changedFiles.map(async (file) => {
-        const result = await preloadFileDiff({
-          fileDiff: getFileDiff(file),
-          options: {
-            theme: DEFAULT_THEMES,
-            themeType: 'dark',
-            disableFileHeader: true,
-            overflow: 'wrap',
-            diffStyle: 'split',
-          },
-        });
-        return [file.path, result.prerenderedHTML] as const;
-      })
-    ),
     preloadFile(LIVE_EDITOR_FILE_EXAMPLE),
     preloadFile(MARKER_DEMO_FILE_EXAMPLE),
     preloadFile(FIND_DEMO_FILE_EXAMPLE),
@@ -71,7 +51,6 @@ export default async function EditRoute() {
 
   return (
     <EditPage
-      prerenderedDiffs={Object.fromEntries(auiEntries)}
       liveEditorFile={liveFile}
       markerFile={markerFile}
       findFile={findFile}

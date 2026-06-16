@@ -2,7 +2,6 @@ import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 
 import { WorkerPoolContext } from '../_components/WorkerPoolContext';
 import { LiveEditor } from '../_examples/LiveEditor/LiveEditor';
-import { AgentUi } from '../_home/AgentUi';
 import { EditHero } from './EditHero';
 import { EditReference } from './EditReference';
 import { EditShortcuts } from './EditShortcuts';
@@ -17,7 +16,6 @@ import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 
 interface EditPageProps {
-  prerenderedDiffs: Record<string, string>;
   liveEditorFile: PreloadedFileResult<undefined>;
   markerFile: PreloadedFileResult<undefined>;
   findFile: PreloadedFileResult<undefined>;
@@ -27,7 +25,6 @@ interface EditPageProps {
 }
 
 export function EditPage({
-  prerenderedDiffs,
   liveEditorFile,
   markerFile,
   findFile,
@@ -43,8 +40,6 @@ export function EditPage({
         <HeadingAnchors />
 
         <section className="space-y-16 pb-8">
-          <AgentUi prerenderedDiffs={prerenderedDiffs} />
-
           <LiveEditor prerenderedFile={liveEditorFile} />
 
           <div className="space-y-5">
