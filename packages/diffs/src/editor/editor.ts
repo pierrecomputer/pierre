@@ -21,7 +21,11 @@ import {
 } from './lineAnnotations';
 import { type Marker, MarkerManager, markerSeverityDatasetKey } from './marker';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
-import { type MatchRange, SearchPanelWidget } from './searchPanel';
+import {
+  type MatchRange,
+  type SearchPanelMode,
+  SearchPanelWidget,
+} from './searchPanel';
 import type { EditorSelection } from './selection';
 import {
   applyDeleteHardLineForwardToSelections,
@@ -1039,7 +1043,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     switch (command) {
       case 'openSearchPanel':
-        this.#renderSearchPanel();
+        this.#openSearchPanel('find');
+        break;
+
+      case 'openSearchReplacePanel':
+        this.#openSearchPanel('replace');
         break;
 
       case 'findNextMatch': {
@@ -2122,8 +2130,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     renderCtx.elements.set(cacheKey, selectionActionIcon);
   }
 
+  // Opens the search panel in the requested mode. If a panel is already open,
+  // it switches that panel's mode in place (preserving the current query)
+  // rather than recreating it.
+  #openSearchPanel(mode: SearchPanelMode) {
+    if (this.#searchPanel !== undefined) {
+      this.#searchPanel.setMode(mode);
+      return;
+    }
+    this.#renderSearchPanel(mode);
+  }
+
   // TODO(@ije): render search highlight
-  #renderSearchPanel() {
+  #renderSearchPanel(mode: SearchPanelMode) {
     // cleanup the existing search panel
     this.#searchPanel?.cleanup();
 
@@ -2175,6 +2194,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       textDocument,
       containerElement: preElement,
       defaultQuery,
+      mode,
       initialMatch,
       scrollToMatch,
       applyReplace: (edits: ResolvedTextEdit[]) => {

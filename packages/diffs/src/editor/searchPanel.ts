@@ -6,6 +6,8 @@ import { h } from './utils';
 
 export type MatchRange = [startOffset: number, endOffset: number];
 
+export type SearchPanelMode = 'find' | 'replace';
+
 export interface SearchParams {
   text: string;
   replaceText: string;
@@ -18,6 +20,7 @@ export interface SearchPanelOptions {
   textDocument: TextDocument<unknown>;
   containerElement: HTMLElement;
   defaultQuery: string;
+  mode?: SearchPanelMode;
   initialMatch?: MatchRange;
   scrollToMatch: (nextMatch: MatchRange, retainFocus: boolean) => void;
   applyReplace: (edits: ResolvedTextEdit[]) => void;
@@ -32,12 +35,14 @@ export class SearchPanelWidget {
   #container: HTMLDivElement;
   #inputElement: HTMLInputElement;
   #updateMatches?: (options?: { syncSelection?: boolean }) => void;
+  #applyMode?: (mode: SearchPanelMode) => void;
 
   constructor(options: SearchPanelOptions) {
     const {
       textDocument,
       containerElement,
       defaultQuery,
+      mode = 'find',
       initialMatch,
       scrollToMatch,
       applyReplace,
@@ -58,19 +63,24 @@ export class SearchPanelWidget {
       current: undefined as MatchRange | undefined,
     };
 
-    const matchResultElement = h('div', { dataset: 'matches' });
+    // Default to the empty-query "no results" state so it shows on open before
+    // any search runs.
+    const matchResultElement = h('div', {
+      dataset: { matches: '', noMatches: '' },
+      textContent: 'No results',
+    });
     const updateMatches = (options?: { syncSelection?: boolean }) => {
       matches.all =
         searchParams.text !== '' ? textDocument.search(searchParams) : [];
       this.#container
-        .querySelectorAll<HTMLElement>('[data-disabled]')
+        .querySelectorAll<HTMLElement>('[data-icon][data-disabled]')
         .forEach((element) => {
           element.dataset.disabled = String(matches.all.length === 0);
         });
 
       if (searchParams.text === '') {
-        matchResultElement.textContent = '';
-        delete matchResultElement.dataset.noMatches;
+        matchResultElement.textContent = 'No results';
+        matchResultElement.dataset.noMatches = '';
         return;
       }
 
@@ -261,83 +271,118 @@ export class SearchPanelWidget {
         } else if (e.key === 'Enter') {
           e.preventDefault();
           findNextMatch(false, true);
-        } else if (e.key === 'f' && isPrimaryModifier(e)) {
-          // prevent the default browser search panel open behavior
+        } else if (
+          isPrimaryModifier(e) &&
+          (e.key === 'f' || e.code === 'KeyF')
+        ) {
+          // Prevent the default browser search panel and switch the panel mode
+          // in place (cmd+f -> find, cmd+opt+f -> find/replace).
           e.preventDefault();
+          applyMode(e.altKey ? 'replace' : 'find');
         }
       },
     });
+
+    // The three search-option toggles are overlaid on the right edge of the
+    // find input instead of sitting beside it.
+    const searchTogglesElement = h('div', {
+      dataset: 'searchToggles',
+      children: [caseSensitiveToggle, wholeWordToggle, regexToggle],
+    });
+
+    const findInputBox = h('div', {
+      dataset: { inputBox: '', find: '' },
+      children: [this.#inputElement, searchTogglesElement],
+    });
+
+    // The replace input and its action buttons are tagged as replace cells so
+    // they can be hidden together when the panel is in find-only mode.
+    const replaceInputBox = h('div', {
+      dataset: { inputBox: '', replace: '', replaceCell: '' },
+      children: [replaceInputElement],
+    });
+
+    const replaceActionsElement = h('div', {
+      dataset: { replaceActions: '', replaceCell: '' },
+      children: [
+        h('div', {
+          dataset: { icon: 'replace' },
+          title: 'Replace',
+          innerHTML: getEditorIconSvg('replace'),
+          onclick: () => {
+            replace();
+          },
+        }),
+        h('div', {
+          dataset: { icon: 'replace-all' },
+          title: 'Replace All',
+          innerHTML: getEditorIconSvg('replace-all'),
+          onclick: () => {
+            replaceAll();
+          },
+        }),
+      ],
+    });
+
+    const navElement = h('div', {
+      dataset: 'searchNav',
+      children: [
+        h('div', {
+          dataset: { icon: 'arrow-up', disabled: 'true' },
+          title: 'Previous',
+          innerHTML: getEditorIconSvg('arrow-up'),
+          onclick: () => {
+            findNextMatch(true);
+          },
+        }),
+        h('div', {
+          dataset: { icon: 'arrow-down', disabled: 'true' },
+          title: 'Next',
+          innerHTML: getEditorIconSvg('arrow-down'),
+          onclick: () => {
+            findNextMatch();
+          },
+        }),
+        h('div', {
+          dataset: { icon: 'close' },
+          title: 'Close',
+          innerHTML: getEditorIconSvg('close'),
+          onclick: close,
+        }),
+      ],
+    });
+
+    // A 2x2 grid of inputs (find/replace) and their trailing content (results
+    // text / replace actions), with the find navigation buttons in a third
+    // column on the first row. DOM order drives grid auto-placement:
+    //   row 1: find input | results text | nav buttons
+    //   row 2: replace input | replace actions
+    const gridElement = h('div', {
+      dataset: { searchGrid: '', mode },
+      children: [
+        findInputBox,
+        matchResultElement,
+        navElement,
+        replaceInputBox,
+        replaceActionsElement,
+      ],
+    });
+
+    // Toggles the panel between find and find/replace modes by showing or
+    // hiding the replace cells, then returns focus to the find input.
+    const applyMode = (next: SearchPanelMode) => {
+      gridElement.dataset.mode = next;
+      this.#inputElement.focus();
+      this.#inputElement.select();
+    };
+    this.#applyMode = applyMode;
 
     this.#container = h('div', {
       dataset: 'searchPanel',
       children: [
         h('div', {
           dataset: 'editorWidget',
-          children: [
-            h('div', {
-              dataset: 'searchPanelRow',
-              children: [
-                h('div', {
-                  dataset: 'inputBox',
-                  children: [this.#inputElement, matchResultElement],
-                }),
-                caseSensitiveToggle,
-                wholeWordToggle,
-                regexToggle,
-                h('div', { dataset: 'divider' }),
-                h('div', {
-                  dataset: { icon: 'arrow-up', disabled: 'true' },
-                  title: 'Previous',
-                  innerHTML: getEditorIconSvg('arrow-up'),
-                  onclick: () => {
-                    findNextMatch(true);
-                  },
-                }),
-                h('div', {
-                  dataset: { icon: 'arrow-down', disabled: 'true' },
-                  title: 'Next',
-                  innerHTML: getEditorIconSvg('arrow-down'),
-                  onclick: () => {
-                    findNextMatch();
-                  },
-                }),
-                h('div', {
-                  dataset: { icon: 'close' },
-                  title: 'Close',
-                  innerHTML: getEditorIconSvg('close'),
-                  onclick: close,
-                }),
-              ],
-            }),
-            h('div', {
-              dataset: { searchPanelRow: '', disabled: 'true' },
-              children: [
-                h('div', {
-                  dataset: 'inputBox',
-                  children: [replaceInputElement],
-                }),
-                h('div', {
-                  dataset: { icon: 'replace' },
-                  title: 'Replace',
-                  innerHTML: getEditorIconSvg('replace'),
-                  onclick: () => {
-                    replace();
-                  },
-                }),
-                h('div', {
-                  dataset: { icon: 'replace-all' },
-                  title: 'Replace All',
-                  innerHTML: getEditorIconSvg('replace-all'),
-                  onclick: () => {
-                    replaceAll();
-                  },
-                }),
-                h('div', {
-                  dataset: 'spacing',
-                }),
-              ],
-            }),
-          ],
+          children: [gridElement],
         }),
       ],
     });
@@ -361,6 +406,10 @@ export class SearchPanelWidget {
 
   updateMatches(options?: { syncSelection?: boolean }): void {
     this.#updateMatches?.(options);
+  }
+
+  setMode(mode: SearchPanelMode): void {
+    this.#applyMode?.(mode);
   }
 
   cleanup(): void {

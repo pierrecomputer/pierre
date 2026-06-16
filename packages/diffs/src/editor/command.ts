@@ -8,6 +8,7 @@ export type EditorCommand =
   | 'selectAll'
   | 'findNextMatch'
   | 'openSearchPanel'
+  | 'openSearchReplacePanel'
   | 'moveCursorToDocStart'
   | 'moveCursorToDocEnd'
   | 'expandSelectionDocStart'
@@ -16,7 +17,6 @@ export type EditorCommand =
 const SHORTCUTS: Partial<Record<string, EditorCommand>> = {
   a: 'selectAll',
   d: 'findNextMatch',
-  f: 'openSearchPanel',
 };
 
 export function resolveEditorCommandFromKeyboardEvent(
@@ -25,11 +25,19 @@ export function resolveEditorCommandFromKeyboardEvent(
 ): EditorCommand | undefined {
   const hasPrimaryModifier = isPrimaryModifier(event, isMac);
   const { shiftKey, altKey, key } = event;
+
+  const normalizedKey = key.length === 1 ? key.toLowerCase() : key;
+
+  // cmd/ctrl+f opens the search panel in find mode; adding alt opens it in
+  // find/replace mode. macOS emits a dead key for Option+F (key === 'ƒ'), so
+  // fall back to event.code to detect the physical F key.
+  if (hasPrimaryModifier && (normalizedKey === 'f' || event.code === 'KeyF')) {
+    return altKey ? 'openSearchReplacePanel' : 'openSearchPanel';
+  }
+
   if (altKey) {
     return undefined;
   }
-
-  const normalizedKey = key.length === 1 ? key.toLowerCase() : key;
 
   if (!hasPrimaryModifier && normalizedKey === 'Tab') {
     return shiftKey ? 'outdent' : 'indent';
