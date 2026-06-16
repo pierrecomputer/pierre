@@ -2,10 +2,6 @@
   "name": "@pierre/storage-elements",
   "version": "0.0.2",
   "type": "module",
-  "scripts": {
-    "tsc": "tsgo --build",
-    "build": "tsgo --build"
-  },
   "dependencies": {
     "@radix-ui/react-dialog": "catalog:",
     "@radix-ui/react-label": "catalog:",

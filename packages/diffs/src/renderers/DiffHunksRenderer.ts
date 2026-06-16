@@ -61,6 +61,12 @@ import {
   createGutterWrapper,
   createHastElement,
 } from '../utils/hast_utils';
+import {
+  FILE_ANNOTATION_HUNK_INDEX,
+  FILE_ANNOTATION_LINE_INDEX,
+  getFileAnnotations,
+  shouldRenderFileAnnotations,
+} from '../utils/includesFileAnnotations';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import type { DiffLineMetadata } from '../utils/iterateOverDiff';
@@ -470,9 +476,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
   }
 
-  protected createAnnotationElement(span: AnnotationSpan): HASTElement {
+  private createAnnotationElement = (span: AnnotationSpan): HASTElement => {
     return createDefaultAnnotationElement(span);
-  }
+  };
 
   // Unified hook returns extra rows that render before/after the current line.
   declare protected getUnifiedInjectedRowsForLine?: (
@@ -978,6 +984,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         pushSeparator('additions', props, context);
       }
     }
+
+    this.pushFileLevelAnnotations(fileDiff, diffStyle, renderRange, context);
 
     iterateOverDiff({
       diff: fileDiff,
@@ -1513,6 +1521,71 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
   }
 
+  private pushFileLevelAnnotations(
+    fileDiff: FileDiffMetadata,
+    diffStyle: 'unified' | 'split',
+    renderRange: RenderRange,
+    context: ProcessContext
+  ): void {
+    if (!shouldRenderFileAnnotations(renderRange)) {
+      return;
+    }
+
+    const deletionAnnotationNames =
+      fileDiff.type !== 'new'
+        ? getAnnotationNames(getFileAnnotations(this.deletionAnnotations))
+        : [];
+    const additionAnnotationNames =
+      fileDiff.type !== 'deleted'
+        ? getAnnotationNames(getFileAnnotations(this.additionAnnotations))
+        : [];
+    if (
+      deletionAnnotationNames.length === 0 &&
+      additionAnnotationNames.length === 0
+    ) {
+      return;
+    }
+
+    const hunkIndex = FILE_ANNOTATION_HUNK_INDEX;
+    const lineIndex = FILE_ANNOTATION_LINE_INDEX;
+    const { createAnnotationElement } = this;
+
+    if (diffStyle === 'unified') {
+      pushLineWithAnnotation({
+        diffStyle,
+        type: 'context',
+        unifiedSpan: {
+          type: 'annotation',
+          hunkIndex,
+          lineIndex,
+          annotations: deletionAnnotationNames.concat(additionAnnotationNames),
+        },
+        createAnnotationElement,
+        context,
+      });
+      return;
+    }
+
+    pushLineWithAnnotation({
+      diffStyle,
+      type: 'context',
+      deletionSpan: {
+        type: 'annotation',
+        hunkIndex,
+        lineIndex,
+        annotations: deletionAnnotationNames,
+      },
+      additionSpan: {
+        type: 'annotation',
+        hunkIndex,
+        lineIndex,
+        annotations: additionAnnotationNames,
+      },
+      createAnnotationElement,
+      context,
+    });
+  }
+
   private getAnnotations(
     type: 'unified',
     deletionLineNumber: number | undefined,
@@ -1584,6 +1657,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       stickyHeader,
     });
   }
+}
+
+function getAnnotationNames<LAnnotation>(
+  annotations: DiffLineAnnotation<LAnnotation>[] | undefined
+): string[] {
+  return (
+    annotations?.map((annotation) => getLineAnnotationName(annotation)) ?? []
+  );
 }
 
 function getModifiedLinesString(lines: number) {

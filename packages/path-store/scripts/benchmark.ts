@@ -530,7 +530,7 @@ function parseArgs(argv: readonly string[]): BenchmarkCliOptions {
     }
 
     if (argument === '--help') {
-      console.log('Usage: bun ws path-store benchmark -- [options]');
+      console.log('Usage: moonx path-store:benchmark -- [options]');
       console.log('');
       console.log('Options:');
       console.log(

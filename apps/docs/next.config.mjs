@@ -2,9 +2,9 @@ import { loadWorktreeEnv } from '../../scripts/load-worktree-env.mjs';
 
 // `next dev` runs under Node, which (like Bun) only auto-loads the standard
 // `.env*` names. Our worktree helper writes `PIERRE_WORKTREE_SLUG` /
-// `PIERRE_PORT_OFFSET` into `.env.worktree` at the worktree root, so pull those
-// in manually before Next inspects `process.env`. When `ws.ts` is in the call
-// chain it has already injected the same keys; the loader preserves those.
+// `PIERRE_PORT_OFFSET` into `.env.worktree` at the worktree root, so pull
+// those in manually before Next inspects `process.env`. moon tasks load the
+// same file via their envFile option; the loader preserves existing values.
 loadWorktreeEnv();
 
 // The browser title prefix (see `app/layout.tsx`) reads
@@ -24,12 +24,15 @@ const isDiffs = !isTrees;
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // In dev only, give each site its own build dir so `diffs:dev` and
-  // `trees:dev` can run concurrently (Next 16's dev lockfile is per-directory,
-  // not per-port). Production keeps the default `.next` so Vercel finds it.
-  ...(process.env.NODE_ENV === 'development' && {
-    distDir: `.next/${site}`,
-  }),
+  // Each site variant gets its own build dir wherever both variants share a
+  // workspace. Dev needs it so `dev-diffs` and `dev-trees` can run
+  // concurrently (Next 16's dev lockfile is per-directory, not per-port);
+  // local/CI builds need it so the two site builds can run in parallel and
+  // be cached independently. On Vercel each project builds exactly one site
+  // in an isolated container AND the Next builder collects output from the
+  // literal `.next` (it does not honor an env-dependent distDir when
+  // locating routes-manifest.json), so use the default there.
+  distDir: process.env.VERCEL ? '.next' : `.next/${site}`,
   reactStrictMode: true,
   reactCompiler: true,
   devIndicators: false,

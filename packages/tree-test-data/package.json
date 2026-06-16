@@ -9,8 +9,5 @@
       "types": "./index.d.ts",
       "import": "./index.js"
     }
-  },
-  "scripts": {
-    "test": "bun test"
   }
 }

@@ -1,39 +1,49 @@
-name: Set up Bun and dependencies
+name: Set up moon and caches
 description: >-
-  Install the Bun version pinned in .prototools, restore the Bun install cache,
-  and install workspace dependencies with a frozen lockfile. Shared by every CI
-  job so the toolchain version and the dependency fast-path live in one place.
+  Install the proto-pinned toolchain (.prototools is the single source of truth
+  for bun, node, and moon versions) and mount Blacksmith sticky disks for
+  everything cacheable: the proto toolchain, bun's download cache, and moon's
+  workspace cache. moon installs workspace dependencies itself with a frozen
+  lockfile when a task requires them, so there is no explicit `bun install`
+  step.
 
 runs:
   using: composite
   steps:
-    # Single source of truth for the Bun version: the same .prototools pin proto
-    # uses locally and assert-bun-version enforces on publish. Bump it there and
-    # every CI job follows automatically — there is no per-job version to sync.
-    - name: Resolve pinned Bun version
-      id: bun-version
-      shell: bash
-      run: |
-        version=$(awk -F'"' '/^bun[[:space:]]*=/ { print $2; exit }' .prototools)
-        if [ -z "$version" ]; then
-          echo "::error::Could not read the pinned Bun version from .prototools"
-          exit 1
-        fi
-        echo "version=$version" >> "$GITHUB_OUTPUT"
-
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+    # Sticky disks restore in seconds and persist per-key across runs, which
+    # is what makes moon's local cache behave like a warm remote cache in CI.
+    - name: Mount proto toolchain cache
+      uses: useblacksmith/stickydisk@4c034ba57b706cf0e3b4b0ce098c2a3b1071580c # v1.4.0
       with:
-        bun-version: ${{ steps.bun-version.outputs.version }}
+        key: ${{ github.repository }}-proto-${{ runner.os }}
+        path: ~/.proto
 
-    - name: Cache dependencies
-      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+    - name: Mount bun download cache
+      uses: useblacksmith/stickydisk@4c034ba57b706cf0e3b4b0ce098c2a3b1071580c # v1.4.0
       with:
+        key: ${{ github.repository }}-bun-install-${{ runner.os }}
         path: ~/.bun/install/cache
-        key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-bun-
 
-    - name: Install dependencies
-      shell: bash
-      run: bun install --frozen-lockfile
+    # Persist only the portable parts of moon's cache: moon documents
+    # `hashes` and `outputs` as safe to share between environments, while
+    # `states` holds machine-specific run state that must be rebuilt per run.
+    - name: Mount moon hash cache
+      uses: useblacksmith/stickydisk@4c034ba57b706cf0e3b4b0ce098c2a3b1071580c # v1.4.0
+      with:
+        key: ${{ github.repository }}-moon-hashes-${{ runner.os }}
+        path: ${{ github.workspace }}/.moon/cache/hashes
+
+    - name: Mount moon output cache
+      uses: useblacksmith/stickydisk@4c034ba57b706cf0e3b4b0ce098c2a3b1071580c # v1.4.0
+      with:
+        key: ${{ github.repository }}-moon-outputs-${{ runner.os }}
+        path: ${{ github.workspace }}/.moon/cache/outputs
+
+    # Installs proto, then `proto install` provisions every tool pinned in
+    # .prototools (bun, node, moon, gh). The action's own actions/cache layer
+    # is disabled because the sticky disk above already owns ~/.proto.
+    - name: Install proto and moon
+      uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+      with:
+        auto-install: true
+        cache: false

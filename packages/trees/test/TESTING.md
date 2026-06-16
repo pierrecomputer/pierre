@@ -31,11 +31,11 @@ If a unit test can prove behavior, write a unit test instead.
 
 ## Commands
 
-From repo root:
+From anywhere in the repo:
 
 ```bash
-bun ws trees test
-bun ws trees test:e2e
+moonx trees:test
+moonx trees:test-e2e
 ```
 
 `test:e2e` automatically:

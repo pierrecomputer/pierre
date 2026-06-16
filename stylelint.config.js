@@ -1,5 +1,13 @@
 export default {
   extends: ['stylelint-config-standard'],
+  // Generated output can contain CSS (Next chunks, package dist, demo
+  // builds); linting must not depend on whether builds have run.
+  ignoreFiles: [
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/.next/**',
+    '**/.source/**',
+  ],
   rules: {
     // For Tailwind
     'at-rule-no-unknown': [

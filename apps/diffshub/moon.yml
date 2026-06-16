@@ -1,0 +1,55 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# Local-only tasks avoid presets and set options explicitly. Rule of thumb:
+# moon ci executes EVERY affected runInCI-enabled task (requested targets
+# only add, never subtract), so `runInCI: 'always'` — which keeps a task
+# runnable in CI-marked shells like agent harnesses (CI=1) — is safe only
+# for tasks that can never be affected through the graph (no deps, no
+# dependents). Graph-connected local tasks (dev/prod/e2e variants) stay
+# `runInCI: 'skip'`; run those with a `CI=` prefix, e.g.
+# `CI= moonx docs:dev-diffs`.
+language: 'typescript'
+layer: 'application'
+
+tasks:
+  build:
+    command: 'next build'
+    deps:
+      - '^:build'
+    outputs:
+      - '.next'
+
+  # Build deps run to completion first, then dependency watchers (`^:dev`)
+  # run alongside next dev. run-dev.sh kills stale listeners on the port
+  # before starting (crashed terminals leak servers).
+  dev:
+    script:
+      'export PORT=$(( ${PIERRE_PORT_OFFSET:-0} + 3692 )) && bash
+      ../../scripts/run-dev.sh "$PORT" -- next dev'
+    deps:
+      - '^:build'
+      - '^:dev'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+      envFile: '/.env.worktree'
+
+  start:
+    command: 'next start'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'always'
+
+  prod:
+    script:
+      'export PORT=$(( ${PIERRE_PORT_OFFSET:-0} + 3692 )) && bash
+      ../../scripts/run-dev.sh "$PORT" -- next start -p "$PORT"'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+      envFile: '/.env.worktree'

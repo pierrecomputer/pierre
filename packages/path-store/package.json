@@ -8,19 +8,6 @@
       "import": "./src/index.ts"
     }
   },
-  "scripts": {
-    "benchmark": "bun run ./scripts/benchmark.ts",
-    "benchmark:visible-tree-projection": "bun run ./scripts/benchmarkVisibleTreeProjection.ts",
-    "build": "bun run vite build demo",
-    "dev:demo": "PORT=$((${PIERRE_PORT_OFFSET:-0} + 4175)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run vite demo --host 127.0.0.1 --port \"$PORT\"",
-    "profile:demo": "bun run ./scripts/profileDemo.ts",
-    "profile:visible-tree-projection": "bun run ./scripts/profileVisibleTreeProjection.ts",
-    "test": "bun test",
-    "test:demo": "(bun ./test/e2e/check-playwright-binary.js || bun run test:demo:installbinary) && bunx playwright test -c test/e2e/playwright.config.js",
-    "test:demo:installbinary": "bunx playwright@1.51.1 install chromium",
-    "test:demo:server": "vite --config test/e2e/vite.config.js",
-    "tsc": "tsgo --noEmit --pretty"
-  },
   "dependencies": {},
   "devDependencies": {
     "@pierre/tree-test-data": "workspace:*",

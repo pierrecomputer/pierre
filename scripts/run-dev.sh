@@ -9,9 +9,9 @@
 # a new server on the same port.
 #
 # This exists because terminals close uncleanly (especially under AI agents),
-# which can leave `concurrently` / `next dev` children reparented to launchd
+# which can leave dev-server children (e.g. `next dev`) reparented to launchd
 # and still bound to the port. Rather than require manual cleanup, every dev
-# script nukes whatever stale process owns its port before starting fresh.
+# task nukes whatever stale process owns its port before starting fresh.
 #
 # Worktree port offsets (see scripts/wt.ts) guarantee that no two live
 # worktrees share a port, so this never clobbers another worktree's work.

@@ -2,25 +2,6 @@
   "name": "@pierre/docs",
   "version": "0.0.0",
   "private": true,
-  "scripts": {
-    "build": "bun run build:deps && bun run generate-llms-txt && bun run build:next",
-    "build:next": "next build",
-    "build:deps": "cd ../.. && bun ws \"packages/*\" build",
-    "diffs:dev": "export NEXT_PUBLIC_SITE=diffs PORT=$((${PIERRE_PORT_OFFSET:-0} + 3690)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run _dev",
-    "trees:dev": "export NEXT_PUBLIC_SITE=trees PORT=$((${PIERRE_PORT_OFFSET:-0} + 3691)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run _dev",
-    "_dev": "bun run build:deps && bun concurrently \"bun run dev:deps:diffs\" \"bun run dev:deps:tree\" \"bun run dev:deps:truncate\" \"bun run dev:next\" --names \"diffs,trees,truncate,docs\" --prefix-colors \"blue,green,yellow,purple\"",
-    "dev:next": "next dev",
-    "dev:deps:diffs": "(cd ../../packages/diffs && bun run dev)",
-    "dev:deps:tree": "(cd ../../packages/trees && bun run dev)",
-    "dev:deps:truncate": "(cd ../../packages/truncate && bun run dev)",
-    "prod": "bun run build && next start -p ${PORT:-3000}",
-    "start": "next start",
-    "generate-llms-txt": "bun scripts/generate-llms-txt.ts",
-    "test:e2e": "bun run build:deps && bun run build:next && (bun ./test/e2e/check-playwright-binary.ts || bun run test:e2e:installbinary) && bunx playwright test -c test/e2e/playwright.config.ts",
-    "test:e2e:installbinary": "bunx playwright@1.51.1 install chromium",
-    "test:e2e:server": "PORT=$((${PIERRE_PORT_OFFSET:-0} + 4174)) bash ../../scripts/run-dev.sh \"$PORT\" -- bun run start",
-    "tsc": "bun run build:deps && tsgo --noEmit --pretty"
-  },
   "dependencies": {
     "@icons-pack/react-simple-icons": "catalog:",
     "@pierre/diffs": "workspace:*",
@@ -78,7 +59,6 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "concurrently": "catalog:",
     "jsdom": "catalog:",
     "typescript": "catalog:"
   },

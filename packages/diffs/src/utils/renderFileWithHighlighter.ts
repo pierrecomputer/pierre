@@ -62,6 +62,12 @@ export function renderFileWithHighlighter(
     lineIndex: shikiLineNumber - 1 + startingLine,
     lineNumber: shikiLineNumber + startingLine,
   });
+  // tokenizeTimeLimit: 0 disables shiki's silent 500ms-per-line tokenization
+  // abort. When it trips (slow devices, cold JS-regex-engine compile), the
+  // rest of the line collapses to the enclosing scope's color — and since
+  // dual-theme rendering tokenizes per theme, the first (dark) pass can smear
+  // while the warm second (light) pass stays correct. Pathological content is
+  // already guarded by tokenizeMaxLineLength, which renders long lines plain.
   const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
     if (typeof theme === 'string') {
       return {
@@ -71,6 +77,7 @@ export function renderFileWithHighlighter(
         defaultColor: false,
         cssVariablePrefix: formatCSSVariablePrefix('token'),
         tokenizeMaxLineLength,
+        tokenizeTimeLimit: 0,
       };
     }
     return {
@@ -80,6 +87,7 @@ export function renderFileWithHighlighter(
       defaultColor: false,
       cssVariablePrefix: formatCSSVariablePrefix('token'),
       tokenizeMaxLineLength,
+      tokenizeTimeLimit: 0,
     };
   })();
   const highlightedLines = getLineNodes(

@@ -21,6 +21,13 @@ export interface LineCommentMetadata {
 
 export const FAKE_LINE_ANNOTATIONS: LineAnnotation<LineCommentMetadata>[] = [
   {
+    lineNumber: 0,
+    metadata: {
+      author: 'Simple Dizzle',
+      message: 'This should be a file level comment... above everything',
+    },
+  },
+  {
     lineNumber: 2,
     metadata: {
       author: 'Sarah Chen',
@@ -82,6 +89,14 @@ export const FAKE_DIFF_LINE_ANNOTATIONS: DiffLineAnnotation<LineCommentMetadata>
   [
     [
       [
+        {
+          lineNumber: 0,
+          side: 'additions',
+          metadata: {
+            author: 'Simple Dizzle',
+            message: 'This should be a file level comment... above everything',
+          },
+        },
         {
           lineNumber: 2,
           side: 'additions',

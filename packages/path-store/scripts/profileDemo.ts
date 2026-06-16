@@ -261,7 +261,7 @@ interface ProfileBenchmarkOutput {
 }
 
 // Mirror the Playwright config behavior so direct profiling runs pick up the
-// same worktree port offset as `bun ws` and `bun run chrome`.
+// same worktree port offset as moon tasks and the chrome debug helper.
 loadWorktreeEnv();
 
 function readWorktreePortOffset(): number {
@@ -409,7 +409,7 @@ const AGGREGATE_METRIC_DEFINITIONS: Array<{
 ];
 
 function printHelpAndExit(): never {
-  console.log('Usage: bun ws path-store profile:demo -- [options]');
+  console.log('Usage: moonx path-store:profile-demo -- [options]');
   console.log('');
   console.log(
     'Assumes Chrome is already running with --remote-debugging-port enabled.'
@@ -983,7 +983,7 @@ async function startDemoServerIfNeeded(
   }
 
   const serverProcess = Bun.spawn({
-    cmd: ['bun', 'run', 'dev'],
+    cmd: ['moon', 'run', 'path-store:dev-demo'],
     cwd: packageRoot,
     env: {
       ...process.env,

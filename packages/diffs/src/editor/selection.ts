@@ -382,8 +382,12 @@ export function applyTextReplaceToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
   texts: string[],
+<<<<<<< HEAD
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
   options?: { caretOffsetFromEnd?: number }
+=======
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+>>>>>>> beta-1.3
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -489,7 +493,10 @@ export function applyTextReplaceToSelections<LAnnotation>(
     edits = [];
     let offsetDelta = 0;
     let previousEditEnd = -1;
+<<<<<<< HEAD
     const caretOffsetFromEnd = options?.caretOffsetFromEnd ?? 0;
+=======
+>>>>>>> beta-1.3
     for (const entry of ordered) {
       if (entry.start < previousEditEnd) {
         throw new Error('Overlapping multi-selection edits are not supported');
@@ -506,7 +513,11 @@ export function applyTextReplaceToSelections<LAnnotation>(
         text: newText,
       });
       nextSelectionOffsets[entry.index] =
+<<<<<<< HEAD
         entry.start + offsetDelta + newText.length - caretOffsetFromEnd;
+=======
+        entry.start + offsetDelta + newText.length;
+>>>>>>> beta-1.3
       offsetDelta += newText.length - (entry.end - entry.start);
     }
   }

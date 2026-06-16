@@ -6,7 +6,11 @@ import {
   disposeHighlighter,
   parseDiffFromFile,
 } from '../src';
-import type { DiffLineAnnotation, LineTypes } from '../src/types';
+import type {
+  DiffLineAnnotation,
+  FileDiffMetadata,
+  LineTypes,
+} from '../src/types';
 import { fileNew, fileOld } from './mocks';
 import {
   annotationProjection,
@@ -29,8 +33,209 @@ afterAll(async () => {
 const oldFile = { name: 'DiffRenderer.ts', contents: fileOld };
 const newFile = { name: 'DiffRenderer.ts', contents: fileNew };
 
+function createDiffWithLeadingSeparator(): FileDiffMetadata {
+  const oldLines = Array.from({ length: 40 }, (_, index) => `${index + 1}`);
+  const newLines = oldLines.map((line, index) =>
+    index === 24 ? 'changed-25' : line
+  );
+  return parseDiffFromFile(
+    { name: 'leading-separator.ts', contents: `${oldLines.join('\n')}\n` },
+    { name: 'leading-separator.ts', contents: `${newLines.join('\n')}\n` }
+  );
+}
+
+function createNoHunkDiff(): FileDiffMetadata {
+  return {
+    name: 'renamed.ts',
+    prevName: 'old-name.ts',
+    type: 'rename-pure',
+    hunks: [],
+    splitLineCount: 0,
+    unifiedLineCount: 0,
+    isPartial: false,
+    deletionLines: [],
+    additionLines: [],
+  };
+}
+
+function getSlotNames(node: ElementContent): string[] {
+  if (!isHastElement(node)) {
+    return [];
+  }
+  return findHastSlotElements(node).map((slot) => {
+    const name = slot.properties?.name;
+    if (name == null) {
+      throw new Error('slot should have a name');
+    }
+    return name.toString();
+  });
+}
+
+function getAnnotationIndexes(nodes: ElementContent[]): string[] {
+  return nodes
+    .map((node) => getHastAnnotationIndex(node))
+    .filter((index): index is string => index != null);
+}
+
 describe('Annotation Rendering', () => {
   const diff = parseDiffFromFile(oldFile, newFile);
+
+  describe('file-level annotations', () => {
+    test('render before a leading hunk separator in unified style', async () => {
+      const annotations: DiffLineAnnotation<string>[] = [
+        { side: 'deletions', lineNumber: 0, metadata: 'old-file' },
+        { side: 'additions', lineNumber: 0, metadata: 'new-file' },
+      ];
+      const renderer = new DiffHunksRenderer<string>({
+        diffStyle: 'unified',
+      });
+      renderer.setLineAnnotations(annotations);
+
+      const { unifiedContentAST } = await renderer.asyncRender(
+        createDiffWithLeadingSeparator()
+      );
+      assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
+      const firstAnnotationIndex = unifiedContentAST.findIndex(
+        isHastAnnotationElement
+      );
+      const firstSeparatorIndex = unifiedContentAST.findIndex(
+        (node) =>
+          isHastElement(node) && node.properties?.['data-separator'] != null
+      );
+      const firstAnnotation = unifiedContentAST[firstAnnotationIndex];
+      assertDefined(firstAnnotation, 'firstAnnotation should be defined');
+
+      expect(firstAnnotationIndex).toBe(0);
+      expect(firstSeparatorIndex).toBeGreaterThan(firstAnnotationIndex);
+      expect(getHastAnnotationIndex(firstAnnotation)).toBe('-1,-1');
+      expect(getSlotNames(firstAnnotation)).toEqual([
+        'annotation-deletions-0',
+        'annotation-additions-0',
+      ]);
+    });
+
+    test('render paired top rows in split style', async () => {
+      const annotations: DiffLineAnnotation<string>[] = [
+        { side: 'deletions', lineNumber: 0, metadata: 'old-file' },
+        { side: 'additions', lineNumber: 0, metadata: 'new-file' },
+      ];
+      const renderer = new DiffHunksRenderer<string>({
+        diffStyle: 'split',
+        expandUnchanged: true,
+      });
+      renderer.setLineAnnotations(annotations);
+
+      const { additionsContentAST, deletionsContentAST } =
+        await renderer.asyncRender(diff);
+      assertDefined(
+        additionsContentAST,
+        'additionsContentAST should be defined'
+      );
+      assertDefined(
+        deletionsContentAST,
+        'deletionsContentAST should be defined'
+      );
+      const firstAddition = additionsContentAST[0];
+      const firstDeletion = deletionsContentAST[0];
+      assertDefined(firstAddition, 'firstAddition should be defined');
+      assertDefined(firstDeletion, 'firstDeletion should be defined');
+
+      expect(getHastAnnotationIndex(firstAddition)).toBe('-1,-1');
+      expect(getHastAnnotationIndex(firstDeletion)).toBe('-1,-1');
+      expect(getSlotNames(firstAddition)).toEqual(['annotation-additions-0']);
+      expect(getSlotNames(firstDeletion)).toEqual(['annotation-deletions-0']);
+    });
+
+    test('do not collide with first-row annotation keys in split style', async () => {
+      const renderer = new DiffHunksRenderer<string>({ diffStyle: 'split' });
+      renderer.setLineAnnotations([
+        { side: 'deletions', lineNumber: 0, metadata: 'old-file' },
+        { side: 'additions', lineNumber: 0, metadata: 'new-file' },
+        { side: 'deletions', lineNumber: 1, metadata: 'old-first-line' },
+        { side: 'additions', lineNumber: 1, metadata: 'new-first-line' },
+      ]);
+
+      const { additionsContentAST, deletionsContentAST } =
+        await renderer.asyncRender(
+          parseDiffFromFile(
+            { name: 'first-row.ts', contents: 'old\n' },
+            { name: 'first-row.ts', contents: 'new\n' }
+          )
+        );
+      assertDefined(
+        additionsContentAST,
+        'additionsContentAST should be defined'
+      );
+      assertDefined(
+        deletionsContentAST,
+        'deletionsContentAST should be defined'
+      );
+
+      const annotationIndexes = getAnnotationIndexes(
+        deletionsContentAST
+      ).concat(getAnnotationIndexes(additionsContentAST));
+
+      expect(
+        annotationIndexes.filter((index) => index === '-1,-1')
+      ).toHaveLength(2);
+      expect(annotationIndexes.filter((index) => index === '0,0')).toHaveLength(
+        2
+      );
+    });
+
+    test('render code columns for no-hunk diffs with only file-level annotations', async () => {
+      const annotations: DiffLineAnnotation<string>[] = [
+        { side: 'deletions', lineNumber: 0, metadata: 'old-file' },
+        { side: 'additions', lineNumber: 0, metadata: 'new-file' },
+      ];
+      const renderer = new DiffHunksRenderer<string>({ diffStyle: 'split' });
+      renderer.setLineAnnotations(annotations);
+
+      const { additionsContentAST, deletionsContentAST, rowCount } =
+        await renderer.asyncRender(createNoHunkDiff());
+      assertDefined(
+        additionsContentAST,
+        'additionsContentAST should be defined'
+      );
+      assertDefined(
+        deletionsContentAST,
+        'deletionsContentAST should be defined'
+      );
+      const additionAnnotation = additionsContentAST[0];
+      const deletionAnnotation = deletionsContentAST[0];
+      assertDefined(additionAnnotation, 'additionAnnotation should be defined');
+      assertDefined(deletionAnnotation, 'deletionAnnotation should be defined');
+
+      expect(rowCount).toBe(1);
+      expect(getSlotNames(additionAnnotation)).toEqual([
+        'annotation-additions-0',
+      ]);
+      expect(getSlotNames(deletionAnnotation)).toEqual([
+        'annotation-deletions-0',
+      ]);
+    });
+
+    test('do not render in non-top diff render chunks', async () => {
+      const renderer = new DiffHunksRenderer<string>({ diffStyle: 'unified' });
+      renderer.setLineAnnotations([
+        { side: 'additions', lineNumber: 0, metadata: 'new-file' },
+      ]);
+
+      const { unifiedContentAST } = await renderer.asyncRender(diff, {
+        startingLine: 1,
+        totalLines: 5,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
+
+      expect(
+        unifiedContentAST.some(
+          (node) => getHastAnnotationIndex(node) === '-1,-1'
+        )
+      ).toBe(false);
+    });
+  });
 
   describe('line index matching', () => {
     test('annotation lineIndex matches preceding line in unified style', async () => {

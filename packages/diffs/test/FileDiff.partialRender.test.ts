@@ -73,4 +73,70 @@ describe('FileDiff partial render', () => {
       await disposeHighlighter();
     }
   });
+
+  test('re-rendering a range that excludes the top removes file-level annotations', async () => {
+    const { cleanup } = installDom();
+    let instance: FileDiff<string> | undefined;
+    try {
+      const oldFile = { name: 'x.txt', contents: 'a\nb\nc\nd\n' };
+      const newFile = { name: 'x.txt', contents: 'a\nB\nc\nd\n' };
+      const fileDiff = parseDiffFromFile(oldFile, newFile);
+      const fileContainer = document.createElement('div');
+      const lineAnnotations: DiffLineAnnotation<string>[] = [
+        { side: 'deletions', lineNumber: 0, metadata: 'old-file' },
+        { side: 'additions', lineNumber: 0, metadata: 'new-file' },
+      ];
+      instance = new FileDiff<string>({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+        diffStyle: 'split',
+      });
+
+      instance.render({
+        fileContainer,
+        fileDiff,
+        lineAnnotations,
+        deferManagers: true,
+        preventEmit: true,
+        renderRange: {
+          startingLine: 0,
+          totalLines: 2,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        },
+      });
+      await waitForRenderedCode(fileContainer);
+
+      expect(
+        fileContainer.shadowRoot?.querySelectorAll(
+          '[data-line-annotation="-1,-1"]'
+        ).length
+      ).toBe(2);
+
+      instance.render({
+        fileContainer,
+        fileDiff,
+        lineAnnotations,
+        deferManagers: true,
+        preventEmit: true,
+        renderRange: {
+          startingLine: 1,
+          totalLines: 2,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        },
+      });
+      await waitForRenderedCode(fileContainer);
+
+      expect(
+        fileContainer.shadowRoot?.querySelectorAll(
+          '[data-line-annotation="-1,-1"]'
+        ).length
+      ).toBe(0);
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+      await disposeHighlighter();
+    }
+  });
 });

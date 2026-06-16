@@ -1,0 +1,10 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+tags: ['tsdown', 'publishable']
+
+tasks:
+  # No test suite yet; keep `moon run :test` green repo-wide.
+  test:
+    args: '--pass-with-no-tests'

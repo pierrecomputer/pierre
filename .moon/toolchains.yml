@@ -1,0 +1,12 @@
+$schema: 'https://moonrepo.dev/schemas/toolchains.json'
+
+# Bun is the only managed runtime and the package manager. Tool versions come
+# from .prototools (versionFromPrototools defaults to true), so the pin lives
+# in one place. Node stays pinned in .prototools for tools that run on it
+# (e.g. next's CLI), but moon does not manage a node toolchain.
+javascript:
+  packageManager: 'bun'
+
+bun:
+  installArgs:
+    - '--frozen-lockfile'

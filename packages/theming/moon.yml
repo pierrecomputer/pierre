@@ -1,0 +1,29 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+tags: ['tsdown', 'publishable']
+
+tasks:
+  # Replaces the tsdown tag build: the core entrypoints must stay free of
+  # heavyweight imports, asserted after every build.
+  build:
+    script: 'tsdown --clean && bun scripts/assert-core-clean.ts'
+    deps:
+      - '^:build'
+    inputs:
+      - 'src/**/*'
+      - 'scripts/assert-core-clean.ts'
+      - 'tsdown.config.ts'
+      - 'tsconfig.json'
+    outputs:
+      - 'dist'
+    options:
+      merge: 'replace'
+
+  # The dist-guards suite reads dist directly; the dep (merged with the
+  # inherited ^:build) guarantees freshness so the test never builds or
+  # restores dist itself, which would clear it mid-pipeline for siblings.
+  test:
+    deps:
+      - 'build'

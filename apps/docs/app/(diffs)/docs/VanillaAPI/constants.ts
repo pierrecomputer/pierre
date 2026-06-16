@@ -515,7 +515,8 @@ const instance = new FileDiff({
     return span;
   },
 
-  // Render annotations on specific lines
+  // Render annotations on specific lines. Use lineNumber: 0 for a file-level
+  // annotation above the first hunk separator or diff row.
   renderAnnotation(annotation) {
     const element = document.createElement('div');
     element.textContent = annotation.metadata.threadId;
@@ -552,7 +553,10 @@ const instance = new FileDiff({
 instance.render({
   oldFile: { name: 'file.ts', contents: '...' },
   newFile: { name: 'file.ts', contents: '...' },
-  lineAnnotations: [{ side: 'additions', lineNumber: 5, metadata: {} }],
+  lineAnnotations: [
+    { side: 'additions', lineNumber: 0, metadata: {} },
+    { side: 'additions', lineNumber: 5, metadata: {} },
+  ],
   containerWrapper: document.body,
 });
 
@@ -561,6 +565,7 @@ instance.setOptions({ ...instance.options, diffStyle: 'unified' });
 
 // Update line annotations after initial render
 instance.setLineAnnotations([
+  { side: 'additions', lineNumber: 0, metadata: { threadId: 'file-summary' } },
   { side: 'additions', lineNumber: 5, metadata: { threadId: 'abc' } }
 ]);
 
@@ -760,7 +765,8 @@ const instance = new File({
     return span;
   },
 
-  // Render annotations on specific lines
+  // Render annotations on specific lines. Use lineNumber: 0 for a file-level
+  // annotation above the first file line.
   // Note: File uses LineAnnotation (no 'side' property)
   renderAnnotation(annotation) {
     const element = document.createElement('div');
@@ -795,7 +801,10 @@ const instance = new File({
 // Render the file
 instance.render({
   file: { name: 'example.ts', contents: '...' },
-  lineAnnotations: [{ lineNumber: 5, metadata: {} }],
+  lineAnnotations: [
+    { lineNumber: 0, metadata: {} },
+    { lineNumber: 5, metadata: {} },
+  ],
   containerWrapper: document.body,
 });
 
@@ -804,6 +813,7 @@ instance.setOptions({ ...instance.options, overflow: 'wrap' });
 
 // Update line annotations after initial render
 instance.setLineAnnotations([
+  { lineNumber: 0, metadata: { commentId: 'file-summary' } },
   { lineNumber: 5, metadata: { commentId: 'abc' } }
 ]);
 

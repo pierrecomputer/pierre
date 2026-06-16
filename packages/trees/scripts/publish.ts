@@ -13,10 +13,10 @@ import { join, relative, resolve } from 'node:path';
 // repacking the generated tarball after deleting the internal `@pierre/path-store`
 // workspace dependency, so the tarball we rehearse is the tarball we publish.
 //
-// Run from `packages/trees`:
-//   bun run publish-package -- --dry-run
-//   bun run publish-package -- --tag=beta
-//   bun run publish-package -- --tag=latest --promote-latest --tag-release
+// Run from anywhere in the repo:
+//   moonx trees:publish -- --dry-run
+//   moonx trees:publish -- --tag=beta
+//   moonx trees:publish -- --tag=latest --promote-latest --tag-release
 
 interface CliFlags {
   dryRun: boolean;
@@ -109,11 +109,11 @@ function packageRoot(): string {
   return resolve(import.meta.dir, '..');
 }
 
-// Builds trees' dist (the V3 gate runs inside the build script itself) so the
+// Builds trees' dist (the V3 gate runs inside the build task itself) so the
 // tarball we pack next contains up-to-date output with no path-store leaks.
 function buildTrees(): void {
   console.log('[publish] building @pierre/trees');
-  run('bun', ['run', 'build'], { cwd: packageRoot(), inherit: true });
+  run('moon', ['run', 'trees:build'], { cwd: packageRoot(), inherit: true });
 }
 
 // Asks bun to produce the same tarball it would upload to npm. bun's pack

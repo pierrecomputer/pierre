@@ -62,22 +62,16 @@
     "tag": "beta"
   },
   "scripts": {
-    "assert:bun-version": "bun ../../scripts/assert-bun-version.ts",
-    "build": "tsdown --clean",
-    "dev": "echo 'Watching for changes…' && tsdown --watch --log-level error",
-    "benchmark:parse-merge-conflict": "bun run ./scripts/benchmarkParseMergeConflictDiffFromFile.ts",
-    "test": "bun test",
-    "tsc": "tsgo --noEmit --pretty",
-    "prepublishOnly": "bun run assert:bun-version && bun run build"
+    "prepublishOnly": "moon run diffs:prepublish"
   },
   "dependencies": {
     "@pierre/theme": "catalog:",
     "@pierre/theming": "workspace:*",
-    "@shikijs/transformers": "^3.0.0",
+    "@shikijs/transformers": "^3.0.0 || ^4.0.0",
     "diff": "catalog:",
     "hast-util-to-html": "catalog:",
     "lru_map": "catalog:",
-    "shiki": "^3.0.0"
+    "shiki": "^3.0.0 || ^4.0.0"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",

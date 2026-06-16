@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
+  existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -26,19 +27,21 @@ function distUrl(entry: string): string {
   return pathToFileURL(join(DIST_DIR, entry)).href;
 }
 
-// Build the package once before running all guard assertions. This ensures
-// the dist reflects the current source, not a stale previous build.
+// Dist freshness is the task graph's job: theming:test depends on
+// theming:build (see packages/theming/moon.yml), so moon builds (or
+// cache-validates) dist before this suite runs. The test itself must never
+// build or restore dist — a nested `moon run theming:build` here triggers a
+// cache hydration that clears and rewrites dist while sibling tasks
+// (diffs/trees tests and typechecks) are resolving @pierre/theming through
+// it, which broke CI. Guard against a missing dist instead.
 beforeAll(() => {
-  const result = Bun.spawnSync(['bun', 'run', 'build'], {
-    cwd: PKG_DIR,
-    env: { ...process.env, AGENT: '1' },
-  });
-  if (result.exitCode !== 0) {
+  if (!existsSync(join(DIST_DIR, 'index.js'))) {
     throw new Error(
-      `Build failed:\n${result.stderr.toString()}\n${result.stdout.toString()}`
+      'packages/theming/dist is missing. Run `moonx theming:build` (or any ' +
+        'task depending on it) first; theming:test declares that dependency.'
     );
   }
-}, 60_000);
+});
 
 describe('core dist guard', () => {
   test('finds no violations in the current clean dist', () => {

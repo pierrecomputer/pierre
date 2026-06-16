@@ -1,0 +1,316 @@
+'use client';
+
+import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
+import { Check, ChevronRight, Circle } from 'lucide-react';
+import * as React from 'react';
+
+import { cn } from '@/lib/cn';
+
+const DropdownMenu = DropdownMenuPrimitive.Root;
+
+const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+
+const DropdownMenuGroup = DropdownMenuPrimitive.Group;
+
+const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
+
+const DropdownMenuSub = DropdownMenuPrimitive.Sub;
+
+const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
+
+const DropdownMenuSubTrigger = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger> & {
+    inset?: boolean;
+  }
+>(({ className, inset = false, children, ...props }, ref) => (
+  <DropdownMenuPrimitive.SubTrigger
+    ref={ref}
+    className={cn(
+      'focus:bg-accent data-[state=open]:bg-accent flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm outline-none select-none',
+      inset && 'pl-8',
+      className
+    )}
+    {...props}
+  >
+    {children}
+    <ChevronRight className="ml-auto h-4 w-4" />
+  </DropdownMenuPrimitive.SubTrigger>
+));
+DropdownMenuSubTrigger.displayName =
+  DropdownMenuPrimitive.SubTrigger.displayName;
+
+const DropdownMenuSubContent = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
+>(({ className, ...props }, ref) => (
+  <DropdownMenuPrimitive.SubContent
+    ref={ref}
+    className={cn(
+      'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-md border border-[rgb(0_0_0_/_0.15)] bg-clip-padding p-1 shadow-lg dark:border-[rgb(255_255_255_/_0.15)] dark:shadow-black/25',
+      className
+    )}
+    {...props}
+  />
+));
+DropdownMenuSubContent.displayName =
+  DropdownMenuPrimitive.SubContent.displayName;
+
+const DEFAULT_SELECTED_ITEM_SELECTOR =
+  '[data-selected="true"], [aria-current="true"], [aria-checked="true"], [data-state="checked"]';
+
+const DropdownMenuContent = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
+    scrollSelectedIntoView?: boolean;
+    selectedItemSelector?: string;
+  } & Pick<
+      React.ComponentProps<typeof DropdownMenuPrimitive.Portal>,
+      'container'
+    >
+>(
+  (
+    {
+      className,
+      sideOffset = 4,
+      scrollSelectedIntoView = false,
+      selectedItemSelector = DEFAULT_SELECTED_ITEM_SELECTOR,
+      // Added by us for docs, but not generally available to our
+      // users, so don't document things based on this prop
+      container,
+      ...props
+    },
+    ref
+  ) => {
+    const localRef = React.useRef<React.ElementRef<
+      typeof DropdownMenuPrimitive.Content
+    > | null>(null);
+    const scrollFrameRef = React.useRef<number | null>(null);
+
+    const setRefs = React.useCallback(
+      (node: React.ElementRef<typeof DropdownMenuPrimitive.Content> | null) => {
+        const scrollIntoView =
+          node != null && scrollSelectedIntoView && localRef.current !== node;
+
+        // Radix/Floating UI calls this ref super aggressively with null and
+        // the same component quite a lot, resulting in false positives for
+        // scrollIntoView. This is a bunch of code that's annoying to reason
+        // about to work around this.
+        if (node != null) {
+          localRef.current = node;
+        }
+
+        if (scrollIntoView) {
+          if (scrollFrameRef.current != null) {
+            cancelAnimationFrame(scrollFrameRef.current);
+          }
+
+          scrollFrameRef.current = requestAnimationFrame(() => {
+            scrollFrameRef.current = null;
+
+            if (localRef.current !== node || !node.isConnected) {
+              return;
+            }
+
+            node
+              .querySelector<HTMLElement>(selectedItemSelector)
+              ?.scrollIntoView({ block: 'nearest' });
+          });
+        }
+
+        if (typeof ref === 'function') {
+          ref(node);
+        } else if (ref != null) {
+          ref.current = node;
+        }
+      },
+      [ref, scrollSelectedIntoView, selectedItemSelector]
+    );
+
+    React.useEffect(
+      () => () => {
+        localRef.current = null;
+        if (scrollFrameRef.current != null) {
+          cancelAnimationFrame(scrollFrameRef.current);
+        }
+      },
+      []
+    );
+
+    return (
+      <DropdownMenuPrimitive.Portal container={container}>
+        <DropdownMenuPrimitive.Content
+          ref={setRefs}
+          sideOffset={sideOffset}
+          className={cn(
+            'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] space-y-[1px] overflow-hidden rounded-lg border border-[rgb(0_0_0_/_0.1)] bg-clip-padding p-1 shadow-lg dark:border-[rgb(255_255_255_/_0.15)] dark:shadow-black/25',
+            className
+          )}
+          {...props}
+        />
+      </DropdownMenuPrimitive.Portal>
+    );
+  }
+);
+DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
+
+const DropdownMenuItem = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Item>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
+    inset?: boolean;
+    selected?: boolean;
+    variant?: 'default' | 'danger';
+  }
+>(
+  (
+    {
+      className,
+      inset = false,
+      selected = false,
+      variant = 'default',
+      ...props
+    },
+    ref
+  ) => (
+    <DropdownMenuPrimitive.Item
+      ref={ref}
+      className={cn(
+        'focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center rounded-md px-3 py-1.5 text-sm outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        selected && 'bg-accent text-accent-foreground',
+        variant === 'danger' &&
+          'text-destructive focus:bg-destructive/15 focus:text-destructive dark:text-destructive dark:focus:bg-destructive/15 dark:focus:text-destructive',
+        inset && 'pl-8',
+        className
+      )}
+      data-selected={selected ? 'true' : undefined}
+      {...props}
+    />
+  )
+);
+DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
+
+const DropdownMenuCheckboxItem = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem> & {
+    // 'left' (default) keeps the conventional checkmark gutter on the leading
+    // edge. 'right' renders the checkmark inline at the trailing edge instead,
+    // which suits items that already carry their own leading icon/badge (where
+    // the absolute left gutter would otherwise overlap that icon).
+    indicatorSide?: 'left' | 'right';
+  }
+>(({ className, children, checked, indicatorSide = 'left', ...props }, ref) => {
+  const indicator = (
+    <DropdownMenuPrimitive.ItemIndicator>
+      <Check className="h-4 w-4" />
+    </DropdownMenuPrimitive.ItemIndicator>
+  );
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      ref={ref}
+      className={cn(
+        'focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center rounded-sm py-1.5 text-sm transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        indicatorSide === 'left' ? 'pr-2 pl-8' : 'px-2',
+        className
+      )}
+      checked={checked}
+      {...props}
+    >
+      {indicatorSide === 'left' && (
+        <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+          {indicator}
+        </span>
+      )}
+      {children}
+      {indicatorSide === 'right' && (
+        <span className="ml-auto flex h-3.5 w-3.5 items-center justify-center">
+          {indicator}
+        </span>
+      )}
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+});
+DropdownMenuCheckboxItem.displayName =
+  DropdownMenuPrimitive.CheckboxItem.displayName;
+
+const DropdownMenuRadioItem = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
+>(({ className, children, ...props }, ref) => (
+  <DropdownMenuPrimitive.RadioItem
+    ref={ref}
+    className={cn(
+      'focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 text-sm transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      className
+    )}
+    {...props}
+  >
+    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+      <DropdownMenuPrimitive.ItemIndicator>
+        <Circle className="h-2 w-2 fill-current" />
+      </DropdownMenuPrimitive.ItemIndicator>
+    </span>
+    {children}
+  </DropdownMenuPrimitive.RadioItem>
+));
+DropdownMenuRadioItem.displayName = DropdownMenuPrimitive.RadioItem.displayName;
+
+const DropdownMenuLabel = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Label>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label> & {
+    inset?: boolean;
+  }
+>(({ className, inset = false, ...props }, ref) => (
+  <DropdownMenuPrimitive.Label
+    ref={ref}
+    className={cn(
+      'px-2 py-1.5 text-sm font-semibold',
+      inset && 'pl-8',
+      className
+    )}
+    {...props}
+  />
+));
+DropdownMenuLabel.displayName = DropdownMenuPrimitive.Label.displayName;
+
+const DropdownMenuSeparator = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Separator>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>
+>(({ className, ...props }, ref) => (
+  <DropdownMenuPrimitive.Separator
+    ref={ref}
+    className={cn('bg-muted -mx-1 my-1 h-px', className)}
+    {...props}
+  />
+));
+DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
+
+const DropdownMenuShortcut = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLSpanElement>) => {
+  return (
+    <span
+      className={cn('ml-auto text-xs tracking-widest opacity-60', className)}
+      {...props}
+    />
+  );
+};
+DropdownMenuShortcut.displayName = 'DropdownMenuShortcut';
+
+export {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+};

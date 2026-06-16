@@ -1,0 +1,150 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# Local-only tasks avoid presets and set options explicitly. Rule of thumb:
+# moon ci executes EVERY affected runInCI-enabled task (requested targets
+# only add, never subtract), so `runInCI: 'always'` — which keeps a task
+# runnable in CI-marked shells like agent harnesses (CI=1) — is safe only
+# for tasks that can never be affected through the graph (no deps, no
+# dependents). Graph-connected local tasks (dev/prod/e2e variants) stay
+# `runInCI: 'skip'`; run those with a `CI=` prefix, e.g.
+# `CI= moonx docs:dev-diffs`.
+language: 'typescript'
+layer: 'application'
+
+tasks:
+  # Both site builds regenerate the shared `public/llms*.txt` (its content is
+  # site-dependent), so they share a mutex: never run them concurrently.
+  # Their .next outputs are disjoint (`distDir: .next/<site>`), which keeps
+  # the two tasks independently cacheable. Inputs are explicit because the
+  # default project glob would hash the SIBLING task's llms output (moon only
+  # filters a task's own outputs), making the two hashes ping-pong and
+  # forcing rebuilds on every pipeline. Vercel does not run these tasks
+  # (its builder writes plain `.next`, which would fail the declared
+  # outputs): vercel.json runs build-deps below, then next build directly.
+  build:
+    script: 'bun scripts/generate-llms-txt.ts && next build'
+    env:
+      NEXT_PUBLIC_SITE: 'diffs'
+    deps:
+      - '^:build'
+    inputs:
+      - '**/*'
+      - '!node_modules/**'
+      - '!.next/**'
+      - '!public/llms.txt'
+      - '!public/llms-full.txt'
+    outputs:
+      - '.next/diffs'
+      - 'public/llms.txt'
+      - 'public/llms-full.txt'
+    options:
+      mutex: 'docs-build'
+
+  build-trees-site:
+    script: 'bun scripts/generate-llms-txt.ts && next build'
+    env:
+      NEXT_PUBLIC_SITE: 'trees'
+    deps:
+      - '^:build'
+    inputs:
+      - '**/*'
+      - '!node_modules/**'
+      - '!.next/**'
+      - '!public/llms.txt'
+      - '!public/llms-full.txt'
+    outputs:
+      - '.next/trees'
+      - 'public/llms.txt'
+      - 'public/llms-full.txt'
+    options:
+      mutex: 'docs-build'
+
+  # Aggregator for environments that run `next build` outside moon (Vercel):
+  # builds the workspace dependencies, nothing else. runInCI must be enabled
+  # because Vercel builders set CI=1 and moon run refuses CI-skipped tasks
+  # there; it is a noop in the CI pipeline (its deps already run).
+  build-deps:
+    command: 'noop'
+    deps:
+      - '^:build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  generate-llms-txt:
+    command: 'bun scripts/generate-llms-txt.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # Build deps run to completion first, then dependency watchers (`^:dev`)
+  # run alongside next dev. run-dev.sh kills stale listeners on the port
+  # before starting (crashed terminals leak servers).
+  dev-diffs:
+    script:
+      'export NEXT_PUBLIC_SITE=diffs PORT=$(( ${PIERRE_PORT_OFFSET:-0} + 3690 ))
+      && bash ../../scripts/run-dev.sh "$PORT" -- next dev'
+    deps:
+      - '^:build'
+      - '^:dev'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+      envFile: '/.env.worktree'
+
+  dev-trees:
+    script:
+      'export NEXT_PUBLIC_SITE=trees PORT=$(( ${PIERRE_PORT_OFFSET:-0} + 3691 ))
+      && bash ../../scripts/run-dev.sh "$PORT" -- next dev'
+    deps:
+      - '^:build'
+      - '^:dev'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+      envFile: '/.env.worktree'
+
+  # Serves the diffs-site build by default; set NEXT_PUBLIC_SITE=trees (and
+  # have run build-trees-site) to serve the trees build. PORT passes through.
+  # Spawned by playwright's webServer (docs test-e2e).
+  start:
+    command: 'next start'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'always'
+
+  prod:
+    script: 'next start -p "${PORT:-3000}"'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+
+  # Deliberately out of CI (parity with the pre-moon pipeline) and a graph
+  # dependent of `build`, so it must stay runInCI skip. In CI-marked shells:
+  # `CI= moonx docs:test-e2e`.
+  test-e2e:
+    script:
+      '(bun ./test/e2e/check-playwright-binary.ts || bunx playwright@1.51.1
+      install chromium) && bunx playwright test -c test/e2e/playwright.config.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+      envFile: '/.env.worktree'
+
+  test-e2e-server:
+    script:
+      'PORT=$(( ${PIERRE_PORT_OFFSET:-0} + 4174 )) && bash
+      ../../scripts/run-dev.sh "$PORT" -- next start'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'always'
+      envFile: '/.env.worktree'

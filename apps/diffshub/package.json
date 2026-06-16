@@ -2,21 +2,6 @@
   "name": "@pierre/diffshub",
   "version": "0.0.0",
   "private": true,
-  "scripts": {
-    "build": "bun run build:deps && bun run build:next",
-    "build:next": "next build",
-    "build:deps": "cd ../.. && bun ws \"packages/*\" build",
-    "dev": "export PORT=$((${PIERRE_PORT_OFFSET:-0} + 3692)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run _dev",
-    "prod": "export PORT=$((${PIERRE_PORT_OFFSET:-0} + 3692)) && bash ../../scripts/run-dev.sh \"$PORT\" -- bun run _prod",
-    "_dev": "bun run build:deps && bun concurrently \"bun run dev:deps:diffs\" \"bun run dev:deps:tree\" \"bun run dev:deps:truncate\" \"bun run dev:next\" --names \"diffs,trees,truncate,diffshub\" --prefix-colors \"blue,green,yellow,purple\"",
-    "_prod": "bun run build && next start -p ${PORT:-3000}",
-    "dev:next": "next dev",
-    "dev:deps:diffs": "(cd ../../packages/diffs && bun run dev)",
-    "dev:deps:tree": "(cd ../../packages/trees && bun run dev)",
-    "dev:deps:truncate": "(cd ../../packages/truncate && bun run dev)",
-    "start": "next start",
-    "tsc": "bun run build:deps && tsgo --noEmit --pretty"
-  },
   "dependencies": {
     "@pierre/diffs": "workspace:*",
     "@pierre/icons": "catalog:",
@@ -47,7 +32,6 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "concurrently": "catalog:",
     "jsdom": "catalog:",
     "typescript": "catalog:"
   },

@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { loadWorktreeEnv } from '../../../../scripts/load-worktree-env.mjs';
 
 // Pull `PIERRE_PORT_OFFSET` from `.env.worktree` when Playwright is launched
-// outside a `bun ws` call (e.g. `bunx playwright test` from the package root).
+// outside a moon task (e.g. `bunx playwright test` from the package root).
 loadWorktreeEnv();
 
 const portOffset = Number(process.env.PIERRE_PORT_OFFSET ?? 0);
@@ -27,7 +27,7 @@ export default defineConfig({
     viewport: { width: 1400, height: 1000 },
   },
   webServer: {
-    command: `PORT=${e2ePort} bun run start`,
+    command: `PORT=${e2ePort} moon run docs:start`,
     url: `${e2eBaseUrl}/trees-dev/react`,
     reuseExistingServer: false,
     timeout: 60_000,

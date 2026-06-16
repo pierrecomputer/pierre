@@ -337,7 +337,7 @@ declare global {
 }
 
 // Mirror the Playwright config behavior so direct profiling runs pick up the
-// same worktree port offset as `bun ws` and `bun run chrome`.
+// same worktree port offset as moon tasks and the chrome debug helper.
 loadWorktreeEnv();
 
 function readWorktreePortOffset(): number {
@@ -494,7 +494,7 @@ const AGGREGATE_METRIC_DEFINITIONS: Array<{
 const INTEGER_FORMATTER = new Intl.NumberFormat('en-US');
 
 function printHelpAndExit(): never {
-  console.log('Usage: bun ws trees profile:file-tree -- [options]');
+  console.log('Usage: moonx trees:profile-file-tree -- [options]');
   console.log('');
   console.log(
     'Assumes Chrome is already running with --remote-debugging-port enabled.'
@@ -505,7 +505,7 @@ function printHelpAndExit(): never {
     `  --browser-url <url>    Chrome remote debugging base URL (default: ${DEFAULT_BROWSER_URL})`
   );
   console.log(
-    '                         If the local debug port is closed, the profiler starts `bun run chrome` automatically'
+    '                         If the local debug port is closed, the profiler starts `scripts/chrome-remote-debug.sh` automatically'
   );
   console.log(
     `  --url <url>            Page to profile (default: ${DEFAULT_URL})`
@@ -1125,7 +1125,7 @@ async function isUrlReachable(
 /** Builds dist output so the fixture always reflects the current tree implementation. */
 function ensureProductionDistBuild(): void {
   const buildResult = Bun.spawnSync({
-    cmd: ['bun', 'run', 'build'],
+    cmd: ['moon', 'run', 'trees:build'],
     cwd: packageRoot,
     env: {
       ...process.env,
@@ -1209,7 +1209,7 @@ function launchChromeDebugPort(browserUrl: string): void {
   }
 
   const launchResult = Bun.spawnSync({
-    cmd: ['bun', 'run', 'chrome'],
+    cmd: ['./scripts/chrome-remote-debug.sh'],
     cwd: repoRoot,
     env: {
       ...process.env,
@@ -1292,7 +1292,7 @@ async function startFixtureServerIfNeeded(
   }
 
   const serverProcess = Bun.spawn({
-    cmd: ['bun', 'run', 'test:e2e:server'],
+    cmd: ['moon', 'run', 'trees:test-e2e-server'],
     cwd: packageRoot,
     env: {
       ...process.env,
@@ -4207,7 +4207,7 @@ async function main(): Promise<void> {
     throw new Error(
       `${message}\n\nThe profiler checks ${createBrowserVersionUrl(
         config.browserUrl
-      )} before profiling and starts \`bun run chrome\` automatically when a local debug port is closed.`
+      )} before profiling and starts \`scripts/chrome-remote-debug.sh\` automatically when a local debug port is closed.`
     );
   } finally {
     serverProcess?.kill();

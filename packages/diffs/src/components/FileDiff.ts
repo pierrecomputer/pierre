@@ -509,7 +509,9 @@ export class FileDiff<
     }
     this.fileContainer = undefined;
     this.mounted = false;
-    this.lineAnnotations = [];
+    if (!recycle) {
+      this.lineAnnotations = [];
+    }
     this.clearAuxiliaryNodes();
     this.annotationCache.clear();
     this.pre = undefined;

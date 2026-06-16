@@ -50,24 +50,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown --clean && bun scripts/assert-no-path-store.ts",
-    "benchmark": "bun run ./scripts/benchmark.ts",
-    "benchmark:file-tree-get-item": "bun run ./scripts/benchmark.ts --preset get-item",
-    "benchmark:sticky-scroll": "bun run ./scripts/benchmark.ts --preset sticky-scroll",
-    "profile:file-tree": "bun run ./scripts/profileFileTree.ts",
-    "dev": "echo 'Watching for changes…' && tsdown --watch src --watch ../path-store/src --log-level error",
-    "test": "bun test",
-    "coverage": "bun test --coverage",
-    "test:e2e:base": "bun run build && (bun ./test/e2e/check-playwright-binary.ts || bun run test:e2e:installbinary)",
-    "test:e2e": "bun run test:e2e:base && bunx playwright test -c test/e2e/playwright.config.ts --grep-invert @diagnostic",
-    "test:e2e:sticky-drift": "bun run test:e2e:base && bunx playwright test -c test/e2e/playwright.config.ts test/e2e/file-tree-sticky-context-menu-scroll-drift.pw.ts",
-    "test:e2e:installbinary": "bunx playwright@1.51.1 install chromium",
-    "test:e2e:server": "FILE_TREE_E2E_PORT=${FILE_TREE_E2E_PORT:-$((${PIERRE_PORT_OFFSET:-0} + 9221))} vite --config test/e2e/vite.config.ts",
-    "tsc": "tsgo --noEmit --pretty",
-    "generate-icons": "bun scripts/generate-built-in-icons.ts",
-    "publish-package": "bun run ./scripts/publish.ts",
-    "assert:safe-publish": "bun scripts/assert-safe-publish.ts",
-    "prepublishOnly": "bun run assert:safe-publish && bun run build"
+    "prepublishOnly": "moon run trees:prepublish"
   },
   "dependencies": {
     "@pierre/path-store": "workspace:*",

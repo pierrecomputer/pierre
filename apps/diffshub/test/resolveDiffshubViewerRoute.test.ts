@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolveDiffshubViewerRoute } from '../app/_components/utils';
+import { resolveDiffshubViewerRoute } from '../lib/resolveDiffshubViewerRoute';
 
 describe('resolveDiffshubViewerRoute', () => {
   describe('empty path', () => {

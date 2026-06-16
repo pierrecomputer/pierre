@@ -1,0 +1,24 @@
+name = "gh"
+type = "cli"
+
+[platform.linux]
+archive-prefix = "gh_{version}_linux_{arch}"
+download-file = "gh_{version}_linux_{arch}.tar.gz"
+
+[platform.macos]
+archive-prefix = "gh_{version}_macOS_{arch}"
+download-file = "gh_{version}_macOS_{arch}.zip"
+
+[install]
+download-url = "https://github.com/cli/cli/releases/download/v{version}/{download_file}"
+
+[install.arch]
+aarch64 = "arm64"
+x86_64 = "amd64"
+
+[install.exes.gh]
+exe-path = "bin/gh"
+primary = true
+
+[resolve]
+git-url = "https://github.com/cli/cli"

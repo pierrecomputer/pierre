@@ -1,0 +1,76 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# Local-only tasks avoid presets and set options explicitly. Rule of thumb:
+# moon ci executes EVERY affected runInCI-enabled task (requested targets
+# only add, never subtract), so `runInCI: 'always'` — which keeps a task
+# runnable in CI-marked shells like agent harnesses (CI=1) — is safe only
+# for tasks that can never be affected through the graph (no deps, no
+# dependents). Graph-connected local tasks (dev/prod/e2e variants) stay
+# `runInCI: 'skip'`; run those with a `CI=` prefix, e.g.
+# `CI= moonx docs:dev-diffs`.
+language: 'typescript'
+layer: 'library'
+
+tasks:
+  # This package ships its `src` directly (consumers inline it); the only
+  # thing to build is the demo site, so the task is named for what it does
+  # and `^:build` from consumers never drags it in.
+  build-demo:
+    command: 'vite build demo'
+    outputs:
+      - 'demo/dist'
+
+  dev-demo:
+    script:
+      'PORT=$(( ${PIERRE_PORT_OFFSET:-0} + 4175 )) && bash
+      ../../scripts/run-dev.sh "$PORT" -- vite demo --host 127.0.0.1 --port
+      "$PORT"'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'always'
+      envFile: '/.env.worktree'
+
+  # Not targeted by any CI lane; runnable everywhere for local/agent use.
+  test-demo:
+    script:
+      '(bun ./test/e2e/check-playwright-binary.js || bunx playwright@1.51.1
+      install chromium) && bunx playwright test -c test/e2e/playwright.config.js'
+    options:
+      cache: false
+      runInCI: 'always'
+      envFile: '/.env.worktree'
+
+  # Playwright's webServer spawns this; PATH_STORE_DEMO_E2E_PORT is provided
+  # by the playwright config.
+  test-demo-server:
+    command: 'vite --config test/e2e/vite.config.js'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'always'
+      envFile: '/.env.worktree'
+
+  benchmark:
+    command: 'bun scripts/benchmark.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  benchmark-visible-tree-projection:
+    command: 'bun scripts/benchmarkVisibleTreeProjection.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  profile-demo:
+    command: 'bun scripts/profileDemo.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  profile-visible-tree-projection:
+    command: 'bun scripts/profileVisibleTreeProjection.ts'
+    options:
+      cache: false
+      runInCI: 'always'

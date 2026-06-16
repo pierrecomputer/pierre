@@ -6,139 +6,81 @@ on:
       - main
   pull_request:
 
+# Plain-text-friendly logs: moon already disables colors and spinners when it
+# detects CI, but Vite/Next force ANSI color when they see GITHUB_ACTIONS.
+# NO_COLOR keeps downloaded/raw logs byte-clean for humans and agents; GitHub
+# workflow commands (::error test annotations) are unaffected.
+env:
+  NO_COLOR: 1
+
 jobs:
-  build:
-    name: Build Dependencies
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+  # One affected-aware lane: moon computes the affected projects from the VCS
+  # diff (PR base, or the push range on main), expands through graph
+  # relations (a package change re-runs its dependents' builds, tests, and
+  # typechecks — including trees e2e), and restores unchanged work from the
+  # moon cache on the sticky disks. The target list is every CI entry point;
+  # graph-connected tasks like trees:test-e2e also join automatically when
+  # affected, so listing them keeps cold runs explicit rather than adding
+  # coverage.
+  ci:
+    name: Build, test, lint
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Set up Bun and install dependencies
-        uses: ./.github/actions/setup
-
-      - name: Build workspace packages
-        run: bun ws "packages/*" build
-
-      # Build each docs site variant so both are build-verified. Every variant
-      # writes to the same `.next/` dir (the per-site `distDir` in
-      # next.config.mjs is dev-only), so these run sequentially.
-      - name: Build docs (diffs, generates .source)
-        run: bun ws docs build
-
-      - name: Build docs (trees)
-        run: NEXT_PUBLIC_SITE=trees bun ws docs build
-
-      # diffshub is now its own standalone app rather than a docs site variant.
-      - name: Build diffshub
-        run: bun ws diffshub build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: build-output
-          path: |
-            packages/*/dist/
-            apps/docs/.source/
-            apps/docs/.next/
-            apps/diffshub/.next/
-          retention-days: 1
+          # moon diffs against the merge base to compute affected projects.
+          fetch-depth: 0
 
-  lint:
-    name: Lint
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: build
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Set up Bun and install dependencies
+      - name: Set up moon and caches
         uses: ./.github/actions/setup
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: build-output
-
-      - name: Run Lint
-        run: bun run lint
-
-  stylelint:
-    name: Stylelint
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: build
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Set up Bun and install dependencies
-        uses: ./.github/actions/setup
-
-      - name: Run Stylelint
-        run: bun run lint:css
-
-  format:
-    name: Format
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: build
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Set up Bun and install dependencies
-        uses: ./.github/actions/setup
-
-      - name: Run Format check
-        run: bun run format:check
-
-  test:
-    name: Tests
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: build
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Set up Bun and install dependencies
-        uses: ./.github/actions/setup
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: build-output
-
-      - name: Run unit tests (all packages)
-        run: bun ws "packages/*" test --sequential
 
       - name: Mount Playwright browsers
-        uses: useblacksmith/stickydisk@2b7a836cbb2b48f4780ae76a7b6fd79d545fb54a # v1.3.0
+        uses: useblacksmith/stickydisk@4c034ba57b706cf0e3b4b0ce098c2a3b1071580c # v1.4.0
         with:
           key: ${{ github.repository }}-playwright-browsers-${{ runner.os }}
           path: ~/.cache/ms-playwright
-      - name: Install Playwright browser - trees
+
+      # Skip the expensive browser + system-deps install when moon will skip
+      # the e2e target anyway. Fail-open: any query error installs.
+      - name: Check whether trees e2e is affected
+        id: e2e-affected
+        run: |
+          out="$(moon query tasks --affected --downstream deep 2>/dev/null)" || out="test-e2e"
+          case "$out" in
+            *test-e2e*) echo "run=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "run=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      # System libraries are per-runner and not covered by the browser cache.
+      - name: Install Playwright browser
+        if: steps.e2e-affected.outputs.run == 'true'
         run: bunx playwright@1.51.1 install --with-deps chromium
 
-      - name: Run tests - trees e2e
-        run: bun ws trees test:e2e
-
-  typecheck:
-    name: TypeScript
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: build
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Set up Bun and install dependencies
-        uses: ./.github/actions/setup
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: build-output
-
-      - name: Type check all workspaces
-        run: bun run ws "*" tsc
+      # Note on targets: moon ci executes every affected runInCI-enabled
+      # task — the target list adds entry points (so cold runs are explicit)
+      # but never subtracts. Anything that must not run in CI is
+      # runInCI: 'skip' in its task config. No task may write another
+      # task's outputs mid-pipeline (tests never build; builds own their
+      # dist exclusively) — that invariant is what makes the parallel
+      # pipeline safe.
+      #
+      # `:task` shapes only bind to projects affected by changed FILES;
+      # tasks that are affected through graph relations (e.g. docs:build
+      # when packages/diffs changes) only run when named explicitly, and
+      # explicit targets are still affected-filtered (they skip when their
+      # project is untouched). So every cross-project consumer build is
+      # listed by name — that is what catches Next/transpilePackages
+      # regressions in apps when a package changes.
+      # --summary detailed appends an end-of-log recap naming every action
+      # with status, duration, and cache hash, so a failed target is readable
+      # from the log tail without scrolling through interleaved task output.
+      - name: Run affected tasks
+        run: >-
+          moon ci --include-relations --summary detailed :build demo:build
+          diffshub:build docs:build docs:build-trees-site path-store:build-demo
+          :test :typecheck trees:test-e2e root:lint root:lint-css
+          root:format-check
 
   actions-pinned:
     name: Actions pinned to SHA

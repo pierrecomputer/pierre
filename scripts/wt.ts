@@ -2,18 +2,18 @@
 //
 // Worktree command suite for this monorepo.
 //
-//   bun run wt new <slug> [--branch <name>] [--base <ref>]
-//   bun run wt setup [<slug>]
-//   bun run wt rm <slug> [--keep-branch] [--force]
-//   bun run wt clean [<slug>|--all]
-//   bun run wt ps
-//   bun run wt list
+//   moonx root:wt -- new <slug> [--branch <name>] [--base <ref>]
+//   moonx root:wt -- setup [<slug>]
+//   moonx root:wt -- rm <slug> [--keep-branch] [--force]
+//   moonx root:wt -- clean [<slug>|--all]
+//   moonx root:wt -- ps
+//   moonx root:wt -- list
 //
 // Design notes (see AGENTS.md "Worktrees" section for the user-facing summary):
 //
 // - Worktrees live at ~/pierre/pierre-worktrees/<dir>/ where <dir> is the slug
 //   with '/' replaced by '-'. Each worktree owns a port offset stored in
-//   <worktree>/.env.worktree. Dev scripts resolve ports as
+//   <worktree>/.env.worktree. Dev tasks resolve ports as
 //   `${PIERRE_PORT_OFFSET:-0} + <default>` so the main clone (no env file) keeps
 //   its historical ports unchanged.
 // - Discovery is stateless: `git worktree list --porcelain` is the source of
@@ -107,7 +107,7 @@ if (import.meta.main) {
 }
 
 function cmdHelp(): number {
-  console.log(`Usage: bun run wt <subcommand> [args]
+  console.log(`Usage: moonx root:wt -- <subcommand> [args]
 
 Subcommands:
   new <slug> [--branch <name>] [--base <ref>]

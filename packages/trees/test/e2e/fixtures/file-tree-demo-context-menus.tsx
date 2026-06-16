@@ -55,7 +55,7 @@ const portaledMenuContentStyle = {
   border: '1px solid #d4d4d8',
   borderRadius: '10px',
   background: 'white',
-  boxShadow: '0 10px 30px rgba(0, 0, 0, 0.18)',
+  boxShadow: '0 8px 16px rgba(0, 0, 0, 0.1)',
   display: 'grid',
   gap: '8px',
   zIndex: 1000,

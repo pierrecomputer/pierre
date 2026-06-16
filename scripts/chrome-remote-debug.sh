@@ -19,8 +19,8 @@
 set -euo pipefail
 
 # Neither bash nor `bun run` auto-load `.env.worktree`, so when this script is
-# launched outside of a `bun ws` chain (e.g. `bun run chrome` from the worktree
-# root) the `PIERRE_*` vars would otherwise be missing and chrome would open on
+# launched outside a moon task (e.g. directly from the worktree root) the
+# `PIERRE_*` vars would otherwise be missing and chrome would open on
 # the main clone's debug port. Walk up from $PWD until we find `.env.worktree`
 # or hit a `.git` entry (worktree root marker) and source the file so its keys
 # are exported for the remainder of this script. Pre-existing env vars win.

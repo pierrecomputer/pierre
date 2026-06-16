@@ -1,0 +1,46 @@
+$schema: 'https://moonrepo.dev/schemas/tasks.json'
+
+# Tasks shared by every bun project. Only tasks that are string-identical
+# across all inheriting projects belong here; anything with per-project
+# variance lives in that project's moon.yml (or a tag file when 3+ projects
+# share the same shape).
+inheritedBy:
+  toolchains: ['bun']
+
+# Inputs added to every task of every inheriting project (including tasks
+# defined in project moon.yml files):
+# - package.json: manifest changes (deps, exports) must re-trigger tasks.
+# - /tsconfig.options.json: every package tsconfig extends the shared root
+#   options, and several builds emit type declarations (tsgo --build, tsdown
+#   dts, next build), so compiler-option changes must re-key everything or
+#   stale declarations get restored from cache.
+implicitInputs:
+  - 'package.json'
+  - '/tsconfig.options.json'
+
+tasks:
+  # Tests import workspace dependencies through their published dist (same
+  # resolution as typecheck), so dependency builds must complete first.
+  test:
+    command: 'bun test'
+    deps:
+      - '^:build'
+
+  # Cross-package imports resolve through each dependency's published `dist`
+  # (no TypeScript project references between packages), so typechecking a
+  # project requires its workspace dependencies to be built first.
+  typecheck:
+    command: 'tsgo --noEmit --pretty'
+    deps:
+      - '^:build'
+    inputs:
+      # Whole project minus installed and generated trees: explicit input
+      # globs are filesystem-walked (gitignore is not applied), so without
+      # the negations every node_modules file would be hashed.
+      - '**/*'
+      - '!node_modules/**'
+      - '!dist/**'
+      - '!.next/**'
+      - '!.source/**'
+      - '!demo/dist/**'
+      - '!**/*.tsbuildinfo'

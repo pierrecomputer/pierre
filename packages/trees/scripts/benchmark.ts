@@ -181,7 +181,7 @@ function parseArgs(argv: readonly string[]): BenchmarkCliOptions {
     }
 
     if (argument === '--help') {
-      console.log('Usage: bun ws trees benchmark -- [options]');
+      console.log('Usage: moonx trees:benchmark -- [options]');
       console.log('');
       console.log('Options:');
       console.log(

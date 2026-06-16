@@ -6,4 +6,14 @@ minimumReleaseAgeExcludes = [
   "@pierre/icons",
   "@pierre/theme",
   "@pierre/vscode-icons",
+  # moon is exact-pinned everywhere it is consumed (.prototools, vercel.json),
+  # so the age gate adds no protection and would block fresh moon releases.
+  "@moonrepo/cli",
+  "@moonrepo/core-linux-arm64-gnu",
+  "@moonrepo/core-linux-arm64-musl",
+  "@moonrepo/core-linux-x64-gnu",
+  "@moonrepo/core-linux-x64-musl",
+  "@moonrepo/core-macos-arm64",
+  "@moonrepo/core-macos-x64",
+  "@moonrepo/core-windows-x64-msvc",
 ]

@@ -1,0 +1,20 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'javascript'
+layer: 'library'
+
+workspace:
+  inheritedTasks:
+    # Plain JS package with a hand-written index.d.ts; no tsconfig to check.
+    exclude: ['typecheck']
+
+tasks:
+  # index.js imports `../path-store/src/builder.ts` directly (a deliberate
+  # source-level dependency; a manifest dependency would create a cycle with
+  # path-store's devDependency on this package). Hash those sources so a
+  # path-store change re-runs and re-keys this suite.
+  test:
+    inputs:
+      - '**/*'
+      - '!node_modules/**'
+      - '/packages/path-store/src/**/*'

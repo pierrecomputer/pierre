@@ -1,0 +1,138 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# Local-only tasks avoid presets and set options explicitly. Rule of thumb:
+# moon ci executes EVERY affected runInCI-enabled task (requested targets
+# only add, never subtract), so `runInCI: 'always'` — which keeps a task
+# runnable in CI-marked shells like agent harnesses (CI=1) — is safe only
+# for tasks that can never be affected through the graph (no deps, no
+# dependents). Graph-connected local tasks (dev/prod/e2e variants) stay
+# `runInCI: 'skip'`; run those with a `CI=` prefix, e.g.
+# `CI= moonx docs:dev-diffs`.
+language: 'typescript'
+layer: 'library'
+tags: ['tsdown', 'publishable']
+
+tasks:
+  # Replaces the tsdown tag build: path-store sources are inlined into the
+  # bundle, asserted after every build so it never leaks as a runtime import.
+  build:
+    script: 'tsdown --clean && bun scripts/assert-no-path-store.ts'
+    deps:
+      - '^:build'
+    inputs:
+      - 'src/**/*'
+      - 'scripts/assert-no-path-store.ts'
+      - 'tsdown.config.ts'
+      - 'tsconfig.json'
+      - '/packages/path-store/src/**/*'
+    outputs:
+      - 'dist'
+    options:
+      merge: 'replace'
+
+  # Replaces the tsdown tag dev: also watch the inlined path-store sources.
+  dev:
+    command: 'tsdown --watch src --watch ../path-store/src --log-level error'
+    deps:
+      - '^:build'
+    options:
+      merge: 'replace'
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+
+  coverage:
+    command: 'bun test --coverage'
+    deps:
+      - '^:build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  test-e2e:
+    script:
+      '(bun ./test/e2e/check-playwright-binary.ts || bunx playwright@1.51.1
+      install chromium) && bunx playwright test -c test/e2e/playwright.config.ts
+      --grep-invert @diagnostic'
+    deps:
+      - 'build'
+    inputs:
+      - 'src/**/*'
+      - 'test/e2e/**/*'
+    options:
+      envFile: '/.env.worktree'
+
+  test-e2e-sticky-drift:
+    script:
+      '(bun ./test/e2e/check-playwright-binary.ts || bunx playwright@1.51.1
+      install chromium) && bunx playwright test -c test/e2e/playwright.config.ts
+      test/e2e/file-tree-sticky-context-menu-scroll-drift.pw.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+      envFile: '/.env.worktree'
+
+  # Spawned by playwright's webServer (also under CI) and by the profiler;
+  # FILE_TREE_E2E_PORT is provided by the caller, with a worktree-offset
+  # default for manual runs.
+  test-e2e-server:
+    script:
+      'FILE_TREE_E2E_PORT=${FILE_TREE_E2E_PORT:-$(( ${PIERRE_PORT_OFFSET:-0} +
+      9221 ))} vite --config test/e2e/vite.config.ts'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'always'
+      envFile: '/.env.worktree'
+
+  benchmark:
+    command: 'bun scripts/benchmark.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  benchmark-file-tree-get-item:
+    command: 'bun scripts/benchmark.ts --preset get-item'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  benchmark-sticky-scroll:
+    command: 'bun scripts/benchmark.ts --preset sticky-scroll'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  profile-file-tree:
+    command: 'bun scripts/profileFileTree.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  generate-icons:
+    command: 'bun scripts/generate-built-in-icons.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # Fails by design outside the trees publish flow (package.json still
+  # depends on @pierre/path-store); must never enter a CI pipeline.
+  assert-safe-publish:
+    command: 'bun scripts/assert-safe-publish.ts'
+    options:
+      cache: false
+      internal: true
+      runInCI: 'skip'
+
+  # Appends to the publishable tag's guard chain (assert-bun-version, build).
+  prepublish:
+    deps:
+      - 'assert-safe-publish'
+
+  publish:
+    command: 'bun scripts/publish.ts'
+    options:
+      cache: false
+      runInCI: 'skip'

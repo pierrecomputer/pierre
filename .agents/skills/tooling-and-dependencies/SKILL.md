@@ -8,6 +8,20 @@ description:
 
 # Tooling and Dependencies
 
+## Toolchain (proto)
+
+- Tool versions (bun, node, moon, gh) are pinned in `.prototools` and managed by
+  [proto](https://moonrepo.dev/docs/proto); its shims put the pinned versions on
+  PATH inside the repo. `proto use` installs everything after a pin changes.
+- Bump a tool by editing `.prototools` only — never install tools globally or
+  pin versions elsewhere. moon's version is additionally enforced by
+  `versionConstraint` in `.moon/workspace.yml` and mirrored as the
+  `@moonrepo/cli` catalog entry (for Vercel builders without proto); keep all
+  three in sync.
+- CI and local shells resolve the same toolchain: CI installs it with
+  `moonrepo/setup-toolchain`, which runs `proto install` against the same
+  `.prototools`.
+
 ## Bun
 
 - Use `bun` exclusively for commands and package operations.
@@ -32,18 +46,44 @@ This monorepo uses Bun's `workspaces.catalog` in the root `package.json`.
   `apps/docs` should use catalog versions; published packages such as
   `packages/diffs` may use ranges only when that is intentional.
 
-## Scripts
+## Tasks
 
-- Package scripts should work from the package directory.
-- Common scripts may be mirrored at the root as shortcuts. A root mirror should
-  not behave differently from the package script it wraps.
-- Use the workspace runner when convenient:
+- All build/dev/test/lint entrypoints are moon tasks; package.json scripts exist
+  only for npm lifecycle hooks (`prepublishOnly`). Never add task scripts back
+  to a package.json.
+- Tasks are defined in `.moon/tasks/*.yml` (inherited) and each project's
+  `moon.yml`. Repo-wide tooling (format, lint, icons, clean) lives on the `root`
+  project.
+- Run tasks from anywhere in the repo:
 
 ```bash
-bun ws <project> <task>
-bun ws <project> <task> --some --flag
+moon run <project>:<task>
+moonx <project>:<task>             # same engine; shorthand for moon exec
+moonx <project>:<task> -- --flags  # forward arguments after --
+moon run :test                     # a task across every project that has it
+moon tasks <project>               # discover a project's tasks
 ```
 
-`bun ws` forwards arguments to the target script and does not require a
-standalone `--` separator. The only special handling is that `-v` and
-`--verbose` are consumed by `scripts/ws.ts`.
+`moon run` and `moonx` (an alias binary for `moon exec`) execute the same action
+pipeline: identical dependency resolution, caching, and affected support. Use
+them interchangeably; docs write `moon run` for canonical commands and `moonx`
+in interactive examples. The one practical difference: `moonx`/`moon exec`
+exposes CI-behavior overrides (`--ignore-ci-checks`, `--ci <bool>`) that
+`moon run` lacks. `moon ci` is a third thing — the affected-aware orchestrator
+used only by `.github/workflows/ci.yml`; never reach for it locally.
+
+moon builds dependency projects first (`deps: ['^:build']`), caches outputs, and
+skips tasks whose inputs have not changed. Local-only tasks set explicit options
+instead of moon presets (presets force `runInCI: skip`, which moon refuses to
+run in CI-detected shells; agent harnesses export `CI=1`):
+
+- No graph edges at all (formatters, benchmarks, wt, servers spawned by
+  playwright): use `runInCI: 'always'` — runnable everywhere, and never in the
+  CI pipeline because a task with no deps or dependents is never affected
+  through the graph.
+- Connected to the build graph (dev/prod, e2e variants, publish guards): keep
+  `runInCI: 'skip'` — `moon ci --include-relations` runs affected
+  runInCI-enabled tasks even when unrequested, which would pull them into CI.
+  Run them in CI-marked shells with `moonx <target> --ignore-ci-checks` (works
+  regardless of the shell's CI env). For non-moon commands that CI-gate
+  themselves, unset the var instead: `CI= bun publish --dry-run`.

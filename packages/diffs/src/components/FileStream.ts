@@ -157,6 +157,8 @@ export class FileStream {
     this.stream?.cancel().catch(() => {});
     this.stream = stream;
     this.stream
+      // tokenizeTimeLimit: 0 — never trade silently-wrong token colors for
+      // latency; see renderFileWithHighlighter for the full rationale.
       .pipeThrough(
         typeof theme === 'string'
           ? new CodeToTokenTransformStream({
@@ -166,6 +168,7 @@ export class FileStream {
               allowRecalls: true,
               defaultColor: false,
               cssVariablePrefix: formatCSSVariablePrefix('token'),
+              tokenizeTimeLimit: 0,
             })
           : new CodeToTokenTransformStream({
               ...this.options,
@@ -174,6 +177,7 @@ export class FileStream {
               allowRecalls: true,
               defaultColor: false,
               cssVariablePrefix: formatCSSVariablePrefix('token'),
+              tokenizeTimeLimit: 0,
             })
       )
       .pipeTo(

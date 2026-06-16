@@ -1,0 +1,33 @@
+$schema: 'https://moonrepo.dev/schemas/workspace.json'
+
+# Fail fast when a developer's proto-installed moon drifts from the repo pin
+# in .prototools; both must move together.
+versionConstraint: '2.3.3'
+
+projects:
+  globs:
+    - 'packages/*'
+    - 'apps/*'
+  sources:
+    # Repo-wide tooling (lint, format, icons, clean) lives on the root project.
+    root: '.'
+
+vcs:
+  client: 'git'
+  defaultBranch: 'main'
+  # moon generates .moon/hooks/* (gitignored) and points the worktree-local
+  # core.hooksPath at it, so every clone and worktree gets hooks from any
+  # moon command without an install-time side effect like husky's prepare.
+  sync: true
+  hooks:
+    pre-commit:
+      # Typecheck the projects affected by staged files (and their
+      # dependents), then let lint-staged fix and re-stage style issues.
+      - 'moon exec :typecheck --affected --status staged'
+      - 'bun lint-staged'
+    pre-push:
+      # Git LFS guard: forwards the hook arguments and stdin to git-lfs.
+      - 'command -v git-lfs >/dev/null 2>&1 || { echo >&2 "This repository is
+        configured for Git LFS but git-lfs was not found on your path. Install
+        it from https://git-lfs.com"; exit 2; }'
+      - 'git lfs pre-push "$@"'

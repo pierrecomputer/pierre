@@ -9,6 +9,23 @@ AI-friendly output:
 export AGENT=1
 ```
 
+Most local moon tasks (formatters, benchmarks, worktree management) are
+configured with `runInCI: 'always'` so they keep working in CI-marked shells
+like agent harnesses. Tasks connected to the build graph (dev servers, prod
+serves, e2e variants, publish guards) stay CI-skipped — run those with
+`moonx <target> --ignore-ci-checks`, e.g.
+`moonx docs:dev-diffs --ignore-ci-checks`. For non-moon commands that CI-gate
+themselves, unset the var: `CI= bun publish --dry-run`.
+
+## Toolchain
+
+- Tool versions (bun, node, moon, gh) are pinned in `.prototools` and managed by
+  [proto](https://moonrepo.dev/docs/proto); run `proto use` if a tool is missing
+  or a pin changed. Never install toolchain versions globally; bump pins only in
+  `.prototools`.
+- [moon](https://moonrepo.dev/docs) is the task runner; `package.json` scripts
+  are npm lifecycle hooks only.
+
 ## Core Rules
 
 - Use `bun` for commands and dependency work. Do not use `npm`, `pnpm`, `npx`,
@@ -16,10 +33,11 @@ export AGENT=1
 - Dependencies use Bun's root `workspaces.catalog`. Never add dependency
   versions directly to package-level `package.json` files unless a published
   package intentionally needs its own range.
-- Run commands from the monorepo root when they operate across the repo. Use
-  package directories for package-local scripts, or use
-  `bun ws <project> <task>` as the root shortcut when that fits the task.
+- Run tasks through moon: `moon run <project>:<task>` (or the `moonx` shorthand)
+  works from anywhere in the repo. `moonx <project>:<task> -- args` forwards
+  arguments. Discover tasks with `moon tasks <project>`.
 - Preserve trailing newlines at the end of files.
+- Setup steps for a fresh clone live in `CONTRIBUTING.md`.
 
 ## Skills
 
@@ -46,16 +64,17 @@ documentation there.
 ## Verification Baseline
 
 After code changes, verification is not complete until you have run these from
-the monorepo root:
+anywhere in the repo:
 
 ```bash
-bun run format
-bun run lint
+moon run root:format root:lint
 ```
 
-Also run the relevant package-level `bun run tsc` and focused tests for the
-changed area. For docs-only or AGENTS/skill-only changes, formatting and linting
-are sufficient unless the edit touches executable code or package config.
+Also run the affected typecheck and focused tests for the changed area, e.g.
+`moonx <project>:typecheck` and `moonx <project>:test` (or
+`moonx :typecheck --affected`). For docs-only or AGENTS/skill-only changes,
+formatting and linting are sufficient unless the edit touches executable code or
+package config.
 
 ## Code Readability
 

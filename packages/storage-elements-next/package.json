@@ -15,8 +15,7 @@
     "access": "public"
   },
   "scripts": {
-    "tsc": "tsgo --build",
-    "build": "tsgo --build"
+    "prepublishOnly": "moon run storage-elements-next:prepublish"
   },
   "dependencies": {
     "@pierre/storage": "catalog:"

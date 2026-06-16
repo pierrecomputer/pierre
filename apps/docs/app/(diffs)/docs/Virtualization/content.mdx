@@ -1,10 +1,5 @@
 ## Virtualization
 
-<Notice variant="warning" icon={<IconCiWarningFill />}>
-  Virtualization is beta and subject to change. It’s opt-in and best for
-  rendering very large files or many diffs in one scroll view.
-</Notice>
-
 Virtualization in Diffs uses estimated line and file heights to keep large
 renders fast. It renders placeholders and spacer buffers for off-screen content,
 then renders visible lines in hunk-sized batches as you scroll.
@@ -42,12 +37,6 @@ Inside that scroll container, render the `VirtualizedFile` and
 built-in `Virtualizer` context. In vanilla JS, you manage this explicitly by
 creating a `Virtualizer` instance and wiring it to `VirtualizedFile` /
 `VirtualizedFileDiff` instead of the traditional APIs.
-
-<Notice icon={<IconInfoFill />}>
-  These APIs are still early and are subject to change. We may merge related
-  virtualization functionality into the top-level `File` and `FileDiff`
-  components before shipping, so please share feedback as you test these APIs.
-</Notice>
 
 ### React
 

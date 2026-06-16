@@ -1,0 +1,15 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+tags: ['tsdown', 'publishable']
+
+tasks:
+  # No preset: presets force `runInCI: skip` and moon refuses to run such
+  # tasks in CI-detected shells (agent harnesses export CI=1). Never
+  # targeted by the CI lanes.
+  benchmark-parse-merge-conflict:
+    command: 'bun scripts/benchmarkParseMergeConflictDiffFromFile.ts'
+    options:
+      cache: false
+      runInCI: 'always'

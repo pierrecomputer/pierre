@@ -423,6 +423,8 @@ function renderTwoFiles({
   const { state, transformers } = createTransformerWithState(
     options.useTokenTransformer
   );
+  // tokenizeTimeLimit: 0 — never trade silently-wrong token colors for
+  // latency; see renderFileWithHighlighter for the full rationale.
   const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
     return typeof themeOrThemes === 'string'
       ? {
@@ -434,6 +436,7 @@ function renderTwoFiles({
           decorations: undefined,
           defaultColor: false,
           cssVariablePrefix: formatCSSVariablePrefix('token'),
+          tokenizeTimeLimit: 0,
         }
       : {
           ...options,
@@ -444,6 +447,7 @@ function renderTwoFiles({
           decorations: undefined,
           defaultColor: false,
           cssVariablePrefix: formatCSSVariablePrefix('token'),
+          tokenizeTimeLimit: 0,
         };
   })();
 

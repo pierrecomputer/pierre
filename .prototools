@@ -1,9 +1,13 @@
 bun = "1.3.14"
 gh = "2.93.0"
 node = "24.11.0"
-proto = "0.55.4"
+proto = "0.57.4"
+moon = "2.3.3"
+
+[plugins]
+gh = "file://./.proto/plugins/gh.toml"
 
 [settings]
-auto-clean = true
+auto-clean = false
 auto-install = true
 telemetry = false

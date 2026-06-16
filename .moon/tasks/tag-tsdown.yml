@@ -1,0 +1,41 @@
+$schema: 'https://moonrepo.dev/schemas/tasks.json'
+
+# Build/watch tasks for packages bundled with tsdown. Projects that deviate
+# (theming/trees append post-build asserts, trees watches extra paths)
+# override these tasks in their own moon.yml with `merge: replace`.
+#
+# Local-only tasks here avoid presets and set options explicitly: presets
+# force `runInCI: skip`, and moon refuses to run such tasks in CI-detected
+# shells — which includes agent harnesses that export CI=1. CI never runs
+# them anyway because the CI lanes target explicit task names.
+inheritedBy:
+  tags: ['tsdown']
+
+tasks:
+  build:
+    command: 'tsdown --clean'
+    deps:
+      - '^:build'
+    inputs:
+      # tsdown loads the package tsconfig (which extends the root options)
+      # for dts emit, so compiler-option changes must invalidate the cache.
+      - 'src/**/*'
+      - 'tsdown.config.ts'
+      - 'tsconfig.json'
+    outputs:
+      - 'dist'
+
+  # Initial build runs on watcher start, but dependencies must already have
+  # valid dist output for the bundle to resolve them. runInCI must stay
+  # 'skip': this task is a graph dependent of `build`, so 'always' would let
+  # `moon ci --include-relations` pull the watcher into the CI pipeline and
+  # hang it. In CI-marked shells (agent harnesses), run it with a `CI=`
+  # prefix: `CI= moonx <pkg>:dev`.
+  dev:
+    command: 'tsdown --watch --log-level error'
+    deps:
+      - '^:build'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'

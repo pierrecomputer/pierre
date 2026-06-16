@@ -42,15 +42,15 @@ Private engine types stay in `internal-types.ts` or implementation files.
 
 ## Verification and profiling
 
-Run these commands from the repository root:
+Run these commands from anywhere in the repo:
 
 ```bash
-bun ws path-store test
-bun ws path-store tsc
-bun ws path-store benchmark -- --preset mutation
-bun ws path-store benchmark -- --preset cleanup
-bun ws path-store benchmark -- --preset static
-bun ws path-store benchmark:visible-tree-projection
-bun ws path-store profile:demo
-bun ws path-store profile:visible-tree-projection
+moonx path-store:test
+moonx path-store:typecheck
+moonx path-store:benchmark -- --preset mutation
+moonx path-store:benchmark -- --preset cleanup
+moonx path-store:benchmark -- --preset static
+moonx path-store:benchmark-visible-tree-projection
+moonx path-store:profile-demo
+moonx path-store:profile-visible-tree-projection
 ```

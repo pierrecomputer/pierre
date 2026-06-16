@@ -10,29 +10,31 @@ description:
 
 ## Baseline Commands
 
-After code changes, run the required baseline from the monorepo root:
+After code changes, run the required baseline (moon tasks run from anywhere in
+the repo, including CI-marked agent shells):
 
 ```bash
-bun run format
-bun run lint
+moon run root:format root:lint
 ```
 
-Useful check/fix pairs also run from the monorepo root:
+Useful check/fix pairs on the root project:
 
 ```bash
-bun run format:check
-bun run format
-bun run lint
-bun run lint:fix
-bun run lint:css
-bun run lint:css:fix
+moon run root:format-check
+moon run root:format
+moon run root:lint
+moon run root:lint-fix
+moon run root:lint-css
+moon run root:lint-css-fix
 ```
 
-For code changes, also run the relevant package-level typecheck:
+For code changes, also run the relevant typecheck (moon builds workspace
+dependencies first automatically):
 
 ```bash
-cd <package-or-app>
-bun run tsc
+moonx <project>:typecheck
+# or, scoped to what actually changed:
+moonx :typecheck --affected
 ```
 
 ## Unit and Integration Tests
@@ -43,13 +45,14 @@ each package and use `describe`, `test`, and `expect` from `bun:test`.
 Prefer unit or integration tests by default:
 
 ```bash
-cd packages/diffs && bun test
-cd packages/trees && bun test
-cd packages/truncate && bun test
+moonx diffs:test
+moonx trees:test
+moonx truncate:test
 ```
 
-Other packages and apps also expose local test scripts when relevant, for
-example `packages/path-store`, `packages/tree-test-data`, and `apps/docs`.
+`moon run :test` runs every project's suite. Tests import workspace dependencies
+through their built dist, so moon builds those first; running `bun test`
+directly inside a package also works when dist is fresh.
 
 ## Snapshots
 
@@ -71,10 +74,10 @@ boundaries, and browser-only rendering behavior.
 Keep E2E coverage small and high-value:
 
 ```bash
-cd packages/trees && bun run coverage
-cd packages/trees && bun run test:e2e
-cd packages/path-store && bun run test:demo
-cd apps/docs && bun run test:e2e
+moonx trees:coverage
+moonx trees:test-e2e
+moonx path-store:test-demo
+moonx docs:test-e2e
 ```
 
 If E2E fixtures or dev servers are started in a worktree, follow the cleanup

@@ -1,0 +1,153 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# Root project: repo-wide tooling that intentionally runs over the whole
+# workspace in one pass (type-aware oxlint, oxfmt, stylelint, codegen).
+# These are fast enough that we always run them in CI rather than sharding
+# them per project.
+#
+# Local-only tasks avoid presets and set options explicitly: presets force
+# `runInCI: skip`, and moon refuses to run such tasks in CI-detected shells —
+# which includes agent harnesses that export CI=1. moon ci executes every
+# affected runInCI-enabled task, so `runInCI: 'always'` is reserved for tasks
+# with no graph edges (no deps, no dependents) — they can never be affected
+# through the graph and so never join the CI pipeline uninvited.
+language: 'typescript'
+
+# Type-aware lint resolves @pierre/* imports through each package's built
+# dist (exactly like typecheck), so the root project depends on every
+# dist-producing package and lint orders itself after their builds.
+dependsOn:
+  - 'diffs'
+  - 'theming'
+  - 'trees'
+  - 'truncate'
+  - 'storage-elements'
+  - 'storage-elements-next'
+
+workspace:
+  inheritedTasks:
+    # The root manifest matches the bun toolchain, but `bun test` here would
+    # run every suite in the repo and there is no root tsconfig to typecheck.
+    exclude: ['test', 'typecheck']
+
+tasks:
+  lint:
+    command: 'oxlint --type-aware --tsconfig tsconfig.oxlint.json .'
+    deps:
+      - '^:build'
+    inputs:
+      # Explicit input globs are filesystem-walked (gitignore is not
+      # applied), so installed and generated trees must be negated or every
+      # node_modules file gets hashed into the task inputs. moon's own cache
+      # is the critical one: its hash manifests are .js files that moon
+      # writes WHILE the pipeline runs, and hashing them races git
+      # ("short read while indexing .moon/cache/hashes/...").
+      - '**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'
+      - '!.moon/cache/**'
+      - '!.moon/hooks/**'
+      - '!**/node_modules/**'
+      - '!**/dist/**'
+      - '!**/.next/**'
+      - '!**/.source/**'
+      - '.oxlintrc.json'
+      - 'tsconfig.oxlint.json'
+    options:
+      runInCI: 'always'
+
+  # Mutates code based on type information, so it needs fresh dist (like
+  # lint) and must never be graph-pulled into CI: runInCI stays skip. In
+  # CI-marked shells: `CI= moon run root:lint-fix`.
+  lint-fix:
+    command: 'oxlint --type-aware --tsconfig tsconfig.oxlint.json --fix .'
+    deps:
+      - '^:build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  # Quoted glob is expanded by stylelint itself, not the shell. Generated CSS
+  # is excluded via ignoreFiles in stylelint.config.js so results do not
+  # depend on whether builds have run.
+  lint-css:
+    script: 'stylelint "**/*.css"'
+    inputs:
+      - '**/*.css'
+      - '!**/node_modules/**'
+      - '!**/dist/**'
+      - '!**/.next/**'
+      - '!**/.source/**'
+      - 'stylelint.config.js'
+    options:
+      runInCI: 'always'
+
+  lint-css-fix:
+    script: 'stylelint "**/*.css" --fix'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  format:
+    command: 'oxfmt .'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  format-check:
+    command: 'oxfmt --check .'
+    inputs:
+      # .moon/*.yml configs stay included (oxfmt formats them); only moon's
+      # generated state is excluded — see the lint inputs note.
+      - '**/*'
+      - '!.moon/cache/**'
+      - '!.moon/hooks/**'
+      - '!**/node_modules/**'
+      - '!**/dist/**'
+      - '!**/.next/**'
+      - '!**/.source/**'
+    options:
+      runInCI: 'always'
+
+  # Regenerates the committed icon sprite module from @pierre/icons sources,
+  # then formats just the generated file. Not targeted by any CI lane.
+  icons:
+    script: 'node scripts/build-sprite.js && oxfmt packages/diffs/src/sprite.ts'
+    inputs:
+      - 'sprite.config.js'
+      - 'svgo.config.js'
+      - 'scripts/build-sprite.js'
+    outputs:
+      - 'packages/diffs/src/sprite.ts'
+    options:
+      runInCI: 'always'
+
+  chrome:
+    command: './scripts/chrome-remote-debug.sh'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # Worktree manager (create/list/remove Pierre worktrees with port offsets).
+  # Forward arguments with `moonx root:wt -- <args>`.
+  wt:
+    command: 'bun --silent scripts/wt.ts'
+    options:
+      cache: false
+      interactive: true
+      runInCI: 'always'
+
+  clean:
+    script:
+      'rm -rf apps/*/.next apps/*/.source packages/*/dist
+      apps/*/tsconfig.tsbuildinfo packages/*/tsconfig.tsbuildinfo'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  clean-all:
+    script:
+      'rm -rf apps/*/.next apps/*/.source packages/*/dist
+      apps/*/tsconfig.tsbuildinfo packages/*/tsconfig.tsbuildinfo node_modules
+      packages/*/node_modules apps/*/node_modules'
+    options:
+      cache: false
+      runInCI: 'always'

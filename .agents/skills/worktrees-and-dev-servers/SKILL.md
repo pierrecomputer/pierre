@@ -1,10 +1,10 @@
 ---
 name: worktrees-and-dev-servers
 description:
-  Use when working with the repo's bun run wt helper, Pierre-managed worktrees,
-  dev-server port offsets, stale server cleanup, Playwright fixtures, or Chrome
-  debug instances. Do not use this as a substitute for host-provided workspace
-  isolation.
+  Use when working with the repo's moonx root:wt worktree helper, Pierre-managed
+  worktrees, dev-server port offsets, stale server cleanup, Playwright fixtures,
+  or Chrome debug instances. Do not use this as a substitute for host-provided
+  workspace isolation.
 ---
 
 # Worktrees and Dev Servers
@@ -28,20 +28,20 @@ E2E fixtures, because the cleanup and port-offset rules apply to those scripts.
 
 ## Worktree Commands
 
-The `bun run wt` suite is defined in `scripts/wt.ts` and manages only
-Pierre-managed worktrees:
+The `wt` suite is defined in `scripts/wt.ts`, exposed as the `root:wt` moon
+task, and manages only Pierre-managed worktrees:
 
 ```bash
-bun run wt new <slug>    # create a worktree, allocate offset, bun install
-bun run wt rm <slug>     # kill its processes, remove the worktree
-bun run wt clean         # kill zombie servers on all managed worktree ports
-bun run wt clean <slug>  # clean one managed worktree
-bun run wt ps            # show per-worktree port status (LISTEN / -)
-bun run wt list          # summary of managed + external worktrees
+moonx root:wt -- new <slug>    # create a worktree, allocate offset, bun install
+moonx root:wt -- rm <slug>     # kill its processes, remove the worktree
+moonx root:wt -- clean         # kill zombie servers on all managed worktree ports
+moonx root:wt -- clean <slug>  # clean one managed worktree
+moonx root:wt -- ps            # show per-worktree port status (LISTEN / -)
+moonx root:wt -- list          # summary of managed + external worktrees
 ```
 
-Dev scripts pick up the offset through `scripts/ws.ts`, which reads
-`<worktree>/.env.worktree`. Before starting, they run `scripts/run-dev.sh` to
+Port-binding moon tasks read the offset from `<worktree>/.env.worktree` via
+their `envFile` option. Before starting, dev tasks run `scripts/run-dev.sh` to
 kill any stale process bound to the target port.
 
 ## Cleanup Contract
@@ -50,9 +50,9 @@ If you start dev servers, Playwright fixtures, or Chrome debug instances inside
 a worktree, run cleanup before completing your turn:
 
 ```bash
-bun run wt clean <slug>
+moonx root:wt -- clean <slug>
 ```
 
-Use `bun run wt clean` when you do not know the slug or need to clean every
-managed worktree. Use `bun run wt rm <slug>` only when intentionally tearing
-down the worktree itself.
+Use `moonx root:wt -- clean` when you do not know the slug or need to clean
+every managed worktree. Use `moonx root:wt -- rm <slug>` only when intentionally
+tearing down the worktree itself.

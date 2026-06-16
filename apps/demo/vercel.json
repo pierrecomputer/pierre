@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "PATH=\"$PWD/node_modules/.bin:$PWD/../../node_modules/.bin:$PATH\" moon run demo:build"
+}

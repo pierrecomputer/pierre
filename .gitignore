@@ -33,6 +33,10 @@ tsconfig.tsbuildinfo
 .agents/ignore/
 .env.worktree
 
+# moon (generated per-clone/worktree state)
+.moon/cache/
+.moon/hooks/
+
 #tmp
 packages/trees/PLAN.md
 CONTEXT.md

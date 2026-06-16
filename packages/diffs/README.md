@@ -36,11 +36,11 @@ Technically you can use the package manager of your choice, but we use
 # From the root of the mono repo: setup dependencies
 bun install
 
-# Start the demo vite test server from root
-bun run demo:dev
+# Start the demo vite test server
+moonx demo:dev
 
-# To run the docs from root
-bun run docs:dev
+# To run the docs (diffs site)
+moonx docs:dev-diffs
 ```
 
 ### Testing
@@ -53,7 +53,7 @@ bun test
 bun test --update-snapshots
 
 # Type checking
-bun run tsc
+moonx diffs:typecheck
 ```
 
 Tests are located in the `test/` folder and use Bun's native testing framework
@@ -78,7 +78,7 @@ The diff UI uses an SVG sprite built from `@pierre/icons`. From the monorepo
 root:
 
 ```bash
-bun run icons:sprite
+moonx root:icons
 ```
 
 This reads SVGs from `node_modules/@pierre/icons/svg` and writes

@@ -94,9 +94,7 @@ function parseArgs(argv: string[]): BenchmarkConfig {
 }
 
 function printHelpAndExit(): never {
-  console.log(
-    'Usage: bun ws diffs benchmark:parse-merge-conflict -- [options]'
-  );
+  console.log('Usage: moonx diffs:benchmark-parse-merge-conflict -- [options]');
   console.log('');
   console.log('Options:');
   console.log(

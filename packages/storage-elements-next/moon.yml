@@ -1,0 +1,29 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+tags: ['publishable']
+
+workspace:
+  inheritedTasks:
+    # No test suite; building IS the typecheck for this tsgo --build package.
+    exclude: ['test']
+
+tasks:
+  # --force: task-level caching owns incrementality. Without it, a stale
+  # tsconfig.tsbuildinfo with a deleted dist makes tsgo skip emit entirely
+  # and the task fails moon's output validation.
+  build:
+    command: 'tsgo --build --force'
+    deps:
+      - '^:build'
+    outputs:
+      - 'dist'
+
+  # Same command as build: tsgo --build both checks and emits declarations.
+  typecheck:
+    command: 'tsgo --build --force'
+    deps:
+      - '^:build'
+    options:
+      merge: 'replace'

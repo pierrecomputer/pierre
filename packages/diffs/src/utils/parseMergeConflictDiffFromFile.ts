@@ -23,7 +23,7 @@
 //     bun test parseMergeConflictDiffFromFile
 //
 //   Performance benchmark (checksum must match 33121550):
-//     bun ws diffs benchmark:parse-merge-conflict
+//     moonx diffs:benchmark-parse-merge-conflict
 //
 // If you encounter a bug:
 //   1. Add a new test case in test/parseMergeConflictDiffFromFile.test.ts with

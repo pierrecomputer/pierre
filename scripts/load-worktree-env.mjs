@@ -1,14 +1,13 @@
 // Shared `.env.worktree` loader for JS/TS runtimes (Next's config, Playwright
-// configs, anything else that runs in Node or Bun outside the `bun ws` call
-// chain).
+// configs, anything else that runs in Node or Bun outside a moon task).
 //
 // Why this file exists: `scripts/wt.ts` writes `.env.worktree` at the worktree
-// root with `PIERRE_WORKTREE_SLUG` / `PIERRE_PORT_OFFSET`. Neither Bun nor Next
+// root, but its keys must reach `process.env`, and neither Node, Bun, Next,
 // nor Playwright auto-load a file with that non-standard name — only the
-// conventional `.env*` variants. `scripts/ws.ts` injects those vars when it is
-// in the call chain, but direct invocations (e.g. `bun run trees:dev` inside
-// `apps/docs`, or `bunx playwright test` inside a package) skip `ws` entirely.
-// This helper closes that gap by letting configs pull the file in themselves.
+// conventional `.env*` variants. moon tasks load the file via their `envFile`
+// option, but direct invocations (e.g. `next dev` by hand, or
+// `bunx playwright test` inside a package) skip moon entirely. This helper
+// closes that gap by letting configs pull the file in themselves.
 //
 // The walk starts at `startDir` (defaults to `process.cwd()`) and stops at
 // either the first `.env.worktree` it finds or the nearest `.git` entry (the
@@ -66,7 +65,8 @@ export function findWorktreeEnv(startDir = process.cwd()) {
 }
 
 // Load `.env.worktree` values into `process.env`. Existing keys win so that
-// anything `ws.ts` (or a caller) has already injected stays authoritative.
+// anything a moon task (or other caller) has already injected stays
+// authoritative.
 /**
  * @param {string} [startDir]
  * @returns {Record<string, string>}

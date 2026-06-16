@@ -212,14 +212,14 @@ affordance can appear on the same row.
 
 ## Development
 
-From `packages/trees`:
+From anywhere in the repo:
 
 ```bash
-bun test
-bun run test:e2e
-bun run benchmark
-bun run benchmark:file-tree-get-item
-bun run profile:file-tree
-bun run tsc
-bun run build
+moonx trees:test
+moonx trees:test-e2e
+moonx trees:benchmark
+moonx trees:benchmark-file-tree-get-item
+moonx trees:profile-file-tree
+moonx trees:typecheck
+moonx trees:build
 ```

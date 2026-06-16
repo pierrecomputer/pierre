@@ -2141,7 +2141,7 @@ function selectionPointFromAnnotationSlotName(
   }
 
   const lineNumber = Number.parseInt(match[2], 10);
-  if (!Number.isFinite(lineNumber)) {
+  if (!Number.isFinite(lineNumber) || lineNumber <= 0) {
     return undefined;
   }
 

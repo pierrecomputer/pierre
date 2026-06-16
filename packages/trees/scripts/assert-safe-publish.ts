@@ -13,7 +13,7 @@ if (pathStoreVersion != null) {
     [
       'Direct publish is disabled for @pierre/trees.',
       `package.json still depends on @pierre/path-store (${pathStoreVersion}), which is not published to npm.`,
-      'Use `bun run publish-package -- --tag=beta` so the release script can publish the rewritten package.',
+      'Use `moonx trees:publish -- --tag=beta` so the release script can publish the rewritten package.',
     ].join('\n')
   );
   process.exit(1);

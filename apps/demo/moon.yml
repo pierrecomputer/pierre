@@ -1,0 +1,53 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# Local-only tasks avoid presets and set options explicitly. Rule of thumb:
+# moon ci executes EVERY affected runInCI-enabled task (requested targets
+# only add, never subtract), so `runInCI: 'always'` — which keeps a task
+# runnable in CI-marked shells like agent harnesses (CI=1) — is safe only
+# for tasks that can never be affected through the graph (no deps, no
+# dependents). Graph-connected local tasks (dev/prod/e2e variants) stay
+# `runInCI: 'skip'`; run those with a `CI=` prefix, e.g.
+# `CI= moonx docs:dev-diffs`.
+language: 'typescript'
+layer: 'application'
+
+workspace:
+  inheritedTasks:
+    # No test suite in this app.
+    exclude: ['test']
+
+tasks:
+  build:
+    command: 'vite build'
+    deps:
+      - '^:build'
+    outputs:
+      - 'dist'
+
+  # Build deps run to completion first, then dependency watchers (`^:dev`)
+  # run alongside the vite server.
+  dev:
+    command: 'vite --host --clearScreen=false'
+    deps:
+      - '^:build'
+      - '^:dev'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+
+  start:
+    command: 'vite preview'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'always'
+
+  prod:
+    command: 'vite preview'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'
