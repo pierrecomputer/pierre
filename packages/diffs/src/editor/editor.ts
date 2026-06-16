@@ -6,7 +6,6 @@ import type {
   DiffsHighlighter,
   FileContents,
   HighlightedToken,
-  LineAnnotation,
   RenderRange,
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
@@ -15,11 +14,16 @@ import {
   resolveEditorCommandFromKeyboardEvent,
 } from './command';
 import editorCSS from './editor.css?inline';
+import { EditStack } from './editStack';
 import {
   applyDocumentChangeToLineAnnotations,
   renderLineAnnotations,
 } from './lineAnnotations';
-import { type Marker, MarkerManager, markerSeverityDatasetKey } from './marker';
+import {
+  type Marker,
+  MarkerRenderer,
+  markerSeverityDatasetKey,
+} from './marker';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import { type MatchRange, SearchPanelWidget } from './searchPanel';
 import type { EditorSelection } from './selection';
@@ -84,6 +88,8 @@ import {
 } from './utils';
 
 export interface EditorOptions<LAnnotation> {
+  /** The maximum number of entries to keep in the undo stack. */
+  historyMaxEntries?: number;
   /** Render rounded corners for selection ranges, default is true. */
   roundedSelection?: boolean;
   /** Show the clickable selection action icon, default is disabled. */
@@ -92,12 +98,24 @@ export interface EditorOptions<LAnnotation> {
   renderSelectionAction?: (
     context: SelectionActionContext<LAnnotation>
   ) => HTMLElement;
+  /** Callback when the editor is attached to a file. */
+  onAttach?: (
+    editor: Editor<LAnnotation>,
+    fileInstance: DiffsEditableComponent<LAnnotation>
+  ) => void;
   /** Callback when the editor document changes. */
   onChange?: (
     file: FileContents,
-    lineAnnotations?: DiffLineAnnotation<LAnnotation>[] | LineAnnotation<any>[]
+    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ) => void;
   __debug?: boolean;
+}
+
+export interface EditorState<LAnnotation> {
+  file: FileContents;
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+  selections?: EditorSelection[];
+  renderRange?: RenderRange;
 }
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
@@ -105,7 +123,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #wrap = false;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
-  #markerManager?: MarkerManager;
 
   // event disposes
   #editorEventDisposes?: (() => void)[];
@@ -113,15 +130,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #selectEventDisposes?: (() => void)[];
   #detach?: () => void;
 
-  // file
-  #fileInstance?: DiffsEditableComponent<LAnnotation>;
-  #fileContents?: FileContents;
-  #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
-  #textDocument?: TextDocument<LAnnotation>;
-  #renderRange?: RenderRange;
-
   // cache
-  #codePaddingTop = 0;
   #gutterWidthCache?: number;
   #contentWidthCache?: number;
   #lineYCache = new Map<number, number>();
@@ -143,21 +152,27 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #gutterElement?: HTMLElement;
   #contentElement?: HTMLElement;
   #overlayElement?: HTMLElement;
-  #primaryCaretElement?: HTMLElement;
   #overlayElements?: Map<string, HTMLElement>;
-  #selectionAction?: SelectionActionWidget;
-  #searchPanel?: SearchPanelWidget;
+  #primaryCaretElement?: HTMLElement;
   #resizeObserver?: ResizeObserver;
 
   // state
+  #fileInstance?: DiffsEditableComponent<LAnnotation>;
+  #fileContents?: FileContents;
+  #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+  #textDocument?: TextDocument<LAnnotation>;
+  #renderRange?: RenderRange;
+  #markerRenderer?: MarkerRenderer;
+  #searchPanel?: SearchPanelWidget;
+  #selectionAction?: SelectionActionWidget;
   #shouldIgnoreSelectionChange = false;
   #isGutterMouseDown = false;
   #isContentMouseDown = false;
   #shiftKeyPressed = false;
   #selectionStart: EditorSelection | undefined;
   #reservedSelections?: EditorSelection[];
+  #initSelections?: EditorSelection[];
   #selections?: EditorSelection[];
-  #initSelections?: DiffsEditorSelection[];
   #matches?: MatchRange[];
   #scrollingToLine?: number;
   #scrollingToLineChar?: number;
@@ -205,23 +220,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       lineHoverHighlight,
       ...rest
     } = component.options;
-    const isDiff = Object.hasOwn(component, 'fileDiff');
+    const isDiff = component.type === 'file-diff';
     if (
       useTokenTransformer !== true ||
       enableGutterUtility === true ||
       enableLineSelection === true ||
+      lineHoverHighlight !== 'disabled' ||
       (expandUnchanged !== true && isDiff) ||
-      diffStyle === 'unified' ||
-      lineHoverHighlight !== 'disabled'
+      (diffStyle === 'unified' && isDiff)
     ) {
       component.setOptions({
         ...rest,
         useTokenTransformer: true,
         enableGutterUtility: false,
         enableLineSelection: false,
+        lineHoverHighlight: 'disabled',
         expandUnchanged: true,
         diffStyle: 'split',
-        lineHoverHighlight: 'disabled',
       });
       component.rerender();
     }
@@ -231,14 +246,184 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return () => this.cleanUp();
   }
 
-  syncToRenderedView(
+  /**
+   * Apply edits to current attached file.
+   */
+  applyEdits(edits: TextEdit[], updateHistory = false): void {
+    const textDocument = this.#textDocument;
+    if (textDocument == null) {
+      throw new Error('Editor is not attached');
+    }
+    const change = textDocument.applyEdits(
+      edits,
+      updateHistory,
+      this.#selections
+    );
+    if (change !== undefined) {
+      this.#applyChange(
+        change,
+        undefined,
+        this.#applyChangeToLineAnnotations(change)
+      );
+    }
+  }
+
+  getState(): EditorState<LAnnotation> {
+    const fileRef = this.#getFileRef();
+    if (fileRef === undefined) {
+      throw new Error('Editor is not attached');
+    }
+    return {
+      file: { ...fileRef, cacheKey: 'edited-at-' + Date.now() },
+      selections: this.#selections,
+      lineAnnotations: this.#lineAnnotations,
+      renderRange: this.#renderRange,
+    };
+  }
+
+  setState({
+    file,
+    lineAnnotations,
+    renderRange,
+    selections,
+  }: EditorState<LAnnotation>): void {
+    this.#resetCache();
+    this.#resetState();
+    this.#initSelections = selections;
+    this.#fileInstance?.render({
+      file: { ...file, cacheKey: 'edited-at-' + Date.now() },
+      lineAnnotations,
+      renderRange,
+    });
+  }
+
+  setSelections(selections: DiffsEditorSelection[]): void {
+    const textDocument = this.#textDocument;
+    if (textDocument === undefined) {
+      throw new Error('Text document is not initialized');
+    }
+    const resolvedSelections = selections.map<EditorSelection>((selection) => {
+      const start = textDocument.normalizePosition(selection.start);
+      const end = textDocument.normalizePosition(selection.end);
+      const direction =
+        selection.direction === 'none'
+          ? DirectionNone
+          : selection.direction === 'backward'
+            ? DirectionBackward
+            : DirectionForward;
+      return { direction, start, end };
+    });
+    this.#updateSelections(resolvedSelections);
+    this.#scrollToPrimaryCaret(false, 'center');
+  }
+
+  setMarkers(markers: Marker[]): void {
+    const textDocument = this.#textDocument;
+    if (textDocument === undefined) {
+      throw new Error('Text document is not initialized');
+    }
+
+    if (markers.length === 0) {
+      this.#markerRenderer?.cleanup();
+      this.#markerRenderer = undefined;
+      this.#updateSelections(this.#selections ?? []);
+      return;
+    }
+
+    this.#markerRenderer ??= new MarkerRenderer({
+      getLineHeight: () => this.#metrics.lineHeight,
+      getFileContainer: () => this.#fileContainer,
+      getCharX: (line, character) => this.#getCharX(line, character),
+      getLineY: (line) => this.#getLineY(line),
+      isMouseDown: () => this.#isContentMouseDown || this.#isGutterMouseDown,
+    });
+    this.#markerRenderer.setMarkers(markers, textDocument);
+    if (this.#contentElement !== undefined) {
+      this.#markerRenderer.listenHover(this.#contentElement);
+    }
+    this.#updateSelections(this.#selections ?? []);
+  }
+
+  focus(options?: FocusOptions): void {
+    const preventScroll = options?.preventScroll ?? false;
+    const primarySelection = this.#selections?.at(-1);
+    if (primarySelection !== undefined) {
+      const pos =
+        primarySelection.direction === DirectionBackward
+          ? primarySelection.end
+          : primarySelection.start;
+      this.#focus(pos, preventScroll);
+    } else {
+      this.#focus(undefined, preventScroll);
+    }
+  }
+
+  blur(): void {
+    this.#contentElement?.blur();
+  }
+
+  cleanUp(): void {
+    this.#tokenizer?.cleanUp();
+    this.#tokenizer = undefined;
+
+    // dispse event listeners
+    this.#globalEventDisposes?.forEach((dispose) => dispose());
+    this.#globalEventDisposes = undefined;
+    this.#editorEventDisposes?.forEach((dispose) => dispose());
+    this.#editorEventDisposes = undefined;
+    this.#selectEventDisposes?.forEach((dispose) => dispose());
+    this.#selectEventDisposes = undefined;
+    this.#detach?.();
+    this.#detach = undefined;
+
+    // cache
+    this.#gutterWidthCache = undefined;
+    this.#contentWidthCache = undefined;
+    this.#lineYCache.clear();
+    this.#wrapLineOffsetsCache.clear();
+    this.#lastAccessedLineElement = undefined;
+    this.#lastAccessedCharX = undefined;
+
+    // clean up dom elements
+    this.#globalStyleElement?.remove();
+    this.#globalStyleElement = undefined;
+    this.#editorStyleElement?.remove();
+    this.#editorStyleElement = undefined;
+    this.#themeStyleElement?.remove();
+    this.#themeStyleElement = undefined;
+    this.#spriteElement?.remove();
+    this.#spriteElement = undefined;
+    this.#fileContainer = undefined;
+    this.#gutterElement = undefined;
+    this.#contentElement?.removeAttribute('contentEditable');
+    this.#contentElement = undefined;
+    this.#overlayElement?.remove();
+    this.#overlayElement = undefined;
+    this.#resizeObserver?.disconnect();
+    this.#resizeObserver = undefined;
+
+    this.#resetState();
+  }
+
+  /** @internal */
+  __postponeBackgroundTokenizeToNextFrame(): void {
+    const tokenizer = this.#tokenizer;
+    if (tokenizer !== undefined) {
+      tokenizer.pauseBackgroundTokenize();
+      requestAnimationFrame(() => {
+        tokenizer.resumeBackgroundTokenize();
+      });
+    }
+  }
+
+  /** @internal */
+  __syncRenderView: DiffsEditor<LAnnotation>['__syncRenderView'] = (
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileContents: FileContents,
-    didFileChange: boolean,
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
     renderRange: RenderRange | undefined
-  ): void {
+  ) => {
     const shadowRoot = fileContainer.shadowRoot;
     if (shadowRoot == null) {
       console.error('[editor] Could not find the shadow root.');
@@ -287,12 +472,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (
       this.#textDocument === undefined ||
       this.#fileContents === undefined ||
-      didFileChange
+      this.#fileContents.name !== fileContents.name ||
+      this.#fileContents.contents !== fileContents.contents ||
+      this.#fileContents.lang !== fileContents.lang ||
+      this.#fileContents.cacheKey !== fileContents.cacheKey
     ) {
+      const editStack = new EditStack<LAnnotation>({
+        maxEntries: this.#options.historyMaxEntries,
+      });
       const textDocument = new TextDocument<LAnnotation>(
         fileContents.name,
         fileContents.contents,
-        fileContents.lang ?? getFiletypeFromFileName(fileContents.name)
+        fileContents.lang ?? getFiletypeFromFileName(fileContents.name),
+        0,
+        editStack
       );
       this.#fileContents = fileContents;
       this.#textDocument = textDocument;
@@ -307,34 +500,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         },
         __debug: this.#options.__debug,
       });
-      this.#fileInstance?.setSelectedLines(null);
-      this.#shouldIgnoreSelectionChange = false;
-      this.#overlayElements?.forEach((el) => el.remove());
-      this.#overlayElements?.clear();
-      this.#overlayElements = undefined;
-      this.#selections = undefined;
-      this.#scrollingToLine = undefined;
-      this.#reservedSelections = undefined;
-      this.#searchPanel?.cleanup();
-      this.#searchPanel = undefined;
-      this.#selectionAction?.cleanup();
-      this.#selectionAction = undefined;
+      this.#resetState();
+      this.#selections = this.#initSelections;
+      this.#options.onAttach?.(this, this.#fileInstance!);
+      if (this.#textDocument !== undefined && this.#options.__debug === true) {
+        console.log('[diffs/editor] text document changed !!!');
+      }
     }
 
     if (this.#contentElement !== contentEl) {
-      if (
-        this.#contentElement !== undefined &&
-        this.#options.__debug === true
-      ) {
-        console.log('[diffs/editor] full re-render triggered !!!');
-      }
-      const codePaddingTop = parseInt(
-        getComputedStyle(codeElement).paddingTop.slice(0, -2),
-        10
-      );
-      this.#codePaddingTop = Number.isNaN(codePaddingTop) ? 0 : codePaddingTop;
-      this.#gutterWidthCache = undefined;
-      this.#contentWidthCache = undefined;
       this.#gutterElement = gutterEl;
       this.#contentElement = extend(contentEl, {
         contentEditable: 'true',
@@ -351,46 +525,37 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
       this.#metrics.init(contentEl);
       this.#listenContentElement(contentEl, gutterEl);
+      if (
+        this.#contentElement !== undefined &&
+        this.#options.__debug === true
+      ) {
+        console.log('[diffs/editor] full re-render triggered !!!');
+      }
     }
 
-    this.#lineYCache.clear();
-    this.#wrapLineOffsetsCache.clear();
-    this.#lastAccessedLineElement = undefined;
-    this.#lastAccessedCharX = undefined;
+    this.#resetCache();
 
     this.#wrap = this.#fileInstance?.options.overflow === 'wrap';
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
     this.#tokenizer?.prebuildStateStack(renderRange);
 
-    if (this.#initSelections !== undefined) {
-      this.setSelections(this.#initSelections);
-      this.#scrollToPrimaryCaret();
-      this.#initSelections = undefined;
-    } else if (
+    // re-render the existing selections, matches, and markers
+    if (
       this.#selections !== undefined ||
       this.#matches !== undefined ||
-      this.#markerManager !== undefined
+      this.#markerRenderer !== undefined
     ) {
-      // when re-rendering triggered by virtual viewport scroll,
-      // re-render the existing selections, matches, and markers
       this.#updateSelections(this.#selections ?? []);
     }
 
-    if (this.#options.__debug === true && renderRange !== undefined) {
-      const { startingLine, totalLines } = renderRange;
-      console.log(
-        '[diffs/editor] render file:',
-        fileContents.name,
-        'RenderRange:',
-        startingLine + '-' + (startingLine + totalLines),
-        'of',
-        this.#textDocument.lineCount,
-        'lines'
-      );
-    }
-
-    if (this.#scrollingToLine !== undefined) {
+    if (
+      this.#initSelections !== undefined &&
+      this.#primaryCaretElement !== undefined
+    ) {
+      this.#initSelections = undefined;
+      this.#scrollToPrimaryCaret(false, 'center');
+    } else if (this.#scrollingToLine !== undefined) {
       this.#scrollToLine(
         this.#scrollingToLine,
         this.#scrollingToLineChar,
@@ -415,139 +580,44 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     ) {
       this.#selectionAction.render(this.#contentElement);
     }
-  }
 
-  postponeBackgroundTokenizeToNextFrame(): void {
-    const tokenizer = this.#tokenizer;
-    if (tokenizer !== undefined) {
-      tokenizer.pauseBackgroundTokenize();
-      requestAnimationFrame(() => {
-        tokenizer.resumeBackgroundTokenize();
-      });
-    }
-  }
-
-  setSelections(selections: DiffsEditorSelection[]): void {
-    const textDocument = this.#textDocument;
-    if (textDocument !== undefined) {
-      const resolvedSelections = selections.map<EditorSelection>(
-        (selection) => {
-          const start = textDocument.normalizePosition(selection.start);
-          const end = textDocument.normalizePosition(selection.end);
-          const direction =
-            selection.direction === 'none'
-              ? DirectionNone
-              : selection.direction === 'backward'
-                ? DirectionBackward
-                : DirectionForward;
-          return { direction, start, end };
-        }
+    if (this.#options.__debug === true && renderRange !== undefined) {
+      const { startingLine, totalLines } = renderRange;
+      console.log(
+        '[diffs/editor] render file:',
+        fileContents.name,
+        'RenderRange:',
+        startingLine + '-' + (startingLine + totalLines),
+        'of',
+        this.#textDocument.lineCount,
+        'lines'
       );
-      this.#updateSelections(resolvedSelections);
-      this.#scrollToPrimaryCaret();
-    } else {
-      this.#initSelections = selections;
     }
-  }
+  };
 
-  setMarkers(markers: Marker[]): void {
-    const textDocument = this.#textDocument;
-    if (textDocument === undefined) {
-      throw new Error('Text document is not initialized');
-    }
-
-    if (markers.length === 0) {
-      this.#markerManager?.cleanup();
-      this.#markerManager = undefined;
-      this.#updateSelections(this.#selections ?? []);
-      return;
-    }
-
-    this.#markerManager ??= new MarkerManager({
-      getLineHeight: () => this.#metrics.lineHeight,
-      getFileContainer: () => this.#fileContainer,
-      getCharX: (line, character) => this.#getCharX(line, character),
-      getLineY: (line) => this.#getLineY(line),
-      isMouseDown: () => this.#isContentMouseDown || this.#isGutterMouseDown,
-    });
-    this.#markerManager.setMarkers(markers, textDocument);
-    if (this.#contentElement !== undefined) {
-      this.#markerManager.listenHover(this.#contentElement);
-    }
-    this.#updateSelections(this.#selections ?? []);
-  }
-
-  focus(options?: FocusOptions): void {
-    const preventScroll = options?.preventScroll ?? false;
-    const primarySelection = this.#selections?.at(-1);
-    if (primarySelection !== undefined) {
-      const pos =
-        primarySelection.direction === DirectionBackward
-          ? primarySelection.end
-          : primarySelection.start;
-      this.#focus(pos, preventScroll);
-    } else {
-      this.#focus(undefined, preventScroll);
-    }
-  }
-
-  cleanUp(): void {
-    this.#tokenizer?.cleanUp();
-    this.#tokenizer = undefined;
-
-    this.#globalEventDisposes?.forEach((dispose) => dispose());
-    this.#globalEventDisposes = undefined;
-    this.#editorEventDisposes?.forEach((dispose) => dispose());
-    this.#editorEventDisposes = undefined;
-    this.#selectEventDisposes?.forEach((dispose) => dispose());
-    this.#selectEventDisposes = undefined;
-    this.#markerManager?.cleanup();
-    this.#markerManager = undefined;
-
-    this.#detach?.();
-    this.#detach = undefined;
-    this.#fileInstance?.setSelectedLines(null);
-    this.#fileInstance = undefined;
-    this.#fileContents = undefined;
-    this.#lineAnnotations = undefined;
-    this.#textDocument = undefined;
-    this.#renderRange = undefined;
-
-    this.#gutterWidthCache = undefined;
-    this.#contentWidthCache = undefined;
+  #resetCache(): void {
     this.#lineYCache.clear();
     this.#wrapLineOffsetsCache.clear();
     this.#lastAccessedLineElement = undefined;
     this.#lastAccessedCharX = undefined;
+  }
 
-    this.#globalStyleElement?.remove();
-    this.#globalStyleElement = undefined;
-    this.#editorStyleElement?.remove();
-    this.#editorStyleElement = undefined;
-    this.#themeStyleElement?.remove();
-    this.#themeStyleElement = undefined;
-    this.#spriteElement?.remove();
-    this.#spriteElement = undefined;
-    this.#fileContainer = undefined;
-    this.#gutterElement = undefined;
-    this.#contentElement?.removeAttribute('contentEditable');
-    this.#contentElement = undefined;
-    this.#overlayElement?.remove();
-    this.#overlayElement = undefined;
+  #resetState(): void {
+    this.#gutterWidthCache = undefined;
+    this.#contentWidthCache = undefined;
+    this.#fileInstance?.setSelectedLines(null);
+    this.#shouldIgnoreSelectionChange = false;
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements = undefined;
-    this.#primaryCaretElement = undefined;
+    this.#selections = undefined;
+    this.#reservedSelections = undefined;
+    this.#scrollingToLine = undefined;
+    this.#markerRenderer?.cleanup();
+    this.#markerRenderer = undefined;
     this.#searchPanel?.cleanup();
     this.#searchPanel = undefined;
     this.#selectionAction?.cleanup();
     this.#selectionAction = undefined;
-    this.#resizeObserver?.disconnect();
-    this.#resizeObserver = undefined;
-
-    this.#shouldIgnoreSelectionChange = false;
-    this.#selectionStart = undefined;
-    this.#selections = undefined;
-    this.#reservedSelections = undefined;
   }
 
   #initialize(): void {
@@ -729,7 +799,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             return;
           }
 
-          this.#markerManager?.removePopup();
+          this.#markerRenderer?.removePopup();
 
           // this is a workaround for the selection rendering glitch
           // happens when selecting content in shadow DOM on Safari
@@ -960,7 +1030,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               return;
             }
 
-            this.#markerManager?.removePopup();
+            this.#markerRenderer?.removePopup();
             const selection: EditorSelection = {
               start: { line: lineIndex, character: 0 },
               end: {
@@ -1020,7 +1090,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
 
-    this.#markerManager?.listenHover(contentEl);
+    this.#markerRenderer?.listenHover(contentEl);
 
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = new ResizeObserver(() => {
@@ -1180,14 +1250,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (
       this.#selections !== undefined ||
       this.#matches !== undefined ||
-      this.#markerManager !== undefined
+      this.#markerRenderer !== undefined
     ) {
       this.#updateSelections(this.#selections ?? []);
       if (this.#selections !== undefined) {
         this.focus();
       }
     }
-    this.#markerManager?.removePopup();
+    this.#markerRenderer?.removePopup();
   }
 
   #rerender(
@@ -1454,15 +1524,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #scrollToPrimaryCaret(noFocus = false) {
-    const primaryCaretElement = this.#primaryCaretElement;
+  #scrollToPrimaryCaret(
+    noFocus = false,
+    scrollPosition: ScrollLogicalPosition = 'nearest'
+  ) {
     const primarySelection = this.#selections?.at(-1);
     if (primarySelection === undefined) {
       return;
     }
+    const primaryCaretElement = this.#primaryCaretElement;
     if (primaryCaretElement !== undefined) {
       primaryCaretElement.scrollIntoView({
-        block: 'nearest',
+        block: scrollPosition,
         inline: 'nearest',
       });
       if (!noFocus) {
@@ -1489,7 +1562,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #scrollToLine(line: number, char = 0, noFocus = false) {
-    this.postponeBackgroundTokenizeToNextFrame();
+    this.__postponeBackgroundTokenizeToNextFrame();
 
     const virtualCaret = h('div', {
       style: {
@@ -1559,7 +1632,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #updateSelections(selections: EditorSelection[]) {
-    this.postponeBackgroundTokenizeToNextFrame();
+    this.__postponeBackgroundTokenizeToNextFrame();
 
     this.#primaryCaretElement = undefined;
     this.#fileInstance?.setSelectedLines(null);
@@ -1570,7 +1643,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (
       selections.length === 0 &&
       this.#matches === undefined &&
-      this.#markerManager === undefined
+      this.#markerRenderer === undefined
     ) {
       this.#selections = undefined;
       this.#overlayElements?.forEach((el) => el.remove());
@@ -1644,8 +1717,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    if (this.#markerManager !== undefined && textDocument !== undefined) {
-      for (const marker of this.#markerManager.markers) {
+    if (this.#markerRenderer !== undefined && textDocument !== undefined) {
+      for (const marker of this.#markerRenderer.markers) {
         this.#renderSelection(
           renderCtx,
           'marker',
@@ -2040,7 +2113,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#getLineY(line) + wrapLine * this.#metrics.lineHeight,
       renderCtx.fragment,
       () => {
-        const cleanUpSelectionAction = () => {
+        const cleanUp = () => {
           this.#selectionAction?.cleanup();
           this.#selectionAction = undefined;
         };
@@ -2055,7 +2128,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         };
 
         // remove the existing selection action element
-        cleanUpSelectionAction();
+        cleanUp();
 
         const textDocument = this.#textDocument;
         const renderSelectionAction = this.#options.renderSelectionAction;
@@ -2073,24 +2146,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         const selectionActionElement = renderSelectionAction({
           textDocument,
           selection,
-          applyEdits: (edits: TextEdit[]) => {
-            const change = textDocument.applyEdits(
-              edits,
-              true,
-              this.#selections
-            );
-            if (change !== undefined) {
-              this.#applyChange(change);
-            }
-          },
+          applyEdits: (edits: TextEdit[]) => this.applyEdits(edits, true),
           getSelectionText: () => {
             return this.#textDocument?.getText(selection) ?? '';
           },
           replaceSelectionText: (text: string) => {
-            this.#replaceSelectionText(text);
+            this.#replaceSelectionText(text, [selection]);
           },
           close: () => {
-            cleanUpSelectionAction();
+            cleanUp();
             handleWidgetDomResize();
             this.#scrollToPrimaryCaret();
           },
@@ -2226,8 +2290,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   // replace the selection text
-  #replaceSelectionText(text: string | string[]) {
-    const selections = this.#selections;
+  #replaceSelectionText(
+    text: string | string[],
+    selections = this.#selections
+  ) {
     if (selections === undefined) {
       return;
     }
@@ -2415,28 +2481,29 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  #getFileRef(): FileContents | undefined {
+    const fileContents = this.#fileContents;
+    const textDocument = this.#textDocument;
+    if (fileContents === undefined || textDocument === undefined) {
+      return undefined;
+    }
+    const { contents: _, ...file } = fileContents;
+    Object.defineProperty(file, 'contents', {
+      enumerable: true,
+      get: () => textDocument.getText(),
+    });
+    return file as FileContents;
+  }
+
   #applyChange(
     change: TextDocumentChange,
     selections?: EditorSelection[],
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ) {
-    const fileContents = this.#fileContents;
-    const textDocument = this.#textDocument;
+    const fileRef = this.#getFileRef();
     const onChange = this.#options.onChange;
-    if (
-      fileContents !== undefined &&
-      textDocument !== undefined &&
-      onChange !== undefined
-    ) {
-      const { contents: _, ...file } = fileContents;
-      Object.defineProperty(file, 'contents', {
-        enumerable: true,
-        get: () => textDocument.getText(),
-      });
-      onChange(
-        file as FileContents,
-        newLineAnnotations ?? this.#lineAnnotations
-      );
+    if (fileRef !== undefined && onChange !== undefined) {
+      onChange(fileRef, newLineAnnotations ?? this.#lineAnnotations);
     }
 
     // Invalidate layout caches touched by the edit.
@@ -2636,7 +2703,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     // cold(slow) path: measure line top position from DOM (will cause reflow)
-    const y = lineElement.offsetTop + this.#codePaddingTop;
+    const y = lineElement.offsetTop + this.#metrics.paddingTop;
     this.#lineYCache.set(line, y);
     return y;
   }

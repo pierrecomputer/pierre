@@ -368,6 +368,115 @@ export function EditorWithWorkerPool() {
   options,
 };
 
+export const EDITOR_OPTIONS_TYPE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_options_type.ts',
+    contents: `import type {
+  DiffLineAnnotation,
+  DiffsEditableComponent,
+  FileContents,
+} from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+
+interface EditorOptions<LAnnotation> {
+  // Max undo stack entries
+  historyMaxEntries?: number;
+
+  // Render rounded corners on selection ranges (default: true)
+  roundedSelection?: boolean;
+
+  // Show the gutter icon for Selection Action (default: false)
+  enabledSelectionAction?: boolean;
+
+  // Custom Selection Action UI. See Selection Action docs for context shape.
+  renderSelectionAction?: (context) => HTMLElement;
+
+  // Fires after attach when the text document is ready
+  onAttach?: (
+    editor: Editor<LAnnotation>,
+    fileInstance: DiffsEditableComponent<LAnnotation>
+  ) => void;
+
+  // Fires after each edit. file.contents reflects the live document.
+  onChange?: (
+    file: FileContents,
+    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  ) => void;
+}`,
+  },
+  options,
+};
+
+export const EDITOR_PUBLIC_API: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_public_api.ts',
+    contents: `import { Editor } from '@pierre/diffs/editor';
+
+const editor = new Editor();
+
+// Attach to a rendered File, FileDiff, or virtualized variant.
+// Normalizes conflicting fileInstance options and returns a dispose function.
+const dispose = editor.edit(fileInstance)
+
+// Detach, remove listeners, and clean up injected editor DOM.
+// same as dispose()
+editor.cleanUp()
+
+// Apply text edits to the attached document
+// The range is 0-indexed
+editor.applyEdits([
+  {
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+    newText: 'Hello, world!',
+  },
+])
+// Apply text edits and update the undo stack
+editor.applyEdits([
+  {
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+    newText: 'Hello, world!',
+  },
+], true)
+
+// Get the current editor state - file, selections, lineAnnotations, renderRange
+const state = editor.getState()
+const stateRaw = JSON.stringify(state) // serialize the state to a json string for storage/persistence
+
+// Restore editor state after re-rendering the underlying component.
+editor.setState(state)
+
+// Replace all cursors and ranges programmatically.
+// The start/end positions are 0-indexed
+editor.setSelections([
+  {
+    start: { line: 0, character: 2 },
+    end: { line: 0, character: 8 },
+    direction: 'forward',
+  },
+])
+
+// Show inline diagnostic markers. Pass [] to clear.
+editor.setMarkers([
+  {
+    start: { line: 1,  character: 2 },
+    end: {  line: 1, character: 8 },
+    severity: 'error', // or 'warning', 'info', 'hint'
+    message: {
+      html: 'Some lint message',
+    },
+  },
+])
+
+// Focus the editor.
+editor.focus()
+
+// Blur the editor.
+editor.blur()
+`,
+  },
+  options,
+};
+
 export const EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE: PreloadFileOptions<undefined> =
   {
     file: {

@@ -22,6 +22,7 @@ import {
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
 import { ScrollSyncManager } from '../managers/ScrollSyncManager';
+import { queueRender } from '../managers/UniversalRenderingManager';
 import {
   DiffHunksRenderer,
   type DiffHunksRendererOptions,
@@ -763,7 +764,7 @@ export class FileDiff<
 
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
-    this.editor?.postponeBackgroundTokenizeToNextFrame();
+    this.editor?.__postponeBackgroundTokenizeToNextFrame();
 
     const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
@@ -948,19 +949,8 @@ export class FileDiff<
         this.flushManagers();
       }
 
-      const editor = this.editor;
-      const file = this.getAdditionFile();
-      if (editor != null && file != null) {
-        void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-          editor.syncToRenderedView(
-            highlighter,
-            fileContainer,
-            file,
-            diffDidChange,
-            this.lineAnnotations,
-            this.renderRange
-          );
-        });
+      if (this.editor != null) {
+        queueRender(this.syncRenderView);
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {
@@ -1004,23 +994,27 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
-  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
-    this.editor?.cleanUp();
+  private syncRenderView = () => {
+    const editor = this.editor;
     const fileContainer = this.fileContainer;
     const file = this.getAdditionFile();
-    if (fileContainer != null && file != null) {
+    if (editor != null && fileContainer != null && file != null) {
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-        editor.syncToRenderedView(
+        editor.__syncRenderView(
           highlighter,
           fileContainer,
           file,
-          false,
           this.lineAnnotations,
           this.renderRange
         );
       });
     }
+  };
+
+  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+    this.editor?.cleanUp();
     this.editor = editor;
+    queueRender(this.syncRenderView);
     return () => {
       this.editor = undefined;
     };

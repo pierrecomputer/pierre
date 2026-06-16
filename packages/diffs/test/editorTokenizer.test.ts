@@ -56,6 +56,64 @@ describe('EditorTokenizer', () => {
     }
   });
 
+  test('tokenizes plain text without loading a Shiki grammar', () => {
+    const originalPostMessage = globalThis.postMessage;
+    const postedMessages: unknown[] = [];
+    globalThis.postMessage = ((message: unknown) => {
+      postedMessages.push(message);
+    }) as typeof globalThis.postMessage;
+
+    try {
+      const getLanguage = () => {
+        throw new Error('getLanguage should not be called for plain text');
+      };
+      const loadLanguage = () => {
+        throw new Error('loadLanguage should not be called for plain text');
+      };
+      const textDocument = new TextDocument(
+        'Untitled-1',
+        Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n'),
+        'text'
+      );
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({
+          getLanguage,
+          loadLanguage,
+          getLoadedLanguages: () => [],
+        }),
+        textDocument,
+        codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+      const renderRange = {
+        startingLine: 0,
+        totalLines: 5,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      };
+
+      const dirtyLines = tokenizer.tokenize(
+        {
+          startLine: 0,
+          startCharacter: 0,
+          endLine: 19,
+          previousLineCount: textDocument.lineCount,
+          lineCount: textDocument.lineCount,
+          lineDelta: 0,
+          changedLineRanges: [[0, 19]],
+        },
+        renderRange
+      );
+
+      expect([...dirtyLines.keys()]).toEqual([0, 1, 2, 3, 4]);
+      expect(dirtyLines.get(0)?.[0]).toEqual([0, '', 'line 0']);
+      expect(postedMessages).toHaveLength(0);
+    } finally {
+      globalThis.postMessage = originalPostMessage;
+    }
+  });
+
   test('limits foreground tokenization to the render range after prepending lines', () => {
     const originalAddEventListener = globalThis.addEventListener;
     const originalPostMessage = globalThis.postMessage;

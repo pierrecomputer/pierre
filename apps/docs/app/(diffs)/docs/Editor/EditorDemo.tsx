@@ -7,7 +7,18 @@ import { useMemo, useState } from 'react';
 
 const initialFile: FileContents = {
   name: 'editable-demo.ts',
-  contents: `import { Editor } from '@pierre/diffs/editor';
+  contents: `import { VirtualizedFile } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
+
+const fileInstance = new VirtualizedFile({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+});
+
+// render the file into a DOM container
+fileInstance.render({
+  file: { name: 'index.ts', contents: 'export const foo: string = "bar";\n' },
+  containerWrapper: document.getElementById('file-container')
+});
 
 const editor = new Editor({
   onChange(file, lineAnnotations) {
