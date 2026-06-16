@@ -30,9 +30,10 @@ The editor does not replace `File`, `FileDiff`, or their virtualized variants.
 You render the surface first, then attach editing:
 
 1. **Attach** — Call `editor.edit(component)` in vanilla JS, or pass
-   `contentEditable` on a React `File` / `FileDiff` wrapped in `EditorProvider`.
-   The hookup returns a dispose function (vanilla) or runs automatically when
-   `contentEditable` toggles (React).
+   `contentEditable` on a React `File`, `FileDiff`, `MultiFileDiff`, or
+   `PatchDiff` wrapped in `EditorProvider`. The hookup returns a dispose
+   function (vanilla) or runs automatically when `contentEditable` toggles
+   (React).
 2. **Edit surface** — The editor sets `contentEditable` on the code content
    element so mobile keyboards, paste, and native selection UI work as users
    expect. Clipboard shortcuts are handled by the browser; editor commands
@@ -45,17 +46,20 @@ You render the surface first, then attach editing:
    mode. Your `onChange` handler receives updated `FileContents` (and line
    annotations when present).
 
-When attaching, the editor may normalize component options (for example,
-enabling the token transformer and disabling gutter utilities that conflict with
-editing) and trigger a re-render.
+When attaching, the editor normalizes component options that conflict with
+editing and triggers a re-render: it turns on the token transformer, turns off
+gutter utilities, line selection, and line-hover highlighting, and expands any
+collapsed unchanged regions. Diffs are also forced into split view, so a
+`FileDiff` or `MultiFileDiff` rendered as unified switches to split while
+editing.
 
 ### React
 
 Create one `Editor` instance (typically with `useMemo`), wrap your tree in
-`EditorProvider`, and set `contentEditable` on `File`, `FileDiff`, or
-`MultiFileDiff` when editing should be active. The provider cleans up the editor
-on unmount. We highly recommend using the `Virtualizer` component for best
-performance when editing large files.
+`EditorProvider`, and set `contentEditable` on `File`, `FileDiff`,
+`MultiFileDiff`, or `PatchDiff` when editing should be active. The provider
+cleans up the editor on unmount. We highly recommend using the `Virtualizer`
+component for best performance when editing large files.
 
 <EditorComponentTabs
   fileExample={editorReactExample}
@@ -130,25 +134,56 @@ and `close` to dismiss the panel:
 
 <DocsCodeExample {...editorSelectionActionContextType} />
 
+### Markers
+
+Markers add inline diagnostics—errors, warnings, and other annotations—to the
+editable surface, with a hover popover that shows each marker's message. They
+are useful for surfacing linter or language-server output alongside live edits.
+
+Each marker is positioned with zero-based `start` and `end` positions and a
+`severity` that drives its color and popover styling:
+
+<DocsCodeExample {...editorMarkerType} />
+
+Call `editor.setMarkers(markers)` after the editor has attached to a surface
+(calling it before attaching throws). Inlining the array lets TypeScript check
+the `severity` literals against the `Marker` type without importing it.
+
+<DocsCodeExample {...editorMarkerExample} />
+
+Markers re-anchor as the document changes, so they stay attached to their text
+while you edit. Pass an empty array to clear them.
+
+### Programmatic Control
+
+You can drive the editor's selection from code instead of relying solely on user
+input. `editor.setSelections(selections)` replaces the current selections—pass
+more than one for multiple cursors—and `editor.focus()` moves focus into the
+editor, placing the caret at the primary selection.
+
+<DocsCodeExample {...editorProgrammaticExample} />
+
 ### Keyboard Shortcuts
 
 Shortcuts use <kbd>Cmd</kbd> on macOS and <kbd>Ctrl</kbd> on Windows and Linux.
-On macOS, jumping to the start or end of the document uses ↑ and ↓ arrows with
-the modifier while other platforms use <kbd>Home</kbd> and <kbd>End</kbd>
-instead.
+Jumping to the document start or end uses the modifier with the <kbd>Home</kbd>
+and <kbd>End</kbd> keys; on macOS, the modifier with ↑ and ↓ arrows works too.
 
-| Command                   | Shortcut                                                    |
-| ------------------------- | ----------------------------------------------------------- |
-| `selectAll`               | <Shortcut>A</Shortcut>                                      |
-| `copy`                    | <Shortcut>C</Shortcut>                                      |
-| `cut`                     | <Shortcut>X</Shortcut>                                      |
-| `paste`                   | <Shortcut>V/Y</Shortcut>                                    |
-| `findNextMatch`           | <Shortcut>D</Shortcut>                                      |
-| `indent`                  | <Shortcut meta={false}>Tab</Shortcut>                       |
-| `outdent`                 | <Shortcut meta={false} modifiers={['Shift']}>Tab</Shortcut> |
-| `moveCursorToDocStart`    | <Shortcut>Up</Shortcut>                                     |
-| `moveCursorToDocEnd`      | <Shortcut>Down</Shortcut>                                   |
-| `expandSelectionDocStart` | <Shortcut modifiers={['Shift']}>Up</Shortcut>               |
-| `expandSelectionDocEnd`   | <Shortcut modifiers={['Shift']}>Down</Shortcut>             |
-| `undo`                    | <Shortcut>Z</Shortcut>                                      |
-| `redo`                    | <Shortcut modifiers={['Shift']}>Z</Shortcut>                |
+| Action                       | Shortcut                                                        |
+| ---------------------------- | --------------------------------------------------------------- |
+| Indent line or selection     | <Shortcut meta={false}>Tab</Shortcut>                           |
+| Outdent line or selection    | <Shortcut meta={false} modifiers={['Shift']}>Tab</Shortcut>     |
+| Cut                          | <Shortcut>X</Shortcut>                                          |
+| Copy                         | <Shortcut>C</Shortcut>                                          |
+| Paste                        | <Shortcut>V</Shortcut>                                          |
+| Move the cursor              | <Shortcut meta={false}>↑ ↓ ← →</Shortcut>                       |
+| Extend the selection         | <Shortcut meta={false} modifiers={['Shift']}>↑ ↓ ← →</Shortcut> |
+| Jump to line start / end     | <Shortcut>← →</Shortcut>                                        |
+| Jump to document start / end | <Shortcut>Home / End</Shortcut>                                 |
+| Add a cursor                 | <Shortcut>Click</Shortcut>                                      |
+| Collapse to a single cursor  | <Shortcut meta={false}>Esc</Shortcut>                           |
+| Select all                   | <Shortcut>A</Shortcut>                                          |
+| Open the search panel        | <Shortcut>F</Shortcut>                                          |
+| Find next match of selection | <Shortcut>D</Shortcut>                                          |
+| Undo                         | <Shortcut>Z</Shortcut>                                          |
+| Redo                         | <Shortcut modifiers={['Shift']}>Z</Shortcut>                    |
