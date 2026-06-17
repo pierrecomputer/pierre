@@ -1232,28 +1232,96 @@ export function getDocumentBoundarySelection(
   };
 }
 
+interface ClipboardRegion {
+  start: number;
+  end: number;
+}
+
 /**
- * Get the text of the selections for the given text document.
+ * Resolves the document offset range each selection contributes to the
+ * clipboard, ordered by position. A collapsed selection contributes its whole
+ * logical line including the trailing line break; the final line has no
+ * trailing break to include. A ranged selection contributes the selected text.
+ */
+function resolveClipboardRegions(
+  textDocument: TextDocument<unknown>,
+  selections: EditorSelection[]
+): ClipboardRegion[] {
+  return selections
+    .map((selection) => {
+      if (isCollapsedSelection(selection)) {
+        const line = selection.start.line;
+        const start = textDocument.offsetAt({ line, character: 0 });
+        const end =
+          line < textDocument.lineCount - 1
+            ? textDocument.offsetAt({ line: line + 1, character: 0 })
+            : textDocument.offsetAt({
+                line,
+                character: textDocument.getLineLength(line),
+              });
+        return { start, end };
+      }
+      const start = textDocument.offsetAt(selection.start);
+      const end = textDocument.offsetAt(selection.end);
+      return start <= end ? { start, end } : { start: end, end: start };
+    })
+    .sort((a, b) => {
+      const startOrder = a.start - b.start;
+      return startOrder !== 0 ? startOrder : a.end - b.end;
+    });
+}
+
+function endsWithLineBreak(text: string): boolean {
+  return text.endsWith('\n') || text.endsWith('\r');
+}
+
+// Detects the document's line ending so separators synthesized between
+// non-contiguous clipboard regions match the rest of the file.
+function detectEol(textDocument: TextDocument<unknown>): string {
+  if (
+    textDocument.lineCount > 1 &&
+    textDocument.getLineText(0, true).endsWith('\r\n')
+  ) {
+    return '\r\n';
+  }
+  return '\n';
+}
+
+/**
+ * Get the clipboard text of the selections for the given text document. Used by
+ * both copy and cut so the two stay in sync. Overlapping regions (e.g. several
+ * carets on one line) are merged so the same text is never emitted twice, and a
+ * line-ending separator is inserted only between regions that aren't already
+ * contiguous in the document.
  */
 export function getSelectionText(
   textDocument: TextDocument<unknown>,
   selections: EditorSelection[]
 ): string {
-  return [...selections]
-    .sort((a, b) => {
-      const startOrder = comparePosition(a.start, b.start);
-      if (startOrder !== 0) {
-        return startOrder;
+  const regions = resolveClipboardRegions(textDocument, selections);
+  const eol = detectEol(textDocument);
+  let result = '';
+  let prevEnd = -1;
+  for (const region of regions) {
+    if (region.end <= region.start) {
+      continue;
+    }
+    if (region.start <= prevEnd) {
+      // Contiguous with or overlapping the previous region: extend it rather
+      // than repeat any shared text.
+      if (region.end > prevEnd) {
+        result += textDocument.getTextSlice(prevEnd, region.end);
+        prevEnd = region.end;
       }
-      return comparePosition(a.end, b.end);
-    })
-    .map((selection) => {
-      if (isCollapsedSelection(selection)) {
-        return textDocument.getLineText(selection.start.line, false);
-      }
-      return textDocument.getText(selection);
-    })
-    .join('\n');
+      continue;
+    }
+    if (result.length > 0 && !endsWithLineBreak(result)) {
+      result += eol;
+    }
+    result += textDocument.getTextSlice(region.start, region.end);
+    prevEnd = region.end;
+  }
+  return result;
 }
 
 /**
