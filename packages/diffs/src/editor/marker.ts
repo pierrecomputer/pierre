@@ -16,7 +16,7 @@ export interface Marker extends Range {
 
 export interface EditorStub {
   getLineHeight: () => number;
-  getFileContainer: () => HTMLElement | undefined;
+  getOverlayElement: () => HTMLElement | undefined;
   getCharX: (line: number, character: number) => [number, number];
   getLineY: (line: number) => number;
   isMouseDown: () => boolean;
@@ -211,15 +211,8 @@ export class MarkerRenderer {
       return;
     }
 
-    const fileContainer = this.#editor.getFileContainer();
-    const preElement =
-      fileContainer?.shadowRoot?.querySelector<HTMLElement>('pre');
-    const codeElement = preElement?.querySelector<HTMLElement>('[data-code]');
-    if (
-      hoveredMarkerIndex >= this.#markers.length ||
-      preElement == null ||
-      codeElement == null
-    ) {
+    const overlayElement = this.#editor.getOverlayElement();
+    if (hoveredMarkerIndex >= this.#markers.length || overlayElement == null) {
       return;
     }
 
@@ -229,7 +222,7 @@ export class MarkerRenderer {
     const [left, wrapLine] = getCharX(line, character);
     const lineHeight = getLineHeight();
     const y = getLineY(line) + wrapLine * lineHeight + lineHeight;
-    const transform = `translateX(${codeElement.offsetLeft + left}px) translateY(${codeElement.offsetTop + y}px)`;
+    const transform = `translateX(${left}px) translateY(${y}px)`;
     const popup = this.#markerPopupElement;
 
     if (popup !== undefined) {
@@ -269,7 +262,7 @@ export class MarkerRenderer {
           }),
         ],
       },
-      preElement
+      overlayElement
     );
     this.#hoveredMarkerIndex = hoveredMarkerIndex;
     this.#markerPopupEventDisposes = [
