@@ -78,7 +78,7 @@ export function LiveEditor({
           setHasEdits(file.contents !== LIVE_EDITOR_NEW_FILE.contents);
         },
       }),
-    []
+    [mode]
   );
 
   // Reset by remounting the editable surface. Bumping `resetKey` unmounts the

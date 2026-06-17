@@ -5,6 +5,7 @@ import type {
   DiffsEditorSelection,
   DiffsHighlighter,
   FileContents,
+  FileDiffMetadata,
   HighlightedToken,
   RenderRange,
 } from '../types';
@@ -168,7 +169,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   // state
   #fileInstance?: DiffsEditableComponent<LAnnotation>;
-  #fileContents?: FileContents;
+  #fileInfo?: Omit<FileContents, 'contents'>;
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
   #renderRange?: RenderRange;
@@ -227,7 +228,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       enableGutterUtility,
       enableLineSelection,
       expandUnchanged,
-      diffStyle,
       lineHoverHighlight,
       ...rest
     } = component.options;
@@ -236,18 +236,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       useTokenTransformer !== true ||
       enableGutterUtility === true ||
       enableLineSelection === true ||
-      lineHoverHighlight !== 'disabled' ||
       (expandUnchanged !== true && isDiff) ||
-      (diffStyle === 'unified' && isDiff)
+      lineHoverHighlight !== 'disabled'
     ) {
       component.setOptions({
         ...rest,
         useTokenTransformer: true,
         enableGutterUtility: false,
         enableLineSelection: false,
-        lineHoverHighlight: 'disabled',
         expandUnchanged: true,
-        diffStyle: 'split',
+        lineHoverHighlight: 'disabled',
       });
       component.rerender();
     }
@@ -431,7 +429,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   __syncRenderView: DiffsEditor<LAnnotation>['__syncRenderView'] = (
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
-    fileContents: FileContents,
+    fileOrDiff: FileContents | FileDiffMetadata,
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
     renderRange: RenderRange | undefined
   ) => {
@@ -482,23 +480,29 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     if (
       this.#textDocument === undefined ||
-      this.#fileContents === undefined ||
-      this.#fileContents.name !== fileContents.name ||
-      this.#fileContents.contents !== fileContents.contents ||
-      this.#fileContents.lang !== fileContents.lang ||
-      this.#fileContents.cacheKey !== fileContents.cacheKey
+      this.#fileInfo === undefined ||
+      this.#fileInfo.name !== fileOrDiff.name ||
+      this.#fileInfo.lang !== fileOrDiff.lang ||
+      this.#fileInfo.cacheKey !== fileOrDiff.cacheKey
     ) {
+      let contents = '';
+      if ('contents' in fileOrDiff) {
+        contents = fileOrDiff.contents;
+      } else {
+        contents = fileOrDiff.additionLines.join('');
+      }
       const editStack = new EditStack<LAnnotation>({
         maxEntries: this.#options.historyMaxEntries,
       });
       const textDocument = new TextDocument<LAnnotation>(
-        fileContents.name,
-        fileContents.contents,
-        fileContents.lang ?? getFiletypeFromFileName(fileContents.name),
+        fileOrDiff.name,
+        contents,
+        fileOrDiff.lang ?? getFiletypeFromFileName(fileOrDiff.name),
         0,
         editStack
       );
-      this.#fileContents = fileContents;
+      const { name, lang, cacheKey } = fileOrDiff;
+      this.#fileInfo = { name, lang, cacheKey };
       this.#textDocument = textDocument;
       this.#tokenizer?.cleanUp();
       this.#tokenizer = new EditorTokenizer({
@@ -541,6 +545,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#options.__debug === true
       ) {
         console.log('[diffs/editor] full re-render triggered !!!');
+      }
+    }
+
+    if (
+      (lineAnnotations !== undefined && lineAnnotations.length > 0) ||
+      (this.#fileInstance?.type === 'file-diff' &&
+        this.#fileInstance.options.diffStyle === 'unified')
+    ) {
+      for (const child of this.#contentElement.children) {
+        const el = child as HTMLElement;
+        const { lineAnnotation, lineType } = el.dataset;
+        if (lineAnnotation !== undefined || lineType === 'change-deletion') {
+          el.setAttribute('contenteditable', 'false');
+        }
       }
     }
 
@@ -596,7 +614,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const { startingLine, totalLines } = renderRange;
       console.log(
         '[diffs/editor] render file:',
-        fileContents.name,
+        fileOrDiff.name,
         'RenderRange:',
         startingLine + '-' + (startingLine + totalLines),
         'of',
@@ -1303,14 +1321,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   ) {
     const tokenizer = this.#tokenizer;
     const fileInstance = this.#fileInstance;
-    const fileContents = this.#fileContents;
     const textDocument = this.#textDocument;
     const gutterEl = this.#gutterElement;
     const contentEl = this.#contentElement;
     if (
       tokenizer === undefined ||
       fileInstance === undefined ||
-      fileContents === undefined ||
       textDocument === undefined ||
       contentEl === undefined
     ) {
@@ -1334,17 +1350,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         const child = children[i] as HTMLElement | undefined;
         if (child !== undefined) {
           const lineNumber = getLineNumberAttr(child);
-          if (lineNumber !== undefined) {
-            const lineIndex = lineNumber - 1;
-            if (dirtyLines.has(lineIndex)) {
-              const tokens = dirtyLines.get(lineIndex)!;
-              child.replaceChildren(
-                ...renderLineTokens(tokens, tokenizer.themeType)
-              );
-              dirtyLineIndexes.delete(lineIndex);
-              if (dirtyLineIndexes.size === 0) {
-                break;
-              }
+          const lineType = child.dataset.lineType;
+          if (lineNumber === undefined || lineType === 'change-deletion') {
+            continue;
+          }
+          const lineIndex = lineNumber - 1;
+          if (dirtyLines.has(lineIndex)) {
+            const tokens = dirtyLines.get(lineIndex)!;
+            child.replaceChildren(
+              ...renderLineTokens(tokens, tokenizer.themeType)
+            );
+            dirtyLineIndexes.delete(lineIndex);
+            if (dirtyLineIndexes.size === 0) {
+              break;
             }
           }
         }
@@ -1402,7 +1420,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           const lineNumber =
             getLineNumberAttr(child) ??
             getLineNumberAttr(child, 'columnNumber');
-          if (lineNumber === undefined) {
+          const lineType = child.dataset.lineType;
+          if (lineNumber === undefined || lineType === 'change-deletion') {
             continue;
           }
           if (lineNumber - 1 < change.lineCount) {
@@ -1413,7 +1432,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    const isDiff = Object.hasOwn(fileInstance, 'fileDiff');
+    const isDiff = this.#fileInstance?.type === 'file-diff';
     const didLineCountChange = change.lineDelta !== 0;
 
     // fix grid layout
@@ -1434,7 +1453,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     fileInstance.updateRenderCache(
       dirtyLines,
       tokenizer.themeType,
-      isDiff ? !didLineCountChange : undefined
+      isDiff && !didLineCountChange
     );
     if (didLineCountChange) {
       fileInstance.applyDocumentChange(
@@ -2592,12 +2611,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #getFileRef(): FileContents | undefined {
-    const fileContents = this.#fileContents;
+    const fileInfo = this.#fileInfo;
     const textDocument = this.#textDocument;
-    if (fileContents === undefined || textDocument === undefined) {
+    if (fileInfo === undefined || textDocument === undefined) {
       return undefined;
     }
-    const { contents: _, ...file } = fileContents;
+    const file = { ...fileInfo }; // copy
     Object.defineProperty(file, 'contents', {
       enumerable: true,
       get: () => textDocument.getText(),
@@ -2742,7 +2761,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     // fallback to query selector
     lineElement ??= contentElement.querySelector<HTMLElement>(
-      `[data-line="${line + 1}"]`
+      `[data-line="${line + 1}"]` +
+        (this.#fileInstance?.options.diffStyle === 'unified'
+          ? ':not([data-line-type="change-deletion"])'
+          : '')
     );
 
     if (lineElement !== null) {

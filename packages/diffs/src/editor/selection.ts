@@ -1767,8 +1767,8 @@ function getLineChildEnd(
 }
 
 function getLineIndex(el: HTMLElement): number | undefined {
-  const { line } = el.dataset;
-  if (line !== undefined) {
+  const { line, lineType } = el.dataset;
+  if (line !== undefined && lineType !== 'change-deletion') {
     const lineNumber = parseInt(line, 10);
     if (!Number.isNaN(lineNumber)) {
       return lineNumber - 1;

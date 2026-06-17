@@ -237,6 +237,7 @@ export class FileDiff<
   protected enabled = true;
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
+  protected fastRefreshTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -449,13 +450,8 @@ export class FileDiff<
   private canPartiallyRender(
     forceRender: boolean,
     annotationsChanged: boolean,
-    didContentChange: boolean,
-    didEdit: boolean
+    didContentChange: boolean
   ): boolean {
-    if (didEdit) {
-      // The editor is tokenizing the diff in background, so we can partially render
-      return true;
-    }
     if (
       forceRender ||
       annotationsChanged ||
@@ -555,6 +551,10 @@ export class FileDiff<
 
     this.editor?.cleanUp();
     this.editor = undefined;
+    if (this.fastRefreshTimeout != null) {
+      clearTimeout(this.fastRefreshTimeout);
+      this.fastRefreshTimeout = undefined;
+    }
   }
 
   public virtualizedSetup(): void {
@@ -746,7 +746,6 @@ export class FileDiff<
     newFile,
     fileDiff,
     deferManagers = false,
-    didEdit = false,
     forceRender = false,
     preventEmit = false,
     lineAnnotations,
@@ -784,7 +783,6 @@ export class FileDiff<
     if (
       !collapsed &&
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
-      !didEdit &&
       !forceRender &&
       !annotationsChanged &&
       !themeChanged &&
@@ -891,8 +889,7 @@ export class FileDiff<
         this.canPartiallyRender(
           forceRender,
           annotationsChanged,
-          filesDidChange || diffDidChange || themeChanged,
-          didEdit
+          filesDidChange || diffDidChange || themeChanged
         ) &&
         this.applyPartialRender({
           previousRenderRange,
@@ -935,10 +932,7 @@ export class FileDiff<
           this.pre = undefined;
         }
         this.renderSeparators(hunksResult.hunkData);
-      } else if (didEdit && nextRenderRange != null) {
-        this.updateLineType(nextRenderRange);
       }
-
       this.applyBuffers(pre, nextRenderRange);
       this.injectUnsafeCSS();
       this.renderAnnotations();
@@ -950,7 +944,7 @@ export class FileDiff<
       }
 
       if (this.editor != null) {
-        queueRender(this.syncRenderView);
+        queueRender(this.syncRenderViewToEditor);
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {
@@ -994,16 +988,21 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
-  private syncRenderView = () => {
+  private syncRenderViewToEditor = () => {
     const editor = this.editor;
     const fileContainer = this.fileContainer;
-    const file = this.getAdditionFile();
-    if (editor != null && fileContainer != null && file != null) {
+    const fileDiff = this.fileDiff;
+    if (
+      editor != null &&
+      fileContainer != null &&
+      fileDiff != null &&
+      !fileDiff.isPartial
+    ) {
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
         editor.__syncRenderView(
           highlighter,
           fileContainer,
-          file,
+          fileDiff,
           this.lineAnnotations,
           this.renderRange
         );
@@ -1014,7 +1013,7 @@ export class FileDiff<
   public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     this.editor = editor;
-    queueRender(this.syncRenderView);
+    queueRender(this.syncRenderViewToEditor);
     return () => {
       this.editor = undefined;
     };
@@ -1046,33 +1045,22 @@ export class FileDiff<
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    shouldRerender?: boolean
+    shouldRefreshView?: boolean
   ): void {
     this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
-    if (shouldRerender === true) {
-      this.render({ didEdit: true, renderRange: this.renderRange });
+    if (shouldRefreshView === true) {
+      if (this.options.diffStyle === 'split') {
+        if (this.fastRefreshTimeout != null) {
+          clearTimeout(this.fastRefreshTimeout);
+        }
+        this.fastRefreshTimeout = setTimeout(() => {
+          this.fastRefreshTimeout = undefined;
+          this.fastRefreshDiffView();
+        }, 100);
+      } else {
+        this.refreshDiffView();
+      }
     }
-  }
-
-  private getAdditionFile(): FileContents | undefined {
-    if (this.additionFile != null) {
-      return this.additionFile;
-    }
-    const fileDiff = this.fileDiff;
-    if (fileDiff != null && !fileDiff.isPartial) {
-      const { name, lang, cacheKey } = fileDiff;
-      const file = {
-        name,
-        lang,
-        cacheKey,
-      } as FileContents;
-      Object.defineProperty(file, 'contents', {
-        enumerable: true,
-        get: () => fileDiff.additionLines.join(''),
-      });
-      return file;
-    }
-    return undefined;
   }
 
   private removeRenderedCode(): void {
@@ -1901,15 +1889,16 @@ export class FileDiff<
     }
   }
 
-  // Update split-view `data-line-type` after an edit.
-  private updateLineType(renderRange: RenderRange): void {
-    if (this.options.diffStyle === 'unified') {
+  // fast refresh diff view via updating the `data-line-type` after an edit.
+  // only for split view.
+  private fastRefreshDiffView(): void {
+    if (this.options.diffStyle !== 'split') {
       return;
     }
 
     const hunksResult = this.hunksRenderer.renderDiff(
       this.fileDiff,
-      renderRange
+      this.renderRange
     );
     if (hunksResult == null) {
       return;
@@ -1921,7 +1910,7 @@ export class FileDiff<
       this.codeDeletions,
       this.codeAdditions
     );
-    if (columns == null || !Array.isArray(columns)) {
+    if (!Array.isArray(columns)) {
       return;
     }
 
@@ -1962,6 +1951,56 @@ export class FileDiff<
 
     applyLineType('deletions', columns[0]);
     applyLineType('additions', columns[1]);
+  }
+
+  // full diff view re-rendering
+  private refreshDiffView(): void {
+    const hunksResult = this.hunksRenderer.renderDiff(
+      this.fileDiff,
+      this.renderRange
+    );
+    if (hunksResult == null) {
+      return;
+    }
+
+    const columns = this.getCodeColumns(
+      this.options.diffStyle ?? 'split',
+      this.codeUnified,
+      this.codeDeletions,
+      this.codeAdditions
+    );
+    if (columns == null) {
+      return;
+    }
+
+    const render = (
+      type: 'deletions' | 'additions' | 'unified',
+      column: ColumnElements | undefined
+    ) => {
+      if (column == null) {
+        return;
+      }
+      const ast = this.hunksRenderer.renderCodeAST(type, hunksResult);
+      const gutterChildren = getElementChildren(ast?.[0]);
+      const contentChildren = getElementChildren(ast?.[1]);
+      for (const [el, astChildren] of [
+        [column.gutter, gutterChildren],
+        [column.content, contentChildren],
+      ] as const) {
+        if (astChildren != null) {
+          el.innerHTML = toHtml(astChildren);
+        }
+      }
+    };
+
+    if (Array.isArray(columns)) {
+      render('deletions', columns[0]);
+      render('additions', columns[1]);
+    } else {
+      render('unified', columns);
+    }
+
+    this.syncRenderViewToEditor();
   }
 
   private renderPartialColumn(

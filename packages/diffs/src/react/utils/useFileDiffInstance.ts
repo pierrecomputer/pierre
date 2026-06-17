@@ -206,7 +206,6 @@ function mergeFileDiffOptions<LAnnotation>({
       enableGutterUtility: false,
       enableLineSelection: false,
       expandUnchanged: true,
-      diffStyle: 'split',
       lineHoverHighlight: 'disabled',
     };
   }

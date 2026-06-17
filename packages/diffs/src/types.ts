@@ -931,7 +931,7 @@ export interface DiffsEditableComponent<
   updateRenderCache: (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    shouldRerender?: boolean
+    shouldRefreshView?: boolean
   ) => void;
 }
 
@@ -940,7 +940,7 @@ export interface DiffsEditor<LAnnotation> {
   __syncRenderView(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
-    fileContents: FileContents,
+    fileOrDiff: FileContents | FileDiffMetadata,
     lineAnnotations:
       | LineAnnotation<LAnnotation>[]
       | DiffLineAnnotation<LAnnotation>[]

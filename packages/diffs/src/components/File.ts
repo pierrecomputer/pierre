@@ -468,7 +468,7 @@ export class File<
     }
   }
 
-  private syncRenderView = () => {
+  private syncRenderViewToEditor = () => {
     const editor = this.editor;
     const fileContainer = this.fileContainer;
     const file = this.file;
@@ -488,7 +488,7 @@ export class File<
   public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     this.editor = editor;
-    queueRender(this.syncRenderView);
+    queueRender(this.syncRenderViewToEditor);
     return () => {
       this.editor = undefined;
     };
@@ -663,7 +663,7 @@ export class File<
       this.renderAnnotations();
       this.renderGutterUtility();
       if (this.editor != null) {
-        queueRender(this.syncRenderView);
+        queueRender(this.syncRenderViewToEditor);
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {
