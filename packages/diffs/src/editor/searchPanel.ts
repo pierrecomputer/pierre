@@ -226,7 +226,7 @@ export class SearchPanelWidget {
       const button = h('div', {
         dataset: { icon, active: String(searchParams[key]) },
         title,
-        innerHTML: getEditorIconSvg(icon),
+        innerHTML: getEditorIconSvg(icon, 14),
         onclick: () => {
           const next = !searchParams[key];
           button.dataset.active = String(next);
