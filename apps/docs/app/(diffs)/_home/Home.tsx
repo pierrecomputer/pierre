@@ -86,7 +86,7 @@ async function EditorSection() {
           themeType: 'dark',
           disableFileHeader: true,
           overflow: 'wrap',
-          diffStyle: 'split',
+          diffStyle: 'unified',
         },
       });
       return [file.path, result.prerenderedHTML] as const;

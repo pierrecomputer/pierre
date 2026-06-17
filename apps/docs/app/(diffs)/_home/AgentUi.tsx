@@ -190,6 +190,12 @@ export function AgentUi({
     activeTargetRef.current = activePath;
   }, [activePath]);
 
+  // Each file switch remounts the FileDiff (`key={activePath}`), so the editor
+  // it attaches to must be a fresh instance too — reusing one editor across
+  // files leaves stale per-file state (text document, attached surface) behind
+  // and breaks editing on the newly selected file. Keying the memo on
+  // `activePath` recreates the editor per file, mirroring the LiveEditor demo
+  // which recreates its editor when the review/edit mode changes.
   const editor = useMemo(
     () =>
       new Editor({
@@ -219,7 +225,7 @@ export function AgentUi({
           editsRef.current.set(target, file.contents);
         },
       }),
-    []
+    [activePath]
   );
 
   // The changes tree shows one file at a time; selecting a file swaps the
@@ -316,7 +322,7 @@ export function AgentUi({
                     themeType: 'dark',
                     disableFileHeader: true,
                     overflow: 'wrap',
-                    diffStyle: 'split',
+                    diffStyle: 'unified',
                   }}
                   prerenderedHTML={activePrerenderedHTML}
                   contentEditable
