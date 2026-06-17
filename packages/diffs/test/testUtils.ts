@@ -15,14 +15,18 @@ type PlainFile = Omit<FileDiffMetadata, 'additionLines' | 'deletionLines'> & {
 };
 type PlainPatch = Omit<ParsedPatch, 'files'> & { files: PlainFile[] };
 
+export function withPlainFile(file: FileDiffMetadata): PlainFile {
+  return {
+    ...file,
+    additionLines: linesToArray(file.additionLines),
+    deletionLines: linesToArray(file.deletionLines),
+  };
+}
+
 export function withPlainLines(patches: ParsedPatch[]): PlainPatch[] {
   return patches.map((patch) => ({
     ...patch,
-    files: patch.files.map((file) => ({
-      ...file,
-      additionLines: linesToArray(file.additionLines),
-      deletionLines: linesToArray(file.deletionLines),
-    })),
+    files: patch.files.map(withPlainFile),
   }));
 }
 
