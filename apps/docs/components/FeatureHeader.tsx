@@ -24,7 +24,7 @@ export function FeatureHeader({
         {title}
         {isBeta ? <BetaBadge /> : null}
       </h2>
-      <p className="text-muted-foreground text-md">{description}</p>
+      <p className="text-muted-foreground text-md strong-fg">{description}</p>
     </div>
   );
 }

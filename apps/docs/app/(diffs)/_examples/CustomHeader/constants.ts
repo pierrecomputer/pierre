@@ -49,16 +49,12 @@ struct AppConfig {
         self.enableLogging = true
     }
 
-    func headers(token: String? = nil) -> [String: String] {
-        var headers = [
+    func headers() -> [String: String] {
+        return [
             "Content-Type": "application/json",
             "Accept": "application/json",
             "X-API-Version": "2.0"
         ]
-        if let token = token {
-            headers["Authorization"] = "Bearer \\(token)"
-        }
-        return headers
     }
 }
 `,
@@ -70,7 +66,7 @@ export const CUSTOM_HEADER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
   options: {
     theme: DEFAULT_THEMES,
     themeType: 'dark',
-    diffStyle: 'split',
+    diffStyle: 'unified',
     disableBackground: false,
     unsafeCSS: CustomScrollbarCSS,
   },

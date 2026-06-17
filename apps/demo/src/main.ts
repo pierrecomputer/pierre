@@ -79,17 +79,17 @@ const MARKER_ERROR_ICON = renderToStaticMarkup(
   createElement(IconCiFailedOctagonFill, { size: 16 })
 );
 
-// Builds the HTML for a single marker overlay: a severity-colored leading icon
-// next to a message, with an additional description indented below the message
-// (aligned with the message text, not the icon).
+// Builds the HTML for a marker overlay: a leading icon and message with an
+// indented description. The popover is severity-colored (see editor.css), so
+// the icon and text inherit white instead of painting their own color, which
+// would vanish against the fill.
 function markerMessage(opts: {
-  color: string;
   icon: string;
   message: string;
   description: string;
 }): string {
-  const iconCol = `<span style="color:${opts.color};display:inline-flex;flex:none;margin-top:2px">${opts.icon}</span>`;
-  const textCol = `<div style="display:flex;flex-direction:column;gap:2px">${opts.message}<div style="color:gray">${opts.description}</div></div>`;
+  const iconCol = `<span style="display:inline-flex;flex:none;margin-top:2px">${opts.icon}</span>`;
+  const textCol = `<div style="display:flex;flex-direction:column;gap:2px">${opts.message}<div style="opacity:0.8">${opts.description}</div></div>`;
   return `<div style="display:flex;align-items:flex-start;gap:8px">${iconCol}${textCol}</div>`;
 }
 
@@ -885,7 +885,6 @@ if (renderFileButton != null) {
               severity: 'info',
               message: {
                 html: markerMessage({
-                  color: 'var(--diffs-editor-info-fg, #3794ff)',
                   icon: MARKER_INFO_ICON,
                   message: '<code>CodeOptionsMultipleThemes</code>',
                   description: 'Code options of multiple themes.',
@@ -904,7 +903,6 @@ if (renderFileButton != null) {
               severity: 'warning',
               message: {
                 html: markerMessage({
-                  color: 'var(--diffs-editor-warning-fg, #cca700)',
                   icon: MARKER_WARNING_ICON,
                   message: '<code>CodeToHastOptions</code>',
                   description: 'Code to Hast Options is deprecated.',
@@ -923,7 +921,6 @@ if (renderFileButton != null) {
               severity: 'error',
               message: {
                 html: markerMessage({
-                  color: 'var(--diffs-editor-error-fg, red)',
                   icon: MARKER_ERROR_ICON,
                   message: '<code>DecorationItem</code>',
                   description: 'Type not defined.',

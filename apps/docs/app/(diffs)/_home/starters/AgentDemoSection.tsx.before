@@ -1,0 +1,62 @@
+'use client';
+
+import { IconColorDark, IconColorLight } from '@pierre/icons';
+import { useState } from 'react';
+
+import { AgentUi, type ThemeType } from './AgentUi';
+import { FeatureHeader } from '@/components/FeatureHeader';
+import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+
+interface AgentDemoSectionProps {
+  // Server-rendered, already-highlighted diff HTML keyed by file path. Built in
+  // Home.tsx so the embedded card paints highlighted on first load and hydrates
+  // without an SSR/client mismatch.
+  prerenderedDiffs: Record<string, string>;
+}
+
+// Homepage embed of the /aui agent review surface. It trims the standalone page
+// down to a single-file, diff-only card and lifts the light/dark control out
+// into an icon-only button group beside the section heading. It reuses the
+// homepage's shared worker pool, so it highlights with the pool's default
+// themes rather than the /aui page's soft themes.
+export function AgentDemoSection({ prerenderedDiffs }: AgentDemoSectionProps) {
+  // The homepage demo always opens in dark mode regardless of the docs theme;
+  // visitors can flip it with the button group above the card.
+  const [themeType, setThemeType] = useState<ThemeType>('dark');
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <FeatureHeader
+          id="edit"
+          isBeta
+          title="Edit diffs and code"
+          description={
+            <>
+              Enable edit mode in any <code>File</code> or <code>FileDiff</code>{' '}
+              component with the <code>EditorProvider</code>. Includes support
+              for selection management, auto-indention, undo history,
+              find-in-file, lint markers, and more. Pairs nicely with{' '}
+              <code>@pierre/trees</code> for{' '}
+              <abbr title="Agentic User Interface">AUI</abbr> style experiences.
+            </>
+          }
+        />
+        <ButtonGroup
+          value={themeType}
+          onValueChange={(value) => setThemeType(value as ThemeType)}
+          aria-label="Theme"
+        >
+          <ButtonGroupItem value="light" aria-label="Light">
+            <IconColorLight className="size-4" />
+          </ButtonGroupItem>
+          <ButtonGroupItem value="dark" aria-label="Dark">
+            <IconColorDark className="size-4" />
+          </ButtonGroupItem>
+        </ButtonGroup>
+      </div>
+
+      <AgentUi themeType={themeType} prerenderedDiffs={prerenderedDiffs} />
+    </div>
+  );
+}

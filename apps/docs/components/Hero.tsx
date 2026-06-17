@@ -59,7 +59,7 @@ export function Hero({ productId }: HeroProps) {
           </>
         )}
         {product.packageName === '' && <>{product.description} </>}
-        Made with love by{' '}
+        Made by{' '}
         <Link
           target="_blank"
           href="https://pierre.computer"

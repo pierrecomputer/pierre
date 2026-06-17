@@ -183,6 +183,87 @@ export const EDITOR_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<undefined>
     options,
   };
 
+export const EDITOR_MARKER_TYPE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'marker.ts',
+    contents: `type MarkerSeverity = 'error' | 'warning' | 'info' | 'hint';
+
+interface Marker {
+  /** Controls the marker color and popover styling. */
+  severity: MarkerSeverity;
+  /** Popover content. Pass trusted HTML with \`{ html }\`. */
+  message: string | { html: string } | HTMLElement;
+  /** Start position (zero-based line and character). */
+  start: { line: number; character: number };
+  /** End position (zero-based line and character). */
+  end: { line: number; character: number };
+  /** Optional origin label shown in the popover, e.g. "eslint". */
+  source?: string;
+  /** Optional arbitrary data carried alongside the marker. */
+  metadata?: Record<string, unknown>;
+}`,
+  },
+  options,
+};
+
+export const EDITOR_MARKER_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_markers.ts',
+    contents: `import { Editor } from '@pierre/diffs/editor';
+
+const editor = new Editor();
+editor.edit(fileInstance);
+
+// Apply diagnostics, e.g. from a linter or language server. Inlining the array
+// lets TypeScript check the severity literals against the Marker type without
+// importing it (the type is reached through editor.setMarkers).
+editor.setMarkers([
+  {
+    severity: 'error',
+    source: 'eslint',
+    message: 'Expected === and instead saw ==.',
+    start: { line: 9, character: 12 },
+    end: { line: 9, character: 14 },
+  },
+  {
+    severity: 'warning',
+    source: 'eslint',
+    message: 'Unexpected var, use let or const instead.',
+    start: { line: 1, character: 2 },
+    end: { line: 1, character: 5 },
+  },
+]);
+
+// Pass an empty array to clear all markers.
+editor.setMarkers([]);`,
+  },
+  options,
+};
+
+export const EDITOR_PROGRAMMATIC_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_programmatic.ts',
+    contents: `import { Editor } from '@pierre/diffs/editor';
+
+const editor = new Editor();
+editor.edit(fileInstance);
+
+// Drive the selection from code. Positions are zero-based; \`direction\` controls
+// which end the caret sits at when the selection is extended with the keyboard.
+editor.setSelections([
+  {
+    start: { line: 0, character: 0 },
+    end: { line: 0, character: 5 },
+    direction: 'forward',
+  },
+]);
+
+// Move focus into the editor (the caret follows the primary selection).
+editor.focus();`,
+  },
+  options,
+};
+
 export const EDITOR_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react.tsx',

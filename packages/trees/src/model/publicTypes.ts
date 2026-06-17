@@ -411,9 +411,20 @@ export interface FileTreeCompositionOptions {
   header?: FileTreeHeaderCompositionOptions;
 }
 
+// A run of decoration text with an optional CSS color. Used to render a single
+// decoration with multiple independently colored pieces (e.g. green additions
+// and red deletions in one cell).
+export interface FileTreeRowDecorationTextPart {
+  text: string;
+  color?: string;
+}
+
 export interface FileTreeRowDecorationText {
   text: string;
   title?: string;
+  // When provided, the decoration renders these colored parts instead of the
+  // plain `text`. `text` is still used as the accessible/fallback string.
+  parts?: readonly FileTreeRowDecorationTextPart[];
 }
 
 export interface FileTreeRowDecorationIcon {

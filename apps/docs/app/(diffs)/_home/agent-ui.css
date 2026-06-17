@@ -1,0 +1,274 @@
+/* Scoped agent-UI chrome for the homepage agent-review demo. Everything lives
+   under `.aui` so it never leaks into the rest of the docs app. Colours use
+   light-dark(); the `.aui[data-theme-type]` rules pin color-scheme to the
+   demo's own toggle. The UI sits in normal page flow as a fixed-height card. */
+.aui {
+  --ide-surface: light-dark(#ffffff, #070707);
+  --ide-panel: light-dark(#f8f8f8, #0f0f10);
+  --ide-border: light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.07));
+  --ide-fg: light-dark(#18181b, #e4e4e7);
+  --ide-fg-muted: light-dark(#71717a, #a1a1aa);
+  --ide-tab-active: light-dark(#ffffff, #1c1c1f);
+  --ide-tab-hover: light-dark(rgb(0 0 0 / 0.04), rgb(255 255 255 / 0.05));
+  --ide-accent: light-dark(#2563eb, #3b82f6);
+
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  height: 560px;
+  max-height: 72vh;
+  border: 1px solid var(--ide-border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  background-color: var(--ide-surface);
+  color: var(--ide-fg);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.aui[data-theme-type='light'] {
+  color-scheme: light;
+}
+
+.aui[data-theme-type='dark'] {
+  color-scheme: dark;
+}
+
+/* Give the demo more room on desktop. */
+@media (width >= 1024px) {
+  .aui {
+    height: 760px;
+    max-height: 75vh;
+  }
+}
+
+.aui button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.aui code {
+  font-family: var(--font-berkeley-mono), monospace;
+  font-size: 0.9em;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background-color: var(--ide-tab-hover);
+}
+
+.aui-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  min-height: 0;
+}
+
+/* --- Center column ------------------------------------------------------- */
+
+.aui-center {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.aui-center-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 44px;
+  padding-inline: 12px;
+  border-bottom: 1px solid var(--ide-border);
+}
+
+.aui-breadcrumb {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  color: var(--ide-fg-muted);
+}
+
+.aui-crumb:not(:last-child)::after {
+  content: '/';
+  margin-inline: 2px;
+  opacity: 0.5;
+}
+
+.aui-crumb[data-leaf='true'] {
+  color: var(--ide-fg);
+  font-weight: 500;
+}
+
+.aui-surface-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.aui-surface {
+  display: block;
+}
+
+.aui-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ide-fg-muted);
+}
+
+.aui-selection-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.aui-selection-action button {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  background-color: color-mix(in srgb, currentColor 8%, transparent);
+  color: inherit;
+  font-size: 12px;
+}
+
+.aui-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px;
+  padding: 10px 10px 8px;
+  border: 1px solid var(--ide-border);
+  border-radius: 12px;
+  background-color: var(--ide-panel);
+}
+
+.aui-composer:focus-within {
+  border-color: var(--ide-accent);
+}
+
+.aui-composer-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: var(--ide-fg);
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: none;
+}
+
+.aui-composer-input:focus {
+  outline: none;
+}
+
+.aui-composer-input::placeholder {
+  color: var(--ide-fg-muted);
+}
+
+.aui-composer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.aui-composer-select,
+.aui-composer-send {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--ide-fg-muted);
+
+  &[disabled] {
+    cursor: default;
+  }
+}
+
+.aui-composer-select {
+  gap: 5px;
+  height: 28px;
+  padding-inline: 8px;
+  background-color: var(--ide-tab-hover);
+  font-size: 12px;
+}
+
+.aui-composer-send {
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background-color: var(--ide-accent);
+  color: #ffffff;
+
+  &[disabled] {
+    opacity: 0.6;
+  }
+}
+
+/* --- Right changes panel ------------------------------------------------- */
+
+.aui-changes {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--ide-border);
+  background-color: var(--ide-panel);
+}
+
+.aui-changes-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  padding-inline: 10px;
+  border-bottom: 1px solid var(--ide-border);
+}
+
+.aui-changes-tabs button {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--ide-fg-muted);
+  font-size: 12px;
+}
+
+.aui-changes-tabs button[aria-selected='true'] {
+  background-color: var(--ide-tab-active);
+  color: var(--ide-fg);
+}
+
+.aui-changes-tabs button[disabled] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.aui-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-top: 6px;
+}
+
+/* --- Mobile -------------------------------------------------------------- */
+
+/* On narrow screens there isn't room for the changes sidebar, so collapse to a
+   single full-width column showing just the active file. Placed last so it wins
+   over the base `.aui-body`/`.aui-changes` rules above (media queries don't add
+   specificity). */
+@media (width < 640px) {
+  .aui-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .aui-changes {
+    display: none;
+  }
+}

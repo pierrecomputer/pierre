@@ -60,6 +60,7 @@ const HighlighterOptions: WorkerInitializationRenderOptions = {
     'cpp',
     'css',
     'go',
+    'markdown',
     'python',
     'rust',
     'sh',
