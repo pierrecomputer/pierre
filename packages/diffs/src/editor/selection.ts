@@ -376,6 +376,34 @@ export function applyTextChangeToSelections<LAnnotation>(
 }
 
 /**
+ * Returns the next anchor/focus offsets after replacing a selection range.
+ * When the inserted text still contains the original selection (auto-surround),
+ * the inner range is reselected to match VS Code/CodeMirror behavior.
+ */
+function getNextSelectionOffsetPairAfterReplace(
+  textDocument: TextDocument<unknown>,
+  entry: { start: number; end: number },
+  offsetDelta: number,
+  newText: string
+): [number, number] {
+  const insertStart = entry.start + offsetDelta;
+  const insertEnd = insertStart + newText.length;
+  const originalLength = entry.end - entry.start;
+  if (originalLength > 0) {
+    const originalText = textDocument.getText().slice(entry.start, entry.end);
+    const preservedOffset = newText.indexOf(originalText);
+    if (
+      preservedOffset !== -1 &&
+      preservedOffset + originalText.length <= newText.length
+    ) {
+      const rangeStart = insertStart + preservedOffset;
+      return [rangeStart, rangeStart + originalText.length];
+    }
+  }
+  return [insertEnd, insertEnd];
+}
+
+/**
  * Applies a text replace to multiple selections.
  */
 export function applyTextReplaceToSelections<LAnnotation>(
@@ -438,14 +466,15 @@ export function applyTextReplaceToSelections<LAnnotation>(
   }
   const allDeletes = texts.every((text) => text === '');
   let edits: ResolvedTextEdit[];
-  const nextSelectionOffsets: number[] = Array.from({
-    length: selections.length,
-  });
+  const nextSelectionOffsetPairs: Array<[number, number] | undefined> =
+    Array.from({
+      length: selections.length,
+    });
   if (allDeletes) {
     edits = [];
     let hasEffect = false;
     for (const entry of ordered) {
-      nextSelectionOffsets[entry.index] = entry.end;
+      nextSelectionOffsetPairs[entry.index] = [entry.end, entry.end];
       if (entry.start >= entry.end) {
         continue;
       }
@@ -482,7 +511,7 @@ export function applyTextReplaceToSelections<LAnnotation>(
       if (next === caret) {
         next += delta;
       }
-      nextSelectionOffsets[entry.index] = next;
+      nextSelectionOffsetPairs[entry.index] = [next, next];
     }
   } else {
     edits = [];
@@ -503,8 +532,13 @@ export function applyTextReplaceToSelections<LAnnotation>(
         end: entry.end,
         text: newText,
       });
-      nextSelectionOffsets[entry.index] =
-        entry.start + offsetDelta + newText.length;
+      nextSelectionOffsetPairs[entry.index] =
+        getNextSelectionOffsetPairAfterReplace(
+          textDocument,
+          entry,
+          offsetDelta,
+          newText
+        );
       offsetDelta += newText.length - (entry.end - entry.start);
     }
   }
@@ -512,7 +546,12 @@ export function applyTextReplaceToSelections<LAnnotation>(
   const change = textDocument.applyResolvedEdits(edits, true, selections);
   const nextSelections = createSelectionsFromOffsetPairs(
     textDocument,
-    nextSelectionOffsets.map((offset) => [offset, offset])
+    nextSelectionOffsetPairs.map((offsets) => {
+      if (offsets === undefined) {
+        throw new Error('Missing next selection offsets');
+      }
+      return offsets;
+    })
   );
   textDocument.setLastUndoSelectionsAfter(nextSelections);
   if (change !== undefined && lineAnnotations !== undefined) {
@@ -529,6 +568,70 @@ export function applyTextReplaceToSelections<LAnnotation>(
     }
   }
   return { nextSelections, change };
+}
+
+const SURROUNDING_PAIRS: Array<[openChar: string, closeChar: string]> = [
+  ["'", "'"],
+  ['"', '"'],
+  ['`', '`'],
+  ['{', '}'],
+  ['[', ']'],
+  ['<', '>'],
+  ['(', ')'],
+];
+
+const AUTO_SURROUND_CLOSE_CHARS = new Map(SURROUNDING_PAIRS);
+const AUTO_SURROUND_QUOTE_CHARS = new Set(["'", '"', '`']);
+const AUTO_SURROUND_BRACKET_CHARS = new Set(['{', '[', '(', '<']);
+
+export type AutoSurround =
+  | 'default'
+  | 'never'
+  | 'brackets'
+  | 'quotes'
+  | 'languageDefined';
+
+function shouldAutoSurroundChar(
+  autoSurround: AutoSurround | undefined,
+  char: string
+): boolean {
+  if (autoSurround === 'never') {
+    return false;
+  }
+  if (autoSurround === 'brackets') {
+    return AUTO_SURROUND_BRACKET_CHARS.has(char);
+  }
+  if (autoSurround === 'quotes') {
+    return AUTO_SURROUND_QUOTE_CHARS.has(char);
+  }
+  return true;
+}
+
+/**
+ * Returns per-selection replacement text when typing a surround character over
+ * non-collapsed selections, matching VS Code auto-surround behavior.
+ */
+export function getAutoSurroundReplacementTexts<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  selections: EditorSelection[],
+  char: string,
+  autoSurround?: AutoSurround
+): string[] | undefined {
+  if (char.length !== 1 || selections.length === 0) {
+    return undefined;
+  }
+  const closeChar = AUTO_SURROUND_CLOSE_CHARS.get(char);
+  if (closeChar === undefined || !shouldAutoSurroundChar(autoSurround, char)) {
+    return undefined;
+  }
+  const replacements: string[] = [];
+  for (const selection of selections) {
+    if (isCollapsedSelection(selection)) {
+      return undefined;
+    }
+    replacements.push(char + textDocument.getText(selection) + closeChar);
+  }
+  return replacements;
 }
 
 /**

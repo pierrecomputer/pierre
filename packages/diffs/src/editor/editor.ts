@@ -30,7 +30,7 @@ import {
   type SearchPanelMode,
   SearchPanelWidget,
 } from './searchPanel';
-import type { EditorSelection } from './selection';
+import type { AutoSurround, EditorSelection } from './selection';
 import {
   applyDeleteHardLineForwardToSelections,
   applyDeleteSoftLineBackwardToSelections,
@@ -49,6 +49,7 @@ import {
   extendSelection,
   extendSelections,
   findNexMatch,
+  getAutoSurroundReplacementTexts,
   getCaretPosition,
   getDocumentBoundarySelection,
   getDocumentFullSelection,
@@ -96,6 +97,11 @@ export interface EditorOptions<LAnnotation> {
   historyMaxEntries?: number;
   /** Render rounded corners for selection ranges, default is true. */
   roundedSelection?: boolean;
+  /**
+   * Controls auto-surround when typing quotes or brackets over a selection.
+   * Default is `"default"` (both quotes and brackets).
+   */
+  autoSurround?: AutoSurround;
   /** Show the clickable selection action icon, default is disabled. */
   enabledSelectionAction?: boolean;
   /** Render the selection action widget element. */
@@ -607,9 +613,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #resetState(): void {
+    this.#setSelectedLinesSafe(null);
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
-    this.#fileInstance?.setSelectedLines(null);
     this.#shouldIgnoreSelectionChange = false;
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements = undefined;
@@ -1433,9 +1439,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // input type doc: https://developer.mozilla.org/en-US/docs/Web/API/InputEvent/inputType
   #handleInput(inputType: string, data: string | null) {
     switch (inputType) {
-      case 'insertText':
-        this.#replaceSelectionText(data ?? '');
+      case 'insertText': {
+        const text = data ?? '';
+        const textDocument = this.#textDocument;
+        const selections = this.#selections;
+        const autoSurroundTexts =
+          textDocument !== undefined && selections !== undefined
+            ? getAutoSurroundReplacementTexts(
+                textDocument,
+                selections,
+                text,
+                this.#options.autoSurround
+              )
+            : undefined;
+        this.#replaceSelectionText(autoSurroundTexts ?? text);
         break;
+      }
       case 'insertParagraph':
         // TODO(@ije): use document.EOF instead of '\n'
         this.#replaceSelectionText('\n');
@@ -1639,11 +1658,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     virtualCaret.remove();
   }
 
+  #setSelectedLinesSafe(range: { start: number; end: number } | null): void {
+    try {
+      this.#fileInstance?.setSelectedLines(range);
+    } catch {
+      // InteractionManager.renderSelection can throw while editor DOM is updating.
+    }
+  }
+
   #updateSelections(selections: EditorSelection[]) {
     this.__postponeBackgroundTokenizeToNextFrame();
 
     this.#primaryCaretElement = undefined;
-    this.#fileInstance?.setSelectedLines(null);
+    this.#setSelectedLinesSafe(null);
     this.#gutterElement
       ?.querySelectorAll('[data-active]')
       .forEach((el) => el.removeAttribute('data-active'));
@@ -1671,17 +1698,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#selections = normalizedSelections;
       if (isCollapsedSelection(primarySelection)) {
         const line = primarySelection.start.line + 1;
-        this.#fileInstance?.setSelectedLines({
+        this.#setSelectedLinesSafe({
           start: line,
           end: line,
         });
-      } else {
-        if (this.#gutterElement !== undefined) {
-          const pos = getCaretPosition(primarySelection);
-          this.#gutterElement
-            .querySelector(`[data-column-number="${pos.line + 1}"]`)
-            ?.setAttribute('data-active', '');
-        }
+      } else if (this.#gutterElement !== undefined) {
+        const pos = getCaretPosition(primarySelection);
+        this.#gutterElement
+          .querySelector(`[data-column-number="${pos.line + 1}"]`)
+          ?.setAttribute('data-active', '');
       }
 
       for (const selection of normalizedSelections) {
