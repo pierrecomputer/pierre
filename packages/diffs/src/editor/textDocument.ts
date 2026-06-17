@@ -1,3 +1,4 @@
+import type { MatchRange, SearchParams } from '../search';
 import { countLineBreaks } from '../utils/computeFileOffsets';
 import {
   coalesceEditStackEntries,
@@ -6,7 +7,6 @@ import {
   shouldCoalesceEditStackEntry,
 } from './editStack';
 import { PieceTable } from './pieceTable';
-import type { SearchParams } from './searchPanel';
 import { setTextDocumentChangeTransaction } from './textDocumentChangeTransaction';
 import type {
   EditHistoryState,
@@ -213,7 +213,7 @@ export class TextDocument<
     return this.#pieceTable.findNextNonOverlappingSubstring(needle, occupied);
   }
 
-  search(searchParams: SearchParams): [start: number, end: number][] {
+  search(searchParams: SearchParams): MatchRange[] {
     return this.#pieceTable.search(searchParams);
   }
 

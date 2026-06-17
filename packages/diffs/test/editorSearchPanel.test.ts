@@ -1,9 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import {
-  buildSearchReplacementText,
-  PieceTable,
-} from '../src/editor/pieceTable';
+import { PieceTable } from '../src/editor/pieceTable';
 import {
   type MatchRange,
   type SearchPanelOptions,
@@ -12,6 +9,7 @@ import {
 } from '../src/editor/searchPanel';
 import { TextDocument } from '../src/editor/textDocument';
 import type { ResolvedTextEdit } from '../src/editor/types';
+import { buildSearchReplacementText } from '../src/search';
 import { installDom, wait } from './domHarness';
 
 function setInputValue(input: HTMLInputElement, value: string): void {
