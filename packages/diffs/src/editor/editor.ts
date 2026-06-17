@@ -176,6 +176,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
   #shouldIgnoreSelectionChange = false;
+  #isComposing = false;
   #isGutterMouseDown = false;
   #isContentMouseDown = false;
   #shiftKeyPressed = false;
@@ -680,7 +681,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           }
 
           const selectionRaw = document.getSelection();
-          const composedRange = selectionRaw?.getComposedRanges({
+          // getComposedRanges is the only selection API that reads through the
+          // editor's shadow root, but it is newly available and missing on
+          // older browsers and embedded WebViews. Bail out instead of throwing
+          // out of this listener on every selectionchange when it is absent.
+          if (
+            selectionRaw == null ||
+            typeof selectionRaw.getComposedRanges !== 'function'
+          ) {
+            return;
+          }
+          const composedRange = selectionRaw.getComposedRanges({
             shadowRoots: [shadowRoot],
           })?.[0];
           if (
@@ -956,6 +967,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (!targetIsContentElement(e)) {
           return;
         }
+        if (e.inputType === 'insertCompositionText') {
+          return;
+        }
         e.preventDefault();
         this.#handleInput(e.inputType, e.data);
       }),
@@ -975,6 +989,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           if (!targetIsContentElement(e)) {
             return;
           }
+          this.#isComposing = true;
           this.#shouldIgnoreSelectionChange = true;
         },
         { passive: true }
@@ -988,7 +1003,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             return;
           }
           this.#shouldIgnoreSelectionChange = false;
-          this.#handleInput('insertText', e.data);
+          const wasComposing = this.#isComposing;
+          this.#isComposing = false;
+          // An empty compositionend during a tracked composition means the
+          // candidate was canceled (e.g. Esc), so there is nothing to commit.
+          if (e.data !== '' || !wasComposing) {
+            this.#handleInput('insertText', e.data);
+          }
         },
         { passive: true }
       ),
@@ -1455,6 +1476,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#replaceSelectionText(autoSurroundTexts ?? text);
         break;
       }
+      case 'insertCompositionText':
+        break;
       case 'insertParagraph':
         // TODO(@ije): use document.EOF instead of '\n'
         this.#replaceSelectionText('\n');
