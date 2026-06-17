@@ -61,6 +61,7 @@ import {
   mapCursorMove,
   mapSelectionShift,
   mergeOverlappingSelections,
+  remapSelectionsAfterEdits,
   resolveIndentEdits,
   selectionIntersects,
 } from './selection';
@@ -263,18 +264,70 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (textDocument == null) {
       throw new Error('Editor is not attached');
     }
+    // Capture the current selection edges and the edit ranges as pre-edit
+    // offsets so the caret can be re-anchored once the buffer changes. Reading
+    // them after applyEdits would resolve against the new buffer and desync.
+    const selectionsBefore = this.#selections;
+    const selectionOffsetsBefore = selectionsBefore?.map(
+      (selection) =>
+        [
+          textDocument.offsetAt(selection.start),
+          textDocument.offsetAt(selection.end),
+        ] as [number, number]
+    );
+    // Resolve edits to pre-edit offsets, mirroring TextDocument's own
+    // resolution (swap reversed ranges, sort ascending), so the remap matches
+    // the edits TextDocument actually applies below.
+    const resolvedEditOffsets =
+      selectionsBefore === undefined
+        ? undefined
+        : edits
+            .map((edit) => {
+              const a = textDocument.offsetAt(edit.range.start);
+              const b = textDocument.offsetAt(edit.range.end);
+              return {
+                start: Math.min(a, b),
+                end: Math.max(a, b),
+                text: edit.newText,
+              };
+            })
+            .sort((a, b) => a.start - b.start);
+
     const change = textDocument.applyEdits(
       edits,
       updateHistory,
-      this.#selections
+      selectionsBefore
     );
-    if (change !== undefined) {
-      this.#applyChange(
-        change,
-        undefined,
-        this.#applyChangeToLineAnnotations(change)
-      );
+    if (change === undefined) {
+      return;
     }
+
+    // Re-anchor selections against the applied edits so the editor #selections,
+    // the native window selection, and the on-screen caret stay in sync with
+    // the new buffer. Skipping this leaves a programmatic edit (e.g. an AI or
+    // codemod insertion) with a stale caret and corrupts the next keystroke.
+    let nextSelections: EditorSelection[] | undefined;
+    if (
+      selectionsBefore !== undefined &&
+      selectionOffsetsBefore !== undefined &&
+      resolvedEditOffsets !== undefined
+    ) {
+      nextSelections = remapSelectionsAfterEdits(
+        textDocument,
+        selectionsBefore,
+        selectionOffsetsBefore,
+        resolvedEditOffsets
+      );
+      if (updateHistory) {
+        textDocument.setLastUndoSelectionsAfter(nextSelections);
+      }
+    }
+
+    this.#applyChange(
+      change,
+      nextSelections,
+      this.#applyChangeToLineAnnotations(change)
+    );
   }
 
   getState(): EditorState<LAnnotation> {

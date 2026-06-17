@@ -944,6 +944,62 @@ export function createSelectionFromAnchorAndFocusOffsets(
 }
 
 /**
+ * Maps a single offset from the pre-edit document into the post-edit document.
+ * `edits` are resolved edits in pre-edit offsets, sorted ascending and
+ * non-overlapping. An offset at or after an edit shifts by that edit's net
+ * length change; an offset that falls strictly inside a replaced range collapses
+ * to the end of the replacement text.
+ */
+function remapOffsetThroughEdits(
+  offset: number,
+  edits: readonly ResolvedTextEdit[]
+): number {
+  let delta = 0;
+  for (const edit of edits) {
+    if (offset <= edit.start) {
+      break;
+    }
+    if (offset >= edit.end) {
+      delta += edit.text.length - (edit.end - edit.start);
+    } else {
+      return edit.start + delta + edit.text.length;
+    }
+  }
+  return offset + delta;
+}
+
+/**
+ * Re-anchors selections after a batch of text edits has been applied, so the
+ * caret keeps pointing at the same logical location in the changed buffer.
+ *
+ * `selectionOffsets` (one `[start, end]` pair per selection) and `edits` are
+ * measured in the PRE-edit document; the returned selections are built from
+ * `textDocument`, which must already reflect the applied edits. Selection
+ * direction is preserved by remapping each edge and re-deriving anchor/focus.
+ */
+export function remapSelectionsAfterEdits(
+  textDocument: TextDocument<unknown>,
+  selections: readonly EditorSelection[],
+  selectionOffsets: ReadonlyArray<readonly [number, number]>,
+  edits: readonly ResolvedTextEdit[]
+): EditorSelection[] {
+  return selections.map((selection, index) => {
+    const [startOffset, endOffset] = selectionOffsets[index];
+    const nextStart = remapOffsetThroughEdits(startOffset, edits);
+    const nextEnd = remapOffsetThroughEdits(endOffset, edits);
+    const anchorOffset =
+      selection.direction === DirectionBackward ? nextEnd : nextStart;
+    const focusOffset =
+      selection.direction === DirectionBackward ? nextStart : nextEnd;
+    return createSelectionFromAnchorAndFocusOffsets(
+      textDocument,
+      anchorOffset,
+      focusOffset
+    );
+  });
+}
+
+/**
  * Creates a selection from a anchor and focus selection.
  */
 export function createSelectionFrom(
