@@ -1,0 +1,37 @@
+import { AgentUi } from './AgentUi';
+import { FeatureHeader } from '@/components/FeatureHeader';
+
+interface AgentDemoSectionProps {
+  // Server-rendered, already-highlighted diff HTML keyed by file path. Built in
+  // Home.tsx so the embedded card paints highlighted on first load and hydrates
+  // without an SSR/client mismatch.
+  prerenderedDiffs: Record<string, string>;
+}
+
+// Homepage embed of the agent-review surface: a single-file, diff-only card.
+// Always dark (the snapshot is prerendered dark and matching it avoids theme
+// flashing), so there's no light/dark toggle. It reuses the homepage's shared
+// worker pool for highlighting.
+export function AgentDemoSection({ prerenderedDiffs }: AgentDemoSectionProps) {
+  return (
+    <div className="space-y-5">
+      <FeatureHeader
+        id="edit"
+        isBeta
+        title="Edit diffs and code"
+        description={
+          <>
+            Enable edit mode in any <code>File</code> or <code>FileDiff</code>{' '}
+            component with the <code>EditorProvider</code>. Includes support for
+            selection management, auto-indention, undo history, find-in-file,
+            lint markers, and more. Pairs nicely with <code>@pierre/trees</code>{' '}
+            for <abbr title="Agentic User Interface">AUI</abbr> style
+            experiences.
+          </>
+        }
+      />
+
+      <AgentUi prerenderedDiffs={prerenderedDiffs} />
+    </div>
+  );
+}

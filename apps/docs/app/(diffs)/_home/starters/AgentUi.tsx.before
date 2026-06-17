@@ -9,7 +9,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import './agent-ui.css';
 import {
-  AUI_DIFF_OPTIONS,
   AUI_SESSIONS,
   type AuiChangedFile,
   type AuiSession,
@@ -18,6 +17,8 @@ import {
   getSessionGitStatus,
   getSessionPaths,
 } from './mockData';
+
+export type ThemeType = 'light' | 'dark';
 
 // The editor's stylesheet flattens every line number to one neutral colour
 // (`--diffs-editor-line-number-fg`) and is injected as an unlayered <style>,
@@ -52,10 +53,12 @@ function getLineNumberColorSheet(): CSSStyleSheet | null {
 function ChangesTree({
   session,
   activePath,
+  themeType,
   onSelect,
 }: {
   session: AuiSession;
   activePath: string | null;
+  themeType: ThemeType;
   onSelect: (path: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -129,12 +132,12 @@ function ChangesTree({
   }, [session]);
 
   // Inline color-scheme beats the tree's `:host { color-scheme: light dark }`,
-  // pinning its light-dark() colours to the demo's dark mode.
+  // flipping its light-dark() colours with our toggle.
   useEffect(() => {
     if (containerRef.current != null) {
-      containerRef.current.style.colorScheme = 'dark';
+      containerRef.current.style.colorScheme = themeType;
     }
-  }, [session]);
+  }, [themeType, session]);
 
   // Keep the highlighted row matched to the active file.
   useEffect(() => {
@@ -160,6 +163,9 @@ function ChangesTree({
 }
 
 export interface AgentUiProps {
+  // Theme is controlled by the parent so the toggle can live outside the
+  // component (the homepage section renders its own button group).
+  themeType: ThemeType;
   // Highlight themes the surrounding worker pool was initialized with. Defaults
   // to the shared homepage pool's themes.
   theme?: { dark: string; light: string };
@@ -169,9 +175,8 @@ export interface AgentUiProps {
   prerenderedDiffs?: Record<string, string>;
 }
 
-// The demo is always dark: the snapshot is prerendered dark and matching it
-// avoids theme flashing, so there is no light/dark toggle.
 export function AgentUi({
+  themeType,
   theme = DEFAULT_THEMES,
   prerenderedDiffs,
 }: AgentUiProps) {
@@ -191,30 +196,11 @@ export function AgentUi({
     activeTargetRef.current = activePath;
   }, [activePath]);
 
-  // The FileDiff is never remounted per file (no `key`): a client-side remount
-  // would drop the server `prerenderedHTML` (templateRender only injects it
-  // during SSR), so switching files just swaps the `fileDiff` prop and the
-  // FileDiff re-renders the new diff in place on the same surface.
-  //
-  // The editor, however, IS recreated per file (note `activePath` in the deps).
-  // The library only attaches the editor — via `editor.edit(instance)`, which
-  // builds the editor's TextDocument from the file currently rendered — when the
-  // `editor` reference itself changes (see useFileDiffInstance's attach effect,
-  // keyed on `[contentEditable, editor]`). It does NOT re-attach when only the
-  // `fileDiff` prop changes. So a single stable editor would keep the first
-  // file's document while the surface shows a different file, mis-positioning the
-  // caret/selection and breaking edits. Recreating the editor per file forces a
-  // re-attach that rebuilds the document against the newly rendered file — the
-  // same pattern the LiveDiffEditor demo uses when its layout/mode changes.
   const editor = useMemo(
     () =>
       new Editor({
         enabledSelectionAction: true,
-        renderSelectionAction({
-          close,
-          getSelectionText,
-          replaceSelectionText,
-        }) {
+        renderSelectionAction({ close, getSelectionText, replaceSelectionText }) {
           const container = document.createElement('div');
           const button = document.createElement('button');
           container.className = 'aui-selection-action';
@@ -235,10 +221,7 @@ export function AgentUi({
           editsRef.current.set(target, file.contents);
         },
       }),
-    // Recreate the editor whenever the active file changes so it re-attaches and
-    // rebuilds its document against the newly rendered surface (same reasoning as
-    // the LiveDiffEditor demo's layout/mode dep).
-    [activePath]
+    []
   );
 
   // The changes tree shows one file at a time; selecting a file swaps the
@@ -268,10 +251,15 @@ export function AgentUi({
     [activeFile, editKey]
   );
 
-  // Server-rendered, already-highlighted HTML for the active diff. Only safe
-  // when the file is unedited so the markup matches `fileDiff`.
+  // Server-rendered, already-highlighted HTML for the active diff. The snapshot
+  // is generated in dark mode, so only reuse it while the demo is in dark mode
+  // (otherwise a freshly opened file would flash dark before re-highlighting).
+  // It's also only safe when the file is unedited so the markup matches
+  // `fileDiff`.
   const activePrerenderedHTML =
-    activePath != null && editsRef.current.get(editKey) == null
+    themeType === 'dark' &&
+    activePath != null &&
+    editsRef.current.get(editKey) == null
       ? prerenderedDiffs?.[activePath]
       : undefined;
 
@@ -298,7 +286,7 @@ export function AgentUi({
 
   return (
     <EditorProvider editor={editor}>
-      <div className="aui" data-theme-type="dark" data-embedded="true">
+      <div className="aui" data-theme-type={themeType} data-embedded="true">
         <div className="aui-body">
           <section className="aui-center">
             <header className="aui-center-header">
@@ -327,9 +315,16 @@ export function AgentUi({
             <div className="aui-surface-wrap" ref={surfaceWrapRef}>
               {activeFile != null && fileDiff != null ? (
                 <FileDiff
+                  key={activePath}
                   fileDiff={fileDiff}
                   className="aui-surface"
-                  options={{ ...AUI_DIFF_OPTIONS, theme }}
+                  options={{
+                    theme,
+                    themeType,
+                    disableFileHeader: true,
+                    overflow: 'wrap',
+                    diffStyle: 'unified',
+                  }}
                   prerenderedHTML={activePrerenderedHTML}
                   contentEditable
                 />
@@ -384,6 +379,7 @@ export function AgentUi({
             <ChangesTree
               session={session}
               activePath={activePath}
+              themeType={themeType}
               onSelect={openFile}
             />
           </aside>

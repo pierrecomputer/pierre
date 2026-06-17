@@ -1,7 +1,14 @@
 #!/usr/bin/env bun
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve as resolvePath } from 'node:path';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, resolve as resolvePath } from 'node:path';
 
 // Builds the canned data for the homepage agent-review demo from THIS repo, so
 // the diffs shown in the card are real code. The single live session is
@@ -14,10 +21,11 @@ import { resolve as resolvePath } from 'node:path';
 //   bun apps/docs/scripts/generate-aui-mock-data.ts
 
 const repoRoot = resolvePath(import.meta.dirname, '../../..');
-const outputPath = resolvePath(
-  repoRoot,
-  'apps/docs/app/(diffs)/_home/mockData.generated.ts'
-);
+const homeDir = 'apps/docs/app/(diffs)/_home';
+const outputPath = resolvePath(repoRoot, `${homeDir}/mockData.generated.ts`);
+// Committed `before`/`after` snapshots that give a few files a realistic,
+// stable diff (see `readStarter`).
+const startersDir = resolvePath(repoRoot, `${homeDir}/starters`);
 
 // The source files that make up the homepage agent-review demo. The generated
 // blob itself is deliberately excluded to avoid self-nesting and bloat.
@@ -27,7 +35,6 @@ const SELF_SESSION_FILES = [
   'apps/docs/app/(diffs)/_home/mockData.ts',
   'apps/docs/app/(diffs)/_home/agent-ui.css',
   'apps/docs/scripts/generate-aui-mock-data.ts',
-  '.agents/skills/agent-ui/SKILL.md',
 ] as const;
 
 interface GeneratedChangedFile {
@@ -47,60 +54,77 @@ interface GeneratedSession {
   changedFiles: GeneratedChangedFile[];
 }
 
-// Returns the file contents at HEAD, or null when the path is new (not tracked
-// in the last commit).
-function gitShowHead(path: string): string | null {
-  try {
-    return execFileSync('git', ['show', `HEAD:${path}`], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-    });
-  } catch {
+// A committed "starter" snapshot for a demo file, stored under
+// `starters/<basename>.before` / `.after`. The demo's changed files are all
+// introduced on this branch, so diffing the working tree against `HEAD`
+// produces an empty diff for any file that happens to be committed (the surface
+// then renders blank). Pinning a curated `after` (and optionally a `before`)
+// instead keeps the demo deterministic regardless of git state:
+//   - `.before` + `.after`: a realistic modified diff (additions + deletions).
+//   - `.after` only: shown as freshly added (e.g. a file no longer on disk).
+// A file with no starter falls back to its on-disk contents shown as added, so
+// every demo surface always has a non-empty, editable diff.
+function readStarter(path: string): { before: string; after: string } | null {
+  const name = basename(path);
+  const beforePath = resolvePath(startersDir, `${name}.before`);
+  const afterPath = resolvePath(startersDir, `${name}.after`);
+  if (!existsSync(afterPath)) {
     return null;
   }
+  return {
+    before: existsSync(beforePath) ? readFileSync(beforePath, 'utf8') : '',
+    after: readFileSync(afterPath, 'utf8'),
+  };
 }
 
-// Parses `git diff --numstat HEAD` for a single path. Returns null when git has
-// nothing to report (e.g. an untracked new file).
-function gitNumstat(
-  path: string
-): { additions: number; deletions: number } | null {
+// Real line add/delete counts (via `git diff --no-index --numstat` on temp
+// files) so the tree's +/- decorations match what the diff actually renders.
+function diffCounts(
+  before: string,
+  after: string
+): { additions: number; deletions: number } {
+  if (before === after) {
+    return { additions: 0, deletions: 0 };
+  }
+  const dir = mkdtempSync(resolvePath(tmpdir(), 'aui-diff-'));
   try {
-    const out = execFileSync('git', ['diff', '--numstat', 'HEAD', '--', path], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-    }).trim();
-    if (out.length === 0) {
-      return null;
+    const beforePath = resolvePath(dir, 'before');
+    const afterPath = resolvePath(dir, 'after');
+    writeFileSync(beforePath, before, 'utf8');
+    writeFileSync(afterPath, after, 'utf8');
+    let out = '';
+    try {
+      out = execFileSync(
+        'git',
+        ['diff', '--no-index', '--numstat', beforePath, afterPath],
+        { encoding: 'utf8' }
+      );
+    } catch (error: unknown) {
+      // `git diff --no-index` exits 1 when the files differ, but still writes
+      // the numstat line to stdout, so read it off the thrown result.
+      out = (error as { stdout?: string }).stdout ?? '';
     }
-    const [additions, deletions] = out.split('\n')[0].split('\t');
-    if (additions === '-' || deletions === '-') {
-      return null;
-    }
-    return { additions: Number(additions), deletions: Number(deletions) };
-  } catch {
-    return null;
+    const [additions, deletions] = (out.trim().split('\n')[0] ?? '').split(
+      '\t'
+    );
+    const toCount = (value: string | undefined): number => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    return { additions: toCount(additions), deletions: toCount(deletions) };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
-}
-
-function countLines(contents: string): number {
-  if (contents.length === 0) {
-    return 0;
-  }
-  const lines = contents.split('\n');
-  return contents.endsWith('\n') ? lines.length - 1 : lines.length;
 }
 
 function buildChangedFile(path: string): GeneratedChangedFile {
-  const after = readFileSync(resolvePath(repoRoot, path), 'utf8');
-  const head = gitShowHead(path);
+  const starter = readStarter(path);
+  const after =
+    starter?.after ?? readFileSync(resolvePath(repoRoot, path), 'utf8');
+  const before = starter?.before ?? '';
   const status: GeneratedChangedFile['status'] =
-    head == null ? 'added' : 'modified';
-  const before = head ?? '';
-  const numstat = gitNumstat(path);
-  const additions = numstat?.additions ?? countLines(after);
-  const deletions = numstat?.deletions ?? 0;
+    before === '' ? 'added' : 'modified';
+  const { additions, deletions } = diffCounts(before, after);
   return { path, status, before, after, additions, deletions };
 }
 

@@ -1,6 +1,11 @@
-import type { PreloadedFileResult } from '@pierre/diffs/ssr';
+import type {
+  PreloadedFileResult,
+  PreloadFileDiffResult,
+} from '@pierre/diffs/ssr';
 
 import { WorkerPoolContext } from '../_components/WorkerPoolContext';
+import { LiveDiffEditor } from '../_examples/LiveDiffEditor/LiveDiffEditor';
+import { LiveEditor } from '../_examples/LiveEditor/LiveEditor';
 import { EditHero } from './EditHero';
 import { EditReference } from './EditReference';
 import { EditShortcuts } from './EditShortcuts';
@@ -15,6 +20,8 @@ import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 
 interface EditPageProps {
+  liveEditorFile: PreloadedFileResult<undefined>;
+  liveDiffEditorDiff: PreloadFileDiffResult<undefined>;
   markerFile: PreloadedFileResult<undefined>;
   findFile: PreloadedFileResult<undefined>;
   historyFile: PreloadedFileResult<undefined>;
@@ -23,6 +30,8 @@ interface EditPageProps {
 }
 
 export function EditPage({
+  liveEditorFile,
+  liveDiffEditorDiff,
   markerFile,
   findFile,
   historyFile,
@@ -37,6 +46,10 @@ export function EditPage({
         <HeadingAnchors />
 
         <section className="space-y-16 pb-8">
+          <LiveEditor prerenderedFile={liveEditorFile} />
+
+          <LiveDiffEditor prerenderedDiff={liveDiffEditorDiff} />
+
           <div className="space-y-5">
             <FeatureHeader
               id="selection-action"

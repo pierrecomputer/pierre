@@ -1,4 +1,3 @@
-import { DEFAULT_THEMES } from '@pierre/diffs';
 import {
   preloadFileDiff,
   preloadMultiFileDiff,
@@ -31,7 +30,7 @@ import { SplitUnified } from '../_examples/SplitUnified/SplitUnified';
 import { TOKEN_HOVER_EXAMPLE } from '../_examples/TokenHover/constants';
 import { TokenHover } from '../_examples/TokenHover/TokenHover';
 import { AgentDemoSection } from './AgentDemoSection';
-import { AUI_SESSIONS, getFileDiff } from './mockData';
+import { AUI_DIFF_OPTIONS, AUI_SESSIONS, getFileDiff } from './mockData';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
@@ -81,13 +80,7 @@ async function EditorSection() {
     session.changedFiles.map(async (file) => {
       const result = await preloadFileDiff({
         fileDiff: getFileDiff(file),
-        options: {
-          theme: DEFAULT_THEMES,
-          themeType: 'dark',
-          disableFileHeader: true,
-          overflow: 'wrap',
-          diffStyle: 'unified',
-        },
+        options: AUI_DIFF_OPTIONS,
       });
       return [file.path, result.prerenderedHTML] as const;
     })

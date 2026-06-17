@@ -9,7 +9,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import './agent-ui.css';
 import {
-  AUI_DIFF_OPTIONS,
   AUI_SESSIONS,
   type AuiChangedFile,
   type AuiSession,
@@ -171,10 +170,7 @@ export interface AgentUiProps {
 
 // The demo is always dark: the snapshot is prerendered dark and matching it
 // avoids theme flashing, so there is no light/dark toggle.
-export function AgentUi({
-  theme = DEFAULT_THEMES,
-  prerenderedDiffs,
-}: AgentUiProps) {
+export function AgentUi({ theme = DEFAULT_THEMES, prerenderedDiffs }: AgentUiProps) {
   const session = AUI_SESSIONS[0];
 
   const [activePath, setActivePath] = useState<string | null>(
@@ -191,30 +187,11 @@ export function AgentUi({
     activeTargetRef.current = activePath;
   }, [activePath]);
 
-  // The FileDiff is never remounted per file (no `key`): a client-side remount
-  // would drop the server `prerenderedHTML` (templateRender only injects it
-  // during SSR), so switching files just swaps the `fileDiff` prop and the
-  // FileDiff re-renders the new diff in place on the same surface.
-  //
-  // The editor, however, IS recreated per file (note `activePath` in the deps).
-  // The library only attaches the editor — via `editor.edit(instance)`, which
-  // builds the editor's TextDocument from the file currently rendered — when the
-  // `editor` reference itself changes (see useFileDiffInstance's attach effect,
-  // keyed on `[contentEditable, editor]`). It does NOT re-attach when only the
-  // `fileDiff` prop changes. So a single stable editor would keep the first
-  // file's document while the surface shows a different file, mis-positioning the
-  // caret/selection and breaking edits. Recreating the editor per file forces a
-  // re-attach that rebuilds the document against the newly rendered file — the
-  // same pattern the LiveDiffEditor demo uses when its layout/mode changes.
   const editor = useMemo(
     () =>
       new Editor({
         enabledSelectionAction: true,
-        renderSelectionAction({
-          close,
-          getSelectionText,
-          replaceSelectionText,
-        }) {
+        renderSelectionAction({ close, getSelectionText, replaceSelectionText }) {
           const container = document.createElement('div');
           const button = document.createElement('button');
           container.className = 'aui-selection-action';
@@ -235,10 +212,7 @@ export function AgentUi({
           editsRef.current.set(target, file.contents);
         },
       }),
-    // Recreate the editor whenever the active file changes so it re-attaches and
-    // rebuilds its document against the newly rendered surface (same reasoning as
-    // the LiveDiffEditor demo's layout/mode dep).
-    [activePath]
+    []
   );
 
   // The changes tree shows one file at a time; selecting a file swaps the
@@ -327,9 +301,16 @@ export function AgentUi({
             <div className="aui-surface-wrap" ref={surfaceWrapRef}>
               {activeFile != null && fileDiff != null ? (
                 <FileDiff
+                  key={activePath}
                   fileDiff={fileDiff}
                   className="aui-surface"
-                  options={{ ...AUI_DIFF_OPTIONS, theme }}
+                  options={{
+                    theme,
+                    themeType: 'dark',
+                    disableFileHeader: true,
+                    overflow: 'wrap',
+                    diffStyle: 'unified',
+                  }}
                   prerenderedHTML={activePrerenderedHTML}
                   contentEditable
                 />
