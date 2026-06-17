@@ -1,3 +1,4 @@
+import type { MatchRange, SearchParams } from '../search';
 import type {
   DiffLineAnnotation,
   EditorChange,
@@ -15,7 +16,6 @@ import {
   shouldCoalesceEditStackEntry,
 } from './editStack';
 import { PieceTable } from './pieceTable';
-import type { SearchParams } from './searchPanel';
 import type { EditHistoryLineAnnotation, EditHistoryState } from './types';
 
 export type { Position, Range, TextEdit } from '../types';
@@ -208,7 +208,7 @@ export class TextDocument<LAnnotation> {
     return this.#pieceTable.findNextNonOverlappingSubstring(needle, occupied);
   }
 
-  search(searchParams: SearchParams): [start: number, end: number][] {
+  search(searchParams: SearchParams): MatchRange[] {
     return this.#pieceTable.search(searchParams);
   }
 

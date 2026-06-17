@@ -1,9 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import {
-  buildSearchReplacementText,
-  PieceTable,
-} from '../src/editor/pieceTable';
+import { PieceTable } from '../src/editor/pieceTable';
 import {
   type MatchRange,
   type SearchPanelOptions,
@@ -11,6 +8,7 @@ import {
   type SearchParams,
 } from '../src/editor/searchPanel';
 import { TextDocument } from '../src/editor/textDocument';
+import { buildSearchReplacementText } from '../src/search';
 import type { ResolvedTextEdit } from '../src/types';
 import { installDom, wait } from './domHarness';
 
