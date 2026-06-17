@@ -385,6 +385,11 @@ interface EditorOptions<LAnnotation> {
   // Render rounded corners on selection ranges (default: true)
   roundedSelection?: boolean;
 
+  // Auto-surround selected text when typing a quote or bracket.
+  // Values: 'default' | 'never' | 'brackets' | 'quotes' | 'languageDefined'
+  // (default: 'default' — both quotes and brackets)
+  autoSurround?: 'default' | 'never' | 'brackets' | 'quotes' | 'languageDefined';
+
   // Show the gutter icon for Selection Action (default: false)
   enabledSelectionAction?: boolean;
 
