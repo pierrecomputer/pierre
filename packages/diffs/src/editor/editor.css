@@ -81,6 +81,13 @@
   animation-delay: 0.8s;
   visibility: hidden;
 }
+/* Honor the OS reduced-motion setting: drop the blink so the caret renders as a
+   solid bar (opacity stays at its default of 1) instead of pulsing. */
+@media (prefers-reduced-motion: reduce) {
+  [data-caret] {
+    animation: none;
+  }
+}
 [data-selection-range] {
   z-index: -10;
   background-color: var(--diffs-editor-selection-bg);
