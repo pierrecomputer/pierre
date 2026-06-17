@@ -49,16 +49,21 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     Element: Reflect.get(globalThis, 'Element'),
     Event: Reflect.get(globalThis, 'Event'),
     HTMLButtonElement: Reflect.get(globalThis, 'HTMLButtonElement'),
+    HTMLCanvasElement: Reflect.get(globalThis, 'HTMLCanvasElement'),
     HTMLDivElement: Reflect.get(globalThis, 'HTMLDivElement'),
     HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
     HTMLPreElement: Reflect.get(globalThis, 'HTMLPreElement'),
     HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
+    getComputedStyle: Reflect.get(globalThis, 'getComputedStyle'),
+    matchMedia: Reflect.get(globalThis, 'matchMedia'),
     MouseEvent: Reflect.get(globalThis, 'MouseEvent'),
+    MutationObserver: Reflect.get(globalThis, 'MutationObserver'),
     Node: Reflect.get(globalThis, 'Node'),
     PointerEvent: Reflect.get(globalThis, 'PointerEvent'),
     requestAnimationFrame: Reflect.get(globalThis, 'requestAnimationFrame'),
     ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
     SVGElement: Reflect.get(globalThis, 'SVGElement'),
+    SVGSVGElement: Reflect.get(globalThis, 'SVGSVGElement'),
     window: Reflect.get(globalThis, 'window'),
   };
 
@@ -85,6 +90,19 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     unobserve(_target: Element): void {}
     disconnect(): void {}
   }
+
+  const matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener(): void {},
+    removeEventListener(): void {},
+    addListener(): void {},
+    removeListener(): void {},
+    dispatchEvent(): boolean {
+      return true;
+    },
+  })) as typeof window.matchMedia;
 
   const {
     maxTouchPoints = 0,
@@ -115,6 +133,23 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
   let nextFrameId = 0;
   const frames = new Map<number, ReturnType<typeof setTimeout>>();
 
+  Object.defineProperty(dom.window.HTMLCanvasElement.prototype, 'getContext', {
+    configurable: true,
+    value: (contextId: string) => {
+      if (contextId !== '2d') {
+        return null;
+      }
+      return {
+        font: '',
+        measureText: (text: string) => ({ width: text.length * 8 }),
+      };
+    },
+  });
+  Object.defineProperty(dom.window.HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: () => {},
+  });
+
   const pointTargets = new Map<string, Element>();
   Object.defineProperty(dom.window.document, 'elementFromPoint', {
     configurable: true,
@@ -135,11 +170,15 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     Element: dom.window.Element,
     Event: dom.window.Event,
     HTMLButtonElement: dom.window.HTMLButtonElement,
+    HTMLCanvasElement: dom.window.HTMLCanvasElement,
     HTMLDivElement: dom.window.HTMLDivElement,
     HTMLElement: dom.window.HTMLElement,
     HTMLPreElement: dom.window.HTMLPreElement,
     HTMLStyleElement: dom.window.HTMLStyleElement,
+    getComputedStyle: dom.window.getComputedStyle.bind(dom.window),
+    matchMedia,
     MouseEvent: dom.window.MouseEvent,
+    MutationObserver: dom.window.MutationObserver,
     Node: dom.window.Node,
     PointerEvent: MockPointerEvent,
     requestAnimationFrame: ((callback: FrameRequestCallback) => {
@@ -153,9 +192,10 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     }) as typeof requestAnimationFrame,
     ResizeObserver: MockResizeObserver,
     SVGElement: dom.window.SVGElement,
+    SVGSVGElement: dom.window.SVGSVGElement,
     window: dom.window,
   });
-  Object.assign(dom.window, { PointerEvent: MockPointerEvent });
+  Object.assign(dom.window, { matchMedia, PointerEvent: MockPointerEvent });
   Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
     value: navigator,
