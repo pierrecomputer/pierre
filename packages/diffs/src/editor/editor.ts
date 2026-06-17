@@ -130,6 +130,11 @@ export interface EditorState<LAnnotation> {
   renderRange?: RenderRange;
 }
 
+interface SelectionCut {
+  index: number;
+  edit: ResolvedTextEdit;
+}
+
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #options: EditorOptions<LAnnotation>;
   #wrap = false;
@@ -1040,8 +1045,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           return;
         }
         e.preventDefault();
-        e.clipboardData?.setData('text', this.#getSelectionText());
-        this.#replaceSelectionText('');
+        e.clipboardData?.setData('text', this.#cutSelectionText());
       }),
 
       addEventListener(contentEl, 'paste', (e) => {
@@ -2504,6 +2508,205 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return '';
     }
     return getSelectionText(textDocument, selections);
+  }
+
+  #cutSelectionText(): string {
+    const textDocument = this.#textDocument;
+    const selections = this.#selections;
+    if (
+      textDocument === undefined ||
+      selections === undefined ||
+      selections.length === 0
+    ) {
+      return '';
+    }
+
+    if (selections.some((selection) => isCollapsedSelection(selection))) {
+      const cut = this.#resolveSelectionCut(textDocument, selections);
+      this.#applySelectionCutEdits(cut.edits, cut.nextSelectionOffsets);
+      return cut.text;
+    }
+
+    const text = getSelectionText(textDocument, selections);
+    this.#replaceSelectionText('');
+    return text;
+  }
+
+  // Resolves the deletion an individual selection contributes to a cut: a
+  // collapsed caret removes its whole logical line, while a ranged selection
+  // removes only the selected text.
+  #resolveSelectionCutEdit(
+    textDocument: TextDocument<LAnnotation>,
+    selection: EditorSelection
+  ): ResolvedTextEdit {
+    if (isCollapsedSelection(selection)) {
+      return this.#resolveCollapsedSelectionCutEdit(textDocument, selection);
+    }
+    const [start, end] =
+      comparePosition(selection.start, selection.end) <= 0
+        ? [selection.start, selection.end]
+        : [selection.end, selection.start];
+    return {
+      start: textDocument.offsetAt(start),
+      end: textDocument.offsetAt(end),
+      text: '',
+    };
+  }
+
+  // A caret-only cut removes the whole logical line. Non-final lines delete
+  // their trailing line break; the final line deletes the preceding break so
+  // no empty line is left behind.
+  #resolveCollapsedSelectionCutEdit(
+    textDocument: TextDocument<LAnnotation>,
+    selection: EditorSelection
+  ): ResolvedTextEdit {
+    const line = selection.start.line;
+    const lineStart = textDocument.offsetAt({ line, character: 0 });
+    const lineEnd = textDocument.offsetAt({
+      line,
+      character: textDocument.getLineLength(line),
+    });
+
+    if (line < textDocument.lineCount - 1) {
+      const nextLineStart = textDocument.offsetAt({
+        line: line + 1,
+        character: 0,
+      });
+      return { start: lineStart, end: nextLineStart, text: '' };
+    }
+
+    if (line > 0) {
+      const previousLineEnd = textDocument.offsetAt({
+        line: line - 1,
+        character: textDocument.getLineLength(line - 1),
+      });
+      return { start: previousLineEnd, end: lineEnd, text: '' };
+    }
+
+    return { start: lineStart, end: lineEnd, text: '' };
+  }
+
+  // Resolves the clipboard text, merged deletions, and resulting caret offsets
+  // for a cut. The clipboard text comes from the shared getSelectionText helper
+  // so cut stays in sync with copy, while the deletions are computed per
+  // selection and merged so overlapping cuts delete their shared text once.
+  #resolveSelectionCut(
+    textDocument: TextDocument<LAnnotation>,
+    selections: EditorSelection[]
+  ): {
+    text: string;
+    edits: ResolvedTextEdit[];
+    nextSelectionOffsets: number[];
+  } {
+    const cuts = selections.map<SelectionCut>((selection, index) => ({
+      index,
+      edit: this.#resolveSelectionCutEdit(textDocument, selection),
+    }));
+    const orderedCuts = [...cuts].sort((a, b) => {
+      const startOrder = a.edit.start - b.edit.start;
+      if (startOrder !== 0) {
+        return startOrder;
+      }
+      const endOrder = a.edit.end - b.edit.end;
+      if (endOrder !== 0) {
+        return endOrder;
+      }
+      return a.index - b.index;
+    });
+    const edits = this.#mergeCutEdits(orderedCuts);
+    return {
+      text: getSelectionText(textDocument, selections),
+      edits,
+      nextSelectionOffsets: this.#mapCutSelectionOffsets(orderedCuts, edits),
+    };
+  }
+
+  #mergeCutEdits(orderedCuts: SelectionCut[]): ResolvedTextEdit[] {
+    const edits: ResolvedTextEdit[] = [];
+    for (const { edit } of orderedCuts) {
+      if (edit.start >= edit.end) {
+        continue;
+      }
+      const last = edits.at(-1);
+      if (last !== undefined && edit.start <= last.end) {
+        edits[edits.length - 1] = {
+          start: last.start,
+          end: Math.max(last.end, edit.end),
+          text: '',
+        };
+      } else {
+        edits.push(edit);
+      }
+    }
+    return edits;
+  }
+
+  #mapCutSelectionOffsets(
+    orderedCuts: SelectionCut[],
+    edits: ResolvedTextEdit[]
+  ): number[] {
+    const nextOffsets: number[] = Array.from({ length: orderedCuts.length });
+    let editIndex = 0;
+    let offsetDelta = 0;
+    for (const cut of orderedCuts) {
+      while (
+        editIndex < edits.length &&
+        cut.edit.start > edits[editIndex].end
+      ) {
+        const edit = edits[editIndex];
+        offsetDelta -= edit.end - edit.start;
+        editIndex++;
+      }
+
+      const edit = edits[editIndex];
+      if (
+        edit !== undefined &&
+        cut.edit.start >= edit.start &&
+        cut.edit.start <= edit.end
+      ) {
+        nextOffsets[cut.index] = edit.start + offsetDelta;
+      } else {
+        nextOffsets[cut.index] = cut.edit.start + offsetDelta;
+      }
+    }
+    return nextOffsets;
+  }
+
+  #applySelectionCutEdits(
+    edits: ResolvedTextEdit[],
+    nextSelectionOffsets: number[]
+  ): void {
+    const textDocument = this.#textDocument;
+    const selections = this.#selections;
+    if (
+      textDocument === undefined ||
+      selections === undefined ||
+      edits.length === 0
+    ) {
+      return;
+    }
+
+    const change = textDocument.applyResolvedEdits(edits, true, selections);
+    if (change === undefined) {
+      return;
+    }
+
+    const nextSelections = nextSelectionOffsets.map<EditorSelection>(
+      (offset) => {
+        const caret = textDocument.positionAt(offset);
+        return {
+          start: caret,
+          end: caret,
+          direction: DirectionNone,
+        };
+      }
+    );
+    textDocument.setLastUndoSelectionsAfter(nextSelections);
+    this.#applyChange(
+      change,
+      nextSelections,
+      this.#applyChangeToLineAnnotations(change)
+    );
   }
 
   // replace the selection text
