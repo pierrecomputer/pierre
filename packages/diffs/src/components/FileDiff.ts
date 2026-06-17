@@ -1045,9 +1045,14 @@ export class FileDiff<
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    shouldRefreshView?: boolean
+    shouldRefreshView?: boolean,
+    skipDiffRecompute?: boolean
   ): void {
-    this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
+    this.hunksRenderer.updateRenderCache(
+      dirtyLines,
+      themeType,
+      skipDiffRecompute
+    );
     if (shouldRefreshView === true) {
       if (this.options.diffStyle === 'split') {
         if (this.fastRefreshTimeout != null) {

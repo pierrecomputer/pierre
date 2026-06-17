@@ -1485,7 +1485,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     fileInstance.updateRenderCache(
       dirtyLines,
       tokenizer.themeType,
-      isDiff && !didLineCountChange
+      isDiff && !didLineCountChange,
+      // On a line-count change we recompute hunk metadata authoritatively in
+      // `applyDocumentChange` below, so skip the redundant recompute here.
+      didLineCountChange
     );
     if (didLineCountChange) {
       fileInstance.applyDocumentChange(

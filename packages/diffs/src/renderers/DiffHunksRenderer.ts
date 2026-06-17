@@ -335,7 +335,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
+    themeType: 'dark' | 'light',
+    // When a line-count change is being applied in the same edit pass,
+    // `applyDocumentChange` recomputes hunk metadata from the full document
+    // text immediately after this call, so recomputing here is wasted work
+    // (and runs against a mid-update line array). Skip it but keep syncing the
+    // per-line token/text content below, which `applyDocumentChange` preserves.
+    skipDiffRecompute = false
   ): void {
     if (this.renderCache == null) {
       return;
@@ -399,7 +405,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     }
 
-    if (changedAdditionLines.length > 0) {
+    if (!skipDiffRecompute && changedAdditionLines.length > 0) {
       Object.assign(
         diff,
         updateDiffHunks(

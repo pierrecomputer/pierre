@@ -931,7 +931,12 @@ export interface DiffsEditableComponent<
   updateRenderCache: (
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    shouldRefreshView?: boolean
+    shouldRefreshView?: boolean,
+    // When the same edit pass also changes the document line count, the editor
+    // follows up with `applyDocumentChange`, which recomputes hunk metadata from
+    // the authoritative document text. Set this to skip the redundant hunk
+    // recompute here (token/line content updates still apply).
+    skipDiffRecompute?: boolean
   ) => void;
 }
 
