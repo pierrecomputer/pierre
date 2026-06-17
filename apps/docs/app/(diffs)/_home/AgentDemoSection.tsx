@@ -1,20 +1,12 @@
-import { IconArrowUpRight } from '@pierre/icons';
 import Link from 'next/link';
 
 import { AgentUi } from './AgentUi';
 import { FeatureHeader } from '@/components/FeatureHeader';
 
 interface AgentDemoSectionProps {
-  // Server-rendered, already-highlighted diff HTML keyed by file path. Built in
-  // Home.tsx so the embedded card paints highlighted on first load and hydrates
-  // without an SSR/client mismatch.
   prerenderedDiffs: Record<string, string>;
 }
 
-// Homepage embed of the agent-review surface: a single-file, diff-only card.
-// Always dark (the snapshot is prerendered dark and matching it avoids theme
-// flashing), so there's no light/dark toggle. It reuses the homepage's shared
-// worker pool for highlighting.
 export function AgentDemoSection({ prerenderedDiffs }: AgentDemoSectionProps) {
   return (
     <div className="space-y-5">
@@ -31,24 +23,13 @@ export function AgentDemoSection({ prerenderedDiffs }: AgentDemoSectionProps) {
             for <abbr title="Agentic User Interface">AUI</abbr> style
             experiences.{' '}
             <Link href="/edit" className="inline-link">
-              Explore everything edit can do
+              Learn more about edit mode.
             </Link>
-            .
           </>
         }
       />
 
       <AgentUi prerenderedDiffs={prerenderedDiffs} />
-
-      <div>
-        <Link
-          href="/edit"
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 text-sm transition-colors"
-        >
-          See the edit feature page
-          <IconArrowUpRight />
-        </Link>
-      </div>
     </div>
   );
 }
