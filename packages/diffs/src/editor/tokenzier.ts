@@ -59,7 +59,10 @@ export class EditorTokenizer {
       totalLines === Infinity ? Infinity : startingLine + totalLines,
       this.#textDocument.lineCount
     );
-    if (this.#grammar === undefined) {
+    if (
+      this.#grammar === undefined &&
+      !isGrammarlessLanguage(this.#textDocument.languageId)
+    ) {
       await this.#highlighter.loadLanguage(this.#textDocument.languageId);
       this.#grammar = this.#highlighter.getLanguage(
         this.#textDocument.languageId
@@ -141,7 +144,10 @@ export class EditorTokenizer {
     this.#setStyle = setStyle;
     this.#onDeferTokenize = onDeferTokenize;
     this.#debug = __debug ?? false;
-    if (highlighter.getLoadedLanguages().includes(textDocument.languageId)) {
+    if (
+      !isGrammarlessLanguage(textDocument.languageId) &&
+      highlighter.getLoadedLanguages().includes(textDocument.languageId)
+    ) {
       this.#grammar = highlighter.getLanguage(textDocument.languageId);
     }
     this.#colorMap = [];
@@ -192,8 +198,8 @@ export class EditorTokenizer {
   }
 
   cleanUp(): void {
-    this.#detachMessageListener();
     this.stopBackgroundTokenize();
+    this.#detachMessageListener();
     this.#disposes?.forEach((dispose) => dispose());
     this.#disposes = undefined;
   }
@@ -204,7 +210,10 @@ export class EditorTokenizer {
     change: TextDocumentChange,
     renderRange?: RenderRange
   ): Map<number, Array<HighlightedToken>> {
-    if (this.#grammar === undefined) {
+    if (
+      this.#grammar === undefined &&
+      !isGrammarlessLanguage(this.#textDocument.languageId)
+    ) {
       throw new Error('Grammar not loaded');
     }
 
@@ -450,6 +459,10 @@ export class EditorTokenizer {
     changedLineRanges?: readonly [number, number][],
     changedRangeIndex = 0
   ): void {
+    if (isGrammarlessLanguage(this.#textDocument.languageId)) {
+      return;
+    }
+
     const jobId = ++this.#backgroundJobId;
 
     if (this.#debug) {
@@ -474,9 +487,6 @@ export class EditorTokenizer {
     line: number,
     state: StateStack
   ): { resolvedTokens: Array<HighlightedToken>; state: StateStack } {
-    if (this.#grammar === undefined) {
-      throw new Error('Grammar not loaded');
-    }
     const lineText = this.#textDocument.getLineText(line);
     if (lineText.length > this.#tokenizeMaxLineLength) {
       console.warn(
@@ -484,7 +494,11 @@ export class EditorTokenizer {
       );
       return { resolvedTokens: [[0, '', lineText]], state };
     }
-    if (lineText === '' || lineText.trim() === '') {
+    if (
+      this.#grammar === undefined ||
+      lineText === '' ||
+      lineText.trim() === ''
+    ) {
       return { resolvedTokens: [[0, '', lineText]], state };
     }
     const result = tokenizeLine(
@@ -679,4 +693,9 @@ export function renderLineTokens(
       textContent: textContent,
     });
   });
+}
+
+// Shiki special-cases `text` and `ansi` in codeToHast but does not expose grammars.
+function isGrammarlessLanguage(languageId: string): boolean {
+  return languageId === 'text' || languageId === 'ansi';
 }

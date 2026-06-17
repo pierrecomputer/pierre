@@ -20,6 +20,7 @@ import {
   type SelectionWriteOptions,
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
+import { queueRender } from '../managers/UniversalRenderingManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 import type {
@@ -467,23 +468,27 @@ export class File<
     }
   }
 
-  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
-    this.editor?.cleanUp();
+  private syncRenderView = () => {
+    const editor = this.editor;
     const fileContainer = this.fileContainer;
     const file = this.file;
-    if (fileContainer != null && file != null) {
+    if (editor != null && fileContainer != null && file != null) {
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
-        editor.syncToRenderedView(
+        editor.__syncRenderView(
           highlighter,
           fileContainer,
           file,
-          false,
           this.lineAnnotations,
           this.renderRange
         );
       });
     }
+  };
+
+  public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
+    this.editor?.cleanUp();
     this.editor = editor;
+    queueRender(this.syncRenderView);
     return () => {
       this.editor = undefined;
     };
@@ -531,7 +536,7 @@ export class File<
 
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
-    this.editor?.postponeBackgroundTokenizeToNextFrame();
+    this.editor?.__postponeBackgroundTokenizeToNextFrame();
 
     const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
@@ -657,19 +662,8 @@ export class File<
       }
       this.renderAnnotations();
       this.renderGutterUtility();
-
-      const editor = this.editor;
-      if (editor != null) {
-        void this.fileRenderer.initializeHighlighter().then((highlighter) => {
-          editor.syncToRenderedView(
-            highlighter,
-            fileContainer,
-            file,
-            didFileChange,
-            this.lineAnnotations,
-            this.renderRange
-          );
-        });
+      if (this.editor != null) {
+        queueRender(this.syncRenderView);
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {
@@ -999,10 +993,20 @@ export class File<
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
     this.code = getOrCreateCodeNode({ code: this.code });
-    this.code.innerHTML = this.fileRenderer.renderPartialHTML(
-      this.fileRenderer.renderCodeAST(result)
-    );
-    pre.replaceChildren(this.code);
+    const codeAst = this.fileRenderer.renderCodeAST(result);
+    if (this.code.childElementCount >= 2) {
+      for (let i = 0; i < 2; i++) {
+        const domEl = this.code.children[i] as HTMLElement;
+        const astEl = codeAst[i] as HASTElement;
+        domEl.innerHTML = toHtml(astEl.children);
+        domEl.style.cssText = astEl.properties.style as string;
+      }
+    } else {
+      this.code.innerHTML = toHtml(codeAst);
+    }
+    if (!pre.contains(this.code)) {
+      pre.replaceChildren(this.code);
+    }
     this.lastRowCount = result.rowCount;
   }
 

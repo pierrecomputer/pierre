@@ -214,54 +214,98 @@
 
 /* Search Panel Widget */
 [data-search-panel] {
-  display: flex;
-  gap: 6px;
   position: sticky;
   top: 12px;
-  min-width: 300px;
-  margin-inline: auto 12px;
-  margin-bottom: 4px;
-  padding: 4px;
-}
-[data-search-panel-row] {
+  right: 12px;
+  z-index: 100;
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 1px;
+  justify-content: right;
+  flex-direction: column;
   width: 100%;
+  height: fit-content;
+  margin-bottom: 4px;
+}
+[data-search-panel] [data-editor-widget] {
+  position: relative;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px;
+  max-width: 100%;
+  margin-inline: auto 12px;
   font-family: var(--diffs-header-font-fallback);
   font-size: 14px;
 }
-[data-search-panel-row] input {
-  font-size: 14px;
-  line-height: 24px;
-  width: 120px;
-  padding-inline: 4px;
-  border: none;
-  outline: none;
-  background-color: transparent;
-  color: var(--diffs-fg);
+/* The two input rows form a grid: column 1 holds the find/replace inputs,
+   column 2 holds the results text / replace actions, and column 3 holds the
+   find navigation buttons on the first row only. DOM order auto-places items. */
+[data-search-grid] {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 4px 6px;
 }
-[data-search-panel-row] input::selection {
+[data-search-grid][data-mode='find'] [data-replace-cell] {
+  display: none;
+}
+[data-input-box] {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 200px;
+}
+[data-input-box] input {
+  flex-grow: 1;
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 24px;
+  padding-inline: 6px;
+  color: var(--diffs-fg);
+  background-color: var(--diffs-bg);
+  border: 1px solid color-mix(in lab, var(--diffs-fg) 12%, var(--diffs-bg));
+  border-radius: 6px;
+  outline: none;
+}
+/* Reserve room on the right of the find input for the overlaid toggles. */
+[data-input-box][data-find] input {
+  padding-inline-end: 72px;
+}
+[data-input-box] input::selection {
   background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
 }
-[data-search-panel-row] [data-matches] {
-  min-width: 10ch;
-  margin-right: auto;
+[data-search-toggles] {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+[data-matches] {
+  flex-shrink: 0;
+  min-width: 50px;
   font-size: 12px;
   font-weight: 500;
   line-height: 20px;
-  padding-inline: 4px;
+  white-space: nowrap;
   color: color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg));
 }
-[data-search-panel-row] [data-matches][data-no-matches] {
-  color: color-mix(in lab, var(--diffs-deletion-base) 90%, var(--diffs-bg));
+[data-matches][data-no-matches] {
+  color: color-mix(in lab, var(--diffs-fg) 35%, var(--diffs-bg));
 }
-[data-search-panel-row] svg {
+[data-replace-actions],
+[data-search-nav] {
+  display: flex;
+  align-items: center;
+}
+[data-search-panel] svg {
   display: block;
   fill: currentColor;
 }
-[data-search-panel-row] [data-icon] {
+[data-search-panel] [data-icon] {
   flex-shrink: 0;
   width: 24px;
   height: 24px;
@@ -275,27 +319,13 @@
     background-color 0.1s ease-in-out,
     color 0.1s ease-in-out;
 }
-[data-search-panel-row] [data-icon='search'] {
-  color: color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg));
-  cursor: default;
-}
-[data-search-panel-row] [data-icon][data-disabled='true'] {
+[data-search-panel] [data-icon][data-disabled='true'] {
   opacity: 0.25;
   pointer-events: none;
 }
-[data-search-panel-row] [data-icon]:not([data-icon='search']):hover {
-  background-color: color-mix(in lab, var(--diffs-fg) 6%, var(--diffs-bg));
+[data-search-panel] [data-icon]:hover {
   color: var(--diffs-fg);
 }
-[data-search-panel-row] [data-icon][data-active='true'] {
-  background-color: color-mix(in lab, var(--diffs-fg) 10%, var(--diffs-bg));
-  color: var(--diffs-fg);
-}
-[data-search-panel-row] [data-divider] {
-  flex-shrink: 0;
-  align-self: center;
-  width: 1px;
-  height: 16px;
-  margin-inline: 8px;
-  background-color: color-mix(in lab, var(--diffs-fg) 10%, var(--diffs-bg));
+[data-search-panel] [data-icon][data-active='true'] {
+  color: light-dark(var(--diffs-modified-light), var(--diffs-modified-dark));
 }

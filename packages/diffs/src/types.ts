@@ -904,10 +904,17 @@ export interface DiffsComponentOptions extends BaseCodeOptions {
 }
 
 export interface DiffsBaseComponent {
+  readonly type: 'file' | 'file-diff' | 'unresolved-file';
   readonly top?: number;
   readonly options: DiffsComponentOptions;
   setOptions: (options: Partial<DiffsComponentOptions>) => void;
   setSelectedLines: (range: { start: number; end: number } | null) => void;
+  render(options: {
+    file?: FileContents;
+    fileDiff?: FileDiffMetadata;
+    lineAnnotations?: any[];
+    renderRange?: RenderRange;
+  }): void;
   rerender(): void;
   cleanUp(): void;
 }
@@ -929,18 +936,17 @@ export interface DiffsEditableComponent<
 }
 
 export interface DiffsEditor<LAnnotation> {
-  syncToRenderedView(
+  __postponeBackgroundTokenizeToNextFrame(): void;
+  __syncRenderView(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileContents: FileContents,
-    didFileChange: boolean,
     lineAnnotations:
       | LineAnnotation<LAnnotation>[]
       | DiffLineAnnotation<LAnnotation>[]
       | undefined,
     renderRange: RenderRange | undefined
   ): void;
-  postponeBackgroundTokenizeToNextFrame(): void;
   cleanUp(): void;
 }
 
