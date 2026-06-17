@@ -548,6 +548,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
+    // The contenteditable host advertises role="textbox", so without an
+    // accessible name screen readers announce an unlabeled text field. Label it
+    // with the file name. The same content element is reused across file
+    // switches (see File#applyFullRender), so refresh the label on every sync
+    // rather than only when the element is first initialized above.
+    if (contentEl.ariaLabel !== fileOrDiff.name) {
+      contentEl.ariaLabel = fileOrDiff.name;
+    }
+
     if (
       (lineAnnotations !== undefined && lineAnnotations.length > 0) ||
       (this.#fileInstance?.type === 'file-diff' &&
