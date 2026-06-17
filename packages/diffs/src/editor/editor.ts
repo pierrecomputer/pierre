@@ -820,6 +820,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     ];
   }
 
+  // Swaps in a new batch of transient "select" listeners — gutter drag
+  // tracking or the Safari annotation-hover workaround — disposing the
+  // previous batch first. Routing every reassignment through here keeps the
+  // dispose-before-replace invariant in one place: a stale set (e.g. from a
+  // pointerup that never fired after a canceled gesture, or a fresh
+  // pointerdown before the previous interaction tore down) can never be
+  // overwritten while its listeners are still attached to the document.
+  #replaceSelectEventListeners(disposes: (() => void)[]): void {
+    this.#selectEventDisposes?.forEach((dispose) => dispose());
+    this.#selectEventDisposes = disposes;
+  }
+
   #listenContentElement(contentEl: HTMLElement, gutterEl?: HTMLElement): void {
     const targetIsContentElement = (e: Event) => {
       const target = e.composedPath()[0] as HTMLElement | undefined;
@@ -848,7 +860,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#lineAnnotations !== undefined &&
             this.#lineAnnotations.length > 0
           ) {
-            this.#selectEventDisposes = [
+            const annotationDisposes = [
               ...contentEl.querySelectorAll<HTMLElement>(
                 '[data-line-annotation]'
               ),
@@ -862,6 +874,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 }),
               ])
               .flat();
+            this.#replaceSelectEventListeners(annotationDisposes);
           }
 
           this.#isContentMouseDown = true;
@@ -1070,6 +1083,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           gutterEl,
           'pointerdown',
           (e) => {
+            // Gutter drag-selection is mouse-only: the global pointerup that
+            // clears #isGutterMouseDown and disposes the mousemove listener
+            // bails for non-mouse pointers, so reacting to a touch/pen tap
+            // here would strand that state and leak the listener. Mirror the
+            // content pointerdown guard.
+            if (e.pointerType !== 'mouse') {
+              return;
+            }
+
             const textDocument = this.#textDocument;
             const lineIndex = resolveEditableLine(
               resolveGutterTarget(
@@ -1093,7 +1115,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#selectionStart = selection;
             this.#updateSelections([selection]);
             this.#focus(selection.end);
-            this.#selectEventDisposes = [
+            this.#replaceSelectEventListeners([
               addEventListener(
                 document,
                 'mousemove',
@@ -1133,7 +1155,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 },
                 { passive: true }
               ),
-            ];
+            ]);
           },
           { passive: true }
         )
