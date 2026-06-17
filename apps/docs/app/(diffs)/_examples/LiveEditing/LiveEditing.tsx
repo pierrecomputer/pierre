@@ -146,8 +146,7 @@ export function LiveEditing({
             or <code>FileDiff</code>—editable in place. Toggle between a
             read-only <strong>Review</strong> and a live <strong>Edit</strong>,
             switch the surface between a file and a diff, and render the diff
-            inline (<strong>unified</strong>) or side-by-side (
-            <strong>split</strong>). Start typing in the code below and it
+            unified or side-by-side split. Start typing in the code below and it
             updates as you edit.
           </>
         }

@@ -199,6 +199,14 @@
     @apply scroll-mt-5;
   }
 
+  b,
+  strong {
+    font-weight: 500 !important;
+  }
+  .strong-fg strong {
+    @apply text-foreground;
+  }
+
   /* Heading anchor links */
   .heading-anchor {
     @apply text-muted-foreground hover:text-foreground ml-2 opacity-0 transition-opacity duration-200;
