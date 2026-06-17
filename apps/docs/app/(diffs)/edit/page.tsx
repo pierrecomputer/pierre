@@ -9,7 +9,6 @@ import {
   SHORTCUTS_DEMO_FILE_EXAMPLE,
 } from '../_edit/constants';
 import { EditPage } from '../_edit/EditPage';
-import { LIVE_EDITOR_FILE_EXAMPLE } from '../_examples/LiveEditor/constants';
 
 const editTitle = 'Pierre Diffs — now with edit';
 const editDescription =
@@ -33,25 +32,17 @@ export const metadata: Metadata = {
 // and hydrate cleanly (no flash): the "Live editing" File surface, and the
 // lint-marker, find-in-file, undo-history, shortcuts, and selection files.
 export default async function EditRoute() {
-  const [
-    liveFile,
-    markerFile,
-    findFile,
-    historyFile,
-    shortcutsFile,
-    selectionFile,
-  ] = await Promise.all([
-    preloadFile(LIVE_EDITOR_FILE_EXAMPLE),
-    preloadFile(MARKER_DEMO_FILE_EXAMPLE),
-    preloadFile(FIND_DEMO_FILE_EXAMPLE),
-    preloadFile(HISTORY_DEMO_FILE_EXAMPLE),
-    preloadFile(SHORTCUTS_DEMO_FILE_EXAMPLE),
-    preloadFile(SELECTION_DEMO_FILE_EXAMPLE),
-  ]);
+  const [markerFile, findFile, historyFile, shortcutsFile, selectionFile] =
+    await Promise.all([
+      preloadFile(MARKER_DEMO_FILE_EXAMPLE),
+      preloadFile(FIND_DEMO_FILE_EXAMPLE),
+      preloadFile(HISTORY_DEMO_FILE_EXAMPLE),
+      preloadFile(SHORTCUTS_DEMO_FILE_EXAMPLE),
+      preloadFile(SELECTION_DEMO_FILE_EXAMPLE),
+    ]);
 
   return (
     <EditPage
-      liveEditorFile={liveFile}
       markerFile={markerFile}
       findFile={findFile}
       historyFile={historyFile}

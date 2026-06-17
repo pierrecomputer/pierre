@@ -115,7 +115,6 @@ export function LiveEditor({ prerenderedFile }: LiveEditorProps) {
     <div className="space-y-5">
       <FeatureHeader
         id="editor"
-        isBeta={true}
         title="Live editing"
         description={
           <>

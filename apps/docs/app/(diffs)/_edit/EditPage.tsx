@@ -1,7 +1,6 @@
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 
 import { WorkerPoolContext } from '../_components/WorkerPoolContext';
-import { LiveEditor } from '../_examples/LiveEditor/LiveEditor';
 import { EditHero } from './EditHero';
 import { EditReference } from './EditReference';
 import { EditShortcuts } from './EditShortcuts';
@@ -16,7 +15,6 @@ import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 
 interface EditPageProps {
-  liveEditorFile: PreloadedFileResult<undefined>;
   markerFile: PreloadedFileResult<undefined>;
   findFile: PreloadedFileResult<undefined>;
   historyFile: PreloadedFileResult<undefined>;
@@ -25,7 +23,6 @@ interface EditPageProps {
 }
 
 export function EditPage({
-  liveEditorFile,
   markerFile,
   findFile,
   historyFile,
@@ -40,8 +37,6 @@ export function EditPage({
         <HeadingAnchors />
 
         <section className="space-y-16 pb-8">
-          <LiveEditor prerenderedFile={liveEditorFile} />
-
           <div className="space-y-5">
             <FeatureHeader
               id="selection-action"
@@ -79,15 +74,15 @@ export function EditPage({
           <div className="space-y-5">
             <FeatureHeader
               id="find"
-              title="Find in file"
+              title="Find and replace while editing"
               description={
                 <>
-                  Open the search panel with <code>Cmd/Ctrl-F</code> on any{' '}
-                  <code>File</code> or <code>FileDiff</code> to find and
-                  replace. The example below shows the search panel
-                  pre-filled—press <code>Enter</code> or use its arrows to jump
-                  between matches, and toggle case, whole-word, or regex as you
-                  go.
+                  Find strings across files with <code>Cmd/Ctrl-F</code> on any{' '}
+                  <code>File</code> or <code>FileDiff</code>. Find and replace
+                  with <code>Cmd/Ctrl-Shift-F</code>. The example below shows
+                  the search panel pre-filled—press <code>Enter</code> or use
+                  its arrows to jump between matches, and toggle case,
+                  whole-word, or regex as you go.
                 </>
               }
             />

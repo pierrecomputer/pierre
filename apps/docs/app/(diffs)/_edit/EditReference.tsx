@@ -1,4 +1,10 @@
-import type { ReactNode } from 'react';
+import {
+  IconBoxTape,
+  IconCodeBlock,
+  IconDiffSplit,
+  type IconProps,
+} from '@pierre/icons';
+import type { ComponentType, ReactNode } from 'react';
 
 import { FeatureHeader } from '@/components/FeatureHeader';
 
@@ -9,6 +15,8 @@ interface ReferenceItem {
 
 interface ReferenceGroup {
   label: string;
+  icon: ComponentType<IconProps>;
+  headingClassName: string;
   items: ReferenceItem[];
 }
 
@@ -18,6 +26,8 @@ interface ReferenceGroup {
 const CAPABILITY_GROUPS: ReferenceGroup[] = [
   {
     label: 'Editing',
+    icon: IconCodeBlock,
+    headingClassName: 'border-blue-500/30 text-blue-500',
     items: [
       {
         term: 'Files & diffs',
@@ -48,6 +58,8 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
   },
   {
     label: 'Rendering',
+    icon: IconDiffSplit,
+    headingClassName: 'border-purple-500/30 text-purple-500',
     items: [
       {
         term: 'Line wrapping',
@@ -58,25 +70,18 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
         term: 'Virtualized files',
         description: (
           <>
-            Edit huge files with <code>VirtualizedFile</code> /{' '}
-            <code>VirtualizedFileDiff</code>; off-screen lines render on demand.
+            Use <code>VirtualizedFile</code> and{' '}
+            <code>VirtualizedFileDiff</code> to edit massive files; off-screen
+            lines render on demand.
           </>
         ),
-      },
-      {
-        term: 'Theme-aware',
-        description:
-          'Edited lines re-highlight against the active light or dark theme automatically.',
-      },
-      {
-        term: 'Background tokenizing',
-        description:
-          'Re-highlighting is deferred during scroll and edit bursts to stay smooth.',
       },
     ],
   },
   {
     label: 'Integration & delivery',
+    icon: IconBoxTape,
+    headingClassName: 'border-rose-500/30 text-rose-500',
     items: [
       {
         term: 'Diff annotations',
@@ -127,19 +132,22 @@ export function EditReference() {
           </>
         }
       />
-      <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-12 lg:grid-cols-3">
         {CAPABILITY_GROUPS.map((group) => (
           <div key={group.label}>
-            <h3 className="text-muted-foreground text-md mb-4 border-b pb-3 font-light">
+            <h3
+              className={`text-foreground mb-5 flex flex-col gap-1.5 border-b pb-4 text-lg font-light`}
+            >
+              <group.icon className={`size-5 ${group.headingClassName}`} />
               {group.label}
             </h3>
-            <dl className="space-y-4">
+            <dl className="space-y-5">
               {group.items.map((item, index) => (
                 <div key={index}>
                   <dt className="text-sm font-medium [&_code]:text-[0.8125rem]">
                     {item.term}
                   </dt>
-                  <dd className="text-muted-foreground mt-0.5 text-sm">
+                  <dd className="text-muted-foreground mt-0.5 text-sm text-pretty">
                     {item.description}
                   </dd>
                 </div>
