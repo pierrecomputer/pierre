@@ -132,6 +132,43 @@ describe('Editor.applyEdits selection sync', () => {
     }
   });
 
+  test('moves the caret past text inserted at the caret', async () => {
+    const { cleanup, editor } = await createEditorFixture('alpha\nbravo');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ]);
+
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 2 },
+            end: { line: 0, character: 2 },
+          },
+          newText: 'XYZ',
+        },
+      ]);
+
+      expect(editor.getState().file.contents).toBe('alXYZpha\nbravo');
+      // The caret must follow the inserted text so the next keystroke lands
+      // after it, not in front of it.
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('shifts both edges of a selected range and preserves direction', async () => {
     const { cleanup, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie'

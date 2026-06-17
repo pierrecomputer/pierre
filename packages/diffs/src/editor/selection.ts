@@ -946,9 +946,10 @@ export function createSelectionFromAnchorAndFocusOffsets(
 /**
  * Maps a single offset from the pre-edit document into the post-edit document.
  * `edits` are resolved edits in pre-edit offsets, sorted ascending and
- * non-overlapping. An offset at or after an edit shifts by that edit's net
- * length change; an offset that falls strictly inside a replaced range collapses
- * to the end of the replacement text.
+ * non-overlapping. An offset at or after an edit's start shifts to the end of
+ * that edit's replacement (right gravity), so text inserted at the caret pushes
+ * the caret past it; an offset strictly before an edit is only shifted by the
+ * net length change of the edits that precede it.
  */
 function remapOffsetThroughEdits(
   offset: number,
@@ -956,7 +957,7 @@ function remapOffsetThroughEdits(
 ): number {
   let delta = 0;
   for (const edit of edits) {
-    if (offset <= edit.start) {
+    if (offset < edit.start) {
       break;
     }
     if (offset >= edit.end) {
