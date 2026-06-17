@@ -4,8 +4,7 @@ import type {
 } from '@pierre/diffs/ssr';
 
 import { WorkerPoolContext } from '../_components/WorkerPoolContext';
-import { LiveDiffEditor } from '../_examples/LiveDiffEditor/LiveDiffEditor';
-import { LiveEditor } from '../_examples/LiveEditor/LiveEditor';
+import { LiveEditing } from '../_examples/LiveEditing/LiveEditing';
 import { EditHero } from './EditHero';
 import { EditReference } from './EditReference';
 import { EditShortcuts } from './EditShortcuts';
@@ -46,9 +45,10 @@ export function EditPage({
         <HeadingAnchors />
 
         <section className="space-y-16 pb-8">
-          <LiveEditor prerenderedFile={liveEditorFile} />
-
-          <LiveDiffEditor prerenderedDiff={liveDiffEditorDiff} />
+          <LiveEditing
+            prerenderedFile={liveEditorFile}
+            prerenderedDiff={liveDiffEditorDiff}
+          />
 
           <div className="space-y-5">
             <FeatureHeader
