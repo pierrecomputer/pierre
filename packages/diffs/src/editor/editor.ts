@@ -341,7 +341,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#markerRenderer ??= new MarkerRenderer({
       getLineHeight: () => this.#metrics.lineHeight,
-      getFileContainer: () => this.#fileContainer,
+      getOverlayElement: () => this.#overlayElement,
       getCharX: (line, character) => this.#getCharX(line, character),
       getLineY: (line) => this.#getLineY(line),
       isMouseDown: () => this.#isContentMouseDown || this.#isGutterMouseDown,
@@ -568,6 +568,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
     this.#tokenizer?.prebuildStateStack(renderRange);
+    this.#markerRenderer?.removePopup();
 
     // re-render the existing selections, matches, and markers
     if (
