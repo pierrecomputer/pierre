@@ -758,7 +758,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         'selectionchange',
         () => {
           const shadowRoot = this.#fileContainer?.shadowRoot;
-          if (this.#shouldIgnoreSelectionChange || shadowRoot == null) {
+          // Ignore selection changes while the contenteditable is unfocused. A
+          // programmatic applyEdits (skipFocus) re-anchors #selections without
+          // syncing the native Selection, so a DOM-driven or refocus
+          // selectionchange whose range still belongs to the editor must not
+          // overwrite the remapped #selections before the user returns to type.
+          if (
+            this.#shouldIgnoreSelectionChange ||
+            shadowRoot == null ||
+            !this.#contentHasFocus
+          ) {
             return;
           }
 
