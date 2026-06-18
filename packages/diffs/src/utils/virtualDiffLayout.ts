@@ -27,6 +27,17 @@ export interface GetTrailingContextRangeSizeProps {
   errorPrefix: string;
 }
 
+export interface GetPartialHydrationTrailingContextProps {
+  fileDiff: FileDiffMetadata;
+  canHydratePartialDiff: boolean;
+}
+
+export interface PartialHydrationTrailingContext {
+  type: 'partial-hydration-tail';
+  hunkIndex: number;
+  lineCountKnown: false;
+}
+
 export interface GetTrailingExpandedRegionProps extends GetTrailingContextRangeSizeProps {
   hunkIndex: number;
   expandedHunks: GetExpandedRegionProps['expandedHunks'];
@@ -150,6 +161,29 @@ export function hasTrailingContextMismatch(
   }
 
   return additionRemaining !== deletionRemaining;
+}
+
+// Models the unknown tail after the final hunk in a partial diff. The actual
+// line count is intentionally absent until full file contents are loaded.
+export function getPartialHydrationTrailingContext({
+  fileDiff,
+  canHydratePartialDiff,
+}: GetPartialHydrationTrailingContextProps):
+  | PartialHydrationTrailingContext
+  | undefined {
+  if (
+    !canHydratePartialDiff ||
+    !fileDiff.isPartial ||
+    fileDiff.hunks.length === 0
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: 'partial-hydration-tail',
+    hunkIndex: fileDiff.hunks.length,
+    lineCountKnown: false,
+  };
 }
 
 // Measures the unchanged tail after the final hunk. Both sides must have the
