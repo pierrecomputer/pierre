@@ -43,6 +43,7 @@ import type {
   HighlightedToken,
   HunkData,
   HunkSeparators,
+  MaybeDiffFileInput,
   PostRenderPhase,
   PrePropertiesConfig,
   RenderHeaderFilenameSuffixCallback,
@@ -67,6 +68,7 @@ import {
   wrapThemeCSS,
   wrapUnsafeCSS,
 } from '../utils/cssWrappers';
+import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
@@ -80,10 +82,8 @@ import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
 
-export interface FileDiffRenderProps<LAnnotation> {
+export interface FileDiffRenderBaseProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
-  oldFile?: FileContents;
-  newFile?: FileContents;
   deferManagers?: boolean;
   didEdit?: boolean;
   forceRender?: boolean;
@@ -94,13 +94,17 @@ export interface FileDiffRenderProps<LAnnotation> {
   renderRange?: RenderRange;
 }
 
-export interface FileDiffHydrationProps<LAnnotation> extends Omit<
-  FileDiffRenderProps<LAnnotation>,
+export type FileDiffRenderProps<LAnnotation> =
+  FileDiffRenderBaseProps<LAnnotation> & MaybeDiffFileInput;
+
+export type FileDiffHydrationProps<LAnnotation> = Omit<
+  FileDiffRenderBaseProps<LAnnotation>,
   'fileContainer'
-> {
-  fileContainer: HTMLElement;
-  prerenderedHTML?: string;
-}
+> &
+  MaybeDiffFileInput & {
+    fileContainer: HTMLElement;
+    prerenderedHTML?: string;
+  };
 
 export type FileDiffType = 'file-diff' | 'unresolved-file';
 
@@ -174,12 +178,10 @@ interface ApplyPartialRenderProps {
   renderRange: RenderRange | undefined;
 }
 
-interface HydrationSetup<LAnnotation> {
+type HydrationSetup<LAnnotation> = {
   fileDiff: FileDiffMetadata | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
-  oldFile?: FileContents;
-  newFile?: FileContents;
-}
+} & MaybeDiffFileInput;
 
 let instanceId = -1;
 
@@ -227,8 +229,8 @@ export class FileDiff<
   protected lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
   protected managersDirty = false;
 
-  protected deletionFile: FileContents | undefined;
-  protected additionFile: FileContents | undefined;
+  protected deletionFile?: FileContents | null;
+  protected additionFile?: FileContents | null;
   public fileDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
@@ -568,16 +570,17 @@ export class FileDiff<
     this.workerManager?.subscribeToThemeChanges(this);
   }
 
-  public hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
-    const {
-      fileContainer,
-      prerenderedHTML,
-      preventEmit = false,
-      lineAnnotations,
-      oldFile,
-      newFile,
-      fileDiff,
-    } = props;
+  public hydrate({
+    fileContainer,
+    prerenderedHTML,
+    preventEmit = false,
+    lineAnnotations,
+    fileDiff,
+    ...fileInputProps
+  }: FileDiffHydrationProps<LAnnotation>): void {
+    const fileInput = getDiffFileInput(fileInputProps, 'FileDiff.hydrate');
+    const oldFile = fileInput?.oldFile;
+    const newFile = fileInput?.newFile;
     this.hydrateElements(fileContainer, prerenderedHTML);
     if (
       shouldRenderCode(
@@ -591,15 +594,20 @@ export class FileDiff<
         this.options.disableFileHeader
       )
     ) {
-      this.render({ ...props, preventEmit: true });
+      this.render({
+        ...fileInput,
+        fileContainer,
+        lineAnnotations,
+        fileDiff,
+        preventEmit: true,
+      });
     }
     // Otherwise orchestrate our setup
     else {
       this.hydrationSetup({
         fileDiff,
-        oldFile,
-        newFile,
         lineAnnotations,
+        ...fileInput,
       });
     }
     if (!preventEmit) {
@@ -685,7 +693,7 @@ export class FileDiff<
     this.deletionFile = oldFile;
     this.fileDiff =
       fileDiff ??
-      (oldFile != null && newFile != null
+      (oldFile !== undefined && newFile !== undefined
         ? parseDiffFromFile(oldFile, newFile, this.options.parseDiffOptions)
         : undefined);
 
@@ -748,8 +756,6 @@ export class FileDiff<
   };
 
   public render({
-    oldFile,
-    newFile,
     fileDiff,
     deferManagers = false,
     forceRender = false,
@@ -758,7 +764,11 @@ export class FileDiff<
     fileContainer,
     containerWrapper,
     renderRange,
+    ...fileInputProps
   }: FileDiffRenderProps<LAnnotation>): boolean {
+    const fileInput = getDiffFileInput(fileInputProps, 'FileDiff.render');
+    const oldFile = fileInput?.oldFile;
+    const newFile = fileInput?.newFile;
     if (!this.enabled) {
       // NOTE(amadeus): May need to be a silent failure? Making it loud for now
       // to better understand it
@@ -774,11 +784,11 @@ export class FileDiff<
     const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
     const themeChanged = this.hasThemeChanged();
+    const hasFileInput = fileInput != null;
     const filesDidChange =
-      oldFile != null &&
-      newFile != null &&
-      (!areFilesEqual(oldFile, this.deletionFile) ||
-        !areFilesEqual(newFile, this.additionFile));
+      hasFileInput &&
+      (!areOptionalFilesEqual(oldFile, this.deletionFile) ||
+        !areOptionalFilesEqual(newFile, this.additionFile));
     let diffDidChange = fileDiff != null && fileDiff !== this.fileDiff;
     const annotationsChanged =
       lineAnnotations != null &&
@@ -809,11 +819,11 @@ export class FileDiff<
 
     if (fileDiff != null) {
       this.fileDiff = fileDiff;
-    } else if (oldFile != null && newFile != null && filesDidChange) {
+    } else if (hasFileInput && (filesDidChange || this.fileDiff == null)) {
       diffDidChange = true;
       this.fileDiff = parseDiffFromFile(
-        oldFile,
-        newFile,
+        fileInput.oldFile,
+        fileInput.newFile,
         this.options.parseDiffOptions
       );
     }
@@ -2564,8 +2574,18 @@ export class FileDiff<
 
 interface HasContentProps {
   fileDiff: FileDiffMetadata | undefined;
-  oldFile: FileContents | undefined;
-  newFile: FileContents | undefined;
+  oldFile: FileContents | null | undefined;
+  newFile: FileContents | null | undefined;
+}
+
+function areOptionalFilesEqual(
+  fileA: FileContents | null | undefined,
+  fileB: FileContents | null | undefined
+): boolean {
+  if (fileA == null || fileB == null) {
+    return fileA == null && fileB == null;
+  }
+  return areFilesEqual(fileA, fileB);
 }
 
 function hasDiffContent({

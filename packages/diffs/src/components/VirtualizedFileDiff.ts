@@ -3,6 +3,7 @@ import type {
   DiffLineAnnotation,
   DiffsTextDocument,
   ExpansionDirections,
+  FileContents,
   FileDiffMetadata,
   Hunk,
   HunkSeparators,
@@ -16,6 +17,7 @@ import type {
   VirtualFileMetrics,
 } from '../types';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
+import { areFilesEqual } from '../utils/areFilesEqual';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
 import { computeEstimatedDiffHeights } from '../utils/computeEstimatedDiffHeights';
@@ -24,6 +26,7 @@ import {
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
+import { getDiffFileInput } from '../utils/getDiffFileInput';
 import {
   FILE_ANNOTATION_DOM_KEY,
   FILE_ANNOTATION_LINE_NUMBER,
@@ -915,13 +918,15 @@ export class VirtualizedFileDiff<
 
   override render({
     fileContainer,
-    oldFile,
-    newFile,
     fileDiff,
     forceRender = false,
     lineAnnotations,
-    ...props
+    ...fileInputProps
   }: FileDiffRenderProps<LAnnotation> = {}): boolean {
+    const fileInput = getDiffFileInput(
+      fileInputProps,
+      'VirtualizedFileDiff.render'
+    );
     const { forceRenderOverride, isSetup } = this;
     this.forceRenderOverride = undefined;
     const annotationsChanged = this.syncLineAnnotations(lineAnnotations);
@@ -929,15 +934,33 @@ export class VirtualizedFileDiff<
       this.resetLayoutCache({ includeEstimatedHeights: false });
     }
 
-    this.fileDiff ??=
+    const hasFileInput = fileInput != null;
+    const oldFile = fileInput?.oldFile;
+    const newFile = fileInput?.newFile;
+    const filesDidChange =
+      hasFileInput &&
+      (!areOptionalFilesEqual(oldFile, this.deletionFile) ||
+        !areOptionalFilesEqual(newFile, this.additionFile));
+    const nextFileDiff =
       fileDiff ??
-      (oldFile != null && newFile != null
+      (hasFileInput && (filesDidChange || this.fileDiff == null)
         ? // NOTE(amadeus): We might be forcing ourselves to double up the
           // computation of fileDiff (in the super.render() call), so we might want
           // to figure out a way to avoid that.  That also could be just as simple as
           // passing through fileDiff though... so maybe we good?
-          parseDiffFromFile(oldFile, newFile, this.options.parseDiffOptions)
+          parseDiffFromFile(
+            fileInput.oldFile,
+            fileInput.newFile,
+            this.options.parseDiffOptions
+          )
         : undefined);
+    if (
+      nextFileDiff != null &&
+      !areDiffTargetsEqual(this.fileDiff, nextFileDiff)
+    ) {
+      this.resetLayoutCache({ includeEstimatedHeights: true });
+    }
+    this.fileDiff = nextFileDiff ?? this.fileDiff;
 
     fileContainer = this.getOrCreateFileContainer(fileContainer);
 
@@ -986,11 +1009,10 @@ export class VirtualizedFileDiff<
       fileDiff: this.fileDiff,
       fileContainer,
       renderRange,
-      oldFile,
-      newFile,
       lineAnnotations,
       forceRender: (forceRenderOverride ?? forceRender) || annotationsChanged,
-      ...props,
+      ...fileInput,
+      ...fileInputProps,
     });
   }
 
@@ -1772,6 +1794,16 @@ function getOptionHunkSeparatorType<LAnnotation>(
   return typeof hunkSeparators === 'function'
     ? 'custom'
     : (hunkSeparators ?? 'line-info');
+}
+
+function areOptionalFilesEqual(
+  fileA: FileContents | null | undefined,
+  fileB: FileContents | null | undefined
+): boolean {
+  if (fileA == null || fileB == null) {
+    return fileA == null && fileB == null;
+  }
+  return areFilesEqual(fileA, fileB);
 }
 
 // Extracts the view-specific line index from the data-line-index attribute.

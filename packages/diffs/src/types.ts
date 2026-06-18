@@ -38,6 +38,15 @@ export interface FileContents {
   cacheKey?: string;
 }
 
+export type DiffFileInput =
+  | { oldFile: FileContents; newFile: FileContents }
+  | { oldFile: null; newFile: FileContents }
+  | { oldFile: FileContents; newFile: null };
+
+export type MaybeDiffFileInput =
+  | DiffFileInput
+  | { oldFile?: undefined; newFile?: undefined };
+
 export type HighlighterTypes = 'shiki-js' | 'shiki-wasm';
 
 export type HighlightedToken = [char: number, fg: string, text: string];

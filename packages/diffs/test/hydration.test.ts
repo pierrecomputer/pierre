@@ -435,6 +435,76 @@ describe('collapsed hydration', () => {
     }
   });
 
+  test('VirtualizedFileDiff hydrates a new file from an explicit missing oldFile side', () => {
+    const dom = installDomConstructors();
+    try {
+      const virtualizerState = createVirtualizer();
+      const instance = new VirtualizedFileDiff(
+        undefined,
+        virtualizerState.virtualizer
+      );
+      const fileContainer = dom.createHydrationContainer();
+      const props: FileDiffHydrationProps<undefined> = {
+        oldFile: null,
+        newFile: modifiedFile,
+        fileContainer,
+      };
+
+      instance.hydrate(props);
+
+      expect(instance.fileDiff?.type).toBe('new');
+      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(virtualizerState.connectCalls).toBe(1);
+      const placeholderHeight = getPlaceholderHeight(fileContainer);
+      assertDefined(
+        placeholderHeight,
+        'expected hydration to render a placeholder for the off-screen new file diff'
+      );
+      expect(placeholderHeight).toBe(
+        getExpectedPlaceholderHeight(
+          parseDiffFromFile(null, modifiedFile).splitLineCount
+        )
+      );
+    } finally {
+      dom.cleanup();
+    }
+  });
+
+  test('VirtualizedFileDiff hydrates a deleted file from an explicit missing newFile side', () => {
+    const dom = installDomConstructors();
+    try {
+      const virtualizerState = createVirtualizer();
+      const instance = new VirtualizedFileDiff(
+        undefined,
+        virtualizerState.virtualizer
+      );
+      const fileContainer = dom.createHydrationContainer();
+      const props: FileDiffHydrationProps<undefined> = {
+        oldFile: file,
+        newFile: null,
+        fileContainer,
+      };
+
+      instance.hydrate(props);
+
+      expect(instance.fileDiff?.type).toBe('deleted');
+      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(virtualizerState.connectCalls).toBe(1);
+      const placeholderHeight = getPlaceholderHeight(fileContainer);
+      assertDefined(
+        placeholderHeight,
+        'expected hydration to render a placeholder for the off-screen deleted file diff'
+      );
+      expect(placeholderHeight).toBe(
+        getExpectedPlaceholderHeight(
+          parseDiffFromFile(file, null).splitLineCount
+        )
+      );
+    } finally {
+      dom.cleanup();
+    }
+  });
+
   test('UnresolvedFile does not rerender missing code while collapsed', () => {
     const dom = installDomConstructors();
     try {
