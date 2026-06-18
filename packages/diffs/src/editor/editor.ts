@@ -1280,6 +1280,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (this.#selections !== undefined) {
           const edits: TextEdit[] = [];
           const nextSelections: EditorSelection[] = [];
+          // Single-line indent inserts text at each caret. When several carets
+          // share a line, indentation inserted by carets to their left shifts
+          // them right, so record each one here and offset its resulting
+          // position once every edit on the line is known. Without this, later
+          // same-line carets land before their own inserted indent.
+          const sameLineIndents: Array<{
+            line: number;
+            startCharacter: number;
+            addedLength: number;
+            selectionIndex: number;
+          }> = [];
           for (const selection of this.#selections) {
             const startLine = selection.start.line;
             const outdent = command === 'outdent';
@@ -1297,9 +1308,52 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                 line: startLine,
                 character: 0,
               });
-              this.#replaceSelectionText(
-                lineChar0 === '\t' ? '\t' : ' '.repeat(this.#metrics.tabSize)
-              );
+              const text =
+                lineChar0 === '\t' ? '\t' : ' '.repeat(this.#metrics.tabSize);
+              edits.push({
+                range: selection,
+                newText: text,
+              });
+              sameLineIndents.push({
+                line: startLine,
+                startCharacter: selection.start.character,
+                addedLength:
+                  text.length -
+                  (selection.end.character - selection.start.character),
+                selectionIndex: nextSelections.length,
+              });
+              const nextPosition = {
+                line: selection.start.line,
+                character: selection.start.character + text.length,
+              };
+              nextSelections.push({
+                start: nextPosition,
+                end: nextPosition,
+                direction: DirectionNone,
+              });
+            }
+          }
+          for (const indent of sameLineIndents) {
+            let shift = 0;
+            for (const other of sameLineIndents) {
+              if (
+                other.line === indent.line &&
+                other.startCharacter < indent.startCharacter
+              ) {
+                shift += other.addedLength;
+              }
+            }
+            if (shift !== 0) {
+              const current = nextSelections[indent.selectionIndex];
+              const position = {
+                line: indent.line,
+                character: current.start.character + shift,
+              };
+              nextSelections[indent.selectionIndex] = {
+                start: position,
+                end: position,
+                direction: DirectionNone,
+              };
             }
           }
           const change = textDocument.applyEdits(

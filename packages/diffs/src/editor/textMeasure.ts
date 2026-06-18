@@ -55,7 +55,10 @@ export class Metrics {
       this.#canvasCtx.font = font;
       this.ch = this.canvasMeasureTextWidth('0');
     }
-    this.tabSize = parseInt(tabSize, 10);
+    const nextTabSize = parseInt(tabSize, 10);
+    if (!Number.isNaN(nextTabSize)) {
+      this.tabSize = nextTabSize;
+    }
   }
 
   /** measure the width of the text */

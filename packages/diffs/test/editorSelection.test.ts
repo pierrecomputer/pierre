@@ -18,6 +18,7 @@ import {
   getAutoSurroundReplacementTexts,
   getCaretPosition,
   getSelectionAnchor,
+  getSelectionText,
   mapCursorMove,
   mapSelectionShift,
   mergeOverlappingSelections,
@@ -1423,6 +1424,42 @@ describe('mapSelectionRangeMove', () => {
     expect(mapSelectionShift(textDocument, downSelections, 'down')).toEqual([
       createSelection(1, 3, 2, 1, DirectionForward),
     ]);
+  });
+
+  test('preserves goal column while extending down across a short line', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'this is a much longer line here\nshort\nanother much longer line here\n'
+    );
+    const onShortLine = mapSelectionShift(
+      textDocument,
+      [createSelection(0, 20, 0, 20)],
+      'down'
+    );
+    const onLongLine = mapSelectionShift(textDocument, onShortLine, 'down');
+
+    expect(onShortLine).toEqual([
+      createSelection(0, 20, 1, 20, DirectionForward),
+    ]);
+    expect(onLongLine).toEqual([
+      createSelection(0, 20, 2, 20, DirectionForward),
+    ]);
+  });
+
+  test('does not copy the trailing newline when the goal column overshoots', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'this is a much longer line here\nshort\nanother much longer line here\n'
+    );
+    const onShortLine = mapSelectionShift(
+      textDocument,
+      [createSelection(0, 20, 0, 20)],
+      'down'
+    );
+
+    expect(getSelectionText(textDocument, onShortLine)).toBe(
+      'r line here\nshort'
+    );
   });
 });
 
