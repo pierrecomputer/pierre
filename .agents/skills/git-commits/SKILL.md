@@ -22,7 +22,12 @@ Use the following commit message template:
   tool.
 - The <scope> can be a project, package, or app name; omit the scope and its
   wrapped parens if none is clear.
-- The <subject> and <description> should explain the motivations and changes.
+- Write the <subject> and the first paragraph in plain, concrete language a
+  teammate could understand without knowing the internals. Keep jargon and
+  implementation detail for later in the body.
+- For `fix` and `feat` commits, structure the body so a reviewer can picture and
+  reproduce the change before the technical explanation. See "Writing the
+  description".
 - Include a description body for every commit unless the staged change is truly
   mechanical or trivial and the subject fully explains it.
 - Keep every commit message line 72 characters or fewer. Hard-wrap body text to
@@ -30,6 +35,20 @@ Use the following commit message template:
 - Use imperative mood; be concise
 - Include user-provided context when it improves the message
 - Do not include AI attribution in or after the description
+- Do not narrate your own process or verification. Leave out test results, pass
+  counts, and "verified with ..." notes.
+
+## Writing the Description
+
+For a `fix` or `feat`, lead with the flow, then explain the code:
+
+1. **The flow.** The concrete situation in plain language — for a bug, the steps
+   to reproduce and the wrong behavior; for a feature, what someone does and can
+   now see or do.
+2. **The cause and the change.** What was wrong or missing, and how this commit
+   fixes it.
+
+Skip step 1 when there is no flow, such as a refactor or dependency bump.
 
 ## Commit Boundaries
 
@@ -52,7 +71,8 @@ usually deserve different commits.
 
 ## Verification Before Each Commit
 
-Every commit should be verified before it is created.
+Verify every commit before creating it. Keep verification out of the message —
+status, test output, and pass counts go in the handoff, not the commit body.
 
 If the full baseline fails for unrelated pre-existing issues, say that in the
 commit handoff and include the first relevant failure. Do not describe the
@@ -76,8 +96,11 @@ Include a wrapped commit body for ordinary source changes:
 git commit -F - <<'COMMIT'
 fix(diffs): Keep scroll focus stable
 
-Keep focus anchored when rows are recycled during scroll so keyboard
-navigation does not lose the active item.
+Scroll a long diff with the keyboard, then press an arrow key: the
+selection jumps to a row other than the one highlighted.
+
+Track the active item by stable id instead of screen position so it
+survives row recycling.
 COMMIT
 ```
 
