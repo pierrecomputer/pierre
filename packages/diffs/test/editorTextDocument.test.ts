@@ -281,6 +281,54 @@ describe('TextDocument', () => {
     expect(d.getText()).toBe('a\r\nB\r\nc');
   });
 
+  test('applyEdits reports inserted lines for a lone CR line ending', () => {
+    const d = doc('a');
+    const change = d.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+        },
+        newText: '\rb',
+      },
+    ]);
+    expect(d.getText()).toBe('a\rb');
+    expect(d.lineCount).toBe(2);
+    expect(change).toEqual({
+      startLine: 0,
+      startCharacter: 1,
+      endLine: 1,
+      previousLineCount: 1,
+      lineCount: 2,
+      lineDelta: 1,
+      changedLineRanges: [[0, 1]],
+    });
+  });
+
+  test('applyEdits reports inserted lines for multiple lone CR line endings', () => {
+    const d = doc('hello');
+    const change = d.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+        },
+        newText: '\rworld\rfoo',
+      },
+    ]);
+    expect(d.getText()).toBe('hello\rworld\rfoo');
+    expect(d.lineCount).toBe(3);
+    expect(change).toEqual({
+      startLine: 0,
+      startCharacter: 5,
+      endLine: 2,
+      previousLineCount: 1,
+      lineCount: 3,
+      lineDelta: 2,
+      changedLineRanges: [[0, 2]],
+    });
+  });
+
   test('getText(range) spans multiple lines correctly after edits', () => {
     const d = doc('foo\nbar\nbaz');
     d.applyEdits([
