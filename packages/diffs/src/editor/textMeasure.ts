@@ -1,9 +1,22 @@
 import { h, round } from './utils';
 
+// Upper bound on cached DOM text-width measurements. The cache only holds
+// non-ASCII runs (emoji, ZWJ sequences, variation selectors), so it stays
+// small for ordinary code, but capping it prevents unbounded growth on
+// emoji-heavy documents. Past the cap the oldest entry is evicted.
+const DOM_WIDTH_CACHE_LIMIT = 4096;
+
 export class Metrics {
   #root?: HTMLElement;
   #canvasCtx?: CanvasRenderingContext2D;
   #font?: string;
+
+  // Memoizes domMeasureTextWidth() results keyed by the (tab-expanded) text it
+  // measured. That path inserts a span and reads getBoundingClientRect(), which
+  // forces a synchronous layout every call; without this cache, caret and
+  // selection updates on emoji-heavy lines re-measure the same runs on every
+  // render. Cleared in init() whenever the font changes (see below).
+  #domWidthCache = new Map<string, number>();
 
   /** Width of the '0' character. */
   ch: number = -1;
@@ -54,6 +67,8 @@ export class Metrics {
       this.#font = font;
       this.#canvasCtx.font = font;
       this.ch = this.canvasMeasureTextWidth('0');
+      // Cached DOM widths were measured against the previous font.
+      this.#domWidthCache.clear();
     }
     const nextTabSize = parseInt(tabSize, 10);
     if (!Number.isNaN(nextTabSize)) {
@@ -108,11 +123,16 @@ export class Metrics {
 
   /**
    * measure the width of the text using the DOM
-   * this is slow because it cause a reflow, use it for non-ascii text
+   * this is slow because it cause a reflow, use it for non-ascii text;
+   * results are memoized per text so repeated measurements skip the reflow
    */
   domMeasureTextWidth(text: string): number {
     if (this.#root === undefined) {
       throw new Error('Metrics not initialized');
+    }
+    const cached = this.#domWidthCache.get(text);
+    if (cached !== undefined) {
+      return cached;
     }
     const measureEl = h(
       'span',
@@ -130,11 +150,23 @@ export class Metrics {
       },
       this.#root
     );
+    let width: number;
     try {
-      return measureEl.getBoundingClientRect().width;
+      // round() to match canvasMeasureTextWidth and ch; otherwise the DOM path
+      // returns raw sub-pixel widths and caret/selection offsets drift between
+      // ASCII and non-ASCII runs on the same line.
+      width = round(measureEl.getBoundingClientRect().width);
     } finally {
       measureEl.remove();
     }
+    if (this.#domWidthCache.size >= DOM_WIDTH_CACHE_LIMIT) {
+      const oldestKey = this.#domWidthCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.#domWidthCache.delete(oldestKey);
+      }
+    }
+    this.#domWidthCache.set(text, width);
+    return width;
   }
 }
 
