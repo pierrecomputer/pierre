@@ -28,7 +28,7 @@ export function EditHero() {
         size="xl"
         className="text-md h-[auto] self-start rounded-lg px-0 md:mt-auto lg:text-lg"
       >
-        <Link href="/docs#editor">
+        <Link href="/docs#edit-mode">
           <IconBook className="opacity-65" />
           Explore the docs
           <IconArrowRight className="opacity-40" />

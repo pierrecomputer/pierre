@@ -76,9 +76,9 @@ export function EditorDemo() {
     <div className="not-prose bg-card overflow-hidden rounded-lg border">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <div>
-          <h5 className="text-sm font-medium">Editor Demo</h5>
+          <h5 className="text-sm font-medium">Edit mode demo</h5>
           <p className="text-muted-foreground text-xs">
-            Click into the code and type to try the editor.
+            Click into the code and type to try edit mode.
           </p>
         </div>
         <div className="text-muted-foreground text-xs">

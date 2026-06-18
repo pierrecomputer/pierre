@@ -1,24 +1,24 @@
-## Editor
+## Edit mode
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>
-  Editor is experimental and subject to change.
+  Edit mode is experimental and subject to change.
 </Notice>
 
-The editor is a pluggable editing layer for `File`-style code surfaces. It adds
+Edit mode is a pluggable editing layer for `File`-style code surfaces. It adds
 keyboard-driven editing to an already-rendered `File` or `FileDiff` while the
 existing renderer continues to own syntax highlighting, layout, annotations, and
-virtualization. Editor includes:
+virtualization. Edit mode includes:
 
 - Text editing
 - Selection management, including multiple cursors
 - Automatic indentation
 - History (undo and redo)
 - Find-in-file search and replace
-- [Selection Action](#editor-selection-action) (opt-in, custom UI)
+- [Selection Action](#edit-mode-selection-action) (opt-in, custom UI)
 - SSR support
 - Mobile-friendly
 
-To attach the editor to a `File` instance, import it from
+To enable edit mode on a `File` instance, import `Editor` from
 `@pierre/diffs/editor`. It is intentionally separate from the core bundle so you
 can lazy-load it when editing is optional.
 
@@ -26,7 +26,7 @@ can lazy-load it when editing is optional.
 
 ### How It Works
 
-The editor does not replace `File`, `FileDiff`, or their virtualized variants.
+Edit mode does not replace `File`, `FileDiff`, or their virtualized variants.
 You render the surface first, then attach editing:
 
 1. **Attach** — Call `editor.edit(component)` in vanilla JS, or pass
@@ -34,9 +34,9 @@ You render the surface first, then attach editing:
    `PatchDiff` wrapped in `EditorProvider`. The hookup returns a dispose
    function (vanilla) or runs automatically when `contentEditable` toggles
    (React).
-2. **Edit surface** — The editor sets `contentEditable` on the code content
+2. **Edit surface** — Edit mode sets `contentEditable` on the code content
    element so mobile keyboards, paste, and native selection UI work as users
-   expect. Clipboard shortcuts are handled by the browser; editor commands
+   expect. Clipboard shortcuts are handled by the browser; edit mode commands
    handle structure-aware actions like indent and undo.
 3. **Selections** — Carets and ranges are tracked with the native `Selection`
    API. Multiple non-overlapping selections are supported; Cmd/Ctrl-click adds
@@ -46,12 +46,12 @@ You render the surface first, then attach editing:
    mode. Your `onChange` handler receives updated `FileContents` (and line
    annotations when present).
 
-When attaching, the editor normalizes component options that conflict with
+When attaching, edit mode normalizes component options that conflict with
 editing and triggers a re-render: it turns on the token transformer, turns off
 gutter utilities, line selection, and line-hover highlighting, and expands any
-collapsed unchanged regions. Diffs are also forced into split view, so a
-`FileDiff` or `MultiFileDiff` rendered as unified switches to split while
-editing.
+collapsed unchanged regions. The diff layout is preserved, so a `FileDiff` or
+`MultiFileDiff` stays in whatever view it was rendered in; in unified diffs,
+deleted lines and annotation lines remain read-only.
 
 ### React
 
@@ -94,8 +94,8 @@ query state, apply edits, and control selections programmatically.
 
 ### Using Worker Pool
 
-When you offload syntax highlighting to a worker pool, the editor still needs
-the token transformer pipeline to re-highlight lines as you type. Set
+When you offload syntax highlighting to a worker pool, edit mode still needs the
+token transformer pipeline to re-highlight lines as you type. Set
 `useTokenTransformer: true` on the pool's `highlighterOptions`.
 
 See [Worker Pool](#worker-pool) for worker factory setup and pool options. In
@@ -119,11 +119,11 @@ where editing is rare.
 
 ### Selection Action
 
-Selection Action is an opt-in editor feature for showing custom UI inline with
-the current selection—useful for quick transforms, refactor prompts, or other
-selection-scoped tools. Set `enabledSelectionAction: true`, return your UI from
-`renderSelectionAction`, and open it from the gutter icon that appears on the
-active selection.
+Selection Action is an opt-in edit mode feature for showing custom UI inline
+with the current selection—useful for quick transforms, refactor prompts, or
+other selection-scoped tools. Set `enabledSelectionAction: true`, return your UI
+from `renderSelectionAction`, and open it from the gutter icon that appears on
+the active selection.
 
 <DocsCodeExample {...editorSelectionActionExample} />
 
