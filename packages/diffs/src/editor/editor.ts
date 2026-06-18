@@ -342,6 +342,26 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     );
   }
 
+  /** Whether there is an edit to undo. */
+  get canUndo(): boolean {
+    return this.#textDocument?.canUndo ?? false;
+  }
+
+  /** Whether there is an undone edit to redo. */
+  get canRedo(): boolean {
+    return this.#textDocument?.canRedo ?? false;
+  }
+
+  /** Undo the last edit. Does nothing when there is nothing to undo. */
+  undo(): void {
+    this.#runCommand('undo');
+  }
+
+  /** Redo the last undone edit. Does nothing when there is nothing to redo. */
+  redo(): void {
+    this.#runCommand('redo');
+  }
+
   getState(): EditorState<LAnnotation> {
     const fileRef = this.#getFileRef();
     if (fileRef === undefined) {
