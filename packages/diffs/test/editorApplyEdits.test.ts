@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
@@ -294,6 +294,140 @@ describe('Editor.applyEdits selection sync', () => {
           direction: 0,
         },
       ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('does not steal focus when the editor is not focused', async () => {
+    const { cleanup, content, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 2, character: 3 },
+          end: { line: 2, character: 3 },
+          direction: 'none',
+        },
+      ]);
+      // The editor tracks focus via focus/blur on the content element. Focus
+      // first so the editor is genuinely focused, then blur to mimic the user
+      // moving to another input on the page. The focus is required: the editor
+      // starts unfocused, so without it the blur would be a no-op and the test
+      // would pass even if the blur handler stopped clearing focus.
+      content.dispatchEvent(new Event('focus'));
+      content.dispatchEvent(new Event('blur'));
+
+      const focusSpy = spyOn(editor, 'focus');
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'NEW\n',
+        },
+      ]);
+
+      // Selection state is still remapped so it stays correct...
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 3, character: 3 },
+          end: { line: 3, character: 3 },
+          direction: 0,
+        },
+      ]);
+      // ...but the editor must not pull focus back to itself.
+      expect(focusSpy).not.toHaveBeenCalled();
+      focusSpy.mockRestore();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('repositions focus when the editor is already focused', async () => {
+    const { cleanup, content, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 2, character: 3 },
+          end: { line: 2, character: 3 },
+          direction: 'none',
+        },
+      ]);
+      // Mark the editor as focused the same way a real focus would.
+      content.dispatchEvent(new Event('focus'));
+
+      const focusSpy = spyOn(editor, 'focus');
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'NEW\n',
+        },
+      ]);
+
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 3, character: 3 },
+          end: { line: 3, character: 3 },
+          direction: 0,
+        },
+      ]);
+      expect(focusSpy).toHaveBeenCalled();
+      focusSpy.mockRestore();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('repositions focus when a focus is still pending from the same tick', async () => {
+    const { cleanup, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 2, character: 3 },
+          end: { line: 2, character: 3 },
+          direction: 'none',
+        },
+      ]);
+      // focus() queues the real contentElement.focus() in a rAF, so the focus
+      // event has not fired yet. A same-tick applyEdits (the common
+      // set-selection-then-edit flow) must still treat the editor as focused and
+      // reposition, rather than skip and leave the native selection stale while
+      // the queued focus lands afterward.
+      editor.focus();
+
+      const focusSpy = spyOn(editor, 'focus');
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'NEW\n',
+        },
+      ]);
+
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 3, character: 3 },
+          end: { line: 3, character: 3 },
+          direction: 0,
+        },
+      ]);
+      expect(focusSpy).toHaveBeenCalled();
+      focusSpy.mockRestore();
     } finally {
       cleanup();
     }

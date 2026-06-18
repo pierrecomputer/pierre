@@ -179,6 +179,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
   #shouldIgnoreSelectionChange = false;
+  // Whether the contenteditable holds (or is claiming) focus. Synced by
+  // focus/blur listeners and set eagerly by #focus(), whose real focus() call is
+  // deferred to a rAF. Lets applyEdits skip focus/scroll only on unfocused
+  // editors, without regressing a same-tick setSelections-then-applyEdits flow.
+  #contentHasFocus = false;
   #isComposing = false;
   #isGutterMouseDown = false;
   #isContentMouseDown = false;
@@ -265,6 +270,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (textDocument == null) {
       throw new Error('Editor is not attached');
     }
+    // Only reposition focus and scroll when the editor already holds focus. A
+    // programmatic edit must not pull focus from another input the user is
+    // typing in; the selection state below is re-anchored either way.
+    const wasFocused = this.#contentHasFocus;
     // Capture the current selection edges and the edit ranges as pre-edit
     // offsets so the caret can be re-anchored once the buffer changes. Reading
     // them after applyEdits would resolve against the new buffer and desync.
@@ -327,7 +336,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#applyChange(
       change,
       nextSelections,
-      this.#applyChangeToLineAnnotations(change)
+      this.#applyChangeToLineAnnotations(change),
+      { skipFocus: !wasFocused }
     );
   }
 
@@ -460,6 +470,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#gutterElement = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
     this.#contentElement = undefined;
+    this.#contentHasFocus = false;
     this.#overlayElement?.remove();
     this.#overlayElement = undefined;
     this.#resizeObserver?.disconnect();
@@ -906,6 +917,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#editorEventDisposes?.forEach((dispose) => dispose());
     this.#editorEventDisposes = [
+      addEventListener(
+        contentEl,
+        'focus',
+        () => {
+          this.#contentHasFocus = true;
+        },
+        { passive: true }
+      ),
+      addEventListener(
+        contentEl,
+        'blur',
+        () => {
+          this.#contentHasFocus = false;
+        },
+        { passive: true }
+      ),
       addEventListener(
         contentEl,
         'pointerdown',
@@ -1670,6 +1697,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #focus(position?: Position, preventScroll = true) {
+    // Mark focus eagerly: the positional branch defers the real focus() to a
+    // rAF, so a same-tick applyEdits would otherwise see the editor as
+    // unfocused and skip repositioning while this focus still lands afterward.
+    this.#contentHasFocus = true;
     if (position !== undefined) {
       this.#shouldIgnoreSelectionChange = true;
       this.#setWindowSelection({
@@ -2829,7 +2860,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     change: TextDocumentChange,
     selections?: EditorSelection[],
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-    options?: { skipSearchRefresh?: boolean }
+    options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
   ) {
     const fileRef = this.#getFileRef();
     const onChange = this.#options.onChange;
@@ -2888,19 +2919,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     if (selections !== undefined) {
-      // re-render selection range and caret, focus to the editor to update the window selection,
-      // and scroll to the crate to mock the 'contenteditable' behavior
+      // Always re-render the selection range and caret overlay so editor state
+      // stays in sync. When skipFocus is set (a programmatic edit on an editor
+      // that is not focused) we stop here: focusing or scrolling would pull the
+      // caret and viewport toward an editor the user is not interacting with.
       this.#updateSelections(selections);
-      if (this.#primaryCaretElement !== undefined) {
-        this.#primaryCaretElement.scrollIntoView({
-          block: 'nearest',
-          inline: 'nearest',
-        });
-      } else if (selections.length > 0) {
-        const pos = getCaretPosition(selections.at(-1)!);
-        this.#scrollToLine(pos.line, pos.character);
+      if (options?.skipFocus !== true) {
+        // focus to update the native window selection, and scroll to the caret
+        // to mock the 'contenteditable' behavior
+        if (this.#primaryCaretElement !== undefined) {
+          this.#primaryCaretElement.scrollIntoView({
+            block: 'nearest',
+            inline: 'nearest',
+          });
+        } else if (selections.length > 0) {
+          const pos = getCaretPosition(selections.at(-1)!);
+          this.#scrollToLine(pos.line, pos.character);
+        }
+        this.focus({ preventScroll: true });
       }
-      this.focus({ preventScroll: true });
     }
   }
 
