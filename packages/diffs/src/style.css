@@ -26,6 +26,8 @@
     --diffs-modified-dark: #69b1ff;
     --diffs-deleted-light: #ff2e3f;
     --diffs-deleted-dark: #ff6762;
+    --diffs-warning-light: #d5a910;
+    --diffs-warning-dark: #ffd452;
 
     /*
     // Available CSS Color Overrides

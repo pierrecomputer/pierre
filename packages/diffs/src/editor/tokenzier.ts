@@ -197,7 +197,7 @@ export class EditorTokenizer {
       --diffs-editor-cursor-fg: ${cursorForeground ?? 'unset'};
       --diffs-editor-hint-fg: ${hintForeground ?? 'unset'};
       --diffs-editor-info-fg: ${infoForeground ?? 'unset'};
-      --diffs-editor-warning-fg: ${warningForeground ?? 'unset'};
+      --diffs-editor-warning-fg: ${warningForeground ?? 'light-dark(var(--diffs-warning-light), var(--diffs-warning-dark))'};
       --diffs-editor-error-fg: ${errorForeground ?? 'unset'};
     }`);
   }
