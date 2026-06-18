@@ -3,8 +3,9 @@ import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
+import { DirectionForward, DirectionNone } from '../src/editor/selection';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents } from '../src/types';
+import type { DiffsEditorSelection, FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -43,10 +44,22 @@ interface EditorTestWindow extends Window {
   InputEvent: {
     new (type: string, eventInitDict?: InputEventInit): InputEvent;
   };
+  KeyboardEvent: {
+    new (type: string, eventInitDict?: KeyboardEventInit): KeyboardEvent;
+  };
 }
 
-async function createEditorFixture(): Promise<EditorFixture> {
-  const dom = installDom();
+interface CreateEditorFixtureOptions {
+  contents?: string;
+  platform?: string;
+  selections?: DiffsEditorSelection[];
+}
+
+async function createEditorFixture(
+  options: CreateEditorFixtureOptions = {}
+): Promise<EditorFixture> {
+  const { contents = 'line 1', platform = 'MacIntel', selections } = options;
+  const dom = installDom({ navigator: { platform } });
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
 
@@ -56,8 +69,8 @@ async function createEditorFixture(): Promise<EditorFixture> {
   });
   const editor = new Editor<undefined>();
   const initialFile: FileContents = {
-    name: 'ime.ts',
-    contents: 'line 1',
+    name: 'editor.ts',
+    contents,
   };
 
   file.render({
@@ -68,13 +81,15 @@ async function createEditorFixture(): Promise<EditorFixture> {
   editor.edit(file);
 
   const content = await waitForEditableContent(fileContainer);
-  editor.setSelections([
-    {
-      start: { line: 0, character: initialFile.contents.length },
-      end: { line: 0, character: initialFile.contents.length },
-      direction: 'none',
-    },
-  ]);
+  editor.setSelections(
+    selections ?? [
+      {
+        start: { line: 0, character: initialFile.contents.length },
+        end: { line: 0, character: initialFile.contents.length },
+        direction: 'none',
+      },
+    ]
+  );
 
   return {
     cleanup() {
@@ -86,6 +101,21 @@ async function createEditorFixture(): Promise<EditorFixture> {
     editor,
     window: dom.window as unknown as EditorTestWindow,
   };
+}
+
+function dispatchKeydown(
+  window: EditorTestWindow,
+  target: HTMLElement,
+  init: KeyboardEventInit
+): KeyboardEvent {
+  const event = new window.KeyboardEvent('keydown', {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    ...init,
+  });
+  target.dispatchEvent(event);
+  return event;
 }
 
 describe('Editor composition input', () => {
@@ -184,6 +214,138 @@ describe('Editor composition input', () => {
       expect(editor.getState().file.contents).toBe('line 1');
     } finally {
       consoleError.mockRestore();
+      cleanup();
+    }
+  });
+});
+
+describe('Editor keyboard editing', () => {
+  test('uses primary Linux Ctrl+A as select-all instead of cursor move', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: 'alpha\nbeta',
+      platform: 'Linux x86_64',
+      selections: [
+        {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 2 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const event = dispatchKeydown(window, content, {
+        key: 'a',
+        ctrlKey: true,
+      });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 1, character: 4 },
+          direction: DirectionForward,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('uses primary Linux Ctrl+F as search instead of cursor move', async () => {
+    const { cleanup, content, window } = await createEditorFixture({
+      contents: 'alpha beta',
+      platform: 'Linux x86_64',
+      selections: [
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const event = dispatchKeydown(window, content, {
+        key: 'f',
+        ctrlKey: true,
+      });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(
+        (content.getRootNode() as ParentNode).querySelector(
+          '[data-search-panel]'
+        )
+      ).toBeInstanceOf(HTMLElement);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('applies single-line indent once per collapsed caret', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: 'alpha\nbeta',
+      selections: [
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 0 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const event = dispatchKeydown(window, content, { key: 'Tab' });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(editor.getState().file.contents).toBe('  alpha\n  beta');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('shifts later same-line carets past earlier inserted indents', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: 'abcdefgh',
+      selections: [
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const event = dispatchKeydown(window, content, { key: 'Tab' });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(editor.getState().file.contents).toBe('  abcde  fgh');
+      // The second caret follows its own inserted indent (column 9), not the
+      // pre-shift column 7 that lands before it.
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: DirectionNone,
+        },
+        {
+          start: { line: 0, character: 9 },
+          end: { line: 0, character: 9 },
+          direction: DirectionNone,
+        },
+      ]);
+    } finally {
       cleanup();
     }
   });
