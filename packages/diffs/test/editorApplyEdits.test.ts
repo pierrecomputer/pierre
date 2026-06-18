@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
@@ -32,6 +32,9 @@ async function waitForEditableContent(
 interface EditorTestWindow extends Window {
   KeyboardEvent: {
     new (type: string, eventInitDict?: KeyboardEventInit): KeyboardEvent;
+  };
+  PointerEvent: {
+    new (type: string, eventInitDict?: PointerEventInit): PointerEvent;
   };
 }
 
@@ -437,9 +440,10 @@ describe('Editor.applyEdits selection sync', () => {
     const { cleanup, content, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie'
     );
-    // Spying on the shared global document.getSelection, so restore in finally
-    // to avoid leaking the stub into later tests.
+    // Spying on the shared global document/window getSelection, so restore in
+    // finally to avoid leaking the stubs into later tests.
     let getSelectionStub: { mockRestore(): void } | undefined;
+    let windowSelectionStub: { mockRestore(): void } | undefined;
 
     try {
       editor.setSelections([
@@ -472,6 +476,12 @@ describe('Editor.applyEdits selection sync', () => {
       getSelectionStub = spyOn(document, 'getSelection').mockReturnValue({
         getComposedRanges: () => [composedRange],
       } as unknown as Selection);
+      // The focus events below also drive the editor's native-selection re-sync
+      // (window.getSelection().setBaseAndExtent), so stub that to a no-op rather
+      // than let jsdom's partial Selection throw.
+      windowSelectionStub = spyOn(window, 'getSelection').mockReturnValue({
+        setBaseAndExtent: () => {},
+      } as unknown as Selection);
 
       // Unfocused: a selectionchange whose range still belongs to the editor
       // must not overwrite the remapped caret before the user returns.
@@ -500,6 +510,84 @@ describe('Editor.applyEdits selection sync', () => {
       ]);
     } finally {
       getSelectionStub?.mockRestore();
+      windowSelectionStub?.mockRestore();
+      cleanup();
+    }
+  });
+
+  test('re-syncs the native selection on keyboard refocus', async () => {
+    const { cleanup, content, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    // Stub the native Selection so the re-sync is observable and so jsdom's
+    // partial setBaseAndExtent does not throw during setup focus frames.
+    const setBaseAndExtent = mock(() => {});
+    const getSelectionStub = spyOn(window, 'getSelection').mockReturnValue({
+      setBaseAndExtent,
+    } as unknown as Selection);
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+      ]);
+      // Drain focus frames so #shouldIgnoreSelectionChange is cleared, then
+      // ignore any selection syncs from setup.
+      for (let i = 0; i < 5; i++) {
+        await wait(0);
+      }
+      setBaseAndExtent.mockClear();
+
+      // A keyboard/programmatic refocus (no pointer gesture) on an unfocused
+      // editor must re-assert the remapped selection onto the native Selection,
+      // so a later stale selectionchange cannot move the caret back.
+      content.dispatchEvent(new Event('focus'));
+      expect(setBaseAndExtent).toHaveBeenCalled();
+    } finally {
+      getSelectionStub.mockRestore();
+      cleanup();
+    }
+  });
+
+  test('leaves the native selection to the click on pointer refocus', async () => {
+    const {
+      cleanup,
+      content,
+      editor,
+      window: testWindow,
+    } = await createEditorFixture('alpha\nbravo\ncharlie');
+    const setBaseAndExtent = mock(() => {});
+    const getSelectionStub = spyOn(window, 'getSelection').mockReturnValue({
+      setBaseAndExtent,
+    } as unknown as Selection);
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+      ]);
+      for (let i = 0; i < 5; i++) {
+        await wait(0);
+      }
+      // A mouse pointerdown precedes focus on a click and sets the mouse-down
+      // flag the focus handler checks; ignore any prior setup syncs.
+      content.dispatchEvent(
+        new testWindow.PointerEvent('pointerdown', { button: 0 })
+      );
+      setBaseAndExtent.mockClear();
+
+      // The editor must defer to the click's own caret, not re-assert the stale
+      // remapped selection over it.
+      content.dispatchEvent(new Event('focus'));
+      expect(setBaseAndExtent).not.toHaveBeenCalled();
+    } finally {
+      getSelectionStub.mockRestore();
       cleanup();
     }
   });
