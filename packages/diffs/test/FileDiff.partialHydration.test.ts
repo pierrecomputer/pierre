@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
 
 import {
@@ -18,6 +18,10 @@ afterAll(async () => {
 class TestFileDiff extends FileDiff<undefined> {
   getExpandedHunkForTest(index: number) {
     return this.hunksRenderer.getExpandedHunk(index);
+  }
+
+  getPendingHydrationPromiseForTest() {
+    return this.pendingDiffHydration?.promise;
   }
 }
 
@@ -244,6 +248,101 @@ describe('FileDiff partial hydration', () => {
       expect(instance.fileDiff?.isPartial).toBe(false);
       expect(instance.fileDiff?.additionLines).toEqual(['alpha\n', 'beta\n']);
       expect(instance.fileDiff?.deletionLines).toEqual(['alpha\n', 'beta\n']);
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('logs loader errors, keeps partial diff intact, and allows retry', async () => {
+    const { cleanup } = installDom();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    let instance: TestFileDiff | undefined;
+    try {
+      const { oldFile, newFile, partial } = createPartialChange();
+      const loadedContents = { oldFile, newFile };
+      const loadError = new Error('load failed');
+      let loadCalls = 0;
+      const fileContainer = document.createElement('div');
+      instance = new TestFileDiff({
+        disableFileHeader: true,
+        loadDiffFiles: () => {
+          loadCalls++;
+          if (loadCalls === 1) {
+            return Promise.reject(loadError);
+          }
+          return Promise.resolve(loadedContents);
+        },
+      });
+
+      instance.render({
+        fileContainer,
+        fileDiff: partial,
+        deferManagers: true,
+        preventEmit: true,
+      });
+      instance.expandHunk(0, 'down', 1);
+      await wait(10);
+
+      expect(loadCalls).toBe(1);
+      expect(consoleError.mock.calls[0]?.[0]).toBe(loadError);
+      expect(instance.fileDiff).toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(true);
+      expect(instance.getPendingHydrationPromiseForTest()).toBeUndefined();
+
+      instance.expandHunk(0, 'up', 1);
+      expect(loadCalls).toBe(2);
+      await waitForHydrated(instance);
+
+      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.fileDiff?.additionLines).toEqual([
+        'keep 1\n',
+        'new value\n',
+        'keep 3\n',
+        'keep 4\n',
+      ]);
+    } finally {
+      consoleError.mockRestore();
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('rejects the hydration promise when disableErrorHandling is true', async () => {
+    const { cleanup } = installDom();
+    let instance: TestFileDiff | undefined;
+    try {
+      const { partial } = createPartialChange();
+      const loadError = new Error('load failed');
+      const fileContainer = document.createElement('div');
+      instance = new TestFileDiff({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+        loadDiffFiles: () => Promise.reject(loadError),
+      });
+
+      instance.render({
+        fileContainer,
+        fileDiff: partial,
+        deferManagers: true,
+        preventEmit: true,
+      });
+      instance.expandHunk(0, 'down', 1);
+      const hydrationPromise = instance.getPendingHydrationPromiseForTest();
+      assertDefined(hydrationPromise, 'expected hydration to be pending');
+
+      let rejectedError: unknown;
+      try {
+        await hydrationPromise;
+      } catch (error: unknown) {
+        rejectedError = error;
+      }
+
+      expect(rejectedError).toBe(loadError);
+      expect(instance.fileDiff).toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(true);
+      expect(instance.getPendingHydrationPromiseForTest()).toBeUndefined();
     } finally {
       instance?.cleanUp();
       cleanup();

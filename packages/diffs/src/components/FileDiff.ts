@@ -799,6 +799,9 @@ export class FileDiff<
 
       this.applyHydratedPartialDiff(hydratedFileDiff, loadedContents);
     } catch (error: unknown) {
+      if (this.options.disableErrorHandling === true) {
+        throw error;
+      }
       console.error(error);
     } finally {
       if (this.pendingDiffHydration?.fileDiff === fileDiff) {
