@@ -432,4 +432,75 @@ describe('Editor.applyEdits selection sync', () => {
       cleanup();
     }
   });
+
+  test('ignores a selectionchange while the editor is unfocused', async () => {
+    const { cleanup, content, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+    // Spying on the shared global document.getSelection, so restore in finally
+    // to avoid leaking the stub into later tests.
+    let getSelectionStub: { mockRestore(): void } | undefined;
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 2, character: 3 },
+          end: { line: 2, character: 3 },
+          direction: 'none',
+        },
+      ]);
+      // Drain focus frames queued during setup so #shouldIgnoreSelectionChange
+      // is cleared and is not the reason the handler bails below.
+      for (let i = 0; i < 5; i++) {
+        await wait(0);
+      }
+
+      // jsdom does not implement Selection.getComposedRanges (the shadow-DOM
+      // aware API the handler reads the caret through), so stub it to return a
+      // collapsed range anchored on the first rendered line. Captured after the
+      // drain so the node is the settled, attached line element.
+      const firstLine = content.querySelector('[data-line="1"]');
+      if (firstLine == null) {
+        throw new Error('expected a rendered line element');
+      }
+      const composedRange = {
+        startContainer: firstLine,
+        startOffset: 0,
+        endContainer: firstLine,
+        endOffset: 0,
+      };
+      getSelectionStub = spyOn(document, 'getSelection').mockReturnValue({
+        getComposedRanges: () => [composedRange],
+      } as unknown as Selection);
+
+      // Unfocused: a selectionchange whose range still belongs to the editor
+      // must not overwrite the remapped caret before the user returns.
+      content.dispatchEvent(new Event('focus'));
+      content.dispatchEvent(new Event('blur'));
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 2, character: 3 },
+          end: { line: 2, character: 3 },
+          direction: 0,
+        },
+      ]);
+
+      // Focused: the same selectionchange is honored and moves the caret to the
+      // native range (line 0), proving the focus guard — not the stub — gated
+      // the unfocused case above.
+      content.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      getSelectionStub?.mockRestore();
+      cleanup();
+    }
+  });
 });
