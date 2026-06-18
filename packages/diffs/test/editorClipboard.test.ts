@@ -22,31 +22,6 @@ function createTestHighlighter(): DiffsHighlighter {
   } as unknown as DiffsHighlighter;
 }
 
-function createMatchMedia(): typeof window.matchMedia {
-  return ((query: string) =>
-    ({
-      addEventListener: () => {},
-      addListener: () => {},
-      dispatchEvent: () => false,
-      matches: false,
-      media: query,
-      onchange: null,
-      removeEventListener: () => {},
-      removeListener: () => {},
-    }) as MediaQueryList) as typeof window.matchMedia;
-}
-
-function installEditorDom() {
-  const dom = installDom();
-  window.matchMedia = createMatchMedia();
-  HTMLCanvasElement.prototype.getContext = (() => ({
-    font: '',
-    measureText: (text: string) => ({ width: text.length * 8 }),
-  })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
-  HTMLElement.prototype.scrollIntoView = () => {};
-  return dom;
-}
-
 class TestEditableComponent implements DiffsEditableComponent<undefined> {
   readonly type = 'file' as const;
   readonly top = 0;
@@ -228,7 +203,7 @@ function dispatchCopy(
 
 describe('Editor clipboard events', () => {
   test('cuts the current line when the primary selection is collapsed', () => {
-    const { cleanup } = installEditorDom();
+    const { cleanup } = installDom();
 
     const editor = new Editor<undefined>();
     const component = new TestEditableComponent({
@@ -265,7 +240,7 @@ describe('Editor clipboard events', () => {
   });
 
   test('cuts every collapsed selection line in a multi-cursor cut', () => {
-    const { cleanup } = installEditorDom();
+    const { cleanup } = installDom();
 
     const editor = new Editor<undefined>();
     const component = new TestEditableComponent({
@@ -312,7 +287,7 @@ describe('Editor clipboard events', () => {
   });
 
   test('cuts mixed ranges and collapsed selection lines together', () => {
-    const { cleanup } = installEditorDom();
+    const { cleanup } = installDom();
 
     const editor = new Editor<undefined>();
     const component = new TestEditableComponent({
@@ -359,7 +334,7 @@ describe('Editor clipboard events', () => {
   });
 
   test('cuts a line once when multiple carets share it', () => {
-    const { cleanup } = installEditorDom();
+    const { cleanup } = installDom();
 
     const editor = new Editor<undefined>();
     const component = new TestEditableComponent({
@@ -401,7 +376,7 @@ describe('Editor clipboard events', () => {
   });
 
   test('cuts a line once when a range overlaps a caret on the same line', () => {
-    const { cleanup } = installEditorDom();
+    const { cleanup } = installDom();
 
     const editor = new Editor<undefined>();
     const component = new TestEditableComponent({
@@ -443,7 +418,7 @@ describe('Editor clipboard events', () => {
   });
 
   test('copies the whole line including its break when collapsed', () => {
-    const { cleanup } = installEditorDom();
+    const { cleanup } = installDom();
 
     const editor = new Editor<undefined>();
     const component = new TestEditableComponent({
@@ -474,7 +449,7 @@ describe('Editor clipboard events', () => {
   });
 
   test('copies the final line without a trailing break', () => {
-    const { cleanup } = installEditorDom();
+    const { cleanup } = installDom();
 
     const editor = new Editor<undefined>();
     const component = new TestEditableComponent({
