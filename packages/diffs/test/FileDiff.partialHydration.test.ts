@@ -169,6 +169,77 @@ describe('FileDiff partial hydration', () => {
     }
   });
 
+  test('expandHunk without a file loader leaves partial diffs unhydrated', () => {
+    const { cleanup } = installDom();
+    let instance: TestFileDiff | undefined;
+    try {
+      const { partial } = createPartialChange();
+      const fileContainer = document.createElement('div');
+      instance = new TestFileDiff({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+      });
+
+      instance.render({
+        fileContainer,
+        fileDiff: partial,
+        deferManagers: true,
+        preventEmit: true,
+      });
+      instance.expandHunk(0, 'down', 1);
+
+      expect(instance.fileDiff).toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(true);
+      expect(instance.getPendingHydrationPromiseForTest()).toBeUndefined();
+      expect(instance.getExpandedHunkForTest(0)).toEqual({
+        fromStart: 0,
+        fromEnd: 1,
+      });
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('expandHunk on full diffs does not start partial hydration', () => {
+    const { cleanup } = installDom();
+    let instance: TestFileDiff | undefined;
+    try {
+      const { oldFile, newFile } = createPartialChange();
+      const fullDiff = parseDiffFromFile(oldFile, newFile);
+      let loadCalls = 0;
+      const fileContainer = document.createElement('div');
+      instance = new TestFileDiff({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+        loadDiffFiles: () => {
+          loadCalls++;
+          return Promise.resolve({ oldFile, newFile });
+        },
+      });
+
+      instance.render({
+        fileContainer,
+        fileDiff: fullDiff,
+        deferManagers: true,
+        preventEmit: true,
+      });
+      instance.expandHunk(0, 'both', 1);
+
+      expect(loadCalls).toBe(0);
+      expect(instance.fileDiff).toBe(fullDiff);
+      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.getPendingHydrationPromiseForTest()).toBeUndefined();
+      expect(instance.getExpandedHunkForTest(0)).toEqual({
+        fromStart: 1,
+        fromEnd: 1,
+      });
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
   test('ignores stale loader results after the rendered diff changes', async () => {
     const { cleanup } = installDom();
     let instance: TestFileDiff | undefined;
