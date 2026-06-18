@@ -189,11 +189,10 @@ export function mapSelectionShift(
   shortcut: 'textStart' | 'start' | 'end' | 'up' | 'down' | 'left' | 'right'
 ): EditorSelection[] {
   return selections.map((selection) => {
-    const [anchorOffset, focusOffset] = getSelectionAnchorAndFocusOffsets(
-      textDocument,
-      selection
-    );
-    const focusPosition = textDocument.positionAt(focusOffset);
+    const focusPosition =
+      selection.direction === DirectionBackward
+        ? selection.start
+        : selection.end;
     const [movedFocusSelection] = mapCursorMove(
       textDocument,
       [
@@ -205,12 +204,7 @@ export function mapSelectionShift(
       ],
       shortcut
     );
-    const movedFocusOffset = textDocument.offsetAt(movedFocusSelection.start);
-    return createSelectionFromAnchorAndFocusOffsets(
-      textDocument,
-      anchorOffset,
-      movedFocusOffset
-    );
+    return createSelectionFrom(selection, movedFocusSelection);
   });
 }
 

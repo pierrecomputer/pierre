@@ -302,6 +302,7 @@ export class FileRenderer<LAnnotation = undefined> {
     }
     const { file, result } = this.renderCache;
     if (result != null && result.code.length !== textDocument.lineCount) {
+      result.code.length = Math.min(result.code.length, textDocument.lineCount);
       for (let i = result.code.length; i < textDocument.lineCount; i++) {
         // prefill lines with plain text content
         result.code.push({

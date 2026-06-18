@@ -1,6 +1,7 @@
 import { JSDOM } from 'jsdom';
 
 import type { CodeView } from '../src/components/CodeView';
+import { resetPlatformDetectionForTests } from '../src/editor/platform';
 import type { CodeViewItem, FileContents } from '../src/types';
 
 export interface InstallDomNavigatorOptions {
@@ -200,6 +201,10 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     configurable: true,
     value: navigator,
   });
+  // Platform detection memoizes on first call; reset it so it re-runs against
+  // the navigator just installed above rather than a value an earlier test
+  // cached under a different platform.
+  resetPlatformDetectionForTests();
 
   return {
     window: dom.window,

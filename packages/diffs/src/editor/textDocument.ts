@@ -173,7 +173,19 @@ export class TextDocument<LAnnotation> {
   }
 
   getText(range?: Range): string {
-    return this.#pieceTable.getText(range);
+    if (range === undefined) {
+      return this.#pieceTable.getText();
+    }
+    // Clamp the range to visible line content before extracting text. A
+    // preserved vertical-move "goal column" can leave a selection focus whose
+    // character overshoots a shorter line; without this, the piece table clamps
+    // to the line's offset span (which includes the trailing line break) and
+    // copy/cut would pull in that newline. Mirrors `offsetAt`, which normalizes
+    // positions the same way.
+    return this.#pieceTable.getText({
+      start: this.normalizePosition(range.start),
+      end: this.normalizePosition(range.end),
+    });
   }
 
   getLineText(line: number, includeLineBreak?: boolean): string {

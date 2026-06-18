@@ -2,6 +2,18 @@ let _isMacLike: boolean | undefined = undefined;
 let _isLinux: boolean | undefined = undefined;
 let _isSafari: boolean | undefined = undefined;
 
+/**
+ * Clears the cached platform/browser detection. Detection is memoized on first
+ * call, so a test process that swaps `navigator` (e.g. to exercise Linux or
+ * Safari behavior) must reset it; otherwise the value cached by an earlier test
+ * leaks across tests and no longer matches the active navigator.
+ */
+export function resetPlatformDetectionForTests(): void {
+  _isMacLike = undefined;
+  _isLinux = undefined;
+  _isSafari = undefined;
+}
+
 export function isMacLike(): boolean {
   return (_isMacLike ??= /macOS|MacIntel|iPhone|iPad|iPod/i.test(
     getPlatform()
@@ -37,7 +49,7 @@ export function isMoveCursorShortcut(
   | 'end'
   | undefined {
   // emacs key bindings
-  if ((isMacLike() || isLinux()) && e.ctrlKey && !e.altKey && !e.metaKey) {
+  if (isMacLike() && e.ctrlKey && !e.altKey && !e.metaKey) {
     switch (e.key) {
       case 'a':
         return 'start';

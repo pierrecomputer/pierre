@@ -1,8 +1,18 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
+import { TextDocument } from '../src/editor/textDocument';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { FileRenderer } from '../src/renderers/FileRenderer';
+import type { FileContents } from '../src/types';
 import { mockFiles } from './mocks';
+
+type FileRendererCacheProbe = {
+  renderCache?: {
+    result?: {
+      code: unknown[];
+    };
+  };
+};
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -19,5 +29,24 @@ describe('FileRenderer', () => {
     const instance = new FileRenderer();
     const result = await instance.asyncRender(mockFiles.file1);
     expect(instance.renderCodeAST(result)).toMatchSnapshot();
+  });
+
+  test('truncates cached code rows when document lines are deleted', async () => {
+    const instance = new FileRenderer();
+    const file: FileContents = {
+      cacheKey: 'editable-file',
+      contents: 'alpha\nbeta\ngamma',
+      name: 'editable.txt',
+    };
+
+    await instance.asyncRender(file);
+    expect(instance.renderFile(file)?.rowCount).toBe(3);
+
+    instance.applyDocumentChange(
+      new TextDocument('inmemory://editable-file', 'alpha\ngamma')
+    );
+
+    const cache = (instance as unknown as FileRendererCacheProbe).renderCache;
+    expect(cache?.result?.code).toHaveLength(2);
   });
 });
