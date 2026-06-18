@@ -15,7 +15,10 @@ export class Metrics {
   // measured. That path inserts a span and reads getBoundingClientRect(), which
   // forces a synchronous layout every call; without this cache, caret and
   // selection updates on emoji-heavy lines re-measure the same runs on every
-  // render. Cleared in init() whenever the font changes (see below).
+  // render. Cleared via clearTextWidthCache() whenever the inherited font may
+  // have changed: on a font change in init(), and on a layout reflow the
+  // editor reports through its resize handler (e.g. a web font finishing
+  // loading without the content element being replaced).
   #domWidthCache = new Map<string, number>();
 
   /** Width of the '0' character. */
@@ -68,7 +71,7 @@ export class Metrics {
       this.#canvasCtx.font = font;
       this.ch = this.canvasMeasureTextWidth('0');
       // Cached DOM widths were measured against the previous font.
-      this.#domWidthCache.clear();
+      this.clearTextWidthCache();
     }
     const nextTabSize = parseInt(tabSize, 10);
     if (!Number.isNaN(nextTabSize)) {
@@ -167,6 +170,15 @@ export class Metrics {
     }
     this.#domWidthCache.set(text, width);
     return width;
+  }
+
+  /**
+   * discard memoized DOM text widths
+   * call this when the inherited font may have changed without re-running
+   * init(), e.g. on a layout reflow, so stale widths are not reused
+   */
+  clearTextWidthCache(): void {
+    this.#domWidthCache.clear();
   }
 }
 

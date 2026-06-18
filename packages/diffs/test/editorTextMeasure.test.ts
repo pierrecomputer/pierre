@@ -268,4 +268,30 @@ describe('Metrics.measureTextWidth (DOM path)', () => {
       cleanup();
     }
   });
+
+  test('re-measures after the cache is cleared on a layout change', () => {
+    const { cleanup } = installDom();
+    const rect = stubBoundingClientRectWidth(20);
+    try {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const metrics = new Metrics();
+      metrics.init(root);
+
+      const emoji = '😀';
+      metrics.measureTextWidth(emoji);
+      metrics.measureTextWidth(emoji);
+      expect(rect.getCallCount()).toBe(1);
+
+      // The editor calls this from handleLayoutResize, so a reflow that the
+      // same content element survives (e.g. a web font finishing loading)
+      // re-measures instead of returning the width from the previous font.
+      metrics.clearTextWidthCache();
+      metrics.measureTextWidth(emoji);
+      expect(rect.getCallCount()).toBe(2);
+    } finally {
+      rect.restore();
+      cleanup();
+    }
+  });
 });
