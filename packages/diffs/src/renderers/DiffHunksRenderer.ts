@@ -24,6 +24,7 @@ import type {
   CodeColumnType,
   CustomPreProperties,
   DiffLineAnnotation,
+  DiffSearchLineDecoration,
   DiffsHighlighter,
   ExpansionDirections,
   FileDiffMetadata,
@@ -41,6 +42,7 @@ import type {
   ThemedDiffResult,
 } from '../types';
 import { applyLineTextWithNewline } from '../utils/applyLineTextWithNewline';
+import { applySearchDecorationsToLine } from '../utils/applySearchDecorations';
 import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
@@ -250,6 +252,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private searchDecorations: Record<
+    'deletions' | 'additions',
+    Map<number, DiffSearchLineDecoration[]>
+  > = {
+    deletions: new Map(),
+    additions: new Map(),
+  };
 
   private computedLangs: SupportedLanguages[] = ['text'];
   private renderCache: DiffRenderCache | undefined;
@@ -307,6 +316,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
+    this.setSearchDecorations(undefined);
     this.workerManager?.cleanUpTasks(this);
   }
 
@@ -486,6 +496,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       result: fresh.result,
     };
     this.onRenderUpdate?.();
+  }
+
+  public setSearchDecorations(
+    decorations: readonly DiffSearchLineDecoration[] | undefined
+  ): void {
+    this.searchDecorations = groupDiffSearchDecorationsBySide(decorations);
   }
 
   public get diffCache(): FileDiffMetadata | undefined {
@@ -1722,7 +1738,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             lineDecoration.gutterProperties
           );
           if (additionLineContent != null) {
-            additionLineContent = withContentProperties(
+            const decoratedLine = withContentProperties(
               additionLineContent,
               lineDecoration.contentProperties,
               isRenderCacheDirty && additionLine != null
@@ -1732,8 +1748,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                   }
                 : undefined
             );
+            if (decoratedLine != null) {
+              additionLineContent = applySearchDecorationsToLine(
+                decoratedLine,
+                additionLine != null
+                  ? this.searchDecorations.additions.get(additionLine.lineIndex)
+                  : undefined
+              );
+            }
           } else if (deletionLineContent != null) {
-            deletionLineContent = withContentProperties(
+            const decoratedLine = withContentProperties(
               deletionLineContent,
               lineDecoration.contentProperties,
               isRenderCacheDirty && deletionLine != null
@@ -1743,6 +1767,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                   }
                 : undefined
             );
+            if (decoratedLine != null) {
+              deletionLineContent = applySearchDecorationsToLine(
+                decoratedLine,
+                deletionLine != null
+                  ? this.searchDecorations.deletions.get(deletionLine.lineIndex)
+                  : undefined
+              );
+            }
           }
           pushLineWithAnnotation({
             diffStyle: 'unified',
@@ -1857,7 +1889,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               deletionLineDecoration.gutterProperties
             );
             if (deletionLineDecorated != null) {
-              deletionLineContent = deletionLineDecorated;
+              deletionLineContent = applySearchDecorationsToLine(
+                deletionLineDecorated,
+                this.searchDecorations.deletions.get(deletionLine.lineIndex)
+              );
             }
           }
           if (additionLine != null) {
@@ -1879,7 +1914,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               additionLineDecoration.gutterProperties
             );
             if (additionLineDecorated != null) {
-              additionLineContent = additionLineDecorated;
+              additionLineContent = applySearchDecorationsToLine(
+                additionLineDecorated,
+                this.searchDecorations.additions.get(additionLine.lineIndex)
+              );
             }
           }
           pushLineWithAnnotation({
@@ -2323,6 +2361,26 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       stickyHeader,
     });
   }
+}
+
+function groupDiffSearchDecorationsBySide(
+  decorations: readonly DiffSearchLineDecoration[] | undefined
+): Record<'deletions' | 'additions', Map<number, DiffSearchLineDecoration[]>> {
+  const grouped = {
+    deletions: new Map<number, DiffSearchLineDecoration[]>(),
+    additions: new Map<number, DiffSearchLineDecoration[]>(),
+  };
+  if (decorations == null) {
+    return grouped;
+  }
+
+  for (const decoration of decorations) {
+    const sideDecorations = grouped[decoration.side];
+    const lineDecorations = sideDecorations.get(decoration.lineIndex) ?? [];
+    lineDecorations.push(decoration);
+    sideDecorations.set(decoration.lineIndex, lineDecorations);
+  }
+  return grouped;
 }
 
 // Use the platform's English plural rules to pick "line" vs "lines" so a

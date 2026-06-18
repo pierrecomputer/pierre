@@ -159,7 +159,9 @@ async function openSearchReplacePanel({
 }
 
 function findReplaceInput(panel: HTMLElement): HTMLInputElement {
-  const input = panel.querySelector<HTMLInputElement>('input[data-replace]');
+  const input = panel.shadowRoot?.querySelector<HTMLInputElement>(
+    'input[data-replace]'
+  );
   if (input == null) {
     throw new Error('replace input was not rendered');
   }

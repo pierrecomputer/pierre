@@ -24,10 +24,12 @@ import type {
   RenderFileOptions,
   RenderFileResult,
   RenderRange,
+  SearchLineDecoration,
   SupportedLanguages,
   ThemedFileResult,
 } from '../types';
 import { applyLineTextWithNewline } from '../utils/applyLineTextWithNewline';
+import { applySearchDecorationsToLine } from '../utils/applySearchDecorations';
 import { areFileRenderOptionsEqual } from '../utils/areFileRenderOptionsEqual';
 import { areFileTargetsEqual } from '../utils/areFileTargetsEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
@@ -131,6 +133,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private searchDecorations = new Map<number, SearchLineDecoration[]>();
   private lineCache: LineCache | undefined;
   private pendingStructuralRows: Map<number, HASTElement> | undefined;
   private textDocumentCache = new WeakMap<
@@ -181,6 +184,12 @@ export class FileRenderer<LAnnotation = undefined> {
       this.lineAnnotations[annotation.lineNumber] = arr;
       arr.push(annotation);
     }
+  }
+
+  public setSearchDecorations(
+    decorations: readonly SearchLineDecoration[] | undefined
+  ): void {
+    this.searchDecorations = groupSearchDecorationsByLine(decorations);
   }
 
   public cleanUp(): void {
@@ -322,6 +331,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
     this.file = undefined;
+    this.setSearchDecorations(undefined);
   }
 
   public clearRenderCache(): void {
@@ -961,7 +971,12 @@ export class FileRenderer<LAnnotation = undefined> {
       gutter.children.push(
         createGutterItem('context', lineNumber, `${lineIndex}`)
       );
-      contentArray.push(line);
+      contentArray.push(
+        applySearchDecorationsToLine(
+          line,
+          this.searchDecorations.get(lineIndex)
+        )
+      );
       rowCount++;
 
       // Check annotations using ACTUAL line number from file
@@ -1185,6 +1200,22 @@ export class FileRenderer<LAnnotation = undefined> {
       totalLines,
     });
   }
+}
+
+function groupSearchDecorationsByLine(
+  decorations: readonly SearchLineDecoration[] | undefined
+): Map<number, SearchLineDecoration[]> {
+  const grouped = new Map<number, SearchLineDecoration[]>();
+  if (decorations == null) {
+    return grouped;
+  }
+
+  for (const decoration of decorations) {
+    const lineDecorations = grouped.get(decoration.lineIndex) ?? [];
+    lineDecorations.push(decoration);
+    grouped.set(decoration.lineIndex, lineDecorations);
+  }
+  return grouped;
 }
 
 function isFileMassive(lineCount: number, tokenizeMaxLength: number): boolean {

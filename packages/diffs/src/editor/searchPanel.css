@@ -1,0 +1,300 @@
+:host {
+  --diffs-search-panel-fg: var(--diffs-fg, light-dark(#000, #fff));
+  --diffs-search-panel-bg: var(--diffs-bg, light-dark(#fff, #000));
+  --diffs-search-panel-modified: var(
+    --diffs-modified-base,
+    light-dark(
+      var(--diffs-modified-light, #009fff),
+      var(--diffs-modified-dark, #69b1ff)
+    )
+  );
+  color-scheme: light dark;
+  position: sticky;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  height: 0;
+  box-sizing: border-box;
+}
+
+:host([data-search-panel-overlay]) {
+  pointer-events: none;
+}
+
+[data-search-panel] {
+  display: flex;
+  justify-content: flex-end;
+  flex-direction: column;
+  width: 100%;
+  height: fit-content;
+  container: search-panel / inline-size;
+}
+
+[data-editor-widget] {
+  --diffs-widget-fg: var(--diffs-search-panel-fg);
+  --diffs-widget-bg: color-mix(
+    in lab,
+    var(--diffs-search-panel-fg) 4%,
+    var(--diffs-search-panel-bg)
+  );
+  --diffs-widget-border: color-mix(
+    in lab,
+    var(--diffs-search-panel-fg) 20%,
+    transparent
+  );
+  --diffs-widget-shadow:
+    inset 0 0 0 1px var(--diffs-search-panel-bg), 0 4px 8px rgb(0 0 0 / 0.075),
+    0 6px 18px rgb(0 0 0 / 0.075);
+  position: relative;
+  z-index: 100;
+  width: fit-content;
+  display: flex;
+  flex-shrink: 0;
+  align-items: stretch;
+  gap: 8px;
+  padding: 4px;
+  max-width: 100%;
+  min-width: 260px;
+  margin-inline: auto 16px;
+  border: 1px solid var(--diffs-widget-border);
+  border-radius: 9px;
+  background-color: var(--diffs-widget-bg);
+  background-clip: padding-box;
+  box-shadow: var(--diffs-widget-shadow);
+  font-family: var(
+    --diffs-header-font-fallback,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif
+  );
+  font-size: 14px;
+}
+
+:host([data-search-panel-overlay]) [data-editor-widget] {
+  pointer-events: auto;
+}
+
+svg {
+  display: block;
+  fill: currentColor;
+  width: 12px;
+  height: 12px;
+}
+
+[data-search-grid] {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  grid-template-areas:
+    'find    matches nav'
+    'replace actions .';
+  align-items: center;
+  gap: 4px 6px;
+  width: 100%;
+}
+
+[data-input-box][data-find] {
+  grid-area: find;
+}
+
+[data-search-nav] {
+  grid-area: nav;
+}
+
+[data-input-box][data-replace] {
+  grid-area: replace;
+}
+
+[data-replace-actions] {
+  grid-area: actions;
+}
+
+[data-search-grid][data-mode='find'] {
+  grid-template-areas: 'find matches nav';
+}
+
+[data-search-grid][data-mode='find'] [data-replace-cell] {
+  display: none;
+}
+
+@container search-panel (width < 400px) {
+  [data-editor-widget] {
+    padding: 10px;
+  }
+
+  [data-search-grid][data-mode='replace'] {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      'find    find    find'
+      'replace replace replace'
+      'nav     matches actions';
+  }
+
+  [data-search-grid][data-mode='find'] {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      'find find    find'
+      'nav  matches matches';
+  }
+
+  [data-replace-actions] {
+    justify-self: end;
+  }
+
+  [data-search-grid] [data-input-box] {
+    width: auto;
+  }
+}
+
+[data-input-box] {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 200px;
+}
+
+[data-input-box] input {
+  flex-grow: 1;
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 24px;
+  padding-inline: 6px;
+  color: var(--diffs-search-panel-fg);
+  background-color: var(--diffs-search-panel-bg);
+  border: 1px solid
+    color-mix(
+      in lab,
+      var(--diffs-search-panel-fg) 12%,
+      var(--diffs-search-panel-bg)
+    );
+  border-radius: 6px;
+  outline: none;
+}
+
+[data-input-box] input::selection {
+  background-color: color-mix(
+    in lab,
+    var(--diffs-search-panel-fg) 8%,
+    var(--diffs-search-panel-bg)
+  );
+}
+
+[data-input-box] input:focus-visible {
+  outline: 1px solid var(--diffs-search-panel-modified);
+}
+
+[data-input-box][data-find] input {
+  padding-inline-end: 72px;
+}
+
+[data-input-box] [data-search-icon] {
+  --diffs-search-icon-size: 20px;
+}
+
+[data-search-toggles] {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+[data-matches] {
+  grid-area: matches;
+  flex-shrink: 0;
+  min-width: 50px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  color: color-mix(
+    in lab,
+    var(--diffs-search-panel-fg) 50%,
+    var(--diffs-search-panel-bg)
+  );
+}
+
+[data-matches][data-no-matches] {
+  color: color-mix(
+    in lab,
+    var(--diffs-search-panel-fg) 35%,
+    var(--diffs-search-panel-bg)
+  );
+}
+
+[data-replace-actions],
+[data-search-nav] {
+  display: flex;
+  align-items: center;
+}
+
+[data-search-icon] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  flex-shrink: 0;
+  width: var(--diffs-search-icon-size, 24px);
+  height: var(--diffs-search-icon-size, 24px);
+  margin: 0;
+  padding: 0;
+  color: color-mix(
+    in lab,
+    var(--diffs-search-panel-fg) 65%,
+    var(--diffs-search-panel-bg)
+  );
+  border: 0;
+  border-radius: var(--diffs-search-icon-radius, 4px);
+  background: none;
+  cursor: pointer;
+  transition:
+    background-color 0.1s ease-in-out,
+    color 0.1s ease-in-out;
+}
+
+[data-search-icon]:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+[data-search-icon]:not(:disabled):hover {
+  color: var(--diffs-search-panel-fg);
+}
+
+[data-search-icon]:focus-visible {
+  outline: 1px solid var(--diffs-search-panel-modified);
+}
+
+[data-search-icon][aria-pressed='true'] {
+  color: var(--diffs-search-panel-modified);
+}
+
+[data-search-close] {
+  --diffs-search-icon-size: 20px;
+  --diffs-search-icon-radius: 50%;
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
+  color: var(--diffs-widget-bg);
+  background-color: color-mix(
+    in lab,
+    var(--diffs-widget-fg) 50%,
+    var(--diffs-search-panel-bg)
+  );
+}
+
+[data-search-close]:not(:disabled):hover {
+  opacity: 1;
+  color: var(--diffs-widget-bg);
+  background-color: var(--diffs-widget-fg);
+}
