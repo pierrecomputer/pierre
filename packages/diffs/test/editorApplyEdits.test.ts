@@ -2,7 +2,7 @@ import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
-import { Editor } from '../src/editor/editor';
+import { Editor, type EditorOptions } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
@@ -45,7 +45,10 @@ interface EditorFixture {
   window: EditorTestWindow;
 }
 
-async function createEditorFixture(contents: string): Promise<EditorFixture> {
+async function createEditorFixture(
+  contents: string,
+  editorOptions?: EditorOptions<undefined>
+): Promise<EditorFixture> {
   const dom = installDom();
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
@@ -54,7 +57,7 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor<undefined>(editorOptions);
   const initialFile: FileContents = { name: 'edits.ts', contents };
 
   file.render({ file: initialFile, fileContainer, forceRender: true });
@@ -588,6 +591,122 @@ describe('Editor.applyEdits selection sync', () => {
       expect(setBaseAndExtent).not.toHaveBeenCalled();
     } finally {
       getSelectionStub.mockRestore();
+      cleanup();
+    }
+  });
+});
+
+describe('Editor undo/redo API', () => {
+  const insertBang = [
+    {
+      range: {
+        start: { line: 0, character: 5 },
+        end: { line: 0, character: 5 },
+      },
+      newText: '!',
+    },
+  ];
+
+  test('canUndo and canRedo reflect the history state', async () => {
+    const { cleanup, editor } = await createEditorFixture('alpha');
+
+    try {
+      expect(editor.canUndo).toBe(false);
+      expect(editor.canRedo).toBe(false);
+
+      editor.applyEdits(insertBang, true);
+
+      expect(editor.getState().file.contents).toBe('alpha!');
+      expect(editor.canUndo).toBe(true);
+      expect(editor.canRedo).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('undo reverts the last edit and redo re-applies it', async () => {
+    const { cleanup, editor } = await createEditorFixture('alpha');
+
+    try {
+      editor.applyEdits(insertBang, true);
+      expect(editor.getState().file.contents).toBe('alpha!');
+
+      editor.undo();
+      expect(editor.getState().file.contents).toBe('alpha');
+      expect(editor.canUndo).toBe(false);
+      expect(editor.canRedo).toBe(true);
+
+      editor.redo();
+      expect(editor.getState().file.contents).toBe('alpha!');
+      expect(editor.canUndo).toBe(true);
+      expect(editor.canRedo).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('undo and redo do nothing when there is no history', async () => {
+    const { cleanup, editor } = await createEditorFixture('alpha');
+
+    try {
+      editor.undo();
+      editor.redo();
+
+      expect(editor.getState().file.contents).toBe('alpha');
+      expect(editor.canUndo).toBe(false);
+      expect(editor.canRedo).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('programmatic undo matches the keyboard undo result', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('alpha');
+
+    try {
+      const edit = [
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'X',
+        },
+      ];
+
+      editor.applyEdits(edit, true);
+      pressUndoRedo(window, content, false);
+      const keyboardResult = editor.getState().file.contents;
+
+      pressUndoRedo(window, content, true);
+      expect(editor.getState().file.contents).toBe('Xalpha');
+
+      editor.undo();
+      expect(editor.getState().file.contents).toBe(keyboardResult);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('undo notifies the onChange callback', async () => {
+    let changeCount = 0;
+    const { cleanup, editor } = await createEditorFixture('alpha', {
+      onChange() {
+        changeCount++;
+      },
+    });
+
+    try {
+      editor.applyEdits(insertBang, true);
+      const countAfterEdit = changeCount;
+
+      editor.undo();
+
+      // Undo runs through the same change path as an edit, so consumers are
+      // notified and can re-read canUndo/canRedo to update their UI.
+      expect(changeCount).toBe(countAfterEdit + 1);
+    } finally {
       cleanup();
     }
   });
