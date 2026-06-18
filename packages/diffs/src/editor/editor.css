@@ -41,9 +41,22 @@
   background-color: var(--diffs-line-bg);
 }
 
-/* Editor Overlay */
+/* Editor Overlay
+   Holds the absolutely-positioned caret, selection, match, and marker layers.
+   It is a positioned box (not `display: contents`) so its children resolve their
+   containing block to it instead of bubbling up to the diff container. The editor
+   sets its left/top/width to the editable column's origin and width (see
+   Editor#syncOverlayOrigin) so the layers line up — and overlay widgets like the
+   marker popup size correctly — in single-file, unified, split-scroll, and
+   split-wrap layouts alike. `[data-code]` is `display: contents` in split-wrap,
+   so without this the overlay would fall back to the diff container and render
+   over the wrong (deletions) column. */
 [data-editor-overlay] {
-  display: contents;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
 }
 [data-caret],
 [data-selection-range],

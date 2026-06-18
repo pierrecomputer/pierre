@@ -1976,8 +1976,36 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  // Anchor the editor overlay to the editable column's origin so the
+  // absolutely-positioned caret/selection/match/marker layers line up with the
+  // text in every layout. `getCharX` measures X from the column's left edge
+  // (gutter included) and `getLineY` measures Y from the content element's top,
+  // so the overlay's top-left must sit at the gutter-left / content-top. In a
+  // single File, a unified diff, or a split diff in scroll mode `[data-code]` is
+  // itself a positioned box at that origin, so these offsets are ~0; in a split
+  // diff in wrap mode `[data-code]` is `display: contents`, so without this the
+  // overlay would resolve to the diff container and render over the wrong (left)
+  // column. The overlay is a sibling of the gutter/content inside `[data-code]`,
+  // so it shares their offsetParent and their offsetLeft/offsetTop are already in
+  // the overlay's own coordinate space. The width is set so overlay widgets that
+  // size against the column (e.g. the marker popup's `max-width: calc(100% - …)`)
+  // stay in bounds instead of collapsing against the overlay's zero box.
+  #syncOverlayOrigin(): void {
+    const overlay = this.#overlayElement;
+    const contentEl = this.#contentElement;
+    if (overlay === undefined || contentEl === undefined) {
+      return;
+    }
+    const originEl = this.#gutterElement ?? contentEl;
+    const originLeft = originEl.offsetLeft;
+    overlay.style.left = `${originLeft}px`;
+    overlay.style.top = `${contentEl.offsetTop}px`;
+    overlay.style.width = `${contentEl.offsetLeft + contentEl.offsetWidth - originLeft}px`;
+  }
+
   #updateSelections(selections: EditorSelection[]) {
     this.__postponeBackgroundTokenizeToNextFrame();
+    this.#syncOverlayOrigin();
 
     this.#primaryCaretElement = undefined;
     this.#setSelectedLinesSafe(null);
