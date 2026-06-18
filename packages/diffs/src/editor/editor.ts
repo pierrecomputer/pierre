@@ -931,6 +931,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         'focus',
         () => {
           this.#contentHasFocus = true;
+          // A keyboard or direct programmatic refocus restores a stale native
+          // Selection that the selectionchange handler would apply over the
+          // remapped #selections (after an applyEdits inserted a line above the
+          // unfocused caret). Re-assert the editor's selection so the caret
+          // stays anchored. A pointer focus is left to the click, and #focus()
+          // already syncs the selection during an editor-driven focus.
+          if (
+            !this.#isContentMouseDown &&
+            !this.#shouldIgnoreSelectionChange &&
+            this.#selections !== undefined &&
+            this.#selections.length > 0
+          ) {
+            this.#setWindowSelection(this.#selections.at(-1)!);
+          }
         },
         { passive: true }
       ),
