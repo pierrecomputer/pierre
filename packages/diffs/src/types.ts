@@ -47,6 +47,11 @@ export type MaybeDiffFileInput =
   | DiffFileInput
   | { oldFile?: undefined; newFile?: undefined };
 
+export type FileDiffContentsLoader = (fileDiff: FileDiffMetadata) => Promise<{
+  oldFile: FileContents | null;
+  newFile: FileContents | null;
+}>;
+
 export type HighlighterTypes = 'shiki-js' | 'shiki-wasm';
 
 export type HighlightedToken = [char: number, fg: string, text: string];
@@ -407,6 +412,12 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   disableBackground?: boolean;
   hunkSeparators?: HunkSeparators; // line-info is default
   expandUnchanged?: boolean; // false is default
+  /**
+   * Fetches full old/new file contents for a partial diff. This enables hunk
+   * expansion after metadata parsed from a patch is hydrated with complete file
+   * contents.
+   */
+  loadDiffFiles?: FileDiffContentsLoader;
   // Auto-expand collapsed context at or below this size.
   collapsedContextThreshold?: number; // 2 is default
   // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
@@ -427,7 +438,7 @@ export interface BaseDiffOptions extends BaseCodeOptions {
 export type BaseDiffOptionsWithDefaults = Required<
   Omit<
     BaseDiffOptions,
-    'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions'
+    'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions' | 'loadDiffFiles'
   >
 >;
 

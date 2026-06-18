@@ -245,6 +245,7 @@ const CODE_VIEW_DIFF_OPTION_KEYS = [
   'diffIndicators',
   'disableBackground',
   'expandUnchanged',
+  'loadDiffFiles',
   'collapsedContextThreshold',
   'lineDiffType',
   'maxLineDiffLength',
