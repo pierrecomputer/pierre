@@ -1372,6 +1372,24 @@ describe('mapSelectionMove', () => {
     expect(nextSelections).toEqual([createSelection(1, 6, 1, 6)]);
     expect(change).toBeDefined();
   });
+
+  test('moves right past a whole emoji instead of into the surrogate pair', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀');
+    const afterLetter = [createSelection(0, 1, 0, 1)];
+
+    expect(mapCursorMove(textDocument, afterLetter, 'right')).toEqual([
+      createSelection(0, 3, 0, 3),
+    ]);
+  });
+
+  test('moves left over a whole emoji instead of into the surrogate pair', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀');
+    const lineEnd = [createSelection(0, 3, 0, 3)];
+
+    expect(mapCursorMove(textDocument, lineEnd, 'left')).toEqual([
+      createSelection(0, 1, 0, 1),
+    ]);
+  });
 });
 
 describe('mapSelectionRangeMove', () => {
@@ -1460,6 +1478,15 @@ describe('mapSelectionRangeMove', () => {
     expect(getSelectionText(textDocument, onShortLine)).toBe(
       'r line here\nshort'
     );
+  });
+
+  test('extends the selection across a whole emoji on shift + right', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀');
+    const afterLetter = [createSelection(0, 1, 0, 1)];
+
+    expect(mapSelectionShift(textDocument, afterLetter, 'right')).toEqual([
+      createSelection(0, 1, 0, 3, DirectionForward),
+    ]);
   });
 });
 
@@ -1859,6 +1886,56 @@ describe('applyTransposeToSelections', () => {
       createSelection(1, 2, 1, 2),
       createSelection(2, 2, 2, 2),
     ]);
+  });
+
+  test('swaps a letter and an emoji without splitting the surrogate pair', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀b');
+    const selections = [createSelection(0, 1, 0, 1)];
+    const { nextSelections, change } = applyTransposeToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('😀ab');
+    expect(nextSelections).toEqual([createSelection(0, 3, 0, 3)]);
+  });
+
+  test('swaps the last two graphemes when the line ends with an emoji', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀');
+    const selections = [createSelection(0, 3, 0, 3)];
+    const { nextSelections } = applyTransposeToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe('😀a');
+    expect(nextSelections).toEqual([createSelection(0, 3, 0, 3)]);
+  });
+
+  test('is a no-op at end-of-line when the line is a single emoji', () => {
+    const textDocument = new TextDocument('inmemory://1', '😀');
+    const selections = [createSelection(0, 2, 0, 2)];
+    const { nextSelections, change } = applyTransposeToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(change).toBeUndefined();
+    expect(textDocument.getText()).toBe('😀');
+    expect(nextSelections).toEqual([createSelection(0, 2, 0, 2)]);
+  });
+
+  test('carries an emoji across the line break when transposing at start-of-line', () => {
+    const textDocument = new TextDocument('inmemory://1', 'x😀\ny');
+    const selections = [createSelection(1, 0, 1, 0)];
+    const { nextSelections } = applyTransposeToSelections(
+      textDocument,
+      selections
+    );
+
+    expect(textDocument.getText()).toBe('xy\n😀');
+    expect(nextSelections).toEqual([createSelection(1, 2, 1, 2)]);
   });
 });
 
