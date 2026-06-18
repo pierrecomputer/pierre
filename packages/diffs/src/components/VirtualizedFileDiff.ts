@@ -1,5 +1,6 @@
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
+  BaseDiffOptions,
   DiffLineAnnotation,
   DiffsTextDocument,
   ExpansionDirections,
@@ -49,6 +50,10 @@ import {
   type FileDiffRenderProps,
 } from './FileDiff';
 import type { Virtualizer } from './Virtualizer';
+
+type LoadedPartialDiffContents = Awaited<
+  ReturnType<NonNullable<BaseDiffOptions['loadDiffFiles']>>
+>;
 
 interface DiffLayoutCheckpoint {
   renderedLineIndex: number;
@@ -738,6 +743,7 @@ export class VirtualizedFileDiff<
       direction,
       expansionLineCountOverride
     );
+    this.startDiffHydrationIfNeeded();
     this.forceRenderOverride = true;
     this.resetLayoutCache({ includeEstimatedHeights: true });
     if (this.isSimpleMode()) {
@@ -745,6 +751,19 @@ export class VirtualizedFileDiff<
     }
     this.virtualizer.instanceChanged(this, true);
   };
+
+  protected override applyHydratedPartialDiff(
+    hydratedFileDiff: FileDiffMetadata,
+    loadedContents: LoadedPartialDiffContents
+  ): void {
+    this.commitHydratedPartialDiff(hydratedFileDiff, loadedContents);
+    this.forceRenderOverride = true;
+    this.resetLayoutCache({ includeEstimatedHeights: true });
+    if (this.isSimpleMode()) {
+      this.computeApproximateSize();
+    }
+    this.virtualizer.instanceChanged(this, true);
+  }
 
   public setVisibility(visible: boolean): void {
     if (this.isAdvancedMode() || this.fileContainer == null) {

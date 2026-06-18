@@ -73,6 +73,7 @@ import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOption
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
+import { hydratePartialFileDiff } from '../utils/hydratePartialFileDiff';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
@@ -81,6 +82,10 @@ import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
+
+type LoadedPartialDiffContents = Awaited<
+  ReturnType<NonNullable<BaseDiffOptions['loadDiffFiles']>>
+>;
 
 export interface FileDiffRenderBaseProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
@@ -178,6 +183,11 @@ interface ApplyPartialRenderProps {
   renderRange: RenderRange | undefined;
 }
 
+interface PendingDiffHydration {
+  fileDiff: FileDiffMetadata;
+  promise: Promise<void>;
+}
+
 type HydrationSetup<LAnnotation> = {
   fileDiff: FileDiffMetadata | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
@@ -233,6 +243,7 @@ export class FileDiff<
   protected additionFile?: FileContents | null;
   public fileDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
+  protected pendingDiffHydration: PendingDiffHydration | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
   protected lastRenderedHeaderHTML: string | undefined;
   protected cachedHeaderHTML: string | undefined;
@@ -504,6 +515,7 @@ export class FileDiff<
     this.managersDirty = false;
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.renderRange = undefined;
+    this.pendingDiffHydration = undefined;
 
     // Clean up the elements
     if (!this.isContainerManaged) {
@@ -752,8 +764,67 @@ export class FileDiff<
       direction,
       expansionLineCountOverride
     );
+    this.startDiffHydrationIfNeeded();
     this.rerender();
   };
+
+  protected startDiffHydrationIfNeeded(): void {
+    const { fileDiff } = this;
+    const { loadDiffFiles } = this.options;
+    if (fileDiff == null || !fileDiff.isPartial || loadDiffFiles == null) {
+      return;
+    }
+    if (this.pendingDiffHydration?.fileDiff === fileDiff) {
+      return;
+    }
+
+    const promise = this.loadAndHydrateDiff(fileDiff, loadDiffFiles);
+    this.pendingDiffHydration = { fileDiff, promise };
+  }
+
+  private async loadAndHydrateDiff(
+    fileDiff: FileDiffMetadata,
+    loadDiffFiles: NonNullable<BaseDiffOptions['loadDiffFiles']>
+  ): Promise<void> {
+    try {
+      const loadedContents = await loadDiffFiles(fileDiff);
+      if (!this.enabled || this.fileDiff !== fileDiff) {
+        return;
+      }
+
+      const hydratedFileDiff = hydratePartialFileDiff(fileDiff, loadedContents);
+      if (!this.enabled || this.fileDiff !== fileDiff) {
+        return;
+      }
+
+      this.applyHydratedPartialDiff(hydratedFileDiff, loadedContents);
+    } catch (error: unknown) {
+      console.error(error);
+    } finally {
+      if (this.pendingDiffHydration?.fileDiff === fileDiff) {
+        this.pendingDiffHydration = undefined;
+      }
+    }
+  }
+
+  protected applyHydratedPartialDiff(
+    hydratedFileDiff: FileDiffMetadata,
+    loadedContents: LoadedPartialDiffContents
+  ): void {
+    this.commitHydratedPartialDiff(hydratedFileDiff, loadedContents);
+    this.rerender();
+  }
+
+  protected commitHydratedPartialDiff(
+    hydratedFileDiff: FileDiffMetadata,
+    loadedContents: LoadedPartialDiffContents
+  ): void {
+    this.fileDiff = hydratedFileDiff;
+    this.deletionFile = loadedContents.oldFile;
+    this.additionFile = loadedContents.newFile;
+    this.cachedHeaderHTML = undefined;
+    this.hunksRenderer.clearRenderCache();
+  }
 
   public render({
     fileDiff,
@@ -776,12 +847,14 @@ export class FileDiff<
         'FileDiff.render: attempting to call render after cleaned up'
       );
     }
-
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
     this.editor?.__postponeBackgroundTokenizeToNextFrame();
-
-    const { collapsed = false, themeType = 'system' } = this.options;
+    const {
+      collapsed = false,
+      themeType = 'system',
+      expandUnchanged = false,
+    } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
     const themeChanged = this.hasThemeChanged();
     const hasFileInput = fileInput != null;
@@ -836,6 +909,9 @@ export class FileDiff<
     }
     if (this.fileDiff == null) {
       return false;
+    }
+    if (expandUnchanged) {
+      this.startDiffHydrationIfNeeded();
     }
     this.hunksRenderer.setOptions(this.getHunksRendererOptions(this.options));
     this.syncInteractionOptions();
