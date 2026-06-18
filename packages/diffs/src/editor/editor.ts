@@ -663,6 +663,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#resetCache();
 
+    // The tokenizer is created once per attached document and reused across
+    // re-renders, so a host-driven theme swap (theme picker, light/dark toggle)
+    // wouldn't otherwise reach it. Re-apply the surface's current theme on every
+    // sync so the editor's line-highlight/token colors track the active theme.
+    this.#tokenizer?.syncTheme(this.#fileInstance?.options ?? {});
+
     this.#wrap = this.#fileInstance?.options.overflow === 'wrap';
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;

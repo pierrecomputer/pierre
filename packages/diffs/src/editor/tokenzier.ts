@@ -35,6 +35,10 @@ export class EditorTokenizer {
   #grammar: IGrammar | undefined;
   #mediaQueryList: MediaQueryList;
   #themeType: 'light' | 'dark';
+  // The resolved name of the theme currently applied to the editor (e.g.
+  // `github-light`). Tracked so `syncTheme` can detect a host-driven theme swap
+  // even when the light/dark mode itself is unchanged.
+  #themeName = '';
   #colorMap: string[];
   #textDocument: TextDocument<unknown>;
   #tokenizeMaxLineLength: number;
@@ -171,7 +175,35 @@ export class EditorTokenizer {
     }
   }
 
+  // Re-apply the editor's theme from the surface's current code options. Edit
+  // mode reuses a single tokenizer across re-renders, so when the host swaps the
+  // theme — a theme picker, a light/dark toggle, etc. — we must recompute the
+  // active theme and re-tokenize. Without this the editor keeps rendering the
+  // theme it captured when it first attached (stale line-highlight background
+  // and token colors). System-driven changes are still handled by the
+  // observers wired up in the constructor; this covers explicit `themeType`/
+  // `theme` option changes that those observers don't see.
+  syncTheme(codeOptions: BaseCodeOptions): void {
+    const { themeType = 'system', theme = DEFAULT_THEMES } = codeOptions;
+    const nextThemeType =
+      themeType === 'system'
+        ? this.#mediaQueryList.matches
+          ? 'dark'
+          : 'light'
+        : themeType;
+    const nextThemeName =
+      typeof theme === 'string' ? theme : theme[nextThemeType];
+    if (
+      nextThemeType === this.#themeType &&
+      nextThemeName === this.#themeName
+    ) {
+      return;
+    }
+    this.#emitThemeChange(nextThemeName, nextThemeType);
+  }
+
   #setTheme(themeName: string) {
+    this.#themeName = themeName;
     this.#colorMap = this.#highlighter.setTheme(themeName).colorMap;
     const { colors = {} } = this.#highlighter.getTheme(themeName);
     const selectionBackground = colors['editor.selectionBackground'];
