@@ -1,9 +1,11 @@
 import { afterAll, describe, expect, test } from 'bun:test';
+import { createTwoFilesPatch } from 'diff';
 
 import {
   DiffHunksRenderer,
   disposeHighlighter,
   parseDiffFromFile,
+  parsePatchFiles,
 } from '../src';
 import type { FileDiffMetadata } from '../src/types';
 import { mockDiffs } from './mocks';
@@ -54,6 +56,34 @@ function changeBlockSurpluses(diff: FileDiffMetadata): {
     }
   }
   return { additionsColumn, deletionsColumn };
+}
+
+function parsePartialDiffWithCollapsedContext(): FileDiffMetadata {
+  const oldFile = {
+    name: 'partial.txt',
+    contents: ['keep 1\n', 'old value\n', 'keep 3\n'].join(''),
+  };
+  const newFile = {
+    name: 'partial.txt',
+    contents: ['keep 1\n', 'new value\n', 'keep 3\n'].join(''),
+  };
+  const file = parsePatchFiles(
+    createTwoFilesPatch(
+      oldFile.name,
+      newFile.name,
+      oldFile.contents,
+      newFile.contents,
+      undefined,
+      undefined,
+      { context: 0 }
+    ),
+    'partial',
+    true
+  )[0]?.files[0];
+  assertDefined(file, 'expected patch to contain one file');
+  expect(file.isPartial).toBe(true);
+  expect(file.hunks[0]?.collapsedBefore).toBeGreaterThan(0);
+  return file;
 }
 
 describe('DiffHunksRenderer', () => {
@@ -227,6 +257,29 @@ describe('DiffHunksRenderer', () => {
     const result = await instance.asyncRender(diff);
     const html = instance.renderFullHTML(result);
     expect(html).not.toContain('data-container-size');
+  });
+
+  test('keeps partial hunk separators non-expandable without a file loader', async () => {
+    const instance = new DiffHunksRenderer({ hunkSeparators: 'line-info' });
+    const result = await instance.asyncRender(
+      parsePartialDiffWithCollapsedContext()
+    );
+
+    expect(result.hunkData.length).toBeGreaterThan(0);
+    expect(result.hunkData.every((hunk) => hunk.expandable == null)).toBe(true);
+  });
+
+  test('marks partial hunk separators expandable with a file loader', async () => {
+    const instance = new DiffHunksRenderer({
+      hunkSeparators: 'line-info',
+      loadDiffFiles: () => Promise.resolve({ oldFile: null, newFile: null }),
+    });
+    const result = await instance.asyncRender(
+      parsePartialDiffWithCollapsedContext()
+    );
+
+    expect(result.hunkData.length).toBeGreaterThan(0);
+    expect(result.hunkData.every((hunk) => hunk.expandable != null)).toBe(true);
   });
 
   test('skips inline diff decorations for changed lines above maxLineDiffLength', async () => {
