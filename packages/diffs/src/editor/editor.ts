@@ -1053,7 +1053,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (text !== undefined) {
           // TODO(@ije): Add support of multiple selections copy&paste
           // TODO(@ije): normalize the pasted text with textDocument.EOF
-          this.#replaceSelectionText(text);
+          this.#replaceSelectionText(text, undefined, true);
         }
       }),
 
@@ -2578,7 +2578,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const text = getSelectionText(textDocument, selections);
-    this.#replaceSelectionText('');
+    this.#replaceSelectionText('', undefined, true);
     return text;
   }
 
@@ -2596,7 +2596,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    const change = textDocument.applyResolvedEdits(edits, true, selections);
+    const change = textDocument.applyResolvedEdits(
+      edits,
+      true,
+      selections,
+      undefined,
+      true
+    );
     if (change === undefined) {
       return;
     }
@@ -2622,7 +2628,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // replace the selection text
   #replaceSelectionText(
     text: string | string[],
-    selections = this.#selections
+    selections = this.#selections,
+    undoBoundary = false
   ) {
     if (selections === undefined) {
       return;
@@ -2638,7 +2645,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             textDocument,
             selections,
             text,
-            this.#lineAnnotations
+            this.#lineAnnotations,
+            undoBoundary
           )
         : applyTextChangeToSelections<LAnnotation>(
             textDocument,
@@ -2648,7 +2656,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               end: textDocument.offsetAt(primarySelection.end),
               text: Array.isArray(text) ? text.join('\n') : text,
             },
-            this.#lineAnnotations
+            this.#lineAnnotations,
+            undefined,
+            undoBoundary
           );
 
     if (change !== undefined) {
