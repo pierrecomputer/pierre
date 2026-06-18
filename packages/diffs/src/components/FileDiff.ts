@@ -43,6 +43,7 @@ import type {
   CapturedDiffSessionState,
   CustomPreProperties,
   DiffLineAnnotation,
+  DiffSearchLineDecoration,
   DiffsEditableComponent,
   DiffsEditor,
   DiffsTextDocument,
@@ -221,6 +222,7 @@ export interface FileDiffRenderBaseProps<LAnnotation> {
   containerWrapper?: HTMLElement;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   renderRange?: RenderRange;
+  searchDecorations?: readonly DiffSearchLineDecoration[];
 }
 
 export type FileDiffRenderProps<LAnnotation> =
@@ -1381,6 +1383,7 @@ export class FileDiff<
     fileContainer,
     containerWrapper,
     renderRange,
+    searchDecorations,
     ...fileInputProps
   }: FileDiffRenderProps<LAnnotation>): boolean {
     if (!this.enabled) {
@@ -1497,6 +1500,7 @@ export class FileDiff<
     this.syncInteractionOptions();
 
     this.hunksRenderer.setLineAnnotations(this.getLatestAnnotations());
+    this.hunksRenderer.setSearchDecorations(searchDecorations);
 
     const { disableErrorHandling = false, disableFileHeader = false } =
       this.options;

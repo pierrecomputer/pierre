@@ -1,7 +1,12 @@
 import { type MatchRange, type SearchParams } from '../search';
 import { resolveFindAgainShortcut } from './command';
 import { isPrimaryModifier } from './platform';
-import { getEditorIconSvg, type SVGSpriteNames } from './sprite';
+import searchPanelCSS from './searchPanel.css?inline';
+import {
+  getEditorIconSvg,
+  type SVGSpriteNames,
+  SVGSpriteSheet,
+} from './sprite';
 import { h } from './utils';
 
 export type SearchPanelMode = 'find' | 'replace';
@@ -33,7 +38,7 @@ export interface SearchPanelOptions<TMatch = MatchRange> {
 }
 
 export class SearchPanelWidget<TMatch = MatchRange> {
-  #container: HTMLDivElement;
+  #host: HTMLDivElement;
   #inputElement: HTMLInputElement;
   #updateMatches?: (options?: { syncSelection?: boolean }) => void;
   #applyMode?: (mode: SearchPanelMode) => void;
@@ -415,18 +420,34 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     };
     this.#applyMode = applyMode;
 
-    this.#container = h('div', {
+    this.#host = h('div', {
       dataset: 'searchPanel',
-      children: [
-        h('div', {
-          dataset: 'editorWidget',
-          children: [gridElement],
-        }),
-      ],
     });
+    const shadowRoot = this.#host.attachShadow({ mode: 'open' });
+    const spriteContainer = document.createElement('div');
+    spriteContainer.innerHTML = SVGSpriteSheet;
+    const spriteElement = spriteContainer.firstElementChild;
+    if (spriteElement instanceof SVGElement) {
+      shadowRoot.appendChild(spriteElement);
+    }
+    h('style', { textContent: searchPanelCSS }, shadowRoot);
+
+    h(
+      'div',
+      {
+        dataset: 'searchPanel',
+        children: [
+          h('div', {
+            dataset: 'editorWidget',
+            children: [gridElement],
+          }),
+        ],
+      },
+      shadowRoot
+    );
 
     matches.current = initialMatch;
-    containerElement.before(this.#container);
+    containerElement.before(this.#host);
 
     requestAnimationFrame(() => {
       if (initialMatch !== undefined) {
@@ -465,6 +486,6 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   // highlights in place; only use it when the caller clears that state itself
   // (e.g. a full editor reset). User-initiated dismissals should call close().
   cleanup(): void {
-    this.#container.remove();
+    this.#host.remove();
   }
 }

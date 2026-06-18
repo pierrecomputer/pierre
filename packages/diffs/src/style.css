@@ -1474,6 +1474,23 @@
     box-decoration-break: clone;
   }
 
+  :is([data-line], [data-no-newline]) [data-search-match] {
+    border-radius: 3px;
+    box-decoration-break: clone;
+    background-color: var(
+      --diffs-bg-search-match-override,
+      color-mix(in lab, var(--diffs-modified-base) 28%, transparent)
+    );
+  }
+
+  :is([data-line], [data-no-newline]) [data-search-match-current] {
+    background-color: var(
+      --diffs-bg-search-match-current-override,
+      color-mix(in lab, var(--diffs-modified-base) 52%, transparent)
+    );
+    outline: 1px solid var(--diffs-modified-base);
+  }
+
   [data-line-type='change-addition'] [data-diff-span] {
     background-color: var(--diffs-bg-addition-emphasis);
   }

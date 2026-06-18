@@ -532,6 +532,17 @@ export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;
 export type AnnotationSide = 'deletions' | 'additions';
 export type SelectionSide = 'deletions' | 'additions';
 
+export interface SearchLineDecoration {
+  lineIndex: number;
+  startCharacter: number;
+  endCharacter: number;
+  current?: boolean;
+}
+
+export interface DiffSearchLineDecoration extends SearchLineDecoration {
+  side: SelectionSide;
+}
+
 export interface SelectedLineRange {
   start: number;
   side?: SelectionSide;

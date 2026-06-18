@@ -42,6 +42,7 @@ import type {
   PrePropertiesConfig,
   RenderFileMetadata,
   RenderRange,
+  SearchLineDecoration,
   SelectedLineRange,
   ThemeTypes,
 } from '../types';
@@ -90,6 +91,7 @@ export interface FileRenderProps<LAnnotation> {
   preventEmit?: boolean;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   renderRange?: RenderRange;
+  searchDecorations?: readonly SearchLineDecoration[];
 }
 
 export interface FileHydrateProps<LAnnotation> extends Omit<
@@ -1025,6 +1027,7 @@ export class File<
     deferManagers = false,
     lineAnnotations,
     renderRange,
+    searchDecorations,
   }: FileRenderProps<LAnnotation>): boolean {
     if (!this.enabled) {
       throw new Error(
@@ -1071,6 +1074,7 @@ export class File<
       this.setLineAnnotations(lineAnnotations);
     }
     this.fileRenderer.setLineAnnotations(this.getLatestAnnotations());
+    this.fileRenderer.setSearchDecorations(searchDecorations);
 
     const { disableErrorHandling = false, disableFileHeader = false } =
       this.options;
