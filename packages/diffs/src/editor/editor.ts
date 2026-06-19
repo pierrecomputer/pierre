@@ -1789,6 +1789,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
       case 'insertCompositionText':
         break;
+      case 'insertLineBreak':
       case 'insertParagraph':
         // TODO(@ije): use document.EOF instead of '\n'
         this.#replaceSelectionText('\n');
