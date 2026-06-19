@@ -33,6 +33,7 @@ import {
 } from './searchPanel';
 import type { AutoSurround, EditorSelection } from './selection';
 import {
+  applyDeleteCharacterToSelections,
   applyDeleteHardLineForwardToSelections,
   applyDeleteSoftLineBackwardToSelections,
   applyDeleteWordBackwardToSelections,
@@ -2847,31 +2848,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    const primarySelection = selections.at(-1);
-    if (primarySelection === undefined) {
-      return;
+    const { nextSelections, change } =
+      applyDeleteCharacterToSelections<LAnnotation>(
+        textDocument,
+        selections,
+        forward,
+        this.#lineAnnotations
+      );
+    if (change !== undefined) {
+      this.#applyChange(
+        change,
+        nextSelections,
+        this.#applyChangeToLineAnnotations(change)
+      );
     }
-
-    let edit: ResolvedTextEdit;
-    if (isCollapsedSelection(primarySelection)) {
-      const offset = textDocument.offsetAt(primarySelection.start);
-      const nextOffset = forward
-        ? Math.min(textDocument.getText().length, offset + 1)
-        : Math.max(0, offset - 1);
-      edit = {
-        start: Math.min(offset, nextOffset),
-        end: Math.max(offset, nextOffset),
-        text: '',
-      };
-    } else {
-      edit = {
-        start: textDocument.offsetAt(primarySelection.start),
-        end: textDocument.offsetAt(primarySelection.end),
-        text: '',
-      };
-    }
-
-    this.#applyResolvedTextEdit(edit);
   }
 
   #deleteSoftLineBackward() {
@@ -2961,26 +2951,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       textDocument,
       selections,
       this.#lineAnnotations
-    );
-    if (change !== undefined) {
-      this.#applyChange(
-        change,
-        nextSelections,
-        this.#applyChangeToLineAnnotations(change)
-      );
-    }
-  }
-
-  #applyResolvedTextEdit(edit: ResolvedTextEdit) {
-    if (this.#selections === undefined || this.#textDocument === undefined) {
-      return;
-    }
-    const { nextSelections, change } = applyTextChangeToSelections<LAnnotation>(
-      this.#textDocument,
-      this.#selections,
-      edit,
-      this.#lineAnnotations,
-      this.#metrics.tabSize
     );
     if (change !== undefined) {
       this.#applyChange(

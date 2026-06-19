@@ -897,6 +897,108 @@ export function applyDeleteWordBackwardToSelections<LAnnotation>(
 }
 
 /**
+ * Resolves the document range deleted by Backspace or Delete at a collapsed
+ * caret. Non-collapsed selections delete their selected text instead.
+ */
+export function resolveDeleteCharacterRange(
+  textDocument: TextDocument<unknown>,
+  selection: EditorSelection,
+  forward: boolean
+): [start: Position, end: Position] {
+  if (!isCollapsedSelection(selection)) {
+    return [selection.start, selection.end];
+  }
+
+  const caret = getCaretPosition(selection);
+  let { line, character } = caret;
+  const lineLength = textDocument.getLineLength(line);
+  const lineCount = textDocument.lineCount;
+
+  // A preserved vertical-move goal column can overshoot a shorter line; clamp
+  // before stepping so Backspace/Delete target the visible caret position.
+  character = Math.min(character, lineLength);
+
+  if (forward) {
+    if (character < lineLength) {
+      return [
+        { line, character },
+        {
+          line,
+          character: stepCharacterByGrapheme(
+            textDocument,
+            line,
+            character,
+            true
+          ),
+        },
+      ];
+    }
+    if (line < lineCount - 1) {
+      return [
+        { line, character: lineLength },
+        { line: line + 1, character: 0 },
+      ];
+    }
+    return [caret, caret];
+  }
+
+  if (character > 0) {
+    return [
+      {
+        line,
+        character: stepCharacterByGrapheme(
+          textDocument,
+          line,
+          character,
+          false
+        ),
+      },
+      { line, character },
+    ];
+  }
+  if (line > 0) {
+    const prevLineLength = textDocument.getLineLength(line - 1);
+    return [
+      { line: line - 1, character: prevLineLength },
+      { line, character: 0 },
+    ];
+  }
+  return [caret, caret];
+}
+
+/**
+ * Deletes one grapheme (or selected text) at each selection.
+ */
+export function applyDeleteCharacterToSelections<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  selections: EditorSelection[],
+  forward: boolean,
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+): {
+  nextSelections: EditorSelection[];
+  change?: TextDocumentChange;
+} {
+  const deleteSelections: EditorSelection[] = selections.map((selection) => {
+    const [start, end] = resolveDeleteCharacterRange(
+      textDocument,
+      selection,
+      forward
+    );
+    return {
+      start,
+      end,
+      direction: DirectionNone,
+    };
+  });
+  return applyTextReplaceToSelections(
+    textDocument,
+    deleteSelections,
+    deleteSelections.map(() => ''),
+    lineAnnotations
+  );
+}
+
+/**
  * Checks if a selection is collapsed.
  */
 export function isCollapsedSelection(
@@ -1690,13 +1792,16 @@ function findClusterBreak(
   return 0;
 }
 
+const graphemeSegmenter = new Intl.Segmenter(undefined, {
+  granularity: 'grapheme',
+});
+
 // Lists the start column of every grapheme cluster on a line (always starting
 // at 0). Used to step the caret and to transpose by whole graphemes so a
 // surrogate pair (emoji) or combining sequence is never split.
 function getLineGraphemeStarts(lineText: string): number[] {
   const graphemeStarts = [0];
-  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-  for (const segment of segmenter.segment(lineText)) {
+  for (const segment of graphemeSegmenter.segment(lineText)) {
     if (segment.index > 0) {
       graphemeStarts.push(segment.index);
     }
@@ -1714,13 +1819,31 @@ function stepCharacterByGrapheme(
   character: number,
   forward: boolean
 ): number {
-  const lineText = textDocument.getLineText(line);
-  return findClusterBreak(
-    lineText,
-    character,
-    forward,
-    getLineGraphemeStarts(lineText)
-  );
+  const lineLength = textDocument.getLineLength(line);
+  if (forward) {
+    if (character >= lineLength) {
+      return lineLength;
+    }
+    const lineStart = textDocument.offsetAt({ line, character: 0 });
+    const suffix = textDocument.getTextSlice(
+      lineStart + character,
+      lineStart + lineLength
+    );
+    for (const segment of graphemeSegmenter.segment(suffix)) {
+      return character + segment.segment.length;
+    }
+    return lineLength;
+  }
+  if (character <= 0) {
+    return 0;
+  }
+  const lineStart = textDocument.offsetAt({ line, character: 0 });
+  const prefix = textDocument.getTextSlice(lineStart, lineStart + character);
+  let prevStart = 0;
+  for (const segment of graphemeSegmenter.segment(prefix)) {
+    prevStart = segment.index;
+  }
+  return prevStart;
 }
 
 function getSelectionAnchorAndFocusOffsets(
