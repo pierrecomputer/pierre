@@ -4,22 +4,15 @@ import { h, round } from './utils';
 // non-ASCII runs (emoji, ZWJ sequences, variation selectors), so it stays
 // small for ordinary code, but capping it prevents unbounded growth on
 // emoji-heavy documents. Past the cap the oldest entry is evicted.
-const DOM_WIDTH_CACHE_LIMIT = 4096;
+const TEXT_WIDTH_CACHE_LIMIT = 4096;
 
 export class Metrics {
   #root?: HTMLElement;
   #canvasCtx?: CanvasRenderingContext2D;
   #font?: string;
 
-  // Memoizes domMeasureTextWidth() results keyed by the (tab-expanded) text it
-  // measured. That path inserts a span and reads getBoundingClientRect(), which
-  // forces a synchronous layout every call; without this cache, caret and
-  // selection updates on emoji-heavy lines re-measure the same runs on every
-  // render. Cleared via clearTextWidthCache() whenever the inherited font may
-  // have changed: on a font change in init(), and on a layout reflow the
-  // editor reports through its resize handler (e.g. a web font finishing
-  // loading without the content element being replaced).
-  #domWidthCache = new Map<string, number>();
+  // Memoizes domMeasureTextWidth() results
+  #textWidthCache = new Map<string, number>();
 
   /** Width of the '0' character. */
   ch: number = -1;
@@ -27,7 +20,7 @@ export class Metrics {
   tabSize: number = 2;
   /** Height of the code line. */
   lineHeight: number = 20;
-
+  /** Padding top of the root element. */
   paddingTop: number = 0;
 
   /** initialize the metrics */
@@ -133,7 +126,8 @@ export class Metrics {
     if (this.#root === undefined) {
       throw new Error('Metrics not initialized');
     }
-    const cached = this.#domWidthCache.get(text);
+    const cacheKey = text + '|' + this.#font;
+    const cached = this.#textWidthCache.get(cacheKey);
     if (cached !== undefined) {
       return cached;
     }
@@ -162,13 +156,13 @@ export class Metrics {
     } finally {
       measureEl.remove();
     }
-    if (this.#domWidthCache.size >= DOM_WIDTH_CACHE_LIMIT) {
-      const oldestKey = this.#domWidthCache.keys().next().value;
+    if (this.#textWidthCache.size >= TEXT_WIDTH_CACHE_LIMIT) {
+      const oldestKey = this.#textWidthCache.keys().next().value;
       if (oldestKey !== undefined) {
-        this.#domWidthCache.delete(oldestKey);
+        this.#textWidthCache.delete(oldestKey);
       }
     }
-    this.#domWidthCache.set(text, width);
+    this.#textWidthCache.set(cacheKey, width);
     return width;
   }
 
@@ -178,7 +172,7 @@ export class Metrics {
    * init(), e.g. on a layout reflow, so stale widths are not reused
    */
   clearTextWidthCache(): void {
-    this.#domWidthCache.clear();
+    this.#textWidthCache.clear();
   }
 }
 
