@@ -20,7 +20,6 @@ import {
   type SelectionWriteOptions,
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
-import { queueRender } from '../managers/UniversalRenderingManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
 import type {
@@ -468,7 +467,7 @@ export class File<
     }
   }
 
-  private syncRenderViewToEditor = () => {
+  private syncRenderViewToEditor(): void {
     const editor = this.editor;
     const fileContainer = this.fileContainer;
     const file = this.file;
@@ -483,12 +482,12 @@ export class File<
         );
       });
     }
-  };
+  }
 
   public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     this.editor = editor;
-    queueRender(this.syncRenderViewToEditor);
+    this.syncRenderViewToEditor();
     return () => {
       this.editor = undefined;
     };
@@ -663,7 +662,7 @@ export class File<
       this.renderAnnotations();
       this.renderGutterUtility();
       if (this.editor != null) {
-        queueRender(this.syncRenderViewToEditor);
+        this.syncRenderViewToEditor();
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {

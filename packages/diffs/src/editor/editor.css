@@ -16,10 +16,12 @@
 
 :host, /* for scroll anchor */
 [data-code], /* for editor overlay */
-[data-content] /* for wrap line measurement */ {
+[data-content] /* for wrap line measurement */,
+[data-diff-type='split'][data-overflow='wrap'] {
   position: relative;
 }
 [data-content] {
+  cursor: text;
   background-color: transparent;
   caret-color: var(--diffs-bg-caret);
   outline: none;
@@ -29,16 +31,6 @@
 [data-line]:not([data-selected-line]) span,
 [data-line-annotation] {
   background-color: transparent;
-}
-[data-column-number] {
-  color: var(--diffs-editor-line-number-fg);
-}
-[data-column-number]:is([data-selected-line]) {
-  background-color: var(--diffs-editor-line-number-active-bg);
-  color: var(--diffs-editor-line-number-active-fg);
-}
-[data-column-number]:is([data-active]) {
-  color: var(--diffs-editor-line-number-active-fg);
 }
 [data-line] {
   cursor: text;
@@ -50,7 +42,6 @@
   background-color: var(--diffs-line-bg);
 }
 
-/* Editor Overlay */
 [data-editor-overlay] {
   display: contents;
 }
@@ -77,15 +68,13 @@
       )
     )
   );
-  animation: blinking 1.2s infinite;
-  animation-delay: 0.8s;
   visibility: hidden;
 }
-/* Honor the OS reduced-motion setting: drop the blink so the caret renders as a
-   solid bar (opacity stays at its default of 1) instead of pulsing. */
-@media (prefers-reduced-motion: reduce) {
+/* Reduce motion only if user has set a preference */
+@media (prefers-reduced-motion: no-preference) {
   [data-caret] {
-    animation: none;
+    animation: blinking 1.2s infinite;
+    animation-delay: 0.8s;
   }
 }
 [data-selection-range] {
@@ -112,27 +101,36 @@
 }
 [data-marker-range] {
   z-index: 1;
-  /* White stroke: luminance masks treat black as transparent. */
-  -webkit-mask-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2IiBoZWlnaHQ9IjMiPjxwYXRoIGQ9Im0wIDIuNSBsMiAtMS41IGwxIDAgbDIgMS41IGwxIDAiIHN0cm9rZT0iI2ZmZiIgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9zdmc+');
+  background-color: var(--diffs-marker-fg);
   mask-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2IiBoZWlnaHQ9IjMiPjxwYXRoIGQ9Im0wIDIuNSBsMiAtMS41IGwxIDAgbDIgMS41IGwxIDAiIHN0cm9rZT0iI2ZmZiIgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9zdmc+');
-  -webkit-mask-position: left bottom;
   mask-position: left bottom;
-  -webkit-mask-repeat: repeat-x;
   mask-repeat: repeat-x;
-  -webkit-mask-size: 6px 3px;
   mask-size: 6px 3px;
 }
-[data-marker-error] {
-  background-color: var(--diffs-editor-error-fg, red);
+/* Marker severity palette, shared by the squiggle underline
+   ([data-marker-range]) and the hover popover ([data-marker-popup]). Each
+   severity resolves a single --diffs-marker-fg token that both consumers read,
+   so the colors live in one place. The range element carries
+   data-marker-<severity>; the popup carries data-marker-severity="<severity>". */
+[data-marker-error],
+[data-marker-popup][data-marker-severity='error'] {
+  --diffs-marker-fg: var(--diffs-editor-error-fg, var(--diffs-deletion-base));
 }
-[data-marker-warning] {
-  background-color: var(--diffs-editor-warning-fg, #cca700);
+[data-marker-warning],
+[data-marker-popup][data-marker-severity='warning'] {
+  --diffs-widget-fg: #000;
+  --diffs-marker-fg: var(
+    --diffs-editor-warning-fg,
+    light-dark(var(--diffs-warning-light), var(--diffs-warning-dark))
+  );
 }
-[data-marker-info] {
-  background-color: var(--diffs-editor-info-fg, #3794ff);
+[data-marker-info],
+[data-marker-popup][data-marker-severity='info'] {
+  --diffs-marker-fg: var(--diffs-editor-info-fg, var(--diffs-modified-base));
 }
-[data-marker-hint] {
-  background-color: var(--diffs-editor-hint-fg, #6a6a6a);
+[data-marker-hint],
+[data-marker-popup][data-marker-severity='hint'] {
+  --diffs-marker-fg: var(--diffs-editor-hint-fg, var(--diffs-fg-number));
 }
 [data-rtl] {
   border-top-left-radius: 3px;
@@ -192,25 +190,14 @@
    white text, mirroring the underline. The inset 1px ring (normally painted in
    the surface background) is dropped so the fill reads as one solid chip. */
 [data-marker-popup][data-marker-severity] {
-  color: #fff;
+  color: var(--diffs-widget-fg, #fff);
   border-color: transparent;
+  --diffs-widget-bg: var(--diffs-marker-fg);
   --diffs-widget-shadow:
     0 4px 8px rgb(0 0 0 / 0.15), 0 6px 18px rgb(0 0 0 / 0.15);
 }
 [data-marker-popup][data-marker-severity] code {
   color: inherit;
-}
-[data-marker-popup][data-marker-severity='error'] {
-  --diffs-widget-bg: var(--diffs-editor-error-fg, #e5484d);
-}
-[data-marker-popup][data-marker-severity='warning'] {
-  --diffs-widget-bg: var(--diffs-editor-warning-fg, #cca700);
-}
-[data-marker-popup][data-marker-severity='info'] {
-  --diffs-widget-bg: var(--diffs-editor-info-fg, #3794ff);
-}
-[data-marker-popup][data-marker-severity='hint'] {
-  --diffs-widget-bg: var(--diffs-editor-hint-fg, #6a6a6a);
 }
 
 /* Selection Action Widget */

@@ -20,9 +20,7 @@ export interface SelectionActionContext<LAnnotation> {
 
 export class SelectionActionWidget {
   static renderIcon(
-    x: number,
-    y: number,
-    container: HTMLElement | DocumentFragment,
+    parent: HTMLElement | DocumentFragment,
     onclick: () => void
   ): HTMLElement {
     return h(
@@ -30,13 +28,10 @@ export class SelectionActionWidget {
       {
         dataset: { selectionActionIcon: '', visible: 'false' },
         title: 'Selection Action',
-        style: {
-          transform: `translateY(${y}px) translateX(${x}px)`,
-        },
         innerHTML: getEditorIconSvg('quick'),
         onclick,
       },
-      container
+      parent
     );
   }
 

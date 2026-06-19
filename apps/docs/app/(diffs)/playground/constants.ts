@@ -107,6 +107,43 @@ export async function deleteUser(id: string): Promise<void> {
 
 `;
 
+// Diagnostics for the playground's edit-mode marker toggle. Positions are
+// zero-based line/character ranges into NEW_USERS_CONTENT (the diff's editable
+// new-file side), so keep them in sync if that content changes. Severities are
+// `as const` so the literals satisfy the editor's MarkerSeverity union without
+// importing the Marker type (mirrors _edit/constants.ts MARKER_DEMO_MARKERS).
+// Covers all four severities so the toggle exercises every marker color.
+export const PLAYGROUND_MARKERS = [
+  {
+    severity: 'error' as const,
+    source: 'ts',
+    message: "Module './utils' has no exported member 'hashPassword'.",
+    start: { line: 8, character: 24 },
+    end: { line: 8, character: 36 },
+  },
+  {
+    severity: 'info' as const,
+    source: 'ts',
+    message: "'user' is declared here; consider narrowing before use.",
+    start: { line: 18, character: 8 },
+    end: { line: 18, character: 12 },
+  },
+  {
+    severity: 'warning' as const,
+    source: 'eslint',
+    message: 'Prefer a custom error subclass over the generic Error.',
+    start: { line: 22, character: 14 },
+    end: { line: 22, character: 19 },
+  },
+  {
+    severity: 'hint' as const,
+    source: 'eslint',
+    message: 'Redundant comment; the guard above already documents this.',
+    start: { line: 24, character: 2 },
+    end: { line: 24, character: 14 },
+  },
+];
+
 export const PLAYGROUND_DIFF: PreloadFileDiffOptions<PlaygroundAnnotationMetadata> =
   {
     fileDiff: parseDiffFromFile(
