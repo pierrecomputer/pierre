@@ -88,6 +88,18 @@ interface ResetLayoutCacheOptions {
   includeEstimatedHeights?: boolean;
 }
 
+interface PendingHydration {
+  sourceFileDiff: FileDiffMetadata;
+  hydratedFileDiff: FileDiffMetadata;
+  loadedContents: LoadedPartialDiffContents;
+}
+
+interface PendingExpansion {
+  hunkIndex: number;
+  direction: ExpansionDirections;
+  expansionLineCountOverride: number | undefined;
+}
+
 const LAYOUT_CHECKPOINT_INTERVAL = 5_000;
 
 let instanceId = -1;
@@ -115,6 +127,8 @@ export class VirtualizedFileDiff<
   private layoutDirty = true;
   private forceRenderOverride: true | undefined;
   private currentCollapsed: boolean | undefined;
+  private pendingHydration: PendingHydration | undefined;
+  private pendingExpansions: PendingExpansion[] | undefined;
 
   constructor(
     options: FileDiffOptions<LAnnotation> | undefined,
@@ -265,6 +279,16 @@ export class VirtualizedFileDiff<
     if (this.cache.measuredHeightDeltaTotal !== 0) {
       this.cache.measuredHeightDeltaTotal = 0;
     }
+    this.invalidateDerivedLayoutCache(includeEstimatedHeights);
+    // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
+    // at the same time, so we shouldn't trigger this there.
+    if (forceSimpleRecompute && this.isSimpleMode()) {
+      this.computeApproximateSize();
+    }
+  }
+
+  private invalidateDerivedLayoutCache(includeEstimatedHeights: boolean): void {
+    this.layoutDirty = true;
     if (this.cache.checkpoints.length > 0) {
       this.cache.checkpoints.length = 0;
     }
@@ -277,11 +301,6 @@ export class VirtualizedFileDiff<
     }
     if (this.renderRange != null) {
       this.renderRange = undefined;
-    }
-    // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
-    // at the same time, so we shouldn't trigger this there.
-    if (forceSimpleRecompute && this.isSimpleMode()) {
-      this.computeApproximateSize();
     }
   }
 
@@ -728,6 +747,8 @@ export class VirtualizedFileDiff<
     }
     if (!recycle) {
       this.resetLayoutCache({ includeEstimatedHeights: true });
+      this.pendingExpansions = undefined;
+      this.pendingHydration = undefined;
     }
     this.isSetup = false;
     super.cleanUp(recycle);
@@ -738,17 +759,27 @@ export class VirtualizedFileDiff<
     direction: ExpansionDirections,
     expansionLineCountOverride?: number
   ): void => {
-    this.hunksRenderer.expandHunk(
-      hunkIndex,
-      direction,
-      expansionLineCountOverride
-    );
-    this.startDiffHydrationIfNeeded();
-    this.forceRenderOverride = true;
-    this.resetLayoutCache({ includeEstimatedHeights: true });
-    if (this.isSimpleMode()) {
+    if (this.fileDiff == null) {
+      return;
+    }
+    if (this.isAdvancedMode()) {
+      this.pendingExpansions ??= [];
+      this.pendingExpansions.push({
+        hunkIndex,
+        direction,
+        expansionLineCountOverride,
+      });
+    } else {
+      this.hunksRenderer.expandHunk(
+        hunkIndex,
+        direction,
+        expansionLineCountOverride
+      );
+      this.resetLayoutCache({ includeEstimatedHeights: true });
       this.computeApproximateSize();
     }
+    this.startDiffHydrationIfNeeded();
+    this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(this, true);
   };
 
@@ -756,13 +787,72 @@ export class VirtualizedFileDiff<
     hydratedFileDiff: FileDiffMetadata,
     loadedContents: LoadedPartialDiffContents
   ): void {
-    this.commitHydratedPartialDiff(hydratedFileDiff, loadedContents);
-    this.forceRenderOverride = true;
-    this.resetLayoutCache({ includeEstimatedHeights: true });
-    if (this.isSimpleMode()) {
+    if (this.fileDiff == null) {
+      return;
+    }
+    if (this.isAdvancedMode()) {
+      this.pendingHydration = {
+        sourceFileDiff: this.fileDiff,
+        hydratedFileDiff,
+        loadedContents,
+      };
+    } else {
+      this.commitHydratedPartialDiff(hydratedFileDiff, loadedContents);
+      this.resetLayoutCache({ includeEstimatedHeights: true });
       this.computeApproximateSize();
     }
+    this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(this, true);
+  }
+
+  public consumePendingCodeViewLayoutChanges(
+    expectedFileDiff: FileDiffMetadata
+  ): FileDiffMetadata | undefined {
+    let hasLayoutChange = false;
+    const { pendingExpansions, pendingHydration } = this;
+
+    if (pendingExpansions != null) {
+      this.pendingExpansions = undefined;
+      for (const pendingExpansion of pendingExpansions) {
+        this.hunksRenderer.expandHunk(
+          pendingExpansion.hunkIndex,
+          pendingExpansion.direction,
+          pendingExpansion.expansionLineCountOverride
+        );
+        hasLayoutChange = true;
+      }
+    }
+
+    let hydratedFileDiff: FileDiffMetadata | undefined;
+    if (pendingHydration != null) {
+      this.pendingHydration = undefined;
+      if (pendingHydration.sourceFileDiff === expectedFileDiff) {
+        this.commitHydratedPartialDiff(
+          pendingHydration.hydratedFileDiff,
+          pendingHydration.loadedContents
+        );
+        hydratedFileDiff = pendingHydration.hydratedFileDiff;
+        hasLayoutChange = true;
+      }
+    }
+
+    if (hasLayoutChange) {
+      this.forceRenderOverride = true;
+      this.invalidateDerivedLayoutCache(true);
+    }
+
+    return hydratedFileDiff;
+  }
+
+  protected override startDiffHydrationIfNeeded(): void {
+    if (this.pendingHydration != null) {
+      if (this.pendingHydration.sourceFileDiff === this.fileDiff) {
+        return;
+      }
+      this.pendingHydration = undefined;
+    }
+
+    super.startDiffHydrationIfNeeded();
   }
 
   public setVisibility(visible: boolean): void {

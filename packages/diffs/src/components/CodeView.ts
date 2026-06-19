@@ -3297,6 +3297,13 @@ export class CodeView<LAnnotation = undefined> {
       }
       item.top = runningTop;
       if (item.type === 'diff') {
+        // FIXME(amadeus): I feel like there's gotta be a cleaner way to do
+        // this... it feels gross..
+        const hydratedFileDiff =
+          item.instance.consumePendingCodeViewLayoutChanges(item.item.fileDiff);
+        if (hydratedFileDiff != null) {
+          item.item.fileDiff = hydratedFileDiff;
+        }
         item.height = item.instance.prepareCodeViewItem(
           item.item.fileDiff,
           runningTop,
