@@ -70,8 +70,10 @@ function makeDirtyLines(
 
 // Builds a renderer with a populated (highlighted) render cache, mirroring the
 // state the editor operates on mid-session.
-async function createPrimedRenderer(): Promise<DiffHunksRenderer> {
-  const renderer = new DiffHunksRenderer({ theme: 'github-light' });
+async function createPrimedRenderer(
+  diffStyle: 'split' | 'unified' = 'split'
+): Promise<DiffHunksRenderer> {
+  const renderer = new DiffHunksRenderer({ theme: 'github-light', diffStyle });
   const diff = parseDiffFromFile(
     { name: 'greet.ts', contents: OLD_CONTENTS },
     { name: 'greet.ts', contents: NEW_CONTENTS }
@@ -168,4 +170,41 @@ describe('DiffHunksRenderer.updateRenderCache skipDiffRecompute', () => {
       legacy.renderFullHTML(legacyResult)
     );
   });
+});
+
+// Deleting every character empties the editor's document, whose text is "".
+// splitFileContents("") is [], so a naive recompute drops the addition side to
+// zero lines — but the editor always keeps one (empty) line, so the addition
+// column must keep one empty editable row. Without it the attached editor has
+// no element to host its caret: the additions column disappears entirely in
+// split (an uneditable view) and unified renders only deletions (nothing to
+// type into).
+describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
+  // The editor reports a single empty line for an emptied document ([''] joins
+  // to "", the editor's empty text).
+  const EMPTY_DOCUMENT = makeTextDocument(['']);
+
+  for (const diffStyle of ['split', 'unified'] as const) {
+    test(`keeps one empty editable addition line (${diffStyle})`, async () => {
+      const renderer = await createPrimedRenderer(diffStyle);
+      renderer.applyDocumentChange(EMPTY_DOCUMENT);
+
+      const diff = renderer.getRenderDiff();
+      expect(diff).toBeDefined();
+      if (diff == null) return;
+
+      // One empty line, not zero — this is the regression guard.
+      expect(diff.additionLines).toEqual(['']);
+      // The old content is still the deletion side.
+      expect(diff.deletionLines.length).toBeGreaterThan(0);
+
+      // The diff must still render (a zero-addition diff threw mid-render).
+      const result = renderer.renderDiff();
+      expect(result).toBeDefined();
+      if (result == null) return;
+      const html = renderer.renderFullHTML(result);
+      // The editable addition line is emitted as an added change row.
+      expect(html).toContain('change-addition');
+    });
+  }
 });
