@@ -1999,7 +1999,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   #setSelectedLinesSafe(range: { start: number; end: number } | null): void {
     try {
-      this.#fileInstance?.setSelectedLines(range);
+      // notify: false renders the active-line highlight without firing the
+      // host's onLineSelected callback. A caret or text selection in the editor
+      // is not a gutter line selection, so it must not publish one.
+      this.#fileInstance?.setSelectedLines(range, { notify: false });
     } catch {
       // InteractionManager.renderSelection can throw while editor DOM is updating.
     }
