@@ -1499,8 +1499,13 @@ function getAnnotationNames<LAnnotation>(
   );
 }
 
+// Use the platform's English plural rules to pick "line" vs "lines" so a
+// count of 0 reads as "0 unmodified lines". en-US returns "one" only for 1.
+const EN_PLURAL_RULES = new Intl.PluralRules('en-US');
+
 function getModifiedLinesString(lines: number) {
-  return `${lines} unmodified line${lines > 1 ? 's' : ''}`;
+  const suffix = EN_PLURAL_RULES.select(lines) === 'one' ? '' : 's';
+  return `${lines} unmodified line${suffix}`;
 }
 
 function pushUnifiedInjectedRows(
