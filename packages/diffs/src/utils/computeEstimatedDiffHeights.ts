@@ -25,6 +25,7 @@ export interface ComputeEstimatedDiffHeightsOptions {
   expandUnchanged: boolean;
   expandedHunks: Map<number, HunkExpansionRegion> | true | undefined;
   collapsedContextThreshold: number;
+  canHydratePartialDiff: boolean;
 }
 
 export interface EstimatedDiffHeights {
@@ -42,6 +43,7 @@ export function computeEstimatedDiffHeights({
   expandUnchanged,
   expandedHunks: configuredExpandedHunks,
   collapsedContextThreshold,
+  canHydratePartialDiff,
 }: ComputeEstimatedDiffHeightsOptions): EstimatedDiffHeights {
   let splitHeight = getVirtualFileHeaderRegion(metrics, disableFileHeader);
   let unifiedHeight = splitHeight;
@@ -111,6 +113,18 @@ export function computeEstimatedDiffHeights({
         splitHeight += separatorHeight;
         unifiedHeight += separatorHeight;
       }
+    } else if (
+      hunkIndex === finalHunkIndex &&
+      fileDiff.isPartial &&
+      canHydratePartialDiff
+    ) {
+      const separatorHeight =
+        getTrailingHunkSeparatorLayout({
+          type: hunkSeparators,
+          metrics,
+        })?.totalHeight ?? 0;
+      splitHeight += separatorHeight;
+      unifiedHeight += separatorHeight;
     }
   }
 

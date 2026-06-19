@@ -908,6 +908,8 @@ export class VirtualizedFileDiff<
       expandUnchanged,
       expandedHunks: this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
+      canHydratePartialDiff:
+        this.fileDiff.isPartial && this.options.loadDiffFiles != null,
     });
     this.cache.estimatedSplitHeight = splitHeight;
     this.cache.estimatedUnifiedHeight = unifiedHeight;
@@ -1092,6 +1094,8 @@ export class VirtualizedFileDiff<
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
     } = this.options;
     const finalHunkIndex = this.fileDiff.hunks.length - 1;
+    const canHydratePartialDiff =
+      this.fileDiff.isPartial && this.options.loadDiffFiles != null;
     const diffStyle = this.getDiffStyle();
     const hunkSeparators = this.getHunkSeparatorType();
     const expandedHunks = expandUnchanged
@@ -1223,7 +1227,12 @@ export class VirtualizedFileDiff<
               type: hunkSeparators,
               metrics: this.metrics,
             })?.totalHeight ?? 0)
-          : 0;
+          : hunkIndex === finalHunkIndex && canHydratePartialDiff
+            ? (getTrailingHunkSeparatorLayout({
+                type: hunkSeparators,
+                metrics: this.metrics,
+              })?.totalHeight ?? 0)
+            : 0;
       const trailingExpandedCount =
         trailingRegion != null
           ? trailingRegion.fromStart + trailingRegion.fromEnd
@@ -1400,6 +1409,8 @@ export class VirtualizedFileDiff<
     const { hunkLineCount, lineHeight } = this.metrics;
     const diffStyle = this.getDiffStyle();
     const hunkSeparators = this.getHunkSeparatorType();
+    const canHydratePartialDiff =
+      fileDiff.isPartial && this.options.loadDiffFiles != null;
     const fileHeight = this.height;
     let lineCount =
       this.cache.totalLines > 0
@@ -1500,6 +1511,13 @@ export class VirtualizedFileDiff<
             : deletionLine.unifiedLineIndex;
         const hasMetadata =
           (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false);
+        const isFinalHunkRow =
+          hunkIndex === fileDiff.hunks.length - 1 &&
+          hunk != null &&
+          (diffStyle === 'split'
+            ? splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1
+            : unifiedLineIndex ===
+              hunk.unifiedLineStart + hunk.unifiedLineCount - 1);
         const leadingSeparator =
           collapsedBefore > 0
             ? getLeadingHunkSeparatorLayout({
@@ -1562,12 +1580,26 @@ export class VirtualizedFileDiff<
         currentLine++;
         absoluteLineTop += lineHeight;
 
-        if (collapsedAfter > 0) {
-          absoluteLineTop +=
-            getTrailingHunkSeparatorLayout({
-              type: hunkSeparators,
-              metrics: this.metrics,
-            })?.totalHeight ?? 0;
+        if (collapsedAfter > 0 || (isFinalHunkRow && canHydratePartialDiff)) {
+          const trailingSeparator = getTrailingHunkSeparatorLayout({
+            type: hunkSeparators,
+            metrics: this.metrics,
+          });
+          if (trailingSeparator != null) {
+            if (
+              absoluteLineTop < bottom &&
+              absoluteLineTop + trailingSeparator.totalHeight > top
+            ) {
+              firstVisibleHunk ??= currentHunk;
+            }
+            if (
+              centerHunk == null &&
+              absoluteLineTop + trailingSeparator.totalHeight > viewportCenter
+            ) {
+              centerHunk = currentHunk;
+            }
+            absoluteLineTop += trailingSeparator.totalHeight;
+          }
         }
 
         return false;
@@ -1779,6 +1811,8 @@ function hasDiffLayoutOptionChanged<LAnnotation>(
       (nextOptions.diffIndicators ?? 'bars') ||
     (previousOptions.hunkSeparators ?? 'line-info') !==
       (nextOptions.hunkSeparators ?? 'line-info') ||
+    Boolean(previousOptions.loadDiffFiles) !==
+      Boolean(nextOptions.loadDiffFiles) ||
     (previousOptions.expandUnchanged ?? false) !==
       (nextOptions.expandUnchanged ?? false) ||
     (previousOptions.collapsedContextThreshold ??
@@ -1798,6 +1832,8 @@ function hasDiffEstimateOptionChanged<LAnnotation>(
       (nextOptions.disableFileHeader ?? false) ||
     (previousOptions.hunkSeparators ?? 'line-info') !==
       (nextOptions.hunkSeparators ?? 'line-info') ||
+    Boolean(previousOptions.loadDiffFiles) !==
+      Boolean(nextOptions.loadDiffFiles) ||
     (previousOptions.expandUnchanged ?? false) !==
       (nextOptions.expandUnchanged ?? false) ||
     (previousOptions.collapsedContextThreshold ??

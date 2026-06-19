@@ -94,6 +94,7 @@ function compute(
     expandUnchanged: false,
     expandedHunks: undefined,
     collapsedContextThreshold: DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+    canHydratePartialDiff: false,
     ...rest,
   });
 }
@@ -311,12 +312,12 @@ describe('computeEstimatedDiffHeights', () => {
     });
   });
 
-  test('does not estimate trailing collapsed context for partial diffs', () => {
+  test('does not reserve a synthetic trailing separator for partial diffs without a file loader', () => {
     const fileDiff = { ...createTwoHunkDiff(), isPartial: true };
     const rowHeights = getDeclaredRowHeights(fileDiff);
 
-    // Partial diffs have an unknown tail, so no trailing separator height is
-    // reserved after the final hunk.
+    // Without a loader the unknown partial tail cannot be expanded, so no
+    // synthetic trailing separator is rendered or reserved.
     expect(compute(fileDiff)).toEqual({
       splitHeight:
         metrics.diffHeaderHeight +
@@ -329,6 +330,28 @@ describe('computeEstimatedDiffHeights', () => {
         firstLineInfoSeparatorHeight +
         rowHeights.unified +
         middleLineInfoSeparatorHeight +
+        defaultPaddingBottom,
+    });
+  });
+
+  test('reserves a synthetic trailing separator for partial diffs with a file loader', () => {
+    const fileDiff = { ...createTwoHunkDiff(), isPartial: true };
+    const rowHeights = getDeclaredRowHeights(fileDiff);
+
+    expect(compute(fileDiff, { canHydratePartialDiff: true })).toEqual({
+      splitHeight:
+        metrics.diffHeaderHeight +
+        firstLineInfoSeparatorHeight +
+        rowHeights.split +
+        middleLineInfoSeparatorHeight +
+        trailingLineInfoSeparatorHeight +
+        defaultPaddingBottom,
+      unifiedHeight:
+        metrics.diffHeaderHeight +
+        firstLineInfoSeparatorHeight +
+        rowHeights.unified +
+        middleLineInfoSeparatorHeight +
+        trailingLineInfoSeparatorHeight +
         defaultPaddingBottom,
     });
   });
