@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import {
+  expandTabsToSpaces,
+  getExpandedAsciiTextColumns,
   getUnicodeMeasurementOffsets,
   Metrics,
   needsDomTextMeasurement,
@@ -94,6 +96,80 @@ describe('getUnicodeMeasurementOffsets', () => {
   test('returns one offset per grapheme for ZWJ sequences', () => {
     const family = '👨‍👩‍👧‍👦';
     expect(getUnicodeMeasurementOffsets(family)).toEqual([0, family.length]);
+  });
+});
+
+describe('getExpandedAsciiTextColumns', () => {
+  test('counts plain ASCII as one column per character', () => {
+    expect(getExpandedAsciiTextColumns('', 4)).toBe(0);
+    expect(getExpandedAsciiTextColumns('hello', 4)).toBe(5);
+  });
+
+  test('returns -1 for non-ASCII text', () => {
+    expect(getExpandedAsciiTextColumns('café', 4)).toBe(-1);
+    expect(getExpandedAsciiTextColumns('a😀', 4)).toBe(-1);
+  });
+
+  test('leading tabs advance one full tab stop each', () => {
+    expect(getExpandedAsciiTextColumns('\t', 4)).toBe(4);
+    expect(getExpandedAsciiTextColumns('\t\t', 4)).toBe(8);
+    expect(getExpandedAsciiTextColumns('\t', 2)).toBe(2);
+  });
+
+  // Regression: a tab is a tab stop, not a fixed tabSize-wide character. A tab
+  // preceded by other characters advances only to the next multiple of tabSize,
+  // matching CSS `tab-size`. The previous implementation added a flat tabSize.
+  test('mid-line tabs advance to the next tab stop, not a flat tabSize', () => {
+    // 'foo' fills cols 0-3; tab at col 3 advances to col 4 (not 3 + 4 = 7).
+    expect(getExpandedAsciiTextColumns('foo\t', 4)).toBe(4);
+    expect(getExpandedAsciiTextColumns('foo\tbar', 4)).toBe(7);
+    // tabSize 2: 'foo' (col 3) -> tab to col 4 (not 3 + 2 = 5).
+    expect(getExpandedAsciiTextColumns('foo\t', 2)).toBe(4);
+    // A tab landing exactly on a tab stop still advances a full tabSize.
+    expect(getExpandedAsciiTextColumns('ab\t', 2)).toBe(4);
+    // Multiple alignment tabs each snap to their own next tab stop.
+    expect(getExpandedAsciiTextColumns('a\tb\tc', 4)).toBe(9);
+  });
+
+  // The width of a slice that starts off a tab stop (e.g. a selection on a
+  // wrapped line) must be taken as the gap between two offsets measured from
+  // the segment start, not by measuring the bare slice. Measuring the slice
+  // alone restarts the tab at column 0 and reports the wrong width.
+  test('a tabbed slice is measured as the gap between segment offsets', () => {
+    const tabSize = 4;
+    // Segment "abcx\t": selecting "x\t" starts at column 3; x fills col 3-4
+    // and the tab advances from column 4 to column 8, a 5-column selection.
+    const startOffset = getExpandedAsciiTextColumns('abc', tabSize);
+    const endOffset = getExpandedAsciiTextColumns('abcx\t', tabSize);
+    expect(endOffset - startOffset).toBe(5);
+    // Measuring the bare slice "x\t" instead reports only 4 columns.
+    expect(getExpandedAsciiTextColumns('x\t', tabSize)).toBe(4);
+  });
+});
+
+describe('expandTabsToSpaces', () => {
+  test('returns the input unchanged when there are no tabs', () => {
+    const text = 'no tabs here';
+    expect(expandTabsToSpaces(text, 4)).toBe(text);
+  });
+
+  test('expands leading tabs to a full tab stop', () => {
+    expect(expandTabsToSpaces('\t', 4)).toBe('    ');
+    expect(expandTabsToSpaces('\t\t', 4)).toBe('        ');
+  });
+
+  // Regression: the space count for a mid-line tab depends on its column.
+  test('expands mid-line tabs to the next tab stop', () => {
+    // 'foo' (col 3) -> 1 space to reach col 4.
+    expect(expandTabsToSpaces('foo\t', 4)).toBe('foo ');
+    expect(expandTabsToSpaces('foo\tbar', 4)).toBe('foo bar');
+    // tabSize 2: 'a' (col 1) -> 1 space to reach col 2.
+    expect(expandTabsToSpaces('a\tb', 2)).toBe('a b');
+  });
+
+  test('preserves non-ASCII characters while expanding tabs by column', () => {
+    // 'é' occupies one column; the tab then fills cols 1-4.
+    expect(expandTabsToSpaces('é\t', 4)).toBe('é   ');
   });
 });
 
