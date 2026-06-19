@@ -133,7 +133,6 @@ export interface EditorState<LAnnotation> {
 
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #options: EditorOptions<LAnnotation>;
-  #wrap = false;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
 
@@ -144,6 +143,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #detach?: () => void;
 
   // cache
+  #contentOffset?: { left: number; top: number };
   #gutterWidthCache?: number;
   #contentWidthCache?: number;
   #lineYCache = new Map<number, number>();
@@ -606,7 +606,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       });
       this.#resetState();
       this.#selections = this.#initSelections;
-      this.#options.onAttach?.(this, this.#fileInstance!);
+      requestAnimationFrame(() => {
+        this.#options.onAttach?.(this, this.#fileInstance!);
+      });
       if (this.#textDocument !== undefined && this.#options.__debug === true) {
         console.log('[diffs/editor] text document changed !!!');
       }
@@ -649,8 +651,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     if (
       (lineAnnotations !== undefined && lineAnnotations.length > 0) ||
-      (this.#fileInstance?.type === 'file-diff' &&
-        this.#fileInstance.options.diffStyle === 'unified')
+      (this.#isDiff && this.#diffSyle === 'unified')
     ) {
       for (const child of this.#contentElement.children) {
         const el = child as HTMLElement;
@@ -663,7 +664,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#resetCache();
 
-    this.#wrap = this.#fileInstance?.options.overflow === 'wrap';
+    // The tokenizer is created once per attached document and reused across
+    // re-renders, so a host-driven theme swap (theme picker, light/dark toggle)
+    // wouldn't otherwise reach it. Re-apply the surface's current theme on every
+    // sync so the editor's line-highlight/token colors track the active theme.
+    this.#tokenizer?.syncTheme(this.#fileInstance?.options ?? {});
+
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
     this.#tokenizer?.prebuildStateStack(renderRange);
@@ -723,6 +729,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
   };
+
+  get #diffSyle(): 'unified' | 'split' {
+    return this.#fileInstance?.options.diffStyle ?? 'split';
+  }
+
+  get #isDiff(): boolean {
+    return this.#fileInstance?.type === 'file-diff';
+  }
+
+  get #isWrap(): boolean {
+    return this.#fileInstance?.options.overflow === 'wrap';
+  }
 
   #resetCache(): void {
     this.#lineYCache.clear();
@@ -1302,11 +1320,26 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#markerRenderer?.listenHover(contentEl);
 
     this.#resizeObserver?.disconnect();
-    this.#resizeObserver = new ResizeObserver(() => {
-      this.#handleLayoutResize();
-    });
+    this.#resizeObserver = new ResizeObserver(this.#handleLayoutResize);
     this.#resizeObserver.observe(contentEl);
     this.#resizeObserver.observe(contentEl.parentElement!);
+    this.#computeContentOffset(contentEl);
+  }
+
+  // diff(split) treat the content element as grid item,
+  // that breaks the overlay element positioning.
+  // this function computes the content offset to fix
+  // the overlay element position.
+  #computeContentOffset(contentEl: HTMLElement) {
+    if (this.#isDiff && this.#diffSyle === 'split' && this.#isWrap) {
+      this.#contentOffset = {
+        top: contentEl.offsetTop,
+        left: contentEl.offsetLeft - this.#getGutterWidth(),
+      };
+      if (this.#options.__debug === true) {
+        console.log('[diffs/editor] content offset:', this.#contentOffset);
+      }
+    }
   }
 
   // TODO(@ije): add command registry
@@ -1496,7 +1529,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #handleLayoutResize() {
+  #handleLayoutResize = () => {
     const lineAnnotations = this.#lineAnnotations?.length ?? 0;
     const prevGutterWidth = this.#gutterWidthCache;
     const prevContentWidth = this.#contentWidthCache;
@@ -1514,7 +1547,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // web font finished loading) while this same content element survived, so
     // discard memoized non-ASCII text widths and let them re-measure.
     this.#metrics.clearTextWidthCache();
-    if (contentWidthChanged && (this.#wrap || lineAnnotations > 0)) {
+    if (contentWidthChanged && (this.#isWrap || lineAnnotations > 0)) {
       this.#lineYCache.clear();
       this.#wrapLineOffsetsCache.clear();
     }
@@ -1529,7 +1562,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     this.#markerRenderer?.removePopup();
-  }
+    this.#computeContentOffset(this.#contentElement!);
+  };
 
   // A custom monospace web font can finish loading after the editor first
   // renders. Until then Metrics measured the '0' width against the fallback
@@ -1687,7 +1721,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    const isDiff = this.#fileInstance?.type === 'file-diff';
     const didLineCountChange = change.lineDelta !== 0;
 
     // fix grid layout
@@ -1708,7 +1741,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     fileInstance.updateRenderCache(
       dirtyLines,
       tokenizer.themeType,
-      isDiff && !didLineCountChange,
+      this.#isDiff && !didLineCountChange,
       // On a line-count change we recompute hunk metadata authoritatively in
       // `applyDocumentChange` below, so skip the redundant recompute here.
       didLineCountChange
@@ -2095,7 +2128,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const startChar = line === start.line ? start.character : 0;
       const endChar = isLastLine ? end.character : lineText.length;
 
-      if (this.#wrap) {
+      if (this.#isWrap) {
         const contentWidth = this.#getContentWidth();
         const textWidth =
           2 * this.#metrics.ch + this.#metrics.measureTextWidth(lineText);
@@ -2259,12 +2292,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     const { ch, lineHeight } = this.#metrics;
     const y = this.#getLineY(line) + wrapLine * lineHeight;
-    const css = `width:${width}px;transform:translateX(${left}px) translateY(${y}px);`;
-    const cacheKey = `${type}-${left}-${y}-${width}${extraDataset ?? ''}`;
+    const cacheKey = `${type}-${line}/${wrapLine}-${left}-${width} ${extraDataset ?? ''}`;
     const overlayEls = this.#overlayElements;
-
     const rounded =
       (this.#options.roundedSelection ?? true) && type === 'selection';
+
     const addRoundedCorner = (
       line: number,
       wrapLine: number,
@@ -2277,7 +2309,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         selectionCorner: '',
         [radius]: '',
       };
-      const cacheKeyPrefix = `${type}-block-${left}-${top}-1ch`;
+      const cacheKeyPrefix = `${type}-block-${line}/${wrapLine}-${left}-1ch`;
       let cacheKey = cacheKeyPrefix + '-' + radius;
       if (radius === 'rbl') {
         const prevCornerKey = cacheKeyPrefix + '-rtl';
@@ -2295,6 +2327,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
       if (overlayEls?.has(cacheKey) === true) {
         cornerEl = overlayEls.get(cacheKey)!;
+        cornerEl.style.cssText = css;
         overlayEls.delete(cacheKey);
       } else {
         cornerEl = h(
@@ -2385,12 +2418,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           dataset: extraDataset
             ? [type + 'Range', extraDataset]
             : type + 'Range',
-          style: { cssText: css },
         },
         renderCtx.fragment
       );
     }
 
+    rangeEl.style.width = `${width}px`;
+    rangeEl.style.transform = `translateX(${left}px) translateY(${y}px)`;
     if (rounded) {
       addRadiusStyle(rangeEl);
     }
@@ -2414,18 +2448,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (renderCtx.elements.has(cacheKey)) {
       return;
     }
+
     const x = left - 1;
     const y = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
-    const caretEl = h(
-      'div',
-      {
-        dataset: 'caret',
-        style: {
-          transform: `translateX(${x}px) translateY(${y}px)`,
+
+    let caretEl: HTMLElement;
+    if (this.#overlayElements?.has(cacheKey) === true) {
+      caretEl = this.#overlayElements.get(cacheKey)!;
+      this.#overlayElements.delete(cacheKey);
+    } else {
+      caretEl = h(
+        'div',
+        {
+          dataset: 'caret',
         },
-      },
-      renderCtx.fragment
-    );
+        renderCtx.fragment
+      );
+    }
+    caretEl.style.transform = `translateX(${x}px) translateY(${y}px)`;
     renderCtx.elements.set(cacheKey, caretEl);
     if (isPrimary) {
       caretEl.style.scrollMargin = this.#getScrollMargin();
@@ -2446,16 +2486,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const [left, wrapLine] = this.#getCharX(line, 0);
-    const cacheKey = 'selectionActionIcon-' + line + '(' + wrapLine + ')';
+    const top = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
+
+    const cacheKey = 'selectionActionIcon-' + line + '/' + wrapLine;
     if (renderCtx.elements.has(cacheKey)) {
       return;
     }
 
-    const selectionActionIcon = SelectionActionWidget.renderIcon(
-      left,
-      this.#getLineY(line) + wrapLine * this.#metrics.lineHeight,
-      renderCtx.fragment,
-      () => {
+    let icon: HTMLElement;
+    if (this.#overlayElements?.has(cacheKey) === true) {
+      icon = this.#overlayElements.get(cacheKey)!;
+      this.#overlayElements.delete(cacheKey);
+    } else {
+      icon = SelectionActionWidget.renderIcon(renderCtx.fragment, () => {
         const cleanUp = () => {
           this.#selectionAction?.cleanup();
           this.#selectionAction = undefined;
@@ -2524,9 +2567,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (this.#isLineVisible(line) && this.#contentElement !== undefined) {
           this.#selectionAction.render(this.#contentElement);
         }
-      }
-    );
-    renderCtx.elements.set(cacheKey, selectionActionIcon);
+      });
+    }
+    icon.style.transform = `translateY(${top}px) translateX(${left}px)`;
+    renderCtx.elements.set(cacheKey, icon);
   }
 
   // Opens the search panel in the requested mode. If a panel is already open,
@@ -2836,7 +2880,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (selections === undefined || textDocument === undefined) {
       return;
     }
-    const getSoftLineStart = this.#wrap
+    const getSoftLineStart = this.#isWrap
       ? (line: number, character: number) => {
           const wrapOffsets = this.#wrapLineText(line);
           for (let w = 0; w + 1 < wrapOffsets.length; w++) {
@@ -2983,7 +3027,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
       }
     }
-    if (this.#wrap) {
+    if (this.#isWrap) {
       for (const line of this.#wrapLineOffsetsCache.keys()) {
         if (line >= change.startLine) {
           this.#wrapLineOffsetsCache.delete(line);
@@ -3105,7 +3149,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // fallback to query selector
     lineElement ??= contentElement.querySelector<HTMLElement>(
       `[data-line="${line + 1}"]` +
-        (this.#fileInstance?.options.diffStyle === 'unified'
+        (this.#diffSyle === 'unified'
           ? ':not([data-line-type="change-deletion"])'
           : '')
     );
@@ -3187,7 +3231,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     // cold(slow) path: measure line top position from DOM (will cause reflow)
-    const y = lineElement.offsetTop + this.#metrics.paddingTop;
+    let y = lineElement.offsetTop + this.#metrics.paddingTop;
+    if (this.#contentOffset !== undefined) {
+      y += this.#contentOffset?.top ?? 0;
+    }
     this.#lineYCache.set(line, y);
     return y;
   }
@@ -3206,7 +3253,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const lineText = this.#textDocument?.getLineText(line);
     const offsetLeft = this.#getGutterWidth() + this.#metrics.ch; // gutter width + inline padding (1ch)
     if (lineText === undefined || lineText.length === 0 || char <= 0) {
-      return [offsetLeft, 0];
+      return [offsetLeft + (this.#contentOffset?.left ?? 0), 0];
     }
 
     const boundedCharacter = snapTextOffsetToUnicodeBoundary(
@@ -3227,7 +3274,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       left = offsetLeft + this.#metrics.measureTextWidth(textBeforeCharacter);
     }
 
-    if (this.#wrap) {
+    if (this.#isWrap) {
       const contentWidth = this.#getContentWidth();
       const textWidth =
         2 * this.#metrics.ch + this.#metrics.measureTextWidth(lineText);
@@ -3255,6 +3302,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             break;
           }
         }
+      }
+      if (this.#contentOffset !== undefined) {
+        left += this.#contentOffset.left;
       }
     }
 

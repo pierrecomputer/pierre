@@ -6,11 +6,13 @@ import type {
   DiffLineAnnotation,
   SelectedLineRange,
 } from '@pierre/diffs';
-import { FileDiff } from '@pierre/diffs/react';
+import { Editor } from '@pierre/diffs/editor';
+import { EditorProvider, FileDiff } from '@pierre/diffs/react';
 import type { PreloadFileDiffResult } from '@pierre/diffs/ssr';
 import {
   IconCheck,
   IconChevronSm,
+  IconCiWarning,
   IconCodeStyleBars,
   IconCodeStyleBg,
   IconCodeStyleInline,
@@ -20,20 +22,23 @@ import {
   IconCursor,
   IconDiffSplit,
   IconDiffUnified,
+  IconEye,
   IconHunkDivider,
   IconInReview,
   IconLink,
   IconListOrdered,
   IconParagraph,
+  IconPencil,
   IconSymbolDiffstat,
   IconWordWrap,
   IconXSquircle,
 } from '@pierre/icons';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
+import { PLAYGROUND_MARKERS } from './constants';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -81,6 +86,10 @@ const HUNK_SEPARATOR_OPTIONS = [
 
 type HunkSeparatorValue = (typeof HUNK_SEPARATOR_OPTIONS)[number]['value'];
 
+// The editable surface is rendered read-only (Review) or attached to a live
+// editor (Edit). Markers are diagnostics shown only while editing.
+type EditorMode = 'review' | 'edit';
+
 // Default values for URL param comparison
 const DEFAULTS = {
   diffStyle: 'split',
@@ -97,6 +106,8 @@ const DEFAULTS = {
   gutterButton: true,
   interactionMode: 'comment' as const,
   annotations: true,
+  editorMode: 'review' as EditorMode,
+  markers: false,
 } as const;
 
 interface PlaygroundClientProps {
@@ -130,10 +141,17 @@ interface PlaygroundControlsContentProps {
   setEnableGutterUtility: (v: boolean) => void;
   showAnnotations: boolean;
   setShowAnnotations: (v: boolean) => void;
+  editorMode: EditorMode;
+  setEditorMode: (v: EditorMode) => void;
+  showMarkers: boolean;
+  setShowMarkers: (v: boolean) => void;
   selectedRange: SelectedLineRange | null;
   setSelectedRange: (v: SelectedLineRange | null) => void;
   handleCopyLink: () => void;
   hideShare?: boolean;
+  // In the mobile drawer the dropdowns portal to <body> beneath the drawer
+  // (z-60), so callers pass a higher z-index class to lift menus above it.
+  dropdownContentClassName?: string;
 }
 
 function PlaygroundControlsContent({
@@ -163,10 +181,15 @@ function PlaygroundControlsContent({
   setEnableGutterUtility,
   showAnnotations,
   setShowAnnotations,
+  editorMode,
+  setEditorMode,
+  showMarkers,
+  setShowMarkers,
   selectedRange,
   setSelectedRange,
   handleCopyLink,
   hideShare = false,
+  dropdownContentClassName,
 }: PlaygroundControlsContentProps) {
   const interactionMode: 'select' | 'comment' | 'none' = enableGutterUtility
     ? 'comment'
@@ -200,12 +223,29 @@ function PlaygroundControlsContent({
         <ButtonGroup
           value={diffStyle}
           onValueChange={(value) => setDiffStyle(value as 'split' | 'unified')}
+          size="icon"
         >
           <ButtonGroupItem value="split">
             <IconDiffSplit />
           </ButtonGroupItem>
           <ButtonGroupItem value="unified">
             <IconDiffUnified />
+          </ButtonGroupItem>
+        </ButtonGroup>
+
+        <div className="bg-border h-6 w-px" />
+
+        <ButtonGroup
+          value={editorMode}
+          onValueChange={(value) => setEditorMode(value as EditorMode)}
+          aria-label="Editor mode"
+          size="icon"
+        >
+          <ButtonGroupItem value="review">
+            <IconEye />
+          </ButtonGroupItem>
+          <ButtonGroupItem value="edit">
+            <IconPencil />
           </ButtonGroupItem>
         </ButtonGroup>
 
@@ -219,7 +259,11 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" scrollSelectedIntoView>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
             {LIGHT_THEMES.map((theme) => (
               <DropdownMenuItem
                 key={theme}
@@ -246,7 +290,11 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" scrollSelectedIntoView>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
             {DARK_THEMES.map((theme) => (
               <DropdownMenuItem
                 key={theme}
@@ -270,6 +318,7 @@ function PlaygroundControlsContent({
           onValueChange={(value) =>
             setThemeType(value as 'system' | 'light' | 'dark')
           }
+          size="icon"
         >
           <ButtonGroupItem value="system">
             <IconColorAuto />
@@ -287,6 +336,7 @@ function PlaygroundControlsContent({
         <ButtonGroup
           value={diffIndicators}
           onValueChange={(value) => setDiffIndicators(value as DiffIndicators)}
+          size="icon"
         >
           <ButtonGroupItem value="bars">
             <IconCodeStyleBars />
@@ -310,7 +360,11 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" scrollSelectedIntoView>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
             {LINE_DIFF_OPTIONS.map((option) => (
               <DropdownMenuItem
                 key={option.value}
@@ -370,6 +424,20 @@ function PlaygroundControlsContent({
           onCheckedChange={setShowAnnotations}
         />
 
+        <ToggleButton
+          icon={<IconCiWarning />}
+          label="Markers"
+          checked={showMarkers}
+          onCheckedChange={setShowMarkers}
+          // Markers come from an attached editor, so they only render in Edit.
+          disabled={editorMode !== 'edit'}
+          title={
+            editorMode !== 'edit'
+              ? 'Switch to Edit mode to show lint markers'
+              : undefined
+          }
+        />
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="justify-start px-3">
@@ -380,7 +448,11 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" scrollSelectedIntoView>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
             {HUNK_SEPARATOR_OPTIONS.map((option) => (
               <DropdownMenuItem
                 key={option.value}
@@ -408,7 +480,11 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" scrollSelectedIntoView>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
             {interactionModeOptions.map((option) => (
               <DropdownMenuItem
                 key={option.value}
@@ -546,6 +622,12 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const [showAnnotations, setShowAnnotations] = useState(
     getBoolParam('annot', DEFAULTS.annotations)
   );
+  const [editorMode, setEditorMode] = useState<EditorMode>(
+    getParam('edit', DEFAULTS.editorMode) === 'edit' ? 'edit' : 'review'
+  );
+  const [showMarkers, setShowMarkers] = useState(
+    getBoolParam('markers', DEFAULTS.markers)
+  );
 
   // Parse selected line range from URL
   // Format: L15a (line 15 additions), L28-35a (lines 28-35 additions), L10d (line 10 deletions)
@@ -576,6 +658,34 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     : enableLineSelection
       ? 'select'
       : 'none';
+
+  const contentEditable = editorMode === 'edit';
+
+  // The editor attaches to the diff's editable (new-file) side. Recreate it
+  // when the diff layout or edit mode changes so it re-attaches to the freshly
+  // relaid-out surface with a clean document instead of reusing a torn-down
+  // instance (mirrors LiveEditing's editor lifecycle).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally force a fresh editor; the factory takes no inputs
+  const editor = useMemo(() => new Editor({}), [diffStyle, editorMode]);
+
+  // Apply (or clear) the demo markers whenever the editor, mode, or toggle
+  // changes. `setMarkers` throws until the editor attaches to its surface
+  // (async), so retry each frame until the call sticks (mirrors MarkerDemo).
+  useEffect(() => {
+    if (!contentEditable) {
+      return;
+    }
+    let frame = 0;
+    const apply = () => {
+      try {
+        editor.setMarkers(showMarkers ? PLAYGROUND_MARKERS : []);
+      } catch {
+        frame = requestAnimationFrame(apply);
+      }
+    };
+    apply();
+    return () => cancelAnimationFrame(frame);
+  }, [editor, contentEditable, showMarkers]);
 
   // Build URL with current config
   const buildUrl = useCallback(() => {
@@ -608,6 +718,9 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       params.set('gutter', enableGutterUtility ? '1' : '0');
     if (showAnnotations !== DEFAULTS.annotations)
       params.set('annot', showAnnotations ? '1' : '0');
+    if (editorMode !== DEFAULTS.editorMode) params.set('edit', editorMode);
+    if (showMarkers !== DEFAULTS.markers)
+      params.set('markers', showMarkers ? '1' : '0');
 
     if (selectedRange != null) {
       const sideChar = selectedRange.side === 'deletions' ? 'd' : 'a';
@@ -637,6 +750,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     enableLineSelection,
     enableGutterUtility,
     showAnnotations,
+    editorMode,
+    showMarkers,
     selectedRange,
   ]);
 
@@ -744,10 +859,63 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     setEnableGutterUtility,
     showAnnotations,
     setShowAnnotations,
+    editorMode,
+    setEditorMode,
+    showMarkers,
+    setShowMarkers,
     selectedRange,
     setSelectedRange,
     handleCopyLink,
   };
+
+  // Editing takes over click targets, so line selection and gutter comments are
+  // disabled while in Edit mode (they only make sense in read-only Review).
+  const fileDiff = (
+    <FileDiff
+      {...prerenderedDiff}
+      className="border-border overflow-hidden rounded-lg border"
+      contentEditable={contentEditable}
+      selectedLines={contentEditable ? null : selectedRange}
+      lineAnnotations={showAnnotations ? annotations : []}
+      options={{
+        ...prerenderedDiff.options,
+        diffStyle,
+        diffIndicators,
+        lineDiffType,
+        hunkSeparators,
+        disableBackground,
+        disableLineNumbers,
+        overflow,
+        themeType,
+        theme: { dark: selectedDarkTheme, light: selectedLightTheme },
+        enableLineSelection: contentEditable ? false : canSelectLines,
+        enableGutterUtility: contentEditable ? false : canUseGutterComments,
+        onLineSelectionEnd: handleLineSelectionEnd,
+        onGutterUtilityClick:
+          !contentEditable && canUseGutterComments
+            ? (range) => {
+                if (range.side != null) {
+                  addCommentAtLine(range.side, range.start);
+                }
+              }
+            : undefined,
+      }}
+      renderAnnotation={
+        showAnnotations
+          ? (annotation) =>
+              annotation.metadata.isThread === true ? (
+                <ExampleThread />
+              ) : (
+                <CommentForm
+                  side={annotation.side}
+                  lineNumber={annotation.lineNumber}
+                  onCancel={handleCancelComment}
+                />
+              )
+          : undefined
+      }
+    />
+  );
 
   return (
     <div className="space-y-6">
@@ -796,53 +964,20 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
                 Close
               </Button>
             </div>
-            <PlaygroundControlsContent {...controlsContentProps} hideShare />
+            <PlaygroundControlsContent
+              {...controlsContentProps}
+              hideShare
+              dropdownContentClassName="z-[70]"
+            />
           </div>
         </div>
       </div>
 
-      <FileDiff
-        {...prerenderedDiff}
-        className="border-border overflow-hidden rounded-lg border"
-        selectedLines={selectedRange}
-        lineAnnotations={showAnnotations ? annotations : []}
-        options={{
-          ...prerenderedDiff.options,
-          diffStyle,
-          diffIndicators,
-          lineDiffType,
-          hunkSeparators,
-          disableBackground,
-          disableLineNumbers,
-          overflow,
-          themeType,
-          theme: { dark: selectedDarkTheme, light: selectedLightTheme },
-          enableLineSelection: canSelectLines,
-          enableGutterUtility: canUseGutterComments,
-          onLineSelectionEnd: handleLineSelectionEnd,
-          onGutterUtilityClick: canUseGutterComments
-            ? (range) => {
-                if (range.side != null) {
-                  addCommentAtLine(range.side, range.start);
-                }
-              }
-            : undefined,
-        }}
-        renderAnnotation={
-          showAnnotations
-            ? (annotation) =>
-                annotation.metadata.isThread === true ? (
-                  <ExampleThread />
-                ) : (
-                  <CommentForm
-                    side={annotation.side}
-                    lineNumber={annotation.lineNumber}
-                    onCancel={handleCancelComment}
-                  />
-                )
-            : undefined
-        }
-      />
+      {contentEditable ? (
+        <EditorProvider editor={editor}>{fileDiff}</EditorProvider>
+      ) : (
+        fileDiff
+      )}
     </div>
   );
 }
@@ -852,17 +987,22 @@ function ToggleButton({
   label,
   checked,
   onCheckedChange,
+  disabled = false,
+  title,
 }: {
   icon?: React.ReactNode;
   label: string;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
+  disabled?: boolean;
+  title?: string;
 }) {
   return (
-    <div className="gridstack">
+    <div className="gridstack" title={title}>
       <Button
         variant="outline"
         className="justify-between gap-3 pr-11 pl-3"
+        disabled={disabled}
         onClick={() => onCheckedChange(!checked)}
       >
         <div className="flex items-center gap-2">
@@ -873,6 +1013,7 @@ function ToggleButton({
       <Switch
         checked={checked}
         onCheckedChange={onCheckedChange}
+        disabled={disabled}
         onClick={(e) => e.stopPropagation()}
         className="pointer-events-none mr-3 place-self-center justify-self-end"
       />
