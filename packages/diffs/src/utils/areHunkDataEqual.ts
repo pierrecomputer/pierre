@@ -5,6 +5,7 @@ export function areHunkDataEqual(hunkA: HunkData, hunkB: HunkData): boolean {
     hunkA.slotName === hunkB.slotName &&
     hunkA.hunkIndex === hunkB.hunkIndex &&
     hunkA.lines === hunkB.lines &&
+    hunkA.lineCountKnown === hunkB.lineCountKnown &&
     hunkA.type === hunkB.type &&
     hunkA.expandable?.chunked === hunkB.expandable?.chunked &&
     hunkA.expandable?.up === hunkB.expandable?.up &&

@@ -282,6 +282,47 @@ describe('DiffHunksRenderer', () => {
     expect(result.hunkData.every((hunk) => hunk.expandable != null)).toBe(true);
   });
 
+  test('renders synthetic bottom separator for partial diffs with a file loader', async () => {
+    const diff = parsePartialDiffWithCollapsedContext();
+    const instance = new DiffHunksRenderer({
+      diffStyle: 'unified',
+      hunkSeparators: 'line-info',
+      loadDiffFiles: () => Promise.resolve({ oldFile: null, newFile: null }),
+    });
+    const result = await instance.asyncRender(diff);
+    const html = instance.renderFullHTML(result);
+    const tailHunkData = result.hunkData.find(
+      (hunk) => hunk.hunkIndex === diff.hunks.length
+    );
+
+    expect(tailHunkData).toEqual({
+      slotName: `hunk-separator-unified-${diff.hunks.length}`,
+      hunkIndex: diff.hunks.length,
+      lines: 0,
+      lineCountKnown: false,
+      type: 'unified',
+      expandable: { up: true, down: false, chunked: false },
+    });
+    expect(html).toContain('More unchanged context may be available');
+    expect(html).toContain(`data-expand-index="${diff.hunks.length}"`);
+    expect(html).not.toContain('0 unmodified lines');
+  });
+
+  test('does not render synthetic bottom separator for partial diffs without a file loader', async () => {
+    const diff = parsePartialDiffWithCollapsedContext();
+    const instance = new DiffHunksRenderer({
+      diffStyle: 'unified',
+      hunkSeparators: 'line-info',
+    });
+    const result = await instance.asyncRender(diff);
+    const html = instance.renderFullHTML(result);
+
+    expect(
+      result.hunkData.some((hunk) => hunk.hunkIndex === diff.hunks.length)
+    ).toBe(false);
+    expect(html).not.toContain('More unchanged context may be available');
+  });
+
   test('skips inline diff decorations for changed lines above maxLineDiffLength', async () => {
     const instance = new DiffHunksRenderer({
       diffStyle: 'split',
