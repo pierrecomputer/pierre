@@ -6,6 +6,7 @@ import { type ColorMode } from '@pierre/theming';
 import { useThemeController } from '@pierre/theming/react';
 import {
   type ReactNode,
+  type SetStateAction,
   useCallback,
   useEffect,
   useRef,
@@ -24,6 +25,10 @@ import {
   themeController,
 } from '@/components/themeController';
 import { preloadAvatars } from '@/lib/annotation';
+import {
+  type DiffsHubDisplayPreferences,
+  useDiffsHubDisplayPreferences,
+} from '@/lib/displayPreferences';
 import { removeSavedCommentSidebarEntry } from '@/lib/removeSavedCommentSidebarEntry';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 import type {
@@ -54,15 +59,23 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   useEffect(preloadAvatars, []);
 
   const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
-  const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
-  const [collapseMode, setCollapseMode] = useState<'expanded' | 'collapsed'>(
-    'expanded'
-  );
   const [fileTreeOverlayOpen, setFileTreeOverlayOpen] = useState(false);
-  const [overflow, setOverflow] = useState<'wrap' | 'scroll'>('scroll');
-  const [showBackgrounds, setShowBackgrounds] = useState(true);
-  const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
-  const [lineNumbers, setLineNumbers] = useState(true);
+  const [forceUnifiedDiffStyle, setForceUnifiedDiffStyle] = useState(false);
+  const {
+    displayPreferences,
+    displayPreferencesHydrated,
+    updateDisplayPreferences,
+  } = useDiffsHubDisplayPreferences();
+  const {
+    collapseMode,
+    diffIndicators,
+    lineNumbers,
+    overflow,
+    showBackgrounds,
+  } = displayPreferences;
+  const diffStyle = forceUnifiedDiffStyle
+    ? 'unified'
+    : displayPreferences.diffStyle;
   // All theming state — color mode and the light/dark theme-name picks — lives
   // in the single @pierre/theming controller (the same instance the app-wide
   // ThemeProvider is bound to). Reading it here means picking Auto/Light/Dark
@@ -145,7 +158,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)');
     const updateMobileState = (matches: boolean) => {
-      setDiffStyle(matches ? 'unified' : 'split');
+      setForceUnifiedDiffStyle(matches);
       if (!matches) setFileTreeOverlayOpen(false);
     };
     const handleChange = (event: MediaQueryListEvent) => {
@@ -156,6 +169,57 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
+  const updateDisplayPreference = useCallback(
+    <Key extends keyof DiffsHubDisplayPreferences>(
+      key: Key,
+      value: SetStateAction<DiffsHubDisplayPreferences[Key]>
+    ) => {
+      updateDisplayPreferences((previous) => {
+        const previousValue = previous[key];
+        const nextValue =
+          typeof value === 'function'
+            ? (
+                value as (current: typeof previousValue) => typeof previousValue
+              )(previousValue)
+            : value;
+        return {
+          ...previous,
+          [key]: nextValue,
+        };
+      });
+    },
+    [updateDisplayPreferences]
+  );
+  const setDiffStyle = useCallback(
+    (value: SetStateAction<'split' | 'unified'>) => {
+      updateDisplayPreference('diffStyle', value);
+    },
+    [updateDisplayPreference]
+  );
+  const setDiffIndicators = useCallback(
+    (value: SetStateAction<DiffIndicators>) => {
+      updateDisplayPreference('diffIndicators', value);
+    },
+    [updateDisplayPreference]
+  );
+  const setLineNumbers = useCallback(
+    (value: SetStateAction<boolean>) => {
+      updateDisplayPreference('lineNumbers', value);
+    },
+    [updateDisplayPreference]
+  );
+  const setOverflow = useCallback(
+    (value: SetStateAction<'wrap' | 'scroll'>) => {
+      updateDisplayPreference('overflow', value);
+    },
+    [updateDisplayPreference]
+  );
+  const setShowBackgrounds = useCallback(
+    (value: SetStateAction<boolean>) => {
+      updateDisplayPreference('showBackgrounds', value);
+    },
+    [updateDisplayPreference]
+  );
   const handleSelectTreeItem = useCallback((itemId: string) => {
     setFileTreeOverlayOpen(false);
     const viewer = viewerRef.current;
@@ -177,9 +241,12 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   }, []);
   const handleToggleCollapseMode = useCallback(() => {
     const next = collapseMode === 'expanded' ? 'collapsed' : 'expanded';
-    setCollapseMode(next);
+    updateDisplayPreferences((previous) => ({
+      ...previous,
+      collapseMode: next,
+    }));
     applyCollapseModeToLoaded(next);
-  }, [applyCollapseModeToLoaded, collapseMode]);
+  }, [applyCollapseModeToLoaded, collapseMode, updateDisplayPreferences]);
   const handleCommentSaved = useCallback(
     (comment: DiffsHubSavedCommentEvent) => {
       setCommentSections((prev) =>
@@ -227,6 +294,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   // first batch of files against the wrong palette.
   const viewerAvailable =
     isWorkerPoolReadyOrDisable &&
+    displayPreferencesHydrated &&
     themesHydrated &&
     (loadState === 'ready' ||
       (loadState === 'streaming' && initialItems.length > 0));
