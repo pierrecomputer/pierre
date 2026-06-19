@@ -797,6 +797,31 @@ export class FileDiff<
         return;
       }
 
+      // NOTE(amadeus): If we are using a WorkerPool, lets go ahead and kick
+      // off the highlight task right away so we avoid a plain-text render
+      const { workerManager } = this;
+      const tokenizeMaxLength =
+        this.options.tokenizeMaxLength ?? DEFAULT_TOKENIZE_MAX_LENGTH;
+      const shouldPrimeHighlightCache =
+        workerManager?.isWorkingPool() === true &&
+        hydratedFileDiff.cacheKey != null &&
+        !isDiffPlainText(hydratedFileDiff) &&
+        Math.max(
+          hydratedFileDiff.additionLines.length,
+          hydratedFileDiff.deletionLines.length
+        ) <= tokenizeMaxLength;
+
+      if (shouldPrimeHighlightCache) {
+        try {
+          await workerManager.primeDiffHighlightCache(hydratedFileDiff);
+        } catch (error) {
+          console.error(error);
+        }
+        if (!this.enabled || this.fileDiff !== fileDiff) {
+          return;
+        }
+      }
+
       this.applyHydratedPartialDiff(hydratedFileDiff, loadedContents);
     } catch (error: unknown) {
       if (this.options.disableErrorHandling === true) {
