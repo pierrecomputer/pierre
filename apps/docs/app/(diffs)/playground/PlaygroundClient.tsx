@@ -149,6 +149,9 @@ interface PlaygroundControlsContentProps {
   setSelectedRange: (v: SelectedLineRange | null) => void;
   handleCopyLink: () => void;
   hideShare?: boolean;
+  // In the mobile drawer the dropdowns portal to <body> beneath the drawer
+  // (z-60), so callers pass a higher z-index class to lift menus above it.
+  dropdownContentClassName?: string;
 }
 
 function PlaygroundControlsContent({
@@ -186,6 +189,7 @@ function PlaygroundControlsContent({
   setSelectedRange,
   handleCopyLink,
   hideShare = false,
+  dropdownContentClassName,
 }: PlaygroundControlsContentProps) {
   const interactionMode: 'select' | 'comment' | 'none' = enableGutterUtility
     ? 'comment'
@@ -255,7 +259,11 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" scrollSelectedIntoView>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
             {LIGHT_THEMES.map((theme) => (
               <DropdownMenuItem
                 key={theme}
@@ -282,7 +290,11 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" scrollSelectedIntoView>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
             {DARK_THEMES.map((theme) => (
               <DropdownMenuItem
                 key={theme}
@@ -348,7 +360,11 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" scrollSelectedIntoView>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
             {LINE_DIFF_OPTIONS.map((option) => (
               <DropdownMenuItem
                 key={option.value}
@@ -432,7 +448,11 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" scrollSelectedIntoView>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
             {HUNK_SEPARATOR_OPTIONS.map((option) => (
               <DropdownMenuItem
                 key={option.value}
@@ -460,7 +480,11 @@ function PlaygroundControlsContent({
               <IconChevronSm className="text-muted-foreground ml-auto" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" scrollSelectedIntoView>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
             {interactionModeOptions.map((option) => (
               <DropdownMenuItem
                 key={option.value}
@@ -940,7 +964,11 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
                 Close
               </Button>
             </div>
-            <PlaygroundControlsContent {...controlsContentProps} hideShare />
+            <PlaygroundControlsContent
+              {...controlsContentProps}
+              hideShare
+              dropdownContentClassName="z-[70]"
+            />
           </div>
         </div>
       </div>
