@@ -2010,9 +2010,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#primaryCaretElement = undefined;
     this.#setSelectedLinesSafe(null);
-    this.#gutterElement
-      ?.querySelectorAll('[data-active]')
-      .forEach((el) => el.removeAttribute('data-active'));
 
     if (
       selections.length === 0 &&
@@ -2035,18 +2032,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const normalizedSelections = mergeOverlappingSelections(selections);
       const primarySelection = normalizedSelections.at(-1)!;
       this.#selections = normalizedSelections;
-      if (isCollapsedSelection(primarySelection)) {
-        const line = primarySelection.start.line + 1;
-        this.#setSelectedLinesSafe({
-          start: line,
-          end: line,
-        });
-      } else if (this.#gutterElement !== undefined) {
-        const pos = getCaretPosition(primarySelection);
-        this.#gutterElement
-          .querySelector(`[data-column-number="${pos.line + 1}"]`)
-          ?.setAttribute('data-active', '');
-      }
+      // Highlight the line that holds the caret (the selection's head),
+      // whether the selection is collapsed or spans a range. A ranged selection
+      // previously skipped this, so starting a multi-line selection dropped the
+      // active-line highlight from the line the cursor was on.
+      const caretLine = getCaretPosition(primarySelection).line + 1;
+      this.#setSelectedLinesSafe({ start: caretLine, end: caretLine });
 
       for (const selection of normalizedSelections) {
         if (!isCollapsedSelection(selection)) {
