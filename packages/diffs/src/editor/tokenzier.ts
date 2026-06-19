@@ -208,8 +208,6 @@ export class EditorTokenizer {
     const { colors = {} } = this.#highlighter.getTheme(themeName);
     const selectionBackground = colors['editor.selectionBackground'];
     const lineHighlightBackground = colors['editor.lineHighlightBackground'];
-    const gutterForeground = colors['editorLineNumber.foreground'];
-    const gutterActiveForeground = colors['editorLineNumber.activeForeground'];
     const cursorForeground = colors['editorCursor.foreground'];
     const findMatchBackground = colors['editor.findMatchBackground'];
     const findMatchHighlightBackground =
@@ -221,15 +219,12 @@ export class EditorTokenizer {
     this.#setStyle(`:host {
       --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
       --diffs-editor-line-highlight-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg)'};
-      --diffs-editor-line-number-fg: ${gutterForeground ?? 'var(--diffs-fg-number)'};
-      --diffs-editor-line-number-active-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg, var(--diffs-bg))'};
-      --diffs-editor-line-number-active-fg: ${gutterActiveForeground ?? 'var(--diffs-selection-number-fg)'};
       --diffs-editor-match-bg: ${findMatchBackground ?? 'unset'};
       --diffs-editor-match-highlight-bg: ${findMatchHighlightBackground ?? 'unset'};
       --diffs-editor-cursor-fg: ${cursorForeground ?? 'unset'};
       --diffs-editor-hint-fg: ${hintForeground ?? 'unset'};
       --diffs-editor-info-fg: ${infoForeground ?? 'unset'};
-      --diffs-editor-warning-fg: ${warningForeground ?? 'light-dark(var(--diffs-warning-light), var(--diffs-warning-dark))'};
+      --diffs-editor-warning-fg: ${warningForeground ?? 'unset'};
       --diffs-editor-error-fg: ${errorForeground ?? 'unset'};
     }`);
   }
