@@ -71,7 +71,6 @@ describe('DiffsHub display preferences', () => {
     const preferences: DiffsHubDisplayPreferences = {
       collapseMode: 'collapsed',
       codeFont: {
-        family: 'JetBrains Mono',
         input: 'jetbrains',
         kind: 'custom',
       },
@@ -129,7 +128,7 @@ describe('DiffsHub display preferences', () => {
           collapseMode: 'collapsed',
           codeFont: {
             input: 'system',
-            kind: 'system',
+            kind: 'custom',
           },
           diffIndicators: 'none',
           diffStyle: 'unified',
@@ -182,7 +181,6 @@ describe('DiffsHub display preferences', () => {
 
     expect(
       getDiffsHubCodeFontFamily({
-        family: 'Commit Mono',
         input: 'Commit Mono',
         kind: 'custom',
       })
@@ -191,7 +189,7 @@ describe('DiffsHub display preferences', () => {
     expect(
       getDiffsHubCodeFontFamily({
         input: 'monospace',
-        kind: 'system',
+        kind: 'custom',
       })
     ).toBe(SYSTEM_CODE_FONT_FAMILY);
 
@@ -200,7 +198,6 @@ describe('DiffsHub display preferences', () => {
 
     expect(
       getDiffsHubCodeFontFamily({
-        family: 'JetBrains Mono, serif',
         input: 'JetBrains Mono, serif',
         kind: 'custom',
       })

@@ -292,7 +292,7 @@ describe('ReviewUI display preferences', () => {
   test('hydrates, applies, and persists the custom code font preference', async () => {
     writeStoredPreferences({
       codeFont: {
-        family: 'jetbrains',
+        input: 'jetbrains',
         kind: 'custom',
       },
       collapseMode: 'expanded',
@@ -343,7 +343,6 @@ describe('ReviewUI display preferences', () => {
 
       await waitFor(() => {
         expect(readStoredCodeFont()).toEqual({
-          family: 'Source Code Pro',
           input: 'sourcecodepro',
           kind: 'custom',
         });
@@ -360,7 +359,7 @@ describe('ReviewUI display preferences', () => {
       await waitFor(() => {
         expect(readStoredCodeFont()).toEqual({
           input: 'monospace',
-          kind: 'system',
+          kind: 'custom',
         });
         expect(readViewerFontFamily(rendered.container)).toBe(
           'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
@@ -378,12 +377,7 @@ interface StoredPreferences {
         kind: 'default';
       }
     | {
-        input?: string;
-        kind: 'system';
-      }
-    | {
-        family: string;
-        input?: string;
+        input: string;
         kind: 'custom';
       };
   collapseMode: 'expanded' | 'collapsed';

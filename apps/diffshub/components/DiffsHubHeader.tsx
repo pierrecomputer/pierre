@@ -20,9 +20,7 @@ import { type ColorMode } from '@pierre/theming';
 import Link from 'next/link';
 import {
   type CSSProperties,
-  type Dispatch,
   memo,
-  type SetStateAction,
   useCallback,
   useLayoutEffect,
   useMemo,
@@ -49,7 +47,6 @@ import {
   DIFFS_HUB_CODE_FONT_OPTIONS,
   type DiffsHubCodeFont,
   isDiffsHubDefaultCodeFont,
-  resolveCodeFontInput,
 } from '@/lib/displayPreferences';
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import { getDropdownThemeStyle } from '@/lib/theme/dropdownChromeStyle';
@@ -76,15 +73,15 @@ interface HeaderProps {
   overflow: 'wrap' | 'scroll';
   onToggleCollapseMode(): void;
   onToggleFileTreeOverlay(): void;
-  setCodeFont: Dispatch<SetStateAction<DiffsHubCodeFont>>;
+  setCodeFont(value: DiffsHubCodeFont): void;
   setColorMode(mode: ColorMode): void;
   setDarkThemeName(name: DarkThemeName): void;
-  setDiffIndicators: Dispatch<SetStateAction<DiffIndicators>>;
-  setDiffStyle: Dispatch<SetStateAction<'split' | 'unified'>>;
+  setDiffIndicators(value: DiffIndicators): void;
+  setDiffStyle(value: 'split' | 'unified'): void;
   setLightThemeName(name: LightThemeName): void;
-  setLineNumbers: Dispatch<SetStateAction<boolean>>;
-  setOverflow: Dispatch<SetStateAction<'wrap' | 'scroll'>>;
-  setShowBackgrounds: Dispatch<SetStateAction<boolean>>;
+  setLineNumbers(value: boolean): void;
+  setOverflow(value: 'wrap' | 'scroll'): void;
+  setShowBackgrounds(value: boolean): void;
   showBackgrounds: boolean;
 }
 
@@ -118,10 +115,7 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
   const [currentUrl, setCurrentUrl] = useState(initialUrl);
   const codeFontSelection = codeFont.kind === 'default' ? 'default' : 'custom';
   const customCodeFontFamily =
-    codeFont.kind === 'default'
-      ? ''
-      : (codeFont.input ??
-        (codeFont.kind === 'system' ? 'System monospace' : codeFont.family));
+    codeFont.kind === 'default' ? '' : codeFont.input;
   const focusCustomCodeFontInput = useCallback(
     (input: HTMLInputElement | null) => {
       if (input == null || document.activeElement === input) {
@@ -322,11 +316,10 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
                         }
 
                         if (value === 'custom') {
-                          setCodeFont((previous) =>
-                            previous.kind !== 'default'
-                              ? previous
+                          setCodeFont(
+                            codeFont.kind !== 'default'
+                              ? codeFont
                               : {
-                                  family: '',
                                   input: '',
                                   kind: 'custom',
                                 }
@@ -360,13 +353,10 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
                       spellCheck={false}
                       value={customCodeFontFamily}
                       onChange={({ currentTarget }) => {
-                        setCodeFont(
-                          resolveCodeFontInput(currentTarget.value) ?? {
-                            family: '',
-                            input: currentTarget.value,
-                            kind: 'custom',
-                          }
-                        );
+                        setCodeFont({
+                          input: currentTarget.value,
+                          kind: 'custom',
+                        });
                       }}
                       onKeyDown={(event) => event.stopPropagation()}
                     />

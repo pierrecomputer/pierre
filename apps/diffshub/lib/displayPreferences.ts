@@ -12,12 +12,7 @@ export type DiffsHubCodeFont =
       kind: 'default';
     }
   | {
-      input?: string;
-      kind: 'system';
-    }
-  | {
-      family: string;
-      input?: string;
+      input: string;
       kind: 'custom';
     };
 export type DiffsHubDiffStyle = 'split' | 'unified';
@@ -162,10 +157,25 @@ interface StoredDisplayPreferences {
 interface UseDiffsHubDisplayPreferencesResult {
   displayPreferences: DiffsHubDisplayPreferences;
   displayPreferencesHydrated: boolean;
+  setCodeFont(value: DiffsHubDisplayPreferences['codeFont']): void;
+  setDiffIndicators(value: DiffIndicators): void;
+  setDiffStyle(value: DiffsHubDiffStyle): void;
+  setLineNumbers(value: boolean): void;
+  setOverflow(value: DiffsHubOverflow): void;
+  setShowBackgrounds(value: boolean): void;
   updateDisplayPreferences(
     update: (previous: DiffsHubDisplayPreferences) => DiffsHubDisplayPreferences
   ): void;
 }
+
+type ResolvedCodeFontInput =
+  | {
+      kind: 'system';
+    }
+  | {
+      family: string;
+      kind: 'custom';
+    };
 
 export function useDiffsHubDisplayPreferences(): UseDiffsHubDisplayPreferencesResult {
   const [displayPreferences, setDisplayPreferences] =
@@ -196,10 +206,64 @@ export function useDiffsHubDisplayPreferences(): UseDiffsHubDisplayPreferencesRe
     },
     []
   );
+  const updateDisplayPreference = useCallback(
+    <Key extends keyof DiffsHubDisplayPreferences>(
+      key: Key,
+      value: DiffsHubDisplayPreferences[Key]
+    ) => {
+      updateDisplayPreferences((previous) => ({
+        ...previous,
+        [key]: value,
+      }));
+    },
+    [updateDisplayPreferences]
+  );
+  const setCodeFont = useCallback(
+    (value: DiffsHubDisplayPreferences['codeFont']) => {
+      updateDisplayPreference('codeFont', value);
+    },
+    [updateDisplayPreference]
+  );
+  const setDiffIndicators = useCallback(
+    (value: DiffIndicators) => {
+      updateDisplayPreference('diffIndicators', value);
+    },
+    [updateDisplayPreference]
+  );
+  const setDiffStyle = useCallback(
+    (value: DiffsHubDiffStyle) => {
+      updateDisplayPreference('diffStyle', value);
+    },
+    [updateDisplayPreference]
+  );
+  const setLineNumbers = useCallback(
+    (value: boolean) => {
+      updateDisplayPreference('lineNumbers', value);
+    },
+    [updateDisplayPreference]
+  );
+  const setOverflow = useCallback(
+    (value: DiffsHubOverflow) => {
+      updateDisplayPreference('overflow', value);
+    },
+    [updateDisplayPreference]
+  );
+  const setShowBackgrounds = useCallback(
+    (value: boolean) => {
+      updateDisplayPreference('showBackgrounds', value);
+    },
+    [updateDisplayPreference]
+  );
 
   return {
     displayPreferences,
     displayPreferencesHydrated,
+    setCodeFont,
+    setDiffIndicators,
+    setDiffStyle,
+    setLineNumbers,
+    setOverflow,
+    setShowBackgrounds,
     updateDisplayPreferences,
   };
 }
@@ -238,11 +302,9 @@ export function getDiffsHubCodeFontFamily(font: DiffsHubCodeFont): string {
   switch (font.kind) {
     case 'default':
       return DEFAULT_CODE_FONT_FAMILY;
-    case 'system':
-      return SYSTEM_CODE_FONT_FAMILY;
     case 'custom':
       return (
-        getCustomCodeFontFamilyName(font.family) ??
+        getCustomCodeFontFamily(font.input) ??
         getDiffsHubCodeFontFamily(
           DEFAULT_DIFFS_HUB_DISPLAY_PREFERENCES.codeFont
         )
@@ -258,15 +320,10 @@ export function getCustomCodeFontFamily(family: string): string | null {
 
   return resolvedFont.kind === 'custom'
     ? getCustomCodeFontFamilyName(resolvedFont.family)
-    : getDiffsHubCodeFontFamily(resolvedFont);
+    : SYSTEM_CODE_FONT_FAMILY;
 }
 
-export function resolveCustomCodeFontFamilyName(input: string): string | null {
-  const resolvedFont = resolveCodeFontInput(input);
-  return resolvedFont?.kind === 'custom' ? resolvedFont.family : null;
-}
-
-export function resolveCodeFontInput(input: string): DiffsHubCodeFont | null {
+function resolveCodeFontInput(input: string): ResolvedCodeFontInput | null {
   const cleanedInput = cleanCustomCodeFontFamilyInput(input);
   if (cleanedInput == null) {
     return null;
@@ -279,7 +336,6 @@ export function resolveCodeFontInput(input: string): DiffsHubCodeFont | null {
     SYSTEM_MONO_ALIAS_KEYS.has(compactInput)
   ) {
     return {
-      input,
       kind: 'system',
     };
   }
@@ -288,7 +344,6 @@ export function resolveCodeFontInput(input: string): DiffsHubCodeFont | null {
     FONT_ALIAS_INDEX.get(normalizedInput) ?? FONT_ALIAS_INDEX.get(compactInput);
   return {
     family: knownFont?.family ?? cleanedInput,
-    input,
     kind: 'custom',
   };
 }
@@ -375,20 +430,6 @@ function parseCodeFont(
     };
   }
 
-  if (kind === 'system') {
-    const input = cleanCustomCodeFontFamilyInput(
-      getObjectProperty(value, 'input')
-    );
-    return input == null
-      ? {
-          kind: 'system',
-        }
-      : {
-          input,
-          kind: 'system',
-        };
-  }
-
   if (kind === 'preset') {
     const presetValue = getObjectProperty(value, 'value');
     return presetValue === 'default' ? { kind: 'default' } : fallback;
@@ -399,7 +440,10 @@ function parseCodeFont(
       cleanCustomCodeFontFamilyInput(getObjectProperty(value, 'input')) ??
       cleanCustomCodeFontFamilyInput(getObjectProperty(value, 'family'));
     if (customInput != null) {
-      return resolveCodeFontInput(customInput) ?? fallback;
+      return {
+        input: customInput,
+        kind: 'custom',
+      };
     }
   }
 

@@ -1,12 +1,10 @@
 'use client';
 
-import { type DiffIndicators } from '@pierre/diffs';
 import { type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
 import { type ColorMode } from '@pierre/theming';
 import { useThemeController } from '@pierre/theming/react';
 import {
   type ReactNode,
-  type SetStateAction,
   useCallback,
   useEffect,
   useRef,
@@ -26,7 +24,6 @@ import {
 } from '@/components/themeController';
 import { preloadAvatars } from '@/lib/annotation';
 import {
-  type DiffsHubDisplayPreferences,
   getDiffsHubCodeFontFamily,
   useDiffsHubDisplayPreferences,
 } from '@/lib/displayPreferences';
@@ -65,6 +62,12 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const {
     displayPreferences,
     displayPreferencesHydrated,
+    setCodeFont,
+    setDiffIndicators,
+    setDiffStyle,
+    setLineNumbers,
+    setOverflow,
+    setShowBackgrounds,
     updateDisplayPreferences,
   } = useDiffsHubDisplayPreferences();
   const {
@@ -173,63 +176,6 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
-  const updateDisplayPreference = useCallback(
-    <Key extends keyof DiffsHubDisplayPreferences>(
-      key: Key,
-      value: SetStateAction<DiffsHubDisplayPreferences[Key]>
-    ) => {
-      updateDisplayPreferences((previous) => {
-        const previousValue = previous[key];
-        const nextValue =
-          typeof value === 'function'
-            ? (
-                value as (current: typeof previousValue) => typeof previousValue
-              )(previousValue)
-            : value;
-        return {
-          ...previous,
-          [key]: nextValue,
-        };
-      });
-    },
-    [updateDisplayPreferences]
-  );
-  const setDiffStyle = useCallback(
-    (value: SetStateAction<'split' | 'unified'>) => {
-      updateDisplayPreference('diffStyle', value);
-    },
-    [updateDisplayPreference]
-  );
-  const setCodeFont = useCallback(
-    (value: SetStateAction<DiffsHubDisplayPreferences['codeFont']>) => {
-      updateDisplayPreference('codeFont', value);
-    },
-    [updateDisplayPreference]
-  );
-  const setDiffIndicators = useCallback(
-    (value: SetStateAction<DiffIndicators>) => {
-      updateDisplayPreference('diffIndicators', value);
-    },
-    [updateDisplayPreference]
-  );
-  const setLineNumbers = useCallback(
-    (value: SetStateAction<boolean>) => {
-      updateDisplayPreference('lineNumbers', value);
-    },
-    [updateDisplayPreference]
-  );
-  const setOverflow = useCallback(
-    (value: SetStateAction<'wrap' | 'scroll'>) => {
-      updateDisplayPreference('overflow', value);
-    },
-    [updateDisplayPreference]
-  );
-  const setShowBackgrounds = useCallback(
-    (value: SetStateAction<boolean>) => {
-      updateDisplayPreference('showBackgrounds', value);
-    },
-    [updateDisplayPreference]
-  );
   const handleSelectTreeItem = useCallback((itemId: string) => {
     setFileTreeOverlayOpen(false);
     const viewer = viewerRef.current;
