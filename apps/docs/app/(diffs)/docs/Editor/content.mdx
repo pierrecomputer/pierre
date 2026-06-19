@@ -163,6 +163,23 @@ editor, placing the caret at the primary selection.
 
 <DocsCodeExample {...editorProgrammaticExample} />
 
+### History
+
+The editor keeps an undo stack for user edits and for programmatic edits applied
+with `applyEdits(..., true)`. Use `editor.canUndo` and `editor.canRedo` to
+enable or disable toolbar buttons, and call `editor.undo()` or `editor.redo()`
+to step through history from code. These methods share the same stack as the
+keyboard shortcuts (<kbd>Cmd/Ctrl-Z</kbd> and <kbd>Cmd/Ctrl-Shift-Z</kbd>).
+
+`undo()` and `redo()` are no-ops when there is nothing to undo or redo. Both run
+through the same change path as a normal edit, so your `onChange` handler fires
+and you can re-read `canUndo` / `canRedo` to keep UI state in sync.
+
+Limit the stack size with `historyMaxEntries` in
+[Editor Options](#editor-options) (default: 100).
+
+<DocsCodeExample {...editorUndoRedoExample} />
+
 ### Keyboard Shortcuts
 
 Shortcuts use <kbd>Cmd</kbd> on macOS and <kbd>Ctrl</kbd> on Windows and Linux.
