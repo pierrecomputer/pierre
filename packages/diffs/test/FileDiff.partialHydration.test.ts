@@ -105,6 +105,29 @@ async function waitForHydrated(instance: FileDiff<undefined>): Promise<void> {
   throw new Error('Timed out waiting for partial diff hydration');
 }
 
+async function waitForSyntheticBottomSeparator(
+  fileContainer: HTMLElement,
+  hunkIndex: number
+): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (querySyntheticBottomSeparator(fileContainer, hunkIndex) != null) {
+      return;
+    }
+    await wait(10);
+  }
+  throw new Error('Timed out waiting for synthetic bottom separator');
+}
+
+function querySyntheticBottomSeparator(
+  fileContainer: HTMLElement,
+  hunkIndex: number
+): Element | null {
+  const root = fileContainer.shadowRoot ?? fileContainer;
+  return root.querySelector(
+    `[data-expand-index="${hunkIndex}"] [data-expand-up]`
+  );
+}
+
 describe('FileDiff partial hydration', () => {
   test('expandHunk hydrates once and preserves expansion state changes made while loading', async () => {
     const { cleanup } = installDom();
@@ -195,6 +218,68 @@ describe('FileDiff partial hydration', () => {
         fromStart: 0,
         fromEnd: 1,
       });
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('expanding the synthetic bottom hunk hydrates once and clears partial-only UI', async () => {
+    const { cleanup } = installDom();
+    let instance: TestFileDiff | undefined;
+    try {
+      const { oldFile, newFile, partial } = createPartialChange();
+      const loadedContents = { oldFile, newFile };
+      const deferred = createDeferred<typeof loadedContents>();
+      let loadCalls = 0;
+      const fileContainer = document.createElement('div');
+      instance = new TestFileDiff({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+        diffStyle: 'unified',
+        hunkSeparators: 'line-info',
+        loadDiffFiles: (fileDiff) => {
+          loadCalls++;
+          expect(fileDiff).toBe(partial);
+          return deferred.promise;
+        },
+      });
+
+      instance.render({
+        fileContainer,
+        fileDiff: partial,
+        preventEmit: true,
+      });
+      await waitForSyntheticBottomSeparator(
+        fileContainer,
+        partial.hunks.length
+      );
+      expect(fileContainer.shadowRoot?.textContent).toContain(
+        'More unchanged context may be available'
+      );
+
+      instance.expandHunk(partial.hunks.length, 'up');
+      expect(loadCalls).toBe(1);
+      assertDefined(
+        instance.getPendingHydrationPromiseForTest(),
+        'expected hydration to be pending after expanding synthetic bottom hunk'
+      );
+
+      instance.expandHunk(partial.hunks.length, 'up');
+      expect(loadCalls).toBe(1);
+
+      deferred.resolve(loadedContents);
+      await waitForHydrated(instance);
+
+      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(fileContainer.shadowRoot?.textContent).not.toContain(
+        'More unchanged context may be available'
+      );
+      expect(
+        querySyntheticBottomSeparator(fileContainer, partial.hunks.length)
+      ).toBeNull();
+      expect(instance.getPendingHydrationPromiseForTest()).toBeUndefined();
     } finally {
       instance?.cleanUp();
       cleanup();
