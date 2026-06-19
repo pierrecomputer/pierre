@@ -1,10 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import {
   getUnicodeMeasurementOffsets,
+  Metrics,
   needsDomTextMeasurement,
   snapTextOffsetToUnicodeBoundary,
 } from '../src/editor/textMeasure';
+import { type DomHandle, installDom } from './domHarness';
 
 describe('needsDomTextMeasurement', () => {
   test('returns false for empty and plain ASCII text', () => {
@@ -92,5 +94,59 @@ describe('getUnicodeMeasurementOffsets', () => {
   test('returns one offset per grapheme for ZWJ sequences', () => {
     const family = '👨‍👩‍👧‍👦';
     expect(getUnicodeMeasurementOffsets(family)).toEqual([0, family.length]);
+  });
+});
+
+describe('Metrics.remeasureCharacterWidth', () => {
+  let dom: DomHandle;
+  // Width the stubbed canvas reports for the '0' it measures. Tests change
+  // this between init() and remeasure to mimic a fallback font being replaced
+  // by a custom monospace web font that finishes loading after first render.
+  let glyphWidth: number;
+
+  beforeEach(() => {
+    dom = installDom();
+    glyphWidth = 8;
+    Object.defineProperty(window.HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      value: (contextId: string) =>
+        contextId === '2d'
+          ? { font: '', measureText: () => ({ width: glyphWidth }) }
+          : null,
+    });
+  });
+
+  afterEach(() => {
+    dom.cleanup();
+  });
+
+  function initMetrics(): Metrics {
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const metrics = new Metrics();
+    metrics.init(root);
+    return metrics;
+  }
+
+  test('re-measures ch and reports the change after the font loads', () => {
+    const metrics = initMetrics();
+    expect(metrics.ch).toBe(8); // measured against the fallback font
+
+    // The custom web font loads and the same '0' now measures wider.
+    glyphWidth = 11;
+    expect(metrics.remeasureCharacterWidth()).toBe(true);
+    expect(metrics.ch).toBe(11);
+  });
+
+  test('reports no change when the measured width is stable', () => {
+    const metrics = initMetrics();
+    expect(metrics.remeasureCharacterWidth()).toBe(false);
+    expect(metrics.ch).toBe(8);
+  });
+
+  test('is a no-op before init has measured anything', () => {
+    const metrics = new Metrics();
+    expect(metrics.remeasureCharacterWidth()).toBe(false);
+    expect(metrics.ch).toBe(-1);
   });
 });

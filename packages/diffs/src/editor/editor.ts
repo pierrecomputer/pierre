@@ -197,6 +197,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #scrollingToLineChar?: number;
   #scrollingToLineNoFocus = false;
   #retainSearchPanelFocus = false;
+  #fontRemeasureScheduled = false;
 
   #onDeferTokenize = (
     lines: Map<number, Array<HighlightedToken>>,
@@ -475,6 +476,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#overlayElement = undefined;
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = undefined;
+    // Let a reused instance schedule the font re-measure again on its next
+    // mount, where a different font-family string may not be loaded yet.
+    this.#fontRemeasureScheduled = false;
 
     this.#resetState();
   }
@@ -604,6 +608,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         contentEl.after(this.#overlayElement);
       }
       this.#metrics.init(contentEl);
+      this.#remeasureMetricsOnFontLoad();
       this.#listenContentElement(contentEl, gutterEl);
       if (
         this.#contentElement !== undefined &&
@@ -1500,6 +1505,43 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     this.#markerRenderer?.removePopup();
+  }
+
+  // A custom monospace web font can finish loading after the editor first
+  // renders. Until then Metrics measured the '0' width against the fallback
+  // font, so the gutter width and every caret/selection x-position (each
+  // offset by a whole number of `ch` units) are wrong. Re-measure once fonts
+  // settle and, when the width actually changed, drop the cached widths and
+  // offsets and repaint the overlays so they line up with the loaded glyphs.
+  // FontFaceSet is unavailable in non-browser hosts (e.g. jsdom in tests).
+  #remeasureMetricsOnFontLoad(): void {
+    if (this.#fontRemeasureScheduled) {
+      return;
+    }
+    const fonts = document.fonts as FontFaceSet | undefined;
+    if (fonts === undefined) {
+      return;
+    }
+    this.#fontRemeasureScheduled = true;
+    void fonts.ready.then(() => {
+      if (
+        this.#contentElement === undefined ||
+        !this.#metrics.remeasureCharacterWidth()
+      ) {
+        return;
+      }
+      this.#gutterWidthCache = undefined;
+      this.#contentWidthCache = undefined;
+      this.#resetCache();
+      if (
+        this.#selections !== undefined ||
+        this.#matches !== undefined ||
+        this.#markerRenderer !== undefined
+      ) {
+        this.#updateSelections(this.#selections ?? []);
+      }
+      this.#markerRenderer?.removePopup();
+    });
   }
 
   #rerender(
