@@ -23,6 +23,12 @@ export interface EditStackEntry<LAnnotation> {
   lineAnnotationsBefore?: DiffLineAnnotation<LAnnotation>[];
   /** Line annotations after the transaction. */
   lineAnnotationsAfter?: DiffLineAnnotation<LAnnotation>[];
+  /**
+   * When `true`, this entry is its own undo step and never merges with the
+   * entry before or after it. Set for paste and cut, which otherwise look like
+   * typing and would merge into the previous keystroke.
+   */
+  undoBoundary?: boolean;
 }
 
 /** Options for the edit stack. */
@@ -176,6 +182,8 @@ export function shouldCoalesceEditStackEntry<LAnnotation>(
 ): boolean {
   if (
     previousEntry === undefined ||
+    previousEntry.undoBoundary === true ||
+    nextEntry.undoBoundary === true ||
     previousEntry.forwardEdits.length === 0 ||
     previousEntry.forwardEdits.length !== previousEntry.inverseEdits.length ||
     previousEntry.forwardEdits.length !== nextEntry.forwardEdits.length ||
@@ -201,6 +209,7 @@ export function shouldCoalesceEditStackEntry<LAnnotation>(
     const nextIsInsert =
       nextForward.start === nextForward.end &&
       nextForward.text.length > 0 &&
+      !nextForward.text.includes('\n') &&
       nextInverse.text.length === 0;
     if (previousWasInsert && nextIsInsert) {
       const expectedMappedNextStart = previousForward.end;
