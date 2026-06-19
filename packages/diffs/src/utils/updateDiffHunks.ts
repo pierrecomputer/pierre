@@ -47,6 +47,41 @@ export function recomputeDiffHunks(
   };
 }
 
+// Rebuilds hunk metadata when the editable side has been emptied of all text.
+//
+// The editor always keeps one (empty) line for an empty document, but an empty
+// string splits into zero addition lines, so a normal recompute produces a diff
+// with no addition rows at all. Rendering that leaves the attached editor with
+// no line element to host its caret. To keep one editable row, diff the
+// unchanged deletions against a single empty line (which yields an ordinary
+// "replace everything with one empty line" change) and store the addition as
+// `['']` so it still joins back to the editor's empty document.
+export function recomputeEmptyDocumentDiff(
+  diff: FileDiffMetadata,
+  parseDiffOptions?: CreatePatchOptionsNonabortable
+): FullDiffHunkUpdate {
+  const recomputed = parseDiffFromFile(
+    {
+      name: diff.prevName ?? diff.name,
+      contents: diff.deletionLines.join(''),
+    },
+    {
+      name: diff.name,
+      contents: '\n',
+      lang: diff.lang,
+    },
+    parseDiffOptions
+  );
+  return {
+    hunks: recomputed.hunks,
+    splitLineCount: recomputed.splitLineCount,
+    unifiedLineCount: recomputed.unifiedLineCount,
+    additionLines: [''],
+    deletionLines: recomputed.deletionLines,
+    type: recomputed.type,
+  };
+}
+
 /** Updates hunk metadata after addition lines change; re-parses affected hunks only. */
 export function updateDiffHunks(
   diff: FileDiffMetadata,

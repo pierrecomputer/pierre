@@ -74,7 +74,11 @@ import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import { splitFileContents } from '../utils/splitFileContents';
-import { recomputeDiffHunks, updateDiffHunks } from '../utils/updateDiffHunks';
+import {
+  recomputeDiffHunks,
+  recomputeEmptyDocumentDiff,
+  updateDiffHunks,
+} from '../utils/updateDiffHunks';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 
@@ -444,10 +448,22 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       additionHastLines[i] ??= createPlainAdditionLineElement(i, textDocument);
     }
     if (!diff.isPartial) {
-      Object.assign(
-        diff,
-        recomputeDiffHunks(diff, this.options.parseDiffOptions)
-      );
+      // An empty document splits into zero addition lines, which would recompute
+      // to a diff with no editable rows and leave the attached editor with no
+      // line element to host its caret (the additions column vanishes in split;
+      // unified shows only deletions). Keep one empty editable line instead.
+      if (newLength === 0) {
+        Object.assign(
+          diff,
+          recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
+        );
+        additionHastLines[0] = createPlainAdditionLineElement(0, textDocument);
+      } else {
+        Object.assign(
+          diff,
+          recomputeDiffHunks(diff, this.options.parseDiffOptions)
+        );
+      }
     }
 
     this.renderCache.isDirty = true;
