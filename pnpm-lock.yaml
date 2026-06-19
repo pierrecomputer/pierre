@@ -298,6 +298,9 @@ importers:
       '@pierre/icons':
         specifier: 'catalog:'
         version: 0.7.1(react@19.2.7)
+      diff:
+        specifier: 'catalog:'
+        version: 9.0.0
       react:
         specifier: 19.2.7
         version: 19.2.7
