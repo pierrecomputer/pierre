@@ -2292,8 +2292,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     const { ch, lineHeight } = this.#metrics;
     const y = this.#getLineY(line) + wrapLine * lineHeight;
-    const css = `width:${width}px;transform:translateX(${left}px) translateY(${y}px);`;
-    const cacheKey = `${type}-${line}/${wrapLine}-${left}-${width}${extraDataset ?? ''}`;
+    const cacheKey = `${type}-${line}/${wrapLine}-${left}-${width} ${extraDataset ?? ''}`;
     const overlayEls = this.#overlayElements;
     const rounded =
       (this.#options.roundedSelection ?? true) && type === 'selection';
@@ -2411,8 +2410,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     if (overlayEls?.has(cacheKey) === true) {
       rangeEl = overlayEls.get(cacheKey)!;
-      rangeEl.style.cssText = css;
-      console.log('[diffs/editor] rangeEl', rangeEl);
       overlayEls.delete(cacheKey);
     } else {
       rangeEl = h(
@@ -2421,12 +2418,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           dataset: extraDataset
             ? [type + 'Range', extraDataset]
             : type + 'Range',
-          style: { cssText: css },
         },
         renderCtx.fragment
       );
     }
 
+    rangeEl.style.width = `${width}px`;
+    rangeEl.style.transform = `translateX(${left}px) translateY(${y}px)`;
     if (rounded) {
       addRadiusStyle(rangeEl);
     }
@@ -2453,25 +2451,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     const x = left - 1;
     const y = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
-    const transform = `translateX(${x}px) translateY(${y}px)`;
 
     let caretEl: HTMLElement;
     if (this.#overlayElements?.has(cacheKey) === true) {
       caretEl = this.#overlayElements.get(cacheKey)!;
-      caretEl.style.transform = transform;
       this.#overlayElements.delete(cacheKey);
     } else {
       caretEl = h(
         'div',
         {
           dataset: 'caret',
-          style: {
-            transform,
-          },
         },
         renderCtx.fragment
       );
     }
+    caretEl.style.transform = `translateX(${x}px) translateY(${y}px)`;
     renderCtx.elements.set(cacheKey, caretEl);
     if (isPrimary) {
       caretEl.style.scrollMargin = this.#getScrollMargin();
@@ -2492,16 +2486,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const [left, wrapLine] = this.#getCharX(line, 0);
+    const top = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
+
     const cacheKey = 'selectionActionIcon-' + line + '/' + wrapLine;
     if (renderCtx.elements.has(cacheKey)) {
       return;
     }
 
-    const selectionActionIcon = SelectionActionWidget.renderIcon(
-      left,
-      this.#getLineY(line) + wrapLine * this.#metrics.lineHeight,
-      renderCtx.fragment,
-      () => {
+    let icon: HTMLElement;
+    if (this.#overlayElements?.has(cacheKey) === true) {
+      icon = this.#overlayElements.get(cacheKey)!;
+      this.#overlayElements.delete(cacheKey);
+    } else {
+      icon = SelectionActionWidget.renderIcon(renderCtx.fragment, () => {
         const cleanUp = () => {
           this.#selectionAction?.cleanup();
           this.#selectionAction = undefined;
@@ -2570,9 +2567,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (this.#isLineVisible(line) && this.#contentElement !== undefined) {
           this.#selectionAction.render(this.#contentElement);
         }
-      }
-    );
-    renderCtx.elements.set(cacheKey, selectionActionIcon);
+      });
+    }
+    icon.style.transform = `translateY(${top}px) translateX(${left}px)`;
+    renderCtx.elements.set(cacheKey, icon);
   }
 
   // Opens the search panel in the requested mode. If a panel is already open,

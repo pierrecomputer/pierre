@@ -22,7 +22,6 @@ import {
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
 import { ScrollSyncManager } from '../managers/ScrollSyncManager';
-import { queueRender } from '../managers/UniversalRenderingManager';
 import {
   DiffHunksRenderer,
   type DiffHunksRendererOptions,
@@ -944,7 +943,7 @@ export class FileDiff<
       }
 
       if (this.editor != null) {
-        queueRender(this.syncRenderViewToEditor);
+        this.syncRenderViewToEditor();
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {
@@ -988,7 +987,7 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
-  private syncRenderViewToEditor = () => {
+  private syncRenderViewToEditor(): void {
     const editor = this.editor;
     const fileContainer = this.fileContainer;
     const fileDiff = this.fileDiff;
@@ -1008,12 +1007,12 @@ export class FileDiff<
         );
       });
     }
-  };
+  }
 
   public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     this.editor = editor;
-    queueRender(this.syncRenderViewToEditor);
+    this.syncRenderViewToEditor();
     return () => {
       this.editor = undefined;
     };
