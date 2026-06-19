@@ -88,10 +88,7 @@ export class Metrics {
 
   /** measure the width of the text */
   measureTextWidth(text: string): number {
-    const textWithExpandedTabs = text.replaceAll(
-      '\t',
-      ' '.repeat(this.tabSize)
-    );
+    const textWithExpandedTabs = expandTabsToSpaces(text, this.tabSize);
     if (needsDomTextMeasurement(textWithExpandedTabs)) {
       return this.domMeasureTextWidth(textWithExpandedTabs);
     }
@@ -204,17 +201,48 @@ export function getUnicodeMeasurementOffsets(
   return offsets;
 }
 
-/** get the number of columns of the ASCII text */
+/**
+ * Expand tab characters to spaces using fixed tab stops: each tab advances to
+ * the next multiple of tabSize from its running column, matching how the
+ * rendered text expands tabs via CSS `tab-size`. Expanding every tab to a flat
+ * tabSize would mis-measure tabs that follow other characters on the same line
+ * (e.g. an alignment tab in `foo\tbar`).
+ */
+export function expandTabsToSpaces(text: string, tabSize: number): string {
+  if (!text.includes('\t')) {
+    return text;
+  }
+  let result = '';
+  let column = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) === /* '\t' */ 9) {
+      const advance = tabSize - (column % tabSize);
+      result += ' '.repeat(advance);
+      column += advance;
+    } else {
+      result += text[i];
+      column += 1;
+    }
+  }
+  return result;
+}
+
+/**
+ * Count the rendered columns of ASCII text, advancing each tab to the next
+ * fixed tab stop (a multiple of tabSize) to match CSS `tab-size`. Returns -1
+ * for non-ASCII text, which must be measured glyph-by-glyph instead.
+ */
 export function getExpandedAsciiTextColumns(
   text: string,
   tabSize: number
 ): number {
   let columns = 0;
   for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) > 127) {
+    const code = text.charCodeAt(i);
+    if (code > 127) {
       return -1;
     }
-    columns += text.charCodeAt(i) === /* '\t' */ 9 ? tabSize : 1;
+    columns += code === /* '\t' */ 9 ? tabSize - (columns % tabSize) : 1;
   }
   return columns;
 }

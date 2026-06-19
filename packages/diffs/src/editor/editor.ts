@@ -2152,23 +2152,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         continue;
       }
 
-      let segmentLeft: number;
-      let segmentWidth: number;
+      const segmentStartWidth = this.#segmentTextWidth(
+        lineText,
+        segmentStart,
+        wrapStartChar
+      );
+      const segmentLeft = offsetLeft + segmentStartWidth;
       let paddingEnd = 0;
-      if (wrapStartChar === 0) {
-        segmentLeft = offsetLeft;
-      } else {
-        const prefixInSegment = lineText.slice(segmentStart, wrapStartChar);
-        const prefixAsciiColumns = getExpandedAsciiTextColumns(
-          prefixInSegment,
-          this.#metrics.tabSize
-        );
-        segmentLeft =
-          offsetLeft +
-          (prefixAsciiColumns !== -1
-            ? prefixAsciiColumns * this.#metrics.ch
-            : this.#metrics.measureTextWidth(prefixInSegment));
-      }
       if (
         !isLastLine &&
         wrapLine === segmentCount - 1 &&
@@ -2176,20 +2166,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       ) {
         paddingEnd = this.#metrics.ch;
       }
-      if (wrapStartChar === wrapEndChar) {
-        segmentWidth = paddingEnd;
-      } else {
-        const selectionInSegment = lineText.slice(wrapStartChar, wrapEndChar);
-        const selectionAsciiWidth = getExpandedAsciiTextColumns(
-          selectionInSegment,
-          this.#metrics.tabSize
-        );
-        segmentWidth =
-          selectionAsciiWidth !== -1
-            ? selectionAsciiWidth * this.#metrics.ch
-            : this.#metrics.measureTextWidth(selectionInSegment);
-        segmentWidth += paddingEnd;
-      }
+      // Measure the selection width as the gap between two segment-relative
+      // offsets so a tab inside the selection advances from its real column,
+      // not from the start of the sliced selection text.
+      const segmentWidth =
+        wrapStartChar === wrapEndChar
+          ? paddingEnd
+          : this.#segmentTextWidth(lineText, segmentStart, wrapEndChar) -
+            segmentStartWidth +
+            paddingEnd;
 
       this.#renderSelectionBlock(
         renderCtx,
@@ -2201,6 +2186,27 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         extraDataset
       );
     }
+  }
+
+  // Pixel width of the text from a wrapped segment's start up to a character,
+  // relative to the segment's left edge. Tabs advance from the segment start,
+  // which sits on a tab stop, so tab stops line up with the rendered text.
+  #segmentTextWidth(
+    lineText: string,
+    segmentStart: number,
+    character: number
+  ): number {
+    if (character <= segmentStart) {
+      return 0;
+    }
+    const segmentText = lineText.slice(segmentStart, character);
+    const asciiColumns = getExpandedAsciiTextColumns(
+      segmentText,
+      this.#metrics.tabSize
+    );
+    return asciiColumns !== -1
+      ? asciiColumns * this.#metrics.ch
+      : this.#metrics.measureTextWidth(segmentText);
   }
 
   // Render one selection block for a single visual line.
