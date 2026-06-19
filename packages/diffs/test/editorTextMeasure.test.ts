@@ -8,7 +8,47 @@ import {
   needsDomTextMeasurement,
   snapTextOffsetToUnicodeBoundary,
 } from '../src/editor/textMeasure';
+import { round } from '../src/editor/utils';
 import { type DomHandle, installDom } from './domHarness';
+
+// Replaces HTMLElement.prototype.getBoundingClientRect with a stub that counts
+// invocations and reports a fixed sub-pixel width. domMeasureTextWidth() is the
+// only code under test that calls getBoundingClientRect, so the count equals the
+// number of forced layouts it performed. Returns the call counter and a restore
+// function.
+function stubBoundingClientRectWidth(width: number): {
+  getCallCount: () => number;
+  restore: () => void;
+} {
+  const original = HTMLElement.prototype.getBoundingClientRect;
+  let calls = 0;
+  Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+    configurable: true,
+    value(): DOMRect {
+      calls++;
+      return {
+        width,
+        height: 0,
+        top: 0,
+        left: 0,
+        right: width,
+        bottom: 0,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      };
+    },
+  });
+  return {
+    getCallCount: () => calls,
+    restore: () => {
+      Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+        configurable: true,
+        value: original,
+      });
+    },
+  };
+}
 
 describe('needsDomTextMeasurement', () => {
   test('returns false for empty and plain ASCII text', () => {
@@ -224,5 +264,110 @@ describe('Metrics.remeasureCharacterWidth', () => {
     const metrics = new Metrics();
     expect(metrics.remeasureCharacterWidth()).toBe(false);
     expect(metrics.ch).toBe(-1);
+  });
+});
+
+describe('Metrics.measureTextWidth (DOM path)', () => {
+  test('rounds measured widths and memoizes repeated measurements', () => {
+    const { cleanup } = installDom();
+    const rawWidth = 41.6789;
+    const rect = stubBoundingClientRectWidth(rawWidth);
+    try {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const metrics = new Metrics();
+      metrics.init(root);
+
+      const emoji = '😀';
+      const first = metrics.measureTextWidth(emoji);
+      const second = metrics.measureTextWidth(emoji);
+      const third = metrics.measureTextWidth(emoji);
+
+      // The DOM path now rounds like canvasMeasureTextWidth and ch instead of
+      // leaking the raw sub-pixel value.
+      expect(first).toBe(round(rawWidth));
+      expect(first).not.toBe(rawWidth);
+      expect(second).toBe(first);
+      expect(third).toBe(first);
+
+      // The forced layout happens once; repeats are served from the cache.
+      expect(rect.getCallCount()).toBe(1);
+
+      // A different string is measured once, then also cached.
+      const other = metrics.measureTextWidth('a😀b');
+      expect(other).toBe(round(rawWidth));
+      expect(rect.getCallCount()).toBe(2);
+      metrics.measureTextWidth('a😀b');
+      expect(rect.getCallCount()).toBe(2);
+    } finally {
+      rect.restore();
+      cleanup();
+    }
+  });
+
+  test('re-measures after the font changes', () => {
+    const { cleanup } = installDom();
+    const rect = stubBoundingClientRectWidth(10);
+    const realGetComputedStyle = globalThis.getComputedStyle;
+    let fontFamily = 'monospace';
+    // Drive the font Metrics.init() reads so the test controls when the font
+    // string changes, independent of jsdom's computed-style behavior.
+    globalThis.getComputedStyle = (() =>
+      ({
+        fontSize: '12px',
+        fontFamily,
+        tabSize: '2',
+        lineHeight: '20px',
+        paddingTop: '0px',
+      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+    try {
+      const rootA = document.createElement('div');
+      document.body.appendChild(rootA);
+      const metrics = new Metrics();
+      metrics.init(rootA);
+
+      const emoji = '😀';
+      metrics.measureTextWidth(emoji);
+      metrics.measureTextWidth(emoji);
+      expect(rect.getCallCount()).toBe(1);
+
+      // A new content element with a different font invalidates cached widths.
+      fontFamily = 'serif';
+      const rootB = document.createElement('div');
+      document.body.appendChild(rootB);
+      metrics.init(rootB);
+      metrics.measureTextWidth(emoji);
+      expect(rect.getCallCount()).toBe(2);
+    } finally {
+      globalThis.getComputedStyle = realGetComputedStyle;
+      rect.restore();
+      cleanup();
+    }
+  });
+
+  test('re-measures after the cache is cleared on a layout change', () => {
+    const { cleanup } = installDom();
+    const rect = stubBoundingClientRectWidth(20);
+    try {
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      const metrics = new Metrics();
+      metrics.init(root);
+
+      const emoji = '😀';
+      metrics.measureTextWidth(emoji);
+      metrics.measureTextWidth(emoji);
+      expect(rect.getCallCount()).toBe(1);
+
+      // The editor calls this from handleLayoutResize, so a reflow that the
+      // same content element survives (e.g. a web font finishing loading)
+      // re-measures instead of returning the width from the previous font.
+      metrics.clearTextWidthCache();
+      metrics.measureTextWidth(emoji);
+      expect(rect.getCallCount()).toBe(2);
+    } finally {
+      rect.restore();
+      cleanup();
+    }
   });
 });

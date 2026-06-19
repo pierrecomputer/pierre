@@ -1510,6 +1510,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#lastAccessedLineElement = undefined;
     this.#lastAccessedCharX = undefined;
+    // A width change means the inherited font/metrics may have changed (e.g. a
+    // web font finished loading) while this same content element survived, so
+    // discard memoized non-ASCII text widths and let them re-measure.
+    this.#metrics.clearTextWidthCache();
     if (contentWidthChanged && (this.#wrap || lineAnnotations > 0)) {
       this.#lineYCache.clear();
       this.#wrapLineOffsetsCache.clear();
