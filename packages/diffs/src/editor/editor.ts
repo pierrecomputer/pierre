@@ -2495,6 +2495,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#overlayElements.delete(cacheKey);
     } else {
       icon = SelectionActionWidget.renderIcon(renderCtx.fragment, () => {
+        // The icon element is cached and reused across renders for the same
+        // line (see cacheKey above), so the `selection` captured when the icon
+        // was first created can be stale: while dragging, the icon is created
+        // from the first single-character selection rather than the user's
+        // final selection. Read the current primary selection at click time so
+        // the action always operates on what the user actually has selected.
+        const activeSelection = this.#selections?.at(-1) ?? selection;
+
         const cleanUp = () => {
           this.#selectionAction?.cleanup();
           this.#selectionAction = undefined;
@@ -2523,17 +2531,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           return;
         }
 
-        const line = selection.end.line;
+        const line = activeSelection.end.line;
         const lineText = textDocument.getLineText(line);
         const selectionActionElement = renderSelectionAction({
           textDocument,
-          selection,
+          selection: activeSelection,
           applyEdits: (edits: TextEdit[]) => this.applyEdits(edits, true),
           getSelectionText: () => {
-            return this.#textDocument?.getText(selection) ?? '';
+            return this.#textDocument?.getText(activeSelection) ?? '';
           },
           replaceSelectionText: (text: string) => {
-            this.#replaceSelectionText(text, [selection]);
+            this.#replaceSelectionText(text, [activeSelection]);
           },
           close: () => {
             cleanUp();
@@ -2559,7 +2567,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           leadingWhitespaces,
           handleWidgetDomResize
         );
-        this.#updateSelections([selection]);
+        this.#updateSelections([activeSelection]);
         if (this.#isLineVisible(line) && this.#contentElement !== undefined) {
           this.#selectionAction.render(this.#contentElement);
         }
