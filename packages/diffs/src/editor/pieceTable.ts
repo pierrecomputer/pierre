@@ -323,17 +323,19 @@ export class PieceTable {
     const docLength = this.#length;
     const charAt = (offset: number) => this.charAt(offset);
 
+    // Reuse the single compiled pattern across every line, resetting its
+    // lastIndex before each line, instead of allocating a fresh RegExp per
+    // line. The pattern is global, so lastIndex tracks progress within a line.
     for (let line = 0; line < this.#lineCount; line++) {
       const lineText = this.getLineText(line);
       const lineStart = this.offsetAt({ line, character: 0 });
-      const re = new RegExp(pattern.source, pattern.flags);
-      re.lastIndex = 0;
+      pattern.lastIndex = 0;
       let match: RegExpExecArray | null;
-      while ((match = re.exec(lineText)) !== null) {
+      while ((match = pattern.exec(lineText)) !== null) {
         const rel = match.index;
         const fragment = match[0];
         if (fragment.length === 0) {
-          re.lastIndex = advancePastEmptyMatch(lineText, rel);
+          pattern.lastIndex = advancePastEmptyMatch(lineText, rel);
           continue;
         }
         const docStart = lineStart + rel;
@@ -346,8 +348,8 @@ export class PieceTable {
             return out;
           }
         }
-        if (rel === re.lastIndex) {
-          re.lastIndex = advancePastEmptyMatch(lineText, rel);
+        if (rel === pattern.lastIndex) {
+          pattern.lastIndex = advancePastEmptyMatch(lineText, rel);
         }
       }
     }

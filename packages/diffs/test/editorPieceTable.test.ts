@@ -294,6 +294,28 @@ describe('PieceTable', () => {
     ).toBeUndefined();
   });
 
+  test('search returns every match across lines with one reused pattern', () => {
+    // Two matches share line 1 (offsets advance within the line) while lines 0
+    // and 2 match from their start (the pattern resets between lines). This is
+    // the behavior that must hold when the compiled regex is reused per line
+    // instead of recompiled.
+    const table = new PieceTable('foo\nfoofoo\nbar foo');
+    const searchParams = {
+      text: 'foo',
+      replaceText: '',
+      caseSensitive: false,
+      wholeWord: false,
+      regex: false,
+    };
+
+    expect(table.search(searchParams)).toEqual([
+      [0, 3],
+      [4, 7],
+      [7, 10],
+      [15, 18],
+    ]);
+  });
+
   test('search does not match newline-spanning plain queries', () => {
     const table = new PieceTable('foo\nbar\nfoo');
     const searchParams = {
