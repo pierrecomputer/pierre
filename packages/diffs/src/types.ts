@@ -908,9 +908,6 @@ export interface DiffsBaseComponent {
   readonly top?: number;
   readonly options: DiffsComponentOptions;
   setOptions: (options: Partial<DiffsComponentOptions>) => void;
-  // `notify: false` updates the line-selection highlight without invoking the
-  // onLineSelected callback. The editor uses this to render its active-line
-  // highlight without publishing it as a user line selection.
   setSelectedLines: (
     range: { start: number; end: number } | null,
     options?: { notify?: boolean }
