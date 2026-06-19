@@ -22,6 +22,7 @@ import {
   mapCursorMove,
   mapSelectionShift,
   mergeOverlappingSelections,
+  resolveDeleteCharacterRange,
   resolveIndentEdits,
   selectionIntersects,
 } from '../src/editor/selection';
@@ -1487,6 +1488,40 @@ describe('mapSelectionRangeMove', () => {
     expect(mapSelectionShift(textDocument, afterLetter, 'right')).toEqual([
       createSelection(0, 1, 0, 3, DirectionForward),
     ]);
+  });
+});
+
+describe('resolveDeleteCharacterRange', () => {
+  test('backward delete removes a whole emoji', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀');
+    const caret = createSelection(0, 3, 0, 3);
+
+    expect(resolveDeleteCharacterRange(textDocument, caret, false)).toEqual([
+      { line: 0, character: 1 },
+      { line: 0, character: 3 },
+    ]);
+  });
+
+  test('forward delete removes a whole emoji', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀');
+    const caret = createSelection(0, 1, 0, 1);
+
+    expect(resolveDeleteCharacterRange(textDocument, caret, true)).toEqual([
+      { line: 0, character: 1 },
+      { line: 0, character: 3 },
+    ]);
+  });
+
+  test('returns the selected range for non-collapsed selections', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀b');
+    const selection = createSelection(0, 1, 0, 3, DirectionForward);
+
+    expect(resolveDeleteCharacterRange(textDocument, selection, false)).toEqual(
+      [
+        { line: 0, character: 1 },
+        { line: 0, character: 3 },
+      ]
+    );
   });
 });
 

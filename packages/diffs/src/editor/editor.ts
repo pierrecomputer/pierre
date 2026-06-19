@@ -62,6 +62,7 @@ import {
   mapSelectionShift,
   mergeOverlappingSelections,
   remapSelectionsAfterEdits,
+  resolveDeleteCharacterRange,
   resolveIndentEdits,
   resolveSelectionCut,
   selectionIntersects,
@@ -2852,26 +2853,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    let edit: ResolvedTextEdit;
-    if (isCollapsedSelection(primarySelection)) {
-      const offset = textDocument.offsetAt(primarySelection.start);
-      const nextOffset = forward
-        ? Math.min(textDocument.getText().length, offset + 1)
-        : Math.max(0, offset - 1);
-      edit = {
-        start: Math.min(offset, nextOffset),
-        end: Math.max(offset, nextOffset),
-        text: '',
-      };
-    } else {
-      edit = {
-        start: textDocument.offsetAt(primarySelection.start),
-        end: textDocument.offsetAt(primarySelection.end),
-        text: '',
-      };
+    const [start, end] = resolveDeleteCharacterRange(
+      textDocument,
+      primarySelection,
+      forward
+    );
+    if (comparePosition(start, end) === 0) {
+      return;
     }
 
-    this.#applyResolvedTextEdit(edit);
+    this.#applyResolvedTextEdit({
+      start: textDocument.offsetAt(start),
+      end: textDocument.offsetAt(end),
+      text: '',
+    });
   }
 
   #deleteSoftLineBackward() {
