@@ -61,6 +61,31 @@ export class Metrics {
     }
   }
 
+  /**
+   * Re-measure the '0' character width against the font that is loaded right
+   * now, returning true when it changed.
+   *
+   * A custom web font can finish loading after the editor first renders.
+   * Until then canvas measureText reports the fallback font's width, and
+   * getComputedStyle returns the same font-family string before and after the
+   * file arrives, so init()'s font guard never re-measures on its own. Call
+   * this once fonts have settled (e.g. on document.fonts.ready) to replace a
+   * width measured against the fallback font with the real glyph width. The
+   * boolean return lets the caller skip re-rendering when nothing changed.
+   */
+  remeasureCharacterWidth(): boolean {
+    if (this.#canvasCtx === undefined || this.#font === undefined) {
+      return false;
+    }
+    this.#canvasCtx.font = this.#font;
+    const ch = this.canvasMeasureTextWidth('0');
+    if (ch === this.ch) {
+      return false;
+    }
+    this.ch = ch;
+    return true;
+  }
+
   /** measure the width of the text */
   measureTextWidth(text: string): number {
     const textWithExpandedTabs = text.replaceAll(
