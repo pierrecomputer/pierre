@@ -194,6 +194,56 @@ describe('VirtualizedFileDiff partial hydration', () => {
     }
   });
 
+  test('expanding the synthetic bottom hunk starts hydration and marks layout dirty', async () => {
+    let instance: TestVirtualizedFileDiff | undefined;
+    try {
+      const { oldFile, newFile, partial } = createPartialChange();
+      const loadedContents = { oldFile, newFile };
+      const deferred = createDeferred<typeof loadedContents>();
+      const virtualizerState = createVirtualizer();
+      let loadCalls = 0;
+      instance = new TestVirtualizedFileDiff(
+        {
+          disableFileHeader: true,
+          loadDiffFiles: (fileDiff) => {
+            loadCalls++;
+            expect(fileDiff).toBe(partial);
+            return deferred.promise;
+          },
+        },
+        virtualizerState.virtualizer
+      );
+
+      instance.prepareCodeViewItem(partial, 0);
+      instance.expandHunk(partial.hunks.length, 'up', 1);
+      instance.expandHunk(partial.hunks.length, 'up', 1);
+
+      expect(loadCalls).toBe(1);
+      expect(instance.fileDiff).toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(true);
+      expect(instance.getExpandedHunkForTest(partial.hunks.length)).toEqual({
+        fromStart: 2,
+        fromEnd: 0,
+      });
+      expect(virtualizerState.instanceChangedCalls).toEqual([
+        { layoutDirty: true },
+        { layoutDirty: true },
+      ]);
+
+      deferred.resolve(loadedContents);
+      await waitForHydrated(instance);
+
+      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(virtualizerState.instanceChangedCalls.at(-1)).toEqual({
+        layoutDirty: true,
+      });
+      expect(virtualizerState.instanceChangedCalls).toHaveLength(3);
+    } finally {
+      instance?.cleanUp();
+    }
+  });
+
   test('ignores stale loader results after the prepared diff changes', async () => {
     let instance: TestVirtualizedFileDiff | undefined;
     try {

@@ -27,17 +27,6 @@ export interface GetTrailingContextRangeSizeProps {
   errorPrefix: string;
 }
 
-export interface GetPartialHydrationTrailingContextProps {
-  fileDiff: FileDiffMetadata;
-  canHydratePartialDiff: boolean;
-}
-
-export interface PartialHydrationTrailingContext {
-  type: 'partial-hydration-tail';
-  hunkIndex: number;
-  lineCountKnown: false;
-}
-
 export interface GetTrailingExpandedRegionProps extends GetTrailingContextRangeSizeProps {
   hunkIndex: number;
   expandedHunks: GetExpandedRegionProps['expandedHunks'];

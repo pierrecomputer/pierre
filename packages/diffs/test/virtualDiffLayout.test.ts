@@ -9,6 +9,7 @@ import type {
 import {
   getExpandedRegion,
   getLeadingHunkSeparatorLayout,
+  getTrailingContextRangeSize,
   getTrailingExpandedRegion,
   getTrailingHunkSeparatorLayout,
 } from '../src/utils/virtualDiffLayout';
@@ -114,6 +115,23 @@ describe('virtual diff layout helpers', () => {
   });
 
   describe('getTrailingExpandedRegion', () => {
+    test('preserves known trailing context only for full diffs', () => {
+      const fileDiff = createTrailingDiff(5);
+
+      expect(
+        getTrailingContextRangeSize({
+          fileDiff,
+          errorPrefix: 'virtualDiffLayout.test',
+        })
+      ).toBe(5);
+      expect(
+        getTrailingContextRangeSize({
+          fileDiff: { ...fileDiff, isPartial: true },
+          errorPrefix: 'virtualDiffLayout.test',
+        })
+      ).toBe(0);
+    });
+
     test('ignores unsupported final trailing fromEnd expansion', () => {
       const fileDiff = createTrailingDiff(5);
 
