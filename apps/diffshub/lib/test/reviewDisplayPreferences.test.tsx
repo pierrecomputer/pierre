@@ -31,6 +31,9 @@ index 1111111..2222222 100644
 
 const originalGlobals = {
   CSSStyleSheet: Reflect.get(globalThis, 'CSSStyleSheet'),
+  CustomEvent: Reflect.get(globalThis, 'CustomEvent'),
+  Element: Reflect.get(globalThis, 'Element'),
+  Event: Reflect.get(globalThis, 'Event'),
   Image: Reflect.get(globalThis, 'Image'),
   cancelAnimationFrame: Reflect.get(globalThis, 'cancelAnimationFrame'),
   customElements: Reflect.get(globalThis, 'customElements'),
@@ -40,6 +43,7 @@ const originalGlobals = {
   HTMLButtonElement: Reflect.get(globalThis, 'HTMLButtonElement'),
   HTMLDivElement: Reflect.get(globalThis, 'HTMLDivElement'),
   HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
+  HTMLInputElement: Reflect.get(globalThis, 'HTMLInputElement'),
   HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
   HTMLTemplateElement: Reflect.get(globalThis, 'HTMLTemplateElement'),
   IntersectionObserver: Reflect.get(globalThis, 'IntersectionObserver'),
@@ -51,6 +55,7 @@ const originalGlobals = {
   matchMedia: Reflect.get(globalThis, 'matchMedia'),
   MutationObserver: Reflect.get(globalThis, 'MutationObserver'),
   navigator: Reflect.get(globalThis, 'navigator'),
+  Node: Reflect.get(globalThis, 'Node'),
   requestAnimationFrame: Reflect.get(globalThis, 'requestAnimationFrame'),
   ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
   ShadowRoot: Reflect.get(globalThis, 'ShadowRoot'),
@@ -72,6 +77,16 @@ const dom = new JSDOM('<!doctype html><html><body></body></html>', {
   url: 'http://localhost',
   virtualConsole,
 });
+const originalHTMLElementPrototype = {
+  attachEvent: Object.getOwnPropertyDescriptor(
+    dom.window.HTMLElement.prototype,
+    'attachEvent'
+  ),
+  detachEvent: Object.getOwnPropertyDescriptor(
+    dom.window.HTMLElement.prototype,
+    'detachEvent'
+  ),
+};
 
 let mobileMatches = false;
 type MediaListener =
@@ -101,9 +116,45 @@ class MockCSSStyleSheet {
   replaceSync(_cssText: string): void {}
 }
 
+function defineHTMLElementEventShim(
+  property: keyof typeof originalHTMLElementPrototype
+): void {
+  const isAttachEvent = property === 'attachEvent';
+  Object.defineProperty(dom.window.HTMLElement.prototype, property, {
+    configurable: true,
+    value(
+      this: HTMLElement,
+      eventName: string,
+      listener: EventListenerOrEventListenerObject
+    ) {
+      const type = eventName.startsWith('on') ? eventName.slice(2) : eventName;
+      if (isAttachEvent) {
+        this.addEventListener(type, listener);
+      } else {
+        this.removeEventListener(type, listener);
+      }
+    },
+  });
+}
+
+function restoreHTMLElementEventShim(
+  property: keyof typeof originalHTMLElementPrototype
+): void {
+  const descriptor = originalHTMLElementPrototype[property];
+  if (descriptor == null) {
+    Reflect.deleteProperty(dom.window.HTMLElement.prototype, property);
+    return;
+  }
+
+  Object.defineProperty(dom.window.HTMLElement.prototype, property, descriptor);
+}
+
 beforeAll(() => {
   Object.assign(globalThis, {
     CSSStyleSheet: MockCSSStyleSheet,
+    CustomEvent: dom.window.CustomEvent,
+    Element: dom.window.Element,
+    Event: dom.window.Event,
     cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window),
     customElements: dom.window.customElements,
     document: dom.window.document,
@@ -112,6 +163,7 @@ beforeAll(() => {
     HTMLButtonElement: dom.window.HTMLButtonElement,
     HTMLDivElement: dom.window.HTMLDivElement,
     HTMLElement: dom.window.HTMLElement,
+    HTMLInputElement: dom.window.HTMLInputElement,
     HTMLStyleElement: dom.window.HTMLStyleElement,
     HTMLTemplateElement: dom.window.HTMLTemplateElement,
     Image: dom.window.Image,
@@ -120,6 +172,7 @@ beforeAll(() => {
     matchMedia,
     MutationObserver: dom.window.MutationObserver,
     navigator: dom.window.navigator,
+    Node: dom.window.Node,
     requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window),
     ResizeObserver: MockResizeObserver,
     ShadowRoot: dom.window.ShadowRoot,
@@ -135,6 +188,8 @@ beforeAll(() => {
     matchMedia,
     ResizeObserver: MockResizeObserver,
   });
+  defineHTMLElementEventShim('attachEvent');
+  defineHTMLElementEventShim('detachEvent');
 });
 
 beforeEach(() => {
@@ -152,6 +207,8 @@ afterAll(() => {
       Object.assign(globalThis, { [key]: value });
     }
   }
+  restoreHTMLElementEventShim('attachEvent');
+  restoreHTMLElementEventShim('detachEvent');
   dom.window.close();
 });
 
@@ -231,9 +288,104 @@ describe('ReviewUI display preferences', () => {
       await cleanup(rendered);
     }
   });
+
+  test('hydrates, applies, and persists the custom code font preference', async () => {
+    writeStoredPreferences({
+      codeFont: {
+        family: 'jetbrains',
+        kind: 'custom',
+      },
+      collapseMode: 'expanded',
+      diffIndicators: 'bars',
+      diffStyle: 'split',
+      lineNumbers: true,
+      overflow: 'scroll',
+      showBackgrounds: true,
+    });
+
+    const rendered = await renderReviewUI();
+
+    try {
+      await waitFor(() => {
+        expect(readViewerFontFamily(rendered.container)).toBe(
+          '"JetBrains Mono", var(--font-berkeley-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+        );
+      });
+
+      const settingsButton = await waitForElement<HTMLButtonElement>(
+        rendered.container,
+        'button[aria-label="Display settings"]'
+      );
+      await act(async () => {
+        pointerClick(settingsButton);
+        await flushReact();
+      });
+
+      const customButton = await waitForElement<HTMLButtonElement>(
+        document,
+        'button[title="custom"]'
+      );
+      await act(async () => {
+        customButton.click();
+        await flushReact();
+      });
+
+      const customInput = await waitForElement<HTMLInputElement>(
+        document,
+        'input[placeholder="JetBrains Mono"]'
+      );
+      expect(document.activeElement).toBe(customInput);
+
+      await act(async () => {
+        setInputValue(customInput, 'sourcecodepro');
+        await flushReact();
+      });
+
+      await waitFor(() => {
+        expect(readStoredCodeFont()).toEqual({
+          family: 'Source Code Pro',
+          input: 'sourcecodepro',
+          kind: 'custom',
+        });
+        expect(readViewerFontFamily(rendered.container)).toBe(
+          '"Source Code Pro", var(--font-berkeley-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+        );
+      });
+
+      await act(async () => {
+        setInputValue(customInput, 'monospace');
+        await flushReact();
+      });
+
+      await waitFor(() => {
+        expect(readStoredCodeFont()).toEqual({
+          input: 'monospace',
+          kind: 'system',
+        });
+        expect(readViewerFontFamily(rendered.container)).toBe(
+          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+        );
+      });
+    } finally {
+      await cleanup(rendered);
+    }
+  });
 });
 
 interface StoredPreferences {
+  codeFont?:
+    | {
+        kind: 'default';
+      }
+    | {
+        input?: string;
+        kind: 'system';
+      }
+    | {
+        family: string;
+        input?: string;
+        kind: 'custom';
+      };
   collapseMode: 'expanded' | 'collapsed';
   diffIndicators: 'bars' | 'classic' | 'none';
   diffStyle: 'split' | 'unified';
@@ -298,6 +450,47 @@ function readStoredDiffStyle(): string | undefined {
       preferences?: { diffStyle?: string };
     }
   ).preferences?.diffStyle;
+}
+
+function readStoredCodeFont(): unknown {
+  const rawValue = localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEY);
+  if (rawValue == null) {
+    return undefined;
+  }
+
+  return (
+    JSON.parse(rawValue) as {
+      preferences?: { codeFont?: unknown };
+    }
+  ).preferences?.codeFont;
+}
+
+function readViewerFontFamily(container: ParentNode): string | null {
+  return (
+    container
+      .querySelector<HTMLElement>('[style*="--diffs-font-family"]')
+      ?.style.getPropertyValue('--diffs-font-family') ?? null
+  );
+}
+
+function setInputValue(input: HTMLInputElement, value: string): void {
+  const valueSetter = Object.getOwnPropertyDescriptor(
+    dom.window.HTMLInputElement.prototype,
+    'value'
+  )?.set;
+  if (valueSetter == null) {
+    throw new Error('Expected HTMLInputElement.value setter to exist');
+  }
+
+  valueSetter.call(input, value);
+  const propertyChangeEvent = new dom.window.Event('propertychange', {
+    bubbles: true,
+  });
+  Object.defineProperty(propertyChangeEvent, 'propertyName', {
+    value: 'value',
+  });
+  input.dispatchEvent(propertyChangeEvent);
+  input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 }
 
 function fetchPatch(): Promise<Response> {
@@ -419,6 +612,25 @@ async function waitForElement<ElementType extends Element>(
     throw new Error(`Expected to find element matching ${selector}`);
   }
   return element;
+}
+
+function pointerClick(element: HTMLElement): void {
+  const pointerDown = new dom.window.MouseEvent('pointerdown', {
+    bubbles: true,
+    button: 0,
+    buttons: 1,
+    cancelable: true,
+  });
+  Object.defineProperty(pointerDown, 'pointerType', { value: 'mouse' });
+  element.dispatchEvent(pointerDown);
+  element.dispatchEvent(
+    new dom.window.MouseEvent('pointerup', {
+      bubbles: true,
+      button: 0,
+      cancelable: true,
+    })
+  );
+  element.click();
 }
 
 function querySelectorDeep<ElementType extends Element>(

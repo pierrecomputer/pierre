@@ -12,7 +12,14 @@ import {
 } from '@pierre/diffs';
 import { type CodeViewHandle, useStableCallback } from '@pierre/diffs/react';
 import { IconChevronSm } from '@pierre/icons';
-import { memo, type RefObject, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  memo,
+  type RefObject,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { DraftAnnotation } from './DraftAnnotation';
 import { ExampleAnnotation } from './ExampleAnnotation';
@@ -63,6 +70,7 @@ interface ActiveDraftComment {
 
 interface DiffsHubViewerProps {
   className?: string;
+  codeFontFamily: string;
   diffStyle: 'split' | 'unified';
   onCommentDeleted(comment: DiffsHubDeletedCommentEvent): void;
   onCommentSaved(comment: DiffsHubSavedCommentEvent): void;
@@ -80,6 +88,7 @@ interface DiffsHubViewerProps {
 
 export const DiffsHubViewer = memo(function DiffsHubViewer({
   className,
+  codeFontFamily,
   diffStyle,
   onCommentDeleted,
   onCommentSaved,
@@ -106,6 +115,14 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
   const annotationThemeStyle = useMemo(
     () => buildAnnotationThemeStyle(themeChromeStyle),
     [themeChromeStyle]
+  );
+  const viewerStyle = useMemo(
+    () =>
+      ({
+        ...(annotationThemeStyle ?? {}),
+        '--diffs-font-family': codeFontFamily,
+      }) satisfies CSSProperties & { '--diffs-font-family': string },
+    [annotationThemeStyle, codeFontFamily]
   );
 
   const handleSetSelection = useStableCallback(
@@ -471,7 +488,7 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
         'cv-scrollbar relative h-full min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain border-b border-border w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-clip [&_diffs-container]:[contain:layout_paint_style] [&_diffs-container]:shadow-[0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque)),0_1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))]'
       )}
       options={options}
-      style={annotationThemeStyle}
+      style={viewerStyle}
       selectedLines={selectedLines}
       onSelectedLinesChange={handleSetSelection}
       renderAnnotation={renderCommentAnnotation}

@@ -27,6 +27,7 @@ import {
 import { preloadAvatars } from '@/lib/annotation';
 import {
   type DiffsHubDisplayPreferences,
+  getDiffsHubCodeFontFamily,
   useDiffsHubDisplayPreferences,
 } from '@/lib/displayPreferences';
 import { removeSavedCommentSidebarEntry } from '@/lib/removeSavedCommentSidebarEntry';
@@ -68,6 +69,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   } = useDiffsHubDisplayPreferences();
   const {
     collapseMode,
+    codeFont,
     diffIndicators,
     lineNumbers,
     overflow,
@@ -76,6 +78,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const diffStyle = forceUnifiedDiffStyle
     ? 'unified'
     : displayPreferences.diffStyle;
+  const codeFontFamily = getDiffsHubCodeFontFamily(codeFont);
   // All theming state — color mode and the light/dark theme-name picks — lives
   // in the single @pierre/theming controller (the same instance the app-wide
   // ThemeProvider is bound to). Reading it here means picking Auto/Light/Dark
@@ -197,6 +200,12 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     },
     [updateDisplayPreference]
   );
+  const setCodeFont = useCallback(
+    (value: SetStateAction<DiffsHubDisplayPreferences['codeFont']>) => {
+      updateDisplayPreference('codeFont', value);
+    },
+    [updateDisplayPreference]
+  );
   const setDiffIndicators = useCallback(
     (value: SetStateAction<DiffIndicators>) => {
       updateDisplayPreference('diffIndicators', value);
@@ -304,6 +313,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     <ReviewGrid>
       <DiffsHubHeader
         className="[grid-area:header]"
+        codeFont={codeFont}
         collapseMode={collapseMode}
         colorMode={colorMode}
         darkThemeName={darkThemeName}
@@ -317,6 +327,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
         fileTreeAvailable={treeSource != null}
         onToggleCollapseMode={handleToggleCollapseMode}
         onToggleFileTreeOverlay={handleToggleFileTreeOverlay}
+        setCodeFont={setCodeFont}
         setColorMode={setColorMode}
         setDarkThemeName={setDarkThemeName}
         setDiffIndicators={setDiffIndicators}
@@ -345,6 +356,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
           <DiffsHubViewer
             key={viewerKey}
             className="[grid-area:viewer]"
+            codeFontFamily={codeFontFamily}
             diffStyle={diffStyle}
             overflow={overflow}
             showBackgrounds={showBackgrounds}

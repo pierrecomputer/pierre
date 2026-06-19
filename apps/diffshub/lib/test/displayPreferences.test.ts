@@ -3,11 +3,16 @@ import { describe, expect, test } from 'bun:test';
 import {
   DEFAULT_DIFFS_HUB_DISPLAY_PREFERENCES,
   type DiffsHubDisplayPreferences,
+  getCustomCodeFontFamily,
+  getDiffsHubCodeFontFamily,
   readDiffsHubDisplayPreferences,
   writeDiffsHubDisplayPreferences,
 } from '../displayPreferences';
 
 const STORAGE_KEY = 'diffshub.displayPreferences.v1';
+const SYSTEM_CODE_FONT_FAMILY =
+  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+const CUSTOM_CODE_FONT_FALLBACK = `var(--font-berkeley-mono), ${SYSTEM_CODE_FONT_FAMILY}`;
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -65,6 +70,11 @@ describe('DiffsHub display preferences', () => {
     const storage = new MemoryStorage();
     const preferences: DiffsHubDisplayPreferences = {
       collapseMode: 'collapsed',
+      codeFont: {
+        family: 'JetBrains Mono',
+        input: 'jetbrains',
+        kind: 'custom',
+      },
       diffIndicators: 'classic',
       diffStyle: 'unified',
       lineNumbers: false,
@@ -86,6 +96,10 @@ describe('DiffsHub display preferences', () => {
       JSON.stringify({
         preferences: {
           collapseMode: 'closed',
+          codeFont: {
+            kind: 'legacy',
+            value: 'system-mono',
+          },
           diffIndicators: 'classic',
           diffStyle: 'side-by-side',
           lineNumbers: false,
@@ -113,6 +127,10 @@ describe('DiffsHub display preferences', () => {
       JSON.stringify({
         preferences: {
           collapseMode: 'collapsed',
+          codeFont: {
+            input: 'system',
+            kind: 'system',
+          },
           diffIndicators: 'none',
           diffStyle: 'unified',
           lineNumbers: false,
@@ -128,6 +146,69 @@ describe('DiffsHub display preferences', () => {
         DEFAULT_DIFFS_HUB_DISPLAY_PREFERENCES
       );
     });
+  });
+
+  test('formats custom installed font names as a quoted font-family fallback stack', () => {
+    for (const input of [
+      'jetbrains',
+      'jetbrainsmono',
+      'jetbrains mono',
+      'jetbrains-mono',
+      'JetBrainsMono',
+      'JETBRAINS MONO',
+    ]) {
+      expect(getCustomCodeFontFamily(input)).toBe(
+        `"JetBrains Mono", ${CUSTOM_CODE_FONT_FALLBACK}`
+      );
+    }
+
+    expect(getCustomCodeFontFamily('Vendor "Mono" \\ Preview\n')).toBe(
+      `"Vendor \\"Mono\\" \\\\ Preview", ${CUSTOM_CODE_FONT_FALLBACK}`
+    );
+
+    expect(getCustomCodeFontFamily('sourcecodepro')).toBe(
+      `"Source Code Pro", ${CUSTOM_CODE_FONT_FALLBACK}`
+    );
+
+    for (const input of [
+      'system',
+      'monospace',
+      'system mono',
+      'system monospace',
+      'ui monospace',
+    ]) {
+      expect(getCustomCodeFontFamily(input)).toBe(SYSTEM_CODE_FONT_FAMILY);
+    }
+
+    expect(
+      getDiffsHubCodeFontFamily({
+        family: 'Commit Mono',
+        input: 'Commit Mono',
+        kind: 'custom',
+      })
+    ).toBe(`"Commit Mono", ${CUSTOM_CODE_FONT_FALLBACK}`);
+
+    expect(
+      getDiffsHubCodeFontFamily({
+        input: 'monospace',
+        kind: 'system',
+      })
+    ).toBe(SYSTEM_CODE_FONT_FAMILY);
+
+    expect(getCustomCodeFontFamily('JetBrains Mono, serif')).toBeNull();
+    expect(getCustomCodeFontFamily('x'.repeat(81))).toBeNull();
+
+    expect(
+      getDiffsHubCodeFontFamily({
+        family: 'JetBrains Mono, serif',
+        input: 'JetBrains Mono, serif',
+        kind: 'custom',
+      })
+    ).toBe(
+      getDiffsHubCodeFontFamily(DEFAULT_DIFFS_HUB_DISPLAY_PREFERENCES.codeFont)
+    );
+
+    expect(getCustomCodeFontFamily('   ')).toBeNull();
   });
 });
 
