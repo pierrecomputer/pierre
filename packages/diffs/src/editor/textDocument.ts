@@ -1,4 +1,5 @@
 import type { DiffLineAnnotation } from '../types';
+import { countLineBreaks } from '../utils/computeFileOffsets';
 import {
   coalesceEditStackEntries,
   createEditStackEntry,
@@ -414,7 +415,7 @@ export class TextDocument<LAnnotation> {
       const edit = edits[i];
       const editStartLine = editPositions[i * 2].line;
       const editEndLine = editPositions[i * 2 + 1].line;
-      const insertedLineSpan = lineFeedCount(edit.text);
+      const insertedLineSpan = countLineBreaks(edit.text);
       const changedStartLine = editStartLine + lineDeltaBeforeEdit;
       const changedEndLine = changedStartLine + insertedLineSpan;
       startLine = Math.min(startLine, editStartLine);
@@ -439,14 +440,4 @@ export class TextDocument<LAnnotation> {
     }
     return { startLine, endLine, ranges };
   }
-}
-
-function lineFeedCount(text: string): number {
-  let count = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === /* \n */ 10) {
-      count++;
-    }
-  }
-  return count;
 }

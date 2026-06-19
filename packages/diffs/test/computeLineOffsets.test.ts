@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   computeLineOffsets,
+  countLineBreaks,
   linesFromFileContents,
 } from '../src/utils/computeFileOffsets';
 
@@ -45,6 +46,37 @@ describe('computeLineOffsets', () => {
 
     expect([...lines]).toEqual([0, 1]);
     expect(lines.length).toBe(2);
+  });
+});
+
+describe('countLineBreaks', () => {
+  test('stays consistent with computeLineOffsets across line endings', () => {
+    const cases = [
+      '',
+      'hello',
+      'a\nb',
+      'a\nb\n',
+      'a\r\nb\r\n',
+      '\rworld\rfoo',
+      'a\rb\r\nc\n',
+      '\n',
+      '\r',
+    ];
+
+    for (const contents of cases) {
+      expect(countLineBreaks(contents)).toBe(
+        computeLineOffsets(contents).length - 1
+      );
+    }
+  });
+
+  test('counts a lone CR as one break and CRLF as one break', () => {
+    expect(countLineBreaks('')).toBe(0);
+    expect(countLineBreaks('no breaks')).toBe(0);
+    expect(countLineBreaks('\r')).toBe(1);
+    expect(countLineBreaks('a\rb\rc')).toBe(2);
+    expect(countLineBreaks('a\r\nb')).toBe(1);
+    expect(countLineBreaks('a\nb\nc')).toBe(2);
   });
 });
 
