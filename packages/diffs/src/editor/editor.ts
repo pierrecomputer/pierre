@@ -33,6 +33,7 @@ import {
 } from './searchPanel';
 import type { AutoSurround, EditorSelection } from './selection';
 import {
+  applyDeleteCharacterToSelections,
   applyDeleteHardLineForwardToSelections,
   applyDeleteSoftLineBackwardToSelections,
   applyDeleteWordBackwardToSelections,
@@ -62,7 +63,6 @@ import {
   mapSelectionShift,
   mergeOverlappingSelections,
   remapSelectionsAfterEdits,
-  resolveDeleteCharacterRange,
   resolveIndentEdits,
   resolveSelectionCut,
   selectionIntersects,
@@ -2848,25 +2848,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    const primarySelection = selections.at(-1);
-    if (primarySelection === undefined) {
-      return;
+    const { nextSelections, change } =
+      applyDeleteCharacterToSelections<LAnnotation>(
+        textDocument,
+        selections,
+        forward,
+        this.#lineAnnotations
+      );
+    if (change !== undefined) {
+      this.#applyChange(
+        change,
+        nextSelections,
+        this.#applyChangeToLineAnnotations(change)
+      );
     }
-
-    const [start, end] = resolveDeleteCharacterRange(
-      textDocument,
-      primarySelection,
-      forward
-    );
-    if (comparePosition(start, end) === 0) {
-      return;
-    }
-
-    this.#applyResolvedTextEdit({
-      start: textDocument.offsetAt(start),
-      end: textDocument.offsetAt(end),
-      text: '',
-    });
   }
 
   #deleteSoftLineBackward() {
@@ -2956,26 +2951,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       textDocument,
       selections,
       this.#lineAnnotations
-    );
-    if (change !== undefined) {
-      this.#applyChange(
-        change,
-        nextSelections,
-        this.#applyChangeToLineAnnotations(change)
-      );
-    }
-  }
-
-  #applyResolvedTextEdit(edit: ResolvedTextEdit) {
-    if (this.#selections === undefined || this.#textDocument === undefined) {
-      return;
-    }
-    const { nextSelections, change } = applyTextChangeToSelections<LAnnotation>(
-      this.#textDocument,
-      this.#selections,
-      edit,
-      this.#lineAnnotations,
-      this.#metrics.tabSize
     );
     if (change !== undefined) {
       this.#applyChange(

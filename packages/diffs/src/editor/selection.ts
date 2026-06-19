@@ -963,6 +963,38 @@ export function resolveDeleteCharacterRange(
 }
 
 /**
+ * Deletes one grapheme (or selected text) at each selection.
+ */
+export function applyDeleteCharacterToSelections<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  selections: EditorSelection[],
+  forward: boolean,
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+): {
+  nextSelections: EditorSelection[];
+  change?: TextDocumentChange;
+} {
+  const deleteSelections: EditorSelection[] = selections.map((selection) => {
+    const [start, end] = resolveDeleteCharacterRange(
+      textDocument,
+      selection,
+      forward
+    );
+    return {
+      start,
+      end,
+      direction: DirectionNone,
+    };
+  });
+  return applyTextReplaceToSelections(
+    textDocument,
+    deleteSelections,
+    deleteSelections.map(() => ''),
+    lineAnnotations
+  );
+}
+
+/**
  * Checks if a selection is collapsed.
  */
 export function isCollapsedSelection(

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  applyDeleteCharacterToSelections,
   applyDeleteHardLineForwardToSelections,
   applyDeleteSoftLineBackwardToSelections,
   applyDeleteWordBackwardToSelections,
@@ -1487,6 +1488,48 @@ describe('mapSelectionRangeMove', () => {
 
     expect(mapSelectionShift(textDocument, afterLetter, 'right')).toEqual([
       createSelection(0, 1, 0, 3, DirectionForward),
+    ]);
+  });
+});
+
+describe('applyDeleteCharacterToSelections', () => {
+  test('resolves backward delete ranges per selection for multi-cursor edits', () => {
+    const textDocument = new TextDocument('inmemory://1', 'ab😀');
+    const selections = [
+      createSelection(0, 2, 0, 2),
+      createSelection(0, 4, 0, 4),
+    ];
+    const { nextSelections, change } = applyDeleteCharacterToSelections(
+      textDocument,
+      selections,
+      false
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('a');
+    expect(nextSelections).toEqual([
+      createSelection(0, 1, 0, 1),
+      createSelection(0, 1, 0, 1),
+    ]);
+  });
+
+  test('resolves forward delete ranges per selection for multi-cursor edits', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀b');
+    const selections = [
+      createSelection(0, 1, 0, 1),
+      createSelection(0, 3, 0, 3),
+    ];
+    const { nextSelections, change } = applyDeleteCharacterToSelections(
+      textDocument,
+      selections,
+      true
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('a');
+    expect(nextSelections).toEqual([
+      createSelection(0, 1, 0, 1),
+      createSelection(0, 1, 0, 1),
     ]);
   });
 });
