@@ -1,5 +1,5 @@
 import type { DiffIndicators } from '@pierre/diffs';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   readBrowserStorageKey,
@@ -65,11 +65,16 @@ interface UseDiffsHubDisplayPreferencesResult {
 export function useDiffsHubDisplayPreferences(): UseDiffsHubDisplayPreferencesResult {
   const [displayPreferences, setDisplayPreferences] =
     useState<DiffsHubDisplayPreferences>(DEFAULT_DIFFS_HUB_DISPLAY_PREFERENCES);
+  const displayPreferencesRef = useRef<DiffsHubDisplayPreferences>(
+    DEFAULT_DIFFS_HUB_DISPLAY_PREFERENCES
+  );
   const [displayPreferencesHydrated, setDisplayPreferencesHydrated] =
     useState(false);
 
   useEffect(() => {
-    setDisplayPreferences(readDiffsHubDisplayPreferences());
+    const storedPreferences = readDiffsHubDisplayPreferences();
+    displayPreferencesRef.current = storedPreferences;
+    setDisplayPreferences(storedPreferences);
     setDisplayPreferencesHydrated(true);
   }, []);
 
@@ -79,11 +84,10 @@ export function useDiffsHubDisplayPreferences(): UseDiffsHubDisplayPreferencesRe
         previous: DiffsHubDisplayPreferences
       ) => DiffsHubDisplayPreferences
     ) => {
-      setDisplayPreferences((previous) => {
-        const next = update(previous);
-        writeDiffsHubDisplayPreferences(next);
-        return next;
-      });
+      const next = update(displayPreferencesRef.current);
+      displayPreferencesRef.current = next;
+      setDisplayPreferences(next);
+      writeDiffsHubDisplayPreferences(next);
     },
     []
   );

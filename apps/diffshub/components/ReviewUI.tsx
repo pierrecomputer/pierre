@@ -150,6 +150,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   } = usePatchLoader({
     collapseMode,
     domain,
+    enabled: displayPreferencesHydrated,
     onLoadStart: handlePatchLoadStart,
     path,
     viewerRef,
