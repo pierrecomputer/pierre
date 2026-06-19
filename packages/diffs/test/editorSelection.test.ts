@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  applyDeleteCharacterToSelections,
   applyDeleteHardLineForwardToSelections,
   applyDeleteSoftLineBackwardToSelections,
   applyDeleteWordBackwardToSelections,
@@ -22,6 +23,7 @@ import {
   mapCursorMove,
   mapSelectionShift,
   mergeOverlappingSelections,
+  resolveDeleteCharacterRange,
   resolveIndentEdits,
   selectionIntersects,
 } from '../src/editor/selection';
@@ -1487,6 +1489,105 @@ describe('mapSelectionRangeMove', () => {
     expect(mapSelectionShift(textDocument, afterLetter, 'right')).toEqual([
       createSelection(0, 1, 0, 3, DirectionForward),
     ]);
+  });
+});
+
+describe('applyDeleteCharacterToSelections', () => {
+  test('resolves backward delete ranges per selection for multi-cursor edits', () => {
+    const textDocument = new TextDocument('inmemory://1', 'ab😀');
+    const selections = [
+      createSelection(0, 2, 0, 2),
+      createSelection(0, 4, 0, 4),
+    ];
+    const { nextSelections, change } = applyDeleteCharacterToSelections(
+      textDocument,
+      selections,
+      false
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('a');
+    expect(nextSelections).toEqual([
+      createSelection(0, 1, 0, 1),
+      createSelection(0, 1, 0, 1),
+    ]);
+  });
+
+  test('resolves forward delete ranges per selection for multi-cursor edits', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀b');
+    const selections = [
+      createSelection(0, 1, 0, 1),
+      createSelection(0, 3, 0, 3),
+    ];
+    const { nextSelections, change } = applyDeleteCharacterToSelections(
+      textDocument,
+      selections,
+      true
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('a');
+    expect(nextSelections).toEqual([
+      createSelection(0, 1, 0, 1),
+      createSelection(0, 1, 0, 1),
+    ]);
+  });
+});
+
+describe('resolveDeleteCharacterRange', () => {
+  test('backward delete removes a whole emoji', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀');
+    const caret = createSelection(0, 3, 0, 3);
+
+    expect(resolveDeleteCharacterRange(textDocument, caret, false)).toEqual([
+      { line: 0, character: 1 },
+      { line: 0, character: 3 },
+    ]);
+  });
+
+  test('forward delete removes a whole emoji', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀');
+    const caret = createSelection(0, 1, 0, 1);
+
+    expect(resolveDeleteCharacterRange(textDocument, caret, true)).toEqual([
+      { line: 0, character: 1 },
+      { line: 0, character: 3 },
+    ]);
+  });
+
+  test('returns the selected range for non-collapsed selections', () => {
+    const textDocument = new TextDocument('inmemory://1', 'a😀b');
+    const selection = createSelection(0, 1, 0, 3, DirectionForward);
+
+    expect(resolveDeleteCharacterRange(textDocument, selection, false)).toEqual(
+      [
+        { line: 0, character: 1 },
+        { line: 0, character: 3 },
+      ]
+    );
+  });
+
+  test('backward delete clamps a goal column past a shorter line end', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'this is a much longer line\nshort\n'
+    );
+    const caret = createSelection(1, 20, 1, 20);
+
+    expect(resolveDeleteCharacterRange(textDocument, caret, false)).toEqual([
+      { line: 1, character: 4 },
+      { line: 1, character: 5 },
+    ]);
+
+    const { nextSelections, change } = applyDeleteCharacterToSelections(
+      textDocument,
+      [caret],
+      false
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('this is a much longer line\nshor\n');
+    expect(nextSelections).toEqual([createSelection(1, 4, 1, 4)]);
   });
 });
 
