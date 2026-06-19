@@ -537,6 +537,92 @@ describe('TextDocument', () => {
     expect(d.getText()).toBe('hello');
   });
 
+  test('paste does not coalesce into the preceding typed character', () => {
+    const d = doc('');
+    // Type a single character (normal typing).
+    d.applyEdits(
+      [
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'a',
+        },
+      ],
+      true,
+      [caret(0, 0)]
+    );
+    // Paste a single-line string at the caret. The trailing `true` marks it as
+    // an undo boundary, like the editor's paste handler. Without it the paste
+    // looks just like typing and would merge into the previous step.
+    d.applyEdits(
+      [
+        {
+          range: {
+            start: { line: 0, character: 1 },
+            end: { line: 0, character: 1 },
+          },
+          newText: 'hello',
+        },
+      ],
+      true,
+      [caret(0, 1)],
+      undefined,
+      true
+    );
+
+    expect(d.getText()).toBe('ahello');
+
+    d.undo();
+    expect(d.getText()).toBe('a');
+
+    d.undo();
+    expect(d.getText()).toBe('');
+  });
+
+  test('typing after a paste does not coalesce into the pasted text', () => {
+    const d = doc('');
+    // Paste a single-line string (undo boundary).
+    d.applyEdits(
+      [
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'hello',
+        },
+      ],
+      true,
+      [caret(0, 0)],
+      undefined,
+      true
+    );
+    // Type a character immediately after the paste.
+    d.applyEdits(
+      [
+        {
+          range: {
+            start: { line: 0, character: 5 },
+            end: { line: 0, character: 5 },
+          },
+          newText: 'x',
+        },
+      ],
+      true,
+      [caret(0, 5)]
+    );
+
+    expect(d.getText()).toBe('hellox');
+
+    d.undo();
+    expect(d.getText()).toBe('hello');
+
+    d.undo();
+    expect(d.getText()).toBe('');
+  });
+
   test('contiguous forward deletes coalesce into one undo step', () => {
     const d = doc('abc');
     d.applyEdits(

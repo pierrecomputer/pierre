@@ -216,7 +216,8 @@ export function applyTextChangeToSelections<LAnnotation>(
   selections: EditorSelection[],
   edit: ResolvedTextEdit,
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-  tabSize = 2
+  tabSize = 2,
+  undoBoundary = false
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -342,7 +343,13 @@ export function applyTextChangeToSelections<LAnnotation>(
   }
   finalizeMergedGroup();
 
-  const change = textDocument.applyResolvedEdits(edits, true, selections);
+  const change = textDocument.applyResolvedEdits(
+    edits,
+    true,
+    selections,
+    undefined,
+    undoBoundary
+  );
   const nextSelections = createSelectionsFromOffsetPairs(
     textDocument,
     nextSelectionOffsets.map((offsets) => {
@@ -404,7 +411,8 @@ export function applyTextReplaceToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
   texts: string[],
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+  undoBoundary = false
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
@@ -537,7 +545,13 @@ export function applyTextReplaceToSelections<LAnnotation>(
     }
   }
 
-  const change = textDocument.applyResolvedEdits(edits, true, selections);
+  const change = textDocument.applyResolvedEdits(
+    edits,
+    true,
+    selections,
+    undefined,
+    undoBoundary
+  );
   const nextSelections = createSelectionsFromOffsetPairs(
     textDocument,
     nextSelectionOffsetPairs.map((offsets) => {

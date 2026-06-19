@@ -224,7 +224,8 @@ export class TextDocument<LAnnotation> {
     edits: TextEdit[],
     updateHistory = false,
     selectionsBefore?: EditorSelection[],
-    selectionsAfter?: EditorSelection[]
+    selectionsAfter?: EditorSelection[],
+    undoBoundary = false
   ): TextDocumentChange | undefined {
     if (edits.length === 0) {
       return;
@@ -233,7 +234,8 @@ export class TextDocument<LAnnotation> {
       edits.map((edit) => this.#resolveEdit(edit)),
       updateHistory,
       selectionsBefore,
-      selectionsAfter
+      selectionsAfter,
+      undoBoundary
     );
   }
 
@@ -241,7 +243,8 @@ export class TextDocument<LAnnotation> {
     edits: ResolvedTextEdit[],
     updateHistory = false,
     selectionsBefore?: EditorSelection[],
-    selectionsAfter?: EditorSelection[]
+    selectionsAfter?: EditorSelection[],
+    undoBoundary = false
   ): TextDocumentChange | undefined {
     if (edits.length === 0) {
       return undefined;
@@ -256,6 +259,9 @@ export class TextDocument<LAnnotation> {
         selectionsBefore,
         selectionsAfter
       );
+      if (undoBoundary) {
+        entry.undoBoundary = true;
+      }
       const previousEntry = this.#editStack.peekUndo();
       const change = this.#applyResolvedEditsToBuffer(resolvedEdits);
       this.#version++;

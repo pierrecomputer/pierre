@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createEditStackEntry, EditStack } from '../src/editor/editStack';
+import {
+  createEditStackEntry,
+  EditStack,
+  shouldCoalesceEditStackEntry,
+} from '../src/editor/editStack';
 import type { EditorSelection } from '../src/editor/selection';
 import {
   DirectionNone,
@@ -171,5 +175,36 @@ describe('EditHistory', () => {
     expect(editStack.canRedo).toBe(false);
     expect(editStack.popUndoToRedo()).toBeUndefined();
     expect(editStack.popRedoToUndo()).toBeUndefined();
+  });
+});
+
+describe('shouldCoalesceEditStackEntry', () => {
+  test('coalesces two consecutive single-character inserts', () => {
+    const previous = stackEntry('', [{ start: 0, end: 0, text: 'a' }], 0, 1);
+    const next = stackEntry('a', [{ start: 1, end: 1, text: 'b' }], 1, 2);
+    expect(shouldCoalesceEditStackEntry(previous, next)).toBe(true);
+  });
+
+  test('does not coalesce when the previous entry is an undo boundary', () => {
+    const previous = stackEntry('', [{ start: 0, end: 0, text: 'a' }], 0, 1);
+    previous.undoBoundary = true;
+    const next = stackEntry('a', [{ start: 1, end: 1, text: 'b' }], 1, 2);
+    expect(shouldCoalesceEditStackEntry(previous, next)).toBe(false);
+  });
+
+  test('does not coalesce when the next entry is an undo boundary', () => {
+    const previous = stackEntry('', [{ start: 0, end: 0, text: 'a' }], 0, 1);
+    const next = stackEntry('a', [{ start: 1, end: 1, text: 'b' }], 1, 2);
+    next.undoBoundary = true;
+    expect(shouldCoalesceEditStackEntry(previous, next)).toBe(false);
+  });
+
+  // A newline insert must never merge into the typing before it. The editor
+  // already prevents this with a separate `lineDelta === 0` check, so this test
+  // calls the helper directly to protect other callers.
+  test('does not coalesce a newline insert into preceding typing', () => {
+    const previous = stackEntry('', [{ start: 0, end: 0, text: 'a' }], 0, 1);
+    const next = stackEntry('a', [{ start: 1, end: 1, text: '\n' }], 1, 2);
+    expect(shouldCoalesceEditStackEntry(previous, next)).toBe(false);
   });
 });
