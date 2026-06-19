@@ -53,21 +53,28 @@ export function recomputeDiffHunks(
 // string splits into zero addition lines, so a normal recompute produces a diff
 // with no addition rows at all. Rendering that leaves the attached editor with
 // no line element to host its caret. To keep one editable row, diff the
-// unchanged deletions against a single empty line (which yields an ordinary
-// "replace everything with one empty line" change) and store the addition as
-// `['']` so it still joins back to the editor's empty document.
+// unchanged deletions against a single line (which yields a hunk that places
+// exactly one addition row), then store the addition as `['']` so it still
+// joins back to the editor's empty document.
+//
+// The sentinel only has to differ from the deletion side so a hunk is produced;
+// its text is discarded by the `['']` override below. When the old side is
+// itself a single blank line the empty sentinel would be identical and yield no
+// hunk (and so no editable row), so fall back to a non-blank line there.
 export function recomputeEmptyDocumentDiff(
   diff: FileDiffMetadata,
   parseDiffOptions?: CreatePatchOptionsNonabortable
 ): FullDiffHunkUpdate {
+  const deletionContents = diff.deletionLines.join('');
+  const additionSentinel = deletionContents === '\n' ? ' \n' : '\n';
   const recomputed = parseDiffFromFile(
     {
       name: diff.prevName ?? diff.name,
-      contents: diff.deletionLines.join(''),
+      contents: deletionContents,
     },
     {
       name: diff.name,
-      contents: '\n',
+      contents: additionSentinel,
       lang: diff.lang,
     },
     parseDiffOptions

@@ -206,5 +206,37 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       // The editable addition line is emitted as an added change row.
       expect(html).toContain('change-addition');
     });
+
+    // When the old side is itself a single blank line, diffing the emptied
+    // document against an empty line would be a no-op (zero hunks, so zero
+    // rendered rows). The recompute must still produce one editable row.
+    test(`keeps an editable line when the old side is one blank line (${diffStyle})`, async () => {
+      const renderer = new DiffHunksRenderer({
+        theme: 'github-light',
+        diffStyle,
+      });
+      const diff = parseDiffFromFile(
+        { name: 'blank.ts', contents: '\n' },
+        { name: 'blank.ts', contents: 'typed\n' }
+      );
+      await renderer.asyncRender(diff);
+      renderer.renderDiff(diff);
+
+      renderer.applyDocumentChange(EMPTY_DOCUMENT);
+
+      const rendered = renderer.getRenderDiff();
+      expect(rendered).toBeDefined();
+      if (rendered == null) return;
+      expect(rendered.additionLines).toEqual(['']);
+      // The blank old line is still recorded as the deletion side.
+      expect(rendered.deletionLines.join('')).toBe('\n');
+      // At least one hunk, so iterateOverDiff has a row to emit.
+      expect(rendered.hunks.length).toBeGreaterThanOrEqual(1);
+
+      const result = renderer.renderDiff();
+      expect(result).toBeDefined();
+      if (result == null) return;
+      expect(renderer.renderFullHTML(result)).toContain('change-addition');
+    });
   }
 });
