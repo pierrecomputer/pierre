@@ -1566,6 +1566,29 @@ describe('resolveDeleteCharacterRange', () => {
       ]
     );
   });
+
+  test('backward delete clamps a goal column past a shorter line end', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'this is a much longer line\nshort\n'
+    );
+    const caret = createSelection(1, 20, 1, 20);
+
+    expect(resolveDeleteCharacterRange(textDocument, caret, false)).toEqual([
+      { line: 1, character: 4 },
+      { line: 1, character: 5 },
+    ]);
+
+    const { nextSelections, change } = applyDeleteCharacterToSelections(
+      textDocument,
+      [caret],
+      false
+    );
+
+    expect(change).toBeDefined();
+    expect(textDocument.getText()).toBe('this is a much longer line\nshor\n');
+    expect(nextSelections).toEqual([createSelection(1, 4, 1, 4)]);
+  });
 });
 
 describe('applyDeleteHardLineForwardToSelections', () => {

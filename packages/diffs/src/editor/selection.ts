@@ -910,9 +910,13 @@ export function resolveDeleteCharacterRange(
   }
 
   const caret = getCaretPosition(selection);
-  const { line, character } = caret;
+  let { line, character } = caret;
   const lineLength = textDocument.getLineLength(line);
   const lineCount = textDocument.lineCount;
+
+  // A preserved vertical-move goal column can overshoot a shorter line; clamp
+  // before stepping so Backspace/Delete target the visible caret position.
+  character = Math.min(character, lineLength);
 
   if (forward) {
     if (character < lineLength) {
