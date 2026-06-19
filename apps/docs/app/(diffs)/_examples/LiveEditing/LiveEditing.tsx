@@ -6,7 +6,7 @@ import type {
   PreloadedFileResult,
   PreloadFileDiffResult,
 } from '@pierre/diffs/ssr';
-import { IconRefresh } from '@pierre/icons';
+import { IconDiffSplit, IconDiffUnified, IconRefresh } from '@pierre/icons';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { LIVE_EDITOR_NEW_FILE } from '../LiveEditor/constants';
@@ -181,16 +181,17 @@ export function LiveEditing({
           value={diffLayout}
           onValueChange={(value) => handleDiffLayoutChange(value as DiffLayout)}
           aria-label="Diff layout"
+          size="icon"
         >
           {(['unified', 'split'] as const).map((value) => (
             <ButtonGroupItem
               key={value}
               value={value}
-              className="capitalize"
+              aria-label={value}
               // Layout only applies to the diff surface; disable it for files.
               disabled={surface === 'file'}
             >
-              {value}
+              {value === 'split' ? <IconDiffSplit /> : <IconDiffUnified />}
             </ButtonGroupItem>
           ))}
         </ButtonGroup>
