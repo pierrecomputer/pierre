@@ -264,6 +264,52 @@ editor.focus();`,
   options,
 };
 
+export const EDITOR_UNDO_REDO_EXAMPLE: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'editor_undo_redo.tsx',
+    contents: `import { Editor } from '@pierre/diffs/editor';
+import { EditorProvider, File } from '@pierre/diffs/react';
+import { useMemo, useState } from 'react';
+
+export function EditorWithHistoryToolbar() {
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  const editor = useMemo(
+    () =>
+      new Editor({
+        onChange() {
+          // Undo and redo run through the same change path as edits, so refresh
+          // toolbar state from \`onChange\` rather than only after button clicks.
+          setCanUndo(editor.canUndo);
+          setCanRedo(editor.canRedo);
+        },
+      }),
+    []
+  );
+
+  return (
+    <EditorProvider editor={editor}>
+      <div className="toolbar">
+        <button type="button" disabled={!canUndo} onClick={() => editor.undo()}>
+          Undo
+        </button>
+        <button type="button" disabled={!canRedo} onClick={() => editor.redo()}>
+          Redo
+        </button>
+      </div>
+
+      <File
+        file={{ name: 'example.ts', contents: 'export const x = 1;' }}
+        contentEditable
+      />
+    </EditorProvider>
+  );
+}`,
+  },
+  options,
+};
+
 export const EDITOR_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
   file: {
     name: 'editor_react.tsx',
@@ -558,6 +604,14 @@ editor.focus()
 
 // Blur the editor.
 editor.blur()
+
+// Whether there is an edit to undo or redo.
+editor.canUndo
+editor.canRedo
+
+// Undo the last edit or redo the last undone edit. No-ops when history is empty.
+editor.undo()
+editor.redo()
 `,
   },
   options,

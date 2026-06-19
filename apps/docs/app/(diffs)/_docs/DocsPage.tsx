@@ -38,6 +38,7 @@ import {
   EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE,
   EDITOR_SELECTION_ACTION_CONTEXT_TYPE,
   EDITOR_SELECTION_ACTION_EXAMPLE,
+  EDITOR_UNDO_REDO_EXAMPLE,
   EDITOR_VANILLA_FILE_DIFF_EXAMPLE,
   EDITOR_VANILLA_FILE_EXAMPLE,
   EDITOR_WORKER_POOL_REACT_EXAMPLE,
@@ -412,6 +413,7 @@ async function EditorSection() {
     editorReactExample,
     editorReactFileDiffExample,
     editorReactMultiFileDiffExample,
+    editorUndoRedoExample,
     editorWorkerPoolReactExample,
     editorWorkerPoolVanillaExample,
   ] = await Promise.all([
@@ -428,6 +430,7 @@ async function EditorSection() {
     preloadFile(EDITOR_REACT_EXAMPLE),
     preloadFile(EDITOR_REACT_FILE_DIFF_EXAMPLE),
     preloadFile(EDITOR_REACT_MULTI_FILE_DIFF_EXAMPLE),
+    preloadFile(EDITOR_UNDO_REDO_EXAMPLE),
     preloadFile(EDITOR_WORKER_POOL_REACT_EXAMPLE),
     preloadFile(EDITOR_WORKER_POOL_VANILLA_EXAMPLE),
   ]);
@@ -447,6 +450,7 @@ async function EditorSection() {
       editorReactExample,
       editorReactFileDiffExample,
       editorReactMultiFileDiffExample,
+      editorUndoRedoExample,
       editorWorkerPoolReactExample,
       editorWorkerPoolVanillaExample,
     },
