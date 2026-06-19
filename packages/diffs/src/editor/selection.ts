@@ -149,26 +149,29 @@ export function mapCursorMove(
       const lineLength = textDocument.getLineLength(line);
       character = Math.min(character, lineLength);
       if (shortcut === 'left') {
-        character--;
-
-        if (character < 0) {
-          if (line === 0) {
-            character = 0;
-          } else {
-            line = Math.max(0, line - 1);
-            character = textDocument.getLineLength(line);
-          }
+        if (character > 0) {
+          // Step left by a whole grapheme so the caret never lands inside an
+          // emoji or other multi-code-unit character.
+          character = stepCharacterByGrapheme(
+            textDocument,
+            line,
+            character,
+            false
+          );
+        } else if (line > 0) {
+          line = line - 1;
+          character = textDocument.getLineLength(line);
         }
-      } else {
-        character++;
-        if (character > lineLength) {
-          if (line === lineCount - 1) {
-            character--;
-          } else {
-            line = Math.min(Math.max(lineCount - 1, 0), line + 1);
-            character = 0;
-          }
-        }
+      } else if (character < lineLength) {
+        character = stepCharacterByGrapheme(
+          textDocument,
+          line,
+          character,
+          true
+        );
+      } else if (line < lineCount - 1) {
+        line = line + 1;
+        character = 0;
       }
     }
     const pos = { line, character };
@@ -670,40 +673,75 @@ export function applyTransposeToSelections<LAnnotation>(
 
     const { line, character } = selection.start;
     const offset = anchor;
-    const lineLength = textDocument.getLineLength(line);
+    const lineText = textDocument.getLineText(line);
+    const lineLength = lineText.length;
+    // Document offset of column 0 on this line, used to translate the
+    // grapheme-cluster columns below back into document offsets.
+    const lineStart = offset - character;
+    const graphemeStarts = getLineGraphemeStarts(lineText);
     let edit: ResolvedTextEdit | undefined;
 
     if (character > 0 && character < lineLength) {
+      // Swap the whole grapheme before the caret with the one after it so a
+      // surrogate pair (emoji) on either side is moved intact.
+      const before = findClusterBreak(
+        lineText,
+        character,
+        false,
+        graphemeStarts
+      );
+      const after = findClusterBreak(lineText, character, true, graphemeStarts);
       edit = {
-        start: offset - 1,
-        end: offset + 1,
-        text: text[offset] + text[offset - 1],
+        start: lineStart + before,
+        end: lineStart + after,
+        text:
+          lineText.slice(character, after) + lineText.slice(before, character),
       };
-      nextOffsetPairs.push([offset + 1, offset + 1]);
-    } else if (character === lineLength && lineLength >= 2) {
+      nextOffsetPairs.push([lineStart + after, lineStart + after]);
+    } else if (character === lineLength && graphemeStarts.length >= 2) {
+      // Swap the last two graphemes on the line.
+      const lastStart = graphemeStarts[graphemeStarts.length - 1];
+      const secondLastStart = graphemeStarts[graphemeStarts.length - 2];
       edit = {
-        start: offset - 2,
+        start: lineStart + secondLastStart,
         end: offset,
-        text: text[offset - 1] + text[offset - 2],
+        text:
+          lineText.slice(lastStart, lineLength) +
+          lineText.slice(secondLastStart, lastStart),
       };
       nextOffsetPairs.push([offset, offset]);
     } else if (character === 0 && line > 0 && lineLength > 0) {
+      // Carry the previous line's last grapheme and this line's first grapheme
+      // across the line break, swapping their order.
       const prevLine = line - 1;
-      const prevLength = textDocument.getLineLength(prevLine);
+      const prevLineText = textDocument.getLineText(prevLine);
+      const prevLength = prevLineText.length;
       const prevEnd = textDocument.offsetAt({
         line: prevLine,
         character: prevLength,
       });
-      const prevStart = prevLength > 0 ? prevEnd - 1 : prevEnd;
+      const prevGraphemeStart =
+        prevLength > 0
+          ? findClusterBreak(
+              prevLineText,
+              prevLength,
+              false,
+              getLineGraphemeStarts(prevLineText)
+            )
+          : prevLength;
+      const firstEnd = findClusterBreak(lineText, 0, true, graphemeStarts);
+      const prevStart = prevEnd - (prevLength - prevGraphemeStart);
+      const newText =
+        lineText.slice(0, firstEnd) +
+        text.slice(prevEnd, offset) +
+        prevLineText.slice(prevGraphemeStart, prevLength);
       edit = {
         start: prevStart,
-        end: offset + 1,
-        text:
-          text[offset] +
-          text.slice(prevEnd, offset) +
-          text.slice(prevStart, prevEnd),
+        end: offset + firstEnd,
+        text: newText,
       };
-      nextOffsetPairs.push([offset + 1, offset + 1]);
+      const caret = prevStart + newText.length;
+      nextOffsetPairs.push([caret, caret]);
     } else {
       nextOffsetPairs.push([anchor, focus]);
       continue;
@@ -1604,13 +1642,7 @@ function resolveDeleteWordBackwardRange(
     ];
   }
   const lineText = textDocument.getLineText(line);
-  const graphemeStarts = [0];
-  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-  for (const segment of segmenter.segment(lineText)) {
-    if (segment.index > 0) {
-      graphemeStarts.push(segment.index);
-    }
-  }
+  const graphemeStarts = getLineGraphemeStarts(lineText);
   let pos = head;
   let match: number | undefined;
   while (pos > 0) {
@@ -1656,6 +1688,39 @@ function findClusterBreak(
     }
   }
   return 0;
+}
+
+// Lists the start column of every grapheme cluster on a line (always starting
+// at 0). Used to step the caret and to transpose by whole graphemes so a
+// surrogate pair (emoji) or combining sequence is never split.
+function getLineGraphemeStarts(lineText: string): number[] {
+  const graphemeStarts = [0];
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+  for (const segment of segmenter.segment(lineText)) {
+    if (segment.index > 0) {
+      graphemeStarts.push(segment.index);
+    }
+  }
+  return graphemeStarts;
+}
+
+// Returns the character column one grapheme cluster to the left or right of
+// `character` on `line`. Stepping by grapheme rather than by a single UTF-16
+// code unit keeps the caret from landing inside an emoji or other multi-unit
+// character. Crossing a line boundary is left to the caller.
+function stepCharacterByGrapheme(
+  textDocument: TextDocument<unknown>,
+  line: number,
+  character: number,
+  forward: boolean
+): number {
+  const lineText = textDocument.getLineText(line);
+  return findClusterBreak(
+    lineText,
+    character,
+    forward,
+    getLineGraphemeStarts(lineText)
+  );
 }
 
 function getSelectionAnchorAndFocusOffsets(
