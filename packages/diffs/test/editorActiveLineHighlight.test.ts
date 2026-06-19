@@ -1,10 +1,10 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
-import { File } from '../src/components/File';
+import { File, type FileOptions } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents } from '../src/types';
+import type { FileContents, SelectedLineRange } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -35,7 +35,10 @@ interface EditorFixture {
   editor: Editor<undefined>;
 }
 
-async function createEditorFixture(contents: string): Promise<EditorFixture> {
+async function createEditorFixture(
+  contents: string,
+  fileOptions?: Partial<FileOptions<undefined>>
+): Promise<EditorFixture> {
   const dom = installDom();
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
@@ -43,6 +46,7 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
   const file = new File<undefined>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
+    ...fileOptions,
   });
   const editor = new Editor<undefined>();
   const initialFile: FileContents = { name: 'highlight.ts', contents };
@@ -127,6 +131,31 @@ describe('editor active line highlight', () => {
       // A backward selection puts the caret on the start line (index 1 ->
       // data-line "2"), not the end of the range.
       expect(highlightedLineNumbers(content)).toEqual([2]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('does not publish a line-selection notification for an editor selection', async () => {
+    const notifiedRanges: (SelectedLineRange | null)[] = [];
+    const { cleanup, content, editor } = await createEditorFixture(
+      'alpha\nbravo\ncharlie\ndelta',
+      { onLineSelected: (range) => notifiedRanges.push(range) }
+    );
+    try {
+      editor.setSelections([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 3, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+      // The caret line still gets the active-line highlight...
+      expect(highlightedLineNumbers(content)).toEqual([4]);
+      // ...but the editor renders it without publishing a line selection.
+      // Text selection is not a gutter line selection, so a consumer's
+      // onLineSelected handler must not fire.
+      expect(notifiedRanges).toEqual([]);
     } finally {
       cleanup();
     }
