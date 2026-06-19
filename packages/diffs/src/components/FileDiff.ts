@@ -87,6 +87,8 @@ type LoadedPartialDiffContents = Awaited<
   ReturnType<NonNullable<BaseDiffOptions['loadDiffFiles']>>
 >;
 
+const HYDRATED_DIFF_HIGHLIGHT_PRIMING_TIMEOUT_MS = 300;
+
 export interface FileDiffRenderBaseProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
   deferManagers?: boolean;
@@ -812,10 +814,25 @@ export class FileDiff<
         ) <= tokenizeMaxLength;
 
       if (shouldPrimeHighlightCache) {
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
         try {
-          await workerManager.primeDiffHighlightCache(hydratedFileDiff);
-        } catch (error) {
-          console.error(error);
+          await Promise.race([
+            workerManager
+              .primeDiffHighlightCache(hydratedFileDiff)
+              .catch((error: unknown) => {
+                console.error(error);
+              }),
+            new Promise<void>((resolve) => {
+              timeoutId = setTimeout(
+                resolve,
+                HYDRATED_DIFF_HIGHLIGHT_PRIMING_TIMEOUT_MS
+              );
+            }),
+          ]);
+        } finally {
+          if (timeoutId != null) {
+            clearTimeout(timeoutId);
+          }
         }
         if (!this.enabled || this.fileDiff !== fileDiff) {
           return;
