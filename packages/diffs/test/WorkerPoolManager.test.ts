@@ -264,7 +264,9 @@ function respondToDiffRequest(
 class TestWorker {
   terminated = false;
   private diffRequests: RenderDiffRequest[] = [];
-  private diffRequestResolve: ((request: RenderDiffRequest) => void) | undefined;
+  private diffRequestResolve:
+    | ((request: RenderDiffRequest) => void)
+    | undefined;
   private initializeRequest: InitializeWorkerRequest | undefined;
   private initializeRequestResolve:
     | ((request: InitializeWorkerRequest) => void)

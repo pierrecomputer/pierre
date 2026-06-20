@@ -11,8 +11,12 @@ interface ArbitraryFilesProps {
 }
 
 export function ArbitraryFiles({ prerenderedDiff }: ArbitraryFilesProps) {
-  const [oldFile, setOldFile] = useState(prerenderedDiff.oldFile);
-  const [newFile, setNewFile] = useState(prerenderedDiff.newFile);
+  const [oldFile, setOldFile] = useState(
+    () => prerenderedDiff.oldFile ?? { name: 'old.css', contents: '' }
+  );
+  const [newFile, setNewFile] = useState(
+    () => prerenderedDiff.newFile ?? { name: 'new.css', contents: '' }
+  );
 
   return (
     <div className="space-y-5">

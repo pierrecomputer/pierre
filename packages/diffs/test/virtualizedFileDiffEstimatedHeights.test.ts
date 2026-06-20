@@ -11,6 +11,7 @@ import type {
 } from '../src/types';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import { installDom } from './domHarness';
 
 // Mirrors LAYOUT_CHECKPOINT_INTERVAL in src/components/VirtualizedFileDiff.ts:
 // the source emits one layout checkpoint per this many diff rows.
@@ -891,6 +892,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
   });
 
   test('ignores trailing fromEnd expansion in render range line totals', () => {
+    const { cleanup } = installDom();
     const fileDiff = createTwoHunkDiff();
     const trailingHunkIndex = fileDiff.hunks.length;
     const fromStartOnly = new Map<number, HunkExpansionRegion>([
@@ -898,15 +900,26 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     ]);
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
 
-    instance.expandHunk(trailingHunkIndex, 'up', 2);
-    instance.expandHunk(trailingHunkIndex, 'down', 3);
+    try {
+      instance.render({
+        fileContainer: document.createElement('div'),
+        fileDiff,
+        deferManagers: true,
+        preventEmit: true,
+      });
+      instance.expandHunk(trailingHunkIndex, 'up', 2);
+      instance.expandHunk(trailingHunkIndex, 'down', 3);
 
-    expect(inspect(instance).getExpandedLineCount(fileDiff, 'split')).toBe(
-      countIteratedRows(fileDiff, 'split', fromStartOnly)
-    );
-    expect(inspect(instance).getExpandedLineCount(fileDiff, 'unified')).toBe(
-      countIteratedRows(fileDiff, 'unified', fromStartOnly)
-    );
+      expect(inspect(instance).getExpandedLineCount(fileDiff, 'split')).toBe(
+        countIteratedRows(fileDiff, 'split', fromStartOnly)
+      );
+      expect(inspect(instance).getExpandedLineCount(fileDiff, 'unified')).toBe(
+        countIteratedRows(fileDiff, 'unified', fromStartOnly)
+      );
+    } finally {
+      instance.cleanUp();
+      cleanup();
+    }
   });
 
   test('checkpoint generation jumps through large uniform blocks', () => {
