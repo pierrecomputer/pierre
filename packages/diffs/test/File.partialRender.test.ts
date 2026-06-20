@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 
 import {
   disposeHighlighter,
@@ -8,6 +8,10 @@ import {
   type RenderRange,
 } from '../src';
 import { installDom, wait } from './domHarness';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 function makeFile(lineCount: number): FileContents {
   const lines = Array.from(
@@ -89,7 +93,6 @@ describe('File partial render', () => {
     } finally {
       instance?.cleanUp();
       cleanup();
-      await disposeHighlighter();
     }
   });
 });

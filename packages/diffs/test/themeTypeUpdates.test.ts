@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 
 import {
   CodeView,
@@ -15,6 +15,10 @@ import {
   VirtualizedFileDiff,
 } from '../src';
 import { createRoot, installDom, wait } from './domHarness';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 function makeFile(name: string): FileContents {
   return {
@@ -142,7 +146,6 @@ describe('themeType updates', () => {
       viewer.cleanUp();
       await wait(0);
       cleanup();
-      await disposeHighlighter();
     }
   });
 
@@ -177,7 +180,6 @@ describe('themeType updates', () => {
     } finally {
       instance?.cleanUp();
       cleanup();
-      await disposeHighlighter();
     }
   });
 
@@ -212,7 +214,6 @@ describe('themeType updates', () => {
     } finally {
       instance?.cleanUp();
       cleanup();
-      await disposeHighlighter();
     }
   });
 
@@ -271,7 +272,6 @@ describe('themeType updates', () => {
     } finally {
       instance?.cleanUp();
       cleanup();
-      await disposeHighlighter();
     }
   });
 
@@ -315,7 +315,6 @@ describe('themeType updates', () => {
     } finally {
       instance?.cleanUp();
       cleanup();
-      await disposeHighlighter();
     }
   });
 });

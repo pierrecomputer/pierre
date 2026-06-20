@@ -1,8 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
 import type { DiffLineAnnotation } from '../src/types';
 import { installDom } from './domHarness';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 async function waitForRenderedCode(container: HTMLElement): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {
@@ -70,7 +74,6 @@ describe('FileDiff partial render', () => {
     } finally {
       instance?.cleanUp();
       cleanup();
-      await disposeHighlighter();
     }
   });
 
@@ -136,7 +139,6 @@ describe('FileDiff partial render', () => {
     } finally {
       instance?.cleanUp();
       cleanup();
-      await disposeHighlighter();
     }
   });
 
@@ -168,7 +170,6 @@ describe('FileDiff partial render', () => {
     } finally {
       instance?.cleanUp();
       cleanup();
-      await disposeHighlighter();
     }
   });
 
@@ -200,7 +201,6 @@ describe('FileDiff partial render', () => {
     } finally {
       instance?.cleanUp();
       cleanup();
-      await disposeHighlighter();
     }
   });
 });

@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  test,
-} from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { parseDiffFromFile } from '../src';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
@@ -50,7 +43,7 @@ beforeAll(() => {
   }) as typeof cancelAnimationFrame;
 });
 
-afterAll(() => {
+afterAll(async () => {
   for (const timeout of frames.values()) {
     clearTimeout(timeout);
   }
@@ -66,9 +59,6 @@ afterAll(() => {
   } else {
     Reflect.deleteProperty(globalThis, 'cancelAnimationFrame');
   }
-});
-
-afterEach(async () => {
   await disposeHighlighter();
 });
 
