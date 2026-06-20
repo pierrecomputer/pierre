@@ -8,6 +8,7 @@ import {
   parsePatchFiles,
 } from '../src';
 import type { FileContents, FileDiffMetadata } from '../src/types';
+import type { WorkerPoolManager } from '../src/worker';
 import { installDom, wait } from './domHarness';
 import { assertDefined } from './testUtils';
 
@@ -28,12 +29,62 @@ class TestFileDiff extends FileDiff<undefined> {
 function createDeferred<T>(): {
   promise: Promise<T>;
   resolve(value: T): void;
+  reject(error: unknown): void;
 } {
   let resolve: (value: T) => void = () => {};
-  const promise = new Promise<T>((promiseResolve) => {
+  let reject: (error: unknown) => void = () => {};
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
     resolve = promiseResolve;
+    reject = promiseReject;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
+}
+
+function createPrimeWorkerManager(): {
+  primeDeferred: ReturnType<typeof createDeferred<void>>;
+  primedDiffs: FileDiffMetadata[];
+  workerManager: WorkerPoolManager;
+} {
+  const primeDeferred = createDeferred<void>();
+  const primedDiffs: FileDiffMetadata[] = [];
+  const workerManager = {
+    cleanUpTasks() {},
+    getDiffRenderOptions() {
+      return {
+        theme: 'github-dark',
+        useTokenTransformer: false,
+        tokenizeMaxLineLength: 1000,
+        lineDiffType: 'word-alt',
+        maxLineDiffLength: 1000,
+      };
+    },
+    getDiffResultCache() {
+      return undefined;
+    },
+    getPlainDiffAST() {
+      return undefined;
+    },
+    highlightDiffAST() {},
+    initialize() {
+      return Promise.resolve();
+    },
+    isInitialized() {
+      return true;
+    },
+    isWorkingPool() {
+      return true;
+    },
+    primeDiffHighlightCache(fileDiff: FileDiffMetadata) {
+      primedDiffs.push(fileDiff);
+      return primeDeferred.promise;
+    },
+    subscribeToThemeChanges() {
+      return () => undefined;
+    },
+    unsubscribeToThemeChanges() {},
+  } as unknown as WorkerPoolManager;
+
+  return { primeDeferred, primedDiffs, workerManager };
 }
 
 function parseSinglePartialFile(patch: string): FileDiffMetadata {
@@ -133,7 +184,7 @@ describe('FileDiff partial hydration', () => {
     const { cleanup } = installDom();
     let instance: TestFileDiff | undefined;
     try {
-      const { oldFile, newFile, partial } = createPartialChange();
+      const { oldFile, newFile, partial } = createPartialChange('partial.ts');
       const loadedContents = { oldFile, newFile };
       const deferred = createDeferred<typeof loadedContents>();
       let loadCalls = 0;
@@ -228,7 +279,7 @@ describe('FileDiff partial hydration', () => {
     const { cleanup } = installDom();
     let instance: TestFileDiff | undefined;
     try {
-      const { oldFile, newFile, partial } = createPartialChange();
+      const { oldFile, newFile, partial } = createPartialChange('partial.ts');
       const loadedContents = { oldFile, newFile };
       const deferred = createDeferred<typeof loadedContents>();
       let loadCalls = 0;
@@ -366,6 +417,185 @@ describe('FileDiff partial hydration', () => {
       expect(instance.fileDiff?.name).toBe('second.txt');
       expect(instance.fileDiff?.isPartial).toBe(false);
       expect(instance.fileDiff?.additionLines).toEqual(['after\n']);
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('waits for eligible worker priming before committing hydrated diffs', async () => {
+    const { cleanup } = installDom();
+    let instance: TestFileDiff | undefined;
+    try {
+      const { oldFile, newFile, partial } = createPartialChange('partial.ts');
+      const loadedContents = { oldFile, newFile };
+      const loadDeferred = createDeferred<typeof loadedContents>();
+      const { primeDeferred, primedDiffs, workerManager } =
+        createPrimeWorkerManager();
+      const fileContainer = document.createElement('div');
+      instance = new TestFileDiff(
+        {
+          disableErrorHandling: true,
+          disableFileHeader: true,
+          loadDiffFiles: () => loadDeferred.promise,
+        },
+        workerManager
+      );
+
+      instance.render({
+        fileContainer,
+        fileDiff: partial,
+        deferManagers: true,
+        preventEmit: true,
+      });
+      instance.expandHunk(0, 'down', 1);
+
+      loadDeferred.resolve(loadedContents);
+      await wait(0);
+
+      expect(primedDiffs).toHaveLength(1);
+      expect(primedDiffs[0]?.isPartial).toBe(false);
+      expect(instance.fileDiff).toBe(partial);
+
+      primeDeferred.resolve(undefined);
+      await waitForHydrated(instance);
+
+      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(false);
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('commits hydrated diffs after the worker priming timeout elapses', async () => {
+    const { cleanup } = installDom();
+    let instance: TestFileDiff | undefined;
+    try {
+      const { oldFile, newFile, partial } = createPartialChange('partial.ts');
+      const loadedContents = { oldFile, newFile };
+      const { primeDeferred, primedDiffs, workerManager } =
+        createPrimeWorkerManager();
+      const fileContainer = document.createElement('div');
+      instance = new TestFileDiff(
+        {
+          disableErrorHandling: true,
+          disableFileHeader: true,
+          loadDiffFiles: () => Promise.resolve(loadedContents),
+        },
+        workerManager
+      );
+
+      instance.render({
+        fileContainer,
+        fileDiff: partial,
+        deferManagers: true,
+        preventEmit: true,
+      });
+      instance.expandHunk(0, 'down', 1);
+
+      await waitForHydrated(instance);
+
+      expect(primedDiffs).toHaveLength(1);
+      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(false);
+      primeDeferred.resolve(undefined);
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('commits hydrated diffs when worker priming rejects', async () => {
+    const { cleanup } = installDom();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    let instance: TestFileDiff | undefined;
+    try {
+      const { oldFile, newFile, partial } = createPartialChange('partial.ts');
+      const loadedContents = { oldFile, newFile };
+      const primingError = new Error('prime failed');
+      const { primeDeferred, primedDiffs, workerManager } =
+        createPrimeWorkerManager();
+      const fileContainer = document.createElement('div');
+      instance = new TestFileDiff(
+        {
+          disableErrorHandling: true,
+          disableFileHeader: true,
+          loadDiffFiles: () => Promise.resolve(loadedContents),
+        },
+        workerManager
+      );
+
+      instance.render({
+        fileContainer,
+        fileDiff: partial,
+        deferManagers: true,
+        preventEmit: true,
+      });
+      instance.expandHunk(0, 'down', 1);
+      await wait(0);
+
+      primeDeferred.reject(primingError);
+      await waitForHydrated(instance);
+
+      expect(primedDiffs).toHaveLength(1);
+      expect(consoleError.mock.calls[0]?.[0]).toBe(primingError);
+      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(false);
+    } finally {
+      consoleError.mockRestore();
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('ignores stale hydration results after the rendered diff changes while priming is pending', async () => {
+    const { cleanup } = installDom();
+    let instance: TestFileDiff | undefined;
+    try {
+      const { oldFile, newFile, partial } = createPartialChange('first.ts');
+      const nextDiff = parseDiffFromFile(
+        { name: 'second.ts', contents: 'const value = "before";\n' },
+        { name: 'second.ts', contents: 'const value = "after";\n' }
+      );
+      const loadedContents = { oldFile, newFile };
+      const { primeDeferred, primedDiffs, workerManager } =
+        createPrimeWorkerManager();
+      const fileContainer = document.createElement('div');
+      instance = new TestFileDiff(
+        {
+          disableErrorHandling: true,
+          disableFileHeader: true,
+          loadDiffFiles: () => Promise.resolve(loadedContents),
+        },
+        workerManager
+      );
+
+      instance.render({
+        fileContainer,
+        fileDiff: partial,
+        deferManagers: true,
+        preventEmit: true,
+      });
+      instance.expandHunk(0, 'down', 1);
+      await wait(0);
+
+      expect(primedDiffs).toHaveLength(1);
+      instance.render({
+        fileContainer,
+        fileDiff: nextDiff,
+        deferManagers: true,
+        preventEmit: true,
+      });
+      primeDeferred.resolve(undefined);
+      await wait(0);
+
+      expect(instance.fileDiff).toBe(nextDiff);
+      expect(instance.fileDiff?.name).toBe('second.ts');
+      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.fileDiff?.additionLines).toEqual([
+        'const value = "after";\n',
+      ]);
     } finally {
       instance?.cleanUp();
       cleanup();
