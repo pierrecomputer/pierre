@@ -809,6 +809,7 @@ export class VirtualizedFileDiff<
     expectedFileDiff: FileDiffMetadata
   ): FileDiffMetadata | undefined {
     let hasLayoutChange = false;
+    let didHydrate = false;
     const { pendingExpansions, pendingHydration } = this;
 
     if (pendingExpansions != null) {
@@ -832,13 +833,17 @@ export class VirtualizedFileDiff<
           pendingHydration.loadedContents
         );
         hydratedFileDiff = pendingHydration.hydratedFileDiff;
-        hasLayoutChange = true;
+        didHydrate = true;
       }
     }
 
-    if (hasLayoutChange) {
+    if (hasLayoutChange || didHydrate) {
       this.forceRenderOverride = true;
-      this.invalidateDerivedLayoutCache(true);
+      if (didHydrate) {
+        this.resetLayoutCache({ includeEstimatedHeights: true });
+      } else {
+        this.invalidateDerivedLayoutCache(true);
+      }
     }
 
     return hydratedFileDiff;
