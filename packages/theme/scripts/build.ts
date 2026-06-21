@@ -117,8 +117,10 @@ const vscodeThemes = [
   },
 ];
 
+// oxfmt skips these files (.oxfmtrc.json), so append the trailing newline it
+// would otherwise add.
 for (const { file, theme } of vscodeThemes) {
-  writeFileSync(file, JSON.stringify(theme, null, 2), 'utf8');
+  writeFileSync(file, JSON.stringify(theme, null, 2) + '\n', 'utf8');
   console.log('Wrote', file);
 }
 
@@ -154,7 +156,7 @@ const zedTheme = createZedTheme('Pierre', 'pierrecomputer', [
 
 writeFileSync(
   'zed/themes/pierre.json',
-  JSON.stringify(zedTheme, null, 2),
+  JSON.stringify(zedTheme, null, 2) + '\n',
   'utf8'
 );
 console.log('Wrote zed/themes/pierre.json');
