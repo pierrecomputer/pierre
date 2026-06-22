@@ -305,7 +305,6 @@ export class EditorTokenizer {
     let line = canReuseCachedStates
       ? changedLineRanges[changedRangeIndex][0]
       : viewStart;
-    let state = this.#stateStack[line] ?? INITIAL;
     let settled = false;
     const dirtyLines: Map<number, Array<HighlightedToken>> = new Map();
     const offscreenDirtyLines:
@@ -331,6 +330,12 @@ export class EditorTokenizer {
         }
       }
     }
+    // Seed the loop's grammar state after the offscreen flush, not before it.
+    // When a delete's removed lines reach the viewport's first line, the flush
+    // rebuilds the cached state up to `line`; reading it earlier would capture
+    // the truncated INITIAL state and color the viewport as if outside an open
+    // construct (block comment, template literal) it is actually inside.
+    let state = this.#stateStack[line] ?? INITIAL;
     for (; line < renderRangeEndLine; ) {
       const previousNextState = canReuseCachedStates
         ? this.#stateStack[line + 1]
