@@ -110,6 +110,27 @@ function createRandom(seed: number): () => number {
   };
 }
 
+/**
+ * Reference implementation of `PieceTable.applyEdits` on a plain string: edits
+ * are sorted ascending and applied with a moving copy cursor, so overlapping or
+ * out-of-order edits clamp the same way the piece table does.
+ */
+function applyEditsToString(
+  text: string,
+  edits: { start: number; end: number; text: string }[]
+): string {
+  const sorted = [...edits].sort((a, b) => a.start - b.start);
+  let out = '';
+  let cursor = 0;
+  for (const edit of sorted) {
+    const start = Math.min(Math.max(edit.start, cursor), text.length);
+    const end = Math.min(Math.max(edit.end, start), text.length);
+    out += text.slice(cursor, start) + edit.text;
+    cursor = end;
+  }
+  return out + text.slice(cursor);
+}
+
 describe('PieceTable', () => {
   test('returns the original text', () => {
     const table = new PieceTable('hello');
@@ -400,5 +421,151 @@ describe('PieceTable', () => {
     }
 
     expectTableToMatchText(table, text);
+  });
+
+  test('applyEdits applies a single replacement', () => {
+    const table = new PieceTable('hello world');
+
+    table.applyEdits([{ start: 6, end: 11, text: 'there' }]);
+
+    expectTableToMatchText(table, 'hello there');
+  });
+
+  test('applyEdits applies multiple non-overlapping edits in one pass', () => {
+    const table = new PieceTable('one two three');
+    const edits = [
+      { start: 0, end: 3, text: 'ONE' },
+      { start: 4, end: 7, text: '2' },
+      { start: 8, end: 13, text: 'III' },
+    ];
+
+    table.applyEdits(edits);
+
+    expect(table.getText()).toBe('ONE 2 III');
+    expectTableToMatchText(table, applyEditsToString('one two three', edits));
+  });
+
+  test('applyEdits mixes inserts, deletes, and replacements', () => {
+    const original = 'alpha\nbeta\ngamma';
+    const table = new PieceTable(original);
+    const edits = [
+      { start: 0, end: 0, text: '> ' }, // pure insert
+      { start: 6, end: 10, text: '' }, // pure delete ("beta")
+      { start: 11, end: 16, text: 'GAMMA' }, // replace ("gamma")
+    ];
+
+    table.applyEdits(edits);
+
+    expectTableToMatchText(table, applyEditsToString(original, edits));
+  });
+
+  test('applyEdits matches the string oracle across random batched edits', () => {
+    for (let seed = 1; seed <= 6; seed++) {
+      const random = createRandom(seed * 7 + 3);
+      let text = 'function demo() {\n  return 42;\n}\n';
+      const table = new PieceTable(text);
+      // No lone-`\r`-producing inserts here: the position oracle below splits
+      // on `\n` only. CRLF handling is fuzzed separately against the real
+      // computeLineOffsets oracle.
+      const inserts = ['x', 'YZ', '\n', '  ', '🙂', 'abc'];
+
+      for (let round = 0; round < 60; round++) {
+        // Build 1..4 sorted, non-overlapping edits over the current text.
+        const editCount = 1 + Math.floor(random() * 4);
+        const edits: { start: number; end: number; text: string }[] = [];
+        let nextStart = 0;
+        for (let i = 0; i < editCount && nextStart <= text.length; i++) {
+          const span = Math.max(1, text.length - nextStart);
+          const start = Math.min(
+            nextStart + Math.floor(random() * span),
+            text.length
+          );
+          const maxDelete = Math.min(4, text.length - start);
+          const end = start + Math.floor(random() * (maxDelete + 1));
+          const insert =
+            random() < 0.5
+              ? inserts[Math.floor(random() * inserts.length)]
+              : '';
+          edits.push({ start, end, text: insert });
+          nextStart = end + 1; // keep edits ascending and non-overlapping
+        }
+
+        const expected = applyEditsToString(text, edits);
+        table.applyEdits(edits);
+        expect(table.getText()).toBe(expected);
+        text = expected;
+      }
+
+      expectTableToMatchText(table, text);
+    }
+  });
+
+  test('matches the string oracle across many scattered single edits', () => {
+    for (let seed = 1; seed <= 5; seed++) {
+      const random = createRandom(seed * 131 + 17);
+      let text = 'the quick brown fox\njumps over\nthe lazy dog\n';
+      const table = new PieceTable(text);
+      const inserts = ['q', 'Hi', '\n', '🙂', '', '   '];
+
+      for (let i = 0; i < 600; i++) {
+        const roll = random();
+        if (roll < 0.55) {
+          const insert = inserts[Math.floor(random() * inserts.length)];
+          const offset = Math.floor(random() * (text.length + 1));
+          table.insert(insert, offset);
+          text = text.slice(0, offset) + insert + text.slice(offset);
+        } else if (roll < 0.9) {
+          const offset = Math.floor(random() * (text.length + 1));
+          const length = Math.floor(random() * 6);
+          table.delete(offset, length);
+          text = text.slice(0, offset) + text.slice(offset + length);
+        } else {
+          // single-edit applyEdits is the production per-keystroke path
+          const offset = Math.floor(random() * (text.length + 1));
+          const length = Math.min(
+            Math.floor(random() * 4),
+            text.length - offset
+          );
+          const insert = inserts[Math.floor(random() * inserts.length)];
+          table.applyEdits([
+            { start: offset, end: offset + length, text: insert },
+          ]);
+          text = text.slice(0, offset) + insert + text.slice(offset + length);
+        }
+        expect(table.getText()).toBe(text);
+      }
+
+      expectTableToMatchText(table, text);
+    }
+  });
+
+  test('preserves CR/LF content across random edits that split pairs', () => {
+    // Edits can slice a `\r\n` pair across a piece boundary, so this stresses
+    // the split/merge content path (getText walks pieces in order; getTextSlice
+    // uses findPieceAtOffset and parent links). Line counting is buffer-based
+    // and pinned by the explicit CRLF tests, so it is not re-derived here.
+    for (let seed = 1; seed <= 5; seed++) {
+      const random = createRandom(seed * 977 + 5);
+      let text = 'a\r\nb\nc\r\n';
+      const table = new PieceTable(text);
+      const inserts = ['\r\n', '\r', '\n', 'd', 'EF', '\r\ng', ''];
+
+      for (let i = 0; i < 400; i++) {
+        if (random() < 0.6) {
+          const insert = inserts[Math.floor(random() * inserts.length)];
+          const offset = Math.floor(random() * (text.length + 1));
+          table.insert(insert, offset);
+          text = text.slice(0, offset) + insert + text.slice(offset);
+        } else {
+          const offset = Math.floor(random() * (text.length + 1));
+          const length = Math.floor(random() * 4);
+          table.delete(offset, length);
+          text = text.slice(0, offset) + text.slice(offset + length);
+        }
+
+        expect(table.getText()).toBe(text);
+        expect(table.getTextSlice(0, text.length)).toBe(text);
+      }
+    }
   });
 });
