@@ -60,6 +60,7 @@ import { areHunkDataEqual } from '../utils/areHunkDataEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
+import { assertNotPartialDiffDowngrade } from '../utils/assertNotPartialDiffDowngrade';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
@@ -592,6 +593,16 @@ export class FileDiff<
     fileDiff,
     ...fileInputProps
   }: FileDiffHydrationProps<LAnnotation>): void {
+    if (!this.enabled) {
+      throw new Error(
+        'FileDiff.hydrate: attempting to call hydrate after cleaned up'
+      );
+    }
+    if (this.fileContainer != null) {
+      throw new Error(
+        'FileDiff.hydrate: hydrate can only be called before the instance has rendered or hydrated'
+      );
+    }
     const fileInput = getDiffFileInput(fileInputProps, 'FileDiff.hydrate');
     const oldFile = fileInput?.oldFile;
     const newFile = fileInput?.newFile;
@@ -930,6 +941,22 @@ export class FileDiff<
       return this.applyCachedThemeState(themeType);
     }
 
+    let nextParsedFileDiff: FileDiffMetadata | undefined;
+    if (fileDiff != null) {
+      assertNotPartialDiffDowngrade(this.fileDiff, fileDiff, 'FileDiff.render');
+    } else if (hasFileInput && (filesDidChange || this.fileDiff == null)) {
+      nextParsedFileDiff = parseDiffFromFile(
+        fileInput.oldFile,
+        fileInput.newFile,
+        this.options.parseDiffOptions
+      );
+      assertNotPartialDiffDowngrade(
+        this.fileDiff,
+        nextParsedFileDiff,
+        'FileDiff.render'
+      );
+    }
+
     const { renderRange: previousRenderRange } = this;
     this.renderRange = nextRenderRange;
     this.deletionFile = oldFile;
@@ -937,13 +964,9 @@ export class FileDiff<
 
     if (fileDiff != null) {
       this.fileDiff = fileDiff;
-    } else if (hasFileInput && (filesDidChange || this.fileDiff == null)) {
+    } else if (nextParsedFileDiff != null) {
       diffDidChange = true;
-      this.fileDiff = parseDiffFromFile(
-        fileInput.oldFile,
-        fileInput.newFile,
-        this.options.parseDiffOptions
-      );
+      this.fileDiff = nextParsedFileDiff;
     }
     if (diffDidChange) {
       this.cachedHeaderHTML = undefined;

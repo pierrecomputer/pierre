@@ -21,6 +21,7 @@ import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
+import { assertNotPartialDiffDowngrade } from '../utils/assertNotPartialDiffDowngrade';
 import { computeEstimatedDiffHeights } from '../utils/computeEstimatedDiffHeights';
 import {
   computeVirtualFileMetrics,
@@ -421,6 +422,11 @@ export class VirtualizedFileDiff<
     reset?: PendingCodeViewLayoutReset,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): number {
+    assertNotPartialDiffDowngrade(
+      this.fileDiff,
+      fileDiff,
+      'VirtualizedFileDiff.prepareCodeViewItem'
+    );
     const targetChanged = !areDiffTargetsEqual(this.fileDiff, fileDiff);
     const annotationsChanged = this.syncLineAnnotations(lineAnnotations);
     let shouldResetLayoutCache =
@@ -1043,13 +1049,6 @@ export class VirtualizedFileDiff<
       fileInputProps,
       'VirtualizedFileDiff.render'
     );
-    const { forceRenderOverride, isSetup } = this;
-    this.forceRenderOverride = undefined;
-    const annotationsChanged = this.syncLineAnnotations(lineAnnotations);
-    if (annotationsChanged) {
-      this.resetLayoutCache({ includeEstimatedHeights: false });
-    }
-
     const hasFileInput = fileInput != null;
     const oldFile = fileInput?.oldFile;
     const newFile = fileInput?.newFile;
@@ -1070,6 +1069,17 @@ export class VirtualizedFileDiff<
             this.options.parseDiffOptions
           )
         : undefined);
+    assertNotPartialDiffDowngrade(
+      this.fileDiff,
+      nextFileDiff,
+      'VirtualizedFileDiff.render'
+    );
+    const { forceRenderOverride, isSetup } = this;
+    this.forceRenderOverride = undefined;
+    const annotationsChanged = this.syncLineAnnotations(lineAnnotations);
+    if (annotationsChanged) {
+      this.resetLayoutCache({ includeEstimatedHeights: false });
+    }
     if (
       nextFileDiff != null &&
       !areDiffTargetsEqual(this.fileDiff, nextFileDiff)
