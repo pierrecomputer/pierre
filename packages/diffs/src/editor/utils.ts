@@ -116,3 +116,7 @@ export function debounce<T extends (...args: any[]) => void>(
 export function round(value: number, precision: number = 1000): number {
   return Math.round(value * precision) / precision;
 }
+
+export function endsWithLineBreak(text: string): boolean {
+  return text.endsWith('\n') || text.endsWith('\r');
+}

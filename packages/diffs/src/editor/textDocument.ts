@@ -153,6 +153,24 @@ export class TextDocument<LAnnotation> {
     return this.#pieceTable.lineCount;
   }
 
+  // The line ending the document uses, detected from its first line. Lets
+  // inserted or pasted text match the rest of the file instead of leaving
+  // mixed endings behind. Recognizes Windows `\r\n` and classic-Mac lone `\r`
+  // breaks (both of which the piece table already splits on), defaulting to
+  // Unix `\n`.
+  get eol(): string {
+    if (this.lineCount > 1) {
+      const firstLineBreak = this.getLineText(0, true);
+      if (firstLineBreak.endsWith('\r\n')) {
+        return '\r\n';
+      }
+      if (firstLineBreak.endsWith('\r')) {
+        return '\r';
+      }
+    }
+    return '\n';
+  }
+
   get canUndo(): boolean {
     return this.#editStack.canUndo;
   }
@@ -191,6 +209,13 @@ export class TextDocument<LAnnotation> {
 
   getLineText(line: number, includeLineBreak?: boolean): string {
     return this.#pieceTable.getLineText(line, includeLineBreak);
+  }
+
+  // Rewrites every line break in `text` to the document's EOL. Clipboard text
+  // can carry Windows (`\r\n`) or classic-Mac (`\r`) breaks; inserting it
+  // verbatim would leave mixed line endings in a file that uses one style.
+  normalizeEol(text: string): string {
+    return text.replace(/\r\n|\r|\n/g, this.eol);
   }
 
   getLineLength(line: number, includeLineBreak?: boolean): number {

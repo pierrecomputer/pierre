@@ -8,6 +8,7 @@ import type {
   TextDocumentChange,
   TextEdit,
 } from './textDocument';
+import { endsWithLineBreak } from './utils';
 
 export const DirectionBackward = -1;
 export const DirectionNone = 0;
@@ -1419,22 +1420,6 @@ function resolveClipboardRegions(
     });
 }
 
-function endsWithLineBreak(text: string): boolean {
-  return text.endsWith('\n') || text.endsWith('\r');
-}
-
-// Detects the document's line ending so separators synthesized between
-// non-contiguous clipboard regions match the rest of the file.
-function detectEol(textDocument: TextDocument<unknown>): string {
-  if (
-    textDocument.lineCount > 1 &&
-    textDocument.getLineText(0, true).endsWith('\r\n')
-  ) {
-    return '\r\n';
-  }
-  return '\n';
-}
-
 /**
  * Get the clipboard text of the selections for the given text document. Used by
  * both copy and cut so the two stay in sync. Overlapping regions (e.g. several
@@ -1447,7 +1432,7 @@ export function getSelectionText(
   selections: EditorSelection[]
 ): string {
   const regions = resolveClipboardRegions(textDocument, selections);
-  const eol = detectEol(textDocument);
+  const eol = textDocument.eol;
   let result = '';
   let prevEnd = -1;
   for (const region of regions) {
