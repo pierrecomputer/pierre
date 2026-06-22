@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import type { IGrammar, StateStack } from 'shiki/textmate';
+import { type IGrammar, INITIAL, type StateStack } from 'shiki/textmate';
 
 import {
   TextDocument,
@@ -261,6 +261,102 @@ describe('EditorTokenizer', () => {
     expect(dirtyLines.size).toBe(0);
     expect(offscreenUpdates.at(-1)?.has(0)).toBe(true);
     expect(offscreenUpdates.at(-1)?.get(0)?.[0]?.[2]).toBe('');
+  });
+
+  test('seeds the viewport from the propagated state when an offscreen delete reaches it', () => {
+    const originalAddEventListener = globalThis.addEventListener;
+    const originalRemoveEventListener = globalThis.removeEventListener;
+    const originalPostMessage = globalThis.postMessage;
+    globalThis.addEventListener =
+      (() => {}) as typeof globalThis.addEventListener;
+    globalThis.removeEventListener =
+      (() => {}) as typeof globalThis.removeEventListener;
+    globalThis.postMessage = (() => {}) as typeof globalThis.postMessage;
+
+    try {
+      // Model a `/* ... */` block comment: the grammar state is either inside or
+      // outside the comment, and each line is colored by the state it is
+      // tokenized in (foreground index 1 = comment, 0 = code). The document opens
+      // a comment on line 0 and never closes it, so every later line is inside.
+      const insideComment = {
+        equals: (other: StateStack) => other === insideComment,
+      } as unknown as StateStack;
+      const grammar = {
+        tokenizeLine2(lineText: string, ruleStack: StateStack) {
+          const inside = ruleStack === insideComment;
+          const stillInside = inside
+            ? !lineText.includes('*/')
+            : lineText.includes('/*');
+          return {
+            tokens: new Uint32Array([0, inside ? 1 << 15 : 0]),
+            ruleStack: stillInside ? insideComment : INITIAL,
+            stoppedEarly: false,
+            lineText,
+          };
+        },
+      } as unknown as IGrammar;
+      const textDocument = new TextDocument(
+        'test.ts',
+        Array.from({ length: 150 }, (_, i) =>
+          i === 0 ? '/*' : `mid ${i}`
+        ).join('\n'),
+        'typescript'
+      );
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({
+          getLanguage: () => grammar,
+          setTheme: () => ({ colorMap: ['#code', '#comment'] }),
+        }),
+        textDocument,
+        codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+
+      // Build the cached state stack across the whole document so every line
+      // starts out correctly colored as comment.
+      tokenizer.tokenize(
+        {
+          startLine: 0,
+          startCharacter: 0,
+          endLine: textDocument.lineCount - 1,
+          previousLineCount: textDocument.lineCount,
+          lineCount: textDocument.lineCount,
+          lineDelta: 0,
+          changedLineRanges: [[0, textDocument.lineCount - 1]],
+        },
+        { startingLine: 0, totalLines: 150, bufferBefore: 0, bufferAfter: 0 }
+      );
+
+      // Scroll the viewport to line 100, then delete the single line directly
+      // above it. The deleted range reaches the viewport's first line, so the
+      // offscreen flush rebuilds the cached state right up to it.
+      const renderRange = {
+        startingLine: 100,
+        totalLines: 10,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      };
+      const change = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 99, character: 0 },
+            end: { line: 100, character: 0 },
+          },
+          newText: '',
+        },
+      ])!;
+      const dirtyLines = tokenizer.tokenize(change, renderRange);
+
+      expect(change.lineDelta).toBeLessThan(0);
+      // The viewport is still inside the never-closed comment, so its first line
+      // must be colored as comment — not re-tokenized from the INITIAL state.
+      expect(dirtyLines.get(100)?.[0]?.[1]).toBe('#comment');
+    } finally {
+      globalThis.addEventListener = originalAddEventListener;
+      globalThis.removeEventListener = originalRemoveEventListener;
+      globalThis.postMessage = originalPostMessage;
+    }
   });
 
   test('tokenizes inserted lines past the render range in the background', () => {
