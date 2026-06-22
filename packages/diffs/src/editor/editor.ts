@@ -1,3 +1,4 @@
+import { queueRender } from '../managers/UniversalRenderingManager';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
@@ -108,6 +109,14 @@ export interface EditorOptions<LAnnotation> {
   autoSurround?: AutoSurround;
   /** Show the clickable selection action icon, default is disabled. */
   enabledSelectionAction?: boolean;
+  /**
+   * Custom clipboard provider.
+   * Highly recommended to use native clipboard API if you are building an electron app.
+   * see https://www.electronjs.org/docs/latest/api/clipboard
+   */
+  clipboard?: {
+    readText: () => Promise<string> | string;
+  };
   /** Render the selection action widget element. */
   renderSelectionAction?: (
     context: SelectionActionContext<LAnnotation>
@@ -1115,6 +1124,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           return;
         }
 
+        // Handle the 'paste' event manually with the custom clipboard API.
+        if (
+          e.key === 'v' &&
+          isPrimaryModifier(e) &&
+          this.#options.clipboard !== undefined
+        ) {
+          e.preventDefault();
+          queueRender(this.#handleCustomPasteEvent);
+          return;
+        }
+
         const command = resolveEditorCommandFromKeyboardEvent(e);
         if (command !== undefined) {
           e.preventDefault();
@@ -1326,6 +1346,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#resizeObserver.observe(contentEl.parentElement!);
     this.#computeContentOffset(contentEl);
   }
+
+  #handleCustomPasteEvent = async () => {
+    const clipboard = this.#options.clipboard;
+    if (clipboard !== undefined) {
+      const text = await clipboard.readText();
+      this.#replaceSelectionText(text, undefined, true);
+    }
+  };
 
   // diff(split) treat the content element as grid item,
   // that breaks the overlay element positioning.

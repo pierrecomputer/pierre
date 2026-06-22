@@ -520,6 +520,13 @@ interface EditorOptions<LAnnotation> {
   // Show the gutter icon for Selection Action (default: false)
   enabledSelectionAction?: boolean;
 
+  // Custom clipboard provider.
+  // Highly recommended to use native clipboard API if you are building an electron app.
+  // see https://www.electronjs.org/docs/latest/api/clipboard
+  clipboard?: {
+    readText: () => Promise<string> | string;
+  };
+
   // Custom Selection Action UI. See Selection Action docs for context shape.
   renderSelectionAction?: (context) => HTMLElement;
 
