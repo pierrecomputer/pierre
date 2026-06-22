@@ -3018,10 +3018,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       onChange(fileRef, newLineAnnotations ?? this.#lineAnnotations);
     }
 
-    // Invalidate layout caches touched by the edit.
-    // - line inserts/deletes shift line numbers, so clear from startLine onward
-    // - wrapped edits can change visual height, which shifts downstream line Y
-    if (change.lineDelta !== 0) {
+    // Invalidate layout caches touched by the edit. Clear cached line Y
+    // positions from startLine onward when either:
+    // - the line count changed (inserts/deletes renumber every later line), or
+    // - wrap is on, where editing a line can add or remove a wrapped row and
+    //   shift the Y of every line after it even though the line count is the
+    //   same.
+    if (change.lineDelta !== 0 || this.#isWrap) {
       for (const line of this.#lineYCache.keys()) {
         if (line >= change.startLine) {
           this.#lineYCache.delete(line);
