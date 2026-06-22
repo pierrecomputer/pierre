@@ -150,6 +150,29 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
     );
   }, []);
 
+  // The horizontally scrollable code panel (`[data-code]`) wrapping the content.
+  const getScroller = useCallback(
+    (): HTMLElement | null => getContent()?.closest('[data-code]') ?? null,
+    [getContent]
+  );
+
+  // Run history dispatches and restore the scroll position afterward. Applying
+  // a change reveals the caret via `scrollIntoView`, which would otherwise
+  // scroll the code panel sideways and nudge the page.
+  const preserveScroll = useCallback(
+    (fn: () => void) => {
+      const scroller = getScroller();
+      const scrollLeft = scroller?.scrollLeft ?? 0;
+      const { scrollX, scrollY } = window;
+      fn();
+      if (scroller != null) {
+        scroller.scrollLeft = scrollLeft;
+      }
+      window.scrollTo(scrollX, scrollY);
+    },
+    [getScroller]
+  );
+
   // Fire the editor's real undo (Cmd/Ctrl-Z) or redo (adds Shift) shortcut on
   // the content element. The editor applies the change and its `onChange`
   // updates the step count, so the controls and the keyboard share one path.
@@ -281,36 +304,40 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   const undo = useCallback(() => {
     const content = getContent();
     if (content != null) {
-      dispatchHistoryKey(content, false);
+      preserveScroll(() => dispatchHistoryKey(content, false));
     }
-  }, [dispatchHistoryKey, getContent]);
+  }, [dispatchHistoryKey, getContent, preserveScroll]);
 
   const redo = useCallback(() => {
     const content = getContent();
     if (content != null) {
-      dispatchHistoryKey(content, true);
+      preserveScroll(() => dispatchHistoryKey(content, true));
     }
-  }, [dispatchHistoryKey, getContent]);
+  }, [dispatchHistoryKey, getContent, preserveScroll]);
 
   const undoAll = useCallback(() => {
     const content = getContent();
     if (content == null) {
       return;
     }
-    for (let i = applied; i > 0; i--) {
-      dispatchHistoryKey(content, false);
-    }
-  }, [applied, dispatchHistoryKey, getContent]);
+    preserveScroll(() => {
+      for (let i = applied; i > 0; i--) {
+        dispatchHistoryKey(content, false);
+      }
+    });
+  }, [applied, dispatchHistoryKey, getContent, preserveScroll]);
 
   const redoAll = useCallback(() => {
     const content = getContent();
     if (content == null) {
       return;
     }
-    for (let i = applied; i < TOTAL_EDITS; i++) {
-      dispatchHistoryKey(content, true);
-    }
-  }, [applied, dispatchHistoryKey, getContent]);
+    preserveScroll(() => {
+      for (let i = applied; i < TOTAL_EDITS; i++) {
+        dispatchHistoryKey(content, true);
+      }
+    });
+  }, [applied, dispatchHistoryKey, getContent, preserveScroll]);
 
   const canUndo = applied > 0;
   const canRedo = applied < TOTAL_EDITS;
