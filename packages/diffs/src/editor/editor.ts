@@ -141,6 +141,13 @@ export interface EditorState<LAnnotation> {
   renderRange?: RenderRange;
 }
 
+// Cap on how far an edit may widen the virtualized render window, as a multiple
+// of the bounded window the virtualizer last synced (~viewport + 2*hunkLineCount).
+// Edits within this many lines of the window bottom widen so their caret renders;
+// larger inserts fall back to the bounded buffer-only path instead of building a
+// row per inserted line. A safety bound, not a correctness-critical value.
+const MAX_EDIT_WIDEN_WINDOW_MULTIPLE = 2;
+
 export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #options: EditorOptions<LAnnotation>;
   #metrics = new Metrics();
@@ -185,6 +192,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
   #renderRange?: RenderRange;
+  // Bounded render-window size (~viewport + 2*hunkLineCount) from the last view
+  // sync. Used to cap how far #applyChange widens the window for an edit, so a
+  // large insert can't materialize an unbounded number of rows. Captured at sync
+  // time so consecutive edits that grow #renderRange can't ratchet the cap up.
+  // undefined until the first sync; Infinity for non-virtualized (whole-file)
+  // windows, where no cap is needed.
+  #viewportWindowLines?: number;
   #markerRenderer?: MarkerRenderer;
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
@@ -682,6 +696,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
+    // Remember the bounded window the virtualizer just synced so #applyChange
+    // can clamp any edit-time widening against it. Refreshed on every scroll;
+    // undefined/Infinity windows leave the clamp disabled.
+    this.#viewportWindowLines = renderRange?.totalLines;
     this.#tokenizer?.prebuildStateStack(renderRange);
     this.#markerRenderer?.removePopup();
 
@@ -3056,15 +3074,60 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const primarySelection = selections.at(-1)!;
       const renderRangeEndLine =
         renderRange.startingLine + renderRange.totalLines;
-      // when typing new line at the end of the file,
-      // extend the render range +1 to trigger the re-render of the new line
-      if (primarySelection.end.line === renderRangeEndLine) {
-        renderRange = {
-          ...renderRange,
-          totalLines: renderRange.totalLines + 1,
-        };
-      } else if (primarySelection.end.line > renderRangeEndLine) {
-        shouldUpdateBuffer = true;
+      // When an edit moves the caret to or past the last rendered line — typing
+      // Enter at the window's bottom edge, or pasting a few lines there — widen
+      // the render range so every new line up to the caret gets a row when
+      // #rerender runs below. The widened range is also written back to
+      // #renderRange: the next edit reads renderRangeEndLine from it, and
+      // #renderCaret/#isLineVisible read it to decide whether to draw the caret.
+      // Without persisting, the end line stays stale, a following edit is
+      // misclassified as "past the window", and its just-typed line is left
+      // unrendered until the next scroll re-syncs the range. Only edits that
+      // carry a caret reach here (the block is guarded on `selections` above), so
+      // a bare programmatic applyEdits with no active selection does not widen.
+      //
+      // Cap the widening at a multiple of the bounded window the virtualizer
+      // last synced. A large insert at the caret — most often a big multi-line
+      // paste, or a scripted set-selection-then-edit at scale — can drop the
+      // caret far below the window; widening to reach it would make #rerender
+      // build a row per inserted line synchronously, defeating virtualization.
+      // Past the cap, keep the bounded window and only recompute the buffer
+      // spacer — the scroll that follows a focused edit (or the next user scroll
+      // when unfocused) renders the far region with a bounded window.
+      if (primarySelection.end.line >= renderRangeEndLine) {
+        const widenedTotalLines =
+          primarySelection.end.line - renderRange.startingLine + 1;
+        const maxWidenLines =
+          this.#viewportWindowLines === undefined ||
+          this.#viewportWindowLines === Infinity
+            ? Infinity
+            : this.#viewportWindowLines * MAX_EDIT_WIDEN_WINDOW_MULTIPLE;
+        // Only widen when the edit actually reaches the rendered window — its
+        // dirty lines start at or before the window end. #rerender materializes
+        // rows from change.startLine onward, so widening for an edit that starts
+        // entirely below the window (e.g. setSelections to an offscreen line
+        // then applyEdits before the virtualizer re-syncs) would leave the
+        // rows between the window and the edit unbuilt while #isLineVisible
+        // reports them visible, mispositioning the new rows and caret until the
+        // next scroll.
+        if (
+          change.startLine <= renderRangeEndLine &&
+          widenedTotalLines <= maxWidenLines
+        ) {
+          if (primarySelection.end.line > renderRangeEndLine) {
+            // The line count grew below the window, so the buffer spacer must be
+            // recomputed (preserves the prior behavior for this case).
+            shouldUpdateBuffer = true;
+          }
+          renderRange = { ...renderRange, totalLines: widenedTotalLines };
+          this.#renderRange = renderRange;
+        } else {
+          // The edit is past the cap, or starts below the rendered window: keep
+          // the bounded window and only recompute the buffer; the scroll that
+          // follows a focused edit (or the next user scroll) renders the far
+          // region.
+          shouldUpdateBuffer = true;
+        }
       }
     }
     this.#rerender(change, newLineAnnotations, renderRange, shouldUpdateBuffer);
