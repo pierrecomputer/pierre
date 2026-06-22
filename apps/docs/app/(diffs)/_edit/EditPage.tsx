@@ -87,7 +87,7 @@ export function EditPage({
           <div className="space-y-5">
             <FeatureHeader
               id="find"
-              title="Find and replace while editing"
+              title="Find and replace"
               description={
                 <>
                   Find strings across files with <code>Cmd/Ctrl-F</code> on any{' '}
@@ -108,11 +108,12 @@ export function EditPage({
               title="Undo history"
               description={
                 <>
-                  Every edit lands on a structure-aware undo stack. The example
-                  below loads with a short refactor already applied across
-                  several commits—use the toolbar controls (or{' '}
-                  <code>Cmd/Ctrl-Z</code> and <code>Shift</code> to redo) to
-                  walk back and forth through each change.
+                  Edits land on a structure-aware undo stack out of the box.
+                  Walk it with keyboard shortcuts and the toolbar below, or
+                  drive it in code with <code>editor.undo()</code>,{' '}
+                  <code>editor.redo()</code>, and{' '}
+                  <code>editor.applyEdits()</code>. The example loads with a
+                  short refactor already applied across several commits.
                 </>
               }
             />

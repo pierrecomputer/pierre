@@ -167,7 +167,7 @@ export function LiveEditing({
             onClick={() => setMode(mode === 'edit' ? 'review' : 'edit')}
           >
             <div className="flex items-center gap-2">
-              <IconPencil />
+              <IconPencil className="-ml-0.5" />
               Edit mode
             </div>
           </Button>

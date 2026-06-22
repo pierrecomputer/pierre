@@ -382,6 +382,17 @@
   display: block;
   fill: currentColor;
 }
+/* Every clickable control is a real <button>; strip the UA chrome so the
+   shared [data-icon] rule below is the single source of their appearance. */
+[data-search-panel] button {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+}
 [data-search-panel] [data-icon] {
   flex-shrink: 0;
   width: 24px;
@@ -399,15 +410,20 @@
 [data-input-box] [data-icon] {
   width: 20px;
 }
-[data-search-panel] [data-icon][data-disabled='true'] {
+[data-search-panel] [data-icon]:disabled {
   opacity: 0.25;
-  pointer-events: none;
+  cursor: default;
 }
-[data-search-panel] [data-icon]:hover {
+[data-search-panel] [data-icon]:not(:disabled):hover {
   color: var(--diffs-fg);
 }
-[data-search-panel] [data-icon][data-active='true'] {
+[data-search-panel] [data-icon][aria-pressed='true'] {
   color: light-dark(var(--diffs-modified-light), var(--diffs-modified-dark));
+}
+[data-search-panel] [data-icon]:focus-visible {
+  outline: 2px solid
+    light-dark(var(--diffs-modified-light), var(--diffs-modified-dark));
+  outline-offset: -1px;
 }
 [data-search-panel] [data-search-close] {
   position: absolute;

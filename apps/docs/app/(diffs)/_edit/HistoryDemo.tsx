@@ -10,13 +10,14 @@ import { Editor } from '@pierre/diffs/editor';
 import { EditorProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import {
+  IconApproved,
   IconArrowLeftBar,
   IconArrowRightBar,
   IconArrowRightShort,
   IconArrowShort,
-  IconCheck,
   IconCommit,
 } from '@pierre/icons';
+import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { HISTORY_DEMO_EDITS, HISTORY_DEMO_FILE } from './constants';
@@ -116,11 +117,6 @@ function offsetToPosition(
   return { line, character: offset - lineStart };
 }
 
-// Demo of the editor's undo history. With no public API to push edits or
-// trigger undo/redo, we drive it as a user would: seed edits via `beforeinput`
-// and run the real Cmd/Ctrl-Z shortcut for the controls. On load we apply every
-// edit in one burst so the surface arrives fully refactored with its undo stack
-// already built, then the controls step back through it.
 export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isMacRef = useRef(false);
@@ -344,6 +340,56 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
 
   return (
     <div className="not-prose" ref={wrapperRef}>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={undoAll}
+          disabled={!canUndo}
+          aria-label="Reset to original"
+          title="Reset to original"
+        >
+          <IconArrowLeftBar className="-ml-1" />
+          Undo all
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={undo}
+          disabled={!canUndo}
+          aria-label="Undo"
+          title="Undo (Cmd/Ctrl-Z)"
+        >
+          <IconArrowShort className="-ml-1" />
+          Undo
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={redo}
+          disabled={!canRedo}
+          aria-label="Redo"
+          title="Redo (Cmd/Ctrl-Shift-Z)"
+        >
+          Redo
+          <IconArrowRightShort className="-mr-1" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={redoAll}
+          disabled={!canRedo}
+          aria-label="Redo all"
+          title="Redo all"
+        >
+          Redo all
+          <IconArrowRightBar className="-mr-1" />
+        </Button>
+        <span className="text-muted-foreground ml-auto hidden text-xs tabular-nums md:block">
+          {applied}/{TOTAL_EDITS} steps
+        </span>
+      </div>
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-8">
         <div className="min-w-0 flex-1">
           <EditorProvider editor={editor}>
@@ -355,79 +401,29 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
           </EditorProvider>
         </div>
 
-        <div className="flex w-full shrink-0 flex-col gap-3 lg:w-64">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon-md"
-                onClick={undoAll}
-                disabled={!canUndo}
-                aria-label="Reset to original"
-                title="Reset to original"
-              >
-                <IconArrowLeftBar />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon-md"
-                onClick={undo}
-                disabled={!canUndo}
-                aria-label="Undo"
-                title="Undo (Cmd/Ctrl-Z)"
-              >
-                <IconArrowShort />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon-md"
-                onClick={redo}
-                disabled={!canRedo}
-                aria-label="Redo"
-                title="Redo (Cmd/Ctrl-Shift-Z)"
-              >
-                <IconArrowRightShort />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon-md"
-                onClick={redoAll}
-                disabled={!canRedo}
-                aria-label="Redo all"
-                title="Redo all"
-              >
-                <IconArrowRightBar />
-              </Button>
-            </div>
-            <span className="text-muted-foreground ml-auto text-xs tabular-nums">
-              {applied}/{TOTAL_EDITS}
-            </span>
-          </div>
-
-          <ol className="bg-muted overflow-hidden rounded-lg dark:bg-neutral-900">
+        <div className="flex w-full shrink-0 flex-col gap-3 lg:w-72">
+          {/*
+            The applied steps are always the first `applied` rows, so instead of
+            faking a box with per-item borders we draw one card behind them: a
+            `::before` pinned to the top whose height is `applied` rows tall
+            (each row is `h-11` = 2.75rem) and that carries the single
+            box-shadow outline. It collapses to nothing when no steps applied.
+          */}
+          <ol
+            className="bg-muted before:bg-background relative rounded-lg before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-[calc(var(--steps)*2.75rem)] before:rounded-lg before:shadow-[0_0_0_1px_var(--border),0_1px_3px_rgb(0_0_0/0.04),0_6px_16px_-6px_rgb(0_0_0/0.08)] before:transition-[height,opacity] before:duration-200 before:ease-out before:content-[''] data-[empty=true]:before:opacity-0 dark:bg-neutral-900"
+            style={{ '--steps': applied } as CSSProperties}
+            data-empty={applied === 0}
+          >
             {HISTORY_DEMO_EDITS.map((edit, index) => {
               const isApplied = index < applied;
-              const isLastApplied = index === applied - 1;
               const className = [
-                'flex items-center gap-2 border px-3 py-2.5 text-sm',
-                isApplied
-                  ? 'text-foreground bg-background border-x-border'
-                  : 'text-muted-foreground border-transparent',
-                isApplied &&
-                  (index === 0
-                    ? 'rounded-t-lg border-t-border'
-                    : 'border-t-background'),
-                isApplied &&
-                  (isLastApplied
-                    ? 'rounded-b-lg border-b-border'
-                    : 'border-b-background'),
-              ]
-                .filter(Boolean)
-                .join(' ');
+                'relative z-10 flex h-11 items-center gap-2 px-3 text-[15px]',
+                isApplied ? 'text-foreground' : 'text-muted-foreground',
+              ].join(' ');
               return (
                 <li key={edit.label} className={className}>
                   {isApplied ? (
-                    <IconCheck className="mx-[1px] shrink-0 text-green-500 dark:text-green-400" />
+                    <IconApproved className="mx-[1px] shrink-0 text-green-500 dark:text-green-400" />
                   ) : (
                     <IconCommit className="text-muted-foreground/50 shrink-0" />
                   )}

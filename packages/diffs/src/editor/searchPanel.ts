@@ -72,11 +72,9 @@ export class SearchPanelWidget {
     const updateMatches = (options?: { syncSelection?: boolean }) => {
       matches.all =
         searchParams.text !== '' ? textDocument.search(searchParams) : [];
-      this.#container
-        .querySelectorAll<HTMLElement>('[data-icon][data-disabled]')
-        .forEach((element) => {
-          element.dataset.disabled = String(matches.all.length === 0);
-        });
+      const noMatches = matches.all.length === 0;
+      prevButton.disabled = noMatches;
+      nextButton.disabled = noMatches;
 
       if (searchParams.text === '') {
         matchResultElement.textContent = 'No results';
@@ -215,24 +213,46 @@ export class SearchPanelWidget {
       onClose();
     };
 
+    // Shared builder for the panel's icon controls. Every clickable control is a
+    // real <button> so it gets focus, keyboard activation, and native disabled
+    // handling for free; `getEditorIconSvg` marks the glyph aria-hidden, so the
+    // accessible name comes from `label` (also used as the hover title).
+    const iconButton = (opts: {
+      icon: SVGSpriteNames;
+      label: string;
+      size?: number;
+      dataset?: Record<string, string>;
+      onClick: () => void;
+    }) =>
+      h('button', {
+        type: 'button',
+        title: opts.label,
+        ariaLabel: opts.label,
+        dataset: { icon: opts.icon, ...opts.dataset },
+        innerHTML: getEditorIconSvg(opts.icon, opts.size ?? 16),
+        onclick: opts.onClick,
+      });
+
     // Builds an always-visible icon button that toggles one boolean search
     // option (case/whole-word/regex). The button reflects its on/off state via
-    // the `data-active` attribute so the stylesheet can highlight it.
+    // `aria-pressed` so the stylesheet can highlight it and assistive tech can
+    // announce it.
     const makeToggle = (
       icon: SVGSpriteNames,
       title: string,
       key: 'caseSensitive' | 'wholeWord' | 'regex'
     ) => {
-      const button = h('div', {
-        dataset: { icon, active: String(searchParams[key]) },
-        title,
-        innerHTML: getEditorIconSvg(icon, 14),
-        onclick: () => {
+      const button = iconButton({
+        icon,
+        label: title,
+        size: 14,
+        onClick: () => {
           const next = !searchParams[key];
-          button.dataset.active = String(next);
+          button.ariaPressed = String(next);
           updateSearchParam(key, next);
         },
       });
+      button.ariaPressed = String(searchParams[key]);
       return button;
     };
 
@@ -305,52 +325,43 @@ export class SearchPanelWidget {
     const replaceActionsElement = h('div', {
       dataset: { replaceActions: '', replaceCell: '' },
       children: [
-        h('div', {
-          dataset: { icon: 'replace' },
-          title: 'Replace',
-          innerHTML: getEditorIconSvg('replace'),
-          onclick: () => {
-            replace();
-          },
-        }),
-        h('div', {
-          dataset: { icon: 'replace-all' },
-          title: 'Replace All',
-          innerHTML: getEditorIconSvg('replace-all'),
-          onclick: () => {
-            replaceAll();
-          },
+        iconButton({ icon: 'replace', label: 'Replace', onClick: replace }),
+        iconButton({
+          icon: 'replace-all',
+          label: 'Replace All',
+          onClick: replaceAll,
         }),
       ],
     });
+
+    // Held so the no-results state can toggle their native disabled flag.
+    const prevButton = iconButton({
+      icon: 'arrow-up',
+      label: 'Previous',
+      onClick: () => {
+        findNextMatch(true);
+      },
+    });
+    const nextButton = iconButton({
+      icon: 'arrow-down',
+      label: 'Next',
+      onClick: () => {
+        findNextMatch();
+      },
+    });
+    prevButton.disabled = true;
+    nextButton.disabled = true;
 
     const navElement = h('div', {
       dataset: 'searchNav',
-      children: [
-        h('div', {
-          dataset: { icon: 'arrow-up', disabled: 'true' },
-          title: 'Previous',
-          innerHTML: getEditorIconSvg('arrow-up'),
-          onclick: () => {
-            findNextMatch(true);
-          },
-        }),
-        h('div', {
-          dataset: { icon: 'arrow-down', disabled: 'true' },
-          title: 'Next',
-          innerHTML: getEditorIconSvg('arrow-down'),
-          onclick: () => {
-            findNextMatch();
-          },
-        }),
-      ],
+      children: [prevButton, nextButton],
     });
 
-    const closeElement = h('div', {
-      dataset: { searchClose: '', icon: 'close' },
-      title: 'Close',
-      innerHTML: getEditorIconSvg('close'),
-      onclick: close,
+    const closeElement = iconButton({
+      icon: 'close',
+      label: 'Close',
+      onClick: close,
+      dataset: { searchClose: '' },
     });
 
     // Cells are positioned by CSS grid-template-areas (see editor.css); DOM order
