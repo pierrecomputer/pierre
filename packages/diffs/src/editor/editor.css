@@ -203,7 +203,7 @@
    the surface background) is dropped so the fill reads as one solid chip. */
 [data-marker-popup][data-marker-severity] {
   color: var(--diffs-widget-fg, #fff);
-  border-color: transparent;
+  border: 0;
   --diffs-widget-bg: var(--diffs-marker-fg);
   --diffs-widget-shadow:
     0 4px 8px rgb(0 0 0 / 0.15), 0 6px 18px rgb(0 0 0 / 0.15);
