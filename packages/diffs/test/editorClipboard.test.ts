@@ -201,6 +201,24 @@ function dispatchCopy(
   return writes;
 }
 
+function dispatchPaste(target: HTMLElement, text: string): void {
+  const event = new window.Event('paste', {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+  });
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      getData(_type: string) {
+        return text;
+      },
+    },
+  });
+
+  target.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);
+}
+
 describe('Editor clipboard events', () => {
   test('cuts the current line when the primary selection is collapsed', () => {
     const { cleanup } = installDom();
@@ -471,6 +489,131 @@ describe('Editor clipboard events', () => {
       const writes = dispatchCopy(component.contentElement);
 
       expect(writes).toEqual([['text', 'charlie']]);
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('rewrites Windows clipboard line breaks to the document EOL on paste', () => {
+    const { cleanup } = installDom();
+
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'alpha\nbravo\ncharlie',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 2, character: 7 },
+          end: { line: 2, character: 7 },
+          direction: 'none',
+        },
+      ]);
+
+      dispatchPaste(component.contentElement, 'X\r\nY');
+
+      // The clipboard \r\n is rewritten to the document's \n, so no stray
+      // carriage return survives in the file.
+      expect(editor.getState().file.contents).toBe('alpha\nbravo\ncharlieX\nY');
+      expect(editor.getState().file.contents).not.toContain('\r');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('rewrites lone carriage returns to the document EOL on paste', () => {
+    const { cleanup } = installDom();
+
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'alpha\nbravo',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 1, character: 5 },
+          end: { line: 1, character: 5 },
+          direction: 'none',
+        },
+      ]);
+
+      dispatchPaste(component.contentElement, 'X\rY');
+
+      expect(editor.getState().file.contents).toBe('alpha\nbravoX\nY');
+      expect(editor.getState().file.contents).not.toContain('\r');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('matches the document EOL when the file uses CRLF', () => {
+    const { cleanup } = installDom();
+
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'alpha\r\nbravo',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 1, character: 5 },
+          end: { line: 1, character: 5 },
+          direction: 'none',
+        },
+      ]);
+
+      // The clipboard carries Unix \n but the document is CRLF, so the paste
+      // is rewritten to \r\n rather than left as a mismatched \n.
+      dispatchPaste(component.contentElement, 'X\nY');
+
+      expect(editor.getState().file.contents).toBe('alpha\r\nbravoX\r\nY');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('matches the document EOL when the file uses lone CR', () => {
+    const { cleanup } = installDom();
+
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'a\rb',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 1, character: 1 },
+          end: { line: 1, character: 1 },
+          direction: 'none',
+        },
+      ]);
+
+      // Classic-Mac files break lines on a lone \r, so the paste is rewritten
+      // to \r rather than left as a mismatched \n.
+      dispatchPaste(component.contentElement, 'x\ny');
+
+      expect(editor.getState().file.contents).toBe('a\rbx\ry');
+      expect(editor.getState().file.contents).not.toContain('\n');
     } finally {
       editor.cleanUp();
       cleanup();

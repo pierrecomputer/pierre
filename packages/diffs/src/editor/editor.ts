@@ -1164,10 +1164,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
         e.preventDefault();
         const text = e.clipboardData?.getData('text');
-        if (text !== undefined) {
+        const textDocument = this.#textDocument;
+        if (text !== undefined && textDocument !== undefined) {
+          // Rewrite clipboard line breaks to the document's EOL so a Windows
+          // clipboard (\r\n or \r) doesn't leave mixed line endings behind.
           // TODO(@ije): Add support of multiple selections copy&paste
-          // TODO(@ije): normalize the pasted text with textDocument.EOF
-          this.#replaceSelectionText(text, undefined, true);
+          this.#replaceSelectionText(
+            textDocument.normalizeEol(text),
+            undefined,
+            true
+          );
         }
       }),
 
