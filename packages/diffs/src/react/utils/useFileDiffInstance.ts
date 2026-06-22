@@ -1,4 +1,5 @@
 import {
+  type RefObject,
   useCallback,
   useContext,
   useEffect,
@@ -15,6 +16,7 @@ import type {
   SelectedLineRange,
   VirtualFileMetrics,
 } from '../../types';
+import { areDiffTargetsEqual } from '../../utils/areDiffTargetsEqual';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
 import { noopRender } from '../constants';
 import { useEditor } from '../EditorContext';
@@ -43,6 +45,11 @@ interface UseFileDiffInstanceReturn {
   getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
 }
 
+interface HydratedDiffRefState {
+  fileDiff: FileDiffMetadata;
+  hydratedFileDiff: FileDiffMetadata | undefined;
+}
+
 export function useFileDiffInstance<LAnnotation>({
   fileDiff,
   options,
@@ -62,6 +69,10 @@ export function useFileDiffInstance<LAnnotation>({
   const instanceRef = useRef<
     FileDiff<LAnnotation> | VirtualizedFileDiff<LAnnotation> | null
   >(null);
+  const hydratedDiffRef = useRef<HydratedDiffRefState>({
+    fileDiff,
+    hydratedFileDiff: undefined,
+  });
   const ref = useStableCallback((fileContainer: HTMLElement | null) => {
     if (fileContainer != null) {
       if (instanceRef.current != null) {
@@ -118,6 +129,10 @@ export function useFileDiffInstance<LAnnotation>({
   useIsometricEffect(() => {
     const { current: instance } = instanceRef;
     if (instance == null) return;
+    const renderableFileDiff = resolveRenderableFileDiff(
+      hydratedDiffRef,
+      fileDiff
+    );
     const newOptions = mergeFileDiffOptions({
       controlledSelection,
       contentEditable,
@@ -130,7 +145,7 @@ export function useFileDiffInstance<LAnnotation>({
     instance.setOptions(newOptions);
     void instance.render({
       forceRender,
-      fileDiff,
+      fileDiff: renderableFileDiff,
       lineAnnotations,
     });
     if (selectedLines !== undefined) {
@@ -155,6 +170,50 @@ export function useFileDiffInstance<LAnnotation>({
   }, []);
 
   return { ref, getHoveredLine };
+}
+
+function resolveRenderableFileDiff(
+  hydratedDiffRef: RefObject<HydratedDiffRefState>,
+  fileDiff: FileDiffMetadata
+): FileDiffMetadata {
+  const { current: trackedState } = hydratedDiffRef;
+  const renderableFileDiff =
+    trackedState.hydratedFileDiff ?? trackedState.fileDiff;
+
+  if (!fileDiff.isPartial) {
+    if (trackedState.fileDiff !== fileDiff) {
+      hydratedDiffRef.current = {
+        fileDiff,
+        hydratedFileDiff: undefined,
+      };
+    }
+    return fileDiff;
+  }
+
+  if (areDiffTargetsEqual(trackedState.fileDiff, fileDiff)) {
+    if (!renderableFileDiff.isPartial) {
+      return renderableFileDiff;
+    }
+    if (trackedState.fileDiff !== fileDiff) {
+      hydratedDiffRef.current = {
+        fileDiff,
+        hydratedFileDiff: undefined,
+      };
+    }
+    return fileDiff;
+  }
+
+  if (!renderableFileDiff.isPartial) {
+    throw new Error(
+      'useFileDiffInstance: Cannot replace a rendered full diff with a different partial diff.'
+    );
+  }
+
+  hydratedDiffRef.current = {
+    fileDiff,
+    hydratedFileDiff: undefined,
+  };
+  return fileDiff;
 }
 
 interface MergeFileDiffOptionsProps<LAnnotation> {
