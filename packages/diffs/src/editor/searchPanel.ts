@@ -343,26 +343,25 @@ export class SearchPanelWidget {
             findNextMatch();
           },
         }),
-        h('div', {
-          dataset: { icon: 'close' },
-          title: 'Close',
-          innerHTML: getEditorIconSvg('close'),
-          onclick: close,
-        }),
       ],
     });
 
-    // A 2x2 grid of inputs (find/replace) and their trailing content (results
-    // text / replace actions), with the find navigation buttons in a third
-    // column on the first row. DOM order drives grid auto-placement:
-    //   row 1: find input | results text | nav buttons
-    //   row 2: replace input | replace actions
+    const closeElement = h('div', {
+      dataset: { searchClose: '', icon: 'close' },
+      title: 'Close',
+      innerHTML: getEditorIconSvg('close'),
+      onclick: close,
+    });
+
+    // Cells are positioned by CSS grid-template-areas (see editor.css); DOM order
+    // here only drives tab/reading order.
     const gridElement = h('div', {
       dataset: { searchGrid: '', mode },
       children: [
         findInputBox,
         matchResultElement,
         navElement,
+        closeElement,
         replaceInputBox,
         replaceActionsElement,
       ],
