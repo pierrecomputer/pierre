@@ -45,11 +45,14 @@ class TextBuffer {
   }
 }
 
-// A node in the balanced piece tree.
+// A node in the balanced piece tree. `priority` keeps the tree balanced as a
+// treap (see PieceTable): the tree is a max-heap on priority while staying a
+// binary search tree on document offset.
 class PieceNode {
   left: PieceNode | null = null;
   right: PieceNode | null = null;
   parent: PieceNode | null = null;
+  priority = 0;
 
   constructor(
     public piece: Piece,
@@ -72,24 +75,32 @@ class PieceNode {
 /**
  * A piece table is a data structure that allows for efficient insertion and deletion of text.
  * It is a tree of pieces, where each piece is a segment of text that is either original or added.
- * The tree is rebuilt as a balanced tree after edits to keep lookups efficient.
+ * The tree is a treap (a binary search tree that also keeps each node's random priority in heap
+ * order, which keeps the tree balanced without an explicit rebalancing pass). Each edit reshapes
+ * only the nodes along one root-to-leaf path via split and merge in O(log P), instead of
+ * rebuilding all P pieces.
  * Inspired by https://code.visualstudio.com/blogs/2018/03/23/text-buffer-reimplementation
  */
 export class PieceTable {
   #original: TextBuffer;
   #add = new TextBuffer('');
   #root: PieceNode | null = null;
-  #piecesCache: Piece[] = [];
   #length = 0;
   #lineCount = 0;
   #lastVisitedLine: [number, boolean, string] | null = null;
   #lastVisitedLineLength: [number, boolean, number] | null = null;
+  // Seeds the treap priorities. 0x9e3779b9 is the 32-bit golden-ratio
+  // constant (2^32 / phi), a well-mixed value commonly used to seed hashes
+  // and PRNGs; any fixed nonzero seed works here. A fixed seed keeps the
+  // tree shape, and thus performance, deterministic across runs.
+  #priorityState = 0x9e3779b9;
 
   constructor(originalText: string) {
     this.#original = new TextBuffer(originalText);
-    this.#setPieces([
-      this.#createPiece(Piece.Original, 0, originalText.length),
-    ]);
+    const piece = this.#createPiece(Piece.Original, 0, originalText.length);
+    this.#root = piece.length > 0 ? this.#createNode(piece) : null;
+    this.#length = this.#root?.subtreeLength ?? 0;
+    this.#lineCount = (this.#root?.subtreeLineBreakCount ?? 0) + 1;
   }
 
   get lineCount(): number {
@@ -360,175 +371,36 @@ export class PieceTable {
     if (text.length === 0) {
       return;
     }
-
-    const insertOffset = clamp(offset, 0, this.#length);
-    const addOffset = this.#add.append(text);
-    const insertedPiece = this.#createPiece(
-      Piece.Added,
-      addOffset,
-      text.length
-    );
-    const pieces = this.#pieces();
-    const nextPieces: Piece[] = [];
-
-    let cursor = 0;
-    let inserted = false;
-
-    for (const piece of pieces) {
-      const pieceEnd = cursor + piece.length;
-      if (!inserted && insertOffset <= pieceEnd) {
-        const splitOffset = insertOffset - cursor;
-        if (splitOffset > 0) {
-          nextPieces.push(
-            this.#createPiece(piece.source, piece.offset, splitOffset)
-          );
-        }
-        nextPieces.push(insertedPiece);
-        if (splitOffset < piece.length) {
-          nextPieces.push(
-            this.#createPiece(
-              piece.source,
-              piece.offset + splitOffset,
-              piece.length - splitOffset
-            )
-          );
-        }
-        inserted = true;
-      } else {
-        nextPieces.push(piece);
-      }
-      cursor = pieceEnd;
-    }
-
-    if (!inserted) {
-      nextPieces.push(insertedPiece);
-    }
-
-    this.#setPieces(nextPieces);
-    this.#lastVisitedLine = null;
-    this.#lastVisitedLineLength = null;
+    const start = clamp(offset, 0, this.#length);
+    this.#replaceRangeIncremental(start, start, text);
   }
 
   delete(offset: number, length: number): void {
     if (length <= 0 || this.#length === 0) {
       return;
     }
-
     const start = clamp(offset, 0, this.#length);
     const end = clamp(start + length, start, this.#length);
     if (start === end) {
       return;
     }
-
-    const nextPieces: Piece[] = [];
-    let cursor = 0;
-    for (const piece of this.#pieces()) {
-      const pieceStart = cursor;
-      const pieceEnd = cursor + piece.length;
-      const keepBefore = clamp(start - pieceStart, 0, piece.length);
-      const keepAfter = clamp(pieceEnd - end, 0, piece.length);
-
-      if (keepBefore > 0) {
-        nextPieces.push(
-          this.#createPiece(piece.source, piece.offset, keepBefore)
-        );
-      }
-      if (keepAfter > 0) {
-        nextPieces.push(
-          this.#createPiece(
-            piece.source,
-            piece.offset + piece.length - keepAfter,
-            keepAfter
-          )
-        );
-      }
-      cursor = pieceEnd;
-    }
-
-    this.#setPieces(nextPieces);
-    this.#lastVisitedLine = null;
-    this.#lastVisitedLineLength = null;
+    this.#replaceRangeIncremental(start, end, '');
   }
 
   applyEdits(edits: readonly ResolvedTextEdit[]): void {
     if (edits.length === 0) {
       return;
     }
-
-    let pieceIndex = 0;
-    let pieceStart = 0;
-    let copyCursor = 0;
-
-    const pieces = this.#pieces();
-    const insertedPieces = edits.map((edit) =>
-      edit.text.length === 0
-        ? undefined
-        : this.#createPiece(
-            Piece.Added,
-            this.#add.append(edit.text),
-            edit.text.length
-          )
-    );
-    const nextPieces: Piece[] = [];
-
-    const advancePiece = () => {
-      const piece = pieces[pieceIndex];
-      if (piece !== undefined) {
-        pieceStart += piece.length;
-        pieceIndex++;
-      }
-    };
-
-    const appendRange = (start: number, end: number) => {
-      let rangeStart = clamp(start, 0, this.#length);
-      const rangeEnd = clamp(end, rangeStart, this.#length);
-      while (
-        pieceIndex < pieces.length &&
-        pieceStart + pieces[pieceIndex].length <= rangeStart
-      ) {
-        advancePiece();
-      }
-      while (pieceIndex < pieces.length && rangeStart < rangeEnd) {
-        const piece = pieces[pieceIndex];
-        const pieceEnd = pieceStart + piece.length;
-        const offsetInPiece = clamp(rangeStart - pieceStart, 0, piece.length);
-        const takeEnd = Math.min(pieceEnd, rangeEnd);
-        const takeLength = takeEnd - (pieceStart + offsetInPiece);
-        if (takeLength > 0) {
-          nextPieces.push(
-            offsetInPiece === 0 && takeLength === piece.length
-              ? piece
-              : this.#createPiece(
-                  piece.source,
-                  piece.offset + offsetInPiece,
-                  takeLength
-                )
-          );
-        }
-        rangeStart = takeEnd;
-        if (rangeStart >= pieceEnd) {
-          advancePiece();
-        }
-      }
-    };
-
-    for (let i = 0; i < edits.length; i++) {
+    // Edits arrive sorted ascending and non-overlapping (TextDocument enforces
+    // this). Applying them from last to first keeps each remaining edit's
+    // offsets valid, since edits at higher offsets never shift lower ones, and
+    // every edit becomes an O(log P) incremental replace.
+    for (let i = edits.length - 1; i >= 0; i--) {
       const edit = edits[i];
-      const start = clamp(edit.start, copyCursor, this.#length);
+      const start = clamp(edit.start, 0, this.#length);
       const end = clamp(edit.end, start, this.#length);
-      appendRange(copyCursor, start);
-
-      const insertedPiece = insertedPieces[i];
-      if (insertedPiece !== undefined) {
-        nextPieces.push(insertedPiece);
-      }
-      copyCursor = end;
+      this.#replaceRangeIncremental(start, end, edit.text);
     }
-    appendRange(copyCursor, this.#length);
-
-    this.#setPieces(nextPieces);
-    this.#lastVisitedLine = null;
-    this.#lastVisitedLineLength = null;
   }
 
   positionAt(offset: number): Position {
@@ -746,46 +618,204 @@ export class PieceTable {
     );
   }
 
-  #pieces(): Piece[] {
-    return this.#piecesCache;
-  }
-
-  #setPieces(pieces: Piece[]): void {
-    const coalescedPieces = coalescePieces(pieces);
-    this.#piecesCache = coalescedPieces;
-    let length = 0;
-    let lineBreakCount = 0;
-    for (const piece of coalescedPieces) {
-      length += piece.length;
-      lineBreakCount += piece.lineBreakCount;
-    }
-    this.#root = this.#buildBalancedTree(
-      coalescedPieces,
-      0,
-      coalescedPieces.length,
-      null
-    );
-    this.#length = length;
-    this.#lineCount = lineBreakCount + 1;
-  }
-
-  #buildBalancedTree(
-    pieces: Piece[],
-    start: number,
-    end: number,
-    parent: PieceNode | null
-  ): PieceNode | null {
-    if (start >= end) {
-      return null;
+  // Replaces document range [start, end) with `text` by splitting the tree at
+  // both ends, dropping the middle (the deleted span), and joining the inserted
+  // piece back in. Each split/merge touches only one root-to-leaf path, so the
+  // edit is O(log P) instead of rebuilding all P pieces. `start`/`end` must be
+  // clamped into [0, length] with start <= end.
+  #replaceRangeIncremental(start: number, end: number, text: string): void {
+    if (start === end && text.length === 0) {
+      return;
     }
 
-    const middle = start + Math.floor((end - start) / 2);
-    const node = new PieceNode(pieces[middle]);
-    node.parent = parent;
-    node.left = this.#buildBalancedTree(pieces, start, middle, node);
-    node.right = this.#buildBalancedTree(pieces, middle + 1, end, node);
-    node.updateSubtreeLength();
+    const [left, rest] = this.#split(this.#root, start);
+    const [, right] = this.#split(rest, end - start);
+
+    let root: PieceNode | null;
+    if (text.length > 0) {
+      const insertedPiece = this.#createPiece(
+        Piece.Added,
+        this.#add.append(text),
+        text.length
+      );
+      // The inserted text is fresh at the end of the add buffer, so it can only
+      // sit next to the piece on its left, never the one on its right.
+      root = this.#mergeNodes(
+        this.#appendCoalescing(left, insertedPiece),
+        right
+      );
+    } else {
+      // Pure deletion: the pieces now meeting at the seam may be contiguous in
+      // the same buffer, so re-attach the right side's first piece through the
+      // coalescing append to merge them when possible.
+      const [seamPiece, restRight] = this.#popLeftmost(right);
+      root =
+        seamPiece === undefined
+          ? left
+          : this.#mergeNodes(
+              this.#appendCoalescing(left, seamPiece),
+              restRight
+            );
+    }
+
+    if (root !== null) {
+      root.parent = null;
+    }
+    this.#root = root;
+    this.#length = root?.subtreeLength ?? 0;
+    this.#lineCount = (root?.subtreeLineBreakCount ?? 0) + 1;
+    this.#lastVisitedLine = null;
+    this.#lastVisitedLineLength = null;
+  }
+
+  #nextPriority(): number {
+    this.#priorityState =
+      (Math.imul(this.#priorityState, 1664525) + 1013904223) >>> 0;
+    return this.#priorityState;
+  }
+
+  #createNode(piece: Piece): PieceNode {
+    const node = new PieceNode(piece);
+    node.priority = this.#nextPriority();
     return node;
+  }
+
+  // Attaches `child` as a side of `node`, keeping the parent pointer in sync so
+  // read-side iteration (#nextNode) can still walk back up the tree.
+  #setLeft(node: PieceNode, child: PieceNode | null): void {
+    node.left = child;
+    if (child !== null) {
+      child.parent = node;
+    }
+  }
+
+  #setRight(node: PieceNode, child: PieceNode | null): void {
+    node.right = child;
+    if (child !== null) {
+      child.parent = node;
+    }
+  }
+
+  // Splits the subtree into [0, offset) and [offset, length). When the offset
+  // falls inside a piece, that piece is sliced in two so the split lands on a
+  // clean boundary. Internal parent pointers stay correct; the caller fixes the
+  // returned roots' own parents when it reattaches or stores them.
+  #split(
+    node: PieceNode | null,
+    offset: number
+  ): [left: PieceNode | null, right: PieceNode | null] {
+    if (node === null) {
+      return [null, null];
+    }
+
+    const leftLength = node.left?.subtreeLength ?? 0;
+    if (offset <= leftLength) {
+      const [left, right] = this.#split(node.left, offset);
+      this.#setLeft(node, right);
+      node.updateSubtreeLength();
+      return [left, node];
+    }
+
+    const pieceLength = node.piece.length;
+    if (offset >= leftLength + pieceLength) {
+      const [left, right] = this.#split(
+        node.right,
+        offset - leftLength - pieceLength
+      );
+      this.#setRight(node, left);
+      node.updateSubtreeLength();
+      return [node, right];
+    }
+
+    // The offset is strictly inside this node's piece: slice it in two. Both
+    // halves inherit this node's priority, which keeps the heap valid because
+    // this node already outranked both of its children.
+    const inPiece = offset - leftLength;
+    const leftNode = new PieceNode(
+      this.#createPiece(node.piece.source, node.piece.offset, inPiece)
+    );
+    const rightNode = new PieceNode(
+      this.#createPiece(
+        node.piece.source,
+        node.piece.offset + inPiece,
+        pieceLength - inPiece
+      )
+    );
+    leftNode.priority = node.priority;
+    rightNode.priority = node.priority;
+    this.#setLeft(leftNode, node.left);
+    this.#setRight(rightNode, node.right);
+    leftNode.updateSubtreeLength();
+    rightNode.updateSubtreeLength();
+    return [leftNode, rightNode];
+  }
+
+  // Joins two subtrees where every offset in `left` precedes every offset in
+  // `right`, taking the higher-priority root so the result stays balanced.
+  #mergeNodes(
+    left: PieceNode | null,
+    right: PieceNode | null
+  ): PieceNode | null {
+    if (left === null) {
+      return right;
+    }
+    if (right === null) {
+      return left;
+    }
+    if (left.priority >= right.priority) {
+      this.#setRight(left, this.#mergeNodes(left.right, right));
+      left.updateSubtreeLength();
+      return left;
+    }
+    this.#setLeft(right, this.#mergeNodes(left, right.left));
+    right.updateSubtreeLength();
+    return right;
+  }
+
+  // Appends `piece` after every node in `tree`. If the tree's last piece and
+  // `piece` point at adjacent text in the same buffer, they are merged in place
+  // (no new node) — this is what keeps sequential typing a single piece and
+  // stops the piece count from growing without bound.
+  #appendCoalescing(tree: PieceNode | null, piece: Piece): PieceNode {
+    if (tree === null) {
+      return this.#createNode(piece);
+    }
+    let last = tree;
+    while (last.right !== null) {
+      last = last.right;
+    }
+    if (canCoalescePieces(last.piece, piece)) {
+      last.piece = coalesceTwoPieces(last.piece, piece);
+      // The last piece grew, so refresh aggregates from it up to the root.
+      for (let node: PieceNode | null = last; node !== null; ) {
+        node.updateSubtreeLength();
+        if (node === tree) {
+          break;
+        }
+        node = node.parent;
+      }
+      return tree;
+    }
+    // `tree` is non-null here, so merging in the new node always yields a node.
+    return this.#mergeNodes(tree, this.#createNode(piece)) as PieceNode;
+  }
+
+  // Removes and returns the first piece of the tree along with the remaining
+  // tree, so a deletion seam can re-merge the piece that becomes adjacent to
+  // the one on the other side of the deletion.
+  #popLeftmost(
+    tree: PieceNode | null
+  ): [piece: Piece | undefined, rest: PieceNode | null] {
+    if (tree === null) {
+      return [undefined, null];
+    }
+    if (tree.left === null) {
+      return [tree.piece, tree.right];
+    }
+    const [piece, newLeft] = this.#popLeftmost(tree.left);
+    this.#setLeft(tree, newLeft);
+    tree.updateSubtreeLength();
+    return [piece, tree];
   }
 
   #walk(
@@ -875,34 +905,25 @@ function rangeOverlaps(
   return range !== undefined && range[0] < end;
 }
 
-// Keeps the table compact after repeated edits by joining neighboring pieces
-// that already point at contiguous text in the same backing buffer.
-function coalescePieces(pieces: Piece[]): Piece[] {
-  const coalescedPieces: Piece[] = [];
-  for (const piece of pieces) {
-    if (piece.length === 0) {
-      continue;
-    }
+// True when two pieces point at directly adjacent text in the same backing
+// buffer, so they can be represented as one piece.
+function canCoalescePieces(prev: Piece, next: Piece): boolean {
+  return (
+    prev.source === next.source && prev.offset + prev.length === next.offset
+  );
+}
 
-    const previous = coalescedPieces[coalescedPieces.length - 1];
-    if (
-      previous !== undefined &&
-      previous.source === piece.source &&
-      previous.offset + previous.length === piece.offset
-    ) {
-      coalescedPieces[coalescedPieces.length - 1] = new Piece(
-        previous.source,
-        previous.offset,
-        previous.length + piece.length,
-        previous.lineOffsetStart,
-        piece.lineOffsetEnd
-      );
-      continue;
-    }
-
-    coalescedPieces.push(piece);
-  }
-  return coalescedPieces;
+// Joins two adjacent pieces (see canCoalescePieces) into one. Keeping the table
+// compact after every edit is what stops the piece count from growing without
+// bound during normal typing.
+function coalesceTwoPieces(prev: Piece, next: Piece): Piece {
+  return new Piece(
+    prev.source,
+    prev.offset,
+    prev.length + next.length,
+    prev.lineOffsetStart,
+    next.lineOffsetEnd
+  );
 }
 
 // Returns the index of the first element in the array that is greater than the target.
