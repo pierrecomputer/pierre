@@ -181,13 +181,12 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Button
           variant="outline"
-          size="sm"
           onMouseDown={(event) => event.preventDefault()}
           onClick={wrapSelection}
         >
           Wrap in t()
         </Button>
-        <Button variant="outline" size="sm" onClick={reset} disabled={!changed}>
+        <Button variant="outline" onClick={reset} disabled={!changed}>
           <IconArrowLeftBar />
           Reset
         </Button>
