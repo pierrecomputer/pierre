@@ -99,6 +99,11 @@ describe('CodeView partial hydration', () => {
     const initialPartialFileDiff = partialItem.fileDiff;
     const loadedContents = { oldFile, newFile };
     const deferred = createDeferred<typeof loadedContents>();
+    const callbackCalls: {
+      sourceFileDiff: typeof initialPartialFileDiff;
+      hydratedFileDiff: typeof initialPartialFileDiff;
+      instance: unknown;
+    }[] = [];
     let loadCalls = 0;
     const viewer = new CodeView<undefined>({
       disableErrorHandling: true,
@@ -107,6 +112,9 @@ describe('CodeView partial hydration', () => {
         loadCalls++;
         expect(fileDiff).toBe(initialPartialFileDiff);
         return deferred.promise;
+      },
+      onHydratedPartialDiff(sourceFileDiff, hydratedFileDiff, instance) {
+        callbackCalls.push({ sourceFileDiff, hydratedFileDiff, instance });
       },
     });
 
@@ -151,6 +159,11 @@ describe('CodeView partial hydration', () => {
 
       expect(rerenderedInstanceFileDiff).toBe(hydratedItem.fileDiff);
       expect(rerenderedInstanceFileDiff.isPartial).toBe(false);
+      expect(callbackCalls).toHaveLength(1);
+      expect(callbackCalls[0]?.sourceFileDiff).toBe(initialPartialFileDiff);
+      expect(callbackCalls[0]?.hydratedFileDiff).toBe(hydratedItem.fileDiff);
+      expect(callbackCalls[0]?.hydratedFileDiff.isPartial).toBe(false);
+      expect(callbackCalls[0]?.instance).toBe(diffInstance);
     } finally {
       viewer.cleanUp();
       await wait(0);

@@ -108,7 +108,7 @@ describe('onPostRender phases', () => {
 
     try {
       instance.hydrate({ file, fileContainer });
-      instance.hydrate({ file, fileContainer });
+      instance.render({ file, fileContainer, forceRender: true });
       instance.cleanUp();
       instance.cleanUp();
 
@@ -132,7 +132,7 @@ describe('onPostRender phases', () => {
 
     try {
       instance.hydrate({ fileDiff, fileContainer });
-      instance.hydrate({ fileDiff, fileContainer });
+      instance.render({ fileDiff, fileContainer, forceRender: true });
       instance.cleanUp();
       instance.cleanUp();
 
@@ -198,7 +198,7 @@ describe('onPostRender phases', () => {
     }
   });
 
-  test('File placeholder rendering unmounts once and allows remount', () => {
+  test('File placeholder rendering unmounts once and allows render remount', () => {
     const { cleanup } = installDom();
     const phases: PostRenderPhase[] = [];
     const instance = new File({
@@ -214,7 +214,7 @@ describe('onPostRender phases', () => {
       instance.hydrate({ file, fileContainer });
       instance.renderPlaceholder(24);
       instance.renderPlaceholder(48);
-      instance.hydrate({ file, fileContainer });
+      instance.render({ file, fileContainer, forceRender: true });
 
       expect(phases).toEqual(['mount', 'unmount', 'mount']);
     } finally {
@@ -223,7 +223,7 @@ describe('onPostRender phases', () => {
     }
   });
 
-  test('FileDiff placeholder rendering unmounts once and allows remount', () => {
+  test('FileDiff placeholder rendering unmounts once and allows render remount', () => {
     const { cleanup } = installDom();
     const phases: PostRenderPhase[] = [];
     const instance = new FileDiff({
@@ -239,7 +239,7 @@ describe('onPostRender phases', () => {
       instance.hydrate({ fileDiff, fileContainer });
       instance.renderPlaceholder(24);
       instance.renderPlaceholder(48);
-      instance.hydrate({ fileDiff, fileContainer });
+      instance.render({ fileDiff, fileContainer, forceRender: true });
 
       expect(phases).toEqual(['mount', 'unmount', 'mount']);
     } finally {

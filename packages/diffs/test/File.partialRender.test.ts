@@ -51,6 +51,55 @@ async function waitForAnnotationCount(
 }
 
 describe('File partial render', () => {
+  test('hydrate can only initialize a File instance', () => {
+    const { cleanup } = installDom();
+    let instance: File<string> | undefined;
+    try {
+      const file = makeFile(4);
+      const fileContainer = document.createElement('div');
+      instance = new File({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+      });
+
+      instance.hydrate({ file, fileContainer });
+
+      expect(() => instance!.hydrate({ file, fileContainer })).toThrow(
+        'File.hydrate: hydrate can only be called before the instance has rendered or hydrated'
+      );
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('hydrate after render rejects File updates', () => {
+    const { cleanup } = installDom();
+    let instance: File<string> | undefined;
+    try {
+      const file = makeFile(4);
+      const fileContainer = document.createElement('div');
+      instance = new File({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+      });
+
+      instance.render({
+        file,
+        fileContainer,
+        deferManagers: true,
+        preventEmit: true,
+      });
+
+      expect(() => instance!.hydrate({ file, fileContainer })).toThrow(
+        'File.hydrate: hydrate can only be called before the instance has rendered or hydrated'
+      );
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
   test('preserves file-level annotations when a top render range grows', async () => {
     const { cleanup } = installDom();
     let instance: File<string> | undefined;
@@ -60,7 +109,7 @@ describe('File partial render', () => {
       const lineAnnotations: LineAnnotation<string>[] = [
         { lineNumber: 0, metadata: 'file' },
       ];
-      instance = new File<string>({
+      instance = new File({
         disableErrorHandling: true,
         disableFileHeader: true,
       });

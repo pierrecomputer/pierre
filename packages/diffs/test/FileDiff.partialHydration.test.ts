@@ -187,6 +187,11 @@ describe('FileDiff partial hydration', () => {
       const { oldFile, newFile, partial } = createPartialChange('partial.ts');
       const loadedContents = { oldFile, newFile };
       const deferred = createDeferred<typeof loadedContents>();
+      const callbackCalls: {
+        sourceFileDiff: FileDiffMetadata;
+        hydratedFileDiff: FileDiffMetadata;
+        instance: FileDiff<undefined>;
+      }[] = [];
       let loadCalls = 0;
       const fileContainer = document.createElement('div');
       instance = new TestFileDiff({
@@ -196,6 +201,13 @@ describe('FileDiff partial hydration', () => {
           loadCalls++;
           expect(fileDiff).toBe(partial);
           return deferred.promise;
+        },
+        onHydratedPartialDiff(sourceFileDiff, hydratedFileDiff, diffInstance) {
+          callbackCalls.push({
+            sourceFileDiff,
+            hydratedFileDiff,
+            instance: diffInstance,
+          });
         },
       });
 
@@ -237,6 +249,16 @@ describe('FileDiff partial hydration', () => {
         fromStart: 2,
         fromEnd: 1,
       });
+      const hydratedInstanceFileDiff = instance.fileDiff;
+      assertDefined(
+        hydratedInstanceFileDiff,
+        'expected FileDiff to keep hydrated file diff'
+      );
+      expect(callbackCalls).toHaveLength(1);
+      expect(callbackCalls[0]?.sourceFileDiff).toBe(partial);
+      expect(callbackCalls[0]?.hydratedFileDiff).toBe(hydratedInstanceFileDiff);
+      expect(callbackCalls[0]?.hydratedFileDiff.isPartial).toBe(false);
+      expect(callbackCalls[0]?.instance).toBe(instance);
     } finally {
       instance?.cleanUp();
       cleanup();
@@ -370,6 +392,109 @@ describe('FileDiff partial hydration', () => {
         fromStart: 1,
         fromEnd: 1,
       });
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('rendering a partial diff after a full diff throws before overwriting state', () => {
+    const { cleanup } = installDom();
+    let instance: TestFileDiff | undefined;
+    try {
+      const { oldFile, newFile, partial } = createPartialChange();
+      const fullDiff = parseDiffFromFile(oldFile, newFile);
+      const fileContainer = document.createElement('div');
+      instance = new TestFileDiff({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+      });
+
+      instance.render({
+        fileContainer,
+        fileDiff: fullDiff,
+        deferManagers: true,
+        preventEmit: true,
+      });
+
+      expect(() => {
+        instance!.render({
+          fileContainer,
+          fileDiff: partial,
+          deferManagers: true,
+          preventEmit: true,
+        });
+      }).toThrow(
+        'FileDiff.render: Cannot replace a full diff with a partial diff on the same instance.'
+      );
+      expect(instance.fileDiff).toBe(fullDiff);
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('hydrate can only initialize a FileDiff instance', () => {
+    const { cleanup } = installDom();
+    let instance: TestFileDiff | undefined;
+    try {
+      const { oldFile, newFile } = createPartialChange();
+      const fullDiff = parseDiffFromFile(oldFile, newFile);
+      const fileContainer = document.createElement('div');
+      instance = new TestFileDiff({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+      });
+
+      instance.hydrate({
+        fileContainer,
+        fileDiff: fullDiff,
+        preventEmit: true,
+      });
+
+      expect(() => {
+        instance!.hydrate({
+          fileContainer,
+          fileDiff: fullDiff,
+          preventEmit: true,
+        });
+      }).toThrow(
+        'FileDiff.hydrate: hydrate can only be called before the instance has rendered or hydrated'
+      );
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('hydrate after render rejects FileDiff updates', () => {
+    const { cleanup } = installDom();
+    let instance: TestFileDiff | undefined;
+    try {
+      const { oldFile, newFile } = createPartialChange();
+      const fullDiff = parseDiffFromFile(oldFile, newFile);
+      const fileContainer = document.createElement('div');
+      instance = new TestFileDiff({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+      });
+
+      instance.render({
+        fileContainer,
+        fileDiff: fullDiff,
+        deferManagers: true,
+        preventEmit: true,
+      });
+
+      expect(() => {
+        instance!.hydrate({
+          fileContainer,
+          fileDiff: fullDiff,
+          preventEmit: true,
+        });
+      }).toThrow(
+        'FileDiff.hydrate: hydrate can only be called before the instance has rendered or hydrated'
+      );
     } finally {
       instance?.cleanUp();
       cleanup();
