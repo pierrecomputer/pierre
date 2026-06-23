@@ -7,6 +7,7 @@ import {
   DEFAULT_TOKENIZE_MAX_LENGTH,
   DIFFS_TAG_NAME,
   EMPTY_RENDER_RANGE,
+  HEADER_FILENAME_SUFFIX_SLOT_ID,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
   THEME_CSS_ATTRIBUTE,
@@ -44,6 +45,7 @@ import type {
   HunkSeparators,
   PostRenderPhase,
   PrePropertiesConfig,
+  RenderHeaderFilenameSuffixCallback,
   RenderHeaderMetadataCallback,
   RenderHeaderPrefixCallback,
   RenderRange,
@@ -117,6 +119,7 @@ export interface FileDiffOptions<LAnnotation>
       ) => HTMLElement | DocumentFragment | null | undefined);
   disableFileHeader?: boolean;
   renderHeaderPrefix?: RenderHeaderPrefixCallback;
+  renderHeaderFilenameSuffix?: RenderHeaderFilenameSuffixCallback;
   renderHeaderMetadata?: RenderHeaderMetadataCallback;
   renderCustomHeader?: RenderHeaderMetadataCallback;
   /**
@@ -207,6 +210,7 @@ export class FileDiff<
 
   protected headerElement: HTMLElement | undefined;
   protected headerPrefix: HTMLElement | undefined;
+  protected headerFilenameSuffix: HTMLElement | undefined;
   protected headerMetadata: HTMLElement | undefined;
   protected headerCustom: HTMLElement | undefined;
   protected separatorCache: Map<string, CustomHunkElementCache> = new Map();
@@ -519,6 +523,7 @@ export class FileDiff<
     this.appliedPreAttributes = undefined;
     this.headerElement = undefined;
     this.headerPrefix = undefined;
+    this.headerFilenameSuffix = undefined;
     this.headerMetadata = undefined;
     this.headerCustom = undefined;
     this.placeHolder = undefined;
@@ -1159,6 +1164,7 @@ export class FileDiff<
     this.errorWrapper?.remove();
     this.headerElement?.remove();
     this.headerPrefix?.remove();
+    this.headerFilenameSuffix?.remove();
     this.headerMetadata?.remove();
     this.headerCustom?.remove();
     this.pre?.remove();
@@ -1174,6 +1180,7 @@ export class FileDiff<
     this.errorWrapper = undefined;
     this.headerElement = undefined;
     this.headerPrefix = undefined;
+    this.headerFilenameSuffix = undefined;
     this.headerMetadata = undefined;
     this.headerCustom = undefined;
     this.pre = undefined;
@@ -1441,8 +1448,12 @@ export class FileDiff<
       return;
     }
 
-    const { renderCustomHeader, renderHeaderPrefix, renderHeaderMetadata } =
-      this.options;
+    const {
+      renderCustomHeader,
+      renderHeaderPrefix,
+      renderHeaderFilenameSuffix,
+      renderHeaderMetadata,
+    } = this.options;
 
     if (renderCustomHeader != null) {
       const content = renderCustomHeader(fileDiff) ?? undefined;
@@ -1453,19 +1464,28 @@ export class FileDiff<
         content
       );
       this.headerPrefix?.remove();
+      this.headerFilenameSuffix?.remove();
       this.headerMetadata?.remove();
       this.headerPrefix = undefined;
+      this.headerFilenameSuffix = undefined;
       this.headerMetadata = undefined;
       return;
     }
 
     const prefix = renderHeaderPrefix?.(fileDiff) ?? undefined;
+    const suffix = renderHeaderFilenameSuffix?.(fileDiff) ?? undefined;
     const content = renderHeaderMetadata?.(fileDiff) ?? undefined;
     this.headerPrefix = this.upsertHeaderSlotElement(
       container,
       this.headerPrefix,
       HEADER_PREFIX_SLOT_ID,
       prefix
+    );
+    this.headerFilenameSuffix = this.upsertHeaderSlotElement(
+      container,
+      this.headerFilenameSuffix,
+      HEADER_FILENAME_SUFFIX_SLOT_ID,
+      suffix
     );
     this.headerMetadata = this.upsertHeaderSlotElement(
       container,
@@ -1479,9 +1499,11 @@ export class FileDiff<
 
   private clearHeaderSlots(): void {
     this.headerPrefix?.remove();
+    this.headerFilenameSuffix?.remove();
     this.headerMetadata?.remove();
     this.headerCustom?.remove();
     this.headerPrefix = undefined;
+    this.headerFilenameSuffix = undefined;
     this.headerMetadata = undefined;
     this.headerCustom = undefined;
   }

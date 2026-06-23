@@ -11,14 +11,14 @@ import { useMemo, useState } from 'react';
 import { FeatureHeader } from '@/components/FeatureHeader';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
-type HeaderMode = 'custom' | 'metadata';
+type HeaderMode = 'custom' | 'slots';
 
 interface CustomHeaderProps {
   prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
 }
 
 export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
-  const [headerMode, setHeaderMode] = useState<HeaderMode>('metadata');
+  const [headerMode, setHeaderMode] = useState<HeaderMode>('slots');
   const [isViewed, setIsViewed] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -42,8 +42,8 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
         description={
           <>
             Customize your <code>File</code> or <code>FileDiff</code> headers
-            with two options: inserting additional header metadata, or a fully
-            custom header rendered inside the built-in{' '}
+            with built-in prefix, filename suffix, and metadata slots, or use a
+            fully custom header rendered inside the built-in{' '}
             <code>data-diffs-header</code> shell.
           </>
         }
@@ -52,7 +52,7 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
         value={headerMode}
         onValueChange={(value) => setHeaderMode(value as HeaderMode)}
       >
-        <ButtonGroupItem value="metadata">Metadata</ButtonGroupItem>
+        <ButtonGroupItem value="slots">Built-in slots</ButtonGroupItem>
         <ButtonGroupItem value="custom">Custom header</ButtonGroupItem>
       </ButtonGroup>
       <MultiFileDiff
@@ -82,6 +82,9 @@ export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {
               collapsed={collapsed}
             />
           );
+        }}
+        renderHeaderFilenameSuffix={(fileDiff) => {
+          return <HeaderFilenameSuffix fileDiff={fileDiff} />;
         }}
         renderHeaderMetadata={() => {
           return (
@@ -210,6 +213,22 @@ function HeaderPrefix({ collapsed, toggleCollapsed }: HeaderPrefixProps) {
         className={`transition-transform ${collapsed ? '-rotate-90' : ''}`}
       />
     </button>
+  );
+}
+
+interface HeaderFilenameSuffixProps {
+  fileDiff: FileDiffMetadata;
+}
+
+function HeaderFilenameSuffix({ fileDiff }: HeaderFilenameSuffixProps) {
+  const extension = fileDiff.name.includes('.')
+    ? (fileDiff.name.split('.').pop() ?? 'file')
+    : 'file';
+
+  return (
+    <span className="rounded-full border border-white/15 bg-white/10 px-1.5 py-0.5 text-[10px] font-medium tracking-[0.08em] text-white/60 uppercase">
+      {extension}
+    </span>
   );
 }
 

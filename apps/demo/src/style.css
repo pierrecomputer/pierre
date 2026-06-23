@@ -216,6 +216,22 @@ diffs-container {
   margin-top: 2px;
 }
 
+.header-filename-suffix-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: 18px;
+  padding-inline: 6px;
+  border: 1px solid color-mix(in srgb, #7c3aed 45%, transparent);
+  border-radius: 999px;
+  background: light-dark(#f5f3ff, color-mix(in srgb, #7c3aed 22%, transparent));
+  color: light-dark(#5b21b6, #ddd6fe);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
 .annotation-slot-wrapper {
   background-color: rgba(0, 0, 0, 0.1);
   overflow: hidden;
