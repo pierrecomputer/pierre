@@ -53,6 +53,14 @@ exports[`createFileHeaderElement renders default file header AST 1`] = `
           "tagName": "div",
           "type": "element",
         },
+        {
+          "children": [],
+          "properties": {
+            "name": "header-filename-suffix",
+          },
+          "tagName": "slot",
+          "type": "element",
+        },
       ],
       "properties": {
         "data-header-content": "",
@@ -181,6 +189,14 @@ exports[`createFileHeaderElement renders default renamed file header AST 1`] = `
           "tagName": "div",
           "type": "element",
         },
+        {
+          "children": [],
+          "properties": {
+            "name": "header-filename-suffix",
+          },
+          "tagName": "slot",
+          "type": "element",
+        },
       ],
       "properties": {
         "data-header-content": "",
@@ -289,6 +305,14 @@ exports[`createFileHeaderElement renders sticky file header AST 1`] = `
             "data-title": "",
           },
           "tagName": "div",
+          "type": "element",
+        },
+        {
+          "children": [],
+          "properties": {
+            "name": "header-filename-suffix",
+          },
+          "tagName": "slot",
           "type": "element",
         },
       ],

@@ -50,6 +50,7 @@ import './style.css';
 import mdContent from './mocks/example_md.txt?raw';
 import tsContent from './mocks/example_ts.txt?raw';
 import { createFakeContentStream } from './utils/createFakeContentStream';
+import { createHeaderFilenameSuffixBadge } from './utils/createHeaderFilenameSuffixBadge';
 import { createHighlighterCleanup } from './utils/createHighlighterCleanup';
 import { createWorkerAPI } from './utils/createWorkerAPI';
 import {
@@ -64,7 +65,8 @@ const WORKER_POOL = true;
 const VIRTUALIZE = true;
 const CRAZY_FILE = false;
 const LARGE_CONFLICT_FILE = false;
-const CODE_VIEW_OLD_NEW_FILE = true;
+const RENDER_FILENAME_SUFFIX = false;
+const CODE_VIEW_OLD_NEW_FILE = false;
 
 // Pre-render the @pierre/icons SVG markup once so it can be embedded into the
 // `message.html` strings the editor injects for markers. The icons default to
@@ -310,6 +312,13 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         diffStyle: unified ? 'unified' : 'split',
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation: renderDiffAnnotation,
+        ...(RENDER_FILENAME_SUFFIX
+          ? {
+              renderHeaderFilenameSuffix() {
+                return createHeaderFilenameSuffixBadge('Diff slot');
+              },
+            }
+          : null),
         renderHeaderMetadata() {
           const collapseToggle = createToggle(
             'Collapse',
@@ -942,6 +951,13 @@ if (renderFileButton != null) {
       theme: DEMO_THEME,
       themeType: getThemeType(),
       renderAnnotation,
+      ...(RENDER_FILENAME_SUFFIX
+        ? {
+            renderHeaderFilenameSuffix() {
+              return createHeaderFilenameSuffixBadge('File slot');
+            },
+          }
+        : null),
       renderHeaderMetadata() {
         const collapsedToggle = createToggle(
           'Collapse',
@@ -1100,6 +1116,13 @@ if (renderFileConflictButton != null) {
         themeType: getThemeType(),
         overflow: wrap ? 'wrap' : 'scroll',
         renderAnnotation,
+        ...(RENDER_FILENAME_SUFFIX
+          ? {
+              renderHeaderFilenameSuffix() {
+                return createHeaderFilenameSuffixBadge('Conflict slot');
+              },
+            }
+          : null),
         enableLineSelection: true,
         enableGutterUtility: true,
         maxContextLines: 4,

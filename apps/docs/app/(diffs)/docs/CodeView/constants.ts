@@ -276,6 +276,9 @@ export function ReviewSurface() {
         }}
         selectedLines={selectedLines}
         onSelectedLinesChange={setSelectedLines}
+        renderHeaderPrefix={(item) => (
+          <span>{item.type === 'diff' ? 'Diff' : 'File'}</span>
+        )}
         renderHeaderMetadata={(item) =>
           item.type === 'diff' ? <span>{item.fileDiff.type}</span> : <span>file</span>
         }
@@ -317,6 +320,11 @@ const viewer = new CodeView({
   layout: { paddingTop: 16, paddingBottom: 16, gap: 12 },
   onSelectedLinesChange(selection) {
     console.log('selected lines', selection);
+  },
+  renderHeaderPrefix(_headerData, context) {
+    const span = document.createElement('span');
+    span.textContent = context.item.type === 'diff' ? 'Diff' : 'File';
+    return span;
   },
   renderHeaderMetadata(_headerData, context) {
     return context.item.type === 'diff' ? context.item.fileDiff.type : 'file';

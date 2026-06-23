@@ -449,6 +449,10 @@ export type RenderHeaderPrefixCallback = (
   fileDiff: FileDiffMetadata
 ) => Element | string | number | null | undefined;
 
+export type RenderHeaderFilenameSuffixCallback = (
+  fileDiff: FileDiffMetadata
+) => Element | string | number | null | undefined;
+
 export type RenderFileMetadata = (
   file: FileContents
 ) => Element | string | number | null | undefined;

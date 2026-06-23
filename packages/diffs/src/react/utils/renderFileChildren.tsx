@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import {
   CUSTOM_HEADER_SLOT_ID,
+  HEADER_FILENAME_SUFFIX_SLOT_ID,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
 } from '../../constants';
@@ -15,6 +16,7 @@ interface RenderFileChildrenProps<LAnnotation> {
   file: FileContents;
   renderCustomHeader: FileProps<LAnnotation>['renderCustomHeader'];
   renderHeaderPrefix: FileProps<LAnnotation>['renderHeaderPrefix'];
+  renderHeaderFilenameSuffix?: FileProps<LAnnotation>['renderHeaderFilenameSuffix'];
   renderHeaderMetadata: FileProps<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: FileProps<LAnnotation>['renderAnnotation'];
   lineAnnotations: FileProps<LAnnotation>['lineAnnotations'];
@@ -26,6 +28,7 @@ export function renderFileChildren<LAnnotation>({
   file,
   renderCustomHeader,
   renderHeaderPrefix,
+  renderHeaderFilenameSuffix,
   renderHeaderMetadata,
   renderAnnotation,
   lineAnnotations,
@@ -34,6 +37,7 @@ export function renderFileChildren<LAnnotation>({
 }: RenderFileChildrenProps<LAnnotation>): ReactNode {
   const customHeader = renderCustomHeader?.(file);
   const prefix = renderHeaderPrefix?.(file);
+  const suffix = renderHeaderFilenameSuffix?.(file);
   const metadata = renderHeaderMetadata?.(file);
   return (
     <>
@@ -42,6 +46,9 @@ export function renderFileChildren<LAnnotation>({
       ) : (
         <>
           {prefix != null && <div slot={HEADER_PREFIX_SLOT_ID}>{prefix}</div>}
+          {suffix != null && (
+            <div slot={HEADER_FILENAME_SUFFIX_SLOT_ID}>{suffix}</div>
+          )}
           {metadata != null && (
             <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>
           )}

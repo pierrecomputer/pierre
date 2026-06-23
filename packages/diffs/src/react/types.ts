@@ -20,6 +20,7 @@ export interface DiffBasePropsReact<LAnnotation> {
   renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
   renderCustomHeader?(fileDiff: FileDiffMetadata): ReactNode;
   renderHeaderPrefix?(fileDiff: FileDiffMetadata): ReactNode;
+  renderHeaderFilenameSuffix?(fileDiff: FileDiffMetadata): ReactNode;
   renderHeaderMetadata?(fileDiff: FileDiffMetadata): ReactNode;
   renderGutterUtility?(
     getHoveredLine: () => GetHoveredLineResult<'diff'> | undefined
@@ -38,6 +39,7 @@ export interface FileProps<LAnnotation> {
   renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
   renderCustomHeader?(file: FileContents): ReactNode;
   renderHeaderPrefix?(file: FileContents): ReactNode;
+  renderHeaderFilenameSuffix?(file: FileContents): ReactNode;
   renderHeaderMetadata?(file: FileContents): ReactNode;
   renderGutterUtility?(
     getHoveredLine: () => GetHoveredLineResult<'file'> | undefined

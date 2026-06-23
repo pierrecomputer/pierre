@@ -54,6 +54,7 @@ interface CodeViewBaseProps<LAnnotation> {
   onScroll?(scrollTop: number, viewer: CodeViewClass<LAnnotation>): void;
   renderCustomHeader?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderPrefix?(item: CodeViewItem<LAnnotation>): ReactNode;
+  renderHeaderFilenameSuffix?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderMetadata?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderAnnotation?(
     annotation: LineAnnotation<LAnnotation> | DiffLineAnnotation<LAnnotation>,
@@ -151,6 +152,7 @@ function CodeViewInner<LAnnotation = undefined>(
     renderAnnotation,
     renderCustomHeader,
     renderGutterUtility,
+    renderHeaderFilenameSuffix,
     renderHeaderMetadata,
     renderHeaderPrefix,
     selectedLines,
@@ -167,6 +169,7 @@ function CodeViewInner<LAnnotation = undefined>(
   const hasHeaderRenderers =
     hasCustomHeader ||
     renderHeaderPrefix != null ||
+    renderHeaderFilenameSuffix != null ||
     renderHeaderMetadata != null;
   const hasRenderers =
     hasHeaderRenderers || hasAnnotationRenderer || hasGutterRenderer;
@@ -473,6 +476,7 @@ function CodeViewInner<LAnnotation = undefined>(
           managedContentStore={slotContentStore}
           renderCustomHeader={renderCustomHeader}
           renderHeaderPrefix={renderHeaderPrefix}
+          renderHeaderFilenameSuffix={renderHeaderFilenameSuffix}
           renderHeaderMetadata={renderHeaderMetadata}
           renderAnnotation={renderAnnotation}
           renderGutterUtility={renderGutterUtility}
@@ -614,6 +618,7 @@ interface RenderCodeViewItemChildrenProps<LAnnotation> {
   renderedItem: CodeViewRenderedItem<LAnnotation>;
   renderCustomHeader: CodeViewBaseProps<LAnnotation>['renderCustomHeader'];
   renderHeaderPrefix: CodeViewBaseProps<LAnnotation>['renderHeaderPrefix'];
+  renderHeaderFilenameSuffix: CodeViewBaseProps<LAnnotation>['renderHeaderFilenameSuffix'];
   renderHeaderMetadata: CodeViewBaseProps<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: CodeViewBaseProps<LAnnotation>['renderAnnotation'];
   renderGutterUtility: CodeViewBaseProps<LAnnotation>['renderGutterUtility'];
@@ -623,6 +628,7 @@ interface SlotPortalsProps<LAnnotation> {
   managedContentStore: ManagedContentStore<LAnnotation>;
   renderCustomHeader: CodeViewBaseProps<LAnnotation>['renderCustomHeader'];
   renderHeaderPrefix: CodeViewBaseProps<LAnnotation>['renderHeaderPrefix'];
+  renderHeaderFilenameSuffix: CodeViewBaseProps<LAnnotation>['renderHeaderFilenameSuffix'];
   renderHeaderMetadata: CodeViewBaseProps<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: CodeViewBaseProps<LAnnotation>['renderAnnotation'];
   renderGutterUtility: CodeViewBaseProps<LAnnotation>['renderGutterUtility'];
@@ -632,6 +638,7 @@ const SlotPortals = memo(function SlotPortals<LAnnotation>({
   managedContentStore,
   renderCustomHeader,
   renderHeaderPrefix,
+  renderHeaderFilenameSuffix,
   renderHeaderMetadata,
   renderAnnotation,
   renderGutterUtility,
@@ -651,6 +658,7 @@ const SlotPortals = memo(function SlotPortals<LAnnotation>({
         renderedItem,
         renderCustomHeader,
         renderHeaderPrefix,
+        renderHeaderFilenameSuffix,
         renderHeaderMetadata,
         renderAnnotation,
         renderGutterUtility,
@@ -665,6 +673,7 @@ function renderCodeViewItemChildren<LAnnotation>({
   renderedItem,
   renderCustomHeader,
   renderHeaderPrefix,
+  renderHeaderFilenameSuffix,
   renderHeaderMetadata,
   renderAnnotation,
   renderGutterUtility,
@@ -677,6 +686,10 @@ function renderCodeViewItemChildren<LAnnotation>({
         renderCustomHeader != null ? () => renderCustomHeader(item) : undefined,
       renderHeaderPrefix:
         renderHeaderPrefix != null ? () => renderHeaderPrefix(item) : undefined,
+      renderHeaderFilenameSuffix:
+        renderHeaderFilenameSuffix != null
+          ? () => renderHeaderFilenameSuffix(item)
+          : undefined,
       renderHeaderMetadata:
         renderHeaderMetadata != null
           ? () => renderHeaderMetadata(item)
@@ -700,6 +713,10 @@ function renderCodeViewItemChildren<LAnnotation>({
         renderCustomHeader != null ? () => renderCustomHeader(item) : undefined,
       renderHeaderPrefix:
         renderHeaderPrefix != null ? () => renderHeaderPrefix(item) : undefined,
+      renderHeaderFilenameSuffix:
+        renderHeaderFilenameSuffix != null
+          ? () => renderHeaderFilenameSuffix(item)
+          : undefined,
       renderHeaderMetadata:
         renderHeaderMetadata != null
           ? () => renderHeaderMetadata(item)

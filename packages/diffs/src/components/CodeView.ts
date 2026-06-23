@@ -329,6 +329,7 @@ type CodeViewModeOptions<
 const CODE_VIEW_SHARED_CALLBACK_KEYS = [
   'renderCustomHeader',
   'renderHeaderPrefix',
+  'renderHeaderFilenameSuffix',
   'renderHeaderMetadata',
   'renderAnnotation',
   'renderGutterUtility',

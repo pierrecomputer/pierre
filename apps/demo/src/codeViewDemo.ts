@@ -14,6 +14,9 @@ import {
 import type { WorkerPoolManager } from '@pierre/diffs/worker';
 
 import { FAKE_DIFF_LINE_ANNOTATIONS, type LineCommentMetadata } from './mocks/';
+import { createHeaderFilenameSuffixBadge } from './utils/createHeaderFilenameSuffixBadge';
+
+const RENDER_FILENAME_SUFFIX = false;
 
 type CodeViewCommentMetadata =
   | CodeViewSavedCommentMetadata
@@ -95,6 +98,13 @@ export function renderDemoCodeView(
     renderAnnotation(annotation) {
       return renderCodeViewAnnotation(annotation, viewer, items);
     },
+    ...(RENDER_FILENAME_SUFFIX
+      ? {
+          renderHeaderFilenameSuffix() {
+            return createHeaderFilenameSuffixBadge('CodeView slot');
+          },
+        }
+      : null),
     lineHoverHighlight: 'both',
     expansionLineCount: 10,
     enableLineSelection: true,

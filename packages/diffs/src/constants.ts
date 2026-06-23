@@ -41,6 +41,7 @@ export const MERGE_CONFLICT_SEPARATOR_MARKER_REGEX: RegExp = /^={7,}$/;
 export const MERGE_CONFLICT_END_MARKER_REGEX: RegExp = /^>{7,}(?:\s.*)?$/;
 
 export const HEADER_PREFIX_SLOT_ID = 'header-prefix';
+export const HEADER_FILENAME_SUFFIX_SLOT_ID = 'header-filename-suffix';
 export const HEADER_METADATA_SLOT_ID = 'header-metadata';
 export const CUSTOM_HEADER_SLOT_ID = 'header-custom';
 
