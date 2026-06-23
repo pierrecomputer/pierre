@@ -71,3 +71,25 @@ export function resolveEditorCommandFromKeyboardEvent(
 
   return SHORTCUTS[normalizedKey];
 }
+
+// Detects the native "find again" shortcut (cmd/ctrl+g for next, adding shift
+// for previous) so the find/replace panel can override the browser default and
+// step through matches. macOS can emit a dead key for the physical G, so fall
+// back to event.code like the cmd+f handling above.
+export function resolveFindAgainShortcut(
+  event: KeyboardEvent,
+  isMac: boolean = isMacLike()
+): 'next' | 'previous' | undefined {
+  if (event.altKey) {
+    return undefined;
+  }
+  if (!isPrimaryModifier(event, isMac)) {
+    return undefined;
+  }
+  const normalizedKey =
+    event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  if (normalizedKey === 'g' || event.code === 'KeyG') {
+    return event.shiftKey ? 'previous' : 'next';
+  }
+  return undefined;
+}

@@ -1,3 +1,4 @@
+import { resolveFindAgainShortcut } from './command';
 import { buildSearchReplacementText } from './pieceTable';
 import { isPrimaryModifier } from './platform';
 import { getEditorIconSvg, type SVGSpriteNames } from './sprite';
@@ -36,6 +37,7 @@ export class SearchPanelWidget {
   #inputElement: HTMLInputElement;
   #updateMatches?: (options?: { syncSelection?: boolean }) => void;
   #applyMode?: (mode: SearchPanelMode) => void;
+  #navigate?: (findPrevious: boolean) => void;
 
   constructor(options: SearchPanelOptions) {
     const {
@@ -155,6 +157,9 @@ export class SearchPanelWidget {
       }
       matches.current = nextMatch;
     };
+    // Keep focus in the panel when stepping through matches from the inputs.
+    this.#navigate = (findPrevious: boolean) =>
+      findNextMatch(findPrevious, true);
 
     const buildReplacementEdit = (
       matchStart: number,
@@ -272,6 +277,13 @@ export class SearchPanelWidget {
       oninput: (e: Event) => {
         searchParams.replaceText = (e.target as HTMLInputElement).value;
       },
+      onkeydown: (e: KeyboardEvent) => {
+        const findAgain = resolveFindAgainShortcut(e);
+        if (findAgain !== undefined) {
+          e.preventDefault();
+          findNextMatch(findAgain === 'previous', true);
+        }
+      },
     });
 
     this.#inputElement = h('input', {
@@ -285,12 +297,18 @@ export class SearchPanelWidget {
         updateMatches();
       },
       onkeydown: (e: KeyboardEvent) => {
+        const findAgain = resolveFindAgainShortcut(e);
         if (e.key === 'Escape') {
           e.preventDefault();
           close();
         } else if (e.key === 'Enter') {
           e.preventDefault();
           findNextMatch(false, true);
+        } else if (findAgain !== undefined) {
+          // Override the native browser find-again shortcut so cmd+g steps to
+          // the next match and cmd+shift+g to the previous one.
+          e.preventDefault();
+          findNextMatch(findAgain === 'previous', true);
         } else if (
           isPrimaryModifier(e) &&
           (e.key === 'f' || e.code === 'KeyF')
@@ -412,6 +430,10 @@ export class SearchPanelWidget {
 
   focus(): void {
     this.#inputElement.focus();
+  }
+
+  navigate(findPrevious: boolean): void {
+    this.#navigate?.(findPrevious);
   }
 
   updateMatches(options?: { syncSelection?: boolean }): void {

@@ -14,6 +14,7 @@ import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import {
   type EditorCommand,
   resolveEditorCommandFromKeyboardEvent,
+  resolveFindAgainShortcut,
 } from './command';
 import editorCSS from './editor.css';
 import { EditStack } from './editStack';
@@ -1152,6 +1153,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           e.preventDefault();
           queueRender(this.#handleCustomPasteEvent);
           return;
+        }
+
+        // Only hijack the native find-again shortcut while the panel is open
+        // so cmd+g/cmd+shift+g step through matches; otherwise leave it alone.
+        if (this.#searchPanel !== undefined) {
+          const findAgain = resolveFindAgainShortcut(e);
+          if (findAgain !== undefined) {
+            e.preventDefault();
+            this.#searchPanel.navigate(findAgain === 'previous');
+            return;
+          }
         }
 
         const command = resolveEditorCommandFromKeyboardEvent(e);
