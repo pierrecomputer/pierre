@@ -35,7 +35,7 @@ export function FileDiff<LAnnotation = undefined>({
   disableWorkerPool = false,
   contentEditable = false,
 }: FileDiffProps<LAnnotation>): React.JSX.Element {
-  const { ref, getHoveredLine } = useFileDiffInstance({
+  const { ref, getHoveredLine, renderedFileDiff } = useFileDiffInstance({
     fileDiff,
     options,
     metrics,
@@ -48,7 +48,7 @@ export function FileDiff<LAnnotation = undefined>({
     contentEditable,
   });
   const children = renderDiffChildren({
-    fileDiff,
+    fileDiff: renderedFileDiff,
     renderCustomHeader,
     renderHeaderPrefix,
     renderHeaderFilenameSuffix,
