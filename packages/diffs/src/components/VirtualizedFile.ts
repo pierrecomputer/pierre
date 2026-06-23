@@ -180,7 +180,7 @@ export class VirtualizedFile<
     super.setThemeType(themeType);
   }
 
-  private resetLayoutCache(recompute = false): void {
+  private resetLayoutCache(recompute = false, resetRenderRange = true): void {
     this.layoutDirty = true;
     this.cache.fileAnnotationHeight = 0;
     if (this.cache.heights.size > 0) {
@@ -189,7 +189,7 @@ export class VirtualizedFile<
     if (this.cache.checkpoints.length > 0) {
       this.cache.checkpoints.length = 0;
     }
-    if (this.renderRange != null) {
+    if (this.renderRange != null && resetRenderRange) {
       this.renderRange = undefined;
     }
     // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
@@ -629,23 +629,13 @@ export class VirtualizedFile<
     newLineAnnotations?: LineAnnotation<LAnnotation>[],
     shouldUpdateBuffer = false
   ): void {
-    const { heights, checkpoints } = this.cache;
     const previousRenderRange = this.renderRange;
 
     super.applyDocumentChange(textDocument, newLineAnnotations);
 
     // reset the layout cache
     this.getSimpleVirtualizer()?.markDOMDirty();
-    this.layoutDirty = true;
-    if (heights.size > 0) {
-      heights.clear();
-    }
-    if (checkpoints.length > 0) {
-      checkpoints.length = 0;
-    }
-    if (this.isSimpleMode()) {
-      this.computeApproximateSize();
-    }
+    this.resetLayoutCache(this.isSimpleMode(), false);
 
     // Update the buffers caused by the line-count change to ensure the host
     // scrolls to the correct position before re-rendering

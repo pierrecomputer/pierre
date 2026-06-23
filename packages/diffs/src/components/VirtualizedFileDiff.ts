@@ -88,6 +88,7 @@ interface DiffLayoutCache {
 interface ResetLayoutCacheOptions {
   forceSimpleRecompute?: boolean;
   includeEstimatedHeights?: boolean;
+  resetRenderRange?: boolean;
 }
 
 interface PendingLoadedDiff {
@@ -272,6 +273,7 @@ export class VirtualizedFileDiff<
   private resetLayoutCache({
     forceSimpleRecompute = false,
     includeEstimatedHeights = false,
+    resetRenderRange = true,
   }: ResetLayoutCacheOptions = {}): void {
     this.layoutDirty = true;
     this.cache.fileAnnotationHeight = 0;
@@ -301,7 +303,7 @@ export class VirtualizedFileDiff<
       this.cache.estimatedSplitHeight = undefined;
       this.cache.estimatedUnifiedHeight = undefined;
     }
-    if (this.renderRange != null) {
+    if (this.renderRange != null && resetRenderRange) {
       this.renderRange = undefined;
     }
   }
@@ -911,6 +913,7 @@ export class VirtualizedFileDiff<
     this.resetLayoutCache({
       forceSimpleRecompute: this.isSimpleMode(),
       includeEstimatedHeights: true,
+      resetRenderRange: false,
     });
 
     // Update the buffers caused by the line-count change to ensure the host

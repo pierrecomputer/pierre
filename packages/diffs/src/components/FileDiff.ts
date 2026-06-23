@@ -314,8 +314,8 @@ export class FileDiff<
     side: SelectionSide = 'additions'
   ) => {
     // use the fileDiff from the hunksRenderer if it exists, it maybe updated
-    // by the host
-    const fileDiff = this.hunksRenderer.getRenderDiff() ?? this.fileDiff;
+    // by the editor
+    const fileDiff = this.hunksRenderer.getDiffCache() ?? this.fileDiff;
     if (fileDiff == null) {
       return undefined;
     }
@@ -1156,13 +1156,11 @@ export class FileDiff<
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
     this.hunksRenderer.applyDocumentChange(textDocument);
-    const renderDiff = this.hunksRenderer.getRenderDiff();
-    if (renderDiff != null) {
-      this.fileDiff = renderDiff;
+    const fileDiff = this.hunksRenderer.getDiffCache();
+    if (fileDiff != null) {
+      this.fileDiff = fileDiff;
     }
-    // TODO(@ije): can we avoid full-render here?
     this.rerender();
-    this.interactionManager.setSelectionDirty();
     if (
       newLineAnnotations !== undefined &&
       newLineAnnotations !== this.lineAnnotations

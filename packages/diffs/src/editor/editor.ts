@@ -196,21 +196,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
   #renderRange?: RenderRange;
-  // Bounded render-window size (~viewport + 2*hunkLineCount) from the last view
-  // sync. Used to cap how far #applyChange widens the window for an edit, so a
-  // large insert can't materialize an unbounded number of rows. Captured at sync
-  // time so consecutive edits that grow #renderRange can't ratchet the cap up.
-  // undefined until the first sync; Infinity for non-virtualized (whole-file)
-  // windows, where no cap is needed.
   #viewportWindowLines?: number;
   #markerRenderer?: MarkerRenderer;
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
   #shouldIgnoreSelectionChange = false;
-  // Whether the contenteditable holds (or is claiming) focus. Synced by
-  // focus/blur listeners and set eagerly by #focus(), whose real focus() call is
-  // deferred to a rAF. Lets applyEdits skip focus/scroll only on unfocused
-  // editors, without regressing a same-tick setSelections-then-applyEdits flow.
   #contentHasFocus = false;
   #isComposing = false;
   #isGutterMouseDown = false;
@@ -558,13 +548,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   /** @internal */
-  __syncRenderView: DiffsEditor<LAnnotation>['__syncRenderView'] = (
+  __syncRenderView(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileOrDiff: FileContents | FileDiffMetadata,
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
     renderRange: RenderRange | undefined
-  ) => {
+  ): void {
     const shadowRoot = fileContainer.shadowRoot;
     if (shadowRoot == null) {
       console.error('[editor] Could not find the shadow root.');
@@ -812,7 +802,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         'lines'
       );
     }
-  };
+  }
 
   get #diffSyle(): 'unified' | 'split' {
     return this.#fileInstance?.options.diffStyle ?? 'split';
@@ -2131,7 +2121,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         });
       });
     } else {
-      this.#contentElement?.focus({ preventScroll });
+      requestAnimationFrame(() => {
+        this.#contentElement?.focus({ preventScroll });
+      });
     }
   }
 
