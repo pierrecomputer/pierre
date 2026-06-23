@@ -50,6 +50,10 @@ interface HydratedDiffRefState {
   hydratedFileDiff: FileDiffMetadata | undefined;
 }
 
+type OnHydratedPartialDiff<LAnnotation> = NonNullable<
+  FileDiffOptions<LAnnotation>['onHydratedPartialDiff']
+>;
+
 export function useFileDiffInstance<LAnnotation>({
   fileDiff,
   options,
@@ -73,6 +77,20 @@ export function useFileDiffInstance<LAnnotation>({
     fileDiff,
     hydratedFileDiff: undefined,
   });
+  const onHydratedPartialDiff = useStableCallback<
+    OnHydratedPartialDiff<LAnnotation>
+  >((sourceFileDiff, hydratedFileDiff, instance) => {
+    syncHydratedDiffFromCommit(
+      hydratedDiffRef,
+      sourceFileDiff,
+      hydratedFileDiff
+    );
+    options?.onHydratedPartialDiff?.(
+      sourceFileDiff,
+      hydratedFileDiff,
+      instance
+    );
+  });
   const ref = useStableCallback((fileContainer: HTMLElement | null) => {
     if (fileContainer != null) {
       if (instanceRef.current != null) {
@@ -88,6 +106,7 @@ export function useFileDiffInstance<LAnnotation>({
             hasCustomHeader,
             hasEditor: editor !== undefined,
             hasGutterRenderUtility,
+            onHydratedPartialDiff,
             options,
           }),
           simpleVirtualizer,
@@ -103,6 +122,7 @@ export function useFileDiffInstance<LAnnotation>({
             hasCustomHeader,
             hasEditor: editor !== undefined,
             hasGutterRenderUtility,
+            onHydratedPartialDiff,
             options,
           }),
           !disableWorkerPool ? poolManager : undefined,
@@ -139,6 +159,7 @@ export function useFileDiffInstance<LAnnotation>({
       hasCustomHeader,
       hasEditor: editor !== undefined,
       hasGutterRenderUtility,
+      onHydratedPartialDiff,
       options,
     });
     const forceRender = !areOptionsEqual(instance.options, newOptions);
@@ -170,6 +191,28 @@ export function useFileDiffInstance<LAnnotation>({
   }, []);
 
   return { ref, getHoveredLine };
+}
+
+function syncHydratedDiffFromCommit(
+  hydratedDiffRef: RefObject<HydratedDiffRefState>,
+  sourceFileDiff: FileDiffMetadata,
+  hydratedFileDiff: FileDiffMetadata
+): void {
+  const trackedState = hydratedDiffRef.current;
+  if (
+    !trackedState.fileDiff.isPartial ||
+    hydratedFileDiff.isPartial ||
+    trackedState.hydratedFileDiff === hydratedFileDiff ||
+    (sourceFileDiff !== trackedState.fileDiff &&
+      !areDiffTargetsEqual(sourceFileDiff, trackedState.fileDiff))
+  ) {
+    return;
+  }
+
+  hydratedDiffRef.current = {
+    fileDiff: trackedState.fileDiff,
+    hydratedFileDiff,
+  };
 }
 
 function resolveRenderableFileDiff(
@@ -222,6 +265,7 @@ interface MergeFileDiffOptionsProps<LAnnotation> {
   hasEditor: boolean;
   hasCustomHeader: boolean;
   hasGutterRenderUtility: boolean;
+  onHydratedPartialDiff: OnHydratedPartialDiff<LAnnotation>;
   options: FileDiffOptions<LAnnotation> | undefined;
 }
 
@@ -232,42 +276,41 @@ function mergeFileDiffOptions<LAnnotation>({
   hasCustomHeader,
   hasEditor,
   hasGutterRenderUtility,
+  onHydratedPartialDiff,
 }: MergeFileDiffOptionsProps<LAnnotation>):
   | FileDiffOptions<LAnnotation>
   | undefined {
   const needsEditorOptions = contentEditable && hasEditor;
   const needsReactOverrides =
     controlledSelection || hasGutterRenderUtility || hasCustomHeader;
+  const needsOnHydratedHandler = options?.loadDiffFiles != null;
 
-  if (!needsReactOverrides && !needsEditorOptions) {
+  if (!needsReactOverrides && !needsEditorOptions && !needsOnHydratedHandler) {
     return options;
   }
 
-  let merged: FileDiffOptions<LAnnotation> = { ...options };
-
-  if (needsReactOverrides) {
-    merged = {
-      ...merged,
-      controlledSelection,
-      renderCustomHeader: hasCustomHeader
-        ? noopRender
-        : options?.renderCustomHeader,
-      renderGutterUtility: hasGutterRenderUtility
-        ? noopRender
-        : options?.renderGutterUtility,
-    };
-  }
-
-  if (needsEditorOptions) {
-    merged = {
-      ...merged,
-      useTokenTransformer: true,
-      enableGutterUtility: false,
-      enableLineSelection: false,
-      expandUnchanged: true,
-      lineHoverHighlight: 'disabled',
-    };
-  }
-
-  return merged;
+  return {
+    ...options,
+    ...(needsReactOverrides
+      ? {
+          controlledSelection,
+          renderCustomHeader: hasCustomHeader
+            ? noopRender
+            : options?.renderCustomHeader,
+          renderGutterUtility: hasGutterRenderUtility
+            ? noopRender
+            : options?.renderGutterUtility,
+        }
+      : null),
+    ...(needsEditorOptions
+      ? {
+          useTokenTransformer: true,
+          enableGutterUtility: false,
+          enableLineSelection: false,
+          expandUnchanged: true,
+          lineHoverHighlight: 'disabled',
+        }
+      : null),
+    ...(needsOnHydratedHandler ? { onHydratedPartialDiff } : null),
+  };
 }

@@ -152,6 +152,11 @@ export interface FileDiffOptions<LAnnotation>
     instance: FileDiff<LAnnotation>,
     phase: PostRenderPhase
   ): unknown;
+  onHydratedPartialDiff?(
+    sourceFileDiff: FileDiffMetadata,
+    hydratedFileDiff: FileDiffMetadata,
+    instance: FileDiff<LAnnotation>
+  ): unknown;
 }
 
 interface AnnotationElementCache<LAnnotation> {
@@ -867,8 +872,25 @@ export class FileDiff<
     hydratedFileDiff: FileDiffMetadata,
     loadedContents: LoadedPartialDiffContents
   ): void {
+    const { fileDiff: sourceFileDiff } = this;
     this.commitHydratedPartialDiff(hydratedFileDiff, loadedContents);
+    this.emitHydratedPartialDiff(sourceFileDiff, hydratedFileDiff);
     this.rerender();
+  }
+
+  protected emitHydratedPartialDiff(
+    sourceFileDiff: FileDiffMetadata | undefined,
+    hydratedFileDiff: FileDiffMetadata
+  ): void {
+    const { onHydratedPartialDiff } = this.options;
+    if (
+      sourceFileDiff?.isPartial !== true ||
+      hydratedFileDiff.isPartial ||
+      onHydratedPartialDiff == null
+    ) {
+      return;
+    }
+    onHydratedPartialDiff(sourceFileDiff, hydratedFileDiff, this);
   }
 
   protected commitHydratedPartialDiff(

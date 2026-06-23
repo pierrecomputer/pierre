@@ -246,6 +246,7 @@ const CODE_VIEW_DIFF_OPTION_KEYS = [
   'disableBackground',
   'expandUnchanged',
   'loadDiffFiles',
+  'onHydratedPartialDiff',
   'collapsedContextThreshold',
   'lineDiffType',
   'maxLineDiffLength',

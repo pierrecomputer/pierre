@@ -793,12 +793,13 @@ export class VirtualizedFileDiff<
     hydratedFileDiff: FileDiffMetadata,
     loadedContents: LoadedPartialDiffContents
   ): void {
-    if (this.fileDiff == null) {
+    const { fileDiff: sourceFileDiff } = this;
+    if (sourceFileDiff == null) {
       return;
     }
     if (this.isAdvancedMode()) {
       this.pendingHydration = {
-        sourceFileDiff: this.fileDiff,
+        sourceFileDiff,
         hydratedFileDiff,
         loadedContents,
       };
@@ -806,6 +807,7 @@ export class VirtualizedFileDiff<
       this.commitHydratedPartialDiff(hydratedFileDiff, loadedContents);
       this.resetLayoutCache({ includeEstimatedHeights: true });
       this.computeApproximateSize();
+      this.emitHydratedPartialDiff(sourceFileDiff, hydratedFileDiff);
     }
     this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(this, true);
@@ -831,6 +833,7 @@ export class VirtualizedFileDiff<
     }
 
     let hydratedFileDiff: FileDiffMetadata | undefined;
+    let hydratedSourceFileDiff: FileDiffMetadata | undefined;
     if (pendingHydration != null) {
       this.pendingHydration = undefined;
       if (pendingHydration.sourceFileDiff === expectedFileDiff) {
@@ -839,6 +842,7 @@ export class VirtualizedFileDiff<
           pendingHydration.loadedContents
         );
         hydratedFileDiff = pendingHydration.hydratedFileDiff;
+        hydratedSourceFileDiff = pendingHydration.sourceFileDiff;
         didHydrate = true;
       }
     }
@@ -850,6 +854,10 @@ export class VirtualizedFileDiff<
       } else {
         this.invalidateDerivedLayoutCache(true);
       }
+    }
+
+    if (hydratedFileDiff != null) {
+      this.emitHydratedPartialDiff(hydratedSourceFileDiff, hydratedFileDiff);
     }
 
     return hydratedFileDiff;
