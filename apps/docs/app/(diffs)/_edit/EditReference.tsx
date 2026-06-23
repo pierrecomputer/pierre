@@ -33,9 +33,9 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
         term: 'Files & diffs',
         description: (
           <>
-            Edit a <code>File</code>, <code>FileDiff</code>, or{' '}
-            <code>MultiFileDiff</code>; the new-file side of a diff re-tokenizes
-            as you type.
+            Edit a <code>File</code>, <code>FileDiff</code>,{' '}
+            <code>MultiFileDiff</code>, or <code>PatchDiff</code>; the new-file
+            side of a diff re-tokenizes as you type.
           </>
         ),
       },
@@ -47,7 +47,7 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
       {
         term: 'Smart indentation',
         description:
-          'Indent or outdent whole selections, with tabs vs. spaces detected from the file.',
+          "Indent or outdent whole selections, with tab vs. space inferred from each line's existing indentation.",
       },
       {
         term: 'International input',
@@ -75,6 +75,16 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
             lines render on demand.
           </>
         ),
+      },
+      {
+        term: 'Themes & color modes',
+        description:
+          'Tokens and editor chrome follow the surface theme, re-tokenizing live when you switch themes or toggle light and dark.',
+      },
+      {
+        term: 'UI adapts to container',
+        description:
+          'Container queries reflow find & replace panel and marker popovers at narrow widths for a smoother experience, no matter the layout.',
       },
     ],
   },
@@ -124,7 +134,7 @@ export function EditReference() {
     <div className="space-y-5">
       <FeatureHeader
         id="reference"
-        title="Everything else, at a glance"
+        title="And everything else you need…"
         description={
           <>
             The demos above cover the headline features. Here's the rest of what
