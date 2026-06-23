@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import {
   CUSTOM_HEADER_SLOT_ID,
+  HEADER_FILENAME_SUFFIX_SLOT_ID,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
 } from '../../constants';
@@ -21,6 +22,7 @@ interface RenderDiffChildrenProps<LAnnotation, T> {
   actions?: (MergeConflictDiffAction | undefined)[];
   renderCustomHeader: DiffBasePropsReact<LAnnotation>['renderCustomHeader'];
   renderHeaderPrefix: DiffBasePropsReact<LAnnotation>['renderHeaderPrefix'];
+  renderHeaderFilenameSuffix?: DiffBasePropsReact<LAnnotation>['renderHeaderFilenameSuffix'];
   renderHeaderMetadata: DiffBasePropsReact<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: DiffBasePropsReact<LAnnotation>['renderAnnotation'];
   renderGutterUtility: DiffBasePropsReact<LAnnotation>['renderGutterUtility'];
@@ -38,6 +40,7 @@ export function renderDiffChildren<LAnnotation, T>({
   actions,
   renderCustomHeader,
   renderHeaderPrefix,
+  renderHeaderFilenameSuffix,
   renderHeaderMetadata,
   renderAnnotation,
   renderGutterUtility,
@@ -48,6 +51,7 @@ export function renderDiffChildren<LAnnotation, T>({
 }: RenderDiffChildrenProps<LAnnotation, T>): ReactNode {
   const customHeader = renderCustomHeader?.(fileDiff);
   const prefix = renderHeaderPrefix?.(fileDiff);
+  const suffix = renderHeaderFilenameSuffix?.(fileDiff);
   const metadata = renderHeaderMetadata?.(fileDiff);
   return (
     <>
@@ -56,6 +60,9 @@ export function renderDiffChildren<LAnnotation, T>({
       ) : (
         <>
           {prefix != null && <div slot={HEADER_PREFIX_SLOT_ID}>{prefix}</div>}
+          {suffix != null && (
+            <div slot={HEADER_FILENAME_SUFFIX_SLOT_ID}>{suffix}</div>
+          )}
           {metadata != null && (
             <div slot={HEADER_METADATA_SLOT_ID}>{metadata}</div>
           )}
