@@ -98,6 +98,10 @@ export function useFileDiffInstance<LAnnotation>({
           'useFileDiffInstance: An instance should not already exist when a node is created'
         );
       }
+      const renderableFileDiff = resolveRenderableFileDiff(
+        hydratedDiffRef,
+        fileDiff
+      );
       if (simpleVirtualizer != null) {
         instanceRef.current = new VirtualizedFileDiff(
           mergeFileDiffOptions({
@@ -130,7 +134,7 @@ export function useFileDiffInstance<LAnnotation>({
         );
       }
       void instanceRef.current.hydrate({
-        fileDiff,
+        fileDiff: renderableFileDiff,
         fileContainer,
         lineAnnotations,
         prerenderedHTML,
