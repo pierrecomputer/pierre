@@ -3,7 +3,6 @@ export type SVGSpriteNames =
   | 'arrow-up'
   | 'case'
   | 'close'
-  | 'quick'
   | 'regex'
   | 'whole-word'
   | 'replace'
@@ -12,10 +11,10 @@ export type SVGSpriteNames =
 // Icon artwork is sourced from `@pierre/icons` (IconSearch, IconX,
 // IconArrowRightShort, IconType, IconTypeWord, IconRegex) so the editor matches
 // the rest of the product. The arrow glyph is the short right arrow rotated to
-// point up/down for the search "previous"/"next" controls. `quick` is the only
-// hand-authored glyph and uses its own 0 0 20 20 viewBox; `getEditorIconSvg`
-// omits an outer viewBox so each symbol scales to fill the requested size
-// regardless of its intrinsic coordinate system.
+// point up/down for the search "previous"/"next" controls. The replace glyphs
+// use their own 0 0 20 20 viewBox; `getEditorIconSvg` omits an outer viewBox so
+// each symbol scales to fill the requested size regardless of its intrinsic
+// coordinate system.
 export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0" height="0">
   <symbol id="diffs-editor-icon-close" viewBox="0 0 16 16">
     <path fill="currentColor" d="M3.21967 3.21967C3.51256 2.92678 3.98744 2.92678 4.28033 3.21967L8 6.93934L11.7197 3.21967C12.0126 2.92678 12.4874 2.92678 12.7803 3.21967C13.0732 3.51256 13.0732 3.98744 12.7803 4.28033L9.06066 8L12.7803 11.7197C13.0732 12.0126 13.0732 12.4874 12.7803 12.7803C12.4874 13.0732 12.0126 13.0732 11.7197 12.7803L8 9.06066L4.28033 12.7803C3.98744 13.0732 3.51256 13.0732 3.21967 12.7803C2.92678 12.4874 2.92678 12.0126 3.21967 11.7197L6.93934 8L3.21967 4.28033C2.92678 3.98744 2.92678 3.51256 3.21967 3.21967Z"></path>
@@ -38,9 +37,6 @@ export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0
   <symbol id="diffs-editor-icon-regex" viewBox="0 0 16 16">
     <path fill="currentColor" d="M8.60788 6.59074C8.78227 6.46701 9.02141 6.60508 9.00146 6.81797L8.77564 9.22666C8.76189 9.37331 8.87726 9.5 9.02455 9.5H9.97548C10.1228 9.5 10.2381 9.37331 10.2244 9.22667L9.99858 6.81801C9.97862 6.60513 10.2178 6.46706 10.3922 6.59079L12.3652 7.99066C12.4853 8.07589 12.6527 8.03932 12.7264 7.91177L13.2018 7.08823C13.2755 6.96068 13.2234 6.79742 13.0896 6.73601L10.8907 5.72723C10.6963 5.63807 10.6963 5.36193 10.8907 5.27277L13.0896 4.264C13.2234 4.20258 13.2755 4.03932 13.2018 3.91177L12.7263 3.08824C12.6527 2.96068 12.4853 2.92411 12.3652 3.00934L10.3922 4.40921C10.2178 4.53294 9.97862 4.39486 9.99858 4.18198L10.2244 1.77334C10.2381 1.62669 10.1228 1.5 9.97548 1.5H9.02455C8.87726 1.5 8.76189 1.62669 8.77564 1.77334L9.00146 4.18203C9.02141 4.39491 8.78227 4.53298 8.60788 4.40926L6.63479 3.00934C6.51466 2.92411 6.34726 2.96068 6.27362 3.08823L5.79815 3.91177C5.72451 4.03932 5.77654 4.20258 5.91041 4.26399L8.10929 5.27277C8.30363 5.36193 8.30363 5.63807 8.10929 5.72723L5.91041 6.73601C5.77653 6.79742 5.7245 6.96068 5.79814 7.08824L6.27361 7.91177C6.34725 8.03932 6.51466 8.07589 6.63478 7.99066L8.60788 6.59074Z"></path>
     <path fill="currentColor" d="M4 11C3.44772 11 3 11.4477 3 12V13C3 13.5523 3.44772 14 4 14H5C5.55228 14 6 13.5523 6 13V12C6 11.4477 5.55228 11 5 11H4Z"></path>
-  </symbol>
-  <symbol id="diffs-editor-icon-quick" viewBox="0 0 20 20">
-    <polygon points="11 3 9 9 16 9 9 17 11 11 4 11 11 3" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></polygon>
   </symbol>
   <symbol id="diffs-editor-icon-replace" viewBox="0 0 20 20">
    <path d="m3,11h11c1.657,0,3-1.343,3-3v-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>

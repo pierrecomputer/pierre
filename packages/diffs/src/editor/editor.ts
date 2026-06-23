@@ -107,7 +107,10 @@ export interface EditorOptions<LAnnotation> {
    * Default is `"default"` (both quotes and brackets).
    */
   autoSurround?: AutoSurround;
-  /** Show the clickable selection action icon, default is disabled. */
+  /**
+   * Show a floating selection action popover anchored to the active selection,
+   * default is disabled.
+   */
   enabledSelectionAction?: boolean;
   /**
    * Custom clipboard provider.
@@ -736,14 +739,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#searchPanel?.focus();
     }
 
-    if (
-      this.#selectionAction !== undefined &&
-      this.#isLineVisible(this.#selectionAction.line) &&
-      this.#contentElement !== undefined
-    ) {
-      this.#selectionAction.render(this.#contentElement);
-    }
-
     if (this.#options.__debug === true && renderRange !== undefined) {
       const { startingLine, totalLines } = renderRange;
       console.log(
@@ -941,11 +936,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#shiftKeyPressed = false;
           this.#selectionStart = undefined;
           this.#reservedSelections = undefined;
-          this.#overlayElements?.forEach((el, key) => {
-            if (key.startsWith('selectionActionIcon-')) {
-              el.dataset.visible = 'true';
-            }
-          });
+          // The popover is suppressed while the mouse is down so it doesn't
+          // flicker under the cursor mid-drag. Now that the drag has ended,
+          // re-run the overlay pass so a settled ranged selection reveals it.
+          if (
+            this.#options.enabledSelectionAction === true &&
+            this.#selections !== undefined &&
+            this.#selections.length > 0 &&
+            !isCollapsedSelection(this.#selections.at(-1)!)
+          ) {
+            this.#updateSelections(this.#selections);
+          }
         },
         { passive: true }
       ),
@@ -2086,6 +2087,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#selections = undefined;
       this.#overlayElements?.forEach((el) => el.remove());
       this.#overlayElements?.clear();
+      this.#selectionAction?.cleanup();
+      this.#selectionAction = undefined;
       return;
     }
 
@@ -2111,12 +2114,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#renderSelection(renderCtx, 'selection', selection);
         }
         this.#renderCaret(renderCtx, selection, selection === primarySelection);
-      }
-      if (
-        this.#options.enabledSelectionAction === true &&
-        !isCollapsedSelection(primarySelection)
-      ) {
-        this.#renderSelectionActionIcon(renderCtx, primarySelection);
       }
     }
 
@@ -2162,6 +2159,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements?.clear();
     this.#overlayElements = renderCtx.elements;
+
+    this.#updateSelectionActionPopover();
   }
 
   #renderSelection(
@@ -2547,112 +2546,75 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #renderSelectionActionIcon(
-    renderCtx: {
-      fragment: DocumentFragment;
-      elements: Map<string, HTMLElement>;
-    },
-    selection: EditorSelection
-  ) {
-    const line = getCaretPosition(selection).line;
-    if (!this.#isLineVisible(line)) {
+  // Keeps the floating selection-action popover in sync with the current
+  // selection. Called at the end of every overlay render so the popover appears
+  // as soon as a ranged selection settles, follows it while it stays open, and
+  // tears down when the selection collapses, the option is off, or the anchor
+  // line scrolls out of view. Creation is suppressed while the mouse is down so
+  // the popover doesn't flicker under the cursor mid-drag; the pointerup handler
+  // re-runs this once the drag ends.
+  #updateSelectionActionPopover(): void {
+    const primarySelection = this.#selections?.at(-1);
+    const overlayElement = this.#overlayElement;
+    const textDocument = this.#textDocument;
+    const renderSelectionAction = this.#options.renderSelectionAction;
+    if (
+      this.#options.enabledSelectionAction !== true ||
+      renderSelectionAction === undefined ||
+      primarySelection === undefined ||
+      isCollapsedSelection(primarySelection) ||
+      this.#isContentMouseDown ||
+      overlayElement === undefined ||
+      textDocument === undefined
+    ) {
+      this.#selectionAction?.cleanup();
+      this.#selectionAction = undefined;
       return;
     }
 
-    const [left, wrapLine] = this.#getCharX(line, 0);
-    const top = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
-
-    const cacheKey = 'selectionActionIcon-' + line + '/' + wrapLine;
-    if (renderCtx.elements.has(cacheKey)) {
+    const head = getCaretPosition(primarySelection);
+    if (!this.#isLineVisible(head.line)) {
+      this.#selectionAction?.cleanup();
+      this.#selectionAction = undefined;
       return;
     }
 
-    let icon: HTMLElement;
-    if (this.#overlayElements?.has(cacheKey) === true) {
-      icon = this.#overlayElements.get(cacheKey)!;
-      this.#overlayElements.delete(cacheKey);
-    } else {
-      icon = SelectionActionWidget.renderIcon(renderCtx.fragment, () => {
-        // The icon element is cached and reused across renders for the same
-        // line (see cacheKey above), so the `selection` captured when the icon
-        // was first created can be stale: while dragging, the icon is created
-        // from the first single-character selection rather than the user's
-        // final selection. Read the current primary selection at click time so
-        // the action always operates on what the user actually has selected.
-        const activeSelection = this.#selections?.at(-1) ?? selection;
-
-        const cleanUp = () => {
+    if (this.#selectionAction === undefined) {
+      // The popover element is created once and kept open across selection
+      // changes, so its action handlers read the live primary selection rather
+      // than the snapshot taken at creation time (extending the selection by
+      // keyboard would otherwise leave them acting on the original range).
+      const getActiveSelection = (): EditorSelection =>
+        this.#selections?.at(-1) ?? primarySelection;
+      const selectionActionElement = renderSelectionAction({
+        textDocument,
+        selection: primarySelection,
+        applyEdits: (edits: TextEdit[]) => this.applyEdits(edits, true),
+        getSelectionText: () =>
+          this.#textDocument?.getText(getActiveSelection()) ?? '',
+        replaceSelectionText: (text: string) => {
+          this.#replaceSelectionText(text, [getActiveSelection()]);
+        },
+        close: () => {
           this.#selectionAction?.cleanup();
           this.#selectionAction = undefined;
-        };
-
-        const handleWidgetDomResize = () => {
-          // the line y cache is invalidated by the DOM change,
-          // clear the line y cache and re-render the selection
-          this.#lineYCache.clear();
-          if (this.#selections !== undefined) {
-            this.#updateSelections(this.#selections);
-          }
-        };
-
-        // remove the existing selection action element
-        cleanUp();
-
-        const textDocument = this.#textDocument;
-        const renderSelectionAction = this.#options.renderSelectionAction;
-        const fileContainer = this.#fileContainer;
-        if (
-          textDocument === undefined ||
-          renderSelectionAction === undefined ||
-          fileContainer == null
-        ) {
-          return;
-        }
-
-        const line = activeSelection.end.line;
-        const lineText = textDocument.getLineText(line);
-        const selectionActionElement = renderSelectionAction({
-          textDocument,
-          selection: activeSelection,
-          applyEdits: (edits: TextEdit[]) => this.applyEdits(edits, true),
-          getSelectionText: () => {
-            return this.#textDocument?.getText(activeSelection) ?? '';
-          },
-          replaceSelectionText: (text: string) => {
-            this.#replaceSelectionText(text, [activeSelection]);
-          },
-          close: () => {
-            cleanUp();
-            handleWidgetDomResize();
-            this.#scrollToPrimaryCaret();
-          },
-        });
-        let leadingWhitespaces = 0;
-        for (let i = 0; i < lineText.length; i++) {
-          const charCode = lineText.charCodeAt(i);
-          if (charCode === /* space */ 32) {
-            leadingWhitespaces++;
-          } else if (charCode === /* tab */ 9) {
-            leadingWhitespaces += this.#metrics.tabSize;
-          } else {
-            break;
-          }
-        }
-        this.#selectionAction = new SelectionActionWidget(
-          line,
-          selectionActionElement,
-          fileContainer,
-          leadingWhitespaces,
-          handleWidgetDomResize
-        );
-        this.#updateSelections([activeSelection]);
-        if (this.#isLineVisible(line) && this.#contentElement !== undefined) {
-          this.#selectionAction.render(this.#contentElement);
-        }
+          this.#scrollToPrimaryCaret();
+        },
       });
+      this.#selectionAction = new SelectionActionWidget(
+        head.line,
+        selectionActionElement,
+        overlayElement
+      );
     }
-    icon.style.transform = `translateY(${top}px) translateX(${left}px)`;
-    renderCtx.elements.set(cacheKey, icon);
+
+    // Anchor just below the selection's head line, mirroring the marker hover
+    // popover's geometry.
+    const [left, wrapLine] = this.#getCharX(head.line, head.character);
+    const lineHeight = this.#metrics.lineHeight;
+    const top = this.#getLineY(head.line) + wrapLine * lineHeight + lineHeight;
+    this.#selectionAction.line = head.line;
+    this.#selectionAction.reposition(left, top);
   }
 
   // Opens the search panel in the requested mode. If a panel is already open,

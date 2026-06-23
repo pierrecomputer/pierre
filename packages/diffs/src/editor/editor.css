@@ -152,9 +152,6 @@
   [data-content] {
     caret-color: transparent;
   }
-  [data-selection-action] {
-    caret-color: currentColor;
-  }
   [data-content]:focus ~ [data-editor-overlay] [data-caret] {
     visibility: visible;
   }
@@ -213,35 +210,17 @@
   color: inherit;
 }
 
-/* Selection Action Widget */
-[data-selection-action-icon] {
-  position: absolute;
-  top: 0;
-  left: -1lh;
-  z-index: 10;
+/* Selection Action Widget: a floating popover hosting the consumer's
+   selection-action element. It reuses the shared [data-editor-widget] chrome and
+   sits in the overlay layer (which is pointer-events: none), so it re-enables
+   pointer events for its own actions. */
+[data-selection-action-popover] {
   display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
   align-items: center;
-  justify-content: center;
-  width: 1lh;
-  height: 1lh;
-  color: color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg));
-  background-color: color-mix(in lab, var(--diffs-fg) 12%, var(--diffs-bg));
-  border-radius: 6px;
-  transition:
-    background-color 0.1s ease-in-out,
-    color 0.1s ease-in-out;
-  cursor: pointer;
-  visibility: hidden;
-}
-[data-selection-action-icon][data-visible='true'] {
-  visibility: visible;
-}
-[data-selection-action-icon]:hover {
-  color: var(--diffs-fg);
-  background-color: color-mix(in lab, var(--diffs-fg) 18%, var(--diffs-bg));
-}
-[data-selection-action] {
-  padding-inline-end: 1ch;
+  padding: 4px;
+  pointer-events: auto;
 }
 
 /* Search Panel Widget */
