@@ -1877,7 +1877,7 @@ function expandSingleNewlineInsert(
   insertText: string,
   insertStartOffset: number
 ): string {
-  if (insertText !== '\n' && insertText !== '\r\n') {
+  if (insertText !== '\n' && insertText !== '\r' && insertText !== '\r\n') {
     return insertText;
   }
   const line = textDocument.positionAt(insertStartOffset).line;
