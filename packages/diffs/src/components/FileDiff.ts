@@ -1160,7 +1160,12 @@ export class FileDiff<
     if (fileDiff != null) {
       this.fileDiff = fileDiff;
     }
-    this.rerender();
+    if (this.options.diffStyle === 'unified') {
+      this.refreshDiffView();
+    } else {
+      // TODO(@ije): can we avoid full-render here?
+      this.rerender();
+    }
     if (
       newLineAnnotations !== undefined &&
       newLineAnnotations !== this.lineAnnotations
@@ -2170,6 +2175,7 @@ export class FileDiff<
       ] as const) {
         if (astChildren != null) {
           el.innerHTML = toHtml(astChildren);
+          el.style.setProperty('grid-row', `span ${hunksResult.rowCount}`);
         }
       }
     };
@@ -2181,6 +2187,7 @@ export class FileDiff<
       render('unified', columns);
     }
 
+    this.lastRowCount = hunksResult.rowCount;
     this.syncRenderViewToEditor();
   }
 
