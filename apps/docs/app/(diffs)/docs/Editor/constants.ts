@@ -142,6 +142,7 @@ export const EDITOR_SELECTION_ACTION_EXAMPLE: PreloadFileOptions<undefined> = {
 
 const editor = new Editor({
   enabledSelectionAction: true,
+  // The popover appears automatically on selection (no icon, no extra click).
   renderSelectionAction: (context) => {
     const container = document.createElement('div');
     const button = document.createElement('button');
@@ -517,7 +518,7 @@ interface EditorOptions<LAnnotation> {
   // (default: 'default' — both quotes and brackets)
   autoSurround?: 'default' | 'never' | 'brackets' | 'quotes' | 'languageDefined';
 
-  // Show the gutter icon for Selection Action (default: false)
+  // Show the floating Selection Action popover on selection (default: false)
   enabledSelectionAction?: boolean;
 
   // Custom clipboard provider.

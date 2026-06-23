@@ -56,12 +56,12 @@ export function EditPage({
               title="Selection actions"
               description={
                 <>
-                  Select any text to reveal the gutter icon, then click it to
-                  open a custom widget rendered with{' '}
-                  <code>renderSelectionAction()</code>. Run a transform on the
-                  selection—here, wrap a string for translation or shout it in
-                  caps—or drive the same wrap from the toolbar, then reset the
-                  surface to its original source.
+                  Select any text to reveal a floating popover, anchored to the
+                  selection and rendered with{' '}
+                  <code>renderSelectionAction()</code>. Place any number of
+                  actions inside—here, an editor-style <em>Add to chat</em>{' '}
+                  sends the selected snippet to the panel on the right, while a
+                  secondary action copies it.
                 </>
               }
             />
