@@ -2,6 +2,7 @@ import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 
 import {
   CUSTOM_HEADER_SLOT_ID,
+  HEADER_FILENAME_SUFFIX_SLOT_ID,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
 } from '../constants';
@@ -111,6 +112,12 @@ function createHeaderElement({
         }),
       ],
       properties: { 'data-title': '' },
+    })
+  );
+  children.push(
+    createHastElement({
+      tagName: 'slot',
+      properties: { name: HEADER_FILENAME_SUFFIX_SLOT_ID },
     })
   );
   return createHastElement({
