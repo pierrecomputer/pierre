@@ -1395,6 +1395,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  // #computeContentOffset only assigns #contentOffset in a split + wrap diff and
+  // never clears it, so after toggling wrap off (or switching to unified) the
+  // same editor keeps a stale offset. Read it through this getter, which returns
+  // the offset only while the live layout is the one that produced it, so a
+  // stale value is never applied to caret, selection, or line-Y positions.
+  get #activeContentOffset(): { left: number; top: number } | undefined {
+    if (this.#isDiff && this.#diffSyle === 'split' && this.#isWrap) {
+      return this.#contentOffset;
+    }
+    return undefined;
+  }
+
   // TODO(@ije): add command registry
   #runCommand(command: EditorCommand) {
     const textDocument = this.#textDocument;
@@ -2205,7 +2217,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         left =
           this.#getGutterWidth() +
           this.#metrics.ch +
-          (this.#contentOffset?.left ?? 0);
+          (this.#activeContentOffset?.left ?? 0);
       } else {
         left = this.#getCharX(line, startChar)[0];
       }
@@ -2252,13 +2264,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const segmentCount = wrapOffsets.length - 1;
     // offsetLeft is the x of the content's left edge in overlay coordinates.
     // In a split diff with wrapping the content element is a grid item shifted
-    // right of the deletion panel, so the same #contentOffset.left that
-    // #getCharX adds for the caret must be included here too; otherwise every
-    // wrapped selection block is pulled left by the panel offset.
+    // right of the deletion panel, so the same content offset that #getCharX
+    // adds for the caret must be included here too; otherwise every wrapped
+    // selection block is pulled left by the panel offset.
     const offsetLeft =
       this.#getGutterWidth() +
       this.#metrics.ch +
-      (this.#contentOffset?.left ?? 0);
+      (this.#activeContentOffset?.left ?? 0);
 
     for (let wrapLine = 0; wrapLine < segmentCount; wrapLine++) {
       const segmentStart = wrapOffsets[wrapLine];
@@ -3319,9 +3331,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     // cold(slow) path: measure line top position from DOM (will cause reflow)
     let y = lineElement.offsetTop + this.#metrics.paddingTop;
-    if (this.#contentOffset !== undefined) {
-      y += this.#contentOffset?.top ?? 0;
-    }
+    y += this.#activeContentOffset?.top ?? 0;
     this.#lineYCache.set(line, y);
     return y;
   }
@@ -3340,7 +3350,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const lineText = this.#textDocument?.getLineText(line);
     const offsetLeft = this.#getGutterWidth() + this.#metrics.ch; // gutter width + inline padding (1ch)
     if (lineText === undefined || lineText.length === 0 || char <= 0) {
-      return [offsetLeft + (this.#contentOffset?.left ?? 0), 0];
+      return [offsetLeft + (this.#activeContentOffset?.left ?? 0), 0];
     }
 
     const boundedCharacter = snapTextOffsetToUnicodeBoundary(
@@ -3390,9 +3400,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           }
         }
       }
-      if (this.#contentOffset !== undefined) {
-        left += this.#contentOffset.left;
-      }
+      left += this.#activeContentOffset?.left ?? 0;
     }
 
     if (this.#lastAccessedCharX !== undefined) {
