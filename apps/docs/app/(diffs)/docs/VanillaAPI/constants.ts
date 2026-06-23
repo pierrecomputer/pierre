@@ -500,14 +500,22 @@ const instance = new FileDiff({
   // ─────────────────────────────────────────────────────────────
 
   // Diff header render callbacks receive FileDiffMetadata directly.
-  // This includes renderCustomHeader, renderHeaderPrefix, and
-  // renderHeaderMetadata.
+  // This includes renderCustomHeader, renderHeaderPrefix,
+  // renderHeaderFilenameSuffix, and renderHeaderMetadata.
   // renderHeaderPrefix renders at the beginning of the built-in header,
   // before the filename and icon.
+  // renderHeaderFilenameSuffix renders immediately after the displayed filename.
   // renderHeaderMetadata renders at the end of the built-in header,
   // after the +/- line metrics.
   // renderCustomHeader replaces the built-in header content entirely.
   //
+  // Render custom content at the beginning of the built-in header.
+  renderHeaderPrefix(fileDiff) {
+    const span = document.createElement('span');
+    span.textContent = fileDiff.type;
+    return span;
+  },
+
   // Render custom content at the end of the built-in header.
   renderHeaderMetadata(fileDiff) {
     const span = document.createElement('span');
@@ -758,7 +766,23 @@ const instance = new File({
   // RENDER CALLBACKS
   // ─────────────────────────────────────────────────────────────
 
-  // Render custom content in the file header
+  // File header callbacks receive FileContents directly.
+  // renderHeaderPrefix renders at the beginning of the built-in header,
+  // before the filename.
+  // renderHeaderFilenameSuffix renders immediately after the displayed filename.
+  // renderHeaderMetadata renders at the end of the built-in header.
+  // renderCustomHeader replaces the built-in header content entirely.
+
+  // Render custom content at the beginning of the built-in header.
+  renderHeaderPrefix(file) {
+    const span = document.createElement('span');
+    span.textContent = file.name.endsWith('.generated.ts')
+      ? 'Generated'
+      : 'Source';
+    return span;
+  },
+
+  // Render custom content in the file header.
   renderHeaderMetadata(file) {
     const span = document.createElement('span');
     span.textContent = file.name;

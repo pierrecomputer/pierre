@@ -376,16 +376,22 @@ interface ThreadMetadata {
   // ─────────────────────────────────────────────────────────────
 
   // All diff header render callbacks receive FileDiffMetadata directly.
-  // This includes renderCustomHeader, renderHeaderPrefix, and
-  // renderHeaderMetadata.
+  // This includes renderCustomHeader, renderHeaderPrefix,
+  // renderHeaderFilenameSuffix, and renderHeaderMetadata.
   // renderHeaderPrefix renders at the beginning of the built-in header,
   // before the filename.
+  // renderHeaderFilenameSuffix renders immediately after the displayed filename.
   // renderHeaderMetadata renders at the end of the built-in header,
   // after the +/- line metrics.
   // renderCustomHeader replaces the built-in header content entirely.
   //
-  // Render custom content on the right side of the built-in header.
   // Callback arg: FileDiffMetadata
+  // Render custom content at the beginning of the built-in header.
+  renderHeaderPrefix={(fileDiff) => (
+    <span>{fileDiff.type}</span>
+  )}
+
+  // Render custom content on the right side of the built-in header.
   renderHeaderMetadata={(fileDiff) => (
     <span>{fileDiff.name}</span>
   )}
@@ -500,7 +506,8 @@ export function MyDiff() {
       }}
 
       // See "Shared Props" tabs for all available props:
-      // lineAnnotations, renderAnnotation, renderHeaderMetadata,
+      // lineAnnotations, renderAnnotation, renderHeaderPrefix,
+      // renderHeaderFilenameSuffix, renderHeaderMetadata,
       // renderGutterUtility, selectedLines, className, style, etc.
     />
   );
@@ -537,7 +544,8 @@ export function MyPatchDiff() {
       }}
 
       // See "Shared Props" tabs for all available props:
-      // lineAnnotations, renderAnnotation, renderHeaderMetadata,
+      // lineAnnotations, renderAnnotation, renderHeaderPrefix,
+      // renderHeaderFilenameSuffix, renderHeaderMetadata,
       // renderGutterUtility, selectedLines, className, style, etc.
     />
   );
@@ -579,7 +587,8 @@ export function MyFileDiff() {
       }}
 
       // See "Shared Props" tabs for all available props:
-      // lineAnnotations, renderAnnotation, renderHeaderMetadata,
+      // lineAnnotations, renderAnnotation, renderHeaderPrefix,
+      // renderHeaderFilenameSuffix, renderHeaderMetadata,
       // renderGutterUtility, selectedLines, className, style, etc.
     />
   );
@@ -623,7 +632,8 @@ export function CodeFile() {
       }}
 
       // The File component supports similar props to the diff components:
-      // lineAnnotations, renderAnnotation, renderHeaderMetadata,
+      // lineAnnotations, renderAnnotation, renderHeaderPrefix,
+      // renderHeaderFilenameSuffix, renderHeaderMetadata,
       // renderGutterUtility, selectedLines, className, style, etc.
       //
       // Key difference: File uses LineAnnotation (no 'side' property)
@@ -1010,10 +1020,16 @@ interface CommentMetadata {
   // File header callbacks receive FileContents directly.
   // renderHeaderPrefix renders at the beginning of the built-in header,
   // before the filename.
+  // renderHeaderFilenameSuffix renders immediately after the displayed filename.
   // renderHeaderMetadata renders at the end of the built-in header.
   // renderCustomHeader replaces the built-in header content entirely.
   // Callback arg: FileContents
   //
+  // Render custom content at the beginning of the built-in header.
+  renderHeaderPrefix={(file) => (
+    <span>{file.name.endsWith('.generated.ts') ? 'Generated' : 'Source'}</span>
+  )}
+
   // Render custom content on the right side of the built-in header.
   renderHeaderMetadata={(file) => (
     <span>{file.name}</span>

@@ -103,9 +103,9 @@ items or update existing ones.
   to live in component state.
 - In React, use the ref for `scrollTo`, `setSelectedLines`, `getSelectedLines`,
   `clearSelectedLines`, `getItem`, `updateItem`, `addItems`, and `getInstance`.
-- `renderCustomHeader`, `renderHeaderPrefix`, `renderHeaderMetadata`,
-  `renderAnnotation`, and `renderGutterUtility` receive the whole
-  `CodeViewItem`, which makes it easy to branch on `item.type`.
+- `renderCustomHeader`, `renderHeaderPrefix`, `renderHeaderFilenameSuffix`,
+  `renderHeaderMetadata`, `renderAnnotation`, and `renderGutterUtility` receive
+  the whole `CodeViewItem`, which makes it easy to branch on `item.type`.
 - In Vanilla JS, `CodeView` owns a scrollable root that you set up once and
   update over time.
 - In Vanilla JS, call `setup(root)` once with the scrollable container.
