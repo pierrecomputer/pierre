@@ -922,8 +922,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     this.diff = fileDiff;
     const unified = diffStyle === 'unified';
-    const isExpandableDiff =
-      !fileDiff.isPartial || this.options.loadDiffFiles != null;
+    const canHydrateContext = canHydrateCollapsedContext(
+      fileDiff,
+      this.options.loadDiffFiles != null
+    );
+    const isExpandableDiff = !fileDiff.isPartial || canHydrateContext;
 
     let additionsContentAST: ElementContent[] | undefined = [];
     let deletionsContentAST: ElementContent[] | undefined = [];
@@ -966,7 +969,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       fileDiff,
       errorPrefix: 'DiffHunksRenderer.processDiffResult',
     });
-    const canHydrate = fileDiff.isPartial && this.options.loadDiffFiles != null;
     const pendingSplitContext: PendingSplitContext = {
       size: 0,
       side: undefined,
@@ -1385,12 +1387,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         if (
           hunkSeparators !== 'simple' &&
           hunkSeparators !== 'metadata' &&
-          (collapsedAfter > 0 || (isFinalHunkRow && canHydrate))
+          (collapsedAfter > 0 || (isFinalHunkRow && canHydrateContext))
         ) {
           pushSeparators({
             hunkIndex: type === 'context-expanded' ? hunkIndex : hunkIndex + 1,
             collapsedLines:
-              isFinalHunkRow && canHydrate ? 'unknown' : collapsedAfter,
+              isFinalHunkRow && canHydrateContext ? 'unknown' : collapsedAfter,
             rangeSize: trailingRangeSize,
             hunkSpecs: undefined,
             isFirstHunk: false,
@@ -2030,5 +2032,16 @@ function isDiffMassive(
   return (
     Math.max(diff.additionLines.length, diff.deletionLines.length) >
     tokenizeMaxLength
+  );
+}
+
+function canHydrateCollapsedContext(
+  fileDiff: FileDiffMetadata,
+  hasFileLoader: boolean
+): boolean {
+  return (
+    fileDiff.isPartial &&
+    hasFileLoader &&
+    (fileDiff.type === 'change' || fileDiff.type === 'rename-changed')
   );
 }
