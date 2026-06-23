@@ -171,4 +171,71 @@ describe('Editor selection action', () => {
       cleanup();
     }
   });
+
+  // The popover only exists while a range is selected; collapsing the selection
+  // (clicking elsewhere, arrowing away) tears it down.
+  test('collapsing the selection removes the popover', async () => {
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      'hello world',
+      {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          return document.createElement('div');
+        },
+      }
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 5 },
+          direction: 'forward',
+        },
+      ]);
+      expect(() => findSelectionActionPopover(content)).not.toThrow();
+
+      editor.setSelections([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ]);
+      const root = content.getRootNode() as ShadowRoot;
+      expect(root.querySelector('[data-selection-action-popover]')).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+
+  // Without `enabledSelectionAction`, a ranged selection renders nothing and the
+  // consumer's callback is never invoked.
+  test('renders no popover when the feature is disabled', async () => {
+    let rendered = false;
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      'hello world',
+      {
+        renderSelectionAction() {
+          rendered = true;
+          return document.createElement('div');
+        },
+      }
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 5 },
+          direction: 'forward',
+        },
+      ]);
+      const root = content.getRootNode() as ShadowRoot;
+      expect(root.querySelector('[data-selection-action-popover]')).toBeNull();
+      expect(rendered).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
 });
