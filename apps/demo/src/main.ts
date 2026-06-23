@@ -836,6 +836,7 @@ if (renderFileButton != null) {
     virtualizer?.setup(globalThis.document);
     const wrap = getWrapped();
     const editor = new Editor<LineCommentMetadata>({
+      clipboard: navigator.clipboard,
       enabledSelectionAction: true,
       renderSelectionAction: (ctx) => {
         const div = document.createElement('div');
