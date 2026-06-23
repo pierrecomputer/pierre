@@ -2199,7 +2199,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       let width = 0;
       let paddingEnd = 0;
       if (startChar === 0) {
-        left = this.#getGutterWidth() + this.#metrics.ch; // gutter width + inline padding (1ch)
+        // gutter width + inline padding (1ch), plus the split-diff content
+        // offset so a column-0 selection lines up with the content panel the
+        // same way #getCharX (used for startChar > 0 and the caret) does.
+        left =
+          this.#getGutterWidth() +
+          this.#metrics.ch +
+          (this.#contentOffset?.left ?? 0);
       } else {
         left = this.#getCharX(line, startChar)[0];
       }
@@ -2244,7 +2250,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   ) {
     const wrapOffsets = this.#wrapLineText(line);
     const segmentCount = wrapOffsets.length - 1;
-    const offsetLeft = this.#getGutterWidth() + this.#metrics.ch;
+    // offsetLeft is the x of the content's left edge in overlay coordinates.
+    // In a split diff with wrapping the content element is a grid item shifted
+    // right of the deletion panel, so the same #contentOffset.left that
+    // #getCharX adds for the caret must be included here too; otherwise every
+    // wrapped selection block is pulled left by the panel offset.
+    const offsetLeft =
+      this.#getGutterWidth() +
+      this.#metrics.ch +
+      (this.#contentOffset?.left ?? 0);
 
     for (let wrapLine = 0; wrapLine < segmentCount; wrapLine++) {
       const segmentStart = wrapOffsets[wrapLine];
