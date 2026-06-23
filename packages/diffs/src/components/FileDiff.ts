@@ -1046,6 +1046,25 @@ export class FileDiff<
     }
   }
 
+  // Re-render the diff from the editor's document after a host-driven full
+  // re-render rebuilt the rows from the host's (now stale) file contents.
+  // applyDocumentChange re-derives the diff (addition lines + hunks) from the
+  // document, but the cached highlighted AST still holds the host's content for
+  // rows that already existed, and renderDiff reuses it. Clearing the render
+  // cache forces the re-render to re-highlight from the document, so every row
+  // matches it - text, syntax colors, and line count - in one pass. Mutating
+  // the diff in place keeps its cacheKey, so the editor's document and undo
+  // history survive the re-render.
+  public rerenderFromDocument(textDocument: DiffsTextDocument): void {
+    this.hunksRenderer.applyDocumentChange(textDocument);
+    const renderDiff = this.hunksRenderer.getRenderDiff();
+    if (renderDiff != null) {
+      this.fileDiff = renderDiff;
+    }
+    this.hunksRenderer.clearRenderCache();
+    this.rerender();
+  }
+
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
