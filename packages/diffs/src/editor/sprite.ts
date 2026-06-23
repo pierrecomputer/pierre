@@ -9,11 +9,11 @@ export type SVGSpriteNames =
   | 'replace-all';
 
 // Icon artwork is sourced from `@pierre/icons` (IconSearch, IconX,
-// IconArrowRightShort, IconType, IconTypeWord, IconRegex) so the editor matches
-// the rest of the product. The arrow glyph is the short right arrow rotated to
-// point up/down for the search "previous"/"next" controls. The replace glyphs
-// use their own 0 0 20 20 viewBox; `getEditorIconSvg` omits an outer viewBox so
-// each symbol scales to fill the requested size regardless of its intrinsic
+// IconArrowRightShort, IconType, IconTypeWord, IconRegex, IconReplace,
+// IconReplaceAll) so the editor matches the rest of the product. The arrow glyph
+// is the short right arrow rotated to point up/down for the search
+// "previous"/"next" controls. `getEditorIconSvg` omits an outer viewBox so each
+// symbol scales to fill the requested size regardless of its intrinsic
 // coordinate system.
 export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0" height="0">
   <symbol id="diffs-editor-icon-close" viewBox="0 0 16 16">
@@ -38,15 +38,11 @@ export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0
     <path fill="currentColor" d="M8.60788 6.59074C8.78227 6.46701 9.02141 6.60508 9.00146 6.81797L8.77564 9.22666C8.76189 9.37331 8.87726 9.5 9.02455 9.5H9.97548C10.1228 9.5 10.2381 9.37331 10.2244 9.22667L9.99858 6.81801C9.97862 6.60513 10.2178 6.46706 10.3922 6.59079L12.3652 7.99066C12.4853 8.07589 12.6527 8.03932 12.7264 7.91177L13.2018 7.08823C13.2755 6.96068 13.2234 6.79742 13.0896 6.73601L10.8907 5.72723C10.6963 5.63807 10.6963 5.36193 10.8907 5.27277L13.0896 4.264C13.2234 4.20258 13.2755 4.03932 13.2018 3.91177L12.7263 3.08824C12.6527 2.96068 12.4853 2.92411 12.3652 3.00934L10.3922 4.40921C10.2178 4.53294 9.97862 4.39486 9.99858 4.18198L10.2244 1.77334C10.2381 1.62669 10.1228 1.5 9.97548 1.5H9.02455C8.87726 1.5 8.76189 1.62669 8.77564 1.77334L9.00146 4.18203C9.02141 4.39491 8.78227 4.53298 8.60788 4.40926L6.63479 3.00934C6.51466 2.92411 6.34726 2.96068 6.27362 3.08823L5.79815 3.91177C5.72451 4.03932 5.77654 4.20258 5.91041 4.26399L8.10929 5.27277C8.30363 5.36193 8.30363 5.63807 8.10929 5.72723L5.91041 6.73601C5.77653 6.79742 5.7245 6.96068 5.79814 7.08824L6.27361 7.91177C6.34725 8.03932 6.51466 8.07589 6.63478 7.99066L8.60788 6.59074Z"></path>
     <path fill="currentColor" d="M4 11C3.44772 11 3 11.4477 3 12V13C3 13.5523 3.44772 14 4 14H5C5.55228 14 6 13.5523 6 13V12C6 11.4477 5.55228 11 5 11H4Z"></path>
   </symbol>
-  <symbol id="diffs-editor-icon-replace" viewBox="0 0 20 20">
-   <path d="m3,11h11c1.657,0,3-1.343,3-3v-3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
-   <polyline points="7 7 3 11 7 15" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></polyline>
+  <symbol id="diffs-editor-icon-replace" viewBox="0 0 16 16">
+    <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M5.28033 5.71967C5.57322 6.01256 5.57322 6.48744 5.28033 6.78033L3.56066 8.5H11.75C12.7165 8.5 13.5 7.7165 13.5 6.75V2.75C13.5 2.33579 13.8358 2 14.25 2C14.6642 2 15 2.33579 15 2.75V6.75C15 8.54493 13.5449 10 11.75 10H3.56066L5.28033 11.7197C5.57322 12.0126 5.57322 12.4874 5.28033 12.7803C4.98744 13.0732 4.51256 13.0732 4.21967 12.7803L1.21967 9.78033C0.926777 9.48744 0.926777 9.01256 1.21967 8.71967L4.21967 5.71967C4.51256 5.42678 4.98744 5.42678 5.28033 5.71967Z"></path>
   </symbol>
-  <symbol id="diffs-editor-icon-replace-all" viewBox="0 0 20 20">
-    <path d="m16,6H6c-1.657,0-3,1.343-3,3v1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
-    <polyline points="13.25 8.75 16 6 13.25 3.25" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></polyline>
-    <path d="m4,14h10c1.657,0,3-1.343,3-3v-1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
-    <polyline points="6.75 11.25 4 14 6.75 16.75" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></polyline>
+  <symbol id="diffs-editor-icon-replace-all" viewBox="0 0 16 16">
+    <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M10.7197 0.21967C11.0126 -0.0732233 11.4874 -0.0732233 11.7803 0.21967L14.7803 3.21967C15.0732 3.51256 15.0732 3.98744 14.7803 4.28033L11.7803 7.28033C11.4874 7.57322 11.0126 7.57322 10.7197 7.28033C10.4268 6.98744 10.4268 6.51256 10.7197 6.21967L12.4393 4.5H4.25C3.2835 4.5 2.5 5.2835 2.5 6.25V6.875C2.5 7.28921 2.16421 7.625 1.75 7.625C1.33579 7.625 1 7.28921 1 6.875V6.25C1 4.45507 2.45508 3 4.25 3H12.4393L10.7197 1.28033C10.4268 0.987437 10.4268 0.512563 10.7197 0.21967ZM5.28033 8.71967C5.57322 9.01256 5.57322 9.48744 5.28033 9.78033L3.56066 11.5H11.75C12.7165 11.5 13.5 10.7165 13.5 9.75V9.125C13.5 8.71079 13.8358 8.375 14.25 8.375C14.6642 8.375 15 8.71079 15 9.125V9.75C15 11.5449 13.5449 13 11.75 13H3.56066L5.28033 14.7197C5.57322 15.0126 5.57322 15.4874 5.28033 15.7803C4.98744 16.0732 4.51256 16.0732 4.21967 15.7803L1.21967 12.7803C0.926777 12.4874 0.926777 12.0126 1.21967 11.7197L4.21967 8.71967C4.51256 8.42678 4.98744 8.42678 5.28033 8.71967Z"></path>
   </symbol>
 </svg>`;
 
