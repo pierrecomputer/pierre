@@ -20,6 +20,9 @@
 [data-diff-type='split'][data-overflow='wrap'] {
   position: relative;
 }
+[data-code] {
+  container-type: inline-size;
+}
 [data-content] {
   cursor: text;
   background-color: transparent;
@@ -176,15 +179,24 @@
 }
 [data-marker-popup] {
   padding: 8px 12px;
-  min-width: 180px;
+  min-width: min(180px, calc(100cqw - 24px));
   pointer-events: auto;
   font-family: var(--diffs-header-font-fallback);
   font-size: 14px;
   line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  translate: clamp(8px, var(--marker-x, 8px), calc(100cqw - 8px - 100%))
+    var(--marker-y, 0);
+}
+[data-marker-popup] [data-marker-message] {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 [data-marker-popup] code {
   display: inline;
   background-color: transparent;
+  white-space: normal;
 }
 /* Severity-colored popover: solid fill in the marker's severity color with
    white text, mirroring the underline. The inset 1px ring (normally painted in
