@@ -240,9 +240,6 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
     let hunkIndex = 0;
     for (const fileDiff of parsedPatch.files) {
       const fileAnnotations = patchAnnotations[hunkIndex];
-      let instance:
-        | FileDiff<LineCommentMetadata>
-        | VirtualizedFileDiff<LineCommentMetadata>;
       const options: FileDiffOptions<LineCommentMetadata> = {
         theme: DEMO_THEME,
         themeType,
@@ -416,7 +413,9 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         //   props.tokenElement.style.borderRadius = '';
         // },
       };
-      instance = (() => {
+      const instance:
+        | FileDiff<LineCommentMetadata>
+        | VirtualizedFileDiff<LineCommentMetadata> = (() => {
         if (virtualizer != null) {
           return new VirtualizedFileDiff<LineCommentMetadata>(
             options,
@@ -747,9 +746,6 @@ if (renderFileButton != null) {
     const wrap = getWrapped();
     const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
-    let instance:
-      | File<LineCommentMetadata>
-      | VirtualizedFile<LineCommentMetadata>;
     const options: FileOptions<LineCommentMetadata> = {
       overflow: wrap ? 'wrap' : 'scroll',
       theme: DEMO_THEME,
@@ -848,7 +844,9 @@ if (renderFileButton != null) {
       // },
     };
 
-    instance = (() => {
+    const instance:
+      | File<LineCommentMetadata>
+      | VirtualizedFile<LineCommentMetadata> = (() => {
       if (virtualizer != null) {
         return new VirtualizedFile<LineCommentMetadata>(
           options,

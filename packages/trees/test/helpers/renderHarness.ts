@@ -1,7 +1,10 @@
 import { JSDOM } from 'jsdom';
 
 import { type FileTreeVisibleRow } from '../../src/index';
-import { computeFileTreeLayout } from '../../src/model/layout';
+import {
+  computeFileTreeLayout,
+  type FileTreeLayoutSnapshot,
+} from '../../src/model/layout';
 import {
   FILE_TREE_DEFAULT_ITEM_HEIGHT,
   FILE_TREE_DEFAULT_OVERSCAN,
@@ -257,6 +260,16 @@ export function getMountedItemPaths(
     .filter((path): path is string => path != null);
 }
 
+export interface FileTreeVisibleRowsController {
+  getVisibleCount(): number;
+  getVisibleRows(start: number, end: number): readonly FileTreeVisibleRow[];
+}
+
+export interface ExpectedRenderedWindow {
+  layout: FileTreeLayoutSnapshot<FileTreeVisibleRow>;
+  mountedPaths: string[];
+}
+
 export function getVisibleRowPath(row: FileTreeVisibleRow): string {
   return row.isFlattened
     ? (row.flattenedSegments?.findLast((segment) => segment.isTerminal)?.path ??
@@ -282,26 +295,24 @@ export function getVisibleIndexForPath(
 }
 
 export function computeExpectedRenderedWindow(
-  controller: {
-    getVisibleCount(): number;
-    getVisibleRows(start: number, end: number): readonly FileTreeVisibleRow[];
-  },
+  controller: FileTreeVisibleRowsController,
   scrollTop: number,
   viewportHeight: number
-) {
+): ExpectedRenderedWindow {
   const visibleCount = controller.getVisibleCount();
   const rows =
     visibleCount <= 0 ? [] : controller.getVisibleRows(0, visibleCount - 1);
-  const layout = computeFileTreeLayout(rows, {
-    itemHeight: FILE_TREE_DEFAULT_ITEM_HEIGHT,
-    overscan: FILE_TREE_DEFAULT_OVERSCAN,
-    scrollTop,
-    viewportHeight,
-  });
+  const layout: FileTreeLayoutSnapshot<FileTreeVisibleRow> =
+    computeFileTreeLayout(rows, {
+      itemHeight: FILE_TREE_DEFAULT_ITEM_HEIGHT,
+      overscan: FILE_TREE_DEFAULT_OVERSCAN,
+      scrollTop: scrollTop,
+      viewportHeight: viewportHeight,
+    });
   const stickyPathSet = new Set(
     layout.sticky.rows.map((entry) => getVisibleRowPath(entry.row))
   );
-  const mountedPaths =
+  const mountedPaths: string[] =
     layout.window.startIndex < 0 ||
     layout.window.endIndex < layout.window.startIndex
       ? []
@@ -311,8 +322,8 @@ export function computeExpectedRenderedWindow(
           .filter((path) => !stickyPathSet.has(path));
 
   return {
-    layout,
-    mountedPaths,
+    layout: layout,
+    mountedPaths: mountedPaths,
   };
 }
 

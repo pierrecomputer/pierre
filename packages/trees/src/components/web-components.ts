@@ -1,5 +1,5 @@
 import { FILE_TREE_STYLE_ATTRIBUTE, FILE_TREE_TAG_NAME } from '../constants';
-import rawStyles from '../style.css';
+import rawStyles from '../style.css?inline';
 import { wrapCoreCSS } from '../utils/cssWrappers';
 import { ensureMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 

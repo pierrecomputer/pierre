@@ -1,5 +1,5 @@
 import { DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY } from '../constants';
-import rawStyles from '../style.css';
+import rawStyles from '../style.css?inline';
 import type { ThemeTypes } from '../types';
 import { createMeasuredScrollbarGutterDeclaration } from './scrollbarGutter';
 

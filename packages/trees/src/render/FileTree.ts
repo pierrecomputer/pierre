@@ -53,7 +53,7 @@ import {
   FILE_TREE_DEFAULT_ITEM_HEIGHT,
   FILE_TREE_DEFAULT_VIEWPORT_HEIGHT,
 } from '../model/virtualization';
-import fileTreeStyles from '../style.css';
+import fileTreeStyles from '../style.css?inline';
 import {
   escapeStyleTextForHtml,
   wrapCoreCSS,

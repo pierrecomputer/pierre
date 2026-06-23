@@ -1,3 +1,5 @@
+import type { FileTreeProfileInstrumentationSummary } from '../../../scripts/lib/fileTreeProfileShared';
+
 const now = () => {
   if (typeof performance !== 'undefined') {
     return performance.now();
@@ -27,22 +29,37 @@ interface BenchmarkPhaseAggregate {
   inclusiveMs: number;
 }
 
-interface HeapSnapshot {
+export interface FileTreeProfileBenchmarkHeapSnapshot {
   jsHeapSizeLimit: number;
   totalJSHeapSize: number;
   usedJSHeapSize: number;
 }
 
-export function createBenchmarkInstrumentation() {
+export interface FileTreeProfileBenchmarkPhaseInstrumentation {
+  measurePhase<TValue>(name: string, fn: () => TValue): TValue;
+  setCounter(name: string, value: number): void;
+}
+
+export interface FileTreeProfileBenchmarkInstrumentation {
+  instrumentation: FileTreeProfileBenchmarkPhaseInstrumentation;
+  readHeapSnapshot: () => FileTreeProfileBenchmarkHeapSnapshot | null;
+  reset: () => void;
+  summarize: (
+    heapBefore: FileTreeProfileBenchmarkHeapSnapshot | null,
+    heapAfter: FileTreeProfileBenchmarkHeapSnapshot | null
+  ) => FileTreeProfileInstrumentationSummary;
+}
+
+export function createBenchmarkInstrumentation(): FileTreeProfileBenchmarkInstrumentation {
   const phaseTotals: Record<string, BenchmarkPhaseAggregate> = {};
   const counters: Record<string, number> = {};
   const phaseStack: BenchmarkPhaseFrame[] = [];
 
-  const instrumentation = {
+  const instrumentation: FileTreeProfileBenchmarkPhaseInstrumentation = {
     measurePhase<TValue>(name: string, fn: () => TValue): TValue {
       const frame: BenchmarkPhaseFrame = {
         childDurationMs: 0,
-        name,
+        name: name,
         startedAt: now(),
       };
       phaseStack.push(frame);
@@ -92,7 +109,7 @@ export function createBenchmarkInstrumentation() {
     },
   };
 
-  const reset = () => {
+  const reset = (): void => {
     for (const phaseName of Object.keys(phaseTotals)) {
       delete phaseTotals[phaseName];
     }
@@ -104,7 +121,7 @@ export function createBenchmarkInstrumentation() {
     phaseStack.length = 0;
   };
 
-  const readHeapSnapshot = (): HeapSnapshot | null => {
+  const readHeapSnapshot = (): FileTreeProfileBenchmarkHeapSnapshot | null => {
     const memory = performance.memory;
     if (memory == null) {
       return null;
@@ -117,31 +134,36 @@ export function createBenchmarkInstrumentation() {
     };
   };
 
+  const summarize: FileTreeProfileBenchmarkInstrumentation['summarize'] = (
+    heapBefore,
+    heapAfter
+  ) => {
+    return {
+      counters: { ...counters },
+      heap:
+        heapBefore == null || heapAfter == null
+          ? null
+          : {
+              jsHeapSizeLimitBytes: heapAfter.jsHeapSizeLimit,
+              totalJSHeapSizeAfterBytes: heapAfter.totalJSHeapSize,
+              usedJSHeapSizeAfterBytes: heapAfter.usedJSHeapSize,
+              usedJSHeapSizeBeforeBytes: heapBefore.usedJSHeapSize,
+              usedJSHeapSizeDeltaBytes:
+                heapAfter.usedJSHeapSize - heapBefore.usedJSHeapSize,
+            },
+      phases: Object.entries(phaseTotals).map(([name, aggregate]) => ({
+        count: aggregate.count,
+        durationMs: aggregate.inclusiveMs,
+        name: name,
+        selfDurationMs: aggregate.exclusiveMs,
+      })),
+    };
+  };
+
   return {
-    instrumentation,
-    readHeapSnapshot,
-    reset,
-    summarize(heapBefore: HeapSnapshot | null, heapAfter: HeapSnapshot | null) {
-      return {
-        counters: { ...counters },
-        heap:
-          heapBefore == null || heapAfter == null
-            ? null
-            : {
-                jsHeapSizeLimitBytes: heapAfter.jsHeapSizeLimit,
-                totalJSHeapSizeAfterBytes: heapAfter.totalJSHeapSize,
-                usedJSHeapSizeAfterBytes: heapAfter.usedJSHeapSize,
-                usedJSHeapSizeBeforeBytes: heapBefore.usedJSHeapSize,
-                usedJSHeapSizeDeltaBytes:
-                  heapAfter.usedJSHeapSize - heapBefore.usedJSHeapSize,
-              },
-        phases: Object.entries(phaseTotals).map(([name, aggregate]) => ({
-          count: aggregate.count,
-          durationMs: aggregate.inclusiveMs,
-          name,
-          selfDurationMs: aggregate.exclusiveMs,
-        })),
-      };
-    },
+    instrumentation: instrumentation,
+    readHeapSnapshot: readHeapSnapshot,
+    reset: reset,
+    summarize: summarize,
   };
 }

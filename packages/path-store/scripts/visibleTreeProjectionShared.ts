@@ -16,13 +16,24 @@ export interface VisibleTreeProjectionWorkload {
   visibleCount: number;
 }
 
+export interface VisibleTreeProjectionScenarioMeasurement {
+  collapseTargetPath?: string | null;
+  rowCount: number;
+}
+
 export interface VisibleTreeProjectionScenario {
   description: string;
-  measure: () => {
-    collapseTargetPath?: string | null;
-    rowCount: number;
-  };
+  measure: () => VisibleTreeProjectionScenarioMeasurement;
   name: string;
+}
+
+export interface VisibleTreeProjectionDurationSummary {
+  averageMs: number;
+  maxMs: number;
+  medianMs: number;
+  minMs: number;
+  p95Ms: number;
+  runCount: number;
 }
 
 // Prepares a stable visible-row snapshot plus a reusable store for the
@@ -151,7 +162,9 @@ export function createVisibleTreeProjectionScenarios(
   return scenarios;
 }
 
-export function summarizeDurations(durationsMs: readonly number[]) {
+export function summarizeDurations(
+  durationsMs: readonly number[]
+): VisibleTreeProjectionDurationSummary {
   const sorted = [...durationsMs].sort((left, right) => left - right);
   const count = sorted.length;
   const sum = sorted.reduce((total, duration) => total + duration, 0);

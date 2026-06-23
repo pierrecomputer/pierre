@@ -1,6 +1,6 @@
 type Callback = (time: number) => unknown;
 
-let callbacks = new Set<Callback>();
+const callbacks = new Set<Callback>();
 let frameId: null | number = null;
 
 // TODO(amadeus): Figure out a proper name for this module...

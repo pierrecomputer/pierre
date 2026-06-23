@@ -1,11 +1,11 @@
 import { resolve } from 'node:path';
-import { defineConfig } from 'vite';
+import { defineConfig, type UserConfig } from 'vite';
 
 const defaultPort = 9221;
 const portFromEnv = Number(process.env.FILE_TREE_E2E_PORT);
 const port = Number.isFinite(portFromEnv) ? portFromEnv : defaultPort;
 
-export default defineConfig({
+const config: UserConfig = defineConfig({
   publicDir: resolve(
     import.meta.dirname,
     '..',
@@ -21,3 +21,5 @@ export default defineConfig({
     strictPort: true,
   },
 });
+
+export default config;

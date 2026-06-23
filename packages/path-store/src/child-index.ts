@@ -14,7 +14,7 @@ const PATH_STORE_CHILD_INDEX_CHUNK_THRESHOLD =
 // Exposed so hot callers can avoid the rebuildVisibleChildChunks function
 // call for directories that fall below the chunk threshold (the vast
 // majority on tree-shaped workloads).
-export const PATH_STORE_CHILD_INDEX_CHUNK_THRESHOLD_EXTERNAL =
+export const PATH_STORE_CHILD_INDEX_CHUNK_THRESHOLD_EXTERNAL: number =
   PATH_STORE_CHILD_INDEX_CHUNK_THRESHOLD;
 
 export function createDirectoryChildIndex(): DirectoryChildIndex {

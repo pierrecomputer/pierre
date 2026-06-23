@@ -95,7 +95,7 @@ function enhanceForP3Gamut(
   }
 
   const saturationBoost = 0.15 + s * 0.15; // 15–30% depending on saturation
-  let newS = Math.min(1.0, s + s * saturationBoost);
+  const newS = Math.min(1.0, s + s * saturationBoost);
 
   let newL = l;
   if (s > 0.5 && l < 0.7) {

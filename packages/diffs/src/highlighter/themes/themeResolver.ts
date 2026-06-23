@@ -1,4 +1,4 @@
-import { createThemeResolver } from '@pierre/theming';
+import { createThemeResolver, type ThemeResolver } from '@pierre/theming';
 
 import type { ThemeRegistrationResolved } from '../../types';
 
@@ -14,4 +14,5 @@ import type { ThemeRegistrationResolved } from '../../types';
 // add the diffs-specific behavior the generic resolver knows nothing about:
 // the worker-context guard, Shiki normalization, the bundled-theme fallback,
 // and the theme.name validation.
-export const themeResolver = createThemeResolver<ThemeRegistrationResolved>();
+export const themeResolver: ThemeResolver<ThemeRegistrationResolved> =
+  createThemeResolver<ThemeRegistrationResolved>();

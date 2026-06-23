@@ -1,4 +1,8 @@
-import { defineConfig, devices } from '@playwright/test';
+import {
+  defineConfig,
+  devices,
+  type PlaywrightTestConfig,
+} from '@playwright/test';
 
 import { loadWorktreeEnv } from '../../../../scripts/load-worktree-env.mjs';
 
@@ -11,7 +15,7 @@ const e2ePort = 4173 + portOffset;
 const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
 const e2eOutputDir = `/tmp/pierre-trees-playwright-results${portOffset > 0 ? `-${portOffset}` : ''}`;
 
-export default defineConfig({
+const config: PlaywrightTestConfig = defineConfig({
   testDir: '.',
   testMatch: ['**/*.pw.ts'],
   outputDir: e2eOutputDir,
@@ -43,3 +47,5 @@ export default defineConfig({
     },
   ],
 });
+
+export default config;

@@ -1,5 +1,5 @@
 import { DIFFS_TAG_NAME } from '../constants';
-import styles from '../style.css';
+import styles from '../style.css?inline';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 
 // If HTMLElement is undefined it usually means we are in a server environment

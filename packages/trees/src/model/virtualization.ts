@@ -5,7 +5,7 @@ import type {
   FileTreeViewportMetrics,
 } from './internalTypes';
 
-export const FILE_TREE_DEFAULT_ITEM_HEIGHT =
+export const FILE_TREE_DEFAULT_ITEM_HEIGHT: number =
   FILE_TREE_DENSITY_PRESETS.default.itemHeight;
 export const FILE_TREE_DEFAULT_OVERSCAN = 10;
 export const FILE_TREE_DEFAULT_VIEWPORT_HEIGHT = 420;

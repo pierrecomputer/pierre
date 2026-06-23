@@ -392,7 +392,7 @@ export class UnresolvedFile<
   }
 
   override render(props: UnresolvedFileRenderProps<LAnnotation> = {}): boolean {
-    let {
+    const {
       file,
       fileDiff,
       actions,

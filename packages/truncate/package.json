@@ -29,6 +29,7 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@tsdown/css": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "react": "catalog:",

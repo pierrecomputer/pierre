@@ -67,6 +67,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",
+    "@tsdown/css": "catalog:",
     "@types/hast": "catalog:",
     "@types/jsdom": "catalog:",
     "@types/react": "catalog:",

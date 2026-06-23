@@ -298,9 +298,7 @@ describe('file-tree renaming', () => {
     const { cleanup, dom } = installDom();
     try {
       const FileTree = await loadFileTree();
-      let fileTree: import('../src/index').FileTree;
-
-      fileTree = new FileTree({
+      const fileTree = new FileTree({
         composition: {
           contextMenu: {
             enabled: true,

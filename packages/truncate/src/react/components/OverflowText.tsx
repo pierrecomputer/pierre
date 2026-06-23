@@ -18,7 +18,7 @@ function OverflowMarker({
   children,
   marker,
   variant = 'default',
-}: OverflowTextProps) {
+}: OverflowTextProps): React.JSX.Element {
   const isFadeVariant = variant === 'fade';
   return (
     <div aria-hidden data-truncate-marker-cell>
@@ -35,7 +35,7 @@ function OverflowMarker({
   );
 }
 
-function OverflowContent(options: OverflowTextProps) {
+function OverflowContent(options: OverflowTextProps): React.JSX.Element {
   const { mode, children } = options;
 
   // The inner span wrapper here is only needed to implement
@@ -58,7 +58,7 @@ export function OverflowText({
   marker = '…',
   variant = 'default',
   ...props
-}: OverflowTextProps) {
+}: OverflowTextProps): React.JSX.Element {
   const contentNode = (
     <OverflowContent key="content" mode={mode}>
       {children}
@@ -92,7 +92,7 @@ export function OverflowText({
 export function Truncate({
   children,
   ...props
-}: Omit<OverflowTextProps, 'mode'>) {
+}: Omit<OverflowTextProps, 'mode'>): React.JSX.Element {
   return (
     <OverflowText mode="truncate" {...props}>
       {children}
@@ -103,7 +103,7 @@ export function Truncate({
 export function Fruncate({
   children,
   ...props
-}: Omit<OverflowTextProps, 'mode'>) {
+}: Omit<OverflowTextProps, 'mode'>): React.JSX.Element {
   return (
     <OverflowText mode="fruncate" {...props}>
       {children}
@@ -120,7 +120,7 @@ export function MiddleTruncate({
   className,
   style,
   ...props
-}: MiddleTruncateProps) {
+}: MiddleTruncateProps): React.JSX.Element | null {
   let firstSegment: ReactNode | null = null;
   let secondSegment: ReactNode | null = null;
   if (Array.isArray(contents)) {

@@ -6,7 +6,7 @@ import type {
   PathStoreEvent,
 } from '../../src/public-types';
 
-export const demoSmallPaths = [
+export const demoSmallPaths: string[] = [
   'alpha/docs/readme.md',
   'alpha/src/app.ts',
   'alpha/src/utils/math.ts',
@@ -17,29 +17,54 @@ export const demoSmallPaths = [
   'zeta.md',
 ];
 
-interface ProjectionReadableStore {
+export interface ProjectionFlattenedSegment {
+  isTerminal: boolean;
+  name: string;
+  nodeId: number;
+  path: string;
+}
+
+export interface ProjectionVisibleRow {
+  depth: number;
+  flattenedSegments?: readonly ProjectionFlattenedSegment[];
+  hasChildren: boolean;
+  id: number;
+  isExpanded: boolean;
+  isFlattened: boolean;
+  isLoading: boolean;
+  kind: 'directory' | 'file';
+  loadState?: string;
+  name: string;
+  path: string;
+}
+
+export interface ProjectionReadableStore {
   getVisibleCount(): number;
-  getVisibleSlice(
-    start: number,
-    end: number
-  ): readonly {
-    depth: number;
-    flattenedSegments?: readonly {
-      isTerminal: boolean;
-      name: string;
-      nodeId: number;
-      path: string;
-    }[];
-    hasChildren: boolean;
-    id: number;
-    isExpanded: boolean;
-    isFlattened: boolean;
-    isLoading: boolean;
-    kind: 'directory' | 'file';
-    loadState?: string;
-    name: string;
+  getVisibleSlice(start: number, end: number): readonly ProjectionVisibleRow[];
+}
+
+export type VisibleRowsSansIdsSnapshot = Array<
+  Omit<ProjectionVisibleRow, 'flattenedSegments' | 'id'> & {
+    flattenedSegments?: Array<Omit<ProjectionFlattenedSegment, 'nodeId'>>;
+  }
+>;
+
+export interface VisibleRowIdentitySnapshotEntry {
+  flattenedSegments?: Array<{
+    nodeId: number;
     path: string;
-  }[];
+  }>;
+  id: number;
+  path: string;
+}
+
+export interface VisiblePathDepthSnapshotEntry {
+  depth: number;
+  path: string;
+}
+
+export interface AssertMatchesRebuildOptions {
+  flattenEmptyDirectories?: boolean;
 }
 
 export function createWideRootFilePaths(count: number): string[] {
@@ -85,17 +110,17 @@ export function collectWildcardEvents(store: PathStore): PathStoreEvent[] {
 
 export function getVisiblePaths(
   store: ProjectionReadableStore,
-  start = 0,
-  end = Number.MAX_SAFE_INTEGER
+  start: number = 0,
+  end: number = Number.MAX_SAFE_INTEGER
 ): string[] {
   return store.getVisibleSlice(start, end).map((row) => row.path);
 }
 
 export function getVisibleRowsSansIds(
   store: ProjectionReadableStore,
-  start = 0,
-  end = Number.MAX_SAFE_INTEGER
-) {
+  start: number = 0,
+  end: number = Number.MAX_SAFE_INTEGER
+): VisibleRowsSansIdsSnapshot {
   return store.getVisibleSlice(start, end).map(({ id: _id, ...row }) => ({
     ...row,
     flattenedSegments: row.flattenedSegments?.map(
@@ -106,9 +131,9 @@ export function getVisibleRowsSansIds(
 
 export function getVisibleRowIdentitySnapshot(
   store: ProjectionReadableStore,
-  start = 0,
-  end = Number.MAX_SAFE_INTEGER
-) {
+  start: number = 0,
+  end: number = Number.MAX_SAFE_INTEGER
+): VisibleRowIdentitySnapshotEntry[] {
   return store.getVisibleSlice(start, end).map((row) => ({
     flattenedSegments: row.flattenedSegments?.map((segment) => ({
       nodeId: segment.nodeId,
@@ -121,9 +146,9 @@ export function getVisibleRowIdentitySnapshot(
 
 export function getVisiblePathDepthSnapshot(
   store: ProjectionReadableStore,
-  start = 0,
-  end = Number.MAX_SAFE_INTEGER
-) {
+  start: number = 0,
+  end: number = Number.MAX_SAFE_INTEGER
+): VisiblePathDepthSnapshotEntry[] {
   return store
     .getVisibleSlice(start, end)
     .map((row) => ({ depth: row.depth, path: row.path }));
@@ -131,8 +156,8 @@ export function getVisiblePathDepthSnapshot(
 
 export function getVisiblePathDepthSnapshotViaSingleReads(
   store: ProjectionReadableStore
-) {
-  const rows: Array<{ depth: number; path: string }> = [];
+): VisiblePathDepthSnapshotEntry[] {
+  const rows: VisiblePathDepthSnapshotEntry[] = [];
   for (let index = 0; index < store.getVisibleCount(); index += 1) {
     const row = store.getVisibleSlice(index, index)[0];
     if (row == null) {
@@ -186,11 +211,7 @@ export function getExpandedDirectoryPaths(store: PathStore): string[] {
 
 export function assertMatchesRebuild(
   store: PathStore,
-  {
-    flattenEmptyDirectories = false,
-  }: {
-    flattenEmptyDirectories?: boolean;
-  } = {}
+  { flattenEmptyDirectories = false }: AssertMatchesRebuildOptions = {}
 ): void {
   const rebuiltStore = new PathStore({
     flattenEmptyDirectories,

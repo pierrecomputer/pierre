@@ -25,6 +25,7 @@
   "compilerOptions": {
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
+    "types": ["bun"],
     "allowJs": true,
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
