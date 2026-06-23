@@ -253,6 +253,35 @@ function createCodeViewFiles(): {
   };
 }
 
+function createCodeViewNoTrailingExpansionFiles(): {
+  oldFile: FileContents;
+  newFile: FileContents;
+} {
+  const oldFile: FileContents = {
+    name: 'no_trailing_expansion.ts',
+    contents: [
+      'const keepOne = "same";\n',
+      'const keepTwo = "same";\n',
+      'const keepThree = "same";\n',
+      'const keepFour = "same";\n',
+      'export const noTrailingExpansion = "old";\n',
+    ].join(''),
+    cacheKey: 'code-view-no-trailing-expansion-old',
+  };
+  const newFile: FileContents = {
+    name: oldFile.name,
+    contents: [
+      'const keepOne = "same";\n',
+      'const keepTwo = "same";\n',
+      'const keepThree = "same";\n',
+      'const keepFour = "same";\n',
+      'export const noTrailingExpansion = "new";\n',
+    ].join(''),
+    cacheKey: 'code-view-no-trailing-expansion-new',
+  };
+  return { oldFile, newFile };
+}
+
 function createCodeViewFullPatches(
   oldFile: FileContents,
   newFile: FileContents
@@ -277,6 +306,24 @@ function createCodeViewPartialPatches(
   );
 }
 
+function createCodeViewNoTrailingExpansionPartialPatches(
+  oldFile: FileContents,
+  newFile: FileContents
+): ParsedPatch[] {
+  return parsePatchFiles(
+    createTwoFilesPatch(
+      oldFile.name,
+      newFile.name,
+      oldFile.contents,
+      newFile.contents,
+      oldFile.header,
+      newFile.header,
+      { context: 0 }
+    ),
+    'code-view-no-trailing-expansion-partial'
+  );
+}
+
 async function loadCodeViewPatches(): Promise<CodeViewRenderData> {
   switch (CODE_VIEW_TYPE) {
     case 'old-new-full': {
@@ -285,13 +332,23 @@ async function loadCodeViewPatches(): Promise<CodeViewRenderData> {
     }
     case 'old-new-hydration': {
       const { oldFile, newFile } = createCodeViewFiles();
+      const noTrailingExpansionFiles = createCodeViewNoTrailingExpansionFiles();
       return {
-        parsedPatches: createCodeViewPartialPatches(oldFile, newFile),
+        parsedPatches: [
+          ...createCodeViewNoTrailingExpansionPartialPatches(
+            noTrailingExpansionFiles.oldFile,
+            noTrailingExpansionFiles.newFile
+          ),
+          ...createCodeViewPartialPatches(oldFile, newFile),
+        ],
         loadDiffFiles(fileDiff) {
           console.log(
             'CodeView partial hydration demo loading full files',
             fileDiff
           );
+          if (fileDiff.name === noTrailingExpansionFiles.newFile.name) {
+            return Promise.resolve(noTrailingExpansionFiles);
+          }
           return Promise.resolve({ oldFile, newFile });
         },
       };

@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
-import { act, createElement, type ComponentType } from 'react';
+import { act, type ComponentType, createElement } from 'react';
 import { createRoot as createReactRoot, type Root } from 'react-dom/client';
 
 import {
