@@ -179,6 +179,7 @@
   z-index: 100;
   width: fit-content;
   max-width: calc(100% - 24px);
+  font: 14px/20px var(--diffs-header-font-fallback);
   border: 1px solid var(--diffs-widget-border);
   border-radius: 9px;
   background-color: var(--diffs-widget-bg);
@@ -214,7 +215,6 @@
   min-width: min(180px, calc(100cqw - 24px));
   overflow-wrap: anywhere;
   color: var(--diffs-marker-contrast, contrast-color(#fff, #000));
-  font: 14px/20px var(--diffs-header-font-fallback);
   white-space: normal;
   border: 0;
   pointer-events: auto;
@@ -271,7 +271,6 @@
     max-width: 100%;
     min-width: 260px;
     margin-inline: auto 16px;
-    font: 14px/20px var(--diffs-header-font-fallback);
   }
 
   svg {
@@ -416,6 +415,8 @@
   flex-shrink: 0;
   width: var(--diffs-search-icon-size, 24px);
   height: var(--diffs-search-icon-size, 24px);
+  margin: 0;
+  padding: 0;
   color: color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg));
   border: 0;
   border-radius: var(--diffs-search-icon-radius, 4px);
