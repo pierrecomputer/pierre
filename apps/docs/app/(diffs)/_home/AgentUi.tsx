@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_THEMES } from '@pierre/diffs';
+import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
 import { EditorProvider, File, FileDiff } from '@pierre/diffs/react';
 import { IconArrow, IconChevronSm, IconSparkle, IconX } from '@pierre/icons';
@@ -25,6 +25,25 @@ import {
   getSessionGitStatus,
   getSessionPaths,
 } from './mockData';
+
+// Added/removed line totals for a single file's diff.
+interface DiffStats {
+  additions: number;
+  deletions: number;
+}
+
+// Sums the added and removed line counts across every hunk of a parsed diff so
+// the Changes tree can show live +/- totals that track in-editor edits, rather
+// than the static snapshot counts baked into the mock data.
+function countDiffStats(diff: FileDiffMetadata): DiffStats {
+  let additions = 0;
+  let deletions = 0;
+  for (const hunk of diff.hunks) {
+    additions += hunk.additionLines;
+    deletions += hunk.deletionLines;
+  }
+  return { additions, deletions };
+}
 
 // The editor's stylesheet flattens every line number to one neutral colour
 // (`--diffs-editor-line-number-fg`) and is injected as an unlayered <style>,
@@ -81,16 +100,23 @@ interface AuiSnippet {
 function ChangesTree({
   session,
   activePath,
+  statsByPath,
   onSelect,
 }: {
   session: AuiSession;
   activePath: string | null;
+  statsByPath: Record<string, DiffStats>;
   onSelect: (path: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<FileTree | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  // The FileTree lives for the whole session, so its renderRowDecoration closure
+  // is created once. Reading the latest stats through a ref keeps the decoration
+  // in sync with edits without recreating the tree.
+  const statsRef = useRef(statsByPath);
+  statsRef.current = statsByPath;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -111,20 +137,26 @@ function ChangesTree({
         if (file == null) {
           return null;
         }
+        // Prefer the live counts (which track in-editor edits) and fall back to
+        // the file's static snapshot counts before any edit has been recorded.
+        const stats = statsRef.current[item.path] ?? {
+          additions: file.additions,
+          deletions: file.deletions,
+        };
         // `light-dark()` resolves against the tree host's color-scheme, which we
         // pin to the demo's own toggle, so jade/red adapt across light and dark.
         // Skip a zero count entirely so rows only show the side that changed.
         const parts: { text: string; color: string }[] = [];
-        if (file.additions > 0) {
+        if (stats.additions > 0) {
           parts.push({
-            text: `+${String(file.additions)}`,
+            text: `+${String(stats.additions)}`,
             color: 'light-dark(#0f9d6b, #34d399)',
           });
         }
-        if (file.deletions > 0) {
+        if (stats.deletions > 0) {
           const prefix = parts.length > 0 ? '\u00a0' : '';
           parts.push({
-            text: `${prefix}\u2212${String(file.deletions)}`,
+            text: `${prefix}\u2212${String(stats.deletions)}`,
             color: 'light-dark(#dc2626, #f87171)',
           });
         }
@@ -133,7 +165,7 @@ function ChangesTree({
         }
         return {
           text: parts.map((part) => part.text).join(''),
-          title: `${String(file.additions)} additions, ${String(file.deletions)} deletions`,
+          title: `${String(stats.additions)} additions, ${String(stats.deletions)} deletions`,
           parts,
         };
       },
@@ -164,6 +196,17 @@ function ChangesTree({
       containerRef.current.style.colorScheme = 'dark';
     }
   }, [session]);
+
+  // When the live stats change, force the tree to re-run renderRowDecoration.
+  // setComposition deliberately rerenders even with the same composition, and
+  // the controller owns selection/expansion so the active row stays highlighted.
+  useEffect(() => {
+    const tree = treeRef.current;
+    if (tree == null) {
+      return;
+    }
+    tree.setComposition(tree.getComposition());
+  }, [statsByPath, session]);
 
   // Keep the highlighted row matched to the active file.
   useEffect(() => {
@@ -210,6 +253,17 @@ export function AgentUi({
     () => session.changedFiles[0]?.path ?? null
   );
 
+  // Per-file added/removed line totals shown in the Changes tree. Seeded from
+  // the snapshot counts and recomputed from the live diff as the user edits.
+  const [liveStats, setLiveStats] = useState<Record<string, DiffStats>>(() =>
+    Object.fromEntries(
+      session.changedFiles.map((file) => [
+        file.path,
+        { additions: file.additions, deletions: file.deletions },
+      ])
+    )
+  );
+
   // Snippets sent from the selection action's "Add to chat" land here as
   // composer attachments. The editor is recreated per file, but routing the add
   // through a ref keeps the latest setter without depending on that lifecycle.
@@ -229,6 +283,25 @@ export function AgentUi({
   const removeSnippet = useCallback((id: number) => {
     setSnippets((prev) => prev.filter((snippet) => snippet.id !== id));
   }, []);
+
+  // Recomputes a file's +/- totals from its live edits. Routed through a ref so
+  // the per-file editor (recreated on `activePath`) can call the latest version
+  // without listing `session` as a dependency.
+  const recordEditedStats = useCallback(
+    (target: string, contents: string) => {
+      const changed = session.changedFiles.find(
+        (entry) => entry.path === target
+      );
+      if (changed == null) {
+        return;
+      }
+      const stats = countDiffStats(getFileDiff(changed, contents));
+      setLiveStats((prev) => ({ ...prev, [target]: stats }));
+    },
+    [session]
+  );
+  const recordEditedStatsRef = useRef(recordEditedStats);
+  recordEditedStatsRef.current = recordEditedStats;
 
   // Persisted in-editor edits keyed by path, so switching files keeps the
   // agent's tweaked output.
@@ -290,6 +363,9 @@ export function AgentUi({
             return;
           }
           editsRef.current.set(target, file.contents);
+          // Recompute the edited file's diff against its original snapshot so the
+          // Changes tree's +/- totals reflect the live edits.
+          recordEditedStatsRef.current(target, file.contents);
         },
       }),
     [activePath]
@@ -473,6 +549,7 @@ export function AgentUi({
             <ChangesTree
               session={session}
               activePath={activePath}
+              statsByPath={liveStats}
               onSelect={openFile}
             />
           </aside>
