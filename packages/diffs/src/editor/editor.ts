@@ -196,11 +196,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
   #renderRange?: RenderRange;
+  // Bounded render-window size (~viewport + 2*hunkLineCount) from the last view
+  // sync. Used to cap how far #applyChange widens the window for an edit, so a
+  // large insert can't materialize an unbounded number of rows. Captured at sync
+  // time so consecutive edits that grow #renderRange can't ratchet the cap up.
+  // undefined until the first sync; Infinity for non-virtualized (whole-file)
+  // windows, where no cap is needed.
   #viewportWindowLines?: number;
   #markerRenderer?: MarkerRenderer;
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
   #shouldIgnoreSelectionChange = false;
+  // Whether the contenteditable holds (or is claiming) focus. Synced by
+  // focus/blur listeners and set eagerly by #focus(), whose real focus() call is
+  // deferred to a rAF. Lets applyEdits skip focus/scroll only on unfocused
+  // editors, without regressing a same-tick setSelections-then-applyEdits flow.
   #contentHasFocus = false;
   #isComposing = false;
   #isGutterMouseDown = false;
@@ -218,6 +228,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #matches?: MatchRange[];
   #scrollingToLine?: number;
   #scrollingToLineChar?: number;
+  #scrollingToLineFixed = false;
   #scrollingToLineNoFocus = false;
   #retainSearchPanelFocus = false;
   #fontRemeasureScheduled = false;
@@ -262,36 +273,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#options = options;
   }
 
-  edit(component: DiffsEditableComponent<LAnnotation>): () => void {
-    const {
-      useTokenTransformer,
-      enableGutterUtility,
-      enableLineSelection,
-      expandUnchanged,
-      lineHoverHighlight,
-      ...rest
-    } = component.options;
-    const isDiff = component.type === 'file-diff';
-    if (
-      useTokenTransformer !== true ||
-      enableGutterUtility === true ||
-      enableLineSelection === true ||
-      (expandUnchanged !== true && isDiff) ||
-      lineHoverHighlight !== 'disabled'
-    ) {
-      component.setOptions({
-        ...rest,
-        useTokenTransformer: true,
-        enableGutterUtility: false,
-        enableLineSelection: false,
-        expandUnchanged: true,
-        lineHoverHighlight: 'disabled',
-      });
-      component.rerender();
-    }
-    this.#fileInstance = component;
+  edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void {
+    fileInstance.setOptions({
+      ...fileInstance.options,
+      useTokenTransformer: true,
+      enableGutterUtility: false,
+      enableLineSelection: false,
+      expandUnchanged: true,
+      lineHoverHighlight: 'disabled',
+    });
+    fileInstance.rerender();
+    this.#fileInstance = fileInstance;
     this.#initialize();
-    this.#detach = component.attachEditor(this);
+    this.#detach = fileInstance.attachEditor(this);
     return () => this.cleanUp();
   }
 
@@ -548,13 +542,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   /** @internal */
-  __syncRenderView(
+  __syncRenderView: DiffsEditor<LAnnotation>['__syncRenderView'] = (
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,
     fileOrDiff: FileContents | FileDiffMetadata,
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
     renderRange: RenderRange | undefined
-  ): void {
+  ) => {
     const shadowRoot = fileContainer.shadowRoot;
     if (shadowRoot == null) {
       console.error('[editor] Could not find the shadow root.');
@@ -651,16 +645,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    // A full re-render swaps in a new content element, so comparing identity
-    // detects one. This is reliable for FileDiff, which rebuilds the column
-    // (a new node) on a full render and reuses it on a partial one (scrolling).
-    // File reuses its content element in place, so this would not fire for a
-    // File full render - but File has no rerenderFromDocument path, so the
-    // re-render gate below never applies to it. If File ever gains one, this
-    // detection must be revisited.
-    let fullRerender = false;
     if (this.#contentElement !== contentEl) {
-      fullRerender = true;
       this.#gutterElement = gutterEl;
       this.#contentElement = extend(contentEl, {
         contentEditable: 'true',
@@ -724,37 +709,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#viewportWindowLines = renderRange?.totalLines;
     this.#tokenizer?.prebuildStateStack(renderRange);
 
-    // A host-driven full re-render (theme, diff style, wrap, or line-number
-    // toggle) rebuilds the diff rows from the file contents the host passes in.
-    // When the editor's document survived that re-render it stays the source of
-    // truth and may hold edits the host's contents do not, so the rebuilt rows
-    // show the pre-edit content. Re-render the diff from the editor's document
-    // instead, so the rows match it - text, syntax colors, and line count - in
-    // one pass, rather than reconciling the rebuilt rows after the fact.
-    //
-    // Gated three ways:
-    // - documentReplaced: a new file/lang/cacheKey already rebuilt the document
-    //   from the host's contents, so there is nothing to restore.
-    // - contentRebuilt: a partial render (scrolling a virtualized file) reuses
-    //   the existing edited rows, so it needs no re-render.
-    // - divergence: when the rebuilt content already matches the document there
-    //   is nothing to do. This also stops the recursion, since the re-render
-    //   below comes back through here with content that now matches.
-    // Only components with a document-backed re-render (FileDiff) implement
-    // rerenderFromDocument; the plain File has no such path yet and is skipped.
-    const fileInstance = this.#fileInstance;
-    const textDocument = this.#textDocument;
-    if (
-      !documentReplaced &&
-      fullRerender &&
-      fileInstance?.rerenderFromDocument !== undefined &&
-      textDocument !== undefined &&
-      this.#shouldRenderDivergeFromDocument(textDocument)
-    ) {
-      fileInstance.rerenderFromDocument(textDocument);
-      return;
-    }
-
     this.#markerRenderer?.removePopup();
 
     // re-render the existing selections, matches, and markers
@@ -802,7 +756,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         'lines'
       );
     }
-  }
+  };
 
   get #diffSyle(): 'unified' | 'split' {
     return this.#fileInstance?.options.diffStyle ?? 'split';
@@ -1723,7 +1677,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             this.#updateSelections(
               extendSelections(
                 selections,
-                getDocumentBoundarySelection(textDocument, atEnd)
+                getDocumentBoundarySelection(textDocument, atEnd, this.#isDiff)
               )
             );
             this.#scrollToPrimaryCaret();
@@ -2004,42 +1958,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  // Whether the rendered editable rows no longer match the editor's document -
-  // a row's text drifted, a row's line number is past the document (a stale row
-  // left after a deletion), or a row that should exist is missing/shifted (an
-  // insertion shows the following line's text). Reads the DOM rather than the
-  // diff metadata so it catches rows whose cached highlight is stale even after
-  // the underlying text was updated, and it only inspects the rendered rows so
-  // it stays correct under virtualization.
-  #shouldRenderDivergeFromDocument(
-    textDocument: TextDocument<LAnnotation>
-  ): boolean {
-    const contentEl = this.#contentElement;
-    if (contentEl === undefined) {
-      return false;
-    }
-    for (const child of contentEl.children) {
-      const el = child as HTMLElement;
-      const lineType = el.dataset.lineType;
-      const lineNumber = getLineNumberAttr(el);
-      if (
-        lineNumber === undefined ||
-        lineType === undefined ||
-        !isLineEditable(lineType)
-      ) {
-        continue;
-      }
-      const lineIndex = lineNumber - 1;
-      if (
-        lineIndex >= textDocument.lineCount ||
-        el.textContent !== textDocument.getLineText(lineIndex)
-      ) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   // input type doc: https://developer.mozilla.org/en-US/docs/Web/API/InputEvent/inputType
   #handleInput(inputType: string, data: string | null) {
     switch (inputType) {
@@ -2121,9 +2039,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         });
       });
     } else {
-      requestAnimationFrame(() => {
-        this.#contentElement?.focus({ preventScroll });
-      });
+      this.#contentElement?.focus({ preventScroll });
     }
   }
 
@@ -2224,7 +2140,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const lineY = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
       virtualCaret.style.top = lineY + 'px';
       virtualCaret.style.left = left + 'px';
-
       this.#overlayElement?.appendChild(virtualCaret);
       virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
       if (!noFocus) {
@@ -2232,6 +2147,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
       this.#scrollingToLine = undefined;
       this.#scrollingToLineChar = undefined;
+      this.#scrollingToLineFixed = false;
       this.#scrollingToLineNoFocus = false;
     }
     // if the line is not rendered yet(virtualized), scroll to the modeled or approximate
@@ -2271,7 +2187,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               isLineEditable(lineType) &&
               lineNumber !== undefined
             ) {
-              yFix = (line - lineNumber) * this.#metrics.lineHeight;
+              yFix = (line - (lineNumber - 1)) * this.#metrics.lineHeight;
               break;
             }
           }
@@ -2288,10 +2204,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (this.#scrollingToLine === line && yFix === 0) {
           this.#scrollingToLine = undefined;
           this.#scrollingToLineChar = undefined;
+          this.#scrollingToLineFixed = false;
+          this.#scrollingToLineNoFocus = false;
+        } else if (
+          this.#scrollingToLine === line &&
+          this.#scrollingToLineFixed
+        ) {
+          this.#scrollingToLine = undefined;
+          this.#scrollingToLineChar = undefined;
+          this.#scrollingToLineFixed = false;
           this.#scrollingToLineNoFocus = false;
         } else {
           this.#scrollingToLine = line;
           this.#scrollingToLineChar = char;
+          this.#scrollingToLineFixed = yFix !== 0;
           this.#scrollingToLineNoFocus = noFocus;
         }
       }
@@ -2660,7 +2586,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     const { start, end } = range;
     for (let line = start.line; line <= end.line; line++) {
-      if (!this.#isLineVisible(line)) {
+      if (
+        !this.#isLineVisible(line) ||
+        this.#getLineElement(line) === undefined
+      ) {
         continue;
       }
 
@@ -2995,7 +2924,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     isPrimary: boolean
   ) {
     const { line, character } = getCaretPosition(selection);
-    if (!this.#isLineVisible(line)) {
+    if (
+      !this.#isLineVisible(line) ||
+      this.#getLineElement(line) === undefined
+    ) {
       return;
     }
     const [left, wrapLine] = this.#getCharX(line, character);
@@ -3049,7 +2981,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const head = getCaretPosition(primarySelection);
-    if (!this.#isLineVisible(head.line)) {
+    if (
+      !this.#isLineVisible(head.line) ||
+      this.#getLineElement(head.line) === undefined
+    ) {
       this.#selectionAction?.cleanup();
       this.#selectionAction = undefined;
       return;
