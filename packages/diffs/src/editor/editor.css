@@ -104,36 +104,34 @@
 }
 [data-marker-range] {
   z-index: 1;
-  background-color: var(--diffs-marker-fg);
+  background-color: var(--diffs-marker-bg);
   mask-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2IiBoZWlnaHQ9IjMiPjxwYXRoIGQ9Im0wIDIuNSBsMiAtMS41IGwxIDAgbDIgMS41IGwxIDAiIHN0cm9rZT0iI2ZmZiIgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9zdmc+');
   mask-position: left bottom;
   mask-repeat: repeat-x;
   mask-size: 6px 3px;
 }
 /* Marker severity palette, shared by the squiggle underline
-   ([data-marker-range]) and the hover popover ([data-marker-popup]). Each
-   severity resolves a single --diffs-marker-fg token that both consumers read,
-   so the colors live in one place. The range element carries
-   data-marker-<severity>; the popup carries data-marker-severity="<severity>". */
-[data-marker-error],
-[data-marker-popup][data-marker-severity='error'] {
-  --diffs-marker-fg: var(--diffs-editor-error-fg, var(--diffs-deletion-base));
+   ([data-marker-range]) and the hover popover ([data-marker-popup]). Both
+   elements carry data-marker-<severity>, so each severity resolves its
+   --diffs-marker-bg and --diffs-marker-contrast tokens in one place. */
+[data-marker-error] {
+  --diffs-marker-contrast: #fff;
+  --diffs-marker-bg: var(--diffs-editor-error-fg, var(--diffs-deletion-base));
 }
-[data-marker-warning],
-[data-marker-popup][data-marker-severity='warning'] {
-  --diffs-widget-fg: #000;
-  --diffs-marker-fg: var(
+[data-marker-warning] {
+  --diffs-marker-contrast: #000;
+  --diffs-marker-bg: var(
     --diffs-editor-warning-fg,
     light-dark(var(--diffs-warning-light), var(--diffs-warning-dark))
   );
 }
-[data-marker-info],
-[data-marker-popup][data-marker-severity='info'] {
-  --diffs-marker-fg: var(--diffs-editor-info-fg, var(--diffs-modified-base));
+[data-marker-info] {
+  --diffs-marker-contrast: #fff;
+  --diffs-marker-bg: var(--diffs-editor-info-fg, var(--diffs-modified-base));
 }
-[data-marker-hint],
-[data-marker-popup][data-marker-severity='hint'] {
-  --diffs-marker-fg: var(--diffs-editor-hint-fg, var(--diffs-fg-number));
+[data-marker-hint] {
+  --diffs-marker-contrast: #000;
+  --diffs-marker-bg: var(--diffs-editor-hint-fg, var(--diffs-fg-number));
 }
 [data-rtl] {
   border-top-left-radius: 3px;
@@ -175,39 +173,35 @@
   background-clip: padding-box;
   box-shadow: var(--diffs-widget-shadow);
 }
+
+/* Builds on [data-editor-widget] */
 [data-marker-popup] {
-  padding: 8px 12px;
-  min-width: min(180px, calc(100cqw - 24px));
-  pointer-events: auto;
-  font-family: var(--diffs-header-font-fallback);
-  font-size: 14px;
-  line-height: 1.4;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  translate: clamp(8px, var(--marker-x, 8px), calc(100cqw - 8px - 100%))
-    var(--marker-y, 0);
-}
-[data-marker-popup] [data-marker-message] {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-[data-marker-popup] code {
-  display: inline;
-  background-color: transparent;
-  white-space: normal;
-}
-/* Severity-colored popover: solid fill in the marker's severity color with
-   white text, mirroring the underline. The inset 1px ring (normally painted in
-   the surface background) is dropped so the fill reads as one solid chip. */
-[data-marker-popup][data-marker-severity] {
-  color: var(--diffs-widget-fg, #fff);
-  border: 0;
-  --diffs-widget-bg: var(--diffs-marker-fg);
+  --diffs-widget-bg: var(--diffs-marker-bg);
   --diffs-widget-shadow:
     0 4px 8px rgb(0 0 0 / 0.15), 0 6px 18px rgb(0 0 0 / 0.15);
-}
-[data-marker-popup][data-marker-severity] code {
-  color: inherit;
+
+  padding: 8px 12px;
+  min-width: min(180px, calc(100cqw - 24px));
+  overflow-wrap: anywhere;
+  color: var(--diffs-marker-contrast, contrast-color(#fff, #000));
+  font: 14px/20px var(--diffs-header-font-fallback);
+  white-space: normal;
+  border: 0;
+  pointer-events: auto;
+  translate: clamp(8px, var(--marker-x, 8px), calc(100cqw - 8px - 100%))
+    var(--marker-y, 0);
+
+  [data-marker-message] {
+    white-space: normal;
+    overflow-wrap: anywhere;
+
+    code {
+      display: inline;
+      background-color: transparent;
+      white-space: normal;
+      color: inherit;
+    }
+  }
 }
 
 /* Selection Action Widget: a floating popover hosting the consumer's
@@ -236,21 +230,29 @@
   /* Zero height ensures panel appears stickied immediately */
   height: 0;
   container: search-panel / inline-size;
+
+  [data-editor-widget] {
+    position: relative;
+    z-index: 100;
+    display: flex;
+    flex-shrink: 0;
+    align-items: stretch;
+    gap: 8px;
+    padding: 4px;
+    max-width: 100%;
+    min-width: 260px;
+    margin-inline: auto 16px;
+    font: 14px/20px var(--diffs-header-font-fallback);
+  }
+
+  svg {
+    display: block;
+    fill: currentColor;
+    width: 12px;
+    height: 12px;
+  }
 }
-[data-search-panel] [data-editor-widget] {
-  position: relative;
-  z-index: 100;
-  display: flex;
-  flex-shrink: 0;
-  align-items: stretch;
-  gap: 8px;
-  padding: 4px;
-  max-width: 100%;
-  min-width: 260px;
-  margin-inline: auto 16px;
-  font-family: var(--diffs-header-font-fallback);
-  font-size: 14px;
-}
+
 [data-search-grid] {
   display: grid;
   grid-template-columns: auto auto auto;
@@ -304,32 +306,41 @@
     width: auto;
   }
 }
+
 [data-input-box] {
   position: relative;
   display: flex;
   align-items: center;
   width: 200px;
+
+  input {
+    flex-grow: 1;
+    width: 100%;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 24px;
+    padding-inline: 6px;
+    color: var(--diffs-fg);
+    background-color: var(--diffs-bg);
+    border: 1px solid color-mix(in lab, var(--diffs-fg) 12%, var(--diffs-bg));
+    border-radius: 6px;
+    outline: none;
+
+    &::selection {
+      background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
+    }
+  }
+
+  &[data-find] input {
+    /* Space for overlaid search icon toggles */
+    padding-inline-end: 72px;
+  }
+
+  [data-search-icon] {
+    --diffs-search-icon-size: 20px;
+  }
 }
-[data-input-box] input {
-  flex-grow: 1;
-  width: 100%;
-  min-width: 0;
-  font-size: 13px;
-  line-height: 24px;
-  padding-inline: 6px;
-  color: var(--diffs-fg);
-  background-color: var(--diffs-bg);
-  border: 1px solid color-mix(in lab, var(--diffs-fg) 12%, var(--diffs-bg));
-  border-radius: 6px;
-  outline: none;
-}
-/* Reserve room on the right of the find input for the overlaid toggles. */
-[data-input-box][data-find] input {
-  padding-inline-end: 72px;
-}
-[data-input-box] input::selection {
-  background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
-}
+
 [data-search-toggles] {
   position: absolute;
   top: 50%;
@@ -339,6 +350,7 @@
   align-items: center;
   gap: 1px;
 }
+
 [data-matches] {
   grid-area: matches;
   flex-shrink: 0;
@@ -348,68 +360,61 @@
   line-height: 20px;
   white-space: nowrap;
   color: color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg));
+
+  &[data-no-matches] {
+    color: color-mix(in lab, var(--diffs-fg) 35%, var(--diffs-bg));
+  }
 }
-[data-matches][data-no-matches] {
-  color: color-mix(in lab, var(--diffs-fg) 35%, var(--diffs-bg));
-}
+
 [data-replace-actions],
 [data-search-nav] {
   display: flex;
   align-items: center;
 }
-[data-search-panel] svg {
-  display: block;
-  fill: currentColor;
-}
-/* Every clickable control is a real <button>; strip the UA chrome so the
-   shared [data-icon] rule below is the single source of their appearance. */
-[data-search-panel] button {
-  appearance: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: inherit;
-}
-[data-search-panel] [data-icon] {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+
+/* Every clickable control is a real <button> tagged with data-search-icon;
+   strip the UA chrome here so this single rule is the source of their
+   appearance. */
+[data-search-icon] {
   display: flex;
-  color: color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg));
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  appearance: none;
+  flex-shrink: 0;
+  width: var(--diffs-search-icon-size, 24px);
+  height: var(--diffs-search-icon-size, 24px);
+  color: color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg));
+  border: 0;
+  border-radius: var(--diffs-search-icon-radius, 4px);
+  background: none;
   cursor: pointer;
   transition:
     background-color 0.1s ease-in-out,
     color 0.1s ease-in-out;
+
+  &:disabled {
+    opacity: 0.25;
+    cursor: default;
+  }
+  &:not(:disabled):hover {
+    color: var(--diffs-fg);
+  }
+  &:focus-visible {
+    outline: 2px solid
+      light-dark(var(--diffs-modified-light), var(--diffs-modified-dark));
+    outline-offset: -1px;
+  }
+  &[aria-pressed='true'] {
+    color: light-dark(var(--diffs-modified-light), var(--diffs-modified-dark));
+  }
 }
-[data-input-box] [data-icon] {
-  width: 20px;
-}
-[data-search-panel] [data-icon]:disabled {
-  opacity: 0.25;
-  cursor: default;
-}
-[data-search-panel] [data-icon]:not(:disabled):hover {
-  color: var(--diffs-fg);
-}
-[data-search-panel] [data-icon][aria-pressed='true'] {
-  color: light-dark(var(--diffs-modified-light), var(--diffs-modified-dark));
-}
-[data-search-panel] [data-icon]:focus-visible {
-  outline: 2px solid
-    light-dark(var(--diffs-modified-light), var(--diffs-modified-dark));
-  outline-offset: -1px;
-}
-[data-search-panel] [data-search-close] {
+
+[data-search-close] {
+  --diffs-search-icon-size: 20px;
+  --diffs-search-icon-radius: 50%;
   position: absolute;
   top: 0;
   right: 0;
-  width: 20px;
-  height: 20px;
   transform: translate(50%, -50%);
   color: var(--diffs-widget-bg);
   background-color: color-mix(
@@ -417,16 +422,10 @@
     var(--diffs-widget-fg) 50%,
     var(--diffs-bg)
   );
-  border-radius: 50%;
 
-  > svg {
-    width: 12px;
-    height: 12px;
+  &:not(:disabled):hover {
+    opacity: 1;
+    color: var(--diffs-widget-bg);
+    background-color: var(--diffs-widget-fg);
   }
-}
-
-[data-search-panel] [data-search-close]:hover {
-  opacity: 1;
-  color: var(--diffs-widget-bg);
-  background-color: var(--diffs-widget-fg);
 }

@@ -378,13 +378,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   return (
     <div className="not-prose" ref={wrapperRef}>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Button
-          variant="outline"
-          onClick={undoAll}
-          disabled={!canUndo}
-          aria-label="Reset to original"
-          title="Reset to original"
-        >
+        <Button variant="outline" onClick={undoAll} disabled={!canUndo}>
           <IconArrowLeftBar className="-ml-1" />
           Undo all
         </Button>

@@ -231,7 +231,7 @@ export class MarkerRenderer {
 
     if (popup !== undefined) {
       this.#setMarkerPopupPosition(popup, left, y);
-      popup.dataset.markerSeverity = severity;
+      setMarkerPopupSeverity(popup, severity);
       const content = popup.firstElementChild as HTMLElement | null;
       if (content?.dataset.markerMessage !== undefined) {
         if (typeof message === 'string') {
@@ -252,7 +252,7 @@ export class MarkerRenderer {
         dataset: {
           editorWidget: '',
           markerPopup: '',
-          markerSeverity: severity,
+          [markerSeverityDatasetKey(severity)]: '',
         },
         children: [
           h('div', {
@@ -280,6 +280,27 @@ export class MarkerRenderer {
       }),
     ];
   }
+}
+
+const MARKER_SEVERITIES: readonly MarkerSeverity[] = [
+  'error',
+  'warning',
+  'info',
+  'hint',
+];
+
+// Marks the popup with data-marker-<severity> (the same boolean attribute the
+// squiggle range element uses) so the CSS severity palette can target both with
+// a single selector. The popup element is reused across hovers, so any
+// previously applied severity attribute is cleared first.
+function setMarkerPopupSeverity(
+  popup: HTMLElement,
+  severity: MarkerSeverity
+): void {
+  for (const candidate of MARKER_SEVERITIES) {
+    delete popup.dataset[markerSeverityDatasetKey(candidate)];
+  }
+  popup.dataset[markerSeverityDatasetKey(severity)] = '';
 }
 
 export function markerSeverityDatasetKey(severity: MarkerSeverity): string {

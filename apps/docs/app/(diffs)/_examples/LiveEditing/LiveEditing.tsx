@@ -171,12 +171,14 @@ export function LiveEditing({
               Edit mode
             </div>
           </Button>
+          {/* Visual-only indicator stacked over the button; the Button is the
+              interactive control, so keep the switch out of the tab order and
+              hidden from assistive tech to avoid a duplicate toggle. */}
           <Switch
             checked={mode === 'edit'}
-            onCheckedChange={(checked) => setMode(checked ? 'edit' : 'review')}
-            onClick={(e) => e.stopPropagation()}
+            tabIndex={-1}
+            aria-hidden
             className="pointer-events-none mr-3 place-self-center justify-self-end"
-            aria-label="Edit mode"
           />
         </div>
 

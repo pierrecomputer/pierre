@@ -3,7 +3,7 @@ import type { TextDocument, TextEdit } from './textDocument';
 import { h } from './utils';
 
 export interface SelectionActionContext<LAnnotation> {
-  /** The current selection. */
+  /** The current selection (live: reflects keyboard-driven changes). */
   selection: EditorSelection;
   /** The text document. */
   textDocument: TextDocument<LAnnotation>;

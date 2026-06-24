@@ -20,7 +20,8 @@ const EDITABLE_FILE_OPTIONS: FileOptions<undefined> = {
 // lines, so keep the two in sync if the contents change.
 export const MARKER_DEMO_FILE: FileContents = {
   name: 'totals.ts',
-  contents: `function calculateTotal(items, taxRate) {
+  contents: `// TODO: validate items and taxRate before summing
+function calculateTotal(items, taxRate) {
   var total = 0
   for (var i = 0; i < items.length; i++) {
     total += items[i].price
@@ -48,46 +49,56 @@ export const MARKER_DEMO_FILE: FileContents = {
 // exported) Marker type.
 export const MARKER_DEMO_MARKERS = [
   {
-    severity: 'warning' as const,
-    source: 'eslint',
-    message: 'Unexpected var, use let or const instead.',
-    start: { line: 1, character: 2 },
-    end: { line: 1, character: 5 },
+    severity: 'hint' as const,
+    source: 'todo',
+    message: 'Unresolved TODO comment',
+    // Spans the whole comment: hover detection keys off the hovered token's
+    // start column, and the line comment is a single token starting at char 0,
+    // so the marker must include char 0 for the popup to trigger.
+    start: { line: 0, character: 0 },
+    end: { line: 0, character: 50 },
   },
   {
     severity: 'warning' as const,
     source: 'eslint',
     message: 'Unexpected var, use let or const instead.',
-    start: { line: 2, character: 7 },
-    end: { line: 2, character: 10 },
+    start: { line: 2, character: 2 },
+    end: { line: 2, character: 5 },
+  },
+  {
+    severity: 'warning' as const,
+    source: 'eslint',
+    message: 'Unexpected var, use let or const instead',
+    start: { line: 3, character: 7 },
+    end: { line: 3, character: 10 },
   },
   {
     severity: 'info' as const,
     source: 'ts',
-    message: "Object is possibly 'undefined'.",
-    start: { line: 3, character: 13 },
-    end: { line: 3, character: 21 },
+    message: "Object is possibly 'undefined'",
+    start: { line: 4, character: 13 },
+    end: { line: 4, character: 21 },
   },
   {
     severity: 'warning' as const,
     source: 'eslint',
-    message: "'tax' is never reassigned. Use 'const' instead.",
-    start: { line: 6, character: 6 },
-    end: { line: 6, character: 9 },
+    message: "'tax' is never reassigned. Use 'const' instead",
+    start: { line: 7, character: 6 },
+    end: { line: 7, character: 9 },
   },
   {
     severity: 'info' as const,
     source: 'eslint',
-    message: 'Unexpected console statement.',
-    start: { line: 7, character: 2 },
-    end: { line: 7, character: 13 },
+    message: 'Unexpected console statement',
+    start: { line: 8, character: 2 },
+    end: { line: 8, character: 13 },
   },
   {
     severity: 'error' as const,
     source: 'eslint',
-    message: 'Expected === and instead saw ==.',
-    start: { line: 9, character: 12 },
-    end: { line: 9, character: 14 },
+    message: 'Expected === and instead saw ==',
+    start: { line: 10, character: 12 },
+    end: { line: 10, character: 14 },
   },
 ];
 

@@ -2592,15 +2592,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     if (this.#selectionAction === undefined) {
-      // The popover element is created once and kept open across selection
-      // changes, so its action handlers read the live primary selection rather
-      // than the snapshot taken at creation time (extending the selection by
-      // keyboard would otherwise leave them acting on the original range).
+      // The popover element is reused while a selection stays open, so its
+      // action handlers read the live primary selection rather than the
+      // snapshot taken at creation time (extending the selection by keyboard
+      // would otherwise leave them acting on the original range). A fresh drag
+      // tears the popover down (see #isContentMouseDown above) and pointerup
+      // recreates it, so the reuse only spans keyboard-driven selection changes.
       const getActiveSelection = (): EditorSelection =>
         this.#selections?.at(-1) ?? primarySelection;
       const selectionActionElement = renderSelectionAction({
         textDocument,
-        selection: primarySelection,
+        // Live getter so consumers reading `selection` always see the current
+        // range, matching getSelectionText/replaceSelectionText below.
+        get selection(): EditorSelection {
+          return getActiveSelection();
+        },
         applyEdits: (edits: TextEdit[]) => this.applyEdits(edits, true),
         getSelectionText: () =>
           this.#textDocument?.getText(getActiveSelection()) ?? '',

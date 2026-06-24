@@ -233,7 +233,7 @@ export class SearchPanelWidget {
         type: 'button',
         title: opts.label,
         ariaLabel: opts.label,
-        dataset: { icon: opts.icon, ...opts.dataset },
+        dataset: { searchIcon: '', ...opts.dataset },
         innerHTML: getEditorIconSvg(opts.icon, opts.size ?? 16),
         onclick: opts.onClick,
       });
