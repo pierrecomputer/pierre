@@ -8,6 +8,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -24,6 +25,7 @@ import {
   themeController,
 } from '@/components/themeController';
 import { preloadAvatars } from '@/lib/annotation';
+import { createGitHubDiffFileLoader } from '@/lib/githubDiffFileLoader';
 import { removeSavedCommentSidebarEntry } from '@/lib/removeSavedCommentSidebarEntry';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 import type {
@@ -117,6 +119,10 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
+  const loadDiffFiles = useMemo(
+    () => (domain == null ? createGitHubDiffFileLoader(path) : undefined),
+    [domain, path]
+  );
   const handlePatchLoadStart = useCallback(() => {
     setFileTreeOverlayOpen(false);
   }, []);
@@ -285,6 +291,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
             themeType={colorMode}
             viewerRef={viewerRef}
             initialItems={initialItems}
+            loadDiffFiles={loadDiffFiles}
             onCommentDeleted={handleCommentDeleted}
             onCommentSaved={handleCommentSaved}
             onLineLinkChange={onLineLinkChange}
