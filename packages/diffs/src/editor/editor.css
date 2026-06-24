@@ -102,6 +102,26 @@
     light-dark(#ff963288, #ff963266)
   );
 }
+
+[data-rtl] {
+  border-top-left-radius: 3px;
+}
+[data-rtr] {
+  border-top-right-radius: 3px;
+}
+[data-rbl] {
+  border-bottom-left-radius: 3px;
+}
+[data-rbr] {
+  border-bottom-right-radius: 3px;
+}
+
+/* Markers
+ *
+ * Marker range applies a wavy underline. Severity attributes are used by both
+ * `[data-marker-range]` and `[data-marker-popup]` alike.
+ */
+
 [data-marker-range] {
   z-index: 1;
   background-color: var(--diffs-marker-bg);
@@ -110,10 +130,7 @@
   mask-repeat: repeat-x;
   mask-size: 6px 3px;
 }
-/* Marker severity palette, shared by the squiggle underline
-   ([data-marker-range]) and the hover popover ([data-marker-popup]). Both
-   elements carry data-marker-<severity>, so each severity resolves its
-   --diffs-marker-bg and --diffs-marker-contrast tokens in one place. */
+
 [data-marker-error] {
   --diffs-marker-contrast: #fff;
   --diffs-marker-bg: var(--diffs-editor-error-fg, var(--diffs-deletion-base));
@@ -133,18 +150,6 @@
   --diffs-marker-contrast: #000;
   --diffs-marker-bg: var(--diffs-editor-hint-fg, var(--diffs-fg-number));
 }
-[data-rtl] {
-  border-top-left-radius: 3px;
-}
-[data-rtr] {
-  border-top-right-radius: 3px;
-}
-[data-rbl] {
-  border-bottom-left-radius: 3px;
-}
-[data-rbr] {
-  border-bottom-right-radius: 3px;
-}
 
 @media (width >= 480px) {
   [data-content] {
@@ -154,6 +159,13 @@
     visibility: visible;
   }
 }
+
+/* Editor widgets
+ *
+ * Positioned popovers used across edit mode. Used by markers, search panel,
+ * and selection action.
+ */
+
 [data-editor-widget] {
   --diffs-widget-fg: var(--diffs-fg);
   --diffs-widget-bg: color-mix(in lab, var(--diffs-fg) 4%, var(--diffs-bg));
@@ -346,6 +358,10 @@
     &::selection {
       background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
     }
+
+    &:focus-visible {
+      outline: 1px solid var(--diffs-modified-base);
+    }
   }
 
   &[data-find] input {
@@ -417,12 +433,10 @@
     color: var(--diffs-fg);
   }
   &:focus-visible {
-    outline: 2px solid
-      light-dark(var(--diffs-modified-light), var(--diffs-modified-dark));
-    outline-offset: -1px;
+    outline: 1px solid var(--diffs-modified-base);
   }
   &[aria-pressed='true'] {
-    color: light-dark(var(--diffs-modified-light), var(--diffs-modified-dark));
+    color: var(--diffs-modified-base);
   }
 }
 

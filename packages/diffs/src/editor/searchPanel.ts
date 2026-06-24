@@ -382,17 +382,19 @@ export class SearchPanelWidget {
       dataset: { searchClose: '' },
     });
 
-    // Cells are positioned by CSS grid-template-areas (see editor.css); DOM order
-    // here only drives tab/reading order.
+    // Cells are positioned by CSS grid-template-areas (see editor.css), so DOM
+    // order here only drives tab/reading order, not layout. Keep the replace
+    // input directly after the find input (and its toggles) so Tab walks
+    // find -> replace before reaching the nav arrows and close button.
     const gridElement = h('div', {
       dataset: { searchGrid: '', mode },
       children: [
         findInputBox,
+        replaceInputBox,
+        replaceActionsElement,
         matchResultElement,
         navElement,
         closeElement,
-        replaceInputBox,
-        replaceActionsElement,
       ],
     });
 
