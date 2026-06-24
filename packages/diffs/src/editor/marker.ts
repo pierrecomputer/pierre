@@ -197,6 +197,11 @@ export class MarkerRenderer {
     }, MARKER_POPUP_HIDE_DELAY_MS);
   }
 
+  #setMarkerPopupPosition(popup: HTMLElement, x: number, y: number): void {
+    popup.style.setProperty('--marker-x', x + 'px');
+    popup.style.setProperty('--marker-y', y + 'px');
+  }
+
   #dismissMarkerPopup(): void {
     this.#markerPopupEventDisposes?.forEach((dispose) => dispose());
     this.#markerPopupEventDisposes = undefined;
@@ -222,11 +227,10 @@ export class MarkerRenderer {
     const [left, wrapLine] = getCharX(line, character);
     const lineHeight = getLineHeight();
     const y = getLineY(line) + wrapLine * lineHeight + lineHeight;
-    const transform = `translateX(${left}px) translateY(${y}px)`;
     const popup = this.#markerPopupElement;
 
     if (popup !== undefined) {
-      popup.style.transform = transform;
+      this.#setMarkerPopupPosition(popup, left, y);
       popup.dataset.markerSeverity = severity;
       const content = popup.firstElementChild as HTMLElement | null;
       if (content?.dataset.markerMessage !== undefined) {
@@ -250,7 +254,6 @@ export class MarkerRenderer {
           markerPopup: '',
           markerSeverity: severity,
         },
-        style: { transform },
         children: [
           h('div', {
             dataset: 'markerMessage',
@@ -264,6 +267,7 @@ export class MarkerRenderer {
       },
       overlayElement
     );
+    this.#setMarkerPopupPosition(this.#markerPopupElement, left, y);
     this.#hoveredMarkerIndex = hoveredMarkerIndex;
     this.#markerPopupEventDisposes = [
       addEventListener(this.#markerPopupElement, 'mouseenter', () => {
