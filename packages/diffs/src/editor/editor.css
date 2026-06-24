@@ -174,7 +174,25 @@
   box-shadow: var(--diffs-widget-shadow);
 }
 
-/* Builds on [data-editor-widget] */
+/* Shared geometry for the overlay popovers (marker hover popup and
+   selection-action popover). Both are positioned in overlay coordinate space via
+   --popover-x/--popover-y (set in JS). The left edge is clamped so the popover
+   never slides under the line-number gutter (--gutter-width, also set in JS) and
+   the width is capped so it never overflows the visible code column. Builds on
+   [data-editor-widget]. */
+[data-marker-popup],
+[data-selection-action-popover] {
+  --popover-min-left: calc(var(--gutter-width, 0px) + 8px);
+  --popover-available-width: calc(100cqw - var(--gutter-width, 0px) - 16px);
+  max-width: min(640px, var(--popover-available-width));
+  translate: clamp(
+      var(--popover-min-left),
+      var(--popover-x, var(--popover-min-left)),
+      calc(100cqw - 8px - 100%)
+    )
+    var(--popover-y, 0);
+}
+
 [data-marker-popup] {
   --diffs-widget-bg: var(--diffs-marker-bg);
   --diffs-widget-shadow:
@@ -188,8 +206,6 @@
   white-space: normal;
   border: 0;
   pointer-events: auto;
-  translate: clamp(8px, var(--marker-x, 8px), calc(100cqw - 8px - 100%))
-    var(--marker-y, 0);
 
   [data-marker-message] {
     white-space: normal;
@@ -213,6 +229,7 @@
   flex-wrap: wrap;
   gap: 4px;
   align-items: center;
+  width: max-content;
   padding: 4px;
   pointer-events: auto;
 }

@@ -455,6 +455,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#markerRenderer ??= new MarkerRenderer({
       getLineHeight: () => this.#metrics.lineHeight,
       getOverlayElement: () => this.#overlayElement,
+      getGutterWidth: () => this.#getGutterWidth(),
       getCharX: (line, character) => this.#getCharX(line, character),
       getLineY: (line) => this.#getLineY(line),
       isMouseDown: () => this.#isContentMouseDown || this.#isGutterMouseDown,
@@ -2632,7 +2633,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const lineHeight = this.#metrics.lineHeight;
     const top = this.#getLineY(head.line) + wrapLine * lineHeight + lineHeight;
     this.#selectionAction.line = head.line;
-    this.#selectionAction.reposition(left, top);
+    this.#selectionAction.reposition(left, top, this.#getGutterWidth());
   }
 
   // Opens the search panel in the requested mode. If a panel is already open,

@@ -17,6 +17,7 @@ export interface Marker extends Range {
 export interface EditorStub {
   getLineHeight: () => number;
   getOverlayElement: () => HTMLElement | undefined;
+  getGutterWidth: () => number;
   getCharX: (line: number, character: number) => [number, number];
   getLineY: (line: number) => number;
   isMouseDown: () => boolean;
@@ -197,9 +198,16 @@ export class MarkerRenderer {
     }, MARKER_POPUP_HIDE_DELAY_MS);
   }
 
+  // Positions the popup in overlay coordinate space and feeds the current gutter
+  // width to CSS so the shared popover rule can keep the popup clear of the
+  // line-number gutter (see [data-marker-popup] in editor.css).
   #setMarkerPopupPosition(popup: HTMLElement, x: number, y: number): void {
-    popup.style.setProperty('--marker-x', x + 'px');
-    popup.style.setProperty('--marker-y', y + 'px');
+    popup.style.setProperty(
+      '--gutter-width',
+      this.#editor.getGutterWidth() + 'px'
+    );
+    popup.style.setProperty('--popover-x', x + 'px');
+    popup.style.setProperty('--popover-y', y + 'px');
   }
 
   #dismissMarkerPopup(): void {

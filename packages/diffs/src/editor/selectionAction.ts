@@ -18,10 +18,11 @@ export interface SelectionActionContext<LAnnotation> {
 }
 
 // Floating popover that hosts the consumer's selection-action element. It mounts
-// into the editor's overlay layer and is positioned with a transform, mirroring
-// the marker hover popover, so it never reflows the document the way the old
-// inline gutter-triggered row did. The consumer's element can hold any number of
-// actions; the editor only owns where the popover sits.
+// into the editor's overlay layer and is positioned via CSS custom properties
+// (the shared popover rule in editor.css), mirroring the marker hover popover, so
+// it never reflows the document the way the old inline gutter-triggered row did.
+// The consumer's element can hold any number of actions; the editor only owns
+// where the popover sits.
 export class SelectionActionWidget {
   // The line the popover is anchored to (the selection's head). The editor reads
   // this to decide whether the anchor is still on a visible line.
@@ -46,9 +47,13 @@ export class SelectionActionWidget {
   }
 
   // Anchor the popover at `(left, top)`, expressed in the overlay's coordinate
-  // space (the same space caret/selection overlays use).
-  reposition(left: number, top: number): void {
-    this.#popover.style.transform = `translateX(${left}px) translateY(${top}px)`;
+  // space (the same space caret/selection overlays use). Horizontal placement and
+  // sizing are handled in CSS via the shared popover rule; `gutterWidth` lets it
+  // keep the popover clear of the line-number gutter.
+  reposition(left: number, top: number, gutterWidth: number): void {
+    this.#popover.style.setProperty('--gutter-width', gutterWidth + 'px');
+    this.#popover.style.setProperty('--popover-x', left + 'px');
+    this.#popover.style.setProperty('--popover-y', top + 'px');
   }
 
   cleanup(): void {
