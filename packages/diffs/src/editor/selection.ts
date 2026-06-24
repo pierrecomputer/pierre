@@ -974,17 +974,31 @@ export function applyDeleteCharacterToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
   forward: boolean,
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+  tabSize = 2
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
 } {
   const deleteSelections: EditorSelection[] = selections.map((selection) => {
-    const [start, end] = resolveDeleteCharacterRange(
+    let [start, end] = resolveDeleteCharacterRange(
       textDocument,
       selection,
       forward
     );
+    if (!forward) {
+      const normalized = normalizeLeadingIndentForChange(
+        textDocument,
+        {
+          start: textDocument.offsetAt(start),
+          end: textDocument.offsetAt(end),
+          text: '',
+        },
+        tabSize
+      );
+      start = textDocument.positionAt(normalized.start);
+      end = textDocument.positionAt(normalized.end);
+    }
     return {
       start,
       end,

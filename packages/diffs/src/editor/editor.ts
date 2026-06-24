@@ -2934,7 +2934,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         textDocument,
         selections,
         forward,
-        this.#lineAnnotations
+        this.#lineAnnotations,
+        this.#metrics.tabSize
       );
     if (change !== undefined) {
       this.#applyChange(
