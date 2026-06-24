@@ -12,12 +12,16 @@ language: 'typescript'
 layer: 'application'
 
 tasks:
+  # Next's persistent build cache is an input to future Next builds, not a
+  # deploy artifact. Exclude it from moon's output snapshot while still caching
+  # the generated app output.
   build:
     command: 'next build'
     deps:
       - '^:build'
     outputs:
-      - '.next'
+      - '.next/**/*'
+      - '!.next/cache/**'
 
   # Build deps run to completion first, then dependency watchers (`^:dev`)
   # run alongside next dev. run-dev.sh kills stale listeners on the port
