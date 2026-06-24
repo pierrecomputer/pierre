@@ -1598,6 +1598,22 @@ describe('applyDeleteCharacterToSelections', () => {
     expect(textDocument.getText()).toBe('  oo');
     expect(nextSelections).toEqual([createSelection(0, 2, 0, 2)]);
   });
+
+  test('does not expand an explicit selection in leading indentation', () => {
+    const textDocument = new TextDocument('inmemory://1', '    foo');
+    // The caret is not collapsed: only the last indent space is selected.
+    const selections = [createSelection(0, 3, 0, 4)];
+    const { nextSelections } = applyDeleteCharacterToSelections(
+      textDocument,
+      selections,
+      false,
+      undefined,
+      4
+    );
+
+    expect(textDocument.getText()).toBe('   foo');
+    expect(nextSelections).toEqual([createSelection(0, 3, 0, 3)]);
+  });
 });
 
 describe('resolveDeleteCharacterRange', () => {

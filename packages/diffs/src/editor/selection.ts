@@ -986,7 +986,10 @@ export function applyDeleteCharacterToSelections<LAnnotation>(
       selection,
       forward
     );
-    if (!forward) {
+    // Only grow a Backspace into a full indent unit for a collapsed caret. When
+    // the user has an explicit selection, Backspace must delete exactly that
+    // selection rather than expanding it to a whole soft tab.
+    if (!forward && isCollapsedSelection(selection)) {
       const normalized = normalizeLeadingIndentForChange(
         textDocument,
         {
@@ -1941,8 +1944,12 @@ function createSelectionsFromOffsetPairs(
   });
 }
 
-// Expands a backspace over leading spaces into one soft-tab width so mixed hard/soft indentation
-// behaves like the explicit outdent command.
+// Grows a single-character backspace into one soft-tab width so leading spaces
+// outdent like the explicit outdent command. This only applies when the caret
+// sits in pure leading whitespace and the tabSize characters right before it are
+// all spaces, so it removes exactly one indent unit rather than snapping to the
+// nearest tab stop. Hard tabs and partial (sub-tab) indentation are left to a
+// normal one-character delete.
 function normalizeLeadingIndentForChange(
   textDocument: TextDocument<unknown>,
   change: ResolvedTextEdit,

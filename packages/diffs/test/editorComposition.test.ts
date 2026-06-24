@@ -382,6 +382,35 @@ describe('Editor keyboard editing', () => {
     }
   });
 
+  test('deletes only the selection when backspacing a range in indentation', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: '  foo',
+      selections: [
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 2 },
+          direction: 'forward',
+        },
+      ],
+    });
+
+    try {
+      const event = dispatchBackspace(window, content);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(editor.getState().file.contents).toBe(' foo');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+          direction: DirectionNone,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('shifts later same-line carets past earlier inserted indents', async () => {
     const { cleanup, content, editor, window } = await createEditorFixture({
       contents: 'abcdefgh',
