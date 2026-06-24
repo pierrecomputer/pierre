@@ -32,9 +32,6 @@ export const AUI_DIFF_OPTIONS: DiffBasePropsReact<undefined>['options'] = {
   lineHoverHighlight: 'disabled',
 };
 
-// Lifecycle of an agent run.
-export type AuiSessionStatus = 'running' | 'review' | 'done';
-
 // A single file the agent changed in a session. `before`/`after` are full file
 // snapshots (real repo contents for the live session) from which we derive the
 // diff, the tree's git status, and the +/- decoration counts.
@@ -48,10 +45,6 @@ export interface AuiChangedFile {
 }
 
 export interface AuiSession {
-  id: string;
-  title: string;
-  subtitle?: string;
-  status: AuiSessionStatus;
   changedFiles: AuiChangedFile[];
 }
 

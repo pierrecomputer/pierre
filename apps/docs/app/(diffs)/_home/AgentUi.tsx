@@ -55,8 +55,8 @@ function getLineNumberColorSheet(): CSSStyleSheet | null {
 
 // `renderSelectionAction` returns a plain DOM node, not React, and renders into
 // the editor's shadow DOM where the page's CSS (including agent-ui.css) doesn't
-// reach, so IconCommentFill is inlined as markup painted with `currentColor` and
-// the buttons are styled inline.
+// reach, so the comment icon is inlined as markup painted with `currentColor`
+// and the buttons are styled inline.
 const ICON_COMMENT_FILL_SVG = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.19406e-05 8C2.19406e-05 3.58172 3.58174 0 8.00002 0C9.17929 0 10.3009 0.255639 11.3107 0.715237C13.4225 1.67636 15.0429 3.52827 15.6917 5.79351C15.8926 6.49527 16 7.23572 16 8C16 12.4183 12.4183 16 8.00002 16H0.750022C0.446675 16 0.173198 15.8173 0.0571123 15.537C-0.0589735 15.2568 0.00519335 14.9342 0.219692 14.7197L1.83763 13.1017C0.690449 11.7174 2.19406e-05 9.93877 2.19406e-05 8Z" fill="currentColor"/></svg>`;
 
 const SELECTION_PRIMARY_BUTTON_STYLE =
@@ -240,21 +240,15 @@ export function AgentUi({
     activeTargetRef.current = activePath;
   }, [activePath]);
 
-  // The FileDiff is never remounted per file (no `key`): a client-side remount
-  // would drop the server `prerenderedHTML` (templateRender only injects it
-  // during SSR), so switching files just swaps the `fileDiff` prop and the
-  // FileDiff re-renders the new diff in place on the same surface.
+  // The FileDiff is never remounted per file (no `key`), so switching files just
+  // swaps the `fileDiff` prop and re-renders in place, preserving the server
+  // `prerenderedHTML` (which SSR injects only on mount).
   //
-  // The editor, however, IS recreated per file (note `activePath` in the deps).
-  // The library only attaches the editor — via `editor.edit(instance)`, which
-  // builds the editor's TextDocument from the file currently rendered — when the
-  // `editor` reference itself changes (see useFileDiffInstance's attach effect,
-  // keyed on `[contentEditable, editor]`). It does NOT re-attach when only the
-  // `fileDiff` prop changes. So a single stable editor would keep the first
-  // file's document while the surface shows a different file, mis-positioning the
-  // caret/selection and breaking edits. Recreating the editor per file forces a
-  // re-attach that rebuilds the document against the newly rendered file — the
-  // same pattern the LiveDiffEditor demo uses when its layout/mode changes.
+  // The editor, however, IS recreated per file (`activePath` in the deps). The
+  // library rebuilds the editor's TextDocument only when the `editor` reference
+  // changes, not when `fileDiff` changes, so a stable editor would keep the
+  // first file's document while the surface shows another file — mis-positioning
+  // the caret and breaking edits.
   const editor = useMemo(
     () =>
       new Editor({
@@ -298,14 +292,9 @@ export function AgentUi({
           editsRef.current.set(target, file.contents);
         },
       }),
-    // Recreate the editor whenever the active file changes so it re-attaches and
-    // rebuilds its document against the newly rendered surface (same reasoning as
-    // the LiveDiffEditor demo's layout/mode dep).
     [activePath]
   );
 
-  // The changes tree shows one file at a time; selecting a file swaps the
-  // active surface.
   const openFile = useCallback((path: string) => {
     setActivePath(path);
   }, []);
