@@ -12,7 +12,7 @@ if (vscePat === undefined || vscePat.length === 0) {
 }
 
 withVsixPackageShim(() => {
-  execFileSync('bunx', ['vsce', 'publish', '--no-dependencies'], {
+  execFileSync('pnpm', ['exec', 'vsce', 'publish', '--no-dependencies'], {
     cwd: packageRoot,
     env: { ...process.env, VSCE_PAT: vscePat },
     stdio: 'inherit',

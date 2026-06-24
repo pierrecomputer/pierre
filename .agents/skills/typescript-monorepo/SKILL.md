@@ -26,7 +26,7 @@ When adding a new package or app:
 - Add it to the root `tsconfig.json` references.
 - Ensure its local `tsconfig.json` follows existing package/app patterns.
 - Give it a `moon.yml` (language, layer, tags, and any project-specific tasks);
-  shared tasks come from `.moon/tasks/*.yml` via tags and the bun toolchain.
+  shared tasks come from `.moon/tasks/*.yml` via tags or project language.
 
 When one workspace package depends on another:
 
@@ -36,8 +36,8 @@ When one workspace package depends on another:
 
 ## Workspace Dependencies
 
-Use the dependency catalog rules from `tooling-and-dependencies` for external
-packages. Use `workspace:*` for internal package dependencies.
+Use the `pnpm-workspace.yaml` catalog rules from `tooling-and-dependencies` for
+external packages. Use `workspace:*` for internal package dependencies.
 
 If a package is published, review its `exports`, `typesVersions`, `files`, peer
 dependencies, and its moon `prepublish` task chain before changing public

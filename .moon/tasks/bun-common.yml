@@ -1,11 +1,11 @@
 $schema: 'https://moonrepo.dev/schemas/tasks.json'
 
-# Tasks shared by every bun project. Only tasks that are string-identical
-# across all inheriting projects belong here; anything with per-project
-# variance lives in that project's moon.yml (or a tag file when 3+ projects
-# share the same shape).
+# Tasks shared by every JS/TS project. Only tasks that are string-identical
+# across all inheriting projects belong here; anything with per-project variance
+# lives in that project's moon.yml (or a tag file when 3+ projects share the same
+# shape).
 inheritedBy:
-  toolchains: ['bun']
+  languages: ['typescript', 'javascript']
 
 # Inputs added to every task of every inheriting project (including tasks
 # defined in project moon.yml files):

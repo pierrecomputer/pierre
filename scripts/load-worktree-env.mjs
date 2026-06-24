@@ -6,7 +6,7 @@
 // nor Playwright auto-load a file with that non-standard name — only the
 // conventional `.env*` variants. moon tasks load the file via their `envFile`
 // option, but direct invocations (e.g. `next dev` by hand, or
-// `bunx playwright test` inside a package) skip moon entirely. This helper
+// `pnpm exec playwright test` inside a package) skip moon entirely. This helper
 // closes that gap by letting configs pull the file in themselves.
 //
 // The walk starts at `startDir` (defaults to `process.cwd()`) and stops at

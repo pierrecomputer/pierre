@@ -7,7 +7,7 @@ import {
 import { loadWorktreeEnv } from '../../../../scripts/load-worktree-env.mjs';
 
 // Pull `PIERRE_PORT_OFFSET` from `.env.worktree` when Playwright is launched
-// outside a moon task (e.g. `bunx playwright test` from the package root).
+// outside a moon task (e.g. `pnpm exec playwright test` from the package root).
 loadWorktreeEnv();
 
 const portOffset = Number(process.env.PIERRE_PORT_OFFSET ?? 0);

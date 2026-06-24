@@ -2,17 +2,18 @@
 name: tooling-and-dependencies
 description:
   Use when running repo scripts, adding or changing dependencies, editing
-  package.json files, installing packages, or deciding how Bun workspace
-  commands should be invoked in this monorepo.
+  package.json files, installing packages, publishing packages, or deciding when
+  pnpm package operations versus Bun runtime commands should be invoked.
 ---
 
 # Tooling and Dependencies
 
 ## Toolchain (proto)
 
-- Tool versions (bun, node, moon, gh) are pinned in `.prototools` and managed by
-  [proto](https://moonrepo.dev/docs/proto); its shims put the pinned versions on
-  PATH inside the repo. `proto use` installs everything after a pin changes.
+- Tool versions (bun, pnpm, node, moon, gh) are pinned in `.prototools` and
+  managed by [proto](https://moonrepo.dev/docs/proto); its shims put the pinned
+  versions on PATH inside the repo. `proto use` installs everything after a pin
+  changes.
 - Bump a tool by editing `.prototools` only — never install tools globally or
   pin versions elsewhere. moon's version is additionally enforced by
   `versionConstraint` in `.moon/workspace.yml` and mirrored as the
@@ -22,26 +23,28 @@ description:
   `moonrepo/setup-toolchain`, which runs `proto install` against the same
   `.prototools`.
 
-## Bun
+## Package Manager and Runtime
 
-- Use `bun` exclusively for commands and package operations.
-- Do not use `npm`, `pnpm`, `npx`, or other package runners unless there is a
-  specific reason and you explain it.
-- Bun can run TypeScript directly, so local scripts may be `.ts` files without a
-  separate compile step.
+- Use `pnpm` for package operations: install, add, remove, dedupe, lockfile,
+  package-runner, and publish work.
+- Do not use `bun`, `npm`, `yarn`, `npx`, or other package runners for package
+  operations unless there is a specific documented reason.
+- Bun remains the direct TypeScript runtime and Bun test runner where current
+  moon tasks use it. Local scripts may still be `.ts` files without a separate
+  compile step.
 
 ## Dependency Catalog
 
-This monorepo uses Bun's `workspaces.catalog` in the root `package.json`.
+This monorepo uses the `catalog` in `pnpm-workspace.yaml`.
 
 - Never add a version directly to an individual package's `package.json` by
   default.
 - To add a dependency:
-  1. Add the exact version to the root `package.json` under
-     `workspaces.catalog`, for example `"new-package": "1.2.3"`.
+  1. Add the exact version to `pnpm-workspace.yaml` under `catalog`, for example
+     `"new-package": "1.2.3"`.
   2. Reference it from the package with `"new-package": "catalog:"`.
-- Do not run `bun add <package>` inside a package directory; it writes direct
-  versions and breaks the catalog pattern.
+- Do not run `pnpm add <package>` inside a package directory; it writes direct
+  versions and breaks the catalog pattern unless you manually normalize them.
 - Published packages may intentionally use ranges for end-user compatibility.
   `apps/docs` should use catalog versions; published packages such as
   `packages/diffs` may use ranges only when that is intentional.
@@ -86,4 +89,4 @@ run in CI-detected shells; agent harnesses export `CI=1`):
   runInCI-enabled tasks even when unrequested, which would pull them into CI.
   Run them in CI-marked shells with `moonx <target> --ignore-ci-checks` (works
   regardless of the shell's CI env). For non-moon commands that CI-gate
-  themselves, unset the var instead: `CI= bun publish --dry-run`.
+  themselves, unset the var instead: `CI= pnpm publish --dry-run`.

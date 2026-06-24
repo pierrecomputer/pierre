@@ -70,7 +70,7 @@ fork and maintain your own theme.
 
 1. Clone and open this [repo](https://github.com/pierrecomputer/pierre) in your
    editor
-2. Run `bun install` from the repository root to install the dependencies.
+2. Run `pnpm install` from the repository root to install the dependencies.
 3. Press `F5` to open a new window with your extension loaded
 4. Open `Code > Preferences > Color Theme` [`⌘k ⌘t`] and pick the "Pierre…"
    theme you want to test.

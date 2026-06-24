@@ -14,7 +14,7 @@ interface PackageManagerTabsProps {
 export function PackageManagerTabs({
   installationExamples,
 }: PackageManagerTabsProps) {
-  const [selectedPm, setSelectedPm] = useState<PackageManager>('npm');
+  const [selectedPm, setSelectedPm] = useState<PackageManager>('pnpm');
 
   return (
     <>

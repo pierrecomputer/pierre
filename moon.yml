@@ -24,7 +24,7 @@ dependsOn:
 
 workspace:
   inheritedTasks:
-    # The root manifest matches the bun toolchain, but `bun test` here would
+    # The root project inherits JS/TS shared tasks, but `bun test` here would
     # run every suite in the repo and there is no root tsconfig to typecheck.
     exclude: ['test', 'typecheck']
 

@@ -16,7 +16,7 @@ path strings, not internal numeric IDs.
 ## Install
 
 ```bash
-bun add @pierre/trees
+pnpm add @pierre/trees
 ```
 
 ## Vanilla usage

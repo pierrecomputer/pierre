@@ -30,7 +30,7 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
     docsPath: '/docs',
     themePath: '/theme',
     packageName: '@pierre/diffs',
-    installCommand: 'bun i @pierre/diffs',
+    installCommand: 'pnpm add @pierre/diffs',
     githubUrl: 'https://github.com/pierrecomputer/pierre',
   },
   trees: {
@@ -44,7 +44,7 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
     basePath: '',
     docsPath: '/docs',
     packageName: '@pierre/trees',
-    installCommand: 'bun i @pierre/trees',
+    installCommand: 'pnpm add @pierre/trees',
     githubUrl: 'https://github.com/pierrecomputer/pierre',
   },
 };

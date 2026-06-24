@@ -104,10 +104,10 @@ the project:
    git pull upstream main
    ```
 
-3. Install dependencies using [Bun](https://bun.sh/):
+3. Install dependencies using [pnpm](https://pnpm.io/):
 
    ```bash
-   bun install
+   pnpm install
    ```
 
 4. Create a new topic branch to contain your feature, change, or fix:
@@ -120,11 +120,12 @@ the project:
 
 6. Commit your changes in logical, reviewable chunks whenever possible.
 
-7. Run linting and tests to ensure everything passes:
+7. Run formatting, linting, and tests to ensure everything passes:
 
    ```bash
-   bun run lint
-   bun run diffs:test
+   moon run root:format
+   moon run root:lint
+   moonx diffs:test
    ```
 
 8. Push your topic branch up to your fork:
@@ -143,10 +144,11 @@ license your work under the terms of the [Apache License 2.0](LICENSE).
 
 ### General
 
-- We use [Bun](https://bun.sh/) for package management and running scripts
+- We use [pnpm](https://pnpm.io/) for package management and
+  [moon](https://moonrepo.dev/docs) for repo tasks
 - We use TypeScript throughout the project
-- Run `bun run lint` to check code style
-- Run `bun run format` to auto-format code
+- Run `moon run root:lint` to check code style
+- Run `moon run root:format` to auto-format code
 
 ## License
 

@@ -2,9 +2,10 @@ import { docsCodeSnippet } from '@/lib/docsCodeSnippet';
 
 export const VANILLA_QUICKSTART_INSTALL = docsCodeSnippet(
   'install.sh',
-  `bun add @pierre/trees
+  `pnpm add @pierre/trees
 # npm: npm install @pierre/trees
-# pnpm: pnpm add @pierre/trees`
+# bun: bun add @pierre/trees
+# yarn: yarn add @pierre/trees`
 );
 
 export const VANILLA_QUICKSTART_MOUNT_PROJECT_TREE = docsCodeSnippet(

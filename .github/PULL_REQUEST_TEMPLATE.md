@@ -24,11 +24,11 @@
 
 - [ ] I have read the
       [contributing guidelines](https://github.com/pierrecomputer/pierre/blob/main/.github/CONTRIBUTING.md)
-- [ ] My code follows the code style of the project (`bun run lint`)
-- [ ] My code is formatted properly (`bun run format`)
+- [ ] My code follows the code style of the project (`moon run root:lint`)
+- [ ] My code is formatted properly (`moon run root:format`)
 - [ ] I have updated the documentation accordingly (if applicable)
 - [ ] I have added tests to cover my changes (if applicable)
-- [ ] All new and existing tests pass (`bun run diffs:test`)
+- [ ] All new and existing tests pass (`moonx diffs:test`)
 
 ### How was AI used in generating this PR
 

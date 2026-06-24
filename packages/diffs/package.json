@@ -53,6 +53,9 @@
       "import": "./dist/worker/worker-portable.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "prepublishOnly": "moon run diffs:prepublish"
   },

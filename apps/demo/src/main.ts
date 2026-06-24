@@ -712,9 +712,9 @@ function toggleTheme() {
 const fileExample: FileContents | Promise<FileContents> = (() => {
   if (CRAZY_FILE) {
     return new Promise<FileContents>((resolve) => {
-      void import('../../../bun.lock?raw').then(({ default: contents }) =>
+      void import('../../../pnpm-lock.yaml?raw').then(({ default: contents }) =>
         resolve({
-          name: 'file.json',
+          name: 'pnpm-lock.yaml',
           contents,
           cacheKey: 'diff',
         })

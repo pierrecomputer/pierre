@@ -12,7 +12,7 @@ in the monorepo. Tasks (build/dev/test/lint) are run by moon —
   enabled, worktree-aware (exposed as `root:chrome`).
 - `load-worktree-env.mjs` — `.env.worktree` loader for configs that run outside
   a moon task (Next/Playwright configs).
-- `build-sprite.js`, `assert-bun-version.ts` — codegen/publish helpers behind
+- `build-sprite.js`, `assert-pnpm-version.ts` — codegen/publish helpers behind
   the `root:icons` task and the publishable packages' `prepublish` chain.
 
 The rest of this document explains `wt` in detail and walks through the most
@@ -63,7 +63,7 @@ By default:
   title prefix reads `NEXT_PUBLIC_WORKTREE_SLUG`, which `next.config.mjs`
   bridges from `PIERRE_WORKTREE_SLUG` so `.env.worktree` stays the single source
   of truth.
-- `bun install` runs automatically so the worktree's `node_modules` is ready;
+- `pnpm install` runs automatically so the worktree's `node_modules` is ready;
   moon syncs its git hooks on the first moon command in the worktree.
 - A summary of the worktree's URLs and the `cd` command is printed.
 
@@ -106,7 +106,7 @@ Runs the post-add setup that `wt new` runs automatically:
 - Resolves the target worktree.
 - Writes or reuses `.env.worktree` with `PIERRE_WORKTREE_SLUG` and
   `PIERRE_PORT_OFFSET`.
-- Runs `bun install` in the target worktree.
+- Runs `pnpm install` in the target worktree.
 - Prints the worktree's URLs and `cd` command.
 
 With a slug, `wt setup` targets the managed worktree path:
@@ -359,7 +359,7 @@ moonx root:wt -- setup
 - **Hooks / generated files.** Fresh worktrees don't have `.moon/hooks/` until a
   moon command runs (any `moon run`/`moonx`/`moon sync hooks` regenerates them
   and points the worktree-local `core.hooksPath` at them). `wt setup` runs
-  `bun install` automatically, so the toolchain is ready immediately.
+  `pnpm install` automatically, so the toolchain is ready immediately.
 
 ---
 

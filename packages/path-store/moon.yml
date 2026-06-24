@@ -34,8 +34,9 @@ tasks:
   # Not targeted by any CI lane; runnable everywhere for local/agent use.
   test-demo:
     script:
-      '(bun ./test/e2e/check-playwright-binary.js || bunx playwright@1.51.1
-      install chromium) && bunx playwright test -c test/e2e/playwright.config.js'
+      '(bun ./test/e2e/check-playwright-binary.js || pnpm exec playwright
+      install chromium) && pnpm exec playwright test -c
+      test/e2e/playwright.config.js'
     options:
       cache: false
       runInCI: 'always'

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-// Direct `bun publish` would upload a package.json that still depends on the
+// Direct `pnpm publish` would upload a package.json that still depends on the
 // private workspace package. The release script removes that dependency from the
 // final tarball before publishing.
 const pkgPath = resolve(import.meta.dir, '..', 'package.json');

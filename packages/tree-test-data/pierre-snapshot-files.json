@@ -274,7 +274,7 @@
   "apps/docs/types/css-modules.d.ts",
   "apps/docs/types/file-tree-container.d.ts",
   "apps/docs/types/raw-loader.d.ts",
-  "bun.lock",
+  "pnpm-lock.yaml",
   "package.json",
   "packages/diffs/LICENSE.md",
   "packages/diffs/README.md",

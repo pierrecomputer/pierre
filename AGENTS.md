@@ -15,22 +15,23 @@ like agent harnesses. Tasks connected to the build graph (dev servers, prod
 serves, e2e variants, publish guards) stay CI-skipped — run those with
 `moonx <target> --ignore-ci-checks`, e.g.
 `moonx docs:dev-diffs --ignore-ci-checks`. For non-moon commands that CI-gate
-themselves, unset the var: `CI= bun publish --dry-run`.
+themselves, unset the var: `CI= pnpm publish --dry-run`.
 
 ## Toolchain
 
-- Tool versions (bun, node, moon, gh) are pinned in `.prototools` and managed by
-  [proto](https://moonrepo.dev/docs/proto); run `proto use` if a tool is missing
-  or a pin changed. Never install toolchain versions globally; bump pins only in
-  `.prototools`.
+- Tool versions (bun, pnpm, node, moon, gh) are pinned in `.prototools` and
+  managed by [proto](https://moonrepo.dev/docs/proto); run `proto use` if a tool
+  is missing or a pin changed. Never install toolchain versions globally; bump
+  pins only in `.prototools`.
 - [moon](https://moonrepo.dev/docs) is the task runner; `package.json` scripts
   are npm lifecycle hooks only.
 
 ## Core Rules
 
-- Use `bun` for commands and dependency work. Do not use `npm`, `pnpm`, `npx`,
-  or similar tools unless there is a specific reason.
-- Dependencies use Bun's root `workspaces.catalog`. Never add dependency
+- Use `pnpm` for install/add/remove/dedupe/package-manager and publishing work.
+  Do not use `bun`, `npm`, `yarn`, `npx`, or similar tools for package
+  operations unless there is a specific reason.
+- Dependencies use the `catalog` in `pnpm-workspace.yaml`. Never add dependency
   versions directly to package-level `package.json` files unless a published
   package intentionally needs its own range.
 - Run tasks through moon: `moon run <project>:<task>` (or the `moonx` shorthand)

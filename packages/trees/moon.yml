@@ -54,9 +54,9 @@ tasks:
 
   test-e2e:
     script:
-      '(bun ./test/e2e/check-playwright-binary.ts || bunx playwright@1.51.1
-      install chromium) && bunx playwright test -c test/e2e/playwright.config.ts
-      --grep-invert @diagnostic'
+      '(bun ./test/e2e/check-playwright-binary.ts || pnpm exec playwright
+      install chromium) && pnpm exec playwright test -c
+      test/e2e/playwright.config.ts --grep-invert @diagnostic'
     deps:
       - 'build'
     inputs:
@@ -67,8 +67,9 @@ tasks:
 
   test-e2e-sticky-drift:
     script:
-      '(bun ./test/e2e/check-playwright-binary.ts || bunx playwright@1.51.1
-      install chromium) && bunx playwright test -c test/e2e/playwright.config.ts
+      '(bun ./test/e2e/check-playwright-binary.ts || pnpm exec playwright
+      install chromium) && pnpm exec playwright test -c
+      test/e2e/playwright.config.ts
       test/e2e/file-tree-sticky-context-menu-scroll-drift.pw.ts'
     deps:
       - 'build'
@@ -129,7 +130,7 @@ tasks:
       internal: true
       runInCI: 'skip'
 
-  # Appends to the publishable tag's guard chain (assert-bun-version, build).
+  # Appends to the publishable tag's guard chain (assert-pnpm-version, build).
   prepublish:
     deps:
       - 'assert-safe-publish'

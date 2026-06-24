@@ -80,13 +80,13 @@ git worktree add --detach "$TEST_WORKTREE" "$TEST_SHA"
 ```bash
 cd "$BASE_WORKTREE"
 export AGENT=1
-bun run wt setup
+moonx root:wt -- setup
 ```
 
 ```bash
 cd "$TEST_WORKTREE"
 export AGENT=1
-bun run wt setup
+moonx root:wt -- setup
 ```
 
 `wt setup` writes each worktree's `.env.worktree`, installs dependencies, and
@@ -152,13 +152,13 @@ Build both worktrees from their roots:
 ```bash
 cd "$BASE_WORKTREE"
 export AGENT=1
-bun ws diffshub build
+moonx diffshub:build
 ```
 
 ```bash
 cd "$TEST_WORKTREE"
 export AGENT=1
-bun ws diffshub build
+moonx diffshub:build
 ```
 
 ## Serve
@@ -167,13 +167,13 @@ Start each production server from its DiffsHub app directory:
 
 ```bash
 cd "$BASE_WORKTREE/apps/diffshub"
-nohup env AGENT=1 bun run start -- -p "$BASE_PORT" > /tmp/diffshub-base.log 2>&1 &
+nohup env AGENT=1 PORT="$BASE_PORT" moonx diffshub:start > /tmp/diffshub-base.log 2>&1 &
 export BASE_SERVER_PID=$!
 ```
 
 ```bash
 cd "$TEST_WORKTREE/apps/diffshub"
-nohup env AGENT=1 bun run start -- -p "$TEST_PORT" > /tmp/diffshub-test.log 2>&1 &
+nohup env AGENT=1 PORT="$TEST_PORT" moonx diffshub:start > /tmp/diffshub-test.log 2>&1 &
 export TEST_SERVER_PID=$!
 ```
 
@@ -575,8 +575,8 @@ Remove worktrees:
 
 ```bash
 cd <main-repo-root>
-bun run wt rm "$BASE_SLUG" --force
-bun run wt rm "$TEST_SLUG" --force
+moonx root:wt -- rm "$BASE_SLUG" --force
+moonx root:wt -- rm "$TEST_SLUG" --force
 rmdir "$BENCHMARK_WORKTREE_ROOT" 2>/dev/null || true
 ```
 
@@ -587,5 +587,5 @@ Confirm final state:
 
 ```bash
 git status --short
-bun run wt ps
+moonx root:wt -- ps
 ```
