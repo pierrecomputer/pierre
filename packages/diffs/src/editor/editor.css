@@ -102,39 +102,7 @@
     light-dark(#ff963288, #ff963266)
   );
 }
-[data-marker-range] {
-  z-index: 1;
-  background-color: var(--diffs-marker-fg);
-  mask-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2IiBoZWlnaHQ9IjMiPjxwYXRoIGQ9Im0wIDIuNSBsMiAtMS41IGwxIDAgbDIgMS41IGwxIDAiIHN0cm9rZT0iI2ZmZiIgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9zdmc+');
-  mask-position: left bottom;
-  mask-repeat: repeat-x;
-  mask-size: 6px 3px;
-}
-/* Marker severity palette, shared by the squiggle underline
-   ([data-marker-range]) and the hover popover ([data-marker-popup]). Each
-   severity resolves a single --diffs-marker-fg token that both consumers read,
-   so the colors live in one place. The range element carries
-   data-marker-<severity>; the popup carries data-marker-severity="<severity>". */
-[data-marker-error],
-[data-marker-popup][data-marker-severity='error'] {
-  --diffs-marker-fg: var(--diffs-editor-error-fg, var(--diffs-deletion-base));
-}
-[data-marker-warning],
-[data-marker-popup][data-marker-severity='warning'] {
-  --diffs-widget-fg: #000;
-  --diffs-marker-fg: var(
-    --diffs-editor-warning-fg,
-    light-dark(var(--diffs-warning-light), var(--diffs-warning-dark))
-  );
-}
-[data-marker-info],
-[data-marker-popup][data-marker-severity='info'] {
-  --diffs-marker-fg: var(--diffs-editor-info-fg, var(--diffs-modified-base));
-}
-[data-marker-hint],
-[data-marker-popup][data-marker-severity='hint'] {
-  --diffs-marker-fg: var(--diffs-editor-hint-fg, var(--diffs-fg-number));
-}
+
 [data-rtl] {
   border-top-left-radius: 3px;
 }
@@ -148,18 +116,58 @@
   border-bottom-right-radius: 3px;
 }
 
+/* Markers
+ *
+ * Marker range applies a wavy underline. Severity attributes are used by both
+ * `[data-marker-range]` and `[data-marker-popup]` alike.
+ */
+
+[data-marker-range] {
+  z-index: 1;
+  background-color: var(--diffs-marker-bg);
+  mask-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2IiBoZWlnaHQ9IjMiPjxwYXRoIGQ9Im0wIDIuNSBsMiAtMS41IGwxIDAgbDIgMS41IGwxIDAiIHN0cm9rZT0iI2ZmZiIgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9zdmc+');
+  mask-position: left bottom;
+  mask-repeat: repeat-x;
+  mask-size: 6px 3px;
+}
+
+[data-marker-error] {
+  --diffs-marker-contrast: #fff;
+  --diffs-marker-bg: var(--diffs-editor-error-fg, var(--diffs-deletion-base));
+}
+[data-marker-warning] {
+  --diffs-marker-contrast: #000;
+  --diffs-marker-bg: var(
+    --diffs-editor-warning-fg,
+    light-dark(var(--diffs-warning-light), var(--diffs-warning-dark))
+  );
+}
+[data-marker-info] {
+  --diffs-marker-contrast: #fff;
+  --diffs-marker-bg: var(--diffs-editor-info-fg, var(--diffs-modified-base));
+}
+[data-marker-hint] {
+  --diffs-marker-contrast: #000;
+  --diffs-marker-bg: var(--diffs-editor-hint-fg, var(--diffs-fg-number));
+}
+
 @media (width >= 480px) {
   [data-content] {
     caret-color: transparent;
-  }
-  [data-selection-action] {
-    caret-color: currentColor;
   }
   [data-content]:focus ~ [data-editor-overlay] [data-caret] {
     visibility: visible;
   }
 }
+
+/* Editor widgets
+ *
+ * Positioned popovers used across edit mode. Used by markers, search panel,
+ * and selection action.
+ */
+
 [data-editor-widget] {
+  --diffs-widget-fg: var(--diffs-fg);
   --diffs-widget-bg: color-mix(in lab, var(--diffs-fg) 4%, var(--diffs-bg));
   --diffs-widget-border: color-mix(in lab, var(--diffs-fg) 20%, transparent);
   --diffs-widget-shadow:
@@ -171,141 +179,200 @@
   z-index: 100;
   width: fit-content;
   max-width: calc(100% - 24px);
+  font: 14px/20px var(--diffs-header-font-fallback);
   border: 1px solid var(--diffs-widget-border);
   border-radius: 9px;
   background-color: var(--diffs-widget-bg);
   background-clip: padding-box;
   box-shadow: var(--diffs-widget-shadow);
 }
-[data-marker-popup] {
-  padding: 8px 12px;
-  min-width: min(180px, calc(100cqw - 24px));
-  pointer-events: auto;
-  font-family: var(--diffs-header-font-fallback);
-  font-size: 14px;
-  line-height: 1.4;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  translate: clamp(8px, var(--marker-x, 8px), calc(100cqw - 8px - 100%))
-    var(--marker-y, 0);
-}
-[data-marker-popup] [data-marker-message] {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-[data-marker-popup] code {
-  display: inline;
-  background-color: transparent;
-  white-space: normal;
-}
-/* Severity-colored popover: solid fill in the marker's severity color with
-   white text, mirroring the underline. The inset 1px ring (normally painted in
-   the surface background) is dropped so the fill reads as one solid chip. */
-[data-marker-popup][data-marker-severity] {
-  color: var(--diffs-widget-fg, #fff);
-  border-color: transparent;
-  --diffs-widget-bg: var(--diffs-marker-fg);
-  --diffs-widget-shadow:
-    0 4px 8px rgb(0 0 0 / 0.15), 0 6px 18px rgb(0 0 0 / 0.15);
-}
-[data-marker-popup][data-marker-severity] code {
-  color: inherit;
+
+/* Shared geometry for the overlay popovers (marker hover popup and
+   selection-action popover). Both are positioned in overlay coordinate space via
+   --popover-x/--popover-y (set in JS). The left edge is clamped so the popover
+   never slides under the line-number gutter (--gutter-width, also set in JS) and
+   the width is capped so it never overflows the visible code column. Builds on
+   [data-editor-widget]. */
+[data-marker-popup],
+[data-selection-action-popover] {
+  --popover-min-left: calc(var(--gutter-width, 0px) + 8px);
+  --popover-available-width: calc(100cqw - var(--gutter-width, 0px) - 16px);
+  max-width: min(640px, var(--popover-available-width));
+  translate: clamp(
+      var(--popover-min-left),
+      var(--popover-x, var(--popover-min-left)),
+      calc(100cqw - 8px - 100%)
+    )
+    var(--popover-y, 0);
 }
 
-/* Selection Action Widget */
-[data-selection-action-icon] {
-  position: absolute;
-  top: 0;
-  left: -1lh;
-  z-index: 10;
+[data-marker-popup] {
+  --diffs-widget-bg: var(--diffs-marker-bg);
+  --diffs-widget-shadow:
+    0 4px 8px rgb(0 0 0 / 0.15), 0 6px 18px rgb(0 0 0 / 0.15);
+
+  padding: 8px 12px;
+  min-width: min(180px, calc(100cqw - 24px));
+  overflow-wrap: anywhere;
+  color: var(--diffs-marker-contrast, contrast-color(#fff, #000));
+  white-space: normal;
+  border: 0;
+  pointer-events: auto;
+
+  [data-marker-message] {
+    white-space: normal;
+    overflow-wrap: anywhere;
+
+    code {
+      display: inline;
+      background-color: transparent;
+      white-space: normal;
+      color: inherit;
+    }
+  }
+}
+
+/* Selection Action Widget: a floating popover hosting the consumer's
+   selection-action element. It reuses the shared [data-editor-widget] chrome and
+   sits in the overlay layer (which is pointer-events: none), so it re-enables
+   pointer events for its own actions. */
+[data-selection-action-popover] {
   display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
   align-items: center;
-  justify-content: center;
-  width: 1lh;
-  height: 1lh;
-  color: color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg));
-  background-color: color-mix(in lab, var(--diffs-fg) 12%, var(--diffs-bg));
-  border-radius: 6px;
-  transition:
-    background-color 0.1s ease-in-out,
-    color 0.1s ease-in-out;
-  cursor: pointer;
-  visibility: hidden;
-}
-[data-selection-action-icon][data-visible='true'] {
-  visibility: visible;
-}
-[data-selection-action-icon]:hover {
-  color: var(--diffs-fg);
-  background-color: color-mix(in lab, var(--diffs-fg) 18%, var(--diffs-bg));
-}
-[data-selection-action] {
-  padding-inline-end: 1ch;
+  width: max-content;
+  padding: 4px;
+  pointer-events: auto;
 }
 
 /* Search Panel Widget */
 [data-search-panel] {
   position: sticky;
-  top: 12px;
-  right: 12px;
+  top: 16px;
+  right: 16px;
   z-index: 100;
   display: flex;
   justify-content: right;
   flex-direction: column;
   width: 100%;
-  height: fit-content;
-  margin-bottom: 4px;
+  /* Zero height ensures panel appears stickied immediately */
+  height: 0;
+  container: search-panel / inline-size;
+
+  [data-editor-widget] {
+    position: relative;
+    z-index: 100;
+    display: flex;
+    flex-shrink: 0;
+    align-items: stretch;
+    gap: 8px;
+    padding: 4px;
+    max-width: 100%;
+    min-width: 260px;
+    margin-inline: auto 16px;
+  }
+
+  svg {
+    display: block;
+    fill: currentColor;
+    width: 12px;
+    height: 12px;
+  }
 }
-[data-search-panel] [data-editor-widget] {
-  position: relative;
-  z-index: 100;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 4px;
-  max-width: 100%;
-  margin-inline: auto 12px;
-  font-family: var(--diffs-header-font-fallback);
-  font-size: 14px;
-}
-/* The two input rows form a grid: column 1 holds the find/replace inputs,
-   column 2 holds the results text / replace actions, and column 3 holds the
-   find navigation buttons on the first row only. DOM order auto-places items. */
+
 [data-search-grid] {
   display: grid;
   grid-template-columns: auto auto auto;
+  grid-template-areas:
+    'find    matches nav'
+    'replace actions .';
   align-items: center;
   gap: 4px 6px;
+  width: 100%;
+}
+[data-input-box][data-find] {
+  grid-area: find;
+}
+[data-search-nav] {
+  grid-area: nav;
+}
+[data-input-box][data-replace] {
+  grid-area: replace;
+}
+[data-replace-actions] {
+  grid-area: actions;
+}
+[data-search-grid][data-mode='find'] {
+  grid-template-areas: 'find matches nav';
 }
 [data-search-grid][data-mode='find'] [data-replace-cell] {
   display: none;
 }
+
+@container search-panel (width < 400px) {
+  [data-search-panel] [data-editor-widget] {
+    padding: 10px;
+  }
+  [data-search-grid][data-mode='replace'] {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      'find    find    find'
+      'replace replace replace'
+      'nav     matches actions';
+  }
+  [data-search-grid][data-mode='find'] {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      'find find    find'
+      'nav  matches matches';
+  }
+  [data-replace-actions] {
+    justify-self: end;
+  }
+  [data-search-grid] [data-input-box] {
+    width: auto;
+  }
+}
+
 [data-input-box] {
   position: relative;
   display: flex;
   align-items: center;
   width: 200px;
+
+  input {
+    flex-grow: 1;
+    width: 100%;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 24px;
+    padding-inline: 6px;
+    color: var(--diffs-fg);
+    background-color: var(--diffs-bg);
+    border: 1px solid color-mix(in lab, var(--diffs-fg) 12%, var(--diffs-bg));
+    border-radius: 6px;
+    outline: none;
+
+    &::selection {
+      background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
+    }
+
+    &:focus-visible {
+      outline: 1px solid var(--diffs-modified-base);
+    }
+  }
+
+  &[data-find] input {
+    /* Space for overlaid search icon toggles */
+    padding-inline-end: 72px;
+  }
+
+  [data-search-icon] {
+    --diffs-search-icon-size: 20px;
+  }
 }
-[data-input-box] input {
-  flex-grow: 1;
-  width: 100%;
-  min-width: 0;
-  font-size: 13px;
-  line-height: 24px;
-  padding-inline: 6px;
-  color: var(--diffs-fg);
-  background-color: var(--diffs-bg);
-  border: 1px solid color-mix(in lab, var(--diffs-fg) 12%, var(--diffs-bg));
-  border-radius: 6px;
-  outline: none;
-}
-/* Reserve room on the right of the find input for the overlaid toggles. */
-[data-input-box][data-find] input {
-  padding-inline-end: 72px;
-}
-[data-input-box] input::selection {
-  background-color: color-mix(in lab, var(--diffs-fg) 8%, var(--diffs-bg));
-}
+
 [data-search-toggles] {
   position: absolute;
   top: 50%;
@@ -315,7 +382,9 @@
   align-items: center;
   gap: 1px;
 }
+
 [data-matches] {
+  grid-area: matches;
   flex-shrink: 0;
   min-width: 50px;
   font-size: 12px;
@@ -323,43 +392,72 @@
   line-height: 20px;
   white-space: nowrap;
   color: color-mix(in lab, var(--diffs-fg) 50%, var(--diffs-bg));
+
+  &[data-no-matches] {
+    color: color-mix(in lab, var(--diffs-fg) 35%, var(--diffs-bg));
+  }
 }
-[data-matches][data-no-matches] {
-  color: color-mix(in lab, var(--diffs-fg) 35%, var(--diffs-bg));
-}
+
 [data-replace-actions],
 [data-search-nav] {
   display: flex;
   align-items: center;
 }
-[data-search-panel] svg {
-  display: block;
-  fill: currentColor;
-}
-[data-search-panel] [data-icon] {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+
+/* Every clickable control is a real <button> tagged with data-search-icon;
+   strip the UA chrome here so this single rule is the source of their
+   appearance. */
+[data-search-icon] {
   display: flex;
-  color: color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg));
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  appearance: none;
+  flex-shrink: 0;
+  width: var(--diffs-search-icon-size, 24px);
+  height: var(--diffs-search-icon-size, 24px);
+  margin: 0;
+  padding: 0;
+  color: color-mix(in lab, var(--diffs-fg) 65%, var(--diffs-bg));
+  border: 0;
+  border-radius: var(--diffs-search-icon-radius, 4px);
+  background: none;
   cursor: pointer;
   transition:
     background-color 0.1s ease-in-out,
     color 0.1s ease-in-out;
+
+  &:disabled {
+    opacity: 0.25;
+    cursor: default;
+  }
+  &:not(:disabled):hover {
+    color: var(--diffs-fg);
+  }
+  &:focus-visible {
+    outline: 1px solid var(--diffs-modified-base);
+  }
+  &[aria-pressed='true'] {
+    color: var(--diffs-modified-base);
+  }
 }
-[data-input-box] [data-icon] {
-  width: 20px;
-}
-[data-search-panel] [data-icon][data-disabled='true'] {
-  opacity: 0.25;
-  pointer-events: none;
-}
-[data-search-panel] [data-icon]:hover {
-  color: var(--diffs-fg);
-}
-[data-search-panel] [data-icon][data-active='true'] {
-  color: light-dark(var(--diffs-modified-light), var(--diffs-modified-dark));
+
+[data-search-close] {
+  --diffs-search-icon-size: 20px;
+  --diffs-search-icon-radius: 50%;
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
+  color: var(--diffs-widget-bg);
+  background-color: color-mix(
+    in lab,
+    var(--diffs-widget-fg) 50%,
+    var(--diffs-bg)
+  );
+
+  &:not(:disabled):hover {
+    opacity: 1;
+    color: var(--diffs-widget-bg);
+    background-color: var(--diffs-widget-fg);
+  }
 }

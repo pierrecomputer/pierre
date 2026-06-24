@@ -270,7 +270,7 @@ diffs-container {
   gap: 4px;
 }
 
-[data-selection-action-slot] button {
+[data-selection-action-popover] button {
   border-color: rgba(128, 128, 128, 0.4);
 
   &:hover {

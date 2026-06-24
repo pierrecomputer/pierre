@@ -41,29 +41,6 @@ export function EditorDemo() {
   const editor = useMemo(
     () =>
       new Editor({
-        enabledSelectionAction: true,
-        renderSelectionAction({
-          close,
-          replaceSelectionText,
-          getSelectionText,
-        }) {
-          const container = document.createElement('div');
-          const button = document.createElement('button');
-
-          container.style.cssText =
-            'display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0;';
-          button.type = 'button';
-          button.textContent = 'Wrap selection in TODO()';
-          button.style.cssText =
-            'font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, currentColor 35%, transparent); background: color-mix(in srgb, currentColor 8%, transparent); cursor: pointer;';
-          button.addEventListener('click', () => {
-            replaceSelectionText(`TODO(${getSelectionText()})`);
-            close();
-          });
-
-          container.appendChild(button);
-          return container;
-        },
         onChange(_file) {
           // setFile(nextFile);
           setChangeCount((count) => count + 1);

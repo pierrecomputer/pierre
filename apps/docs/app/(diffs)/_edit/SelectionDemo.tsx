@@ -1,12 +1,24 @@
 'use client';
 
+import { DEFAULT_THEMES } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
 import { EditorProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
-import { IconArrowLeftBar } from '@pierre/icons';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  IconArrow,
+  IconChevronSm,
+  IconCommentFill,
+  IconSparkle,
+  IconX,
+} from '@pierre/icons';
+import {
+  type CSSProperties,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
-import { SELECTION_DEMO_FILE } from './constants';
 import { Button } from '@/components/ui/button';
 
 interface SelectionDemoProps {
@@ -14,187 +26,186 @@ interface SelectionDemoProps {
   prerenderedFile: PreloadedFileResult<undefined>;
 }
 
-// Custom element the File renders into; its shadow DOM is open, so we can reach
-// in to read the live selection.
-const DIFFS_TAG_NAME = 'diffs-container';
+// `renderSelectionAction` returns a plain DOM node, not React, so IconCommentFill
+// is inlined as markup and painted with `currentColor`.
+const ICON_COMMENT_FILL_SVG = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.19406e-05 8C2.19406e-05 3.58172 3.58174 0 8.00002 0C9.17929 0 10.3009 0.255639 11.3107 0.715237C13.4225 1.67636 15.0429 3.52827 15.6917 5.79351C15.8926 6.49527 16 7.23572 16 8C16 12.4183 12.4183 16 8.00002 16H0.750022C0.446675 16 0.173198 15.8173 0.0571123 15.537C-0.0589735 15.2568 0.00519335 14.9342 0.219692 14.7197L1.83763 13.1017C0.690449 11.7174 2.19406e-05 9.93877 2.19406e-05 8Z" fill="currentColor"/></svg>`;
 
-// The pristine document text the Reset button restores the surface to.
-const ORIGINAL_CONTENTS = SELECTION_DEMO_FILE.contents;
+// The actions render into the editor's shadow DOM, where the page's Tailwind
+// classes don't reach, so they're styled inline.
+const PRIMARY_BUTTON_STYLE =
+  'display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 500; padding: 4px 10px 4px 8px; border-radius: 6px; border: 0; background-color: #6366f1; color: #fff; cursor: pointer;';
+const SECONDARY_BUTTON_STYLE =
+  'display: inline-flex; align-items: center; font-size: 12px; padding: 4px 8px; border-radius: 6px; border: 0; background-color: color-mix(in lab, currentColor 25%, transparent); color: inherit; cursor: pointer;';
 
-// Inline styles keep the injected widget self-contained: it slots into light DOM
-// where the page's Tailwind classes don't reach, so we ship its look with it.
-const ACTION_STYLE =
-  'display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0;';
-const BUTTON_STYLE =
-  'font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, currentColor 35%, transparent); background-color: color-mix(in srgb, currentColor 8%, transparent); color: inherit; cursor: pointer;';
+// Shared Tailwind classes for the inert composer's model/agent picker pills.
+const COMPOSER_PILL_CLASS =
+  'inline-flex h-7 items-center gap-1.5 rounded-md bg-neutral-800 px-2 text-xs text-neutral-400';
 
-// Normalize trailing newlines so a wrapped-then-restored document compares equal
-// to the original regardless of how the editor serializes its final newline.
-function normalize(text: string): string {
-  return text.replace(/\n+$/, '');
-}
-
-// The {line, character} position one past the last character of `text`. The
-// Reset button selects from the document start to here, then types the original
-// contents over the whole range to revert every applied wrap in one edit.
-function endPosition(text: string): { line: number; character: number } {
-  const lines = text.split('\n');
-  const line = lines.length - 1;
-  return { line, character: lines[line].length };
-}
+// Tighter type scale so more snippet code fits in the narrow chat panel.
+const CHAT_SNIPPET_STYLE = {
+  '--diffs-font-size': '12px',
+  '--diffs-line-height': '18px',
+} as CSSProperties;
 
 // Demo of the editor's opt-in Selection Action: with `enabledSelectionAction`,
-// selecting text reveals a gutter icon whose click runs `renderSelectionAction`
-// inline. The toolbar drives the same transforms programmatically. With no
-// public API to read the selection or push an edit from outside the action, we
-// drive the editor as a user would—reading the shadow-DOM selection and
-// dispatching `beforeinput`.
+// selecting text immediately reveals a floating popover (anchored below the
+// selection) whose contents come from `renderSelectionAction`. Here it mimics an
+// editor's "Add to chat": the primary action sends the selected snippet to a
+// mock chat panel beside the surface, and a secondary action copies it.
 export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [snippets, setSnippets] = useState<string[]>([]);
 
-  // The editor's live text, kept current by `onChange`, so Reset knows the
-  // range to overwrite and we can tell whether any wrap has been applied.
-  const currentTextRef = useRef(ORIGINAL_CONTENTS);
-  const [changed, setChanged] = useState(false);
+  // The popover lives inside the editor instance, which is created once. Route
+  // its "Add to chat" click through a ref so it always calls the latest setter
+  // without recreating the editor.
+  const addSnippet = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (trimmed === '') {
+      return;
+    }
+    setSnippets((prev) => [...prev, trimmed]);
+  }, []);
+  const addSnippetRef = useRef(addSnippet);
+  addSnippetRef.current = addSnippet;
 
   const editor = useMemo(
     () =>
       new Editor<undefined>({
-        onChange(file) {
-          currentTextRef.current = file.contents;
-          setChanged(normalize(file.contents) !== normalize(ORIGINAL_CONTENTS));
-        },
         enabledSelectionAction: true,
-        renderSelectionAction({
-          close,
-          getSelectionText,
-          replaceSelectionText,
-        }) {
+        renderSelectionAction({ close, getSelectionText }) {
           const container = document.createElement('div');
-          container.style.cssText = ACTION_STYLE;
+          container.style.cssText = 'display: flex; gap: 4px;';
 
-          const addAction = (
-            label: string,
-            transform: (text: string) => string
-          ) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.textContent = label;
-            button.style.cssText = BUTTON_STYLE;
-            button.addEventListener('click', () => {
-              replaceSelectionText(transform(getSelectionText()));
-              close();
-            });
-            container.append(button);
-          };
+          const addToChat = document.createElement('button');
+          addToChat.type = 'button';
+          addToChat.style.cssText = PRIMARY_BUTTON_STYLE;
+          addToChat.innerHTML = `${ICON_COMMENT_FILL_SVG} Add to chat`;
+          // Suppress the default mousedown so clicking the action doesn't blur
+          // the editor and collapse the selection we're about to read.
+          addToChat.addEventListener('mousedown', (event) =>
+            event.preventDefault()
+          );
+          addToChat.addEventListener('click', () => {
+            addSnippetRef.current(getSelectionText());
+            close();
+          });
 
-          addAction('Wrap in t()', (text) => `t(${text})`);
-          addAction('Uppercase', (text) => text.toUpperCase());
+          const copy = document.createElement('button');
+          copy.type = 'button';
+          copy.textContent = 'Copy';
+          copy.style.cssText = SECONDARY_BUTTON_STYLE;
+          copy.addEventListener('mousedown', (event) => event.preventDefault());
+          copy.addEventListener('click', () => {
+            void navigator.clipboard?.writeText(getSelectionText());
+            close();
+          });
 
+          container.append(addToChat, copy);
           return container;
         },
       }),
     []
   );
 
-  // Resolve the editor's editable content element inside the open shadow root,
-  // or null until the File has highlighted and attached.
-  const getContent = useCallback((): HTMLElement | null => {
-    const host = wrapperRef.current?.querySelector<HTMLElement>(DIFFS_TAG_NAME);
-    return (
-      host?.shadowRoot?.querySelector<HTMLElement>('[data-content]') ?? null
-    );
-  }, []);
-
-  // Read the currently selected text straight from the editor's shadow root.
-  // Chromium exposes `getSelection()` on a ShadowRoot, which is what the editor
-  // renders into; this returns '' when nothing is selected.
-  const getSelectedText = useCallback((): string => {
-    const host = wrapperRef.current?.querySelector<HTMLElement>(DIFFS_TAG_NAME);
-    const shadow = host?.shadowRoot as
-      | (ShadowRoot & { getSelection?: () => Selection | null })
-      | null
-      | undefined;
-    return shadow?.getSelection?.()?.toString() ?? '';
-  }, []);
-
-  // Type `replacement` over the editor's current selection by dispatching the
-  // same `beforeinput` the browser emits while typing, so the edit lands on the
-  // undo stack exactly as a hand-typed one would.
-  const typeOverSelection = useCallback(
-    (content: HTMLElement, replacement: string) => {
-      content.dispatchEvent(
-        new InputEvent('beforeinput', {
-          inputType: 'insertText',
-          data: replacement,
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-        })
-      );
-    },
-    []
-  );
-
-  // Wrap the live selection in `t(...)`, mirroring the inline action but driven
-  // from the toolbar. The button suppresses its default mousedown so clicking it
-  // doesn't blur the editor and drop the selection we're about to read.
-  const wrapSelection = useCallback(() => {
-    const content = getContent();
-    const text = getSelectedText();
-    if (content == null || text === '') {
-      return;
-    }
-    typeOverSelection(content, `t(${text})`);
-  }, [getContent, getSelectedText, typeOverSelection]);
-
-  // Restore the original document by selecting the whole thing and typing the
-  // pristine contents over it. We capture and restore the window scroll around
-  // `setSelections` because selecting scrolls the caret into view, which would
-  // otherwise yank the page down to this (below-the-fold) demo.
-  const reset = useCallback(() => {
-    const content = getContent();
-    if (content == null) {
-      return;
-    }
-    const { scrollX, scrollY } = window;
-    editor.setSelections([
-      {
-        start: { line: 0, character: 0 },
-        end: endPosition(currentTextRef.current),
-        direction: 'forward',
-      },
-    ]);
-    typeOverSelection(content, ORIGINAL_CONTENTS);
-    editor.setSelections([
-      {
-        start: { line: 0, character: 0 },
-        end: { line: 0, character: 0 },
-        direction: 'none',
-      },
-    ]);
-    window.scrollTo(scrollX, scrollY);
-  }, [editor, getContent, typeOverSelection]);
+  const clearChat = useCallback(() => setSnippets([]), []);
 
   return (
-    <div className="not-prose" ref={wrapperRef}>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={wrapSelection}
-        >
-          Wrap in t()
-        </Button>
-        <Button variant="outline" size="sm" onClick={reset} disabled={!changed}>
-          <IconArrowLeftBar />
-          Reset
-        </Button>
-      </div>
+    <div className="not-prose grid gap-4 md:grid-cols-[minmax(0,1fr)_20rem]">
       <EditorProvider editor={editor}>
         <File {...prerenderedFile} className="diff-container" contentEditable />
       </EditorProvider>
+
+      {/* The wrapper takes its height from the editor column (its only in-flow
+          sibling); the aside fills it absolutely at md+ so a long snippet list
+          scrolls inside instead of stretching the panel. On mobile it falls back
+          to normal flow. */}
+      <div className="relative">
+        <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950 md:absolute md:inset-0">
+          <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+            <span className="flex items-center gap-1 text-sm font-medium text-white">
+              <IconCommentFill className="size-4" />
+              Chat
+            </span>
+            {snippets.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto gap-1 px-0 text-neutral-400 hover:bg-transparent hover:text-neutral-200"
+                onClick={clearChat}
+              >
+                <IconX />
+                Clear
+              </Button>
+            )}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {snippets.length === 0 ? (
+              <p className="p-4 text-sm text-neutral-400">
+                Select code in the editor, then choose{' '}
+                <span className="font-medium text-white">Add to chat</span> to
+                send the snippet here.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2 p-3">
+                {snippets.map((snippet, index) => (
+                  <li
+                    key={index}
+                    className="overflow-hidden rounded-md border border-neutral-800"
+                  >
+                    <File
+                      file={{
+                        name: `chat-snippet-${index}.ts`,
+                        contents: snippet,
+                      }}
+                      options={{
+                        theme: DEFAULT_THEMES,
+                        themeType: 'dark',
+                        disableFileHeader: true,
+                        disableLineNumbers: true,
+                      }}
+                      // The page's shared worker pool is wired up for the editable
+                      // editor surface; a dynamically mounted read-only File isn't
+                      // highlighted through it, so highlight on the main thread.
+                      disableWorkerPool
+                      className="overflow-x-auto"
+                      style={CHAT_SNIPPET_STYLE}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2 rounded-b-md border-t border-neutral-800 bg-neutral-900 p-2.5 focus-within:border-neutral-600">
+            <textarea
+              className="min-h-10 w-full resize-none bg-transparent px-1 text-[13px] leading-normal text-white placeholder:text-neutral-500 focus:outline-none"
+              placeholder="Ask for changes…"
+              rows={2}
+              disabled
+            />
+            <div className="flex items-center gap-1.5">
+              <button type="button" className={COMPOSER_PILL_CLASS} disabled>
+                <IconSparkle className="opacity-50" />
+                Agent
+                <IconChevronSm className="opacity-50" />
+              </button>
+              <button type="button" className={COMPOSER_PILL_CLASS} disabled>
+                Mythos 5
+                <IconChevronSm className="opacity-50" />
+              </button>
+              <button
+                type="button"
+                aria-label="Send"
+                className="ml-auto inline-flex size-7 items-center justify-center rounded-lg bg-indigo-500 text-white opacity-60"
+                disabled
+              >
+                <IconArrow className="rotate-90" />
+              </button>
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

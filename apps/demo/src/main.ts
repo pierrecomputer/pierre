@@ -859,7 +859,6 @@ if (renderFileButton != null) {
           ctx.replaceSelectionText(comment);
           ctx.close();
         });
-        div.style.marginBlock = '4px';
         div.appendChild(button);
         return div;
       },

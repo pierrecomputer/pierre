@@ -14,7 +14,7 @@
       "@octokit/auth-app": "8.1.1",
       "@octokit/openapi-types": "26.0.0",
       "@octokit/rest": "22.0.0",
-      "@pierre/icons": "0.7.0",
+      "@pierre/icons": "0.7.1",
       "@pierre/storage": "0.0.10",
       "@pierre/vscode-icons": "0.0.9",
       "@playwright/test": "1.51.1",
@@ -106,7 +106,7 @@
   },
   "devDependencies": {
     "@moonrepo/cli": "catalog:",
-    "@pierre/icons": "catalog:",
+    "@pierre/icons": "^0.7.1",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",
     "lint-staged": "catalog:",
