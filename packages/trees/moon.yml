@@ -31,8 +31,11 @@ tasks:
       merge: 'replace'
 
   # Replaces the tsdown tag dev: also watch the inlined path-store sources.
+  # Keep the watcher non-cleaning so app dev servers never resolve packages
+  # while their dist directories are temporarily empty.
   dev:
-    command: 'tsdown --watch src --watch ../path-store/src --log-level error'
+    command:
+      'tsdown --watch src --watch ../path-store/src --no-clean --log-level error'
     deps:
       - '^:build'
     options:
