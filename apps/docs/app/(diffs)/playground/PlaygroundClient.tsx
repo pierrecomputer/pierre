@@ -973,11 +973,15 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         </div>
       </div>
 
-      {contentEditable ? (
-        <EditorProvider editor={editor}>{fileDiff}</EditorProvider>
-      ) : (
-        fileDiff
-      )}
+      {/*
+        Keep EditorProvider mounted in both Review and Edit so toggling modes
+        only flips `contentEditable` (the editor attaches lazily when that turns
+        true). Conditionally wrapping would change the child component type and
+        remount FileDiff, which recreates the shadow root and re-injects the
+        dark SSR HTML for a frame — the light->dark flash we're avoiding here.
+        Mirrors the LiveEditing demo.
+      */}
+      <EditorProvider editor={editor}>{fileDiff}</EditorProvider>
     </div>
   );
 }
