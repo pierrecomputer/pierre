@@ -386,7 +386,6 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
           variant="outline"
           onClick={undo}
           disabled={!canUndo}
-          aria-label="Undo"
           title="Undo (Cmd/Ctrl-Z)"
         >
           <IconArrowShort className="-ml-1" />
@@ -396,30 +395,18 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
           variant="outline"
           onClick={redo}
           disabled={!canRedo}
-          aria-label="Redo"
           title="Redo (Cmd/Ctrl-Shift-Z)"
         >
           Redo
           <IconArrowRightShort className="-mr-1" />
         </Button>
-        <Button
-          variant="outline"
-          onClick={redoAll}
-          disabled={!canRedo}
-          aria-label="Redo all"
-          title="Redo all"
-        >
+        <Button variant="outline" onClick={redoAll} disabled={!canRedo}>
           Redo all
           <IconArrowRightBar className="-mr-1" />
         </Button>
         {diverged ? (
           <div className="ml-auto flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={reset}
-              aria-label="Reset to guided history"
-              title="Reset to guided history"
-            >
+            <Button variant="outline" onClick={reset}>
               <IconRefresh className="-ml-1" />
               Reset
             </Button>
