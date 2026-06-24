@@ -82,7 +82,7 @@ export function renderLineAnnotations<LAnnotation>(
     map.get(lineNumber)!.push(getLineAnnotationName(annotation));
   }
 
-  let leftCodeElement = contentEl.parentElement?.previousElementSibling;
+  const leftCodeElement = contentEl.parentElement?.previousElementSibling;
   let leftGutterElement: HTMLElement | undefined;
   let leftContentElement: HTMLElement | undefined;
   if (

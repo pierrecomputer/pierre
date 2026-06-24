@@ -32,6 +32,7 @@
 [data-gutter-buffer],
 [data-line]:not([data-selected-line]),
 [data-line]:not([data-selected-line]) span,
+[data-line] [data-diff-span],
 [data-line-annotation] {
   background-color: transparent;
 }

@@ -2,10 +2,17 @@
 
 import { DEFAULT_THEMES } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, FileDiff } from '@pierre/diffs/react';
-import { IconArrow, IconChevronSm, IconSparkle } from '@pierre/icons';
+import { EditorProvider, File, FileDiff } from '@pierre/diffs/react';
+import { IconArrow, IconChevronSm, IconSparkle, IconX } from '@pierre/icons';
 import { FileTree, type FileTreeRowDecoration } from '@pierre/trees';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import './agent-ui.css';
 import {
@@ -44,6 +51,28 @@ function getLineNumberColorSheet(): CSSStyleSheet | null {
     lineNumberColorSheet.replaceSync(LINE_NUMBER_COLOR_CSS);
   }
   return lineNumberColorSheet;
+}
+
+// `renderSelectionAction` returns a plain DOM node, not React, and renders into
+// the editor's shadow DOM where the page's CSS (including agent-ui.css) doesn't
+// reach, so IconCommentFill is inlined as markup painted with `currentColor` and
+// the buttons are styled inline.
+const ICON_COMMENT_FILL_SVG = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.19406e-05 8C2.19406e-05 3.58172 3.58174 0 8.00002 0C9.17929 0 10.3009 0.255639 11.3107 0.715237C13.4225 1.67636 15.0429 3.52827 15.6917 5.79351C15.8926 6.49527 16 7.23572 16 8C16 12.4183 12.4183 16 8.00002 16H0.750022C0.446675 16 0.173198 15.8173 0.0571123 15.537C-0.0589735 15.2568 0.00519335 14.9342 0.219692 14.7197L1.83763 13.1017C0.690449 11.7174 2.19406e-05 9.93877 2.19406e-05 8Z" fill="currentColor"/></svg>`;
+
+const SELECTION_PRIMARY_BUTTON_STYLE =
+  'display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 500; padding: 4px 10px 4px 8px; border-radius: 6px; border: 0; background-color: #6366f1; color: #fff; cursor: pointer;';
+const SELECTION_SECONDARY_BUTTON_STYLE =
+  'display: inline-flex; align-items: center; font-size: 12px; padding: 4px 8px; border-radius: 6px; border: 0; background-color: color-mix(in lab, currentColor 25%, transparent); color: inherit; cursor: pointer;';
+
+// Tighter type scale so a snippet code block fits in the narrow composer.
+const SNIPPET_STYLE = {
+  '--diffs-font-size': '12px',
+  '--diffs-line-height': '18px',
+} as CSSProperties;
+
+interface AuiSnippet {
+  id: number;
+  text: string;
 }
 
 // Renders the active session's changed files as a @pierre/trees FileTree, with
@@ -181,6 +210,26 @@ export function AgentUi({
     () => session.changedFiles[0]?.path ?? null
   );
 
+  // Snippets sent from the selection action's "Add to chat" land here as
+  // composer attachments. The editor is recreated per file, but routing the add
+  // through a ref keeps the latest setter without depending on that lifecycle.
+  const [snippets, setSnippets] = useState<AuiSnippet[]>([]);
+  const snippetIdRef = useRef(0);
+  const addSnippet = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (trimmed === '') {
+      return;
+    }
+    snippetIdRef.current += 1;
+    const id = snippetIdRef.current;
+    setSnippets((prev) => [...prev, { id, text: trimmed }]);
+  }, []);
+  const addSnippetRef = useRef(addSnippet);
+  addSnippetRef.current = addSnippet;
+  const removeSnippet = useCallback((id: number) => {
+    setSnippets((prev) => prev.filter((snippet) => snippet.id !== id));
+  }, []);
+
   // Persisted in-editor edits keyed by path, so switching files keeps the
   // agent's tweaked output.
   const editsRef = useRef<Map<string, string>>(new Map());
@@ -210,21 +259,35 @@ export function AgentUi({
     () =>
       new Editor({
         enabledSelectionAction: true,
-        renderSelectionAction({
-          close,
-          getSelectionText,
-          replaceSelectionText,
-        }) {
+        renderSelectionAction({ close, getSelectionText }) {
           const container = document.createElement('div');
-          const button = document.createElement('button');
-          container.className = 'aui-selection-action';
-          button.type = 'button';
-          button.textContent = 'Wrap selection in TODO()';
-          button.addEventListener('click', () => {
-            replaceSelectionText(`TODO(${getSelectionText()})`);
+          container.style.cssText = 'display: flex; gap: 4px;';
+
+          const addToChat = document.createElement('button');
+          addToChat.type = 'button';
+          addToChat.style.cssText = SELECTION_PRIMARY_BUTTON_STYLE;
+          addToChat.innerHTML = `${ICON_COMMENT_FILL_SVG} Add to chat`;
+          // Suppress the default mousedown so clicking the action doesn't blur
+          // the editor and collapse the selection we're about to read.
+          addToChat.addEventListener('mousedown', (event) =>
+            event.preventDefault()
+          );
+          addToChat.addEventListener('click', () => {
+            addSnippetRef.current(getSelectionText());
             close();
           });
-          container.append(button);
+
+          const copy = document.createElement('button');
+          copy.type = 'button';
+          copy.textContent = 'Copy';
+          copy.style.cssText = SELECTION_SECONDARY_BUTTON_STYLE;
+          copy.addEventListener('mousedown', (event) => event.preventDefault());
+          copy.addEventListener('click', () => {
+            void navigator.clipboard?.writeText(getSelectionText());
+            close();
+          });
+
+          container.append(addToChat, copy);
           return container;
         },
         onChange(file) {
@@ -341,6 +404,43 @@ export function AgentUi({
             </div>
 
             <div className="aui-composer">
+              {snippets.length > 0 && (
+                <ul className="aui-composer-attachments">
+                  {snippets.map((snippet) => (
+                    <li key={snippet.id} className="aui-attachment">
+                      <File
+                        file={{
+                          name: 'snippet.ts',
+                          contents: snippet.text,
+                        }}
+                        options={{
+                          theme,
+                          themeType: 'dark',
+                          disableFileHeader: true,
+                          disableLineNumbers: true,
+                        }}
+                        // The page's shared worker pool is wired up for the
+                        // editable editor surface; a dynamically mounted
+                        // read-only File isn't highlighted through it, so
+                        // highlight on the main thread.
+                        disableWorkerPool
+                        className="aui-attachment-code"
+                        style={SNIPPET_STYLE}
+                      />
+                      <button
+                        type="button"
+                        className="aui-attachment-remove"
+                        aria-label="Remove snippet"
+                        onClick={() => {
+                          removeSnippet(snippet.id);
+                        }}
+                      >
+                        <IconX />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <textarea
                 className="aui-composer-input"
                 placeholder="Ask for changes, @mention files, or run commands…"
