@@ -148,7 +148,7 @@
   --diffs-marker-bg: var(--diffs-editor-info-fg, var(--diffs-modified-base));
 }
 [data-marker-hint] {
-  --diffs-marker-contrast: #000;
+  --diffs-marker-contrast: light-dark(#fff, #000);
   --diffs-marker-bg: var(--diffs-editor-hint-fg, var(--diffs-fg-number));
 }
 
