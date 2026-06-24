@@ -1187,7 +1187,7 @@ export class FileDiff<
   // history survive the re-render.
   public rerenderFromDocument(textDocument: DiffsTextDocument): void {
     this.hunksRenderer.applyDocumentChange(textDocument);
-    const renderDiff = this.hunksRenderer.getRenderDiff();
+    const renderDiff = this.hunksRenderer.getDiffCache();
     if (renderDiff != null) {
       this.fileDiff = renderDiff;
     }

@@ -1708,7 +1708,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         {
           const atEnd = command === 'moveCursorToDocEnd';
           this.#updateSelections([
-            getDocumentBoundarySelection(textDocument, atEnd),
+            getDocumentBoundarySelection(textDocument, atEnd, this.#isDiff),
           ]);
           this.#scrollToPrimaryCaret();
         }
@@ -2224,6 +2224,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const lineY = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
       virtualCaret.style.top = lineY + 'px';
       virtualCaret.style.left = left + 'px';
+
       this.#overlayElement?.appendChild(virtualCaret);
       virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
       if (!noFocus) {
