@@ -1533,7 +1533,7 @@ describe('applyDeleteCharacterToSelections', () => {
     ]);
   });
 
-  test('deletes one hard tab when backspacing in leading indentation', () => {
+  test('deletes a hard-tab indent on Backspace at a caret', () => {
     const textDocument = new TextDocument('inmemory://1', '\tfoo');
     const selections = [createSelection(0, 1, 0, 1)];
     const { nextSelections } = applyDeleteCharacterToSelections(
@@ -1548,7 +1548,7 @@ describe('applyDeleteCharacterToSelections', () => {
     expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
   });
 
-  test('deletes one soft tab when backspacing in leading indentation', () => {
+  test('deletes a soft-tab indent on Backspace at a caret', () => {
     const textDocument = new TextDocument('inmemory://1', '    foo');
     const selections = [createSelection(0, 4, 0, 4)];
     const { nextSelections } = applyDeleteCharacterToSelections(
@@ -1563,7 +1563,7 @@ describe('applyDeleteCharacterToSelections', () => {
     expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
   });
 
-  test('normalizes backspace indentation per caret context', () => {
+  test('normalizes indent on Backspace for each caret', () => {
     const textDocument = new TextDocument('inmemory://1', '\tfoo\n    bar');
     const selections = [
       createSelection(0, 1, 0, 1),
@@ -1584,7 +1584,7 @@ describe('applyDeleteCharacterToSelections', () => {
     ]);
   });
 
-  test('does not expand deletion outside leading indentation', () => {
+  test('does not expand a Backspace outside leading indentation', () => {
     const textDocument = new TextDocument('inmemory://1', '  foo');
     const selections = [createSelection(0, 3, 0, 3)];
     const { nextSelections } = applyDeleteCharacterToSelections(
