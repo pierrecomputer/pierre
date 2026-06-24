@@ -21,9 +21,6 @@ dependsOn:
   - 'theme'
   - 'theming'
   - 'trees'
-  - 'truncate'
-  - 'storage-elements'
-  - 'storage-elements-next'
 
 workspace:
   inheritedTasks:

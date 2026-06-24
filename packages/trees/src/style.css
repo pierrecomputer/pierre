@@ -1414,7 +1414,7 @@
     color: var(--trees-fg);
   }
 
-  /** @pierre/truncate css here, manually copy pasted for now */
+  /** Truncation marker CSS kept local so trees owns its row rendering behavior. */
   [data-truncate-container] {
     /* CUSTOM TO TREES, TO SUPPORT THE OUTLINE */
     margin-top: -1px;

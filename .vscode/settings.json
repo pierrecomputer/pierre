@@ -21,7 +21,6 @@
     "**/apps/**/*.css": "tailwindcss",
     "*.css": "css",
     "**/packages/trees/**/*.css": "postcss",
-    "**/packages/truncate/**/*.css": "postcss",
     "*.mdx": "markdown"
   },
   "stylelint.validate": ["css", "postcss"],

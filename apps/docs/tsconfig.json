@@ -14,12 +14,6 @@
     },
     {
       "path": "../../packages/trees/tsconfig.json"
-    },
-    {
-      "path": "../../packages/truncate/tsconfig.json"
-    },
-    {
-      "path": "../../packages/storage-elements-next/tsconfig.json"
     }
   ],
   "compilerOptions": {

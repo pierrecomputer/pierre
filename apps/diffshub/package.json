@@ -8,7 +8,6 @@
     "@pierre/theme": "workspace:*",
     "@pierre/theming": "workspace:*",
     "@pierre/trees": "workspace:*",
-    "@pierre/truncate": "workspace:*",
     "@radix-ui/react-dropdown-menu": "catalog:",
     "@radix-ui/react-slot": "catalog:",
     "@radix-ui/react-switch": "catalog:",

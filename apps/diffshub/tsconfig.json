@@ -16,9 +16,6 @@
       "path": "../../packages/trees/tsconfig.json"
     },
     {
-      "path": "../../packages/truncate/tsconfig.json"
-    },
-    {
       "path": "../../packages/theme/tsconfig.json"
     },
     {
