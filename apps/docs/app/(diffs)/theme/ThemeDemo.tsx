@@ -310,7 +310,7 @@ interface WorkingFile {
 }
 
 export function ThemeDemo() {
-  const { resolvedTheme } = useTheme();
+  const { resolvedColorScheme } = useTheme();
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('dark');
   const [activeTab, setActiveTab] = useState<TabId>('typescript');
   const [mounted, setMounted] = useState(false);
@@ -351,10 +351,10 @@ export function ThemeDemo() {
   // Sync with system theme on mount
   useEffect(() => {
     setMounted(true);
-    if (resolvedTheme === 'light' || resolvedTheme === 'dark') {
-      setColorMode(resolvedTheme);
+    if (resolvedColorScheme === 'light' || resolvedColorScheme === 'dark') {
+      setColorMode(resolvedColorScheme);
     }
-  }, [resolvedTheme]);
+  }, [resolvedColorScheme]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

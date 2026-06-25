@@ -11,8 +11,8 @@ export function TreeCssViewer({
   contents: string;
   filename?: string;
 }) {
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedColorScheme } = useTheme();
+  const isDark = resolvedColorScheme === 'dark';
   const theme = isDark ? 'pierre-dark' : 'pierre-light';
   const themeType = isDark ? 'dark' : 'light';
 

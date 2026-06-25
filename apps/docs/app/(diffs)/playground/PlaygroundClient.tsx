@@ -94,7 +94,7 @@ type EditorMode = 'review' | 'edit';
 // Default values for URL param comparison
 const DEFAULTS = {
   diffStyle: 'split',
-  themeType: 'system',
+  colorMode: 'system',
   lightTheme: 'pierre-light',
   darkTheme: 'pierre-dark',
   diffIndicators: 'bars',
@@ -118,8 +118,8 @@ interface PlaygroundClientProps {
 interface PlaygroundControlsContentProps {
   diffStyle: 'split' | 'unified';
   setDiffStyle: (v: 'split' | 'unified') => void;
-  themeType: 'system' | 'light' | 'dark';
-  setThemeType: (v: 'system' | 'light' | 'dark') => void;
+  colorMode: 'system' | 'light' | 'dark';
+  setColorMode: (v: 'system' | 'light' | 'dark') => void;
   selectedLightTheme: (typeof LIGHT_THEMES)[number];
   setSelectedLightTheme: (v: (typeof LIGHT_THEMES)[number]) => void;
   selectedDarkTheme: (typeof DARK_THEMES)[number];
@@ -158,8 +158,8 @@ interface PlaygroundControlsContentProps {
 function PlaygroundControlsContent({
   diffStyle,
   setDiffStyle,
-  themeType,
-  setThemeType,
+  colorMode,
+  setColorMode,
   selectedLightTheme,
   setSelectedLightTheme,
   selectedDarkTheme,
@@ -270,7 +270,7 @@ function PlaygroundControlsContent({
                 key={theme}
                 onClick={() => {
                   setSelectedLightTheme(theme);
-                  setThemeType('light');
+                  setColorMode('light');
                 }}
                 selected={selectedLightTheme === theme}
               >
@@ -301,7 +301,7 @@ function PlaygroundControlsContent({
                 key={theme}
                 onClick={() => {
                   setSelectedDarkTheme(theme);
-                  setThemeType('dark');
+                  setColorMode('dark');
                 }}
                 selected={selectedDarkTheme === theme}
               >
@@ -315,9 +315,9 @@ function PlaygroundControlsContent({
         </DropdownMenu>
 
         <ButtonGroup
-          value={themeType}
+          value={colorMode}
           onValueChange={(value) =>
-            setThemeType(value as 'system' | 'light' | 'dark')
+            setColorMode(value as 'system' | 'light' | 'dark')
           }
           size="icon"
         >
@@ -541,10 +541,10 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // The app-wide color scheme resolved by @pierre/theming (the shared
-  // theme controller). The diff's "system" mode must follow this so the
-  // editor stays in sync with the rest of the app. See `effectiveThemeType`.
-  const { resolvedTheme } = useTheme();
+  // The app-wide color scheme resolved by @pierre/theming (the shared theme
+  // controller). The diff's "system" mode must follow this so the editor stays
+  // in sync with the rest of the app. See `effectiveColorMode`.
+  const { resolvedColorScheme } = useTheme();
 
   const getParam = <T extends string>(key: string, defaultValue: T): T => {
     return (searchParams.get(key) as T) ?? defaultValue;
@@ -568,8 +568,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     getParam('layout', DEFAULTS.diffStyle) as 'split' | 'unified'
   );
 
-  const [themeType, setThemeType] = useState<'system' | 'light' | 'dark'>(
-    getParam('mode', DEFAULTS.themeType) as 'system' | 'light' | 'dark'
+  const [colorMode, setColorMode] = useState<'system' | 'light' | 'dark'>(
+    getParam('mode', DEFAULTS.colorMode) as 'system' | 'light' | 'dark'
   );
   const [selectedLightTheme, setSelectedLightTheme] = useState<
     (typeof LIGHT_THEMES)[number]
@@ -699,7 +699,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
 
     // Only add non-default values to keep URL clean
     if (diffStyle !== DEFAULTS.diffStyle) params.set('layout', diffStyle);
-    if (themeType !== DEFAULTS.themeType) params.set('mode', themeType);
+    if (colorMode !== DEFAULTS.colorMode) params.set('mode', colorMode);
     if (selectedLightTheme !== DEFAULTS.lightTheme)
       params.set('light', selectedLightTheme);
     if (selectedDarkTheme !== DEFAULTS.darkTheme)
@@ -743,7 +743,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       : '/playground';
   }, [
     diffStyle,
-    themeType,
+    colorMode,
     selectedLightTheme,
     selectedDarkTheme,
     diffIndicators,
@@ -841,8 +841,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const controlsContentProps = {
     diffStyle,
     setDiffStyle,
-    themeType,
-    setThemeType,
+    colorMode,
+    setColorMode,
     selectedLightTheme,
     setSelectedLightTheme,
     selectedDarkTheme,
@@ -879,10 +879,11 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   // theme differs from the OS preference. To keep the editor in sync with the
   // app, resolve "system" to the app's current scheme from @pierre/theming and
   // pass that concrete light/dark to the diff; "light"/"dark" still force the
-  // editor independently. Before the controller has mounted `resolvedTheme` is
-  // undefined, so fall back to "system" to match the prerendered diff.
-  const effectiveThemeType =
-    themeType === 'system' ? (resolvedTheme ?? 'system') : themeType;
+  // editor independently. Before the controller has mounted
+  // `resolvedColorScheme` is undefined, so fall back to "system" to match the
+  // prerendered diff.
+  const effectiveColorMode =
+    colorMode === 'system' ? (resolvedColorScheme ?? 'system') : colorMode;
 
   // Editing takes over click targets, so line selection and gutter comments are
   // disabled while in Edit mode (they only make sense in read-only Review).
@@ -902,7 +903,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         disableBackground,
         disableLineNumbers,
         overflow,
-        themeType: effectiveThemeType,
+        themeType: effectiveColorMode,
         theme: { dark: selectedDarkTheme, light: selectedLightTheme },
         enableLineSelection: contentEditable ? false : canSelectLines,
         enableGutterUtility: contentEditable ? false : canUseGutterComments,
