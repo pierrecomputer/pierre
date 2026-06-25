@@ -69,8 +69,10 @@ export function HomePage() {
             .com/org/repo/pull/number
           </code>
         </div>
-        <HomeFetchForm />
-        <HomeGitHubTokenForm />
+        <div className="bg-accent md:bg-background overflow-hidden rounded-lg border md:my-6">
+          <HomeFetchForm />
+          <HomeGitHubTokenForm />
+        </div>
         <div className="space-y-2">
           <h3 className="text-muted-foreground text-sm font-normal">
             Enter a URL above, or use one of these:

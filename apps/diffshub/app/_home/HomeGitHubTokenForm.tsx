@@ -10,7 +10,7 @@ export const HomeGitHubTokenForm = memo(function HomeGitHubTokenForm() {
   return (
     <GitHubTokenControl
       active={hasToken}
-      className="bg-accent md:bg-background rounded-lg border px-4 py-3"
+      className="border-border/70 border-t px-4 py-3"
       onClear={clearToken}
       onSave={setToken}
       title="Private GitHub access"
