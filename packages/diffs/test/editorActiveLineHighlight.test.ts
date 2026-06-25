@@ -96,7 +96,7 @@ describe('editor active line highlight', () => {
     }
   });
 
-  test('keeps the caret line highlighted during a forward multi-line selection', async () => {
+  test('drops the full-line highlight during a forward multi-line selection', async () => {
     const { cleanup, content, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie\ndelta'
     );
@@ -108,15 +108,15 @@ describe('editor active line highlight', () => {
           direction: 'forward',
         },
       ]);
-      // A forward selection puts the caret on the end line (index 3 ->
-      // data-line "4"); only that line carries the active-line highlight.
-      expect(highlightedLineNumbers(content)).toEqual([4]);
+      // A non-empty selection shows the selected text, not a full-line
+      // background, so no row carries the active-line highlight.
+      expect(highlightedLineNumbers(content)).toEqual([]);
     } finally {
       cleanup();
     }
   });
 
-  test('keeps the caret line highlighted during a backward multi-line selection', async () => {
+  test('drops the full-line highlight during a backward multi-line selection', async () => {
     const { cleanup, content, editor } = await createEditorFixture(
       'alpha\nbravo\ncharlie\ndelta'
     );
@@ -128,9 +128,7 @@ describe('editor active line highlight', () => {
           direction: 'backward',
         },
       ]);
-      // A backward selection puts the caret on the start line (index 1 ->
-      // data-line "2"), not the end of the range.
-      expect(highlightedLineNumbers(content)).toEqual([2]);
+      expect(highlightedLineNumbers(content)).toEqual([]);
     } finally {
       cleanup();
     }
@@ -150,10 +148,9 @@ describe('editor active line highlight', () => {
           direction: 'forward',
         },
       ]);
-      // The caret line still gets the active-line highlight...
-      expect(highlightedLineNumbers(content)).toEqual([4]);
-      // ...but the editor renders it without publishing a line selection.
-      // Text selection is not a gutter line selection, so a consumer's
+      // A non-empty selection draws no full-line highlight...
+      expect(highlightedLineNumbers(content)).toEqual([]);
+      // ...and text selection is not a gutter line selection, so a consumer's
       // onLineSelected handler must not fire.
       expect(notifiedRanges).toEqual([]);
     } finally {

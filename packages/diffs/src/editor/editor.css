@@ -2,6 +2,20 @@
   background-color: transparent;
 }
 
+/* Read-only deletion text sits outside the editor's selection overlay, so the
+   global transparent ::selection above hides its selection by default. Reveal
+   the native selection (so users can see what they select and copy) only while
+   the user is actively selecting within deleted text: the editor sets
+   data-deleted-text-selection on the diff while a pointer gesture starts there.
+   Gating it this way means a normal selection of editable code that merely
+   sweeps across an interleaved deleted line (unified view) does not highlight
+   that line. Covers the whole deletions column in split view and individual
+   deleted lines in unified view. */
+[data-deleted-text-selection] [data-deletions] ::selection,
+[data-deleted-text-selection] [data-line-type='change-deletion'] ::selection {
+  background-color: var(--diffs-editor-selection-bg);
+}
+
 @keyframes blinking {
   0% {
     opacity: 1;
@@ -31,8 +45,6 @@
 }
 [data-gutter-buffer],
 [data-line]:not([data-selected-line]),
-[data-line]:not([data-selected-line]) span,
-[data-line] [data-diff-span],
 [data-line-annotation] {
   background-color: transparent;
 }

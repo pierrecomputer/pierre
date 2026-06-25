@@ -217,6 +217,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #isContentMouseDown = false;
   #shiftKeyPressed = false;
   #selectionStart: EditorSelection | undefined;
+  // The full text of a read-only deleted-line selection built from the gutter,
+  // captured when the selection is made. Deleted lines are separate read-only
+  // hosts, so window.getSelection() only spans the first line; the copy/cut
+  // handlers prefer this. Empty for a direct content drag (no gutter range).
+  #deletedSelectionText = '';
   #reservedSelections?: EditorSelection[];
   #initSelections?: EditorSelection[];
   #selections?: EditorSelection[];
@@ -1083,6 +1088,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             return;
           }
 
+          // A click on a read-only deleted line (unified view) selects it
+          // natively. Hand the selection to the deleted text and drop the
+          // editor's own selection, so only one region is highlighted at a
+          // time and the deleted line is not swept into an editable selection.
+          if (this.#isDeletedLineTarget(e)) {
+            this.#setDeletedTextSelectionActive(true);
+            if (this.#selections !== undefined) {
+              this.#updateSelections([]);
+            }
+            return;
+          }
+          this.#setDeletedTextSelectionActive(false);
+
           this.#markerRenderer?.removePopup();
 
           // this is a workaround for the selection rendering glitch
@@ -1224,7 +1242,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           return;
         }
         e.preventDefault();
-        e.clipboardData?.setData('text', this.#getSelectionText());
+        // A read-only deleted-text selection lives outside the editor's
+        // document, so #getSelectionText() would be empty. Copy the selected
+        // deleted text instead.
+        e.clipboardData?.setData(
+          'text',
+          this.#isDeletedTextSelectionActive()
+            ? this.#deletedTextForClipboard()
+            : this.#getSelectionText()
+        );
       }),
 
       addEventListener(contentEl, 'cut', (e) => {
@@ -1232,7 +1258,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           return;
         }
         e.preventDefault();
-        e.clipboardData?.setData('text', this.#cutSelectionText());
+        // Deleted text is read-only and can't be removed, so a cut there copies
+        // the selected deleted text (like the copy handler) without editing.
+        e.clipboardData?.setData(
+          'text',
+          this.#isDeletedTextSelectionActive()
+            ? this.#deletedTextForClipboard()
+            : this.#cutSelectionText()
+        );
       }),
 
       addEventListener(contentEl, 'paste', (e) => {
@@ -1305,6 +1338,53 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         { passive: true }
       ),
     ];
+
+    // A selection in the read-only deletions column is painted natively (see
+    // the gated ::selection rule). Starting one there reveals that selection
+    // and clears the editor's own selection on the additions side, so only one
+    // column shows a selection at a time. Non-diff files have no deletions
+    // column.
+    const deletionsCode =
+      this.#fileContainer?.shadowRoot?.querySelector<HTMLElement>(
+        '[data-deletions]'
+      );
+    if (deletionsCode != null) {
+      this.#editorEventDisposes.push(
+        addEventListener(
+          deletionsCode,
+          'pointerdown',
+          (e) => {
+            // Clicking a deletion line's number selects the whole line's text
+            // and dragging extends the selection across deletion lines (like a
+            // click/drag on an addition line number); clicking its text lets
+            // the browser place/extend the selection directly. Either way the
+            // deleted-text marker reveals it and the editor drops its own
+            // selection.
+            const target = e.composedPath()[0];
+            const gutterRow =
+              target instanceof HTMLElement
+                ? target.closest('[data-column-number]')
+                : null;
+            if (
+              gutterRow instanceof HTMLElement &&
+              this.#beginDeletionGutterSelection(
+                gutterRow,
+                deletionsCode,
+                e.pointerType === 'mouse'
+              )
+            ) {
+              return;
+            }
+            this.#setDeletedTextSelectionActive(true);
+            if (this.#selections !== undefined) {
+              this.#updateSelections([]);
+            }
+          },
+          { passive: true }
+        )
+      );
+    }
+
     if (gutterEl !== undefined) {
       const resolveGutterTarget = (
         eventTarget: HTMLElement | undefined,
@@ -1342,38 +1422,57 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           gutterEl,
           'pointerdown',
           (e) => {
-            // Gutter drag-selection is mouse-only: the global pointerup that
-            // clears #isGutterMouseDown and disposes the mousemove listener
-            // bails for non-mouse pointers, so reacting to a touch/pen tap
-            // here would strand that state and leak the listener. Mirror the
-            // content pointerdown guard.
+            const gutterRow = resolveGutterTarget(
+              e.composedPath()[0] as HTMLElement | undefined
+            );
+            // Clicking a read-only deleted line's number (unified view) selects
+            // that line's text natively, since the line is not in the editor's
+            // document. This runs before the mouse-only gate below: a deletion
+            // tap registers no drag state to strand, so it works on touch too,
+            // matching the split deletions column.
+            if (gutterRow?.dataset.lineType === 'change-deletion') {
+              const code = gutterRow.closest('[data-code]');
+              if (code != null) {
+                this.#beginDeletionGutterSelection(
+                  gutterRow,
+                  code,
+                  e.pointerType === 'mouse'
+                );
+              }
+              return;
+            }
+
+            // Editable gutter drag-selection is mouse-only: the global pointerup
+            // that clears #isGutterMouseDown and disposes the mousemove listener
+            // bails for non-mouse pointers, so reacting to a touch/pen tap here
+            // would strand that state and leak the listener. Mirror the content
+            // pointerdown guard.
             if (e.pointerType !== 'mouse') {
               return;
             }
 
             const textDocument = this.#textDocument;
-            const lineIndex = resolveEditableLine(
-              resolveGutterTarget(
-                e.composedPath()[0] as HTMLElement | undefined
-              )
-            );
+            const lineIndex = resolveEditableLine(gutterRow);
             if (lineIndex === undefined || textDocument === undefined) {
               return;
             }
 
             this.#markerRenderer?.removePopup();
-            const selection: EditorSelection = {
-              start: { line: lineIndex, character: 0 },
-              end: {
-                line: lineIndex,
-                character: textDocument.getLineText(lineIndex).length,
-              },
-              direction: DirectionForward,
-            };
+            const selection = this.#spanLineSelection(
+              lineIndex,
+              lineIndex,
+              textDocument
+            );
             this.#isGutterMouseDown = true;
             this.#selectionStart = selection;
             this.#updateSelections([selection]);
-            this.#focus(selection.end);
+            // Span the native selection across the clicked line and focus
+            // without collapsing it. #focus(position) would drop a collapsed
+            // caret at the line end, which a later selectionchange then turns
+            // into a bare caret — so a single click on a line number would
+            // place a cursor instead of selecting the whole line's text.
+            this.#setWindowSelection(selection);
+            this.#focus();
             this.#replaceSelectEventListeners([
               addEventListener(
                 document,
@@ -1393,24 +1492,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
                     return;
                   }
 
-                  let selection: EditorSelection = {
-                    start: { line: lineIndex, character: 0 },
-                    end: {
-                      line: lineIndex,
-                      character: textDocument.getLineText(lineIndex).length,
-                    },
-                    direction: DirectionForward,
-                  };
-                  if (this.#selectionStart !== undefined) {
-                    selection = createSelectionFrom(
-                      this.#selectionStart,
-                      selection
-                    );
-                  } else {
-                    this.#selectionStart = selection;
-                  }
+                  // A gutter drag keeps both the clicked line (the anchor) and
+                  // the line under the pointer fully selected. Until a drag
+                  // outruns its pointerdown the anchor is set; if it somehow is
+                  // not, the line under the pointer becomes the anchor.
+                  const anchorLine =
+                    this.#selectionStart?.start.line ?? lineIndex;
+                  const selection = this.#spanLineSelection(
+                    anchorLine,
+                    lineIndex,
+                    textDocument
+                  );
+                  this.#selectionStart ??= selection;
                   this.#updateSelections([selection]);
-                  this.#focus(selection.end);
+                  this.#focus(
+                    selection.direction === DirectionBackward
+                      ? selection.start
+                      : selection.end
+                  );
                 },
                 { passive: true }
               ),
@@ -2156,12 +2255,251 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     virtualCaret.remove();
   }
 
-  #setSelectedLinesSafe(range: { start: number; end: number } | null): void {
+  // Build a selection that fully covers every line from the anchor line to the
+  // focus line — from the topmost line's start to the bottommost line's end.
+  // Dragging above the anchor yields a backward selection so the anchor line
+  // stays selected and #focus lands on the line the gesture ended on. A single
+  // line (anchor === focus) is a forward whole-line selection.
+  #spanLineSelection(
+    anchorLine: number,
+    focusLine: number,
+    textDocument: TextDocument<LAnnotation>
+  ): EditorSelection {
+    const lineStart = (line: number): Position => ({ line, character: 0 });
+    const lineEnd = (line: number): Position => ({
+      line,
+      character: textDocument.getLineText(line).length,
+    });
+    if (focusLine < anchorLine) {
+      return {
+        start: lineStart(focusLine),
+        end: lineEnd(anchorLine),
+        direction: DirectionBackward,
+      };
+    }
+    return {
+      start: lineStart(anchorLine),
+      end: lineEnd(focusLine),
+      direction: DirectionForward,
+    };
+  }
+
+  // A pointer gesture targets read-only deleted text when its closest row is a
+  // change-deletion. Used to route a click in unified view's deleted text to a
+  // native selection instead of the editor's own.
+  #isDeletedLineTarget(event: Event): boolean {
+    const target = event.composedPath()[0];
+    return (
+      target instanceof HTMLElement &&
+      target.closest('[data-line]')?.getAttribute('data-line-type') ===
+        'change-deletion'
+    );
+  }
+
+  // Select read-only deleted text with the native selection, spanning from the
+  // anchor row to the focus row (the same row for a click). Deleted lines are
+  // not part of the editor's document, so they cannot be selected as editor
+  // text; instead select their DOM text, reveal it via the deleted-text marker,
+  // drop the editor's own selection, and highlight the deleted gutter numbers so
+  // the result matches a click/drag on an addition line.
+  #selectDeletedLines(
+    anchorContent: HTMLElement,
+    focusContent: HTMLElement,
+    deletionsCode: Element
+  ): void {
+    const rows = [
+      ...deletionsCode.querySelectorAll('[data-content] > [data-line]'),
+    ];
+    const anchorIndex = rows.indexOf(anchorContent);
+    const focusIndex = rows.indexOf(focusContent);
+    const [topContent, bottomContent] =
+      focusIndex < anchorIndex
+        ? [focusContent, anchorContent]
+        : [anchorContent, focusContent];
+
+    const winSelection = window.getSelection();
+    if (winSelection !== null) {
+      const range = document.createRange();
+      range.setStart(topContent, 0);
+      range.setEnd(bottomContent, bottomContent.childNodes.length);
+      winSelection.removeAllRanges();
+      winSelection.addRange(range);
+    }
+
+    this.#setDeletedTextSelectionActive(true);
+    this.#updateSelections([]);
+
+    // Highlight only the focus line's gutter number — the line where the click
+    // landed or the drag ended. An addition selection highlights just its caret
+    // line (getCaretPosition is the focus end), so matching that keeps the two
+    // sides consistent. #setDeletedTextSelectionActive cleared the previous
+    // selection's number above, so set this one's directly on the gutter row
+    // that lines up with the focus content row.
+    const gutterRows = [
+      ...deletionsCode.querySelectorAll('[data-gutter] > [data-column-number]'),
+    ];
+    gutterRows[focusIndex]?.setAttribute('data-selected-line', 'single');
+
+    // Record the selected deleted lines' text for the clipboard. Each deleted
+    // line is its own read-only host, so window.getSelection().toString() only
+    // captures the first line; the copy/cut handlers prefer this value.
+    const lo = Math.min(anchorIndex, focusIndex);
+    const hi = Math.max(anchorIndex, focusIndex);
+    this.#deletedSelectionText =
+      lo < 0
+        ? ''
+        : rows
+            .slice(lo, hi + 1)
+            .filter(
+              (row) => row.getAttribute('data-line-type') === 'change-deletion'
+            )
+            .map((row) => row.textContent ?? '')
+            .join('\n');
+  }
+
+  // The content row that lines up with a gutter row: the two columns are
+  // parallel, so the gutter row's index is the content row's index.
+  #contentRowForGutterRow(
+    gutterRow: HTMLElement,
+    contentColumn: Element | null | undefined
+  ): HTMLElement | undefined {
+    const gutterColumn = gutterRow.parentElement;
+    if (gutterColumn == null || contentColumn == null) {
+      return undefined;
+    }
+    const index = [...gutterColumn.children].indexOf(gutterRow);
+    const row = contentColumn.children[index];
+    return row instanceof HTMLElement ? row : undefined;
+  }
+
+  // Begin a native selection of read-only deleted lines from a pointerdown on a
+  // deletion line number. Selects the clicked line and, for a mouse pointer,
+  // tracks a drag across the deletion gutter that extends the selection — the
+  // same gesture as a click/drag on an addition line number. `code` is the
+  // [data-code] holding the deletion column: the separate deletions column in
+  // split view, or the shared column in unified view. Returns false when the
+  // gutter row has no matching content row, letting the caller fall back to a
+  // plain deleted-text selection.
+  #beginDeletionGutterSelection(
+    gutterRow: HTMLElement,
+    code: Element,
+    isMouse: boolean
+  ): boolean {
+    const contentColumn = code.querySelector('[data-content]');
+    const anchorContent = this.#contentRowForGutterRow(
+      gutterRow,
+      contentColumn
+    );
+    if (anchorContent === undefined) {
+      return false;
+    }
+    this.#selectDeletedLines(anchorContent, anchorContent, code);
+    // The document pointerup disposes this listener; it must not set
+    // #isGutterMouseDown, whose pointerup focuses the editor and would collapse
+    // the native deletion selection.
+    if (isMouse) {
+      this.#replaceSelectEventListeners([
+        addEventListener(
+          document,
+          'mousemove',
+          (moveEvent) => {
+            const moveTarget = moveEvent.composedPath()[0];
+            const moveGutter =
+              moveTarget instanceof HTMLElement
+                ? moveTarget.closest('[data-column-number]')
+                : null;
+            if (
+              moveGutter instanceof HTMLElement &&
+              code.contains(moveGutter)
+            ) {
+              const focusContent = this.#contentRowForGutterRow(
+                moveGutter,
+                contentColumn
+              );
+              if (focusContent !== undefined) {
+                this.#selectDeletedLines(anchorContent, focusContent, code);
+              }
+            }
+          },
+          { passive: true }
+        ),
+      ]);
+    }
+    return true;
+  }
+
+  // Whether a read-only deleted-text selection is currently active (the marker
+  // #setDeletedTextSelectionActive sets). The copy/cut handlers read this to
+  // copy the native selection instead of the editor's empty document selection.
+  #isDeletedTextSelectionActive(): boolean {
+    return (
+      this.#fileContainer?.shadowRoot
+        ?.querySelector('pre')
+        ?.hasAttribute('data-deleted-text-selection') ?? false
+    );
+  }
+
+  // The clipboard text for a read-only deleted-text selection. A gutter
+  // selection records the full multi-line text in #deletedSelectionText; a
+  // direct content drag leaves it empty, so fall back to the browser's native
+  // selection (which spans only the first deleted line — its separate host).
+  #deletedTextForClipboard(): string {
+    return this.#deletedSelectionText !== ''
+      ? this.#deletedSelectionText
+      : (window.getSelection()?.toString() ?? '');
+  }
+
+  // Toggle the marker that reveals the native selection inside read-only
+  // deleted text (see the gated ::selection rule). It stays on only while the
+  // user is actively selecting within deleted lines, so a normal selection of
+  // editable code that sweeps across an interleaved deleted line does not
+  // highlight it.
+  #setDeletedTextSelectionActive(active: boolean): void {
+    const pre = this.#fileContainer?.shadowRoot?.querySelector('pre');
+    if (pre == null) {
+      return;
+    }
+    if (active) {
+      pre.setAttribute('data-deleted-text-selection', '');
+      // Drop any line-number highlight left over from a previous selection.
+      // #selectDeletedLines marks the deleted gutter numbers directly, and the
+      // editor only clears them when its own selection range changes — but
+      // deletion selections leave that range null, so a second deletion click
+      // would otherwise keep the first selection's numbers highlighted.
+      for (const highlighted of pre.querySelectorAll('[data-selected-line]')) {
+        highlighted.removeAttribute('data-selected-line');
+      }
+      // Reset the captured selection text. #selectDeletedLines refills it for a
+      // gutter selection; a content drag leaves it empty so the copy/cut
+      // handlers fall back to the native selection.
+      this.#deletedSelectionText = '';
+    } else {
+      pre.removeAttribute('data-deleted-text-selection');
+      this.#deletedSelectionText = '';
+    }
+  }
+
+  #setSelectedLinesSafe(
+    range: { start: number; end: number } | null,
+    lineNumberOnly = false
+  ): void {
     try {
       // notify: false renders the active-line highlight without firing the
       // host's onLineSelected callback. A caret or text selection in the editor
       // is not a gutter line selection, so it must not publish one.
-      this.#fileInstance?.setSelectedLines(range, { notify: false });
+      //
+      // activeLineSide keeps the highlight on the additions pane, the side the
+      // editor edits. Without it a split diff also highlights the matching
+      // read-only deletions row on the left.
+      //
+      // lineNumberOnly marks just the caret line's gutter number while text is
+      // selected, so the line keeps its highlighted number but drops the
+      // full-line background in favor of the text selection.
+      this.#fileInstance?.setSelectedLines(range, {
+        notify: false,
+        activeLineSide: 'additions',
+        lineNumberOnly,
+      });
     } catch {
       // InteractionManager.renderSelection can throw while editor DOM is updating.
     }
@@ -2196,12 +2534,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const normalizedSelections = mergeOverlappingSelections(selections);
       const primarySelection = normalizedSelections.at(-1)!;
       this.#selections = normalizedSelections;
-      // Highlight the line that holds the caret (the selection's head),
-      // whether the selection is collapsed or spans a range. A ranged selection
-      // previously skipped this, so starting a multi-line selection dropped the
-      // active-line highlight from the line the cursor was on.
+      // The caret line always keeps its highlighted gutter number. With a bare
+      // caret it also gets the full-line background; once any selection spans
+      // text, the background is dropped (lineNumberOnly) so the text selection
+      // is the only line-level highlight.
+      const hasNonEmptySelection = normalizedSelections.some(
+        (selection) => !isCollapsedSelection(selection)
+      );
       const caretLine = getCaretPosition(primarySelection).line + 1;
-      this.#setSelectedLinesSafe({ start: caretLine, end: caretLine });
+      this.#setSelectedLinesSafe(
+        { start: caretLine, end: caretLine },
+        hasNonEmptySelection
+      );
 
       for (const selection of normalizedSelections) {
         if (!isCollapsedSelection(selection)) {
