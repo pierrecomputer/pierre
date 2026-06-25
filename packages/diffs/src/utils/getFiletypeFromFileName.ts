@@ -314,6 +314,8 @@ export const EXTENSION_TO_FILE_FORMAT: ExtensionFormatMap = {
   tfvars: 'tfvars',
   toml: 'toml',
   ts: 'typescript',
+  mts: 'typescript',
+  cts: 'typescript',
   tsp: 'typespec',
   tsv: 'tsv',
   tsx: 'tsx',
