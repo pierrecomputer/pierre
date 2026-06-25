@@ -41,6 +41,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/DropdownMenu';
+import { GitHubTokenControl } from '@/components/GitHubTokenControl';
 import { Switch } from '@/components/Switch';
 import { docsThemeCatalog } from '@/components/themeCatalog';
 import { cn } from '@/lib/cn';
@@ -62,10 +63,13 @@ interface HeaderProps {
   diffStyle: 'split' | 'unified';
   fileTreeAvailable: boolean;
   fileTreeOverlayOpen: boolean;
+  githubTokenActive: boolean;
   initialUrl: string;
   lightThemeName: LightThemeName;
   lineNumbers: boolean;
   overflow: 'wrap' | 'scroll';
+  onClearGitHubToken(): void;
+  onSaveGitHubToken(token: string): void;
   onToggleCollapseMode(): void;
   onToggleFileTreeOverlay(): void;
   setColorMode(mode: ColorMode): void;
@@ -88,10 +92,13 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
   diffStyle,
   fileTreeAvailable,
   fileTreeOverlayOpen,
+  githubTokenActive,
   initialUrl,
   lightThemeName,
   lineNumbers,
   overflow,
+  onClearGitHubToken,
+  onSaveGitHubToken,
   onToggleCollapseMode,
   onToggleFileTreeOverlay,
   setColorMode,
@@ -241,6 +248,12 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
                 className="w-58 p-2"
                 style={dropdownThemeStyle}
               >
+                <GitHubTokenControl
+                  active={githubTokenActive}
+                  onClear={onClearGitHubToken}
+                  onSave={onSaveGitHubToken}
+                />
+                <div className="bg-border/70 my-1 h-px" />
                 <DropdownMenuItem
                   className="cursor-default p-0"
                   onSelect={(e) => e.preventDefault()}

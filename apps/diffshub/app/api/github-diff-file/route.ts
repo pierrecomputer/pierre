@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
   const name = params.get('name');
   const type = parseChangeType(params.get('type'));
   const prevName = params.get('prevName') ?? undefined;
+  const token = parseBearerToken(request.headers.get('authorization'));
 
   if (path == null || name == null || type == null) {
     return createJSONResponse(
@@ -28,7 +29,10 @@ export async function GET(request: NextRequest) {
 
   try {
     return createJSONResponse(
-      await loadGitHubDiffFiles({ name, path, prevName, type })
+      await loadGitHubDiffFiles(
+        { name, path, prevName, type },
+        token == null ? undefined : { token, tokenSource: 'request' }
+      )
     );
   } catch (error) {
     return createJSONResponse(
@@ -36,6 +40,16 @@ export async function GET(request: NextRequest) {
       { status: 502 }
     );
   }
+}
+
+function parseBearerToken(value: string | null): string | undefined {
+  if (value == null) {
+    return undefined;
+  }
+
+  const match = /^Bearer\s+(.+)$/i.exec(value.trim());
+  const token = match?.[1]?.trim();
+  return token == null || token === '' ? undefined : token;
 }
 
 function parseChangeType(value: string | null): ChangeTypes | undefined {
@@ -55,6 +69,7 @@ function createJSONResponse(
     status: options.status ?? 200,
     headers: {
       'Cache-Control': CACHE_CONTROL,
+      Vary: 'Authorization',
     },
   });
 }

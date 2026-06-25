@@ -56,6 +56,8 @@ const GENERIC_PATCH_LOAD_ERROR_MESSAGE =
 interface UsePatchLoaderOptions {
   collapseMode: 'expanded' | 'collapsed';
   domain?: string;
+  getGitHubToken?(): string | undefined;
+  githubTokenVersion?: number | string;
   onLoadStart(): void;
   path: string;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
@@ -80,6 +82,8 @@ interface UsePatchLoaderResult {
 export function usePatchLoader({
   collapseMode,
   domain,
+  getGitHubToken,
+  githubTokenVersion = 0,
   onLoadStart,
   path,
   viewerRef,
@@ -268,12 +272,13 @@ export function usePatchLoader({
           }
         }
 
-        console.time('--     request time');
-        const response = await fetch(`/api/diff?${patchSearchParams}`, {
-          cache: 'no-store',
-          signal: controller.signal,
-        });
-        console.timeEnd('--     request time');
+        const response = await fetch(
+          `/api/diff?${patchSearchParams}`,
+          createPatchRequestInit(
+            controller.signal,
+            domain == null || domain === '' ? getGitHubToken?.() : undefined
+          )
+        );
 
         // This only catches route setup errors. GitHub fetch failures are
         // delivered while consuming the stream so the UI can enter the
@@ -286,9 +291,7 @@ export function usePatchLoader({
         }
 
         if (response.body == null) {
-          console.time('--     reading patch');
           const patchContent = await response.text();
-          console.timeEnd('--     reading patch');
           await commitFullPatch(patchContent);
           return;
         }
@@ -404,7 +407,6 @@ export function usePatchLoader({
         const appendStreamedFile = async (fileText: string) => {
           if (!hasReceivedFirstStreamedFile) {
             hasReceivedFirstStreamedFile = true;
-            console.timeEnd('--     first streamed file');
           }
 
           const patchMetadata = getStreamedPatchMetadata(fileText);
@@ -450,13 +452,10 @@ export function usePatchLoader({
           publishTreeSourceIfNeeded();
         };
 
-        console.time('--     first streamed file');
-        console.time('--     reading patch stream');
         const fallbackPatchContent = await streamGitPatchFiles(
           response.body,
           appendStreamedFile
         );
-        console.timeEnd('--     reading patch stream');
         if (!isCurrentRequest()) {
           return;
         }
@@ -475,8 +474,7 @@ export function usePatchLoader({
         if (!isCurrentRequest()) {
           return;
         }
-        console.warn('Failed to load diff', error);
-        setErrorMessage(GENERIC_PATCH_LOAD_ERROR_MESSAGE);
+        setErrorMessage(getPatchLoadErrorMessage(error));
         setLoadState('error');
       }
     }
@@ -488,6 +486,8 @@ export function usePatchLoader({
     };
   }, [
     domain,
+    getGitHubToken,
+    githubTokenVersion,
     loadAttempt,
     onLoadStart,
     path,
@@ -574,6 +574,30 @@ function applyDiffsHubItemIdRename(
 
 function getNextItemVersion(item: { version?: string | number }): number {
   return typeof item.version === 'number' ? item.version + 1 : 1;
+}
+
+function createPatchRequestInit(
+  signal: AbortSignal,
+  token: string | undefined
+): RequestInit {
+  const normalizedToken = token?.trim();
+  if (normalizedToken == null || normalizedToken === '') {
+    return { cache: 'no-store', signal };
+  }
+  return {
+    cache: 'no-store',
+    headers: {
+      Authorization: `Bearer ${normalizedToken}`,
+    },
+    signal,
+  };
+}
+
+function getPatchLoadErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim() !== '') {
+    return error.message;
+  }
+  return GENERIC_PATCH_LOAD_ERROR_MESSAGE;
 }
 
 function replaceLocationHash(hash: string | null): void {

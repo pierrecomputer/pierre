@@ -10,6 +10,8 @@ type GitHubFileLoaderFetch = (
 interface GitHubDiffFileLoaderOptions {
   endpoint?: string;
   fetch?: GitHubFileLoaderFetch;
+  getAuthVersion?(): number | string;
+  getToken?(): string | undefined;
 }
 
 interface LoadedDiffFilesResponse {
@@ -30,6 +32,8 @@ export function createGitHubDiffFileLoader(
 
   const endpoint = options.endpoint ?? '/api/github-diff-file';
   const fetcher = options.fetch ?? fetch;
+  const getAuthVersion = options.getAuthVersion ?? (() => 0);
+  const getToken = options.getToken ?? (() => undefined);
   const loadedFilesCache = new Map<string, Promise<LoadedDiffFilesResponse>>();
 
   return (fileDiff) => {
@@ -55,7 +59,7 @@ export function createGitHubDiffFileLoader(
       case 'change':
       case 'rename-changed':
       case 'rename-pure': {
-        const cacheKey = `${fileDiff.type}\0${fileDiff.prevName ?? ''}\0${fileDiff.name}`;
+        const cacheKey = `${getAuthVersion()}\0${fileDiff.type}\0${fileDiff.prevName ?? ''}\0${fileDiff.name}`;
         const cached = loadedFilesCache.get(cacheKey);
         if (cached != null) {
           return cached;
@@ -67,6 +71,7 @@ export function createGitHubDiffFileLoader(
           fileDiff.type,
           fileDiff.name,
           fileDiff.prevName,
+          getToken(),
           fetcher
         ).catch((error: unknown) => {
           loadedFilesCache.delete(cacheKey);
@@ -85,14 +90,15 @@ async function fetchLoadedDiffFiles(
   type: string,
   name: string,
   prevName: string | undefined,
+  token: string | undefined,
   fetcher: GitHubFileLoaderFetch
 ): Promise<LoadedDiffFilesResponse> {
   const response = await fetcher(
     createEndpointURL(endpoint, sourcePath, type, name, prevName),
-    { cache: 'no-store' }
+    createEndpointRequestInit(token)
   );
   if (!response.ok) {
-    const detail = (await response.text()).trim();
+    const detail = await readLoaderErrorDetail(response);
     throw new Error(
       detail.length > 0
         ? `DiffsHub GitHub file loader failed (${response.status}): ${detail}`
@@ -115,6 +121,36 @@ function createEndpointURL(
     searchParams.set('prevName', prevName);
   }
   return `${endpoint}?${searchParams}`;
+}
+
+function createEndpointRequestInit(token: string | undefined): RequestInit {
+  const normalizedToken = token?.trim();
+  if (normalizedToken == null || normalizedToken === '') {
+    return { cache: 'no-store' };
+  }
+  return {
+    cache: 'no-store',
+    headers: {
+      Authorization: `Bearer ${normalizedToken}`,
+    },
+  };
+}
+
+async function readLoaderErrorDetail(response: Response): Promise<string> {
+  const text = (await response.text()).trim();
+  if (text === '') {
+    return '';
+  }
+
+  try {
+    const data = JSON.parse(text) as unknown;
+    if (isRecord(data) && typeof data.error === 'string') {
+      return data.error;
+    }
+  } catch {
+    // Fall back to the original body when the proxy returns plain text.
+  }
+  return text;
 }
 
 function normalizeLoadedDiffFiles(data: unknown): LoadedDiffFilesResponse {

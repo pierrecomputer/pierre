@@ -11,6 +11,7 @@ import {
 const GITHUB_API_ROOT = 'https://api.github.com';
 const GITHUB_RAW_ROOT = 'https://raw.githubusercontent.com';
 const GITHUB_API_VERSION = '2022-11-28';
+const GITHUB_RAW_MEDIA_TYPE = 'application/vnd.github.raw';
 const REF_CACHE_TTL_MS = 5 * 60 * 1000;
 const FILE_CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -38,6 +39,7 @@ export interface GitHubDiffFileRequest {
 interface GitHubDiffFileServerOptions {
   fetch?: GitHubServerFetch;
   token?: string;
+  tokenSource?: 'request';
 }
 
 interface CacheEntry<T> {
@@ -58,6 +60,7 @@ export async function loadGitHubDiffFiles(
   }
 
   const fetcher = options.fetch ?? fetch;
+  const useSharedCache = options.tokenSource !== 'request';
   switch (request.type) {
     case 'new':
       return {
@@ -71,25 +74,61 @@ export async function loadGitHubDiffFiles(
       };
     case 'change':
     case 'rename-changed': {
-      const refs = await resolveCachedGitHubDiffRefs(source, fetcher, options);
+      const refs = await resolveGitHubDiffRefsForRequest(
+        source,
+        fetcher,
+        options,
+        useSharedCache
+      );
       const oldRef = requireOldRef(request.name, refs);
       const oldPath = request.prevName ?? request.name;
       const [oldFile, newFile] = await Promise.all([
-        loadCachedGitHubFile(oldRef, oldPath, fetcher),
-        loadCachedGitHubFile(refs.newRef, request.name, fetcher),
+        loadGitHubFileForRequest(
+          oldRef,
+          oldPath,
+          fetcher,
+          options,
+          useSharedCache
+        ),
+        loadGitHubFileForRequest(
+          refs.newRef,
+          request.name,
+          fetcher,
+          options,
+          useSharedCache
+        ),
       ]);
       return { oldFile, newFile };
     }
     case 'rename-pure': {
-      const refs = await resolveCachedGitHubDiffRefs(source, fetcher, options);
-      const newFile = await loadCachedGitHubFile(
+      const refs = await resolveGitHubDiffRefsForRequest(
+        source,
+        fetcher,
+        options,
+        useSharedCache
+      );
+      const newFile = await loadGitHubFileForRequest(
         refs.newRef,
         request.name,
-        fetcher
+        fetcher,
+        options,
+        useSharedCache
       );
       return { oldFile: null, newFile };
     }
   }
+}
+
+function resolveGitHubDiffRefsForRequest(
+  source: GitHubDiffSource,
+  fetcher: GitHubServerFetch,
+  options: GitHubDiffFileServerOptions,
+  useSharedCache: boolean
+): Promise<GitHubDiffRefs> {
+  if (!useSharedCache) {
+    return resolveGitHubDiffRefs(source, fetcher, options);
+  }
+  return resolveCachedGitHubDiffRefs(source, fetcher, options);
 }
 
 export function clearGitHubDiffFileServerCache(): void {
@@ -111,13 +150,28 @@ function resolveCachedGitHubDiffRefs(
 function loadCachedGitHubFile(
   repoRef: GitHubRepoRef,
   path: string,
-  fetcher: GitHubServerFetch
+  fetcher: GitHubServerFetch,
+  options: GitHubDiffFileServerOptions
 ): Promise<FileContents> {
   const normalizedPath = path.replace(/^\/+/, '');
   const cacheKey = `${repoRef.owner}/${repoRef.repo}\0${repoRef.ref}\0${normalizedPath}`;
   return getCachedPromise(fileCache, cacheKey, FILE_CACHE_TTL_MS, () =>
-    fetchGitHubFile(repoRef, normalizedPath, fetcher)
+    fetchGitHubFile(repoRef, normalizedPath, fetcher, options)
   );
+}
+
+function loadGitHubFileForRequest(
+  repoRef: GitHubRepoRef,
+  path: string,
+  fetcher: GitHubServerFetch,
+  options: GitHubDiffFileServerOptions,
+  useSharedCache: boolean
+): Promise<FileContents> {
+  const normalizedPath = path.replace(/^\/+/, '');
+  if (!useSharedCache) {
+    return fetchGitHubFile(repoRef, normalizedPath, fetcher, options);
+  }
+  return loadCachedGitHubFile(repoRef, normalizedPath, fetcher, options);
 }
 
 function getCachedPromise<T>(
@@ -286,21 +340,52 @@ async function readCompareHeadSha(
 async function fetchGitHubFile(
   repoRef: GitHubRepoRef,
   path: string,
-  fetcher: GitHubServerFetch
+  fetcher: GitHubServerFetch,
+  options: GitHubDiffFileServerOptions
 ): Promise<FileContents> {
-  const url = `${GITHUB_RAW_ROOT}/${encodeURLSegment(repoRef.owner)}/${encodeURLSegment(repoRef.repo)}/${encodeURLSegment(repoRef.ref)}/${encodePath(path)}`;
-  const response = await fetcher(url, {
-    headers: { 'User-Agent': 'pierre-diffshub' },
-  });
-  await assertGitHubResponseOK(
-    response,
-    `GitHub raw file ${repoRef.owner}/${repoRef.repo}/${path}@${repoRef.ref}`
+  const response = await fetchGitHubFileContents(
+    repoRef,
+    path,
+    fetcher,
+    options
   );
   return {
     name: path,
     contents: await response.text(),
     cacheKey: `github:${repoRef.owner}/${repoRef.repo}:${repoRef.ref}:${path}`,
   };
+}
+
+async function fetchGitHubFileContents(
+  repoRef: GitHubRepoRef,
+  path: string,
+  fetcher: GitHubServerFetch,
+  options: GitHubDiffFileServerOptions
+): Promise<Response> {
+  if (options.tokenSource === 'request' && options.token != null) {
+    const url = createGitHubAPIURL(
+      `/repos/${encodeURLSegment(repoRef.owner)}/${encodeURLSegment(repoRef.repo)}/contents/${encodePath(path)}`,
+      { ref: repoRef.ref }
+    );
+    const response = await fetcher(url, {
+      headers: createGitHubRawAPIHeaders(options.token),
+    });
+    await assertGitHubResponseOK(
+      response,
+      `GitHub contents file ${repoRef.owner}/${repoRef.repo}/${path}@${repoRef.ref}`
+    );
+    return response;
+  }
+
+  const url = `${GITHUB_RAW_ROOT}/${encodeURLSegment(repoRef.owner)}/${encodeURLSegment(repoRef.repo)}/${encodeURLSegment(repoRef.ref)}/${encodePath(path)}`;
+  const response = await fetcher(url, {
+    headers: createGitHubRawHeaders(options.token ?? getGitHubToken()),
+  });
+  await assertGitHubResponseOK(
+    response,
+    `GitHub raw file ${repoRef.owner}/${repoRef.repo}/${path}@${repoRef.ref}`
+  );
+  return response;
 }
 
 async function fetchGitHubJSON(
@@ -327,6 +412,25 @@ function createGitHubJSONHeaders(token: string | undefined): HeadersInit {
   return headers;
 }
 
+function createGitHubRawHeaders(token: string | undefined): HeadersInit {
+  const headers: Record<string, string> = {
+    'User-Agent': 'pierre-diffshub',
+  };
+  if (token != null && token !== '') {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+function createGitHubRawAPIHeaders(token: string): HeadersInit {
+  return {
+    Accept: GITHUB_RAW_MEDIA_TYPE,
+    Authorization: `Bearer ${token}`,
+    'User-Agent': 'pierre-diffshub',
+    'X-GitHub-Api-Version': GITHUB_API_VERSION,
+  };
+}
+
 async function assertGitHubResponseOK(
   response: Response,
   label: string
@@ -336,10 +440,29 @@ async function assertGitHubResponseOK(
   }
 
   const detail = (await response.text()).trim();
+  if (isGitHubRateLimitResponse(response, detail)) {
+    throw new Error(
+      'GitHub rate limit exceeded. Add a GitHub token in DiffsHub settings to raise the limit.'
+    );
+  }
+
   throw new Error(
     detail.length > 0
       ? `${label} failed (${response.status}): ${detail}`
       : `${label} failed (${response.status}).`
+  );
+}
+
+function isGitHubRateLimitResponse(
+  response: Response,
+  detail: string
+): boolean {
+  if (response.status !== 403) {
+    return false;
+  }
+  return (
+    response.headers.get('x-ratelimit-remaining') === '0' ||
+    /rate limit/i.test(detail)
   );
 }
 

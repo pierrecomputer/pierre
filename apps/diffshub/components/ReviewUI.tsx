@@ -18,6 +18,7 @@ import { DiffsHubSidebar } from './DiffsHubSidebar';
 import { DiffsHubStatusPanel } from './DiffsHubStatusPanel';
 import { DiffsHubViewer } from './DiffsHubViewer';
 import { ThemeSourceProvider } from './ThemeSourceProvider';
+import { useGitHubToken } from './useGitHubToken';
 import { usePatchLoader } from './usePatchLoader';
 import { useThemeCycle } from './useThemeCycle';
 import {
@@ -65,6 +66,22 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const [showBackgrounds, setShowBackgrounds] = useState(true);
   const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
   const [lineNumbers, setLineNumbers] = useState(true);
+  const {
+    clearToken: clearGitHubToken,
+    hasToken: hasGitHubToken,
+    setToken: setGitHubToken,
+    token: githubToken,
+    tokenVersion: githubTokenVersion,
+  } = useGitHubToken();
+  const githubTokenRef = useRef(githubToken);
+  const githubTokenVersionRef = useRef(githubTokenVersion);
+  useEffect(() => {
+    githubTokenRef.current = githubToken;
+  }, [githubToken]);
+  useEffect(() => {
+    githubTokenVersionRef.current = githubTokenVersion;
+  }, [githubTokenVersion]);
+  const getGitHubToken = useCallback(() => githubTokenRef.current, []);
   // All theming state — color mode and the light/dark theme-name picks — lives
   // in the single @pierre/theming controller (the same instance the app-wide
   // ThemeProvider is bound to). Reading it here means picking Auto/Light/Dark
@@ -120,7 +137,13 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
   const loadDiffFiles = useMemo(
-    () => (domain == null ? createGitHubDiffFileLoader(path) : undefined),
+    () =>
+      domain == null
+        ? createGitHubDiffFileLoader(path, {
+            getAuthVersion: () => githubTokenVersionRef.current,
+            getToken: () => githubTokenRef.current,
+          })
+        : undefined,
     [domain, path]
   );
   const handlePatchLoadStart = useCallback(() => {
@@ -143,6 +166,8 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   } = usePatchLoader({
     collapseMode,
     domain,
+    getGitHubToken,
+    githubTokenVersion,
     onLoadStart: handlePatchLoadStart,
     path,
     viewerRef,
@@ -252,6 +277,9 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
         overflow={overflow}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
         fileTreeAvailable={treeSource != null}
+        githubTokenActive={hasGitHubToken}
+        onClearGitHubToken={clearGitHubToken}
+        onSaveGitHubToken={setGitHubToken}
         onToggleCollapseMode={handleToggleCollapseMode}
         onToggleFileTreeOverlay={handleToggleFileTreeOverlay}
         setColorMode={setColorMode}
