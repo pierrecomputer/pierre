@@ -90,7 +90,6 @@ export function renderDemoCodeView(
   setupCodeViewWrapper(wrapper);
 
   const items = createCodeViewItems(parsedPatches);
-  let viewer: CodeView<CodeViewCommentMetadata>;
   const options: CodeViewOptions<CodeViewCommentMetadata> = {
     theme,
     themeType,
@@ -123,7 +122,7 @@ export function renderDemoCodeView(
     },
   };
 
-  viewer = new CodeView(options, workerManager);
+  const viewer = new CodeView(options, workerManager);
   viewer.setup(wrapper);
   viewer.setItems(items);
   codeViewInstances.push({ instance: viewer, options });

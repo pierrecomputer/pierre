@@ -56,12 +56,12 @@ export function EditPage({
               title="Selection actions"
               description={
                 <>
-                  Select any text to reveal the gutter icon, then click it to
-                  open a custom widget rendered with{' '}
-                  <code>renderSelectionAction()</code>. Run a transform on the
-                  selection—here, wrap a string for translation or shout it in
-                  caps—or drive the same wrap from the toolbar, then reset the
-                  surface to its original source.
+                  Select any text to reveal a floating popover, anchored to the
+                  selection and rendered with{' '}
+                  <code>renderSelectionAction()</code>. Place any number of
+                  actions inside—here, an editor-style <em>Add to chat</em>{' '}
+                  sends the selected snippet to the panel on the right, while a
+                  secondary action copies it.
                 </>
               }
             />
@@ -77,7 +77,8 @@ export function EditPage({
                   Use <code>editor.setMarkers()</code> to inject inline context
                   into your code for linter, formatting, and more. Includes
                   support for severity-aware underlines and hover popups. Hover
-                  over markers with wavy underlines below to see an example.
+                  over markers (shown with wavy, colored underlines) in the
+                  example below.
                 </>
               }
             />
@@ -87,7 +88,7 @@ export function EditPage({
           <div className="space-y-5">
             <FeatureHeader
               id="find"
-              title="Find and replace while editing"
+              title="Find and replace"
               description={
                 <>
                   Find strings across files with <code>Cmd/Ctrl-F</code> on any{' '}
@@ -108,11 +109,12 @@ export function EditPage({
               title="Undo history"
               description={
                 <>
-                  Every edit lands on a structure-aware undo stack. The example
-                  below loads with a short refactor already applied across
-                  several commits—use the toolbar controls (or{' '}
-                  <code>Cmd/Ctrl-Z</code> and <code>Shift</code> to redo) to
-                  walk back and forth through each change.
+                  Edits land on a structure-aware undo stack out of the box.
+                  Walk it with keyboard shortcuts and the toolbar below, or
+                  drive it in code with <code>editor.undo()</code>,{' '}
+                  <code>editor.redo()</code>, and{' '}
+                  <code>editor.applyEdits()</code>. The example loads with a
+                  short refactor already applied across several commits.
                 </>
               }
             />

@@ -10,7 +10,6 @@
     "@pierre/theming": "workspace:*",
     "@pierre/tree-test-data": "workspace:*",
     "@pierre/trees": "workspace:*",
-    "@pierre/truncate": "workspace:*",
     "@radix-ui/react-avatar": "catalog:",
     "@radix-ui/react-dialog": "catalog:",
     "@radix-ui/react-dropdown-menu": "catalog:",
@@ -61,9 +60,5 @@
     "@types/react-dom": "catalog:",
     "jsdom": "catalog:",
     "typescript": "catalog:"
-  },
-  "overrides": {
-    "@types/react": "19.2.7",
-    "@types/react-dom": "19.2.3"
   }
 }

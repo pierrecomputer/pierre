@@ -96,8 +96,14 @@ interface FileTreeStartRenamingOptions {
   removeIfCanceled?: boolean;
 }
 
-export const FILE_TREE_RENAME_VIEW = Symbol('FILE_TREE_RENAME_VIEW');
+export const FILE_TREE_RENAME_VIEW: unique symbol = Symbol(
+  'FILE_TREE_RENAME_VIEW'
+);
 
+// oxlint-disable-next-line typescript/no-unsafe-declaration-merging
+export interface FileTreeController {
+  [FILE_TREE_RENAME_VIEW](): FileTreeRenameViewState;
+}
 // Initial render only mounts a tiny viewport slice, so controller startup can
 // cap its first projection build and defer the full 494k-row metadata walk
 // until the user actually navigates outside that initial window.
@@ -197,6 +203,29 @@ function createVisibleProjection(
 export class FileTreeController
   implements FileTreeMutationHandle, FileTreeSearchSessionHandle
 {
+  static {
+    Object.defineProperty(FileTreeController.prototype, FILE_TREE_RENAME_VIEW, {
+      configurable: true,
+      value(this: FileTreeController): FileTreeRenameViewState {
+        return {
+          cancel: () => {
+            this.#cancelRenaming();
+          },
+          commit: () => {
+            this.#completeRenaming();
+          },
+          getPath: () => this.#renamingPath,
+          getValue: () => this.#renamingValue,
+          isActive: () => this.#renamingPath != null,
+          setValue: (value: string) => {
+            this.#setRenamingValue(value);
+          },
+        };
+      },
+      writable: true,
+    });
+  }
+
   readonly #baseOptions: Omit<
     FileTreeControllerOptions,
     'dragAndDrop' | 'paths' | 'preparedInput'
@@ -1129,23 +1158,6 @@ export class FileTreeController
     this.#removeRenamingPathIfCanceled = options.removeIfCanceled ?? false;
     this.#emit();
     return true;
-  }
-
-  public [FILE_TREE_RENAME_VIEW](): FileTreeRenameViewState {
-    return {
-      cancel: () => {
-        this.#cancelRenaming();
-      },
-      commit: () => {
-        this.#completeRenaming();
-      },
-      getPath: () => this.#renamingPath,
-      getValue: () => this.#renamingValue,
-      isActive: () => this.#renamingPath != null,
-      setValue: (value: string) => {
-        this.#setRenamingValue(value);
-      },
-    };
   }
 
   #cancelRenaming(): void {

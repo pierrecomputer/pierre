@@ -2,7 +2,7 @@ import autoprefixer from 'autoprefixer';
 import postcss from 'postcss';
 import { defineConfig, type UserConfig } from 'tsdown';
 
-const config: UserConfig = defineConfig([
+const config: UserConfig[] = defineConfig([
   {
     entry: ['src/**/*.ts', 'src/**/*.tsx'],
     loader: {

@@ -305,9 +305,6 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         __debug: true,
       });
       const fileAnnotations = patchAnnotations[hunkIndex];
-      let instance:
-        | FileDiff<LineCommentMetadata>
-        | VirtualizedFileDiff<LineCommentMetadata>;
       let isEditing = false;
       const options: FileDiffOptions<LineCommentMetadata> = {
         theme: DEMO_THEME,
@@ -516,7 +513,9 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
         //   props.tokenElement.style.borderRadius = '';
         // },
       };
-      instance = (() => {
+      const instance:
+        | FileDiff<LineCommentMetadata>
+        | VirtualizedFileDiff<LineCommentMetadata> = (() => {
         if (virtualizer != null) {
           return new VirtualizedFileDiff<LineCommentMetadata>(
             options,
@@ -813,9 +812,9 @@ function toggleTheme() {
 const fileExample: FileContents | Promise<FileContents> = (() => {
   if (CRAZY_FILE) {
     return new Promise<FileContents>((resolve) => {
-      void import('../../../bun.lock?raw').then(({ default: contents }) =>
+      void import('../../../pnpm-lock.yaml?raw').then(({ default: contents }) =>
         resolve({
-          name: 'file.json',
+          name: 'pnpm-lock.yaml',
           contents,
           cacheKey: 'diff',
         })
@@ -860,7 +859,6 @@ if (renderFileButton != null) {
           ctx.replaceSelectionText(comment);
           ctx.close();
         });
-        div.style.marginBlock = '4px';
         div.appendChild(button);
         return div;
       },
@@ -946,9 +944,6 @@ if (renderFileButton != null) {
     Object.assign(window, { editor });
     const fileContainer = document.createElement(DIFFS_TAG_NAME);
     wrapper.appendChild(fileContainer);
-    let instance:
-      | File<LineCommentMetadata>
-      | VirtualizedFile<LineCommentMetadata>;
     let isEditing = false;
     const options: FileOptions<LineCommentMetadata> = {
       overflow: wrap ? 'wrap' : 'scroll',
@@ -1079,7 +1074,9 @@ if (renderFileButton != null) {
       // },
     };
 
-    instance = (() => {
+    const instance:
+      | File<LineCommentMetadata>
+      | VirtualizedFile<LineCommentMetadata> = (() => {
       if (virtualizer != null) {
         return new VirtualizedFile<LineCommentMetadata>(
           options,

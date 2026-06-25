@@ -10,13 +10,15 @@ import { Editor } from '@pierre/diffs/editor';
 import { EditorProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import {
+  IconApproved,
   IconArrowLeftBar,
   IconArrowRightBar,
   IconArrowRightShort,
   IconArrowShort,
-  IconCheck,
   IconCommit,
+  IconRefresh,
 } from '@pierre/icons';
+import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { HISTORY_DEMO_EDITS, HISTORY_DEMO_FILE } from './constants';
@@ -116,11 +118,6 @@ function offsetToPosition(
   return { line, character: offset - lineStart };
 }
 
-// Demo of the editor's undo history. With no public API to push edits or
-// trigger undo/redo, we drive it as a user would: seed edits via `beforeinput`
-// and run the real Cmd/Ctrl-Z shortcut for the controls. On load we apply every
-// edit in one burst so the surface arrives fully refactored with its undo stack
-// already built, then the controls step back through it.
 export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isMacRef = useRef(false);
@@ -128,6 +125,11 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // Number of edits currently applied, derived from the editor's live text on
   // every `onChange` (undo, redo, controls, or keyboard) so it always matches.
   const [applied, setApplied] = useState(0);
+  // True once the document no longer matches any seeded snapshot, i.e. the user
+  // typed their own edit. The guided step controls and the right-hand list stop
+  // mapping to the undo stack in that state, so we surface an off-track UI and a
+  // Reset rather than letting the step count freeze at a stale value.
+  const [diverged, setDiverged] = useState(false);
   const editor = useMemo(
     () =>
       new Editor<undefined>({
@@ -135,6 +137,9 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
           const index = snapshotIndexFor(file.contents);
           if (index >= 0) {
             setApplied(index);
+            setDiverged(false);
+          } else {
+            setDiverged(true);
           }
         },
       }),
@@ -149,6 +154,29 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
       host?.shadowRoot?.querySelector<HTMLElement>('[data-content]') ?? null
     );
   }, []);
+
+  // The horizontally scrollable code panel (`[data-code]`) wrapping the content.
+  const getScroller = useCallback(
+    (): HTMLElement | null => getContent()?.closest('[data-code]') ?? null,
+    [getContent]
+  );
+
+  // Run history dispatches and restore the scroll position afterward. Applying
+  // a change reveals the caret via `scrollIntoView`, which would otherwise
+  // scroll the code panel sideways and nudge the page.
+  const preserveScroll = useCallback(
+    (fn: () => void) => {
+      const scroller = getScroller();
+      const scrollLeft = scroller?.scrollLeft ?? 0;
+      const { scrollX, scrollY } = window;
+      fn();
+      if (scroller != null) {
+        scroller.scrollLeft = scrollLeft;
+      }
+      window.scrollTo(scrollX, scrollY);
+    },
+    [getScroller]
+  );
 
   // Fire the editor's real undo (Cmd/Ctrl-Z) or redo (adds Shift) shortcut on
   // the content element. The editor applies the change and its `onChange`
@@ -175,33 +203,11 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
     isMacRef.current = detectMac();
   }, []);
 
-  // Build the undo stack on load so the surface arrives already fully
-  // refactored with history intact. We poll until the content element has
-  // attached AND the editor's grammar is ready, because seeding an edit before
-  // the editor can tokenize throws ("Grammar not loaded") inside the editor.
-  useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (wrapper == null) {
-      return;
-    }
-
-    // Warm the shared highlighter so the grammar is ready as early as possible
-    // (ideally before the editor attaches, making its first tokenize sync).
-    void preloadHighlighter({
-      themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
-      langs: [LANGUAGE],
-      preferredHighlighter: 'shiki-wasm',
-    }).catch(() => {});
-
-    let cancelled = false;
-    let timer: number | undefined;
-    let attempts = 0;
-    let contentSeenAt = 0;
-
-    // Apply a single edit by locating its `find` anchor in that step's snapshot
-    // (the document text right before the edit) and replacing it. The editor's
-    // `onChange` advances the step count once the edit lands.
-    const applyEdit = (content: HTMLElement, index: number) => {
+  // Apply a single edit by locating its `find` anchor in that step's snapshot
+  // (the document text right before the edit) and replacing it. The editor's
+  // `onChange` advances the step count once the edit lands.
+  const applyEdit = useCallback(
+    (content: HTMLElement, index: number) => {
       const edit = HISTORY_DEMO_EDITS[index];
       const text = SNAPSHOTS[index];
       const at = text.indexOf(edit.find);
@@ -224,15 +230,20 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
           composed: true,
         })
       );
-    };
+    },
+    [editor]
+  );
 
-    // Apply every edit in one synchronous pass. Each `setSelections` scrolls the
-    // caret into view, which would yank the page down to this (below-the-fold)
-    // demo, so we capture and restore the window scroll position around the
-    // burst. Collapsing the selection afterward leaves a clean final state.
-    const seedAll = (content: HTMLElement) => {
+  // Apply every edit in one synchronous pass to build the full undo stack. Each
+  // `setSelections` scrolls the caret into view, which would yank the page down
+  // to this (below-the-fold) demo, so we capture and restore the window scroll
+  // position around the burst. Collapsing the selection afterward leaves a clean
+  // final state. Reused by both the load seed and Reset, so it assumes the
+  // document is at the original snapshot when called.
+  const seedAll = useCallback(
+    (content: HTMLElement) => {
       const { scrollX, scrollY } = window;
-      for (let index = 0; index < TOTAL_EDITS && !cancelled; index++) {
+      for (let index = 0; index < TOTAL_EDITS; index++) {
         applyEdit(content, index);
       }
       editor.setSelections([
@@ -243,7 +254,32 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
         },
       ]);
       window.scrollTo(scrollX, scrollY);
-    };
+    },
+    [applyEdit, editor]
+  );
+
+  // Build the undo stack on load so the surface arrives already fully
+  // refactored with history intact. We poll until the content element has
+  // attached AND the editor's grammar is ready, because seeding an edit before
+  // the editor can tokenize throws ("Grammar not loaded") inside the editor.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (wrapper == null) {
+      return;
+    }
+
+    // Warm the shared highlighter so the grammar is ready as early as possible
+    // (ideally before the editor attaches, making its first tokenize sync).
+    void preloadHighlighter({
+      themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
+      langs: [LANGUAGE],
+      preferredHighlighter: 'shiki-wasm',
+    }).catch(() => {});
+
+    let cancelled = false;
+    let timer: number | undefined;
+    let attempts = 0;
+    let contentSeenAt = 0;
 
     const waitForReady = () => {
       if (cancelled) {
@@ -276,47 +312,112 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
         window.clearTimeout(timer);
       }
     };
-  }, [editor, getContent]);
+  }, [getContent, seedAll]);
 
   const undo = useCallback(() => {
     const content = getContent();
     if (content != null) {
-      dispatchHistoryKey(content, false);
+      preserveScroll(() => dispatchHistoryKey(content, false));
     }
-  }, [dispatchHistoryKey, getContent]);
+  }, [dispatchHistoryKey, getContent, preserveScroll]);
 
   const redo = useCallback(() => {
     const content = getContent();
     if (content != null) {
-      dispatchHistoryKey(content, true);
+      preserveScroll(() => dispatchHistoryKey(content, true));
     }
-  }, [dispatchHistoryKey, getContent]);
+  }, [dispatchHistoryKey, getContent, preserveScroll]);
 
   const undoAll = useCallback(() => {
     const content = getContent();
     if (content == null) {
       return;
     }
-    for (let i = applied; i > 0; i--) {
-      dispatchHistoryKey(content, false);
-    }
-  }, [applied, dispatchHistoryKey, getContent]);
+    preserveScroll(() => {
+      for (let i = applied; i > 0; i--) {
+        dispatchHistoryKey(content, false);
+      }
+    });
+  }, [applied, dispatchHistoryKey, getContent, preserveScroll]);
 
   const redoAll = useCallback(() => {
     const content = getContent();
     if (content == null) {
       return;
     }
-    for (let i = applied; i < TOTAL_EDITS; i++) {
-      dispatchHistoryKey(content, true);
-    }
-  }, [applied, dispatchHistoryKey, getContent]);
+    preserveScroll(() => {
+      for (let i = applied; i < TOTAL_EDITS; i++) {
+        dispatchHistoryKey(content, true);
+      }
+    });
+  }, [applied, dispatchHistoryKey, getContent, preserveScroll]);
 
-  const canUndo = applied > 0;
-  const canRedo = applied < TOTAL_EDITS;
+  // Recover the guided demo after the user typed their own edit. We unwind the
+  // whole undo stack (the stray edit plus the seeded steps) back to the original
+  // document via the editor's programmatic `undo()`, which is reliable
+  // regardless of where focus sits, then replay all seeded edits so the surface
+  // lands back at the fully-refactored 7/7 state with its history intact.
+  const reset = useCallback(() => {
+    const content = getContent();
+    if (content == null) {
+      return;
+    }
+    preserveScroll(() => {
+      let guard = 0;
+      while (editor.canUndo && guard < 1000) {
+        editor.undo();
+        guard += 1;
+      }
+      seedAll(content);
+    });
+  }, [editor, getContent, preserveScroll, seedAll]);
+
+  const canUndo = !diverged && applied > 0;
+  const canRedo = !diverged && applied < TOTAL_EDITS;
 
   return (
     <div className="not-prose" ref={wrapperRef}>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Button variant="outline" onClick={undoAll} disabled={!canUndo}>
+          <IconArrowLeftBar className="-ml-1" />
+          Undo all
+        </Button>
+        <Button
+          variant="outline"
+          onClick={undo}
+          disabled={!canUndo}
+          title="Undo (Cmd/Ctrl-Z)"
+        >
+          <IconArrowShort className="-ml-1" />
+          Undo
+        </Button>
+        <Button
+          variant="outline"
+          onClick={redo}
+          disabled={!canRedo}
+          title="Redo (Cmd/Ctrl-Shift-Z)"
+        >
+          Redo
+          <IconArrowRightShort className="-mr-1" />
+        </Button>
+        <Button variant="outline" onClick={redoAll} disabled={!canRedo}>
+          Redo all
+          <IconArrowRightBar className="-mr-1" />
+        </Button>
+        {diverged ? (
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="outline" onClick={reset}>
+              <IconRefresh className="-ml-1" />
+              Reset
+            </Button>
+          </div>
+        ) : (
+          <span className="text-muted-foreground ml-auto hidden text-xs tabular-nums md:block">
+            {applied}/{TOTAL_EDITS} steps
+          </span>
+        )}
+      </div>
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-8">
         <div className="min-w-0 flex-1">
           <EditorProvider editor={editor}>
@@ -328,79 +429,38 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
           </EditorProvider>
         </div>
 
-        <div className="flex w-full shrink-0 flex-col gap-3 lg:w-64">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon-md"
-                onClick={undoAll}
-                disabled={!canUndo}
-                aria-label="Reset to original"
-                title="Reset to original"
-              >
-                <IconArrowLeftBar />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon-md"
-                onClick={undo}
-                disabled={!canUndo}
-                aria-label="Undo"
-                title="Undo (Cmd/Ctrl-Z)"
-              >
-                <IconArrowShort />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon-md"
-                onClick={redo}
-                disabled={!canRedo}
-                aria-label="Redo"
-                title="Redo (Cmd/Ctrl-Shift-Z)"
-              >
-                <IconArrowRightShort />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon-md"
-                onClick={redoAll}
-                disabled={!canRedo}
-                aria-label="Redo all"
-                title="Redo all"
-              >
-                <IconArrowRightBar />
-              </Button>
-            </div>
-            <span className="text-muted-foreground ml-auto text-xs tabular-nums">
-              {applied}/{TOTAL_EDITS}
-            </span>
-          </div>
-
-          <ol className="bg-muted overflow-hidden rounded-lg dark:bg-neutral-900">
+        <div className="flex w-full shrink-0 flex-col gap-3 lg:w-72">
+          {diverged ? (
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Feel free to continue making edits. When ready, reset to restore
+              the guided demo.
+            </p>
+          ) : null}
+          {/*
+            The applied steps are always the first `applied` rows, so instead of
+            faking a box with per-item borders we draw one card behind them: a
+            `::before` pinned to the top whose height is `applied` rows tall
+            (each row is `h-11` = 2.75rem) and that carries the single
+            box-shadow outline. It collapses to nothing when no steps applied.
+            While diverged we collapse the card and mute the whole list because
+            the step count no longer reflects the undo stack.
+          */}
+          <ol
+            className="bg-muted before:bg-background relative rounded-lg transition-opacity before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-[calc(var(--steps)*2.75rem)] before:rounded-lg before:shadow-[0_0_0_1px_var(--border),0_1px_3px_rgb(0_0_0/0.04),0_6px_16px_-6px_rgb(0_0_0/0.08)] before:transition-[height,opacity] before:duration-200 before:ease-out before:content-[''] data-[diverged=true]:opacity-50 data-[empty=true]:before:opacity-0 dark:bg-neutral-900"
+            style={{ '--steps': diverged ? 0 : applied } as CSSProperties}
+            data-empty={diverged || applied === 0}
+            data-diverged={diverged}
+          >
             {HISTORY_DEMO_EDITS.map((edit, index) => {
-              const isApplied = index < applied;
-              const isLastApplied = index === applied - 1;
+              const isApplied = !diverged && index < applied;
               const className = [
-                'flex items-center gap-2 border px-3 py-2.5 text-sm',
-                isApplied
-                  ? 'text-foreground bg-background border-x-border'
-                  : 'text-muted-foreground border-transparent',
-                isApplied &&
-                  (index === 0
-                    ? 'rounded-t-lg border-t-border'
-                    : 'border-t-background'),
-                isApplied &&
-                  (isLastApplied
-                    ? 'rounded-b-lg border-b-border'
-                    : 'border-b-background'),
-              ]
-                .filter(Boolean)
-                .join(' ');
+                'relative z-10 flex h-11 items-center gap-2 px-3 text-[15px]',
+                isApplied ? 'text-foreground' : 'text-muted-foreground',
+              ].join(' ');
               return (
                 <li key={edit.label} className={className}>
                   {isApplied ? (
-                    <IconCheck className="mx-[1px] shrink-0 text-green-500 dark:text-green-400" />
+                    <IconApproved className="mx-[1px] shrink-0 text-green-500 dark:text-green-400" />
                   ) : (
                     <IconCommit className="text-muted-foreground/50 shrink-0" />
                   )}

@@ -60,7 +60,7 @@ export interface SetupWorktreeOptions {
   path?: string;
   /** Slug to write into `.env.worktree`. Defaults to the existing env slug or worktree directory name. */
   slug?: string;
-  /** Run `bun install` in the worktree after writing `.env.worktree`. Defaults to true. */
+  /** Run `pnpm install` in the worktree after writing `.env.worktree`. Defaults to true. */
   install?: boolean;
   /** Print the port summary and cd command after setup. Defaults to true. */
   printSummary?: boolean;
@@ -117,7 +117,7 @@ Subcommands:
 
   setup [<slug>]
       Run post-add setup for an existing worktree: write .env.worktree,
-      run bun install, and print the worktree's ports. With <slug>, targets
+      run pnpm install, and print the worktree's ports. With <slug>, targets
       ~/pierre/pierre-worktrees/<slug>. Without <slug>, targets the current
       linked worktree.
 
@@ -257,13 +257,13 @@ export async function setupWorktree(
 
   if (options.install ?? true) {
     console.log(`\nInstalling dependencies in ${worktreeRoot}...`);
-    const bunInstall = spawnSync('bun', ['install'], {
+    const pnpmInstall = spawnSync('pnpm', ['install'], {
       cwd: worktreeRoot,
       stdio: 'inherit',
     });
-    if (bunInstall.status !== 0) {
+    if (pnpmInstall.status !== 0) {
       throw new Error(
-        'wt setup: bun install failed; the worktree may be incomplete'
+        'wt setup: pnpm install failed; the worktree may be incomplete'
       );
     }
   }

@@ -55,7 +55,7 @@ jobs:
       # System libraries are per-runner and not covered by the browser cache.
       - name: Install Playwright browser
         if: steps.e2e-affected.outputs.run == 'true'
-        run: bunx playwright@1.51.1 install --with-deps chromium
+        run: pnpm dlx playwright@1.51.1 install --with-deps chromium
 
       # Note on targets: moon ci executes every affected runInCI-enabled
       # task — the target list adds entry points (so cold runs are explicit)

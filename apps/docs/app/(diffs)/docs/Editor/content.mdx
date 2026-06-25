@@ -119,18 +119,19 @@ where editing is rare.
 
 ### Selection Action
 
-Selection Action is an opt-in edit mode feature for showing custom UI inline
-with the current selection—useful for quick transforms, refactor prompts, or
-other selection-scoped tools. Set `enabledSelectionAction: true`, return your UI
-from `renderSelectionAction`, and open it from the gutter icon that appears on
-the active selection.
+Selection Action is an opt-in edit mode feature for showing custom UI alongside
+the current selection—useful for quick transforms, refactor prompts, or other
+selection-scoped tools. Set `enabledSelectionAction: true` and return your UI
+from `renderSelectionAction`; a floating popover holding your UI appears
+automatically, anchored to the active selection. The popover can hold any number
+of actions.
 
 <DocsCodeExample {...editorSelectionActionExample} />
 
-`renderSelectionAction` runs when the user opens the action. Its context
-includes the active `selection`, the editable `textDocument`, helpers to read or
-modify the selection (`getSelectionText`, `replaceSelectionText`, `applyEdits`),
-and `close` to dismiss the panel:
+`renderSelectionAction` runs when the popover opens. Its context includes the
+active `selection`, the editable `textDocument`, helpers to read or modify the
+selection (`getSelectionText`, `replaceSelectionText`, `applyEdits`), and
+`close` to dismiss the popover:
 
 <DocsCodeExample {...editorSelectionActionContextType} />
 
@@ -201,6 +202,8 @@ and <kbd>End</kbd> keys; on macOS, the modifier with ↑ and ↓ arrows works to
 | Collapse to a single cursor  | <Shortcut meta={false}>Esc</Shortcut>                           |
 | Select all                   | <Shortcut>A</Shortcut>                                          |
 | Open the search panel        | <Shortcut>F</Shortcut>                                          |
+| Go to next search match      | <Shortcut>G</Shortcut>                                          |
+| Go to previous search match  | <Shortcut modifiers={['Shift']}>G</Shortcut>                    |
 | Find next match of selection | <Shortcut>D</Shortcut>                                          |
 | Undo                         | <Shortcut>Z</Shortcut>                                          |
 | Redo                         | <Shortcut modifiers={['Shift']}>Z</Shortcut>                    |

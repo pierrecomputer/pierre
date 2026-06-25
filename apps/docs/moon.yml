@@ -130,8 +130,9 @@ tasks:
   # `CI= moonx docs:test-e2e`.
   test-e2e:
     script:
-      '(bun ./test/e2e/check-playwright-binary.ts || bunx playwright@1.51.1
-      install chromium) && bunx playwright test -c test/e2e/playwright.config.ts'
+      '(bun ./test/e2e/check-playwright-binary.ts || pnpm exec playwright
+      install chromium) && pnpm exec playwright test -c
+      test/e2e/playwright.config.ts'
     deps:
       - 'build'
     options:

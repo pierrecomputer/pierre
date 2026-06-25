@@ -2,9 +2,9 @@
 
 This monorepo uses [proto](https://moonrepo.dev/docs/proto) to manage the
 toolchain and [moon](https://moonrepo.dev/docs) to run tasks. Every tool version
-(bun, node, moon, gh) is pinned in `.prototools`, so once proto is installed,
-everything else resolves to the right version automatically when you are inside
-the repo.
+(bun, pnpm, node, moon, gh) is pinned in `.prototools`, so once proto is
+installed, everything else resolves to the right version automatically when you
+are inside the repo.
 
 ## Setup
 
@@ -26,7 +26,7 @@ the repo.
    ```
 
 3. **Clone and install the toolchain** — from the repo root, proto reads
-   `.prototools` and installs the pinned bun, node, moon, and gh:
+   `.prototools` and installs the pinned bun, pnpm, node, moon, and gh:
 
    ```bash
    git clone git@github.com:pierrecomputer/pierre.git
@@ -34,17 +34,17 @@ the repo.
    proto use
    ```
 
-   (`.prototools` has `auto-install = true`, so simply running `bun` or `moon`
-   also installs them on demand.)
+   (`.prototools` has `auto-install = true`, so simply running `pnpm`, `bun`, or
+   `moon` also installs them on demand.)
 
 4. **Install dependencies**:
 
    ```bash
-   bun install
+   pnpm install
    ```
 
-   Dependency versions live in the root `package.json` `workspaces.catalog`;
-   packages reference them with `"catalog:"`. Don't add versions directly to
+   Dependency versions live in the `pnpm-workspace.yaml` catalog; packages
+   reference them with `"catalog:"`. Don't add versions directly to
    package-level manifests.
 
 5. **Git hooks** are managed by moon (`vcs.hooks` in `.moon/workspace.yml`) and
@@ -99,7 +99,7 @@ green local baseline usually means a green PR.
 - Worktrees, dev-server port offsets, and stale-server cleanup are documented in
   `scripts/README.md`.
 - Publishing `@pierre/trees` goes through its release script — see
-  `packages/trees/PUBLISHING.md`. Other published packages use plain
-  `bun publish`, which runs their moon `prepublish` guard chain automatically.
+  `packages/trees/PUBLISHING.md`. Other published npm packages use
+  `pnpm publish`, which runs their moon `prepublish` guard chain automatically.
 - Vercel deploys read each app's `vercel.json` from the deploying commit; CI
   configuration lives in `.github/workflows/ci.yml`.

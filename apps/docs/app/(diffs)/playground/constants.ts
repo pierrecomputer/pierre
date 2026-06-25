@@ -156,8 +156,14 @@ export const PLAYGROUND_DIFF: PreloadFileDiffOptions<PlaygroundAnnotationMetadat
         contents: NEW_USERS_CONTENT,
       }
     ),
+    // Match the client's default render (PlaygroundClient DEFAULTS): ship both
+    // light and dark themes with themeType 'system' so the prerendered shadow
+    // DOM resolves via the native CSS `light-dark()` against the pre-paint
+    // color-scheme. A single fixed theme would force one color-scheme server
+    // side and flash when the client re-resolves to the other on first paint.
     options: {
-      theme: 'pierre-dark',
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      themeType: 'system',
       diffStyle: 'split',
       unsafeCSS: CustomScrollbarCSS,
     },

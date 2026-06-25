@@ -64,6 +64,7 @@
     "@pierre/vscode-icons": "catalog:",
     "@playwright/test": "catalog:",
     "@radix-ui/react-dropdown-menu": "catalog:",
+    "@tsdown/css": "catalog:",
     "@types/jsdom": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

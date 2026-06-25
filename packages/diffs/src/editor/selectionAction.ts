@@ -1,10 +1,9 @@
 import type { EditorSelection } from './selection';
-import { getEditorIconSvg } from './sprite';
 import type { TextDocument, TextEdit } from './textDocument';
 import { h } from './utils';
 
 export interface SelectionActionContext<LAnnotation> {
-  /** The current selection. */
+  /** The current selection (live: reflects keyboard-driven changes). */
   selection: EditorSelection;
   /** The text document. */
   textDocument: TextDocument<LAnnotation>;
@@ -18,102 +17,46 @@ export interface SelectionActionContext<LAnnotation> {
   close: () => void;
 }
 
+// Floating popover that hosts the consumer's selection-action element. It mounts
+// into the editor's overlay layer and is positioned via CSS custom properties
+// (the shared popover rule in editor.css), mirroring the marker hover popover, so
+// it never reflows the document the way the old inline gutter-triggered row did.
+// The consumer's element can hold any number of actions; the editor only owns
+// where the popover sits.
 export class SelectionActionWidget {
-  static renderIcon(
-    parent: HTMLElement | DocumentFragment,
-    onclick: () => void
-  ): HTMLElement {
-    return h(
-      'div',
-      {
-        dataset: { selectionActionIcon: '', visible: 'false' },
-        title: 'Selection Action',
-        innerHTML: getEditorIconSvg('quick'),
-        onclick,
-      },
-      parent
-    );
-  }
-
-  #gutterBuffer: HTMLElement;
-  #selectionActionContainer: HTMLElement;
-  #slot: HTMLElement;
-  #observer: ResizeObserver;
-  #handleDomResize: () => void;
+  // The line the popover is anchored to (the selection's head). The editor reads
+  // this to decide whether the anchor is still on a visible line.
+  line: number;
+  #popover: HTMLElement;
 
   constructor(
-    public line: number,
+    line: number,
     selectionActionElement: HTMLElement,
-    fileContainer: HTMLElement,
-    leadingWhitespaces = 0,
-    handleDomResize: () => void
+    overlayElement: HTMLElement
   ) {
-    const slotName = 'selection-action-' + line;
-    this.#slot = h(
+    this.line = line;
+    this.#popover = h(
       'div',
       {
-        dataset: 'selectionActionSlot',
-        slot: slotName,
-        style: 'white-space: normal',
+        dataset: { editorWidget: '', selectionActionPopover: '' },
+        contentEditable: 'false',
         children: [selectionActionElement],
       },
-      fileContainer
+      overlayElement
     );
-    this.#gutterBuffer = h('div', {
-      dataset: { gutterBuffer: 'selectionAction', bufferSize: '1' },
-      style: 'grid-row: span 1',
-    });
-    this.#selectionActionContainer = h('div', {
-      dataset: { selectionAction: String(line) },
-      style: {
-        paddingInlineStart: leadingWhitespaces + 1 + 'ch', // +1 align css `padding-inline`
-      },
-      contentEditable: 'false',
-      children: [h('slot', { name: slotName })],
-    });
-    this.#observer = new ResizeObserver(handleDomResize);
-    this.#observer.observe(this.#slot);
-    this.#handleDomResize = handleDomResize;
   }
 
-  render(containerElement: HTMLElement): void {
-    const gutterElement =
-      containerElement.previousElementSibling as HTMLElement | null;
-    const lineNumber = this.line + 1;
-    const gutterLineElement = gutterElement?.querySelector<HTMLElement>(
-      `[data-column-number="${lineNumber}"]`
-    );
-    const contentLineElement = containerElement.querySelector<HTMLElement>(
-      `[data-line="${lineNumber}"]`
-    );
-    if (
-      gutterElement != null &&
-      gutterLineElement != null &&
-      contentLineElement != null
-    ) {
-      gutterLineElement.after(this.#gutterBuffer);
-      contentLineElement.after(this.#selectionActionContainer);
-      gutterElement.style.gridRow = 'span ' + gutterElement.children.length;
-      containerElement.style.gridRow =
-        'span ' + containerElement.children.length;
-      this.#handleDomResize();
-    }
+  // Anchor the popover at `(left, top)`, expressed in the overlay's coordinate
+  // space (the same space caret/selection overlays use). Horizontal placement and
+  // sizing are handled in CSS via the shared popover rule; `gutterWidth` lets it
+  // keep the popover clear of the line-number gutter.
+  reposition(left: number, top: number, gutterWidth: number): void {
+    this.#popover.style.setProperty('--gutter-width', gutterWidth + 'px');
+    this.#popover.style.setProperty('--popover-x', left + 'px');
+    this.#popover.style.setProperty('--popover-y', top + 'px');
   }
 
   cleanup(): void {
-    const gutter = this.#gutterBuffer.parentElement;
-    const content = this.#selectionActionContainer.parentElement;
-
-    this.#gutterBuffer.remove();
-    this.#selectionActionContainer.remove();
-
-    if (gutter != null && content != null) {
-      gutter.style.gridRow = 'span ' + gutter.children.length;
-      content.style.gridRow = 'span ' + content.children.length;
-    }
-    this.#handleDomResize();
-
-    this.#slot.remove();
-    this.#observer.disconnect();
+    this.#popover.remove();
   }
 }

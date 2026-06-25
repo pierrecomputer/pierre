@@ -47,23 +47,14 @@ interface GeneratedChangedFile {
 }
 
 interface GeneratedSession {
-  id: string;
-  title: string;
-  subtitle: string;
-  status: 'running' | 'review' | 'done';
   changedFiles: GeneratedChangedFile[];
 }
 
-// A committed "starter" snapshot for a demo file, stored under
-// `starters/<basename>.before` / `.after`. The demo's changed files are all
-// introduced on this branch, so diffing the working tree against `HEAD`
-// produces an empty diff for any file that happens to be committed (the surface
-// then renders blank). Pinning a curated `after` (and optionally a `before`)
-// instead keeps the demo deterministic regardless of git state:
-//   - `.before` + `.after`: a realistic modified diff (additions + deletions).
-//   - `.after` only: shown as freshly added (e.g. a file no longer on disk).
-// A file with no starter falls back to its on-disk contents shown as added, so
-// every demo surface always has a non-empty, editable diff.
+// Reads a committed "starter" snapshot for a demo file from
+// `starters/<basename>.before` / `.after`, keeping each demo diff deterministic
+// regardless of git state. `.before` + `.after` yields a modified diff; `.after`
+// alone is shown as added. Returns null when no starter exists, so the caller
+// falls back to the file's on-disk contents.
 function readStarter(path: string): { before: string; after: string } | null {
   const name = basename(path);
   const beforePath = resolvePath(startersDir, `${name}.before`);
@@ -129,10 +120,6 @@ function buildChangedFile(path: string): GeneratedChangedFile {
 }
 
 const selfSession: GeneratedSession = {
-  id: 'aui-self',
-  title: 'Add agent-review demo',
-  subtitle: 'Ready for review',
-  status: 'review',
   changedFiles: SELF_SESSION_FILES.map((path) => {
     console.log(`[aui] capturing ${path}`);
     return buildChangedFile(path);

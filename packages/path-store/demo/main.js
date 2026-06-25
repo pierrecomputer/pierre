@@ -1438,7 +1438,7 @@ function createStore(benchmark = null) {
   };
 }
 
-function renderStoreForSetup(preferredOffset = undefined) {
+function renderStoreForSetup(preferredOffset) {
   createStore();
   return renderCurrentWindow(preferredOffset);
 }

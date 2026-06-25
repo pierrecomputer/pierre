@@ -62,7 +62,7 @@ theming ships one implementation through four public entry points.
 ## Install
 
 ```bash
-bun add @pierre/theming
+pnpm add @pierre/theming
 ```
 
 Add the optional peers only for the entries you use, e.g., `react` for `/react`,

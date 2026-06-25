@@ -17,6 +17,7 @@ export interface Marker extends Range {
 export interface EditorStub {
   getLineHeight: () => number;
   getOverlayElement: () => HTMLElement | undefined;
+  getGutterWidth: () => number;
   getCharX: (line: number, character: number) => [number, number];
   getLineY: (line: number) => number;
   isMouseDown: () => boolean;
@@ -197,9 +198,16 @@ export class MarkerRenderer {
     }, MARKER_POPUP_HIDE_DELAY_MS);
   }
 
+  // Positions the popup in overlay coordinate space and feeds the current gutter
+  // width to CSS so the shared popover rule can keep the popup clear of the
+  // line-number gutter (see [data-marker-popup] in editor.css).
   #setMarkerPopupPosition(popup: HTMLElement, x: number, y: number): void {
-    popup.style.setProperty('--marker-x', x + 'px');
-    popup.style.setProperty('--marker-y', y + 'px');
+    popup.style.setProperty(
+      '--gutter-width',
+      this.#editor.getGutterWidth() + 'px'
+    );
+    popup.style.setProperty('--popover-x', x + 'px');
+    popup.style.setProperty('--popover-y', y + 'px');
   }
 
   #dismissMarkerPopup(): void {
@@ -231,7 +239,7 @@ export class MarkerRenderer {
 
     if (popup !== undefined) {
       this.#setMarkerPopupPosition(popup, left, y);
-      popup.dataset.markerSeverity = severity;
+      setMarkerPopupSeverity(popup, severity);
       const content = popup.firstElementChild as HTMLElement | null;
       if (content?.dataset.markerMessage !== undefined) {
         if (typeof message === 'string') {
@@ -252,7 +260,7 @@ export class MarkerRenderer {
         dataset: {
           editorWidget: '',
           markerPopup: '',
-          markerSeverity: severity,
+          [markerSeverityDatasetKey(severity)]: '',
         },
         children: [
           h('div', {
@@ -280,6 +288,27 @@ export class MarkerRenderer {
       }),
     ];
   }
+}
+
+const MARKER_SEVERITIES: readonly MarkerSeverity[] = [
+  'error',
+  'warning',
+  'info',
+  'hint',
+];
+
+// Marks the popup with data-marker-<severity> (the same boolean attribute the
+// squiggle range element uses) so the CSS severity palette can target both with
+// a single selector. The popup element is reused across hovers, so any
+// previously applied severity attribute is cleared first.
+function setMarkerPopupSeverity(
+  popup: HTMLElement,
+  severity: MarkerSeverity
+): void {
+  for (const candidate of MARKER_SEVERITIES) {
+    delete popup.dataset[markerSeverityDatasetKey(candidate)];
+  }
+  popup.dataset[markerSeverityDatasetKey(severity)] = '';
 }
 
 export function markerSeverityDatasetKey(severity: MarkerSeverity): string {

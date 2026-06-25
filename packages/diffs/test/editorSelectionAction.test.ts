@@ -67,21 +67,25 @@ async function createSelectionActionFixture(
   };
 }
 
-// Returns the clickable gutter icon that opens the selection action.
-function findSelectionActionIcon(content: HTMLElement): HTMLElement {
+// Returns the floating popover that hosts the selection action, mounted into the
+// editor's overlay layer as soon as a ranged selection settles.
+function findSelectionActionPopover(content: HTMLElement): HTMLElement {
   const root = content.getRootNode() as ShadowRoot;
-  const icon = root.querySelector<HTMLElement>('[data-selection-action-icon]');
-  if (icon === null) {
-    throw new Error('selection action icon was not rendered');
+  const popover = root.querySelector<HTMLElement>(
+    '[data-selection-action-popover]'
+  );
+  if (popover === null) {
+    throw new Error('selection action popover was not rendered');
   }
-  return icon;
+  return popover;
 }
 
 describe('Editor selection action', () => {
-  // The gutter icon element is cached and reused across renders for the same
-  // line. During a drag it is first created from the first single-character
-  // selection, so its click handler must read the current selection rather than
-  // the stale snapshot it was created with.
+  // The popover element is created once when the selection settles and kept open
+  // across selection changes, so its handlers must read the current primary
+  // selection rather than the snapshot taken when it was first created. During a
+  // drag the popover is first created from the initial single-character
+  // selection.
   test('forward-grown selection: acts on the full selection, not the first character', async () => {
     let captured: SelectionActionContext<undefined> | undefined;
     const { cleanup, editor, content } = await createSelectionActionFixture(
@@ -96,7 +100,7 @@ describe('Editor selection action', () => {
     );
 
     try {
-      // First selection (single character) creates and caches the icon.
+      // First selection (single character) creates the popover.
       editor.setSelections([
         {
           start: { line: 0, character: 0 },
@@ -105,7 +109,7 @@ describe('Editor selection action', () => {
         },
       ]);
 
-      // The selection grows on the same line; the cached icon is reused.
+      // The selection grows on the same line; the popover stays open.
       editor.setSelections([
         {
           start: { line: 0, character: 0 },
@@ -114,8 +118,7 @@ describe('Editor selection action', () => {
         },
       ]);
 
-      findSelectionActionIcon(content).click();
-
+      expect(() => findSelectionActionPopover(content)).not.toThrow();
       expect(captured).toBeDefined();
       expect(captured!.getSelectionText()).toBe('hello');
 
@@ -126,8 +129,9 @@ describe('Editor selection action', () => {
     }
   });
 
-  // Mirror of the forward case: a backward drag first creates the icon from the
-  // last character, so the stale snapshot would be the selection's last letter.
+  // Mirror of the forward case: a backward drag first creates the popover from
+  // the last character, so a stale snapshot would be the selection's last
+  // letter.
   test('backward-grown selection: acts on the full selection, not the last character', async () => {
     let captured: SelectionActionContext<undefined> | undefined;
     const { cleanup, editor, content } = await createSelectionActionFixture(
@@ -151,7 +155,7 @@ describe('Editor selection action', () => {
         },
       ]);
 
-      // The selection grows backward on the same line; the cached icon is reused.
+      // The selection grows backward on the same line; the popover stays open.
       editor.setSelections([
         {
           start: { line: 0, character: 0 },
@@ -160,10 +164,76 @@ describe('Editor selection action', () => {
         },
       ]);
 
-      findSelectionActionIcon(content).click();
-
+      expect(() => findSelectionActionPopover(content)).not.toThrow();
       expect(captured).toBeDefined();
       expect(captured!.getSelectionText()).toBe('hello');
+    } finally {
+      cleanup();
+    }
+  });
+
+  // The popover only exists while a range is selected; collapsing the selection
+  // (clicking elsewhere, arrowing away) tears it down.
+  test('collapsing the selection removes the popover', async () => {
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      'hello world',
+      {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          return document.createElement('div');
+        },
+      }
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 5 },
+          direction: 'forward',
+        },
+      ]);
+      expect(() => findSelectionActionPopover(content)).not.toThrow();
+
+      editor.setSelections([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ]);
+      const root = content.getRootNode() as ShadowRoot;
+      expect(root.querySelector('[data-selection-action-popover]')).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+
+  // Without `enabledSelectionAction`, a ranged selection renders nothing and the
+  // consumer's callback is never invoked.
+  test('renders no popover when the feature is disabled', async () => {
+    let rendered = false;
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      'hello world',
+      {
+        renderSelectionAction() {
+          rendered = true;
+          return document.createElement('div');
+        },
+      }
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 5 },
+          direction: 'forward',
+        },
+      ]);
+      const root = content.getRootNode() as ShadowRoot;
+      expect(root.querySelector('[data-selection-action-popover]')).toBeNull();
+      expect(rendered).toBe(false);
     } finally {
       cleanup();
     }

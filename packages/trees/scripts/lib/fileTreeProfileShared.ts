@@ -2,7 +2,10 @@ import { getVirtualizationWorkload } from '@pierre/tree-test-data';
 
 // Keep the profiling fixture on the narrow data-preparation entrypoint so the
 // Vite-served page does not accidentally import the source render runtime.
-import { preparePresortedFileTreeInput } from '../../src/preparedInput';
+import {
+  type FileTreePreparedInput,
+  preparePresortedFileTreeInput,
+} from '../../src/preparedInput';
 
 export const FILE_TREE_PROFILE_WORKLOAD_NAMES = [
   'linux-5x',
@@ -98,6 +101,18 @@ export interface FileTreeProfilePageSummary {
   workload: FileTreeProfileWorkloadSummary;
 }
 
+export interface FileTreeProfileFixtureOptionsConfig {
+  initialExpansion?: FileTreeProfileActionInitialExpansion;
+}
+
+export interface FileTreeProfileFixtureOptions {
+  flattenEmptyDirectories: boolean;
+  initialExpansion: FileTreeProfileActionInitialExpansion;
+  initialVisibleRowCount: number;
+  preparedInput: FileTreePreparedInput;
+  stickyFolders: boolean;
+}
+
 export function isFileTreeProfileWorkloadName(
   value: string
 ): value is FileTreeProfileWorkloadName {
@@ -129,17 +144,16 @@ export function getFileTreeProfileWorkload(
 
 export function createFileTreeProfileFixtureOptions(
   workload: FileTreeProfileWorkload,
-  options: {
-    initialExpansion?: FileTreeProfileActionInitialExpansion;
-  } = {}
-) {
-  const initialExpansion = options.initialExpansion ?? 'open';
+  options: FileTreeProfileFixtureOptionsConfig = {}
+): FileTreeProfileFixtureOptions {
+  const initialExpansion: FileTreeProfileActionInitialExpansion =
+    options.initialExpansion ?? 'open';
   return {
     flattenEmptyDirectories: true,
     // All profiling workloads expand every derived directory, so open-default
     // startup is semantically identical to replaying a huge explicit expanded
     // path list and avoids constructor-side expansion normalization work.
-    initialExpansion,
+    initialExpansion: initialExpansion,
     preparedInput: preparePresortedFileTreeInput(workload.files),
     initialVisibleRowCount: FILE_TREE_PROFILE_VIEWPORT_HEIGHT / 30,
     stickyFolders: true,

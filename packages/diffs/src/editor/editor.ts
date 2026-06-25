@@ -14,8 +14,9 @@ import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import {
   type EditorCommand,
   resolveEditorCommandFromKeyboardEvent,
+  resolveFindAgainShortcut,
 } from './command';
-import editorCSS from './editor.css';
+import editorCSS from './editor.css?inline';
 import { EditStack } from './editStack';
 import {
   applyDocumentChangeToLineAnnotations,
@@ -107,7 +108,10 @@ export interface EditorOptions<LAnnotation> {
    * Default is `"default"` (both quotes and brackets).
    */
   autoSurround?: AutoSurround;
-  /** Show the clickable selection action icon, default is disabled. */
+  /**
+   * Show a floating selection action popover anchored to the active selection,
+   * default is disabled.
+   */
   enabledSelectionAction?: boolean;
   /**
    * Custom clipboard provider.
@@ -451,6 +455,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#markerRenderer ??= new MarkerRenderer({
       getLineHeight: () => this.#metrics.lineHeight,
       getOverlayElement: () => this.#overlayElement,
+      getGutterWidth: () => this.#getGutterWidth(),
       getCharX: (line, character) => this.#getCharX(line, character),
       getLineY: (line) => this.#getLineY(line),
       isMouseDown: () => this.#isContentMouseDown || this.#isGutterMouseDown,
@@ -591,13 +596,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    if (
+    // Whether this sync replaces the document with a freshly parsed one (a new
+    // file, language, or cache key) versus reusing the existing one. A reused
+    // document keeps any edits the host's file contents do not have, which the
+    // rebuilt line DOM below must be reconciled against.
+    const documentReplaced =
       this.#textDocument === undefined ||
       this.#fileInfo === undefined ||
       this.#fileInfo.name !== fileOrDiff.name ||
       this.#fileInfo.lang !== fileOrDiff.lang ||
-      this.#fileInfo.cacheKey !== fileOrDiff.cacheKey
-    ) {
+      this.#fileInfo.cacheKey !== fileOrDiff.cacheKey;
+    if (documentReplaced) {
       let contents = '';
       if ('contents' in fileOrDiff) {
         contents = fileOrDiff.contents;
@@ -638,7 +647,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
+    // A full re-render swaps in a new content element, so comparing identity
+    // detects one. This is reliable for FileDiff, which rebuilds the column
+    // (a new node) on a full render and reuses it on a partial one (scrolling).
+    // File reuses its content element in place, so this would not fire for a
+    // File full render - but File has no rerenderFromDocument path, so the
+    // re-render gate below never applies to it. If File ever gains one, this
+    // detection must be revisited.
+    let fullRerender = false;
     if (this.#contentElement !== contentEl) {
+      fullRerender = true;
       this.#gutterElement = gutterEl;
       this.#contentElement = extend(contentEl, {
         contentEditable: 'true',
@@ -701,6 +719,38 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // undefined/Infinity windows leave the clamp disabled.
     this.#viewportWindowLines = renderRange?.totalLines;
     this.#tokenizer?.prebuildStateStack(renderRange);
+
+    // A host-driven full re-render (theme, diff style, wrap, or line-number
+    // toggle) rebuilds the diff rows from the file contents the host passes in.
+    // When the editor's document survived that re-render it stays the source of
+    // truth and may hold edits the host's contents do not, so the rebuilt rows
+    // show the pre-edit content. Re-render the diff from the editor's document
+    // instead, so the rows match it - text, syntax colors, and line count - in
+    // one pass, rather than reconciling the rebuilt rows after the fact.
+    //
+    // Gated three ways:
+    // - documentReplaced: a new file/lang/cacheKey already rebuilt the document
+    //   from the host's contents, so there is nothing to restore.
+    // - contentRebuilt: a partial render (scrolling a virtualized file) reuses
+    //   the existing edited rows, so it needs no re-render.
+    // - divergence: when the rebuilt content already matches the document there
+    //   is nothing to do. This also stops the recursion, since the re-render
+    //   below comes back through here with content that now matches.
+    // Only components with a document-backed re-render (FileDiff) implement
+    // rerenderFromDocument; the plain File has no such path yet and is skipped.
+    const fileInstance = this.#fileInstance;
+    const textDocument = this.#textDocument;
+    if (
+      !documentReplaced &&
+      fullRerender &&
+      fileInstance?.rerenderFromDocument !== undefined &&
+      textDocument !== undefined &&
+      this.#shouldRenderDivergeFromDocument(textDocument)
+    ) {
+      fileInstance.rerenderFromDocument(textDocument);
+      return;
+    }
+
     this.#markerRenderer?.removePopup();
 
     // re-render the existing selections, matches, and markers
@@ -736,14 +786,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#searchPanel?.focus();
     }
 
-    if (
-      this.#selectionAction !== undefined &&
-      this.#isLineVisible(this.#selectionAction.line) &&
-      this.#contentElement !== undefined
-    ) {
-      this.#selectionAction.render(this.#contentElement);
-    }
-
     if (this.#options.__debug === true && renderRange !== undefined) {
       const { startingLine, totalLines } = renderRange;
       console.log(
@@ -752,7 +794,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         'RenderRange:',
         startingLine + '-' + (startingLine + totalLines),
         'of',
-        this.#textDocument.lineCount,
+        this.#textDocument?.lineCount,
         'lines'
       );
     }
@@ -941,11 +983,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#shiftKeyPressed = false;
           this.#selectionStart = undefined;
           this.#reservedSelections = undefined;
-          this.#overlayElements?.forEach((el, key) => {
-            if (key.startsWith('selectionActionIcon-')) {
-              el.dataset.visible = 'true';
-            }
-          });
+          // The popover is suppressed while the mouse is down so it doesn't
+          // flicker under the cursor mid-drag. Now that the drag has ended,
+          // re-run the overlay pass so a settled ranged selection reveals it.
+          if (
+            this.#options.enabledSelectionAction === true &&
+            this.#selections !== undefined &&
+            this.#selections.length > 0 &&
+            !isCollapsedSelection(this.#selections.at(-1)!)
+          ) {
+            this.#updateSelections(this.#selections);
+          }
         },
         { passive: true }
       ),
@@ -1151,6 +1199,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           e.preventDefault();
           queueRender(this.#handleCustomPasteEvent);
           return;
+        }
+
+        // Only hijack the native find-again shortcut while the panel is open
+        // so cmd+g/cmd+shift+g step through matches; otherwise leave it alone.
+        if (this.#searchPanel !== undefined) {
+          const findAgain = resolveFindAgainShortcut(e);
+          if (findAgain !== undefined) {
+            e.preventDefault();
+            this.#searchPanel.navigate(findAgain === 'previous');
+            return;
+          }
         }
 
         const command = resolveEditorCommandFromKeyboardEvent(e);
@@ -1832,6 +1891,42 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  // Whether the rendered editable rows no longer match the editor's document -
+  // a row's text drifted, a row's line number is past the document (a stale row
+  // left after a deletion), or a row that should exist is missing/shifted (an
+  // insertion shows the following line's text). Reads the DOM rather than the
+  // diff metadata so it catches rows whose cached highlight is stale even after
+  // the underlying text was updated, and it only inspects the rendered rows so
+  // it stays correct under virtualization.
+  #shouldRenderDivergeFromDocument(
+    textDocument: TextDocument<LAnnotation>
+  ): boolean {
+    const contentEl = this.#contentElement;
+    if (contentEl === undefined) {
+      return false;
+    }
+    for (const child of contentEl.children) {
+      const el = child as HTMLElement;
+      const lineType = el.dataset.lineType;
+      const lineNumber = getLineNumberAttr(el);
+      if (
+        lineNumber === undefined ||
+        lineType === undefined ||
+        !isLineEditable(lineType)
+      ) {
+        continue;
+      }
+      const lineIndex = lineNumber - 1;
+      if (
+        lineIndex >= textDocument.lineCount ||
+        el.textContent !== textDocument.getLineText(lineIndex)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // input type doc: https://developer.mozilla.org/en-US/docs/Web/API/InputEvent/inputType
   #handleInput(inputType: string, data: string | null) {
     switch (inputType) {
@@ -2086,6 +2181,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#selections = undefined;
       this.#overlayElements?.forEach((el) => el.remove());
       this.#overlayElements?.clear();
+      this.#selectionAction?.cleanup();
+      this.#selectionAction = undefined;
       return;
     }
 
@@ -2111,12 +2208,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#renderSelection(renderCtx, 'selection', selection);
         }
         this.#renderCaret(renderCtx, selection, selection === primarySelection);
-      }
-      if (
-        this.#options.enabledSelectionAction === true &&
-        !isCollapsedSelection(primarySelection)
-      ) {
-        this.#renderSelectionActionIcon(renderCtx, primarySelection);
       }
     }
 
@@ -2162,6 +2253,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#overlayElements?.forEach((el) => el.remove());
     this.#overlayElements?.clear();
     this.#overlayElements = renderCtx.elements;
+
+    this.#updateSelectionActionPopover();
   }
 
   #renderSelection(
@@ -2547,112 +2640,81 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #renderSelectionActionIcon(
-    renderCtx: {
-      fragment: DocumentFragment;
-      elements: Map<string, HTMLElement>;
-    },
-    selection: EditorSelection
-  ) {
-    const line = getCaretPosition(selection).line;
-    if (!this.#isLineVisible(line)) {
+  // Keeps the floating selection-action popover in sync with the current
+  // selection. Called at the end of every overlay render so the popover appears
+  // as soon as a ranged selection settles, follows it while it stays open, and
+  // tears down when the selection collapses, the option is off, or the anchor
+  // line scrolls out of view. Creation is suppressed while the mouse is down so
+  // the popover doesn't flicker under the cursor mid-drag; the pointerup handler
+  // re-runs this once the drag ends.
+  #updateSelectionActionPopover(): void {
+    const primarySelection = this.#selections?.at(-1);
+    const overlayElement = this.#overlayElement;
+    const textDocument = this.#textDocument;
+    const renderSelectionAction = this.#options.renderSelectionAction;
+    if (
+      this.#options.enabledSelectionAction !== true ||
+      renderSelectionAction === undefined ||
+      primarySelection === undefined ||
+      isCollapsedSelection(primarySelection) ||
+      this.#isContentMouseDown ||
+      overlayElement === undefined ||
+      textDocument === undefined
+    ) {
+      this.#selectionAction?.cleanup();
+      this.#selectionAction = undefined;
       return;
     }
 
-    const [left, wrapLine] = this.#getCharX(line, 0);
-    const top = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
-
-    const cacheKey = 'selectionActionIcon-' + line + '/' + wrapLine;
-    if (renderCtx.elements.has(cacheKey)) {
+    const head = getCaretPosition(primarySelection);
+    if (!this.#isLineVisible(head.line)) {
+      this.#selectionAction?.cleanup();
+      this.#selectionAction = undefined;
       return;
     }
 
-    let icon: HTMLElement;
-    if (this.#overlayElements?.has(cacheKey) === true) {
-      icon = this.#overlayElements.get(cacheKey)!;
-      this.#overlayElements.delete(cacheKey);
-    } else {
-      icon = SelectionActionWidget.renderIcon(renderCtx.fragment, () => {
-        // The icon element is cached and reused across renders for the same
-        // line (see cacheKey above), so the `selection` captured when the icon
-        // was first created can be stale: while dragging, the icon is created
-        // from the first single-character selection rather than the user's
-        // final selection. Read the current primary selection at click time so
-        // the action always operates on what the user actually has selected.
-        const activeSelection = this.#selections?.at(-1) ?? selection;
-
-        const cleanUp = () => {
+    if (this.#selectionAction === undefined) {
+      // The popover element is reused while a selection stays open, so its
+      // action handlers read the live primary selection rather than the
+      // snapshot taken at creation time (extending the selection by keyboard
+      // would otherwise leave them acting on the original range). A fresh drag
+      // tears the popover down (see #isContentMouseDown above) and pointerup
+      // recreates it, so the reuse only spans keyboard-driven selection changes.
+      const getActiveSelection = (): EditorSelection =>
+        this.#selections?.at(-1) ?? primarySelection;
+      const selectionActionElement = renderSelectionAction({
+        textDocument,
+        // Live getter so consumers reading `selection` always see the current
+        // range, matching getSelectionText/replaceSelectionText below.
+        get selection(): EditorSelection {
+          return getActiveSelection();
+        },
+        applyEdits: (edits: TextEdit[]) => this.applyEdits(edits, true),
+        getSelectionText: () =>
+          this.#textDocument?.getText(getActiveSelection()) ?? '',
+        replaceSelectionText: (text: string) => {
+          this.#replaceSelectionText(text, [getActiveSelection()]);
+        },
+        close: () => {
           this.#selectionAction?.cleanup();
           this.#selectionAction = undefined;
-        };
-
-        const handleWidgetDomResize = () => {
-          // the line y cache is invalidated by the DOM change,
-          // clear the line y cache and re-render the selection
-          this.#lineYCache.clear();
-          if (this.#selections !== undefined) {
-            this.#updateSelections(this.#selections);
-          }
-        };
-
-        // remove the existing selection action element
-        cleanUp();
-
-        const textDocument = this.#textDocument;
-        const renderSelectionAction = this.#options.renderSelectionAction;
-        const fileContainer = this.#fileContainer;
-        if (
-          textDocument === undefined ||
-          renderSelectionAction === undefined ||
-          fileContainer == null
-        ) {
-          return;
-        }
-
-        const line = activeSelection.end.line;
-        const lineText = textDocument.getLineText(line);
-        const selectionActionElement = renderSelectionAction({
-          textDocument,
-          selection: activeSelection,
-          applyEdits: (edits: TextEdit[]) => this.applyEdits(edits, true),
-          getSelectionText: () => {
-            return this.#textDocument?.getText(activeSelection) ?? '';
-          },
-          replaceSelectionText: (text: string) => {
-            this.#replaceSelectionText(text, [activeSelection]);
-          },
-          close: () => {
-            cleanUp();
-            handleWidgetDomResize();
-            this.#scrollToPrimaryCaret();
-          },
-        });
-        let leadingWhitespaces = 0;
-        for (let i = 0; i < lineText.length; i++) {
-          const charCode = lineText.charCodeAt(i);
-          if (charCode === /* space */ 32) {
-            leadingWhitespaces++;
-          } else if (charCode === /* tab */ 9) {
-            leadingWhitespaces += this.#metrics.tabSize;
-          } else {
-            break;
-          }
-        }
-        this.#selectionAction = new SelectionActionWidget(
-          line,
-          selectionActionElement,
-          fileContainer,
-          leadingWhitespaces,
-          handleWidgetDomResize
-        );
-        this.#updateSelections([activeSelection]);
-        if (this.#isLineVisible(line) && this.#contentElement !== undefined) {
-          this.#selectionAction.render(this.#contentElement);
-        }
+          this.#scrollToPrimaryCaret();
+        },
       });
+      this.#selectionAction = new SelectionActionWidget(
+        head.line,
+        selectionActionElement,
+        overlayElement
+      );
     }
-    icon.style.transform = `translateY(${top}px) translateX(${left}px)`;
-    renderCtx.elements.set(cacheKey, icon);
+
+    // Anchor just below the selection's head line, mirroring the marker hover
+    // popover's geometry.
+    const [left, wrapLine] = this.#getCharX(head.line, head.character);
+    const lineHeight = this.#metrics.lineHeight;
+    const top = this.#getLineY(head.line) + wrapLine * lineHeight + lineHeight;
+    this.#selectionAction.line = head.line;
+    this.#selectionAction.reposition(left, top, this.#getGutterWidth());
   }
 
   // Opens the search panel in the requested mode. If a panel is already open,

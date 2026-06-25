@@ -945,6 +945,13 @@ export interface DiffsEditableComponent<
     // recompute here (token/line content updates still apply).
     skipDiffRecompute?: boolean
   ) => void;
+  // Re-render the component from the editor's document, discarding the cached
+  // (host-derived) rendered content. The editor calls this after a host-driven
+  // full re-render rebuilt the rows from the host's stale file contents, so the
+  // visible rows match the document - text, syntax colors, and line count - in
+  // one pass. Optional: components without a document-backed re-render (the
+  // plain File) leave it unset and are skipped.
+  rerenderFromDocument?: (textDocument: DiffsTextDocument) => void;
 }
 
 export interface DiffsEditor<LAnnotation> {

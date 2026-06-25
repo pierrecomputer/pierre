@@ -1,12 +1,15 @@
 $schema: 'https://moonrepo.dev/schemas/toolchains.json'
 
-# Bun is the only managed runtime and the package manager. Tool versions come
-# from .prototools (versionFromPrototools defaults to true), so the pin lives
-# in one place. Node stays pinned in .prototools for tools that run on it
-# (e.g. next's CLI), but moon does not manage a node toolchain.
+# pnpm manages workspace installs and package-manager operations. Tool versions
+# come from .prototools (versionFromPrototools defaults to true), so pins live in
+# one place. Bun stays available for direct runtime and test script execution.
 javascript:
-  packageManager: 'bun'
+  packageManager: 'pnpm'
 
-bun:
+node: {}
+
+pnpm:
   installArgs:
     - '--frozen-lockfile'
+
+bun: {}

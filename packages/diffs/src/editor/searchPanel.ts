@@ -1,3 +1,4 @@
+import { resolveFindAgainShortcut } from './command';
 import { buildSearchReplacementText } from './pieceTable';
 import { isPrimaryModifier } from './platform';
 import { getEditorIconSvg, type SVGSpriteNames } from './sprite';
@@ -36,6 +37,7 @@ export class SearchPanelWidget {
   #inputElement: HTMLInputElement;
   #updateMatches?: (options?: { syncSelection?: boolean }) => void;
   #applyMode?: (mode: SearchPanelMode) => void;
+  #navigate?: (findPrevious: boolean) => void;
 
   constructor(options: SearchPanelOptions) {
     const {
@@ -72,11 +74,9 @@ export class SearchPanelWidget {
     const updateMatches = (options?: { syncSelection?: boolean }) => {
       matches.all =
         searchParams.text !== '' ? textDocument.search(searchParams) : [];
-      this.#container
-        .querySelectorAll<HTMLElement>('[data-icon][data-disabled]')
-        .forEach((element) => {
-          element.dataset.disabled = String(matches.all.length === 0);
-        });
+      const noMatches = matches.all.length === 0;
+      prevButton.disabled = noMatches;
+      nextButton.disabled = noMatches;
 
       if (searchParams.text === '') {
         matchResultElement.textContent = 'No results';
@@ -157,6 +157,9 @@ export class SearchPanelWidget {
       }
       matches.current = nextMatch;
     };
+    // Keep focus in the panel when stepping through matches from the inputs.
+    this.#navigate = (findPrevious: boolean) =>
+      findNextMatch(findPrevious, true);
 
     const buildReplacementEdit = (
       matchStart: number,
@@ -215,24 +218,46 @@ export class SearchPanelWidget {
       onClose();
     };
 
+    // Shared builder for the panel's icon controls. Every clickable control is a
+    // real <button> so it gets focus, keyboard activation, and native disabled
+    // handling for free; `getEditorIconSvg` marks the glyph aria-hidden, so the
+    // accessible name comes from `label` (also used as the hover title).
+    const iconButton = (opts: {
+      icon: SVGSpriteNames;
+      label: string;
+      size?: number;
+      dataset?: Record<string, string>;
+      onClick: () => void;
+    }) =>
+      h('button', {
+        type: 'button',
+        title: opts.label,
+        ariaLabel: opts.label,
+        dataset: { searchIcon: '', ...opts.dataset },
+        innerHTML: getEditorIconSvg(opts.icon, opts.size ?? 16),
+        onclick: opts.onClick,
+      });
+
     // Builds an always-visible icon button that toggles one boolean search
     // option (case/whole-word/regex). The button reflects its on/off state via
-    // the `data-active` attribute so the stylesheet can highlight it.
+    // `aria-pressed` so the stylesheet can highlight it and assistive tech can
+    // announce it.
     const makeToggle = (
       icon: SVGSpriteNames,
       title: string,
       key: 'caseSensitive' | 'wholeWord' | 'regex'
     ) => {
-      const button = h('div', {
-        dataset: { icon, active: String(searchParams[key]) },
-        title,
-        innerHTML: getEditorIconSvg(icon, 14),
-        onclick: () => {
+      const button = iconButton({
+        icon,
+        label: title,
+        size: 14,
+        onClick: () => {
           const next = !searchParams[key];
-          button.dataset.active = String(next);
+          button.ariaPressed = String(next);
           updateSearchParam(key, next);
         },
       });
+      button.ariaPressed = String(searchParams[key]);
       return button;
     };
 
@@ -252,6 +277,13 @@ export class SearchPanelWidget {
       oninput: (e: Event) => {
         searchParams.replaceText = (e.target as HTMLInputElement).value;
       },
+      onkeydown: (e: KeyboardEvent) => {
+        const findAgain = resolveFindAgainShortcut(e);
+        if (findAgain !== undefined) {
+          e.preventDefault();
+          findNextMatch(findAgain === 'previous', true);
+        }
+      },
     });
 
     this.#inputElement = h('input', {
@@ -265,12 +297,18 @@ export class SearchPanelWidget {
         updateMatches();
       },
       onkeydown: (e: KeyboardEvent) => {
+        const findAgain = resolveFindAgainShortcut(e);
         if (e.key === 'Escape') {
           e.preventDefault();
           close();
         } else if (e.key === 'Enter') {
           e.preventDefault();
           findNextMatch(false, true);
+        } else if (findAgain !== undefined) {
+          // Override the native browser find-again shortcut so cmd+g steps to
+          // the next match and cmd+shift+g to the previous one.
+          e.preventDefault();
+          findNextMatch(findAgain === 'previous', true);
         } else if (
           isPrimaryModifier(e) &&
           (e.key === 'f' || e.code === 'KeyF')
@@ -305,66 +343,58 @@ export class SearchPanelWidget {
     const replaceActionsElement = h('div', {
       dataset: { replaceActions: '', replaceCell: '' },
       children: [
-        h('div', {
-          dataset: { icon: 'replace' },
-          title: 'Replace',
-          innerHTML: getEditorIconSvg('replace'),
-          onclick: () => {
-            replace();
-          },
-        }),
-        h('div', {
-          dataset: { icon: 'replace-all' },
-          title: 'Replace All',
-          innerHTML: getEditorIconSvg('replace-all'),
-          onclick: () => {
-            replaceAll();
-          },
+        iconButton({ icon: 'replace', label: 'Replace', onClick: replace }),
+        iconButton({
+          icon: 'replace-all',
+          label: 'Replace All',
+          onClick: replaceAll,
         }),
       ],
     });
+
+    // Held so the no-results state can toggle their native disabled flag.
+    const prevButton = iconButton({
+      icon: 'arrow-up',
+      label: 'Previous',
+      onClick: () => {
+        findNextMatch(true);
+      },
+    });
+    const nextButton = iconButton({
+      icon: 'arrow-down',
+      label: 'Next',
+      onClick: () => {
+        findNextMatch();
+      },
+    });
+    prevButton.disabled = true;
+    nextButton.disabled = true;
 
     const navElement = h('div', {
       dataset: 'searchNav',
-      children: [
-        h('div', {
-          dataset: { icon: 'arrow-up', disabled: 'true' },
-          title: 'Previous',
-          innerHTML: getEditorIconSvg('arrow-up'),
-          onclick: () => {
-            findNextMatch(true);
-          },
-        }),
-        h('div', {
-          dataset: { icon: 'arrow-down', disabled: 'true' },
-          title: 'Next',
-          innerHTML: getEditorIconSvg('arrow-down'),
-          onclick: () => {
-            findNextMatch();
-          },
-        }),
-        h('div', {
-          dataset: { icon: 'close' },
-          title: 'Close',
-          innerHTML: getEditorIconSvg('close'),
-          onclick: close,
-        }),
-      ],
+      children: [prevButton, nextButton],
     });
 
-    // A 2x2 grid of inputs (find/replace) and their trailing content (results
-    // text / replace actions), with the find navigation buttons in a third
-    // column on the first row. DOM order drives grid auto-placement:
-    //   row 1: find input | results text | nav buttons
-    //   row 2: replace input | replace actions
+    const closeElement = iconButton({
+      icon: 'close',
+      label: 'Close',
+      onClick: close,
+      dataset: { searchClose: '' },
+    });
+
+    // Cells are positioned by CSS grid-template-areas (see editor.css), so DOM
+    // order here only drives tab/reading order, not layout. Keep the replace
+    // input directly after the find input (and its toggles) so Tab walks
+    // find -> replace before reaching the nav arrows and close button.
     const gridElement = h('div', {
       dataset: { searchGrid: '', mode },
       children: [
         findInputBox,
-        matchResultElement,
-        navElement,
         replaceInputBox,
         replaceActionsElement,
+        matchResultElement,
+        navElement,
+        closeElement,
       ],
     });
 
@@ -402,6 +432,10 @@ export class SearchPanelWidget {
 
   focus(): void {
     this.#inputElement.focus();
+  }
+
+  navigate(findPrevious: boolean): void {
+    this.#navigate?.(findPrevious);
   }
 
   updateMatches(options?: { syncSelection?: boolean }): void {

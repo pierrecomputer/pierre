@@ -14,17 +14,12 @@
     },
     {
       "path": "../../packages/trees/tsconfig.json"
-    },
-    {
-      "path": "../../packages/truncate/tsconfig.json"
-    },
-    {
-      "path": "../../packages/storage-elements-next/tsconfig.json"
     }
   ],
   "compilerOptions": {
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
+    "types": ["bun"],
     "allowJs": true,
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,

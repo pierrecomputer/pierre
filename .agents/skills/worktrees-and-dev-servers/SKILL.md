@@ -32,7 +32,7 @@ The `wt` suite is defined in `scripts/wt.ts`, exposed as the `root:wt` moon
 task, and manages only Pierre-managed worktrees:
 
 ```bash
-moonx root:wt -- new <slug>    # create a worktree, allocate offset, bun install
+moonx root:wt -- new <slug>    # create a worktree, allocate offset, pnpm install
 moonx root:wt -- rm <slug>     # kill its processes, remove the worktree
 moonx root:wt -- clean         # kill zombie servers on all managed worktree ports
 moonx root:wt -- clean <slug>  # clean one managed worktree

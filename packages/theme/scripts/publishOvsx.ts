@@ -12,7 +12,7 @@ if (ovsxPat === undefined || ovsxPat.length === 0) {
 }
 
 withVsixPackageShim(() => {
-  execFileSync('bunx', ['ovsx', 'publish', '--no-dependencies'], {
+  execFileSync('pnpm', ['exec', 'ovsx', 'publish', '--no-dependencies'], {
     cwd: packageRoot,
     env: { ...process.env, OVSX_PAT: ovsxPat },
     stdio: 'inherit',

@@ -38,7 +38,7 @@
     "dist",
     "build",
     ".vite",
-    "bun.lock",
+    "pnpm-lock.yaml",
     ".next",
     ".source",
     ".vercel",

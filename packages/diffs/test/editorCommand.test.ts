@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   type EditorCommand,
   resolveEditorCommandFromKeyboardEvent,
+  resolveFindAgainShortcut,
 } from '../src/editor/command';
 
 type ShortcutKeyboardEvent = Pick<
@@ -101,6 +102,55 @@ describe('resolveEditorShortcutCommand', () => {
       { event: { key: 'Tab' }, expected: 'indent' },
       { event: { key: 'Tab', shiftKey: true }, expected: 'outdent' },
       { event: { key: 'Tab', ctrlKey: true }, expected: undefined },
+    ]);
+  });
+});
+
+describe('resolveFindAgainShortcut', () => {
+  function expectFindAgain(
+    platform: string,
+    cases: Array<{
+      event: Partial<ShortcutKeyboardEvent> &
+        Pick<ShortcutKeyboardEvent, 'key'>;
+      expected: 'next' | 'previous' | undefined;
+    }>
+  ): void {
+    const isMac = /macOS|MacIntel|iPhone|iPad|iPod/i.test(platform);
+    withPlatform(platform, () => {
+      for (const { event: shortcutEvent, expected } of cases) {
+        expect(resolveFindAgainShortcut(event(shortcutEvent), isMac)).toBe(
+          expected
+        );
+      }
+    });
+  }
+
+  test('uses cmd+g / cmd+shift+g on macOS', () => {
+    expectFindAgain('MacIntel', [
+      { event: { key: 'g', metaKey: true }, expected: 'next' },
+      {
+        event: { key: 'g', metaKey: true, shiftKey: true },
+        expected: 'previous',
+      },
+      { event: { key: 'g', ctrlKey: true }, expected: undefined },
+    ]);
+  });
+
+  test('uses ctrl+g / ctrl+shift+g on windows and linux', () => {
+    expectFindAgain('Linux x86_64', [
+      { event: { key: 'g', ctrlKey: true }, expected: 'next' },
+      {
+        event: { key: 'g', ctrlKey: true, shiftKey: true },
+        expected: 'previous',
+      },
+    ]);
+  });
+
+  test('ignores alt-modified and unmodified g', () => {
+    expectFindAgain('MacIntel', [
+      { event: { key: 'g', metaKey: true, altKey: true }, expected: undefined },
+      { event: { key: 'g' }, expected: undefined },
+      { event: { key: 'f', metaKey: true }, expected: undefined },
     ]);
   });
 });

@@ -1,11 +1,10 @@
 name: Set up moon and caches
 description: >-
   Install the proto-pinned toolchain (.prototools is the single source of truth
-  for bun, node, and moon versions) and mount Blacksmith sticky disks for
-  everything cacheable: the proto toolchain, bun's download cache, and moon's
-  workspace cache. moon installs workspace dependencies itself with a frozen
-  lockfile when a task requires them, so there is no explicit `bun install`
-  step.
+  for bun, pnpm, node, and moon versions) and mount Blacksmith sticky disks for
+  everything cacheable: the proto toolchain, pnpm's store, and moon's workspace
+  cache. moon installs workspace dependencies itself with pnpm and a frozen
+  lockfile when a task requires them, so there is no explicit install step.
 
 runs:
   using: composite
@@ -18,11 +17,11 @@ runs:
         key: ${{ github.repository }}-proto-${{ runner.os }}
         path: ~/.proto
 
-    - name: Mount bun download cache
+    - name: Mount pnpm store cache
       uses: useblacksmith/stickydisk@4c034ba57b706cf0e3b4b0ce098c2a3b1071580c # v1.4.0
       with:
-        key: ${{ github.repository }}-bun-install-${{ runner.os }}
-        path: ~/.bun/install/cache
+        key: ${{ github.repository }}-pnpm-store-${{ runner.os }}
+        path: ~/.local/share/pnpm/store
 
     # Persist only the portable parts of moon's cache: moon documents
     # `hashes` and `outputs` as safe to share between environments, while
@@ -40,8 +39,9 @@ runs:
         path: ${{ github.workspace }}/.moon/cache/outputs
 
     # Installs proto, then `proto install` provisions every tool pinned in
-    # .prototools (bun, node, moon, gh). The action's own actions/cache layer
-    # is disabled because the sticky disk above already owns ~/.proto.
+    # .prototools (bun runtime, pnpm package manager, node, moon, gh). The
+    # action's own actions/cache layer is disabled because the sticky disk above
+    # already owns ~/.proto.
     - name: Install proto and moon
       uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
       with:

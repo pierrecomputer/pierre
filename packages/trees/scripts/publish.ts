@@ -89,9 +89,9 @@ function preflight(flags: CliFlags): void {
     }
   }
 
-  const whoami = run('bun', ['pm', 'whoami']).trim();
+  const whoami = run('pnpm', ['whoami']).trim();
   if (whoami.length === 0) {
-    throw new Error('bun pm whoami returned empty — log in to npm first.');
+    throw new Error('pnpm whoami returned empty — run pnpm login first.');
   }
   console.log(`npm user: ${whoami}`);
 
@@ -116,12 +116,12 @@ function buildTrees(): void {
   run('moon', ['run', 'trees:build'], { cwd: packageRoot(), inherit: true });
 }
 
-// Asks bun to produce the same tarball it would upload to npm. bun's pack
-// already rewrites `workspace:*` dependencies to their resolved versions.
+// Asks pnpm to produce the same tarball it would upload to npm. pnpm pack
+// rewrites `workspace:*` dependencies to their resolved versions.
 function packTarball(destination: string, cwd = packageRoot()): string {
   console.log(`[publish] packing tarball into ${destination}`);
   mkdirSync(destination, { recursive: true });
-  run('bun', ['pm', 'pack', '--destination', destination], {
+  run('pnpm', ['pack', '--pack-destination', destination], {
     cwd,
     inherit: true,
   });
@@ -232,20 +232,24 @@ function verifyTarball(tarballPath: string, workDir: string): void {
   assertPublishPayload(join(verifyRoot, 'package'));
 }
 
-// Publish the final tarball, not the source package directory. `--ignore-scripts`
-// prevents package lifecycle hooks from rebuilding the already-verified payload.
+// Publish the final tarball, not the source package directory. The final tarball
+// has repo-only lifecycle scripts removed before it reaches pnpm publish.
 function publish(tarballPath: string, tag: string): void {
-  console.log(`[publish] bun publish --tag=${tag} ${tarballPath}`);
-  run('bun', ['publish', '--ignore-scripts', '--tag', tag, tarballPath], {
+  console.log(
+    `[publish] pnpm publish ${tarballPath} --tag ${tag} --no-git-checks`
+  );
+  run('pnpm', ['publish', tarballPath, '--tag', tag, '--no-git-checks'], {
     inherit: true,
   });
 }
 
 function dryRunPublish(tarballPath: string, tag: string): void {
-  console.log(`[publish] bun publish --dry-run --tag=${tag} ${tarballPath}`);
+  console.log(
+    `[publish] pnpm publish ${tarballPath} --dry-run --tag ${tag} --no-git-checks`
+  );
   run(
-    'bun',
-    ['publish', '--dry-run', '--ignore-scripts', '--tag', tag, tarballPath],
+    'pnpm',
+    ['publish', tarballPath, '--dry-run', '--tag', tag, '--no-git-checks'],
     {
       inherit: true,
     }
@@ -254,7 +258,7 @@ function dryRunPublish(tarballPath: string, tag: string): void {
 
 function promoteLatest(version: string): void {
   console.log(`[publish] promoting @pierre/trees@${version} to latest`);
-  run('npm', ['dist-tag', 'add', `@pierre/trees@${version}`, 'latest'], {
+  run('pnpm', ['dist-tag', 'add', `@pierre/trees@${version}`, 'latest'], {
     inherit: true,
   });
 }

@@ -120,22 +120,6 @@
   color: var(--ide-fg-muted);
 }
 
-.aui-selection-action {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 0;
-}
-
-.aui-selection-action button {
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
-  background-color: color-mix(in srgb, currentColor 8%, transparent);
-  color: inherit;
-  font-size: 12px;
-}
-
 .aui-composer {
   display: flex;
   flex-direction: column;
@@ -149,6 +133,52 @@
 
 .aui-composer:focus-within {
   border-color: var(--ide-accent);
+}
+
+/* Snippets sent from the selection action's "Add to chat" stack above the
+   composer input as removable code attachments. */
+.aui-composer-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 160px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.aui-attachment {
+  position: relative;
+  border: 1px solid var(--ide-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: var(--ide-surface);
+}
+
+.aui-attachment-code {
+  display: block;
+  overflow-x: auto;
+}
+
+.aui-attachment-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 6px;
+  background-color: color-mix(in srgb, var(--ide-surface) 70%, transparent);
+  color: var(--ide-fg-muted);
+}
+
+.aui-attachment-remove:hover {
+  background-color: var(--ide-tab-hover);
+  color: var(--ide-fg);
 }
 
 .aui-composer-input {

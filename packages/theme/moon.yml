@@ -61,7 +61,7 @@ tasks:
   # Publishing is manual: there is no release-triggered workflow. A maintainer
   # runs these directly with the relevant token in the environment.
   publish-npm:
-    command: 'bun publish --access public'
+    command: 'pnpm publish --access public'
     deps:
       - 'build'
     options:

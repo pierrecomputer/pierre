@@ -1,11 +1,18 @@
 'use client';
 
-import { DEFAULT_THEMES } from '@pierre/diffs';
+import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, FileDiff } from '@pierre/diffs/react';
-import { IconArrow, IconChevronSm, IconSparkle } from '@pierre/icons';
+import { EditorProvider, File, FileDiff } from '@pierre/diffs/react';
+import { IconArrow, IconChevronSm, IconSparkle, IconX } from '@pierre/icons';
 import { FileTree, type FileTreeRowDecoration } from '@pierre/trees';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import './agent-ui.css';
 import {
@@ -18,6 +25,25 @@ import {
   getSessionGitStatus,
   getSessionPaths,
 } from './mockData';
+
+// Added/removed line totals for a single file's diff.
+interface DiffStats {
+  additions: number;
+  deletions: number;
+}
+
+// Sums the added and removed line counts across every hunk of a parsed diff so
+// the Changes tree can show live +/- totals that track in-editor edits, rather
+// than the static snapshot counts baked into the mock data.
+function countDiffStats(diff: FileDiffMetadata): DiffStats {
+  let additions = 0;
+  let deletions = 0;
+  for (const hunk of diff.hunks) {
+    additions += hunk.additionLines;
+    deletions += hunk.deletionLines;
+  }
+  return { additions, deletions };
+}
 
 // The editor's stylesheet flattens every line number to one neutral colour
 // (`--diffs-editor-line-number-fg`) and is injected as an unlayered <style>,
@@ -46,22 +72,51 @@ function getLineNumberColorSheet(): CSSStyleSheet | null {
   return lineNumberColorSheet;
 }
 
+// `renderSelectionAction` returns a plain DOM node, not React, and renders into
+// the editor's shadow DOM where the page's CSS (including agent-ui.css) doesn't
+// reach, so the comment icon is inlined as markup painted with `currentColor`
+// and the buttons are styled inline.
+const ICON_COMMENT_FILL_SVG = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.19406e-05 8C2.19406e-05 3.58172 3.58174 0 8.00002 0C9.17929 0 10.3009 0.255639 11.3107 0.715237C13.4225 1.67636 15.0429 3.52827 15.6917 5.79351C15.8926 6.49527 16 7.23572 16 8C16 12.4183 12.4183 16 8.00002 16H0.750022C0.446675 16 0.173198 15.8173 0.0571123 15.537C-0.0589735 15.2568 0.00519335 14.9342 0.219692 14.7197L1.83763 13.1017C0.690449 11.7174 2.19406e-05 9.93877 2.19406e-05 8Z" fill="currentColor"/></svg>`;
+
+const SELECTION_PRIMARY_BUTTON_STYLE =
+  'display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 500; padding: 4px 10px 4px 8px; border-radius: 6px; border: 0; background-color: #6366f1; color: #fff; cursor: pointer;';
+const SELECTION_SECONDARY_BUTTON_STYLE =
+  'display: inline-flex; align-items: center; font-size: 12px; padding: 4px 8px; border-radius: 6px; border: 0; background-color: color-mix(in lab, currentColor 25%, transparent); color: inherit; cursor: pointer;';
+
+// Tighter type scale so a snippet code block fits in the narrow composer.
+const SNIPPET_STYLE = {
+  '--diffs-font-size': '12px',
+  '--diffs-line-height': '18px',
+} as CSSProperties;
+
+interface AuiSnippet {
+  id: number;
+  text: string;
+}
+
 // Renders the active session's changed files as a @pierre/trees FileTree, with
 // git-status colours and per-row +/- decorations. The tree is an imperative web
 // component, so it's created in an effect and torn down on session change.
 function ChangesTree({
   session,
   activePath,
+  statsByPath,
   onSelect,
 }: {
   session: AuiSession;
   activePath: string | null;
+  statsByPath: Record<string, DiffStats>;
   onSelect: (path: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<FileTree | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  // The FileTree lives for the whole session, so its renderRowDecoration closure
+  // is created once. Reading the latest stats through a ref keeps the decoration
+  // in sync with edits without recreating the tree.
+  const statsRef = useRef(statsByPath);
+  statsRef.current = statsByPath;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -82,20 +137,26 @@ function ChangesTree({
         if (file == null) {
           return null;
         }
+        // Prefer the live counts (which track in-editor edits) and fall back to
+        // the file's static snapshot counts before any edit has been recorded.
+        const stats = statsRef.current[item.path] ?? {
+          additions: file.additions,
+          deletions: file.deletions,
+        };
         // `light-dark()` resolves against the tree host's color-scheme, which we
         // pin to the demo's own toggle, so jade/red adapt across light and dark.
         // Skip a zero count entirely so rows only show the side that changed.
         const parts: { text: string; color: string }[] = [];
-        if (file.additions > 0) {
+        if (stats.additions > 0) {
           parts.push({
-            text: `+${String(file.additions)}`,
+            text: `+${String(stats.additions)}`,
             color: 'light-dark(#0f9d6b, #34d399)',
           });
         }
-        if (file.deletions > 0) {
+        if (stats.deletions > 0) {
           const prefix = parts.length > 0 ? '\u00a0' : '';
           parts.push({
-            text: `${prefix}\u2212${String(file.deletions)}`,
+            text: `${prefix}\u2212${String(stats.deletions)}`,
             color: 'light-dark(#dc2626, #f87171)',
           });
         }
@@ -104,7 +165,7 @@ function ChangesTree({
         }
         return {
           text: parts.map((part) => part.text).join(''),
-          title: `${String(file.additions)} additions, ${String(file.deletions)} deletions`,
+          title: `${String(stats.additions)} additions, ${String(stats.deletions)} deletions`,
           parts,
         };
       },
@@ -135,6 +196,17 @@ function ChangesTree({
       containerRef.current.style.colorScheme = 'dark';
     }
   }, [session]);
+
+  // When the live stats change, force the tree to re-run renderRowDecoration.
+  // setComposition deliberately rerenders even with the same composition, and
+  // the controller owns selection/expansion so the active row stays highlighted.
+  useEffect(() => {
+    const tree = treeRef.current;
+    if (tree == null) {
+      return;
+    }
+    tree.setComposition(tree.getComposition());
+  }, [statsByPath, session]);
 
   // Keep the highlighted row matched to the active file.
   useEffect(() => {
@@ -181,6 +253,56 @@ export function AgentUi({
     () => session.changedFiles[0]?.path ?? null
   );
 
+  // Per-file added/removed line totals shown in the Changes tree. Seeded from
+  // the snapshot counts and recomputed from the live diff as the user edits.
+  const [liveStats, setLiveStats] = useState<Record<string, DiffStats>>(() =>
+    Object.fromEntries(
+      session.changedFiles.map((file) => [
+        file.path,
+        { additions: file.additions, deletions: file.deletions },
+      ])
+    )
+  );
+
+  // Snippets sent from the selection action's "Add to chat" land here as
+  // composer attachments. The editor is recreated per file, but routing the add
+  // through a ref keeps the latest setter without depending on that lifecycle.
+  const [snippets, setSnippets] = useState<AuiSnippet[]>([]);
+  const snippetIdRef = useRef(0);
+  const addSnippet = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (trimmed === '') {
+      return;
+    }
+    snippetIdRef.current += 1;
+    const id = snippetIdRef.current;
+    setSnippets((prev) => [...prev, { id, text: trimmed }]);
+  }, []);
+  const addSnippetRef = useRef(addSnippet);
+  addSnippetRef.current = addSnippet;
+  const removeSnippet = useCallback((id: number) => {
+    setSnippets((prev) => prev.filter((snippet) => snippet.id !== id));
+  }, []);
+
+  // Recomputes a file's +/- totals from its live edits. Routed through a ref so
+  // the per-file editor (recreated on `activePath`) can call the latest version
+  // without listing `session` as a dependency.
+  const recordEditedStats = useCallback(
+    (target: string, contents: string) => {
+      const changed = session.changedFiles.find(
+        (entry) => entry.path === target
+      );
+      if (changed == null) {
+        return;
+      }
+      const stats = countDiffStats(getFileDiff(changed, contents));
+      setLiveStats((prev) => ({ ...prev, [target]: stats }));
+    },
+    [session]
+  );
+  const recordEditedStatsRef = useRef(recordEditedStats);
+  recordEditedStatsRef.current = recordEditedStats;
+
   // Persisted in-editor edits keyed by path, so switching files keeps the
   // agent's tweaked output.
   const editsRef = useRef<Map<string, string>>(new Map());
@@ -191,40 +313,48 @@ export function AgentUi({
     activeTargetRef.current = activePath;
   }, [activePath]);
 
-  // The FileDiff is never remounted per file (no `key`): a client-side remount
-  // would drop the server `prerenderedHTML` (templateRender only injects it
-  // during SSR), so switching files just swaps the `fileDiff` prop and the
-  // FileDiff re-renders the new diff in place on the same surface.
+  // The FileDiff is never remounted per file (no `key`), so switching files just
+  // swaps the `fileDiff` prop and re-renders in place, preserving the server
+  // `prerenderedHTML` (which SSR injects only on mount).
   //
-  // The editor, however, IS recreated per file (note `activePath` in the deps).
-  // The library only attaches the editor — via `editor.edit(instance)`, which
-  // builds the editor's TextDocument from the file currently rendered — when the
-  // `editor` reference itself changes (see useFileDiffInstance's attach effect,
-  // keyed on `[contentEditable, editor]`). It does NOT re-attach when only the
-  // `fileDiff` prop changes. So a single stable editor would keep the first
-  // file's document while the surface shows a different file, mis-positioning the
-  // caret/selection and breaking edits. Recreating the editor per file forces a
-  // re-attach that rebuilds the document against the newly rendered file — the
-  // same pattern the LiveDiffEditor demo uses when its layout/mode changes.
+  // The editor, however, IS recreated per file (`activePath` in the deps). The
+  // library rebuilds the editor's TextDocument only when the `editor` reference
+  // changes, not when `fileDiff` changes, so a stable editor would keep the
+  // first file's document while the surface shows another file — mis-positioning
+  // the caret and breaking edits.
   const editor = useMemo(
     () =>
       new Editor({
         enabledSelectionAction: true,
-        renderSelectionAction({
-          close,
-          getSelectionText,
-          replaceSelectionText,
-        }) {
+        renderSelectionAction({ close, getSelectionText }) {
           const container = document.createElement('div');
-          const button = document.createElement('button');
-          container.className = 'aui-selection-action';
-          button.type = 'button';
-          button.textContent = 'Wrap selection in TODO()';
-          button.addEventListener('click', () => {
-            replaceSelectionText(`TODO(${getSelectionText()})`);
+          container.style.cssText = 'display: flex; gap: 4px;';
+
+          const addToChat = document.createElement('button');
+          addToChat.type = 'button';
+          addToChat.style.cssText = SELECTION_PRIMARY_BUTTON_STYLE;
+          addToChat.innerHTML = `${ICON_COMMENT_FILL_SVG} Add to chat`;
+          // Suppress the default mousedown so clicking the action doesn't blur
+          // the editor and collapse the selection we're about to read.
+          addToChat.addEventListener('mousedown', (event) =>
+            event.preventDefault()
+          );
+          addToChat.addEventListener('click', () => {
+            addSnippetRef.current(getSelectionText());
             close();
           });
-          container.append(button);
+
+          const copy = document.createElement('button');
+          copy.type = 'button';
+          copy.textContent = 'Copy';
+          copy.style.cssText = SELECTION_SECONDARY_BUTTON_STYLE;
+          copy.addEventListener('mousedown', (event) => event.preventDefault());
+          copy.addEventListener('click', () => {
+            void navigator.clipboard?.writeText(getSelectionText());
+            close();
+          });
+
+          container.append(addToChat, copy);
           return container;
         },
         onChange(file) {
@@ -233,16 +363,14 @@ export function AgentUi({
             return;
           }
           editsRef.current.set(target, file.contents);
+          // Recompute the edited file's diff against its original snapshot so the
+          // Changes tree's +/- totals reflect the live edits.
+          recordEditedStatsRef.current(target, file.contents);
         },
       }),
-    // Recreate the editor whenever the active file changes so it re-attaches and
-    // rebuilds its document against the newly rendered surface (same reasoning as
-    // the LiveDiffEditor demo's layout/mode dep).
     [activePath]
   );
 
-  // The changes tree shows one file at a time; selecting a file swaps the
-  // active surface.
   const openFile = useCallback((path: string) => {
     setActivePath(path);
   }, []);
@@ -341,6 +469,43 @@ export function AgentUi({
             </div>
 
             <div className="aui-composer">
+              {snippets.length > 0 && (
+                <ul className="aui-composer-attachments">
+                  {snippets.map((snippet) => (
+                    <li key={snippet.id} className="aui-attachment">
+                      <File
+                        file={{
+                          name: 'snippet.ts',
+                          contents: snippet.text,
+                        }}
+                        options={{
+                          theme,
+                          themeType: 'dark',
+                          disableFileHeader: true,
+                          disableLineNumbers: true,
+                        }}
+                        // The page's shared worker pool is wired up for the
+                        // editable editor surface; a dynamically mounted
+                        // read-only File isn't highlighted through it, so
+                        // highlight on the main thread.
+                        disableWorkerPool
+                        className="aui-attachment-code"
+                        style={SNIPPET_STYLE}
+                      />
+                      <button
+                        type="button"
+                        className="aui-attachment-remove"
+                        aria-label="Remove snippet"
+                        onClick={() => {
+                          removeSnippet(snippet.id);
+                        }}
+                      >
+                        <IconX />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <textarea
                 className="aui-composer-input"
                 placeholder="Ask for changes, @mention files, or run commands…"
@@ -384,6 +549,7 @@ export function AgentUi({
             <ChangesTree
               session={session}
               activePath={activePath}
+              statsByPath={liveStats}
               onSelect={openFile}
             />
           </aside>

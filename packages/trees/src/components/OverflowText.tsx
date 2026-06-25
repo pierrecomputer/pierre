@@ -1,6 +1,6 @@
 /** @jsxImportSource preact */
 
-import type { ComponentChildren, CSSProperties } from 'preact';
+import type { ComponentChildren, CSSProperties, JSX } from 'preact';
 
 type PropsWithChildren<T = {}> = T & {
   children?: ComponentChildren;
@@ -191,7 +191,7 @@ export function OverflowText({
   marker = '…',
   variant = 'default',
   ...props
-}: OverflowTextProps) {
+}: OverflowTextProps): JSX.Element {
   'use no memo';
   const contentNode = (
     <OverflowContent key="content" mode={mode}>
@@ -226,7 +226,7 @@ export function OverflowText({
 export function Truncate({
   children,
   ...props
-}: Omit<OverflowTextProps, 'mode'>) {
+}: Omit<OverflowTextProps, 'mode'>): JSX.Element {
   'use no memo';
   return (
     <OverflowText mode="truncate" {...props}>
@@ -238,7 +238,7 @@ export function Truncate({
 export function Fruncate({
   children,
   ...props
-}: Omit<OverflowTextProps, 'mode'>) {
+}: Omit<OverflowTextProps, 'mode'>): JSX.Element {
   'use no memo';
   return (
     <OverflowText mode="fruncate" {...props}>
@@ -256,7 +256,7 @@ export function MiddleTruncate({
   className,
   style,
   ...props
-}: MiddleTruncateProps) {
+}: MiddleTruncateProps): JSX.Element | null {
   'use no memo';
   let firstSegment: ComponentChildren | null = null;
   let secondSegment: ComponentChildren | null = null;

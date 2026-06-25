@@ -13,7 +13,6 @@
     "nextjs/no-head-element": "off",
     "nextjs/no-html-link-for-pages": "off",
     "nextjs/no-img-element": "off",
-    "typescript/tsconfig-error": "off",
     "prefer-const": ["error", { "destructuring": "all" }],
     "no-unused-vars": [
       "error",
@@ -104,7 +103,6 @@
     "{packages,apps}/*/.source/**",
     "{packages,apps}/*/.vinxi/**",
     "{packages,apps}/*/.output/**",
-    "{packages,apps}/*/.vercel/**",
-    "packages/storage-elements/blocks/git-platform-sync/**"
+    "{packages,apps}/*/.vercel/**"
   ]
 }

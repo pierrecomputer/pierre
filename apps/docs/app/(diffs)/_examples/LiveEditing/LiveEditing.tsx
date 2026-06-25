@@ -6,12 +6,19 @@ import type {
   PreloadedFileResult,
   PreloadFileDiffResult,
 } from '@pierre/diffs/ssr';
-import { IconDiffSplit, IconDiffUnified, IconRefresh } from '@pierre/icons';
+import {
+  IconDiffSplit,
+  IconDiffUnified,
+  IconPencil,
+  IconRefresh,
+} from '@pierre/icons';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { LIVE_EDITOR_NEW_FILE } from '../LiveEditor/constants';
 import { FeatureHeader } from '@/components/FeatureHeader';
+import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
 interface LiveEditingProps {
@@ -153,24 +160,34 @@ export function LiveEditing({
       />
 
       <div className="flex flex-wrap gap-3">
+        <div className="gridstack">
+          <Button
+            variant="outline"
+            className="justify-between gap-3 pr-11 pl-3"
+            onClick={() => setMode(mode === 'edit' ? 'review' : 'edit')}
+          >
+            <div className="flex items-center gap-2">
+              <IconPencil className="-ml-0.5" />
+              Edit mode
+            </div>
+          </Button>
+          {/* Visual-only indicator stacked over the button; the Button is the
+              interactive control, so keep the switch out of the tab order and
+              hidden from assistive tech to avoid a duplicate toggle. */}
+          <Switch
+            checked={mode === 'edit'}
+            tabIndex={-1}
+            aria-hidden
+            className="pointer-events-none mr-3 place-self-center justify-self-end"
+          />
+        </div>
+
         <ButtonGroup
           value={surface}
           onValueChange={(value) => handleSurfaceChange(value as Surface)}
           aria-label="Surface"
         >
           {(['file', 'diff'] as const).map((value) => (
-            <ButtonGroupItem key={value} value={value} className="capitalize">
-              {value}
-            </ButtonGroupItem>
-          ))}
-        </ButtonGroup>
-
-        <ButtonGroup
-          value={mode}
-          onValueChange={(value) => setMode(value as EditorMode)}
-          aria-label="Editor mode"
-        >
-          {(['review', 'edit'] as const).map((value) => (
             <ButtonGroupItem key={value} value={value} className="capitalize">
               {value}
             </ButtonGroupItem>

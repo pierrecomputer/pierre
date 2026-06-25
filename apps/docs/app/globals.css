@@ -188,7 +188,7 @@
     letter-spacing: -0.025em;
   }
   kbd {
-    @apply text-muted-foreground bg-accent shadow-[inset_0_-1px_0_var(--color-border)] px-1.25 py-0.25 rounded-sm text-center min-w-[1.75em];
+    @apply text-muted-foreground bg-accent min-w-[1.75em] rounded-sm px-1.25 py-0.25 text-center shadow-[inset_0_-1px_0_var(--color-border)];
   }
 
   h2,

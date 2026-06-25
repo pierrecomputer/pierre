@@ -238,6 +238,13 @@
     contain: content;
   }
 
+  input,
+  button {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+  }
+
   *,
   *::before,
   *::after {

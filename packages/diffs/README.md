@@ -24,17 +24,16 @@ JavaScript and React components.
 ## Install
 
 ```bash
-bun i @pierre/diffs
+pnpm add @pierre/diffs
 ```
 
 ## Development
 
-Technically you can use the package manager of your choice, but we use
-[bun](https://bun.sh/).
+We use pnpm for workspace package management and Bun for tests.
 
 ```bash
-# From the root of the mono repo: setup dependencies
-bun install
+# From the root of the monorepo: setup dependencies
+pnpm install
 
 # Start the demo vite test server
 moonx demo:dev
@@ -64,12 +63,13 @@ with snapshot support.
 **Applicable to the Pierre team only.**
 
 ```bash
-# You may need to login with npm first:
-npm login
+# You may need to login first:
+pnpm login
 
-# Always run publish from within the package directory
+# Always run publish from within the package directory.
 cd packages/diffs
-bun publish
+pnpm publish
+# In a CI-marked shell: CI= pnpm publish
 ```
 
 ## Building the sprite

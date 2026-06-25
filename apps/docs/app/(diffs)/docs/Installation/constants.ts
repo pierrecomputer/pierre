@@ -2,7 +2,7 @@ import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
-export const PACKAGE_MANAGERS = ['npm', 'bun', 'pnpm', 'yarn'] as const;
+export const PACKAGE_MANAGERS = ['pnpm', 'npm', 'bun', 'yarn'] as const;
 export type PackageManager = (typeof PACKAGE_MANAGERS)[number];
 
 const INSTALL_COMMANDS: Record<PackageManager, string> = {

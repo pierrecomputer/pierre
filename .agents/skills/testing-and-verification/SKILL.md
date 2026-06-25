@@ -47,7 +47,6 @@ Prefer unit or integration tests by default:
 ```bash
 moonx diffs:test
 moonx trees:test
-moonx truncate:test
 ```
 
 `moon run :test` runs every project's suite. Tests import workspace dependencies
