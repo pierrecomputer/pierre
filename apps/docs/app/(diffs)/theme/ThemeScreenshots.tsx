@@ -10,16 +10,16 @@ import { useTheme } from '@/components/theme-provider';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 export function ThemeScreenshots() {
-  const { resolvedTheme } = useTheme();
+  const { resolvedColorScheme } = useTheme();
   const [activeTheme, setActiveTheme] = useState<'light' | 'dark'>('dark');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    if (resolvedTheme === 'light' || resolvedTheme === 'dark') {
-      setActiveTheme(resolvedTheme);
+    if (resolvedColorScheme === 'light' || resolvedColorScheme === 'dark') {
+      setActiveTheme(resolvedColorScheme);
     }
-  }, [resolvedTheme]);
+  }, [resolvedColorScheme]);
 
   if (!mounted) {
     return (

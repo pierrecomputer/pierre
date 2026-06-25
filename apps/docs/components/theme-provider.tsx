@@ -1,6 +1,6 @@
 'use client';
 
-import type { ColorMode } from '@pierre/theming';
+import type { ColorMode, ColorScheme } from '@pierre/theming';
 import {
   createContext,
   type ReactNode,
@@ -14,32 +14,33 @@ import {
 
 import { themeController } from './themeController';
 
-type ResolvedTheme = 'light' | 'dark';
-
 interface ThemeProviderProps {
   attribute?: 'class' | `data-${string}` | Array<'class' | `data-${string}`>;
   children: ReactNode;
   enableColorScheme?: boolean;
-  value?: Partial<Record<ResolvedTheme, string>>;
+  value?: Partial<Record<ColorScheme, string>>;
 }
 
+// Mirrors @pierre/theming's vocabulary: `colorMode` is the selected
+// light/dark/system mode, `resolvedColorScheme` is the concrete light/dark it
+// resolves to, and `setColorMode` drives the controller.
 interface ThemeContextValue {
-  resolvedTheme?: ResolvedTheme;
-  setTheme: (theme: ColorMode) => void;
-  systemTheme?: ResolvedTheme;
-  theme?: ColorMode;
-  themes: ColorMode[];
+  colorMode?: ColorMode;
+  colorModes: ColorMode[];
+  resolvedColorScheme?: ColorScheme;
+  setColorMode: (mode: ColorMode) => void;
+  systemColorScheme?: ColorScheme;
 }
 
-const RESOLVED_THEMES: ResolvedTheme[] = ['light', 'dark'];
-const AVAILABLE_MODES: ColorMode[] = ['light', 'dark', 'system'];
+const COLOR_SCHEMES: ColorScheme[] = ['light', 'dark'];
+const COLOR_MODES: ColorMode[] = ['light', 'dark', 'system'];
 
-// Navbar tint (iOS Safari's <meta name="theme-color">) for each resolved
-// color mode. These match the global body `--background` (oklch(1)/oklch(0.145))
+// Navbar tint (iOS Safari's <meta name="theme-color">) for each resolved color
+// scheme. These match the global body `--background` (oklch(1)/oklch(0.145))
 // that iOS samples at the top of the page, so the navbar blends with the page
 // instead of contrasting it. Kept in sync with the same literals hardcoded in
 // the layout's pre-paint bootstrap script (which can't import this module).
-const MODE_THEME_COLOR: Record<ResolvedTheme, string> = {
+const MODE_THEME_COLOR: Record<ColorScheme, string> = {
   light: '#ffffff',
   dark: '#0a0a0a',
 };
@@ -61,25 +62,25 @@ function setThemeColorMeta(color: string) {
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-// Applies the already-resolved color mode to <html>: the class/data-attribute
+// Applies the already-resolved color scheme to <html>: the class/data-attribute
 // contract, the native color-scheme, and the iOS navbar tint. The resolved
 // 'light'/'dark' comes straight from the theme controller, so this no longer
 // re-derives it from a raw mode + system preference.
 function applyTheme({
   attribute,
   enableColorScheme,
-  resolvedTheme,
+  resolvedColorScheme,
   value,
 }: {
   attribute: ThemeProviderProps['attribute'];
   enableColorScheme: boolean;
-  resolvedTheme: ResolvedTheme;
-  value: Partial<Record<ResolvedTheme, string>> | undefined;
+  resolvedColorScheme: ColorScheme;
+  value: Partial<Record<ColorScheme, string>> | undefined;
 }) {
   const root = document.documentElement;
-  const resolvedValue = value?.[resolvedTheme] ?? resolvedTheme;
+  const resolvedValue = value?.[resolvedColorScheme] ?? resolvedColorScheme;
   const attributes = Array.isArray(attribute) ? attribute : [attribute];
-  const classValues = RESOLVED_THEMES.map((theme) => value?.[theme] ?? theme);
+  const classValues = COLOR_SCHEMES.map((scheme) => value?.[scheme] ?? scheme);
 
   for (const currentAttribute of attributes) {
     if (currentAttribute === 'class') {
@@ -93,16 +94,16 @@ function applyTheme({
   }
 
   if (enableColorScheme) {
-    root.style.colorScheme = resolvedTheme;
+    root.style.colorScheme = resolvedColorScheme;
   }
 
-  // Keep the iOS navbar tint in step with the resolved color mode.
-  setThemeColorMeta(MODE_THEME_COLOR[resolvedTheme]);
+  // Keep the iOS navbar tint in step with the resolved color scheme.
+  setThemeColorMeta(MODE_THEME_COLOR[resolvedColorScheme]);
 }
 
 // Thin React binding over the @pierre/theming controller (the single owner of
 // theming state). It subscribes to the controller for mode +
-// resolvedColorScheme, applies the resolved mode to the DOM, and exposes the
+// resolvedColorScheme, applies the resolved scheme to the DOM, and exposes the
 // useTheme() API the app already depends on. Selection and persistence live in
 // the controller — this component holds no theming state of its own.
 export function ThemeProvider({
@@ -122,37 +123,37 @@ export function ThemeProvider({
   // first render — but the server rendered the defaults. Expose the resolved
   // values to consumers only after mount, so any render output derived from
   // useTheme() (e.g. diffshub's chrome) matches the SSR markup first, then
-  // flips. The DOM application below still uses the real resolved mode (the
+  // flips. The DOM application below still uses the real resolved scheme (the
   // pre-paint bootstrap script already painted it), so this gate is invisible.
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const theme = mounted ? state.mode : undefined;
-  const resolvedTheme = mounted ? state.resolvedColorScheme : undefined;
+  const colorMode = mounted ? state.mode : undefined;
+  const resolvedColorScheme = mounted ? state.resolvedColorScheme : undefined;
 
   useEffect(() => {
     applyTheme({
       attribute,
       enableColorScheme,
-      resolvedTheme: state.resolvedColorScheme,
+      resolvedColorScheme: state.resolvedColorScheme,
       value,
     });
   }, [attribute, enableColorScheme, state.resolvedColorScheme, value]);
 
-  const setTheme = useCallback((next: ColorMode) => {
+  const setColorMode = useCallback((next: ColorMode) => {
     themeController.setColorMode(next);
   }, []);
 
   const contextValue = useMemo<ThemeContextValue>(
     () => ({
-      resolvedTheme,
-      setTheme,
-      theme,
-      themes: AVAILABLE_MODES,
+      colorMode,
+      colorModes: COLOR_MODES,
+      resolvedColorScheme,
+      setColorMode,
     }),
-    [resolvedTheme, setTheme, theme]
+    [colorMode, resolvedColorScheme, setColorMode]
   );
 
   return (
@@ -165,8 +166,8 @@ export function ThemeProvider({
 export function useTheme(): ThemeContextValue {
   return (
     useContext(ThemeContext) ?? {
-      setTheme: () => {},
-      themes: [],
+      colorModes: [],
+      setColorMode: () => {},
     }
   );
 }
