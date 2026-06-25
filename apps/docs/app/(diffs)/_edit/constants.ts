@@ -312,6 +312,13 @@ export const EDITOR_SHORTCUT_GROUPS: readonly EditorShortcutGroup[] = [
     shortcuts: [
       { keys: ['F'], action: 'Open the search panel', mod: true },
       { keys: ['D'], action: 'Find next match of the selection', mod: true },
+      { keys: ['G'], action: 'Next match', mod: true },
+      {
+        keys: ['G'],
+        modifiers: ['Shift'],
+        action: 'Previous match',
+        mod: true,
+      },
       { keys: ['Enter'], action: 'Next match (in search panel)' },
       { keys: ['Esc'], action: 'Close the search panel' },
     ],
