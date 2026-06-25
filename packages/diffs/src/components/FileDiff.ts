@@ -2188,6 +2188,7 @@ export class FileDiff<
     }
 
     this.lastRowCount = hunksResult.rowCount;
+    this.renderSeparators(hunksResult.hunkData);
     this.syncRenderViewToEditor();
   }
 
