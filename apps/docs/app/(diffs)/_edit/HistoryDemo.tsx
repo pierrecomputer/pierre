@@ -378,9 +378,14 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   return (
     <div className="not-prose" ref={wrapperRef}>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Button variant="outline" onClick={undoAll} disabled={!canUndo}>
+        <Button
+          variant="outline"
+          onClick={undoAll}
+          disabled={!canUndo}
+          aria-label="Undo all"
+          size="icon"
+        >
           <IconArrowLeftBar className="-ml-1" />
-          Undo all
         </Button>
         <Button
           variant="outline"
@@ -388,7 +393,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
           disabled={!canUndo}
           title="Undo (Cmd/Ctrl-Z)"
         >
-          <IconArrowShort className="-ml-1" />
+          <IconArrowShort className="-mx-1" />
           Undo
         </Button>
         <Button
@@ -398,10 +403,15 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
           title="Redo (Cmd/Ctrl-Shift-Z)"
         >
           Redo
-          <IconArrowRightShort className="-mr-1" />
+          <IconArrowRightShort className="-mx-1" />
         </Button>
-        <Button variant="outline" onClick={redoAll} disabled={!canRedo}>
-          Redo all
+        <Button
+          variant="outline"
+          onClick={redoAll}
+          disabled={!canRedo}
+          aria-label="Redo all"
+          size="icon"
+        >
           <IconArrowRightBar className="-mr-1" />
         </Button>
         {diverged ? (

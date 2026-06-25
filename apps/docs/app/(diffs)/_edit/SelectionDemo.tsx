@@ -110,7 +110,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
   const clearChat = useCallback(() => setSnippets([]), []);
 
   return (
-    <div className="not-prose grid gap-4 md:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="not-prose grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(0,1fr)_20rem]">
       <EditorProvider editor={editor}>
         <File {...prerenderedFile} className="diff-container" contentEditable />
       </EditorProvider>
