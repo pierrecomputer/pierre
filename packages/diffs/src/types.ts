@@ -914,7 +914,11 @@ export interface DiffsBaseComponent {
   setOptions: (options: Partial<DiffsComponentOptions>) => void;
   setSelectedLines: (
     range: { start: number; end: number } | null,
-    options?: { notify?: boolean }
+    options?: {
+      notify?: boolean;
+      activeLineSide?: SelectionSide;
+      lineNumberOnly?: boolean;
+    }
   ) => void;
   render(options: {
     file?: FileContents;

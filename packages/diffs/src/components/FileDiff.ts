@@ -1017,9 +1017,11 @@ export class FileDiff<
   public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     this.editor = editor;
+    this.interactionManager.setEditorAttached(true);
     this.syncRenderViewToEditor();
     return () => {
       this.editor = undefined;
+      this.interactionManager.setEditorAttached(false);
     };
   }
 
