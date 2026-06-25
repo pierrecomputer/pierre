@@ -974,17 +974,34 @@ export function applyDeleteCharacterToSelections<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
   selections: EditorSelection[],
   forward: boolean,
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+  tabSize = 2
 ): {
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
 } {
   const deleteSelections: EditorSelection[] = selections.map((selection) => {
-    const [start, end] = resolveDeleteCharacterRange(
+    let [start, end] = resolveDeleteCharacterRange(
       textDocument,
       selection,
       forward
     );
+    // Only grow a Backspace into a full indent unit for a collapsed caret. When
+    // the user has an explicit selection, Backspace must delete exactly that
+    // selection rather than expanding it to a whole soft tab.
+    if (!forward && isCollapsedSelection(selection)) {
+      const normalized = normalizeLeadingIndentForChange(
+        textDocument,
+        {
+          start: textDocument.offsetAt(start),
+          end: textDocument.offsetAt(end),
+          text: '',
+        },
+        tabSize
+      );
+      start = textDocument.positionAt(normalized.start);
+      end = textDocument.positionAt(normalized.end);
+    }
     return {
       start,
       end,

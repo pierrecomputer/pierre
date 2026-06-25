@@ -118,6 +118,21 @@ function dispatchKeydown(
   return event;
 }
 
+function dispatchBackspace(
+  window: EditorTestWindow,
+  target: HTMLElement
+): InputEvent {
+  const event = new window.InputEvent('beforeinput', {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    inputType: 'deleteContentBackward',
+    data: null,
+  });
+  target.dispatchEvent(event);
+  return event;
+}
+
 describe('Editor composition input', () => {
   test('lets the browser own IME preview before committing composition text', async () => {
     const { cleanup, content, editor, window } = await createEditorFixture();
@@ -304,6 +319,93 @@ describe('Editor keyboard editing', () => {
 
       expect(event.defaultPrevented).toBe(true);
       expect(editor.getState().file.contents).toBe('  alpha\n  beta');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('deletes one soft tab when backspacing in leading indentation', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: '  foo',
+      selections: [
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const event = dispatchBackspace(window, content);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(editor.getState().file.contents).toBe('foo');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: DirectionNone,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('deletes one hard tab when backspacing in leading indentation', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: '\tfoo',
+      selections: [
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const event = dispatchBackspace(window, content);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(editor.getState().file.contents).toBe('foo');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: DirectionNone,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('deletes only the selection when backspacing a range in indentation', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: '  foo',
+      selections: [
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 2 },
+          direction: 'forward',
+        },
+      ],
+    });
+
+    try {
+      const event = dispatchBackspace(window, content);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(editor.getState().file.contents).toBe(' foo');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+          direction: DirectionNone,
+        },
+      ]);
     } finally {
       cleanup();
     }

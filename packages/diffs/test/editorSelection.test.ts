@@ -1532,6 +1532,88 @@ describe('applyDeleteCharacterToSelections', () => {
       createSelection(0, 1, 0, 1),
     ]);
   });
+
+  test('deletes a hard-tab indent on Backspace at a caret', () => {
+    const textDocument = new TextDocument('inmemory://1', '\tfoo');
+    const selections = [createSelection(0, 1, 0, 1)];
+    const { nextSelections } = applyDeleteCharacterToSelections(
+      textDocument,
+      selections,
+      false,
+      undefined,
+      2
+    );
+
+    expect(textDocument.getText()).toBe('foo');
+    expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
+  });
+
+  test('deletes a soft-tab indent on Backspace at a caret', () => {
+    const textDocument = new TextDocument('inmemory://1', '    foo');
+    const selections = [createSelection(0, 4, 0, 4)];
+    const { nextSelections } = applyDeleteCharacterToSelections(
+      textDocument,
+      selections,
+      false,
+      undefined,
+      4
+    );
+
+    expect(textDocument.getText()).toBe('foo');
+    expect(nextSelections).toEqual([createSelection(0, 0, 0, 0)]);
+  });
+
+  test('normalizes indent on Backspace for each caret', () => {
+    const textDocument = new TextDocument('inmemory://1', '\tfoo\n    bar');
+    const selections = [
+      createSelection(0, 1, 0, 1),
+      createSelection(1, 4, 1, 4),
+    ];
+    const { nextSelections } = applyDeleteCharacterToSelections(
+      textDocument,
+      selections,
+      false,
+      undefined,
+      4
+    );
+
+    expect(textDocument.getText()).toBe('foo\nbar');
+    expect(nextSelections).toEqual([
+      createSelection(0, 0, 0, 0),
+      createSelection(1, 0, 1, 0),
+    ]);
+  });
+
+  test('does not expand a Backspace outside leading indentation', () => {
+    const textDocument = new TextDocument('inmemory://1', '  foo');
+    const selections = [createSelection(0, 3, 0, 3)];
+    const { nextSelections } = applyDeleteCharacterToSelections(
+      textDocument,
+      selections,
+      false,
+      undefined,
+      2
+    );
+
+    expect(textDocument.getText()).toBe('  oo');
+    expect(nextSelections).toEqual([createSelection(0, 2, 0, 2)]);
+  });
+
+  test('does not expand an explicit selection in leading indentation', () => {
+    const textDocument = new TextDocument('inmemory://1', '    foo');
+    // The caret is not collapsed: only the last indent space is selected.
+    const selections = [createSelection(0, 3, 0, 4)];
+    const { nextSelections } = applyDeleteCharacterToSelections(
+      textDocument,
+      selections,
+      false,
+      undefined,
+      4
+    );
+
+    expect(textDocument.getText()).toBe('   foo');
+    expect(nextSelections).toEqual([createSelection(0, 3, 0, 3)]);
+  });
 });
 
 describe('resolveDeleteCharacterRange', () => {
