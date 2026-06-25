@@ -103,6 +103,7 @@
     light-dark(#ff963288, #ff963266)
   );
 }
+
 [data-rtl] {
   border-top-left-radius: 3px;
 }

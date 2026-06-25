@@ -17,10 +17,7 @@ export function FeatureHeader({
 }: FeatureHeaderProps) {
   return (
     <div className="max-w-3xl">
-      <h2
-        id={id}
-        className="flex scroll-mt-20 items-center gap-2 text-2xl font-medium"
-      >
+      <h2 id={id} className="scroll-mt-20 text-2xl font-medium">
         {title}
         {isBeta ? <BetaBadge className="ml-2 align-middle" /> : null}
       </h2>

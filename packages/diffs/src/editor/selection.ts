@@ -1944,12 +1944,8 @@ function createSelectionsFromOffsetPairs(
   });
 }
 
-// Grows a single-character backspace into one soft-tab width so leading spaces
-// outdent like the explicit outdent command. This only applies when the caret
-// sits in pure leading whitespace and the tabSize characters right before it are
-// all spaces, so it removes exactly one indent unit rather than snapping to the
-// nearest tab stop. Hard tabs and partial (sub-tab) indentation are left to a
-// normal one-character delete.
+// Expands a backspace over leading spaces into one soft-tab width so mixed hard/soft indentation
+// behaves like the explicit outdent command.
 function normalizeLeadingIndentForChange(
   textDocument: TextDocument<unknown>,
   change: ResolvedTextEdit,
