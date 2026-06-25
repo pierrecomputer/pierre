@@ -53,7 +53,11 @@ export function hydratePartialFileDiff(
         isPartial: false,
         deletionLines: [...lines],
         additionLines: [...lines],
-        cacheKey: getHydratedCacheKey(loadedContents.oldFile, newFile),
+        cacheKey: getHydratedCacheKey(
+          fileDiff,
+          loadedContents.oldFile,
+          newFile
+        ),
       };
     }
   }
@@ -79,7 +83,7 @@ function hydrateTwoSidedFileDiff(
     isPartial: false,
     deletionLines,
     additionLines,
-    cacheKey: getHydratedCacheKey(oldFile, newFile),
+    cacheKey: getHydratedCacheKey(fileDiff, oldFile, newFile),
   };
 }
 
@@ -89,6 +93,7 @@ function hydrateReparsedFileDiff(
   newFile: FileContents | null
 ): FileDiffMetadata {
   const parsed = parseDiffFromFile(oldFile, newFile, undefined, true);
+  const cacheKey = getHydratedCacheKey(fileDiff, oldFile, newFile);
   return {
     ...parsed,
     name: fileDiff.name,
@@ -100,6 +105,7 @@ function hydrateReparsedFileDiff(
     prevMode: fileDiff.prevMode,
     type: fileDiff.type,
     isPartial: false,
+    cacheKey,
   };
 }
 
@@ -213,11 +219,25 @@ function requireNewFile(
 }
 
 function getHydratedCacheKey(
+  fileDiff: FileDiffMetadata,
   oldFile: FileContents | null,
   newFile: FileContents | null
 ): string | undefined {
-  if (oldFile?.cacheKey == null || newFile?.cacheKey == null) {
-    return undefined;
+  const loadedFileCacheKey = getLoadedFileCacheKey(oldFile, newFile);
+  if (loadedFileCacheKey != null) {
+    return loadedFileCacheKey;
   }
-  return `${oldFile.cacheKey}:${newFile.cacheKey}`;
+  return fileDiff.cacheKey != null
+    ? `${fileDiff.cacheKey}:hydrated`
+    : undefined;
+}
+
+function getLoadedFileCacheKey(
+  oldFile: FileContents | null,
+  newFile: FileContents | null
+): string | undefined {
+  if (oldFile?.cacheKey != null && newFile?.cacheKey != null) {
+    return `${oldFile.cacheKey}:${newFile.cacheKey}`;
+  }
+  return oldFile?.cacheKey ?? newFile?.cacheKey;
 }

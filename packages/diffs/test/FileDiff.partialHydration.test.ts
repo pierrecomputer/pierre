@@ -187,11 +187,6 @@ describe('FileDiff partial hydration', () => {
       const { oldFile, newFile, partial } = createPartialChange('partial.ts');
       const loadedContents = { oldFile, newFile };
       const deferred = createDeferred<typeof loadedContents>();
-      const callbackCalls: {
-        sourceFileDiff: FileDiffMetadata;
-        hydratedFileDiff: FileDiffMetadata;
-        instance: FileDiff<undefined>;
-      }[] = [];
       let loadCalls = 0;
       const fileContainer = document.createElement('div');
       instance = new TestFileDiff({
@@ -201,13 +196,6 @@ describe('FileDiff partial hydration', () => {
           loadCalls++;
           expect(fileDiff).toBe(partial);
           return deferred.promise;
-        },
-        onHydratedPartialDiff(sourceFileDiff, hydratedFileDiff, diffInstance) {
-          callbackCalls.push({
-            sourceFileDiff,
-            hydratedFileDiff,
-            instance: diffInstance,
-          });
         },
       });
 
@@ -231,7 +219,7 @@ describe('FileDiff partial hydration', () => {
       deferred.resolve(loadedContents);
       await waitForHydrated(instance);
 
-      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
       expect(instance.fileDiff?.additionLines).toEqual([
         'keep 1\n',
@@ -254,11 +242,6 @@ describe('FileDiff partial hydration', () => {
         hydratedInstanceFileDiff,
         'expected FileDiff to keep hydrated file diff'
       );
-      expect(callbackCalls).toHaveLength(1);
-      expect(callbackCalls[0]?.sourceFileDiff).toBe(partial);
-      expect(callbackCalls[0]?.hydratedFileDiff).toBe(hydratedInstanceFileDiff);
-      expect(callbackCalls[0]?.hydratedFileDiff.isPartial).toBe(false);
-      expect(callbackCalls[0]?.instance).toBe(instance);
     } finally {
       instance?.cleanUp();
       cleanup();
@@ -344,7 +327,7 @@ describe('FileDiff partial hydration', () => {
       deferred.resolve(loadedContents);
       await waitForHydrated(instance);
 
-      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
       expect(fileContainer.shadowRoot?.textContent).not.toContain(
         'More unchanged context may be available'
@@ -398,7 +381,7 @@ describe('FileDiff partial hydration', () => {
     }
   });
 
-  test('rendering a partial diff after a full diff throws before overwriting state', () => {
+  test('rendering a partial diff after a full diff replaces the rendered metadata', () => {
     const { cleanup } = installDom();
     let instance: TestFileDiff | undefined;
     try {
@@ -417,17 +400,16 @@ describe('FileDiff partial hydration', () => {
         preventEmit: true,
       });
 
-      expect(() => {
-        instance!.render({
-          fileContainer,
-          fileDiff: partial,
-          deferManagers: true,
-          preventEmit: true,
-        });
-      }).toThrow(
-        'FileDiff.render: Cannot replace a full diff with a partial diff on the same instance.'
-      );
-      expect(instance.fileDiff).toBe(fullDiff);
+      const didRender = instance.render({
+        fileContainer,
+        fileDiff: partial,
+        deferManagers: true,
+        preventEmit: true,
+      });
+
+      expect(didRender).toBe(true);
+      expect(instance.fileDiff).toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(true);
     } finally {
       instance?.cleanUp();
       cleanup();
@@ -553,6 +535,7 @@ describe('FileDiff partial hydration', () => {
     let instance: TestFileDiff | undefined;
     try {
       const { oldFile, newFile, partial } = createPartialChange('partial.ts');
+      partial.cacheKey = 'partial-cache';
       const loadedContents = { oldFile, newFile };
       const loadDeferred = createDeferred<typeof loadedContents>();
       const { primeDeferred, primedDiffs, workerManager } =
@@ -580,12 +563,13 @@ describe('FileDiff partial hydration', () => {
 
       expect(primedDiffs).toHaveLength(1);
       expect(primedDiffs[0]?.isPartial).toBe(false);
+      expect(primedDiffs[0]?.cacheKey).toBe('partial.ts:old:partial.ts:new');
       expect(instance.fileDiff).toBe(partial);
 
       primeDeferred.resolve(undefined);
       await waitForHydrated(instance);
 
-      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
     } finally {
       instance?.cleanUp();
@@ -598,6 +582,7 @@ describe('FileDiff partial hydration', () => {
     let instance: TestFileDiff | undefined;
     try {
       const { oldFile, newFile, partial } = createPartialChange('partial.ts');
+      partial.cacheKey = 'partial-cache';
       const loadedContents = { oldFile, newFile };
       const { primeDeferred, primedDiffs, workerManager } =
         createPrimeWorkerManager();
@@ -622,7 +607,8 @@ describe('FileDiff partial hydration', () => {
       await waitForHydrated(instance);
 
       expect(primedDiffs).toHaveLength(1);
-      expect(instance.fileDiff).not.toBe(partial);
+      expect(primedDiffs[0]?.cacheKey).toBe('partial.ts:old:partial.ts:new');
+      expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
       primeDeferred.resolve(undefined);
     } finally {
@@ -637,6 +623,7 @@ describe('FileDiff partial hydration', () => {
     let instance: TestFileDiff | undefined;
     try {
       const { oldFile, newFile, partial } = createPartialChange('partial.ts');
+      partial.cacheKey = 'partial-cache';
       const loadedContents = { oldFile, newFile };
       const primingError = new Error('prime failed');
       const { primeDeferred, primedDiffs, workerManager } =
@@ -664,8 +651,9 @@ describe('FileDiff partial hydration', () => {
       await waitForHydrated(instance);
 
       expect(primedDiffs).toHaveLength(1);
+      expect(primedDiffs[0]?.cacheKey).toBe('partial.ts:old:partial.ts:new');
       expect(consoleError.mock.calls[0]?.[0]).toBe(primingError);
-      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
     } finally {
       consoleError.mockRestore();
@@ -679,6 +667,7 @@ describe('FileDiff partial hydration', () => {
     let instance: TestFileDiff | undefined;
     try {
       const { oldFile, newFile, partial } = createPartialChange('first.ts');
+      partial.cacheKey = 'partial-cache';
       const nextDiff = parseDiffFromFile(
         { name: 'second.ts', contents: 'const value = "before";\n' },
         { name: 'second.ts', contents: 'const value = "after";\n' }
@@ -706,6 +695,7 @@ describe('FileDiff partial hydration', () => {
       await wait(0);
 
       expect(primedDiffs).toHaveLength(1);
+      expect(primedDiffs[0]?.cacheKey).toBe('first.ts:old:first.ts:new');
       instance.render({
         fileContainer,
         fileDiff: nextDiff,
@@ -805,7 +795,7 @@ describe('FileDiff partial hydration', () => {
       expect(loadCalls).toBe(2);
       await waitForHydrated(instance);
 
-      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
       expect(instance.fileDiff?.additionLines).toEqual([
         'keep 1\n',

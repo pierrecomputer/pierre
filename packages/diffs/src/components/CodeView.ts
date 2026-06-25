@@ -246,7 +246,6 @@ const CODE_VIEW_DIFF_OPTION_KEYS = [
   'disableBackground',
   'expandUnchanged',
   'loadDiffFiles',
-  'onHydratedPartialDiff',
   'collapsedContextThreshold',
   'lineDiffType',
   'maxLineDiffLength',
@@ -3298,13 +3297,7 @@ export class CodeView<LAnnotation = undefined> {
       }
       item.top = runningTop;
       if (item.type === 'diff') {
-        // FIXME(amadeus): I feel like there's gotta be a cleaner way to do
-        // this... it feels gross..
-        const hydratedFileDiff =
-          item.instance.consumePendingCodeViewLayoutChanges(item.item.fileDiff);
-        if (hydratedFileDiff != null) {
-          item.item.fileDiff = hydratedFileDiff;
-        }
+        item.instance.consumePendingCodeViewLayoutChanges(item.item.fileDiff);
         item.height = item.instance.prepareCodeViewItem(
           item.item.fileDiff,
           runningTop,

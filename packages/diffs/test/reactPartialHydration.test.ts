@@ -1,13 +1,14 @@
-import { afterAll, describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
-import { act, type ComponentType, createElement } from 'react';
+import {
+  act,
+  type ComponentType,
+  createElement,
+  type ReactElement,
+} from 'react';
 import { createRoot as createReactRoot, type Root } from 'react-dom/client';
 
-import {
-  disposeHighlighter,
-  FileDiff as ImperativeFileDiff,
-  parsePatchFiles,
-} from '../src';
+import { disposeHighlighter, parsePatchFiles } from '../src';
 import { HEADER_METADATA_SLOT_ID } from '../src/constants';
 import {
   FileDiff as ReactFileDiff,
@@ -30,12 +31,6 @@ interface PartialChange {
   newFile: FileContents;
   partial: FileDiffMetadata;
   patch: string;
-}
-
-interface HydrationCallback {
-  sourceFileDiff: FileDiffMetadata;
-  hydratedFileDiff: FileDiffMetadata;
-  instance: ImperativeFileDiff<undefined>;
 }
 
 const ReactFileDiffComponent = ReactFileDiff as ComponentType<
@@ -97,17 +92,34 @@ function renderHydrationState(fileDiff: FileDiffMetadata): string {
     : `full:${fileDiff.additionLines.length}`;
 }
 
-async function waitForHydration(
-  callbackCalls: readonly HydrationCallback[]
-): Promise<HydrationCallback> {
+async function waitForHydratedMetadata(
+  fileDiff: FileDiffMetadata
+): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {
-    const callbackCall = callbackCalls[0];
-    if (callbackCall != null) {
-      return callbackCall;
+    if (!fileDiff.isPartial) {
+      return;
     }
     await wait(10);
   }
   throw new Error('Timed out waiting for React partial diff hydration');
+}
+
+async function renderUntilHeaderMetadata(
+  root: Root,
+  element: ReactElement,
+  container: HTMLElement,
+  expectedText: string
+): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    await act(async () => {
+      root.render(element);
+      await wait(10);
+    });
+    if (getHeaderMetadataText(container) === expectedText) {
+      return;
+    }
+  }
+  throw new Error(`Timed out waiting for header metadata: ${expectedText}`);
 }
 
 async function unmountRoot(root: Root | undefined): Promise<void> {
@@ -129,24 +141,12 @@ describe('React partial diff hydration', () => {
     let root: Root | undefined;
     try {
       const { oldFile, newFile, partial } = createPartialChange('react.ts');
-      const callbackCalls: HydrationCallback[] = [];
       const props: ReactFileDiffProps<undefined> = {
         fileDiff: partial,
         options: {
           disableErrorHandling: true,
           expandUnchanged: true,
           loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
-          onHydratedPartialDiff(
-            sourceFileDiff: FileDiffMetadata,
-            hydratedFileDiff: FileDiffMetadata,
-            instance: ImperativeFileDiff<undefined>
-          ) {
-            callbackCalls.push({
-              sourceFileDiff,
-              hydratedFileDiff,
-              instance,
-            });
-          },
         },
         renderHeaderMetadata: renderHydrationState,
       };
@@ -158,12 +158,7 @@ describe('React partial diff hydration', () => {
       });
 
       expect(getHeaderMetadataText(container)).toBe('partial');
-      const callbackCall = await waitForHydration(callbackCalls);
-      expect(callbackCall.sourceFileDiff).toBe(partial);
-      expect(callbackCall.hydratedFileDiff.isPartial).toBe(false);
-      expect(callbackCall.instance.fileDiff).toBe(
-        callbackCall.hydratedFileDiff
-      );
+      await waitForHydratedMetadata(partial);
 
       await act(async () => {
         root!.render(createElement(ReactFileDiffComponent, props));
@@ -171,9 +166,6 @@ describe('React partial diff hydration', () => {
       });
 
       expect(getHeaderMetadataText(container)).toBe('full:4');
-      expect(callbackCall.instance.fileDiff).toBe(
-        callbackCall.hydratedFileDiff
-      );
     } finally {
       await unmountRoot(root);
       cleanupActEnvironment();
@@ -189,24 +181,12 @@ describe('React partial diff hydration', () => {
     let root: Root | undefined;
     try {
       const { oldFile, newFile, patch } = createPartialChange('patch.ts');
-      const callbackCalls: HydrationCallback[] = [];
       const props: ReactPatchDiffProps<undefined> = {
         patch,
         options: {
           disableErrorHandling: true,
           expandUnchanged: true,
           loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
-          onHydratedPartialDiff(
-            sourceFileDiff: FileDiffMetadata,
-            hydratedFileDiff: FileDiffMetadata,
-            instance: ImperativeFileDiff<undefined>
-          ) {
-            callbackCalls.push({
-              sourceFileDiff,
-              hydratedFileDiff,
-              instance,
-            });
-          },
         },
         renderHeaderMetadata: renderHydrationState,
       };
@@ -218,21 +198,11 @@ describe('React partial diff hydration', () => {
       });
 
       expect(getHeaderMetadataText(container)).toBe('partial');
-      const callbackCall = await waitForHydration(callbackCalls);
-      expect(callbackCall.sourceFileDiff.isPartial).toBe(true);
-      expect(callbackCall.hydratedFileDiff.isPartial).toBe(false);
-      expect(callbackCall.instance.fileDiff).toBe(
-        callbackCall.hydratedFileDiff
-      );
-
-      await act(async () => {
-        root!.render(createElement(ReactPatchDiffComponent, props));
-        await wait(0);
-      });
-
-      expect(getHeaderMetadataText(container)).toBe('full:4');
-      expect(callbackCall.instance.fileDiff).toBe(
-        callbackCall.hydratedFileDiff
+      await renderUntilHeaderMetadata(
+        root,
+        createElement(ReactPatchDiffComponent, props),
+        container,
+        'full:4'
       );
     } finally {
       await unmountRoot(root);
@@ -241,17 +211,15 @@ describe('React partial diff hydration', () => {
     }
   });
 
-  test('FileDiff rejects a different partial source after hydration', async () => {
+  test('FileDiff accepts a different partial source after hydration', async () => {
     const { cleanup } = installDom();
     const cleanupActEnvironment = installReactActEnvironment();
-    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     const container = document.createElement('div');
     document.body.appendChild(container);
     let root: Root | undefined;
     try {
       const firstChange = createPartialChange('first.ts');
       const secondChange = createPartialChange('second.ts');
-      const callbackCalls: HydrationCallback[] = [];
       const props: ReactFileDiffProps<undefined> = {
         fileDiff: firstChange.partial,
         options: {
@@ -262,17 +230,6 @@ describe('React partial diff hydration', () => {
               oldFile: firstChange.oldFile,
               newFile: firstChange.newFile,
             }),
-          onHydratedPartialDiff(
-            sourceFileDiff: FileDiffMetadata,
-            hydratedFileDiff: FileDiffMetadata,
-            instance: ImperativeFileDiff<undefined>
-          ) {
-            callbackCalls.push({
-              sourceFileDiff,
-              hydratedFileDiff,
-              instance,
-            });
-          },
         },
         renderHeaderMetadata: renderHydrationState,
       };
@@ -282,29 +239,26 @@ describe('React partial diff hydration', () => {
         root!.render(createElement(ReactFileDiffComponent, props));
         await wait(0);
       });
-      await waitForHydration(callbackCalls);
+      await waitForHydratedMetadata(firstChange.partial);
 
-      let thrownError: unknown;
-      try {
-        await act(async () => {
-          root!.render(
-            createElement(ReactFileDiffComponent, {
-              ...props,
-              fileDiff: secondChange.partial,
-            })
-          );
-          await wait(0);
-        });
-      } catch (error: unknown) {
-        thrownError = error;
-      }
+      await act(async () => {
+        root!.render(
+          createElement(ReactFileDiffComponent, {
+            ...props,
+            fileDiff: secondChange.partial,
+            options: {
+              ...props.options,
+              expandUnchanged: false,
+            },
+          })
+        );
+        await wait(0);
+      });
 
-      expect(thrownError).toBeInstanceOf(Error);
-      expect(String(thrownError)).toContain(
-        'useFileDiffInstance: Cannot replace a rendered full diff with a different partial diff.'
-      );
+      expect(firstChange.partial.isPartial).toBe(false);
+      expect(secondChange.partial.isPartial).toBe(true);
+      expect(getHeaderMetadataText(container)).toBe('partial');
     } finally {
-      consoleError.mockRestore();
       await unmountRoot(root);
       cleanupActEnvironment();
       cleanup();

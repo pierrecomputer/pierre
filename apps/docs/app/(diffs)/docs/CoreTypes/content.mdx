@@ -17,6 +17,20 @@ components.
 hunks (changed regions), line counts, and optionally the full file contents for
 expansion.
 
+When a component uses `loadDiffFiles`, treat `FileDiffMetadata` as mutable
+render metadata. A partial metadata object parsed from a patch can be upgraded
+in place: `isPartial` flips to `false`, hunks and line arrays are replaced with
+hydrated values, and the object identity is preserved.
+
+If you reparse a patch or create a new partial `FileDiffMetadata`, the renderer
+treats it as a fresh partial model. Keep the same metadata object stable when
+you want hydration to persist.
+
+When loaded files provide cache keys, hydration uses those keys so full-file
+highlights can be reused across diffs. If loaded files are unkeyed but the
+partial metadata has a `cacheKey`, hydration appends a hydrated segment as a
+fallback.
+
 **Tip:** You can generate `FileDiffMetadata` using
 [`parseDiffFromFile`](#utilities-parsedifffromfile) (from two file versions) or
 [`parsePatchFiles`](#utilities-parsepatchfiles) (from a patch string).

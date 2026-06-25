@@ -37,7 +37,7 @@ export function PatchDiff<LAnnotation = undefined>({
   contentEditable = false,
 }: PatchDiffProps<LAnnotation>): React.JSX.Element {
   const fileDiff = usePatch(patch);
-  const { ref, getHoveredLine, renderedFileDiff } = useFileDiffInstance({
+  const { ref, getHoveredLine } = useFileDiffInstance({
     fileDiff,
     options,
     metrics,
@@ -50,7 +50,7 @@ export function PatchDiff<LAnnotation = undefined>({
     contentEditable,
   });
   const children = renderDiffChildren({
-    fileDiff: renderedFileDiff,
+    fileDiff,
     renderCustomHeader,
     renderHeaderPrefix,
     renderHeaderFilenameSuffix,

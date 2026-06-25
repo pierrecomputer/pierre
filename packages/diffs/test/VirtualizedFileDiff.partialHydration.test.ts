@@ -135,11 +135,6 @@ describe('VirtualizedFileDiff partial hydration', () => {
       const loadedContents = { oldFile, newFile };
       const deferred = createDeferred<typeof loadedContents>();
       const virtualizerState = createVirtualizer();
-      const callbackCalls: {
-        sourceFileDiff: FileDiffMetadata;
-        hydratedFileDiff: FileDiffMetadata;
-        instance: unknown;
-      }[] = [];
       let loadCalls = 0;
       instance = new TestVirtualizedFileDiff(
         {
@@ -148,17 +143,6 @@ describe('VirtualizedFileDiff partial hydration', () => {
             loadCalls++;
             expect(fileDiff).toBe(partial);
             return deferred.promise;
-          },
-          onHydratedPartialDiff(
-            sourceFileDiff,
-            hydratedFileDiff,
-            diffInstance
-          ) {
-            callbackCalls.push({
-              sourceFileDiff,
-              hydratedFileDiff,
-              instance: diffInstance,
-            });
           },
         },
         virtualizerState.virtualizer
@@ -183,7 +167,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       deferred.resolve(loadedContents);
       await waitForHydrated(instance);
 
-      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
       expect(instance.fileDiff?.additionLines).toEqual([
         'keep 1\n',
@@ -210,11 +194,6 @@ describe('VirtualizedFileDiff partial hydration', () => {
         hydratedInstanceFileDiff,
         'expected VirtualizedFileDiff to keep hydrated file diff'
       );
-      expect(callbackCalls).toHaveLength(1);
-      expect(callbackCalls[0]?.sourceFileDiff).toBe(partial);
-      expect(callbackCalls[0]?.hydratedFileDiff).toBe(hydratedInstanceFileDiff);
-      expect(callbackCalls[0]?.hydratedFileDiff.isPartial).toBe(false);
-      expect(callbackCalls[0]?.instance).toBe(instance);
     } finally {
       instance?.cleanUp();
     }
@@ -259,7 +238,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
       deferred.resolve(loadedContents);
       await waitForHydrated(instance);
 
-      expect(instance.fileDiff).not.toBe(partial);
+      expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
       expect(virtualizerState.instanceChangedCalls.at(-1)).toEqual({
         layoutDirty: true,
@@ -310,7 +289,7 @@ describe('VirtualizedFileDiff partial hydration', () => {
     }
   });
 
-  test('rendering a partial diff after a full diff throws before overwriting state', () => {
+  test('rendering a partial diff after a full diff replaces the rendered metadata', () => {
     const { cleanup } = installDom();
     let instance: TestVirtualizedFileDiff | undefined;
     try {
@@ -330,24 +309,22 @@ describe('VirtualizedFileDiff partial hydration', () => {
         preventEmit: true,
       });
 
-      expect(() => {
-        instance!.render({
-          fileContainer,
-          fileDiff: partial,
-          deferManagers: true,
-          preventEmit: true,
-        });
-      }).toThrow(
-        'VirtualizedFileDiff.render: Cannot replace a full diff with a partial diff on the same instance.'
-      );
-      expect(instance.fileDiff).toBe(fullDiff);
+      instance.render({
+        fileContainer,
+        fileDiff: partial,
+        deferManagers: true,
+        preventEmit: true,
+      });
+
+      expect(instance.fileDiff).toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(true);
     } finally {
       instance?.cleanUp();
       cleanup();
     }
   });
 
-  test('prepareCodeViewItem rejects a partial diff after a full diff', () => {
+  test('prepareCodeViewItem accepts a partial diff after a full diff', () => {
     let instance: TestVirtualizedFileDiff | undefined;
     try {
       const { oldFile, newFile, partial } = createPartialChange();
@@ -360,10 +337,11 @@ describe('VirtualizedFileDiff partial hydration', () => {
 
       instance.prepareCodeViewItem(fullDiff, 0);
 
-      expect(() => instance!.prepareCodeViewItem(partial, 0)).toThrow(
-        'VirtualizedFileDiff.prepareCodeViewItem: Cannot replace a full diff with a partial diff on the same instance.'
-      );
-      expect(instance.fileDiff).toBe(fullDiff);
+      const height = instance.prepareCodeViewItem(partial, 0);
+
+      expect(typeof height).toBe('number');
+      expect(instance.fileDiff).toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(true);
     } finally {
       instance?.cleanUp();
     }

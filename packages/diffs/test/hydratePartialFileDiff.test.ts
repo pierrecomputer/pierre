@@ -7,8 +7,11 @@ import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { splitFileContents } from '../src/utils/splitFileContents';
 import { assertDefined, verifyHunkLineValues } from './testUtils';
 
-function parseSingleFile(patch: string): FileDiffMetadata {
-  const file = parsePatchFiles(patch, 'partial', true)[0]?.files[0];
+function parseSingleFile(
+  patch: string,
+  cacheKeyPrefix?: string
+): FileDiffMetadata {
+  const file = parsePatchFiles(patch, cacheKeyPrefix, true)[0]?.files[0];
   assertDefined(file, 'expected patch to contain one file');
   expect(file.isPartial).toBe(true);
   return file;
@@ -147,6 +150,62 @@ describe('hydratePartialFileDiff', () => {
     expect(verifyHunkLineValues(hydrated)).toEqual([]);
   });
 
+  test('uses loaded file cache keys without a partial cache key', () => {
+    const oldFile: FileContents = {
+      name: 'unkeyed.txt',
+      cacheKey: 'old-full',
+      contents: 'old value\n',
+    };
+    const newFile: FileContents = {
+      name: 'unkeyed.txt',
+      cacheKey: 'new-full',
+      contents: 'new value\n',
+    };
+    const partial = parseSingleFile(
+      createTwoFilesPatch(
+        oldFile.name,
+        newFile.name,
+        oldFile.contents,
+        newFile.contents,
+        undefined,
+        undefined,
+        { context: 0 }
+      )
+    );
+
+    const hydrated = hydratePartialFileDiff(partial, { oldFile, newFile });
+
+    expect(partial.cacheKey).toBeUndefined();
+    expect(hydrated.cacheKey).toBe('old-full:new-full');
+  });
+
+  test('falls back to a hydrated cache segment when loaded files are unkeyed', () => {
+    const oldFile: FileContents = {
+      name: 'fallback.txt',
+      contents: 'old value\n',
+    };
+    const newFile: FileContents = {
+      name: 'fallback.txt',
+      contents: 'new value\n',
+    };
+    const partial = parseSingleFile(
+      createTwoFilesPatch(
+        oldFile.name,
+        newFile.name,
+        oldFile.contents,
+        newFile.contents,
+        undefined,
+        undefined,
+        { context: 0 }
+      )
+    );
+    partial.cacheKey = 'partial-cache';
+
+    const hydrated = hydratePartialFileDiff(partial, { oldFile, newFile });
+
+    expect(hydrated.cacheKey).toBe('partial-cache:hydrated');
+  });
+
   test('requires both files for rename-changed diffs and preserves rename metadata', () => {
     const oldFile: FileContents = {
       name: 'old-name.ts',
@@ -234,7 +293,7 @@ describe('hydratePartialFileDiff', () => {
     expect(hydrated.isPartial).toBe(false);
     expect(hydrated.additionLines).toEqual(newFileLines);
     expect(hydrated.deletionLines).toEqual([]);
-    expect(hydrated.cacheKey).toBeUndefined();
+    expect(hydrated.cacheKey).toBe('new-full');
     expect(verifyHunkLineValues(hydrated)).toEqual([]);
     expect(() =>
       hydratePartialFileDiff(partial, {
@@ -283,7 +342,7 @@ describe('hydratePartialFileDiff', () => {
     expect(hydrated.isPartial).toBe(false);
     expect(hydrated.additionLines).toEqual([]);
     expect(hydrated.deletionLines).toEqual(oldFileLines);
-    expect(hydrated.cacheKey).toBeUndefined();
+    expect(hydrated.cacheKey).toBe('old-full');
     expect(verifyHunkLineValues(hydrated)).toEqual([]);
     expect(() =>
       hydratePartialFileDiff(partial, {
@@ -335,7 +394,7 @@ describe('hydratePartialFileDiff', () => {
     expect(hydrated.unifiedLineCount).toBe(0);
     expect(hydrated.additionLines).toEqual(newFileLines);
     expect(hydrated.deletionLines).toEqual(newFileLines);
-    expect(hydrated.cacheKey).toBeUndefined();
+    expect(hydrated.cacheKey).toBe('new-full');
     expect(() =>
       hydratePartialFileDiff(partial, {
         oldFile: { name: 'old-name.txt', contents: newFile.contents },

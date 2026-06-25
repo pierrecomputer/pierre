@@ -37,6 +37,17 @@ The `CodeView` tab above is the quick-start version. For the full guide on
 controlled `items`, imperative `initialItems`, ids, `version`, selection, and
 `scrollTo`, see [CodeView](#code-view).
 
+### Partial Diff Hydration
+
+When `loadDiffFiles` is configured, partial `FileDiffMetadata` passed to
+`FileDiff` may be hydrated in place. Keep the same `fileDiff` object identity
+stable across parent rerenders when you want the hydrated full metadata to
+persist.
+
+Passing a freshly parsed partial object resets hydration for that render. Avoid
+calling `parsePatchFiles` during every render before passing the result to
+`FileDiff`; store or memoize the parsed metadata instead.
+
 ### Shared Props
 
 The three diff components (`MultiFileDiff`, `PatchDiff`, and `FileDiff`) share a

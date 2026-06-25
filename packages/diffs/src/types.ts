@@ -256,6 +256,10 @@ export interface Hunk {
 /**
  * Metadata and content for a single file's diff.  Think of this as a JSON
  * compatible representation of a diff for a single file.
+ *
+ * When a renderer uses `loadDiffFiles` to hydrate a partial diff, it upgrades
+ * this metadata object in place. Keep the same object identity stable when
+ * callers want that hydrated state to persist across later renders.
  */
 export interface FileDiffMetadata {
   /** The file's name and path. */
@@ -308,6 +312,10 @@ export interface FileDiffMetadata {
    * in the patch and hunk expansion is unavailable.
    *
    * When false, they contain the complete file contents.
+   *
+   * A hydrating renderer mutates a partial metadata object to flip this to
+   * false after `loadDiffFiles` resolves. Passing a freshly parsed partial
+   * object later is treated as a new partial render model.
    */
   isPartial: boolean;
 
@@ -332,6 +340,11 @@ export interface FileDiffMetadata {
    * to highlight if we've already highlighted the diff.  Please note that if
    * you modify the contents of the diff in any way, you will need to update
    * the `cacheKey`.
+   *
+   * When `loadDiffFiles` hydrates a partial diff, Diffs uses loaded file cache
+   * keys when they are available so full-file highlights can be reused. If the
+   * loaded files are unkeyed and this partial key exists, Diffs appends a
+   * hydration segment as a fallback.
    */
   cacheKey?: string;
 }

@@ -21,7 +21,6 @@ import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
-import { assertNotPartialDiffDowngrade } from '../utils/assertNotPartialDiffDowngrade';
 import { computeEstimatedDiffHeights } from '../utils/computeEstimatedDiffHeights';
 import {
   computeVirtualFileMetrics,
@@ -422,11 +421,6 @@ export class VirtualizedFileDiff<
     reset?: PendingCodeViewLayoutReset,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): number {
-    assertNotPartialDiffDowngrade(
-      this.fileDiff,
-      fileDiff,
-      'VirtualizedFileDiff.prepareCodeViewItem'
-    );
     const targetChanged = !areDiffTargetsEqual(this.fileDiff, fileDiff);
     const annotationsChanged = this.syncLineAnnotations(lineAnnotations);
     let shouldResetLayoutCache =
@@ -807,7 +801,6 @@ export class VirtualizedFileDiff<
       this.commitHydratedPartialDiff(hydratedFileDiff, loadedContents);
       this.resetLayoutCache({ includeEstimatedHeights: true });
       this.computeApproximateSize();
-      this.emitHydratedPartialDiff(sourceFileDiff, hydratedFileDiff);
     }
     this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(this, true);
@@ -815,7 +808,7 @@ export class VirtualizedFileDiff<
 
   public consumePendingCodeViewLayoutChanges(
     expectedFileDiff: FileDiffMetadata
-  ): FileDiffMetadata | undefined {
+  ): void {
     let hasLayoutChange = false;
     let didHydrate = false;
     const { pendingExpansions, pendingHydration } = this;
@@ -832,8 +825,6 @@ export class VirtualizedFileDiff<
       }
     }
 
-    let hydratedFileDiff: FileDiffMetadata | undefined;
-    let hydratedSourceFileDiff: FileDiffMetadata | undefined;
     if (pendingHydration != null) {
       this.pendingHydration = undefined;
       if (pendingHydration.sourceFileDiff === expectedFileDiff) {
@@ -841,8 +832,6 @@ export class VirtualizedFileDiff<
           pendingHydration.hydratedFileDiff,
           pendingHydration.loadedContents
         );
-        hydratedFileDiff = pendingHydration.hydratedFileDiff;
-        hydratedSourceFileDiff = pendingHydration.sourceFileDiff;
         didHydrate = true;
       }
     }
@@ -855,12 +844,6 @@ export class VirtualizedFileDiff<
         this.invalidateDerivedLayoutCache(true);
       }
     }
-
-    if (hydratedFileDiff != null) {
-      this.emitHydratedPartialDiff(hydratedSourceFileDiff, hydratedFileDiff);
-    }
-
-    return hydratedFileDiff;
   }
 
   protected override startDiffHydrationIfNeeded(): void {
@@ -1077,11 +1060,6 @@ export class VirtualizedFileDiff<
             this.options.parseDiffOptions
           )
         : undefined);
-    assertNotPartialDiffDowngrade(
-      this.fileDiff,
-      nextFileDiff,
-      'VirtualizedFileDiff.render'
-    );
     const { forceRenderOverride, isSetup } = this;
     this.forceRenderOverride = undefined;
     const annotationsChanged = this.syncLineAnnotations(lineAnnotations);

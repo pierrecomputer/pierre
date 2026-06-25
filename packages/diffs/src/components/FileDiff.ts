@@ -60,7 +60,6 @@ import { areHunkDataEqual } from '../utils/areHunkDataEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
-import { assertNotPartialDiffDowngrade } from '../utils/assertNotPartialDiffDowngrade';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
@@ -151,11 +150,6 @@ export interface FileDiffOptions<LAnnotation>
     node: HTMLElement,
     instance: FileDiff<LAnnotation>,
     phase: PostRenderPhase
-  ): unknown;
-  onHydratedPartialDiff?(
-    sourceFileDiff: FileDiffMetadata,
-    hydratedFileDiff: FileDiffMetadata,
-    instance: FileDiff<LAnnotation>
   ): unknown;
 }
 
@@ -872,36 +866,25 @@ export class FileDiff<
     hydratedFileDiff: FileDiffMetadata,
     loadedContents: LoadedPartialDiffContents
   ): void {
-    const { fileDiff: sourceFileDiff } = this;
     this.commitHydratedPartialDiff(hydratedFileDiff, loadedContents);
-    this.emitHydratedPartialDiff(sourceFileDiff, hydratedFileDiff);
     this.rerender();
-  }
-
-  protected emitHydratedPartialDiff(
-    sourceFileDiff: FileDiffMetadata | undefined,
-    hydratedFileDiff: FileDiffMetadata
-  ): void {
-    const { onHydratedPartialDiff } = this.options;
-    if (
-      sourceFileDiff?.isPartial !== true ||
-      hydratedFileDiff.isPartial ||
-      onHydratedPartialDiff == null
-    ) {
-      return;
-    }
-    onHydratedPartialDiff(sourceFileDiff, hydratedFileDiff, this);
   }
 
   protected commitHydratedPartialDiff(
     hydratedFileDiff: FileDiffMetadata,
     loadedContents: LoadedPartialDiffContents
-  ): void {
-    this.fileDiff = hydratedFileDiff;
+  ): FileDiffMetadata {
+    const currentFileDiff = this.fileDiff;
+    if (currentFileDiff == null || !currentFileDiff.isPartial) {
+      this.fileDiff = hydratedFileDiff;
+    } else {
+      copyFileDiffMetadata(currentFileDiff, hydratedFileDiff);
+    }
     this.deletionFile = loadedContents.oldFile;
     this.additionFile = loadedContents.newFile;
     this.cachedHeaderHTML = undefined;
     this.hunksRenderer.clearRenderCache();
+    return this.fileDiff ?? hydratedFileDiff;
   }
 
   public render({
@@ -964,18 +947,15 @@ export class FileDiff<
     }
 
     let nextParsedFileDiff: FileDiffMetadata | undefined;
-    if (fileDiff != null) {
-      assertNotPartialDiffDowngrade(this.fileDiff, fileDiff, 'FileDiff.render');
-    } else if (hasFileInput && (filesDidChange || this.fileDiff == null)) {
+    if (
+      fileDiff == null &&
+      hasFileInput &&
+      (filesDidChange || this.fileDiff == null)
+    ) {
       nextParsedFileDiff = parseDiffFromFile(
         fileInput.oldFile,
         fileInput.newFile,
         this.options.parseDiffOptions
-      );
-      assertNotPartialDiffDowngrade(
-        this.fileDiff,
-        nextParsedFileDiff,
-        'FileDiff.render'
       );
     }
 
@@ -2742,6 +2722,49 @@ interface HasContentProps {
   fileDiff: FileDiffMetadata | undefined;
   oldFile: FileContents | null | undefined;
   newFile: FileContents | null | undefined;
+}
+
+type OptionalFileDiffMetadataKey =
+  | 'prevName'
+  | 'lang'
+  | 'newObjectId'
+  | 'prevObjectId'
+  | 'mode'
+  | 'prevMode'
+  | 'cacheKey';
+
+// Hydration upgrades the caller-owned metadata object so React and imperative
+// renderers can share one mutable render model.
+function copyFileDiffMetadata(
+  target: FileDiffMetadata,
+  source: FileDiffMetadata
+): void {
+  target.name = source.name;
+  copyOptionalFileDiffMetadataProperty(target, source, 'prevName');
+  copyOptionalFileDiffMetadataProperty(target, source, 'lang');
+  copyOptionalFileDiffMetadataProperty(target, source, 'newObjectId');
+  copyOptionalFileDiffMetadataProperty(target, source, 'prevObjectId');
+  copyOptionalFileDiffMetadataProperty(target, source, 'mode');
+  copyOptionalFileDiffMetadataProperty(target, source, 'prevMode');
+  target.type = source.type;
+  target.hunks = source.hunks;
+  target.splitLineCount = source.splitLineCount;
+  target.unifiedLineCount = source.unifiedLineCount;
+  target.isPartial = source.isPartial;
+  target.deletionLines = source.deletionLines;
+  target.additionLines = source.additionLines;
+  copyOptionalFileDiffMetadataProperty(target, source, 'cacheKey');
+}
+
+function copyOptionalFileDiffMetadataProperty<
+  K extends OptionalFileDiffMetadataKey,
+>(target: FileDiffMetadata, source: FileDiffMetadata, property: K): void {
+  const value = source[property];
+  if (value === undefined) {
+    delete target[property];
+    return;
+  }
+  target[property] = value;
 }
 
 function areOptionalFilesEqual(
