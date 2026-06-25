@@ -39,6 +39,7 @@ import { toast } from 'sonner';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
 import { PLAYGROUND_MARKERS } from './constants';
+import { useTheme } from '@/components/theme-provider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -540,6 +541,11 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  // The app-wide color scheme resolved by @pierre/theming (the shared
+  // theme controller). The diff's "system" mode must follow this so the
+  // editor stays in sync with the rest of the app. See `effectiveThemeType`.
+  const { resolvedTheme } = useTheme();
+
   const getParam = <T extends string>(key: string, defaultValue: T): T => {
     return (searchParams.get(key) as T) ?? defaultValue;
   };
@@ -868,6 +874,16 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     handleCopyLink,
   };
 
+  // The diff's own "system" mode follows the OS (its shadow root declares
+  // `color-scheme: light dark`), which drifts from the app whenever the app's
+  // theme differs from the OS preference. To keep the editor in sync with the
+  // app, resolve "system" to the app's current scheme from @pierre/theming and
+  // pass that concrete light/dark to the diff; "light"/"dark" still force the
+  // editor independently. Before the controller has mounted `resolvedTheme` is
+  // undefined, so fall back to "system" to match the prerendered diff.
+  const effectiveThemeType =
+    themeType === 'system' ? (resolvedTheme ?? 'system') : themeType;
+
   // Editing takes over click targets, so line selection and gutter comments are
   // disabled while in Edit mode (they only make sense in read-only Review).
   const fileDiff = (
@@ -886,7 +902,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         disableBackground,
         disableLineNumbers,
         overflow,
-        themeType,
+        themeType: effectiveThemeType,
         theme: { dark: selectedDarkTheme, light: selectedLightTheme },
         enableLineSelection: contentEditable ? false : canSelectLines,
         enableGutterUtility: contentEditable ? false : canUseGutterComments,
