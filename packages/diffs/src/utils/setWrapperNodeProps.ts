@@ -55,7 +55,6 @@ export function setPreNodeProperties(
     pre.removeAttribute('data-diff-type');
   }
   pre.setAttribute('data-overflow', overflow);
-  pre.tabIndex = 0;
   // Set CSS custom property for line number column width
   pre.style.setProperty(
     '--diffs-min-number-column-width-default',

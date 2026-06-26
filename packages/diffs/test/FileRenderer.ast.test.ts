@@ -214,7 +214,8 @@ describe('FileRenderer AST Structure', () => {
     expect(preAST.properties['data-file']).toBe('');
     expect(preAST.properties['data-diff']).toBeUndefined();
     expect(preAST.properties['data-overflow']).toBe('scroll');
-    expect(preAST.properties.tabIndex).toBe(0);
+    // The pre is intentionally not focusable (no tabindex); the host owns focus.
+    expect(preAST.properties.tabIndex).toBeUndefined();
     // The gutter width var reserves one ch per digit of the line count
     expect(preAST.properties.style).toBe(
       `--diffs-min-number-column-width-default:${`${totalLines}`.length}ch;`

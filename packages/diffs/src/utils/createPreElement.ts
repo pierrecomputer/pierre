@@ -35,7 +35,10 @@ export function createPreWrapperProperties({
       diffIndicators === 'bars' || diffIndicators === 'classic'
         ? diffIndicators
         : undefined,
-    tabIndex: 0,
+    // The pre is intentionally not focusable. It is not the scroll container
+    // (`[data-code]` inside it is) and has no keyboard behavior of its own, so
+    // a tabindex would only add a tab stop per diff and steal focus from a host
+    // wrapper that wants to own keyboard navigation of the selection.
     style: `--diffs-min-number-column-width-default:${`${totalLines}`.length}ch;`,
   };
 

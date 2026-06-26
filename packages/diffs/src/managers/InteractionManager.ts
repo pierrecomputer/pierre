@@ -758,7 +758,11 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       return;
     }
 
-    event.preventDefault();
+    // Intentionally no preventDefault here. The line-number gutter uses
+    // `user-select: none`, so a drag that starts on it never begins a native
+    // text selection. Calling preventDefault would also cancel the browser's
+    // native focus change, which stops a focusable host wrapper from receiving
+    // focus (and the keyboard events it needs) when a line number is clicked.
     const { lineNumber, eventSide, lineIndex } = pointerInfo;
 
     if (event.shiftKey && this.selectedRange != null) {
