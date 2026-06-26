@@ -2963,20 +2963,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const x = left - 1;
     const y = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
 
-    let caretEl: HTMLElement;
-    if (this.#overlayElements?.has(cacheKey) === true) {
-      caretEl = this.#overlayElements.get(cacheKey)!;
-      this.#overlayElements.delete(cacheKey);
-    } else {
-      caretEl = h(
-        'div',
-        {
-          dataset: 'caret',
-        },
-        renderCtx.fragment
-      );
-    }
-    caretEl.style.transform = `translateX(${x}px) translateY(${y}px)`;
+    const caretEl = h(
+      'div',
+      {
+        dataset: 'caret',
+        style: { transform: `translateX(${x}px) translateY(${y}px)` },
+      },
+      renderCtx.fragment
+    );
     renderCtx.elements.set(cacheKey, caretEl);
     if (isPrimary) {
       caretEl.style.scrollMargin = this.#getScrollMargin();
