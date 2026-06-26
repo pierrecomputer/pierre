@@ -145,7 +145,7 @@ function typeAt(
 }
 
 describe('diff editor: display-option toggle mid-edit', () => {
-  test('rebuilds line DOM from diff source when a display option is toggled', async () => {
+  test('keeps edited line DOM when a display option is toggled', async () => {
     // old/new differ so the additions column (the editor's target) renders; the
     // edit targets line 0 ("alpha"), an unchanged context line — the "rename a
     // function" case from the bug report.
@@ -161,9 +161,9 @@ describe('diff editor: display-option toggle mid-edit', () => {
 
       await fixture.toggleDisplayOption();
 
-      // A forced re-render rebuilds rows from the host's diff source, not the
-      // editor document, so the on-screen text reverts until the next edit.
-      expect(lineText(container, 1)).toBe('alpha');
+      // A forced re-render briefly rebuilds rows from the host's diff source,
+      // then re-renders from the editor document so the edit remains visible.
+      expect(lineText(container, 1)).toBe('alphaX');
     } finally {
       await fixture.cleanup();
     }
