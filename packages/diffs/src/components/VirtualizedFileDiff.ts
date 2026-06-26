@@ -2,7 +2,6 @@ import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   BaseDiffOptions,
   DiffLineAnnotation,
-  DiffsTextDocument,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -897,42 +896,6 @@ export class VirtualizedFileDiff<
     }
     this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(this, false);
-  }
-
-  // Normally triggered by the host when the document line count changes.
-  override applyDocumentChange(
-    textDocument: DiffsTextDocument,
-    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-    shouldUpdateBuffer = false
-  ): void {
-    const previousRenderRange = this.renderRange;
-
-    super.applyDocumentChange(textDocument, newLineAnnotations);
-
-    this.getSimpleVirtualizer()?.markDOMDirty();
-    this.resetLayoutCache({
-      forceSimpleRecompute: this.isSimpleMode(),
-      includeEstimatedHeights: true,
-      resetRenderRange: false,
-    });
-
-    // Update the buffers caused by the line-count change to ensure the host
-    // scrolls to the correct position before re-rendering
-    if (
-      shouldUpdateBuffer &&
-      previousRenderRange !== undefined &&
-      this.fileDiff !== undefined
-    ) {
-      const windowSpecs = this.virtualizer.getWindowSpecs();
-      const renderRange = this.computeRenderRangeFromWindow(
-        this.fileDiff,
-        this.top ?? 0,
-        windowSpecs
-      );
-      if (renderRange.bufferAfter !== previousRenderRange.bufferAfter) {
-        this.updateBuffers(renderRange);
-      }
-    }
   }
 
   // Compute the approximate size from the cached baseline estimate plus any
