@@ -194,7 +194,7 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       renderer.renderDiff(diff);
       renderer.applyDocumentChange(EMPTY_DOCUMENT);
 
-      const rendered = renderer.getRenderDiff();
+      const rendered = renderer.getDiffCache();
       expect(rendered).toBeDefined();
       if (rendered == null) return;
 

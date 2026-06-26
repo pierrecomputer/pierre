@@ -651,6 +651,12 @@ export class File<
       return true;
     }
 
+    // the editor use the cacheKey to maintain the editing state
+    // if the cacheKey is not set, set it to the file name
+    if (file.cacheKey === undefined && this.editor != null) {
+      file.cacheKey = file.name;
+    }
+
     try {
       const pre = this.getOrCreatePreNode(fileContainer);
       if (
