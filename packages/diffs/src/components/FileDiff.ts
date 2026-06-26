@@ -1150,7 +1150,13 @@ export class FileDiff<
     };
   }
 
-  // normally triggered by the host when the document line count changes
+  protected updateBuffers(renderRange: RenderRange): void {
+    if (this.pre != null) {
+      this.applyBuffers(this.pre, renderRange);
+    }
+  }
+
+  // normally triggered by the editor when the document line count changes
   public applyDocumentChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
@@ -2177,11 +2183,13 @@ export class FileDiff<
     ] as const) {
       if (astChildren != null) {
         el.innerHTML = toHtml(astChildren);
-        el.style.setProperty('grid-row', `span ${hunksResult.rowCount}`);
       }
     }
 
-    this.lastRowCount = hunksResult.rowCount;
+    if (hunksResult.rowCount !== this.lastRowCount) {
+      this.applyRowSpan('unified', columns, hunksResult.rowCount);
+      this.lastRowCount = hunksResult.rowCount;
+    }
     this.renderSeparators(hunksResult.hunkData);
 
     // sync the render view to the editor

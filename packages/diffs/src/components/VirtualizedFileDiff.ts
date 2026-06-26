@@ -2,6 +2,7 @@ import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   BaseDiffOptions,
   DiffLineAnnotation,
+  DiffsTextDocument,
   ExpansionDirections,
   FileContents,
   FileDiffMetadata,
@@ -898,6 +899,46 @@ export class VirtualizedFileDiff<
     this.virtualizer.instanceChanged(this, false);
   }
 
+  // normally triggered by the editor when the document line count changes
+  override applyDocumentChange(
+    textDocument: DiffsTextDocument,
+    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
+    shouldUpdateBuffer = false
+  ): void {
+    const previousRenderRange = this.renderRange;
+
+    super.applyDocumentChange(textDocument, newLineAnnotations);
+
+    this.getSimpleVirtualizer()?.markDOMDirty();
+    this.resetLayoutCache({
+      forceSimpleRecompute: this.isSimpleMode(),
+      includeEstimatedHeights: true,
+      resetRenderRange: false,
+    });
+    if (!this.isSimpleMode()) {
+      this.computeApproximateSize(true);
+    }
+
+    // Recompute the buffer spacer when the edit grew the document below the
+    // rendered window so scroll/caret positioning stays correct before the next
+    // virtualizer re-sync.
+    if (
+      shouldUpdateBuffer &&
+      previousRenderRange !== undefined &&
+      this.fileDiff !== undefined
+    ) {
+      const windowSpecs = this.virtualizer.getWindowSpecs();
+      const renderRange = this.computeRenderRangeFromWindow(
+        this.fileDiff,
+        this.top ?? 0,
+        windowSpecs
+      );
+      if (renderRange.bufferAfter !== previousRenderRange.bufferAfter) {
+        this.updateBuffers(renderRange);
+      }
+    }
+  }
+
   // Compute the approximate size from the cached baseline estimate plus any
   // measured height deltas observed in rendered rows.
   // The reason we refer to this as `approximate size` is because heights my
@@ -1177,9 +1218,9 @@ export class VirtualizedFileDiff<
     fileDiff: FileDiffMetadata | undefined = this.fileDiff
   ): void {
     if (
-      this.cache.checkpoints.length > 0 ||
-      fileDiff == null ||
-      fileDiff.hunks.length === 0 ||
+      (!this.layoutDirty && this.cache.checkpoints.length > 0) ||
+      this.fileDiff == null ||
+      this.fileDiff.hunks.length === 0 ||
       this.options.collapsed === true
     ) {
       return;
@@ -1491,6 +1532,27 @@ export class VirtualizedFileDiff<
     return count;
   }
 
+  // Row total used to clamp render-range scrolling. Sparse layout checkpoints can
+  // still hold a smaller pre-edit count until they are rebuilt, so always take
+  // the max against the live diff metadata (including additionLines.length).
+  private getLayoutLineCount(
+    fileDiff: FileDiffMetadata,
+    diffStyle: 'split' | 'unified'
+  ): number {
+    const expandedLineCount = this.getExpandedLineCount(fileDiff, diffStyle);
+    const metadataLineCount =
+      diffStyle === 'split'
+        ? fileDiff.splitLineCount
+        : fileDiff.unifiedLineCount;
+    return Math.max(
+      expandedLineCount,
+      metadataLineCount,
+      fileDiff.additionLines.length,
+      fileDiff.deletionLines.length,
+      this.cache.totalLines
+    );
+  }
+
   private computeRenderRangeFromWindow(
     fileDiff: FileDiffMetadata,
     fileTop: number,
@@ -1509,10 +1571,7 @@ export class VirtualizedFileDiff<
       this.options.loadDiffFiles != null
     );
     const fileHeight = this.height;
-    let lineCount =
-      this.cache.totalLines > 0
-        ? this.cache.totalLines
-        : this.getExpandedLineCount(fileDiff, diffStyle);
+    let lineCount = this.getLayoutLineCount(fileDiff, diffStyle);
 
     const headerRegion = getVirtualFileHeaderRegion(
       this.metrics,
@@ -1554,8 +1613,8 @@ export class VirtualizedFileDiff<
       };
     }
 
-    this.approximateLayoutCheckpoints(fileDiff);
-    lineCount = this.cache.totalLines > 0 ? this.cache.totalLines : lineCount;
+    this.approximateLayoutCheckpoints();
+    lineCount = this.getLayoutLineCount(fileDiff, diffStyle);
 
     const estimatedTargetLines = Math.ceil(
       Math.max(bottom - top, 0) / lineHeight
