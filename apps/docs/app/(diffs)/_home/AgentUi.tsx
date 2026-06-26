@@ -9,6 +9,7 @@ import {
   type CSSProperties,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -25,6 +26,12 @@ import {
   getSessionGitStatus,
   getSessionPaths,
 } from './mockData';
+
+// Runs as a layout effect in the browser (so DOM reads/writes land before the
+// next paint) but falls back to useEffect during SSR, where useLayoutEffect
+// would warn. The demo is server-rendered, so the fallback matters.
+const useIsomorphicLayoutEffect =
+  typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 // Added/removed line totals for a single file's diff.
 interface DiffStats {
@@ -421,6 +428,20 @@ export function AgentUi({
     }
     if (!shadowRoot.adoptedStyleSheets.includes(sheet)) {
       shadowRoot.adoptedStyleSheets = [...shadowRoot.adoptedStyleSheets, sheet];
+    }
+  }, [activePath]);
+
+  // The FileDiff surface and its host scroll container (`.aui-surface-wrap`) are
+  // reused across file switches — only the `fileDiff` prop changes — so without
+  // this the previous file's scroll offset carries over to the next file. Reset
+  // to the top whenever the active file changes. A layout effect resets after
+  // the new diff is laid out but before paint, so there's no flash of the new
+  // file at the old offset. Editing a file doesn't change `activePath`, so this
+  // never disturbs the scroll position mid-edit.
+  useIsomorphicLayoutEffect(() => {
+    const wrap = surfaceWrapRef.current;
+    if (wrap != null) {
+      wrap.scrollTop = 0;
     }
   }, [activePath]);
 
