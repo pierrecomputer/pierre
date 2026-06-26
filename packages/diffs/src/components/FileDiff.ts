@@ -1172,6 +1172,10 @@ export class FileDiff<
     this.hunksRenderer.applyDocumentChange(textDocument);
     const renderDiff = this.hunksRenderer.getDiffCache();
     if (renderDiff != null) {
+      const cacheKey = this.fileDiff?.cacheKey;
+      if (cacheKey != null && renderDiff.cacheKey == null) {
+        renderDiff.cacheKey = cacheKey;
+      }
       this.fileDiff = renderDiff;
     }
     // TODO(@ije): can we avoid full-render here?
