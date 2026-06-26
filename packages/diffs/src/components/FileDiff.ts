@@ -1158,12 +1158,6 @@ export class FileDiff<
     };
   }
 
-  protected updateBuffers(renderRange: RenderRange): void {
-    if (this.pre != null) {
-      this.applyBuffers(this.pre, renderRange);
-    }
-  }
-
   // normally triggered by the editor when the document line count changes
   public applyDocumentChange(
     textDocument: DiffsTextDocument,
@@ -2575,6 +2569,12 @@ export class FileDiff<
       return deletions != null || additions != null
         ? [deletions, additions]
         : undefined;
+    }
+  }
+
+  protected updateBuffers(renderRange: RenderRange): void {
+    if (this.pre != null) {
+      this.applyBuffers(this.pre, renderRange);
     }
   }
 
