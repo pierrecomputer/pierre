@@ -2211,45 +2211,66 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#scrollingToLineChar = undefined;
       this.#scrollingToLineNoFocus = false;
     }
-    // if the line is not rendered yet(virtualized), scroll to the approximate
+    // if the line is not rendered yet(virtualized), scroll to the modeled or approximate
     // line position to trigger the line to be rendered, then recall this function
     // to ensure the line is scrolled into view
     else {
-      let yFix = 0;
-      if (
-        this.#scrollingToLine === line &&
-        this.#contentElement !== undefined
-      ) {
-        for (let i = this.#contentElement.childElementCount - 1; i >= 0; i--) {
-          const child = this.#contentElement.children[i] as HTMLElement;
-          const lineType = child.dataset.lineType;
-          const lineNumber = getLineNumberAttr(child);
-          if (
-            lineType !== undefined &&
-            isLineEditable(lineType) &&
-            lineNumber !== undefined
+      const modelLinePosition = this.#fileInstance?.getLinePosition?.(line + 1);
+      if (modelLinePosition !== undefined) {
+        virtualCaret.style.top = modelLinePosition.top + 'px';
+        this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
+        virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
+        if (modelLinePosition.height > 0) {
+          this.#scrollingToLine = line;
+          this.#scrollingToLineChar = char;
+          this.#scrollingToLineNoFocus = noFocus;
+        } else {
+          this.#scrollingToLine = undefined;
+          this.#scrollingToLineChar = undefined;
+          this.#scrollingToLineNoFocus = false;
+        }
+      } else {
+        let yFix = 0;
+        if (
+          this.#scrollingToLine === line &&
+          this.#contentElement !== undefined
+        ) {
+          for (
+            let i = this.#contentElement.childElementCount - 1;
+            i >= 0;
+            i--
           ) {
-            yFix = (line - lineNumber) * this.#metrics.lineHeight;
-            break;
+            const child = this.#contentElement.children[i] as HTMLElement;
+            const lineType = child.dataset.lineType;
+            const lineNumber = getLineNumberAttr(child);
+            if (
+              lineType !== undefined &&
+              isLineEditable(lineType) &&
+              lineNumber !== undefined
+            ) {
+              yFix = (line - lineNumber) * this.#metrics.lineHeight;
+              break;
+            }
           }
         }
-      }
-      const lineAnnotations = (this.#lineAnnotations ?? []).filter(
-        (annotation) => annotation.lineNumber < line
-      ).length;
-      const approximateLineY =
-        (lineAnnotations + line) * this.#metrics.lineHeight + yFix;
-      virtualCaret.style.top = approximateLineY + 'px';
-      this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
-      virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
-      if (this.#scrollingToLine === line && yFix === 0) {
-        this.#scrollingToLine = undefined;
-        this.#scrollingToLineChar = undefined;
-        this.#scrollingToLineNoFocus = false;
-      } else {
-        this.#scrollingToLine = line;
-        this.#scrollingToLineChar = char;
-        this.#scrollingToLineNoFocus = noFocus;
+        const lineAnnotations = (this.#lineAnnotations ?? []).filter(
+          (annotation) => annotation.lineNumber < line
+        ).length;
+        const approximateLineY =
+          (lineAnnotations + line) * this.#metrics.lineHeight + yFix;
+        virtualCaret.style.top = approximateLineY + 'px';
+        this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
+        virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
+
+        if (this.#scrollingToLine === line && yFix === 0) {
+          this.#scrollingToLine = undefined;
+          this.#scrollingToLineChar = undefined;
+          this.#scrollingToLineNoFocus = false;
+        } else {
+          this.#scrollingToLine = line;
+          this.#scrollingToLineChar = char;
+          this.#scrollingToLineNoFocus = noFocus;
+        }
       }
     }
     virtualCaret.remove();
