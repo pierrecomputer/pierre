@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
@@ -9,6 +9,12 @@ import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
+  await disposeHighlighter();
+});
+
+// Other component suites (e.g. CodeView) share the singleton highlighter; reset
+// it before each test so async highlight work cannot bleed into undo timing.
+beforeAll(async () => {
   await disposeHighlighter();
 });
 

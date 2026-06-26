@@ -315,7 +315,7 @@ export class FileDiff<
   ) => {
     // use the fileDiff from the hunksRenderer if it exists, it maybe updated
     // by the editor
-    const fileDiff = this.hunksRenderer.getDiffCache() ?? this.fileDiff;
+    const fileDiff = this.hunksRenderer.getRenderDiff() ?? this.fileDiff;
     if (fileDiff == null) {
       return undefined;
     }
@@ -1164,7 +1164,7 @@ export class FileDiff<
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
     this.hunksRenderer.applyDocumentChange(textDocument);
-    const renderDiff = this.hunksRenderer.getDiffCache();
+    const renderDiff = this.hunksRenderer.getRenderDiff();
     if (renderDiff != null) {
       const cacheKey = this.fileDiff?.cacheKey;
       if (cacheKey != null && renderDiff.cacheKey == null) {
