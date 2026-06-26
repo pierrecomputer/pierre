@@ -5,6 +5,7 @@ import {
   disposeHighlighter,
   parseDiffFromFile,
 } from '../src';
+import { TextDocument } from '../src/editor/textDocument';
 import type { DiffsTextDocument, HighlightedToken } from '../src/types';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 
@@ -27,6 +28,36 @@ const NEW_CONTENTS = [
   '}',
   '',
 ].join('\n');
+
+// Addition-side document after pressing Enter in the middle of
+// "  console.log(msg);" (index 1), splitting it into two lines.
+const EDITED_LINES = [
+  'function greet(name) {',
+  '  console.log(',
+  'msg);',
+  '  return msg;',
+  '}',
+  '',
+];
+// The tokenizer reports the truncated line and the new line as dirty, using the
+// post-edit line indexes.
+const DIRTY_EDIT: ReadonlyArray<[number, string]> = [
+  [1, '  console.log('],
+  [2, 'msg);'],
+];
+
+function makeTextDocument(lines: string[]): DiffsTextDocument {
+  const text = lines.join('\n');
+  return {
+    lineCount: lines.length,
+    getText: () => text,
+    getLineText: (lineNumber: number) => lines[lineNumber] ?? '',
+  };
+}
+
+function makeTextDocumentFromText(text: string): DiffsTextDocument {
+  return new TextDocument('edit.ts', text, 'typescript', 0);
+}
 
 function makeDirtyLines(
   edits: ReadonlyArray<[number, string]>
@@ -133,6 +164,49 @@ describe('DiffHunksRenderer.updateRenderCache skipDiffRecompute', () => {
     expect(incremental.splitLineCount).toBe(full.splitLineCount);
     expect(incremental.unifiedLineCount).toBe(full.unifiedLineCount);
   });
+
+  test('meaningful line-count edits preserve unchanged context', async () => {
+    const renderer = await createPrimedRenderer('split');
+
+    renderer.applyDocumentChange(
+      makeTextDocumentFromText(EDITED_LINES.join('\n'))
+    );
+
+    const rendered = renderer.getRenderDiff();
+    expect(rendered).toBeDefined();
+    if (rendered == null) return;
+
+    expect(
+      rendered.hunks.some((hunk) =>
+        hunk.hunkContent.some((content) => content.type === 'context')
+      )
+    ).toBe(true);
+
+    let firstLine:
+      | {
+          type: string;
+          deletionLineNumber?: number;
+          additionLineNumber?: number;
+        }
+      | undefined;
+    iterateOverDiff({
+      diff: rendered,
+      diffStyle: 'split',
+      callback: ({ type, deletionLine, additionLine }) => {
+        firstLine ??= {
+          type,
+          deletionLineNumber: deletionLine?.lineNumber,
+          additionLineNumber: additionLine?.lineNumber,
+        };
+      },
+    });
+
+    expect(firstLine).toEqual({
+      type: 'context',
+      deletionLineNumber: 1,
+      additionLineNumber: 1,
+    });
+  });
 });
 
 // Deleting every character empties the editor's document, whose text is "".
@@ -170,9 +244,6 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       expect(html).toContain('change-addition');
     });
 
-    // When the old side is itself a single blank line, diffing the emptied
-    // document against an empty line would be a no-op (zero hunks, so zero
-    // rendered rows). The recompute must still produce one editable row.
     test(`top-aligns the empty addition line in split view (${diffStyle})`, async () => {
       const oldContents =
         Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join(
@@ -211,6 +282,127 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       expect(firstAdditionSplitLine).toBe(0);
     });
 
+    test(`top-aligns newline-only additions after delete-all (${diffStyle})`, async () => {
+      const oldContents =
+        Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const newContents =
+        Array.from({ length: 60 }, (_, index) => `new ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const renderer = new DiffHunksRenderer({
+        theme: 'github-light',
+        diffStyle,
+      });
+      const diff = parseDiffFromFile(
+        { name: 'old.ts', contents: oldContents },
+        { name: 'new.ts', contents: newContents }
+      );
+      await renderer.asyncRender(diff);
+      renderer.renderDiff(diff);
+      renderer.applyDocumentChange(EMPTY_DOCUMENT);
+      renderer.applyDocumentChange(makeTextDocumentFromText('\n'));
+
+      const rendered = renderer.getRenderDiff();
+      expect(rendered).toBeDefined();
+      if (rendered == null) return;
+
+      const additionSplitLines: number[] = [];
+      iterateOverDiff({
+        diff: rendered,
+        diffStyle: 'split',
+        callback: ({ additionLine }) => {
+          if (additionLine != null) {
+            additionSplitLines.push(additionLine.splitLineIndex);
+          }
+        },
+      });
+      expect(additionSplitLines).toEqual([0, 1]);
+    });
+
+    test(`top-aligns multiple newline-only additions after delete-all (${diffStyle})`, async () => {
+      const oldContents =
+        Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const newContents =
+        Array.from({ length: 60 }, (_, index) => `new ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const renderer = new DiffHunksRenderer({
+        theme: 'github-light',
+        diffStyle,
+      });
+      const diff = parseDiffFromFile(
+        { name: 'old.ts', contents: oldContents },
+        { name: 'new.ts', contents: newContents }
+      );
+      await renderer.asyncRender(diff);
+      renderer.renderDiff(diff);
+      renderer.applyDocumentChange(EMPTY_DOCUMENT);
+      renderer.applyDocumentChange(makeTextDocumentFromText('\n\n'));
+
+      const rendered = renderer.getRenderDiff();
+      expect(rendered).toBeDefined();
+      if (rendered == null) return;
+
+      const additionSplitLines: number[] = [];
+      iterateOverDiff({
+        diff: rendered,
+        diffStyle: 'split',
+        callback: ({ additionLine }) => {
+          if (additionLine != null) {
+            additionSplitLines.push(additionLine.splitLineIndex);
+          }
+        },
+      });
+      expect(additionSplitLines).toEqual([0, 1, 2]);
+    });
+
+    test(`renders one row per editor line after insertLineBreak (${diffStyle})`, async () => {
+      const oldContents =
+        Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const newContents =
+        Array.from({ length: 60 }, (_, index) => `new ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const renderer = new DiffHunksRenderer({
+        theme: 'github-light',
+        diffStyle,
+      });
+      const diff = parseDiffFromFile(
+        { name: 'old.ts', contents: oldContents },
+        { name: 'new.ts', contents: newContents }
+      );
+      await renderer.asyncRender(diff);
+      renderer.renderDiff(diff);
+      renderer.applyDocumentChange(EMPTY_DOCUMENT);
+      renderer.applyDocumentChange(makeTextDocumentFromText('\n'));
+
+      const rendered = renderer.getRenderDiff();
+      expect(rendered).toBeDefined();
+      if (rendered == null) return;
+      expect(rendered.additionLines).toEqual(['\n', '']);
+
+      const additionSplitLines: number[] = [];
+      iterateOverDiff({
+        diff: rendered,
+        diffStyle: 'split',
+        callback: ({ additionLine }) => {
+          if (additionLine != null) {
+            additionSplitLines.push(additionLine.lineNumber);
+          }
+        },
+      });
+      expect(additionSplitLines).toEqual([1, 2]);
+    });
+
+    // When the old side is itself a single blank line, diffing the emptied
+    // document against an empty line would be a no-op (zero hunks, so zero
+    // rendered rows). The recompute must still produce one editable row.
     test(`keeps an editable line when the old side is one blank line (${diffStyle})`, async () => {
       const renderer = new DiffHunksRenderer({
         theme: 'github-light',

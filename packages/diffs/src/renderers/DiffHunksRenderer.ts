@@ -76,7 +76,7 @@ import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import { splitFileContents } from '../utils/splitFileContents';
 import {
-  recomputeDiffHunks,
+  recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
   updateDiffHunks,
 } from '../utils/updateDiffHunks';
@@ -449,9 +449,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     // updateRenderCache may already have extended diff.additionLines for the
     // same edit pass, so never bail out purely on matching lengths here.
-    diff.additionLines = splitFileContents(textDocument.getText());
-    const newLength = diff.additionLines.length;
+    const documentText = textDocument.getText();
+    if (documentText.trim().length === 0) {
+      // Blank documents need the editor's logical line count: `"\n"` is two
+      // editable rows even though the diff parser sees one newline token.
+      const lines: string[] = [];
+      for (let line = 0; line < textDocument.lineCount; line++) {
+        lines.push(textDocument.getLineText(line, true));
+      }
+      diff.additionLines = lines;
+    } else {
+      diff.additionLines = splitFileContents(documentText);
+    }
 
+    const newLength = diff.additionLines.length;
     const additionHastLines = result.code.additionLines;
     const prevLen = additionHastLines.length;
     if (newLength < prevLen) {
@@ -465,7 +476,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // to a diff with no editable rows and leave the attached host with no
       // line element for its caret (the additions column vanishes in split;
       // unified shows only deletions). Keep one empty editable line instead.
-      if (newLength === 0) {
+      if (
+        diff.additionLines.length <= 1 &&
+        diff.additionLines.join('') === ''
+      ) {
         Object.assign(
           diff,
           recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
@@ -474,7 +488,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       } else {
         Object.assign(
           diff,
-          recomputeDiffHunks(diff, this.options.parseDiffOptions)
+          recomputeDiffHunksForEdit(diff, this.options.parseDiffOptions)
         );
       }
     }
