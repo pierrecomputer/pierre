@@ -1977,6 +1977,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
 
+    // A diff re-renders its rows in place after the edits above: a unified diff
+    // rebuilds its content column on every edit (FileDiff.refreshDiffView swaps
+    // the column's innerHTML), and any diff rebuilds on a line-count change
+    // (applyDocumentChange -> full render). That detaches the line elements this
+    // editor memoized for caret/selection geometry (#lineYCache,
+    // #lastAccessedLineElement), so a detached row would measure offsetTop 0 and
+    // the caret would render at the top - the following #scrollToPrimaryCaret
+    // then scrolls the viewport there. Drop the geometry caches so the overlay
+    // re-measures against the freshly rebuilt rows and the caret stays put.
+    if (this.#isDiff && (this.#diffSyle === 'unified' || didLineCountChange)) {
+      this.#resetCache();
+    }
+
     if (newLineAnnotations !== undefined) {
       this.#lineAnnotations = newLineAnnotations;
       renderLineAnnotations(newLineAnnotations, contentEl, gutterEl);
