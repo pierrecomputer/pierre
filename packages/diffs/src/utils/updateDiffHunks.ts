@@ -58,15 +58,17 @@ export function recomputeDiffHunks(
 // joins back to the host's empty document.
 //
 // The sentinel only has to differ from the deletion side so a hunk is produced;
-// its text is discarded by the `['']` override below. When the old side is
-// itself a single blank line the empty sentinel would be identical and yield no
-// hunk (and so no editable row), so fall back to a non-blank line there.
+// its text is discarded by the `['']` override below. A bare `\\n` sentinel
+// can still align as trailing context against the first deletion lines, which
+// leaves the lone addition row deep in split view instead of top-aligned with
+// line 1. Prefer a space-prefixed blank line, and fall back to another
+// non-matching sentinel when the deletion side is already that exact line.
 export function recomputeEmptyDocumentDiff(
   diff: FileDiffMetadata,
   parseDiffOptions?: CreatePatchOptionsNonabortable
 ): FullDiffHunkUpdate {
   const deletionContents = diff.deletionLines.join('');
-  const additionSentinel = deletionContents === '\n' ? ' \n' : '\n';
+  const additionSentinel = deletionContents === ' \n' ? '\u0000\n' : ' \n';
   const recomputed = parseDiffFromFile(
     {
       name: diff.prevName ?? diff.name,

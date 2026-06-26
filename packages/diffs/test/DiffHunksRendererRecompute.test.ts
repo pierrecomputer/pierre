@@ -6,6 +6,7 @@ import {
   parseDiffFromFile,
 } from '../src';
 import type { DiffsTextDocument, HighlightedToken } from '../src/types';
+import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -172,6 +173,44 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
     // When the old side is itself a single blank line, diffing the emptied
     // document against an empty line would be a no-op (zero hunks, so zero
     // rendered rows). The recompute must still produce one editable row.
+    test(`top-aligns the empty addition line in split view (${diffStyle})`, async () => {
+      const oldContents =
+        Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const newContents =
+        Array.from({ length: 60 }, (_, index) => `new ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const renderer = new DiffHunksRenderer({
+        theme: 'github-light',
+        diffStyle,
+      });
+      const diff = parseDiffFromFile(
+        { name: 'old.ts', contents: oldContents },
+        { name: 'new.ts', contents: newContents }
+      );
+      await renderer.asyncRender(diff);
+      renderer.renderDiff(diff);
+      renderer.applyDocumentChange(EMPTY_DOCUMENT);
+
+      const rendered = renderer.getRenderDiff();
+      expect(rendered).toBeDefined();
+      if (rendered == null) return;
+
+      let firstAdditionSplitLine: number | undefined;
+      iterateOverDiff({
+        diff: rendered,
+        diffStyle: 'split',
+        callback: ({ additionLine }) => {
+          if (firstAdditionSplitLine === undefined && additionLine != null) {
+            firstAdditionSplitLine = additionLine.splitLineIndex;
+          }
+        },
+      });
+      expect(firstAdditionSplitLine).toBe(0);
+    });
+
     test(`keeps an editable line when the old side is one blank line (${diffStyle})`, async () => {
       const renderer = new DiffHunksRenderer({
         theme: 'github-light',
