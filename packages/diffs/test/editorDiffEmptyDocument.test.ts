@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
@@ -8,6 +8,12 @@ import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
+  await disposeHighlighter();
+});
+
+// Other component suites (e.g. CodeView) share the singleton highlighter; reset
+// it before each test so async highlight work cannot bleed into undo timing.
+beforeEach(async () => {
   await disposeHighlighter();
 });
 
@@ -157,7 +163,12 @@ describe('diff editor: select-all then delete', () => {
         // Undo reverts the typing, then the deletion, back to the original.
         editor.undo();
         editor.undo();
-        await wait(0);
+        for (let attempt = 0; attempt < 40; attempt++) {
+          if (editor.getState().file.contents === 'a\nb\nc\n') {
+            break;
+          }
+          await wait(10);
+        }
         expect(editor.getState().file.contents).toBe('a\nb\nc\n');
       } finally {
         await fixture.cleanup();
