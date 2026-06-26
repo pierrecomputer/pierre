@@ -316,7 +316,9 @@ export class File<
     }
     this.annotationCache.clear();
     this.pre = undefined;
+    this.bufferBefore?.remove();
     this.bufferBefore = undefined;
+    this.bufferAfter?.remove();
     this.bufferAfter = undefined;
     this.appliedPreAttributes = undefined;
     this.lastRowCount = undefined;

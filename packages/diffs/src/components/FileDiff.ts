@@ -518,7 +518,9 @@ export class FileDiff<
     this.codeUnified = undefined;
     this.codeDeletions = undefined;
     this.codeAdditions = undefined;
+    this.bufferBefore?.remove();
     this.bufferBefore = undefined;
+    this.bufferAfter?.remove();
     this.bufferAfter = undefined;
     this.appliedPreAttributes = undefined;
     this.headerElement = undefined;
