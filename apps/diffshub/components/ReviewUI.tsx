@@ -138,13 +138,13 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
   const loadDiffFiles = useMemo(
     () =>
-      domain == null
+      domain == null && hasGitHubToken
         ? createGitHubDiffFileLoader(path, {
             getAuthVersion: () => githubTokenVersionRef.current,
             getToken: () => githubTokenRef.current,
           })
         : undefined,
-    [domain, path]
+    [domain, hasGitHubToken, path]
   );
   const handlePatchLoadStart = useCallback(() => {
     setFileTreeOverlayOpen(false);

@@ -27,11 +27,18 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  if (token == null) {
+    return createJSONResponse(
+      { error: 'GitHub file expansion requires a configured token.' },
+      { status: 401 }
+    );
+  }
+
   try {
     return createJSONResponse(
       await loadGitHubDiffFiles(
         { name, path, prevName, type },
-        token == null ? undefined : { token, tokenSource: 'request' }
+        { token, tokenSource: 'request' }
       )
     );
   } catch (error) {

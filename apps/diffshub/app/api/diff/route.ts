@@ -602,6 +602,7 @@ async function fetchGitHubPullPatchTarget(
   const baseSha = readStringPath(pullData, ['base', 'sha']);
   const headSha = readStringPath(pullData, ['head', 'sha']);
   const baseRepo = readRepoFullName(pullData, ['base', 'repo', 'full_name']);
+  const headRepo = readRepoFullName(pullData, ['head', 'repo', 'full_name']);
   if (baseSha == null || headSha == null) {
     return {
       response: new Response('GitHub pull response did not include refs.', {
@@ -611,10 +612,16 @@ async function fetchGitHubPullPatchTarget(
     };
   }
 
+  const compareBaseRepo = baseRepo ?? target.repo;
+  const compareHeadRepo = headRepo ?? compareBaseRepo;
+  const compareRange = isSameGitHubRepo(compareBaseRepo, compareHeadRepo)
+    ? `${baseSha}...${headSha}`
+    : `${compareBaseRepo.owner}:${baseSha}...${compareHeadRepo.owner}:${headSha}`;
+
   return fetchDirectPatchTarget(
     {
       patchURL: createGitHubAPIURL(
-        `/repos/${encodeURLSegment(baseRepo?.owner ?? target.repo.owner)}/${encodeURLSegment(baseRepo?.repo ?? target.repo.repo)}/compare/${encodeURLSegment(`${baseSha}...${headSha}`)}`
+        `/repos/${encodeURLSegment(compareBaseRepo.owner)}/${encodeURLSegment(compareBaseRepo.repo)}/compare/${encodeURLSegment(compareRange)}`
       ),
       label: 'authenticated pull compare diff API',
       requestHeaders: createGitHubDiffAPIHeaders(target.token),
@@ -753,6 +760,13 @@ function readRepoFullName(
     owner: fullName.slice(0, separatorIndex),
     repo: fullName.slice(separatorIndex + 1),
   };
+}
+
+function isSameGitHubRepo(a: GitHubRepo, b: GitHubRepo): boolean {
+  return (
+    a.owner.toLowerCase() === b.owner.toLowerCase() &&
+    a.repo.toLowerCase() === b.repo.toLowerCase()
+  );
 }
 
 function readStringPath(
