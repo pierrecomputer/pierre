@@ -780,7 +780,7 @@ export class VirtualizedFileDiff<
       this.resetLayoutCache({ includeEstimatedHeights: true });
       this.computeApproximateSize();
     }
-    this.initializeFilesLoadIfNecessary();
+    this.loadFilesIfNecessary();
     this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(this, true);
   };
@@ -859,7 +859,7 @@ export class VirtualizedFileDiff<
     return nextDiff;
   }
 
-  protected override initializeFilesLoadIfNecessary(): void {
+  protected override loadFilesIfNecessary(): void {
     if (this.pendingHydratedDiff != null) {
       if (this.pendingHydratedDiff.expectedDiff === this.fileDiff) {
         return;
@@ -867,7 +867,7 @@ export class VirtualizedFileDiff<
       this.pendingHydratedDiff = undefined;
     }
 
-    super.initializeFilesLoadIfNecessary();
+    super.loadFilesIfNecessary();
   }
 
   public setVisibility(visible: boolean): void {

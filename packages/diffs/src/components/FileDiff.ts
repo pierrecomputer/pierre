@@ -784,11 +784,11 @@ export class FileDiff<
       direction,
       expansionLineCountOverride
     );
-    this.initializeFilesLoadIfNecessary();
+    this.loadFilesIfNecessary();
     this.rerender();
   };
 
-  protected initializeFilesLoadIfNecessary(): void {
+  protected loadFilesIfNecessary(): void {
     const {
       fileDiff,
       options: { loadDiffFiles },
@@ -951,7 +951,7 @@ export class FileDiff<
       return false;
     }
     if (expandUnchanged) {
-      this.initializeFilesLoadIfNecessary();
+      this.loadFilesIfNecessary();
     }
     this.hunksRenderer.setOptions(this.getHunksRendererOptions(this.options));
     this.syncInteractionOptions();
