@@ -154,7 +154,7 @@ export class FileRenderer<LAnnotation = undefined> {
       renderCache.isDirty === true &&
       renderCache.file.cacheKey != null
     ) {
-      // The render cache has been updated by the editor, let's purge it
+      // The render cache has been updated by the host, let's purge it
       // from the worker manager cache.
       this.workerManager?.evictFileFromCache(renderCache.file.cacheKey);
     }
@@ -295,7 +295,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.renderCache.isDirty = true;
   }
 
-  // normally triggered by the editor when the document line count changes
+  // normally triggered by the host when the document line count changes
   public applyDocumentChange(textDocument: DiffsTextDocument): void {
     if (this.renderCache == null) {
       return undefined;

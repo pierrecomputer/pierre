@@ -87,7 +87,13 @@ class VirtualizedEditableComponent implements DiffsEditableComponent<undefined> 
   updateRenderCache(
     _lines: Map<number, Array<HighlightedToken>>,
     _themeType: 'dark' | 'light'
-  ): void {}
+  ): readonly number[] {
+    return [];
+  }
+
+  applyContentEdit(_changedAdditionLineIndexes: readonly number[]): void {}
+
+  recomputeContentHunks(_changedAdditionLineIndexes: readonly number[]): void {}
 
   #syncRenderView(): void {
     this.#editor?.__syncRenderView(

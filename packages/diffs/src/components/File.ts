@@ -10,6 +10,7 @@ import {
   HEADER_FILENAME_SUFFIX_SLOT_ID,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
+  NO_CHANGED_ADDITION_LINES,
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
@@ -501,7 +502,7 @@ export class File<
     };
   }
 
-  // normally triggered by the editor when the document line count changes
+  // normally triggered by the host when the document line count changes
   public applyDocumentChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: LineAnnotation<LAnnotation>[]
@@ -521,9 +522,17 @@ export class File<
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
-  ): void {
+  ): readonly number[] {
     this.fileRenderer.updateRenderCache(dirtyLines, themeType);
+    // Plain files have no diff hunks to recompute.
+    return NO_CHANGED_ADDITION_LINES;
   }
+
+  // Plain files render edits via the host's inline DOM patch; nothing to do.
+  public applyContentEdit(): void {}
+
+  // Plain files have no diff hunks to recompute.
+  public recomputeContentHunks(): void {}
 
   public render({
     file,

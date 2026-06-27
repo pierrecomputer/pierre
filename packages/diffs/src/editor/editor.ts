@@ -236,7 +236,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
   ) => {
-    this.#fileInstance?.updateRenderCache(lines, themeType);
+    const changedAdditionLines = this.#fileInstance?.updateRenderCache(
+      lines,
+      themeType
+    );
+    // Background/offscreen tokens can carry a content-only edit that landed
+    // outside the render window; keep hunk metadata in sync without refreshing
+    // the view (the visible rows are patched below).
+    if (changedAdditionLines != null && changedAdditionLines.length > 0) {
+      this.#fileInstance?.recomputeContentHunks(changedAdditionLines);
+    }
     // update the view if the render range is updated by scrolling
     // and the deferred tokenized lines inside the render range
     if (
@@ -1961,20 +1970,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    fileInstance.updateRenderCache(
+    const changedAdditionLines = fileInstance.updateRenderCache(
       dirtyLines,
-      tokenizer.themeType,
-      this.#isDiff && !didLineCountChange,
-      // On a line-count change we recompute hunk metadata authoritatively in
-      // `applyDocumentChange` below, so skip the redundant recompute here.
-      didLineCountChange
+      tokenizer.themeType
     );
     if (didLineCountChange) {
+      // Line-count change: recompute hunks from the full document and re-render.
       fileInstance.applyDocumentChange(
         textDocument,
         newLineAnnotations,
         shouldUpdateBuffer
       );
+    } else if (changedAdditionLines.length > 0) {
+      // In-place content edit: incremental hunk recompute + view refresh.
+      // When no addition line text changed there is no hunk impact, so we skip
+      // the refresh entirely (the editor already patched the edited rows inline).
+      fileInstance.applyContentEdit(changedAdditionLines);
     }
 
     // A diff re-renders its rows in place after the edits above: a unified diff

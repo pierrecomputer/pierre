@@ -623,7 +623,7 @@ export class VirtualizedFile<
     this.virtualizer.instanceChanged(this, false);
   }
 
-  // normally triggered by the editor when the document line count changes
+  // normally triggered by the host when the document line count changes
   override applyDocumentChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: LineAnnotation<LAnnotation>[],
@@ -647,7 +647,7 @@ export class VirtualizedFile<
       this.computeApproximateSize();
     }
 
-    // Update the buffers caused by the line-count change to ensure the editor
+    // Update the buffers caused by the line-count change to ensure the host
     // scrolls to the correct position before re-rendering
     if (
       shouldUpdateBuffer &&

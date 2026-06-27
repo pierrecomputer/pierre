@@ -7,6 +7,7 @@ import {
   DEFAULT_RENDER_RANGE,
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
+  NO_CHANGED_ADDITION_LINES,
 } from '../constants';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
@@ -269,7 +270,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       renderCache.isDirty === true &&
       renderCache.diff.cacheKey != null
     ) {
-      // The render cache has been updated by the editor, let's purge it
+      // The render cache has been updated by the host, let's purge it
       // from the worker manager cache.
       this.workerManager?.evictDiffFromCache(renderCache.diff.cacheKey);
     }
@@ -339,20 +340,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light',
-    // When a line-count change is being applied in the same edit pass,
-    // `applyDocumentChange` recomputes hunk metadata from the full document
-    // text immediately after this call, so recomputing here is wasted work
-    // (and runs against a mid-update line array). Skip it but keep syncing the
-    // per-line token/text content below, which `applyDocumentChange` preserves.
-    skipDiffRecompute = false
-  ): void {
+    themeType: 'dark' | 'light'
+  ): readonly number[] {
     if (this.renderCache == null) {
-      return;
+      return NO_CHANGED_ADDITION_LINES;
     }
     const { result, diff } = this.renderCache;
     if (result == null) {
-      return;
+      return NO_CHANGED_ADDITION_LINES;
     }
     if (diff.isPartial) {
       throw new Error('Could not update render cache for partial diff');
@@ -367,7 +362,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       const canSyncDiffLine = line < diff.additionLines.length;
       const prevLine = canSyncDiffLine ? (diff.additionLines[line] ?? '') : '';
       const prevText = cleanLastNewline(prevLine);
-      // The editor text document can expose one extra trailing empty line when
+      // The host text document can expose one extra trailing empty line when
       // the file ends with a newline. Deferred tokenization must not grow
       // additionLines from that mismatch or hunk trailing context desyncs.
       if (canSyncDiffLine) {
@@ -409,22 +404,40 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     }
 
-    if (!skipDiffRecompute && changedAdditionLines.length > 0) {
-      Object.assign(
-        diff,
-        updateDiffHunks(
-          diff,
-          changedAdditionLines,
-          this.options.parseDiffOptions
-        )
-      );
-    }
-
     result.baseThemeType = themeType;
+    this.renderCache.isDirty = true;
+    return changedAdditionLines;
+  }
+
+  // Incrementally recompute hunk metadata after an in-place content edit
+  // (no line-count change). For a line-count change the host calls
+  // `applyDocumentChange` instead, which recomputes from the full document.
+  public recomputeContentHunks(
+    changedAdditionLineIndexes: readonly number[]
+  ): void {
+    if (this.renderCache == null) {
+      return;
+    }
+    const { diff, result } = this.renderCache;
+    if (
+      result == null ||
+      diff.isPartial ||
+      changedAdditionLineIndexes.length === 0
+    ) {
+      return;
+    }
+    Object.assign(
+      diff,
+      updateDiffHunks(
+        diff,
+        changedAdditionLineIndexes,
+        this.options.parseDiffOptions
+      )
+    );
     this.renderCache.isDirty = true;
   }
 
-  // Normally triggered by the editor when the document line count changes.
+  // Normally triggered by the host when the document line count changes.
   public applyDocumentChange(textDocument: DiffsTextDocument): void {
     if (this.renderCache == null) {
       return;
@@ -449,8 +462,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     if (!diff.isPartial) {
       // An empty document splits into zero addition lines, which would recompute
-      // to a diff with no editable rows and leave the attached editor with no
-      // line element to host its caret (the additions column vanishes in split;
+      // to a diff with no editable rows and leave the attached host with no
+      // line element for its caret (the additions column vanishes in split;
       // unified shows only deletions). Keep one empty editable line instead.
       if (newLength === 0) {
         Object.assign(
@@ -1976,7 +1989,7 @@ function createPlainAdditionLineElement(
   };
 }
 
-// Editor line text omits line endings; diff line arrays keep the suffix from parsing.
+// Host line text omits line endings; diff line arrays keep the suffix from parsing.
 function applyLineTextWithNewline(line: string, lineText: string): string {
   if (line.endsWith('\r\n')) {
     return lineText + '\r\n';
