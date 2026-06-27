@@ -21,8 +21,18 @@ class TestFileDiff extends FileDiff<undefined> {
     return this.hunksRenderer.getExpandedHunk(index);
   }
 
-  getPendingHydrationPromiseForTest() {
-    return this.pendingDiffHydration?.promise;
+  getPendingFileLoadPromiseForTest() {
+    return this.pendingFiles?.promise;
+  }
+
+  handleFilesLoadedForTest(
+    expectedDiff: FileDiffMetadata,
+    files: {
+      oldFile: FileContents | null;
+      newFile: FileContents | null;
+    }
+  ) {
+    return this.handleFilesLoaded(expectedDiff, files);
   }
 }
 
@@ -146,6 +156,56 @@ function createPartialPureRename(): {
   return { newFile, partial };
 }
 
+function createPartialAddedFile(): {
+  partial: FileDiffMetadata;
+  loadedContents: { oldFile: null; newFile: FileContents };
+} {
+  const partial = parseSinglePartialFile(
+    [
+      'diff --git a/new-file.txt b/new-file.txt\n',
+      'new file mode 100644\n',
+      'index 0000000..1111111\n',
+      '--- /dev/null\n',
+      '+++ b/new-file.txt\n',
+      '@@ -0,0 +1,2 @@\n',
+      '+alpha\n',
+      '+beta\n',
+    ].join('')
+  );
+  const newFile: FileContents = {
+    name: 'new-file.txt',
+    contents: 'alpha\nbeta\ngamma\n',
+    cacheKey: 'new-full',
+  };
+  expect(partial.type).toBe('new');
+  return { partial, loadedContents: { oldFile: null, newFile } };
+}
+
+function createPartialDeletedFile(): {
+  partial: FileDiffMetadata;
+  loadedContents: { oldFile: FileContents; newFile: null };
+} {
+  const partial = parseSinglePartialFile(
+    [
+      'diff --git a/deleted-file.txt b/deleted-file.txt\n',
+      'deleted file mode 100644\n',
+      'index 1111111..0000000\n',
+      '--- a/deleted-file.txt\n',
+      '+++ /dev/null\n',
+      '@@ -1,2 +0,0 @@\n',
+      '-alpha\n',
+      '-beta\n',
+    ].join('')
+  );
+  const oldFile: FileContents = {
+    name: 'deleted-file.txt',
+    contents: 'alpha\nbeta\ngamma\n',
+    cacheKey: 'old-full',
+  };
+  expect(partial.type).toBe('deleted');
+  return { partial, loadedContents: { oldFile, newFile: null } };
+}
+
 async function waitForHydrated(instance: FileDiff<undefined>): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {
     if (instance.fileDiff?.isPartial === false) {
@@ -177,6 +237,51 @@ function querySyntheticBottomSeparator(
   return root.querySelector(
     `[data-expand-index="${hunkIndex}"] [data-expand-up]`
   );
+}
+
+function expectOneSidedPartialDoesNotStartHydration({
+  partial,
+  loadedContents,
+}: {
+  partial: FileDiffMetadata;
+  loadedContents: {
+    oldFile: FileContents | null;
+    newFile: FileContents | null;
+  };
+}): void {
+  const { cleanup } = installDom();
+  let instance: TestFileDiff | undefined;
+  try {
+    let loadCalls = 0;
+    const fileContainer = document.createElement('div');
+    instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      expandUnchanged: true,
+      loadDiffFiles: () => {
+        loadCalls++;
+        return Promise.resolve(loadedContents);
+      },
+    });
+
+    instance.render({
+      fileContainer,
+      fileDiff: partial,
+      deferManagers: true,
+      preventEmit: true,
+    });
+    expect(loadCalls).toBe(0);
+    expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
+
+    instance.expandHunk(0, 'both', 1);
+    expect(loadCalls).toBe(0);
+    expect(instance.fileDiff).toBe(partial);
+    expect(instance.fileDiff?.isPartial).toBe(true);
+    expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
+  } finally {
+    instance?.cleanUp();
+    cleanup();
+  }
 }
 
 describe('FileDiff partial hydration', () => {
@@ -269,11 +374,80 @@ describe('FileDiff partial hydration', () => {
 
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(true);
-      expect(instance.getPendingHydrationPromiseForTest()).toBeUndefined();
+      expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
       expect(instance.getExpandedHunkForTest(0)).toEqual({
         fromStart: 0,
         fromEnd: 1,
       });
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('expandUnchanged and expandHunk do not hydrate added or deleted partial diffs', () => {
+    expectOneSidedPartialDoesNotStartHydration(createPartialAddedFile());
+    expectOneSidedPartialDoesNotStartHydration(createPartialDeletedFile());
+  });
+
+  test('handles loaded files by source identity even if the source is already full', async () => {
+    const { cleanup } = installDom();
+    let instance: TestFileDiff | undefined;
+    try {
+      const { oldFile, newFile, partial } = createPartialChange('partial.ts');
+      const loadedContents = { oldFile, newFile };
+      const cleanedTasks: unknown[] = [];
+      const workerManager = {
+        subscribeToThemeChanges() {},
+        unsubscribeToThemeChanges() {},
+        getDiffRenderOptions() {
+          return {
+            theme: 'github-dark',
+            useTokenTransformer: false,
+            tokenizeMaxLineLength: 1000,
+            lineDiffType: 'word-alt',
+            maxLineDiffLength: 1000,
+          };
+        },
+        getDiffResultCache() {
+          return undefined;
+        },
+        getPlainDiffAST() {
+          return undefined;
+        },
+        highlightDiffAST() {},
+        initialize() {
+          return Promise.resolve();
+        },
+        isInitialized() {
+          return true;
+        },
+        isWorkingPool() {
+          return true;
+        },
+        primeDiffHighlightCache() {
+          return Promise.resolve();
+        },
+        cleanUpTasks(task: unknown) {
+          cleanedTasks.push(task);
+        },
+      } as unknown as WorkerPoolManager;
+      instance = new TestFileDiff(
+        {
+          disableErrorHandling: true,
+          disableFileHeader: true,
+        },
+        workerManager
+      );
+
+      instance.fileDiff = partial;
+      partial.isPartial = false;
+
+      await instance.handleFilesLoadedForTest(partial, loadedContents);
+
+      expect(instance.fileDiff).toBe(partial);
+      expect(partial.isPartial).toBe(false);
+      expect(cleanedTasks).toHaveLength(1);
     } finally {
       instance?.cleanUp();
       cleanup();
@@ -317,7 +491,7 @@ describe('FileDiff partial hydration', () => {
       instance.expandHunk(partial.hunks.length, 'up');
       expect(loadCalls).toBe(1);
       assertDefined(
-        instance.getPendingHydrationPromiseForTest(),
+        instance.getPendingFileLoadPromiseForTest(),
         'expected hydration to be pending after expanding synthetic bottom hunk'
       );
 
@@ -335,7 +509,7 @@ describe('FileDiff partial hydration', () => {
       expect(
         querySyntheticBottomSeparator(fileContainer, partial.hunks.length)
       ).toBeNull();
-      expect(instance.getPendingHydrationPromiseForTest()).toBeUndefined();
+      expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
     } finally {
       instance?.cleanUp();
       cleanup();
@@ -370,7 +544,7 @@ describe('FileDiff partial hydration', () => {
       expect(loadCalls).toBe(0);
       expect(instance.fileDiff).toBe(fullDiff);
       expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.getPendingHydrationPromiseForTest()).toBeUndefined();
+      expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
       expect(instance.getExpandedHunkForTest(0)).toEqual({
         fromStart: 1,
         fromEnd: 1,
@@ -530,7 +704,7 @@ describe('FileDiff partial hydration', () => {
     }
   });
 
-  test('waits for eligible worker priming before committing hydrated diffs', async () => {
+  test('primes eligible worker highlights with the hydrated source diff', async () => {
     const { cleanup } = installDom();
     let instance: TestFileDiff | undefined;
     try {
@@ -557,17 +731,21 @@ describe('FileDiff partial hydration', () => {
         preventEmit: true,
       });
       instance.expandHunk(0, 'down', 1);
+      const hydrationPromise = instance.getPendingFileLoadPromiseForTest();
+      assertDefined(hydrationPromise, 'expected hydration to be pending');
 
       loadDeferred.resolve(loadedContents);
       await wait(0);
 
       expect(primedDiffs).toHaveLength(1);
+      expect(primedDiffs[0]).toBe(partial);
       expect(primedDiffs[0]?.isPartial).toBe(false);
       expect(primedDiffs[0]?.cacheKey).toBe('partial.ts:old:partial.ts:new');
       expect(instance.fileDiff).toBe(partial);
+      expect(instance.fileDiff?.isPartial).toBe(false);
 
       primeDeferred.resolve(undefined);
-      await waitForHydrated(instance);
+      await hydrationPromise;
 
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
@@ -577,7 +755,7 @@ describe('FileDiff partial hydration', () => {
     }
   });
 
-  test('commits hydrated diffs after the worker priming timeout elapses', async () => {
+  test('continues after the worker priming timeout elapses', async () => {
     const { cleanup } = installDom();
     let instance: TestFileDiff | undefined;
     try {
@@ -603,10 +781,14 @@ describe('FileDiff partial hydration', () => {
         preventEmit: true,
       });
       instance.expandHunk(0, 'down', 1);
+      const hydrationPromise = instance.getPendingFileLoadPromiseForTest();
+      assertDefined(hydrationPromise, 'expected hydration to be pending');
 
       await waitForHydrated(instance);
+      await hydrationPromise;
 
       expect(primedDiffs).toHaveLength(1);
+      expect(primedDiffs[0]).toBe(partial);
       expect(primedDiffs[0]?.cacheKey).toBe('partial.ts:old:partial.ts:new');
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
@@ -651,6 +833,7 @@ describe('FileDiff partial hydration', () => {
       await waitForHydrated(instance);
 
       expect(primedDiffs).toHaveLength(1);
+      expect(primedDiffs[0]).toBe(partial);
       expect(primedDiffs[0]?.cacheKey).toBe('partial.ts:old:partial.ts:new');
       expect(consoleError.mock.calls[0]?.[0]).toBe(primingError);
       expect(instance.fileDiff).toBe(partial);
@@ -789,7 +972,7 @@ describe('FileDiff partial hydration', () => {
       expect(consoleError.mock.calls[0]?.[0]).toBe(loadError);
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(true);
-      expect(instance.getPendingHydrationPromiseForTest()).toBeUndefined();
+      expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
 
       instance.expandHunk(0, 'up', 1);
       expect(loadCalls).toBe(2);
@@ -830,7 +1013,7 @@ describe('FileDiff partial hydration', () => {
         preventEmit: true,
       });
       instance.expandHunk(0, 'down', 1);
-      const hydrationPromise = instance.getPendingHydrationPromiseForTest();
+      const hydrationPromise = instance.getPendingFileLoadPromiseForTest();
       assertDefined(hydrationPromise, 'expected hydration to be pending');
 
       let rejectedError: unknown;
@@ -843,7 +1026,7 @@ describe('FileDiff partial hydration', () => {
       expect(rejectedError).toBe(loadError);
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(true);
-      expect(instance.getPendingHydrationPromiseForTest()).toBeUndefined();
+      expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
     } finally {
       instance?.cleanUp();
       cleanup();

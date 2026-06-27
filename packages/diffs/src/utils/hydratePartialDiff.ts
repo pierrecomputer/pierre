@@ -4,10 +4,10 @@ import type {
   FileDiffMetadata,
   Hunk,
 } from '../types';
-import { parseDiffFromFile } from './parseDiffFromFile';
+import { cloneFileDiffMetadata } from './cloneFileDiffMetadata';
 import { splitFileContents } from './splitFileContents';
 
-type LoadedFileDiffContents = Awaited<ReturnType<FileDiffContentsLoader>>;
+type LoadedFiles = Awaited<ReturnType<FileDiffContentsLoader>>;
 
 interface HydratedHunksResult {
   hunks: Hunk[];
@@ -16,51 +16,40 @@ interface HydratedHunksResult {
 }
 
 /**
- * Rebuilds partial diff metadata with full file line arrays while preserving
- * the patch's parsed hunk structure.
+ * Hydrates a partial diff in place with full file line arrays.
  */
-export function hydratePartialFileDiff(
+export function hydratePartialDiff(
+  type: 'clone' | 'merge',
   fileDiff: FileDiffMetadata,
-  loadedContents: LoadedFileDiffContents
+  files: LoadedFiles
 ): FileDiffMetadata {
-  if (!fileDiff.isPartial) {
-    throw new Error('hydratePartialFileDiff: fileDiff must be partial');
+  const targetFileDiff =
+    type === 'clone' ? cloneFileDiffMetadata(fileDiff) : fileDiff;
+
+  if (!targetFileDiff.isPartial) {
+    throw new Error('hydratePartialDiff: fileDiff must be partial');
   }
 
-  switch (fileDiff.type) {
+  switch (targetFileDiff.type) {
     case 'change':
     case 'rename-changed': {
-      const oldFile = requireOldFile(fileDiff, loadedContents);
-      const newFile = requireNewFile(fileDiff, loadedContents);
-      return hydrateTwoSidedFileDiff(fileDiff, oldFile, newFile);
-    }
-    case 'new': {
-      const newFile = requireNewFile(fileDiff, loadedContents);
-      return hydrateReparsedFileDiff(fileDiff, null, newFile);
-    }
-    case 'deleted': {
-      const oldFile = requireOldFile(fileDiff, loadedContents);
-      return hydrateReparsedFileDiff(fileDiff, oldFile, null);
+      const oldFile = requireOldFile(targetFileDiff, files);
+      const newFile = requireNewFile(targetFileDiff, files);
+      return hydrateTwoSidedFileDiff(targetFileDiff, oldFile, newFile);
     }
     case 'rename-pure': {
-      const newFile = requireNewFile(fileDiff, loadedContents);
+      const newFile = requireNewFile(targetFileDiff, files);
       const lines = splitFileContents(newFile.contents);
-      return {
-        ...fileDiff,
-        hunks: [],
-        splitLineCount: 0,
-        unifiedLineCount: 0,
-        isPartial: false,
-        deletionLines: [...lines],
-        additionLines: [...lines],
-        cacheKey: getHydratedCacheKey(
-          fileDiff,
-          loadedContents.oldFile,
-          newFile
-        ),
-      };
+      targetFileDiff.isPartial = false;
+      targetFileDiff.deletionLines = lines;
+      targetFileDiff.additionLines = lines;
+      setHydratedCacheKey(targetFileDiff, files.oldFile, newFile);
+      return targetFileDiff;
     }
   }
+  throw new Error(
+    `hydratePartialDiff: ${targetFileDiff.type} diffs cannot be hydrated from loaded files`
+  );
 }
 
 function hydrateTwoSidedFileDiff(
@@ -75,38 +64,14 @@ function hydrateTwoSidedFileDiff(
     additionLines.length
   );
 
-  return {
-    ...fileDiff,
-    hunks,
-    splitLineCount,
-    unifiedLineCount,
-    isPartial: false,
-    deletionLines,
-    additionLines,
-    cacheKey: getHydratedCacheKey(fileDiff, oldFile, newFile),
-  };
-}
-
-function hydrateReparsedFileDiff(
-  fileDiff: FileDiffMetadata,
-  oldFile: FileContents | null,
-  newFile: FileContents | null
-): FileDiffMetadata {
-  const parsed = parseDiffFromFile(oldFile, newFile, undefined, true);
-  const cacheKey = getHydratedCacheKey(fileDiff, oldFile, newFile);
-  return {
-    ...parsed,
-    name: fileDiff.name,
-    prevName: fileDiff.prevName,
-    lang: fileDiff.lang ?? parsed.lang,
-    newObjectId: fileDiff.newObjectId,
-    prevObjectId: fileDiff.prevObjectId,
-    mode: fileDiff.mode,
-    prevMode: fileDiff.prevMode,
-    type: fileDiff.type,
-    isPartial: false,
-    cacheKey,
-  };
+  fileDiff.hunks = hunks;
+  fileDiff.splitLineCount = splitLineCount;
+  fileDiff.unifiedLineCount = unifiedLineCount;
+  fileDiff.isPartial = false;
+  fileDiff.deletionLines = deletionLines;
+  fileDiff.additionLines = additionLines;
+  setHydratedCacheKey(fileDiff, oldFile, newFile);
+  return fileDiff;
 }
 
 function hydrateHunks(
@@ -196,26 +161,26 @@ function hydrateHunks(
 
 function requireOldFile(
   fileDiff: FileDiffMetadata,
-  loadedContents: LoadedFileDiffContents
+  files: LoadedFiles
 ): FileContents {
-  if (loadedContents.oldFile == null) {
+  if (files.oldFile == null) {
     throw new Error(
-      `hydratePartialFileDiff: ${fileDiff.type} diff for ${fileDiff.name} requires oldFile`
+      `hydratePartialDiff: ${fileDiff.type} diff for ${fileDiff.name} requires oldFile`
     );
   }
-  return loadedContents.oldFile;
+  return files.oldFile;
 }
 
 function requireNewFile(
   fileDiff: FileDiffMetadata,
-  loadedContents: LoadedFileDiffContents
+  files: LoadedFiles
 ): FileContents {
-  if (loadedContents.newFile == null) {
+  if (files.newFile == null) {
     throw new Error(
-      `hydratePartialFileDiff: ${fileDiff.type} diff for ${fileDiff.name} requires newFile`
+      `hydratePartialDiff: ${fileDiff.type} diff for ${fileDiff.name} requires newFile`
     );
   }
-  return loadedContents.newFile;
+  return files.newFile;
 }
 
 function getHydratedCacheKey(
@@ -230,6 +195,19 @@ function getHydratedCacheKey(
   return fileDiff.cacheKey != null
     ? `${fileDiff.cacheKey}:hydrated`
     : undefined;
+}
+
+function setHydratedCacheKey(
+  fileDiff: FileDiffMetadata,
+  oldFile: FileContents | null,
+  newFile: FileContents | null
+): void {
+  const cacheKey = getHydratedCacheKey(fileDiff, oldFile, newFile);
+  if (cacheKey == null) {
+    delete fileDiff.cacheKey;
+    return;
+  }
+  fileDiff.cacheKey = cacheKey;
 }
 
 function getLoadedFileCacheKey(

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
 
 import type { FileContents, FileDiffMetadata } from '../src/types';
-import { hydratePartialFileDiff } from '../src/utils/hydratePartialFileDiff';
+import { hydratePartialDiff } from '../src/utils/hydratePartialDiff';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { splitFileContents } from '../src/utils/splitFileContents';
 import { assertDefined, verifyHunkLineValues } from './testUtils';
@@ -61,7 +61,7 @@ function expectFirstPartialHunkIndexes(fileDiff: FileDiffMetadata): void {
   expect(partialFirstContent.deletionLineIndex).toBe(0);
 }
 
-describe('hydratePartialFileDiff', () => {
+describe('hydratePartialDiff', () => {
   test('hydrates two-sided partial diffs with full lines and rewritten line indexes', () => {
     const oldFile: FileContents = {
       name: 'two-sided.txt',
@@ -115,6 +115,7 @@ describe('hydratePartialFileDiff', () => {
     partial.newObjectId = '2222222';
     const oldFileLines = splitFileContents(oldFile.contents);
     const newFileLines = splitFileContents(newFile.contents);
+    const partialHunkSpecs = partial.hunks.map((hunk) => hunk.hunkSpecs);
 
     expectPartialLineState(partial, {
       additionLineCount: 6,
@@ -124,13 +125,13 @@ describe('hydratePartialFileDiff', () => {
     });
     expectFirstPartialHunkIndexes(partial);
 
-    const hydrated = hydratePartialFileDiff(partial, { oldFile, newFile });
+    const hydrated = hydratePartialDiff('merge', partial, { oldFile, newFile });
     const firstHunk = hydrated.hunks[0];
     const firstContent = firstHunk?.hunkContent[0];
 
     assertDefined(firstHunk, 'expected hydrated diff to contain a first hunk');
     assertDefined(firstContent, 'expected first hunk to contain content');
-    expect(hydrated).not.toBe(partial);
+    expect(hydrated).toBe(partial);
     expect(hydrated.isPartial).toBe(false);
     expect(hydrated.type).toBe('change');
     expect(hydrated.lang).toBe('typescript');
@@ -141,7 +142,7 @@ describe('hydratePartialFileDiff', () => {
     expect(hydrated.additionLines).toEqual(newFileLines);
     expect(hydrated.deletionLines).toEqual(oldFileLines);
     expect(hydrated.hunks.map((hunk) => hunk.hunkSpecs)).toEqual(
-      partial.hunks.map((hunk) => hunk.hunkSpecs)
+      partialHunkSpecs
     );
     expect(firstHunk.additionLineIndex).toBe(firstHunk.additionStart - 1);
     expect(firstHunk.deletionLineIndex).toBe(firstHunk.deletionStart - 1);
@@ -173,10 +174,52 @@ describe('hydratePartialFileDiff', () => {
       )
     );
 
-    const hydrated = hydratePartialFileDiff(partial, { oldFile, newFile });
+    const hydrated = hydratePartialDiff('merge', partial, { oldFile, newFile });
 
-    expect(partial.cacheKey).toBeUndefined();
+    expect(hydrated).toBe(partial);
     expect(hydrated.cacheKey).toBe('old-full:new-full');
+  });
+
+  test('can hydrate a cloned metadata object without mutating the source diff', () => {
+    const oldFile: FileContents = {
+      name: 'cloned.txt',
+      cacheKey: 'old-full',
+      contents: 'keep 1\nold value\nkeep 3\n',
+    };
+    const newFile: FileContents = {
+      name: 'cloned.txt',
+      cacheKey: 'new-full',
+      contents: 'keep 1\nnew value\nkeep 3\n',
+    };
+    const partial = parseSingleFile(
+      createTwoFilesPatch(
+        oldFile.name,
+        newFile.name,
+        oldFile.contents,
+        newFile.contents,
+        undefined,
+        undefined,
+        { context: 0 }
+      )
+    );
+
+    const hydrated = hydratePartialDiff('clone', partial, { oldFile, newFile });
+
+    expect(hydrated).not.toBe(partial);
+    expect(hydrated.isPartial).toBe(false);
+    expect(hydrated.additionLines).toEqual([
+      'keep 1\n',
+      'new value\n',
+      'keep 3\n',
+    ]);
+    expect(hydrated.deletionLines).toEqual([
+      'keep 1\n',
+      'old value\n',
+      'keep 3\n',
+    ]);
+    expect(partial.isPartial).toBe(true);
+    expect(partial.additionLines).toEqual(['new value\n']);
+    expect(partial.deletionLines).toEqual(['old value\n']);
   });
 
   test('falls back to a hydrated cache segment when loaded files are unkeyed', () => {
@@ -201,8 +244,9 @@ describe('hydratePartialFileDiff', () => {
     );
     partial.cacheKey = 'partial-cache';
 
-    const hydrated = hydratePartialFileDiff(partial, { oldFile, newFile });
+    const hydrated = hydratePartialDiff('merge', partial, { oldFile, newFile });
 
+    expect(hydrated).toBe(partial);
     expect(hydrated.cacheKey).toBe('partial-cache:hydrated');
   });
 
@@ -239,9 +283,16 @@ describe('hydratePartialFileDiff', () => {
       fullDeletionLineCount: oldFileLines.length,
     });
     expectFirstPartialHunkIndexes(partial);
+    expect(() =>
+      hydratePartialDiff('merge', partial, { oldFile, newFile: null })
+    ).toThrow('requires newFile');
+    expect(() =>
+      hydratePartialDiff('merge', partial, { oldFile: null, newFile })
+    ).toThrow('requires oldFile');
 
-    const hydrated = hydratePartialFileDiff(partial, { oldFile, newFile });
+    const hydrated = hydratePartialDiff('merge', partial, { oldFile, newFile });
 
+    expect(hydrated).toBe(partial);
     expect(hydrated.type).toBe('rename-changed');
     expect(hydrated.prevName).toBe(oldFile.name);
     expect(hydrated.name).toBe(newFile.name);
@@ -249,16 +300,10 @@ describe('hydratePartialFileDiff', () => {
     expect(hydrated.additionLines).toEqual(newFileLines);
     expect(hydrated.deletionLines).toEqual(oldFileLines);
     expect(verifyHunkLineValues(hydrated)).toEqual([]);
-    expect(() =>
-      hydratePartialFileDiff(partial, { oldFile, newFile: null })
-    ).toThrow('requires newFile');
-    expect(() =>
-      hydratePartialFileDiff(partial, { oldFile: null, newFile })
-    ).toThrow('requires oldFile');
   });
 
-  test('hydrates new diffs with a nullable old file', () => {
-    const partial = parseSingleFile(
+  test('rejects one-sided added and deleted partial diffs', () => {
+    const addedPartial = parseSingleFile(
       [
         'diff --git a/new-file.txt b/new-file.txt\n',
         'new file mode 100644\n',
@@ -275,39 +320,7 @@ describe('hydratePartialFileDiff', () => {
       contents: 'alpha\nbeta\ngamma\ndelta\n',
       cacheKey: 'new-full',
     };
-    const newFileLines = splitFileContents(newFile.contents);
-
-    expectPartialLineState(partial, {
-      additionLineCount: 2,
-      deletionLineCount: 0,
-      fullAdditionLineCount: newFileLines.length,
-    });
-    expectFirstPartialHunkIndexes(partial);
-
-    const hydrated = hydratePartialFileDiff(partial, {
-      oldFile: null,
-      newFile,
-    });
-
-    expect(hydrated.type).toBe('new');
-    expect(hydrated.isPartial).toBe(false);
-    expect(hydrated.additionLines).toEqual(newFileLines);
-    expect(hydrated.deletionLines).toEqual([]);
-    expect(hydrated.cacheKey).toBe('new-full');
-    expect(verifyHunkLineValues(hydrated)).toEqual([]);
-    expect(() =>
-      hydratePartialFileDiff(partial, {
-        oldFile: { name: 'new-file.txt', contents: '' },
-        newFile: null,
-      })
-    ).toThrow('requires newFile');
-    expect(() =>
-      hydratePartialFileDiff(partial, { oldFile: null, newFile: null })
-    ).toThrow('requires newFile');
-  });
-
-  test('hydrates deleted diffs with a nullable new file', () => {
-    const partial = parseSingleFile(
+    const deletedPartial = parseSingleFile(
       [
         'diff --git a/deleted-file.txt b/deleted-file.txt\n',
         'deleted file mode 100644\n',
@@ -324,35 +337,15 @@ describe('hydratePartialFileDiff', () => {
       contents: 'alpha\nbeta\ngamma\ndelta\n',
       cacheKey: 'old-full',
     };
-    const oldFileLines = splitFileContents(oldFile.contents);
 
-    expectPartialLineState(partial, {
-      additionLineCount: 0,
-      deletionLineCount: 2,
-      fullDeletionLineCount: oldFileLines.length,
-    });
-    expectFirstPartialHunkIndexes(partial);
-
-    const hydrated = hydratePartialFileDiff(partial, {
-      oldFile,
-      newFile: null,
-    });
-
-    expect(hydrated.type).toBe('deleted');
-    expect(hydrated.isPartial).toBe(false);
-    expect(hydrated.additionLines).toEqual([]);
-    expect(hydrated.deletionLines).toEqual(oldFileLines);
-    expect(hydrated.cacheKey).toBe('old-full');
-    expect(verifyHunkLineValues(hydrated)).toEqual([]);
     expect(() =>
-      hydratePartialFileDiff(partial, {
-        oldFile: null,
-        newFile: { name: 'deleted-file.txt', contents: '' },
-      })
-    ).toThrow('requires oldFile');
+      hydratePartialDiff('merge', addedPartial, { oldFile: null, newFile })
+    ).toThrow('new diffs cannot be hydrated from loaded files');
     expect(() =>
-      hydratePartialFileDiff(partial, { oldFile: null, newFile: null })
-    ).toThrow('requires oldFile');
+      hydratePartialDiff('merge', deletedPartial, { oldFile, newFile: null })
+    ).toThrow('deleted diffs cannot be hydrated from loaded files');
+    expect(addedPartial.isPartial).toBe(true);
+    expect(deletedPartial.isPartial).toBe(true);
   });
 
   test('hydrates pure renames as data-only line arrays', () => {
@@ -379,12 +372,22 @@ describe('hydratePartialFileDiff', () => {
       fullDeletionLineCount: newFileLines.length,
     });
     expect(partial.hunks).toEqual([]);
+    expect(() =>
+      hydratePartialDiff('merge', partial, {
+        oldFile: { name: 'old-name.txt', contents: newFile.contents },
+        newFile: null,
+      })
+    ).toThrow('requires newFile');
+    expect(() =>
+      hydratePartialDiff('merge', partial, { oldFile: null, newFile: null })
+    ).toThrow('requires newFile');
 
-    const hydrated = hydratePartialFileDiff(partial, {
+    const hydrated = hydratePartialDiff('merge', partial, {
       oldFile: null,
       newFile,
     });
 
+    expect(hydrated).toBe(partial);
     expect(hydrated.type).toBe('rename-pure');
     expect(hydrated.name).toBe('new-name.txt');
     expect(hydrated.prevName).toBe('old-name.txt');
@@ -395,14 +398,5 @@ describe('hydratePartialFileDiff', () => {
     expect(hydrated.additionLines).toEqual(newFileLines);
     expect(hydrated.deletionLines).toEqual(newFileLines);
     expect(hydrated.cacheKey).toBe('new-full');
-    expect(() =>
-      hydratePartialFileDiff(partial, {
-        oldFile: { name: 'old-name.txt', contents: newFile.contents },
-        newFile: null,
-      })
-    ).toThrow('requires newFile');
-    expect(() =>
-      hydratePartialFileDiff(partial, { oldFile: null, newFile: null })
-    ).toThrow('requires newFile');
   });
 });

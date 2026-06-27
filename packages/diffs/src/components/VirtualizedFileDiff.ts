@@ -21,6 +21,7 @@ import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
+import { awaitWithTimeout } from '../utils/awaitWithTimeout';
 import { computeEstimatedDiffHeights } from '../utils/computeEstimatedDiffHeights';
 import {
   computeVirtualFileMetrics,
@@ -28,6 +29,7 @@ import {
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
+import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import {
   FILE_ANNOTATION_DOM_KEY,
   FILE_ANNOTATION_LINE_NUMBER,
@@ -88,10 +90,10 @@ interface ResetLayoutCacheOptions {
   includeEstimatedHeights?: boolean;
 }
 
-interface PendingHydration {
-  sourceFileDiff: FileDiffMetadata;
-  hydratedFileDiff: FileDiffMetadata;
-  loadedContents: LoadedPartialDiffContents;
+interface PendingLoadedDiff {
+  expectedDiff: FileDiffMetadata;
+  nextDiff: FileDiffMetadata;
+  files: LoadedPartialDiffContents;
 }
 
 interface PendingExpansion {
@@ -127,7 +129,7 @@ export class VirtualizedFileDiff<
   private layoutDirty = true;
   private forceRenderOverride: true | undefined;
   private currentCollapsed: boolean | undefined;
-  private pendingHydration: PendingHydration | undefined;
+  private pendingHydratedDiff: PendingLoadedDiff | undefined;
   private pendingExpansions: PendingExpansion[] | undefined;
 
   constructor(
@@ -748,7 +750,7 @@ export class VirtualizedFileDiff<
     if (!recycle) {
       this.resetLayoutCache({ includeEstimatedHeights: true });
       this.pendingExpansions = undefined;
-      this.pendingHydration = undefined;
+      this.pendingHydratedDiff = undefined;
     }
     this.isSetup = false;
     super.cleanUp(recycle);
@@ -778,27 +780,40 @@ export class VirtualizedFileDiff<
       this.resetLayoutCache({ includeEstimatedHeights: true });
       this.computeApproximateSize();
     }
-    this.startDiffHydrationIfNeeded();
+    this.initializeFilesLoadIfNecessary();
     this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(this, true);
   };
 
-  protected override applyHydratedPartialDiff(
-    hydratedFileDiff: FileDiffMetadata,
-    loadedContents: LoadedPartialDiffContents
-  ): void {
-    const { fileDiff: sourceFileDiff } = this;
-    if (sourceFileDiff == null) {
+  protected override async handleFilesLoaded(
+    expectedDiff: FileDiffMetadata,
+    files: LoadedPartialDiffContents
+  ): Promise<void> {
+    if (this.fileDiff !== expectedDiff || !expectedDiff.isPartial) {
       return;
     }
+    // CodeView component requires careful control for anchor
+    // fixing on re-renders, and thus we cannot apply the
+    // next diff immediately. Instead we clone and stage it for
+    // CodeView layout to consume at render time.
     if (this.isAdvancedMode()) {
-      this.pendingHydration = {
-        sourceFileDiff,
-        hydratedFileDiff,
-        loadedContents,
+      const nextDiff = hydratePartialDiff('clone', expectedDiff, files);
+      await awaitWithTimeout(() => this.primeHighlightCache(nextDiff));
+      if (!this.enabled || this.fileDiff !== expectedDiff) {
+        return;
+      }
+      this.pendingHydratedDiff = {
+        expectedDiff,
+        nextDiff,
+        files,
       };
     } else {
-      this.commitHydratedPartialDiff(hydratedFileDiff, loadedContents);
+      hydratePartialDiff('merge', expectedDiff, files);
+      this.setHydratedState(files);
+      await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
+      if (!this.enabled || this.fileDiff !== expectedDiff) {
+        return;
+      }
       this.resetLayoutCache({ includeEstimatedHeights: true });
       this.computeApproximateSize();
     }
@@ -806,12 +821,12 @@ export class VirtualizedFileDiff<
     this.virtualizer.instanceChanged(this, true);
   }
 
-  public consumePendingCodeViewLayoutChanges(
+  public consumeCodeViewLayoutChanges(
     expectedFileDiff: FileDiffMetadata
-  ): void {
+  ): FileDiffMetadata | undefined {
     let hasLayoutChange = false;
-    let didHydrate = false;
-    const { pendingExpansions, pendingHydration } = this;
+    let nextDiff: FileDiffMetadata | undefined;
+    const { pendingExpansions, pendingHydratedDiff } = this;
 
     if (pendingExpansions != null) {
       this.pendingExpansions = undefined;
@@ -825,36 +840,34 @@ export class VirtualizedFileDiff<
       }
     }
 
-    if (pendingHydration != null) {
-      this.pendingHydration = undefined;
-      if (pendingHydration.sourceFileDiff === expectedFileDiff) {
-        this.commitHydratedPartialDiff(
-          pendingHydration.hydratedFileDiff,
-          pendingHydration.loadedContents
-        );
-        didHydrate = true;
+    if (pendingHydratedDiff != null) {
+      this.pendingHydratedDiff = undefined;
+      if (pendingHydratedDiff.expectedDiff === expectedFileDiff) {
+        this.setHydratedState(pendingHydratedDiff.files);
+        nextDiff = pendingHydratedDiff.nextDiff;
       }
     }
 
-    if (hasLayoutChange || didHydrate) {
+    if (nextDiff != null) {
       this.forceRenderOverride = true;
-      if (didHydrate) {
-        this.resetLayoutCache({ includeEstimatedHeights: true });
-      } else {
-        this.invalidateDerivedLayoutCache(true);
-      }
+      this.resetLayoutCache({ includeEstimatedHeights: true });
+    } else if (hasLayoutChange) {
+      this.forceRenderOverride = true;
+      this.invalidateDerivedLayoutCache(true);
     }
+
+    return nextDiff;
   }
 
-  protected override startDiffHydrationIfNeeded(): void {
-    if (this.pendingHydration != null) {
-      if (this.pendingHydration.sourceFileDiff === this.fileDiff) {
+  protected override initializeFilesLoadIfNecessary(): void {
+    if (this.pendingHydratedDiff != null) {
+      if (this.pendingHydratedDiff.expectedDiff === this.fileDiff) {
         return;
       }
-      this.pendingHydration = undefined;
+      this.pendingHydratedDiff = undefined;
     }
 
-    super.startDiffHydrationIfNeeded();
+    super.initializeFilesLoadIfNecessary();
   }
 
   public setVisibility(visible: boolean): void {
@@ -1000,8 +1013,10 @@ export class VirtualizedFileDiff<
       expandUnchanged,
       expandedHunks: this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
-      canHydratePartialDiff:
-        this.fileDiff.isPartial && this.options.loadDiffFiles != null,
+      canHydratePartialDiff: canHydrateCollapsedContext(
+        this.fileDiff,
+        this.options.loadDiffFiles != null
+      ),
     });
     this.cache.estimatedSplitHeight = splitHeight;
     this.cache.estimatedUnifiedHeight = unifiedHeight;
@@ -1185,8 +1200,10 @@ export class VirtualizedFileDiff<
       collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
     } = this.options;
     const finalHunkIndex = this.fileDiff.hunks.length - 1;
-    const canHydratePartialDiff =
-      this.fileDiff.isPartial && this.options.loadDiffFiles != null;
+    const canHydratePartialDiff = canHydrateCollapsedContext(
+      this.fileDiff,
+      this.options.loadDiffFiles != null
+    );
     const diffStyle = this.getDiffStyle();
     const hunkSeparators = this.getHunkSeparatorType();
     const expandedHunks = expandUnchanged
@@ -1500,8 +1517,10 @@ export class VirtualizedFileDiff<
     const { hunkLineCount, lineHeight } = this.metrics;
     const diffStyle = this.getDiffStyle();
     const hunkSeparators = this.getHunkSeparatorType();
-    const canHydratePartialDiff =
-      fileDiff.isPartial && this.options.loadDiffFiles != null;
+    const canHydratePartialDiff = canHydrateCollapsedContext(
+      fileDiff,
+      this.options.loadDiffFiles != null
+    );
     const fileHeight = this.height;
     let lineCount =
       this.cache.totalLines > 0
@@ -1931,6 +1950,17 @@ function hasDiffEstimateOptionChanged<LAnnotation>(
       DEFAULT_COLLAPSED_CONTEXT_THRESHOLD) !==
       (nextOptions.collapsedContextThreshold ??
         DEFAULT_COLLAPSED_CONTEXT_THRESHOLD)
+  );
+}
+
+function canHydrateCollapsedContext(
+  fileDiff: FileDiffMetadata,
+  hasFileLoader: boolean
+): boolean {
+  return (
+    fileDiff.isPartial &&
+    hasFileLoader &&
+    (fileDiff.type === 'change' || fileDiff.type === 'rename-changed')
   );
 }
 

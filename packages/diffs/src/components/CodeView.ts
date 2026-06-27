@@ -958,7 +958,7 @@ export class CodeView<LAnnotation = undefined> {
     const item = this.idToItem.get(target.id);
     if (item == null) return;
 
-    item.instance.primeHighlightCache();
+    void item.instance.primeHighlightCache();
   }
 
   private getElementPoolLimit() {
@@ -3297,7 +3297,12 @@ export class CodeView<LAnnotation = undefined> {
       }
       item.top = runningTop;
       if (item.type === 'diff') {
-        item.instance.consumePendingCodeViewLayoutChanges(item.item.fileDiff);
+        const fileDiff = item.instance.consumeCodeViewLayoutChanges(
+          item.item.fileDiff
+        );
+        if (fileDiff != null) {
+          item.item.fileDiff = fileDiff;
+        }
         item.height = item.instance.prepareCodeViewItem(
           item.item.fileDiff,
           runningTop,

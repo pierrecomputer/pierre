@@ -60,6 +60,7 @@ import { areHunkDataEqual } from '../utils/areHunkDataEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
+import { awaitWithTimeout } from '../utils/awaitWithTimeout';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
@@ -73,7 +74,7 @@ import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOption
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
-import { hydratePartialFileDiff } from '../utils/hydratePartialFileDiff';
+import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
@@ -87,7 +88,14 @@ type LoadedPartialDiffContents = Awaited<
   ReturnType<NonNullable<BaseDiffOptions['loadDiffFiles']>>
 >;
 
-const HYDRATED_DIFF_HIGHLIGHT_PRIMING_TIMEOUT_MS = 300;
+function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
+  return (
+    fileDiff.isPartial &&
+    (fileDiff.type === 'change' ||
+      fileDiff.type === 'rename-changed' ||
+      fileDiff.type === 'rename-pure')
+  );
+}
 
 export interface FileDiffRenderBaseProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
@@ -185,7 +193,7 @@ interface ApplyPartialRenderProps {
   renderRange: RenderRange | undefined;
 }
 
-interface PendingDiffHydration {
+interface PendingFileLoad {
   fileDiff: FileDiffMetadata;
   promise: Promise<void>;
 }
@@ -245,7 +253,7 @@ export class FileDiff<
   protected additionFile?: FileContents | null;
   public fileDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
-  protected pendingDiffHydration: PendingDiffHydration | undefined;
+  protected pendingFiles: PendingFileLoad | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
   protected lastRenderedHeaderHTML: string | undefined;
   protected cachedHeaderHTML: string | undefined;
@@ -517,7 +525,7 @@ export class FileDiff<
     this.managersDirty = false;
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.renderRange = undefined;
-    this.pendingDiffHydration = undefined;
+    this.pendingFiles = undefined;
 
     // Clean up the elements
     if (!this.isContainerManaged) {
@@ -776,115 +784,77 @@ export class FileDiff<
       direction,
       expansionLineCountOverride
     );
-    this.startDiffHydrationIfNeeded();
+    this.initializeFilesLoadIfNecessary();
     this.rerender();
   };
 
-  protected startDiffHydrationIfNeeded(): void {
-    const { fileDiff } = this;
-    const { loadDiffFiles } = this.options;
-    if (fileDiff == null || !fileDiff.isPartial || loadDiffFiles == null) {
-      return;
-    }
-    if (this.pendingDiffHydration?.fileDiff === fileDiff) {
+  protected initializeFilesLoadIfNecessary(): void {
+    const {
+      fileDiff,
+      options: { loadDiffFiles },
+    } = this;
+    if (
+      fileDiff == null ||
+      loadDiffFiles == null ||
+      !canHydrateDiff(fileDiff) ||
+      this.pendingFiles?.fileDiff === fileDiff
+    ) {
       return;
     }
 
-    const promise = this.loadAndHydrateDiff(fileDiff, loadDiffFiles);
-    this.pendingDiffHydration = { fileDiff, promise };
+    this.pendingFiles = {
+      fileDiff,
+      promise: this.loadFilesForDiff(fileDiff, loadDiffFiles),
+    };
   }
 
-  private async loadAndHydrateDiff(
+  private async loadFilesForDiff(
     fileDiff: FileDiffMetadata,
     loadDiffFiles: NonNullable<BaseDiffOptions['loadDiffFiles']>
   ): Promise<void> {
     try {
-      const loadedContents = await loadDiffFiles(fileDiff);
+      const files = await loadDiffFiles(fileDiff);
       if (!this.enabled || this.fileDiff !== fileDiff) {
         return;
       }
 
-      const hydratedFileDiff = hydratePartialFileDiff(fileDiff, loadedContents);
-      if (!this.enabled || this.fileDiff !== fileDiff) {
-        return;
-      }
-
-      // NOTE(amadeus): If we are using a WorkerPool, lets go ahead and kick
-      // off the highlight task right away so we avoid a plain-text render
-      const { workerManager } = this;
-      const tokenizeMaxLength =
-        this.options.tokenizeMaxLength ?? DEFAULT_TOKENIZE_MAX_LENGTH;
-      const shouldPrimeHighlightCache =
-        workerManager?.isWorkingPool() === true &&
-        hydratedFileDiff.cacheKey != null &&
-        !isDiffPlainText(hydratedFileDiff) &&
-        Math.max(
-          hydratedFileDiff.additionLines.length,
-          hydratedFileDiff.deletionLines.length
-        ) <= tokenizeMaxLength;
-
-      if (shouldPrimeHighlightCache) {
-        let timeoutId: ReturnType<typeof setTimeout> | undefined;
-        try {
-          await Promise.race([
-            workerManager
-              .primeDiffHighlightCache(hydratedFileDiff)
-              .catch((error: unknown) => {
-                console.error(error);
-              }),
-            new Promise<void>((resolve) => {
-              timeoutId = setTimeout(
-                resolve,
-                HYDRATED_DIFF_HIGHLIGHT_PRIMING_TIMEOUT_MS
-              );
-            }),
-          ]);
-        } finally {
-          if (timeoutId != null) {
-            clearTimeout(timeoutId);
-          }
-        }
-        if (!this.enabled || this.fileDiff !== fileDiff) {
-          return;
-        }
-      }
-
-      this.applyHydratedPartialDiff(hydratedFileDiff, loadedContents);
+      await this.handleFilesLoaded(fileDiff, files);
     } catch (error: unknown) {
       if (this.options.disableErrorHandling === true) {
         throw error;
       }
       console.error(error);
     } finally {
-      if (this.pendingDiffHydration?.fileDiff === fileDiff) {
-        this.pendingDiffHydration = undefined;
+      if (this.pendingFiles?.fileDiff === fileDiff) {
+        this.pendingFiles = undefined;
       }
     }
   }
 
-  protected applyHydratedPartialDiff(
-    hydratedFileDiff: FileDiffMetadata,
-    loadedContents: LoadedPartialDiffContents
-  ): void {
-    this.commitHydratedPartialDiff(hydratedFileDiff, loadedContents);
+  protected async handleFilesLoaded(
+    expectedDiff: FileDiffMetadata,
+    files: LoadedPartialDiffContents
+  ): Promise<void> {
+    if (this.fileDiff !== expectedDiff) {
+      return;
+    }
+    if (expectedDiff.isPartial) {
+      hydratePartialDiff('merge', expectedDiff, files);
+    }
+    this.setHydratedState(files);
+    await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
+    if (!this.enabled || this.fileDiff !== expectedDiff) {
+      return;
+    }
     this.rerender();
   }
 
-  protected commitHydratedPartialDiff(
-    hydratedFileDiff: FileDiffMetadata,
-    loadedContents: LoadedPartialDiffContents
-  ): FileDiffMetadata {
-    const currentFileDiff = this.fileDiff;
-    if (currentFileDiff == null || !currentFileDiff.isPartial) {
-      this.fileDiff = hydratedFileDiff;
-    } else {
-      copyFileDiffMetadata(currentFileDiff, hydratedFileDiff);
-    }
-    this.deletionFile = loadedContents.oldFile;
-    this.additionFile = loadedContents.newFile;
+  protected setHydratedState(files: LoadedPartialDiffContents): void {
+    this.deletionFile = files.oldFile;
+    this.additionFile = files.newFile;
     this.cachedHeaderHTML = undefined;
+    this.workerManager?.cleanUpTasks(this.hunksRenderer);
     this.hunksRenderer.clearRenderCache();
-    return this.fileDiff ?? hydratedFileDiff;
   }
 
   public render({
@@ -981,7 +951,7 @@ export class FileDiff<
       return false;
     }
     if (expandUnchanged) {
-      this.startDiffHydrationIfNeeded();
+      this.initializeFilesLoadIfNecessary();
     }
     this.hunksRenderer.setOptions(this.getHunksRendererOptions(this.options));
     this.syncInteractionOptions();
@@ -1311,11 +1281,15 @@ export class FileDiff<
     return true;
   }
 
-  public primeHighlightCache(): void {
-    const { fileDiff, workerManager } = this;
+  public async primeHighlightCache(
+    fileDiff: FileDiffMetadata | undefined = this.fileDiff
+  ): Promise<void> {
+    const { workerManager } = this;
     if (
       fileDiff == null ||
       workerManager == null ||
+      !workerManager.isWorkingPool() ||
+      fileDiff.cacheKey == null ||
       isDiffPlainText(fileDiff)
     ) {
       return;
@@ -1328,7 +1302,12 @@ export class FileDiff<
     ) {
       return;
     }
-    void workerManager.primeDiffHighlightCache(fileDiff).catch(() => undefined);
+
+    await workerManager
+      .primeDiffHighlightCache(fileDiff)
+      .catch((error: unknown) => {
+        console.error(error);
+      });
   }
 
   private cleanChildNodes() {
@@ -2722,49 +2701,6 @@ interface HasContentProps {
   fileDiff: FileDiffMetadata | undefined;
   oldFile: FileContents | null | undefined;
   newFile: FileContents | null | undefined;
-}
-
-type OptionalFileDiffMetadataKey =
-  | 'prevName'
-  | 'lang'
-  | 'newObjectId'
-  | 'prevObjectId'
-  | 'mode'
-  | 'prevMode'
-  | 'cacheKey';
-
-// Hydration upgrades the caller-owned metadata object so React and imperative
-// renderers can share one mutable render model.
-function copyFileDiffMetadata(
-  target: FileDiffMetadata,
-  source: FileDiffMetadata
-): void {
-  target.name = source.name;
-  copyOptionalFileDiffMetadataProperty(target, source, 'prevName');
-  copyOptionalFileDiffMetadataProperty(target, source, 'lang');
-  copyOptionalFileDiffMetadataProperty(target, source, 'newObjectId');
-  copyOptionalFileDiffMetadataProperty(target, source, 'prevObjectId');
-  copyOptionalFileDiffMetadataProperty(target, source, 'mode');
-  copyOptionalFileDiffMetadataProperty(target, source, 'prevMode');
-  target.type = source.type;
-  target.hunks = source.hunks;
-  target.splitLineCount = source.splitLineCount;
-  target.unifiedLineCount = source.unifiedLineCount;
-  target.isPartial = source.isPartial;
-  target.deletionLines = source.deletionLines;
-  target.additionLines = source.additionLines;
-  copyOptionalFileDiffMetadataProperty(target, source, 'cacheKey');
-}
-
-function copyOptionalFileDiffMetadataProperty<
-  K extends OptionalFileDiffMetadataKey,
->(target: FileDiffMetadata, source: FileDiffMetadata, property: K): void {
-  const value = source[property];
-  if (value === undefined) {
-    delete target[property];
-    return;
-  }
-  target[property] = value;
 }
 
 function areOptionalFilesEqual(

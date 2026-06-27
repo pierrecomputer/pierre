@@ -56,6 +56,28 @@ function createVirtualizer(visible = true): {
   return { virtualizer, instanceChangedCalls };
 }
 
+function createAdvancedVirtualizer(): {
+  virtualizer: Virtualizer;
+  instanceChangedCalls: { layoutDirty: boolean }[];
+} {
+  const instanceChangedCalls: { layoutDirty: boolean }[] = [];
+  const virtualizer = {
+    config: { resizeDebugging: false },
+    type: 'advanced',
+    getLocalTopForInstance() {
+      return 0;
+    },
+    getWindowSpecs() {
+      return { top: 0, bottom: 1000 };
+    },
+    instanceChanged(_instance: unknown, layoutDirty: boolean) {
+      instanceChangedCalls.push({ layoutDirty });
+    },
+  } as unknown as Virtualizer;
+
+  return { virtualizer, instanceChangedCalls };
+}
+
 function parseSinglePartialFile(patch: string): FileDiffMetadata {
   const file = parsePatchFiles(patch, 'partial', true)[0]?.files[0];
   assertDefined(file, 'expected patch to contain one file');
@@ -342,6 +364,82 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(typeof height).toBe('number');
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(true);
+    } finally {
+      instance?.cleanUp();
+    }
+  });
+
+  test('applies pending CodeView expansions when the prepared diff changes', () => {
+    let instance: TestVirtualizedFileDiff | undefined;
+    try {
+      const firstChange = createPartialChange('first.txt');
+      const secondChange = createPartialChange('second.txt');
+      const virtualizerState = createAdvancedVirtualizer();
+      instance = new TestVirtualizedFileDiff(
+        { disableFileHeader: true },
+        virtualizerState.virtualizer
+      );
+
+      instance.prepareCodeViewItem(firstChange.partial, 0);
+      instance.expandHunk(0, 'down', 1);
+      instance.prepareCodeViewItem(secondChange.partial, 0);
+      instance.consumeCodeViewLayoutChanges(secondChange.partial);
+
+      expect(instance.getExpandedHunkForTest(0)).toEqual({
+        fromStart: 0,
+        fromEnd: 1,
+      });
+      expect(virtualizerState.instanceChangedCalls).toEqual([
+        { layoutDirty: true },
+      ]);
+    } finally {
+      instance?.cleanUp();
+    }
+  });
+
+  test('stages a hydrated clone for CodeView until layout changes are consumed', async () => {
+    let instance: TestVirtualizedFileDiff | undefined;
+    try {
+      const { oldFile, newFile, partial } = createPartialChange('partial.ts');
+      const loadedContents = { oldFile, newFile };
+      const deferred = createDeferred<typeof loadedContents>();
+      const virtualizerState = createAdvancedVirtualizer();
+      instance = new TestVirtualizedFileDiff(
+        {
+          disableFileHeader: true,
+          loadDiffFiles: () => deferred.promise,
+        },
+        virtualizerState.virtualizer
+      );
+
+      instance.prepareCodeViewItem(partial, 0);
+      instance.expandHunk(0, 'down', 1);
+      deferred.resolve(loadedContents);
+      await wait(10);
+
+      expect(partial.isPartial).toBe(true);
+      expect(instance.fileDiff).toBe(partial);
+      expect(instance.fileDiff?.additionLines).toEqual(['new value\n']);
+      expect(virtualizerState.instanceChangedCalls).toEqual([
+        { layoutDirty: true },
+        { layoutDirty: true },
+      ]);
+
+      const nextDiff = instance.consumeCodeViewLayoutChanges(partial);
+
+      assertDefined(nextDiff, 'expected next diff');
+      expect(nextDiff).not.toBe(partial);
+      expect(nextDiff.isPartial).toBe(false);
+      expect(nextDiff.additionLines).toEqual([
+        'keep 1\n',
+        'new value\n',
+        'keep 3\n',
+        'keep 4\n',
+      ]);
+      expect(instance.fileDiff).toBe(partial);
+      instance.prepareCodeViewItem(nextDiff, 0);
+      expect(instance.fileDiff).toBe(nextDiff);
+      expect(partial.isPartial).toBe(true);
     } finally {
       instance?.cleanUp();
     }
