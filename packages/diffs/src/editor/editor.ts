@@ -169,7 +169,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #contentWidthCache?: number;
   #lineYCache = new Map<number, number>();
   #wrapLineOffsetsCache = new Map<number, Uint32Array>();
-  #lastAccessedLineElement?: [number, HTMLElement];
+  #lineElementsCache = new Map<number, HTMLElement>();
   #lastAccessedCharX?: [
     line: number,
     character: number,
@@ -502,7 +502,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#contentWidthCache = undefined;
     this.#lineYCache.clear();
     this.#wrapLineOffsetsCache.clear();
-    this.#lastAccessedLineElement = undefined;
+    this.#lineElementsCache.clear();
     this.#lastAccessedCharX = undefined;
 
     // clean up dom elements
@@ -773,7 +773,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #resetCache(): void {
     this.#lineYCache.clear();
     this.#wrapLineOffsetsCache.clear();
-    this.#lastAccessedLineElement = undefined;
+    this.#lineElementsCache.clear();
     this.#lastAccessedCharX = undefined;
   }
 
@@ -1717,7 +1717,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    this.#lastAccessedLineElement = undefined;
+    this.#lineElementsCache.clear();
     this.#lastAccessedCharX = undefined;
     // A width change means the inherited font/metrics may have changed (e.g. a
     // web font finished loading) while this same content element survived, so
@@ -2586,10 +2586,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     const { start, end } = range;
     for (let line = start.line; line <= end.line; line++) {
-      if (
-        !this.#isLineVisible(line) ||
-        this.#getLineElement(line) === undefined
-      ) {
+      if (!this.#isLineVisible(line)) {
         continue;
       }
 
@@ -2924,10 +2921,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     isPrimary: boolean
   ) {
     const { line, character } = getCaretPosition(selection);
-    if (
-      !this.#isLineVisible(line) ||
-      this.#getLineElement(line) === undefined
-    ) {
+    if (!this.#isLineVisible(line)) {
       return;
     }
     const [left, wrapLine] = this.#getCharX(line, character);
@@ -2981,10 +2975,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const head = getCaretPosition(primarySelection);
-    if (
-      !this.#isLineVisible(head.line) ||
-      this.#getLineElement(head.line) === undefined
-    ) {
+    if (!this.#isLineVisible(head.line)) {
       this.#selectionAction?.cleanup();
       this.#selectionAction = undefined;
       return;
@@ -3590,17 +3581,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #getLineElement(line: number): HTMLElement | undefined {
-    const lastAccessed = this.#lastAccessedLineElement;
-    if (lastAccessed !== undefined && lastAccessed[0] === line) {
-      return lastAccessed[1];
+    let lineElement = this.#lineElementsCache.get(line);
+    if (lineElement !== undefined) {
+      return lineElement;
     }
 
     const contentElement = this.#contentElement;
     if (contentElement === undefined) {
       return undefined;
     }
-
-    let lineElement: HTMLElement | null = null;
 
     // check if the line is within the render range (fast)
     if (this.#renderRange !== undefined) {
@@ -3626,23 +3615,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     // fallback to query selector
-    lineElement ??= contentElement.querySelector<HTMLElement>(
-      `[data-line="${line + 1}"]` +
-        (this.#diffSyle === 'unified'
-          ? ':not([data-line-type="change-deletion"])'
-          : '')
-    );
+    lineElement ??=
+      contentElement.querySelector<HTMLElement>(
+        `[data-line="${line + 1}"]` +
+          (this.#diffSyle === 'unified'
+            ? ':not([data-line-type="change-deletion"])'
+            : '')
+      ) ?? undefined;
 
-    if (lineElement !== null) {
-      if (lastAccessed !== undefined) {
-        lastAccessed[0] = line;
-        lastAccessed[1] = lineElement;
-      } else {
-        this.#lastAccessedLineElement = [line, lineElement];
-      }
-      return lineElement;
+    if (lineElement !== undefined) {
+      this.#lineElementsCache.set(line, lineElement);
     }
-    return undefined;
+    return lineElement;
   }
 
   #getGutterWidth(): number {
@@ -3901,6 +3885,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     if (this.#renderRange === undefined) {
       return true;
+    }
+    if (this.#isDiff) {
+      return this.#getLineElement(line) !== undefined;
     }
     const { startingLine, totalLines } = this.#renderRange;
     if (line < startingLine) {
