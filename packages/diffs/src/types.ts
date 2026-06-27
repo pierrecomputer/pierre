@@ -935,7 +935,7 @@ export interface DiffsEditableComponent<
 > extends DiffsBaseComponent {
   /**
    * Return the position and height of a one-based line relative to this component.
-   * The editor uses it to scroll to virtualized lines before their DOM nodes exist.
+   * The host uses it to scroll to virtualized lines before their DOM nodes exist.
    * A zero height means the line is not currently renderable.
    * In a file diff, `lineNumber` is the line number in the new file.
    */
@@ -950,16 +950,22 @@ export interface DiffsEditableComponent<
   ) => void;
   updateRenderCache: (
     lines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light',
-    shouldRefreshView?: boolean,
-    // When the same edit pass also changes the document line count, the editor
-    // follows up with `applyDocumentChange`, which recomputes hunk metadata from
-    // the authoritative document text. Set this to skip the redundant hunk
-    // recompute here (token/line content updates still apply).
-    skipDiffRecompute?: boolean
+    themeType: 'dark' | 'light'
+  ) => readonly number[];
+  // Apply an in-place content edit (no line-count change): incrementally
+  // recompute hunk metadata for the changed lines and refresh the view.
+  // No-op for plain files. For a line-count change the host calls
+  // applyDocumentChange instead.
+  applyContentEdit: (changedAdditionLineIndexes: readonly number[]) => void;
+  // Recompute hunk metadata for changed addition lines WITHOUT refreshing the
+  // view. The host calls this for background/offscreen token updates — a
+  // content-only edit that landed outside the render window — where the visible
+  // rows are patched separately. No-op for plain files.
+  recomputeContentHunks: (
+    changedAdditionLineIndexes: readonly number[]
   ) => void;
-  // Re-render the component from the editor's document, discarding the cached
-  // (host-derived) rendered content. The editor calls this after a host-driven
+  // Re-render the component from the host's document, discarding the cached
+  // (host-derived) rendered content. The host calls this after a host-driven
   // full re-render rebuilt the rows from the host's stale file contents, so the
   // visible rows match the document - text, syntax colors, and line count - in
   // one pass. Optional: components without a document-backed re-render (the

@@ -49,13 +49,13 @@ export function recomputeDiffHunks(
 
 // Rebuilds hunk metadata when the editable side has been emptied of all text.
 //
-// The editor always keeps one (empty) line for an empty document, but an empty
+// The host always keeps one (empty) line for an empty document, but an empty
 // string splits into zero addition lines, so a normal recompute produces a diff
-// with no addition rows at all. Rendering that leaves the attached editor with
-// no line element to host its caret. To keep one editable row, diff the
+// with no addition rows at all. Rendering that leaves the attached host with
+// no line element for its caret. To keep one editable row, diff the
 // unchanged deletions against a single line (which yields a hunk that places
 // exactly one addition row), then store the addition as `['']` so it still
-// joins back to the editor's empty document.
+// joins back to the host's empty document.
 //
 // The sentinel only has to differ from the deletion side so a hunk is produced;
 // its text is discarded by the `['']` override below. When the old side is
