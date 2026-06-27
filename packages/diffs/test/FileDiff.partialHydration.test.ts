@@ -34,6 +34,13 @@ class TestFileDiff extends FileDiff<undefined> {
   ) {
     return this.handleFilesLoaded(expectedDiff, files);
   }
+
+  getLoadedFilesForTest() {
+    return {
+      oldFile: this.deletionFile,
+      newFile: this.additionFile,
+    };
+  }
 }
 
 function createDeferred<T>(): {
@@ -390,7 +397,7 @@ describe('FileDiff partial hydration', () => {
     expectOneSidedPartialDoesNotStartHydration(createPartialDeletedFile());
   });
 
-  test('handles loaded files by source identity even if the source is already full', async () => {
+  test('ignores loaded files if the source diff is already full', async () => {
     const { cleanup } = installDom();
     let instance: TestFileDiff | undefined;
     try {
@@ -447,7 +454,11 @@ describe('FileDiff partial hydration', () => {
 
       expect(instance.fileDiff).toBe(partial);
       expect(partial.isPartial).toBe(false);
-      expect(cleanedTasks).toHaveLength(1);
+      expect(cleanedTasks).toHaveLength(0);
+      expect(instance.getLoadedFilesForTest()).toEqual({
+        oldFile: undefined,
+        newFile: undefined,
+      });
     } finally {
       instance?.cleanUp();
       cleanup();

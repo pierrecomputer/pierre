@@ -835,12 +835,10 @@ export class FileDiff<
     expectedDiff: FileDiffMetadata,
     files: LoadedPartialDiffContents
   ): Promise<void> {
-    if (this.fileDiff !== expectedDiff) {
+    if (this.fileDiff !== expectedDiff || !expectedDiff.isPartial) {
       return;
     }
-    if (expectedDiff.isPartial) {
-      hydratePartialDiff('merge', expectedDiff, files);
-    }
+    hydratePartialDiff('merge', expectedDiff, files);
     this.setHydratedState(files);
     await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
     if (!this.enabled || this.fileDiff !== expectedDiff) {
@@ -852,7 +850,6 @@ export class FileDiff<
   protected setHydratedState(files: LoadedPartialDiffContents): void {
     this.deletionFile = files.oldFile;
     this.additionFile = files.newFile;
-    this.cachedHeaderHTML = undefined;
     this.workerManager?.cleanUpTasks(this.hunksRenderer);
     this.hunksRenderer.clearRenderCache();
   }
