@@ -169,7 +169,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #contentWidthCache?: number;
   #lineYCache = new Map<number, number>();
   #wrapLineOffsetsCache = new Map<number, Uint32Array>();
-  #lineElementsCache = new Map<number, HTMLElement>();
+  #lineElementsCache = new Map<number, HTMLElement | null>();
   #lastAccessedCharX?: [
     line: number,
     character: number,
@@ -2591,12 +2591,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
 
       const isLastLine = line === end.line;
-      const lineText = this.#textDocument.getLineText(line);
       const startChar = line === start.line ? start.character : 0;
-      const endChar = isLastLine ? end.character : lineText.length;
+      const endChar = isLastLine
+        ? end.character
+        : this.#textDocument.getLineLength(line);
 
       if (this.#isWrap) {
         const contentWidth = this.#getContentWidth();
+        const lineText = this.#textDocument.getLineText(line);
         const textWidth =
           2 * this.#metrics.ch + this.#metrics.measureTextWidth(lineText);
         if (textWidth > contentWidth) {
@@ -3583,7 +3585,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #getLineElement(line: number): HTMLElement | undefined {
     let lineElement = this.#lineElementsCache.get(line);
     if (lineElement !== undefined) {
-      return lineElement;
+      return lineElement ?? undefined;
     }
 
     const contentElement = this.#contentElement;
@@ -3615,18 +3617,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     // fallback to query selector
-    lineElement ??=
-      contentElement.querySelector<HTMLElement>(
-        `[data-line="${line + 1}"]` +
-          (this.#diffSyle === 'unified'
-            ? ':not([data-line-type="change-deletion"])'
-            : '')
-      ) ?? undefined;
+    lineElement ??= contentElement.querySelector<HTMLElement>(
+      `[data-line="${line + 1}"]` +
+        (this.#diffSyle === 'unified'
+          ? ':not([data-line-type="change-deletion"])'
+          : '')
+    );
 
     if (lineElement !== undefined) {
       this.#lineElementsCache.set(line, lineElement);
     }
-    return lineElement;
+    return lineElement ?? undefined;
   }
 
   #getGutterWidth(): number {
@@ -3883,19 +3884,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (line < 0 || line >= lineCount) {
       return false;
     }
-    if (this.#renderRange === undefined) {
-      return true;
-    }
-    if (this.#isDiff) {
-      return this.#getLineElement(line) !== undefined;
-    }
-    const { startingLine, totalLines } = this.#renderRange;
-    if (line < startingLine) {
-      return false;
-    }
-    if (totalLines === Infinity) {
-      return true;
-    }
-    return line < startingLine + totalLines;
+    return this.#getLineElement(line) !== undefined;
   }
 }
