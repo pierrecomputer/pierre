@@ -352,6 +352,7 @@ function ReviewDiff() {
           );
           // Return { oldFile, newFile }, or { oldFile: null, newFile }
           // for pure renames.
+          // Include cacheKey values that change with revision or content.
           return response.json();
         },
       }}
