@@ -131,16 +131,14 @@ export function mapCursorMove(
       shortcut === 'start' ||
       shortcut === 'end'
     ) {
+      const caret = getCaretPosition(selection);
+      line = caret.line;
+      character = caret.character;
       if (shortcut === 'textStart') {
         const indent = getLeadingSpaces(textDocument.getLineText(line));
         character = character === indent ? 0 : indent;
       } else {
         character = shortcut === 'start' ? 0 : textDocument.getLineLength(line);
-      }
-      if (selection.direction === DirectionBackward) {
-        line = selection.start.line;
-      } else {
-        line = selection.end.line;
       }
     } else if (shortcut === 'up') {
       line = Math.max(0, line - 1);

@@ -1312,6 +1312,24 @@ describe('mapSelectionMove', () => {
     ]);
   });
 
+  test('collapses backward multi-line selections on the focus line for line moves', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      '    first\nsecond line\n  third'
+    );
+    const selections = [createSelection(0, 6, 1, 3, DirectionBackward)];
+
+    expect(mapCursorMove(textDocument, selections, 'start')).toEqual([
+      createSelection(0, 0, 0, 0),
+    ]);
+    expect(mapCursorMove(textDocument, selections, 'end')).toEqual([
+      createSelection(0, 9, 0, 9),
+    ]);
+    expect(mapCursorMove(textDocument, selections, 'textStart')).toEqual([
+      createSelection(0, 4, 0, 4),
+    ]);
+  });
+
   test('moves left from a goal column past a shorter line end', () => {
     const textDocument = new TextDocument(
       'inmemory://1',
