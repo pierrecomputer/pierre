@@ -3,6 +3,8 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import {
   DiffHunksRenderer,
   disposeHighlighter,
+  joinLines,
+  linesToArray,
   parseDiffFromFile,
 } from '../src';
 import type { DiffsTextDocument, HighlightedToken } from '../src/types';
@@ -194,7 +196,7 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       if (diff == null) return;
 
       // One empty line, not zero — this is the regression guard.
-      expect(diff.additionLines).toEqual(['']);
+      expect(linesToArray(diff.additionLines)).toEqual(['']);
       // The old content is still the deletion side.
       expect(diff.deletionLines.length).toBeGreaterThan(0);
 
@@ -227,9 +229,9 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       const rendered = renderer.getRenderDiff();
       expect(rendered).toBeDefined();
       if (rendered == null) return;
-      expect(rendered.additionLines).toEqual(['']);
+      expect(linesToArray(rendered.additionLines)).toEqual(['']);
       // The blank old line is still recorded as the deletion side.
-      expect(rendered.deletionLines.join('')).toBe('\n');
+      expect(joinLines(rendered.deletionLines)).toBe('\n');
       // At least one hunk, so iterateOverDiff has a row to emit.
       expect(rendered.hunks.length).toBeGreaterThanOrEqual(1);
 

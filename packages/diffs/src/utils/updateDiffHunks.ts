@@ -7,7 +7,7 @@ import type {
   Hunk,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
-import { joinLineRange, joinLines, lineAt } from './diffLines';
+import { joinLineRange, joinLines, lineAt, plainLines } from './diffLines';
 import { parseDiffFromFile } from './parseDiffFromFile';
 import { hasTrailingContextMismatch } from './virtualDiffLayout';
 
@@ -66,7 +66,7 @@ export function recomputeEmptyDocumentDiff(
   diff: FileDiffMetadata,
   parseDiffOptions?: CreatePatchOptionsNonabortable
 ): FullDiffHunkUpdate {
-  const deletionContents = diff.deletionLines.join('');
+  const deletionContents = joinLines(diff.deletionLines);
   const additionSentinel = deletionContents === '\n' ? ' \n' : '\n';
   const recomputed = parseDiffFromFile(
     {
@@ -84,7 +84,7 @@ export function recomputeEmptyDocumentDiff(
     hunks: recomputed.hunks,
     splitLineCount: recomputed.splitLineCount,
     unifiedLineCount: recomputed.unifiedLineCount,
-    additionLines: [''],
+    additionLines: plainLines(['']),
     deletionLines: recomputed.deletionLines,
     type: recomputed.type,
   };
