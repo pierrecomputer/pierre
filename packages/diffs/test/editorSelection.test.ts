@@ -18,6 +18,7 @@ import {
   findNexMatch,
   getAutoSurroundReplacementTexts,
   getCaretPosition,
+  getDocumentBoundarySelection,
   getSelectionAnchor,
   getSelectionText,
   mapCursorMove,
@@ -1442,6 +1443,32 @@ describe('mapSelectionMove', () => {
     expect(mapCursorMove(textDocument, lineEnd, 'left')).toEqual([
       createSelection(0, 1, 0, 1),
     ]);
+  });
+});
+
+describe('getDocumentBoundarySelection', () => {
+  test('moves to the end of a one-line document when diff trimming is enabled', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello');
+
+    expect(getDocumentBoundarySelection(textDocument, true, true)).toEqual(
+      createSelection(0, 5, 0, 5, DirectionForward)
+    );
+  });
+
+  test('moves to the end of the last line without a final newline', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello\nworld');
+
+    expect(getDocumentBoundarySelection(textDocument, true, true)).toEqual(
+      createSelection(1, 5, 1, 5, DirectionForward)
+    );
+  });
+
+  test('skips only the extra trailing blank line when trimming diff endings', () => {
+    const textDocument = new TextDocument('inmemory://1', 'hello\nworld\n');
+
+    expect(getDocumentBoundarySelection(textDocument, true, true)).toEqual(
+      createSelection(1, 5, 1, 5, DirectionForward)
+    );
   });
 });
 
