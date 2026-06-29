@@ -2866,12 +2866,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       radius: 'rtl' | 'rbl' | 'rbr'
     ) => {
       const top = this.#getLineY(line) + wrapLine * lineHeight;
-      // The corner mask paints over the translucent selection to fake a rounded
-      // corner, so it must match the background behind the selection. That
-      // background is painted on the line's ::after layer (see editor.css), which
-      // is colored for additions/deletions/current line but transparent for
-      // context lines. Repaint the mask with the line's color when present;
-      // otherwise leave it unset so the CSS falls back to the editor base bg.
+      // Match the corner mask to the line color behind the selection; when
+      // absent (context lines) the CSS falls back to the editor base bg.
       const cornerBg = this.#lineBackgroundColor(line);
       const css =
         `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);` +
@@ -3672,12 +3668,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return undefined;
   }
 
-  // Resolve the painted background color of a line for the selection-corner
-  // masks. The diff line background is painted on a [data-line]::after layer
-  // (see editor.css), so read that pseudo-element's computed color rather than
-  // the line element itself (whose own background is transparent in edit mode).
-  // Returns undefined when the layer is transparent (e.g. context lines), so the
-  // corner keeps the editor base background.
+  // Painted background color of a line, read from the [data-line]::after layer
+  // (the line element itself is transparent in edit mode). Returns undefined when
+  // that layer is transparent (e.g. context lines).
   #lineBackgroundColor(line: number): string | undefined {
     const lineElement = this.#getLineElement(line);
     if (lineElement === undefined) {
