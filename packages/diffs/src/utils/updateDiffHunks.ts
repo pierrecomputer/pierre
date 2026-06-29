@@ -100,6 +100,25 @@ export function appendTrailingEmptyAdditionRow(
   const trailingIndex = diff.additionLines.length;
   diff.additionLines = [...diff.additionLines, ''];
 
+  // Only grow the last hunk when its content runs to the end of the file (a
+  // change on the last line, or an emptied document whose all-deletions hunk
+  // reports additionLineIndex -1 and is grown below to seed its first
+  // addition). When unchanged lines follow the last hunk, growing it would
+  // render the line right after the hunk as a `+`. Instead append a matching
+  // empty row to both sides so the trailing context region renders one more
+  // paired (unchanged) row at EOF — the addition side is the editor's caret
+  // row, and pairing keeps the additions/deletions trailing-context counts
+  // equal (an unpaired addition would trip the trailing-context-mismatch
+  // guard).
+  if (
+    hunk.additionLineIndex >= 0 &&
+    hunk.additionLineIndex + hunk.additionCount < trailingIndex
+  ) {
+    diff.deletionLines = [...diff.deletionLines, ''];
+    recomputeDiffRenderLineCounts(diff);
+    return trailingIndex;
+  }
+
   const lastContent = hunk.hunkContent.at(-1);
   if (lastContent != null && lastContent.type === 'change') {
     // Extend the final change block. When it had only deletions (an emptied

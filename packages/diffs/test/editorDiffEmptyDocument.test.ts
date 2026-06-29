@@ -441,3 +441,103 @@ describe('diff editor: cmd+backspace (deleteHardLineBackward) deletes to line st
     });
   }
 });
+
+// Lists the addition-side rows as [lineType, text] so a test can assert how
+// each document line is classified (e.g. that an unchanged line is not a `+`).
+function additionRowTypes(content: HTMLElement): Array<[string, string]> {
+  const rows: Array<[string, string]> = [];
+  for (const child of content.children) {
+    const el = child as HTMLElement;
+    if (
+      el.dataset.line === undefined ||
+      el.dataset.lineType === 'change-deletion'
+    ) {
+      continue;
+    }
+    rows.push([el.dataset.lineType ?? '', el.textContent ?? '']);
+  }
+  return rows;
+}
+
+// Editing one line of a document that ends in a newline must keep the editor's
+// trailing empty caret row. The content edit recomputes hunks from
+// additionLines.join(''), which drops the synthetic trailing row (the final
+// newline collapses again). A unified diff re-renders its rows from that
+// metadata on every edit, so without re-appending the row the editable final
+// line vanishes after editing any other line.
+describe('diff editor: editing a line keeps the trailing empty row', () => {
+  test('unified diff preserves the trailing caret row after a content edit', async () => {
+    const fixture = await createDiffEditorFixture(
+      'unified',
+      'a\nb\nX\n',
+      'a\nb\nc\n'
+    );
+    const { editor, container } = fixture;
+    try {
+      replaceAll(editor, '');
+      await wait(0);
+      editor.applyEdits([insertAt(0, 0, 'x')], true);
+      await wait(0);
+      editor.applyEdits([insertAt(0, 1, '\n')], true); // "x\n"
+      await wait(0);
+      // The additions side has the typed line plus the trailing empty row.
+      expect(countEditableLineEls(findAdditionContent(container)!)).toBe(2);
+
+      // Edit "x" -> "xy": the line count is unchanged and the document still
+      // ends in a newline, so this takes the content-edit path rather than
+      // applyDocumentChange. The trailing row must survive the recompute.
+      editor.applyEdits([insertAt(0, 1, 'y')], true);
+      await wait(0);
+      expect(editor.getState().file.contents).toBe('xy\n');
+      expect(countEditableLineEls(findAdditionContent(container)!)).toBe(2);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+});
+
+// When a document ends in a newline but its only diff hunk sits earlier in the
+// file (a change near the top with unchanged lines after it), the trailing
+// empty caret row must render at EOF. Growing the last hunk to host it would
+// instead mark the line right after the hunk as a `+`; the row belongs after
+// the unchanged tail.
+describe('diff editor: trailing empty row lands at EOF past an earlier hunk', () => {
+  for (const diffStyle of ['split', 'unified'] as const) {
+    test(`unchanged tail stays context, caret row at EOF (${diffStyle})`, async () => {
+      const fixture = await createDiffEditorFixture(
+        diffStyle,
+        'a\nb\nc\nd\ne\nf\ng\nh\n',
+        'A\nb\nc\nd\ne\nf\ng\nh\n'
+      );
+      const { editor, container } = fixture;
+      try {
+        // Insert a newline after "A": "A\n\nb\nc\nd\ne\nf\ng\nh\n" (10 lines,
+        // the last empty). The line-count change routes through
+        // applyDocumentChange, which appends the trailing empty row.
+        editor.applyEdits([insertAt(0, 1, '\n')], true);
+        await wait(0);
+        const expectTrailingRowAtEof = () => {
+          const content = findAdditionContent(container)!;
+          // 10 editable rows: A, "", b, c, d, e, f, g, h, and the trailing empty.
+          expect(countEditableLineEls(content)).toBe(10);
+          // Lines after the hunk are unchanged and must not render as additions.
+          for (const [lineType, text] of additionRowTypes(content)) {
+            if (['b', 'c', 'd', 'e', 'f', 'g', 'h'].includes(text)) {
+              expect(lineType).not.toBe('change-addition');
+            }
+          }
+        };
+        expectTrailingRowAtEof();
+
+        // Editing another line keeps the line count and the trailing newline, so
+        // this takes the content-edit path. The trailing row must be re-appended
+        // (the recompute drops it) and still land past the unchanged tail.
+        editor.applyEdits([insertAt(0, 1, 'Z')], true); // "AZ\n\nb..h\n"
+        await wait(0);
+        expectTrailingRowAtEof();
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+  }
+});

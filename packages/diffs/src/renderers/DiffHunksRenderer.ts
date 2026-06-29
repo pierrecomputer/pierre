@@ -426,6 +426,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     ) {
       return;
     }
+    // A document that ends in a newline carries a synthetic trailing empty
+    // addition row (see appendTrailingEmptyAdditionRow); splitFileContents never
+    // emits a trailing empty entry on its own, so one here is always that row.
+    // updateDiffHunks may rejoin additionLines and re-split, which drops it (the
+    // final newline collapses again). Re-append it so the editor keeps its caret
+    // row — otherwise editing any other line of such a document removes the
+    // editable final line on the next refresh.
+    const hadTrailingEmptyRow = diff.additionLines.at(-1) === '';
     Object.assign(
       diff,
       updateDiffHunks(
@@ -434,6 +442,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.options.parseDiffOptions
       )
     );
+    if (hadTrailingEmptyRow && diff.additionLines.at(-1) !== '') {
+      appendTrailingEmptyAdditionRow(diff, this.options.parseDiffOptions);
+    }
     this.renderCache.isDirty = true;
   }
 
