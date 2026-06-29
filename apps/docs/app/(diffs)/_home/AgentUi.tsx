@@ -18,7 +18,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   type CSSProperties,
-  startTransition,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -41,8 +40,6 @@ import {
   getSessionGitStatus,
   getSessionPaths,
 } from './mockData';
-import { ViewTransition } from './ViewTransition';
-
 // Runs as a layout effect in the browser (so DOM reads/writes land before the
 // next paint) but falls back to useEffect during SSR, where useLayoutEffect
 // would warn. The demo is server-rendered, so the fallback matters.
@@ -487,18 +484,81 @@ const AUI_WINDOWED_PATH = '/#edit';
 // /edit/live route that fills the viewport with the file tree on the left.
 export type AuiVariant = 'windowed' | 'fullscreen';
 
+// Run an App Router navigation inside a browser View Transition so the shared
+// `.aui` element (see `view-transition-name: aui-window` in the CSS) FLIP-morphs
+// between the windowed card and the fullscreen route.
+//
+// We can't lean on React's <ViewTransition> / Next's `experimental.viewTransition`
+// here: the pinned stable React (19.2) ships no ViewTransition runtime, so that
+// integration never reaches `document.startViewTransition`. Instead we call it
+// directly. App Router navigation is async, so the transition callback returns a
+// promise that resolves once the destination route has committed (the pathname
+// changes), which is when the browser captures the "new" state to animate toward.
+//
+// Polling MUST use setTimeout, not requestAnimationFrame: while the View
+// Transition update callback runs the browser suppresses rendering, which
+// starves rAF. An rAF poll therefore never fires, the promise never resolves,
+// and the browser aborts with "timeout in DOM update" (no animation at all).
+// Timers keep firing during that phase. A short overall timeout guards against a
+// navigation that never commits, and unsupported browsers fall back to an
+// instant navigation.
+function navigateWithViewTransition(navigate: () => void) {
+  const startViewTransition =
+    typeof document !== 'undefined'
+      ? (
+          document as Document & {
+            startViewTransition?: (
+              callback: () => Promise<void> | void
+            ) => unknown;
+          }
+        ).startViewTransition
+      : undefined;
+
+  if (typeof startViewTransition !== 'function') {
+    navigate();
+    return;
+  }
+
+  const fromPath = window.location.pathname;
+  startViewTransition.call(
+    document,
+    () =>
+      new Promise<void>((resolve) => {
+        navigate();
+        const startedAt = Date.now();
+        const poll = () => {
+          if (
+            window.location.pathname !== fromPath ||
+            Date.now() - startedAt > 1200
+          ) {
+            // The route has committed (or we've waited long enough); let React
+            // settle the new DOM one more tick before the browser captures it.
+            setTimeout(resolve, 0);
+          } else {
+            setTimeout(poll, 16);
+          }
+        };
+        setTimeout(poll, 16);
+      })
+  );
+}
+
 // macOS-style traffic-light window controls. The green "zoom" dot is the
 // feature's entry point: in the windowed card it's a Link that morphs the demo
-// into the fullscreen editor (the shared ViewTransition name does the
+// into the fullscreen editor (the shared view-transition-name does the
 // animation); in fullscreen the red and green dots both return to the windowed
 // card. The yellow dot is decorative in this demo. Dots are 12px so the green
 // Link target is small but still a real, labelled control.
 function WindowControls({
   variant,
+  onEnterFullscreen,
   onExitFullscreen,
+  onPrefetch,
 }: {
   variant: AuiVariant;
+  onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
+  onPrefetch?: () => void;
 }) {
   if (variant === 'fullscreen') {
     return (
@@ -531,6 +591,24 @@ function WindowControls({
         href={AUI_FULLSCREEN_PATH}
         aria-label="Open fullscreen editor"
         title="Open fullscreen editor"
+        onPointerEnter={onPrefetch}
+        onFocus={onPrefetch}
+        onClick={(event) => {
+          // Preserve native behavior for new-tab / non-primary clicks; only the
+          // plain left-click drives the in-app morph.
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          event.preventDefault();
+          onEnterFullscreen();
+        }}
       />
     </div>
   );
@@ -560,14 +638,37 @@ export function AgentUi({
   const session = AUI_SESSIONS[0];
   const router = useRouter();
 
+  // Expands the windowed card into the fullscreen route, morphing the shared
+  // `.aui` element via the View Transition.
+  const enterFullscreen = useCallback(() => {
+    navigateWithViewTransition(() => {
+      router.push(AUI_FULLSCREEN_PATH);
+    });
+  }, [router]);
+
+  // Warm the fullscreen route's RSC payload (its async render preloads five
+  // highlighted diffs) so the click->commit the View Transition waits on is a
+  // cache hit instead of a fresh fetch+render. Prefetch eagerly from the
+  // windowed card, and again on intent (hover/focus of the zoom control). In
+  // production this makes the forward morph feel as instant as the reverse;
+  // Next disables prefetch in dev, so the speedup is a production effect.
+  const prefetchFullscreen = useCallback(() => {
+    router.prefetch(AUI_FULLSCREEN_PATH);
+  }, [router]);
+  useEffect(() => {
+    if (variant === 'windowed') {
+      prefetchFullscreen();
+    }
+  }, [variant, prefetchFullscreen]);
+
   // Leaves the fullscreen route for the windowed card. `router.back()` is
   // preferred so Next restores the homepage scroll position (putting the card
   // back on screen for a clean reverse morph); when there's nothing to pop
   // (the route was opened directly) we navigate to the homepage edit section.
-  // The navigation runs inside startTransition so Next's View Transition
-  // integration animates the fullscreen view shrinking back into the card.
+  // Both paths run through the View Transition so the fullscreen view shrinks
+  // back into the card.
   const exitFullscreen = useCallback(() => {
-    startTransition(() => {
+    navigateWithViewTransition(() => {
       if (typeof window !== 'undefined' && window.history.length > 1) {
         router.back();
       } else {
@@ -907,202 +1008,196 @@ export function AgentUi({
   const changedCount = liveSession.changedFiles.length;
 
   return (
-    // Both the windowed card and the fullscreen route render `.aui` under a
-    // ViewTransition with this shared name, so navigating between them morphs
-    // the same element (size, position, corner radius) instead of cutting.
-    <ViewTransition name="aui-window">
-      <EditorProvider editor={editor}>
-        <div
-          className="aui"
-          data-theme-type="dark"
-          data-embedded="true"
-          data-variant={variant}
-        >
-          <div className="aui-body">
-            {variant === 'fullscreen' && (
-              <aside className="aui-files">
-                {/* Window controls take the slot the "Explorer" title used to
+    // Both the windowed card and the fullscreen route render a single `.aui`
+    // carrying `view-transition-name: aui-window`, so the manually-driven View
+    // Transition (see navigateWithViewTransition) morphs the same element's
+    // size/position/corner-radius between routes instead of cutting.
+    <EditorProvider editor={editor}>
+      <div
+        className="aui"
+        data-theme-type="dark"
+        data-embedded="true"
+        data-variant={variant}
+      >
+        <div className="aui-body">
+          {variant === 'fullscreen' && (
+            <aside className="aui-files">
+              {/* Window controls take the slot the "Explorer" title used to
                     occupy; the file actions push to the right. */}
-                <div className="aui-files-toolbar">
-                  <WindowControls
-                    variant={variant}
-                    onExitFullscreen={exitFullscreen}
-                  />
-                  {filesModel != null && (
-                    <FilesToolbar
-                      model={filesModel}
-                      onNewFile={handleNewFile}
-                      onNewFolder={handleNewFolder}
-                    />
-                  )}
-                </div>
-                <FilesTree
-                  session={session}
-                  activePath={activePath}
-                  onModelReady={handleFilesModelReady}
-                  onSelect={openFile}
+              <div className="aui-files-toolbar">
+                <WindowControls
+                  variant={variant}
+                  onEnterFullscreen={enterFullscreen}
+                  onExitFullscreen={exitFullscreen}
                 />
-              </aside>
-            )}
-            <section className="aui-center">
-              <header className="aui-center-header">
-                {/* The windowed card has no left sidebar, so its window controls
-                    sit just left of the breadcrumb. */}
-                {variant === 'windowed' && (
-                  <WindowControls
-                    variant={variant}
-                    onExitFullscreen={exitFullscreen}
+                {filesModel != null && (
+                  <FilesToolbar
+                    model={filesModel}
+                    onNewFile={handleNewFile}
+                    onNewFolder={handleNewFolder}
                   />
                 )}
-                <nav className="aui-breadcrumb" aria-label="File path">
-                  {breadcrumbSegments.length > 0 ? (
-                    breadcrumbSegments.map((segment, index) => (
-                      <span
-                        // Path segments are positional; index keys are stable here.
-                        key={`${segment}-${String(index)}`}
-                        className="aui-crumb"
-                        data-leaf={
-                          index === breadcrumbSegments.length - 1
-                            ? 'true'
-                            : undefined
-                        }
-                      >
-                        {segment}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="aui-crumb">No file selected</span>
-                  )}
-                </nav>
-              </header>
-
-              <div className="aui-surface-wrap" ref={surfaceWrapRef}>
-                {activeFile != null && fileDiff != null ? (
-                  <FileDiff
-                    fileDiff={fileDiff}
-                    className="aui-surface"
-                    options={{ ...AUI_DIFF_OPTIONS, theme }}
-                    prerenderedHTML={activePrerenderedHTML}
-                    contentEditable
-                  />
-                ) : placeholderContents != null && activePath != null ? (
-                  // Read-only view for explorer files that aren't part of the
-                  // change set; highlighted on the main thread since this File is
-                  // mounted dynamically outside the editable surface's worker pool.
-                  <File
-                    key={activePath}
-                    file={{ name: activePath, contents: placeholderContents }}
-                    className="aui-surface"
-                    options={{
-                      theme,
-                      themeType: 'dark',
-                      disableFileHeader: true,
-                      overflow: 'wrap',
-                    }}
-                    disableWorkerPool
-                  />
-                ) : (
-                  <div className="aui-empty">Select a file to review.</div>
-                )}
               </div>
-
-              <div className="aui-composer">
-                {snippets.length > 0 && (
-                  <ul className="aui-composer-attachments">
-                    {snippets.map((snippet) => (
-                      <li key={snippet.id} className="aui-attachment">
-                        <File
-                          file={{
-                            name: 'snippet.ts',
-                            contents: snippet.text,
-                          }}
-                          options={{
-                            theme,
-                            themeType: 'dark',
-                            disableFileHeader: true,
-                            disableLineNumbers: true,
-                          }}
-                          // The page's shared worker pool is wired up for the
-                          // editable editor surface; a dynamically mounted
-                          // read-only File isn't highlighted through it, so
-                          // highlight on the main thread.
-                          disableWorkerPool
-                          className="aui-attachment-code"
-                          style={SNIPPET_STYLE}
-                        />
-                        <button
-                          type="button"
-                          className="aui-attachment-remove"
-                          aria-label="Remove snippet"
-                          onClick={() => {
-                            removeSnippet(snippet.id);
-                          }}
-                        >
-                          <IconX />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <textarea
-                  className="aui-composer-input"
-                  placeholder="Ask for changes, @mention files, or run commands…"
-                  rows={2}
-                  disabled
-                />
-                <div className="aui-composer-toolbar">
-                  <button
-                    type="button"
-                    className="aui-composer-select"
-                    disabled
-                  >
-                    <IconSparkle className="opacity-50" />
-                    Agent
-                    <IconChevronSm className="opacity-50" />
-                  </button>
-                  <button
-                    type="button"
-                    className="aui-composer-select"
-                    disabled
-                  >
-                    Mythos 5
-                    <IconChevronSm className="opacity-50" />
-                  </button>
-                  <button
-                    type="button"
-                    className="aui-composer-send ml-auto"
-                    aria-label="Send"
-                    disabled
-                  >
-                    <IconArrow className="rotate-[90deg]" />
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <aside className="aui-changes">
-              <div className="aui-changes-tabs" role="tablist">
-                <button type="button" role="tab" disabled>
-                  All files
-                </button>
-                <button type="button" role="tab" aria-selected="true">
-                  Changes
-                  <span className="aui-changes-count">{changedCount}</span>
-                </button>
-                <button type="button" role="tab" disabled>
-                  Checks
-                </button>
-              </div>
-              <ChangesTree
-                session={liveSession}
+              <FilesTree
+                session={session}
                 activePath={activePath}
-                statsByPath={liveStats}
+                onModelReady={handleFilesModelReady}
                 onSelect={openFile}
               />
             </aside>
-          </div>
+          )}
+          <section className="aui-center">
+            <header className="aui-center-header">
+              {/* The windowed card has no left sidebar, so its window controls
+                    sit just left of the breadcrumb. */}
+              {variant === 'windowed' && (
+                <WindowControls
+                  variant={variant}
+                  onEnterFullscreen={enterFullscreen}
+                  onExitFullscreen={exitFullscreen}
+                  onPrefetch={prefetchFullscreen}
+                />
+              )}
+              <nav className="aui-breadcrumb" aria-label="File path">
+                {breadcrumbSegments.length > 0 ? (
+                  breadcrumbSegments.map((segment, index) => (
+                    <span
+                      // Path segments are positional; index keys are stable here.
+                      key={`${segment}-${String(index)}`}
+                      className="aui-crumb"
+                      data-leaf={
+                        index === breadcrumbSegments.length - 1
+                          ? 'true'
+                          : undefined
+                      }
+                    >
+                      {segment}
+                    </span>
+                  ))
+                ) : (
+                  <span className="aui-crumb">No file selected</span>
+                )}
+              </nav>
+            </header>
+
+            <div className="aui-surface-wrap" ref={surfaceWrapRef}>
+              {activeFile != null && fileDiff != null ? (
+                <FileDiff
+                  fileDiff={fileDiff}
+                  className="aui-surface"
+                  options={{ ...AUI_DIFF_OPTIONS, theme }}
+                  prerenderedHTML={activePrerenderedHTML}
+                  contentEditable
+                />
+              ) : placeholderContents != null && activePath != null ? (
+                // Read-only view for explorer files that aren't part of the
+                // change set; highlighted on the main thread since this File is
+                // mounted dynamically outside the editable surface's worker pool.
+                <File
+                  key={activePath}
+                  file={{ name: activePath, contents: placeholderContents }}
+                  className="aui-surface"
+                  options={{
+                    theme,
+                    themeType: 'dark',
+                    disableFileHeader: true,
+                    overflow: 'wrap',
+                  }}
+                  disableWorkerPool
+                />
+              ) : (
+                <div className="aui-empty">Select a file to review.</div>
+              )}
+            </div>
+
+            <div className="aui-composer">
+              {snippets.length > 0 && (
+                <ul className="aui-composer-attachments">
+                  {snippets.map((snippet) => (
+                    <li key={snippet.id} className="aui-attachment">
+                      <File
+                        file={{
+                          name: 'snippet.ts',
+                          contents: snippet.text,
+                        }}
+                        options={{
+                          theme,
+                          themeType: 'dark',
+                          disableFileHeader: true,
+                          disableLineNumbers: true,
+                        }}
+                        // The page's shared worker pool is wired up for the
+                        // editable editor surface; a dynamically mounted
+                        // read-only File isn't highlighted through it, so
+                        // highlight on the main thread.
+                        disableWorkerPool
+                        className="aui-attachment-code"
+                        style={SNIPPET_STYLE}
+                      />
+                      <button
+                        type="button"
+                        className="aui-attachment-remove"
+                        aria-label="Remove snippet"
+                        onClick={() => {
+                          removeSnippet(snippet.id);
+                        }}
+                      >
+                        <IconX />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <textarea
+                className="aui-composer-input"
+                placeholder="Ask for changes, @mention files, or run commands…"
+                rows={2}
+                disabled
+              />
+              <div className="aui-composer-toolbar">
+                <button type="button" className="aui-composer-select" disabled>
+                  <IconSparkle className="opacity-50" />
+                  Agent
+                  <IconChevronSm className="opacity-50" />
+                </button>
+                <button type="button" className="aui-composer-select" disabled>
+                  Mythos 5
+                  <IconChevronSm className="opacity-50" />
+                </button>
+                <button
+                  type="button"
+                  className="aui-composer-send ml-auto"
+                  aria-label="Send"
+                  disabled
+                >
+                  <IconArrow className="rotate-[90deg]" />
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <aside className="aui-changes">
+            <div className="aui-changes-tabs" role="tablist">
+              <button type="button" role="tab" disabled>
+                All files
+              </button>
+              <button type="button" role="tab" aria-selected="true">
+                Changes
+                <span className="aui-changes-count">{changedCount}</span>
+              </button>
+              <button type="button" role="tab" disabled>
+                Checks
+              </button>
+            </div>
+            <ChangesTree
+              session={liveSession}
+              activePath={activePath}
+              statsByPath={liveStats}
+              onSelect={openFile}
+            />
+          </aside>
         </div>
-      </EditorProvider>
-    </ViewTransition>
+      </div>
+    </EditorProvider>
   );
 }

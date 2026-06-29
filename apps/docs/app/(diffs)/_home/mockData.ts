@@ -87,7 +87,6 @@ export const AUI_FULL_TREE_PATHS: string[] = [
   'apps/docs/app/(diffs)/_home/AgentDemoSection.tsx',
   'apps/docs/app/(diffs)/_home/AgentUi.tsx',
   'apps/docs/app/(diffs)/_home/Home.tsx',
-  'apps/docs/app/(diffs)/_home/ViewTransition.tsx',
   'apps/docs/app/(diffs)/_home/agent-ui.css',
   'apps/docs/app/(diffs)/_home/mockData.ts',
   'apps/docs/app/(diffs)/_home/mockData.generated.ts',

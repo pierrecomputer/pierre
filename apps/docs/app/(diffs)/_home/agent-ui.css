@@ -27,6 +27,11 @@
   color: var(--ide-fg);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   font-size: 13px;
+
+  /* Shared element for the windowed <-> fullscreen morph. Both variants render
+     a single `.aui`, so the cross-route View Transition (driven manually in
+     AgentUi.tsx) FLIP-animates this element's size/position between them. */
+  view-transition-name: aui-window;
 }
 
 .aui[data-theme-type='light'] {
