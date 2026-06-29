@@ -671,6 +671,29 @@ describe('mergeOverlappingSelections', () => {
       ])
     ).toEqual([createSelection(0, 0, 0, 8, DirectionForward)]);
   });
+
+  test('keeps the latest backward direction when merging overlapping ranges', () => {
+    // The later selection is backward and is the most recent, so the merged
+    // range stays backward: the caret keeps to the union start and the anchor
+    // moves to the union end.
+    expect(
+      mergeOverlappingSelections([
+        createSelection(0, 0, 0, 5, DirectionForward),
+        createSelection(0, 3, 0, 8, DirectionBackward),
+      ])
+    ).toEqual([createSelection(0, 0, 0, 8, DirectionBackward)]);
+  });
+
+  test('derives backward direction when a later caret sits at the merged start', () => {
+    // The bare caret is the most recent selection and lands on the union
+    // start, so the merged range becomes backward to leave the caret in place.
+    expect(
+      mergeOverlappingSelections([
+        createSelection(0, 3, 0, 8, DirectionForward),
+        createSelection(0, 3, 0, 3, DirectionNone),
+      ])
+    ).toEqual([createSelection(0, 3, 0, 8, DirectionBackward)]);
+  });
 });
 
 describe('extendSelection', () => {
