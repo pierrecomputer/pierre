@@ -5,13 +5,17 @@ import {
   type CodeViewItem,
   type CodeViewOptions,
   type DiffLineAnnotation,
+  type DiffsEditableComponent,
   type DiffsThemeNames,
+  type FileContents,
   type FileDiffContentsLoader,
+  type FileDiffMetadata,
   type LineAnnotation,
   type ParsedPatch,
   type SelectedLineRange,
   type ThemesType,
 } from '@pierre/diffs';
+import { Editor } from '@pierre/diffs/editor';
 import type { WorkerPoolManager } from '@pierre/diffs/worker';
 
 import { FAKE_DIFF_LINE_ANNOTATIONS, type LineCommentMetadata } from './mocks/';
@@ -43,6 +47,28 @@ interface CodeViewDemoInstance {
   options: CodeViewOptions<CodeViewCommentMetadata>;
 }
 
+type CodeViewEditableInstance =
+  DiffsEditableComponent<CodeViewCommentMetadata> & {
+    file?: FileContents;
+    fileDiff?: FileDiffMetadata;
+  };
+
+interface CodeViewEditableContext {
+  item: CodeViewItem<CodeViewCommentMetadata>;
+  instance: CodeViewEditableInstance;
+}
+
+interface ActiveCodeViewEditor {
+  itemId: string;
+  viewer: CodeView<CodeViewCommentMetadata>;
+  items: CodeViewItem<CodeViewCommentMetadata>[];
+  instance: CodeViewEditableInstance;
+  editor: Editor<CodeViewCommentMetadata>;
+  dispose: () => void;
+  toggleInput: HTMLInputElement;
+  dirty: boolean;
+}
+
 type CodeViewDemoAnnotation =
   | DiffLineAnnotation<CodeViewCommentMetadata>
   | LineAnnotation<CodeViewCommentMetadata>;
@@ -68,8 +94,11 @@ interface RenderDemoCodeViewOptions {
 
 const codeViewInstances: CodeViewDemoInstance[] = [];
 let nextCodeViewCommentKey = 0;
+let nextCodeViewEditCacheKey = 0;
+let activeCodeViewEditor: ActiveCodeViewEditor | undefined;
 
 export function cleanupCodeView(container: HTMLElement) {
+  deactivateCodeViewEditor({ publish: false });
   for (const { instance } of codeViewInstances) {
     instance.cleanUp();
   }
@@ -81,23 +110,23 @@ export function cleanupCodeView(container: HTMLElement) {
 export function renderDemoCodeView(
   wrapper: HTMLElement,
   parsedPatches: ParsedPatch[],
-  {
+  renderOptions: RenderDemoCodeViewOptions
+) {
+  const {
     diffStyle,
+    loadDiffFiles,
     overflow,
     theme,
     themeType,
-    loadDiffFiles,
     workerManager,
-  }: RenderDemoCodeViewOptions
-) {
+  } = renderOptions;
   setupCodeViewWrapper(wrapper);
 
   const items = createCodeViewItems(parsedPatches);
-  const options: CodeViewOptions<CodeViewCommentMetadata> = {
+  const codeViewOptions: CodeViewOptions<CodeViewCommentMetadata> = {
     // __devOnlyValidateItemHeights: true,
     theme,
     themeType,
-    diffStyle,
     overflow,
     loadDiffFiles,
     renderAnnotation(annotation) {
@@ -110,10 +139,10 @@ export function renderDemoCodeView(
           },
         }
       : null),
-    lineHoverHighlight: 'both',
+    renderHeaderMetadata(_file, context) {
+      return renderCodeViewEditorToggle(viewer, items, context);
+    },
     expansionLineCount: 10,
-    enableLineSelection: true,
-    enableGutterUtility: true,
     stickyHeaders: true,
     layout: { paddingTop: 10, paddingBottom: 24, gap: 12 },
     onGutterUtilityClick(range, context) {
@@ -125,15 +154,28 @@ export function renderDemoCodeView(
     onSelectedLinesChange(selection) {
       console.log('CodeView selected lines', selection);
     },
+
+    // These settings are not compatible with editor... is there a way we can
+    // just ignore their values while editing? CodeView intentionally shares
+    // most options, so ideally we don't toggle the entire CodeView when
+    // editing a single file
+    lineHoverHighlight: 'disabled',
+    enableLineSelection: false,
+    enableGutterUtility: false,
+    // I assume once you merge the unified support, this won't be a requirement anymore
+    diffStyle: diffStyle === 'unified' ? 'split' : diffStyle,
+    useTokenTransformer: true,
+    expandUnchanged: true,
   };
 
-  const viewer = new CodeView(options, workerManager);
+  const viewer = new CodeView(codeViewOptions, workerManager);
   viewer.setup(wrapper);
   viewer.setItems(items);
-  codeViewInstances.push({ instance: viewer, options });
+  codeViewInstances.push({ instance: viewer, options: codeViewOptions });
 }
 
 export function setCodeViewOverflow(overflow: CodeViewOverflow) {
+  deactivateCodeViewEditor();
   for (const codeView of codeViewInstances) {
     codeView.options = { ...codeView.options, overflow };
     codeView.instance.setOptions(codeView.options);
@@ -141,17 +183,200 @@ export function setCodeViewOverflow(overflow: CodeViewOverflow) {
 }
 
 export function setCodeViewDiffStyle(diffStyle: CodeViewDiffStyle) {
+  deactivateCodeViewEditor();
   for (const codeView of codeViewInstances) {
-    codeView.options = { ...codeView.options, diffStyle };
+    codeView.options = {
+      ...codeView.options,
+      // Ideally we don't do this...
+      diffStyle: diffStyle === 'unified' ? 'split' : diffStyle,
+    };
     codeView.instance.setOptions(codeView.options);
   }
 }
 
 export function setCodeViewThemeType(themeType: CodeViewThemeType) {
+  deactivateCodeViewEditor();
   for (const codeView of codeViewInstances) {
     codeView.options = { ...codeView.options, themeType };
     codeView.instance.setOptions(codeView.options);
   }
+}
+
+function renderCodeViewEditorToggle(
+  viewer: CodeView<CodeViewCommentMetadata>,
+  items: CodeViewItem<CodeViewCommentMetadata>[],
+  context: CodeViewEditableContext
+) {
+  if (!canEditCodeViewItem(context.item)) {
+    return undefined;
+  }
+
+  const label = document.createElement('label');
+  label.dataset.collapser = '';
+  label.title = 'Toggle experimental editor mode for this CodeView item';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = activeCodeViewEditor?.itemId === context.item.id;
+  input.addEventListener('change', () => {
+    if (input.checked) {
+      activateCodeViewEditor(viewer, items, context, input);
+    } else if (activeCodeViewEditor?.itemId === context.item.id) {
+      deactivateCodeViewEditor();
+    }
+  });
+  label.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
+  label.append(input, 'Editable');
+  return label;
+}
+
+function canEditCodeViewItem(item: CodeViewItem<CodeViewCommentMetadata>) {
+  return item.type === 'file' || !item.fileDiff.isPartial;
+}
+
+function activateCodeViewEditor(
+  viewer: CodeView<CodeViewCommentMetadata>,
+  items: CodeViewItem<CodeViewCommentMetadata>[],
+  context: CodeViewEditableContext,
+  toggleInput: HTMLInputElement
+) {
+  if (activeCodeViewEditor?.itemId === context.item.id) {
+    activeCodeViewEditor.toggleInput = toggleInput;
+    toggleInput.checked = true;
+    return;
+  }
+
+  deactivateCodeViewEditor();
+
+  const editor = new Editor<CodeViewCommentMetadata>({
+    onAttach(editor) {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+      ]);
+      queueMicrotask(() => editor.focus({ preventScroll: true }));
+    },
+    onChange(file, lineAnnotations) {
+      queueMicrotask(() => {
+        if (activeCodeViewEditor !== activeEditor) {
+          return;
+        }
+        persistCodeViewEditorChange(activeEditor, file, lineAnnotations);
+      });
+    },
+  });
+
+  const activeEditor: ActiveCodeViewEditor = {
+    itemId: context.item.id,
+    viewer,
+    items,
+    instance: context.instance,
+    editor,
+    dispose: () => editor.cleanUp(),
+    toggleInput,
+    dirty: false,
+  };
+
+  try {
+    activeEditor.dispose = editor.edit(context.instance);
+  } catch (error) {
+    console.error('Failed to enable CodeView editor', error);
+    toggleInput.checked = false;
+    return;
+  }
+
+  activeCodeViewEditor = activeEditor;
+  toggleInput.checked = true;
+  Object.assign(window, { codeViewEditor: editor });
+}
+
+function deactivateCodeViewEditor({ publish = true } = {}) {
+  const activeEditor = activeCodeViewEditor;
+  if (activeEditor == null) {
+    return;
+  }
+
+  activeCodeViewEditor = undefined;
+  activeEditor.toggleInput.checked = false;
+  activeEditor.dispose();
+  if (publish && activeEditor.dirty) {
+    activeEditor.viewer.setItems([...activeEditor.items]);
+  }
+}
+
+function persistCodeViewEditorChange(
+  activeEditor: ActiveCodeViewEditor,
+  file: FileContents,
+  lineAnnotations: DiffLineAnnotation<CodeViewCommentMetadata>[] | undefined
+) {
+  const item = activeEditor.items.find(
+    (candidate) => candidate.id === activeEditor.itemId
+  );
+  if (item == null) {
+    return;
+  }
+
+  if (item.type === 'file') {
+    item.file = cloneEditedFile(file);
+    if (lineAnnotations !== undefined) {
+      item.annotations =
+        lineAnnotations as LineAnnotation<CodeViewCommentMetadata>[];
+    }
+  } else {
+    item.fileDiff = cloneEditedFileDiff(
+      activeEditor.instance.fileDiff ?? item.fileDiff,
+      file
+    );
+    if (lineAnnotations !== undefined) {
+      item.annotations = lineAnnotations;
+    }
+  }
+
+  item.version = typeof item.version === 'number' ? item.version + 1 : 1;
+  activeEditor.dirty = true;
+}
+
+function cloneEditedFile(file: FileContents): FileContents {
+  const nextFile: FileContents = {
+    name: file.name,
+    contents: file.contents,
+    cacheKey: createCodeViewEditCacheKey(file.cacheKey ?? file.name),
+  };
+  if (file.lang !== undefined) {
+    nextFile.lang = file.lang;
+  }
+  if (file.header !== undefined) {
+    nextFile.header = file.header;
+  }
+  return nextFile;
+}
+
+function cloneEditedFileDiff(
+  fileDiff: FileDiffMetadata,
+  file: FileContents
+): FileDiffMetadata {
+  return {
+    ...fileDiff,
+    additionLines: splitCodeViewFileContents(file.contents),
+    deletionLines: fileDiff.deletionLines.slice(),
+    hunks: fileDiff.hunks.map((hunk) => ({
+      ...hunk,
+      hunkContent: hunk.hunkContent.map((content) => ({ ...content })),
+    })),
+    cacheKey: createCodeViewEditCacheKey(fileDiff.cacheKey ?? fileDiff.name),
+  };
+}
+
+function splitCodeViewFileContents(contents: string): string[] {
+  return contents === '' ? [] : contents.split(/(?<=\n)/);
+}
+
+function createCodeViewEditCacheKey(baseKey: string): string {
+  return `${baseKey}:code-view-edit:${nextCodeViewEditCacheKey++}`;
 }
 
 function setupCodeViewWrapper(wrapper: HTMLElement) {
@@ -468,6 +693,7 @@ function publishCodeViewItemChange(
   items: CodeViewItem<CodeViewCommentMetadata>[],
   item: CodeViewDiffItem<CodeViewCommentMetadata>
 ) {
+  deactivateCodeViewEditor({ publish: false });
   item.version = typeof item.version === 'number' ? item.version + 1 : 1;
   viewer.setItems([...items]);
 }
