@@ -29,8 +29,8 @@ interface FileContents {
 
   // Optional: Cache key for AST caching in Worker Pool.
   // When provided, rendered AST results are cached and reused.
-  // IMPORTANT: The key must change whenever the content, filename
-  // or lang changes!
+  // IMPORTANT: The key must change whenever the content, filename,
+  // lang, or revision changes!
   cacheKey?: string;
 }
 
@@ -209,8 +209,9 @@ const files: FileDiffMetadata[] = patches[0].files;
 // "my-patch-1", etc.
 // This enables AST caching in Worker Pool for parsed patches.
 
-// Note: Diffs from patch files don't include oldLines/newLines,
-// so "expand unchanged" won't work unless you add them manually`,
+// Note: Diffs from patch files don't include oldLines/newLines.
+// Renderers can hydrate them with loadDiffFiles when full file
+// contents are needed for expanding unchanged context.`,
   },
   options,
 };

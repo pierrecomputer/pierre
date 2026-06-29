@@ -33,9 +33,10 @@ treats it as a fresh partial model. Keep the same metadata object stable when
 you want hydration to persist.
 
 When loaded files provide cache keys, hydration uses those keys so full-file
-highlights can be reused across diffs. If loaded files are unkeyed but the
-partial metadata has a `cacheKey`, hydration appends a hydrated segment as a
-fallback.
+highlights can be reused across diffs. Change each `FileContents.cacheKey`
+whenever the loaded contents, filename, language, or revision changes. If loaded
+files are unkeyed but the partial metadata has a `cacheKey`, hydration appends a
+hydrated segment as a fallback.
 
 **Tip:** You can generate `FileDiffMetadata` using
 [`parseDiffFromFile`](#utilities-parsedifffromfile) (from file contents) or
@@ -58,7 +59,8 @@ deleted file. This approach allows collapsed regions to be expanded.
 #### From a Patch String
 
 Use `parsePatchFiles` when you have a unified diff or patch file. This is useful
-when working with git output or patch files from APIs.
+when working with git output or patch files from APIs. Patch-derived metadata is
+partial until a renderer hydrates it with full files from `loadDiffFiles`.
 
 <DocsCodeExample {...parsePatchFilesExample} />
 
