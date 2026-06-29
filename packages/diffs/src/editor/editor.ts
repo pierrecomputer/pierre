@@ -169,6 +169,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #contentWidthCache?: number;
   #lineYCache = new Map<number, number>();
   #wrapLineOffsetsCache = new Map<number, Uint32Array>();
+  // Tracks whether the document's last line is empty (text is empty or ends in
+  // a newline). The diff renders one editable row per addition line from
+  // splitFileContents, which drops that trailing empty line, so when this state
+  // flips the diff's editable row count changes even if the editor's line count
+  // does not. See #applyChange for how that forces a diff rebuild.
+  #lastLineEmpty = false;
   #lastAccessedLineElement?: [number, HTMLElement];
   #lastAccessedCharX?: [
     line: number,
@@ -640,6 +646,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       const { name, lang, cacheKey } = fileOrDiff;
       this.#fileInfo = { name, lang, cacheKey };
       this.#textDocument = textDocument;
+      this.#lastLineEmpty = this.#isLastLineEmpty();
       this.#tokenizer?.cleanUp();
       this.#tokenizer = new EditorTokenizer({
         highlighter,
@@ -1838,7 +1845,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     change: TextDocumentChange,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     renderRange = this.#renderRange,
-    shouldUpdateBuffer?: boolean
+    shouldUpdateBuffer?: boolean,
+    // Forces the diff metadata rebuild below even when the editor's line count is
+    // unchanged. Set when an edit changes the diff's editable row count without
+    // changing the line count (the document's trailing-empty state flipped); see
+    // #applyChange.
+    forceDiffRebuild = false
   ) {
     const tokenizer = this.#tokenizer;
     const fileInstance = this.#fileInstance;
@@ -1953,7 +1965,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    const didLineCountChange = change.lineDelta !== 0;
+    const didLineCountChange = change.lineDelta !== 0 || forceDiffRebuild;
 
     // fix grid layout
     if (didLineCountChange) {
@@ -3514,13 +3526,31 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       onChange(fileRef, newLineAnnotations ?? this.#lineAnnotations);
     }
 
+    // The diff renders one editable row per addition line from
+    // splitFileContents, which drops the trailing empty line of a document that
+    // ends in a newline. So the editable row count is the editor's line count
+    // minus one whenever the last line is empty. An edit that toggles that
+    // trailing-empty state without changing the line count — typing the first
+    // character onto the empty last line, or deleting it back to empty — changes
+    // the editable row count even though change.lineDelta is 0. Force a diff
+    // rebuild in that case so the row is added or dropped in its correct place;
+    // otherwise #rerender only patches the editor's own line elements and leaves
+    // the new row appended after the deletion buffer, sending the caret to the
+    // bottom of the file.
+    const lastLineEmpty = this.#isLastLineEmpty();
+    const additionRowCountChanged =
+      change.lineDelta === 0 && lastLineEmpty !== this.#lastLineEmpty;
+    this.#lastLineEmpty = lastLineEmpty;
+
     // Invalidate layout caches touched by the edit. Clear cached line Y
     // positions from startLine onward when either:
     // - the line count changed (inserts/deletes renumber every later line), or
+    // - the editable row count changed (the diff rebuild below shifts every
+    //   later row), or
     // - wrap is on, where editing a line can add or remove a wrapped row and
     //   shift the Y of every line after it even though the line count is the
     //   same.
-    if (change.lineDelta !== 0 || this.#isWrap) {
+    if (change.lineDelta !== 0 || additionRowCountChanged || this.#isWrap) {
       for (const line of this.#lineYCache.keys()) {
         if (line >= change.startLine) {
           this.#lineYCache.delete(line);
@@ -3602,7 +3632,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
       }
     }
-    this.#rerender(change, newLineAnnotations, renderRange, shouldUpdateBuffer);
+    this.#rerender(
+      change,
+      newLineAnnotations,
+      renderRange,
+      shouldUpdateBuffer,
+      additionRowCountChanged
+    );
 
     if (
       options?.skipSearchRefresh !== true &&
@@ -3763,6 +3799,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return this.#contentWidthCache;
   }
 
+  // True when the document's last line is empty, i.e. the text is empty or ends
+  // in a newline. splitFileContents drops that trailing empty line, so the diff
+  // renders one fewer editable row than the editor's line count; the editor must
+  // account for it when rebuilding the diff and when placing the caret there.
+  #isLastLineEmpty(): boolean {
+    const textDocument = this.#textDocument;
+    if (textDocument === undefined) {
+      return false;
+    }
+    return (
+      textDocument.getLineText(Math.max(0, textDocument.lineCount - 1)) === ''
+    );
+  }
+
   // get line top(y-coordinate) position
   #getLineY(line: number) {
     const cachedY = this.#lineYCache.get(line);
@@ -3772,6 +3822,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     const lineElement = this.#getLineElement(line);
     if (lineElement === undefined) {
+      // The empty trailing line of a document that ends in a newline has no row
+      // of its own in the diff (splitFileContents collapses it into the prior
+      // row), so there is no element to measure. Place the caret one row below
+      // the preceding line instead of falling back to the document top. Only the
+      // very last line can be missing this way, so the previous line always has
+      // a row to measure from.
+      const previousElement =
+        line > 0 ? this.#getLineElement(line - 1) : undefined;
+      if (previousElement !== undefined) {
+        const y =
+          previousElement.offsetTop +
+          previousElement.offsetHeight +
+          this.#metrics.paddingTop +
+          (this.#activeContentOffset?.top ?? 0);
+        this.#lineYCache.set(line, y);
+        return y;
+      }
       return -1;
     }
 

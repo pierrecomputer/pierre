@@ -4,6 +4,7 @@ import type { FileDiffMetadata, Hunk } from '../src/types';
 import { cleanLastNewline } from '../src/utils/cleanLastNewline';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
+  appendTrailingEmptyAdditionRow,
   recomputeDiffHunks,
   updateDiffHunks,
 } from '../src/utils/updateDiffHunks';
@@ -342,5 +343,53 @@ describe('updateDiffHunks', () => {
 
     expect(diff.hunks[0]?.noEOFCRAdditions).toBe(false);
     expect(diff.hunks.at(-1)?.noEOFCRAdditions).toBe(false);
+  });
+});
+
+describe('appendTrailingEmptyAdditionRow', () => {
+  // An emptied document must render one clean editable addition row after the
+  // deletions, so the editor keeps a caret line. The previous sentinel diff
+  // matched an empty deletion line via LCS and emitted that row as "context"
+  // mid-document (in unified, a "1" line drawn over a deletion). The deletions
+  // here include an empty line (4) so this guards against that regression.
+  test('emptied document yields one clean change-addition after the deletions', () => {
+    const base = parseDiffFromFile(
+      { name: 'f.ts', contents: '1\n2\n3\n\n5\n' },
+      { name: 'f.ts', contents: 'a\nb\nc\nd\ne\n' },
+      PARSE_OPTIONS
+    );
+    const diff = cloneDiff(base);
+    diff.additionLines = [];
+    Object.assign(diff, recomputeDiffHunks(diff, PARSE_OPTIONS));
+    appendTrailingEmptyAdditionRow(diff);
+
+    expect(diff.additionLines).toEqual(['']);
+    expect(diff.type).toBe('change');
+    const lastHunk = diff.hunks.at(-1)!;
+    expect(lastHunk.additionLines).toBe(1);
+    // The row is a real addition, never a context (unchanged) match.
+    expect(
+      lastHunk.hunkContent.every((content) => content.type === 'change')
+    ).toBe(true);
+    expect(verifyFileDiffHunkValues(diff)).toEqual({ valid: true, errors: [] });
+  });
+
+  // A document that ends in a newline has a trailing empty line the editor can
+  // place a caret on; the helper grows the last change block by one `+` line so
+  // it renders, matching the shape a genuine trailing-line edit produces.
+  test('document ending in a newline gains a trailing empty addition row', () => {
+    const base = parseDiffFromFile(
+      { name: 'f.ts', contents: '1\n2\n3\n' },
+      { name: 'f.ts', contents: 'a\n' },
+      PARSE_OPTIONS
+    );
+    const diff = cloneDiff(base);
+    diff.additionLines = ['a\n'];
+    Object.assign(diff, recomputeDiffHunks(diff, PARSE_OPTIONS));
+    appendTrailingEmptyAdditionRow(diff);
+
+    expect(diff.additionLines).toEqual(['a\n', '']);
+    expect(diff.hunks.at(-1)!.additionLines).toBe(2);
+    expect(verifyFileDiffHunkValues(diff)).toEqual({ valid: true, errors: [] });
   });
 });

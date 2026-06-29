@@ -76,8 +76,8 @@ import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import { splitFileContents } from '../utils/splitFileContents';
 import {
+  appendTrailingEmptyAdditionRow,
   recomputeDiffHunks,
-  recomputeEmptyDocumentDiff,
   updateDiffHunks,
 } from '../utils/updateDiffHunks';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
@@ -461,20 +461,27 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       additionHastLines[i] ??= createPlainAdditionLineElement(i, textDocument);
     }
     if (!diff.isPartial) {
-      // An empty document splits into zero addition lines, which would recompute
-      // to a diff with no editable rows and leave the attached host with no
-      // line element for its caret (the additions column vanishes in split;
-      // unified shows only deletions). Keep one empty editable line instead.
-      if (newLength === 0) {
-        Object.assign(
-          diff,
-          recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
-        );
-        additionHastLines[0] = createPlainAdditionLineElement(0, textDocument);
-      } else {
-        Object.assign(
-          diff,
-          recomputeDiffHunks(diff, this.options.parseDiffOptions)
+      Object.assign(
+        diff,
+        recomputeDiffHunks(diff, this.options.parseDiffOptions)
+      );
+      // The editor counts a trailing newline (and an emptied document) as an
+      // extra empty line, but splitFileContents/the diff collapse it away, so the
+      // diff has no row for that caret line. Append one empty editable row so it
+      // renders and the caret/native input can anchor to it — in split this
+      // avoids a caret stuck at the document top, and in unified it avoids the
+      // line being unreachable among the deletion rows. For the emptied document
+      // this also renders one clean change-addition after the deletions, instead
+      // of the older sentinel diff that matched an empty deletion line via LCS
+      // and mis-placed the row mid-document (a "1" line over a deletion). The
+      // highlighted HAST may be a row short here (the re-highlight also drops the
+      // trailing line); processDiffResult fills that row's content empty.
+      if (textDocument.lineCount > diff.additionLines.length) {
+        appendTrailingEmptyAdditionRow(diff);
+        const trailingIndex = diff.additionLines.length - 1;
+        additionHastLines[trailingIndex] = createPlainAdditionLineElement(
+          trailingIndex,
+          textDocument
         );
       }
     }
@@ -1081,20 +1088,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           if (injectedRows?.before != null) {
             pushUnifiedInjectedRows(injectedRows.before, context);
           }
-          let deletionLineContent =
-            deletionLine != null
-              ? deletionLines[deletionLine.lineIndex]
-              : undefined;
-          let additionLineContent =
-            additionLine != null
-              ? additionLines[additionLine.lineIndex]
-              : undefined;
-          if (deletionLineContent == null && additionLineContent == null) {
-            const errorMessage =
-              'DiffHunksRenderer.processDiffResult: deletionLine and additionLine are null, something is wrong';
-            console.error(errorMessage, { file: fileDiff.name });
-            throw new Error(errorMessage);
-          }
+          let { deletionLineContent, additionLineContent } =
+            resolveDiffLineContents(
+              deletionLine,
+              additionLine,
+              deletionLines,
+              additionLines,
+              fileDiff.name
+            );
           const lineType =
             type === 'change'
               ? additionLine != null
@@ -1171,14 +1172,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             );
           }
 
-          let deletionLineContent =
-            deletionLine != null
-              ? deletionLines[deletionLine.lineIndex]
-              : undefined;
-          let additionLineContent =
-            additionLine != null
-              ? additionLines[additionLine.lineIndex]
-              : undefined;
+          let { deletionLineContent, additionLineContent } =
+            resolveDiffLineContents(
+              deletionLine,
+              additionLine,
+              deletionLines,
+              additionLines,
+              fileDiff.name
+            );
           const deletionLineDecoration = this.getSplitLineDecoration({
             side: 'deletions',
             type,
@@ -1189,13 +1190,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             type,
             lineIndex: additionLine?.lineIndex,
           });
-
-          if (deletionLineContent == null && additionLineContent == null) {
-            const errorMessage =
-              'DiffHunksRenderer.processDiffResult: deletionLine and additionLine are null, something is wrong';
-            console.error(errorMessage, { file: fileDiff.name });
-            throw new Error(errorMessage);
-          }
 
           const missingSide = (() => {
             if (type === 'change') {
@@ -1957,6 +1951,62 @@ function withContentProperties(
       ...extendProperties,
     },
   };
+}
+
+// An empty editable line element for a row the diff carries but the highlighted
+// HAST does not. This happens for the editor's trailing empty line (a document
+// that ends in a newline, or an emptied document): splitFileContents and the
+// re-highlight's cleanLastNewline both drop that line, so its content slot is
+// missing even though iterateOverDiff still emits the row. Rendering it empty
+// keeps the row (so the caret/native input can anchor to it) instead of failing.
+function createEmptyDiffLineElement(lineNumber: number): HASTElement {
+  return {
+    type: 'element',
+    tagName: 'div',
+    properties: { 'data-line': lineNumber },
+    children: [
+      {
+        type: 'element',
+        tagName: 'span',
+        properties: { 'data-char': 0 },
+        children: [{ type: 'text', value: '' }],
+      },
+    ],
+  };
+}
+
+// Resolves the highlighted content for a diff row's two sides, shared by the
+// unified and split branches of processDiffResult. A side that has a line but no
+// HAST content is the editor's trailing empty line, dropped from the highlight
+// (see createEmptyDiffLineElement) — render it empty. A row with neither side is
+// a real bug, so throw.
+function resolveDiffLineContents(
+  deletionLine: DiffLineMetadata | undefined,
+  additionLine: DiffLineMetadata | undefined,
+  deletionLines: ElementContent[],
+  additionLines: ElementContent[],
+  fileName: string | undefined
+): {
+  deletionLineContent: ElementContent | undefined;
+  additionLineContent: ElementContent | undefined;
+} {
+  let deletionLineContent =
+    deletionLine != null ? deletionLines[deletionLine.lineIndex] : undefined;
+  let additionLineContent =
+    additionLine != null ? additionLines[additionLine.lineIndex] : undefined;
+  if (additionLine != null && additionLineContent == null) {
+    additionLineContent = createEmptyDiffLineElement(additionLine.lineNumber);
+  }
+  if (deletionLine != null && deletionLineContent == null) {
+    deletionLineContent = createEmptyDiffLineElement(deletionLine.lineNumber);
+  }
+  if (deletionLineContent == null && additionLineContent == null) {
+    const errorMessage =
+      'DiffHunksRenderer.processDiffResult: deletionLine and additionLine are null, something is wrong';
+    console.error(errorMessage, { file: fileName });
+    throw new Error(errorMessage);
+  }
+  return { deletionLineContent, additionLineContent };
 }
 
 function createPlainAdditionLineElement(

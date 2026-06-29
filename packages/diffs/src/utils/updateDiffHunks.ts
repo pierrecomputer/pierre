@@ -47,46 +47,64 @@ export function recomputeDiffHunks(
   };
 }
 
-// Rebuilds hunk metadata when the editable side has been emptied of all text.
+// Adds an editable row for the editor's empty trailing line after a recompute.
 //
-// The host always keeps one (empty) line for an empty document, but an empty
-// string splits into zero addition lines, so a normal recompute produces a diff
-// with no addition rows at all. Rendering that leaves the attached host with
-// no line element for its caret. To keep one editable row, diff the
-// unchanged deletions against a single line (which yields a hunk that places
-// exactly one addition row), then store the addition as `['']` so it still
-// joins back to the host's empty document.
+// The diff derives its addition rows from `splitFileContents`, which collapses
+// the final newline. So a document that is empty or ends in a newline produces
+// one fewer addition row than the editor's line count, leaving the editor's
+// trailing (empty) line with no rendered row. The editor needs a real DOM row
+// there: in split it avoids the caret falling back to the document top, and in
+// unified — where addition rows sit interleaved with non-editable deletion
+// rows — it lets native contenteditable input anchor to the line at all.
 //
-// The sentinel only has to differ from the deletion side so a hunk is produced;
-// its text is discarded by the `['']` override below. When the old side is
-// itself a single blank line the empty sentinel would be identical and yield no
-// hunk (and so no editable row), so fall back to a non-blank line there.
-export function recomputeEmptyDocumentDiff(
-  diff: FileDiffMetadata,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
-): FullDiffHunkUpdate {
-  const deletionContents = diff.deletionLines.join('');
-  const additionSentinel = deletionContents === '\n' ? ' \n' : '\n';
-  const recomputed = parseDiffFromFile(
-    {
-      name: diff.prevName ?? diff.name,
-      contents: deletionContents,
-    },
-    {
-      name: diff.name,
-      contents: additionSentinel,
-      lang: diff.lang,
-    },
-    parseDiffOptions
-  );
-  return {
-    hunks: recomputed.hunks,
-    splitLineCount: recomputed.splitLineCount,
-    unifiedLineCount: recomputed.unifiedLineCount,
-    additionLines: [''],
-    deletionLines: recomputed.deletionLines,
-    type: recomputed.type,
-  };
+// This grows the last hunk by a single `+` line and appends one empty addition
+// line, producing the same hunk shape a genuine one-line edit would. Both
+// unified and split then render the trailing line like any other addition,
+// after the last addition and before any deletion buffer. This also replaces an
+// older sentinel-diff approach for the fully-empty document, which placed the
+// row by diffing the deletions against a blank line — that blank line matched an
+// empty deletion line via LCS and rendered the row mid-document as "context".
+export function appendTrailingEmptyAdditionRow(diff: FileDiffMetadata): void {
+  const hunk = diff.hunks.at(-1);
+  if (hunk == null) {
+    return;
+  }
+
+  const trailingIndex = diff.additionLines.length;
+  diff.additionLines = [...diff.additionLines, ''];
+
+  const lastContent = hunk.hunkContent.at(-1);
+  if (lastContent != null && lastContent.type === 'change') {
+    // Extend the final change block. When it had only deletions (an emptied
+    // document), this new line becomes its first addition.
+    if (lastContent.additions === 0) {
+      lastContent.additionLineIndex = trailingIndex;
+    }
+    lastContent.additions += 1;
+  } else {
+    // The hunk ends in a context block, so add a dedicated addition-only block.
+    hunk.hunkContent.push({
+      type: 'change',
+      additions: 1,
+      deletions: 0,
+      additionLineIndex: trailingIndex,
+      deletionLineIndex: hunk.deletionLineIndex + hunk.deletionCount,
+    });
+  }
+
+  // An all-deletions hunk reports no additions (additionLineIndex -1,
+  // additionStart 0); seed them from the row we just added.
+  if (hunk.additionLineIndex < 0) {
+    hunk.additionLineIndex = trailingIndex;
+  }
+  if (hunk.additionStart < 1) {
+    hunk.additionStart = trailingIndex + 1;
+  }
+  hunk.additionCount += 1;
+  hunk.additionLines += 1;
+  diff.type = 'change';
+
+  recomputeDiffRenderLineCounts(diff);
 }
 
 /** Updates hunk metadata after addition lines change; re-parses affected hunks only. */
