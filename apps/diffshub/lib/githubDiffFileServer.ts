@@ -246,10 +246,63 @@ async function resolveGitHubPullRefs(
     );
   }
 
+  const oldRepo = baseRepo ?? repo;
+  const newRepo = headRepo ?? repo;
+  const mergeBaseSha = await resolveGitHubPullMergeBaseSha(
+    oldRepo,
+    newRepo,
+    baseSha,
+    headSha,
+    fetcher,
+    options
+  );
+
   return {
-    oldRef: { ...(baseRepo ?? repo), ref: baseSha },
-    newRef: { ...(headRepo ?? repo), ref: headSha },
+    oldRef: { ...oldRepo, ref: mergeBaseSha },
+    newRef: { ...newRepo, ref: headSha },
   };
+}
+
+async function resolveGitHubPullMergeBaseSha(
+  baseRepo: GitHubRepo,
+  headRepo: GitHubRepo,
+  baseSha: string,
+  headSha: string,
+  fetcher: GitHubServerFetch,
+  options: GitHubDiffFileServerOptions
+): Promise<string> {
+  const compareRange = createGitHubCompareRange(
+    baseRepo,
+    headRepo,
+    baseSha,
+    headSha
+  );
+  const data = await fetchGitHubJSON(
+    createGitHubAPIURL(
+      `/repos/${encodeURLSegment(baseRepo.owner)}/${encodeURLSegment(baseRepo.repo)}/compare/${encodeURLSegment(compareRange)}`
+    ),
+    fetcher,
+    options
+  );
+  const mergeBaseSha = readStringPath(data, ['merge_base_commit', 'sha']);
+  if (mergeBaseSha == null) {
+    throw new Error(
+      `GitHub compare ${baseRepo.owner}/${baseRepo.repo}@${compareRange} did not include a merge base.`
+    );
+  }
+  return mergeBaseSha;
+}
+
+function createGitHubCompareRange(
+  baseRepo: GitHubRepo,
+  headRepo: GitHubRepo,
+  baseSha: string,
+  headSha: string
+): string {
+  if (isSameGitHubRepo(baseRepo, headRepo)) {
+    return `${baseSha}...${headSha}`;
+  }
+  return `${baseRepo.owner}:${baseSha}...${headRepo.owner}:${headSha}`;
 }
 
 async function resolveGitHubCommitRefs(
@@ -525,6 +578,13 @@ function readRepoFullName(
     owner: fullName.slice(0, separatorIndex),
     repo: fullName.slice(separatorIndex + 1),
   };
+}
+
+function isSameGitHubRepo(a: GitHubRepo, b: GitHubRepo): boolean {
+  return (
+    a.owner.toLowerCase() === b.owner.toLowerCase() &&
+    a.repo.toLowerCase() === b.repo.toLowerCase()
+  );
 }
 
 function readFirstParentSha(data: unknown): string | undefined {
