@@ -138,7 +138,7 @@ describe('hydratePartialDiff', () => {
     expect(hydrated.mode).toBe('100644');
     expect(hydrated.prevObjectId).toBe('1111111');
     expect(hydrated.newObjectId).toBe('2222222');
-    expect(hydrated.cacheKey).toBe('old-full:new-full');
+    expect(hydrated.cacheKey).toBe('partial-cache:hydrated');
     expect(hydrated.additionLines).toEqual(newFileLines);
     expect(hydrated.deletionLines).toEqual(oldFileLines);
     expect(hydrated.hunks.map((hunk) => hunk.hunkSpecs)).toEqual(
@@ -178,6 +178,34 @@ describe('hydratePartialDiff', () => {
 
     expect(hydrated).toBe(partial);
     expect(hydrated.cacheKey).toBe('old-full:new-full');
+  });
+
+  test('does not use one loaded file cache key for a two-sided diff', () => {
+    const oldFile: FileContents = {
+      name: 'one-keyed-side.txt',
+      cacheKey: 'old-full',
+      contents: 'old value\n',
+    };
+    const newFile: FileContents = {
+      name: 'one-keyed-side.txt',
+      contents: 'new value\n',
+    };
+    const partial = parseSingleFile(
+      createTwoFilesPatch(
+        oldFile.name,
+        newFile.name,
+        oldFile.contents,
+        newFile.contents,
+        undefined,
+        undefined,
+        { context: 0 }
+      )
+    );
+
+    const hydrated = hydratePartialDiff('merge', partial, { oldFile, newFile });
+
+    expect(hydrated).toBe(partial);
+    expect(hydrated.cacheKey).toBeUndefined();
   });
 
   test('can hydrate a cloned metadata object without mutating the source diff', () => {
@@ -397,6 +425,6 @@ describe('hydratePartialDiff', () => {
     expect(hydrated.unifiedLineCount).toBe(0);
     expect(hydrated.additionLines).toEqual(newFileLines);
     expect(hydrated.deletionLines).toEqual(newFileLines);
-    expect(hydrated.cacheKey).toBe('new-full');
+    expect(hydrated.cacheKey).toBe('partial-rename-cache:hydrated');
   });
 });

@@ -188,13 +188,10 @@ function getHydratedCacheKey(
   oldFile: FileContents | null,
   newFile: FileContents | null
 ): string | undefined {
-  const loadedFileCacheKey = getLoadedFileCacheKey(oldFile, newFile);
-  if (loadedFileCacheKey != null) {
-    return loadedFileCacheKey;
+  if (fileDiff.cacheKey != null) {
+    return `${fileDiff.cacheKey}:hydrated`;
   }
-  return fileDiff.cacheKey != null
-    ? `${fileDiff.cacheKey}:hydrated`
-    : undefined;
+  return getLoadedFileCacheKey(oldFile, newFile);
 }
 
 function setHydratedCacheKey(
@@ -214,8 +211,10 @@ function getLoadedFileCacheKey(
   oldFile: FileContents | null,
   newFile: FileContents | null
 ): string | undefined {
-  if (oldFile?.cacheKey != null && newFile?.cacheKey != null) {
-    return `${oldFile.cacheKey}:${newFile.cacheKey}`;
+  if (oldFile != null && newFile != null) {
+    return oldFile.cacheKey != null && newFile.cacheKey != null
+      ? `${oldFile.cacheKey}:${newFile.cacheKey}`
+      : undefined;
   }
   return oldFile?.cacheKey ?? newFile?.cacheKey;
 }

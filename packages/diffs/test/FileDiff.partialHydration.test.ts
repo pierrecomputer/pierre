@@ -751,7 +751,7 @@ describe('FileDiff partial hydration', () => {
       expect(primedDiffs).toHaveLength(1);
       expect(primedDiffs[0]).toBe(partial);
       expect(primedDiffs[0]?.isPartial).toBe(false);
-      expect(primedDiffs[0]?.cacheKey).toBe('partial.ts:old:partial.ts:new');
+      expect(primedDiffs[0]?.cacheKey).toBe('partial-cache:hydrated');
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
 
@@ -800,7 +800,7 @@ describe('FileDiff partial hydration', () => {
 
       expect(primedDiffs).toHaveLength(1);
       expect(primedDiffs[0]).toBe(partial);
-      expect(primedDiffs[0]?.cacheKey).toBe('partial.ts:old:partial.ts:new');
+      expect(primedDiffs[0]?.cacheKey).toBe('partial-cache:hydrated');
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
       primeDeferred.resolve(undefined);
@@ -845,7 +845,7 @@ describe('FileDiff partial hydration', () => {
 
       expect(primedDiffs).toHaveLength(1);
       expect(primedDiffs[0]).toBe(partial);
-      expect(primedDiffs[0]?.cacheKey).toBe('partial.ts:old:partial.ts:new');
+      expect(primedDiffs[0]?.cacheKey).toBe('partial-cache:hydrated');
       expect(consoleError.mock.calls[0]?.[0]).toBe(primingError);
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(false);
@@ -889,7 +889,7 @@ describe('FileDiff partial hydration', () => {
       await wait(0);
 
       expect(primedDiffs).toHaveLength(1);
-      expect(primedDiffs[0]?.cacheKey).toBe('first.ts:old:first.ts:new');
+      expect(primedDiffs[0]?.cacheKey).toBe('partial-cache:hydrated');
       instance.render({
         fileContainer,
         fileDiff: nextDiff,
