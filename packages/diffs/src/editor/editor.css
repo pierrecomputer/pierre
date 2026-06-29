@@ -43,19 +43,41 @@
   caret-color: var(--diffs-bg-caret);
   outline: none;
 }
-[data-gutter-buffer],
-[data-line]:not([data-selected-line]),
-[data-line-annotation] {
-  background-color: transparent;
-}
 [data-line] {
   cursor: text;
+  /* The line's own in-flow background would paint above the custom selection
+     overlay ([data-selection-range], z-index -10), hiding it. Keep the line
+     itself transparent and paint --diffs-line-bg on the ::after layer below the
+     overlay instead. Gutters/column numbers/annotations have no overlay, so they
+     keep receiving --diffs-line-bg directly from style.css. */
+  background-color: transparent;
 }
-[data-line]:is([data-selected-line]) {
-  background-color: var(--diffs-editor-line-highlight-bg);
-}
-[data-line]:is([data-line-type='change-deletion']) {
+/* Diff line background layer: sits at z-index -20, below the selection overlay
+   (z-index -10) but still below the in-flow glyph text, so additions/context/
+   deletions/hover keep their color while the translucent selection composites
+   over it. ::before is reserved for the classic +/- indicator, so use ::after. */
+[data-line]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -20;
   background-color: var(--diffs-line-bg);
+  pointer-events: none;
+}
+/* Current-line (cursor) highlight, painted through the same layer. The theme's
+   highlight color is translucent, so compositing it over the line's diff color
+   keeps additions/deletions tinted instead of flattening them to the editor base
+   color. Use --diffs-computed-diff-line-bg (the raw per-type diff color, before
+   style.css folds the selection tint into --diffs-line-bg) as the opaque base so
+   the highlight is not applied twice, then layer the highlight on top via a
+   background-image. Context lines resolve the base to --diffs-bg, leaving their
+   current-line highlight identical to before. */
+[data-line][data-selected-line]::after {
+  background-color: var(--diffs-computed-diff-line-bg, var(--diffs-bg));
+  background-image: linear-gradient(
+    var(--diffs-editor-line-highlight-bg),
+    var(--diffs-editor-line-highlight-bg)
+  );
 }
 
 [data-editor-overlay] {
@@ -97,10 +119,15 @@
   z-index: -10;
   background-color: var(--diffs-editor-selection-bg);
 }
+/* Masks the square corner of the translucent selection to fake a rounded
+   corner. It must match the background painted behind the selection: the
+   editor base bg for context lines, or the line's diff color (additions,
+   deletions, current line) which the editor passes in via
+   --diffs-selection-corner-bg. */
 [data-selection-corner] {
   width: 100%;
   height: 100%;
-  background-color: var(--diffs-bg);
+  background-color: var(--diffs-selection-corner-bg, var(--diffs-bg));
 }
 [data-match-range] {
   z-index: -10;

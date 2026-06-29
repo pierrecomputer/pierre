@@ -2866,7 +2866,18 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       radius: 'rtl' | 'rbl' | 'rbr'
     ) => {
       const top = this.#getLineY(line) + wrapLine * lineHeight;
-      const css = `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);`;
+      // The corner mask paints over the translucent selection to fake a rounded
+      // corner, so it must match the background behind the selection. That
+      // background is painted on the line's ::after layer (see editor.css), which
+      // is colored for additions/deletions/current line but transparent for
+      // context lines. Repaint the mask with the line's color when present;
+      // otherwise leave it unset so the CSS falls back to the editor base bg.
+      const cornerBg = this.#lineBackgroundColor(line);
+      const css =
+        `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);` +
+        (cornerBg !== undefined
+          ? `--diffs-selection-corner-bg:${cornerBg};`
+          : '');
       const dataset = {
         selectionCorner: '',
         [radius]: '',
@@ -3659,6 +3670,28 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     return undefined;
+  }
+
+  // Resolve the painted background color of a line for the selection-corner
+  // masks. The diff line background is painted on a [data-line]::after layer
+  // (see editor.css), so read that pseudo-element's computed color rather than
+  // the line element itself (whose own background is transparent in edit mode).
+  // Returns undefined when the layer is transparent (e.g. context lines), so the
+  // corner keeps the editor base background.
+  #lineBackgroundColor(line: number): string | undefined {
+    const lineElement = this.#getLineElement(line);
+    if (lineElement === undefined) {
+      return undefined;
+    }
+    const backgroundColor = getComputedStyle(
+      lineElement,
+      '::after'
+    ).backgroundColor;
+    return backgroundColor === '' ||
+      backgroundColor === 'transparent' ||
+      backgroundColor === 'rgba(0, 0, 0, 0)'
+      ? undefined
+      : backgroundColor;
   }
 
   #getLineElement(line: number): HTMLElement | undefined {
