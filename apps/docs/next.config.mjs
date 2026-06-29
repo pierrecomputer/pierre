@@ -38,6 +38,12 @@ const nextConfig = {
   devIndicators: false,
   experimental: {
     cssChunking: 'strict',
+    // Wraps App Router navigations in `document.startViewTransition` so the
+    // <ViewTransition> components (e.g. the agent demo morphing from its
+    // windowed card into the fullscreen /edit/live editor) animate across
+    // route changes. Falls back to an instant navigation where the browser
+    // lacks View Transition support.
+    viewTransition: true,
   },
   // allowedDevOrigins: [],
   // Resolve and transpile workspace packages so subpath exports (e.g. @pierre/trees/react)
