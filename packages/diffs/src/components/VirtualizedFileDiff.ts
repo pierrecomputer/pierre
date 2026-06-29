@@ -1133,7 +1133,13 @@ export class VirtualizedFileDiff<
       }
     }
 
-    if (!this.isVisible && this.isSimpleMode() && !dataChanged) {
+    if (!this.isVisible && this.isSimpleMode() && (!dataChanged || !isSetup)) {
+      this.fileDiff = nextFileDiff;
+      this.deletionFile = oldFile;
+      this.additionFile = newFile;
+      if (targetChanged) {
+        this.cachedHeaderHTML = undefined;
+      }
       return this.renderPlaceholder(this.height);
     }
 
