@@ -1135,8 +1135,10 @@ export class VirtualizedFileDiff<
 
     if (!this.isVisible && this.isSimpleMode() && (!dataChanged || !isSetup)) {
       this.fileDiff = nextFileDiff;
-      this.deletionFile = oldFile;
-      this.additionFile = newFile;
+      if (fileInput != null) {
+        this.deletionFile = oldFile;
+        this.additionFile = newFile;
+      }
       if (targetChanged) {
         this.cachedHeaderHTML = undefined;
       }
