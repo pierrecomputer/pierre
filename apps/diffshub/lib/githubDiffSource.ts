@@ -43,7 +43,7 @@ export function parseGitHubDiffSource(
   if (compareMatch != null) {
     return {
       kind: 'compare',
-      range: compareMatch[3],
+      range: decodeURIComponent(compareMatch[3]),
       repo: { owner: compareMatch[1], repo: compareMatch[2] },
     };
   }
