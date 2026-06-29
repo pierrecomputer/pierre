@@ -213,6 +213,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
   #shouldIgnoreSelectionChange = false;
+  // Set by select-all, cleared on the next keydown/pointerdown. Select-all
+  // mirrors the whole document onto the native selection so WebKit fires a
+  // delete beforeinput, but a newline-terminated document's empty trailing line
+  // has no rendered row, so the native range stops one line short. Without this
+  // guard a selectionchange would read that shorter native range back over
+  // #selections, and the next delete would leave the trailing line behind.
+  #suppressNativeSelectionSync = false;
   // Whether the contenteditable holds (or is claiming) focus. Synced by
   // focus/blur listeners and set eagerly by #focus(), whose real focus() call is
   // deferred to a rAF. Lets applyEdits skip focus/scroll only on unfocused
@@ -899,6 +906,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           // overwrite the remapped #selections before the user returns to type.
           if (
             this.#shouldIgnoreSelectionChange ||
+            this.#suppressNativeSelectionSync ||
             shadowRoot == null ||
             !this.#contentHasFocus
           ) {
@@ -1103,6 +1111,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           if (e.pointerType !== 'mouse') {
             return;
           }
+          // A click moves off the select-all selection; let selectionchange
+          // sync #selections from the new native selection again.
+          this.#suppressNativeSelectionSync = false;
 
           // A click on a read-only deleted line (unified view) selects it
           // natively. Hand the selection to the deleted text and drop the
@@ -1200,6 +1211,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (!targetIsContentElement(e)) {
           return;
         }
+        // A keystroke is the user acting on the select-all selection (deleting,
+        // typing, moving); let selectionchange sync #selections again.
+        this.#suppressNativeSelectionSync = false;
 
         // handle the cursor move events manually for multiple selections and virtual viewport
         const mvShortcut = isMoveCursorShortcut(e);
@@ -1715,10 +1729,35 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
         break;
 
-      case 'selectAll':
-        this.#updateSelections([getDocumentFullSelection(textDocument)]);
+      case 'selectAll': {
+        const fullSelection = getDocumentFullSelection(textDocument);
+        this.#updateSelections([fullSelection]);
         this.focus();
+        // The editor paints selections with an overlay and otherwise leaves the
+        // native selection a collapsed caret. focus() above collapses it to the
+        // document start, and Safari/WebKit then fires no delete beforeinput for
+        // a following Backspace — nothing sits before a caret at offset 0 — so
+        // select-all then delete is silently dropped. Mirror the range onto the
+        // native selection so WebKit emits the delete; Chrome already deletes via
+        // #selections regardless. A document that ends in a newline has an empty
+        // trailing line that splitFileContents drops, leaving no row to anchor
+        // the native end to, so clamp it to the last rendered line — the native
+        // range only needs to be non-collapsed, and the edit uses #selections,
+        // which still spans the whole document. #suppressNativeSelectionSync then
+        // stops the resulting selectionchange from reading that clamped (shorter)
+        // range back over #selections before the delete runs.
+        let nativeEnd = fullSelection.end;
+        if (this.#isLastLineEmpty() && nativeEnd.line > 0) {
+          const lastRenderedLine = nativeEnd.line - 1;
+          nativeEnd = {
+            line: lastRenderedLine,
+            character: textDocument.getLineLength(lastRenderedLine),
+          };
+        }
+        this.#suppressNativeSelectionSync = true;
+        this.#setWindowSelection({ ...fullSelection, end: nativeEnd });
         break;
+      }
 
       case 'moveCursorToDocStart':
       case 'moveCursorToDocEnd':
@@ -2095,6 +2134,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#deleteSelectionText(true);
         break;
       case 'deleteSoftLineBackward':
+      // Safari emits deleteHardLineBackward for cmd+backspace where Chrome emits
+      // deleteSoftLineBackward; treat them the same so cmd+backspace deletes to
+      // the line start in both. They differ only on a wrapped line (hard goes to
+      // the logical line start, soft to the visual one), and Chrome's soft
+      // behavior is what we match.
+      case 'deleteHardLineBackward':
         this.#deleteSoftLineBackward();
         break;
       case 'deleteHardLineForward':
