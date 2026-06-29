@@ -954,16 +954,20 @@ export interface DiffsEditableComponent<
   ) => readonly number[];
   // Apply an in-place content edit (no line-count change): incrementally
   // recompute hunk metadata for the changed lines and refresh the view.
+  // Returns true when the refresh rebuilt the rendered rows (so the host must
+  // drop caret/selection caches that point at the now-detached row elements),
+  // and false when it only patched existing rows in place or did nothing.
   // No-op for plain files. For a line-count change the host calls
   // applyDocumentChange instead.
-  applyContentEdit: (changedAdditionLineIndexes: readonly number[]) => void;
+  applyContentEdit: (changedAdditionLineIndexes: readonly number[]) => boolean;
   // Recompute hunk metadata for changed addition lines WITHOUT refreshing the
   // view. The host calls this for background/offscreen token updates — a
   // content-only edit that landed outside the render window — where the visible
-  // rows are patched separately. No-op for plain files.
+  // rows are patched separately. Returns true when the recompute changed the
+  // rendered hunk shape; always false for plain files, which have no hunks.
   recomputeContentHunks: (
     changedAdditionLineIndexes: readonly number[]
-  ) => void;
+  ) => boolean;
   // Re-render the component from the host's document, discarding the cached
   // (host-derived) rendered content. The host calls this after a host-driven
   // full re-render rebuilt the rows from the host's stale file contents, so the

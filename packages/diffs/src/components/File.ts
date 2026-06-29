@@ -178,6 +178,7 @@ export class File<
   protected enabled = true;
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
+  private renderViewSyncVersion = 0;
 
   constructor(
     public options: FileOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -478,14 +479,25 @@ export class File<
     const editor = this.editor;
     const fileContainer = this.fileContainer;
     const file = this.file;
+    const lineAnnotations = this.lineAnnotations;
+    const renderRange = this.renderRange;
     if (editor != null && fileContainer != null && file != null) {
+      const syncVersion = ++this.renderViewSyncVersion;
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
+        if (
+          syncVersion !== this.renderViewSyncVersion ||
+          editor !== this.editor ||
+          fileContainer !== this.fileContainer ||
+          file !== this.file
+        ) {
+          return;
+        }
         editor.__syncRenderView(
           highlighter,
           fileContainer,
           file,
-          this.lineAnnotations,
-          this.renderRange
+          lineAnnotations,
+          renderRange
         );
       });
     }
@@ -529,10 +541,15 @@ export class File<
   }
 
   // Plain files render edits via the host's inline DOM patch; nothing to do.
-  public applyContentEdit(): void {}
+  // Returns false because no rows were rebuilt (see DiffsEditableComponent).
+  public applyContentEdit(): boolean {
+    return false;
+  }
 
-  // Plain files have no diff hunks to recompute.
-  public recomputeContentHunks(): void {}
+  // Plain files have no diff hunks to recompute, so the shape never changes.
+  public recomputeContentHunks(): boolean {
+    return false;
+  }
 
   public render({
     file,

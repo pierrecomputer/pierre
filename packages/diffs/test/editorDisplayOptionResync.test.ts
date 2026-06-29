@@ -4,7 +4,12 @@ import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents } from '../src/types';
+import type {
+  DiffsEditor,
+  DiffsHighlighter,
+  FileContents,
+  HighlightedToken,
+} from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, wait } from './domHarness';
 
@@ -55,6 +60,35 @@ function lineTokenCount(
   const content = findAdditionContent(container);
   const line = content?.querySelector(`[data-line="${lineNumber}"]`);
   return line == null ? undefined : line.childElementCount;
+}
+
+function additionChangeRowCount(container: HTMLElement): number {
+  return (
+    findAdditionContent(container)?.querySelectorAll(
+      '[data-line-type="change-addition"]'
+    ).length ?? 0
+  );
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+function makeDirtyLines(
+  edits: ReadonlyArray<[number, string]>
+): Map<number, HighlightedToken[]> {
+  const dirty = new Map<number, HighlightedToken[]>();
+  for (const [line, lineText] of edits) {
+    dirty.set(line, [[0, '', lineText]]);
+  }
+  return dirty;
 }
 
 interface DisplayOptionFixture {
@@ -263,6 +297,168 @@ describe('diff editor: display-option toggle mid-edit', () => {
       );
     } finally {
       await fixture.cleanup();
+    }
+  });
+
+  test('fully refreshes split rows when content edit removes a hunk', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new FileDiff<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      diffStyle: 'split',
+    });
+    fileDiff.render({
+      oldFile: { name: 'edit.ts', contents: 'alpha\nbravo\ncharlie\n' },
+      newFile: { name: 'edit.ts', contents: 'alpha\nBRAVO\ncharlie\n' },
+      fileContainer: container,
+      forceRender: true,
+    });
+
+    try {
+      expect(additionChangeRowCount(container)).toBeGreaterThan(0);
+
+      const changed = fileDiff.updateRenderCache(
+        makeDirtyLines([[1, 'bravo']]),
+        'light'
+      );
+      fileDiff.applyContentEdit(changed);
+      await wait(150);
+
+      expect(additionChangeRowCount(container)).toBe(0);
+    } finally {
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  // getDiffRenderShapeKey is what lets applyContentEdit tell a reshaping split
+  // edit (which needs a full rebuild) from an in-place one (the fast patch).
+  // These two lock the part fastRefreshDiffView's row-count check cannot cover:
+  // a reshape that keeps the same split row count must still be flagged, and a
+  // settled hunk must stay eligible for the fast path.
+  test('flags a reshape that keeps the same split row count', () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new FileDiff<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      diffStyle: 'split',
+    });
+    fileDiff.render({
+      oldFile: { name: 'edit.ts', contents: 'alpha\nbravo\ncharlie\ndelta\n' },
+      newFile: { name: 'edit.ts', contents: 'alpha\nBRAVO\nCHARLIE\ndelta\n' },
+      fileContainer: container,
+      forceRender: true,
+    });
+
+    try {
+      const splitRowsBefore = fileDiff.fileDiff?.splitLineCount;
+
+      // Revert only line 2 of the two-line change; line 3 stays changed. One
+      // split row turns from a change into context, but the split row count is
+      // unchanged - so fastRefreshDiffView's row-count check would miss it.
+      const changed = fileDiff.updateRenderCache(
+        makeDirtyLines([[1, 'bravo']]),
+        'light'
+      );
+      const hunkShapeChanged = fileDiff.recomputeContentHunks(changed);
+
+      expect(fileDiff.fileDiff?.splitLineCount).toBe(splitRowsBefore);
+      expect(hunkShapeChanged).toBe(true);
+    } finally {
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('keeps a settled hunk on the fast path for a follow-up edit', () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new FileDiff<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      diffStyle: 'split',
+    });
+    fileDiff.render({
+      oldFile: { name: 'edit.ts', contents: 'alpha\nbravo\ncharlie\n' },
+      newFile: { name: 'edit.ts', contents: 'alpha\nBRAVO\ncharlie\n' },
+      fileContainer: container,
+      forceRender: true,
+    });
+
+    try {
+      // The first edit reparses the hunk and settles its representation. A
+      // follow-up edit that keeps the change shape then recomputes to the same
+      // key, so it stays on the in-place fast path instead of a full rebuild.
+      const first = fileDiff.updateRenderCache(
+        makeDirtyLines([[1, 'DELTA']]),
+        'light'
+      );
+      fileDiff.recomputeContentHunks(first);
+
+      const second = fileDiff.updateRenderCache(
+        makeDirtyLines([[1, 'EPSILON']]),
+        'light'
+      );
+      const hunkShapeChanged = fileDiff.recomputeContentHunks(second);
+
+      expect(hunkShapeChanged).toBe(false);
+    } finally {
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('does not sync a detached editor after highlighter initialization resolves', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new FileDiff<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      diffStyle: 'split',
+    });
+    fileDiff.render({
+      oldFile: { name: 'edit.ts', contents: 'alpha\nbravo\n' },
+      newFile: { name: 'edit.ts', contents: 'alpha\nCHANGED\n' },
+      fileContainer: container,
+      forceRender: true,
+    });
+    const renderer = (
+      fileDiff as unknown as {
+        hunksRenderer: {
+          initializeHighlighter(): Promise<DiffsHighlighter>;
+        };
+      }
+    ).hunksRenderer;
+    const originalInitializeHighlighter =
+      renderer.initializeHighlighter.bind(renderer);
+    const deferred = createDeferred<DiffsHighlighter>();
+    renderer.initializeHighlighter = () => deferred.promise;
+    let syncCount = 0;
+    const editor = {
+      __postponeBackgroundTokenizeToNextFrame() {},
+      __syncRenderView() {
+        syncCount++;
+      },
+      cleanUp() {},
+    } as unknown as DiffsEditor<undefined>;
+
+    try {
+      const detach = fileDiff.attachEditor(editor);
+      detach();
+      deferred.resolve({} as DiffsHighlighter);
+      await wait(0);
+
+      expect(syncCount).toBe(0);
+    } finally {
+      renderer.initializeHighlighter = originalInitializeHighlighter;
+      fileDiff.cleanUp();
+      dom.cleanup();
     }
   });
 

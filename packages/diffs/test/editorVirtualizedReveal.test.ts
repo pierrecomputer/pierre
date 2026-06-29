@@ -91,9 +91,15 @@ class VirtualizedEditableComponent implements DiffsEditableComponent<undefined> 
     return [];
   }
 
-  applyContentEdit(_changedAdditionLineIndexes: readonly number[]): void {}
+  applyContentEdit(_changedAdditionLineIndexes: readonly number[]): boolean {
+    return false;
+  }
 
-  recomputeContentHunks(_changedAdditionLineIndexes: readonly number[]): void {}
+  recomputeContentHunks(
+    _changedAdditionLineIndexes: readonly number[]
+  ): boolean {
+    return false;
+  }
 
   #syncRenderView(): void {
     this.#editor?.__syncRenderView(

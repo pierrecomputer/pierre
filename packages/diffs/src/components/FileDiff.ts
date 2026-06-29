@@ -241,6 +241,7 @@ export class FileDiff<
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
   protected fastRefreshTimeout: ReturnType<typeof setTimeout> | undefined;
+  private renderViewSyncVersion = 0;
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -998,19 +999,30 @@ export class FileDiff<
     const editor = this.editor;
     const fileContainer = this.fileContainer;
     const fileDiff = this.fileDiff;
+    const lineAnnotations = this.lineAnnotations;
+    const renderRange = this.renderRange;
     if (
       editor != null &&
       fileContainer != null &&
       fileDiff != null &&
       !fileDiff.isPartial
     ) {
+      const syncVersion = ++this.renderViewSyncVersion;
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
+        if (
+          syncVersion !== this.renderViewSyncVersion ||
+          editor !== this.editor ||
+          fileContainer !== this.fileContainer ||
+          fileDiff !== this.fileDiff
+        ) {
+          return;
+        }
         editor.__syncRenderView(
           highlighter,
           fileContainer,
           fileDiff,
-          this.lineAnnotations,
-          this.renderRange
+          lineAnnotations,
+          renderRange
         );
       });
     }
@@ -1078,23 +1090,36 @@ export class FileDiff<
 
   public recomputeContentHunks(
     changedAdditionLineIndexes: readonly number[]
-  ): void {
-    this.hunksRenderer.recomputeContentHunks(changedAdditionLineIndexes);
+  ): boolean {
+    return this.hunksRenderer.recomputeContentHunks(changedAdditionLineIndexes);
   }
 
-  public applyContentEdit(changedAdditionLineIndexes: readonly number[]): void {
-    this.recomputeContentHunks(changedAdditionLineIndexes);
-    if (this.options.diffStyle === 'split') {
-      if (this.fastRefreshTimeout != null) {
-        clearTimeout(this.fastRefreshTimeout);
-      }
+  // Returns true when it rebuilt the rendered rows via a full refresh (the host
+  // must then drop caret/selection caches that point at the detached rows), and
+  // false when it only scheduled the split fast path, which patches the existing
+  // rows in place.
+  public applyContentEdit(
+    changedAdditionLineIndexes: readonly number[]
+  ): boolean {
+    const hunkShapeChanged = this.recomputeContentHunks(
+      changedAdditionLineIndexes
+    );
+    if (this.fastRefreshTimeout != null) {
+      clearTimeout(this.fastRefreshTimeout);
+      this.fastRefreshTimeout = undefined;
+    }
+    if (this.options.diffStyle === 'split' && !hunkShapeChanged) {
       this.fastRefreshTimeout = setTimeout(() => {
         this.fastRefreshTimeout = undefined;
         this.fastRefreshDiffView();
       }, 100);
-    } else {
-      this.refreshDiffView();
+      return false;
     }
+    if (hunkShapeChanged) {
+      this.hunksRenderer.clearRenderCache();
+    }
+    this.refreshDiffView();
+    return true;
   }
 
   private removeRenderedCode(): void {
@@ -1965,12 +1990,17 @@ export class FileDiff<
       return;
     }
 
+    // Patch the line-type attribute on the existing rows in index order.
+    // Returns false when a column's freshly rendered row count no longer matches
+    // the DOM: getDiffRenderShapeKey approximates the rendered shape from hunk
+    // metadata, so a reshaping edit it fails to flag would otherwise leave stale
+    // rows here. The caller then falls back to a full rebuild.
     const applyLineType = (
       type: 'deletions' | 'additions',
       column: ColumnElements | undefined
-    ) => {
+    ): boolean => {
       if (column == null) {
-        return;
+        return true;
       }
       const ast = this.hunksRenderer.renderCodeAST(type, hunksResult);
       const gutterChildren = getElementChildren(ast?.[0]);
@@ -1979,29 +2009,35 @@ export class FileDiff<
         [column.gutter, gutterChildren],
         [column.content, contentChildren],
       ] as const) {
-        if (
-          astChildren != null &&
-          el.childElementCount === astChildren.length
-        ) {
-          for (let i = 0; i < astChildren.length; i++) {
-            const gutterElement = el.children[i] as HTMLElement;
-            const gutterChild = astChildren[i] as HASTElement;
-            const lineType = gutterChild.properties['data-line-type'] as
-              | string
-              | undefined;
-            if (
-              lineType != null &&
-              gutterElement.dataset.lineType !== lineType
-            ) {
-              gutterElement.dataset.lineType = lineType;
-            }
+        if (astChildren == null) {
+          continue;
+        }
+        if (el.childElementCount !== astChildren.length) {
+          return false;
+        }
+        for (let i = 0; i < astChildren.length; i++) {
+          const gutterElement = el.children[i] as HTMLElement;
+          const gutterChild = astChildren[i] as HASTElement;
+          const lineType = gutterChild.properties['data-line-type'] as
+            | string
+            | undefined;
+          if (lineType != null && gutterElement.dataset.lineType !== lineType) {
+            gutterElement.dataset.lineType = lineType;
           }
         }
       }
+      return true;
     };
 
-    applyLineType('deletions', columns[0]);
-    applyLineType('additions', columns[1]);
+    // applyLineType patches the rows it inspects, so call it for both columns up
+    // front (never short-circuit) and keep the results. A diverged row count
+    // means the fast path cannot align DOM rows to AST rows by index, so if
+    // either column diverged, rebuild the whole view instead.
+    const deletionsPatched = applyLineType('deletions', columns[0]);
+    const additionsPatched = applyLineType('additions', columns[1]);
+    if (!deletionsPatched || !additionsPatched) {
+      this.refreshDiffView();
+    }
   }
 
   // full diff view re-rendering
@@ -2040,6 +2076,8 @@ export class FileDiff<
       ] as const) {
         if (astChildren != null) {
           el.innerHTML = toHtml(astChildren);
+        } else {
+          el.innerHTML = '';
         }
       }
     };

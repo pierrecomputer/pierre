@@ -128,6 +128,41 @@ interface ProcessContext {
   incrementRowCount(count?: number): void;
 }
 
+// Serializes the structure that decides how a diff lays out its rendered rows:
+// hunk count, split/unified line counts, and each hunk's boundaries plus the
+// type and size of its content blocks. applyContentEdit compares this key from
+// before and after recomputing hunks to choose a split edit's refresh path - an
+// unchanged key takes the in-place fast patch (fastRefreshDiffView), a changed
+// key clears the render cache and rebuilds the rows (refreshDiffView).
+//
+// It exists because fastRefreshDiffView's own check only compares row *counts*,
+// so it cannot see a reshape that keeps the split row count while changing which
+// rows are changes vs context. Reverting one line of a two-line change, for
+// example, leaves the same number of split rows but turns that row from a change
+// into context; this key catches it (via the unified count and per-block layout)
+// and forces the rebuild those rows need.
+//
+// It approximates the rendered shape rather than reading it: an edit that does
+// not change the rendered rows can still change the key, because the initial
+// parse and an incremental reparse describe the same hunk differently. That only
+// costs an unnecessary - but always safe - full rebuild. Keep it aligned with
+// anything that affects rendered rows; a layout-affecting field it omits could
+// let a real reshape slip onto the fast path and leave stale rows behind.
+function getDiffRenderShapeKey(diff: FileDiffMetadata): string {
+  let key = `${diff.hunks.length}:${diff.splitLineCount}:${diff.unifiedLineCount}`;
+  for (const hunk of diff.hunks) {
+    key += `|${hunk.collapsedBefore}:${hunk.splitLineStart}:${hunk.splitLineCount}:${hunk.unifiedLineStart}:${hunk.unifiedLineCount}`;
+    for (const content of hunk.hunkContent) {
+      if (content.type === 'context') {
+        key += `;context:${content.lines}:${content.additionLineIndex}:${content.deletionLineIndex}`;
+      } else {
+        key += `;change:${content.additions}:${content.deletions}:${content.additionLineIndex}:${content.deletionLineIndex}`;
+      }
+    }
+  }
+  return key;
+}
+
 export interface DiffHunksRendererOptions extends BaseDiffOptions {
   headerRenderMode?: FileHeaderRenderMode;
 }
@@ -414,9 +449,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   // `applyDocumentChange` instead, which recomputes from the full document.
   public recomputeContentHunks(
     changedAdditionLineIndexes: readonly number[]
-  ): void {
+  ): boolean {
     if (this.renderCache == null) {
-      return;
+      return false;
     }
     const { diff, result } = this.renderCache;
     if (
@@ -424,17 +459,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       diff.isPartial ||
       changedAdditionLineIndexes.length === 0
     ) {
-      return;
+      return false;
     }
-    Object.assign(
+    const previousRenderShape = getDiffRenderShapeKey(diff);
+    // updateDiffHunks mutates `diff` in place with the recomputed hunks, so it
+    // is called for that side effect; its return value just repeats what it
+    // already wrote back, which is why there is no Object.assign here.
+    updateDiffHunks(
       diff,
-      updateDiffHunks(
-        diff,
-        changedAdditionLineIndexes,
-        this.options.parseDiffOptions
-      )
+      changedAdditionLineIndexes,
+      this.options.parseDiffOptions
     );
     this.renderCache.isDirty = true;
+    return getDiffRenderShapeKey(diff) !== previousRenderShape;
   }
 
   // Normally triggered by the host when the document line count changes.
