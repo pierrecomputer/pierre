@@ -354,3 +354,35 @@ describe('diff editor: switching diff style after delete-all', () => {
     });
   }
 });
+
+// Deleting everything from a newly added file empties both sides of the diff, so
+// a recompute compares empty against empty and produces no hunks. The editor
+// still needs one editable row to host its caret, so an empty addition row must
+// be synthesized even when there is no hunk to grow.
+describe('diff editor: delete-all on an added file (empty old side)', () => {
+  for (const diffStyle of ['split', 'unified'] as const) {
+    test(`keeps an editable line and accepts typing (${diffStyle})`, async () => {
+      const fixture = await createDiffEditorFixture(
+        diffStyle,
+        '',
+        'alpha\nbravo\n'
+      );
+      const { editor, container } = fixture;
+      try {
+        replaceAll(editor, '');
+        await wait(0);
+        expect(editor.getState().file.contents).toBe('');
+
+        const content = findAdditionContent(container);
+        expect(content).toBeDefined();
+        expect(countEditableLineEls(content!)).toBeGreaterThanOrEqual(1);
+
+        editor.applyEdits([insertAt(0, 0, 'hello')], true);
+        await wait(0);
+        expect(editor.getState().file.contents).toBe('hello');
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+  }
+});

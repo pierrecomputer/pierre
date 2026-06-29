@@ -64,10 +64,37 @@ export function recomputeDiffHunks(
 // older sentinel-diff approach for the fully-empty document, which placed the
 // row by diffing the deletions against a blank line — that blank line matched an
 // empty deletion line via LCS and rendered the row mid-document as "context".
-export function appendTrailingEmptyAdditionRow(diff: FileDiffMetadata): void {
+//
+// Returns the addition-line index of the row it added, or -1 when it added none.
+export function appendTrailingEmptyAdditionRow(
+  diff: FileDiffMetadata,
+  parseDiffOptions?: CreatePatchOptionsNonabortable
+): number {
   const hunk = diff.hunks.at(-1);
   if (hunk == null) {
-    return;
+    // No hunk means the recompute found no change. When the document is also
+    // empty this is an emptied added file (its old side is empty too), so
+    // comparing empty against empty produces nothing to grow. Synthesize the
+    // single empty addition row a brand-new one-line file would have, so the
+    // editor still has a row to host its caret. (A non-empty file with no hunk
+    // is unchanged and has no addition row to anchor, so leave it alone.)
+    if (diff.additionLines.length === 0) {
+      const recomputed = parseDiffFromFile(
+        {
+          name: diff.prevName ?? diff.name,
+          contents: diff.deletionLines.join(''),
+        },
+        { name: diff.name, contents: '\n', lang: diff.lang },
+        parseDiffOptions
+      );
+      diff.hunks = recomputed.hunks;
+      diff.splitLineCount = recomputed.splitLineCount;
+      diff.unifiedLineCount = recomputed.unifiedLineCount;
+      diff.type = recomputed.type;
+      diff.additionLines = [''];
+      return 0;
+    }
+    return -1;
   }
 
   const trailingIndex = diff.additionLines.length;
@@ -105,6 +132,7 @@ export function appendTrailingEmptyAdditionRow(diff: FileDiffMetadata): void {
   diff.type = 'change';
 
   recomputeDiffRenderLineCounts(diff);
+  return trailingIndex;
 }
 
 /** Updates hunk metadata after addition lines change; re-parses affected hunks only. */

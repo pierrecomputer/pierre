@@ -477,12 +477,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // highlighted HAST may be a row short here (the re-highlight also drops the
       // trailing line); processDiffResult fills that row's content empty.
       if (textDocument.lineCount > diff.additionLines.length) {
-        appendTrailingEmptyAdditionRow(diff);
-        const trailingIndex = diff.additionLines.length - 1;
-        additionHastLines[trailingIndex] = createPlainAdditionLineElement(
-          trailingIndex,
-          textDocument
+        const trailingIndex = appendTrailingEmptyAdditionRow(
+          diff,
+          this.options.parseDiffOptions
         );
+        if (trailingIndex >= 0) {
+          additionHastLines[trailingIndex] = createPlainAdditionLineElement(
+            trailingIndex,
+            textDocument
+          );
+        }
       }
     }
 
