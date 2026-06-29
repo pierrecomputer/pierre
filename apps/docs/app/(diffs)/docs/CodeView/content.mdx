@@ -48,6 +48,10 @@ immutability or deep equality checks, which can quickly become expensive.
 - CodeView-level options such as `layout`, `itemMetrics`, `stickyHeaders`,
   `pointerEventsOnScroll`, and `smoothScrollSettings` allow you to configure the
   scroll view. All other options are shared between all files and diffs.
+- `loadDiffFiles` is one of those shared diff options. It applies to diff items
+  rendered inside `CodeView`, which is useful for large patch-driven review UIs
+  where full file contents should be fetched only when users expand unchanged
+  context.
 
 ### Padding &amp; Gap
 
