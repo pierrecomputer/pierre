@@ -1,4 +1,8 @@
-import type { FileContents, FileDiffContentsLoader } from '@pierre/diffs';
+import type {
+  FileContents,
+  FileDiffContentsLoader,
+  FileDiffMetadata,
+} from '@pierre/diffs';
 
 import { parseGitHubDiffSource } from './githubDiffSource';
 
@@ -59,7 +63,7 @@ export function createGitHubDiffFileLoader(
       case 'change':
       case 'rename-changed':
       case 'rename-pure': {
-        const cacheKey = `${getAuthVersion()}\0${fileDiff.type}\0${fileDiff.prevName ?? ''}\0${fileDiff.name}`;
+        const cacheKey = `${getAuthVersion()}\0${getFileDiffVersion(fileDiff)}\0${fileDiff.type}\0${fileDiff.prevName ?? ''}\0${fileDiff.name}`;
         const cached = loadedFilesCache.get(cacheKey);
         if (cached != null) {
           return cached;
@@ -82,6 +86,14 @@ export function createGitHubDiffFileLoader(
       }
     }
   };
+}
+
+function getFileDiffVersion(fileDiff: FileDiffMetadata): string {
+  return [
+    fileDiff.cacheKey ?? '',
+    fileDiff.prevObjectId ?? '',
+    fileDiff.newObjectId ?? '',
+  ].join('\0');
 }
 
 async function fetchLoadedDiffFiles(
