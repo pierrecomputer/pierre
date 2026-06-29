@@ -2033,7 +2033,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       requestAnimationFrame(() => {
         this.#contentElement?.focus({ preventScroll });
         // another request animation frame since the `focus` call
-        // may trigger a selectionchange event, which we want to ignore
+        // may trigger a selectionchange event, which should be ignored
         requestAnimationFrame(() => {
           this.#shouldIgnoreSelectionChange = false;
         });
@@ -3431,7 +3431,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   #applyChange(
     change: TextDocumentChange,
-    selections?: EditorSelection[],
+    newSelections?: EditorSelection[],
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
   ) {
@@ -3467,10 +3467,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     let shouldUpdateBuffer: boolean | undefined;
     if (
       renderRange !== undefined &&
-      selections !== undefined &&
-      selections.length > 0
+      newSelections !== undefined &&
+      newSelections.length > 0
     ) {
-      const primarySelection = selections.at(-1)!;
+      const primarySelection = newSelections.at(-1)!;
       const renderRangeEndLine =
         renderRange.startingLine + renderRange.totalLines;
       // When an edit moves the caret to or past the last rendered line — typing
@@ -3539,22 +3539,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#searchPanel.updateMatches({ syncSelection: false });
     }
 
-    if (selections !== undefined) {
+    if (newSelections !== undefined) {
       // Always re-render the selection range and caret overlay so editor state
       // stays in sync. When skipFocus is set (a programmatic edit on an editor
       // that is not focused) we stop here: focusing or scrolling would pull the
       // caret and viewport toward an editor the user is not interacting with.
-      this.#updateSelections(selections);
+      this.#updateSelections(newSelections);
+
+      // focus to update the native window selection, and scroll to the caret
+      // to mock the 'contenteditable' behavior
       if (options?.skipFocus !== true) {
-        // focus to update the native window selection, and scroll to the caret
-        // to mock the 'contenteditable' behavior
         if (this.#primaryCaretElement !== undefined) {
-          this.#primaryCaretElement.scrollIntoView({
-            block: 'nearest',
-            inline: 'nearest',
+          requestAnimationFrame(() => {
+            this.#primaryCaretElement?.scrollIntoView({
+              block: 'nearest',
+              inline: 'nearest',
+            });
           });
-        } else if (selections.length > 0) {
-          const pos = getCaretPosition(selections.at(-1)!);
+        } else if (newSelections.length > 0) {
+          const pos = getCaretPosition(newSelections.at(-1)!);
           this.#scrollToLine(pos.line, pos.character);
         }
         this.focus({ preventScroll: true });
