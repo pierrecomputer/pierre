@@ -509,6 +509,20 @@ describe('iterateOverDiff', () => {
         expectedType: 'context',
       },
       {
+        name: 'hunk context after expanded fromEnd boundary',
+        diff: createWindowedSeparatorDiff([
+          {
+            type: 'context',
+            lines: 3,
+            deletionLineIndex: COLLAPSED_BEFORE,
+            additionLineIndex: COLLAPSED_BEFORE,
+          },
+        ]),
+        expandedHunks: new Map([[0, { fromStart: 0, fromEnd: 3 }]]),
+        startingLine: 3,
+        expectedType: 'context',
+      },
+      {
         name: 'hunk change content',
         diff: createWindowedSeparatorDiff([
           {
