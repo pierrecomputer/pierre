@@ -606,6 +606,7 @@ export class CodeView<LAnnotation = undefined> {
   private pendingElementPool: HTMLElement[] = [];
   private options: CodeViewOptions<LAnnotation>;
   private workerManager: WorkerPoolManager | undefined;
+  private isReadySubscription: (() => void) | undefined;
   private isContainerManaged: boolean;
 
   constructor(
@@ -887,6 +888,7 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   public reset(): void {
+    this.clearReadySubscription();
     this.restoreScrollInteractions();
     this.cleanAllRenderedItems();
     this.selectedLines = null;
@@ -1394,6 +1396,34 @@ export class CodeView<LAnnotation = undefined> {
     } else {
       queueRender(this.computeRenderRangeAndEmit);
     }
+  }
+
+  private isReady(): boolean {
+    const { workerManager } = this;
+    if (workerManager == null || workerManager.isInitialized()) {
+      this.clearReadySubscription();
+      return true;
+    }
+
+    this.isReadySubscription ??= workerManager.subscribeToStatChanges(
+      (stats) => {
+        if (stats.managerState !== 'initialized') {
+          return;
+        }
+
+        this.clearReadySubscription();
+        this.render(true);
+      }
+    );
+    return false;
+  }
+
+  private clearReadySubscription(): void {
+    if (this.isReadySubscription == null) {
+      return;
+    }
+    this.isReadySubscription();
+    this.isReadySubscription = undefined;
   }
 
   public instanceChanged(
@@ -2524,6 +2554,9 @@ export class CodeView<LAnnotation = undefined> {
     timestamp: number = performance.now()
   ): void => {
     if (CodeView.__STOP || this.container == null) {
+      return;
+    }
+    if (!this.isReady()) {
       return;
     }
 
