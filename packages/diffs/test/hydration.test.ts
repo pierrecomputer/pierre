@@ -165,6 +165,18 @@ class SpyUnresolvedFile extends UnresolvedFile {
   }
 }
 
+class InspectableVirtualizedFileDiff extends VirtualizedFileDiff {
+  public getCachedFiles(): {
+    deletionFile: FileContents | null | undefined;
+    additionFile: FileContents | null | undefined;
+  } {
+    return {
+      deletionFile: this.deletionFile,
+      additionFile: this.additionFile,
+    };
+  }
+}
+
 function createVirtualizer() {
   let connectCalls = 0;
   const virtualizer = {
@@ -430,6 +442,31 @@ describe('collapsed hydration', () => {
           parseDiffFromFile(file, modifiedFile).splitLineCount
         )
       );
+    } finally {
+      dom.cleanup();
+    }
+  });
+
+  test('VirtualizedFileDiff preserves cached files during off-screen placeholder rerenders', () => {
+    const dom = installDomConstructors();
+    try {
+      const virtualizerState = createVirtualizer();
+      const instance = new InspectableVirtualizedFileDiff(
+        undefined,
+        virtualizerState.virtualizer
+      );
+      const fileContainer = dom.createHydrationContainer();
+
+      instance.hydrate({
+        oldFile: file,
+        newFile: modifiedFile,
+        fileContainer,
+      });
+
+      expect(instance.render()).toBe(true);
+      const cachedFiles = instance.getCachedFiles();
+      expect(cachedFiles.deletionFile).toBe(file);
+      expect(cachedFiles.additionFile).toBe(modifiedFile);
     } finally {
       dom.cleanup();
     }
