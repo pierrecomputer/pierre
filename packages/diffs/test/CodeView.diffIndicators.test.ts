@@ -1,10 +1,14 @@
-import { describe, test } from 'bun:test';
+import { afterAll, describe, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { createRoot, installDom, wait } from './domHarness';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 async function waitForRenderedPre(
   root: ParentNode,
@@ -109,7 +113,6 @@ describe('CodeView diff indicators', () => {
       );
     } finally {
       viewer.cleanUp();
-      await disposeHighlighter();
       cleanup();
     }
   });

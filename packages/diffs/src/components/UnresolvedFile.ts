@@ -31,7 +31,7 @@ import type { WorkerPoolManager } from '../worker';
 import {
   FileDiff,
   type FileDiffOptions,
-  type FileDiffRenderProps,
+  type FileDiffRenderBaseProps,
 } from './FileDiff';
 
 export type RenderMergeConflictActions<LAnnotation> = (
@@ -65,10 +65,9 @@ export interface UnresolvedFileOptions<LAnnotation> extends Omit<
   maxContextLines?: number;
 }
 
-export interface UnresolvedFileRenderProps<LAnnotation> extends Omit<
-  FileDiffRenderProps<LAnnotation>,
-  'oldFile' | 'newFile'
-> {
+export interface UnresolvedFileRenderProps<
+  LAnnotation,
+> extends FileDiffRenderBaseProps<LAnnotation> {
   file?: FileContents;
   actions?: (MergeConflictDiffAction | undefined)[];
   markerRows?: MergeConflictMarkerRow[];

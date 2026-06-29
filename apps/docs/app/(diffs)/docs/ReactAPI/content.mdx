@@ -14,7 +14,7 @@ The React API exposes six main components:
 
 - `CodeView` renders a mixed, virtualized list of files and diffs inside one
   scroll container
-- `MultiFileDiff` compares two file versions
+- `MultiFileDiff` compares file contents directly
 - `PatchDiff` renders from a patch string
 - `FileDiff` renders a pre-parsed `FileDiffMetadata`
 - `File` renders a single code file without a diff
@@ -33,9 +33,28 @@ The React API exposes six main components:
 `UnresolvedFile` is intentionally uncontrolled in React. Treat `file` as initial
 input and remount (for example, with a changing `key`) when you want to reset.
 
+`MultiFileDiff` accepts `FileContents` for each existing side. Pass
+`oldFile={null}` for a new file, or `newFile={null}` for a deleted file.
+
 The `CodeView` tab above is the quick-start version. For the full guide on
 controlled `items`, imperative `initialItems`, ids, `version`, selection, and
 `scrollTo`, see [CodeView](#code-view).
+
+### Partial Diff Hydration
+
+When `loadDiffFiles` is configured, partial `FileDiffMetadata` passed to
+`FileDiff` may be hydrated in place. Keep the same `fileDiff` object identity
+stable across parent rerenders when you want the hydrated full metadata to
+persist.
+
+Return both sides for changed diffs and `{ oldFile: null, newFile }` for pure
+renames. Added and deleted diffs do not need to be hydrated.
+
+Passing a freshly parsed partial object resets hydration for that render. Avoid
+calling `parsePatchFiles` during every render before passing the result to
+`FileDiff`; store or memoize the parsed metadata instead.
+
+<DocsCodeExample {...loadDiffFilesExample} />
 
 ### Shared Props
 

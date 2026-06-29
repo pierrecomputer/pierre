@@ -245,6 +245,7 @@ const CODE_VIEW_DIFF_OPTION_KEYS = [
   'diffIndicators',
   'disableBackground',
   'expandUnchanged',
+  'loadDiffFiles',
   'collapsedContextThreshold',
   'lineDiffType',
   'maxLineDiffLength',
@@ -397,9 +398,14 @@ function defineOptionsState<LAnnotation, TMode extends CodeViewMode>(
   });
 }
 
+// NOTE(amadeus): It should be noted that there are times when various JS
+// tooling will try and enumerate various parts of our code when logging, and
+// sometimes this can trigger on the options prototype directly which won't
+// have access to an internal state.  This forces us to be defensive later on
+// which is important
 function getItemOptionsState<LAnnotation, TMode extends CodeViewMode>(
   options: CodeViewModeOptions<LAnnotation, TMode>
-): CodeViewItemOptionsState {
+): CodeViewItemOptionsState | undefined {
   return (options as CodeViewItemOptions<LAnnotation, TMode>)[
     CODE_VIEW_ITEM_OPTIONS_STATE
   ];
@@ -957,7 +963,7 @@ export class CodeView<LAnnotation = undefined> {
     const item = this.idToItem.get(target.id);
     if (item == null) return;
 
-    item.instance.primeHighlightCache();
+    void item.instance.primeHighlightCache();
   }
 
   private getElementPoolLimit() {
@@ -1631,13 +1637,13 @@ export class CodeView<LAnnotation = undefined> {
       'stickyHeader',
       () => this.options.stickyHeaders
     );
-    defineItemOption(
-      prototype,
-      'collapsed',
-      (receiver) =>
-        this.getItemOptions(getItemOptionsState(receiver), 'file')?.item
-          .collapsed === true
-    );
+    defineItemOption(prototype, 'collapsed', (receiver) => {
+      const state = getItemOptionsState(receiver);
+      if (state == null) {
+        return undefined;
+      }
+      return this.getItemOptions(state, 'file')?.item.collapsed;
+    });
 
     for (const key of CODE_VIEW_SHARED_CALLBACK_KEYS) {
       this.defineItemSharedCallback(prototype, 'file', key);
@@ -1670,13 +1676,13 @@ export class CodeView<LAnnotation = undefined> {
       'hunkSeparators',
       () => this.options.hunkSeparators
     );
-    defineItemOption(
-      prototype,
-      'collapsed',
-      (receiver) =>
-        this.getItemOptions(getItemOptionsState(receiver), 'diff')?.item
-          .collapsed === true
-    );
+    defineItemOption(prototype, 'collapsed', (receiver) => {
+      const state = getItemOptionsState(receiver);
+      if (state == null) {
+        return undefined;
+      }
+      return this.getItemOptions(state, 'diff')?.item.collapsed;
+    });
 
     for (const key of CODE_VIEW_SHARED_CALLBACK_KEYS) {
       this.defineItemSharedCallback(prototype, 'diff', key);
@@ -1718,7 +1724,11 @@ export class CodeView<LAnnotation = undefined> {
     options: FileOptions<LAnnotation> | FileDiffOptions<LAnnotation>,
     id: string
   ): void {
-    getItemOptionsState(options).id = id;
+    const state = getItemOptionsState(options);
+    if (state == null) {
+      throw new Error(`CodeView.updateItemOptionsId: No valid state`);
+    }
+    state.id = id;
   }
 
   private getItemOptions<TMode extends CodeViewMode>(
@@ -1757,6 +1767,9 @@ export class CodeView<LAnnotation = undefined> {
         const state = getItemOptionsState(
           receiver as CodeViewModeOptions<LAnnotation, TMode>
         );
+        if (state == null) {
+          return undefined;
+        }
         // Allocate wrapper storage only once a callback option is actually
         // observed. Most large CodeViews never read these callback properties.
         const callbackCache = (state.callbackCache ??= {});
@@ -1807,6 +1820,9 @@ export class CodeView<LAnnotation = undefined> {
         const state = getItemOptionsState(
           receiver as CodeViewModeOptions<LAnnotation, TMode>
         );
+        if (state == null) {
+          return undefined;
+        }
         // Selection callbacks also use the per-item lazy cache. The wrapper
         // owns CodeView selection synchronization and then delegates to the
         // latest user callback, if one exists.
@@ -3296,6 +3312,12 @@ export class CodeView<LAnnotation = undefined> {
       }
       item.top = runningTop;
       if (item.type === 'diff') {
+        const fileDiff = item.instance.consumeCodeViewLayoutChanges(
+          item.item.fileDiff
+        );
+        if (fileDiff != null) {
+          item.item.fileDiff = fileDiff;
+        }
         item.height = item.instance.prepareCodeViewItem(
           item.item.fileDiff,
           runningTop,

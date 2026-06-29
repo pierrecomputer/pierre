@@ -9,11 +9,11 @@
 
 The Vanilla JS API exposes four core components: `CodeView` (render a mixed,
 virtualized list of files and diffs in one scroll container), `FileDiff`
-(compare two file versions or render a pre-parsed `FileDiffMetadata`), `File`
-(render a single code file without diff), and `UnresolvedFile` (render merge
-conflicts with built-in resolution controls). Typically you'll want to interface
-with these as they'll handle the complicated aspects of syntax highlighting,
-theming, and interactivity for you.
+(compare file contents directly or render a pre-parsed `FileDiffMetadata`),
+`File` (render a single code file without diff), and `UnresolvedFile` (render
+merge conflicts with built-in resolution controls). Typically you'll want to
+interface with these as they'll handle the complicated aspects of syntax
+highlighting, theming, and interactivity for you.
 
 <VanillaComponentTabs
   codeViewExample={codeViewExample}
@@ -37,6 +37,20 @@ The `CodeView` tab above is the quick-start version. For the deeper guide on
 Both `FileDiff` and `File` accept an options object in their constructor. The
 `File` component has similar options, but excludes diff-specific settings and
 uses `LineAnnotation` instead of `DiffLineAnnotation` (no `side` property).
+
+When rendering direct file contents with `FileDiff.render`, pass `FileContents`
+for each existing side. Use `oldFile: null` for a new file, or `newFile: null`
+for a deleted file.
+
+For partial diffs parsed from patches, pass `loadDiffFiles` to `FileDiff`
+constructor options when you want collapsed unchanged context to expand from
+full file contents. The loader receives the partial `FileDiffMetadata` and
+returns `{ oldFile, newFile }`: changed and rename-changed diffs return both
+sides, while pure renames return `{ oldFile: null, newFile }`. Added and deleted
+patch diffs do not need loader hydration. Components catch loader errors by
+default; set `disableErrorHandling: true` when you want errors to rethrow.
+
+<DocsCodeExample {...loadDiffFilesExample} />
 
 `CodeView` forwards many of those same options to each rendered item, while
 adding CodeView-specific controls like `layout`, `itemMetrics`, `stickyHeaders`,

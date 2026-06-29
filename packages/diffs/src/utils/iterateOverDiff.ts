@@ -147,13 +147,15 @@ export function iterateOverDiff({
         return breakUnified && breakSplit;
       }
     },
-    shouldSkip(unifiedHeight: number, splitHeight: number) {
+    shouldSkip(unifiedCount: number, splitCount: number) {
       if (!state.isWindowedHighlight) {
         return false;
       }
 
-      const skipUnified = state.unifiedCount + unifiedHeight < startingLine;
-      const skipSplit = state.splitCount + splitHeight < startingLine;
+      const skipUnified =
+        unifiedCount > 0 && state.unifiedCount + unifiedCount <= startingLine;
+      const skipSplit =
+        splitCount > 0 && state.splitCount + splitCount <= startingLine;
 
       if (diffStyle === 'unified') {
         return skipUnified;

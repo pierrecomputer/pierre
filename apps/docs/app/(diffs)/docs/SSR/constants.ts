@@ -95,6 +95,8 @@ const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
 const newFile = { name: 'example.ts', contents: 'const x = 2;' };
 
 const result = await preloadMultiFileDiff({
+  // Pass FileContents for existing sides. Use oldFile: null for
+  // a new file or newFile: null for a deleted file.
   oldFile,
   newFile,
   options: { theme: 'pierre-dark', diffStyle: 'split' },

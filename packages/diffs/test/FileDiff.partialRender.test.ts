@@ -1,8 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
 import type { DiffLineAnnotation } from '../src/types';
 import { installDom } from './domHarness';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
 
 async function waitForRenderedCode(container: HTMLElement): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {
@@ -70,7 +74,6 @@ describe('FileDiff partial render', () => {
     } finally {
       instance?.cleanUp();
       cleanup();
-      await disposeHighlighter();
     }
   });
 
@@ -136,7 +139,68 @@ describe('FileDiff partial render', () => {
     } finally {
       instance?.cleanUp();
       cleanup();
-      await disposeHighlighter();
+    }
+  });
+
+  test('renders a new file from an explicit missing oldFile side', async () => {
+    const { cleanup } = installDom();
+    let instance: FileDiff<string> | undefined;
+    try {
+      const newFile = { name: 'new.txt', contents: 'alpha\nbeta\n' };
+      const fileContainer = document.createElement('div');
+      instance = new FileDiff<string>({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+        diffStyle: 'split',
+      });
+
+      instance.render({
+        fileContainer,
+        oldFile: null,
+        newFile,
+        deferManagers: true,
+        preventEmit: true,
+      });
+      await waitForRenderedCode(fileContainer);
+
+      expect(instance.fileDiff?.type).toBe('new');
+      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.fileDiff?.deletionLines).toEqual([]);
+      expect(instance.fileDiff?.additionLines).toEqual(['alpha\n', 'beta\n']);
+    } finally {
+      instance?.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('renders a deleted file from an explicit missing newFile side', async () => {
+    const { cleanup } = installDom();
+    let instance: FileDiff<string> | undefined;
+    try {
+      const oldFile = { name: 'deleted.txt', contents: 'alpha\nbeta\n' };
+      const fileContainer = document.createElement('div');
+      instance = new FileDiff<string>({
+        disableErrorHandling: true,
+        disableFileHeader: true,
+        diffStyle: 'split',
+      });
+
+      instance.render({
+        fileContainer,
+        oldFile,
+        newFile: null,
+        deferManagers: true,
+        preventEmit: true,
+      });
+      await waitForRenderedCode(fileContainer);
+
+      expect(instance.fileDiff?.type).toBe('deleted');
+      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.fileDiff?.deletionLines).toEqual(['alpha\n', 'beta\n']);
+      expect(instance.fileDiff?.additionLines).toEqual([]);
+    } finally {
+      instance?.cleanUp();
+      cleanup();
     }
   });
 });

@@ -10,7 +10,7 @@ import { DiffUrlForm } from '@/components/DiffUrlForm';
 // viewer route owns fetching and renders its own loading state there.
 export const HomeFetchForm = memo(function HomeFetchForm() {
   return (
-    <div className="bg-accent md:bg-background rounded-lg border px-4 md:my-6">
+    <div className="px-4">
       <DiffUrlForm
         placeholder="https://github.com/org/repo/123"
         inputClassName="text-md h-12 w-full text-start"

@@ -5,20 +5,41 @@ structures used throughout the library.
 
 ### FileContents
 
-`FileContents` represents a single file. Use it when rendering a file with the
-`<File>` component, or pass two of them as `oldFile` and `newFile` to diff
-components.
+`FileContents` represents one existing file version. Use it when rendering a
+file with the `<File>` component, or pass it as `oldFile` and/or `newFile` to
+diff components. For added or deleted files, pass `null` for the intentionally
+missing side.
+
+An omitted side is not the same as `null`. If you provide either `oldFile` or
+`newFile`, provide the other side too, using `null` only when that file side
+does not exist. Empty file contents are still a real file; represent them with
+`contents: ''`, not `null`.
 
 <DocsCodeExample {...fileContentsType} />
 
 ### FileDiffMetadata
 
-`FileDiffMetadata` represents the differences between two files. It contains the
-hunks (changed regions), line counts, and optionally the full file contents for
-expansion.
+`FileDiffMetadata` represents the differences between file versions. It contains
+the hunks (changed regions), line counts, and optionally the full file contents
+for expansion (if possible).
+
+When a component uses `loadDiffFiles`, treat `FileDiffMetadata` as mutable
+render metadata. A partial metadata object parsed from a patch can be upgraded
+in place: `isPartial` flips to `false`, hunks and line arrays are replaced with
+hydrated values, and the object identity is preserved.
+
+If you reparse a patch or create a new partial `FileDiffMetadata`, the renderer
+treats it as a fresh partial model. Keep the same metadata object stable when
+you want hydration to persist.
+
+When loaded files provide cache keys, hydration uses those keys so full-file
+highlights can be reused across diffs. Change each `FileContents.cacheKey`
+whenever the loaded contents, filename, language, or revision changes. If loaded
+files are unkeyed but the partial metadata has a `cacheKey`, hydration appends a
+hydrated segment as a fallback.
 
 **Tip:** You can generate `FileDiffMetadata` using
-[`parseDiffFromFile`](#utilities-parsedifffromfile) (from two file versions) or
+[`parseDiffFromFile`](#utilities-parsedifffromfile) (from file contents) or
 [`parsePatchFiles`](#utilities-parsepatchfiles) (from a patch string).
 
 <DocsCodeExample {...fileDiffMetadataType} />
@@ -27,17 +48,19 @@ expansion.
 
 There are two ways to create a `FileDiffMetadata`.
 
-#### From Two Files
+#### From File Contents
 
-Use `parseDiffFromFile` when you have both file versions. This approach includes
-the full file contents, enabling the "expand unchanged" feature.
+Use `parseDiffFromFile` when you have the full file contents. Pass both sides
+for a changed file, `oldFile: null` for a new file, or `newFile: null` for a
+deleted file. This approach allows collapsed regions to be expanded.
 
 <DocsCodeExample {...parseDiffFromFileExample} />
 
 #### From a Patch String
 
 Use `parsePatchFiles` when you have a unified diff or patch file. This is useful
-when working with git output or patch files from APIs.
+when working with git output or patch files from APIs. Patch-derived metadata is
+partial until a renderer hydrates it with full files from `loadDiffFiles`.
 
 <DocsCodeExample {...parsePatchFilesExample} />
 

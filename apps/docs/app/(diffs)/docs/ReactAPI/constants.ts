@@ -78,6 +78,7 @@ export const REACT_API_SHARED_DIFF_OPTIONS: PreloadFileOptions<undefined> = {
 import type {
   DiffTokenEventBaseProps,
   FileDiff as FileDiffClass,
+  FileDiffContentsLoader,
   PostRenderPhase,
 } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
@@ -158,6 +159,11 @@ interface DiffOptions {
 
   // Lines revealed per click when expanding collapsed regions
   expansionLineCount: 100,
+
+  // Load full contents for partial changed/renamed diffs parsed from patches.
+  // Return both sides for changed diffs and oldFile: null for pure renames.
+  // Added/deleted diffs do not need to be hydrated.
+  loadDiffFiles?: FileDiffContentsLoader,
 
   // Auto-expand collapsed context regions at or below this size
   // (default: 1)
@@ -323,6 +329,40 @@ interface DiffOptions {
   options,
 };
 
+export const REACT_API_LOAD_DIFF_FILES: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'load_diff_files.tsx',
+    contents: `import {
+  FileDiff,
+  type FileDiffLoadedFiles,
+  parsePatchFiles,
+} from '@pierre/diffs/react';
+
+const [patch] = parsePatchFiles(patchText, 'pull-42');
+const fileDiff = patch.files[0];
+
+function ReviewDiff() {
+  return (
+    <FileDiff
+      fileDiff={fileDiff}
+      options={{
+        async loadDiffFiles(fileDiff): Promise<FileDiffLoadedFiles> {
+          const response = await fetch(
+            '/api/files?path=' + encodeURIComponent(fileDiff.name)
+          );
+          // Return { oldFile, newFile }, or { oldFile: null, newFile }
+          // for pure renames.
+          // Include cacheKey values that change with revision or content.
+          return response.json();
+        },
+      }}
+    />
+  );
+}`,
+  },
+  options,
+};
+
 export const REACT_API_SHARED_DIFF_RENDER_PROPS: PreloadFileOptions<undefined> =
   {
     file: {
@@ -478,8 +518,8 @@ export const REACT_API_MULTI_FILE_DIFF: PreloadFileOptions<undefined> = {
   MultiFileDiff,
 } from '@pierre/diffs/react';
 
-// MultiFileDiff compares two file versions directly.
-// Use this when you have the old and new file contents.
+// MultiFileDiff compares file contents directly.
+// Use this when you have the old and/or new file contents.
 
 // Keep file objects stable (useState/useMemo) to avoid re-renders.
 // The component uses reference equality for change detection.
@@ -496,7 +536,9 @@ const newFile: FileContents = {
 export function MyDiff() {
   return (
     <MultiFileDiff
-      // Required: the two file versions to compare
+      // Required: pass FileContents for existing sides.
+      // Use oldFile={null} for a new file or newFile={null}
+      // for a deleted file.
       oldFile={oldFile}
       newFile={newFile}
 

@@ -369,6 +369,16 @@ export class File<
       file,
       lineAnnotations,
     } = props;
+    if (!this.enabled) {
+      throw new Error(
+        'File.hydrate: attempting to call hydrate after cleaned up'
+      );
+    }
+    if (this.fileContainer != null) {
+      throw new Error(
+        'File.hydrate: hydrate can only be called before the instance has rendered or hydrated'
+      );
+    }
     this.hydrateElements(fileContainer, prerenderedHTML);
     if (
       shouldRenderCode(this.pre, file, this.options.collapsed) ||
@@ -799,7 +809,7 @@ export class File<
     ) {
       return;
     }
-    workerManager.primeFileHighlightCache(file);
+    void workerManager.primeFileHighlightCache(file).catch(() => undefined);
   }
 
   private cleanChildNodes() {

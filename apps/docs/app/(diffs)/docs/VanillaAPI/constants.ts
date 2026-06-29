@@ -92,6 +92,8 @@ const newFile: FileContents = {
 
 // Render the diff into a container
 instance.render({
+  // Pass FileContents for existing sides. For added or deleted files,
+  // pass null for the side that does not exist.
   oldFile,
   newFile,
   containerWrapper: document.getElementById('diff-container'),
@@ -103,6 +105,38 @@ instance.rerender(); // Must call rerender() after updating options
 
 // Clean up when done
 instance.cleanUp();`,
+  },
+  options,
+};
+
+export const VANILLA_API_LOAD_DIFF_FILES: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'load_diff_files.ts',
+    contents: `import {
+  FileDiff,
+  type FileDiffLoadedFiles,
+  parsePatchFiles,
+} from '@pierre/diffs';
+
+const [patch] = parsePatchFiles(patchText, 'pull-42');
+const fileDiff = patch.files[0];
+
+const instance = new FileDiff({
+  async loadDiffFiles(fileDiff): Promise<FileDiffLoadedFiles> {
+    const response = await fetch(
+      '/api/files?path=' + encodeURIComponent(fileDiff.name)
+    );
+    // Return { oldFile, newFile }, or { oldFile: null, newFile }
+    // for pure renames.
+    // Include cacheKey values that change with revision or content.
+    return response.json();
+  },
+});
+
+instance.render({
+  fileDiff,
+  containerWrapper: document.getElementById('diff-container'),
+});`,
   },
   options,
 };
@@ -278,7 +312,11 @@ window.addEventListener('beforeunload', () => {
 export const VANILLA_API_FILE_DIFF_PROPS: PreloadFileOptions<undefined> = {
   file: {
     name: 'file_diff_props.ts',
-    contents: `import { FileDiff, type DiffTokenEventBaseProps } from '@pierre/diffs';
+    contents: `import {
+  FileDiff,
+  type DiffTokenEventBaseProps,
+  type FileDiffContentsLoader,
+} from '@pierre/diffs';
 
 // All available options for the FileDiff class
 const instance = new FileDiff({
@@ -347,6 +385,11 @@ const instance = new FileDiff({
 
   // Lines revealed per click when expanding collapsed regions
   expansionLineCount: 100,
+
+  // Load full contents for partial changed/renamed diffs parsed from patches.
+  // Return both sides for changed diffs and oldFile: null for pure renames.
+  // Added/deleted diffs do not need to be hydrated.
+  loadDiffFiles: undefined as FileDiffContentsLoader | undefined,
 
   // Auto-expand collapsed context regions at or below this size
   // (default: 1)
@@ -559,6 +602,8 @@ const instance = new FileDiff({
 
 // Render the diff
 instance.render({
+  // Use oldFile: null for a new file or newFile: null for a deleted file. Do
+  // not omit only one side.
   oldFile: { name: 'file.ts', contents: '...' },
   newFile: { name: 'file.ts', contents: '...' },
   lineAnnotations: [

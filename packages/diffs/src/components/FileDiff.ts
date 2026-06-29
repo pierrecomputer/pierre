@@ -43,6 +43,7 @@ import type {
   HighlightedToken,
   HunkData,
   HunkSeparators,
+  MaybeDiffFileInput,
   PostRenderPhase,
   PrePropertiesConfig,
   RenderHeaderFilenameSuffixCallback,
@@ -59,6 +60,7 @@ import { areHunkDataEqual } from '../utils/areHunkDataEqual';
 import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
+import { awaitWithTimeout } from '../utils/awaitWithTimeout';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
@@ -67,10 +69,12 @@ import {
   wrapThemeCSS,
   wrapUnsafeCSS,
 } from '../utils/cssWrappers';
+import { getDiffFileInput } from '../utils/getDiffFileInput';
 import { getDiffHunksRendererOptions } from '../utils/getDiffHunksRendererOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
+import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
@@ -80,10 +84,21 @@ import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
 import { DiffsContainerLoaded } from './web-components';
 
-export interface FileDiffRenderProps<LAnnotation> {
+type LoadedPartialDiffContents = Awaited<
+  ReturnType<NonNullable<BaseDiffOptions['loadDiffFiles']>>
+>;
+
+function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
+  return (
+    fileDiff.isPartial &&
+    (fileDiff.type === 'change' ||
+      fileDiff.type === 'rename-changed' ||
+      fileDiff.type === 'rename-pure')
+  );
+}
+
+export interface FileDiffRenderBaseProps<LAnnotation> {
   fileDiff?: FileDiffMetadata;
-  oldFile?: FileContents;
-  newFile?: FileContents;
   deferManagers?: boolean;
   didEdit?: boolean;
   forceRender?: boolean;
@@ -94,13 +109,17 @@ export interface FileDiffRenderProps<LAnnotation> {
   renderRange?: RenderRange;
 }
 
-export interface FileDiffHydrationProps<LAnnotation> extends Omit<
-  FileDiffRenderProps<LAnnotation>,
+export type FileDiffRenderProps<LAnnotation> =
+  FileDiffRenderBaseProps<LAnnotation> & MaybeDiffFileInput;
+
+export type FileDiffHydrationProps<LAnnotation> = Omit<
+  FileDiffRenderBaseProps<LAnnotation>,
   'fileContainer'
-> {
-  fileContainer: HTMLElement;
-  prerenderedHTML?: string;
-}
+> &
+  MaybeDiffFileInput & {
+    fileContainer: HTMLElement;
+    prerenderedHTML?: string;
+  };
 
 export type FileDiffType = 'file-diff' | 'unresolved-file';
 
@@ -174,12 +193,15 @@ interface ApplyPartialRenderProps {
   renderRange: RenderRange | undefined;
 }
 
-interface HydrationSetup<LAnnotation> {
+interface PendingFileLoad {
+  fileDiff: FileDiffMetadata;
+  promise: Promise<void>;
+}
+
+type HydrationSetup<LAnnotation> = {
   fileDiff: FileDiffMetadata | undefined;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
-  oldFile?: FileContents;
-  newFile?: FileContents;
-}
+} & MaybeDiffFileInput;
 
 let instanceId = -1;
 
@@ -227,10 +249,11 @@ export class FileDiff<
   protected lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
   protected managersDirty = false;
 
-  protected deletionFile: FileContents | undefined;
-  protected additionFile: FileContents | undefined;
+  protected deletionFile?: FileContents | null;
+  protected additionFile?: FileContents | null;
   public fileDiff: FileDiffMetadata | undefined;
   protected renderRange: RenderRange | undefined;
+  protected pendingFiles: PendingFileLoad | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
   protected lastRenderedHeaderHTML: string | undefined;
   protected cachedHeaderHTML: string | undefined;
@@ -502,6 +525,7 @@ export class FileDiff<
     this.managersDirty = false;
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.renderRange = undefined;
+    this.pendingFiles = undefined;
 
     // Clean up the elements
     if (!this.isContainerManaged) {
@@ -568,16 +592,27 @@ export class FileDiff<
     this.workerManager?.subscribeToThemeChanges(this);
   }
 
-  public hydrate(props: FileDiffHydrationProps<LAnnotation>): void {
-    const {
-      fileContainer,
-      prerenderedHTML,
-      preventEmit = false,
-      lineAnnotations,
-      oldFile,
-      newFile,
-      fileDiff,
-    } = props;
+  public hydrate({
+    fileContainer,
+    prerenderedHTML,
+    preventEmit = false,
+    lineAnnotations,
+    fileDiff,
+    ...fileInputProps
+  }: FileDiffHydrationProps<LAnnotation>): void {
+    if (!this.enabled) {
+      throw new Error(
+        'FileDiff.hydrate: attempting to call hydrate after cleaned up'
+      );
+    }
+    if (this.fileContainer != null) {
+      throw new Error(
+        'FileDiff.hydrate: hydrate can only be called before the instance has rendered or hydrated'
+      );
+    }
+    const fileInput = getDiffFileInput(fileInputProps, 'FileDiff.hydrate');
+    const oldFile = fileInput?.oldFile;
+    const newFile = fileInput?.newFile;
     this.hydrateElements(fileContainer, prerenderedHTML);
     if (
       shouldRenderCode(
@@ -591,15 +626,20 @@ export class FileDiff<
         this.options.disableFileHeader
       )
     ) {
-      this.render({ ...props, preventEmit: true });
+      this.render({
+        ...fileInputProps,
+        fileContainer,
+        lineAnnotations,
+        fileDiff,
+        preventEmit: true,
+      });
     }
     // Otherwise orchestrate our setup
     else {
       this.hydrationSetup({
         fileDiff,
-        oldFile,
-        newFile,
         lineAnnotations,
+        ...fileInput,
       });
     }
     if (!preventEmit) {
@@ -685,7 +725,7 @@ export class FileDiff<
     this.deletionFile = oldFile;
     this.fileDiff =
       fileDiff ??
-      (oldFile != null && newFile != null
+      (oldFile !== undefined && newFile !== undefined
         ? parseDiffFromFile(oldFile, newFile, this.options.parseDiffOptions)
         : undefined);
 
@@ -744,12 +784,77 @@ export class FileDiff<
       direction,
       expansionLineCountOverride
     );
+    this.loadFilesIfNecessary();
     this.rerender();
   };
 
+  protected loadFilesIfNecessary(): void {
+    const {
+      fileDiff,
+      options: { loadDiffFiles },
+    } = this;
+    if (
+      fileDiff == null ||
+      loadDiffFiles == null ||
+      !canHydrateDiff(fileDiff) ||
+      this.pendingFiles?.fileDiff === fileDiff
+    ) {
+      return;
+    }
+
+    this.pendingFiles = {
+      fileDiff,
+      promise: this.loadFilesForDiff(fileDiff, loadDiffFiles),
+    };
+  }
+
+  private async loadFilesForDiff(
+    fileDiff: FileDiffMetadata,
+    loadDiffFiles: NonNullable<BaseDiffOptions['loadDiffFiles']>
+  ): Promise<void> {
+    try {
+      const files = await loadDiffFiles(fileDiff);
+      if (!this.enabled || this.fileDiff !== fileDiff) {
+        return;
+      }
+
+      await this.handleFilesLoaded(fileDiff, files);
+    } catch (error: unknown) {
+      if (this.options.disableErrorHandling === true) {
+        throw error;
+      }
+      console.error(error);
+    } finally {
+      if (this.pendingFiles?.fileDiff === fileDiff) {
+        this.pendingFiles = undefined;
+      }
+    }
+  }
+
+  protected async handleFilesLoaded(
+    expectedDiff: FileDiffMetadata,
+    files: LoadedPartialDiffContents
+  ): Promise<void> {
+    if (this.fileDiff !== expectedDiff || !expectedDiff.isPartial) {
+      return;
+    }
+    hydratePartialDiff('merge', expectedDiff, files);
+    this.setHydratedState(files);
+    await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
+    if (!this.enabled || this.fileDiff !== expectedDiff) {
+      return;
+    }
+    this.rerender();
+  }
+
+  protected setHydratedState(files: LoadedPartialDiffContents): void {
+    this.deletionFile = files.oldFile;
+    this.additionFile = files.newFile;
+    this.workerManager?.cleanUpTasks(this.hunksRenderer);
+    this.hunksRenderer.clearRenderCache();
+  }
+
   public render({
-    oldFile,
-    newFile,
     fileDiff,
     deferManagers = false,
     forceRender = false,
@@ -758,7 +863,11 @@ export class FileDiff<
     fileContainer,
     containerWrapper,
     renderRange,
+    ...fileInputProps
   }: FileDiffRenderProps<LAnnotation>): boolean {
+    const fileInput = getDiffFileInput(fileInputProps, 'FileDiff.render');
+    const oldFile = fileInput?.oldFile;
+    const newFile = fileInput?.newFile;
     if (!this.enabled) {
       // NOTE(amadeus): May need to be a silent failure? Making it loud for now
       // to better understand it
@@ -766,19 +875,21 @@ export class FileDiff<
         'FileDiff.render: attempting to call render after cleaned up'
       );
     }
-
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
     this.editor?.__postponeBackgroundTokenizeToNextFrame();
-
-    const { collapsed = false, themeType = 'system' } = this.options;
+    const {
+      collapsed = false,
+      themeType = 'system',
+      expandUnchanged = false,
+    } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
     const themeChanged = this.hasThemeChanged();
+    const hasFileInput = fileInput != null;
     const filesDidChange =
-      oldFile != null &&
-      newFile != null &&
-      (!areFilesEqual(oldFile, this.deletionFile) ||
-        !areFilesEqual(newFile, this.additionFile));
+      hasFileInput &&
+      (!areOptionalFilesEqual(oldFile, this.deletionFile) ||
+        !areOptionalFilesEqual(newFile, this.additionFile));
     let diffDidChange = fileDiff != null && fileDiff !== this.fileDiff;
     const annotationsChanged =
       lineAnnotations != null &&
@@ -802,6 +913,19 @@ export class FileDiff<
       return this.applyCachedThemeState(themeType);
     }
 
+    let nextParsedFileDiff: FileDiffMetadata | undefined;
+    if (
+      fileDiff == null &&
+      hasFileInput &&
+      (filesDidChange || this.fileDiff == null)
+    ) {
+      nextParsedFileDiff = parseDiffFromFile(
+        fileInput.oldFile,
+        fileInput.newFile,
+        this.options.parseDiffOptions
+      );
+    }
+
     const { renderRange: previousRenderRange } = this;
     this.renderRange = nextRenderRange;
     this.deletionFile = oldFile;
@@ -809,13 +933,9 @@ export class FileDiff<
 
     if (fileDiff != null) {
       this.fileDiff = fileDiff;
-    } else if (oldFile != null && newFile != null && filesDidChange) {
+    } else if (nextParsedFileDiff != null) {
       diffDidChange = true;
-      this.fileDiff = parseDiffFromFile(
-        oldFile,
-        newFile,
-        this.options.parseDiffOptions
-      );
+      this.fileDiff = nextParsedFileDiff;
     }
     if (diffDidChange) {
       this.cachedHeaderHTML = undefined;
@@ -826,6 +946,9 @@ export class FileDiff<
     }
     if (this.fileDiff == null) {
       return false;
+    }
+    if (expandUnchanged) {
+      this.loadFilesIfNecessary();
     }
     this.hunksRenderer.setOptions(this.getHunksRendererOptions(this.options));
     this.syncInteractionOptions();
@@ -1155,11 +1278,15 @@ export class FileDiff<
     return true;
   }
 
-  public primeHighlightCache(): void {
-    const { fileDiff, workerManager } = this;
+  public async primeHighlightCache(
+    fileDiff: FileDiffMetadata | undefined = this.fileDiff
+  ): Promise<void> {
+    const { workerManager } = this;
     if (
       fileDiff == null ||
       workerManager == null ||
+      !workerManager.isWorkingPool() ||
+      fileDiff.cacheKey == null ||
       isDiffPlainText(fileDiff)
     ) {
       return;
@@ -1172,7 +1299,12 @@ export class FileDiff<
     ) {
       return;
     }
-    workerManager.primeDiffHighlightCache(fileDiff);
+
+    await workerManager
+      .primeDiffHighlightCache(fileDiff)
+      .catch((error: unknown) => {
+        console.error(error);
+      });
   }
 
   private cleanChildNodes() {
@@ -2564,8 +2696,18 @@ export class FileDiff<
 
 interface HasContentProps {
   fileDiff: FileDiffMetadata | undefined;
-  oldFile: FileContents | undefined;
-  newFile: FileContents | undefined;
+  oldFile: FileContents | null | undefined;
+  newFile: FileContents | null | undefined;
+}
+
+function areOptionalFilesEqual(
+  fileA: FileContents | null | undefined,
+  fileB: FileContents | null | undefined
+): boolean {
+  if (fileA == null || fileB == null) {
+    return fileA == null && fileB == null;
+  }
+  return areFilesEqual(fileA, fileB);
 }
 
 function hasDiffContent({

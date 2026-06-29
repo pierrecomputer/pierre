@@ -105,7 +105,7 @@ interface GetRenderOptionsReturn {
 
 interface PushSeparatorProps {
   hunkIndex: number;
-  collapsedLines: number;
+  collapsedLines: number | 'unknown';
   rangeSize: number;
   hunkSpecs: string | undefined;
   isFirstHunk: boolean;
@@ -922,6 +922,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     this.diff = fileDiff;
     const unified = diffStyle === 'unified';
+    const canHydrateContext = canHydrateCollapsedContext(
+      fileDiff,
+      this.options.loadDiffFiles != null
+    );
+    const isExpandableDiff = !fileDiff.isPartial || canHydrateContext;
 
     let additionsContentAST: ElementContent[] | undefined = [];
     let deletionsContentAST: ElementContent[] | undefined = [];
@@ -1059,7 +1064,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             hunkSpecs: hunk?.hunkSpecs,
             isFirstHunk: hunkIndex === 0,
             isLastHunk: false,
-            isExpandable: !fileDiff.isPartial,
+            isExpandable: isExpandableDiff,
           });
         }
 
@@ -1299,6 +1304,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           diffStyle === 'split' &&
           hunk != null &&
           splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1;
+        const isFinalHunkRow =
+          hunkIndex === fileDiff.hunks.length - 1 &&
+          hunk != null &&
+          (diffStyle === 'split'
+            ? splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1
+            : unifiedLineIndex ===
+              hunk.unifiedLineStart + hunk.unifiedLineCount - 1);
         const splitNoEOFCRDeletion = isFinalSplitHunkRow
           ? hunk.noEOFCRDeletions
           : false;
@@ -1372,15 +1384,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           context.incrementRowCount(1);
         }
 
-        if (collapsedAfter > 0 && hunkSeparators !== 'simple') {
+        if (
+          hunkSeparators !== 'simple' &&
+          hunkSeparators !== 'metadata' &&
+          (collapsedAfter > 0 || (isFinalHunkRow && canHydrateContext))
+        ) {
           pushSeparators({
             hunkIndex: type === 'context-expanded' ? hunkIndex : hunkIndex + 1,
-            collapsedLines: collapsedAfter,
+            collapsedLines:
+              isFinalHunkRow && canHydrateContext ? 'unknown' : collapsedAfter,
             rangeSize: trailingRangeSize,
             hunkSpecs: undefined,
             isFirstHunk: false,
             isLastHunk: true,
-            isExpandable: !fileDiff.isPartial,
+            isExpandable: isExpandableDiff,
           });
         }
         context.incrementRowCount(1);
@@ -1847,7 +1864,7 @@ function pushSeparator(
   }: PushSeparatorProps,
   context: ProcessContext
 ) {
-  if (collapsedLines <= 0) {
+  if (typeof collapsedLines === 'number' && collapsedLines <= 0) {
     return;
   }
   const linesAST =
@@ -1900,11 +1917,15 @@ function pushSeparator(
   const slotName = getHunkSeparatorSlotName(type, hunkIndex);
   const chunked = rangeSize > context.expansionLineCount;
   const expandIndex = isExpandable ? hunkIndex : undefined;
+  const content =
+    typeof collapsedLines === 'number'
+      ? getModifiedLinesString(collapsedLines)
+      : 'More unchanged context may be available';
   context.pushToGutter(
     type,
     createSeparator({
       type: context.hunkSeparators,
-      content: getModifiedLinesString(collapsedLines),
+      content,
       expandIndex,
       chunked,
       slotName,
@@ -1915,7 +1936,7 @@ function pushSeparator(
   linesAST.push(
     createSeparator({
       type: context.hunkSeparators,
-      content: getModifiedLinesString(collapsedLines),
+      content,
       expandIndex,
       chunked,
       slotName,
@@ -1929,7 +1950,8 @@ function pushSeparator(
   context.hunkData.push({
     slotName,
     hunkIndex,
-    lines: collapsedLines,
+    lines: typeof collapsedLines === 'number' ? collapsedLines : 0,
+    lineCountKnown: typeof collapsedLines === 'number',
     type,
     expandable: isExpandable
       ? { up: !isFirstHunk, down: !isLastHunk, chunked }
@@ -2010,5 +2032,16 @@ function isDiffMassive(
   return (
     Math.max(diff.additionLines.length, diff.deletionLines.length) >
     tokenizeMaxLength
+  );
+}
+
+function canHydrateCollapsedContext(
+  fileDiff: FileDiffMetadata,
+  hasFileLoader: boolean
+): boolean {
+  return (
+    fileDiff.isPartial &&
+    hasFileLoader &&
+    (fileDiff.type === 'change' || fileDiff.type === 'rename-changed')
   );
 }

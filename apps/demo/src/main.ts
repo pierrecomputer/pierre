@@ -5,6 +5,7 @@ import {
   File,
   type FileContents,
   FileDiff,
+  type FileDiffContentsLoader,
   type FileDiffOptions,
   type FileOptions,
   FileStream,
@@ -28,6 +29,7 @@ import {
   IconCiWarningFill,
   IconInfoFill,
 } from '@pierre/icons';
+import { createTwoFilesPatch } from 'diff';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -66,7 +68,8 @@ const VIRTUALIZE = true;
 const CRAZY_FILE = false;
 const LARGE_CONFLICT_FILE = false;
 const RENDER_FILENAME_SUFFIX = false;
-const CODE_VIEW_OLD_NEW_FILE = false;
+const CODE_VIEW_TYPE: 'old-new-full' | 'old-new-hydration' | 'patch-file' =
+  'old-new-full';
 
 // Pre-render the @pierre/icons SVG markup once so it can be embedded into the
 // `message.html` strings the editor injects for markers. The icons default to
@@ -128,6 +131,14 @@ interface FileStreamCodeConfigsItem {
   content: string;
   letterByLetter: boolean;
   options: FileStreamOptions;
+}
+
+interface HydratableRenderOptions {
+  loadDiffFiles?: FileDiffContentsLoader;
+}
+
+interface CodeViewRenderData extends HydratableRenderOptions {
+  parsedPatches: ParsedPatch[];
 }
 
 function cleanupInstances(container: HTMLElement) {
@@ -223,39 +234,139 @@ function startStreaming() {
 }
 
 let parsedPatches: ParsedPatch[] | undefined;
-let parsedCodeViewFilePatches: ParsedPatch[] | undefined;
 
-function createCodeViewFilePatches(): ParsedPatch[] {
+function createCodeViewFiles(): {
+  oldFile: FileContents;
+  newFile: FileContents;
+} {
+  return {
+    oldFile: {
+      name: 'file_old.ts',
+      contents: FILE_OLD,
+      cacheKey: 'code-view-file-old',
+    },
+    newFile: {
+      name: 'file_new.ts',
+      contents: FILE_NEW,
+      cacheKey: 'code-view-file-new',
+    },
+  };
+}
+
+function createCodeViewNoTrailingExpansionFiles(): {
+  oldFile: FileContents;
+  newFile: FileContents;
+} {
   const oldFile: FileContents = {
-    name: 'file_old.ts',
-    contents: FILE_OLD,
-    cacheKey: 'code-view-file-old',
+    name: 'no_trailing_expansion.ts',
+    contents: [
+      'const keepOne = "same";\n',
+      'const keepTwo = "same";\n',
+      'const keepThree = "same";\n',
+      'const keepFour = "same";\n',
+      'export const noTrailingExpansion = "old";\n',
+    ].join(''),
+    cacheKey: 'code-view-no-trailing-expansion-old',
   };
   const newFile: FileContents = {
-    name: 'file_new.ts',
-    contents: FILE_NEW,
-    cacheKey: 'code-view-file-new',
+    name: oldFile.name,
+    contents: [
+      'const keepOne = "same";\n',
+      'const keepTwo = "same";\n',
+      'const keepThree = "same";\n',
+      'const keepFour = "same";\n',
+      'export const noTrailingExpansion = "new";\n',
+    ].join(''),
+    cacheKey: 'code-view-no-trailing-expansion-new',
   };
+  return { oldFile, newFile };
+}
 
+function createCodeViewFullPatches(
+  oldFile: FileContents,
+  newFile: FileContents
+): ParsedPatch[] {
   return [{ files: [parseDiffFromFile(oldFile, newFile)] }];
 }
 
-async function loadCodeViewPatches(): Promise<ParsedPatch[]> {
-  if (CODE_VIEW_OLD_NEW_FILE) {
-    return (parsedCodeViewFilePatches ??= createCodeViewFilePatches());
+function createCodeViewPartialPatches(
+  oldFile: FileContents,
+  newFile: FileContents
+): ParsedPatch[] {
+  return parsePatchFiles(
+    createTwoFilesPatch(
+      oldFile.name,
+      newFile.name,
+      oldFile.contents,
+      newFile.contents,
+      oldFile.header,
+      newFile.header
+    ),
+    'code-view-partial'
+  );
+}
+
+function createCodeViewNoTrailingExpansionPartialPatches(
+  oldFile: FileContents,
+  newFile: FileContents
+): ParsedPatch[] {
+  return parsePatchFiles(
+    createTwoFilesPatch(
+      oldFile.name,
+      newFile.name,
+      oldFile.contents,
+      newFile.contents,
+      oldFile.header,
+      newFile.header,
+      { context: 0 }
+    ),
+    'code-view-no-trailing-expansion-partial'
+  );
+}
+
+async function loadCodeViewPatches(): Promise<CodeViewRenderData> {
+  switch (CODE_VIEW_TYPE) {
+    case 'old-new-full': {
+      const { oldFile, newFile } = createCodeViewFiles();
+      return { parsedPatches: createCodeViewFullPatches(oldFile, newFile) };
+    }
+    case 'old-new-hydration': {
+      const { oldFile, newFile } = createCodeViewFiles();
+      const noTrailingExpansionFiles = createCodeViewNoTrailingExpansionFiles();
+      return {
+        parsedPatches: [
+          ...createCodeViewNoTrailingExpansionPartialPatches(
+            noTrailingExpansionFiles.oldFile,
+            noTrailingExpansionFiles.newFile
+          ),
+          ...createCodeViewPartialPatches(oldFile, newFile),
+        ],
+        loadDiffFiles(fileDiff) {
+          console.log(
+            'CodeView partial hydration demo loading full files',
+            fileDiff
+          );
+          if (fileDiff.name === noTrailingExpansionFiles.newFile.name) {
+            return Promise.resolve(noTrailingExpansionFiles);
+          }
+          return Promise.resolve({ oldFile, newFile });
+        },
+      };
+    }
+    case 'patch-file':
+      return {
+        parsedPatches: (parsedPatches ??= parsePatchFiles(
+          await loadPatchContent(),
+          'parsed-patch'
+        )),
+      };
   }
-  return (parsedPatches ??= parsePatchFiles(
-    await loadPatchContent(),
-    'parsed-patch'
-  ));
 }
 
 function handlePreloadCodeViewDiff() {
-  if (CODE_VIEW_OLD_NEW_FILE) {
-    parsedCodeViewFilePatches ??= createCodeViewFilePatches();
-    return;
+  if (CODE_VIEW_TYPE === 'patch-file') {
+    void handlePreloadDiff();
   }
-  void handlePreloadDiff();
 }
 
 async function handlePreloadDiff() {
@@ -544,7 +655,10 @@ function renderDiff(parsedPatches: ParsedPatch[], manager?: WorkerPoolManager) {
   // window.scrollTo({ top: 70747 });
 }
 
-function renderCodeView(parsedPatches: ParsedPatch[]) {
+function renderCodeView(
+  parsedPatches: ParsedPatch[],
+  { loadDiffFiles }: HydratableRenderOptions = {}
+) {
   const wrapper = document.getElementById('wrapper');
   if (wrapper == null) return;
   window.scrollTo({ top: 0 });
@@ -554,6 +668,7 @@ function renderCodeView(parsedPatches: ParsedPatch[]) {
     themeType: getThemeType(),
     diffStyle: getUnified() ? 'unified' : 'split',
     overflow: getWrapped() ? 'wrap' : 'scroll',
+    loadDiffFiles,
     workerManager: poolManager,
   });
 }
@@ -647,7 +762,8 @@ const renderCodeViewButton = document.getElementById('render-code-view');
 if (renderCodeViewButton != null) {
   renderCodeViewButton.addEventListener('click', () => {
     void (async () => {
-      renderCodeView(await loadCodeViewPatches());
+      const { parsedPatches, loadDiffFiles } = await loadCodeViewPatches();
+      renderCodeView(parsedPatches, { loadDiffFiles });
     })();
   });
   renderCodeViewButton.addEventListener(
@@ -835,7 +951,7 @@ const fileConflict: FileContents = {
 
 const renderFileButton = document.getElementById('render-file');
 if (renderFileButton != null) {
-  // oxlint-disable-next-line @typescript-oxlint/no-misused-promises
+  // oxlint-disable-next-line typescript/no-misused-promises
   renderFileButton.addEventListener('click', async () => {
     const file = await fileExample;
     const wrapper = document.getElementById('wrapper');
@@ -1099,7 +1215,7 @@ if (renderFileButton != null) {
 
 const renderFileConflictButton = document.getElementById('render-conflict');
 if (renderFileConflictButton != null) {
-  // oxlint-disable-next-line @typescript-oxlint/no-misused-promises
+  // oxlint-disable-next-line typescript/no-misused-promises
   renderFileConflictButton.addEventListener('click', async () => {
     const wrapper = document.getElementById('wrapper');
     if (wrapper == null) {

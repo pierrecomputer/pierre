@@ -27,6 +27,7 @@ export function getDiffHunksRendererOptions<LAnnotation>(
         ? 'custom'
         : options?.hunkSeparators,
     expandUnchanged: options?.expandUnchanged,
+    loadDiffFiles: options?.loadDiffFiles,
     collapsedContextThreshold: options?.collapsedContextThreshold,
     lineDiffType: options?.lineDiffType,
     maxLineDiffLength: options?.maxLineDiffLength,

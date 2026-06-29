@@ -66,13 +66,17 @@ Preloads a diff from a `FileDiffMetadata` object. Use this when you already have
 parsed diff metadata (e.g., from `parseDiffFromFile` or `parsePatchFiles`).
 Spread into the `FileDiff` component.
 
+The lower-level `preloadDiffHTML` helper also accepts direct file contents. Use
+`oldFile: null` for a new file, or `newFile: null` for a deleted file.
+
 <DocsCodeExample {...preloadFileDiff} />
 
 #### preloadMultiFileDiff
 
-Preloads a diff directly from old and new file contents. This is the simplest
-option when you have the raw file contents and want to generate a diff. Spread
-into the `MultiFileDiff` component.
+Preloads a diff directly from file contents. This is the simplest option when
+you have raw file contents and want to generate a diff. Pass both sides for a
+changed file, `oldFile: null` for a new file, or `newFile: null` for a deleted
+file. Spread into the `MultiFileDiff` component.
 
 <DocsCodeExample {...preloadMultiFileDiff} />
 

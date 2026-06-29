@@ -6,6 +6,7 @@ import {
   type CodeViewOptions,
   type DiffLineAnnotation,
   type DiffsThemeNames,
+  type FileDiffContentsLoader,
   type LineAnnotation,
   type ParsedPatch,
   type SelectedLineRange,
@@ -61,6 +62,7 @@ interface RenderDemoCodeViewOptions {
   overflow: CodeViewOverflow;
   theme: DiffsThemeNames | ThemesType;
   themeType: CodeViewThemeType;
+  loadDiffFiles?: FileDiffContentsLoader;
   workerManager?: WorkerPoolManager;
 }
 
@@ -84,6 +86,7 @@ export function renderDemoCodeView(
     overflow,
     theme,
     themeType,
+    loadDiffFiles,
     workerManager,
   }: RenderDemoCodeViewOptions
 ) {
@@ -95,6 +98,7 @@ export function renderDemoCodeView(
     themeType,
     diffStyle,
     overflow,
+    loadDiffFiles,
     renderAnnotation(annotation) {
       return renderCodeViewAnnotation(annotation, viewer, items);
     },

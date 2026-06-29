@@ -184,6 +184,11 @@ export interface SetRenderOptionsWorkerTask {
   requestStart: number;
 }
 
+export interface RenderTaskCallbacks {
+  resolve(): void;
+  reject(error: Error): void;
+}
+
 export interface RenderFileTask {
   type: 'file';
   id: WorkerRequestId;
@@ -193,6 +198,7 @@ export interface RenderFileTask {
   // regardless of whether there's any instances subscribed to the task
   primeCache: boolean;
   highlightKey?: string;
+  callbacks: Set<RenderTaskCallbacks>;
   renderOptionsVersion: number;
   requestStart: number;
 }
@@ -206,6 +212,7 @@ export interface RenderDiffTask {
   // regardless of whether there's any instances subscribed to the task
   primeCache: boolean;
   highlightKey?: string;
+  callbacks: Set<RenderTaskCallbacks>;
   renderOptionsVersion: number;
   requestStart: number;
 }

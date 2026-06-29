@@ -8,6 +8,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -17,6 +18,7 @@ import { DiffsHubSidebar } from './DiffsHubSidebar';
 import { DiffsHubStatusPanel } from './DiffsHubStatusPanel';
 import { DiffsHubViewer } from './DiffsHubViewer';
 import { ThemeSourceProvider } from './ThemeSourceProvider';
+import { useGitHubToken } from './useGitHubToken';
 import { usePatchLoader } from './usePatchLoader';
 import { useThemeCycle } from './useThemeCycle';
 import {
@@ -24,6 +26,7 @@ import {
   themeController,
 } from '@/components/themeController';
 import { preloadAvatars } from '@/lib/annotation';
+import { createGitHubDiffFileLoader } from '@/lib/githubDiffFileLoader';
 import { removeSavedCommentSidebarEntry } from '@/lib/removeSavedCommentSidebarEntry';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 import type {
@@ -63,6 +66,22 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const [showBackgrounds, setShowBackgrounds] = useState(true);
   const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
   const [lineNumbers, setLineNumbers] = useState(true);
+  const {
+    clearToken: clearGitHubToken,
+    hasToken: hasGitHubToken,
+    setToken: setGitHubToken,
+    token: githubToken,
+    tokenVersion: githubTokenVersion,
+  } = useGitHubToken();
+  const githubTokenRef = useRef(githubToken);
+  const githubTokenVersionRef = useRef(githubTokenVersion);
+  useEffect(() => {
+    githubTokenRef.current = githubToken;
+  }, [githubToken]);
+  useEffect(() => {
+    githubTokenVersionRef.current = githubTokenVersion;
+  }, [githubTokenVersion]);
+  const getGitHubToken = useCallback(() => githubTokenRef.current, []);
   // All theming state — color mode and the light/dark theme-name picks — lives
   // in the single @pierre/theming controller (the same instance the app-wide
   // ThemeProvider is bound to). Reading it here means picking Auto/Light/Dark
@@ -117,6 +136,16 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<CodeViewHandle<CommentMetadata> | null>(null);
+  const loadDiffFiles = useMemo(
+    () =>
+      domain == null && hasGitHubToken
+        ? createGitHubDiffFileLoader(path, {
+            getAuthVersion: () => githubTokenVersionRef.current,
+            getToken: () => githubTokenRef.current,
+          })
+        : undefined,
+    [domain, hasGitHubToken, path]
+  );
   const handlePatchLoadStart = useCallback(() => {
     setFileTreeOverlayOpen(false);
   }, []);
@@ -137,6 +166,8 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   } = usePatchLoader({
     collapseMode,
     domain,
+    getGitHubToken,
+    githubTokenVersion,
     onLoadStart: handlePatchLoadStart,
     path,
     viewerRef,
@@ -246,6 +277,9 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
         overflow={overflow}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
         fileTreeAvailable={treeSource != null}
+        githubTokenActive={hasGitHubToken}
+        onClearGitHubToken={clearGitHubToken}
+        onSaveGitHubToken={setGitHubToken}
         onToggleCollapseMode={handleToggleCollapseMode}
         onToggleFileTreeOverlay={handleToggleFileTreeOverlay}
         setColorMode={setColorMode}
@@ -285,6 +319,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
             themeType={colorMode}
             viewerRef={viewerRef}
             initialItems={initialItems}
+            loadDiffFiles={loadDiffFiles}
             onCommentDeleted={handleCommentDeleted}
             onCommentSaved={handleCommentSaved}
             onLineLinkChange={onLineLinkChange}

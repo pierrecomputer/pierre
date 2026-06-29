@@ -154,7 +154,10 @@ export function useFileDiffInstance<LAnnotation>({
     return instanceRef.current?.getHoveredLine();
   }, []);
 
-  return { ref, getHoveredLine };
+  return {
+    ref,
+    getHoveredLine,
+  };
 }
 
 interface MergeFileDiffOptionsProps<LAnnotation> {
@@ -184,31 +187,27 @@ function mergeFileDiffOptions<LAnnotation>({
     return options;
   }
 
-  let merged: FileDiffOptions<LAnnotation> = { ...options };
-
-  if (needsReactOverrides) {
-    merged = {
-      ...merged,
-      controlledSelection,
-      renderCustomHeader: hasCustomHeader
-        ? noopRender
-        : options?.renderCustomHeader,
-      renderGutterUtility: hasGutterRenderUtility
-        ? noopRender
-        : options?.renderGutterUtility,
-    };
-  }
-
-  if (needsEditorOptions) {
-    merged = {
-      ...merged,
-      useTokenTransformer: true,
-      enableGutterUtility: false,
-      enableLineSelection: false,
-      expandUnchanged: true,
-      lineHoverHighlight: 'disabled',
-    };
-  }
-
-  return merged;
+  return {
+    ...options,
+    ...(needsReactOverrides
+      ? {
+          controlledSelection,
+          renderCustomHeader: hasCustomHeader
+            ? noopRender
+            : options?.renderCustomHeader,
+          renderGutterUtility: hasGutterRenderUtility
+            ? noopRender
+            : options?.renderGutterUtility,
+        }
+      : null),
+    ...(needsEditorOptions
+      ? {
+          useTokenTransformer: true,
+          enableGutterUtility: false,
+          enableLineSelection: false,
+          expandUnchanged: true,
+          lineHoverHighlight: 'disabled',
+        }
+      : null),
+  };
 }

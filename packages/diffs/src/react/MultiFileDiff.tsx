@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 
 import { DIFFS_TAG_NAME } from '../constants';
-import type { FileContents } from '../types';
+import type { DiffFileInput, FileContents } from '../types';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import type { DiffBasePropsReact } from './types';
 import { renderDiffChildren } from './utils/renderDiffChildren';
@@ -12,14 +12,15 @@ import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
 export type { FileContents };
 
-export interface MultiFileDiffProps<
+interface MultiFileDiffBaseProps<
   LAnnotation,
 > extends DiffBasePropsReact<LAnnotation> {
-  oldFile: FileContents;
-  newFile: FileContents;
   disableWorkerPool?: boolean;
   contentEditable?: boolean;
 }
+
+export type MultiFileDiffProps<LAnnotation> =
+  MultiFileDiffBaseProps<LAnnotation> & DiffFileInput;
 
 export function MultiFileDiff<LAnnotation = undefined>({
   oldFile,

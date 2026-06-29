@@ -38,6 +38,33 @@ export interface FileContents {
   cacheKey?: string;
 }
 
+export interface FileDiffLoadedChangedFiles {
+  oldFile: FileContents;
+  newFile: FileContents;
+}
+
+export interface FileDiffLoadedPureRenamedFile {
+  oldFile: null;
+  newFile: FileContents;
+}
+
+export type FileDiffLoadedFiles =
+  | FileDiffLoadedChangedFiles
+  | FileDiffLoadedPureRenamedFile;
+
+export type DiffFileInput =
+  | { oldFile: FileContents; newFile: FileContents }
+  | { oldFile: null; newFile: FileContents }
+  | { oldFile: FileContents; newFile: null };
+
+export type MaybeDiffFileInput =
+  | DiffFileInput
+  | { oldFile?: undefined; newFile?: undefined };
+
+export type FileDiffContentsLoader = (
+  fileDiff: FileDiffMetadata
+) => Promise<FileDiffLoadedFiles>;
+
 export type HighlighterTypes = 'shiki-js' | 'shiki-wasm';
 
 export type HighlightedToken = [char: number, fg: string, text: string];
@@ -242,6 +269,10 @@ export interface Hunk {
 /**
  * Metadata and content for a single file's diff.  Think of this as a JSON
  * compatible representation of a diff for a single file.
+ *
+ * When a renderer uses `loadDiffFiles` to hydrate a partial diff, it upgrades
+ * this metadata object in place. Keep the same object identity stable when
+ * callers want that hydrated state to persist across later renders.
  */
 export interface FileDiffMetadata {
   /** The file's name and path. */
@@ -294,6 +325,10 @@ export interface FileDiffMetadata {
    * in the patch and hunk expansion is unavailable.
    *
    * When false, they contain the complete file contents.
+   *
+   * A hydrating renderer mutates a partial metadata object to flip this to
+   * false after `loadDiffFiles` resolves. Passing a freshly parsed partial
+   * object later is treated as a new partial render model.
    */
   isPartial: boolean;
 
@@ -318,6 +353,11 @@ export interface FileDiffMetadata {
    * to highlight if we've already highlighted the diff.  Please note that if
    * you modify the contents of the diff in any way, you will need to update
    * the `cacheKey`.
+   *
+   * When `loadDiffFiles` hydrates a partial diff, Diffs uses loaded file cache
+   * keys when they are available so full-file highlights can be reused. If the
+   * loaded files are unkeyed and this partial key exists, Diffs appends a
+   * hydration segment as a fallback.
    */
   cacheKey?: string;
 }
@@ -398,6 +438,13 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   disableBackground?: boolean;
   hunkSeparators?: HunkSeparators; // line-info is default
   expandUnchanged?: boolean; // false is default
+  /**
+   * Fetches full file contents for partial changed/renamed diffs parsed from
+   * patches. Return both sides for changed diffs and `oldFile: null` for pure
+   * renames. Added/deleted diffs already include their available side and thus
+   * this function serves no purpose in those contexts
+   */
+  loadDiffFiles?: FileDiffContentsLoader;
   // Auto-expand collapsed context at or below this size.
   collapsedContextThreshold?: number; // 2 is default
   // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
@@ -418,7 +465,7 @@ export interface BaseDiffOptions extends BaseCodeOptions {
 export type BaseDiffOptionsWithDefaults = Required<
   Omit<
     BaseDiffOptions,
-    'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions'
+    'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions' | 'loadDiffFiles'
   >
 >;
 
@@ -669,6 +716,7 @@ export interface HunkData {
   slotName: string;
   hunkIndex: number;
   lines: number;
+  lineCountKnown: boolean;
   type: CodeColumnType;
   expandable?: {
     chunked: boolean;

@@ -6,6 +6,7 @@ import {
   type CodeViewOptions,
   type DiffIndicators,
   type DiffLineAnnotation,
+  type FileDiffContentsLoader,
   type LineAnnotation,
   type SelectedLineRange,
   type ThemeTypes,
@@ -74,6 +75,7 @@ interface DiffsHubViewerProps {
   themeType: ThemeTypes;
   viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
   initialItems: CodeViewItem<CommentMetadata>[];
+  loadDiffFiles?: FileDiffContentsLoader;
   onLineLinkChange(selection: CodeViewLineSelection | null): void;
   onViewerReady(): void;
 }
@@ -91,6 +93,7 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
   themeType,
   viewerRef,
   initialItems,
+  loadDiffFiles,
   onLineLinkChange,
   onViewerReady,
 }: DiffsHubViewerProps) {
@@ -431,6 +434,7 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
         diffStyle,
         diffIndicators,
         overflow,
+        loadDiffFiles,
         disableBackground: !showBackgrounds,
         disableLineNumbers: !lineNumbers,
         lineHoverHighlight: 'number',
@@ -456,6 +460,7 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
       handleCreateDraftComment,
       handleLineSelectionEnd,
       lineNumbers,
+      loadDiffFiles,
       overflow,
       showBackgrounds,
       themeType,
