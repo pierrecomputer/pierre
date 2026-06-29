@@ -1172,16 +1172,14 @@ export class FileDiff<
       }
       this.fileDiff = renderDiff;
     }
-    // TODO(@ije): can we avoid full-render here?
-    this.rerender();
     if (
       newLineAnnotations !== undefined &&
       newLineAnnotations !== this.lineAnnotations
     ) {
       this.setLineAnnotations(newLineAnnotations);
       this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
-      this.renderAnnotations();
     }
+    this.rerender();
   }
 
   public updateRenderCache(
@@ -1200,23 +1198,17 @@ export class FileDiff<
       skipDiffRecompute
     );
     if (shouldRefreshView === true) {
-      if (this.options.diffStyle === 'split') {
-        if (this.refreshDiffViewTimeout != null) {
-          clearTimeout(this.refreshDiffViewTimeout);
-        }
-        this.refreshDiffViewTimeout = setTimeout(() => {
-          this.refreshDiffViewTimeout = undefined;
-          this.refreshSplitDiffView();
-        }, 100);
-      } else {
-        this.refreshUnifiedDiffView();
+      if (this.refreshDiffViewTimeout != null) {
+        clearTimeout(this.refreshDiffViewTimeout);
       }
-      this.fastRefreshTimeout = setTimeout(() => {
-        this.fastRefreshTimeout = undefined;
-        this.fastRefreshDiffView();
-      }, 100);
-    } else {
-      this.refreshDiffView();
+      this.refreshDiffViewTimeout = setTimeout(() => {
+        this.refreshDiffViewTimeout = undefined;
+        if (this.options.diffStyle === 'split') {
+          this.refreshSplitDiffView();
+        } else {
+          this.refreshUnifiedDiffView();
+        }
+      }, 250);
     }
   }
 
@@ -2178,6 +2170,9 @@ export class FileDiff<
       this.lastRowCount = hunksResult.rowCount;
     }
     this.renderSeparators(hunksResult.hunkData);
+
+    this.managersDirty = true;
+    this.flushManagers();
 
     // sync the render view to the editor
     this.syncRenderViewToEditor();
