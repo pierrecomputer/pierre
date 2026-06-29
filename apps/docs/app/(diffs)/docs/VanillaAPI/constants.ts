@@ -92,6 +92,8 @@ const newFile: FileContents = {
 
 // Render the diff into a container
 instance.render({
+  // Pass FileContents for existing sides. For added or deleted files,
+  // pass null for the side that does not exist.
   oldFile,
   newFile,
   containerWrapper: document.getElementById('diff-container'),
@@ -559,6 +561,8 @@ const instance = new FileDiff({
 
 // Render the diff
 instance.render({
+  // Use oldFile: null for a new file or newFile: null for a deleted file. Do
+  // not omit only one side.
   oldFile: { name: 'file.ts', contents: '...' },
   newFile: { name: 'file.ts', contents: '...' },
   lineAnnotations: [

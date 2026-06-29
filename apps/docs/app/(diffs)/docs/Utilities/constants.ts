@@ -16,9 +16,9 @@ export const HELPER_PARSE_DIFF_FROM_FILE: PreloadFileOptions<undefined> = {
   type FileDiffMetadata,
 } from '@pierre/diffs';
 
-// Parse a diff by comparing two versions of a file.
-// This is useful when you have the full file contents
-// rather than a patch/diff string.
+// Parse a diff by comparing file contents.
+// This is useful when you have full file contents rather
+// than a patch/diff string.
 const oldFile = {
   name: 'example.ts',
   contents: \`function greet(name: string) {
@@ -36,6 +36,14 @@ export { greet };\`,
 };
 
 const fileDiff: FileDiffMetadata = parseDiffFromFile(oldFile, newFile);
+
+// For added or deleted files, pass null for the side that does not exist.
+// Empty files still use FileContents with contents: ''.
+const addedFileDiff: FileDiffMetadata = parseDiffFromFile(null, newFile);
+const deletedFileDiff: FileDiffMetadata = parseDiffFromFile(oldFile, null);
+
+// Omitting one side is not the same as passing null, and passing
+// null for both sides throws because at least one side must exist.
 
 // With strict error handling (throws instead of logging)
 // const fileDiff = parseDiffFromFile(oldFile, newFile, undefined, true);
@@ -317,7 +325,7 @@ export const HELPER_DIFF_ACCEPT_REJECT: PreloadFileOptions<undefined> = {
   type FileDiffMetadata,
 } from '@pierre/diffs';
 
-// Parse a diff from two file versions
+// Parse a diff from two existing file versions
 let fileDiff: FileDiffMetadata = parseDiffFromFile(
   { name: 'file.ts', contents: 'const x = 1;\\nconst y = 2;' },
   { name: 'file.ts', contents: 'const x = 1;\\nconst y = 3;\\nconst z = 4;' }

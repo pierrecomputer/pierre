@@ -13,7 +13,9 @@ export const FILE_CONTENTS_TYPE: PreloadFileOptions<undefined> = {
     name: 'FileContents.ts',
     contents: `import type { FileContents } from '@pierre/diffs';
 
-// FileContents represents a single file
+// FileContents represents one existing file side.
+// Use null, not FileContents with an empty string, for an intentionally
+// missing side.
 interface FileContents {
   // The filename (used for display and language detection)
   name: string;
@@ -57,7 +59,7 @@ export const FILE_DIFF_METADATA_TYPE: PreloadFileOptions<undefined> = {
     name: 'FileDiffMetadata.ts',
     contents: `import type { FileDiffMetadata, Hunk } from '@pierre/diffs';
 
-// FileDiffMetadata represents the differences between two files
+// FileDiffMetadata represents a parsed file change.
 interface FileDiffMetadata {
   // Current filename
   name: string;
@@ -147,7 +149,7 @@ export const PARSE_DIFF_FROM_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
   type FileDiffMetadata,
 } from '@pierre/diffs';
 
-// Define your two file versions
+// Define the existing file versions
 const oldFile: FileContents = {
   name: 'greeting.ts',
   contents: 'export const greeting = "Hello";',
@@ -160,12 +162,19 @@ const newFile: FileContents = {
   cacheKey: 'greeting-new',
 };
 
-// Generate the diff metadata
+// Generate diff metadata from two existing versions
 const diff: FileDiffMetadata = parseDiffFromFile(oldFile, newFile);
+
+// For added or deleted files, pass null for the side that does not exist.
+// Omitting the side is not the same as passing null.
+const addedFileDiff = parseDiffFromFile(null, newFile);
+const deletedFileDiff = parseDiffFromFile(oldFile, null);
+
+// parseDiffFromFile(null, null) throws because at least one side must exist.
 
 // The resulting diff includes oldLines and newLines,
 // which enables "expand unchanged" functionality in the UI.
-// If both files have cacheKey, the diff will have a combined
+// If both existing versions have cacheKey, the diff will have a combined
 // cacheKey of "greeting-old:greeting-new" for AST caching.`,
   },
   options,

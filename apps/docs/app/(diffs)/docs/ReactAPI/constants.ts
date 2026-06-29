@@ -478,8 +478,8 @@ export const REACT_API_MULTI_FILE_DIFF: PreloadFileOptions<undefined> = {
   MultiFileDiff,
 } from '@pierre/diffs/react';
 
-// MultiFileDiff compares two file versions directly.
-// Use this when you have the old and new file contents.
+// MultiFileDiff compares file contents directly.
+// Use this when you have the old and/or new file contents.
 
 // Keep file objects stable (useState/useMemo) to avoid re-renders.
 // The component uses reference equality for change detection.
@@ -496,7 +496,9 @@ const newFile: FileContents = {
 export function MyDiff() {
   return (
     <MultiFileDiff
-      // Required: the two file versions to compare
+      // Required: pass FileContents for existing sides.
+      // Use oldFile={null} for a new file or newFile={null}
+      // for a deleted file.
       oldFile={oldFile}
       newFile={newFile}
 
