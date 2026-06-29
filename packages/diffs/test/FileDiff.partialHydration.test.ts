@@ -7,7 +7,11 @@ import {
   parseDiffFromFile,
   parsePatchFiles,
 } from '../src';
-import type { FileContents, FileDiffMetadata } from '../src/types';
+import type {
+  FileContents,
+  FileDiffLoadedFiles,
+  FileDiffMetadata,
+} from '../src/types';
 import type { WorkerPoolManager } from '../src/worker';
 import { installDom, wait } from './domHarness';
 import { assertDefined } from './testUtils';
@@ -27,10 +31,7 @@ class TestFileDiff extends FileDiff<undefined> {
 
   handleFilesLoadedForTest(
     expectedDiff: FileDiffMetadata,
-    files: {
-      oldFile: FileContents | null;
-      newFile: FileContents | null;
-    }
+    files: FileDiffLoadedFiles
   ) {
     return this.handleFilesLoaded(expectedDiff, files);
   }
@@ -165,7 +166,6 @@ function createPartialPureRename(): {
 
 function createPartialAddedFile(): {
   partial: FileDiffMetadata;
-  loadedContents: { oldFile: null; newFile: FileContents };
 } {
   const partial = parseSinglePartialFile(
     [
@@ -179,18 +179,12 @@ function createPartialAddedFile(): {
       '+beta\n',
     ].join('')
   );
-  const newFile: FileContents = {
-    name: 'new-file.txt',
-    contents: 'alpha\nbeta\ngamma\n',
-    cacheKey: 'new-full',
-  };
   expect(partial.type).toBe('new');
-  return { partial, loadedContents: { oldFile: null, newFile } };
+  return { partial };
 }
 
 function createPartialDeletedFile(): {
   partial: FileDiffMetadata;
-  loadedContents: { oldFile: FileContents; newFile: null };
 } {
   const partial = parseSinglePartialFile(
     [
@@ -204,14 +198,14 @@ function createPartialDeletedFile(): {
       '-beta\n',
     ].join('')
   );
-  const oldFile: FileContents = {
-    name: 'deleted-file.txt',
-    contents: 'alpha\nbeta\ngamma\n',
-    cacheKey: 'old-full',
-  };
   expect(partial.type).toBe('deleted');
-  return { partial, loadedContents: { oldFile, newFile: null } };
+  return { partial };
 }
+
+const loadedFiles: FileDiffLoadedFiles = {
+  oldFile: { name: 'file.ts', contents: 'const oldValue = 1;\n' },
+  newFile: { name: 'file.ts', contents: 'const newValue = 2;\n' },
+};
 
 async function waitForHydrated(instance: FileDiff<undefined>): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {
@@ -248,13 +242,8 @@ function querySyntheticBottomSeparator(
 
 function expectOneSidedPartialDoesNotStartHydration({
   partial,
-  loadedContents,
 }: {
   partial: FileDiffMetadata;
-  loadedContents: {
-    oldFile: FileContents | null;
-    newFile: FileContents | null;
-  };
 }): void {
   const { cleanup } = installDom();
   let instance: TestFileDiff | undefined;
@@ -267,7 +256,7 @@ function expectOneSidedPartialDoesNotStartHydration({
       expandUnchanged: true,
       loadDiffFiles: () => {
         loadCalls++;
-        return Promise.resolve(loadedContents);
+        return Promise.resolve(loadedFiles);
       },
     });
 

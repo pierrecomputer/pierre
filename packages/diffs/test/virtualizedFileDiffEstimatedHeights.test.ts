@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { DEFAULT_CODE_VIEW_FILE_METRICS } from '../src/constants';
 import type {
+  FileDiffLoadedFiles,
   FileDiffMetadata,
   HunkExpansionRegion,
   RenderRange,
@@ -25,6 +26,10 @@ const metrics: VirtualFileMetrics = {
   spacing: 4,
 };
 const lineInfoTrailingSeparatorHeight = metrics.spacing + 32;
+const loadedFiles: FileDiffLoadedFiles = {
+  oldFile: { name: 'file.ts', contents: 'const oldValue = 1;\n' },
+  newFile: { name: 'file.ts', contents: 'const newValue = 2;\n' },
+};
 
 const virtualizer = {
   type: 'simple',
@@ -293,9 +298,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
   test('reserves synthetic bottom separator height for hydratable partial diffs', () => {
     const lineCount = 8;
     const instance = new VirtualizedFileDiff(
-      {
-        loadDiffFiles: () => Promise.resolve({ oldFile: null, newFile: null }),
-      },
+      { loadDiffFiles: () => Promise.resolve(loadedFiles) },
       virtualizer,
       metrics
     );
@@ -320,9 +323,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     inspect(instance).cache.heightDeltas.set(0, 7);
     inspect(instance).cache.measuredHeightDeltaTotal = 7;
 
-    instance.setOptions({
-      loadDiffFiles: () => Promise.resolve({ oldFile: null, newFile: null }),
-    });
+    instance.setOptions({ loadDiffFiles: () => Promise.resolve(loadedFiles) });
 
     expect(inspect(instance).cache.estimatedSplitHeight).toBe(
       metrics.diffHeaderHeight +
@@ -574,9 +575,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     const lineCount = 8;
     const fileDiff = createHugeSingleBlockDiff(lineCount);
     const instance = new VirtualizedFileDiff(
-      {
-        loadDiffFiles: () => Promise.resolve({ oldFile: null, newFile: null }),
-      },
+      { loadDiffFiles: () => Promise.resolve(loadedFiles) },
       virtualizer,
       metrics
     );

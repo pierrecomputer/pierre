@@ -38,6 +38,20 @@ export interface FileContents {
   cacheKey?: string;
 }
 
+export interface FileDiffLoadedChangedFiles {
+  oldFile: FileContents;
+  newFile: FileContents;
+}
+
+export interface FileDiffLoadedPureRenamedFile {
+  oldFile: null;
+  newFile: FileContents;
+}
+
+export type FileDiffLoadedFiles =
+  | FileDiffLoadedChangedFiles
+  | FileDiffLoadedPureRenamedFile;
+
 export type DiffFileInput =
   | { oldFile: FileContents; newFile: FileContents }
   | { oldFile: null; newFile: FileContents }
@@ -47,10 +61,9 @@ export type MaybeDiffFileInput =
   | DiffFileInput
   | { oldFile?: undefined; newFile?: undefined };
 
-export type FileDiffContentsLoader = (fileDiff: FileDiffMetadata) => Promise<{
-  oldFile: FileContents | null;
-  newFile: FileContents | null;
-}>;
+export type FileDiffContentsLoader = (
+  fileDiff: FileDiffMetadata
+) => Promise<FileDiffLoadedFiles>;
 
 export type HighlighterTypes = 'shiki-js' | 'shiki-wasm';
 
@@ -426,9 +439,10 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   hunkSeparators?: HunkSeparators; // line-info is default
   expandUnchanged?: boolean; // false is default
   /**
-   * Fetches full old/new file contents for a partial diff. This enables hunk
-   * expansion after metadata parsed from a patch is hydrated with complete file
-   * contents.
+   * Fetches full file contents for partial changed/renamed diffs parsed from
+   * patches. Return both sides for changed diffs and `oldFile: null` for pure
+   * renames. Added/deleted diffs already include their available side and thus
+   * this function serves no purpose in those contexts
    */
   loadDiffFiles?: FileDiffContentsLoader;
   // Auto-expand collapsed context at or below this size.

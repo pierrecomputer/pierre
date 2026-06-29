@@ -7,7 +7,7 @@ import {
   parseDiffFromFile,
   parsePatchFiles,
 } from '../src';
-import type { FileDiffMetadata } from '../src/types';
+import type { FileDiffLoadedFiles, FileDiffMetadata } from '../src/types';
 import { mockDiffs } from './mocks';
 import {
   assertDefined,
@@ -21,6 +21,11 @@ import {
 afterAll(async () => {
   await disposeHighlighter();
 });
+
+const loadedFiles: FileDiffLoadedFiles = {
+  oldFile: { name: 'file.ts', contents: 'const oldValue = 1;\n' },
+  newFile: { name: 'file.ts', contents: 'const newValue = 2;\n' },
+};
 
 function countInlineDiffSpans(
   result: Awaited<ReturnType<DiffHunksRenderer['asyncRender']>>
@@ -314,7 +319,7 @@ describe('DiffHunksRenderer', () => {
   test('marks partial hunk separators expandable with a file loader', async () => {
     const instance = new DiffHunksRenderer({
       hunkSeparators: 'line-info',
-      loadDiffFiles: () => Promise.resolve({ oldFile: null, newFile: null }),
+      loadDiffFiles: () => Promise.resolve(loadedFiles),
     });
     const result = await instance.asyncRender(
       parsePartialDiffWithCollapsedContext()
@@ -329,7 +334,7 @@ describe('DiffHunksRenderer', () => {
     const instance = new DiffHunksRenderer({
       diffStyle: 'unified',
       hunkSeparators: 'line-info',
-      loadDiffFiles: () => Promise.resolve({ oldFile: null, newFile: null }),
+      loadDiffFiles: () => Promise.resolve(loadedFiles),
     });
     const result = await instance.asyncRender(diff);
     const html = instance.renderFullHTML(result);
@@ -370,7 +375,7 @@ describe('DiffHunksRenderer', () => {
     const instance = new DiffHunksRenderer({
       diffStyle: 'unified',
       hunkSeparators: 'line-info',
-      loadDiffFiles: () => Promise.resolve({ oldFile: null, newFile: null }),
+      loadDiffFiles: () => Promise.resolve(loadedFiles),
     });
     const result = await instance.asyncRender(diff);
     const html = instance.renderFullHTML(result);
@@ -388,7 +393,7 @@ describe('DiffHunksRenderer', () => {
     const instance = new DiffHunksRenderer({
       diffStyle: 'unified',
       hunkSeparators: 'line-info',
-      loadDiffFiles: () => Promise.resolve({ oldFile: null, newFile: null }),
+      loadDiffFiles: () => Promise.resolve(loadedFiles),
     });
     const result = await instance.asyncRender(diff);
     const html = instance.renderFullHTML(result);

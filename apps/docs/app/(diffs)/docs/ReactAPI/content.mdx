@@ -47,13 +47,14 @@ When `loadDiffFiles` is configured, partial `FileDiffMetadata` passed to
 stable across parent rerenders when you want the hydrated full metadata to
 persist.
 
-The loader returns the same file-side shape used by `MultiFileDiff`:
-`{ oldFile, newFile }`, where each side is `FileContents` when it exists or
-`null` when it intentionally does not.
+Return both sides for changed diffs and `{ oldFile: null, newFile }` for pure
+renames. Added and deleted diffs do not need to be hydrated.
 
 Passing a freshly parsed partial object resets hydration for that render. Avoid
 calling `parsePatchFiles` during every render before passing the result to
 `FileDiff`; store or memoize the parsed metadata instead.
+
+<DocsCodeExample {...loadDiffFilesExample} />
 
 ### Shared Props
 

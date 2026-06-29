@@ -78,6 +78,7 @@ export const REACT_API_SHARED_DIFF_OPTIONS: PreloadFileOptions<undefined> = {
 import type {
   DiffTokenEventBaseProps,
   FileDiff as FileDiffClass,
+  FileDiffContentsLoader,
   PostRenderPhase,
 } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
@@ -158,6 +159,11 @@ interface DiffOptions {
 
   // Lines revealed per click when expanding collapsed regions
   expansionLineCount: 100,
+
+  // Load full contents for partial changed/renamed diffs parsed from patches.
+  // Return both sides for changed diffs and oldFile: null for pure renames.
+  // Added/deleted diffs do not need to be hydrated.
+  loadDiffFiles?: FileDiffContentsLoader,
 
   // Auto-expand collapsed context regions at or below this size
   // (default: 1)
@@ -318,6 +324,39 @@ interface DiffOptions {
   onGutterUtilityClick(range: SelectedLineRange) {
     console.log(range.start, range.end, range.side, range.endSide);
   },
+}`,
+  },
+  options,
+};
+
+export const REACT_API_LOAD_DIFF_FILES: PreloadFileOptions<undefined> = {
+  file: {
+    name: 'load_diff_files.tsx',
+    contents: `import {
+  FileDiff,
+  type FileDiffLoadedFiles,
+  parsePatchFiles,
+} from '@pierre/diffs/react';
+
+const [patch] = parsePatchFiles(patchText, 'pull-42');
+const fileDiff = patch.files[0];
+
+function ReviewDiff() {
+  return (
+    <FileDiff
+      fileDiff={fileDiff}
+      options={{
+        async loadDiffFiles(fileDiff): Promise<FileDiffLoadedFiles> {
+          const response = await fetch(
+            '/api/files?path=' + encodeURIComponent(fileDiff.name)
+          );
+          // Return { oldFile, newFile }, or { oldFile: null, newFile }
+          // for pure renames.
+          return response.json();
+        },
+      }}
+    />
+  );
 }`,
   },
   options,

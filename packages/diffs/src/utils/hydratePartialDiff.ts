@@ -1,13 +1,11 @@
 import type {
   FileContents,
-  FileDiffContentsLoader,
+  FileDiffLoadedFiles,
   FileDiffMetadata,
   Hunk,
 } from '../types';
 import { cloneFileDiffMetadata } from './cloneFileDiffMetadata';
 import { splitFileContents } from './splitFileContents';
-
-type LoadedFiles = Awaited<ReturnType<FileDiffContentsLoader>>;
 
 interface HydratedHunksResult {
   hunks: Hunk[];
@@ -21,7 +19,7 @@ interface HydratedHunksResult {
 export function hydratePartialDiff(
   type: 'clone' | 'merge',
   fileDiff: FileDiffMetadata,
-  files: LoadedFiles
+  files: FileDiffLoadedFiles
 ): FileDiffMetadata {
   const targetFileDiff =
     type === 'clone' ? cloneFileDiffMetadata(fileDiff) : fileDiff;
@@ -39,11 +37,12 @@ export function hydratePartialDiff(
     }
     case 'rename-pure': {
       const newFile = requireNewFile(targetFileDiff, files);
+      requireMissingOldFile(targetFileDiff, files);
       const lines = splitFileContents(newFile.contents);
       targetFileDiff.isPartial = false;
       targetFileDiff.deletionLines = lines;
       targetFileDiff.additionLines = lines;
-      setHydratedCacheKey(targetFileDiff, files.oldFile, newFile);
+      setHydratedCacheKey(targetFileDiff, null, newFile);
       return targetFileDiff;
     }
   }
@@ -161,7 +160,7 @@ function hydrateHunks(
 
 function requireOldFile(
   fileDiff: FileDiffMetadata,
-  files: LoadedFiles
+  files: FileDiffLoadedFiles
 ): FileContents {
   if (files.oldFile == null) {
     throw new Error(
@@ -173,7 +172,7 @@ function requireOldFile(
 
 function requireNewFile(
   fileDiff: FileDiffMetadata,
-  files: LoadedFiles
+  files: FileDiffLoadedFiles
 ): FileContents {
   if (files.newFile == null) {
     throw new Error(
@@ -181,6 +180,17 @@ function requireNewFile(
     );
   }
   return files.newFile;
+}
+
+function requireMissingOldFile(
+  fileDiff: FileDiffMetadata,
+  files: FileDiffLoadedFiles
+): void {
+  if (files.oldFile !== null) {
+    throw new Error(
+      `hydratePartialDiff: ${fileDiff.type} diff for ${fileDiff.name} requires oldFile to be null`
+    );
+  }
 }
 
 function getHydratedCacheKey(
