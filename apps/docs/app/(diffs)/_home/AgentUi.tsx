@@ -1090,12 +1090,19 @@ export function AgentUi({
                   contentEditable
                 />
               ) : placeholderContents != null && activePath != null ? (
-                // Read-only view for explorer files that aren't part of the
-                // change set; highlighted on the main thread since this File is
-                // mounted dynamically outside the editable surface's worker pool.
+                // Editable view for explorer files that aren't part of the change
+                // set (e.g. the root README or a generated stub). It picks up the
+                // shared editor from context via `contentEditable`, and seeds from
+                // any persisted edit so tweaks survive switching files and back.
+                // Highlighted on the main thread since this File is mounted
+                // dynamically outside the editable surface's worker pool.
                 <File
                   key={activePath}
-                  file={{ name: activePath, contents: placeholderContents }}
+                  file={{
+                    name: activePath,
+                    contents:
+                      editsRef.current.get(activePath) ?? placeholderContents,
+                  }}
                   className="aui-surface"
                   options={{
                     theme,
@@ -1104,6 +1111,7 @@ export function AgentUi({
                     overflow: 'wrap',
                   }}
                   disableWorkerPool
+                  contentEditable
                 />
               ) : (
                 <div className="aui-empty">Select a file to review.</div>

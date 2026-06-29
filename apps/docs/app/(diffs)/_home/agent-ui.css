@@ -111,10 +111,13 @@ button.aui-dot {
 }
 
 .aui-dot::after {
+  position: absolute;
+  inset: 0;
   content: '';
-  font-size: 9px;
+  text-align: center;
+  font-size: 10px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 11px;
   color: rgb(0 0 0 / 0.6);
   opacity: 0;
   transition: opacity 0.12s ease;
