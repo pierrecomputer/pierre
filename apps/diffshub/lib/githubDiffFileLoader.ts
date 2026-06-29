@@ -1,6 +1,7 @@
 import type {
   FileContents,
   FileDiffContentsLoader,
+  FileDiffLoadedFiles,
   FileDiffMetadata,
 } from '@pierre/diffs';
 
@@ -38,28 +39,17 @@ export function createGitHubDiffFileLoader(
   const fetcher = options.fetch ?? fetch;
   const getAuthVersion = options.getAuthVersion ?? (() => 0);
   const getToken = options.getToken ?? (() => undefined);
-  const loadedFilesCache = new Map<string, Promise<LoadedDiffFilesResponse>>();
+  const loadedFilesCache = new Map<string, Promise<FileDiffLoadedFiles>>();
 
   return (fileDiff) => {
     switch (fileDiff.type) {
       case 'new':
-        return Promise.resolve({
-          oldFile: null,
-          newFile: createFileFromPartialLines(
-            fileDiff.name,
-            fileDiff.additionLines,
-            'new'
-          ),
-        });
       case 'deleted':
-        return Promise.resolve({
-          oldFile: createFileFromPartialLines(
-            fileDiff.name,
-            fileDiff.deletionLines,
-            'deleted'
-          ),
-          newFile: null,
-        });
+        return Promise.reject(
+          new Error(
+            `DiffsHub GitHub file loader cannot hydrate ${fileDiff.type} diffs.`
+          )
+        );
       case 'change':
       case 'rename-changed':
       case 'rename-pure': {
@@ -104,7 +94,7 @@ async function fetchLoadedDiffFiles(
   prevName: string | undefined,
   token: string | undefined,
   fetcher: GitHubFileLoaderFetch
-): Promise<LoadedDiffFilesResponse> {
+): Promise<FileDiffLoadedFiles> {
   const response = await fetcher(
     createEndpointURL(endpoint, sourcePath, type, name, prevName),
     createEndpointRequestInit(token)
@@ -118,7 +108,7 @@ async function fetchLoadedDiffFiles(
     );
   }
 
-  return normalizeLoadedDiffFiles(await response.json());
+  return normalizeLoadedDiffFiles(await response.json(), type);
 }
 
 function createEndpointURL(
@@ -165,16 +155,36 @@ async function readLoaderErrorDetail(response: Response): Promise<string> {
   return text;
 }
 
-function normalizeLoadedDiffFiles(data: unknown): LoadedDiffFilesResponse {
+function normalizeLoadedDiffFiles(
+  data: unknown,
+  type: string
+): FileDiffLoadedFiles {
   if (!isRecord(data)) {
     throw new Error(
       'DiffsHub GitHub file loader returned an invalid response.'
     );
   }
-  return {
+
+  const files: LoadedDiffFilesResponse = {
     oldFile: normalizeFileContents(data.oldFile),
     newFile: normalizeFileContents(data.newFile),
   };
+
+  if (type === 'rename-pure') {
+    if (files.oldFile !== null || files.newFile === null) {
+      throw new Error(
+        'DiffsHub GitHub file loader returned an invalid pure rename response.'
+      );
+    }
+    return { oldFile: null, newFile: files.newFile };
+  }
+
+  if (files.oldFile === null || files.newFile === null) {
+    throw new Error(
+      'DiffsHub GitHub file loader returned an invalid changed-file response.'
+    );
+  }
+  return { oldFile: files.oldFile, newFile: files.newFile };
 }
 
 function normalizeFileContents(value: unknown): FileContents | null {
@@ -194,18 +204,6 @@ function normalizeFileContents(value: unknown): FileContents | null {
     name,
     contents,
     cacheKey: typeof cacheKey === 'string' ? cacheKey : undefined,
-  };
-}
-
-function createFileFromPartialLines(
-  name: string,
-  lines: readonly string[],
-  side: 'deleted' | 'new'
-): FileContents {
-  return {
-    name,
-    contents: lines.join(''),
-    cacheKey: `github-partial:${side}:${name}`,
   };
 }
 
