@@ -164,3 +164,58 @@ describe('diff editor: select-all then delete', () => {
     });
   }
 });
+
+// Fires the beforeinput the browser would send, so the editor's own handler
+// runs (it reads e.inputType and edits #selections). cancelable lets the
+// handler preventDefault as it does in the browser. InputEvent lives on the
+// jsdom window rather than globalThis, so reach it through the element.
+function dispatchBeforeInput(content: HTMLElement, inputType: string): void {
+  const view = content.ownerDocument.defaultView;
+  if (view == null) {
+    throw new Error('content element is not attached to a window');
+  }
+  content.dispatchEvent(
+    new view.InputEvent('beforeinput', {
+      inputType,
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      data: null,
+    })
+  );
+}
+
+// cmd+backspace deletes to the start of the line. Chrome reports it as
+// deleteSoftLineBackward, but Safari reports deleteHardLineBackward; the editor
+// must treat both the same or Safari's cmd+backspace silently does nothing.
+describe('diff editor: cmd+backspace (deleteHardLineBackward) deletes to line start', () => {
+  for (const diffStyle of ['split', 'unified'] as const) {
+    test(`Safari's deleteHardLineBackward matches Chrome's deleteSoftLineBackward (${diffStyle})`, async () => {
+      const fixture = await createDiffEditorFixture(
+        diffStyle,
+        'a\nb\n',
+        'hello world\nfoo\n'
+      );
+      const { editor, container } = fixture;
+      try {
+        const content = findAdditionContent(container);
+        expect(content).toBeDefined();
+        if (content == null) return;
+
+        // Caret at the end of "hello world", then Safari's cmd+backspace.
+        editor.setSelections([
+          {
+            start: { line: 0, character: 11 },
+            end: { line: 0, character: 11 },
+            direction: 'none',
+          },
+        ]);
+        dispatchBeforeInput(content, 'deleteHardLineBackward');
+        await wait(0);
+        expect(editor.getState().file.contents).toBe('\nfoo\n');
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+  }
+});
