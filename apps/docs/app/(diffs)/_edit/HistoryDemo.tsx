@@ -76,11 +76,6 @@ function snapshotIndexFor(text: string): number {
 // loaded throws ("Grammar not loaded"), so we gate the seeded replay on it.
 const LANGUAGE = getFiletypeFromFileName(HISTORY_DEMO_FILE.name);
 
-// Minimum delay after the editor's surface attaches before we seed. The editor
-// loads its grammar on a 500ms-debounced pass after attaching, so this clears
-// that window even when the language was not already loaded at attach time.
-const GRAMMAR_SETTLE_MS = 700;
-
 // True once the shared main-thread highlighter has this file's grammar, which
 // is what the editor tokenizes edits with.
 function isLanguageReady(): boolean {
@@ -122,6 +117,14 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isMacRef = useRef(false);
 
+  // True while `seedAll` is replaying edits programmatically, so its intermediate
+  // `onChange` callbacks are not mistaken for user input.
+  const isAutoSeedingRef = useRef(false);
+  // Set when the visitor edits before the deferred auto-seed finishes; blocks
+  // `waitForReady` from calling `seedAll` on a document that is no longer the
+  // original snapshot.
+  const userEditedBeforeSeedRef = useRef(false);
+
   // Number of edits currently applied, derived from the editor's live text on
   // every `onChange` (undo, redo, controls, or keyboard) so it always matches.
   const [applied, setApplied] = useState(0);
@@ -140,6 +143,9 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
             setDiverged(false);
           } else {
             setDiverged(true);
+          }
+          if (!isAutoSeedingRef.current && index !== 0) {
+            userEditedBeforeSeedRef.current = true;
           }
         },
       }),
@@ -242,18 +248,23 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // document is at the original snapshot when called.
   const seedAll = useCallback(
     (content: HTMLElement) => {
-      const { scrollX, scrollY } = window;
-      for (let index = 0; index < TOTAL_EDITS; index++) {
-        applyEdit(content, index);
+      isAutoSeedingRef.current = true;
+      try {
+        const { scrollX, scrollY } = window;
+        for (let index = 0; index < TOTAL_EDITS; index++) {
+          applyEdit(content, index);
+        }
+        editor.setSelections([
+          {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+            direction: 'none',
+          },
+        ]);
+        window.scrollTo(scrollX, scrollY);
+      } finally {
+        isAutoSeedingRef.current = false;
       }
-      editor.setSelections([
-        {
-          start: { line: 0, character: 0 },
-          end: { line: 0, character: 0 },
-          direction: 'none',
-        },
-      ]);
-      window.scrollTo(scrollX, scrollY);
     },
     [applyEdit, editor]
   );
@@ -274,32 +285,21 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
     let cancelled = false;
     let timer: number | undefined;
     let attempts = 0;
-    let contentSeenAt = 0;
-    let languageReadyAt = 0;
 
     const waitForReady = () => {
-      if (cancelled) {
+      if (cancelled || userEditedBeforeSeedRef.current) {
         return;
       }
       attempts += 1;
       const content = getContent();
-      if (content != null) {
-        if (contentSeenAt === 0) {
-          contentSeenAt = Date.now();
-        }
-        if (isLanguageReady() && languageReadyAt === 0) {
-          languageReadyAt = Date.now();
-        }
-        if (
-          languageReadyAt > 0 &&
-          Date.now() - contentSeenAt >= GRAMMAR_SETTLE_MS &&
-          Date.now() - languageReadyAt >= GRAMMAR_SETTLE_MS
-        ) {
-          seedAll(content);
+      if (content != null && isLanguageReady()) {
+        if (userEditedBeforeSeedRef.current) {
           return;
         }
+        seedAll(content);
+        return;
       }
-      if (attempts < 240) {
+      if (attempts < 240 && !userEditedBeforeSeedRef.current) {
         timer = window.setTimeout(waitForReady, 50);
       }
     };
@@ -314,7 +314,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
       })
         .catch(() => {})
         .finally(() => {
-          if (!cancelled) {
+          if (!cancelled && !userEditedBeforeSeedRef.current) {
             waitForReady();
           }
         });
