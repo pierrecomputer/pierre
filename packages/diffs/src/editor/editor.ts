@@ -598,15 +598,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // file, language, or cache key) versus reusing the existing one. A reused
     // document keeps any edits the host's file contents do not have, which the
     // rebuilt line DOM below must be reconciled against.
-    const documentReplaced =
+    const shouldRebuildDocument =
       this.#textDocument === undefined ||
       this.#fileInfo === undefined ||
       this.#fileInfo.name !== fileOrDiff.name ||
       this.#fileInfo.lang !== fileOrDiff.lang ||
-      (this.#fileInfo.cacheKey != null &&
-        fileOrDiff.cacheKey != null &&
-        this.#fileInfo.cacheKey !== fileOrDiff.cacheKey);
-    if (documentReplaced) {
+      this.#fileInfo.cacheKey !== fileOrDiff.cacheKey;
+
+    if (shouldRebuildDocument) {
       let contents = '';
       if ('contents' in fileOrDiff) {
         contents = fileOrDiff.contents;
@@ -643,13 +642,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#options.onAttach?.(this, this.#fileInstance!);
       });
       if (this.#textDocument !== undefined && this.#options.__debug === true) {
-        console.log('[diffs/editor] text document changed !!!');
+        console.log(
+          '[diffs/editor] text document rebuilt from',
+          fileOrDiff.name
+        );
       }
     }
 
-    let fullRerender = false;
     if (this.#contentElement !== contentEl) {
-      fullRerender = true;
       this.#gutterElement = gutterEl;
       this.#contentElement = extend(contentEl, {
         contentEditable: 'true',
@@ -712,22 +712,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // undefined/Infinity windows leave the clamp disabled.
     this.#viewportWindowLines = renderRange?.totalLines;
     this.#tokenizer?.prebuildStateStack(renderRange);
-
-    // A host-driven full re-render rebuilds diff rows from the host's file
-    // contents. When the editor document survived, re-render from it so text,
-    // highlighting, and line count stay in sync without per-row reconciliation.
-    const fileInstance = this.#fileInstance;
-    const textDocument = this.#textDocument;
-    if (
-      !documentReplaced &&
-      fullRerender &&
-      fileInstance?.rerenderFromDocument !== undefined &&
-      textDocument !== undefined &&
-      this.#shouldRenderDivergeFromDocument(textDocument)
-    ) {
-      fileInstance.rerenderFromDocument(textDocument);
-      return;
-    }
 
     this.#markerRenderer?.removePopup();
 
@@ -1976,36 +1960,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         `tokenize in: ${round(t2 - t)}ms (${dirtyLines.size} dirty lines)`
       );
     }
-  }
-
-  // Whether rendered editable rows no longer match the editor document.
-  #shouldRenderDivergeFromDocument(
-    textDocument: TextDocument<LAnnotation>
-  ): boolean {
-    const contentEl = this.#contentElement;
-    if (contentEl === undefined) {
-      return false;
-    }
-    for (const child of contentEl.children) {
-      const el = child as HTMLElement;
-      const lineType = el.dataset.lineType;
-      const lineNumber = getLineNumberAttr(el);
-      if (
-        lineNumber === undefined ||
-        lineType === undefined ||
-        !isLineEditable(lineType)
-      ) {
-        continue;
-      }
-      const lineIndex = lineNumber - 1;
-      if (
-        lineIndex >= textDocument.lineCount ||
-        el.textContent !== textDocument.getLineText(lineIndex)
-      ) {
-        return true;
-      }
-    }
-    return false;
   }
 
   // input type doc: https://developer.mozilla.org/en-US/docs/Web/API/InputEvent/inputType

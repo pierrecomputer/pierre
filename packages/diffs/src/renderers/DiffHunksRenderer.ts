@@ -258,7 +258,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.workerManager?.cleanUpTasks(this);
   }
 
-  public getRenderDiff(): FileDiffMetadata | undefined {
+  public getDiffCache(): FileDiffMetadata | undefined {
     return this.renderCache?.diff ?? this.diff;
   }
 

@@ -315,7 +315,7 @@ export class FileDiff<
   ) => {
     // use the fileDiff from the hunksRenderer if it exists, it maybe updated
     // by the host
-    const fileDiff = this.hunksRenderer.getRenderDiff() ?? this.fileDiff;
+    const fileDiff = this.hunksRenderer.getDiffCache() ?? this.fileDiff;
     if (fileDiff == null) {
       return undefined;
     }
@@ -1124,7 +1124,7 @@ export class FileDiff<
   private syncRenderViewToEditor(): void {
     const editor = this.editor;
     const fileContainer = this.fileContainer;
-    const fileDiff = this.fileDiff;
+    const fileDiff = this.hunksRenderer.getDiffCache() ?? this.fileDiff;
     if (
       editor != null &&
       fileContainer != null &&
@@ -1173,13 +1173,13 @@ export class FileDiff<
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
     this.hunksRenderer.applyDocumentChange(textDocument);
-    const renderDiff = this.hunksRenderer.getRenderDiff();
-    if (renderDiff != null) {
+    const fileDiff = this.hunksRenderer.getDiffCache();
+    if (fileDiff != null) {
       const cacheKey = this.fileDiff?.cacheKey;
-      if (cacheKey != null && renderDiff.cacheKey == null) {
-        renderDiff.cacheKey = cacheKey;
+      if (cacheKey != null && fileDiff.cacheKey == null) {
+        fileDiff.cacheKey = cacheKey;
       }
-      this.fileDiff = renderDiff;
+      this.fileDiff = fileDiff;
     }
     if (
       newLineAnnotations !== undefined &&
@@ -1191,25 +1191,6 @@ export class FileDiff<
     }
     this.rerender();
     this.interactionManager.setSelectionDirty();
-  }
-
-  // Re-render the diff from the host's document after a host-driven full
-  // re-render rebuilt the rows from the host's (now stale) file contents.
-  // applyDocumentChange re-derives the diff (addition lines + hunks) from the
-  // document, but the cached highlighted AST still holds the host's content for
-  // rows that already existed, and renderDiff reuses it. Clearing the render
-  // cache forces the re-render to re-highlight from the document, so every row
-  // matches it - text, syntax colors, and line count - in one pass. Mutating
-  // the diff in place keeps its cacheKey, so the host's document and undo
-  // history survive the re-render.
-  public rerenderFromDocument(textDocument: DiffsTextDocument): void {
-    this.hunksRenderer.applyDocumentChange(textDocument);
-    const renderDiff = this.hunksRenderer.getRenderDiff();
-    if (renderDiff != null) {
-      this.fileDiff = renderDiff;
-    }
-    this.hunksRenderer.clearRenderCache();
-    this.rerender();
   }
 
   public updateRenderCache(
