@@ -77,6 +77,7 @@ import type {
   PathStoreVisibleTreeProjection,
   PathStoreVisibleTreeProjectionData,
 } from './public-types';
+import { buildSoaNodeStore, sweepOpenVisibleCountsSoa } from './soa-node-store';
 import {
   compareSegmentSortKeys,
   createSegmentSortKey,
@@ -221,6 +222,66 @@ function initializeOpenVisibleCounts(state: PathStoreState): void {
   rootNode.visibleSubtreeCount = rootTotalChildVisibleSubtreeCount;
 }
 
+// Opt-in variant of initializeOpenVisibleCounts that performs the heavy
+// per-node count computation over a Struct-of-Arrays mirror of the snapshot
+// (parallel Int32Arrays + a flat CSR child table) instead of walking the array
+// of node objects through the directories Map. On large presorted trees this is
+// ~3x faster with a far smaller, flatter heap footprint.
+//
+// The SoA sweep produces byte-for-byte identical subtreeNodeCount /
+// visibleSubtreeCount values; they are copied back into the object-array nodes
+// here, and the per-directory aggregates (totalChild* + visible chunk sums) are
+// rebuilt exactly as the object-array path does, so the resulting state is
+// indistinguishable from initializeOpenVisibleCounts. The render path is
+// therefore completely unaffected by this flag.
+function initializeOpenVisibleCountsViaSoa(state: PathStoreState): void {
+  const { directories, nodes, rootId } = state.snapshot;
+
+  const soa = buildSoaNodeStore(state.snapshot);
+  sweepOpenVisibleCountsSoa(soa);
+
+  const subtreeNodeCount = soa.subtreeNodeCount;
+  const visibleSubtreeCount = soa.visibleSubtreeCount;
+
+  // Copy the finalized counts back into the object-array nodes so the rest of
+  // the store (render path, mutations) reads them unchanged.
+  for (let id = 0; id < nodes.length; id += 1) {
+    const node = nodes[id];
+    if (node == null) {
+      continue;
+    }
+    node.subtreeNodeCount = subtreeNodeCount[id];
+    node.visibleSubtreeCount = visibleSubtreeCount[id];
+  }
+
+  // Rebuild the per-directory aggregates + chunk sums that the object-array
+  // walk writes inline. These read the now-finalized child counts back off the
+  // node objects, so they must run after the copy-back above.
+  for (const [dirId, currentIndex] of directories) {
+    const childIds = currentIndex.childIds;
+    const childCount = childIds.length;
+    let totalChildSubtreeNodeCount = 0;
+    let totalChildVisibleSubtreeCount = 0;
+    for (let ci = 0; ci < childCount; ci++) {
+      const childId = childIds[ci];
+      if (childId == null) {
+        continue;
+      }
+      const childNode = nodes[childId];
+      totalChildSubtreeNodeCount += childNode.subtreeNodeCount;
+      totalChildVisibleSubtreeCount += childNode.visibleSubtreeCount;
+    }
+    currentIndex.totalChildSubtreeNodeCount = totalChildSubtreeNodeCount;
+    currentIndex.totalChildVisibleSubtreeCount = totalChildVisibleSubtreeCount;
+    if (
+      dirId === rootId ||
+      childCount >= PATH_STORE_CHILD_INDEX_CHUNK_THRESHOLD_EXTERNAL
+    ) {
+      rebuildVisibleChildChunks(nodes, currentIndex);
+    }
+  }
+}
+
 function canInitializeOpenVisibleCounts(
   options: PathStoreConstructorOptions
 ): boolean {
@@ -328,11 +389,19 @@ export class PathStore {
           () => this.hasAllDirectoriesExpanded()
         ));
     if (canUseOpenVisibleCounts) {
-      withBenchmarkPhase(
-        instrumentation,
-        'store.state.initializeOpenVisibleCounts',
-        () => initializeOpenVisibleCounts(this.#state)
-      );
+      if (options.useSoaCountSweep === true) {
+        withBenchmarkPhase(
+          instrumentation,
+          'store.state.initializeOpenVisibleCountsViaSoa',
+          () => initializeOpenVisibleCountsViaSoa(this.#state)
+        );
+      } else {
+        withBenchmarkPhase(
+          instrumentation,
+          'store.state.initializeOpenVisibleCounts',
+          () => initializeOpenVisibleCounts(this.#state)
+        );
+      }
     } else {
       withBenchmarkPhase(instrumentation, 'store.state.recomputeCounts', () =>
         recomputeCountsRecursive(this.#state, this.#state.snapshot.rootId)

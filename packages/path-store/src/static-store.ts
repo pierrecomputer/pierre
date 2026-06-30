@@ -42,8 +42,13 @@ interface StaticPathStoreNode {
 }
 
 interface StaticPathStoreSnapshot {
-  childIds: readonly number[];
-  childPositionByNodeId: readonly number[];
+  // Dense child topology stored as typed arrays: each directory's children
+  // occupy childIds[firstChildIndex .. firstChildIndex + childCount), and
+  // childPositionByNodeId[id] is a node's absolute index within childIds (-1 for
+  // the root, which has no parent slot). Int32Array keeps this ~1M-entry table
+  // compact and pointer-free.
+  childIds: Int32Array;
+  childPositionByNodeId: Int32Array;
   childVisibleChunkSumsByDirectory: Array<readonly number[] | null>;
   nodes: StaticPathStoreNode[];
   options: PathStoreSnapshot['options'];
@@ -70,8 +75,16 @@ interface StaticVisibleRowCursor {
 function createStaticSnapshot(
   sourceSnapshot: PathStoreSnapshot
 ): StaticPathStoreSnapshot {
-  const childIds: number[] = [];
-  const childPositionByNodeId = new Array<number>(
+  // childIds holds one entry per parent->child edge; that total equals the sum
+  // of every directory's child count. Sizing the typed array up front avoids
+  // growth/copies during the fill below.
+  let totalChildEdges = 0;
+  for (const directoryIndex of sourceSnapshot.directories.values()) {
+    totalChildEdges += directoryIndex.childIds.length;
+  }
+  const childIds = new Int32Array(totalChildEdges);
+  let childIdsCursor = 0;
+  const childPositionByNodeId = new Int32Array(
     sourceSnapshot.nodes.length
   ).fill(-1);
   const childVisibleChunkSumsByDirectory = new Array<readonly number[] | null>(
@@ -103,11 +116,12 @@ function createStaticSnapshot(
       continue;
     }
 
-    node.firstChildIndex = childIds.length;
+    node.firstChildIndex = childIdsCursor;
     node.childCount = directoryIndex.childIds.length;
     for (const childId of directoryIndex.childIds) {
-      childPositionByNodeId[childId] = childIds.length;
-      childIds.push(childId);
+      childPositionByNodeId[childId] = childIdsCursor;
+      childIds[childIdsCursor] = childId;
+      childIdsCursor += 1;
     }
     childVisibleChunkSumsByDirectory[nodeId] =
       directoryIndex.childVisibleChunkSums == null

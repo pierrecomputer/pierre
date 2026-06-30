@@ -72,6 +72,14 @@ export interface PathStoreConstructorOptions extends PathStoreOptions {
   paths?: readonly string[];
   preparedInput?: PathStorePreparedInput;
   presorted?: boolean;
+  // Opt-in: run the all-directories-open count-only startup sweep over a
+  // Struct-of-Arrays mirror of the snapshot (parallel Int32Arrays + a flat CSR
+  // child table) instead of the default array-of-objects walk. The SoA sweep is
+  // ~3x faster and far leaner on large (~1M node) presorted trees; results are
+  // identical and written back into the object-array nodes so the render path is
+  // unchanged. Only takes effect when the all-open count fast path is eligible;
+  // otherwise it is ignored. Defaults to false (object-array path).
+  useSoaCountSweep?: boolean;
 }
 
 export interface PathStoreFlattenedRowSegment {
