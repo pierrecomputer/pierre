@@ -49,11 +49,23 @@ export class SelectionActionWidget {
   // Anchor the popover at `(left, top)`, expressed in the overlay's coordinate
   // space (the same space caret/selection overlays use). Horizontal placement and
   // sizing are handled in CSS via the shared popover rule; `gutterWidth` lets it
-  // keep the popover clear of the line-number gutter.
-  reposition(left: number, top: number, gutterWidth: number): void {
+  // keep the popover clear of the line-number gutter. When `placeAbove` is true
+  // (a bottom-up/backward selection), `top` is the top edge of the head line and
+  // the popover is shifted up by its own height so it sits above the selection
+  // instead of covering its first line.
+  reposition(
+    left: number,
+    top: number,
+    gutterWidth: number,
+    placeAbove: boolean
+  ): void {
     this.#popover.style.setProperty('--gutter-width', gutterWidth + 'px');
     this.#popover.style.setProperty('--popover-x', left + 'px');
     this.#popover.style.setProperty('--popover-y', top + 'px');
+    this.#popover.style.setProperty(
+      '--popover-y-shift',
+      placeAbove ? '-100%' : '0px'
+    );
   }
 
   cleanup(): void {

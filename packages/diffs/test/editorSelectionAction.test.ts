@@ -3,6 +3,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
+import { DirectionBackward, getCaretPosition } from '../src/editor/selection';
 import type { SelectionActionContext } from '../src/editor/selectionAction';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents } from '../src/types';
@@ -168,6 +169,132 @@ describe('Editor selection action', () => {
       expect(captured).toBeDefined();
       expect(captured!.getSelectionText()).toBe('hello');
     } finally {
+      cleanup();
+    }
+  });
+
+  // A bottom-up (backward) selection has its head at the top, so the popover
+  // must sit above the selection (shifted up by its own height) instead of
+  // covering its first line. The shift is expressed via --popover-y-shift.
+  test('backward selection places the popover above the selection', async () => {
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      'hello world',
+      {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          return document.createElement('div');
+        },
+      }
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 5 },
+          direction: 'backward',
+        },
+      ]);
+
+      const popover = findSelectionActionPopover(content);
+      expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
+        '-100%'
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  // A top-down (forward) selection has its head at the bottom, so the popover
+  // keeps the original below-placement with no self-shift.
+  test('forward selection places the popover below the selection', async () => {
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      'hello world',
+      {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          return document.createElement('div');
+        },
+      }
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 5 },
+          direction: 'forward',
+        },
+      ]);
+
+      const popover = findSelectionActionPopover(content);
+      expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
+        '0px'
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  // getComposedRanges only reports an ordered, direction-less range, so the
+  // selectionchange a refocus fires (after tabbing away and back) would flip a
+  // backward selection to DirectionNone and snap the caret/popover to the
+  // bottom. With the bounds unchanged the prior direction must be preserved.
+  test('refocus keeps a backward selection backward', async () => {
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      'hello\nworld',
+      {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          return document.createElement('div');
+        },
+      }
+    );
+
+    const originalGetSelection = document.getSelection.bind(document);
+    try {
+      // Focus before selecting so #contentHasFocus is set without the focus
+      // handler re-syncing a not-yet-existing selection.
+      content.dispatchEvent(new Event('focus'));
+
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 1, character: 0 },
+          direction: 'backward',
+        },
+      ]);
+      expect(editor.getState().selections?.[0]?.direction).toBe(
+        DirectionBackward
+      );
+
+      const lineElements = Array.from(
+        content.querySelectorAll<HTMLElement>('[data-line]')
+      );
+      const lineElement0 = lineElements.find((el) => el.dataset.line === '1')!;
+      const lineElement1 = lineElements.find((el) => el.dataset.line === '2')!;
+      // A direction-less, bounds-identical range, mirroring what a refocus
+      // selectionchange reports through getComposedRanges.
+      const refocusRange = {
+        startContainer: lineElement0,
+        startOffset: 0,
+        endContainer: lineElement1,
+        endOffset: 0,
+      } as unknown as StaticRange;
+      document.getSelection = (() => ({
+        getComposedRanges: () => [refocusRange],
+      })) as unknown as typeof document.getSelection;
+
+      document.dispatchEvent(new Event('selectionchange'));
+
+      const primarySelection = editor.getState().selections?.at(-1);
+      expect(primarySelection?.direction).toBe(DirectionBackward);
+      expect(getCaretPosition(primarySelection!)).toEqual({
+        line: 0,
+        character: 0,
+      });
+    } finally {
+      document.getSelection = originalGetSelection;
       cleanup();
     }
   });

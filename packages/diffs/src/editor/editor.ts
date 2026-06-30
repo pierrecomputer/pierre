@@ -932,6 +932,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               this.#selectionStart,
               selection
             ).direction;
+          } else if (
+            this.#selections !== undefined &&
+            this.#selections.length === 1
+          ) {
+            // getComposedRanges only reports an ordered start/end range, so a
+            // selectionchange fired by a refocus (or by our own focus-handler
+            // setBaseAndExtent) carries no direction and would otherwise flip a
+            // backward selection to DirectionNone, jumping the caret/popover to
+            // the bottom. When the bounds are unchanged, keep the prior
+            // direction; a genuine change (different bounds) still resets it.
+            const previous = this.#selections[0];
+            if (
+              comparePosition(previous.start, selection.start) === 0 &&
+              comparePosition(previous.end, selection.end) === 0
+            ) {
+              selection.direction = previous.direction;
+            }
           }
 
           if (this.#reservedSelections !== undefined) {
@@ -3075,13 +3092,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
 
-    // Anchor just below the selection's head line, mirroring the marker hover
-    // popover's geometry.
+    // For a top-down (forward) selection the head is the selection's bottom, so
+    // anchor just below the head line, mirroring the marker hover popover's
+    // geometry. For a bottom-up (backward) selection the head is the selection's
+    // top, so anchor at the top edge of the head line and let the widget shift
+    // the popover up by its own height; this keeps it above the selection rather
+    // than covering its first line.
+    const placeAbove = primarySelection.direction === DirectionBackward;
     const [left, wrapLine] = this.#getCharX(head.line, head.character);
     const lineHeight = this.#metrics.lineHeight;
-    const top = this.#getLineY(head.line) + wrapLine * lineHeight + lineHeight;
+    const headRowTop = this.#getLineY(head.line) + wrapLine * lineHeight;
+    const top = placeAbove ? headRowTop : headRowTop + lineHeight;
     this.#selectionAction.line = head.line;
-    this.#selectionAction.reposition(left, top, this.#getGutterWidth());
+    this.#selectionAction.reposition(
+      left,
+      top,
+      this.#getGutterWidth(),
+      placeAbove
+    );
   }
 
   // Opens the search panel in the requested mode. If a panel is already open,
