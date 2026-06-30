@@ -410,6 +410,28 @@ function makeAddedFile(path: string): AuiChangedFile {
   };
 }
 
+// A placeholder file (one outside the agent's change set) that the user edited,
+// modeled as a "modified" change diffing the original placeholder contents
+// against the live edits. This surfaces it in the Changes panel with tracked
+// +/- counts even though it was never part of the original session.
+function makeEditedPlaceholder(path: string, after: string): AuiChangedFile {
+  const before = getPlaceholderContents(path);
+  const stats = countDiffStats(
+    getFileDiff(
+      {
+        path,
+        status: 'modified',
+        before,
+        after: before,
+        additions: 0,
+        deletions: 0,
+      },
+      after
+    )
+  );
+  return { path, status: 'modified', before, after, ...stats };
+}
+
 // Toolbar above the file explorer: New file, New folder, and the search toggle.
 // Lives in its own component (rendered only once we have a model) so
 // useFileTreeSearch — which subscribes to the model — is never called against a
@@ -819,6 +841,16 @@ export function AgentUi({
     )
   );
 
+  // Placeholder files (outside the agent's change set) the user has edited into
+  // something that differs from their original contents. Tracked here so they
+  // can be surfaced in the Changes panel as modified files; reverting an edit
+  // back to the original drops the path again (see recordEditedStats).
+  const [editedPlaceholders, setEditedPlaceholders] = useState<string[]>([]);
+  // Mirror of the latest edits so the editor's onChange (recreated per file) can
+  // rebuild a placeholder's Changes entry without depending on edit state.
+  const editedPlaceholdersRef = useRef(editedPlaceholders);
+  editedPlaceholdersRef.current = editedPlaceholders;
+
   // Snippets sent from the selection action's "Add to chat" land here as
   // composer attachments. The editor is recreated per file, but routing the add
   // through a ref keeps the latest setter without depending on that lifecycle.
@@ -847,13 +879,49 @@ export function AgentUi({
       const changed = liveSession.changedFiles.find(
         (entry) => entry.path === target
       );
-      if (changed == null) {
+      if (changed != null) {
+        const stats = countDiffStats(getFileDiff(changed, contents));
+        setLiveStats((prev) => ({ ...prev, [target]: stats }));
         return;
       }
-      const stats = countDiffStats(getFileDiff(changed, contents));
-      setLiveStats((prev) => ({ ...prev, [target]: stats }));
+      // Not one of the agent's changed files (nor an explorer-added one): it's a
+      // placeholder file being edited. Diff it against its original contents and,
+      // if it now differs, track it so the Changes panel lists it as modified
+      // with live counts. Reverting all edits drops it (and its git tint) again.
+      const stats = countDiffStats(
+        getFileDiff(
+          {
+            path: target,
+            status: 'modified',
+            before: getPlaceholderContents(target),
+            after: getPlaceholderContents(target),
+            additions: 0,
+            deletions: 0,
+          },
+          contents
+        )
+      );
+      const isEdited = stats.additions > 0 || stats.deletions > 0;
+      const wasTracked = editedPlaceholdersRef.current.includes(target);
+      if (isEdited) {
+        setLiveStats((prev) => ({ ...prev, [target]: stats }));
+        if (!wasTracked) {
+          setEditedPlaceholders((prev) => [...prev, target]);
+          filesModel?.applyGitStatusPatch({
+            set: [{ path: target, status: 'modified' }],
+          });
+        }
+      } else if (wasTracked) {
+        setEditedPlaceholders((prev) => prev.filter((path) => path !== target));
+        setLiveStats((prev) => {
+          const next = { ...prev };
+          delete next[target];
+          return next;
+        });
+        filesModel?.applyGitStatusPatch({ remove: [target] });
+      }
     },
-    [liveSession]
+    [liveSession, filesModel]
   );
   const recordEditedStatsRef = useRef(recordEditedStats);
   recordEditedStatsRef.current = recordEditedStats;
@@ -867,6 +935,32 @@ export function AgentUi({
   useEffect(() => {
     activeTargetRef.current = activePath;
   }, [activePath]);
+
+  // Edited placeholder files modeled as "modified" changes from their live
+  // edits. Recomputed when the tracked set changes (each edit also refreshes the
+  // displayed counts via `liveStats`, so the row decoration stays current).
+  const editedPlaceholderFiles = useMemo<AuiChangedFile[]>(
+    () =>
+      editedPlaceholders.map((path) =>
+        makeEditedPlaceholder(
+          path,
+          editsRef.current.get(path) ?? getPlaceholderContents(path)
+        )
+      ),
+    [editedPlaceholders]
+  );
+
+  // The session shown in the Changes panel: the live session (agent changes plus
+  // explorer-added files) augmented with any edited placeholders. Kept separate
+  // from `liveSession` so editing a placeholder lists it here without flipping
+  // its center surface from the editable File view to a diff.
+  const changesSession = useMemo<AuiSession>(
+    () => ({
+      ...liveSession,
+      changedFiles: [...liveSession.changedFiles, ...editedPlaceholderFiles],
+    }),
+    [liveSession, editedPlaceholderFiles]
+  );
 
   // The FileDiff is never remounted per file (no `key`), so switching files just
   // swaps the `fileDiff` prop and re-renders in place, preserving the server
@@ -1005,7 +1099,7 @@ export function AgentUi({
     }
   }, [activePath]);
 
-  const changedCount = liveSession.changedFiles.length;
+  const changedCount = changesSession.changedFiles.length;
 
   return (
     // Both the windowed card and the fullscreen route render a single `.aui`
@@ -1198,7 +1292,7 @@ export function AgentUi({
               </button>
             </div>
             <ChangesTree
-              session={liveSession}
+              session={changesSession}
               activePath={activePath}
               statsByPath={liveStats}
               onSelect={openFile}
