@@ -3092,18 +3092,38 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
     }
 
-    // For a top-down (forward) selection the head is the selection's bottom, so
-    // anchor just below the head line, mirroring the marker hover popover's
-    // geometry. For a bottom-up (backward) selection the head is the selection's
-    // top, so anchor at the top edge of the head line and let the widget shift
-    // the popover up by its own height; this keeps it above the selection rather
-    // than covering its first line.
-    const placeAbove = primarySelection.direction === DirectionBackward;
-    const [left, wrapLine] = this.#getCharX(head.line, head.character);
+    // Pick which selection edge the popover anchors to and whether it sits above
+    // or below that edge. The default mirrors the marker hover popover: a
+    // top-down (forward) selection anchors just below its head (the bottom edge),
+    // while a bottom-up (backward) selection anchors at the top edge of its head
+    // and is shifted up by its own height so it sits above the selection instead
+    // of covering its first line.
+    //
+    // Near the document boundaries the preferred side has no room and the
+    // overlay's scrollport would clip the popover entirely (e.g. a backward
+    // selection whose head is the first row shifts the whole popover above the
+    // visible range). When the head falls within BOUNDARY_LINES of the matching
+    // edge we flip to the selection's opposite edge: a backward selection
+    // touching the first rows drops below its bottom edge, and a forward
+    // selection touching the last rows rises above its top edge.
+    const BOUNDARY_LINES = 3;
+    const lineCount = textDocument.lineCount;
+    const isBackward = primarySelection.direction === DirectionBackward;
+    let placeAbove = isBackward;
+    let anchor = head;
+    if (isBackward && head.line < BOUNDARY_LINES) {
+      placeAbove = false;
+      anchor = primarySelection.end;
+    } else if (!isBackward && head.line >= lineCount - BOUNDARY_LINES) {
+      placeAbove = true;
+      anchor = primarySelection.start;
+    }
+
+    const [left, wrapLine] = this.#getCharX(anchor.line, anchor.character);
     const lineHeight = this.#metrics.lineHeight;
-    const headRowTop = this.#getLineY(head.line) + wrapLine * lineHeight;
-    const top = placeAbove ? headRowTop : headRowTop + lineHeight;
-    this.#selectionAction.line = head.line;
+    const anchorRowTop = this.#getLineY(anchor.line) + wrapLine * lineHeight;
+    const top = placeAbove ? anchorRowTop : anchorRowTop + lineHeight;
+    this.#selectionAction.line = anchor.line;
     this.#selectionAction.reposition(
       left,
       top,

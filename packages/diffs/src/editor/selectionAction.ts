@@ -24,8 +24,9 @@ export interface SelectionActionContext<LAnnotation> {
 // The consumer's element can hold any number of actions; the editor only owns
 // where the popover sits.
 export class SelectionActionWidget {
-  // The line the popover is anchored to (the selection's head). The editor reads
-  // this to decide whether the anchor is still on a visible line.
+  // The line the popover is anchored to. This is usually the selection's head,
+  // but near the document boundaries the editor flips placement to the
+  // selection's opposite edge, so it may be that edge instead.
   line: number;
   #popover: HTMLElement;
 
@@ -49,10 +50,9 @@ export class SelectionActionWidget {
   // Anchor the popover at `(left, top)`, expressed in the overlay's coordinate
   // space (the same space caret/selection overlays use). Horizontal placement and
   // sizing are handled in CSS via the shared popover rule; `gutterWidth` lets it
-  // keep the popover clear of the line-number gutter. When `placeAbove` is true
-  // (a bottom-up/backward selection), `top` is the top edge of the head line and
-  // the popover is shifted up by its own height so it sits above the selection
-  // instead of covering its first line.
+  // keep the popover clear of the line-number gutter. When `placeAbove` is true,
+  // `top` is the top edge of the anchored row and the popover is shifted up by
+  // its own height so it sits above that row rather than covering it.
   reposition(
     left: number,
     top: number,

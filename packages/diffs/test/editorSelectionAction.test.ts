@@ -173,12 +173,16 @@ describe('Editor selection action', () => {
     }
   });
 
+  // A ten-line document used by the placement tests so a selection's head can
+  // sit clear of the first/last rows where the editor flips placement.
+  const MULTILINE = 'l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9';
+
   // A bottom-up (backward) selection has its head at the top, so the popover
   // must sit above the selection (shifted up by its own height) instead of
   // covering its first line. The shift is expressed via --popover-y-shift.
   test('backward selection places the popover above the selection', async () => {
     const { cleanup, editor, content } = await createSelectionActionFixture(
-      'hello world',
+      MULTILINE,
       {
         enabledSelectionAction: true,
         renderSelectionAction() {
@@ -190,8 +194,8 @@ describe('Editor selection action', () => {
     try {
       editor.setSelections([
         {
-          start: { line: 0, character: 0 },
-          end: { line: 0, character: 5 },
+          start: { line: 5, character: 0 },
+          end: { line: 7, character: 2 },
           direction: 'backward',
         },
       ]);
@@ -209,7 +213,39 @@ describe('Editor selection action', () => {
   // keeps the original below-placement with no self-shift.
   test('forward selection places the popover below the selection', async () => {
     const { cleanup, editor, content } = await createSelectionActionFixture(
-      'hello world',
+      MULTILINE,
+      {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          return document.createElement('div');
+        },
+      }
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 2, character: 0 },
+          end: { line: 4, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+
+      const popover = findSelectionActionPopover(content);
+      expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
+        '0px'
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  // A backward selection touching the document's first rows has no room above,
+  // so the popover flips to below the selection's bottom edge (no self-shift)
+  // instead of being clipped above the scrollport.
+  test('backward selection near the top flips the popover below', async () => {
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      MULTILINE,
       {
         enabledSelectionAction: true,
         renderSelectionAction() {
@@ -222,14 +258,46 @@ describe('Editor selection action', () => {
       editor.setSelections([
         {
           start: { line: 0, character: 0 },
-          end: { line: 0, character: 5 },
-          direction: 'forward',
+          end: { line: 1, character: 2 },
+          direction: 'backward',
         },
       ]);
 
       const popover = findSelectionActionPopover(content);
       expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
         '0px'
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  // A forward selection touching the document's last rows has no room below, so
+  // the popover flips to above the selection's top edge (shifted up by its own
+  // height) instead of being clipped below the scrollport.
+  test('forward selection near the bottom flips the popover above', async () => {
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      MULTILINE,
+      {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          return document.createElement('div');
+        },
+      }
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 8, character: 0 },
+          end: { line: 9, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+
+      const popover = findSelectionActionPopover(content);
+      expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
+        '-100%'
       );
     } finally {
       cleanup();
