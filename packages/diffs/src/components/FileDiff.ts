@@ -1010,12 +1010,8 @@ export class FileDiff<
       return true;
     }
 
-    // the editor use the cacheKey to maintain the editing state
-    // if the cacheKey is not set, set it to the diff file name
-    if (this.fileDiff.cacheKey === undefined && this.editor != null) {
-      const fd = this.fileDiff;
-      fd.cacheKey =
-        fd.prevName != null ? fd.prevName + '->' + fd.name : fd.name;
+    if (this.editor != null) {
+      this.ensureCacheKey();
     }
 
     try {
@@ -1147,9 +1143,22 @@ export class FileDiff<
     }
   }
 
+  // the editor use the cacheKey to maintain the editing state
+  // if the cacheKey is not set, set it to the diff file name
+  private ensureCacheKey(): void {
+    const fileDiff = this.fileDiff;
+    if (fileDiff != null && fileDiff.cacheKey === undefined) {
+      fileDiff.cacheKey =
+        fileDiff.prevName != null
+          ? fileDiff.prevName + '->' + fileDiff.name
+          : fileDiff.name;
+    }
+  }
+
   public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     this.editor = editor;
+    this.ensureCacheKey();
     this.interactionManager.setEditorAttached(true);
     this.syncRenderViewToEditor();
     return () => {

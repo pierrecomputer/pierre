@@ -603,7 +603,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInfo === undefined ||
       this.#fileInfo.name !== fileOrDiff.name ||
       this.#fileInfo.lang !== fileOrDiff.lang ||
-      this.#fileInfo.cacheKey !== fileOrDiff.cacheKey;
+      (this.#fileInfo.cacheKey != null &&
+        fileOrDiff.cacheKey != null &&
+        this.#fileInfo.cacheKey !== fileOrDiff.cacheKey);
     if (documentReplaced) {
       let contents = '';
       if ('contents' in fileOrDiff) {
@@ -645,7 +647,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
+    let fullRerender = false;
     if (this.#contentElement !== contentEl) {
+      fullRerender = true;
       this.#gutterElement = gutterEl;
       this.#contentElement = extend(contentEl, {
         contentEditable: 'true',
@@ -708,6 +712,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // undefined/Infinity windows leave the clamp disabled.
     this.#viewportWindowLines = renderRange?.totalLines;
     this.#tokenizer?.prebuildStateStack(renderRange);
+
+    // A host-driven full re-render rebuilds diff rows from the host's file
+    // contents. When the editor document survived, re-render from it so text,
+    // highlighting, and line count stay in sync without per-row reconciliation.
+    const fileInstance = this.#fileInstance;
+    const textDocument = this.#textDocument;
+    if (
+      !documentReplaced &&
+      fullRerender &&
+      fileInstance?.rerenderFromDocument !== undefined &&
+      textDocument !== undefined &&
+      this.#shouldRenderDivergeFromDocument(textDocument)
+    ) {
+      fileInstance.rerenderFromDocument(textDocument);
+      return;
+    }
 
     this.#markerRenderer?.removePopup();
 
@@ -1956,6 +1976,36 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         `tokenize in: ${round(t2 - t)}ms (${dirtyLines.size} dirty lines)`
       );
     }
+  }
+
+  // Whether rendered editable rows no longer match the editor document.
+  #shouldRenderDivergeFromDocument(
+    textDocument: TextDocument<LAnnotation>
+  ): boolean {
+    const contentEl = this.#contentElement;
+    if (contentEl === undefined) {
+      return false;
+    }
+    for (const child of contentEl.children) {
+      const el = child as HTMLElement;
+      const lineType = el.dataset.lineType;
+      const lineNumber = getLineNumberAttr(el);
+      if (
+        lineNumber === undefined ||
+        lineType === undefined ||
+        !isLineEditable(lineType)
+      ) {
+        continue;
+      }
+      const lineIndex = lineNumber - 1;
+      if (
+        lineIndex >= textDocument.lineCount ||
+        el.textContent !== textDocument.getLineText(lineIndex)
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // input type doc: https://developer.mozilla.org/en-US/docs/Web/API/InputEvent/inputType
