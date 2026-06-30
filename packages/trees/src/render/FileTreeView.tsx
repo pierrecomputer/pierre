@@ -54,6 +54,7 @@ import {
   GIT_STATUS_LABEL,
   GIT_STATUS_TITLE,
 } from '../utils/gitStatusPresentation';
+import { shouldBumpControllerRevision } from './controllerSnapshotSubscription';
 import {
   focusElement,
   getActiveTreeElement,
@@ -1279,6 +1280,12 @@ export function FileTreeView({
   );
   const ignoredInheritanceCache = useMemo(() => new Map<string, boolean>(), []);
   const [, setControllerRevision] = useState(0);
+  // Persists across re-subscribes of the controller-subscription effect so the
+  // genuine initial snapshot is suppressed only once per component instance.
+  // A local `let` reset on every effect re-run and swallowed the first real
+  // emit after each re-subscribe (model updated, DOM went stale). See
+  // shouldBumpControllerRevision for the full rationale.
+  const hasSeenInitialControllerSnapshotRef = useRef(false);
   const [activeItemPath, setActiveItemPath] = useState<string | null>(null);
   const [contextHoverPath, setContextHoverPath] = useState<string | null>(null);
   const [contextMenuAnchorTop, setContextMenuAnchorTop] = useState<
@@ -2671,12 +2678,9 @@ export function FileTreeView({
     }
 
     updateViewportRef.current = update;
-    let hasSeenInitialControllerSnapshot = false;
     const unsubscribe = controller.subscribe(() => {
-      if (hasSeenInitialControllerSnapshot) {
+      if (shouldBumpControllerRevision(hasSeenInitialControllerSnapshotRef)) {
         setControllerRevision((revision) => revision + 1);
-      } else {
-        hasSeenInitialControllerSnapshot = true;
       }
       update();
     });
