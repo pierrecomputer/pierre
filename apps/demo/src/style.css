@@ -211,11 +211,6 @@ code {
   flex-direction: row-reverse;
 }
 
-diffs-container {
-  /* content-visibility: auto; */
-  margin-top: 2px;
-}
-
 .header-filename-suffix-badge {
   display: inline-flex;
   align-items: center;
