@@ -55,6 +55,7 @@ import type {
   FileTreeRenamingConfig,
   FileTreeResetEvent,
   FileTreeResetOptions,
+  FileTreeResetPreparedOptions,
   FileTreeScrollOffset,
   FileTreeScrollToPathOptions,
   FileTreeSearchMode,
@@ -1252,8 +1253,20 @@ export class FileTreeController
    */
   public resetPaths(
     paths: readonly string[],
-    options: FileTreeResetOptions = {}
+    options?: FileTreeResetOptions
+  ): void;
+  public resetPaths(options: FileTreeResetPreparedOptions): void;
+  public resetPaths(
+    pathsOrOptions: readonly string[] | FileTreeResetPreparedOptions,
+    maybeOptions: FileTreeResetOptions = {}
   ): void {
+    const usingPreparedOnlyOverload = !Array.isArray(pathsOrOptions);
+    const paths = usingPreparedOnlyOverload
+      ? undefined
+      : (pathsOrOptions as readonly string[]);
+    const options: FileTreeResetOptions = usingPreparedOnlyOverload
+      ? (pathsOrOptions as FileTreeResetPreparedOptions)
+      : maybeOptions;
     const previousPathCount = this.#store.list().length;
     const previousVisibleCount = this.#visibleCount;
     const resolvedInput = resolveFileTreeInput(

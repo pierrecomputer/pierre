@@ -74,6 +74,7 @@ export type {
   FileTreeRenderProps,
   FileTreeResetEvent,
   FileTreeResetOptions,
+  FileTreeResetPreparedOptions,
   FileTreeRowDecoration,
   FileTreeRowDecorationContext,
   FileTreeRowDecorationRenderer,

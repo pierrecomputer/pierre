@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
 
-import { prepareFileTreeInput } from '../src/index';
+import {
+  prepareFileTreeInput,
+  preparePresortedFileTreeInput,
+} from '../src/index';
 import { flushDom, installDom } from './helpers/dom';
 import { loadFileTree, loadFileTreeController } from './helpers/loadFileTree';
 
@@ -137,6 +140,61 @@ describe('file-tree dynamic files / mutation API', () => {
       'src/index.ts',
       'README.md',
     ]);
+
+    controller.destroy();
+  });
+
+  test('resetPaths accepts a preparedInput-only call with no raw paths', async () => {
+    const FileTreeController = await loadFileTreeController();
+
+    // Server-canonical (already sorted) folder paths, the scale-oriented input
+    // that preparePresortedFileTreeInput exists to fast-path.
+    const folderPaths = ['src/', 'src/index.ts', 'README.md'] as const;
+    const controller = new FileTreeController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md'],
+    });
+
+    // The preparedInput-only overload: no dummy `paths` argument required.
+    controller.resetPaths({
+      preparedInput: preparePresortedFileTreeInput([...folderPaths]),
+    });
+
+    expect(controller.getVisibleRows(0, 3).map((row) => row.path)).toEqual([
+      'src/',
+      'src/index.ts',
+      'README.md',
+    ]);
+
+    controller.destroy();
+  });
+
+  test('resetPaths overloads type-check as documented (compile-only assertions)', async () => {
+    const FileTreeController = await loadFileTreeController();
+
+    const controller = new FileTreeController({
+      flattenEmptyDirectories: false,
+      initialExpansion: 'open',
+      paths: ['README.md'],
+    });
+
+    const assertOverloadTyping = (): void => {
+      // Passing only preparedInput type-checks: `paths` is no longer required.
+      controller.resetPaths({
+        preparedInput: prepareFileTreeInput(['README.md']),
+      });
+
+      // Passing only raw paths still type-checks.
+      controller.resetPaths(['README.md']);
+
+      // @ts-expect-error neither paths nor preparedInput is supplied
+      controller.resetPaths({});
+
+      // @ts-expect-error neither paths nor preparedInput is supplied
+      controller.resetPaths();
+    };
+    void assertOverloadTyping;
 
     controller.destroy();
   });
