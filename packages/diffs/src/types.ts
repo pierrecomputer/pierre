@@ -1012,6 +1012,13 @@ export interface DiffsEditableComponent<
   recomputeContentHunks: (
     changedAdditionLineIndexes: readonly number[]
   ) => void;
+  // Re-render the component from the host's document, discarding the cached
+  // (host-derived) rendered content. The host calls this after a host-driven
+  // full re-render rebuilt the rows from the host's stale file contents, so the
+  // visible rows match the document - text, syntax colors, and line count - in
+  // one pass. Optional: components without a document-backed re-render (the
+  // plain File) leave it unset and are skipped.
+  rerenderFromDocument?: (textDocument: DiffsTextDocument) => void;
 }
 
 export interface DiffsEditor<LAnnotation> {

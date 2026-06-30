@@ -41,19 +41,6 @@ const EDITED_LINES = [
 ];
 // The tokenizer reports the truncated line and the new line as dirty, using the
 // post-edit line indexes.
-const DIRTY_EDIT: ReadonlyArray<[number, string]> = [
-  [1, '  console.log('],
-  [2, 'msg);'],
-];
-
-function makeTextDocument(lines: string[]): DiffsTextDocument {
-  const text = lines.join('\n');
-  return {
-    lineCount: lines.length,
-    getText: () => text,
-    getLineText: (lineNumber: number) => lines[lineNumber] ?? '',
-  };
-}
 
 function makeTextDocumentFromText(text: string): DiffsTextDocument {
   return new TextDocument('edit.ts', text, 'typescript', 0);
@@ -94,28 +81,8 @@ async function createPrimedRenderer(
   return renderer;
 }
 
-describe('DiffHunksRenderer.updateRenderCache skipDiffRecompute', () => {
-  test('baseline: without the skip flag, a line-count edit recomputes hunks twice', async () => {
-    const renderer = await createPrimedRenderer();
-    const cacheDiff = renderer.getRenderDiff();
-    expect(cacheDiff).toBeDefined();
-    if (cacheDiff == null) return;
-    // Sanity check the fixture is the unequal-length (recompute-fallback) case.
-    expect(cacheDiff.additionLines.length).not.toBe(
-      cacheDiff.deletionLines.length
-    );
-
-    const hunksBeforeUpdate = cacheDiff.hunks;
-    renderer.updateRenderCache(makeDirtyLines(DIRTY_EDIT), 'light');
-    // A fresh hunks array reference proves a full `recomputeDiffHunks` ran.
-    expect(cacheDiff.hunks).not.toBe(hunksBeforeUpdate);
-
-    const hunksAfterUpdate = cacheDiff.hunks;
-    renderer.applyDocumentChange(makeTextDocument(EDITED_LINES));
-    expect(renderer.getRenderDiff()?.hunks).not.toBe(hunksAfterUpdate);
-  });
-
-  test('skip flag avoids the recompute in updateRenderCache', async () => {
+describe('DiffHunksRenderer content-edit recompute split', () => {
+  test('updateRenderCache returns changed addition lines and does not recompute', async () => {
     const renderer = await createPrimedRenderer();
     const cacheDiff = renderer.getRenderDiff();
     expect(cacheDiff).toBeDefined();
@@ -138,8 +105,8 @@ describe('DiffHunksRenderer.updateRenderCache skipDiffRecompute', () => {
       makeDirtyLines([[1, '  console.log(msg) // edited']]),
       'light'
     );
-    legacy.applyDocumentChange(makeTextDocument(EDITED_LINES));
-    const legacyDiff = legacy.getRenderDiff();
+    split.recomputeContentHunks(changed);
+    const incremental = split.getRenderDiff();
 
     // Expected result: a full re-parse of the same edited content from scratch.
     const full = parseDiffFromFile(
@@ -155,8 +122,6 @@ describe('DiffHunksRenderer.updateRenderCache skipDiffRecompute', () => {
         ].join('\n'),
       }
     );
-    optimized.applyDocumentChange(makeTextDocument(EDITED_LINES));
-    const optimizedDiff = optimized.getRenderDiff();
 
     expect(incremental).toBeDefined();
     if (incremental == null) return;

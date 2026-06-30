@@ -283,7 +283,10 @@ export class VirtualizedFileDiff<
     if (this.cache.measuredHeightDeltaTotal !== 0) {
       this.cache.measuredHeightDeltaTotal = 0;
     }
-    this.invalidateDerivedLayoutCache(includeEstimatedHeights);
+    this.invalidateDerivedLayoutCache(
+      includeEstimatedHeights,
+      resetRenderRange
+    );
     // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
     // at the same time, so we shouldn't trigger this there.
     if (forceSimpleRecompute && this.isSimpleMode()) {
@@ -291,7 +294,10 @@ export class VirtualizedFileDiff<
     }
   }
 
-  private invalidateDerivedLayoutCache(includeEstimatedHeights: boolean): void {
+  private invalidateDerivedLayoutCache(
+    includeEstimatedHeights: boolean,
+    resetRenderRange = true
+  ): void {
     this.layoutDirty = true;
     if (this.cache.checkpoints.length > 0) {
       this.cache.checkpoints.length = 0;
@@ -899,7 +905,7 @@ export class VirtualizedFileDiff<
     this.virtualizer.instanceChanged(this, false);
   }
 
-  // normally triggered by the editor when the document line count changes
+  // Normally triggered by the host when the document line count changes.
   override applyDocumentChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
@@ -1219,8 +1225,8 @@ export class VirtualizedFileDiff<
   ): void {
     if (
       (!this.layoutDirty && this.cache.checkpoints.length > 0) ||
-      this.fileDiff == null ||
-      this.fileDiff.hunks.length === 0 ||
+      fileDiff == null ||
+      fileDiff.hunks.length === 0 ||
       this.options.collapsed === true
     ) {
       return;
@@ -1613,7 +1619,7 @@ export class VirtualizedFileDiff<
       };
     }
 
-    this.approximateLayoutCheckpoints();
+    this.approximateLayoutCheckpoints(fileDiff);
     lineCount = this.getLayoutLineCount(fileDiff, diffStyle);
 
     const estimatedTargetLines = Math.ceil(

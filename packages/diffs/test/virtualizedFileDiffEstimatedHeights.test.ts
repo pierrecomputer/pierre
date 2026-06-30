@@ -13,6 +13,7 @@ import type {
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { recomputeDiffHunks } from '../src/utils/updateDiffHunks';
+import { installDom } from './domHarness';
 
 // Mirrors LAYOUT_CHECKPOINT_INTERVAL in src/components/VirtualizedFileDiff.ts:
 // the source emits one layout checkpoint per this many diff rows.

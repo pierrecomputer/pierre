@@ -626,13 +626,34 @@ export class VirtualizedFile<
   // normally triggered by the host when the document line count changes
   override applyDocumentChange(
     textDocument: DiffsTextDocument,
-    newLineAnnotations?: LineAnnotation<LAnnotation>[]
+    newLineAnnotations?: LineAnnotation<LAnnotation>[],
+    shouldUpdateBuffer = false
   ): void {
+    const previousRenderRange = this.renderRange;
+
+    super.applyDocumentChange(textDocument, newLineAnnotations);
+
     // reset the layout cache
     this.getSimpleVirtualizer()?.markDOMDirty();
     this.resetLayoutCache(this.isSimpleMode(), false);
 
-    super.applyDocumentChange(textDocument, newLineAnnotations);
+    // Update the buffers caused by the line-count change to ensure the host
+    // scrolls to the correct position before re-rendering
+    if (
+      shouldUpdateBuffer &&
+      previousRenderRange !== undefined &&
+      this.file !== undefined
+    ) {
+      const windowSpecs = this.virtualizer.getWindowSpecs();
+      const renderRange = this.computeRenderRangeFromWindow(
+        this.file,
+        this.top ?? 0,
+        windowSpecs
+      );
+      if (renderRange.bufferAfter !== previousRenderRange.bufferAfter) {
+        this.updateBuffers(renderRange);
+      }
+    }
   }
 
   override render({

@@ -263,7 +263,7 @@ export class FileDiff<
   protected enabled = true;
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
-  protected refreshDiffViewTimeout: ReturnType<typeof setTimeout> | undefined;
+  protected fastRefreshTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -314,7 +314,7 @@ export class FileDiff<
     side: SelectionSide = 'additions'
   ) => {
     // use the fileDiff from the hunksRenderer if it exists, it maybe updated
-    // by the editor
+    // by the host
     const fileDiff = this.hunksRenderer.getRenderDiff() ?? this.fileDiff;
     if (fileDiff == null) {
       return undefined;
@@ -581,9 +581,9 @@ export class FileDiff<
 
     this.editor?.cleanUp();
     this.editor = undefined;
-    if (this.refreshDiffViewTimeout != null) {
-      clearTimeout(this.refreshDiffViewTimeout);
-      this.refreshDiffViewTimeout = undefined;
+    if (this.fastRefreshTimeout != null) {
+      clearTimeout(this.fastRefreshTimeout);
+      this.fastRefreshTimeout = undefined;
     }
   }
 
@@ -1158,7 +1158,7 @@ export class FileDiff<
     };
   }
 
-  // normally triggered by the editor when the document line count changes
+  // normally triggered by the host when the document line count changes
   public applyDocumentChange(
     textDocument: DiffsTextDocument,
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
@@ -1178,7 +1178,28 @@ export class FileDiff<
     ) {
       this.setLineAnnotations(newLineAnnotations);
       this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
+      this.renderAnnotations();
     }
+    this.rerender();
+    this.interactionManager.setSelectionDirty();
+  }
+
+  // Re-render the diff from the host's document after a host-driven full
+  // re-render rebuilt the rows from the host's (now stale) file contents.
+  // applyDocumentChange re-derives the diff (addition lines + hunks) from the
+  // document, but the cached highlighted AST still holds the host's content for
+  // rows that already existed, and renderDiff reuses it. Clearing the render
+  // cache forces the re-render to re-highlight from the document, so every row
+  // matches it - text, syntax colors, and line count - in one pass. Mutating
+  // the diff in place keeps its cacheKey, so the host's document and undo
+  // history survive the re-render.
+  public rerenderFromDocument(textDocument: DiffsTextDocument): void {
+    this.hunksRenderer.applyDocumentChange(textDocument);
+    const renderDiff = this.hunksRenderer.getRenderDiff();
+    if (renderDiff != null) {
+      this.fileDiff = renderDiff;
+    }
+    this.hunksRenderer.clearRenderCache();
     this.rerender();
   }
 
@@ -1192,23 +1213,21 @@ export class FileDiff<
   public recomputeContentHunks(
     changedAdditionLineIndexes: readonly number[]
   ): void {
-    this.hunksRenderer.updateRenderCache(
-      dirtyLines,
-      themeType,
-      skipDiffRecompute
-    );
-    if (shouldRefreshView === true) {
-      if (this.refreshDiffViewTimeout != null) {
-        clearTimeout(this.refreshDiffViewTimeout);
+    this.hunksRenderer.recomputeContentHunks(changedAdditionLineIndexes);
+  }
+
+  public applyContentEdit(changedAdditionLineIndexes: readonly number[]): void {
+    this.recomputeContentHunks(changedAdditionLineIndexes);
+    if (this.options.diffStyle === 'split') {
+      if (this.fastRefreshTimeout != null) {
+        clearTimeout(this.fastRefreshTimeout);
       }
-      this.refreshDiffViewTimeout = setTimeout(() => {
-        this.refreshDiffViewTimeout = undefined;
-        if (this.options.diffStyle === 'split') {
-          this.refreshSplitDiffView();
-        } else {
-          this.refreshUnifiedDiffView();
-        }
-      }, 250);
+      this.fastRefreshTimeout = setTimeout(() => {
+        this.fastRefreshTimeout = undefined;
+        this.refreshSplitDiffView();
+      }, 100);
+    } else {
+      this.refreshUnifiedDiffView();
     }
   }
 
