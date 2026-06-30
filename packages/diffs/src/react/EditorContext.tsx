@@ -3,7 +3,7 @@
 import type { Context, PropsWithChildren } from 'react';
 import { createContext, useContext, useEffect } from 'react';
 
-import { Editor } from '../editor';
+import type { Editor } from '../editor';
 
 export const EditorContext: Context<Editor<unknown> | undefined> =
   createContext<Editor<unknown> | undefined>(undefined);
