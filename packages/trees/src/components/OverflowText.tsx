@@ -57,12 +57,53 @@ type AllowableContentGroups =
       children: string;
     };
 
+// When a split boundary lands adjacent to whitespace, the trailing/leading
+// space sits at the seam between the two inline segments. Because the visible
+// content is rendered with `white-space: nowrap`, the browser collapses that
+// boundary whitespace and the name visually loses its space (e.g. "Hello world"
+// rendering as "Helloworld"). To keep the space visible, nudge the proposed
+// center index to the nearest position where neither side of the seam is
+// whitespace, so the space stays interior to one segment. Returns the original
+// index when no whitespace-free boundary exists (e.g. all-whitespace input).
+const isWhitespace = (char: string | undefined): boolean =>
+  char !== undefined && /\s/.test(char);
+
+const avoidWhitespaceBoundary = (
+  contents: string,
+  centerIndex: number
+): number => {
+  const isOnBoundary = (index: number): boolean =>
+    isWhitespace(contents[index - 1]) || isWhitespace(contents[index]);
+
+  if (!isOnBoundary(centerIndex)) {
+    return centerIndex;
+  }
+
+  // Search outward from the center for the closest boundary that is not
+  // adjacent to whitespace, keeping the two segments as balanced as possible.
+  for (let offset = 1; offset < contents.length; offset++) {
+    const before = centerIndex - offset;
+    if (before > 0 && !isOnBoundary(before)) {
+      return before;
+    }
+    const after = centerIndex + offset;
+    if (after < contents.length && !isOnBoundary(after)) {
+      return after;
+    }
+  }
+
+  return centerIndex;
+};
+
+const centerSplitIndex = (contents: string): number =>
+  avoidWhitespaceBoundary(contents, Math.ceil(contents.length / 2));
+
 // Split the contents into two equal segments
 export const splitCenter: CustomSplitFn = (contents) => {
   if (contents.length < 2) {
     return [contents, ''];
   }
-  const splitIndex = Math.ceil(contents.length / 2);
+  const splitIndex = centerSplitIndex(contents);
   return [contents.slice(0, splitIndex), contents.slice(splitIndex)];
 };
 
@@ -80,7 +121,7 @@ export const splitExtension: CustomSplitFn = (contents) => {
   const splitIndex =
     extensionIndex >= 1 && !isTooLong
       ? extensionIndex
-      : Math.ceil(contents.length / 2);
+      : centerSplitIndex(contents);
 
   return [contents.slice(0, splitIndex), contents.slice(splitIndex)];
 };

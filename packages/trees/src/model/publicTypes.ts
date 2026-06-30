@@ -323,15 +323,26 @@ export type FileTreeMutationEventForType<
   ? FileTreeMutationEvent
   : Extract<FileTreeMutationEvent, { operation: TType }>;
 
-export interface FileTreeResetOptions {
+interface FileTreeResetBehaviorOptions {
   // When provided, replaces the baseline expansion set stored at construction
   // time. Useful when the caller is swapping in a dramatically different path
   // list (e.g. upgrading from an SSR preview to a full dataset) and wants the
   // fresh store to start with expansion state that reflects the new paths.
   initialExpandedPaths?: readonly FileTreePublicId[];
-  // Must describe the same path list passed to resetPaths(paths, ...).
-  preparedInput?: FileTreePreparedInput;
 }
+
+export type FileTreeResetOptions = FileTreeResetBehaviorOptions & {
+  // When omitted, the raw `paths` argument describes the tree. When provided,
+  // it must describe the same path list passed to resetPaths(paths, ...).
+  preparedInput?: FileTreePreparedInput;
+};
+
+// Options shape for the preparedInput-only `resetPaths` overload. `paths` may be
+// omitted entirely because `preparedInput` already carries the canonical path
+// list, so the runtime skips the parse + sort that raw `paths` would require.
+export type FileTreeResetPreparedOptions = FileTreeResetBehaviorOptions & {
+  preparedInput: FileTreePreparedInput;
+};
 
 export interface FileTreeMutationHandle {
   add(path: FileTreePublicId): void;
@@ -346,10 +357,14 @@ export interface FileTreeMutationHandle {
     handler: (event: FileTreeMutationEventForType<TType>) => void
   ): () => void;
   remove(path: FileTreePublicId, options?: FileTreeRemoveOptions): void;
+  // Exactly one of `paths` or `preparedInput` is required. Pass raw `paths`
+  // (optionally with a matching `preparedInput`), or pass `preparedInput`
+  // alone to skip the parse + sort that raw `paths` would otherwise require.
   resetPaths(
     paths: readonly FileTreePublicId[],
     options?: FileTreeResetOptions
   ): void;
+  resetPaths(options: FileTreeResetPreparedOptions): void;
 }
 
 export type FileTreeListener = () => void;

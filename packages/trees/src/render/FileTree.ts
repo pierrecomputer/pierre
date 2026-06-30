@@ -43,6 +43,7 @@ import type {
   FileTreeRemoveOptions,
   FileTreeRenderProps,
   FileTreeResetOptions,
+  FileTreeResetPreparedOptions,
   FileTreeRowDecorationRenderer,
   FileTreeScrollToPathOptions,
   FileTreeSearchSessionHandle,
@@ -438,8 +439,19 @@ export class FileTree
   public resetPaths(
     paths: readonly string[],
     options?: FileTreeResetOptions
+  ): void;
+  public resetPaths(options: FileTreeResetPreparedOptions): void;
+  public resetPaths(
+    pathsOrOptions: readonly string[] | FileTreeResetPreparedOptions,
+    options?: FileTreeResetOptions
   ): void {
-    this.#controller.resetPaths(paths, options);
+    if (Array.isArray(pathsOrOptions)) {
+      this.#controller.resetPaths(pathsOrOptions as readonly string[], options);
+    } else {
+      this.#controller.resetPaths(
+        pathsOrOptions as FileTreeResetPreparedOptions
+      );
+    }
   }
 
   // Deliberately rerenders even when the same object reference is passed again.
