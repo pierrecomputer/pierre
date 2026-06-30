@@ -606,6 +606,7 @@ export class CodeView<LAnnotation = undefined> {
   private pendingElementPool: HTMLElement[] = [];
   private options: CodeViewOptions<LAnnotation>;
   private workerManager: WorkerPoolManager | undefined;
+  private isReadySubscription: (() => void) | undefined;
   private isContainerManaged: boolean;
 
   constructor(
@@ -887,6 +888,7 @@ export class CodeView<LAnnotation = undefined> {
   }
 
   public reset(): void {
+    this.clearReadySubscription();
     this.restoreScrollInteractions();
     this.cleanAllRenderedItems();
     this.selectedLines = null;
@@ -1394,6 +1396,47 @@ export class CodeView<LAnnotation = undefined> {
     } else {
       queueRender(this.computeRenderRangeAndEmit);
     }
+  }
+
+  private isReady(): boolean {
+    const { workerManager } = this;
+    // A failed worker pool never reaches the 'initialized' state (it reverts to
+    // 'waiting' with workersFailed: true), so treat failure as ready and let
+    // the renderers fall back to synchronous highlighting.
+    if (
+      workerManager == null ||
+      workerManager.isInitialized() ||
+      workerManager.getStats().workersFailed
+    ) {
+      this.clearReadySubscription();
+      return true;
+    }
+
+    this.isReadySubscription ??= workerManager.subscribeToStatChanges(
+      (stats) => {
+        if (stats.managerState !== 'initialized' && !stats.workersFailed) {
+          return;
+        }
+
+        this.clearReadySubscription();
+        this.render(true);
+      }
+    );
+
+    // If the worker is awiting on initialization, we should attempt to
+    // initialize
+    if (workerManager.getStats().managerState === 'waiting') {
+      void workerManager.initialize().catch(() => {});
+    }
+    return false;
+  }
+
+  private clearReadySubscription(): void {
+    if (this.isReadySubscription == null) {
+      return;
+    }
+    this.isReadySubscription();
+    this.isReadySubscription = undefined;
   }
 
   public instanceChanged(
@@ -2526,6 +2569,9 @@ export class CodeView<LAnnotation = undefined> {
     if (CodeView.__STOP || this.container == null) {
       return;
     }
+    if (!this.isReady()) {
+      return;
+    }
 
     // Read the current viewport and logical scroll position before making DOM
     // mutations, then capture an anchor that can survive layout recalculation.
@@ -2690,6 +2736,7 @@ export class CodeView<LAnnotation = undefined> {
     this.renderState.lastIndex = lastRenderedIndex;
 
     this.flushSlotCoordinator();
+    this.flushManagers(updatedItems);
     this.reconcileRenderedItems(updatedItems);
     this.syncContainerHeight();
     this.updateStickyPositioning();
@@ -2759,7 +2806,16 @@ export class CodeView<LAnnotation = undefined> {
     }
     this.renderState.scrollTop = roundToDevicePixel(syncedScrollTop);
 
-    this.flushManagers(updatedItems);
+    // The post-render scroll-correction block above can call applyScrollFix ->
+    // syncPagedScrollScaffolding -> applyStickyPositioning, which recomputes
+    // renderState.stickyHeight from getStickyBounds(windowSpecs) for the
+    // corrected scroll position. The rendered DOM slice was committed earlier in
+    // this frame for the pre-correction window and is not re-rendered here, so
+    // that windowSpecs-based value can diverge from the committed slice by the
+    // scroll-correction delta. Recompute sticky positioning from the committed
+    // renderRange (no-arg path) so renderState.stickyHeight matches the slice
+    // actually in the DOM before we validate it.
+    this.updateStickyPositioning();
 
     this.validateStickyContainerHeight();
     this.fixContainerFocus();

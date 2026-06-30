@@ -94,6 +94,7 @@ export function renderDemoCodeView(
 
   const items = createCodeViewItems(parsedPatches);
   const options: CodeViewOptions<CodeViewCommentMetadata> = {
+    // __devOnlyValidateItemHeights: true,
     theme,
     themeType,
     diffStyle,
