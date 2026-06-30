@@ -277,6 +277,22 @@ export function wait(ms = 0): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Poll `predicate` every `interval` ms until it returns true or `timeout`
+// elapses, then return. On timeout it simply returns so the caller's `expect`
+// fires with the real, informative failure rather than a generic timeout.
+export async function waitFor(
+  predicate: () => boolean,
+  { timeout = 1000, interval = 5 }: { timeout?: number; interval?: number } = {}
+): Promise<void> {
+  const deadline = Date.now() + timeout;
+  while (!predicate()) {
+    if (Date.now() >= deadline) {
+      return;
+    }
+    await wait(interval);
+  }
+}
+
 export function dispatchScroll(root: HTMLElement): void {
   root.dispatchEvent(new window.Event('scroll'));
 }

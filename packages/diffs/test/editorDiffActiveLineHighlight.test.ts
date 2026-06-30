@@ -5,7 +5,7 @@ import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents } from '../src/types';
-import { installDom, wait } from './domHarness';
+import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -58,6 +58,10 @@ function highlightedGutterNumbers(code: HTMLElement | undefined): number[] {
   return [...code.querySelectorAll('[data-column-number][data-selected-line]')]
     .map((el) => Number(el.getAttribute('data-column-number')))
     .sort((a, b) => a - b);
+}
+
+function arraysEqual(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
 // Dispatch a copy event with a clipboardData spy and return the writes, the
@@ -114,7 +118,30 @@ async function createDiffEditorFixture(
     forceRender: true,
   });
   editor.edit(fileDiff);
-  await wait(10);
+  // The content rows are rendered synchronously by fileDiff.render() (the diff
+  // hunks renderer can produce rows from a cache or a plain-text fallback), but
+  // the editor's text document is only created later, inside the async
+  // initializeHighlighter().then(editor.__syncRenderView) callback in
+  // FileDiff.syncRenderViewToEditor(). Until that callback runs, setSelections
+  // throws "Text document is not initialized". So polling for rows alone can
+  // win the race before the document exists when the highlighter load is slow.
+  //
+  // __syncRenderView sets contentEditable = 'true' on the [data-content]
+  // element (editor.ts) in the same synchronous block that assigns
+  // this.#textDocument, and the first sync always takes both gates, so the
+  // content element becoming contenteditable is a direct, reliable proxy for
+  // "the text document is initialized and setSelections is safe". (jsdom does
+  // not reflect the contentEditable IDL property to the attribute, so read the
+  // property rather than matching a [contenteditable] selector.) Poll on that
+  // (with rows present) rather than on rows alone.
+  await waitFor(() => {
+    const content =
+      container.shadowRoot?.querySelector<HTMLElement>('[data-content]');
+    return (
+      content?.contentEditable === 'true' &&
+      content.querySelectorAll('[data-line]').length > 0
+    );
+  });
 
   return {
     container,
@@ -144,9 +171,9 @@ describe('editor active-line highlight on a diff', () => {
           direction: 'none',
         },
       ]);
-      await wait(10);
 
       const { additions, deletions } = findCodeColumns(fixture.container);
+      await waitFor(() => highlightedLineNumbers(additions).length > 0);
       // The changed addition line ("import x", index 0) renders as data-line 1.
       expect(highlightedLineNumbers(additions)).toEqual([1]);
       // The read-only deletions column must not be highlighted.
@@ -166,9 +193,9 @@ describe('editor active-line highlight on a diff', () => {
           direction: 'none',
         },
       ]);
-      await wait(10);
 
       const { additions, deletions } = findCodeColumns(fixture.container);
+      await waitFor(() => highlightedLineNumbers(additions).length > 0);
       expect(highlightedLineNumbers(additions)).toEqual([1]);
 
       // A pointerdown in the read-only deletions column hands the selection to
@@ -177,7 +204,7 @@ describe('editor active-line highlight on a diff', () => {
       deletions?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true })
       );
-      await wait(10);
+      await waitFor(() => highlightedLineNumbers(additions).length === 0);
       expect(highlightedLineNumbers(additions)).toEqual([]);
     } finally {
       await fixture.cleanup();
@@ -196,9 +223,9 @@ describe('editor active-line highlight on a diff', () => {
           direction: 'forward',
         },
       ]);
-      await wait(10);
 
       const { additions, deletions } = findCodeColumns(fixture.container);
+      await waitFor(() => highlightedGutterNumbers(additions).length > 0);
       // No line background on either column: the selected text is the
       // line-level highlight instead.
       expect(highlightedLineNumbers(additions)).toEqual([]);
@@ -221,11 +248,11 @@ describe('editor active-line highlight on a diff', () => {
           direction: 'none',
         },
       ]);
-      await wait(10);
 
       // A unified diff has a single column, so the additions-only restriction
       // must not suppress the highlight there.
       const { additions } = findCodeColumns(fixture.container);
+      await waitFor(() => highlightedLineNumbers(additions).length > 0);
       expect(highlightedLineNumbers(additions)).toEqual([1]);
     } finally {
       await fixture.cleanup();
@@ -254,8 +281,8 @@ describe('editor active-line highlight on a diff', () => {
           direction: 'none',
         },
       ]);
-      await wait(10);
       const { additions } = findCodeColumns(fixture.container);
+      await waitFor(() => highlightedGutterNumbers(additions).length > 0);
       expect(highlightedGutterNumbers(additions).length).toBeGreaterThan(0);
 
       // Pointerdown on the deleted line hands selection to that line: the
@@ -263,7 +290,7 @@ describe('editor active-line highlight on a diff', () => {
       deletedLine?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => highlightedGutterNumbers(additions).length === 0);
       expect(highlightedGutterNumbers(additions)).toEqual([]);
       expect(pre?.hasAttribute('data-deleted-text-selection')).toBe(true);
 
@@ -272,7 +299,9 @@ describe('editor active-line highlight on a diff', () => {
       editableLine?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(
+        () => pre?.hasAttribute('data-deleted-text-selection') === false
+      );
       expect(pre?.hasAttribute('data-deleted-text-selection')).toBe(false);
     } finally {
       await fixture.cleanup();
@@ -297,8 +326,8 @@ describe('editor active-line highlight on a diff', () => {
           direction: 'none',
         },
       ]);
-      await wait(10);
       const { additions } = findCodeColumns(fixture.container);
+      await waitFor(() => highlightedGutterNumbers(additions).length > 0);
       expect(highlightedGutterNumbers(additions).length).toBeGreaterThan(0);
 
       // Clicking the deleted line's gutter number hands selection to that
@@ -308,7 +337,9 @@ describe('editor active-line highlight on a diff', () => {
       deletedGutterNumber?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(
+        () => deletedGutterNumber?.hasAttribute('data-selected-line') === true
+      );
       expect(deletedGutterNumber?.hasAttribute('data-selected-line')).toBe(
         true
       );
@@ -339,7 +370,7 @@ describe('editor active-line highlight on a diff', () => {
       first?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => first?.hasAttribute('data-selected-line') === true);
       expect(first?.hasAttribute('data-selected-line')).toBe(true);
 
       // Selecting a different deleted line must drop the first one's highlight
@@ -349,7 +380,7 @@ describe('editor active-line highlight on a diff', () => {
       second?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => second?.hasAttribute('data-selected-line') === true);
       expect(second?.hasAttribute('data-selected-line')).toBe(true);
       expect(first?.hasAttribute('data-selected-line')).toBe(false);
     } finally {
@@ -385,11 +416,11 @@ describe('editor active-line highlight on a diff', () => {
       anchor?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => highlightedGutterNumbers(deletions).length > 0);
       focus?.dispatchEvent(
         new MouseEvent('mousemove', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => highlightedGutterNumbers(deletions).includes(4));
 
       // Only the line the drag ended on is highlighted — the same as an
       // addition selection, which highlights just its caret line — not every
@@ -430,11 +461,11 @@ describe('editor active-line highlight on a diff', () => {
       anchor?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => anchor?.hasAttribute('data-selected-line') === true);
       focus?.dispatchEvent(
         new MouseEvent('mousemove', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => focus?.hasAttribute('data-selected-line') === true);
 
       // Only the line the drag ended on stays highlighted (not the anchor, and
       // not every line in the range), and the deleted-text marker reveals the
@@ -467,7 +498,9 @@ describe('editor active-line highlight on a diff', () => {
           pointerType: 'touch',
         })
       );
-      await wait(10);
+      await waitFor(
+        () => deletedGutterNumber?.hasAttribute('data-selected-line') === true
+      );
       expect(deletedGutterNumber?.hasAttribute('data-selected-line')).toBe(
         true
       );
@@ -504,15 +537,17 @@ describe('editor active-line highlight on a diff', () => {
       line2?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => highlightedGutterNumbers(additions).length > 0);
       line4?.dispatchEvent(
         new MouseEvent('mousemove', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => highlightedGutterNumbers(additions).includes(4));
       document.dispatchEvent(
         new PointerEvent('pointerup', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() =>
+        arraysEqual(highlightedGutterNumbers(additions), [4])
+      );
       expect(highlightedGutterNumbers(additions)).toEqual([4]);
 
       // Backward drag (line 4 -> line 2): the anchor line stays selected and the
@@ -520,15 +555,17 @@ describe('editor active-line highlight on a diff', () => {
       line4?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => highlightedGutterNumbers(additions).includes(4));
       line2?.dispatchEvent(
         new MouseEvent('mousemove', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => highlightedGutterNumbers(additions).includes(2));
       document.dispatchEvent(
         new PointerEvent('pointerup', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() =>
+        arraysEqual(highlightedGutterNumbers(additions), [2])
+      );
       expect(highlightedGutterNumbers(additions)).toEqual([2]);
     } finally {
       await fixture.cleanup();
@@ -552,7 +589,9 @@ describe('editor active-line highlight on a diff', () => {
       deletedGutterNumber?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(
+        () => deletedGutterNumber?.hasAttribute('data-selected-line') === true
+      );
 
       // The deleted row lives inside the editor's contentEl (unified view), so a
       // copy event reaches the editor's copy handler. The deleted text isn't in
@@ -592,11 +631,11 @@ describe('editor active-line highlight on a diff', () => {
       first?.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => first?.hasAttribute('data-selected-line') === true);
       last?.dispatchEvent(
         new MouseEvent('mousemove', { bubbles: true, composed: true })
       );
-      await wait(10);
+      await waitFor(() => last?.hasAttribute('data-selected-line') === true);
 
       // Each deleted line is a separate read-only host, so the browser's native
       // selection clamps to the first line; the copy must still carry every
