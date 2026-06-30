@@ -5,14 +5,10 @@ import { EditorProvider, File } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useEffect, useMemo, useRef } from 'react';
 
-import { FIND_DEMO_SEARCH_QUERY } from './constants';
-
 interface FindDemoProps {
   // Server-preloaded, highlighted File; hydrating from it avoids a highlight flash on load.
   prerenderedFile: PreloadedFileResult<undefined>;
 }
-
-const SEARCH_QUERY = FIND_DEMO_SEARCH_QUERY;
 
 // Custom element the File renders into; its shadow DOM is open, so we can reach in.
 const DIFFS_TAG_NAME = 'diffs-container';
@@ -30,10 +26,12 @@ function detectMac(): boolean {
 }
 
 // Demo of the editor's find overlay. With no public API to open the search
-// panel, we do what a user does: dispatch Cmd/Ctrl-F, then type a query into
-// the panel input. We poll for the content element (it attaches async after the
-// File hydrates) and only start once the section is on screen so opening the
-// panel doesn't yank the page on load.
+// panel, we do what a reader would: dispatch Cmd/Ctrl-F on the content element
+// (polling for it, since it attaches asynchronously after the File hydrates).
+// We deliberately leave the input blank and never seed a query — seeding makes
+// the editor scroll its first match into view, and that scroll bubbles up to
+// the page, yanking the reader down to this (below-the-fold) demo on load.
+// Opening an empty panel scrolls nothing.
 export function FindDemo({ prerenderedFile }: FindDemoProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const editor = useMemo(() => new Editor({}), []);
@@ -55,6 +53,7 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
     };
 
     // Open the find panel via the real keyboard shortcut on the content element.
+    // preventScroll keeps focusing the content from scrolling the page.
     const openPanel = (shadow: ShadowRoot) => {
       const content = shadow.querySelector<HTMLElement>('[data-content]');
       if (content == null) {
@@ -73,20 +72,9 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
       );
     };
 
-    // Type the query into the open panel, mirroring a user typing. The editor
-    // selects and scrolls to the first match on input, so the panel lands on
-    // "1 of N" with the input focused. Returns true once the input is found.
-    const fillPanel = (shadow: ShadowRoot): boolean => {
-      const input = shadow.querySelector<HTMLInputElement>('[data-search]');
-      if (input == null) {
-        return false;
-      }
-      input.focus();
-      input.value = SEARCH_QUERY;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      return true;
-    };
-
+    // Poll until the content element has attached, open the panel once, then
+    // stop. We leave the input blank, so nothing scrolls: opening an empty panel
+    // reveals no match for the editor to scroll into view.
     const tick = () => {
       if (cancelled) {
         return;
@@ -95,20 +83,17 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
       const shadow = getShadow();
       if (shadow != null) {
         if (shadow.querySelector('[data-search-panel]') != null) {
-          if (fillPanel(shadow)) {
-            return;
-          }
-        } else {
-          openPanel(shadow);
+          return;
         }
+        openPanel(shadow);
       }
       if (attempts < 120) {
         timer = window.setTimeout(tick, 50);
       }
     };
 
-    // Defer until the demo is on screen so focusing the panel input doesn't
-    // scroll the page on first load.
+    // Defer until the demo nears the viewport so we only open the panel (and
+    // focus its editor) as the reader approaches it, rather than on load.
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
