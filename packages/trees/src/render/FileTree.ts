@@ -448,7 +448,9 @@ export class FileTree
     if (Array.isArray(pathsOrOptions)) {
       this.#controller.resetPaths(pathsOrOptions as readonly string[], options);
     } else {
-      this.#controller.resetPaths(pathsOrOptions as FileTreeResetPreparedOptions);
+      this.#controller.resetPaths(
+        pathsOrOptions as FileTreeResetPreparedOptions
+      );
     }
   }
 
