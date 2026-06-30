@@ -9,6 +9,7 @@ interface MobileNavLinkProps {
   href: string;
   children: React.ReactNode;
   external?: boolean;
+  active?: boolean;
   onClick?: () => void;
 }
 
@@ -16,6 +17,7 @@ export function MobileNavLink({
   href,
   children,
   external,
+  active,
   onClick,
 }: MobileNavLinkProps) {
   return (
@@ -24,7 +26,8 @@ export function MobileNavLink({
       onClick={onClick}
       className={cn(
         'text-foreground flex items-center gap-1.5 rounded-md px-3 py-2 text-base transition-colors',
-        'hover:bg-muted active:bg-muted/70'
+        'hover:bg-muted active:bg-muted/70',
+        active === true && 'pointer-events-none font-medium'
       )}
     >
       {children}

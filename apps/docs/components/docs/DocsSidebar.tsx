@@ -55,6 +55,12 @@ export function DocsSidebar({
   const pathname = usePathname();
   const product = getProductFromPathname(pathname);
   const navRef = useRef<HTMLElement>(null);
+
+  // Mirror the desktop nav's active treatment: home matches exactly, while
+  // section links (Edit, Docs, Theme) match their path prefix.
+  const homePath = product.basePath !== '' ? product.basePath : '/';
+  const isActivePath = (target: string) =>
+    target === homePath ? pathname === target : pathname.startsWith(target);
   const [headings, setHeadings] = useState<HeadingItem[]>([]);
   const [activeHeading, setActiveHeading] = useState<string>('');
 
@@ -169,12 +175,23 @@ export function DocsSidebar({
       >
         {isMobileOpen && (
           <div className="border-border mb-4 border-b pb-4 md:hidden">
-            <MobileNavLink
-              href={product.basePath !== '' ? product.basePath : '/'}
-            >
+            <MobileNavLink href={homePath} active={isActivePath(homePath)}>
               Home
             </MobileNavLink>
-            <MobileNavLink href={product.docsPath}>Docs</MobileNavLink>
+            {product.id === 'diffs' && (
+              <MobileNavLink
+                href={`${product.basePath}/edit`}
+                active={isActivePath(`${product.basePath}/edit`)}
+              >
+                Edit
+              </MobileNavLink>
+            )}
+            <MobileNavLink
+              href={product.docsPath}
+              active={isActivePath(product.docsPath)}
+            >
+              Docs
+            </MobileNavLink>
             {product.id === 'diffs' && (
               <MobileNavLink
                 href={
@@ -200,6 +217,7 @@ export function DocsSidebar({
                   : DIFFS_THEME_PATH
               }
               external={isTrees}
+              active={!isTrees && isActivePath(DIFFS_THEME_PATH)}
             >
               Theme
             </MobileNavLink>
