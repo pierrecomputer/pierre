@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
@@ -9,12 +9,6 @@ import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
-  await disposeHighlighter();
-});
-
-// Other component suites (e.g. CodeView) share the singleton highlighter; reset
-// it before each test so async highlight work cannot bleed into undo timing.
-beforeAll(async () => {
   await disposeHighlighter();
 });
 
@@ -151,7 +145,7 @@ function typeAt(
 }
 
 describe('diff editor: display-option toggle mid-edit', () => {
-  test('keeps edited line DOM when a display option is toggled', async () => {
+  test('keeps the edited line text visible when a display option is toggled', async () => {
     // old/new differ so the additions column (the editor's target) renders; the
     // edit targets line 0 ("alpha"), an unchanged context line — the "rename a
     // function" case from the bug report.
@@ -167,8 +161,7 @@ describe('diff editor: display-option toggle mid-edit', () => {
 
       await fixture.toggleDisplayOption();
 
-      // A forced re-render briefly rebuilds rows from the host's diff source,
-      // then re-renders from the editor document so the edit remains visible.
+      // The edit must still be visible without an extra keystroke.
       expect(lineText(container, 1)).toBe('alphaX');
     } finally {
       await fixture.cleanup();
