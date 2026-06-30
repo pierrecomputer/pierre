@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import type { WorkerPoolManager, WorkerStats } from '../src/worker';
@@ -91,8 +91,7 @@ describe('CodeView worker pool readiness', () => {
 
   test('waits for worker pool initialization before rendering items', async () => {
     const { cleanup } = installDom();
-    const consoleError = mock(() => {});
-    console.error = consoleError;
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     const workerManager = new FakeWorkerPoolManager();
     const viewer = new CodeView(
       { disableFileHeader: true },
@@ -131,8 +130,7 @@ describe('CodeView worker pool readiness', () => {
 
   test('renders via fallback when the worker pool fails after subscribing', async () => {
     const { cleanup } = installDom();
-    const consoleError = mock(() => {});
-    console.error = consoleError;
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     const workerManager = new FakeWorkerPoolManager();
     const viewer = new CodeView(
       { disableFileHeader: true },
@@ -167,8 +165,7 @@ describe('CodeView worker pool readiness', () => {
 
   test('renders immediately when the worker pool has already failed', async () => {
     const { cleanup } = installDom();
-    const consoleError = mock(() => {});
-    console.error = consoleError;
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     const workerManager = new FakeWorkerPoolManager();
     workerManager.markFailed();
     const viewer = new CodeView(
