@@ -550,6 +550,15 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#themeSelectionRefreshFrame = undefined;
     }
 
+    // Drop the attached document so a re-attach rebuilds from the host's
+    // contents rather than reusing the edited buffer. The document survives host
+    // re-renders (option toggles) but not a full detach, so remounting the
+    // surface on the same editor discards prior edits - how the docs "Live
+    // editing" Reset reverts to the original.
+    this.#fileInstance = undefined;
+    this.#fileInfo = undefined;
+    this.#textDocument = undefined;
+
     this.#resetState();
   }
 
