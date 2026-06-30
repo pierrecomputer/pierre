@@ -246,7 +246,9 @@ export class EditorTokenizer {
       this.#grammar === undefined &&
       !isGrammarlessLanguage(this.#textDocument.languageId)
     ) {
-      throw new Error('Grammar not loaded');
+      throw new Error(
+        `Grammar for language "${this.#textDocument.languageId}" not loaded`
+      );
     }
 
     const { lineCount } = this.#textDocument;
