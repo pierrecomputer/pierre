@@ -1400,14 +1400,21 @@ export class CodeView<LAnnotation = undefined> {
 
   private isReady(): boolean {
     const { workerManager } = this;
-    if (workerManager == null || workerManager.isInitialized()) {
+    // A failed worker pool never reaches the 'initialized' state (it reverts to
+    // 'waiting' with workersFailed: true), so treat failure as ready and let
+    // the renderers fall back to synchronous highlighting.
+    if (
+      workerManager == null ||
+      workerManager.isInitialized() ||
+      workerManager.getStats().workersFailed
+    ) {
       this.clearReadySubscription();
       return true;
     }
 
     this.isReadySubscription ??= workerManager.subscribeToStatChanges(
       (stats) => {
-        if (stats.managerState !== 'initialized') {
+        if (stats.managerState !== 'initialized' && !stats.workersFailed) {
           return;
         }
 
