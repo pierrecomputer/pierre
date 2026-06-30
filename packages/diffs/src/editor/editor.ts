@@ -207,6 +207,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
   #shouldIgnoreSelectionChange = false;
+  // Set by select-all, cleared on the next keydown/pointerdown. Select-all puts
+  // a non-collapsed range on the native selection so WebKit fires a delete
+  // beforeinput, but only rendered lines resolve to DOM nodes, so that native
+  // range covers just the on-screen lines while #selections spans the whole
+  // document. Without this guard a selectionchange would read the shorter
+  // native range back over #selections, and the next delete would leave the
+  // offscreen lines behind.
+  #suppressNativeSelectionSync = false;
   // Whether the contenteditable holds (or is claiming) focus. Synced by
   // focus/blur listeners and set eagerly by #focus(), whose real focus() call is
   // deferred to a rAF. Lets applyEdits skip focus/scroll only on unfocused
@@ -864,6 +872,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           // overwrite the remapped #selections before the user returns to type.
           if (
             this.#shouldIgnoreSelectionChange ||
+            this.#suppressNativeSelectionSync ||
             shadowRoot == null ||
             !this.#contentHasFocus
           ) {
@@ -1065,6 +1074,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         contentEl,
         'pointerdown',
         (e) => {
+          // Any pointer press — mouse, touch, or pen — moves off the select-all
+          // selection, so let selectionchange sync #selections from the new
+          // native selection again. This must run before the mouse-only guard
+          // below: a touch or pen tap also moves the caret, and if the flag
+          // stayed set its selectionchange would be ignored and the next typed
+          // character would replace the whole still-selected document.
+          this.#suppressNativeSelectionSync = false;
+
           if (e.pointerType !== 'mouse') {
             return;
           }
@@ -1165,6 +1182,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (!targetIsContentElement(e)) {
           return;
         }
+        // A keystroke is the user acting on the select-all selection (deleting,
+        // typing, moving); let selectionchange sync #selections again.
+        this.#suppressNativeSelectionSync = false;
 
         // handle the cursor move events manually for multiple selections and virtual viewport
         const mvShortcut = isMoveCursorShortcut(e);
@@ -1680,10 +1700,38 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
         break;
 
-      case 'selectAll':
-        this.#updateSelections([getDocumentFullSelection(textDocument)]);
+      case 'selectAll': {
+        const fullSelection = getDocumentFullSelection(textDocument);
+        this.#updateSelections([fullSelection]);
         this.focus();
+        // The editor paints selections with an overlay and otherwise leaves the
+        // native selection a collapsed caret. focus() above collapses it to the
+        // document start, and Safari/WebKit then fires no delete beforeinput for
+        // a following Backspace — nothing sits before a caret at offset 0 — so
+        // select-all then delete is silently dropped. Give WebKit a non-collapsed
+        // native selection so it emits the delete; Chrome already deletes via
+        // #selections regardless. #setWindowSelection can only resolve lines that
+        // are currently rendered, and in a virtualized diff most of the document
+        // is offscreen, so anchor the native range to the editable lines on
+        // screen rather than the document bounds. The native range only needs to
+        // be non-collapsed — the edit uses #selections, which still spans the
+        // whole document. #suppressNativeSelectionSync then stops the resulting
+        // selectionchange from reading that shorter range back over #selections
+        // before the delete runs.
+        const renderedLines = this.#getRenderedEditableLineRange();
+        if (renderedLines !== undefined) {
+          this.#suppressNativeSelectionSync = true;
+          this.#setWindowSelection({
+            start: { line: renderedLines.first, character: 0 },
+            end: {
+              line: renderedLines.last,
+              character: textDocument.getLineLength(renderedLines.last),
+            },
+            direction: DirectionForward,
+          });
+        }
         break;
+      }
 
       case 'moveCursorToDocStart':
       case 'moveCursorToDocEnd':
@@ -3659,6 +3707,42 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       backgroundColor === 'rgba(0, 0, 0, 0)'
       ? undefined
       : backgroundColor;
+  }
+
+  // Returns the first and last document lines that have an editable row in the
+  // current (virtualized) render window, or undefined when none are rendered.
+  // Used by select-all to anchor a native selection: only rendered lines
+  // resolve to DOM nodes, so the native range must stay within what is on
+  // screen even though the document selection spans the whole file.
+  #getRenderedEditableLineRange(): { first: number; last: number } | undefined {
+    const contentElement = this.#contentElement;
+    if (contentElement === undefined) {
+      return undefined;
+    }
+    let first: number | undefined;
+    let last: number | undefined;
+    for (const child of contentElement.children) {
+      const el = child as HTMLElement;
+      const lineType = el.dataset.lineType;
+      const lineNumber = getLineNumberAttr(el);
+      if (
+        lineNumber === undefined ||
+        lineType === undefined ||
+        !isLineEditable(lineType)
+      ) {
+        continue;
+      }
+      const line = lineNumber - 1;
+      if (first === undefined || line < first) {
+        first = line;
+      }
+      if (last === undefined || line > last) {
+        last = line;
+      }
+    }
+    return first === undefined || last === undefined
+      ? undefined
+      : { first, last };
   }
 
   #getLineElement(line: number): HTMLElement | undefined {
