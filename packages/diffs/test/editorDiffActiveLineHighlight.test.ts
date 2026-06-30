@@ -118,14 +118,30 @@ async function createDiffEditorFixture(
     forceRender: true,
   });
   editor.edit(fileDiff);
-  // The async render + edit pass populates the editor's text document and the
-  // content rows together; poll until the rows exist rather than guessing a
-  // fixed delay, so setSelections never races the document being initialized.
-  await waitFor(
-    () =>
-      (container.shadowRoot?.querySelectorAll('[data-content] > [data-line]')
-        .length ?? 0) > 0
-  );
+  // The content rows are rendered synchronously by fileDiff.render() (the diff
+  // hunks renderer can produce rows from a cache or a plain-text fallback), but
+  // the editor's text document is only created later, inside the async
+  // initializeHighlighter().then(editor.__syncRenderView) callback in
+  // FileDiff.syncRenderViewToEditor(). Until that callback runs, setSelections
+  // throws "Text document is not initialized". So polling for rows alone can
+  // win the race before the document exists when the highlighter load is slow.
+  //
+  // __syncRenderView sets contentEditable = 'true' on the [data-content]
+  // element (editor.ts) in the same synchronous block that assigns
+  // this.#textDocument, and the first sync always takes both gates, so the
+  // content element becoming contenteditable is a direct, reliable proxy for
+  // "the text document is initialized and setSelections is safe". (jsdom does
+  // not reflect the contentEditable IDL property to the attribute, so read the
+  // property rather than matching a [contenteditable] selector.) Poll on that
+  // (with rows present) rather than on rows alone.
+  await waitFor(() => {
+    const content =
+      container.shadowRoot?.querySelector<HTMLElement>('[data-content]');
+    return (
+      content?.contentEditable === 'true' &&
+      content.querySelectorAll('[data-line]').length > 0
+    );
+  });
 
   return {
     container,
