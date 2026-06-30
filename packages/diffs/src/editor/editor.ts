@@ -550,6 +550,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#themeSelectionRefreshFrame = undefined;
     }
 
+    // Reset state (including clearing the active-line highlight via
+    // setSelectedLines) while #fileInstance is still set. A detach that only
+    // flips setEditorAttached(false) leaves the File/FileDiff surface mounted,
+    // so clearing after dropping #fileInstance would be a no-op and the
+    // read-only surface would keep showing the editor's stale selected line.
+    this.#resetState();
+
     // Drop the attached document so a re-attach rebuilds from the host's
     // contents rather than reusing the edited buffer. The document survives host
     // re-renders (option toggles) but not a full detach, so remounting the
@@ -558,8 +565,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#fileInstance = undefined;
     this.#fileInfo = undefined;
     this.#textDocument = undefined;
-
-    this.#resetState();
   }
 
   /** @internal */
