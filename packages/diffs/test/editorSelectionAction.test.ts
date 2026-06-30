@@ -4,7 +4,10 @@ import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
 import { DirectionBackward, getCaretPosition } from '../src/editor/selection';
-import type { SelectionActionContext } from '../src/editor/selectionAction';
+import {
+  choosePopoverPlacement,
+  type SelectionActionContext,
+} from '../src/editor/selectionAction';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
@@ -304,6 +307,153 @@ describe('Editor selection action', () => {
     }
   });
 
+  // Regression test for a coordinate-space bug: the viewport check used to
+  // measure #overlayElement (`display: contents`, so getBoundingClientRect is
+  // always a zero rect in real browsers) instead of the `[data-code]` element
+  // that actually anchors overlay children. jsdom's default zero rects masked
+  // this — every element returns one — so this test stubs real, non-zero
+  // layout geometry to exercise the path the way a real browser would.
+  //
+  // A backward selection's head sits on line 10 of a 30-line document: far
+  // from the document's first/last 3 rows, so the older document-edge-only
+  // heuristic never flips it. The document is scrolled so the head row sits
+  // right at the top of a 200px viewport, leaving no room to place the
+  // popover above it — the viewport-aware check must flip to below instead.
+  test('flips a mid-document popover clipped by a scrolled viewport, not just document edges', async () => {
+    const LINE_COUNT = 30;
+    const contents = Array.from(
+      { length: LINE_COUNT },
+      (_, i) => `line${i}`
+    ).join('\n');
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      contents,
+      {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          return document.createElement('div');
+        },
+      }
+    );
+
+    const ROW_HEIGHT = 20;
+    const POPOVER_HEIGHT = 40;
+    const originalOffsetTop = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'offsetTop'
+    );
+    const originalOffsetHeight = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'offsetHeight'
+    );
+    const realGetComputedStyle = globalThis.getComputedStyle;
+
+    // jsdom performs no real layout, so offsetTop/offsetHeight default to 0
+    // and getBoundingClientRect to an all-zero rect on every element. Stub
+    // each line's offsetTop from its own `data-line` attribute (stacking rows
+    // ROW_HEIGHT apart, mirroring real layout), give the popover a real
+    // measured height, and make every element report a scrollable
+    // `overflow-y` so the file container's wrapping div resolves as the
+    // scroll container.
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+      configurable: true,
+      get(this: HTMLElement) {
+        const lineAttr = this.dataset.line;
+        return lineAttr != null ? Number(lineAttr) * ROW_HEIGHT : 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get() {
+        return POPOVER_HEIGHT;
+      },
+    });
+    globalThis.getComputedStyle = (() =>
+      ({
+        overflowY: 'auto',
+      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+
+    try {
+      const shadowRoot = content.getRootNode() as ShadowRoot;
+      const fileContainer = shadowRoot.host as HTMLElement;
+      const scrollContainer = document.createElement('div');
+      document.body.appendChild(scrollContainer);
+      scrollContainer.appendChild(fileContainer);
+
+      const stubRect = (top: number, bottom: number): DOMRect =>
+        ({
+          top,
+          bottom,
+          left: 0,
+          right: 0,
+          width: 0,
+          height: bottom - top,
+          x: 0,
+          y: top,
+          toJSON() {
+            return {};
+          },
+        }) as DOMRect;
+
+      // A 200px-tall viewport fixed at the screen's top edge.
+      Object.defineProperty(scrollContainer, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => stubRect(0, 200),
+      });
+
+      const lineElements = Array.from(
+        content.querySelectorAll<HTMLElement>('[data-line]')
+      );
+      const headLineElement = lineElements[10];
+      const fallbackLineElement = lineElements[12];
+      const headY = Number(headLineElement.dataset.line) * ROW_HEIGHT;
+
+      // Scroll the document so the head row's content-space Y lands exactly at
+      // the viewport's screen top: the `[data-code]` element's own screen top
+      // is `headY` pixels above the viewport.
+      const codeElement = content.closest<HTMLElement>('[data-code]')!;
+      Object.defineProperty(codeElement, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => stubRect(-headY, -headY + LINE_COUNT * ROW_HEIGHT),
+      });
+
+      editor.setSelections([
+        {
+          start: { line: 10, character: 0 },
+          end: { line: 12, character: 2 },
+          direction: 'backward',
+        },
+      ]);
+
+      // Sanity check the fallback candidate's row actually differs from the
+      // head's, so the assertion below isn't vacuously true.
+      expect(fallbackLineElement.dataset.line).not.toBe(
+        headLineElement.dataset.line
+      );
+
+      const popover = findSelectionActionPopover(content);
+      expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
+        '0px'
+      );
+    } finally {
+      if (originalOffsetTop !== undefined) {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          'offsetTop',
+          originalOffsetTop
+        );
+      }
+      if (originalOffsetHeight !== undefined) {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          'offsetHeight',
+          originalOffsetHeight
+        );
+      }
+      globalThis.getComputedStyle = realGetComputedStyle;
+      cleanup();
+    }
+  });
+
   // getComposedRanges only reports an ordered, direction-less range, so the
   // selectionchange a refocus fires (after tabbing away and back) would flip a
   // backward selection to DirectionNone and snap the caret/popover to the
@@ -402,6 +552,91 @@ describe('Editor selection action', () => {
     } finally {
       cleanup();
     }
+  });
+
+  // The placement decision is exercised directly here: the DOM harness performs
+  // no layout, so the popover-update path can only reach the document-edge
+  // fallback, while these cases cover the viewport-aware branch with explicit
+  // geometry.
+  describe('choosePopoverPlacement', () => {
+    // A 200px-tall viewport in overlay coordinate space, shared by the
+    // viewport-aware cases below.
+    const viewport = { top: 0, bottom: 200 };
+    const POPOVER_HEIGHT = 60;
+
+    test('keeps the preferred side when it fits the viewport', () => {
+      expect(
+        choosePopoverPlacement({
+          preferred: { top: 80, bottom: 140 },
+          fallback: { top: 200, bottom: 260 },
+          viewport,
+          popoverHeight: POPOVER_HEIGHT,
+          atDocumentEdge: false,
+        })
+      ).toBe('preferred');
+    });
+
+    test('flips to the fallback when the preferred side is clipped but the fallback fits', () => {
+      // Backward selection scrolled so its head sits at the top of the viewport:
+      // placing above clips past the scrollport top, below has room.
+      expect(
+        choosePopoverPlacement({
+          preferred: { top: -40, bottom: 20 },
+          fallback: { top: 40, bottom: 100 },
+          viewport,
+          popoverHeight: POPOVER_HEIGHT,
+          atDocumentEdge: false,
+        })
+      ).toBe('fallback');
+    });
+
+    test('keeps the preferred side when neither side fits the viewport', () => {
+      expect(
+        choosePopoverPlacement({
+          preferred: { top: -40, bottom: 20 },
+          fallback: { top: 180, bottom: 240 },
+          viewport,
+          popoverHeight: POPOVER_HEIGHT,
+          atDocumentEdge: false,
+        })
+      ).toBe('preferred');
+    });
+
+    test('uses the document-edge signal when viewport geometry is unavailable', () => {
+      const bounds = { top: 0, bottom: 0 };
+      expect(
+        choosePopoverPlacement({
+          preferred: bounds,
+          fallback: bounds,
+          viewport: undefined,
+          popoverHeight: POPOVER_HEIGHT,
+          atDocumentEdge: true,
+        })
+      ).toBe('fallback');
+      expect(
+        choosePopoverPlacement({
+          preferred: bounds,
+          fallback: bounds,
+          viewport: undefined,
+          popoverHeight: POPOVER_HEIGHT,
+          atDocumentEdge: false,
+        })
+      ).toBe('preferred');
+    });
+
+    test('uses the document-edge signal when the popover has not laid out yet', () => {
+      // popoverHeight 0 means no measured geometry, so even with a viewport the
+      // decision falls back to the document-edge signal.
+      expect(
+        choosePopoverPlacement({
+          preferred: { top: -40, bottom: 20 },
+          fallback: { top: 40, bottom: 100 },
+          viewport,
+          popoverHeight: 0,
+          atDocumentEdge: true,
+        })
+      ).toBe('fallback');
+    });
   });
 
   // Without `enabledSelectionAction`, a ranged selection renders nothing and the

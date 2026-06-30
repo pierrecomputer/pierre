@@ -70,6 +70,8 @@ import {
   selectionIntersects,
 } from './selection';
 import {
+  choosePopoverPlacement,
+  type PopoverPlacementBounds,
   type SelectionActionContext,
   SelectionActionWidget,
 } from './selectionAction';
@@ -145,6 +147,15 @@ export interface EditorState<LAnnotation> {
   renderRange?: RenderRange;
 }
 
+// A candidate placement for the selection-action popover: which document
+// position it anchors to and whether it sits above that row (shifted up by its
+// own height) or below it. Distinct from PopoverPlacementBounds (the resolved
+// screen-space extent of a candidate once its anchor and height are known).
+interface PopoverAnchorCandidate {
+  placeAbove: boolean;
+  anchor: Position;
+}
+
 // Cap on how far an edit may widen the virtualized render window, as a multiple
 // of the bounded window the virtualizer last synced (~viewport + 2*hunkLineCount).
 // Edits within this many lines of the window bottom widen so their caret renders;
@@ -185,10 +196,29 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #fileContainer?: HTMLElement;
   #gutterElement?: HTMLElement;
   #contentElement?: HTMLElement;
+  // The `[data-code]` element wrapping #contentElement/#overlayElement. It is
+  // the nearest `position: relative` ancestor (see editor.css) and therefore
+  // the actual coordinate origin for overlay children: #overlayElement itself
+  // is `display: contents` and has no box, so it cannot be measured directly
+  // (getBoundingClientRect on a display:contents element is always zero).
+  #codeElement?: HTMLElement;
   #overlayElement?: HTMLElement;
   #overlayElements?: Map<string, HTMLElement>;
   #primaryCaretElement?: HTMLElement;
   #resizeObserver?: ResizeObserver;
+  // Cached nearest scrollable ancestor of #fileContainer (the scrollport that
+  // clips overlay widgets) plus the container it was resolved against, so the
+  // selection-action popover can test placement without re-walking ancestors
+  // and re-running getComputedStyle on every render.
+  #scrollContainer?: HTMLElement;
+  #scrollContainerSource?: HTMLElement;
+  // Cached screen-space rects for the selection-action popover's viewport
+  // check, refreshed only on scroll/resize (rather than on every selection
+  // update) since #updateSelectionActionPopover can run once per keystroke.
+  #cachedCodeRect?: DOMRect;
+  #cachedScrollContainerRect?: DOMRect;
+  #viewportRectsDirty = true;
+  #viewportRectListenersDisposes?: (() => void)[];
 
   // state
   #fileInstance?: DiffsEditableComponent<LAnnotation>;
@@ -534,6 +564,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#spriteElement?.remove();
     this.#spriteElement = undefined;
     this.#fileContainer = undefined;
+    this.#codeElement = undefined;
+    this.#scrollContainer = undefined;
+    this.#scrollContainerSource = undefined;
+    this.#cachedCodeRect = undefined;
+    this.#cachedScrollContainerRect = undefined;
+    this.#viewportRectsDirty = true;
+    this.#viewportRectListenersDisposes?.forEach((dispose) => dispose());
+    this.#viewportRectListenersDisposes = undefined;
     this.#gutterElement = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
     this.#contentElement = undefined;
@@ -598,6 +636,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
     if (codeElement === undefined || contentEl === undefined) {
       return;
+    }
+    if (this.#codeElement !== codeElement) {
+      this.#codeElement = codeElement;
+      // A new [data-code] element invalidates the cached viewport rects (e.g. a
+      // full re-render loaded a different file, possibly at a different
+      // on-screen position) even without an intervening scroll/resize event.
+      this.#viewportRectsDirty = true;
     }
 
     // inject editor&theme style to the file container
@@ -3093,36 +3138,68 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     // Pick which selection edge the popover anchors to and whether it sits above
-    // or below that edge. The default mirrors the marker hover popover: a
+    // or below that edge. The preferred side mirrors the marker hover popover: a
     // top-down (forward) selection anchors just below its head (the bottom edge),
     // while a bottom-up (backward) selection anchors at the top edge of its head
     // and is shifted up by its own height so it sits above the selection instead
-    // of covering its first line.
-    //
-    // Near the document boundaries the preferred side has no room and the
-    // overlay's scrollport would clip the popover entirely (e.g. a backward
-    // selection whose head is the first row shifts the whole popover above the
-    // visible range). When the head falls within BOUNDARY_LINES of the matching
-    // edge we flip to the selection's opposite edge: a backward selection
-    // touching the first rows drops below its bottom edge, and a forward
-    // selection touching the last rows rises above its top edge.
+    // of covering its first line. When the preferred side has no room the popover
+    // would be clipped by the scrollport, so we flip to the selection's opposite
+    // edge: a backward selection drops below its bottom edge, and a forward
+    // selection rises above its top edge.
+    const lineHeight = this.#metrics.lineHeight;
+    const isBackward = primarySelection.direction === DirectionBackward;
+    const preferred: PopoverAnchorCandidate = {
+      placeAbove: isBackward,
+      anchor: head,
+    };
+    const fallback: PopoverAnchorCandidate = isBackward
+      ? { placeAbove: false, anchor: primarySelection.end }
+      : { placeAbove: true, anchor: primarySelection.start };
+
+    // Resolve each candidate's [left, top, bottom] in overlay coordinate space
+    // up front so both the viewport fit-check and the final reposition() call
+    // below can reuse them without re-deriving the same line/char geometry
+    // twice. For an above placement the CSS `--popover-y-shift: -100%` lifts
+    // the popover by its own height, so its top is the anchor row's top minus
+    // that height.
+    const popoverHeight = this.#selectionAction.height;
+    const candidateGeometry = (
+      candidate: PopoverAnchorCandidate
+    ): PopoverPlacementBounds & { left: number } => {
+      const [left, candidateWrapLine] = this.#getCharX(
+        candidate.anchor.line,
+        candidate.anchor.character
+      );
+      const rowTop =
+        this.#getLineY(candidate.anchor.line) + candidateWrapLine * lineHeight;
+      const top = candidate.placeAbove
+        ? rowTop - popoverHeight
+        : rowTop + lineHeight;
+      return { top, bottom: top + popoverHeight, left };
+    };
+    const preferredGeometry = candidateGeometry(preferred);
+    const fallbackGeometry = candidateGeometry(fallback);
+
+    // Prefer the real scroll viewport so a mid-document selection near the
+    // top/bottom of a scrolled window flips instead of rendering off-screen; the
+    // document-edge signal is the fallback for environments without layout
+    // geometry (e.g. a detached unit-test DOM).
     const BOUNDARY_LINES = 3;
     const lineCount = textDocument.lineCount;
-    const isBackward = primarySelection.direction === DirectionBackward;
-    let placeAbove = isBackward;
-    let anchor = head;
-    if (isBackward && head.line < BOUNDARY_LINES) {
-      placeAbove = false;
-      anchor = primarySelection.end;
-    } else if (!isBackward && head.line >= lineCount - BOUNDARY_LINES) {
-      placeAbove = true;
-      anchor = primarySelection.start;
-    }
+    const atDocumentEdge = isBackward
+      ? head.line < BOUNDARY_LINES
+      : head.line >= lineCount - BOUNDARY_LINES;
+    const useFallback =
+      choosePopoverPlacement({
+        preferred: preferredGeometry,
+        fallback: fallbackGeometry,
+        viewport: this.#getOverlayViewport(),
+        popoverHeight,
+        atDocumentEdge,
+      }) === 'fallback';
+    const { placeAbove, anchor } = useFallback ? fallback : preferred;
+    const { left, top } = useFallback ? fallbackGeometry : preferredGeometry;
 
-    const [left, wrapLine] = this.#getCharX(anchor.line, anchor.character);
-    const lineHeight = this.#metrics.lineHeight;
-    const anchorRowTop = this.#getLineY(anchor.line) + wrapLine * lineHeight;
-    const top = placeAbove ? anchorRowTop : anchorRowTop + lineHeight;
     this.#selectionAction.line = anchor.line;
     this.#selectionAction.reposition(
       left,
@@ -3130,6 +3207,134 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#getGutterWidth(),
       placeAbove
     );
+  }
+
+  // The visible scroll viewport expressed in the overlay's coordinate space (the
+  // same space --popover-y / #getLineY use), or undefined when no usable layout
+  // geometry exists (e.g. a detached unit-test DOM, where every rect is zero).
+  // The selection-action popover uses this to detect when a placement would be
+  // clipped by the scrollport and flip to the side with room.
+  #getOverlayViewport(): { top: number; bottom: number } | undefined {
+    const codeRect = this.#getCodeRect();
+    if (codeRect === undefined) {
+      return undefined;
+    }
+    const scrollContainerRect = this.#getScrollContainerRect();
+    let topScreen: number;
+    let bottomScreen: number;
+    if (scrollContainerRect !== undefined) {
+      topScreen = scrollContainerRect.top;
+      bottomScreen = scrollContainerRect.bottom;
+    } else {
+      // No scrollable ancestor: the page itself scrolls, so the window is the
+      // clip region.
+      topScreen = 0;
+      bottomScreen = window.innerHeight;
+    }
+    if (bottomScreen <= topScreen) {
+      return undefined;
+    }
+    return {
+      top: topScreen - codeRect.top,
+      bottom: bottomScreen - codeRect.top,
+    };
+  }
+
+  // The nearest scrollable ancestor of the file container — the element whose
+  // overflow clips the overlay widgets. Walks the light-DOM ancestor chain (the
+  // overlay lives in the file container's shadow root) and caches the result per
+  // file container so it is not re-resolved on every render.
+  //
+  // Known limitations: this only inspects light-DOM ancestors outside the
+  // shadow root, so it can't see a clip boundary inside it (e.g. `[data-code]`
+  // itself uses `overflow-y: clip`, which also isn't one of the values matched
+  // below) and can't cross into an outer shadow root if the file container is
+  // itself nested in another web component. It also only considers the
+  // *nearest* scrollable ancestor, not the intersection of every clipping
+  // ancestor, so a popover could still be clipped by an outer scroll context
+  // even when it fits within this nearer one.
+  #getScrollContainer(): HTMLElement | undefined {
+    const fileContainer = this.#fileContainer;
+    if (fileContainer === undefined) {
+      return undefined;
+    }
+    if (this.#scrollContainerSource === fileContainer) {
+      // A cached element can detach across re-mounts; re-resolve in that case
+      // but otherwise trust the cache (including a cached "no scroller" result).
+      if (
+        this.#scrollContainer === undefined ||
+        this.#scrollContainer.isConnected
+      ) {
+        return this.#scrollContainer;
+      }
+    }
+    let element: HTMLElement | null = fileContainer.parentElement;
+    while (element !== null) {
+      const overflowY = getComputedStyle(element).overflowY;
+      if (
+        overflowY === 'auto' ||
+        overflowY === 'scroll' ||
+        overflowY === 'overlay'
+      ) {
+        this.#scrollContainer = element;
+        this.#scrollContainerSource = fileContainer;
+        return element;
+      }
+      element = element.parentElement;
+    }
+    this.#scrollContainer = undefined;
+    this.#scrollContainerSource = fileContainer;
+    return undefined;
+  }
+
+  // Lazily measures and caches the screen-space rects #getOverlayViewport
+  // needs (the `[data-code]` element, which is the coordinate origin for
+  // overlay children, and the nearest scrollable ancestor's clip region),
+  // refreshing only when a scroll or resize event marks them dirty rather than
+  // on every call. #updateSelectionActionPopover can run once per keystroke
+  // while a ranged selection stays open, so re-measuring via
+  // getBoundingClientRect on every call would force a synchronous layout
+  // reflow on that hot path.
+  #refreshViewportRectsIfNeeded(): void {
+    if (!this.#viewportRectsDirty) {
+      return;
+    }
+    this.#ensureViewportRectListeners();
+    this.#cachedCodeRect = this.#codeElement?.getBoundingClientRect();
+    this.#cachedScrollContainerRect =
+      this.#getScrollContainer()?.getBoundingClientRect();
+    this.#viewportRectsDirty = false;
+  }
+
+  #getCodeRect(): DOMRect | undefined {
+    this.#refreshViewportRectsIfNeeded();
+    return this.#cachedCodeRect;
+  }
+
+  #getScrollContainerRect(): DOMRect | undefined {
+    this.#refreshViewportRectsIfNeeded();
+    return this.#cachedScrollContainerRect;
+  }
+
+  // Subscribes (once) to the events that can move or resize the cached rects
+  // above: a scroll on the resolved scroll container (or the window, when the
+  // page itself scrolls) and a window resize. Idempotent — a later call while
+  // listeners are already attached is a no-op, so this is safe to call from
+  // every #refreshViewportRectsIfNeeded pass.
+  #ensureViewportRectListeners(): void {
+    if (this.#viewportRectListenersDisposes !== undefined) {
+      return;
+    }
+    const markDirty = () => {
+      this.#viewportRectsDirty = true;
+    };
+    const scroller = this.#getScrollContainer();
+    this.#viewportRectListenersDisposes = [
+      scroller !== undefined
+        ? addEventListener(scroller, 'scroll', markDirty, { passive: true })
+        : addEventListener(window, 'scroll', markDirty, { passive: true }),
+      addEventListener(window, 'resize', markDirty, { passive: true }),
+    ];
   }
 
   // Opens the search panel in the requested mode. If a panel is already open,
