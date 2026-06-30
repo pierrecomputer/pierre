@@ -2083,6 +2083,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#deleteSelectionText(true);
         break;
       case 'deleteSoftLineBackward':
+      // Safari emits deleteHardLineBackward for cmd+backspace where Chrome emits
+      // deleteSoftLineBackward; treat them the same so cmd+backspace deletes to
+      // the line start in both. They differ only on a wrapped line (hard goes to
+      // the logical line start, soft to the visual one), and Chrome's soft
+      // behavior is what we match.
+      case 'deleteHardLineBackward':
         this.#deleteSoftLineBackward();
         break;
       case 'deleteHardLineForward':
