@@ -80,7 +80,7 @@ export function LiveEditing({
     // Recreate the editor when the surface, review/edit mode, or diff layout
     // changes so it re-attaches to the freshly relaid-out surface instead of
     // reusing a stale instance.
-    [surface, mode, diffLayout]
+    []
   );
 
   // Clear edited state and ignore the late `onChange` straggler whenever the
@@ -220,6 +220,10 @@ export function LiveEditing({
             <File
               key={resetKey}
               {...prerenderedFile}
+              file={{
+                ...prerenderedFile.file,
+                cacheKey: prerenderedFile.file.name + resetKey,
+              }}
               className="diff-container"
               renderHeaderMetadata={headerMetadata}
               contentEditable={contentEditable}
@@ -228,6 +232,10 @@ export function LiveEditing({
             <FileDiff
               key={resetKey}
               {...prerenderedDiff}
+              fileDiff={{
+                ...prerenderedDiff.fileDiff,
+                cacheKey: prerenderedDiff.fileDiff.name + resetKey,
+              }}
               options={{ ...prerenderedDiff.options, diffStyle: diffLayout }}
               className="diff-container"
               renderHeaderMetadata={headerMetadata}
