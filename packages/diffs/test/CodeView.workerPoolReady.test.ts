@@ -7,10 +7,16 @@ import { createRoot, installDom, makeFileItem, wait } from './domHarness';
 class FakeWorkerPoolManager {
   private initialized = false;
   private failed = false;
+  private initializeCalls = 0;
+  private autoInitialize = false;
   private statSubscribers = new Set<(stats: WorkerStats) => unknown>();
 
   public get statSubscriberCount(): number {
     return this.statSubscribers.size;
+  }
+
+  public get initializeCallCount(): number {
+    return this.initializeCalls;
   }
 
   public isInitialized(): boolean {
@@ -21,8 +27,19 @@ class FakeWorkerPoolManager {
     return false;
   }
 
+  // Mirror the real manager: a waiting pool only leaves 'waiting' once
+  // initialize() runs. When auto-initialize is enabled, initialize() drives the
+  // pool to 'initialized' the way the real worker bootstrap eventually does.
   public initialize(): Promise<void> {
+    this.initializeCalls += 1;
+    if (this.autoInitialize) {
+      this.markInitialized();
+    }
     return Promise.resolve();
+  }
+
+  public enableAutoInitialize(): void {
+    this.autoInitialize = true;
   }
 
   public subscribeToStatChanges(
@@ -153,6 +170,40 @@ describe('CodeView worker pool readiness', () => {
       // A failed pool must trigger fallback rendering instead of staying blank.
       expect(viewer.getRenderedItems().map((item) => item.id)).toEqual([
         'file:failed-worker',
+      ]);
+      expect(workerManager.statSubscriberCount).toBe(0);
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('kicks initialization for a waiting pool that has not auto-started', async () => {
+    const { cleanup } = installDom();
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const workerManager = new FakeWorkerPoolManager();
+    // Model a pool sitting idle in 'waiting' (e.g. after terminate()): it never
+    // reaches 'initialized' unless something calls initialize().
+    workerManager.enableAutoInitialize();
+    const viewer = new CodeView(
+      { disableFileHeader: true },
+      workerManager.asWorkerPoolManager()
+    );
+
+    try {
+      viewer.setup(createRoot({ height: 1000 }));
+      viewer.setItems([makeFileItem('file:waiting-pool', 3)]);
+
+      viewer.render(true);
+      await wait(0);
+
+      // Rendering must kick initialization rather than block forever, which
+      // then drives the pool to 'initialized' and lets the item render.
+      expect(workerManager.initializeCallCount).toBeGreaterThan(0);
+      expect(viewer.getRenderedItems().map((item) => item.id)).toEqual([
+        'file:waiting-pool',
       ]);
       expect(workerManager.statSubscriberCount).toBe(0);
       expect(consoleError).not.toHaveBeenCalled();

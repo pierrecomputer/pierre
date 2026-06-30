@@ -1422,6 +1422,12 @@ export class CodeView<LAnnotation = undefined> {
         this.render(true);
       }
     );
+
+    // If the worker is awiting on initialization, we should attempt to
+    // initialize
+    if (workerManager.getStats().managerState === 'waiting') {
+      void workerManager.initialize().catch(() => {});
+    }
     return false;
   }
 
