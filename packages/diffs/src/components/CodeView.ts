@@ -2723,6 +2723,7 @@ export class CodeView<LAnnotation = undefined> {
     this.renderState.lastIndex = lastRenderedIndex;
 
     this.flushSlotCoordinator();
+    this.flushManagers(updatedItems);
     this.reconcileRenderedItems(updatedItems);
     this.syncContainerHeight();
     this.updateStickyPositioning();
@@ -2792,7 +2793,16 @@ export class CodeView<LAnnotation = undefined> {
     }
     this.renderState.scrollTop = roundToDevicePixel(syncedScrollTop);
 
-    this.flushManagers(updatedItems);
+    // The post-render scroll-correction block above can call applyScrollFix ->
+    // syncPagedScrollScaffolding -> applyStickyPositioning, which recomputes
+    // renderState.stickyHeight from getStickyBounds(windowSpecs) for the
+    // corrected scroll position. The rendered DOM slice was committed earlier in
+    // this frame for the pre-correction window and is not re-rendered here, so
+    // that windowSpecs-based value can diverge from the committed slice by the
+    // scroll-correction delta. Recompute sticky positioning from the committed
+    // renderRange (no-arg path) so renderState.stickyHeight matches the slice
+    // actually in the DOM before we validate it.
+    this.updateStickyPositioning();
 
     this.validateStickyContainerHeight();
     this.fixContainerFocus();
