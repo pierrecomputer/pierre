@@ -103,7 +103,7 @@ export const MARKER_DEMO_MARKERS = [
 ];
 
 // Find-in-file demo source: several "user" occurrences (case-insensitively) so
-// the find overlay opens with multiple matches to navigate between.
+// typing a query like "user" surfaces multiple matches to navigate between.
 export const FIND_DEMO_FILE: FileContents = {
   name: 'user.ts',
   contents: `type User = {
@@ -123,8 +123,6 @@ export function getUsers(users: User[]) {
 }
 `,
 };
-
-export const FIND_DEMO_SEARCH_QUERY = 'user';
 
 // Selection-action demo source: a small banner module with inline string
 // literals that read as good candidates for a selection-scoped transform (wrap
