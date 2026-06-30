@@ -605,7 +605,7 @@ describe('selectionIntersects', () => {
 });
 
 describe('mergeOverlappingSelections', () => {
-  test('drops earlier overlapping ranges and keeps later selections', () => {
+  test('merges overlapping ranges and keeps disjoint selections', () => {
     expect(
       mergeOverlappingSelections([
         createSelection(2, 0, 2, 4, DirectionForward),
@@ -614,7 +614,7 @@ describe('mergeOverlappingSelections', () => {
       ])
     ).toEqual([
       createSelection(2, 0, 2, 4, DirectionForward),
-      createSelection(0, 2, 0, 7, DirectionForward),
+      createSelection(0, 2, 0, 8, DirectionForward),
     ]);
   });
 
@@ -630,22 +630,22 @@ describe('mergeOverlappingSelections', () => {
     ]);
   });
 
-  test('drops a range when a later caret overlaps its boundary', () => {
+  test('merges a range when a later caret overlaps its boundary', () => {
     expect(
       mergeOverlappingSelections([
         createSelection(0, 2, 0, 6, DirectionForward),
         createSelection(0, 6, 0, 6, DirectionNone),
       ])
-    ).toEqual([createSelection(0, 6, 0, 6, DirectionNone)]);
+    ).toEqual([createSelection(0, 2, 0, 6, DirectionForward)]);
   });
 
-  test('drops an earlier range when a later overlapping range extends it', () => {
+  test('merges an earlier range when a later overlapping range extends it', () => {
     expect(
       mergeOverlappingSelections([
         createSelection(1, 2, 3, 0, DirectionForward),
         createSelection(2, 0, 3, 0, DirectionForward),
       ])
-    ).toEqual([createSelection(2, 0, 3, 0, DirectionForward)]);
+    ).toEqual([createSelection(1, 2, 3, 0, DirectionForward)]);
   });
 
   test('keeps disjoint selections in their original order', () => {
@@ -660,6 +660,39 @@ describe('mergeOverlappingSelections', () => {
       createSelection(1, 0, 1, 1, DirectionForward),
       createSelection(2, 0, 2, 1, DirectionForward),
     ]);
+  });
+
+  test('merges transitive overlaps into one range', () => {
+    expect(
+      mergeOverlappingSelections([
+        createSelection(0, 0, 0, 3, DirectionForward),
+        createSelection(0, 5, 0, 8, DirectionForward),
+        createSelection(0, 2, 0, 6, DirectionForward),
+      ])
+    ).toEqual([createSelection(0, 0, 0, 8, DirectionForward)]);
+  });
+
+  test('keeps the latest backward direction when merging overlapping ranges', () => {
+    // The later selection is backward and is the most recent, so the merged
+    // range stays backward: the caret keeps to the union start and the anchor
+    // moves to the union end.
+    expect(
+      mergeOverlappingSelections([
+        createSelection(0, 0, 0, 5, DirectionForward),
+        createSelection(0, 3, 0, 8, DirectionBackward),
+      ])
+    ).toEqual([createSelection(0, 0, 0, 8, DirectionBackward)]);
+  });
+
+  test('derives backward direction when a later caret sits at the merged start', () => {
+    // The bare caret is the most recent selection and lands on the union
+    // start, so the merged range becomes backward to leave the caret in place.
+    expect(
+      mergeOverlappingSelections([
+        createSelection(0, 3, 0, 8, DirectionForward),
+        createSelection(0, 3, 0, 3, DirectionNone),
+      ])
+    ).toEqual([createSelection(0, 3, 0, 8, DirectionBackward)]);
   });
 });
 
@@ -1312,6 +1345,24 @@ describe('mapSelectionMove', () => {
     ]);
   });
 
+  test('collapses backward multi-line selections on the focus line for line moves', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      '    first\nsecond line\n  third'
+    );
+    const selections = [createSelection(0, 6, 1, 3, DirectionBackward)];
+
+    expect(mapCursorMove(textDocument, selections, 'start')).toEqual([
+      createSelection(0, 0, 0, 0),
+    ]);
+    expect(mapCursorMove(textDocument, selections, 'end')).toEqual([
+      createSelection(0, 9, 0, 9),
+    ]);
+    expect(mapCursorMove(textDocument, selections, 'textStart')).toEqual([
+      createSelection(0, 4, 0, 4),
+    ]);
+  });
+
   test('moves left from a goal column past a shorter line end', () => {
     const textDocument = new TextDocument(
       'inmemory://1',
@@ -1489,6 +1540,20 @@ describe('mapSelectionRangeMove', () => {
     expect(mapSelectionShift(textDocument, afterLetter, 'right')).toEqual([
       createSelection(0, 1, 0, 3, DirectionForward),
     ]);
+  });
+
+  test('merges selections after shift movement creates overlap', () => {
+    const textDocument = new TextDocument('inmemory://1', 'abcdef');
+    const selections = [
+      createSelection(0, 1, 0, 3, DirectionForward),
+      createSelection(0, 3, 0, 5, DirectionForward),
+    ];
+
+    expect(
+      mergeOverlappingSelections(
+        mapSelectionShift(textDocument, selections, 'right')
+      )
+    ).toEqual([createSelection(0, 1, 0, 6, DirectionForward)]);
   });
 });
 

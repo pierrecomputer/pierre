@@ -131,16 +131,14 @@ export function mapCursorMove(
       shortcut === 'start' ||
       shortcut === 'end'
     ) {
+      const caret = getCaretPosition(selection);
+      line = caret.line;
+      character = caret.character;
       if (shortcut === 'textStart') {
         const indent = getLeadingSpaces(textDocument.getLineText(line));
         character = character === indent ? 0 : indent;
       } else {
         character = shortcut === 'start' ? 0 : textDocument.getLineLength(line);
-      }
-      if (selection.direction === DirectionBackward) {
-        line = selection.start.line;
-      } else {
-        line = selection.end.line;
       }
     } else if (shortcut === 'up') {
       line = Math.max(0, line - 1);
@@ -1275,42 +1273,52 @@ export function mergeOverlappingSelections(
   if (selections.length <= 1) {
     return selections;
   }
-  const selected = new Set<number>();
-  const accepted: {
+  const ordered = selections
+    .map((selection, index) => ({ index, selection }))
+    .sort((a, b) => {
+      const startOrder = comparePosition(a.selection.start, b.selection.start);
+      if (startOrder !== 0) {
+        return startOrder;
+      }
+      const endOrder = comparePosition(a.selection.end, b.selection.end);
+      return endOrder !== 0 ? endOrder : a.index - b.index;
+    });
+  const merged: {
     index: number;
     selection: EditorSelection;
   }[] = [];
-  for (let i = selections.length - 1; i >= 0; i--) {
-    const selection = selections[i];
-    if (selection === undefined) {
+
+  let current = ordered[0];
+  for (const entry of ordered.slice(1)) {
+    if (selectionIntersects(current.selection, entry.selection)) {
+      const latest = entry.index > current.index ? entry : current;
+      const start =
+        comparePosition(entry.selection.start, current.selection.start) < 0
+          ? entry.selection.start
+          : current.selection.start;
+      const end =
+        comparePosition(entry.selection.end, current.selection.end) > 0
+          ? entry.selection.end
+          : current.selection.end;
+      let direction = latest.selection.direction;
+      if (direction === DirectionNone && comparePosition(start, end) !== 0) {
+        direction =
+          comparePosition(latest.selection.start, start) === 0
+            ? DirectionBackward
+            : DirectionForward;
+      }
+      current = { index: latest.index, selection: { direction, end, start } };
       continue;
     }
-    let left = 0;
-    let right = accepted.length;
-    while (left < right) {
-      const mid = Math.floor((left + right) / 2);
-      const candidate = accepted[mid]?.selection;
-      if (candidate === undefined) {
-        break;
-      }
-      if (comparePosition(candidate.start, selection.start) < 0) {
-        left = mid + 1;
-      } else {
-        right = mid;
-      }
-    }
-    const previous = accepted[left - 1]?.selection;
-    const next = accepted[left]?.selection;
-    if (
-      (previous !== undefined && selectionIntersects(previous, selection)) ||
-      (next !== undefined && selectionIntersects(next, selection))
-    ) {
-      continue;
-    }
-    accepted.splice(left, 0, { index: i, selection });
-    selected.add(i);
+
+    merged.push(current);
+    current = entry;
   }
-  return selections.filter((_, index) => selected.has(index));
+  merged.push(current);
+
+  return merged
+    .sort((a, b) => a.index - b.index)
+    .map(({ selection }) => selection);
 }
 
 /**
