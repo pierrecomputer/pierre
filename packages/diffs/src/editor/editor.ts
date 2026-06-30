@@ -487,6 +487,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#tokenizer?.cleanUp();
     this.#tokenizer = undefined;
 
+    // cleanUp is a full detach (Edit-mode off, surface switch, unmount), so drop
+    // the parsed document and its file identity. The tokenizer is destroyed just
+    // above and is only ever (re)created when __syncRenderView rebuilds the
+    // document, gated on the file name/lang/cacheKey. Keeping the document here
+    // would make a re-attach with the same cacheKey skip that rebuild, leaving
+    // the editor with no tokenizer — #rerender then bails and typed edits never
+    // paint, even though the model records them. Releasing it forces the next
+    // edit() to rebuild from the host's current contents.
+    this.#textDocument = undefined;
+    this.#fileInfo = undefined;
+
     // dispse event listeners
     this.#globalEventDisposes?.forEach((dispose) => dispose());
     this.#globalEventDisposes = undefined;

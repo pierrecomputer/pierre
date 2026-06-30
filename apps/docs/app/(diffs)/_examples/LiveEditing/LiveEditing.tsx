@@ -77,9 +77,9 @@ export function LiveEditing({
           setHasEdits(file.contents !== LIVE_EDITOR_NEW_FILE.contents);
         },
       }),
-    // Recreate the editor when the surface, review/edit mode, or diff layout
-    // changes so it re-attaches to the freshly relaid-out surface instead of
-    // reusing a stale instance.
+    // A single editor for the demo's lifetime: it re-attaches when the surface
+    // remounts (file<->diff) and re-syncs when review/edit mode or diff layout
+    // changes, so recreating it on every control change is unnecessary.
     []
   );
 
