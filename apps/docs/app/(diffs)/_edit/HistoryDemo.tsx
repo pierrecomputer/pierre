@@ -258,28 +258,24 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
     [applyEdit, editor]
   );
 
-  // Build the undo stack on load so the surface arrives already fully
-  // refactored with history intact. We poll until the content element has
-  // attached AND the editor's grammar is ready, because seeding an edit before
-  // the editor can tokenize throws ("Grammar not loaded") inside the editor.
+  // Build the undo stack once the demo is on screen so the surface arrives
+  // already fully refactored with history intact. We defer until visible
+  // because seeding scrolls the caret into view and would yank the page down
+  // to this below-the-fold demo on first load. We poll until the content
+  // element has attached AND the editor's grammar is ready, because seeding an
+  // edit before the editor can tokenize throws ("Grammar not loaded") inside
+  // the editor.
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (wrapper == null) {
       return;
     }
 
-    // Warm the shared highlighter so the grammar is ready as early as possible
-    // (ideally before the editor attaches, making its first tokenize sync).
-    void preloadHighlighter({
-      themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
-      langs: [LANGUAGE],
-      preferredHighlighter: 'shiki-wasm',
-    }).catch(() => {});
-
     let cancelled = false;
     let timer: number | undefined;
     let attempts = 0;
     let contentSeenAt = 0;
+    let languageReadyAt = 0;
 
     const waitForReady = () => {
       if (cancelled) {
@@ -291,9 +287,13 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
         if (contentSeenAt === 0) {
           contentSeenAt = Date.now();
         }
+        if (isLanguageReady() && languageReadyAt === 0) {
+          languageReadyAt = Date.now();
+        }
         if (
-          isLanguageReady() &&
-          Date.now() - contentSeenAt >= GRAMMAR_SETTLE_MS
+          languageReadyAt > 0 &&
+          Date.now() - contentSeenAt >= GRAMMAR_SETTLE_MS &&
+          Date.now() - languageReadyAt >= GRAMMAR_SETTLE_MS
         ) {
           seedAll(content);
           return;
@@ -304,10 +304,36 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
       }
     };
 
-    waitForReady();
+    const startSeeding = () => {
+      // Warm the shared highlighter before polling so the editor tokenizer can
+      // pick up the grammar synchronously once the surface attaches.
+      void preloadHighlighter({
+        themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
+        langs: [LANGUAGE],
+        preferredHighlighter: 'shiki-wasm',
+      })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) {
+            waitForReady();
+          }
+        });
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          observer.disconnect();
+          startSeeding();
+        }
+      },
+      { threshold: 0.4 }
+    );
+    observer.observe(wrapper);
 
     return () => {
       cancelled = true;
+      observer.disconnect();
       if (timer != null) {
         window.clearTimeout(timer);
       }
