@@ -1,5 +1,6 @@
 # Browser support targets for the entire monorepo
-# Targets browsers with native light-dark() support (May 2024+)
+# Bounded by native Intl.Segmenter support, which the diffs editor relies on:
+# Firefox 125+ (Chrome 87+, Edge 87+, Safari 14.1+ — already covered below).
 #
 # Used by:
 # - apps/docs (Next.js + Tailwind CSS v4)
@@ -8,4 +9,4 @@
 chrome >= 123
 edge >= 123
 safari >= 17.5
-firefox >= 120
+firefox >= 125

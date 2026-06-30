@@ -1,4 +1,4 @@
-import { h, round } from './utils';
+import { getGraphemeSegmenter, h, round } from './utils';
 
 // Upper bound on cached DOM text-width measurements. The cache only holds
 // non-ASCII runs (emoji, ZWJ sequences, variation selectors), so it stays
@@ -206,18 +206,32 @@ export function snapTextOffsetToUnicodeBoundary(
   // Browser caret movement can report offsets around UTF-16 surrogate
   // pairs and emoji joiners; measuring a partial sequence gives a
   // replacement-glyph width.
-  const segmenter = new Intl.Segmenter(undefined, {
-    granularity: 'grapheme',
-  });
-  for (const segment of segmenter.segment(text)) {
-    const segmentStart = segment.index;
-    const segmentEnd = segmentStart + segment.segment.length;
+  const segmenter = getGraphemeSegmenter();
+  if (segmenter !== undefined) {
+    for (const segment of segmenter.segment(text)) {
+      const segmentStart = segment.index;
+      const segmentEnd = segmentStart + segment.segment.length;
+      if (boundedOffset > segmentStart && boundedOffset < segmentEnd) {
+        return segmentEnd;
+      }
+      if (boundedOffset <= segmentStart) {
+        break;
+      }
+    }
+    return boundedOffset;
+  }
+  // Degraded path for engines lacking Intl.Segmenter: snap out of a
+  // surrogate pair by stepping over code points.
+  let segmentStart = 0;
+  for (const codePoint of text) {
+    const segmentEnd = segmentStart + codePoint.length;
     if (boundedOffset > segmentStart && boundedOffset < segmentEnd) {
       return segmentEnd;
     }
     if (boundedOffset <= segmentStart) {
       break;
     }
+    segmentStart = segmentEnd;
   }
   return boundedOffset;
 }
@@ -230,11 +244,18 @@ export function getUnicodeMeasurementOffsets(
     return undefined;
   }
   const offsets = [0];
-  const segmenter = new Intl.Segmenter(undefined, {
-    granularity: 'grapheme',
-  });
-  for (const segment of segmenter.segment(text)) {
-    offsets.push(segment.index + segment.segment.length);
+  const segmenter = getGraphemeSegmenter();
+  if (segmenter !== undefined) {
+    for (const segment of segmenter.segment(text)) {
+      offsets.push(segment.index + segment.segment.length);
+    }
+    return offsets;
+  }
+  // Degraded path for engines lacking Intl.Segmenter: step by code point.
+  let offset = 0;
+  for (const codePoint of text) {
+    offset += codePoint.length;
+    offsets.push(offset);
   }
   return offsets;
 }
