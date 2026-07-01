@@ -120,3 +120,27 @@ export function round(value: number, precision: number = 1000): number {
 export function endsWithLineBreak(text: string): boolean {
   return text.endsWith('\n') || text.endsWith('\r');
 }
+
+// Creates an Intl.Segmenter, or undefined when the engine lacks support.
+// Callers must fall back to a degraded path when this returns undefined.
+export function createSegmenter(
+  options: Intl.SegmenterOptions
+): Intl.Segmenter | undefined {
+  if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') {
+    return undefined;
+  }
+  return new Intl.Segmenter(undefined, options);
+}
+
+// Lazily created and cached grapheme segmenter. Avoids constructing
+// Intl.Segmenter at import time so importing the editor never throws on
+// engines that lack it. Undefined when the engine has no Intl.Segmenter.
+let graphemeSegmenter: Intl.Segmenter | undefined;
+let graphemeSegmenterInit = false;
+export function getGraphemeSegmenter(): Intl.Segmenter | undefined {
+  if (!graphemeSegmenterInit) {
+    graphemeSegmenter = createSegmenter({ granularity: 'grapheme' });
+    graphemeSegmenterInit = true;
+  }
+  return graphemeSegmenter;
+}

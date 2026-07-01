@@ -8,7 +8,11 @@ import type {
   TextDocumentChange,
   TextEdit,
 } from './textDocument';
-import { endsWithLineBreak } from './utils';
+import {
+  createSegmenter,
+  endsWithLineBreak,
+  getGraphemeSegmenter,
+} from './utils';
 
 export const DirectionBackward = -1;
 export const DirectionNone = 0;
@@ -1724,17 +1728,29 @@ function expandCollapsedLineWord(
   lineText: string,
   character: number
 ): { start: number; end: number } | undefined {
-  const segmenter = new Intl.Segmenter(undefined, {
-    granularity: 'word',
-  });
-  for (const seg of segmenter.segment(lineText)) {
-    if (seg.isWordLike !== true) {
-      continue;
+  const segmenter = createSegmenter({ granularity: 'word' });
+  if (segmenter !== undefined) {
+    for (const seg of segmenter.segment(lineText)) {
+      if (seg.isWordLike !== true) {
+        continue;
+      }
+      const lo = seg.index;
+      const hi = lo + seg.segment.length;
+      // Match when the cursor is inside the word or immediately touching
+      // one of its boundaries — not when separated by non-word characters.
+      if (character >= lo && character <= hi) {
+        return { start: lo, end: hi };
+      }
     }
-    const lo = seg.index;
-    const hi = lo + seg.segment.length;
-    // Match when the cursor is inside the word or immediately touching
-    // one of its boundaries — not when separated by non-word characters.
+    return undefined;
+  }
+  // Degraded path for engines lacking Intl.Segmenter: treat runs of
+  // alphanumeric/underscore characters as words.
+  const wordRe = /[\p{Alphabetic}\p{Number}_]+/gu;
+  let match: RegExpExecArray | null;
+  while ((match = wordRe.exec(lineText)) !== null) {
+    const lo = match.index;
+    const hi = lo + match[0].length;
     if (character >= lo && character <= hi) {
       return { start: lo, end: hi };
     }
@@ -1811,19 +1827,28 @@ function findClusterBreak(
   return 0;
 }
 
-const graphemeSegmenter = new Intl.Segmenter(undefined, {
-  granularity: 'grapheme',
-});
-
 // Lists the start column of every grapheme cluster on a line (always starting
 // at 0). Used to step the caret and to transpose by whole graphemes so a
 // surrogate pair (emoji) or combining sequence is never split.
 function getLineGraphemeStarts(lineText: string): number[] {
   const graphemeStarts = [0];
-  for (const segment of graphemeSegmenter.segment(lineText)) {
-    if (segment.index > 0) {
-      graphemeStarts.push(segment.index);
+  const segmenter = getGraphemeSegmenter();
+  if (segmenter !== undefined) {
+    for (const segment of segmenter.segment(lineText)) {
+      if (segment.index > 0) {
+        graphemeStarts.push(segment.index);
+      }
     }
+    return graphemeStarts;
+  }
+  // Degraded path for engines lacking Intl.Segmenter: step by code point
+  // (keeps surrogate pairs intact, but not combining sequences).
+  let index = 0;
+  for (const codePoint of lineText) {
+    if (index > 0) {
+      graphemeStarts.push(index);
+    }
+    index += codePoint.length;
   }
   return graphemeStarts;
 }
@@ -1848,8 +1873,16 @@ function stepCharacterByGrapheme(
       lineStart + character,
       lineStart + lineLength
     );
-    for (const segment of graphemeSegmenter.segment(suffix)) {
-      return character + segment.segment.length;
+    const segmenter = getGraphemeSegmenter();
+    if (segmenter !== undefined) {
+      for (const segment of segmenter.segment(suffix)) {
+        return character + segment.segment.length;
+      }
+      return lineLength;
+    }
+    // Degraded path for engines lacking Intl.Segmenter: step one code point.
+    for (const codePoint of suffix) {
+      return character + codePoint.length;
     }
     return lineLength;
   }
@@ -1859,8 +1892,18 @@ function stepCharacterByGrapheme(
   const lineStart = textDocument.offsetAt({ line, character: 0 });
   const prefix = textDocument.getTextSlice(lineStart, lineStart + character);
   let prevStart = 0;
-  for (const segment of graphemeSegmenter.segment(prefix)) {
-    prevStart = segment.index;
+  const segmenter = getGraphemeSegmenter();
+  if (segmenter !== undefined) {
+    for (const segment of segmenter.segment(prefix)) {
+      prevStart = segment.index;
+    }
+    return prevStart;
+  }
+  // Degraded path for engines lacking Intl.Segmenter: step one code point.
+  let index = 0;
+  for (const codePoint of prefix) {
+    prevStart = index;
+    index += codePoint.length;
   }
   return prevStart;
 }
