@@ -114,6 +114,52 @@ describe('EditorTokenizer', () => {
     }
   });
 
+  test('picks up a grammar the highlighter loads after tokenizer construction', () => {
+    const grammar = {
+      tokenizeLine2(lineText: string, ruleStack: StateStack) {
+        return {
+          tokens: new Uint32Array([0, 0]),
+          ruleStack,
+          stoppedEarly: false,
+          lineText,
+        };
+      },
+    } as unknown as IGrammar;
+    let languageLoaded = false;
+    const textDocument = new TextDocument(
+      'test.ts',
+      'const x = 1\n',
+      'typescript'
+    );
+    const tokenizer = new EditorTokenizer({
+      highlighter: createTestHighlighter({
+        getLoadedLanguages: () => (languageLoaded ? ['typescript'] : []),
+        getLanguage: () => grammar,
+      }),
+      textDocument,
+      codeOptions: { theme: 'test-theme', themeType: 'dark' },
+      setStyle: noopSetStyle,
+      onDeferTokenize: () => {},
+    });
+    const change: TextDocumentChange = {
+      startLine: 0,
+      startCharacter: 0,
+      endLine: 0,
+      previousLineCount: textDocument.lineCount,
+      lineCount: textDocument.lineCount,
+      lineDelta: 0,
+      changedLineRanges: [[0, 0]],
+    };
+
+    expect(() => tokenizer.tokenize(change)).toThrow(
+      'Grammar for language "typescript" not loaded'
+    );
+
+    languageLoaded = true;
+
+    expect(() => tokenizer.tokenize(change)).not.toThrow();
+  });
+
   test('limits foreground tokenization to the render range after prepending lines', () => {
     const originalAddEventListener = globalThis.addEventListener;
     const originalPostMessage = globalThis.postMessage;

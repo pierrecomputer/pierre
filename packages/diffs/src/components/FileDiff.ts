@@ -263,7 +263,10 @@ export class FileDiff<
   protected enabled = true;
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
-  protected fastRefreshTimeout: ReturnType<typeof setTimeout> | undefined;
+  protected refreshViewTimeout: ReturnType<typeof setTimeout> | undefined;
+  protected deferSetSelection:
+    | [SelectedLineRange | null, SelectionWriteOptions | undefined]
+    | undefined;
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -315,7 +318,7 @@ export class FileDiff<
   ) => {
     // use the fileDiff from the hunksRenderer if it exists, it maybe updated
     // by the host
-    const fileDiff = this.hunksRenderer.getRenderDiff() ?? this.fileDiff;
+    const fileDiff = this.hunksRenderer.getDiffCache() ?? this.fileDiff;
     if (fileDiff == null) {
       return undefined;
     }
@@ -493,7 +496,11 @@ export class FileDiff<
     range: SelectedLineRange | null,
     options?: SelectionWriteOptions
   ): void {
-    this.interactionManager.setSelection(range, options);
+    if (this.refreshViewTimeout != null) {
+      this.deferSetSelection = [range, options];
+    } else {
+      this.interactionManager.setSelection(range, options);
+    }
   }
 
   public flushManagers(): void {
@@ -581,9 +588,9 @@ export class FileDiff<
 
     this.editor?.cleanUp();
     this.editor = undefined;
-    if (this.fastRefreshTimeout != null) {
-      clearTimeout(this.fastRefreshTimeout);
-      this.fastRefreshTimeout = undefined;
+    if (this.refreshViewTimeout != null) {
+      clearTimeout(this.refreshViewTimeout);
+      this.refreshViewTimeout = undefined;
     }
   }
 
@@ -875,9 +882,19 @@ export class FileDiff<
         'FileDiff.render: attempting to call render after cleaned up'
       );
     }
+
+    // use the file name as the cache key if it is not set
+    if (fileDiff != null && fileDiff.cacheKey === undefined) {
+      fileDiff.cacheKey =
+        fileDiff.prevName != null
+          ? fileDiff.prevName + ':' + fileDiff.name
+          : fileDiff.name;
+    }
+
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
-    this.editor?.__postponeBackgroundTokenizeToNextFrame();
+    this.editor?.__postponeBgTokenizeToNextFrame();
+
     const {
       collapsed = false,
       themeType = 'system',
@@ -1120,7 +1137,7 @@ export class FileDiff<
   private syncRenderViewToEditor(): void {
     const editor = this.editor;
     const fileContainer = this.fileContainer;
-    const fileDiff = this.fileDiff;
+    const fileDiff = this.hunksRenderer.getDiffCache() ?? this.fileDiff;
     if (
       editor != null &&
       fileContainer != null &&
@@ -1156,13 +1173,14 @@ export class FileDiff<
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
     this.hunksRenderer.applyDocumentChange(textDocument);
-    const renderDiff = this.hunksRenderer.getRenderDiff();
-    if (renderDiff != null) {
-      this.fileDiff = renderDiff;
+    const fileDiff = this.hunksRenderer.getDiffCache();
+    if (fileDiff != null) {
+      const cacheKey = this.fileDiff?.cacheKey;
+      if (cacheKey != null && fileDiff.cacheKey == null) {
+        fileDiff.cacheKey = cacheKey;
+      }
+      this.fileDiff = fileDiff;
     }
-    // TODO(@ije): can we avoid full-render here?
-    this.rerender();
-    this.interactionManager.setSelectionDirty();
     if (
       newLineAnnotations !== undefined &&
       newLineAnnotations !== this.lineAnnotations
@@ -1171,52 +1189,32 @@ export class FileDiff<
       this.hunksRenderer.setLineAnnotations(this.lineAnnotations);
       this.renderAnnotations();
     }
-  }
-
-  // Re-render the diff from the host's document after a host-driven full
-  // re-render rebuilt the rows from the host's (now stale) file contents.
-  // applyDocumentChange re-derives the diff (addition lines + hunks) from the
-  // document, but the cached highlighted AST still holds the host's content for
-  // rows that already existed, and renderDiff reuses it. Clearing the render
-  // cache forces the re-render to re-highlight from the document, so every row
-  // matches it - text, syntax colors, and line count - in one pass. Mutating
-  // the diff in place keeps its cacheKey, so the host's document and undo
-  // history survive the re-render.
-  public rerenderFromDocument(textDocument: DiffsTextDocument): void {
-    this.hunksRenderer.applyDocumentChange(textDocument);
-    const renderDiff = this.hunksRenderer.getRenderDiff();
-    if (renderDiff != null) {
-      this.fileDiff = renderDiff;
-    }
-    this.hunksRenderer.clearRenderCache();
     this.rerender();
+    this.interactionManager.setSelectionDirty();
   }
 
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
-  ): readonly number[] {
-    return this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
-  }
-
-  public recomputeContentHunks(
-    changedAdditionLineIndexes: readonly number[]
+    themeType: 'dark' | 'light',
+    shouldRefreshView: boolean
   ): void {
-    this.hunksRenderer.recomputeContentHunks(changedAdditionLineIndexes);
-  }
-
-  public applyContentEdit(changedAdditionLineIndexes: readonly number[]): void {
-    this.recomputeContentHunks(changedAdditionLineIndexes);
-    if (this.options.diffStyle === 'split') {
-      if (this.fastRefreshTimeout != null) {
-        clearTimeout(this.fastRefreshTimeout);
+    this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
+    if (shouldRefreshView) {
+      if (this.refreshViewTimeout != null) {
+        clearTimeout(this.refreshViewTimeout);
       }
-      this.fastRefreshTimeout = setTimeout(() => {
-        this.fastRefreshTimeout = undefined;
-        this.fastRefreshDiffView();
-      }, 100);
-    } else {
-      this.refreshDiffView();
+      this.refreshViewTimeout = setTimeout(() => {
+        this.refreshViewTimeout = undefined;
+        if (this.options.diffStyle === 'split') {
+          this.refreshSplitDiffView();
+        } else {
+          this.refreshUnifiedDiffView();
+        }
+        if (this.deferSetSelection != null) {
+          this.interactionManager.setSelection(...this.deferSetSelection);
+          this.deferSetSelection = undefined;
+        }
+      }, 150);
     }
   }
 
@@ -2074,7 +2072,7 @@ export class FileDiff<
 
   // fast refresh diff view via updating the `data-line-type` after an edit.
   // only for split view.
-  private fastRefreshDiffView(): void {
+  private refreshSplitDiffView(): void {
     if (this.options.diffStyle !== 'split') {
       return;
     }
@@ -2137,7 +2135,12 @@ export class FileDiff<
   }
 
   // full diff view re-rendering
-  private refreshDiffView(): void {
+  // only for unified view.
+  private refreshUnifiedDiffView(): void {
+    if (this.options.diffStyle !== 'unified') {
+      return;
+    }
+
     const hunksResult = this.hunksRenderer.renderDiff(
       this.fileDiff,
       this.renderRange
@@ -2147,42 +2150,37 @@ export class FileDiff<
     }
 
     const columns = this.getCodeColumns(
-      this.options.diffStyle ?? 'split',
+      'unified',
       this.codeUnified,
       this.codeDeletions,
       this.codeAdditions
     );
-    if (columns == null) {
+    if (columns == null || Array.isArray(columns)) {
       return;
     }
 
-    const render = (
-      type: 'deletions' | 'additions' | 'unified',
-      column: ColumnElements | undefined
-    ) => {
-      if (column == null) {
-        return;
+    const ast = this.hunksRenderer.renderCodeAST('unified', hunksResult);
+    const gutterChildren = getElementChildren(ast?.[0]);
+    const contentChildren = getElementChildren(ast?.[1]);
+    for (const [el, astChildren] of [
+      [columns.gutter, gutterChildren],
+      [columns.content, contentChildren],
+    ] as const) {
+      if (astChildren != null) {
+        el.innerHTML = toHtml(astChildren);
       }
-      const ast = this.hunksRenderer.renderCodeAST(type, hunksResult);
-      const gutterChildren = getElementChildren(ast?.[0]);
-      const contentChildren = getElementChildren(ast?.[1]);
-      for (const [el, astChildren] of [
-        [column.gutter, gutterChildren],
-        [column.content, contentChildren],
-      ] as const) {
-        if (astChildren != null) {
-          el.innerHTML = toHtml(astChildren);
-        }
-      }
-    };
-
-    if (Array.isArray(columns)) {
-      render('deletions', columns[0]);
-      render('additions', columns[1]);
-    } else {
-      render('unified', columns);
     }
 
+    if (hunksResult.rowCount !== this.lastRowCount) {
+      this.applyRowSpan('unified', columns, hunksResult.rowCount);
+      this.lastRowCount = hunksResult.rowCount;
+    }
+    this.renderSeparators(hunksResult.hunkData);
+
+    this.managersDirty = true;
+    this.flushManagers();
+
+    // sync the render view to the editor
     this.syncRenderViewToEditor();
   }
 

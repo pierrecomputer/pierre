@@ -12,6 +12,7 @@ import type {
 } from '../src/types';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import { recomputeDiffHunks } from '../src/utils/updateDiffHunks';
 import { installDom } from './domHarness';
 
 // Mirrors LAYOUT_CHECKPOINT_INTERVAL in src/components/VirtualizedFileDiff.ts:
@@ -934,6 +935,68 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     expect(inspect(instance).cache.totalLines).toBe(lineCount);
     expect(inspect(instance).cache.checkpoints.length).toBe(
       Math.floor((lineCount - 1) / LAYOUT_CHECKPOINT_INTERVAL) + 1
+    );
+  });
+
+  test('render range clamp reaches additionLines.length after stale layout cache', () => {
+    const oldLines = Array.from(
+      { length: 200 },
+      (_, index) => `line ${index + 1}`
+    );
+    const newLines = [...oldLines];
+    newLines[50] = 'changed line 51';
+    let fileDiff = parseDiffFromFile(
+      { name: 'edit.ts', contents: `${oldLines.join('\n')}\n` },
+      { name: 'edit.ts', contents: `${newLines.join('\n')}\n` },
+      { context: 3 }
+    );
+
+    const instance = new VirtualizedFileDiff(
+      { expandUnchanged: true },
+      virtualizer,
+      metrics
+    );
+    instance.prepareCodeViewItem(fileDiff, 0);
+    const fileHeight = instance.getVirtualizedHeight();
+    inspect(instance).computeRenderRangeFromWindow(fileDiff, 0, {
+      top: 0,
+      bottom: 500,
+    });
+    expect(inspect(instance).cache.totalLines).toBe(
+      fileDiff.additionLines.length
+    );
+
+    const edited = [...fileDiff.additionLines];
+    for (let index = 0; index < 10; index++) {
+      edited.push(`new line ${index}\n`);
+    }
+    fileDiff = { ...fileDiff, additionLines: edited };
+    Object.assign(fileDiff, recomputeDiffHunks(fileDiff));
+    inspect(instance).cache.totalLines = fileDiff.additionLines.length - 10;
+
+    const range = inspect(instance).computeRenderRangeFromWindow(fileDiff, 0, {
+      top: fileHeight - 500,
+      bottom: fileHeight,
+    });
+
+    let maxReachableEnd = range.startingLine + range.totalLines;
+    for (let top = 0; top <= fileHeight; top += metrics.lineHeight * 5) {
+      const scrolledRange = inspect(instance).computeRenderRangeFromWindow(
+        fileDiff,
+        0,
+        {
+          top,
+          bottom: top + 500,
+        }
+      );
+      maxReachableEnd = Math.max(
+        maxReachableEnd,
+        scrolledRange.startingLine + scrolledRange.totalLines
+      );
+    }
+
+    expect(maxReachableEnd).toBeGreaterThanOrEqual(
+      fileDiff.additionLines.length
     );
   });
 });

@@ -971,6 +971,7 @@ export interface DiffsBaseComponent {
   render(options: {
     file?: FileContents;
     fileDiff?: FileDiffMetadata;
+    // oxlint-disable-next-line typescript/no-explicit-any
     lineAnnotations?: any[];
     renderRange?: RenderRange;
   }): void;
@@ -998,31 +999,13 @@ export interface DiffsEditableComponent<
   ) => void;
   updateRenderCache: (
     lines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
-  ) => readonly number[];
-  // Apply an in-place content edit (no line-count change): incrementally
-  // recompute hunk metadata for the changed lines and refresh the view.
-  // No-op for plain files. For a line-count change the host calls
-  // applyDocumentChange instead.
-  applyContentEdit: (changedAdditionLineIndexes: readonly number[]) => void;
-  // Recompute hunk metadata for changed addition lines WITHOUT refreshing the
-  // view. The host calls this for background/offscreen token updates — a
-  // content-only edit that landed outside the render window — where the visible
-  // rows are patched separately. No-op for plain files.
-  recomputeContentHunks: (
-    changedAdditionLineIndexes: readonly number[]
+    themeType: 'dark' | 'light',
+    shouldRefreshView: boolean
   ) => void;
-  // Re-render the component from the host's document, discarding the cached
-  // (host-derived) rendered content. The host calls this after a host-driven
-  // full re-render rebuilt the rows from the host's stale file contents, so the
-  // visible rows match the document - text, syntax colors, and line count - in
-  // one pass. Optional: components without a document-backed re-render (the
-  // plain File) leave it unset and are skipped.
-  rerenderFromDocument?: (textDocument: DiffsTextDocument) => void;
 }
 
 export interface DiffsEditor<LAnnotation> {
-  __postponeBackgroundTokenizeToNextFrame(): void;
+  __postponeBgTokenizeToNextFrame(): void;
   __syncRenderView(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,

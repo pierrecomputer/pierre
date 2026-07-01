@@ -5,7 +5,9 @@ import {
   disposeHighlighter,
   parseDiffFromFile,
 } from '../src';
+import { TextDocument } from '../src/editor/textDocument';
 import type { DiffsTextDocument, HighlightedToken } from '../src/types';
+import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -26,6 +28,23 @@ const NEW_CONTENTS = [
   '}',
   '',
 ].join('\n');
+
+// Addition-side document after pressing Enter in the middle of
+// "  console.log(msg);" (index 1), splitting it into two lines.
+const EDITED_LINES = [
+  'function greet(name) {',
+  '  console.log(',
+  'msg);',
+  '  return msg;',
+  '}',
+  '',
+];
+// The tokenizer reports the truncated line and the new line as dirty, using the
+// post-edit line indexes.
+
+function makeTextDocumentFromText(text: string): DiffsTextDocument {
+  return new TextDocument('edit.ts', text, 'typescript', 0);
+}
 
 function makeDirtyLines(
   edits: ReadonlyArray<[number, string]>
@@ -54,8 +73,8 @@ async function createPrimedRenderer(
 ): Promise<DiffHunksRenderer> {
   const renderer = new DiffHunksRenderer({ theme: 'github-light', diffStyle });
   const diff = parseDiffFromFile(
-    { name: 'greet.ts', contents: OLD_CONTENTS },
-    { name: 'greet.ts', contents: NEW_CONTENTS }
+    { name: 'greet.ts', contents: OLD_CONTENTS, cacheKey: 'greet:old' },
+    { name: 'greet.ts', contents: NEW_CONTENTS, cacheKey: 'greet:new' }
   );
   await renderer.asyncRender(diff);
   renderer.renderDiff(diff);
@@ -63,35 +82,32 @@ async function createPrimedRenderer(
 }
 
 describe('DiffHunksRenderer content-edit recompute split', () => {
-  test('updateRenderCache returns changed addition lines and does not recompute', async () => {
+  test('updateRenderCache recomputes hunk metadata for changed addition lines', async () => {
     const renderer = await createPrimedRenderer();
-    const cacheDiff = renderer.getRenderDiff();
+    const cacheDiff = renderer.getDiffCache();
     expect(cacheDiff).toBeDefined();
     if (cacheDiff == null) return;
 
     const hunksBefore = cacheDiff.hunks;
     // In-place edit of an existing line (no line-count change).
-    const changed = renderer.updateRenderCache(
+    renderer.updateRenderCache(
       makeDirtyLines([[1, '  console.log(msg) // edited']]),
       'light'
     );
-    // Token sync ran but hunks were NOT recomputed here.
-    expect(cacheDiff.hunks).toBe(hunksBefore);
-    expect([...changed]).toEqual([1]);
+    expect(cacheDiff.hunks).not.toBe(hunksBefore);
   });
 
-  test('recomputeContentHunks matches a full recompute for a content-only edit', async () => {
+  test('updateRenderCache matches a full recompute for a content-only edit', async () => {
     const split = await createPrimedRenderer();
-    const changed = split.updateRenderCache(
+    split.updateRenderCache(
       makeDirtyLines([[1, '  console.log(msg) // edited']]),
       'light'
     );
-    split.recomputeContentHunks(changed);
-    const incremental = split.getRenderDiff();
+    const incremental = split.getDiffCache();
 
     // Expected result: a full re-parse of the same edited content from scratch.
     const full = parseDiffFromFile(
-      { name: 'greet.ts', contents: OLD_CONTENTS },
+      { name: 'greet.ts', contents: OLD_CONTENTS, cacheKey: 'greet:old' },
       {
         name: 'greet.ts',
         contents: [
@@ -101,6 +117,7 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
           '}',
           '',
         ].join('\n'),
+        cacheKey: 'greet:new:edited',
       }
     );
 
@@ -109,6 +126,49 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
     expect(incremental.hunks).toEqual(full.hunks);
     expect(incremental.splitLineCount).toBe(full.splitLineCount);
     expect(incremental.unifiedLineCount).toBe(full.unifiedLineCount);
+  });
+
+  test('meaningful line-count edits preserve unchanged context', async () => {
+    const renderer = await createPrimedRenderer('split');
+
+    renderer.applyDocumentChange(
+      makeTextDocumentFromText(EDITED_LINES.join('\n'))
+    );
+
+    const rendered = renderer.getDiffCache();
+    expect(rendered).toBeDefined();
+    if (rendered == null) return;
+
+    expect(
+      rendered.hunks.some((hunk) =>
+        hunk.hunkContent.some((content) => content.type === 'context')
+      )
+    ).toBe(true);
+
+    let firstLine:
+      | {
+          type: string;
+          deletionLineNumber?: number;
+          additionLineNumber?: number;
+        }
+      | undefined;
+    iterateOverDiff({
+      diff: rendered,
+      diffStyle: 'split',
+      callback: ({ type, deletionLine, additionLine }) => {
+        firstLine ??= {
+          type,
+          deletionLineNumber: deletionLine?.lineNumber,
+          additionLineNumber: additionLine?.lineNumber,
+        };
+      },
+    });
+
+    expect(firstLine).toEqual({
+      type: 'context',
+      deletionLineNumber: 1,
+      additionLineNumber: 1,
+    });
   });
 });
 
@@ -129,7 +189,7 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       const renderer = await createPrimedRenderer(diffStyle);
       renderer.applyDocumentChange(EMPTY_DOCUMENT);
 
-      const diff = renderer.getRenderDiff();
+      const diff = renderer.getDiffCache();
       expect(diff).toBeDefined();
       if (diff == null) return;
 
@@ -147,6 +207,186 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       expect(html).toContain('change-addition');
     });
 
+    test(`top-aligns the empty addition line in split view (${diffStyle})`, async () => {
+      const oldContents =
+        Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const newContents =
+        Array.from({ length: 60 }, (_, index) => `new ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const renderer = new DiffHunksRenderer({
+        theme: 'github-light',
+        diffStyle,
+      });
+      const diff = parseDiffFromFile(
+        { name: 'old.ts', contents: oldContents, cacheKey: 'old:empty-base' },
+        { name: 'new.ts', contents: newContents, cacheKey: 'new:empty-base' }
+      );
+      await renderer.asyncRender(diff);
+      renderer.renderDiff(diff);
+      renderer.applyDocumentChange(EMPTY_DOCUMENT);
+
+      const rendered = renderer.getDiffCache();
+      expect(rendered).toBeDefined();
+      if (rendered == null) return;
+
+      let firstAdditionSplitLine: number | undefined;
+      iterateOverDiff({
+        diff: rendered,
+        diffStyle: 'split',
+        callback: ({ additionLine }) => {
+          if (firstAdditionSplitLine === undefined && additionLine != null) {
+            firstAdditionSplitLine = additionLine.splitLineIndex;
+          }
+        },
+      });
+      expect(firstAdditionSplitLine).toBe(0);
+    });
+
+    test(`top-aligns newline-only additions after delete-all (${diffStyle})`, async () => {
+      const oldContents =
+        Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const newContents =
+        Array.from({ length: 60 }, (_, index) => `new ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const renderer = new DiffHunksRenderer({
+        theme: 'github-light',
+        diffStyle,
+      });
+      const diff = parseDiffFromFile(
+        {
+          name: 'old.ts',
+          contents: oldContents,
+          cacheKey: 'old:newline-base',
+        },
+        {
+          name: 'new.ts',
+          contents: newContents,
+          cacheKey: 'new:newline-base',
+        }
+      );
+      await renderer.asyncRender(diff);
+      renderer.renderDiff(diff);
+      renderer.applyDocumentChange(EMPTY_DOCUMENT);
+      renderer.applyDocumentChange(makeTextDocumentFromText('\n'));
+
+      const rendered = renderer.getDiffCache();
+      expect(rendered).toBeDefined();
+      if (rendered == null) return;
+
+      const additionSplitLines: number[] = [];
+      iterateOverDiff({
+        diff: rendered,
+        diffStyle: 'split',
+        callback: ({ additionLine }) => {
+          if (additionLine != null) {
+            additionSplitLines.push(additionLine.splitLineIndex);
+          }
+        },
+      });
+      expect(additionSplitLines).toEqual([0, 1]);
+    });
+
+    test(`top-aligns multiple newline-only additions after delete-all (${diffStyle})`, async () => {
+      const oldContents =
+        Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const newContents =
+        Array.from({ length: 60 }, (_, index) => `new ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const renderer = new DiffHunksRenderer({
+        theme: 'github-light',
+        diffStyle,
+      });
+      const diff = parseDiffFromFile(
+        {
+          name: 'old.ts',
+          contents: oldContents,
+          cacheKey: 'old:multi-newline-base',
+        },
+        {
+          name: 'new.ts',
+          contents: newContents,
+          cacheKey: 'new:multi-newline-base',
+        }
+      );
+      await renderer.asyncRender(diff);
+      renderer.renderDiff(diff);
+      renderer.applyDocumentChange(EMPTY_DOCUMENT);
+      renderer.applyDocumentChange(makeTextDocumentFromText('\n\n'));
+
+      const rendered = renderer.getDiffCache();
+      expect(rendered).toBeDefined();
+      if (rendered == null) return;
+
+      const additionSplitLines: number[] = [];
+      iterateOverDiff({
+        diff: rendered,
+        diffStyle: 'split',
+        callback: ({ additionLine }) => {
+          if (additionLine != null) {
+            additionSplitLines.push(additionLine.splitLineIndex);
+          }
+        },
+      });
+      expect(additionSplitLines).toEqual([0, 1, 2]);
+    });
+
+    test(`renders one row per editor line after insertLineBreak (${diffStyle})`, async () => {
+      const oldContents =
+        Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const newContents =
+        Array.from({ length: 60 }, (_, index) => `new ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const renderer = new DiffHunksRenderer({
+        theme: 'github-light',
+        diffStyle,
+      });
+      const diff = parseDiffFromFile(
+        {
+          name: 'old.ts',
+          contents: oldContents,
+          cacheKey: 'old:insert-break-base',
+        },
+        {
+          name: 'new.ts',
+          contents: newContents,
+          cacheKey: 'new:insert-break-base',
+        }
+      );
+      await renderer.asyncRender(diff);
+      renderer.renderDiff(diff);
+      renderer.applyDocumentChange(EMPTY_DOCUMENT);
+      renderer.applyDocumentChange(makeTextDocumentFromText('\n'));
+
+      const rendered = renderer.getDiffCache();
+      expect(rendered).toBeDefined();
+      if (rendered == null) return;
+      expect(rendered.additionLines).toEqual(['\n', '']);
+
+      const additionSplitLines: number[] = [];
+      iterateOverDiff({
+        diff: rendered,
+        diffStyle: 'split',
+        callback: ({ additionLine }) => {
+          if (additionLine != null) {
+            additionSplitLines.push(additionLine.lineNumber);
+          }
+        },
+      });
+      expect(additionSplitLines).toEqual([1, 2]);
+    });
+
     // When the old side is itself a single blank line, diffing the emptied
     // document against an empty line would be a no-op (zero hunks, so zero
     // rendered rows). The recompute must still produce one editable row.
@@ -156,15 +396,15 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
         diffStyle,
       });
       const diff = parseDiffFromFile(
-        { name: 'blank.ts', contents: '\n' },
-        { name: 'blank.ts', contents: 'typed\n' }
+        { name: 'blank.ts', contents: '\n', cacheKey: 'blank:old' },
+        { name: 'blank.ts', contents: 'typed\n', cacheKey: 'blank:new' }
       );
       await renderer.asyncRender(diff);
       renderer.renderDiff(diff);
 
       renderer.applyDocumentChange(EMPTY_DOCUMENT);
 
-      const rendered = renderer.getRenderDiff();
+      const rendered = renderer.getDiffCache();
       expect(rendered).toBeDefined();
       if (rendered == null) return;
       expect(rendered.additionLines).toEqual(['']);

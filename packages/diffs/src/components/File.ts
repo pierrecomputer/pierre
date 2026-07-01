@@ -10,7 +10,6 @@ import {
   HEADER_FILENAME_SUFFIX_SLOT_ID,
   HEADER_METADATA_SLOT_ID,
   HEADER_PREFIX_SLOT_ID,
-  NO_CHANGED_ADDITION_LINES,
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
@@ -532,17 +531,9 @@ export class File<
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
-  ): readonly number[] {
+  ): void {
     this.fileRenderer.updateRenderCache(dirtyLines, themeType);
-    // Plain files have no diff hunks to recompute.
-    return NO_CHANGED_ADDITION_LINES;
   }
-
-  // Plain files render edits via the host's inline DOM patch; nothing to do.
-  public applyContentEdit(): void {}
-
-  // Plain files have no diff hunks to recompute.
-  public recomputeContentHunks(): void {}
 
   public render({
     file,
@@ -560,9 +551,14 @@ export class File<
       );
     }
 
+    // use the file name as the cache key if it is not set
+    if (file.cacheKey === undefined) {
+      file.cacheKey = file.name;
+    }
+
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
-    this.editor?.__postponeBackgroundTokenizeToNextFrame();
+    this.editor?.__postponeBgTokenizeToNextFrame();
 
     const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;

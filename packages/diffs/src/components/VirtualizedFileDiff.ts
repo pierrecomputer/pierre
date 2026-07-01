@@ -88,6 +88,7 @@ interface DiffLayoutCache {
 interface ResetLayoutCacheOptions {
   forceSimpleRecompute?: boolean;
   includeEstimatedHeights?: boolean;
+  resetRenderRange?: boolean;
 }
 
 interface PendingLoadedDiff {
@@ -272,6 +273,7 @@ export class VirtualizedFileDiff<
   private resetLayoutCache({
     forceSimpleRecompute = false,
     includeEstimatedHeights = false,
+    resetRenderRange = true,
   }: ResetLayoutCacheOptions = {}): void {
     this.layoutDirty = true;
     this.cache.fileAnnotationHeight = 0;
@@ -281,7 +283,10 @@ export class VirtualizedFileDiff<
     if (this.cache.measuredHeightDeltaTotal !== 0) {
       this.cache.measuredHeightDeltaTotal = 0;
     }
-    this.invalidateDerivedLayoutCache(includeEstimatedHeights);
+    this.invalidateDerivedLayoutCache(
+      includeEstimatedHeights,
+      resetRenderRange
+    );
     // NOTE(amadeus): In CodeView we intentionally batch computes to all happen
     // at the same time, so we shouldn't trigger this there.
     if (forceSimpleRecompute && this.isSimpleMode()) {
@@ -289,7 +294,10 @@ export class VirtualizedFileDiff<
     }
   }
 
-  private invalidateDerivedLayoutCache(includeEstimatedHeights: boolean): void {
+  private invalidateDerivedLayoutCache(
+    includeEstimatedHeights: boolean,
+    resetRenderRange = true
+  ): void {
     this.layoutDirty = true;
     if (this.cache.checkpoints.length > 0) {
       this.cache.checkpoints.length = 0;
@@ -301,7 +309,7 @@ export class VirtualizedFileDiff<
       this.cache.estimatedSplitHeight = undefined;
       this.cache.estimatedUnifiedHeight = undefined;
     }
-    if (this.renderRange != null) {
+    if (this.renderRange != null && resetRenderRange) {
       this.renderRange = undefined;
     }
   }
@@ -911,10 +919,15 @@ export class VirtualizedFileDiff<
     this.resetLayoutCache({
       forceSimpleRecompute: this.isSimpleMode(),
       includeEstimatedHeights: true,
+      resetRenderRange: false,
     });
+    if (!this.isSimpleMode()) {
+      this.computeApproximateSize(true);
+    }
 
-    // Update the buffers caused by the line-count change to ensure the host
-    // scrolls to the correct position before re-rendering
+    // Recompute the buffer spacer when the edit grew the document below the
+    // rendered window so scroll/caret positioning stays correct before the next
+    // virtualizer re-sync.
     if (
       shouldUpdateBuffer &&
       previousRenderRange !== undefined &&
@@ -1211,7 +1224,7 @@ export class VirtualizedFileDiff<
     fileDiff: FileDiffMetadata | undefined = this.fileDiff
   ): void {
     if (
-      this.cache.checkpoints.length > 0 ||
+      (!this.layoutDirty && this.cache.checkpoints.length > 0) ||
       fileDiff == null ||
       fileDiff.hunks.length === 0 ||
       this.options.collapsed === true
@@ -1525,6 +1538,27 @@ export class VirtualizedFileDiff<
     return count;
   }
 
+  // Row total used to clamp render-range scrolling. Sparse layout checkpoints can
+  // still hold a smaller pre-edit count until they are rebuilt, so always take
+  // the max against the live diff metadata (including additionLines.length).
+  private getLayoutLineCount(
+    fileDiff: FileDiffMetadata,
+    diffStyle: 'split' | 'unified'
+  ): number {
+    const expandedLineCount = this.getExpandedLineCount(fileDiff, diffStyle);
+    const metadataLineCount =
+      diffStyle === 'split'
+        ? fileDiff.splitLineCount
+        : fileDiff.unifiedLineCount;
+    return Math.max(
+      expandedLineCount,
+      metadataLineCount,
+      fileDiff.additionLines.length,
+      fileDiff.deletionLines.length,
+      this.cache.totalLines
+    );
+  }
+
   private computeRenderRangeFromWindow(
     fileDiff: FileDiffMetadata,
     fileTop: number,
@@ -1543,10 +1577,7 @@ export class VirtualizedFileDiff<
       this.options.loadDiffFiles != null
     );
     const fileHeight = this.height;
-    let lineCount =
-      this.cache.totalLines > 0
-        ? this.cache.totalLines
-        : this.getExpandedLineCount(fileDiff, diffStyle);
+    let lineCount = this.getLayoutLineCount(fileDiff, diffStyle);
 
     const headerRegion = getVirtualFileHeaderRegion(
       this.metrics,
@@ -1589,7 +1620,7 @@ export class VirtualizedFileDiff<
     }
 
     this.approximateLayoutCheckpoints(fileDiff);
-    lineCount = this.cache.totalLines > 0 ? this.cache.totalLines : lineCount;
+    lineCount = this.getLayoutLineCount(fileDiff, diffStyle);
 
     const estimatedTargetLines = Math.ceil(
       Math.max(bottom - top, 0) / lineHeight

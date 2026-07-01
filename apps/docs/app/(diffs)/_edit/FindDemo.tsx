@@ -59,7 +59,13 @@ export function FindDemo({ prerenderedFile }: FindDemoProps) {
       if (content == null) {
         return;
       }
-      content.focus({ preventScroll: true });
+      editor.setSelections([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ]);
       content.dispatchEvent(
         new KeyboardEvent('keydown', {
           key: 'f',

@@ -47,26 +47,63 @@ export function recomputeDiffHunks(
   };
 }
 
-// Rebuilds hunk metadata when the editable side has been emptied of all text.
-//
-// The host always keeps one (empty) line for an empty document, but an empty
-// string splits into zero addition lines, so a normal recompute produces a diff
-// with no addition rows at all. Rendering that leaves the attached host with
-// no line element for its caret. To keep one editable row, diff the
-// unchanged deletions against a single line (which yields a hunk that places
-// exactly one addition row), then store the addition as `['']` so it still
-// joins back to the host's empty document.
-//
-// The sentinel only has to differ from the deletion side so a hunk is produced;
-// its text is discarded by the `['']` override below. When the old side is
-// itself a single blank line the empty sentinel would be identical and yield no
-// hunk (and so no editable row), so fall back to a non-blank line there.
-export function recomputeEmptyDocumentDiff(
+// Builds placeholder addition contents that diff as one top-aligned change row per
+// line. Bare `\\n` sentinels align as context against the first deletion lines,
+// which pushes the real addition rows down in split view.
+function buildTopAlignedAdditionSentinel(
+  lineCount: number,
+  deletionContents: string
+): string {
+  const count = Math.max(lineCount, 1);
+  let sentinel = Array.from(
+    { length: count },
+    (_, index) => `${' '.repeat(index + 1)}\n`
+  ).join('');
+  if (sentinel === deletionContents) {
+    sentinel = Array.from(
+      { length: count },
+      (_, index) => `\u0000${' '.repeat(index)}\n`
+    ).join('');
+  }
+  return sentinel;
+}
+
+function hasOnlyBlankAdditionContents(additionLines: string[]): boolean {
+  for (const line of additionLines) {
+    if (line.trim().length > 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// After delete-all the editable side is blank and much shorter than the deletion
+// side. A normal recompute can still treat newline-only additions as context and
+// render the first editable row deep in split view instead of at the top.
+export function shouldTopAlignAdditionRecompute(
   diff: FileDiffMetadata,
+  additionLines: string[]
+): boolean {
+  return (
+    additionLines.length > 0 &&
+    additionLines.length < diff.deletionLines.length &&
+    hasOnlyBlankAdditionContents(additionLines)
+  );
+}
+
+// Rebuilds hunk metadata while keeping the editable addition rows top-aligned in
+// split view. The sentinel only shapes hunks; the caller's addition lines are
+// preserved so the editor document stays the source of truth.
+export function recomputeTopAlignedAdditionDiff(
+  diff: FileDiffMetadata,
+  additionLines: string[],
   parseDiffOptions?: CreatePatchOptionsNonabortable
 ): FullDiffHunkUpdate {
   const deletionContents = diff.deletionLines.join('');
-  const additionSentinel = deletionContents === '\n' ? ' \n' : '\n';
+  const additionSentinel = buildTopAlignedAdditionSentinel(
+    additionLines.length,
+    deletionContents
+  );
   const recomputed = parseDiffFromFile(
     {
       name: diff.prevName ?? diff.name,
@@ -83,10 +120,41 @@ export function recomputeEmptyDocumentDiff(
     hunks: recomputed.hunks,
     splitLineCount: recomputed.splitLineCount,
     unifiedLineCount: recomputed.unifiedLineCount,
-    additionLines: [''],
+    additionLines,
     deletionLines: recomputed.deletionLines,
     type: recomputed.type,
   };
+}
+
+// Rebuilds hunk metadata when the editable side has been emptied of all text.
+//
+// The editor always keeps one (empty) line for an empty document, but an empty
+// string splits into zero addition lines, so a normal recompute produces a diff
+// with no addition rows at all. Rendering that leaves the attached editor with
+// no line element to host its caret.
+export function recomputeEmptyDocumentDiff(
+  diff: FileDiffMetadata,
+  parseDiffOptions?: CreatePatchOptionsNonabortable
+): FullDiffHunkUpdate {
+  return recomputeTopAlignedAdditionDiff(diff, [''], parseDiffOptions);
+}
+
+/** Rebuilds diff hunks after an edit, top-aligning sparse addition sides when needed. */
+export function recomputeDiffHunksForEdit(
+  diff: FileDiffMetadata,
+  parseDiffOptions?: CreatePatchOptionsNonabortable
+): FullDiffHunkUpdate {
+  if (diff.additionLines.length === 0) {
+    return recomputeEmptyDocumentDiff(diff, parseDiffOptions);
+  }
+  if (shouldTopAlignAdditionRecompute(diff, diff.additionLines)) {
+    return recomputeTopAlignedAdditionDiff(
+      diff,
+      diff.additionLines,
+      parseDiffOptions
+    );
+  }
+  return recomputeDiffHunks(diff, parseDiffOptions);
 }
 
 /** Updates hunk metadata after addition lines change; re-parses affected hunks only. */

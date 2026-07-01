@@ -7,7 +7,6 @@ import {
   DEFAULT_RENDER_RANGE,
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
-  NO_CHANGED_ADDITION_LINES,
 } from '../constants';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
@@ -76,7 +75,7 @@ import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import { splitFileContents } from '../utils/splitFileContents';
 import {
-  recomputeDiffHunks,
+  recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
   updateDiffHunks,
 } from '../utils/updateDiffHunks';
@@ -258,7 +257,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.workerManager?.cleanUpTasks(this);
   }
 
-  public getRenderDiff(): FileDiffMetadata | undefined {
+  public getDiffCache(): FileDiffMetadata | undefined {
     return this.renderCache?.diff ?? this.diff;
   }
 
@@ -341,13 +340,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
-  ): readonly number[] {
+  ): void {
     if (this.renderCache == null) {
-      return NO_CHANGED_ADDITION_LINES;
+      return;
     }
     const { result, diff } = this.renderCache;
     if (result == null) {
-      return NO_CHANGED_ADDITION_LINES;
+      return;
     }
     if (diff.isPartial) {
       throw new Error('Could not update render cache for partial diff');
@@ -404,36 +403,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     }
 
-    result.baseThemeType = themeType;
-    this.renderCache.isDirty = true;
-    return changedAdditionLines;
-  }
-
-  // Incrementally recompute hunk metadata after an in-place content edit
-  // (no line-count change). For a line-count change the host calls
-  // `applyDocumentChange` instead, which recomputes from the full document.
-  public recomputeContentHunks(
-    changedAdditionLineIndexes: readonly number[]
-  ): void {
-    if (this.renderCache == null) {
-      return;
-    }
-    const { diff, result } = this.renderCache;
-    if (
-      result == null ||
-      diff.isPartial ||
-      changedAdditionLineIndexes.length === 0
-    ) {
-      return;
-    }
-    Object.assign(
-      diff,
-      updateDiffHunks(
+    if (changedAdditionLines.length > 0) {
+      Object.assign(
         diff,
-        changedAdditionLineIndexes,
-        this.options.parseDiffOptions
-      )
-    );
+        updateDiffHunks(
+          diff,
+          changedAdditionLines,
+          this.options.parseDiffOptions
+        )
+      );
+    }
+
+    result.baseThemeType = themeType;
     this.renderCache.isDirty = true;
   }
 
@@ -449,9 +430,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     // updateRenderCache may already have extended diff.additionLines for the
     // same edit pass, so never bail out purely on matching lengths here.
-    diff.additionLines = splitFileContents(textDocument.getText());
-    const newLength = diff.additionLines.length;
+    const documentText = textDocument.getText();
+    if (documentText.trim().length === 0) {
+      // Blank documents need the editor's logical line count: `"\n"` is two
+      // editable rows even though the diff parser sees one newline token.
+      const lines: string[] = [];
+      for (let line = 0; line < textDocument.lineCount; line++) {
+        lines.push(textDocument.getLineText(line, true));
+      }
+      diff.additionLines = lines;
+    } else {
+      diff.additionLines = splitFileContents(documentText);
+    }
 
+    const newLength = diff.additionLines.length;
     const additionHastLines = result.code.additionLines;
     const prevLen = additionHastLines.length;
     if (newLength < prevLen) {
@@ -465,7 +457,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // to a diff with no editable rows and leave the attached host with no
       // line element for its caret (the additions column vanishes in split;
       // unified shows only deletions). Keep one empty editable line instead.
-      if (newLength === 0) {
+      if (
+        diff.additionLines.length <= 1 &&
+        diff.additionLines.join('') === ''
+      ) {
         Object.assign(
           diff,
           recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
@@ -474,7 +469,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       } else {
         Object.assign(
           diff,
-          recomputeDiffHunks(diff, this.options.parseDiffOptions)
+          recomputeDiffHunksForEdit(diff, this.options.parseDiffOptions)
         );
       }
     }

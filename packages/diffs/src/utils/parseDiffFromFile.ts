@@ -37,10 +37,12 @@ export function parseDiffFromFile(
 
   const fileData = processFile(patch, {
     cacheKey: (() => {
-      if (oldFile?.cacheKey != null && newFile?.cacheKey != null) {
-        return `${oldFile.cacheKey}:${newFile.cacheKey}`;
+      const oldCacheKey = oldFile?.cacheKey ?? oldFile?.name;
+      const newCacheKey = newFile?.cacheKey ?? newFile?.name;
+      if (oldCacheKey != null && newCacheKey != null) {
+        return oldCacheKey + ':' + newCacheKey;
       }
-      return undefined;
+      return oldCacheKey ?? newCacheKey;
     })(),
     oldFile: resolvedOldFile,
     newFile: resolvedNewFile,

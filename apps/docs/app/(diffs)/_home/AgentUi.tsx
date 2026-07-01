@@ -374,8 +374,9 @@ export function AgentUi({
           // Changes tree's +/- totals reflect the live edits.
           recordEditedStatsRef.current(target, file.contents);
         },
+        __debug: true,
       }),
-    [activePath]
+    []
   );
 
   const openFile = useCallback((path: string) => {

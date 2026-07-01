@@ -672,7 +672,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   // relaid-out surface with a clean document instead of reusing a torn-down
   // instance (mirrors LiveEditing's editor lifecycle).
   // eslint-disable-next-line react-hooks/exhaustive-deps -- deps intentionally force a fresh editor; the factory takes no inputs
-  const editor = useMemo(() => new Editor({}), [diffStyle, editorMode]);
+  const editor = useMemo(() => new Editor({}), []);
 
   // Apply (or clear) the demo markers whenever the editor, mode, or toggle
   // changes. `setMarkers` throws until the editor attaches to its surface

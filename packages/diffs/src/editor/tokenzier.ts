@@ -153,12 +153,7 @@ export class EditorTokenizer {
     this.#setStyle = setStyle;
     this.#onDeferTokenize = onDeferTokenize;
     this.#debug = __debug ?? false;
-    if (
-      !isGrammarlessLanguage(textDocument.languageId) &&
-      highlighter.getLoadedLanguages().includes(textDocument.languageId)
-    ) {
-      this.#grammar = highlighter.getLanguage(textDocument.languageId);
-    }
+    this.#ensureGrammar();
     this.#colorMap = [];
     this.#setTheme(typeof theme === 'string' ? theme : theme[this.#themeType]);
   }
@@ -242,11 +237,14 @@ export class EditorTokenizer {
     change: TextDocumentChange,
     renderRange?: RenderRange
   ): Map<number, Array<HighlightedToken>> {
+    this.#ensureGrammar();
     if (
       this.#grammar === undefined &&
       !isGrammarlessLanguage(this.#textDocument.languageId)
     ) {
-      throw new Error('Grammar not loaded');
+      throw new Error(
+        `Grammar for language "${this.#textDocument.languageId}" not loaded`
+      );
     }
 
     const { lineCount } = this.#textDocument;
@@ -425,7 +423,22 @@ export class EditorTokenizer {
   }
 
   prebuildStateStack(renderRange?: RenderRange): void {
+    this.#ensureGrammar();
     this.#prebuildStateStack(renderRange);
+  }
+
+  #ensureGrammar(): void {
+    if (
+      this.#grammar === undefined &&
+      !isGrammarlessLanguage(this.#textDocument.languageId) &&
+      this.#highlighter
+        .getLoadedLanguages()
+        .includes(this.#textDocument.languageId)
+    ) {
+      this.#grammar = this.#highlighter.getLanguage(
+        this.#textDocument.languageId
+      );
+    }
   }
 
   stopBackgroundTokenize(): void {

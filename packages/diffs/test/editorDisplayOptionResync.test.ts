@@ -60,6 +60,7 @@ function lineTokenCount(
 interface DisplayOptionFixture {
   container: HTMLElement;
   editor: Editor<undefined>;
+  fileDiff: FileDiff<undefined>;
   // Toggles a display option and forces a re-render, exactly as the React bridge
   // does on any display-option change: setOptions(newOptions) then a forced
   // re-render. The bug report's headline trigger is the word-wrap toggle, but
@@ -106,6 +107,7 @@ async function createFixture(
   return {
     container,
     editor,
+    fileDiff,
     async toggleDisplayOption() {
       fileDiff.setOptions({
         ...fileDiff.options,
@@ -331,6 +333,55 @@ describe('diff editor: display-option toggle mid-edit', () => {
       editor.cleanUp();
       fileDiff.cleanUp();
       dom.cleanup();
+    }
+  });
+});
+
+// Waits for the editor to mark the additions column editable after an attach.
+async function waitForEditable(container: HTMLElement): Promise<void> {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const content = findAdditionContent(container);
+    if (content != null && content.getAttribute('contenteditable') === 'true') {
+      return;
+    }
+    await wait(0);
+  }
+}
+
+describe('diff editor: detach then re-attach', () => {
+  // Mirrors the demo's Edit-mode toggle and surface switch: turning editing off
+  // detaches the editor (editor.cleanUp), turning it back on re-attaches the
+  // same instance (editor.edit). cleanUp tears down the tokenizer, so the
+  // re-attach must rebuild it before any edit can render. Pre-fix cleanUp kept
+  // the parsed document and its cacheKey, so __syncRenderView treated the
+  // re-attach as "same file" and skipped the rebuild that creates the
+  // tokenizer; #rerender then bailed on the missing tokenizer and edits never
+  // reached the DOM, even though the model still recorded them.
+  test('renders edits typed after a detach/re-attach cycle', async () => {
+    const fixture = await createFixture('alpha\nbravo\n', 'alpha\nCHANGED\n');
+    const { container, editor, fileDiff } = fixture;
+
+    try {
+      typeAt(editor, 0, 5, 'X');
+      await wait(0);
+      expect(lineText(container, 1)).toBe('alphaX');
+
+      // Detach (Edit-mode off) then re-attach the same editor (Edit-mode on).
+      editor.cleanUp();
+      await wait(0);
+      editor.edit(fileDiff);
+      await waitForEditable(container);
+
+      // A keystroke typed after the re-attach must paint into the DOM, not just
+      // land in the model. Pre-fix the re-attach reused the stale document and
+      // never rebuilt the tokenizer, so #rerender bailed: the model recorded the
+      // edit (getState below) while the rendered line stayed stale.
+      typeAt(editor, 1, 0, 'Q');
+      await wait(0);
+      expect(editor.getState().file.contents).toBe('alphaX\nQCHANGED\n');
+      expect(lineText(container, 2)).toBe('QCHANGED');
+    } finally {
+      await fixture.cleanup();
     }
   });
 });

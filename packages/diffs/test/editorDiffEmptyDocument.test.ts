@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
@@ -8,6 +8,12 @@ import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
+  await disposeHighlighter();
+});
+
+// Other component suites (e.g. CodeView) share the singleton highlighter; reset
+// it before each test so async highlight work cannot bleed into undo timing.
+beforeEach(async () => {
   await disposeHighlighter();
 });
 
@@ -97,6 +103,7 @@ async function createDiffEditorFixture(
       editor.cleanUp();
       fileDiff.cleanUp();
       dom.cleanup();
+      await disposeHighlighter();
     },
   };
 }
@@ -156,8 +163,87 @@ describe('diff editor: select-all then delete', () => {
         // Undo reverts the typing, then the deletion, back to the original.
         editor.undo();
         editor.undo();
-        await wait(0);
+        for (let attempt = 0; attempt < 40; attempt++) {
+          if (editor.getState().file.contents === 'a\nb\nc\n') {
+            break;
+          }
+          await wait(10);
+        }
         expect(editor.getState().file.contents).toBe('a\nb\nc\n');
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+
+    test(`keeps split rows top-aligned after inserting a line (${diffStyle})`, async () => {
+      const oldContents =
+        Array.from({ length: 30 }, (_, index) => `old ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const newContents =
+        Array.from({ length: 40 }, (_, index) => `new ${index + 1}`).join(
+          '\n'
+        ) + '\n';
+      const fixture = await createDiffEditorFixture(
+        diffStyle,
+        oldContents,
+        newContents
+      );
+      const { editor, container } = fixture;
+
+      try {
+        replaceAll(editor, '');
+        for (let attempt = 0; attempt < 40; attempt++) {
+          if (editor.getState().file.contents === '') {
+            break;
+          }
+          await wait(10);
+        }
+
+        editor.applyEdits(
+          [
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: '\n',
+            },
+          ],
+          true
+        );
+        for (let attempt = 0; attempt < 40; attempt++) {
+          const content = findAdditionContent(container);
+          const hasLine2 =
+            content != null &&
+            [...content.children].some(
+              (child) => (child as HTMLElement).dataset.line === '2'
+            );
+          const hasCaret =
+            container.shadowRoot?.querySelector('[data-caret]') != null;
+          if (hasLine2 && hasCaret) {
+            break;
+          }
+          await wait(10);
+        }
+
+        const content = findAdditionContent(container);
+        expect(content).toBeDefined();
+        if (content == null) return;
+
+        const line1Index = [...content.children].findIndex(
+          (child) => (child as HTMLElement).dataset.line === '1'
+        );
+        const line2Index = [...content.children].findIndex(
+          (child) => (child as HTMLElement).dataset.line === '2'
+        );
+        if (diffStyle === 'split') {
+          expect(line1Index).toBeGreaterThanOrEqual(0);
+          expect(line2Index).toBe(line1Index + 1);
+        }
+        expect(
+          container.shadowRoot?.querySelector('[data-caret]') != null
+        ).toBe(true);
       } finally {
         await fixture.cleanup();
       }

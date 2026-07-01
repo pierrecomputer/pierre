@@ -1394,9 +1394,18 @@ export function getDocumentFullSelection(
  */
 export function getDocumentBoundarySelection(
   textDocument: TextDocument<unknown>,
-  atEnd: boolean
+  atEnd: boolean,
+  trimmedEndNewLine?: boolean
 ): EditorSelection {
-  const line = atEnd ? textDocument.lineCount - 1 : 0;
+  let line = 0;
+  if (atEnd) {
+    const lastLine = textDocument.lineCount - 1;
+    const hasTrailingBlankLine =
+      trimmedEndNewLine === true &&
+      lastLine > 0 &&
+      textDocument.getLineLength(lastLine) === 0;
+    line = hasTrailingBlankLine ? lastLine - 1 : lastLine;
+  }
   const character = atEnd ? textDocument.getLineLength(line) : 0;
   const start = { line, character };
   return {
