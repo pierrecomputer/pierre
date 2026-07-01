@@ -1,4 +1,6 @@
 import {
+  CODE_VIEW_FOOTER_ATTRIBUTE,
+  CODE_VIEW_HEADER_ATTRIBUTE,
   CORE_CSS_ATTRIBUTE,
   DEFAULT_CODE_VIEW_FILE_METRICS,
   DEFAULT_CODE_VIEW_LAYOUT,
@@ -854,7 +856,10 @@ export class CodeView<LAnnotation = undefined> {
   // hosts are always-rendered, non-virtualized siblings of `container`: the
   // header before it (scrolls away above the items) and the footer after it
   // (trails below them).
-  private reconcileHeaderFooterHosts(): void {
+  // Returns true when a host was newly mounted by this call, so the render cycle
+  // knows to take a synchronous height measurement in the following read phase.
+  private reconcileHeaderFooterHosts(): boolean {
+    const { headerHost: prevHeaderHost, footerHost: prevFooterHost } = this;
     this.headerHost = this.reconcileHost(
       'header',
       this.headerHost,
@@ -864,6 +869,10 @@ export class CodeView<LAnnotation = undefined> {
       'footer',
       this.footerHost,
       this.options.renderCodeViewFooter
+    );
+    return (
+      (prevHeaderHost == null && this.headerHost != null) ||
+      (prevFooterHost == null && this.footerHost != null)
     );
   }
 
@@ -884,6 +893,7 @@ export class CodeView<LAnnotation = undefined> {
     // drop its measured height back to the 0 no-op.
     if (render == null) {
       if (host != null) {
+        this.resizeObserver?.unobserve(host);
         host.remove();
         this.setHostHeight(kind, 0);
       }
@@ -901,20 +911,21 @@ export class CodeView<LAnnotation = undefined> {
     // empty host here and fill it via a portal, while vanilla callbacks return an
     // element to populate it directly.
     host = document.createElement('div');
+    // Establish a block formatting context so the content margins stay inside
+    // the host to ensure proper heights from measurements/ResizeObserver
+    host.style.display = 'flow-root';
     if (kind === 'header') {
+      host.setAttribute(CODE_VIEW_HEADER_ATTRIBUTE, '');
       this.root.insertBefore(host, this.container);
     } else {
+      host.setAttribute(CODE_VIEW_FOOTER_ATTRIBUTE, '');
       this.root.appendChild(host);
     }
     const content = render();
     if (content != null) {
       host.appendChild(content);
     }
-    // Inline-measure once, synchronously, on mount so the first frame lays out
-    // with the real height instead of waiting on the async ResizeObserver. This
-    // forces a reflow, but only on the (rare) mount frame — the per-frame hot
-    // path early-returns above once the host exists.
-    this.setHostHeight(kind, host.getBoundingClientRect().height);
+    this.resizeObserver?.observe(host);
     return host;
   }
 
@@ -934,6 +945,25 @@ export class CodeView<LAnnotation = undefined> {
       this.footerHeight = height;
     }
     this.scrollDirty = true;
+  }
+
+  // Read the mounted hosts' heights from the DOM. Called only in the render
+  // cycle's read phase (right before reconcileRenderedItems) on a mount frame, so
+  // these getBoundingClientRect reads batch into the same reflow as the item
+  // height reads instead of forcing a separate reflow during the write phase.
+  private measureMountedHosts(): void {
+    if (this.headerHost != null) {
+      this.setHostHeight(
+        'header',
+        this.headerHost.getBoundingClientRect().height
+      );
+    }
+    if (this.footerHost != null) {
+      this.setHostHeight(
+        'footer',
+        this.footerHost.getBoundingClientRect().height
+      );
+    }
   }
 
   public setup(root: HTMLElement): void {
@@ -2835,10 +2865,8 @@ export class CodeView<LAnnotation = undefined> {
 
     // Mount/unmount the header/footer hosts in the same DOM-mutation window as the
     // items, after the scroll anchor was captured above and before the post-render
-    // anchor resolve below. A header mount shifts layout above the viewport; the
-    // inline measure inside reconcileHost updates headerHeight, and the post-render
-    // resolve compensates the shift exactly as it does for item height changes.
-    this.reconcileHeaderFooterHosts();
+    // anchor resolve below.
+    const hostsMounted = this.reconcileHeaderFooterHosts();
 
     let prevElement: HTMLElement | undefined;
     const updatedItems = new Set<CodeViewContextItem<LAnnotation>>();
@@ -2886,6 +2914,9 @@ export class CodeView<LAnnotation = undefined> {
 
     this.flushSlotCoordinator();
     this.flushManagers(updatedItems);
+    if (hostsMounted) {
+      this.measureMountedHosts();
+    }
     this.reconcileRenderedItems(updatedItems);
     this.syncContainerHeight();
     this.updateStickyPositioning();
@@ -3189,6 +3220,51 @@ export class CodeView<LAnnotation = undefined> {
             this.pendingScrollTarget = undefined;
             this.scrollAnimation = undefined;
           }
+        }
+      }
+      // A header/footer host resized after mount (async content, fonts, a React
+      // portal filling in). Re-measure and, for a header — which lives above the
+      // items — re-anchor so the content under the user's eyes doesn't jump,
+      // mirroring the stickyContainer branch above. Items are untouched by a host
+      // resize, so we skip reconcileRenderedItems/updateStickyPositioning; the
+      // trailing render() reconciles the range and render window.
+      else if (
+        entry.target === this.headerHost ||
+        entry.target === this.footerHost
+      ) {
+        const kind = entry.target === this.headerHost ? 'header' : 'footer';
+        const blockSize = entry.borderBoxSize[0].blockSize;
+        const currentHeight =
+          kind === 'header' ? this.headerHeight : this.footerHeight;
+        if (blockSize !== currentHeight) {
+          // Capture the anchor with the OLD offset, apply the new height, then
+          // resolve with the NEW offset so the delta cancels the layout shift. A
+          // footer only changes the scroll range, so its anchor resolves to no
+          // change (or a clamp when it shrinks below the current scroll).
+          const currentScrollTop = this.getScrollTop();
+          const anchor = this.getScrollAnchor(currentScrollTop);
+          this.setHostHeight(kind, blockSize);
+          const anchoredScrollTop =
+            anchor != null ? this.resolveAnchoredScrollTop(anchor) : undefined;
+          if (anchoredScrollTop != null) {
+            const resizeAnchorDelta = anchoredScrollTop - currentScrollTop;
+            this.applyScrollFix(
+              anchoredScrollTop,
+              currentScrollTop,
+              this.windowSpecs
+            );
+            if (this.scrollAnimation != null) {
+              this.scrollAnimation.position += resizeAnchorDelta;
+            }
+          }
+          if (
+            this.pendingScrollTarget != null &&
+            this.isPendingTargetSettled(this.pendingScrollTarget)
+          ) {
+            this.pendingScrollTarget = undefined;
+            this.scrollAnimation = undefined;
+          }
+          this.render();
         }
       }
       // Root element resize (element-mode only)
