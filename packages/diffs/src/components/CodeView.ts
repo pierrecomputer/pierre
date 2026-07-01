@@ -34,6 +34,7 @@ import type {
   VirtualFileMetrics,
   VirtualWindowSpecs,
 } from '../types';
+import { areManagedSnapshotsEqual } from '../utils/areManagedSnapshotsEqual';
 import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
@@ -163,6 +164,21 @@ export type CodeViewRenderedItem<LAnnotation> =
   | CodeViewRenderedDiffItem<LAnnotation>
   | CodeViewRenderedFileItem<LAnnotation>;
 
+// Everything the React layer portals into, published together so a single store
+// subscription drives per-item slots AND the global header/footer.
+export interface CodeViewSlotSnapshot<LAnnotation> {
+  // Rendered items that need React-managed slot content (per-item headers,
+  // annotations, gutter utilities), or undefined when none.
+  items: CodeViewRenderedItem<LAnnotation>[] | undefined;
+  // The always-rendered header/footer host elements React portals into, or
+  // undefined when the corresponding renderCodeViewHeader/Footer callback is not
+  // set. Because these live in the snapshot, a host mounting/unmounting changes
+  // it and triggers a publish — which is how React learns about hosts that are
+  // created on a later (worker-ready) render.
+  header: HTMLElement | undefined;
+  footer: HTMLElement | undefined;
+}
+
 export interface CodeViewLineSelection {
   id: string;
   range: SelectedLineRange;
@@ -173,7 +189,7 @@ export interface CodeViewCoordinator<LAnnotation> {
   hasAnnotationRenderer: boolean;
   hasGutterRenderer: boolean;
   onSnapshotChange(
-    snapshot: CodeViewRenderedItem<LAnnotation>[] | undefined
+    snapshot: CodeViewSlotSnapshot<LAnnotation> | undefined
   ): void;
 }
 
@@ -567,7 +583,7 @@ export class CodeView<LAnnotation = undefined> {
   private pendingLayoutReset: PendingCodeViewLayoutReset | undefined;
   private renderOptionsRevision = 0;
   private slotCoordinator: CodeViewCoordinator<LAnnotation> | undefined;
-  private slotSnapshot: CodeViewRenderedItem<LAnnotation>[] | undefined;
+  private slotSnapshot: CodeViewSlotSnapshot<LAnnotation> | undefined;
   private scrollListeners: Set<CodeViewScrollListener<LAnnotation>> = new Set();
   private scrollHeight = 0;
   private containerHeight = -1;
@@ -1694,8 +1710,23 @@ export class CodeView<LAnnotation = undefined> {
 
   public getSlotSnapshot(
     coordinator: CodeViewCoordinator<LAnnotation>
-  ): CodeViewRenderedItem<LAnnotation>[] | undefined {
-    return getSlotSnapshot(this.getRenderedItems(), coordinator);
+  ): CodeViewSlotSnapshot<LAnnotation> | undefined {
+    return this.buildSlotSnapshot(coordinator);
+  }
+
+  // Combine the per-item slot items with the current header/footer host elements
+  // into a single snapshot. Returns undefined only when there is nothing for
+  // React to portal.
+  private buildSlotSnapshot(
+    coordinator: CodeViewCoordinator<LAnnotation>
+  ): CodeViewSlotSnapshot<LAnnotation> | undefined {
+    const items = getSlotItems(this.getRenderedItems(), coordinator);
+    const { element: header } = this.header;
+    const { element: footer } = this.footer;
+    if (items == null && header == null && footer == null) {
+      return undefined;
+    }
+    return { items, header, footer };
   }
 
   public subscribeToScroll(
@@ -3493,19 +3524,14 @@ export class CodeView<LAnnotation = undefined> {
     if (this.slotCoordinator == null) {
       return;
     }
-    const { onSnapshotChange } = this.slotCoordinator;
 
-    const slotSnapshot = getSlotSnapshot(
-      this.getRenderedItems(),
-      this.slotCoordinator
-    );
-
-    if (areSlotSnapshotsEqual(this.slotSnapshot, slotSnapshot)) {
+    const slotSnapshot = this.buildSlotSnapshot(this.slotCoordinator);
+    if (areManagedSnapshotsEqual(this.slotSnapshot, slotSnapshot)) {
       return;
     }
 
     this.slotSnapshot = slotSnapshot;
-    onSnapshotChange(slotSnapshot);
+    this.slotCoordinator.onSnapshotChange(slotSnapshot);
   }
 
   private notifyScroll(): void {
@@ -3819,7 +3845,7 @@ function hasAnnotations<LAnnotation>(item: CodeViewItem<LAnnotation>): boolean {
   return (item.annotations?.length ?? 0) > 0;
 }
 
-function getSlotSnapshot<LAnnotation>(
+function getSlotItems<LAnnotation>(
   renderedItems: CodeViewRenderedItem<LAnnotation>[],
   {
     hasHeaderRenderers,
@@ -3848,34 +3874,4 @@ function getSlotSnapshot<LAnnotation>(
   }
 
   return slotSnapshot.length > 0 ? slotSnapshot : undefined;
-}
-
-function areSlotSnapshotsEqual<LAnnotation>(
-  previous: CodeViewRenderedItem<LAnnotation>[] | undefined,
-  next: CodeViewRenderedItem<LAnnotation>[] | undefined
-): boolean {
-  if (previous == null || next == null) {
-    return previous === next;
-  }
-
-  if (previous.length !== next.length) {
-    return false;
-  }
-
-  for (let index = 0; index < previous.length; index++) {
-    const previousItem = previous[index];
-    const nextItem = next[index];
-    if (
-      previousItem == null ||
-      nextItem == null ||
-      previousItem.id !== nextItem.id ||
-      previousItem.type !== nextItem.type ||
-      previousItem.element !== nextItem.element ||
-      previousItem.version !== nextItem.version
-    ) {
-      return false;
-    }
-  }
-
-  return true;
 }

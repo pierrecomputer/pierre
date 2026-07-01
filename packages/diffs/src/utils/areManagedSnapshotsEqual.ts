@@ -1,6 +1,24 @@
-import type { CodeViewRenderedItem } from '../components/CodeView';
+import type {
+  CodeViewRenderedItem,
+  CodeViewSlotSnapshot,
+} from '../components/CodeView';
 
 export function areManagedSnapshotsEqual<LAnnotation>(
+  previous: CodeViewSlotSnapshot<LAnnotation> | undefined,
+  next: CodeViewSlotSnapshot<LAnnotation> | undefined
+): boolean {
+  if (previous == null || next == null) {
+    return previous === next;
+  }
+
+  if (previous.header !== next.header || previous.footer !== next.footer) {
+    return false;
+  }
+
+  return areRenderedItemsEqual(previous.items, next.items);
+}
+
+function areRenderedItemsEqual<LAnnotation>(
   previous: CodeViewRenderedItem<LAnnotation>[] | undefined,
   next: CodeViewRenderedItem<LAnnotation>[] | undefined
 ): boolean {
