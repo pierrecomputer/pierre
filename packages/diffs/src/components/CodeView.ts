@@ -456,6 +456,16 @@ export interface CodeViewOptions<LAnnotation>
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   layout?: CodeViewLayout;
 
+  /** Render a non-virtualized element at the very start of the scroll content,
+   * before the first item. It is always rendered and scrolls with the content.
+   * Return the same element across calls and mutate it in place to update;
+   * height changes are measured automatically. */
+  renderCodeViewHeader?(): HTMLElement | undefined;
+  /** Render a non-virtualized element at the very end of the scroll content,
+   * after the last item. Always rendered; height changes are measured
+   * automatically. */
+  renderCodeViewFooter?(): HTMLElement | undefined;
+
   /** Internal dev-only check to ensure your `itemMetrics` are correct.  Its
    * automatically disabled in a production build because it will hurt
    * performance fairly significantly */
@@ -596,6 +606,19 @@ export class CodeView<LAnnotation = undefined> {
   private container: HTMLDivElement | undefined = document.createElement('div');
   private stickyContainer = document.createElement('div');
   private stickyOffset = document.createElement('div');
+  // Always-rendered, non-virtualized header/footer hosts. They mount as normal-
+  // flow siblings of `container` inside `root` (header before it, footer after
+  // it), so the footer needs no special positioning. Created lazily, only when a
+  // renderCodeViewHeader/renderCodeViewFooter callback is provided. Never enter
+  // the element pool.
+  private headerHost: HTMLDivElement | undefined;
+  private footerHost: HTMLDivElement | undefined;
+  // Measured heights of the header/footer hosts, folded into the scroll-range
+  // and item-offset math. Default 0 (a no-op) so the math is coherent before a
+  // host exists; set by an inline measure on mount, then kept current by the
+  // ResizeObserver.
+  private headerHeight = 0;
+  private footerHeight = 0;
   private elementPool: HTMLElement[] = [];
   private elementPoolVersion = 0;
   private elementPoolTracker = new WeakMap<HTMLElement, number>();
@@ -632,6 +655,15 @@ export class CodeView<LAnnotation = undefined> {
 
   private getLayout(): CodeViewLayout {
     return this.options.layout ?? DEFAULT_CODE_VIEW_LAYOUT;
+  }
+
+  // Absolute offset (in scroll pixels) from the top of the scroll content to the
+  // first virtualized item. paddingTop is the container's top margin; headerHeight
+  // is the always-rendered header that sits before the items and pushes every item
+  // down by its measured height. Anchor/scroll-target math adds this to an item's
+  // local `top` to get its absolute scroll position.
+  private getItemTopOffset(): number {
+    return this.getLayout().paddingTop + this.headerHeight;
   }
 
   private computeMetricsCache(
@@ -815,6 +847,95 @@ export class CodeView<LAnnotation = undefined> {
     this.container?.style.setProperty('margin-bottom', `${paddingBottom}px`);
   }
 
+  // Mount or unmount the header/footer hosts so they match the current
+  // renderCodeViewHeader/renderCodeViewFooter options. This runs as part of the render cycle
+  // (see computeRenderRangeAndEmit), so the first render, later option
+  // changes, and content updates all converge on one insert/remove path. The
+  // hosts are always-rendered, non-virtualized siblings of `container`: the
+  // header before it (scrolls away above the items) and the footer after it
+  // (trails below them).
+  private reconcileHeaderFooterHosts(): void {
+    this.headerHost = this.reconcileHost(
+      'header',
+      this.headerHost,
+      this.options.renderCodeViewHeader
+    );
+    this.footerHost = this.reconcileHost(
+      'footer',
+      this.footerHost,
+      this.options.renderCodeViewFooter
+    );
+  }
+
+  // Reconcile a single header/footer host: create + position + populate it when
+  // its callback first appears, tear it down when the callback is removed, and
+  // otherwise leave the mounted host untouched (its content is owned by the
+  // caller, or by React via a portal). Returns the new host reference.
+  private reconcileHost(
+    kind: 'header' | 'footer',
+    host: HTMLDivElement | undefined,
+    render: (() => HTMLElement | undefined) | undefined
+  ): HTMLDivElement | undefined {
+    if (this.root == null || this.container == null) {
+      return host;
+    }
+
+    // No callback → the host should not exist; tear down any mounted host and
+    // drop its measured height back to the 0 no-op.
+    if (render == null) {
+      if (host != null) {
+        host.remove();
+        this.setHostHeight(kind, 0);
+      }
+      return undefined;
+    }
+
+    // Already mounted → nothing to do.
+    if (host != null) {
+      return host;
+    }
+
+    // Callback present but not yet mounted → create and position the host. We
+    // keep the host even when render() returns nothing: callback *presence* (not
+    // its return value) governs whether the host exists. This lets React mount an
+    // empty host here and fill it via a portal, while vanilla callbacks return an
+    // element to populate it directly.
+    host = document.createElement('div');
+    if (kind === 'header') {
+      this.root.insertBefore(host, this.container);
+    } else {
+      this.root.appendChild(host);
+    }
+    const content = render();
+    if (content != null) {
+      host.appendChild(content);
+    }
+    // Inline-measure once, synchronously, on mount so the first frame lays out
+    // with the real height instead of waiting on the async ResizeObserver. This
+    // forces a reflow, but only on the (rare) mount frame — the per-frame hot
+    // path early-returns above once the host exists.
+    this.setHostHeight(kind, host.getBoundingClientRect().height);
+    return host;
+  }
+
+  // Store a header/footer host's measured height, flagging the scroll state dirty
+  // when it actually changed so the surrounding render cycle re-derives the scroll
+  // range and re-anchors (the header offset shifts every item's position).
+  private setHostHeight(kind: 'header' | 'footer', height: number): void {
+    if (kind === 'header') {
+      if (this.headerHeight === height) {
+        return;
+      }
+      this.headerHeight = height;
+    } else {
+      if (this.footerHeight === height) {
+        return;
+      }
+      this.footerHeight = height;
+    }
+    this.scrollDirty = true;
+  }
+
   public setup(root: HTMLElement): void {
     if (this.root != null) {
       throw new Error('CodeView.setup: already setup');
@@ -936,6 +1057,10 @@ export class CodeView<LAnnotation = undefined> {
     this.stickyOffset.remove();
     this.stickyContainer.remove();
     this.stickyContainer.textContent = '';
+    this.headerHost?.remove();
+    this.footerHost?.remove();
+    this.headerHost = undefined;
+    this.footerHost = undefined;
     this.root = undefined;
     this.container = undefined;
   }
@@ -1369,7 +1494,15 @@ export class CodeView<LAnnotation = undefined> {
       this.renderOptionsRevision++;
     }
 
-    if (!this.isContainerManaged && this.items.length > 0) {
+    // Render when there are items, OR when the header/footer presence changed —
+    // an otherwise-empty CodeView still needs a render to mount/unmount its hosts.
+    const headerFooterChanged =
+      prevOptions.renderCodeViewHeader !== options.renderCodeViewHeader ||
+      prevOptions.renderCodeViewFooter !== options.renderCodeViewFooter;
+    if (
+      !this.isContainerManaged &&
+      (this.items.length > 0 || headerFooterChanged)
+    ) {
       this.render();
     }
   }
@@ -1548,7 +1681,7 @@ export class CodeView<LAnnotation = undefined> {
     if (item == null) {
       return undefined;
     }
-    return item.top + this.getLayout().paddingTop;
+    return item.top + this.getItemTopOffset();
   }
 
   private createItem(
@@ -2091,8 +2224,15 @@ export class CodeView<LAnnotation = undefined> {
 
   private getMaxScrollTopForHeight(scrollHeight: number): number {
     const { paddingBottom, paddingTop } = this.getLayout();
+    // The header/footer hosts live in `root` outside `container`, so they add to
+    // the real scrollable range on top of the items + padding.
     return Math.max(
-      paddingTop + scrollHeight + paddingBottom - this.getHeight(),
+      paddingTop +
+        this.headerHeight +
+        scrollHeight +
+        this.footerHeight +
+        paddingBottom -
+        this.getHeight(),
       0
     );
   }
@@ -2287,7 +2427,7 @@ export class CodeView<LAnnotation = undefined> {
     // Determine a stable scrollTo target for `nearest` alignment. This is to
     // ensure that we don't experience any scroll bouncing
     const offset = target.offset ?? 0;
-    const targetTop = this.getLayout().paddingTop + rect.top;
+    const targetTop = this.getItemTopOffset() + rect.top;
     const targetBottom = targetTop + rect.height;
     const currentTop = this.getScrollTop();
     const visibleTop =
@@ -2651,7 +2791,9 @@ export class CodeView<LAnnotation = undefined> {
     // Compute the projected logical window, then synchronize the paged scroll
     // scaffold before mutating rendered items.
     this.windowSpecs = createWindowFromScrollPosition({
-      scrollTop: targetScrollTop,
+      // The window is in item-space (0 = first item's top); subtract the header so
+      // a tall header can't desync which items fall inside the render window.
+      scrollTop: targetScrollTop - this.headerHeight,
       height: viewportHeight,
       scrollHeight: this.getScrollHeight(),
       fitPerfectly,
@@ -2690,6 +2832,13 @@ export class CodeView<LAnnotation = undefined> {
         }
       }
     }
+
+    // Mount/unmount the header/footer hosts in the same DOM-mutation window as the
+    // items, after the scroll anchor was captured above and before the post-render
+    // anchor resolve below. A header mount shifts layout above the viewport; the
+    // inline measure inside reconcileHost updates headerHeight, and the post-render
+    // resolve compensates the shift exactly as it does for item height changes.
+    this.reconcileHeaderFooterHosts();
 
     let prevElement: HTMLElement | undefined;
     const updatedItems = new Set<CodeViewContextItem<LAnnotation>>();
@@ -3094,7 +3243,7 @@ export class CodeView<LAnnotation = undefined> {
         continue;
       }
 
-      const absoluteItemTop = this.getLayout().paddingTop + item.top;
+      const absoluteItemTop = this.getItemTopOffset() + item.top;
       const absoluteItemBottom = absoluteItemTop + item.height;
       // Skip items entirely above the viewport since we can't see it
       if (absoluteItemBottom <= scrollTop) {
@@ -3149,9 +3298,9 @@ export class CodeView<LAnnotation = undefined> {
       return undefined;
     }
 
-    const { paddingTop } = this.getLayout();
+    const itemTopOffset = this.getItemTopOffset();
     if (anchor.type === 'item') {
-      const absoluteItemTop = paddingTop + item.top;
+      const absoluteItemTop = itemTopOffset + item.top;
       return this.clampScrollTop(absoluteItemTop - anchor.viewportOffset);
     }
 
@@ -3162,7 +3311,7 @@ export class CodeView<LAnnotation = undefined> {
     if (linePosition == null) {
       return undefined;
     }
-    const absoluteLineTop = paddingTop + item.top + linePosition.top;
+    const absoluteLineTop = itemTopOffset + item.top + linePosition.top;
     return this.clampScrollTop(absoluteLineTop - anchor.viewportOffset);
   }
 
