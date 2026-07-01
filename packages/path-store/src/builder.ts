@@ -505,6 +505,14 @@ export class PathStoreBuilder {
               });
               stackTop++;
               dirStack[stackTop] = nodeId;
+              // Advance past the leaf directory segment so the directory
+              // prefix cache below pairs the leaf's full path with the leaf's
+              // depth, matching the file branch's invariant. Without this,
+              // cachedDirPrefix keeps the parent prefix while cachedDirDepth
+              // holds the leaf depth (off by one), and a following descendant
+              // that hits the startsWith fast path re-creates the leaf
+              // directory as a child of itself (a phantom self-nested dir).
+              segmentStart = endIndex + 1;
             }
 
             const directoryId = dirStack[stackTop];

@@ -129,6 +129,69 @@ describe('path-store ingest and basics', () => {
     );
   });
 
+  test('does not create a phantom self-nested directory for a presorted directory followed by a descendant (#755)', () => {
+    // A directory row (trailing slash) immediately followed by one of its
+    // descendants used to make the presorted builder re-create the leaf
+    // directory as a child of itself, e.g. `/home/user/photos/photos/`.
+    const presortedPaths = ['/home/user/photos/', '/home/user/photos/raw/'];
+
+    const preparedStore = new PathStore({
+      initialExpansion: 'open',
+      preparedInput: PathStore.preparePresortedInput(presortedPaths),
+    });
+
+    expect(getVisiblePaths(preparedStore)).toEqual(['/home/user/photos/raw/']);
+
+    // The presorted build must match the unaffected non-presorted build.
+    const rawStore = new PathStore({
+      initialExpansion: 'open',
+      paths: presortedPaths,
+    });
+    expect(getVisibleRowsSansIds(preparedStore)).toEqual(
+      getVisibleRowsSansIds(rawStore)
+    );
+  });
+
+  test('does not compound phantom directories across a presorted directory chain (#755)', () => {
+    // Deeper inputs used to compound the off-by-one into `/a/b/b/`,
+    // `/a/b/b/c/c/`, and so on.
+    const presortedPaths = ['/a/b/', '/a/b/c/', '/a/b/c/d/'];
+
+    const preparedStore = new PathStore({
+      initialExpansion: 'open',
+      preparedInput: PathStore.preparePresortedInput(presortedPaths),
+    });
+    const rawStore = new PathStore({
+      initialExpansion: 'open',
+      paths: presortedPaths,
+    });
+
+    expect(getVisiblePaths(preparedStore)).toEqual(['/a/b/c/d/']);
+    expect(getVisibleRowsSansIds(preparedStore)).toEqual(
+      getVisibleRowsSansIds(rawStore)
+    );
+  });
+
+  test('preserves sibling directories in a presorted build following a directory row (#755)', () => {
+    // The fix advances the segment cursor past the leaf directory; sibling
+    // directories that do not share the cached prefix must still resolve
+    // against the correct parent.
+    const presortedPaths = sortCanonicalPaths(['/a/b/', '/a/c/', '/a/c/d/']);
+
+    const preparedStore = new PathStore({
+      initialExpansion: 'open',
+      preparedInput: PathStore.preparePresortedInput(presortedPaths),
+    });
+    const rawStore = new PathStore({
+      initialExpansion: 'open',
+      paths: presortedPaths,
+    });
+
+    expect(getVisibleRowsSansIds(preparedStore)).toEqual(
+      getVisibleRowsSansIds(rawStore)
+    );
+  });
+
   test('matches tree-test-data canonical sorting for a representative small fixture', () => {
     const fixture = [
       'README.md',
