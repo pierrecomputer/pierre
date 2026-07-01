@@ -3,13 +3,11 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
+import { choosePopoverPlacement } from '../src/editor/popoverPlacement';
 import { DirectionBackward, getCaretPosition } from '../src/editor/selection';
-import {
-  choosePopoverPlacement,
-  type SelectionActionContext,
-} from '../src/editor/selectionAction';
+import type { SelectionActionContext } from '../src/editor/selectionAction';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents } from '../src/types';
+import type { FileContents, RenderRange } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -38,11 +36,20 @@ interface SelectionActionFixture {
   cleanup(): void;
   content: HTMLElement;
   editor: Editor<undefined>;
+  window: Window & {
+    CompositionEvent: {
+      new (
+        type: string,
+        eventInitDict?: CompositionEventInit
+      ): CompositionEvent;
+    };
+  };
 }
 
 async function createSelectionActionFixture(
   contents: string,
-  editorOptions: EditorOptions<undefined>
+  editorOptions: EditorOptions<undefined>,
+  renderRange?: RenderRange
 ): Promise<SelectionActionFixture> {
   const dom = installDom();
   const fileContainer = document.createElement('div');
@@ -55,7 +62,12 @@ async function createSelectionActionFixture(
   const editor = new Editor<undefined>(editorOptions);
   const initialFile: FileContents = { name: 'edits.ts', contents };
 
-  file.render({ file: initialFile, fileContainer, forceRender: true });
+  file.render({
+    file: initialFile,
+    fileContainer,
+    forceRender: true,
+    renderRange,
+  });
   editor.edit(file);
 
   const content = await waitForEditableContent(fileContainer);
@@ -68,6 +80,7 @@ async function createSelectionActionFixture(
     },
     content,
     editor,
+    window: dom.window as unknown as SelectionActionFixture['window'],
   };
 }
 
@@ -454,6 +467,50 @@ describe('Editor selection action', () => {
     }
   });
 
+  // Regression test: the document-edge heuristic flips to the fallback (the
+  // selection's other edge) whenever the head is near a document edge, even
+  // if that fallback edge is outside the virtualized render window and has no
+  // DOM row. Without a visibility guard, the popover would anchor to a line
+  // #getLineY can't measure instead of staying on the (visible) head.
+  test('keeps the popover on the head when the fallback anchor is outside the render window', async () => {
+    const LINE_COUNT = 200;
+    const contents = Array.from(
+      { length: LINE_COUNT },
+      (_, i) => `line${i}`
+    ).join('\n');
+    // Renders only lines 0..49; the fallback anchor below (line 150) has no
+    // DOM row.
+    const { cleanup, editor, content } = await createSelectionActionFixture(
+      contents,
+      {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          return document.createElement('div');
+        },
+      },
+      { startingLine: 0, totalLines: 50, bufferBefore: 0, bufferAfter: 0 }
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 150, character: 2 },
+          direction: 'backward',
+        },
+      ]);
+
+      const popover = findSelectionActionPopover(content);
+      // Preferred (head-anchored, placed above) must win: the fallback's
+      // anchor line isn't rendered, so it can never be chosen.
+      expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
+        '-100%'
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
   // getComposedRanges only reports an ordered, direction-less range, so the
   // selectionchange a refocus fires (after tabbing away and back) would flip a
   // backward selection to DirectionNone and snap the caret/popover to the
@@ -485,6 +542,12 @@ describe('Editor selection action', () => {
       expect(editor.getState().selections?.[0]?.direction).toBe(
         DirectionBackward
       );
+      // setSelections ends by re-focusing the caret, which sets
+      // #shouldIgnoreSelectionChange for two nested rAFs before clearing it.
+      // Flush those first, or the dispatch below would be ignored regardless
+      // of the fix under test.
+      await wait(0);
+      await wait(0);
 
       const lineElements = Array.from(
         content.querySelectorAll<HTMLElement>('[data-line]')
@@ -511,6 +574,85 @@ describe('Editor selection action', () => {
         line: 0,
         character: 0,
       });
+    } finally {
+      document.getSelection = originalGetSelection;
+      cleanup();
+    }
+  });
+
+  // IME candidate windows can fire selectionchange events mid-composition with
+  // the same direction-less range shape a refocus produces (see the test
+  // above). Composition sets #shouldIgnoreSelectionChange for its whole
+  // duration, so these must be ignored outright rather than reaching the
+  // bounds-comparison branch — confirms the two fixes don't interact badly.
+  test('composition-time selectionchange does not affect a backward selection', async () => {
+    const { cleanup, editor, content, window } =
+      await createSelectionActionFixture('hello\nworld', {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          return document.createElement('div');
+        },
+      });
+
+    const originalGetSelection = document.getSelection.bind(document);
+    try {
+      content.dispatchEvent(new Event('focus'));
+
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 1, character: 0 },
+          direction: 'backward',
+        },
+      ]);
+      expect(editor.getState().selections?.[0]?.direction).toBe(
+        DirectionBackward
+      );
+      // Flush setSelections' own re-focus (see the refocus test above) so the
+      // ignore below is solely due to compositionstart.
+      await wait(0);
+      await wait(0);
+
+      content.dispatchEvent(
+        new window.CompositionEvent('compositionstart', {
+          bubbles: true,
+          composed: true,
+        })
+      );
+
+      const lineElements = Array.from(
+        content.querySelectorAll<HTMLElement>('[data-line]')
+      );
+      const lineElement1 = lineElements.find((el) => el.dataset.line === '2')!;
+      // A range collapsed at the start of line 2 ({1, 0}) — genuinely
+      // different bounds from the current selection's start ({0, 0}).
+      // Reaching the bounds-comparison branch at all would collapse the
+      // selection there; only ignoring the event outright keeps it intact.
+      const compositionRange = {
+        startContainer: lineElement1,
+        startOffset: 0,
+        endContainer: lineElement1,
+        endOffset: 0,
+      } as unknown as StaticRange;
+      document.getSelection = (() => ({
+        getComposedRanges: () => [compositionRange],
+      })) as unknown as typeof document.getSelection;
+
+      document.dispatchEvent(new Event('selectionchange'));
+
+      // Ignored: the pre-composition backward selection must be untouched.
+      const primarySelection = editor.getState().selections?.at(-1);
+      expect(primarySelection?.direction).toBe(DirectionBackward);
+      expect(primarySelection?.start).toEqual({ line: 0, character: 0 });
+      expect(primarySelection?.end).toEqual({ line: 1, character: 0 });
+
+      content.dispatchEvent(
+        new window.CompositionEvent('compositionend', {
+          bubbles: true,
+          composed: true,
+          data: '',
+        })
+      );
     } finally {
       document.getSelection = originalGetSelection;
       cleanup();
@@ -598,6 +740,37 @@ describe('Editor selection action', () => {
           viewport,
           popoverHeight: POPOVER_HEIGHT,
           atDocumentEdge: false,
+        })
+      ).toBe('preferred');
+    });
+
+    // Hysteresis only biases flipping *back* to preferred once already on
+    // fallback; without `previousPlacement` this would resolve to 'preferred'.
+    test('sticks with the fallback side while preferred only barely fits', () => {
+      expect(
+        choosePopoverPlacement({
+          // Fits at margin 0 (top: 2 >= 0), but not within the 4px hysteresis
+          // margin (2 < 4) — too close to the edge to trust yet.
+          preferred: { top: 2, bottom: 62 },
+          fallback: { top: 120, bottom: 180 },
+          viewport,
+          popoverHeight: POPOVER_HEIGHT,
+          atDocumentEdge: false,
+          previousPlacement: 'fallback',
+        })
+      ).toBe('fallback');
+    });
+
+    test('flips back to preferred once it clears the hysteresis margin', () => {
+      expect(
+        choosePopoverPlacement({
+          // Clears the 4px margin (top: 10 >= 4), so it's safe to flip back.
+          preferred: { top: 10, bottom: 70 },
+          fallback: { top: 120, bottom: 180 },
+          viewport,
+          popoverHeight: POPOVER_HEIGHT,
+          atDocumentEdge: false,
+          previousPlacement: 'fallback',
         })
       ).toBe('preferred');
     });

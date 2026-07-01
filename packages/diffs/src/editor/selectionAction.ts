@@ -2,56 +2,6 @@ import type { EditorSelection } from './selection';
 import type { TextDocument, TextEdit } from './textDocument';
 import { h } from './utils';
 
-// Vertical extent of a popover placement candidate in the overlay's coordinate
-// space (the same space --popover-y uses): `top` is the popover's top edge and
-// `bottom` its bottom edge.
-export interface PopoverPlacementBounds {
-  top: number;
-  bottom: number;
-}
-
-export interface ChoosePopoverPlacementInput {
-  /** Bounds for the direction's preferred side (above for backward, below for forward). */
-  preferred: PopoverPlacementBounds;
-  /** Bounds for the opposite edge we flip to when the preferred side has no room. */
-  fallback: PopoverPlacementBounds;
-  /**
-   * The visible scrollport in overlay coordinate space, or undefined when no
-   * layout geometry is available (e.g. a detached unit-test DOM).
-   */
-  viewport: PopoverPlacementBounds | undefined;
-  /** The popover's measured height; 0 before it has laid out. */
-  popoverHeight: number;
-  /**
-   * Whether the head sits within the document's first/last rows. Used only when
-   * `viewport` geometry is unavailable, so placement still flips at the very
-   * top/bottom of the document.
-   */
-  atDocumentEdge: boolean;
-}
-
-// Decides whether the selection-action popover keeps its preferred side or flips
-// to the opposite edge. When the real scrollport is known it flips only if the
-// preferred side would be clipped and the fallback side actually fits, so a
-// mid-document selection near the top/bottom of a scrolled viewport no longer
-// renders the popover off-screen. Without viewport geometry it falls back to the
-// document-edge signal so the very first/last rows still flip.
-export function choosePopoverPlacement(
-  input: ChoosePopoverPlacementInput
-): 'preferred' | 'fallback' {
-  const { preferred, fallback, viewport, popoverHeight, atDocumentEdge } =
-    input;
-  if (viewport !== undefined && popoverHeight > 0) {
-    const fits = (bounds: PopoverPlacementBounds): boolean =>
-      bounds.top >= viewport.top && bounds.bottom <= viewport.bottom;
-    if (!fits(preferred) && fits(fallback)) {
-      return 'fallback';
-    }
-    return 'preferred';
-  }
-  return atDocumentEdge ? 'fallback' : 'preferred';
-}
-
 export interface SelectionActionContext<LAnnotation> {
   /** The current selection (live: reflects keyboard-driven changes). */
   selection: EditorSelection;

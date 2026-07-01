@@ -29,6 +29,11 @@ import {
 } from './marker';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import {
+  choosePopoverPlacement,
+  POPOVER_BOUNDARY_LINES,
+  type PopoverPlacementBounds,
+} from './popoverPlacement';
+import {
   type MatchRange,
   type SearchPanelMode,
   SearchPanelWidget,
@@ -70,8 +75,6 @@ import {
   selectionIntersects,
 } from './selection';
 import {
-  choosePopoverPlacement,
-  type PopoverPlacementBounds,
   type SelectionActionContext,
   SelectionActionWidget,
 } from './selectionAction';
@@ -236,6 +239,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #markerRenderer?: MarkerRenderer;
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
+  // The popover's last-resolved side, fed back into choosePopoverPlacement as
+  // hysteresis so it doesn't flip-flop at the boundary. Reset whenever
+  // #selectionAction is (re)created.
+  #selectionActionPlacement?: 'preferred' | 'fallback';
   #shouldIgnoreSelectionChange = false;
   // Whether the contenteditable holds (or is claiming) focus. Synced by
   // focus/blur listeners and set eagerly by #focus(), whose real focus() call is
@@ -494,6 +501,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       getGutterWidth: () => this.#getGutterWidth(),
       getCharX: (line, character) => this.#getCharX(line, character),
       getLineY: (line) => this.#getLineY(line),
+      getOverlayViewport: () => this.#getOverlayViewport(),
       isMouseDown: () => this.#isContentMouseDown || this.#isGutterMouseDown,
     });
     this.#markerRenderer.setMarkers(markers, textDocument);
@@ -3135,6 +3143,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         selectionActionElement,
         overlayElement
       );
+      // Avoid biasing the first decision with a stale side from a prior popover.
+      this.#selectionActionPlacement = undefined;
     }
 
     // Pick which selection edge the popover anchors to and whether it sits above
@@ -3184,19 +3194,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // top/bottom of a scrolled window flips instead of rendering off-screen; the
     // document-edge signal is the fallback for environments without layout
     // geometry (e.g. a detached unit-test DOM).
-    const BOUNDARY_LINES = 3;
     const lineCount = textDocument.lineCount;
     const atDocumentEdge = isBackward
-      ? head.line < BOUNDARY_LINES
-      : head.line >= lineCount - BOUNDARY_LINES;
+      ? head.line < POPOVER_BOUNDARY_LINES
+      : head.line >= lineCount - POPOVER_BOUNDARY_LINES;
+    // The fallback anchor is the selection's other edge, which can sit outside
+    // the virtualized render window even when the head is visible; #getLineY
+    // returns -1 for an unrendered line, so only consider the fallback once we
+    // know its anchor line actually has layout to measure.
     const useFallback =
+      this.#isLineVisible(fallback.anchor.line) &&
       choosePopoverPlacement({
         preferred: preferredGeometry,
         fallback: fallbackGeometry,
         viewport: this.#getOverlayViewport(),
         popoverHeight,
         atDocumentEdge,
+        previousPlacement: this.#selectionActionPlacement,
       }) === 'fallback';
+    this.#selectionActionPlacement = useFallback ? 'fallback' : 'preferred';
     const { placeAbove, anchor } = useFallback ? fallback : preferred;
     const { left, top } = useFallback ? fallbackGeometry : preferredGeometry;
 
@@ -3321,12 +3337,27 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   // page itself scrolls) and a window resize. Idempotent — a later call while
   // listeners are already attached is a no-op, so this is safe to call from
   // every #refreshViewportRectsIfNeeded pass.
+  //
+  // Scrolling/resizing can change whether a popover's current side still fits
+  // the scrollport, so while one is open this also re-runs its placement
+  // decision, rAF-throttled to avoid recomputing on every scroll tick.
   #ensureViewportRectListeners(): void {
     if (this.#viewportRectListenersDisposes !== undefined) {
       return;
     }
+    let repositionRafId: number | undefined;
     const markDirty = () => {
       this.#viewportRectsDirty = true;
+      if (
+        this.#selectionAction === undefined ||
+        repositionRafId !== undefined
+      ) {
+        return;
+      }
+      repositionRafId = requestAnimationFrame(() => {
+        repositionRafId = undefined;
+        this.#updateSelectionActionPopover();
+      });
     };
     const scroller = this.#getScrollContainer();
     this.#viewportRectListenersDisposes = [
@@ -3334,6 +3365,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         ? addEventListener(scroller, 'scroll', markDirty, { passive: true })
         : addEventListener(window, 'scroll', markDirty, { passive: true }),
       addEventListener(window, 'resize', markDirty, { passive: true }),
+      () => {
+        if (repositionRafId !== undefined) {
+          cancelAnimationFrame(repositionRafId);
+          repositionRafId = undefined;
+        }
+      },
     ];
   }
 
