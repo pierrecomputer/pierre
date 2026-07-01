@@ -237,16 +237,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'light' | 'dark'
   ) => {
-    const changedAdditionLines = this.#fileInstance?.updateRenderCache(
-      lines,
-      themeType
-    );
-    // Background/offscreen tokens can carry a content-only edit that landed
-    // outside the render window; keep hunk metadata in sync without refreshing
-    // the view (the visible rows are patched below).
-    if (changedAdditionLines != null && changedAdditionLines.length > 0) {
-      this.#fileInstance?.recomputeContentHunks(changedAdditionLines);
-    }
+    this.#fileInstance?.updateRenderCache(lines, themeType, false);
     // update the view if the render range is updated by scrolling
     // and the deferred tokenized lines inside the render range
     if (
@@ -274,15 +265,31 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void {
-    fileInstance.setOptions({
-      ...fileInstance.options,
-      useTokenTransformer: true,
-      enableGutterUtility: false,
-      enableLineSelection: false,
-      expandUnchanged: true,
-      lineHoverHighlight: 'disabled',
-    });
-    fileInstance.rerender();
+    const {
+      useTokenTransformer,
+      enableGutterUtility,
+      enableLineSelection,
+      expandUnchanged,
+      lineHoverHighlight = 'disabled',
+      ...rest
+    } = fileInstance.options;
+    if (
+      useTokenTransformer !== true ||
+      enableGutterUtility === true ||
+      enableLineSelection === true ||
+      (expandUnchanged !== true && fileInstance.type === 'file-diff') ||
+      lineHoverHighlight !== 'disabled'
+    ) {
+      fileInstance.setOptions({
+        ...rest,
+        useTokenTransformer: true,
+        enableGutterUtility: false,
+        enableLineSelection: false,
+        expandUnchanged: true,
+        lineHoverHighlight: 'disabled',
+      });
+      fileInstance.rerender();
+    }
     this.#fileInstance = fileInstance;
     this.#initialize();
     this.#detach = fileInstance.attachEditor(this);
@@ -542,7 +549,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   /** @internal */
-  __postponeBackgroundTokenizeToNextFrame(): void {
+  __postponeBgTokenizeToNextFrame(): void {
     const tokenizer = this.#tokenizer;
     if (tokenizer !== undefined) {
       tokenizer.pauseBackgroundTokenize();
@@ -1929,9 +1936,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
 
-    const changedAdditionLines = fileInstance.updateRenderCache(
+    fileInstance.updateRenderCache(
       dirtyLines,
-      tokenizer.themeType
+      tokenizer.themeType,
+      !didLineCountChange
     );
     if (didLineCountChange) {
       // Line-count change: recompute hunks from the full document and re-render.
@@ -1940,11 +1948,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         newLineAnnotations,
         shouldUpdateBuffer
       );
-    } else if (changedAdditionLines.length > 0) {
-      // In-place content edit: incremental hunk recompute + view refresh.
-      // When no addition line text changed there is no hunk impact, so we skip
-      // the refresh entirely (the editor already patched the edited rows inline).
-      fileInstance.applyContentEdit(changedAdditionLines);
     }
 
     // A diff re-renders its rows in place after the edits above: a unified diff
@@ -2139,7 +2142,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #scrollToLine(line: number, char = 0, noFocus = false) {
-    this.__postponeBackgroundTokenizeToNextFrame();
+    this.__postponeBgTokenizeToNextFrame();
 
     const virtualCaret = h('div', {
       style: {
@@ -2491,7 +2494,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #updateSelections(selections: EditorSelection[]) {
-    this.__postponeBackgroundTokenizeToNextFrame();
+    this.__postponeBgTokenizeToNextFrame();
 
     this.#primaryCaretElement = undefined;
     this.#setSelectedLinesSafe(null);

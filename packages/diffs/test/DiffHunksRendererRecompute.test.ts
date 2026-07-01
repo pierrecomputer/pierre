@@ -73,8 +73,8 @@ async function createPrimedRenderer(
 ): Promise<DiffHunksRenderer> {
   const renderer = new DiffHunksRenderer({ theme: 'github-light', diffStyle });
   const diff = parseDiffFromFile(
-    { name: 'greet.ts', contents: OLD_CONTENTS },
-    { name: 'greet.ts', contents: NEW_CONTENTS }
+    { name: 'greet.ts', contents: OLD_CONTENTS, cacheKey: 'greet:old' },
+    { name: 'greet.ts', contents: NEW_CONTENTS, cacheKey: 'greet:new' }
   );
   await renderer.asyncRender(diff);
   renderer.renderDiff(diff);
@@ -82,7 +82,7 @@ async function createPrimedRenderer(
 }
 
 describe('DiffHunksRenderer content-edit recompute split', () => {
-  test('updateRenderCache returns changed addition lines and does not recompute', async () => {
+  test('updateRenderCache recomputes hunk metadata for changed addition lines', async () => {
     const renderer = await createPrimedRenderer();
     const cacheDiff = renderer.getDiffCache();
     expect(cacheDiff).toBeDefined();
@@ -90,27 +90,24 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
 
     const hunksBefore = cacheDiff.hunks;
     // In-place edit of an existing line (no line-count change).
-    const changed = renderer.updateRenderCache(
+    renderer.updateRenderCache(
       makeDirtyLines([[1, '  console.log(msg) // edited']]),
       'light'
     );
-    // Token sync ran but hunks were NOT recomputed here.
-    expect(cacheDiff.hunks).toBe(hunksBefore);
-    expect([...changed]).toEqual([1]);
+    expect(cacheDiff.hunks).not.toBe(hunksBefore);
   });
 
-  test('recomputeContentHunks matches a full recompute for a content-only edit', async () => {
+  test('updateRenderCache matches a full recompute for a content-only edit', async () => {
     const split = await createPrimedRenderer();
-    const changed = split.updateRenderCache(
+    split.updateRenderCache(
       makeDirtyLines([[1, '  console.log(msg) // edited']]),
       'light'
     );
-    split.recomputeContentHunks(changed);
     const incremental = split.getDiffCache();
 
     // Expected result: a full re-parse of the same edited content from scratch.
     const full = parseDiffFromFile(
-      { name: 'greet.ts', contents: OLD_CONTENTS },
+      { name: 'greet.ts', contents: OLD_CONTENTS, cacheKey: 'greet:old' },
       {
         name: 'greet.ts',
         contents: [
@@ -120,6 +117,7 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
           '}',
           '',
         ].join('\n'),
+        cacheKey: 'greet:new:edited',
       }
     );
 
@@ -223,8 +221,8 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
         diffStyle,
       });
       const diff = parseDiffFromFile(
-        { name: 'old.ts', contents: oldContents },
-        { name: 'new.ts', contents: newContents }
+        { name: 'old.ts', contents: oldContents, cacheKey: 'old:empty-base' },
+        { name: 'new.ts', contents: newContents, cacheKey: 'new:empty-base' }
       );
       await renderer.asyncRender(diff);
       renderer.renderDiff(diff);
@@ -261,8 +259,16 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
         diffStyle,
       });
       const diff = parseDiffFromFile(
-        { name: 'old.ts', contents: oldContents },
-        { name: 'new.ts', contents: newContents }
+        {
+          name: 'old.ts',
+          contents: oldContents,
+          cacheKey: 'old:newline-base',
+        },
+        {
+          name: 'new.ts',
+          contents: newContents,
+          cacheKey: 'new:newline-base',
+        }
       );
       await renderer.asyncRender(diff);
       renderer.renderDiff(diff);
@@ -300,8 +306,16 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
         diffStyle,
       });
       const diff = parseDiffFromFile(
-        { name: 'old.ts', contents: oldContents },
-        { name: 'new.ts', contents: newContents }
+        {
+          name: 'old.ts',
+          contents: oldContents,
+          cacheKey: 'old:multi-newline-base',
+        },
+        {
+          name: 'new.ts',
+          contents: newContents,
+          cacheKey: 'new:multi-newline-base',
+        }
       );
       await renderer.asyncRender(diff);
       renderer.renderDiff(diff);
@@ -339,8 +353,16 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
         diffStyle,
       });
       const diff = parseDiffFromFile(
-        { name: 'old.ts', contents: oldContents },
-        { name: 'new.ts', contents: newContents }
+        {
+          name: 'old.ts',
+          contents: oldContents,
+          cacheKey: 'old:insert-break-base',
+        },
+        {
+          name: 'new.ts',
+          contents: newContents,
+          cacheKey: 'new:insert-break-base',
+        }
       );
       await renderer.asyncRender(diff);
       renderer.renderDiff(diff);
@@ -374,8 +396,8 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
         diffStyle,
       });
       const diff = parseDiffFromFile(
-        { name: 'blank.ts', contents: '\n' },
-        { name: 'blank.ts', contents: 'typed\n' }
+        { name: 'blank.ts', contents: '\n', cacheKey: 'blank:old' },
+        { name: 'blank.ts', contents: 'typed\n', cacheKey: 'blank:new' }
       );
       await renderer.asyncRender(diff);
       renderer.renderDiff(diff);

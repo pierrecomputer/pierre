@@ -101,7 +101,3 @@ export const EMPTY_RENDER_RANGE: RenderRange = {
   bufferBefore: 0,
   bufferAfter: 0,
 };
-
-// Shared empty result returned by `updateRenderCache` when no addition-line
-// text changed, so the no-op path does not allocate a new array each call.
-export const NO_CHANGED_ADDITION_LINES: readonly number[] = [];

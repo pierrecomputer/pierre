@@ -7,7 +7,6 @@ import {
   DEFAULT_RENDER_RANGE,
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
-  NO_CHANGED_ADDITION_LINES,
 } from '../constants';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
@@ -341,13 +340,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
-  ): readonly number[] {
+  ): void {
     if (this.renderCache == null) {
-      return NO_CHANGED_ADDITION_LINES;
+      return;
     }
     const { result, diff } = this.renderCache;
     if (result == null) {
-      return NO_CHANGED_ADDITION_LINES;
+      return;
     }
     if (diff.isPartial) {
       throw new Error('Could not update render cache for partial diff');
@@ -404,15 +403,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       };
     }
 
+    if (changedAdditionLines.length > 0) {
+      this.recomputeContentHunks(changedAdditionLines);
+    }
+
     result.baseThemeType = themeType;
     this.renderCache.isDirty = true;
-    return changedAdditionLines;
   }
 
   // Incrementally recompute hunk metadata after an in-place content edit
   // (no line-count change). For a line-count change the host calls
   // `applyDocumentChange` instead, which recomputes from the full document.
-  public recomputeContentHunks(
+  private recomputeContentHunks(
     changedAdditionLineIndexes: readonly number[]
   ): void {
     if (this.renderCache == null) {
@@ -434,7 +436,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.options.parseDiffOptions
       )
     );
-    this.renderCache.isDirty = true;
   }
 
   // Normally triggered by the host when the document line count changes.

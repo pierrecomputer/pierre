@@ -971,6 +971,7 @@ export interface DiffsBaseComponent {
   render(options: {
     file?: FileContents;
     fileDiff?: FileDiffMetadata;
+    // oxlint-disable-next-line typescript/no-explicit-any
     lineAnnotations?: any[];
     renderRange?: RenderRange;
   }): void;
@@ -998,24 +999,13 @@ export interface DiffsEditableComponent<
   ) => void;
   updateRenderCache: (
     lines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
-  ) => readonly number[];
-  // Apply an in-place content edit (no line-count change): incrementally
-  // recompute hunk metadata for the changed lines and refresh the view.
-  // No-op for plain files. For a line-count change the host calls
-  // applyDocumentChange instead.
-  applyContentEdit: (changedAdditionLineIndexes: readonly number[]) => void;
-  // Recompute hunk metadata for changed addition lines WITHOUT refreshing the
-  // view. The host calls this for background/offscreen token updates — a
-  // content-only edit that landed outside the render window — where the visible
-  // rows are patched separately. No-op for plain files.
-  recomputeContentHunks: (
-    changedAdditionLineIndexes: readonly number[]
+    themeType: 'dark' | 'light',
+    shouldRefreshView: boolean
   ) => void;
 }
 
 export interface DiffsEditor<LAnnotation> {
-  __postponeBackgroundTokenizeToNextFrame(): void;
+  __postponeBgTokenizeToNextFrame(): void;
   __syncRenderView(
     highlighter: DiffsHighlighter,
     fileContainer: HTMLElement,

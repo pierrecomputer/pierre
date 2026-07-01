@@ -263,7 +263,7 @@ export class FileDiff<
   protected enabled = true;
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
-  protected fastRefreshTimeout: ReturnType<typeof setTimeout> | undefined;
+  protected refreshViewTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -581,9 +581,9 @@ export class FileDiff<
 
     this.editor?.cleanUp();
     this.editor = undefined;
-    if (this.fastRefreshTimeout != null) {
-      clearTimeout(this.fastRefreshTimeout);
-      this.fastRefreshTimeout = undefined;
+    if (this.refreshViewTimeout != null) {
+      clearTimeout(this.refreshViewTimeout);
+      this.refreshViewTimeout = undefined;
     }
   }
 
@@ -875,9 +875,19 @@ export class FileDiff<
         'FileDiff.render: attempting to call render after cleaned up'
       );
     }
+
+    // use the file name as the cache key if it is not set
+    if (fileDiff != null && fileDiff.cacheKey === undefined) {
+      fileDiff.cacheKey =
+        fileDiff.prevName != null
+          ? fileDiff.prevName + ':' + fileDiff.name
+          : fileDiff.name;
+    }
+
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
-    this.editor?.__postponeBackgroundTokenizeToNextFrame();
+    this.editor?.__postponeBgTokenizeToNextFrame();
+
     const {
       collapsed = false,
       themeType = 'system',
@@ -1010,10 +1020,6 @@ export class FileDiff<
       return true;
     }
 
-    if (this.editor != null) {
-      this.ensureCacheKey();
-    }
-
     try {
       const pre = this.getOrCreatePreNode(fileContainer);
 
@@ -1143,22 +1149,9 @@ export class FileDiff<
     }
   }
 
-  // the editor use the cacheKey to maintain the editing state
-  // if the cacheKey is not set, set it to the diff file name
-  private ensureCacheKey(): void {
-    const fileDiff = this.fileDiff;
-    if (fileDiff != null && fileDiff.cacheKey === undefined) {
-      fileDiff.cacheKey =
-        fileDiff.prevName != null
-          ? fileDiff.prevName + '->' + fileDiff.name
-          : fileDiff.name;
-    }
-  }
-
   public attachEditor(editor: DiffsEditor<LAnnotation>): () => void {
     this.editor?.cleanUp();
     this.editor = editor;
-    this.ensureCacheKey();
     this.interactionManager.setEditorAttached(true);
     this.syncRenderViewToEditor();
     return () => {
@@ -1195,29 +1188,22 @@ export class FileDiff<
 
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light'
-  ): readonly number[] {
-    return this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
-  }
-
-  public recomputeContentHunks(
-    changedAdditionLineIndexes: readonly number[]
+    themeType: 'dark' | 'light',
+    shouldRefreshView: boolean
   ): void {
-    this.hunksRenderer.recomputeContentHunks(changedAdditionLineIndexes);
-  }
-
-  public applyContentEdit(changedAdditionLineIndexes: readonly number[]): void {
-    this.recomputeContentHunks(changedAdditionLineIndexes);
-    if (this.options.diffStyle === 'split') {
-      if (this.fastRefreshTimeout != null) {
-        clearTimeout(this.fastRefreshTimeout);
+    this.hunksRenderer.updateRenderCache(dirtyLines, themeType);
+    if (shouldRefreshView) {
+      if (this.refreshViewTimeout != null) {
+        clearTimeout(this.refreshViewTimeout);
       }
-      this.fastRefreshTimeout = setTimeout(() => {
-        this.fastRefreshTimeout = undefined;
-        this.refreshSplitDiffView();
-      }, 100);
-    } else {
-      this.refreshUnifiedDiffView();
+      this.refreshViewTimeout = setTimeout(() => {
+        this.refreshViewTimeout = undefined;
+        if (this.options.diffStyle === 'split') {
+          this.refreshSplitDiffView();
+        } else {
+          this.refreshUnifiedDiffView();
+        }
+      }, 150);
     }
   }
 
