@@ -8,6 +8,7 @@ import {
   IconArrow,
   IconChevronSm,
   IconCommentFill,
+  IconFileCode,
   IconSparkle,
   IconX,
 } from '@pierre/icons';
@@ -47,24 +48,79 @@ const CHAT_SNIPPET_STYLE = {
   '--diffs-line-height': '18px',
 } as CSSProperties;
 
+interface ChatSnippet {
+  fileName: string;
+  id: number;
+  lineEnd: number;
+  lineStart: number;
+  text: string;
+}
+
+interface ChatSnippetSource {
+  selection: {
+    end: {
+      character: number;
+      line: number;
+    };
+    start: {
+      line: number;
+    };
+  };
+}
+
+function getSelectionLineRange(selection: ChatSnippetSource['selection']): {
+  lineEnd: number;
+  lineStart: number;
+} {
+  const endLine =
+    selection.end.character === 0 && selection.end.line > selection.start.line
+      ? selection.end.line - 1
+      : selection.end.line;
+  const lineStart = Math.min(selection.start.line, endLine) + 1;
+  const lineEnd = Math.max(selection.start.line, endLine) + 1;
+  return { lineEnd, lineStart };
+}
+
+function formatSelectionLineLabel(
+  snippet: Pick<ChatSnippet, 'lineEnd' | 'lineStart'>
+): string {
+  return snippet.lineStart === snippet.lineEnd
+    ? `(${String(snippet.lineStart)})`
+    : `(${String(snippet.lineStart)}-${String(snippet.lineEnd)})`;
+}
+
 // Demo of the editor's opt-in Selection Action: with `enabledSelectionAction`,
 // selecting text immediately reveals a floating popover (anchored below the
 // selection) whose contents come from `renderSelectionAction`. Here it mimics an
 // editor's "Add to chat": the primary action sends the selected snippet to a
 // mock chat panel beside the surface, and a secondary action copies it.
 export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
-  const [snippets, setSnippets] = useState<string[]>([]);
+  const [snippets, setSnippets] = useState<ChatSnippet[]>([]);
+  const snippetIdRef = useRef(0);
 
   // The popover lives inside the editor instance, which is created once. Route
   // its "Add to chat" click through a ref so it always calls the latest setter
   // without recreating the editor.
-  const addSnippet = useCallback((text: string) => {
-    const trimmed = text.trim();
-    if (trimmed === '') {
-      return;
-    }
-    setSnippets((prev) => [...prev, trimmed]);
-  }, []);
+  const addSnippet = useCallback(
+    (text: string, source: ChatSnippetSource) => {
+      const trimmed = text.trim();
+      if (trimmed === '') {
+        return;
+      }
+      snippetIdRef.current += 1;
+      const id = snippetIdRef.current;
+      setSnippets((prev) => [
+        ...prev,
+        {
+          id,
+          fileName: prerenderedFile.file.name,
+          ...getSelectionLineRange(source.selection),
+          text: trimmed,
+        },
+      ]);
+    },
+    [prerenderedFile.file.name]
+  );
   const addSnippetRef = useRef(addSnippet);
   addSnippetRef.current = addSnippet;
 
@@ -72,7 +128,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
     () =>
       new Editor<undefined>({
         enabledSelectionAction: true,
-        renderSelectionAction({ close, getSelectionText }) {
+        renderSelectionAction(selectionAction) {
           const container = document.createElement('div');
           container.style.cssText = 'display: flex; gap: 4px;';
 
@@ -86,8 +142,10 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
             event.preventDefault()
           );
           addToChat.addEventListener('click', () => {
-            addSnippetRef.current(getSelectionText());
-            close();
+            addSnippetRef.current(selectionAction.getSelectionText(), {
+              selection: selectionAction.selection,
+            });
+            selectionAction.close();
           });
 
           const copy = document.createElement('button');
@@ -96,8 +154,10 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
           copy.style.cssText = SECONDARY_BUTTON_STYLE;
           copy.addEventListener('mousedown', (event) => event.preventDefault());
           copy.addEventListener('click', () => {
-            void navigator.clipboard?.writeText(getSelectionText());
-            close();
+            void navigator.clipboard?.writeText(
+              selectionAction.getSelectionText()
+            );
+            selectionAction.close();
           });
 
           container.append(addToChat, copy);
@@ -148,15 +208,24 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
               </p>
             ) : (
               <ul className="flex flex-col gap-2 p-3">
-                {snippets.map((snippet, index) => (
+                {snippets.map((snippet) => (
                   <li
-                    key={index}
+                    key={snippet.id}
                     className="overflow-hidden rounded-md border border-neutral-800"
                   >
+                    <div className="flex h-7 min-w-0 items-center gap-1.5 border-b border-neutral-800 px-2 pr-3 text-xs leading-none text-neutral-400">
+                      <IconFileCode className="size-3.5 shrink-0" />
+                      <span className="min-w-0 truncate font-medium text-neutral-200">
+                        {snippet.fileName}
+                      </span>
+                      <span className="shrink-0">
+                        {formatSelectionLineLabel(snippet)}
+                      </span>
+                    </div>
                     <File
                       file={{
-                        name: `chat-snippet-${index}.ts`,
-                        contents: snippet,
+                        name: snippet.fileName,
+                        contents: snippet.text,
                       }}
                       options={{
                         theme: DEFAULT_THEMES,
@@ -168,7 +237,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
                       // editor surface; a dynamically mounted read-only File isn't
                       // highlighted through it, so highlight on the main thread.
                       disableWorkerPool
-                      className="overflow-x-auto"
+                      className="max-h-32 overflow-auto"
                       style={CHAT_SNIPPET_STYLE}
                     />
                   </li>

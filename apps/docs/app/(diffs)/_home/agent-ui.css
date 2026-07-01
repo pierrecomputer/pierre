@@ -249,9 +249,42 @@ button.aui-dot.is-zoom:hover {
   background-color: var(--ide-surface);
 }
 
+.aui-attachment-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 32px 0 8px;
+  border-bottom: 1px solid var(--ide-border);
+  color: var(--ide-fg-muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.aui-attachment-header svg {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
+.aui-attachment-file {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ide-fg);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aui-attachment-lines {
+  flex: 0 0 auto;
+}
+
 .aui-attachment-code {
   display: block;
-  overflow-x: auto;
+  max-height: 132px;
+  overflow: auto;
 }
 
 .aui-attachment-remove {

@@ -6,6 +6,7 @@ import { EditorProvider, File, FileDiff } from '@pierre/diffs/react';
 import {
   IconArrow,
   IconChevronSm,
+  IconFileCode,
   IconFilePlus,
   IconFolderPlus,
   IconSearch,
@@ -111,7 +112,48 @@ const SNIPPET_STYLE = {
 
 interface AuiSnippet {
   id: number;
+  fileName: string;
+  lineEnd: number;
+  lineStart: number;
   text: string;
+}
+
+interface AuiSnippetSource {
+  path: string;
+  selection: {
+    end: {
+      character: number;
+      line: number;
+    };
+    start: {
+      line: number;
+    };
+  };
+}
+
+function getFileName(path: string): string {
+  return path.split('/').at(-1) ?? path;
+}
+
+function getSelectionLineRange(selection: AuiSnippetSource['selection']): {
+  lineEnd: number;
+  lineStart: number;
+} {
+  const endLine =
+    selection.end.character === 0 && selection.end.line > selection.start.line
+      ? selection.end.line - 1
+      : selection.end.line;
+  const lineStart = Math.min(selection.start.line, endLine) + 1;
+  const lineEnd = Math.max(selection.start.line, endLine) + 1;
+  return { lineEnd, lineStart };
+}
+
+function formatSelectionLineLabel(
+  snippet: Pick<AuiSnippet, 'lineEnd' | 'lineStart'>
+): string {
+  return snippet.lineStart === snippet.lineEnd
+    ? `(${String(snippet.lineStart)})`
+    : `(${String(snippet.lineStart)}-${String(snippet.lineEnd)})`;
 }
 
 // Renders the active session's changed files as a @pierre/trees FileTree, with
@@ -909,14 +951,22 @@ export function AgentUi({
   // through a ref keeps the latest setter without depending on that lifecycle.
   const [snippets, setSnippets] = useState<AuiSnippet[]>([]);
   const snippetIdRef = useRef(0);
-  const addSnippet = useCallback((text: string) => {
+  const addSnippet = useCallback((text: string, source: AuiSnippetSource) => {
     const trimmed = text.trim();
     if (trimmed === '') {
       return;
     }
     snippetIdRef.current += 1;
     const id = snippetIdRef.current;
-    setSnippets((prev) => [...prev, { id, text: trimmed }]);
+    setSnippets((prev) => [
+      ...prev,
+      {
+        id,
+        fileName: getFileName(source.path),
+        ...getSelectionLineRange(source.selection),
+        text: trimmed,
+      },
+    ]);
   }, []);
   const addSnippetRef = useRef(addSnippet);
   addSnippetRef.current = addSnippet;
@@ -1028,7 +1078,7 @@ export function AgentUi({
     () =>
       new Editor({
         enabledSelectionAction: true,
-        renderSelectionAction({ close, getSelectionText }) {
+        renderSelectionAction(selectionAction) {
           const container = document.createElement('div');
           container.style.cssText = 'display: flex; gap: 4px;';
 
@@ -1042,8 +1092,14 @@ export function AgentUi({
             event.preventDefault()
           );
           addToChat.addEventListener('click', () => {
-            addSnippetRef.current(getSelectionText());
-            close();
+            const target = activeTargetRef.current;
+            if (target != null) {
+              addSnippetRef.current(selectionAction.getSelectionText(), {
+                path: target,
+                selection: selectionAction.selection,
+              });
+            }
+            selectionAction.close();
           });
 
           const copy = document.createElement('button');
@@ -1052,8 +1108,10 @@ export function AgentUi({
           copy.style.cssText = SELECTION_SECONDARY_BUTTON_STYLE;
           copy.addEventListener('mousedown', (event) => event.preventDefault());
           copy.addEventListener('click', () => {
-            void navigator.clipboard?.writeText(getSelectionText());
-            close();
+            void navigator.clipboard?.writeText(
+              selectionAction.getSelectionText()
+            );
+            selectionAction.close();
           });
 
           container.append(addToChat, copy);
@@ -1270,9 +1328,18 @@ export function AgentUi({
                 <ul className="aui-composer-attachments">
                   {snippets.map((snippet) => (
                     <li key={snippet.id} className="aui-attachment">
+                      <div className="aui-attachment-header">
+                        <IconFileCode aria-hidden="true" />
+                        <span className="aui-attachment-file">
+                          {snippet.fileName}
+                        </span>
+                        <span className="aui-attachment-lines">
+                          {formatSelectionLineLabel(snippet)}
+                        </span>
+                      </div>
                       <File
                         file={{
-                          name: 'snippet.ts',
+                          name: snippet.fileName,
                           contents: snippet.text,
                         }}
                         options={{

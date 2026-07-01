@@ -93,8 +93,9 @@ export function EditPage({
                 <>
                   Find strings across files with <code>Cmd/Ctrl-F</code> on any{' '}
                   <code>File</code> or <code>FileDiff</code>. Find and replace
-                  with <code>Cmd/Ctrl-Shift-F</code>. The search panel below is
-                  open—type a query to highlight matches, jump between them with{' '}
+                  with <code>Cmd-Opt-F</code>(Mac) or <code>Ctrl-Alt-F</code>
+                  (Linux/Windows). The search panel below is open—type a query
+                  to highlight matches, jump between them with{' '}
                   <code>Enter</code> or its arrows, and toggle case, whole-word,
                   or regex as you go.
                 </>
