@@ -81,6 +81,14 @@ function getSelectionLineRange(selection: ChatSnippetSource['selection']): {
   return { lineEnd, lineStart };
 }
 
+function formatSelectionLineLabel(
+  snippet: Pick<ChatSnippet, 'lineEnd' | 'lineStart'>
+): string {
+  return snippet.lineStart === snippet.lineEnd
+    ? `(${String(snippet.lineStart)})`
+    : `(${String(snippet.lineStart)}-${String(snippet.lineEnd)})`;
+}
+
 // Demo of the editor's opt-in Selection Action: with `enabledSelectionAction`,
 // selecting text immediately reveals a floating popover (anchored below the
 // selection) whose contents come from `renderSelectionAction`. Here it mimics an
@@ -211,7 +219,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
                         {snippet.fileName}
                       </span>
                       <span className="shrink-0">
-                        ({snippet.lineStart}-{snippet.lineEnd})
+                        {formatSelectionLineLabel(snippet)}
                       </span>
                     </div>
                     <File

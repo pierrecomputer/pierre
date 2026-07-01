@@ -148,6 +148,14 @@ function getSelectionLineRange(selection: AuiSnippetSource['selection']): {
   return { lineEnd, lineStart };
 }
 
+function formatSelectionLineLabel(
+  snippet: Pick<AuiSnippet, 'lineEnd' | 'lineStart'>
+): string {
+  return snippet.lineStart === snippet.lineEnd
+    ? `(${String(snippet.lineStart)})`
+    : `(${String(snippet.lineStart)}-${String(snippet.lineEnd)})`;
+}
+
 // Renders the active session's changed files as a @pierre/trees FileTree, with
 // git-status colours and per-row +/- decorations. The tree is an imperative web
 // component, so it's created in an effect and torn down on session change.
@@ -1326,7 +1334,7 @@ export function AgentUi({
                           {snippet.fileName}
                         </span>
                         <span className="aui-attachment-lines">
-                          ({snippet.lineStart}-{snippet.lineEnd})
+                          {formatSelectionLineLabel(snippet)}
                         </span>
                       </div>
                       <File
