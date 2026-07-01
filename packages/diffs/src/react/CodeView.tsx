@@ -690,6 +690,7 @@ const SlotPortals = memo(function SlotPortals<LAnnotation>({
   renderCodeViewHeader,
   renderCodeViewFooter,
 }: SlotPortalsProps<LAnnotation>) {
+  'use no memo';
   const subscribe = useStableCallback((listener: () => void) =>
     managedContentStore.subscribe(listener)
   );
@@ -699,9 +700,16 @@ const SlotPortals = memo(function SlotPortals<LAnnotation>({
   const snapshot = useSyncExternalStore<
     CodeViewSlotSnapshot<LAnnotation> | undefined
   >(subscribe, getSnapshot, getSnapshot);
-  return (
-    <>
-      {snapshot?.items?.map((renderedItem) =>
+  let itemKeys = '';
+  for (const item of snapshot?.items ?? []) {
+    itemKeys += `${item.id}:${item.version}`;
+  }
+  // NOTE(amadeus): And just like that, the react compiler do be failing us
+  // lol... we need to pre-render everything for items, headers and footers to
+  // not trigger needless renders while scrolling
+  const renderedItems = useMemo(
+    () => {
+      return snapshot?.items?.map((renderedItem) =>
         createPortal(
           renderCodeViewItemChildren({
             renderedItem,
@@ -715,13 +723,34 @@ const SlotPortals = memo(function SlotPortals<LAnnotation>({
           renderedItem.element,
           renderedItem.id
         )
-      )}
-      {renderCodeViewHeader != null &&
-        snapshot?.header != null &&
-        createPortal(renderCodeViewHeader(), snapshot.header)}
-      {renderCodeViewFooter != null &&
-        snapshot?.footer != null &&
-        createPortal(renderCodeViewFooter(), snapshot.footer)}
+      );
+    },
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [
+      renderCustomHeader,
+      renderHeaderPrefix,
+      renderHeaderFilenameSuffix,
+      renderHeaderMetadata,
+      renderAnnotation,
+      renderGutterUtility,
+      itemKeys,
+    ]
+  );
+  const renderedHeader = useMemo(() => {
+    return renderCodeViewHeader != null && snapshot?.header != null
+      ? createPortal(renderCodeViewHeader(), snapshot.header)
+      : null;
+  }, [renderCodeViewHeader, snapshot?.header]);
+  const renderedFooter = useMemo(() => {
+    return renderCodeViewFooter != null && snapshot?.footer != null
+      ? createPortal(renderCodeViewFooter(), snapshot.footer)
+      : null;
+  }, [renderCodeViewFooter, snapshot?.footer]);
+  return (
+    <>
+      {renderedItems}
+      {renderedHeader}
+      {renderedFooter}
     </>
   );
 }) as SlotPortalsComponent;
