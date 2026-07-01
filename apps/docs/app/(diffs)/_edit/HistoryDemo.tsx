@@ -76,11 +76,6 @@ function snapshotIndexFor(text: string): number {
 // loaded throws ("Grammar not loaded"), so we gate the seeded replay on it.
 const LANGUAGE = getFiletypeFromFileName(HISTORY_DEMO_FILE.name);
 
-// Minimum delay after the editor's surface attaches before we seed. The editor
-// loads its grammar on a 500ms-debounced pass after attaching, so this clears
-// that window even when the language was not already loaded at attach time.
-const GRAMMAR_SETTLE_MS = 700;
-
 // True once the shared main-thread highlighter has this file's grammar, which
 // is what the editor tokenizes edits with.
 function isLanguageReady(): boolean {
@@ -122,6 +117,14 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isMacRef = useRef(false);
 
+  // True while `seedAll` is replaying edits programmatically, so its intermediate
+  // `onChange` callbacks are not mistaken for user input.
+  const isAutoSeedingRef = useRef(false);
+  // Set when the visitor edits before the deferred auto-seed finishes; blocks
+  // `waitForReady` from calling `seedAll` on a document that is no longer the
+  // original snapshot.
+  const userEditedBeforeSeedRef = useRef(false);
+
   // Number of edits currently applied, derived from the editor's live text on
   // every `onChange` (undo, redo, controls, or keyboard) so it always matches.
   const [applied, setApplied] = useState(0);
@@ -140,6 +143,9 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
             setDiverged(false);
           } else {
             setDiverged(true);
+          }
+          if (!isAutoSeedingRef.current && index !== 0) {
+            userEditedBeforeSeedRef.current = true;
           }
         },
       }),
@@ -242,72 +248,92 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // document is at the original snapshot when called.
   const seedAll = useCallback(
     (content: HTMLElement) => {
-      const { scrollX, scrollY } = window;
-      for (let index = 0; index < TOTAL_EDITS; index++) {
-        applyEdit(content, index);
+      isAutoSeedingRef.current = true;
+      try {
+        const { scrollX, scrollY } = window;
+        for (let index = 0; index < TOTAL_EDITS; index++) {
+          applyEdit(content, index);
+        }
+        editor.setSelections([
+          {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+            direction: 'none',
+          },
+        ]);
+        window.scrollTo(scrollX, scrollY);
+      } finally {
+        isAutoSeedingRef.current = false;
       }
-      editor.setSelections([
-        {
-          start: { line: 0, character: 0 },
-          end: { line: 0, character: 0 },
-          direction: 'none',
-        },
-      ]);
-      window.scrollTo(scrollX, scrollY);
     },
     [applyEdit, editor]
   );
 
-  // Build the undo stack on load so the surface arrives already fully
-  // refactored with history intact. We poll until the content element has
-  // attached AND the editor's grammar is ready, because seeding an edit before
-  // the editor can tokenize throws ("Grammar not loaded") inside the editor.
+  // Build the undo stack once the demo is on screen so the surface arrives
+  // already fully refactored with history intact. We defer until visible
+  // because seeding scrolls the caret into view and would yank the page down
+  // to this below-the-fold demo on first load. We poll until the content
+  // element has attached AND the editor's grammar is ready, because seeding an
+  // edit before the editor can tokenize throws ("Grammar not loaded") inside
+  // the editor.
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (wrapper == null) {
       return;
     }
 
-    // Warm the shared highlighter so the grammar is ready as early as possible
-    // (ideally before the editor attaches, making its first tokenize sync).
-    void preloadHighlighter({
-      themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
-      langs: [LANGUAGE],
-      preferredHighlighter: 'shiki-wasm',
-    }).catch(() => {});
-
     let cancelled = false;
     let timer: number | undefined;
     let attempts = 0;
-    let contentSeenAt = 0;
 
     const waitForReady = () => {
-      if (cancelled) {
+      if (cancelled || userEditedBeforeSeedRef.current) {
         return;
       }
       attempts += 1;
       const content = getContent();
-      if (content != null) {
-        if (contentSeenAt === 0) {
-          contentSeenAt = Date.now();
-        }
-        if (
-          isLanguageReady() &&
-          Date.now() - contentSeenAt >= GRAMMAR_SETTLE_MS
-        ) {
-          seedAll(content);
+      if (content != null && isLanguageReady()) {
+        if (userEditedBeforeSeedRef.current) {
           return;
         }
+        seedAll(content);
+        return;
       }
-      if (attempts < 240) {
+      if (attempts < 240 && !userEditedBeforeSeedRef.current) {
         timer = window.setTimeout(waitForReady, 50);
       }
     };
 
-    waitForReady();
+    const startSeeding = () => {
+      // Warm the shared highlighter before polling so the editor tokenizer can
+      // pick up the grammar synchronously once the surface attaches.
+      void preloadHighlighter({
+        themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
+        langs: [LANGUAGE],
+        preferredHighlighter: 'shiki-wasm',
+      })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled && !userEditedBeforeSeedRef.current) {
+            waitForReady();
+          }
+        });
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          observer.disconnect();
+          startSeeding();
+        }
+      },
+      { threshold: 0.4 }
+    );
+    observer.observe(wrapper);
 
     return () => {
       cancelled = true;
+      observer.disconnect();
       if (timer != null) {
         window.clearTimeout(timer);
       }
