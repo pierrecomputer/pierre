@@ -716,6 +716,24 @@ export function AgentUi({
     }
   }, [variant, prefetchFullscreen]);
 
+  // The mirror of the above for the reverse morph. When the fullscreen route is
+  // opened standalone (no card in history to pop back to), exitFullscreen falls
+  // back to `router.push(AUI_WINDOWED_PATH)` — a fresh homepage render — instead
+  // of the instant `router.back()` restore. Without a warmed payload that push
+  // renders the heavy homepage during the View Transition's suppressed-render
+  // window, so the browser captures a not-yet-laid-out card and the shrink-back
+  // morph looks janky. Prefetching the homepage from the fullscreen route makes
+  // that push a cache hit so the fallback morph matches the card-entry one (a
+  // production effect; Next disables prefetch in dev).
+  const prefetchWindowed = useCallback(() => {
+    router.prefetch(AUI_WINDOWED_PATH);
+  }, [router]);
+  useEffect(() => {
+    if (variant === 'fullscreen') {
+      prefetchWindowed();
+    }
+  }, [variant, prefetchWindowed]);
+
   // Leaves the fullscreen route for the windowed card. When we got here by
   // expanding the card (the flag is set), `router.back()` is preferred so Next
   // restores the homepage scroll position (putting the card back on screen for
