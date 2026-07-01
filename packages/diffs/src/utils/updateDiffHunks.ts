@@ -87,8 +87,13 @@ export function shouldTopAlignAdditionRecompute(
   return (
     additionLines.length > 0 &&
     additionLines.length < diff.deletionLines.length &&
-    hasOnlyBlankAdditionContents(additionLines)
+    (hasOnlyBlankAdditionContents(additionLines) ||
+      hasTrailingEditorBlankLine(additionLines))
   );
+}
+
+function hasTrailingEditorBlankLine(additionLines: string[]): boolean {
+  return additionLines.length > 1 && additionLines.at(-1) === '';
 }
 
 // Rebuilds hunk metadata while keeping the editable addition rows top-aligned in
