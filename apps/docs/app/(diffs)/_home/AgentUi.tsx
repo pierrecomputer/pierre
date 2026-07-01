@@ -502,6 +502,38 @@ export const AUI_FULLSCREEN_PATH = '/edit/live';
 // hosts the windowed card the fullscreen view morphs back into.
 const AUI_WINDOWED_PATH = '/#edit';
 
+// Marks (in sessionStorage) that the fullscreen route was entered by expanding
+// the homepage card in this tab. `window.history.length > 1` can't tell that
+// apart from opening /edit/live directly in a tab that already has unrelated
+// history, so the exit affordance uses this flag instead: only when the card
+// pushed us here is a `router.back()` guaranteed to land back on that card
+// (restoring its scroll position for the reverse morph). Standalone entries
+// leave the flag unset and fall back to navigating to the windowed section.
+const AUI_FROM_CARD_KEY = 'aui:entered-from-card';
+
+function markEnteredFromCard() {
+  try {
+    window.sessionStorage.setItem(AUI_FROM_CARD_KEY, '1');
+  } catch {
+    // sessionStorage can be unavailable (private mode, storage disabled); the
+    // exit path safely falls back to a direct navigation when the flag is gone.
+  }
+}
+
+// Reads and clears the "entered from the card" flag. Clearing on read keeps a
+// single expand/exit round-trip honest: a fresh direct visit won't inherit a
+// stale flag from an earlier in-app expansion.
+function consumeEnteredFromCard(): boolean {
+  try {
+    const enteredFromCard =
+      window.sessionStorage.getItem(AUI_FROM_CARD_KEY) === '1';
+    window.sessionStorage.removeItem(AUI_FROM_CARD_KEY);
+    return enteredFromCard;
+  } catch {
+    return false;
+  }
+}
+
 // `windowed` is the embedded homepage card; `fullscreen` is the standalone
 // /edit/live route that fills the viewport with the file tree on the left.
 export type AuiVariant = 'windowed' | 'fullscreen';
@@ -663,6 +695,7 @@ export function AgentUi({
   // Expands the windowed card into the fullscreen route, morphing the shared
   // `.aui` element via the View Transition.
   const enterFullscreen = useCallback(() => {
+    markEnteredFromCard();
     navigateWithViewTransition(() => {
       router.push(AUI_FULLSCREEN_PATH);
     });
@@ -683,15 +716,17 @@ export function AgentUi({
     }
   }, [variant, prefetchFullscreen]);
 
-  // Leaves the fullscreen route for the windowed card. `router.back()` is
-  // preferred so Next restores the homepage scroll position (putting the card
-  // back on screen for a clean reverse morph); when there's nothing to pop
-  // (the route was opened directly) we navigate to the homepage edit section.
+  // Leaves the fullscreen route for the windowed card. When we got here by
+  // expanding the card (the flag is set), `router.back()` is preferred so Next
+  // restores the homepage scroll position (putting the card back on screen for
+  // a clean reverse morph). Otherwise the route was opened directly — the
+  // previous history entry, if any, is unrelated and popping to it could send
+  // the user off-site — so we navigate to the homepage edit section instead.
   // Both paths run through the View Transition so the fullscreen view shrinks
   // back into the card.
   const exitFullscreen = useCallback(() => {
     navigateWithViewTransition(() => {
-      if (typeof window !== 'undefined' && window.history.length > 1) {
+      if (consumeEnteredFromCard()) {
         router.back();
       } else {
         router.push(AUI_WINDOWED_PATH);
