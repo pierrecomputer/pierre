@@ -178,8 +178,9 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
       {/* The wrapper takes its height from the editor column (its only in-flow
           sibling); the aside fills it absolutely at md+ so a long snippet list
           scrolls inside instead of stretching the panel. On mobile it falls back
-          to normal flow. */}
-      <div className="relative">
+          to normal flow. The min-height keeps the chat panel from collapsing
+          when the editor column is short. */}
+      <div className="relative min-h-80">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950 md:absolute md:inset-0">
           <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
             <span className="flex items-center gap-1 text-sm font-medium text-white">
@@ -260,7 +261,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
                 <IconChevronSm className="opacity-50" />
               </button>
               <button type="button" className={COMPOSER_PILL_CLASS} disabled>
-                Mythos 5
+                Pierre 1
                 <IconChevronSm className="opacity-50" />
               </button>
               <button
