@@ -441,7 +441,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return { direction, start, end };
     });
     this.#updateSelections(resolvedSelections);
-    this.#scrollToPrimaryCaret(false, 'center');
+    this.#scrollToPrimaryCaret();
   }
 
   setMarkers(markers: Marker[]): void {
