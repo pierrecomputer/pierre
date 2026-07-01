@@ -2620,7 +2620,10 @@ export class CodeView<LAnnotation = undefined> {
     offset = 0,
     stickyOffset = 0
   ): number {
-    targetTop += this.getLayout().paddingTop;
+    // targetTop is item-space (0 = first item's top); shift it into absolute
+    // scroll coordinates. getItemTopOffset includes the header height, so
+    // scrolling to an item/line lands correctly when a header is present.
+    targetTop += this.getItemTopOffset();
     const viewportHeight = this.getHeight();
     // If the item + offset is bigger than the viewport, we'll fall back to
     // 'start'
@@ -3345,6 +3348,14 @@ export class CodeView<LAnnotation = undefined> {
     // If we already have a pendingLayoutAnchor, let's use that.
     if (this.pendingLayoutAnchor != null) {
       return this.pendingLayoutAnchor;
+    }
+
+    // We shouldn't scroll anchor when at the top, this way if a custom header
+    // gets asynchronously added it won't be hidden when added.  Also like,
+    // logically it doesn't make sense to anchor at the top of the document,
+    // you probably want to see stuff added at the top...
+    if (scrollTop <= 0) {
+      return undefined;
     }
 
     const { firstIndex, lastIndex, stickyTop, stickyBottom } = this.renderState;
