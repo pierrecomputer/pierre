@@ -349,7 +349,7 @@ export function AgentUi({
                   <IconChevronSm className="opacity-50" />
                 </button>
                 <button type="button" className="aui-composer-select" disabled>
-                  Mythos 5
+                  Pierre 1
                   <IconChevronSm className="opacity-50" />
                 </button>
                 <button

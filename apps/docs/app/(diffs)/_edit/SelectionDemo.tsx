@@ -191,7 +191,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
                 <IconChevronSm className="opacity-50" />
               </button>
               <button type="button" className={COMPOSER_PILL_CLASS} disabled>
-                Mythos 5
+                Pierre 1
                 <IconChevronSm className="opacity-50" />
               </button>
               <button
