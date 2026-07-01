@@ -4,7 +4,7 @@ import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents } from '../src/types';
+import type { DiffsHighlighter, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { installDom, wait } from './domHarness';
 
@@ -382,6 +382,109 @@ describe('diff editor: detach then re-attach', () => {
       expect(lineText(container, 2)).toBe('QCHANGED');
     } finally {
       await fixture.cleanup();
+    }
+  });
+
+  test('ignores a stale async editor sync after reset remounts the diff', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    const editor = new Editor<undefined>();
+    const oldFile: FileContents = {
+      name: 'edit.ts',
+      contents: 'alpha\nbravo\n',
+      cacheKey: 'old:initial',
+    };
+    const newFile: FileContents = {
+      name: 'edit.ts',
+      contents: 'alpha\nCHANGED\n',
+      cacheKey: 'new:initial',
+    };
+    const fileDiff = new FileDiff<undefined>(
+      {
+        disableFileHeader: true,
+        theme: DEFAULT_THEMES,
+        diffStyle: 'split',
+      },
+      undefined,
+      true
+    );
+
+    let remountedFileDiff: FileDiff<undefined> | undefined;
+
+    try {
+      fileDiff.render({
+        oldFile,
+        newFile,
+        fileContainer: container,
+        forceRender: true,
+      });
+      editor.edit(fileDiff);
+      await waitForEditable(container);
+
+      typeAt(editor, 0, 5, 'X');
+      await wait(0);
+      expect(lineText(container, 1)).toBe('alphaX');
+
+      const renderer = (
+        fileDiff as unknown as {
+          hunksRenderer: {
+            initializeHighlighter(): Promise<DiffsHighlighter>;
+          };
+          syncRenderViewToEditor(): void;
+        }
+      ).hunksRenderer;
+      const highlighter = await renderer.initializeHighlighter();
+      let resolveStaleSync:
+        | ((highlighter: DiffsHighlighter) => void)
+        | undefined;
+      renderer.initializeHighlighter = () =>
+        new Promise<DiffsHighlighter>((resolve) => {
+          resolveStaleSync = resolve;
+        });
+
+      // Queue an editor sync from the edited instance, then reset by unmounting
+      // that instance and mounting a fresh diff with the original contents.
+      (
+        fileDiff as unknown as { syncRenderViewToEditor(): void }
+      ).syncRenderViewToEditor();
+      fileDiff.cleanUp();
+
+      const remountedContainer = document.createElement('div');
+      document.body.appendChild(remountedContainer);
+      remountedFileDiff = new FileDiff<undefined>(
+        {
+          disableFileHeader: true,
+          theme: DEFAULT_THEMES,
+          diffStyle: 'split',
+        },
+        undefined,
+        true
+      );
+      remountedFileDiff.render({
+        oldFile: { ...oldFile, cacheKey: 'old:reset' },
+        newFile: { ...newFile, cacheKey: 'new:reset' },
+        fileContainer: remountedContainer,
+        forceRender: true,
+      });
+      editor.edit(remountedFileDiff);
+      await waitForEditable(remountedContainer);
+      expect(lineText(remountedContainer, 1)).toBe('alpha');
+
+      resolveStaleSync?.(highlighter);
+      await wait(0);
+
+      typeAt(editor, 1, 0, 'Q');
+      await wait(0);
+
+      expect(editor.getState().file.contents).toBe('alpha\nQCHANGED\n');
+      expect(lineText(remountedContainer, 1)).toBe('alpha');
+      expect(lineText(remountedContainer, 2)).toBe('QCHANGED');
+    } finally {
+      editor.cleanUp();
+      remountedFileDiff?.cleanUp();
+      dom.cleanup();
     }
   });
 });

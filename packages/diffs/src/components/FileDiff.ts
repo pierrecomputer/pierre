@@ -1145,6 +1145,14 @@ export class FileDiff<
       !fileDiff.isPartial
     ) {
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
+        if (
+          !this.enabled ||
+          this.editor !== editor ||
+          this.fileContainer !== fileContainer ||
+          (this.hunksRenderer.getDiffCache() ?? this.fileDiff) !== fileDiff
+        ) {
+          return;
+        }
         editor.__syncRenderView(
           highlighter,
           fileContainer,
