@@ -232,6 +232,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #scrollingToLineNoFocus = false;
   #retainSearchPanelFocus = false;
   #fontRemeasureScheduled = false;
+  #themeSelectionRefreshFrame?: number;
 
   #onDeferTokenize = (
     lines: Map<number, Array<HighlightedToken>>,
@@ -544,6 +545,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // Let a reused instance schedule the font re-measure again on its next
     // mount, where a different font-family string may not be loaded yet.
     this.#fontRemeasureScheduled = false;
+    if (this.#themeSelectionRefreshFrame !== undefined) {
+      cancelAnimationFrame(this.#themeSelectionRefreshFrame);
+      this.#themeSelectionRefreshFrame = undefined;
+    }
 
     this.#resetState();
   }
@@ -649,6 +654,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         textDocument,
         codeOptions: this.#fileInstance?.options ?? {},
         onDeferTokenize: this.#onDeferTokenize,
+        onThemeChange: () => this.#scheduleThemeSelectionRefresh(),
         setStyle: (css) => {
           this.#themeStyleElement!.textContent = css;
         },
@@ -2493,6 +2499,31 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
+  // Re-render the selection overlay after a theme swap so rounded corner masks
+  // recompute their `--diffs-selection-corner-bg`. Those masks capture the
+  // resolved line-background color when the selection is drawn; a light/dark or
+  // theme-name change updates the line CSS but leaves the captured color stale,
+  // showing wrong-colored corners on diff-colored lines until the selection
+  // moves. Deferred to the next frame because a host-driven theme change fires
+  // this mid-`#sync` (before the render range is refreshed), and `#sync`
+  // re-renders the overlay itself; the frame delay avoids re-entrancy and is
+  // imperceptible.
+  #scheduleThemeSelectionRefresh(): void {
+    if (this.#themeSelectionRefreshFrame !== undefined) {
+      return;
+    }
+    this.#themeSelectionRefreshFrame = requestAnimationFrame(() => {
+      this.#themeSelectionRefreshFrame = undefined;
+      if (
+        this.#selections !== undefined ||
+        this.#matches !== undefined ||
+        this.#markerRenderer !== undefined
+      ) {
+        this.#updateSelections(this.#selections ?? []);
+      }
+    });
+  }
+
   #updateSelections(selections: EditorSelection[]) {
     this.__postponeBgTokenizeToNextFrame();
 
@@ -2806,7 +2837,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       radius: 'rtl' | 'rbl' | 'rbr'
     ) => {
       const top = this.#getLineY(line) + wrapLine * lineHeight;
-      const css = `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);`;
+      // Match the corner mask to the line color behind the selection; when
+      // absent (context lines) the CSS falls back to the editor base bg.
+      const cornerBg = this.#lineBackgroundColor(line);
+      const css =
+        `width:${ch}px;transform:translateX(${left}px) translateY(${top}px);` +
+        (cornerBg !== undefined
+          ? `--diffs-selection-corner-bg:${cornerBg};`
+          : '');
       const dataset = {
         selectionCorner: '',
         [radius]: '',
@@ -3602,6 +3640,25 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
     }
     return undefined;
+  }
+
+  // Painted background color of a line, read from the [data-line]::after layer
+  // (the line element itself is transparent in edit mode). Returns undefined when
+  // that layer is transparent (e.g. context lines).
+  #lineBackgroundColor(line: number): string | undefined {
+    const lineElement = this.#getLineElement(line);
+    if (lineElement === undefined) {
+      return undefined;
+    }
+    const backgroundColor = getComputedStyle(
+      lineElement,
+      '::after'
+    ).backgroundColor;
+    return backgroundColor === '' ||
+      backgroundColor === 'transparent' ||
+      backgroundColor === 'rgba(0, 0, 0, 0)'
+      ? undefined
+      : backgroundColor;
   }
 
   #getLineElement(line: number): HTMLElement | undefined {

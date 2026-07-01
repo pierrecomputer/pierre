@@ -24,6 +24,10 @@ export interface EditorTokenizerProps {
     lines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light'
   ) => void;
+  // Fired after the active theme (light/dark mode or theme name) changes and the
+  // new theme CSS has been applied. Lets the editor recompute overlay pieces
+  // that captured a resolved theme color, e.g. rounded selection corner masks.
+  onThemeChange?: () => void;
   __debug?: boolean;
 }
 
@@ -44,6 +48,7 @@ export class EditorTokenizer {
   #tokenizeMaxLineLength: number;
   #setStyle: EditorTokenizerProps['setStyle'];
   #onDeferTokenize: EditorTokenizerProps['onDeferTokenize'];
+  #onThemeChange: EditorTokenizerProps['onThemeChange'];
   #debug: boolean;
   #disposes?: (() => void)[];
 
@@ -102,6 +107,7 @@ export class EditorTokenizer {
     textDocument,
     setStyle,
     onDeferTokenize,
+    onThemeChange,
     __debug,
   }: EditorTokenizerProps) {
     const {
@@ -152,6 +158,7 @@ export class EditorTokenizer {
     this.#tokenizeMaxLineLength = tokenizeMaxLineLength;
     this.#setStyle = setStyle;
     this.#onDeferTokenize = onDeferTokenize;
+    this.#onThemeChange = onThemeChange;
     this.#debug = __debug ?? false;
     this.#ensureGrammar();
     this.#colorMap = [];
@@ -168,6 +175,10 @@ export class EditorTokenizer {
     if (this.#grammar !== undefined && this.#textDocument.lineCount > 0) {
       this.#scheduleBackgroundTokenize(0);
     }
+    // The theme CSS is now applied, so overlay pieces that captured a resolved
+    // theme color (e.g. rounded selection corner masks) can recompute against
+    // the new colors instead of keeping the old light/dark value.
+    this.#onThemeChange?.();
   }
 
   // Re-apply the editor's theme from the surface's current code options. Edit
