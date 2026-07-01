@@ -5,6 +5,7 @@ import { cleanLastNewline } from '../src/utils/cleanLastNewline';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
   recomputeDiffHunks,
+  recomputeDiffHunksForEdit,
   updateDiffHunks,
 } from '../src/utils/updateDiffHunks';
 import { hasTrailingContextMismatch } from '../src/utils/virtualDiffLayout';
@@ -277,6 +278,55 @@ describe('updateDiffHunks', () => {
       diff,
       runFullRecomputeEdit(base, line, 'line 10 replace newer')
     );
+  });
+
+  test('preserves context when a contentful edit has an editor-only trailing blank line', () => {
+    const oldContents = ['drop 1', 'kept', 'drop 2', ''].join('\n');
+    const diff = parseDiffFromFile(
+      { name: 'example.ts', contents: oldContents },
+      { name: 'example.ts', contents: 'kept\n' },
+      { context: 3 }
+    );
+
+    // Mirrors edit mode after deleting all but one matching line in a longer
+    // file and pressing Enter: the editor has a final logical empty line that
+    // patch-style splitting would normally drop.
+    diff.additionLines = ['kept\n', ''];
+
+    const recomputed = recomputeDiffHunksForEdit(diff, { context: 3 });
+
+    expect(recomputed.additionLines).toEqual(['kept\n', '']);
+    expect(recomputed.splitLineCount).toBe(4);
+    expect(recomputed.unifiedLineCount).toBe(4);
+    expect(recomputed.hunks[0]?.hunkContent).toEqual([
+      {
+        type: 'change',
+        additions: 0,
+        deletions: 1,
+        additionLineIndex: 0,
+        deletionLineIndex: 0,
+      },
+      {
+        type: 'context',
+        lines: 1,
+        additionLineIndex: 0,
+        deletionLineIndex: 1,
+      },
+      {
+        type: 'change',
+        additions: 0,
+        deletions: 1,
+        additionLineIndex: 1,
+        deletionLineIndex: 2,
+      },
+      {
+        type: 'change',
+        additions: 1,
+        deletions: 0,
+        additionLineIndex: 1,
+        deletionLineIndex: 3,
+      },
+    ]);
   });
 
   test('translates reparsed hunk coordinates when context lines become changes', () => {

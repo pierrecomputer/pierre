@@ -1215,10 +1215,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               pendingSplitContext.side != null &&
               pendingSplitContext.side !== missingSide
             ) {
-              // NOTE(amadeus): If we see this error, we might need to bring back: flushSplitSpan();
-              throw new Error(
-                'DiffHunksRenderer.processDiffResult: iterateOverDiff, invalid pending splits'
-              );
+              pendingSplitContext.flush();
             }
             pendingSplitContext.side = missingSide;
             pendingSplitContext.increment();
