@@ -231,6 +231,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #scrollingToLineNoFocus = false;
   #retainSearchPanelFocus = false;
   #fontRemeasureScheduled = false;
+  #themeSelectionRefreshFrame?: number;
 
   #onDeferTokenize = (
     lines: Map<number, Array<HighlightedToken>>,
@@ -542,6 +543,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // Let a reused instance schedule the font re-measure again on its next
     // mount, where a different font-family string may not be loaded yet.
     this.#fontRemeasureScheduled = false;
+    if (this.#themeSelectionRefreshFrame !== undefined) {
+      cancelAnimationFrame(this.#themeSelectionRefreshFrame);
+      this.#themeSelectionRefreshFrame = undefined;
+    }
 
     this.#resetState();
   }
@@ -646,6 +651,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         textDocument,
         codeOptions: this.#fileInstance?.options ?? {},
         onDeferTokenize: this.#onDeferTokenize,
+        onThemeChange: () => this.#scheduleThemeSelectionRefresh(),
         setStyle: (css) => {
           this.#themeStyleElement!.textContent = css;
         },
@@ -2554,6 +2560,31 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     } catch {
       // InteractionManager.renderSelection can throw while editor DOM is updating.
     }
+  }
+
+  // Re-render the selection overlay after a theme swap so rounded corner masks
+  // recompute their `--diffs-selection-corner-bg`. Those masks capture the
+  // resolved line-background color when the selection is drawn; a light/dark or
+  // theme-name change updates the line CSS but leaves the captured color stale,
+  // showing wrong-colored corners on diff-colored lines until the selection
+  // moves. Deferred to the next frame because a host-driven theme change fires
+  // this mid-`#sync` (before the render range is refreshed), and `#sync`
+  // re-renders the overlay itself; the frame delay avoids re-entrancy and is
+  // imperceptible.
+  #scheduleThemeSelectionRefresh(): void {
+    if (this.#themeSelectionRefreshFrame !== undefined) {
+      return;
+    }
+    this.#themeSelectionRefreshFrame = requestAnimationFrame(() => {
+      this.#themeSelectionRefreshFrame = undefined;
+      if (
+        this.#selections !== undefined ||
+        this.#matches !== undefined ||
+        this.#markerRenderer !== undefined
+      ) {
+        this.#updateSelections(this.#selections ?? []);
+      }
+    });
   }
 
   #updateSelections(selections: EditorSelection[]) {
