@@ -245,7 +245,7 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="w-58 p-2"
+                className="w-72 p-2"
                 style={dropdownThemeStyle}
               >
                 <GitHubTokenControl
@@ -253,7 +253,7 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
                   onClear={onClearGitHubToken}
                   onSave={onSaveGitHubToken}
                 />
-                <div className="bg-border/70 my-1 h-px" />
+                <div className="bg-border/70 my-2 h-px" />
                 <DropdownMenuItem
                   className="cursor-default p-0"
                   onSelect={(e) => e.preventDefault()}
