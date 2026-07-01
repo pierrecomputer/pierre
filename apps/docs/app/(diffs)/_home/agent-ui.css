@@ -13,6 +13,9 @@
   --ide-accent: light-dark(#2563eb, #3b82f6);
 
   display: grid;
+  /* Single body row that fills the card. There's no separate titlebar: the
+     macOS-style traffic-light controls live inline (left of the breadcrumb in
+     the windowed card, in the explorer header in fullscreen). */
   grid-template-rows: minmax(0, 1fr);
   height: 560px;
   max-height: 72vh;
@@ -24,6 +27,11 @@
   color: var(--ide-fg);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   font-size: 13px;
+
+  /* Shared element for the windowed <-> fullscreen morph. Both variants render
+     a single `.aui`, so the cross-route View Transition (driven manually in
+     AgentUi.tsx) FLIP-animates this element's size/position between them. */
+  view-transition-name: aui-window;
 }
 
 .aui[data-theme-type='light'] {
@@ -55,6 +63,92 @@
   background-color: var(--ide-tab-hover);
 }
 
+/* --- Window controls (traffic lights) ----------------------------------- */
+
+/* macOS traffic lights. Decorative dots are <span>s; the actionable one (green
+   in the windowed card, red/green in fullscreen) is a Link/button that drives
+   the view transition. Glyphs reveal on cluster hover like the real control.
+   The shared view-transition-name lets the cluster glide between its windowed
+   (left of breadcrumb) and fullscreen (explorer header) positions during the
+   cross-route morph. */
+.aui-traffic {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  view-transition-name: aui-traffic;
+}
+
+.aui-dot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background-color: var(--dot);
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.18);
+  transition: transform 0.12s ease;
+}
+
+.aui-dot.is-close {
+  --dot: #ff5f57;
+}
+
+.aui-dot.is-min {
+  --dot: #febc2e;
+}
+
+.aui-dot.is-zoom {
+  --dot: #28c840;
+}
+
+a.aui-dot,
+button.aui-dot {
+  cursor: pointer;
+}
+
+.aui-dot::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 11px;
+  color: rgb(0 0 0 / 0.6);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.aui-traffic:hover .aui-dot::after {
+  opacity: 1;
+}
+
+.aui-traffic:hover .aui-dot.is-close::after {
+  content: '\00d7';
+}
+
+.aui-traffic:hover .aui-dot.is-min::after {
+  content: '\2013';
+}
+
+.aui-traffic:hover .aui-dot.is-zoom::after {
+  content: '\002b';
+}
+
+a.aui-dot.is-zoom:hover,
+button.aui-dot.is-zoom:hover {
+  transform: scale(1.15);
+}
+
+.aui-dot:focus-visible {
+  outline: 2px solid var(--ide-accent);
+  outline-offset: 2px;
+}
+
 .aui-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 380px;
@@ -73,7 +167,6 @@
 .aui-center-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   height: 44px;
   padding-inline: 12px;
@@ -280,11 +373,165 @@
   opacity: 0.6;
 }
 
+/* Live count of changed files (formerly in the titlebar), shown as a pill on
+   the selected Changes tab. */
+.aui-changes-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  padding-inline: 5px;
+  border-radius: 999px;
+  background-color: var(--ide-tab-hover);
+  color: var(--ide-fg-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.aui-changes-tabs button[aria-selected='true'] .aui-changes-count {
+  color: var(--ide-fg);
+}
+
 .aui-tree {
   flex: 1;
   min-height: 0;
   overflow: auto;
   padding-top: 6px;
+}
+
+/* --- Fullscreen variant (/edit/live) ------------------------------------- */
+
+/* The standalone route fills the viewport with no surrounding page chrome and
+   adds a full project file explorer on the left, keeping the changes panel on
+   the right — like a real editor. Higher specificity than the windowed `.aui`
+   rules (including those inside the desktop media query, since media queries
+   don't add specificity) so it wins regardless of source order. */
+.aui[data-variant='fullscreen'] {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  width: 100vw;
+  height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Three columns: the full file explorer (left), the editor (center), and the
+   existing changes panel (right, unchanged from the windowed layout). The left
+   panel only renders in the fullscreen variant, so the windowed card keeps its
+   two-column body. */
+.aui[data-variant='fullscreen'] .aui-body {
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr) 340px;
+}
+
+/* The fullscreen editor gets the breathing room of the full viewport, so widen
+   the composer's max line measure a touch via centered padding. */
+.aui[data-variant='fullscreen'] .aui-composer {
+  margin-inline: max(12px, calc((100% - 900px) / 2));
+}
+
+/* --- Left file explorer (fullscreen only) -------------------------------- */
+
+.aui-files {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--ide-border);
+  background-color: var(--ide-panel);
+}
+
+.aui-files-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding-inline: 12px 8px;
+  border-bottom: 1px solid var(--ide-border);
+}
+
+/* Window controls sit on the left; the file actions fill the rest and align
+   right. */
+.aui-files-toolbar .aui-traffic {
+  margin-right: auto;
+}
+
+.aui-files-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.aui-files-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--ide-fg-muted);
+  cursor: pointer;
+}
+
+.aui-files-action svg {
+  width: 15px;
+  height: 15px;
+}
+
+.aui-files-action:hover {
+  background-color: var(--ide-tab-active);
+  color: var(--ide-fg);
+}
+
+.aui-files-action[aria-pressed='true'] {
+  background-color: var(--ide-tab-active);
+  color: var(--ide-fg);
+}
+
+.aui-files-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-top: 6px;
+}
+
+/* --- Cross-route morph (View Transitions API) ---------------------------- */
+
+/* React assigns `view-transition-name: aui-window` to the `.aui` element during
+   the navigation between the windowed card and the fullscreen route, so the
+   browser FLIP-morphs its size/position. Tune the timing for an editor-window
+   "zoom" feel and cross-fade the differing contents over the same duration. */
+::view-transition-group(aui-window) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+::view-transition-old(aui-window),
+::view-transition-new(aui-window) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+::view-transition-group(aui-traffic) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(aui-window),
+  ::view-transition-old(aui-window),
+  ::view-transition-new(aui-window),
+  ::view-transition-group(aui-traffic),
+  ::view-transition-old(aui-traffic),
+  ::view-transition-new(aui-traffic) {
+    animation: none;
+  }
 }
 
 /* --- Mobile -------------------------------------------------------------- */
@@ -300,5 +547,12 @@
 
   .aui-changes {
     display: none;
+  }
+
+  /* The fullscreen route is a file navigator first, so keep the explorer on the
+     left even when there's no room for it in the embedded windowed card; the
+     changes panel stays hidden at this width. */
+  .aui[data-variant='fullscreen'] .aui-body {
+    grid-template-columns: minmax(0, 44%) minmax(0, 1fr);
   }
 }

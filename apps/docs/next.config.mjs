@@ -38,6 +38,14 @@ const nextConfig = {
   devIndicators: false,
   experimental: {
     cssChunking: 'strict',
+    // Enables React's <ViewTransition> integration when the React runtime
+    // supports it. The pinned stable React (19.2) ships no ViewTransition
+    // runtime, so this is currently a no-op forward-compat flag: the agent
+    // demo's windowed <-> fullscreen morph is driven manually via
+    // document.startViewTransition (see navigateWithViewTransition in
+    // _home/AgentUi.tsx). Kept on so the native path lights up after a React
+    // upgrade without further wiring.
+    viewTransition: true,
   },
   // allowedDevOrigins: [],
   // Resolve and transpile workspace packages so subpath exports (e.g. @pierre/trees/react)
