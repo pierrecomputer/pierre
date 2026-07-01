@@ -625,7 +625,7 @@ function createManagedCodeViewOptions<LAnnotation>({
     onSelectedLinesChange == null &&
     !controlledSelection
   ) {
-    return options;
+    return options ?? {};
   }
   options = { ...options, controlledSelection, onSelectedLinesChange };
 
@@ -702,7 +702,7 @@ const SlotPortals = memo(function SlotPortals<LAnnotation>({
   >(subscribe, getSnapshot, getSnapshot);
   let itemKeys = '';
   for (const item of snapshot?.items ?? []) {
-    itemKeys += `${item.id}:${item.version}`;
+    itemKeys += `${item.id}:${item.version}:${item.type}`;
   }
   // NOTE(amadeus): And just like that, the react compiler do be failing us
   // lol... we need to pre-render everything for items, headers and footers to
