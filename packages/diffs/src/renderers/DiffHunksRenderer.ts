@@ -404,38 +404,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
 
     if (changedAdditionLines.length > 0) {
-      this.recomputeContentHunks(changedAdditionLines);
+      Object.assign(
+        diff,
+        updateDiffHunks(
+          diff,
+          changedAdditionLines,
+          this.options.parseDiffOptions
+        )
+      );
     }
 
     result.baseThemeType = themeType;
     this.renderCache.isDirty = true;
-  }
-
-  // Incrementally recompute hunk metadata after an in-place content edit
-  // (no line-count change). For a line-count change the host calls
-  // `applyDocumentChange` instead, which recomputes from the full document.
-  private recomputeContentHunks(
-    changedAdditionLineIndexes: readonly number[]
-  ): void {
-    if (this.renderCache == null) {
-      return;
-    }
-    const { diff, result } = this.renderCache;
-    if (
-      result == null ||
-      diff.isPartial ||
-      changedAdditionLineIndexes.length === 0
-    ) {
-      return;
-    }
-    Object.assign(
-      diff,
-      updateDiffHunks(
-        diff,
-        changedAdditionLineIndexes,
-        this.options.parseDiffOptions
-      )
-    );
   }
 
   // Normally triggered by the host when the document line count changes.

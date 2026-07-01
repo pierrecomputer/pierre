@@ -264,6 +264,9 @@ export class FileDiff<
 
   protected editor: DiffsEditor<LAnnotation> | undefined;
   protected refreshViewTimeout: ReturnType<typeof setTimeout> | undefined;
+  protected deferSetSelection:
+    | [SelectedLineRange | null, SelectionWriteOptions | undefined]
+    | undefined;
 
   constructor(
     public options: FileDiffOptions<LAnnotation> = { theme: DEFAULT_THEMES },
@@ -493,7 +496,11 @@ export class FileDiff<
     range: SelectedLineRange | null,
     options?: SelectionWriteOptions
   ): void {
-    this.interactionManager.setSelection(range, options);
+    if (this.refreshViewTimeout != null) {
+      this.deferSetSelection = [range, options];
+    } else {
+      this.interactionManager.setSelection(range, options);
+    }
   }
 
   public flushManagers(): void {
@@ -1202,6 +1209,10 @@ export class FileDiff<
           this.refreshSplitDiffView();
         } else {
           this.refreshUnifiedDiffView();
+        }
+        if (this.deferSetSelection != null) {
+          this.interactionManager.setSelection(...this.deferSetSelection);
+          this.deferSetSelection = undefined;
         }
       }, 150);
     }

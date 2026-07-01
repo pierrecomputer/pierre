@@ -2530,6 +2530,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         (selection) => !isCollapsedSelection(selection)
       );
       const caretLine = getCaretPosition(primarySelection).line + 1;
+
       this.#setSelectedLinesSafe(
         { start: caretLine, end: caretLine },
         hasNonEmptySelection
