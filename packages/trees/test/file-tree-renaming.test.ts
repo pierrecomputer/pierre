@@ -612,4 +612,79 @@ describe('file-tree renaming', () => {
       cleanup();
     }
   });
+
+  test('Enter during IME composition confirms the candidate without committing the rename', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const renameEvents: Array<{
+        destinationPath: string;
+        isFolder: boolean;
+        sourcePath: string;
+      }> = [];
+      const FileTree = await loadFileTree();
+
+      const fileTree = new FileTree({
+        initialExpansion: 'open',
+        paths: ['README.md', 'src/index.ts'],
+        initialVisibleRowCount: 240 / 30,
+        renaming: {
+          onRename: (event) => {
+            renameEvents.push(event);
+          },
+        },
+      });
+      const containerWrapper = document.createElement('div');
+      fileTree.render({ containerWrapper });
+      await flushDom();
+
+      const shadowRoot = getShadowRoot(fileTree);
+      const readmeButton = getItemButton(shadowRoot, dom, 'README.md');
+      readmeButton.click();
+      readmeButton.focus();
+      await flushDom();
+
+      pressKey(readmeButton, dom, 'F2');
+      await flushDom();
+
+      const renameInput = getRenameInput(shadowRoot, dom);
+      // Simulate the input value held mid-composition (e.g. a partial pinyin
+      // string) as the IME candidate menu is confirmed with Enter.
+      setInputValue(renameInput, dom, 'shu');
+      pressKey(renameInput, dom, 'Enter', { isComposing: true });
+      await flushDom(3);
+
+      // The IME-confirming Enter must not commit; the rename input stays open.
+      expect(renameEvents).toEqual([]);
+      expect(
+        shadowRoot.querySelector('[data-item-rename-input]')
+      ).not.toBeNull();
+
+      // Older browsers surface composition via keyCode 229 rather than
+      // isComposing; that Enter must be ignored too.
+      pressKey(renameInput, dom, 'Enter', { keyCode: 229 });
+      await flushDom(3);
+      expect(renameEvents).toEqual([]);
+      expect(
+        shadowRoot.querySelector('[data-item-rename-input]')
+      ).not.toBeNull();
+
+      // Once composition ends, a real Enter commits the finalized value.
+      const finalizedInput = getRenameInput(shadowRoot, dom);
+      setInputValue(finalizedInput, dom, '文档.md');
+      pressKey(finalizedInput, dom, 'Enter');
+      await flushDom(3);
+
+      expect(renameEvents).toEqual([
+        {
+          destinationPath: '文档.md',
+          isFolder: false,
+          sourcePath: 'README.md',
+        },
+      ]);
+      expect(shadowRoot.querySelector('[data-item-rename-input]')).toBeNull();
+      expect(fileTree.getItem('文档.md')).not.toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
 });

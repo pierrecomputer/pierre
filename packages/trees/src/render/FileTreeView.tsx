@@ -2167,6 +2167,16 @@ export function FileTreeView({
     }
 
     if (renameView.isActive()) {
+      // Skip keys dispatched while an IME is composing a candidate. During
+      // CJK/kana/Hangul composition the Enter that confirms a candidate (and
+      // the Escape that dismisses it) is consumed by the IME and carries
+      // `isComposing: true` (older Safari/Edge report `keyCode === 229`).
+      // Committing/cancelling the rename here would truncate the in-flight
+      // composition, so let the IME handle the key and leave the input open.
+      if (event.isComposing || event.keyCode === 229) {
+        return;
+      }
+
       if (event.key === 'Escape') {
         renameView.cancel();
       } else if (event.key === 'Enter') {
