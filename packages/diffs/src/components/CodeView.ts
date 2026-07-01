@@ -1103,11 +1103,13 @@ export class CodeView<LAnnotation = undefined> {
     this.stickyContainer.remove();
     this.stickyContainer.textContent = '';
     this.header.element?.remove();
-    this.footer.element?.remove();
     this.header.element = undefined;
-    this.footer.element = undefined;
     this.header.render = undefined;
+    this.header.height = 0;
+    this.footer.element?.remove();
+    this.footer.element = undefined;
     this.footer.render = undefined;
+    this.footer.height = 0;
     this.root = undefined;
     this.container = undefined;
   }
