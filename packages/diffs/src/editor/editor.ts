@@ -557,14 +557,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // read-only surface would keep showing the editor's stale selected line.
     this.#resetState();
 
-    // Drop the attached document so a re-attach rebuilds from the host's
-    // contents rather than reusing the edited buffer. The document survives host
-    // re-renders (option toggles) but not a full detach, so remounting the
-    // surface on the same editor discards prior edits - how the docs "Live
-    // editing" Reset reverts to the original.
+    // Drop the attached component so a re-attach rebuilds from the host's
+    // contents rather than reusing the edited buffer. #textDocument and
+    // #fileInfo are already released above (the detach that discards prior edits
+    // so the docs "Live editing" Reset reverts to the original).
     this.#fileInstance = undefined;
-    this.#fileInfo = undefined;
-    this.#textDocument = undefined;
   }
 
   /** @internal */
