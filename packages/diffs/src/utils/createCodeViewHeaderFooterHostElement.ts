@@ -7,13 +7,13 @@ import {
 // gives it a block formatting context so the caller's content margins stay
 // inside it, keeping measurement / ResizeObserver heights accurate.
 export function createCodeViewHeaderFooterHostElement(
-  kind: 'header' | 'footer',
+  type: 'header' | 'footer',
   container: HTMLDivElement,
   resizeObserver?: ResizeObserver
 ): HTMLDivElement {
   const element = document.createElement('div');
   element.style.display = 'flow-root';
-  if (kind === 'header') {
+  if (type === 'header') {
     element.setAttribute(CODE_VIEW_HEADER_ATTRIBUTE, '');
     container.before(element);
   } else {

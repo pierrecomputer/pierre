@@ -897,15 +897,15 @@ export class CodeView<LAnnotation = undefined> {
   // and tear it down when the callback is removed. Otherwise the mounted host is
   // left untouched (its content is owned by the caller, or by React via a portal).
   // Mutates the record in place and returns whether its content changed.
-  private reconcileHost(kind: 'header' | 'footer'): boolean {
+  private reconcileHost(type: 'header' | 'footer'): boolean {
     const { root, container } = this;
     if (root == null || container == null) {
       return false;
     }
 
-    const host = kind === 'header' ? this.header : this.footer;
+    const host = type === 'header' ? this.header : this.footer;
     const render =
-      kind === 'header'
+      type === 'header'
         ? this.options.renderCodeViewHeader
         : this.options.renderCodeViewFooter;
 
@@ -936,7 +936,7 @@ export class CodeView<LAnnotation = undefined> {
     const element =
       host.element ??
       createCodeViewHeaderFooterHostElement(
-        kind,
+        type,
         container,
         this.resizeObserver
       );
