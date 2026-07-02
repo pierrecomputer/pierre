@@ -350,8 +350,9 @@ export class File<
 
     this.enabled = false;
 
-    // Clean up the editor
-    this.editor?.cleanUp();
+    // Clean up the editor. Recycling keeps the editor's document/undo state
+    // so the host that owns the editor can re-attach it on remount.
+    this.editor?.cleanUp(recycle);
     this.editor = undefined;
   }
 

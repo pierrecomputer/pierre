@@ -1028,7 +1028,14 @@ export interface DiffsEditor<LAnnotation> {
       | undefined,
     renderRange: RenderRange | undefined
   ): void;
-  cleanUp(): void;
+  /**
+   * Detach from the host component and release all DOM-bound state. With
+   * `recycle` the editor keeps its parsed document, undo history, and file
+   * identity so a later `edit()` against the same file resumes where it left
+   * off — used when a virtualized host temporarily unmounts. Without it the
+   * editor fully resets and the next `edit()` rebuilds from host contents.
+   */
+  cleanUp(recycle?: boolean): void;
 }
 
 /**
@@ -1039,6 +1046,21 @@ export interface DiffsEditor<LAnnotation> {
  */
 export interface DiffsEditorHost<LAnnotation> extends DiffsEditor<LAnnotation> {
   edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void;
+}
+
+/**
+ * Options CodeView passes to its `createEditor` factory. A structural subset
+ * of `EditorOptions` from `@pierre/diffs/editor`, so factories can spread
+ * them straight into the constructor — `new Editor({ ...options })` — and
+ * layer any editor configuration of their own on top. Forwarding `onChange`
+ * is what lets CodeView resolve document changes back to the owning item and
+ * emit them through its own `onItemEditChange` option.
+ */
+export interface CodeViewCreateEditorOptions<LAnnotation> {
+  onChange: (
+    file: FileContents,
+    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  ) => void;
 }
 
 export interface DiffsEditorSelection {

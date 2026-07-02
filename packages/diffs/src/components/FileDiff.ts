@@ -586,7 +586,9 @@ export class FileDiff<
 
     this.enabled = false;
 
-    this.editor?.cleanUp();
+    // Clean up the editor. Recycling keeps the editor's document/undo state
+    // so the host that owns the editor can re-attach it on remount.
+    this.editor?.cleanUp(recycle);
     this.editor = undefined;
     if (this.refreshViewTimeout != null) {
       clearTimeout(this.refreshViewTimeout);
