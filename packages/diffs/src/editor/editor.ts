@@ -57,6 +57,7 @@ import {
   getCaretPosition,
   getDocumentBoundarySelection,
   getDocumentFullSelection,
+  getSelectedLineBlocks,
   getSelectionAnchor,
   getSelectionText,
   isCollapsedSelection,
@@ -68,6 +69,7 @@ import {
   resolveIndentEdits,
   resolveSelectionCut,
   selectionIntersects,
+  shiftSelectionLines,
 } from './selection';
 import {
   type SelectionActionContext,
@@ -1587,6 +1589,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         break;
       }
 
+      case 'moveLineUp':
+      case 'moveLineDown':
+        this.#moveSelectedLines(command === 'moveLineUp' ? -1 : 1);
+        break;
+
       case 'indent':
       case 'outdent':
         if (this.#selections !== undefined) {
@@ -1730,6 +1737,77 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           }
         }
         break;
+    }
+  }
+
+  #moveSelectedLines(direction: -1 | 1): void {
+    const textDocument = this.#textDocument;
+    const selections = this.#selections;
+    if (textDocument === undefined || selections === undefined) {
+      return;
+    }
+
+    const blocks = getSelectedLineBlocks(selections);
+    if (
+      blocks.length === 0 ||
+      (direction < 0 && blocks[0].startLine === 0) ||
+      (direction > 0 && blocks.at(-1)!.endLine >= textDocument.lineCount - 1)
+    ) {
+      return;
+    }
+
+    const lines: string[] = [];
+    for (let line = 0; line < textDocument.lineCount; line++) {
+      lines.push(textDocument.getLineText(line));
+    }
+
+    if (direction < 0) {
+      for (const block of blocks) {
+        const previous = lines[block.startLine - 1];
+        lines.splice(
+          block.startLine - 1,
+          block.endLine - block.startLine + 2,
+          ...lines.slice(block.startLine, block.endLine + 1),
+          previous
+        );
+      }
+    } else {
+      for (let index = blocks.length - 1; index >= 0; index--) {
+        const block = blocks[index];
+        const next = lines[block.endLine + 1];
+        lines.splice(
+          block.startLine,
+          block.endLine - block.startLine + 2,
+          next,
+          ...lines.slice(block.startLine, block.endLine + 1)
+        );
+      }
+    }
+
+    const nextSelections = selections.map((selection) =>
+      shiftSelectionLines(selection, direction)
+    );
+    const lastLine = textDocument.lineCount - 1;
+    const change = textDocument.applyEdits(
+      [
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: {
+              line: lastLine,
+              character: textDocument.getLineLength(lastLine),
+            },
+          },
+          newText: lines.join(textDocument.eol),
+        },
+      ],
+      true,
+      selections,
+      nextSelections,
+      true
+    );
+    if (change !== undefined) {
+      this.#applyChange(change, nextSelections);
     }
   }
 

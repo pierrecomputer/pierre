@@ -9,6 +9,8 @@ export type EditorCommand =
   | 'findNextMatch'
   | 'openSearchPanel'
   | 'openSearchReplacePanel'
+  | 'moveLineUp'
+  | 'moveLineDown'
   | 'moveCursorToDocStart'
   | 'moveCursorToDocEnd'
   | 'expandSelectionDocStart'
@@ -27,6 +29,27 @@ export function resolveEditorCommandFromKeyboardEvent(
   const { shiftKey, altKey, key } = event;
 
   const normalizedKey = key.length === 1 ? key.toLowerCase() : key;
+
+  if (!event.metaKey && !shiftKey) {
+    if (!event.ctrlKey && altKey && normalizedKey === 'ArrowUp') {
+      return 'moveLineUp';
+    }
+    if (!event.ctrlKey && altKey && normalizedKey === 'ArrowDown') {
+      return 'moveLineDown';
+    }
+    if (
+      (isMac || navigator.platform.includes('Linux')) &&
+      event.ctrlKey &&
+      altKey
+    ) {
+      if (normalizedKey === 'p' || event.code === 'KeyP') {
+        return 'moveLineUp';
+      }
+      if (normalizedKey === 'n' || event.code === 'KeyN') {
+        return 'moveLineDown';
+      }
+    }
+  }
 
   // cmd/ctrl+f opens the search panel in find mode; adding alt opens it in
   // find/replace mode. macOS emits a dead key for Option+F (key === 'ƒ'), so

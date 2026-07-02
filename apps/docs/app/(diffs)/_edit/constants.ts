@@ -274,6 +274,26 @@ export const EDITOR_SHORTCUT_GROUPS: readonly EditorShortcutGroup[] = [
         modifiers: ['Shift'],
         action: 'Outdent line or selection',
       },
+      {
+        keys: ['↑'],
+        modifiers: ['Alt'],
+        action: 'Move selected line(s) up',
+      },
+      {
+        keys: ['↓'],
+        modifiers: ['Alt'],
+        action: 'Move selected line(s) down',
+      },
+      {
+        keys: ['P'],
+        modifiers: ['Alt', 'Ctrl'],
+        action: 'Move selected line(s) up (macOS/Linux)',
+      },
+      {
+        keys: ['N'],
+        modifiers: ['Alt', 'Ctrl'],
+        action: 'Move selected line(s) down (macOS/Linux)',
+      },
       { keys: ['X'], action: 'Cut', mod: true },
       { keys: ['C'], action: 'Copy', mod: true },
       { keys: ['V'], action: 'Paste', mod: true },

@@ -130,7 +130,10 @@ export function EditPage({
                 <>
                   Edit mode ships with all the additional shortcuts your users
                   will need out of the box. Use the example <code>File</code>{' '}
-                  below to try the shortcuts you see in the table. Editing the
+                  below to try the shortcuts you see in the table, including
+                  moving selected lines with <code>Alt-↑</code> /{' '}
+                  <code>Alt-↓</code> or <code>Alt-Ctrl-P</code> /{' '}
+                  <code>Alt-Ctrl-N</code> on macOS and Linux. Editing the
                   example <code>File</code> will not update the table.
                 </>
               }
