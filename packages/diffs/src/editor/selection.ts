@@ -1363,21 +1363,36 @@ export function getSelectedLineBlocks(
 }
 
 /**
- * Moves a selection's line positions after its lines are shifted.
+ * Moves a selection's line positions after its lines are shifted, clamping to
+ * the target document bounds.
  */
 export function shiftSelectionLines(
   selection: EditorSelection,
-  direction: -1 | 1
+  direction: -1 | 1,
+  lineCount: number,
+  getLineLength: (line: number) => number
 ): EditorSelection {
+  const shiftPosition = (position: Position): Position => {
+    const line = position.line + direction;
+    if (line >= lineCount) {
+      const lastLine = Math.max(0, lineCount - 1);
+      return {
+        line: lastLine,
+        character: getLineLength(lastLine),
+      };
+    }
+    if (line < 0) {
+      return { line: 0, character: 0 };
+    }
+    return {
+      line,
+      character: position.character,
+    };
+  };
+
   return {
-    start: {
-      line: selection.start.line + direction,
-      character: selection.start.character,
-    },
-    end: {
-      line: selection.end.line + direction,
-      character: selection.end.character,
-    },
+    start: shiftPosition(selection.start),
+    end: shiftPosition(selection.end),
     direction: selection.direction,
   };
 }

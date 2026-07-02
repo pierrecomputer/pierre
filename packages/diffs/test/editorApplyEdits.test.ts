@@ -681,6 +681,34 @@ describe('Editor move line commands', () => {
     }
   });
 
+  test('clamps an exclusive selection end when moving to EOF', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 2, character: 0 },
+          direction: 'forward',
+        },
+      ]);
+
+      pressMoveLine(window, content, 'down');
+      expect(editor.getState().file.contents).toBe('alpha\ncharlie\nbravo');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 5 },
+          direction: 1,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('moves multiple selections as separate line blocks', async () => {
     const { cleanup, content, editor, window } =
       await createEditorFixture('a\nb\nc\nd\ne\nf');

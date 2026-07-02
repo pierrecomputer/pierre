@@ -1785,7 +1785,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     const nextSelections = selections.map((selection) =>
-      shiftSelectionLines(selection, direction)
+      shiftSelectionLines(
+        selection,
+        direction,
+        lines.length,
+        (line) => lines[line]?.length ?? 0
+      )
     );
     const lastLine = textDocument.lineCount - 1;
     const change = textDocument.applyEdits(
