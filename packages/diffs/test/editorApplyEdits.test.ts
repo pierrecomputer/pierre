@@ -651,6 +651,34 @@ describe('Editor move line commands', () => {
     }
   });
 
+  test('moves the final line up without adding a trailing newline', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 2, character: 3 },
+          end: { line: 2, character: 3 },
+          direction: 'none',
+        },
+      ]);
+
+      pressMoveLine(window, content, 'up');
+      expect(editor.getState().file.contents).toBe('alpha\ncharlie\nbravo');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 3 },
+          end: { line: 1, character: 3 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('moves every selected line in a range', async () => {
     const { cleanup, content, editor, window } = await createEditorFixture(
       'zero\none\ntwo\nthree\nfour'

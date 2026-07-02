@@ -1756,56 +1756,75 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
-    const lines: string[] = [];
-    for (let line = 0; line < textDocument.lineCount; line++) {
-      lines.push(textDocument.getLineText(line));
-    }
+    const lineCount = textDocument.lineCount;
+    const lineRangeEnd = (line: number): Position =>
+      line < lineCount - 1
+        ? { line: line + 1, character: 0 }
+        : { line, character: textDocument.getLineLength(line) };
+    const getLinesText = (
+      lines: number[],
+      appendFinalLineBreak: boolean
+    ): string => {
+      const text = lines
+        .map((line) => textDocument.getLineText(line))
+        .join(textDocument.eol);
+      return appendFinalLineBreak ? text + textDocument.eol : text;
+    };
 
+    const edits: TextEdit[] = [];
     if (direction < 0) {
       for (const block of blocks) {
-        const previous = lines[block.startLine - 1];
-        lines.splice(
-          block.startLine - 1,
-          block.endLine - block.startLine + 2,
-          ...lines.slice(block.startLine, block.endLine + 1),
-          previous
-        );
+        const previousLine = block.startLine - 1;
+        const blockLines: number[] = [];
+        for (let line = block.startLine; line <= block.endLine; line++) {
+          blockLines.push(line);
+        }
+        edits.push({
+          range: {
+            start: { line: previousLine, character: 0 },
+            end: lineRangeEnd(block.endLine),
+          },
+          newText: getLinesText(
+            [...blockLines, previousLine],
+            block.endLine < lineCount - 1
+          ),
+        });
       }
     } else {
       for (let index = blocks.length - 1; index >= 0; index--) {
         const block = blocks[index];
-        const next = lines[block.endLine + 1];
-        lines.splice(
-          block.startLine,
-          block.endLine - block.startLine + 2,
-          next,
-          ...lines.slice(block.startLine, block.endLine + 1)
-        );
+        const nextLine = block.endLine + 1;
+        const blockLines: number[] = [];
+        for (let line = block.startLine; line <= block.endLine; line++) {
+          blockLines.push(line);
+        }
+        edits.push({
+          range: {
+            start: { line: block.startLine, character: 0 },
+            end: lineRangeEnd(nextLine),
+          },
+          newText: getLinesText(
+            [nextLine, ...blockLines],
+            nextLine < lineCount - 1
+          ),
+        });
       }
     }
 
+    const lastBlock = blocks.at(-1)!;
+    const lastLineLengthAfterMove =
+      direction > 0 && lastBlock.endLine === lineCount - 2
+        ? textDocument.getLineLength(lastBlock.endLine)
+        : textDocument.getLineLength(lineCount - 1);
     const nextSelections = selections.map((selection) =>
-      shiftSelectionLines(
-        selection,
-        direction,
-        lines.length,
-        (line) => lines[line]?.length ?? 0
+      shiftSelectionLines(selection, direction, lineCount, (line) =>
+        line === lineCount - 1
+          ? lastLineLengthAfterMove
+          : textDocument.getLineLength(line)
       )
     );
-    const lastLine = textDocument.lineCount - 1;
     const change = textDocument.applyEdits(
-      [
-        {
-          range: {
-            start: { line: 0, character: 0 },
-            end: {
-              line: lastLine,
-              character: textDocument.getLineLength(lastLine),
-            },
-          },
-          newText: lines.join(textDocument.eol),
-        },
-      ],
+      edits,
       true,
       selections,
       nextSelections,
