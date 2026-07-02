@@ -544,6 +544,12 @@ export type CodeViewFileItem<T = undefined> = {
   annotations?: LineAnnotation<T>[];
   version?: number;
   collapsed?: boolean;
+  /**
+   * Put this item into edit mode. Requires the CodeView `createEditor` option;
+   * ignored while `collapsed` is true. Like `collapsed`, toggling via
+   * `updateItem` only applies when `version` is bumped.
+   */
+  edit?: boolean;
 };
 
 export type CodeViewDiffItem<T = undefined> = {
@@ -553,6 +559,12 @@ export type CodeViewDiffItem<T = undefined> = {
   annotations?: DiffLineAnnotation<T>[];
   version?: number;
   collapsed?: boolean;
+  /**
+   * Put this item into edit mode. Requires the CodeView `createEditor` option;
+   * ignored while `collapsed` is true. Like `collapsed`, toggling via
+   * `updateItem` only applies when `version` is bumped.
+   */
+  edit?: boolean;
 };
 
 export type CodeViewItem<T = undefined> =
@@ -1017,6 +1029,16 @@ export interface DiffsEditor<LAnnotation> {
     renderRange: RenderRange | undefined
   ): void;
   cleanUp(): void;
+}
+
+/**
+ * The editor surface CodeView drives for items in edit mode. Structurally
+ * matches the `Editor` class from `@pierre/diffs/editor` without importing it,
+ * keeping editor code out of the main entry. Apps supply instances through the
+ * CodeView `createEditor` option.
+ */
+export interface DiffsEditorHost<LAnnotation> extends DiffsEditor<LAnnotation> {
+  edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void;
 }
 
 export interface DiffsEditorSelection {
