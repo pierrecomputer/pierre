@@ -12,7 +12,7 @@ import type {
   HighlightedToken,
   RenderRange,
 } from '../src/types';
-import { installDom } from './domHarness';
+import { installDom, wait } from './domHarness';
 
 function createTestHighlighter(): DiffsHighlighter {
   return {
@@ -217,6 +217,25 @@ function dispatchPaste(target: HTMLElement, text: string): void {
 
   target.dispatchEvent(event);
   expect(event.defaultPrevented).toBe(true);
+}
+
+function dispatchPasteShortcutKeydown(
+  target: HTMLElement,
+  repeat = false,
+  init: Partial<KeyboardEventInit> = {}
+): KeyboardEvent {
+  const event = new window.KeyboardEvent('keydown', {
+    key: init.key ?? 'v',
+    code: init.code ?? 'KeyV',
+    metaKey: true,
+    repeat,
+    ...init,
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+  });
+  target.dispatchEvent(event);
+  return event;
 }
 
 describe('Editor clipboard events', () => {
@@ -489,6 +508,131 @@ describe('Editor clipboard events', () => {
       const writes = dispatchCopy(component.contentElement);
 
       expect(writes).toEqual([['text', 'charlie']]);
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('allows the first browser paste shortcut and suppresses repeat paste', () => {
+    const { cleanup } = installDom();
+
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'alpha',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ]);
+
+      const firstKeydown = dispatchPasteShortcutKeydown(
+        component.contentElement,
+        false,
+        { key: 'V', shiftKey: true }
+      );
+      expect(firstKeydown.defaultPrevented).toBe(false);
+      dispatchPaste(component.contentElement, ' bravo');
+      expect(editor.getState().file.contents).toBe('alpha bravo');
+
+      const repeatKeydown = dispatchPasteShortcutKeydown(
+        component.contentElement,
+        true,
+        { key: 'V', shiftKey: true }
+      );
+      expect(repeatKeydown.defaultPrevented).toBe(true);
+      expect(editor.getState().file.contents).toBe('alpha bravo');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('does not read from a custom clipboard provider on repeat paste', async () => {
+    const { cleanup } = installDom();
+    let reads = 0;
+
+    const editor = new Editor<undefined>({
+      clipboard: {
+        readText: () => {
+          reads++;
+          return ' bravo';
+        },
+      },
+    });
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'alpha',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ]);
+
+      const repeatKeydown = dispatchPasteShortcutKeydown(
+        component.contentElement,
+        true
+      );
+      await wait();
+
+      expect(repeatKeydown.defaultPrevented).toBe(true);
+      expect(reads).toBe(0);
+      expect(editor.getState().file.contents).toBe('alpha');
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('reads from a custom clipboard provider on first paste shortcut', async () => {
+    const { cleanup } = installDom();
+    let reads = 0;
+
+    const editor = new Editor<undefined>({
+      clipboard: {
+        readText: () => {
+          reads++;
+          return ' bravo';
+        },
+      },
+    });
+    const component = new TestEditableComponent({
+      name: 'example.txt',
+      contents: 'alpha',
+      lang: 'text',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setSelections([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ]);
+
+      const keydown = dispatchPasteShortcutKeydown(component.contentElement);
+      await wait();
+
+      expect(keydown.defaultPrevented).toBe(true);
+      expect(reads).toBe(1);
+      expect(editor.getState().file.contents).toBe('alpha bravo');
     } finally {
       editor.cleanUp();
       cleanup();
