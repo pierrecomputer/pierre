@@ -1,55 +1,58 @@
 import type { DiffLineAnnotation } from '../types';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
-import type { TextDocumentChange } from './textDocument';
+import type {
+  TextDocumentChange,
+  TextDocumentLineChange,
+} from './textDocument';
 import { getLineNumberAttr, h } from './utils';
 
 export function applyDocumentChangeToLineAnnotations<T>(
   change: TextDocumentChange,
   lineAnnotations: DiffLineAnnotation<T>[]
 ): DiffLineAnnotation<T>[] | undefined {
-  if (change.lineDelta === 0) {
+  const lineChanges = getLineChanges(change);
+  if (lineChanges.length === 0) {
     return undefined;
   }
 
-  const startCharacter = change.startCharacter;
-  const removedLineCount = Math.max(0, -change.lineDelta);
-  const deletedStartLine =
-    removedLineCount === 0
-      ? undefined
-      : change.startLine + (startCharacter === 0 ? 0 : 1);
-  const deletedEndLine =
-    deletedStartLine === undefined
-      ? undefined
-      : deletedStartLine + removedLineCount;
-  const shiftFromLine =
-    removedLineCount > 0
-      ? change.startLine + removedLineCount
-      : change.startLine + (startCharacter === 0 ? 0 : 1);
   const nextLineAnnotations: DiffLineAnnotation<T>[] = [];
-
   let changed = false;
   for (const annotation of lineAnnotations) {
-    if (annotation.side === 'deletions') {
+    if (annotation.side === 'deletions' || annotation.lineNumber <= 0) {
       nextLineAnnotations.push(annotation);
       continue;
     }
 
-    const line = annotation.lineNumber - 1;
-    if (
-      deletedStartLine !== undefined &&
-      deletedEndLine !== undefined &&
-      line >= deletedStartLine &&
-      line < deletedEndLine
-    ) {
-      changed = true;
-      continue;
+    let line = annotation.lineNumber - 1;
+    let lineCount = change.previousLineCount;
+    let annotationChanged = false;
+    for (const lineChange of lineChanges) {
+      const nextLineCount = Math.max(1, lineCount + lineChange.lineDelta);
+      const nextLine = mapLineThroughLineChange(
+        line,
+        lineChange,
+        nextLineCount
+      );
+      if (
+        nextLine !== line ||
+        lineChangeTouchesAnnotationLine(line, lineChange)
+      ) {
+        annotationChanged = true;
+      }
+      line = nextLine;
+      lineCount = nextLineCount;
     }
 
-    if (line >= shiftFromLine) {
-      nextLineAnnotations.push({
-        ...annotation,
-        lineNumber: line + change.lineDelta + 1,
-      });
+    const lineNumber = line + 1;
+    if (annotationChanged) {
+      nextLineAnnotations.push(
+        lineNumber === annotation.lineNumber
+          ? annotation
+          : {
+              ...annotation,
+              lineNumber,
+            }
+      );
       changed = true;
       continue;
     }
@@ -58,6 +61,86 @@ export function applyDocumentChangeToLineAnnotations<T>(
   }
 
   return changed ? nextLineAnnotations : undefined;
+}
+
+function getLineChanges(
+  change: TextDocumentChange
+): readonly TextDocumentLineChange[] {
+  if (change.lineChanges !== undefined) {
+    return change.lineChanges;
+  }
+  if (change.lineDelta === 0) {
+    return [];
+  }
+  const removedLineCount = Math.max(0, -change.lineDelta);
+  const startLine =
+    removedLineCount > 0 && change.startCharacter > 0
+      ? change.startLine + 1
+      : change.startLine;
+  return [
+    {
+      startLine,
+      startCharacter: change.startCharacter,
+      endLine: startLine + removedLineCount,
+      endCharacter: 0,
+      insertedLineBreaks: Math.max(0, change.lineDelta),
+      lineDelta: change.lineDelta,
+    },
+  ];
+}
+
+function mapLineThroughLineChange(
+  line: number,
+  lineChange: TextDocumentLineChange,
+  nextLineCount: number
+): number {
+  if (line < lineChange.startLine) {
+    return line;
+  }
+
+  if (
+    line > lineChange.endLine ||
+    (lineChange.endLine > lineChange.startLine &&
+      line === lineChange.endLine &&
+      lineChange.endCharacter === 0)
+  ) {
+    return line + lineChange.lineDelta;
+  }
+
+  if (lineChange.startLine === lineChange.endLine) {
+    if (lineChange.startCharacter === 0) {
+      return line + lineChange.insertedLineBreaks;
+    }
+    return line;
+  }
+
+  const replacementLineOffset = Math.min(
+    Math.max(0, line - lineChange.startLine),
+    lineChange.insertedLineBreaks
+  );
+  return clampLine(lineChange.startLine + replacementLineOffset, nextLineCount);
+}
+
+function lineChangeTouchesAnnotationLine(
+  line: number,
+  lineChange: TextDocumentLineChange
+): boolean {
+  if (
+    lineChange.lineDelta === 0 ||
+    line < lineChange.startLine ||
+    line > lineChange.endLine
+  ) {
+    return false;
+  }
+  return !(
+    lineChange.endLine > lineChange.startLine &&
+    line === lineChange.endLine &&
+    lineChange.endCharacter === 0
+  );
+}
+
+function clampLine(line: number, lineCount: number): number {
+  return Math.max(0, Math.min(line, Math.max(0, lineCount - 1)));
 }
 
 export function renderLineAnnotations<LAnnotation>(
