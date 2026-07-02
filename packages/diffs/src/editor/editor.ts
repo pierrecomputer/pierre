@@ -3140,17 +3140,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const popoverHeight = this.#selectionAction.height;
     const candidateGeometry = (
       candidate: typeof preferred
-    ): PopoverPlacementBounds & { left: number } => {
+    ): PopoverPlacementBounds & { left: number; anchorTop: number } => {
       const [left, candidateWrapLine] = this.#getCharX(
         candidate.anchor.line,
         candidate.anchor.character
       );
       const rowTop =
         this.#getLineY(candidate.anchor.line) + candidateWrapLine * lineHeight;
-      const top = candidate.placeAbove
-        ? rowTop - popoverHeight
-        : rowTop + lineHeight;
-      return { top, bottom: top + popoverHeight, left };
+      // `anchorTop` is the value reposition() consumes: the anchor row's top
+      // edge for an above placement (reposition then lifts the popover by its
+      // own height via `--popover-y-shift: -100%`), or the row just below it for
+      // a below placement. `top`/`bottom` describe where the popover actually
+      // paints, so the above case subtracts that height back out — the
+      // viewport fit-check needs the rendered rect, not the pre-shift anchor.
+      const anchorTop = candidate.placeAbove ? rowTop : rowTop + lineHeight;
+      const top = candidate.placeAbove ? anchorTop - popoverHeight : anchorTop;
+      return { top, bottom: top + popoverHeight, left, anchorTop };
     };
     const preferredGeometry = candidateGeometry(preferred);
     const fallbackGeometry = candidateGeometry(fallback);
@@ -3182,12 +3187,14 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       popoverManager.setPlacement('preferred');
     }
     const { placeAbove, anchor } = useFallback ? fallback : preferred;
-    const { left, top } = useFallback ? fallbackGeometry : preferredGeometry;
+    const { left, anchorTop } = useFallback
+      ? fallbackGeometry
+      : preferredGeometry;
 
     this.#selectionAction.line = anchor.line;
     this.#selectionAction.reposition(
       left,
-      top,
+      anchorTop,
       this.#getGutterWidth(),
       placeAbove
     );
