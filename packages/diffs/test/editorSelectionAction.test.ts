@@ -3,7 +3,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
-import { choosePopoverPlacement } from '../src/editor/popoverPlacement';
+import { PopoverManager } from '../src/editor/popover';
 import { DirectionBackward, getCaretPosition } from '../src/editor/selection';
 import type { SelectionActionContext } from '../src/editor/selectionAction';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
@@ -700,15 +700,20 @@ describe('Editor selection action', () => {
   // no layout, so the popover-update path can only reach the document-edge
   // fallback, while these cases cover the viewport-aware branch with explicit
   // geometry.
-  describe('choosePopoverPlacement', () => {
+  describe('choosePlacement', () => {
     // A 200px-tall viewport in overlay coordinate space, shared by the
     // viewport-aware cases below.
     const viewport = { top: 0, bottom: 200 };
     const POPOVER_HEIGHT = 60;
+    const createPopoverManager = (): PopoverManager =>
+      new PopoverManager({
+        hasActivePopover: () => false,
+        updateActivePopover: () => {},
+      });
 
     test('keeps the preferred side when it fits the viewport', () => {
       expect(
-        choosePopoverPlacement({
+        createPopoverManager().choosePlacement({
           preferred: { top: 80, bottom: 140 },
           fallback: { top: 200, bottom: 260 },
           viewport,
@@ -722,7 +727,7 @@ describe('Editor selection action', () => {
       // Backward selection scrolled so its head sits at the top of the viewport:
       // placing above clips past the scrollport top, below has room.
       expect(
-        choosePopoverPlacement({
+        createPopoverManager().choosePlacement({
           preferred: { top: -40, bottom: 20 },
           fallback: { top: 40, bottom: 100 },
           viewport,
@@ -734,7 +739,7 @@ describe('Editor selection action', () => {
 
     test('keeps the preferred side when neither side fits the viewport', () => {
       expect(
-        choosePopoverPlacement({
+        createPopoverManager().choosePlacement({
           preferred: { top: -40, bottom: 20 },
           fallback: { top: 180, bottom: 240 },
           viewport,
@@ -745,10 +750,13 @@ describe('Editor selection action', () => {
     });
 
     // Hysteresis only biases flipping *back* to preferred once already on
-    // fallback; without `previousPlacement` this would resolve to 'preferred'.
+    // fallback; without the manager's prior fallback placement this would
+    // resolve to 'preferred'.
     test('sticks with the fallback side while preferred only barely fits', () => {
+      const popoverManager = createPopoverManager();
+      popoverManager.setPlacement('fallback');
       expect(
-        choosePopoverPlacement({
+        popoverManager.choosePlacement({
           // Fits at margin 0 (top: 2 >= 0), but not within the 4px hysteresis
           // margin (2 < 4) — too close to the edge to trust yet.
           preferred: { top: 2, bottom: 62 },
@@ -756,21 +764,21 @@ describe('Editor selection action', () => {
           viewport,
           popoverHeight: POPOVER_HEIGHT,
           atDocumentEdge: false,
-          previousPlacement: 'fallback',
         })
       ).toBe('fallback');
     });
 
     test('flips back to preferred once it clears the hysteresis margin', () => {
+      const popoverManager = createPopoverManager();
+      popoverManager.setPlacement('fallback');
       expect(
-        choosePopoverPlacement({
+        popoverManager.choosePlacement({
           // Clears the 4px margin (top: 10 >= 4), so it's safe to flip back.
           preferred: { top: 10, bottom: 70 },
           fallback: { top: 120, bottom: 180 },
           viewport,
           popoverHeight: POPOVER_HEIGHT,
           atDocumentEdge: false,
-          previousPlacement: 'fallback',
         })
       ).toBe('preferred');
     });
@@ -778,7 +786,7 @@ describe('Editor selection action', () => {
     test('uses the document-edge signal when viewport geometry is unavailable', () => {
       const bounds = { top: 0, bottom: 0 };
       expect(
-        choosePopoverPlacement({
+        createPopoverManager().choosePlacement({
           preferred: bounds,
           fallback: bounds,
           viewport: undefined,
@@ -787,7 +795,7 @@ describe('Editor selection action', () => {
         })
       ).toBe('fallback');
       expect(
-        choosePopoverPlacement({
+        createPopoverManager().choosePlacement({
           preferred: bounds,
           fallback: bounds,
           viewport: undefined,
@@ -801,7 +809,7 @@ describe('Editor selection action', () => {
       // popoverHeight 0 means no measured geometry, so even with a viewport the
       // decision falls back to the document-edge signal.
       expect(
-        choosePopoverPlacement({
+        createPopoverManager().choosePlacement({
           preferred: { top: -40, bottom: 20 },
           fallback: { top: 40, bottom: 100 },
           viewport,

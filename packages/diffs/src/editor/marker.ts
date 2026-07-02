@@ -1,8 +1,8 @@
 import {
-  choosePopoverPlacement,
   POPOVER_BOUNDARY_LINES,
+  type PopoverManager,
   type PopoverPlacementBounds,
-} from './popoverPlacement';
+} from './popover';
 import { selectionIntersects } from './selection';
 import type { Position, Range, TextDocument } from './textDocument';
 import { addEventListener, getLineNumberAttr, h } from './utils';
@@ -19,19 +19,18 @@ export interface Marker extends Range {
   metadata?: Record<string, unknown>;
 }
 
-export interface EditorStub {
+export interface MarkerRenderOptions {
+  popoverManager: PopoverManager;
   getLineHeight: () => number;
   getOverlayElement: () => HTMLElement | undefined;
   getGutterWidth: () => number;
   getCharX: (line: number, character: number) => [number, number];
   getLineY: (line: number) => number;
-  /** The visible scrollport in overlay coordinate space, or undefined without layout geometry. Used to flip the popup above the marker when below would be clipped. */
-  getOverlayViewport: () => PopoverPlacementBounds | undefined;
   isMouseDown: () => boolean;
 }
 
 export class MarkerRenderer {
-  #editor: EditorStub;
+  #options: MarkerRenderOptions;
   #markers: Marker[] = [];
   // Document line count, used only by the no-viewport document-edge fallback.
   #lineCount = 0;
@@ -44,8 +43,8 @@ export class MarkerRenderer {
   #hoveredMarkerIndex?: number;
   #isMarkerPopupHovered = false;
 
-  constructor(editor: EditorStub) {
-    this.#editor = editor;
+  constructor(editor: MarkerRenderOptions) {
+    this.#options = editor;
   }
 
   get markers(): readonly Marker[] {
@@ -78,7 +77,7 @@ export class MarkerRenderer {
 
     this.#markerEventDisposes = [
       addEventListener(contentEl, 'mouseover', (e) => {
-        if (this.#editor.isMouseDown()) {
+        if (this.#options.isMouseDown()) {
           return;
         }
         const target = e.composedPath()[0] as HTMLElement | undefined;
@@ -219,7 +218,7 @@ export class MarkerRenderer {
   ): void {
     popup.style.setProperty(
       '--gutter-width',
-      this.#editor.getGutterWidth() + 'px'
+      this.#options.getGutterWidth() + 'px'
     );
     popup.style.setProperty('--popover-x', x + 'px');
     popup.style.setProperty('--popover-y', y + 'px');
@@ -235,8 +234,7 @@ export class MarkerRenderer {
     line: number,
     character: number
   ): void {
-    const { getCharX, getLineY, getLineHeight, getOverlayViewport } =
-      this.#editor;
+    const { getCharX, getLineY, getLineHeight, popoverManager } = this.#options;
     const [left, wrapLine] = getCharX(line, character);
     const lineHeight = getLineHeight();
     const rowTop = getLineY(line) + wrapLine * lineHeight;
@@ -251,14 +249,15 @@ export class MarkerRenderer {
       bottom: rowTop,
     };
     const atDocumentEdge = line >= this.#lineCount - POPOVER_BOUNDARY_LINES;
-    const placeAbove =
-      choosePopoverPlacement({
-        preferred,
-        fallback,
-        viewport: getOverlayViewport(),
-        popoverHeight,
-        atDocumentEdge,
-      }) === 'fallback';
+    const viewport = popoverManager.getPlacementBounds();
+    let placeAbove: boolean;
+    if (viewport !== undefined && popoverHeight > 0) {
+      const fits = (bounds: PopoverPlacementBounds): boolean =>
+        bounds.top >= viewport.top && bounds.bottom <= viewport.bottom;
+      placeAbove = !fits(preferred) && fits(fallback);
+    } else {
+      placeAbove = atDocumentEdge;
+    }
 
     this.#setMarkerPopupPosition(
       popup,
@@ -282,7 +281,7 @@ export class MarkerRenderer {
       return;
     }
 
-    const overlayElement = this.#editor.getOverlayElement();
+    const overlayElement = this.#options.getOverlayElement();
     if (hoveredMarkerIndex >= this.#markers.length || overlayElement == null) {
       return;
     }

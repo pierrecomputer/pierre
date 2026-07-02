@@ -29,10 +29,10 @@ import {
 } from './marker';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import {
-  choosePopoverPlacement,
   POPOVER_BOUNDARY_LINES,
+  PopoverManager,
   type PopoverPlacementBounds,
-} from './popoverPlacement';
+} from './popover';
 import {
   type MatchRange,
   type SearchPanelMode,
@@ -150,15 +150,6 @@ export interface EditorState<LAnnotation> {
   renderRange?: RenderRange;
 }
 
-// A candidate placement for the selection-action popover: which document
-// position it anchors to and whether it sits above that row (shifted up by its
-// own height) or below it. Distinct from PopoverPlacementBounds (the resolved
-// screen-space extent of a candidate once its anchor and height are known).
-interface PopoverAnchorCandidate {
-  placeAbove: boolean;
-  anchor: Position;
-}
-
 // Cap on how far an edit may widen the virtualized render window, as a multiple
 // of the bounded window the virtualizer last synced (~viewport + 2*hunkLineCount).
 // Edits within this many lines of the window bottom widen so their caret renders;
@@ -170,6 +161,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #options: EditorOptions<LAnnotation>;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
+  #popoverManager?: PopoverManager;
 
   // event disposes
   #editorEventDisposes?: (() => void)[];
@@ -199,29 +191,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #fileContainer?: HTMLElement;
   #gutterElement?: HTMLElement;
   #contentElement?: HTMLElement;
-  // The `[data-code]` element wrapping #contentElement/#overlayElement. It is
-  // the nearest `position: relative` ancestor (see editor.css) and therefore
-  // the actual coordinate origin for overlay children: #overlayElement itself
-  // is `display: contents` and has no box, so it cannot be measured directly
-  // (getBoundingClientRect on a display:contents element is always zero).
-  #codeElement?: HTMLElement;
   #overlayElement?: HTMLElement;
   #overlayElements?: Map<string, HTMLElement>;
   #primaryCaretElement?: HTMLElement;
   #resizeObserver?: ResizeObserver;
-  // Cached nearest scrollable ancestor of #fileContainer (the scrollport that
-  // clips overlay widgets) plus the container it was resolved against, so the
-  // selection-action popover can test placement without re-walking ancestors
-  // and re-running getComputedStyle on every render.
-  #scrollContainer?: HTMLElement;
-  #scrollContainerSource?: HTMLElement;
-  // Cached screen-space rects for the selection-action popover's viewport
-  // check, refreshed only on scroll/resize (rather than on every selection
-  // update) since #updateSelectionActionPopover can run once per keystroke.
-  #cachedCodeRect?: DOMRect;
-  #cachedScrollContainerRect?: DOMRect;
-  #viewportRectsDirty = true;
-  #viewportRectListenersDisposes?: (() => void)[];
 
   // state
   #fileInstance?: DiffsEditableComponent<LAnnotation>;
@@ -239,10 +212,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #markerRenderer?: MarkerRenderer;
   #searchPanel?: SearchPanelWidget;
   #selectionAction?: SelectionActionWidget;
-  // The popover's last-resolved side, fed back into choosePopoverPlacement as
-  // hysteresis so it doesn't flip-flop at the boundary. Reset whenever
-  // #selectionAction is (re)created.
-  #selectionActionPlacement?: 'preferred' | 'fallback';
   #shouldIgnoreSelectionChange = false;
   // Whether the contenteditable holds (or is claiming) focus. Synced by
   // focus/blur listeners and set eagerly by #focus(), whose real focus() call is
@@ -496,12 +465,12 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     this.#markerRenderer ??= new MarkerRenderer({
+      popoverManager: this.#getPopoverManager(),
       getLineHeight: () => this.#metrics.lineHeight,
       getOverlayElement: () => this.#overlayElement,
       getGutterWidth: () => this.#getGutterWidth(),
       getCharX: (line, character) => this.#getCharX(line, character),
       getLineY: (line) => this.#getLineY(line),
-      getOverlayViewport: () => this.#getOverlayViewport(),
       isMouseDown: () => this.#isContentMouseDown || this.#isGutterMouseDown,
     });
     this.#markerRenderer.setMarkers(markers, textDocument);
@@ -572,14 +541,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#spriteElement?.remove();
     this.#spriteElement = undefined;
     this.#fileContainer = undefined;
-    this.#codeElement = undefined;
-    this.#scrollContainer = undefined;
-    this.#scrollContainerSource = undefined;
-    this.#cachedCodeRect = undefined;
-    this.#cachedScrollContainerRect = undefined;
-    this.#viewportRectsDirty = true;
-    this.#viewportRectListenersDisposes?.forEach((dispose) => dispose());
-    this.#viewportRectListenersDisposes = undefined;
+    this.#popoverManager?.cleanUp();
+    this.#popoverManager = undefined;
     this.#gutterElement = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
     this.#contentElement = undefined;
@@ -645,13 +608,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (codeElement === undefined || contentEl === undefined) {
       return;
     }
-    if (this.#codeElement !== codeElement) {
-      this.#codeElement = codeElement;
-      // A new [data-code] element invalidates the cached viewport rects (e.g. a
-      // full re-render loaded a different file, possibly at a different
-      // on-screen position) even without an intervening scroll/resize event.
-      this.#viewportRectsDirty = true;
-    }
+
+    this.#getPopoverManager().setViewportElements(fileContainer, codeElement);
 
     // inject editor&theme style to the file container
     if (this.#fileContainer !== fileContainer) {
@@ -849,6 +807,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   get #isWrap(): boolean {
     return this.#fileInstance?.options.overflow === 'wrap';
+  }
+
+  #getPopoverManager(): PopoverManager {
+    return (this.#popoverManager ??= new PopoverManager({
+      hasActivePopover: () => this.#selectionAction !== undefined,
+      updateActivePopover: () => this.#updateSelectionActionPopover(),
+    }));
   }
 
   #resetCache(): void {
@@ -3144,7 +3109,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         overlayElement
       );
       // Avoid biasing the first decision with a stale side from a prior popover.
-      this.#selectionActionPlacement = undefined;
+      this.#getPopoverManager().resetPlacement();
     }
 
     // Pick which selection edge the popover anchors to and whether it sits above
@@ -3158,11 +3123,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // selection rises above its top edge.
     const lineHeight = this.#metrics.lineHeight;
     const isBackward = primarySelection.direction === DirectionBackward;
-    const preferred: PopoverAnchorCandidate = {
+    const preferred = {
       placeAbove: isBackward,
       anchor: head,
     };
-    const fallback: PopoverAnchorCandidate = isBackward
+    const fallback: typeof preferred = isBackward
       ? { placeAbove: false, anchor: primarySelection.end }
       : { placeAbove: true, anchor: primarySelection.start };
 
@@ -3174,7 +3139,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // that height.
     const popoverHeight = this.#selectionAction.height;
     const candidateGeometry = (
-      candidate: PopoverAnchorCandidate
+      candidate: typeof preferred
     ): PopoverPlacementBounds & { left: number } => {
       const [left, candidateWrapLine] = this.#getCharX(
         candidate.anchor.line,
@@ -3202,17 +3167,20 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // the virtualized render window even when the head is visible; #getLineY
     // returns -1 for an unrendered line, so only consider the fallback once we
     // know its anchor line actually has layout to measure.
+    const canUseFallback = this.#isLineVisible(fallback.anchor.line);
+    const popoverManager = this.#getPopoverManager();
     const useFallback =
-      this.#isLineVisible(fallback.anchor.line) &&
-      choosePopoverPlacement({
+      canUseFallback &&
+      popoverManager.choosePlacement({
         preferred: preferredGeometry,
         fallback: fallbackGeometry,
-        viewport: this.#getOverlayViewport(),
+        viewport: popoverManager.getPlacementBounds(),
         popoverHeight,
         atDocumentEdge,
-        previousPlacement: this.#selectionActionPlacement,
       }) === 'fallback';
-    this.#selectionActionPlacement = useFallback ? 'fallback' : 'preferred';
+    if (!canUseFallback) {
+      popoverManager.setPlacement('preferred');
+    }
     const { placeAbove, anchor } = useFallback ? fallback : preferred;
     const { left, top } = useFallback ? fallbackGeometry : preferredGeometry;
 
@@ -3223,155 +3191,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#getGutterWidth(),
       placeAbove
     );
-  }
-
-  // The visible scroll viewport expressed in the overlay's coordinate space (the
-  // same space --popover-y / #getLineY use), or undefined when no usable layout
-  // geometry exists (e.g. a detached unit-test DOM, where every rect is zero).
-  // The selection-action popover uses this to detect when a placement would be
-  // clipped by the scrollport and flip to the side with room.
-  #getOverlayViewport(): { top: number; bottom: number } | undefined {
-    const codeRect = this.#getCodeRect();
-    if (codeRect === undefined) {
-      return undefined;
-    }
-    const scrollContainerRect = this.#getScrollContainerRect();
-    let topScreen: number;
-    let bottomScreen: number;
-    if (scrollContainerRect !== undefined) {
-      topScreen = scrollContainerRect.top;
-      bottomScreen = scrollContainerRect.bottom;
-    } else {
-      // No scrollable ancestor: the page itself scrolls, so the window is the
-      // clip region.
-      topScreen = 0;
-      bottomScreen = window.innerHeight;
-    }
-    if (bottomScreen <= topScreen) {
-      return undefined;
-    }
-    return {
-      top: topScreen - codeRect.top,
-      bottom: bottomScreen - codeRect.top,
-    };
-  }
-
-  // The nearest scrollable ancestor of the file container — the element whose
-  // overflow clips the overlay widgets. Walks the light-DOM ancestor chain (the
-  // overlay lives in the file container's shadow root) and caches the result per
-  // file container so it is not re-resolved on every render.
-  //
-  // Known limitations: this only inspects light-DOM ancestors outside the
-  // shadow root, so it can't see a clip boundary inside it (e.g. `[data-code]`
-  // itself uses `overflow-y: clip`, which also isn't one of the values matched
-  // below) and can't cross into an outer shadow root if the file container is
-  // itself nested in another web component. It also only considers the
-  // *nearest* scrollable ancestor, not the intersection of every clipping
-  // ancestor, so a popover could still be clipped by an outer scroll context
-  // even when it fits within this nearer one.
-  #getScrollContainer(): HTMLElement | undefined {
-    const fileContainer = this.#fileContainer;
-    if (fileContainer === undefined) {
-      return undefined;
-    }
-    if (this.#scrollContainerSource === fileContainer) {
-      // A cached element can detach across re-mounts; re-resolve in that case
-      // but otherwise trust the cache (including a cached "no scroller" result).
-      if (
-        this.#scrollContainer === undefined ||
-        this.#scrollContainer.isConnected
-      ) {
-        return this.#scrollContainer;
-      }
-    }
-    let element: HTMLElement | null = fileContainer.parentElement;
-    while (element !== null) {
-      const overflowY = getComputedStyle(element).overflowY;
-      if (
-        overflowY === 'auto' ||
-        overflowY === 'scroll' ||
-        overflowY === 'overlay'
-      ) {
-        this.#scrollContainer = element;
-        this.#scrollContainerSource = fileContainer;
-        return element;
-      }
-      element = element.parentElement;
-    }
-    this.#scrollContainer = undefined;
-    this.#scrollContainerSource = fileContainer;
-    return undefined;
-  }
-
-  // Lazily measures and caches the screen-space rects #getOverlayViewport
-  // needs (the `[data-code]` element, which is the coordinate origin for
-  // overlay children, and the nearest scrollable ancestor's clip region),
-  // refreshing only when a scroll or resize event marks them dirty rather than
-  // on every call. #updateSelectionActionPopover can run once per keystroke
-  // while a ranged selection stays open, so re-measuring via
-  // getBoundingClientRect on every call would force a synchronous layout
-  // reflow on that hot path.
-  #refreshViewportRectsIfNeeded(): void {
-    if (!this.#viewportRectsDirty) {
-      return;
-    }
-    this.#ensureViewportRectListeners();
-    this.#cachedCodeRect = this.#codeElement?.getBoundingClientRect();
-    this.#cachedScrollContainerRect =
-      this.#getScrollContainer()?.getBoundingClientRect();
-    this.#viewportRectsDirty = false;
-  }
-
-  #getCodeRect(): DOMRect | undefined {
-    this.#refreshViewportRectsIfNeeded();
-    return this.#cachedCodeRect;
-  }
-
-  #getScrollContainerRect(): DOMRect | undefined {
-    this.#refreshViewportRectsIfNeeded();
-    return this.#cachedScrollContainerRect;
-  }
-
-  // Subscribes (once) to the events that can move or resize the cached rects
-  // above: a scroll on the resolved scroll container (or the window, when the
-  // page itself scrolls) and a window resize. Idempotent — a later call while
-  // listeners are already attached is a no-op, so this is safe to call from
-  // every #refreshViewportRectsIfNeeded pass.
-  //
-  // Scrolling/resizing can change whether a popover's current side still fits
-  // the scrollport, so while one is open this also re-runs its placement
-  // decision, rAF-throttled to avoid recomputing on every scroll tick.
-  #ensureViewportRectListeners(): void {
-    if (this.#viewportRectListenersDisposes !== undefined) {
-      return;
-    }
-    let repositionRafId: number | undefined;
-    const markDirty = () => {
-      this.#viewportRectsDirty = true;
-      if (
-        this.#selectionAction === undefined ||
-        repositionRafId !== undefined
-      ) {
-        return;
-      }
-      repositionRafId = requestAnimationFrame(() => {
-        repositionRafId = undefined;
-        this.#updateSelectionActionPopover();
-      });
-    };
-    const scroller = this.#getScrollContainer();
-    this.#viewportRectListenersDisposes = [
-      scroller !== undefined
-        ? addEventListener(scroller, 'scroll', markDirty, { passive: true })
-        : addEventListener(window, 'scroll', markDirty, { passive: true }),
-      addEventListener(window, 'resize', markDirty, { passive: true }),
-      () => {
-        if (repositionRafId !== undefined) {
-          cancelAnimationFrame(repositionRafId);
-          repositionRafId = undefined;
-        }
-      },
-    ];
   }
 
   // Opens the search panel in the requested mode. If a panel is already open,
@@ -3932,12 +3751,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return undefined;
   }
 
+  // TODO(@ije): remove this
   // Painted background color of a line, read from the [data-line]::after layer
   // (the line element itself is transparent in edit mode). Returns undefined when
   // that layer is transparent (e.g. context lines).
   #lineBackgroundColor(line: number): string | undefined {
     const lineElement = this.#getLineElement(line);
     if (lineElement === undefined) {
+      return undefined;
+    }
+    // testing environment like jsdom doesn't implement the getComputedStyle API
+    if (navigator.userAgent.includes('jsdom')) {
       return undefined;
     }
     const backgroundColor = getComputedStyle(
