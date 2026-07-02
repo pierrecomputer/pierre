@@ -538,11 +538,12 @@ export interface CodeViewOptions<LAnnotation>
    * route document changes to `onItemEditChange`. CodeView owns the returned
    * editor's lifecycle: it attaches when the edited item mounts, re-attaches
    * across virtualization unmounts, and cleans the editor up once the item
-   * stops being editable (edit off, collapsed, or removed).
+   * stops being editable (edit off, collapsed, or removed). Returning
+   * undefined declines the attach; CodeView retries on later render passes.
    */
   createEditor?(
     options: CodeViewCreateEditorOptions<LAnnotation>
-  ): DiffsEditorHost<LAnnotation>;
+  ): DiffsEditorHost<LAnnotation> | undefined;
   /**
    * Called when an edited item's document changes, with the owning item
    * resolved by CodeView. Editors are recycled across virtualization
