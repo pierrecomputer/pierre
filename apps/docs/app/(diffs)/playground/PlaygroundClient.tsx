@@ -2,8 +2,10 @@
 
 import type {
   AnnotationSide,
+  CodeViewOptions,
   DiffIndicators,
   DiffLineAnnotation,
+  FileDiffOptions,
   SelectedLineRange,
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
@@ -25,6 +27,7 @@ import {
   IconEye,
   IconHunkDivider,
   IconInReview,
+  IconLayers,
   IconLink,
   IconListOrdered,
   IconParagraph,
@@ -38,7 +41,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
-import { PLAYGROUND_MARKERS } from './constants';
+import {
+  CODE_VIEW_ITEMS,
+  PLAYGROUND_MARKERS,
+  VIRTUALIZER_FILE_DIFFS,
+} from './constants';
+import { PlaygroundCodeView } from './PlaygroundCodeView';
+import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
+import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import { useTheme } from '@/components/theme-provider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -91,8 +101,42 @@ type HunkSeparatorValue = (typeof HUNK_SEPARATOR_OPTIONS)[number]['value'];
 // editor (Edit). Markers are diagnostics shown only while editing.
 type EditorMode = 'review' | 'edit';
 
+// The rendering surface the playground diff(s) are drawn with. 'normal' is the
+// single editable FileDiff; 'virtualizer' renders several diffs with window
+// scroll; 'codeview' renders a mix of diff/file items in CodeView's own scroller.
+type ViewMode = 'normal' | 'virtualizer' | 'codeview';
+
+const VIEW_MODE_OPTIONS = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'virtualizer', label: 'Virtualizer' },
+  { value: 'codeview', label: 'CodeView' },
+] as const;
+
+// Pure rendering options shared by all three view modes. These keys don't depend
+// on the annotation metadata generic, so a single annotation-agnostic type keeps
+// them assignable to FileDiff, VirtualizedFileDiff, and CodeView alike (spreading
+// a `<undefined>`-typed options object into an annotated FileDiff would otherwise
+// widen its annotation callbacks to `undefined`).
+type SharedRenderOptions = Pick<
+  FileDiffOptions<undefined>,
+  | 'diffStyle'
+  | 'diffIndicators'
+  | 'lineDiffType'
+  | 'disableBackground'
+  | 'disableLineNumbers'
+  | 'overflow'
+  | 'themeType'
+  | 'theme'
+> & {
+  // The full `hunkSeparators` type includes an LAnnotation-typed render
+  // callback; the playground only uses the string presets, so narrow it here to
+  // stay annotation-agnostic.
+  hunkSeparators: HunkSeparatorValue;
+};
+
 // Default values for URL param comparison
 const DEFAULTS = {
+  viewMode: 'normal' as ViewMode,
   diffStyle: 'split',
   colorMode: 'system',
   lightTheme: 'pierre-light',
@@ -116,6 +160,8 @@ interface PlaygroundClientProps {
 }
 
 interface PlaygroundControlsContentProps {
+  viewMode: ViewMode;
+  setViewMode: (v: ViewMode) => void;
   diffStyle: 'split' | 'unified';
   setDiffStyle: (v: 'split' | 'unified') => void;
   colorMode: 'system' | 'light' | 'dark';
@@ -156,6 +202,8 @@ interface PlaygroundControlsContentProps {
 }
 
 function PlaygroundControlsContent({
+  viewMode,
+  setViewMode,
   diffStyle,
   setDiffStyle,
   colorMode,
@@ -218,9 +266,42 @@ function PlaygroundControlsContent({
     setEnableGutterUtility(false);
   };
 
+  // Edit mode and lint markers attach to the single-FileDiff editor, which only
+  // exists in the Normal view, so those controls are disabled elsewhere.
+  const editorControlsDisabled = viewMode !== 'normal';
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="justify-start px-3">
+              <IconLayers />
+              {VIEW_MODE_OPTIONS.find((opt) => opt.value === viewMode)?.label ??
+                viewMode}
+              <IconChevronSm className="text-muted-foreground ml-auto" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
+            {VIEW_MODE_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => setViewMode(option.value)}
+                selected={viewMode === option.value}
+              >
+                {option.label}
+                {viewMode === option.value && <IconCheck className="ml-auto" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="bg-border h-6 w-px" />
+
         <ButtonGroup
           value={diffStyle}
           onValueChange={(value) => setDiffStyle(value as 'split' | 'unified')}
@@ -242,10 +323,26 @@ function PlaygroundControlsContent({
           aria-label="Editor mode"
           size="icon"
         >
-          <ButtonGroupItem value="review">
+          <ButtonGroupItem
+            value="review"
+            disabled={editorControlsDisabled}
+            title={
+              editorControlsDisabled
+                ? 'Editing is only available in the Normal view'
+                : undefined
+            }
+          >
             <IconEye />
           </ButtonGroupItem>
-          <ButtonGroupItem value="edit">
+          <ButtonGroupItem
+            value="edit"
+            disabled={editorControlsDisabled}
+            title={
+              editorControlsDisabled
+                ? 'Editing is only available in the Normal view'
+                : undefined
+            }
+          >
             <IconPencil />
           </ButtonGroupItem>
         </ButtonGroup>
@@ -430,12 +527,15 @@ function PlaygroundControlsContent({
           label="Markers"
           checked={showMarkers}
           onCheckedChange={setShowMarkers}
-          // Markers come from an attached editor, so they only render in Edit.
-          disabled={editorMode !== 'edit'}
+          // Markers come from an attached editor, so they only render in Edit
+          // mode within the Normal view.
+          disabled={editorControlsDisabled || editorMode !== 'edit'}
           title={
-            editorMode !== 'edit'
-              ? 'Switch to Edit mode to show lint markers'
-              : undefined
+            editorControlsDisabled
+              ? 'Markers are only available in the Normal view'
+              : editorMode !== 'edit'
+                ? 'Switch to Edit mode to show lint markers'
+                : undefined
           }
         />
 
@@ -563,6 +663,11 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     }
     return null;
   };
+
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const value = getParam('view', DEFAULTS.viewMode);
+    return value === 'virtualizer' || value === 'codeview' ? value : 'normal';
+  });
 
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>(
     getParam('layout', DEFAULTS.diffStyle) as 'split' | 'unified'
@@ -698,6 +803,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     const params = new URLSearchParams();
 
     // Only add non-default values to keep URL clean
+    if (viewMode !== DEFAULTS.viewMode) params.set('view', viewMode);
     if (diffStyle !== DEFAULTS.diffStyle) params.set('layout', diffStyle);
     if (colorMode !== DEFAULTS.colorMode) params.set('mode', colorMode);
     if (selectedLightTheme !== DEFAULTS.lightTheme)
@@ -742,6 +848,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       ? `/playground?${queryString}`
       : '/playground';
   }, [
+    viewMode,
     diffStyle,
     colorMode,
     selectedLightTheme,
@@ -839,6 +946,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   }, [isControlsOpen]);
 
   const controlsContentProps = {
+    viewMode,
+    setViewMode,
     diffStyle,
     setDiffStyle,
     colorMode,
@@ -885,6 +994,46 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const effectiveColorMode =
     colorMode === 'system' ? (resolvedColorScheme ?? 'system') : colorMode;
 
+  // Pure rendering options shared by all three view modes. Interaction and
+  // edit-specific options are layered on per surface below.
+  const renderOptions = useMemo<SharedRenderOptions>(
+    () => ({
+      diffStyle,
+      diffIndicators,
+      lineDiffType,
+      hunkSeparators,
+      disableBackground,
+      disableLineNumbers,
+      overflow,
+      themeType: effectiveColorMode,
+      theme: { dark: selectedDarkTheme, light: selectedLightTheme },
+    }),
+    [
+      diffStyle,
+      diffIndicators,
+      lineDiffType,
+      hunkSeparators,
+      disableBackground,
+      disableLineNumbers,
+      overflow,
+      effectiveColorMode,
+      selectedDarkTheme,
+      selectedLightTheme,
+    ]
+  );
+
+  // CodeView adds its own layout/sticky-header options on top of the shared
+  // rendering options; its scrollbar styling mirrors the Normal view's.
+  const codeViewOptions = useMemo<CodeViewOptions<undefined>>(
+    () => ({
+      ...renderOptions,
+      stickyHeaders: true,
+      layout: { paddingTop: 16, paddingBottom: 16, gap: 12 },
+      unsafeCSS: CustomScrollbarCSS,
+    }),
+    [renderOptions]
+  );
+
   // Editing takes over click targets, so line selection and gutter comments are
   // disabled while in Edit mode (they only make sense in read-only Review).
   const fileDiff = (
@@ -896,15 +1045,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       lineAnnotations={showAnnotations ? annotations : []}
       options={{
         ...prerenderedDiff.options,
-        diffStyle,
-        diffIndicators,
-        lineDiffType,
-        hunkSeparators,
-        disableBackground,
-        disableLineNumbers,
-        overflow,
-        themeType: effectiveColorMode,
-        theme: { dark: selectedDarkTheme, light: selectedLightTheme },
+        ...renderOptions,
         enableLineSelection: contentEditable ? false : canSelectLines,
         enableGutterUtility: contentEditable ? false : canUseGutterComments,
         onLineSelectionEnd: handleLineSelectionEnd,
@@ -991,14 +1132,23 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       </div>
 
       {/*
-        Keep EditorProvider mounted in both Review and Edit so toggling modes
-        only flips `contentEditable` (the editor attaches lazily when that turns
-        true). Conditionally wrapping would change the child component type and
-        remount FileDiff, which recreates the shadow root and re-injects the
-        dark SSR HTML for a frame — the light->dark flash we're avoiding here.
-        Mirrors the LiveEditing demo.
+        Normal view keeps EditorProvider mounted in both Review and Edit so
+        toggling modes only flips `contentEditable` (the editor attaches lazily
+        when that turns true). Conditionally wrapping would change the child
+        component type and remount FileDiff, which recreates the shadow root and
+        re-injects the dark SSR HTML for a frame — the light->dark flash we're
+        avoiding here. Mirrors the LiveEditing demo.
       */}
-      <EditorProvider editor={editor}>{fileDiff}</EditorProvider>
+      {viewMode === 'normal' ? (
+        <EditorProvider editor={editor}>{fileDiff}</EditorProvider>
+      ) : viewMode === 'virtualizer' ? (
+        <PlaygroundVirtualizerView
+          diffs={VIRTUALIZER_FILE_DIFFS}
+          options={renderOptions}
+        />
+      ) : (
+        <PlaygroundCodeView items={CODE_VIEW_ITEMS} options={codeViewOptions} />
+      )}
     </div>
   );
 }
