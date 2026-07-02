@@ -30,6 +30,13 @@ Releases must come from merged commits on `main`.
 pnpm whoami            # must print an npm username with @pierre publish access
 ```
 
+If npm requires publish-time 2FA, run the publish command from a real terminal
+and enter a fresh code when pnpm asks. The script attaches the upload and
+dist-tag steps to `/dev/tty`, because moon's task stdio is captured and pnpm
+otherwise cannot prompt. You may still pass `--otp=<code>` for a freshly
+generated classic OTP; the script forwards it to both `pnpm publish` and
+`pnpm dist-tag add`, and redacts it from its own logs.
+
 ## 2. Rehearse with `--dry-run`
 
 From `packages/trees`:

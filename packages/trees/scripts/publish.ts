@@ -1,7 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import {
+  closeSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
   writeFileSync,
@@ -13,21 +15,21 @@ import { join, relative, resolve } from 'node:path';
 // repacking the generated tarball after deleting the internal `@pierre/path-store`
 // workspace dependency, so the tarball we rehearse is the tarball we publish.
 //
-// Run from anywhere in the repo:
 //   moonx trees:publish -- --dry-run
 //   moonx trees:publish -- --tag=beta
 //   moonx trees:publish -- --tag=latest --promote-latest --tag-release
 
-interface CliFlags {
+export interface CliFlags {
   dryRun: boolean;
   tag: string;
   promoteLatest: boolean;
   tagRelease: boolean;
   releaseBranch: string | null;
   allowDirty: boolean;
+  otp: string | null;
 }
 
-function parseArgs(argv: readonly string[]): CliFlags {
+export function parseArgs(argv: readonly string[]): CliFlags {
   const flags: CliFlags = {
     dryRun: false,
     tag: 'beta',
@@ -35,6 +37,7 @@ function parseArgs(argv: readonly string[]): CliFlags {
     tagRelease: false,
     releaseBranch: null,
     allowDirty: false,
+    otp: null,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index] ?? '';
@@ -48,6 +51,19 @@ function parseArgs(argv: readonly string[]): CliFlags {
       flags.allowDirty = true;
     } else if (arg.startsWith('--tag=')) {
       flags.tag = arg.slice('--tag='.length);
+    } else if (arg === '--otp') {
+      const otp = argv[index + 1];
+      if (otp === undefined || otp.length === 0 || otp.startsWith('--')) {
+        throw new Error('--otp requires a one-time password');
+      }
+      flags.otp = otp;
+      index += 1;
+    } else if (arg.startsWith('--otp=')) {
+      const otp = arg.slice('--otp='.length);
+      if (otp.length === 0) {
+        throw new Error('--otp requires a one-time password');
+      }
+      flags.otp = otp;
     } else if (arg.startsWith('--release-branch=')) {
       flags.releaseBranch = arg.slice('--release-branch='.length);
     } else {
@@ -57,21 +73,140 @@ function parseArgs(argv: readonly string[]): CliFlags {
   return flags;
 }
 
+// Builds pnpm arguments with OTP last so auth details stay isolated from the
+// rest of the release command and can be redacted consistently in logs.
+function withOtp(args: string[], otp: string | null): string[] {
+  if (otp === null) {
+    return args;
+  }
+  return [...args, '--otp', otp];
+}
+
+export function publishArgs(
+  tarballPath: string,
+  tag: string,
+  otp: string | null
+): string[] {
+  return withOtp(
+    ['publish', tarballPath, '--tag', tag, '--no-git-checks'],
+    otp
+  );
+}
+
+export function dryRunPublishArgs(
+  tarballPath: string,
+  tag: string,
+  otp: string | null
+): string[] {
+  return withOtp(
+    ['publish', tarballPath, '--dry-run', '--tag', tag, '--no-git-checks'],
+    otp
+  );
+}
+
+export function distTagAddArgs(version: string, otp: string | null): string[] {
+  return withOtp(
+    ['dist-tag', 'add', `@pierre/trees@${version}`, 'latest'],
+    otp
+  );
+}
+
+export function redactOtp(args: readonly string[]): string[] {
+  const redacted: string[] = [];
+  let redactNext = false;
+
+  for (const arg of args) {
+    if (redactNext) {
+      redacted.push('<redacted>');
+      redactNext = false;
+      continue;
+    }
+
+    if (arg === '--otp') {
+      redacted.push(arg);
+      redactNext = true;
+      continue;
+    }
+
+    if (arg.startsWith('--otp=')) {
+      redacted.push('--otp=<redacted>');
+      continue;
+    }
+
+    redacted.push(arg);
+  }
+
+  return redacted;
+}
+
+type StdioOption = 'inherit' | [number, number, number];
+
+// moon captures task stdio, so child processes do not always see a TTY even
+// when a maintainer ran `moonx` from an interactive terminal. Publish-time npm
+// 2FA needs a real terminal for retry prompts and web-based authentication.
+function openTerminalStdio(): [number, number, number] | null {
+  let input: number | null = null;
+  let output: number | null = null;
+  let error: number | null = null;
+
+  try {
+    input = openSync('/dev/tty', 'r');
+    output = openSync('/dev/tty', 'w');
+    error = openSync('/dev/tty', 'w');
+    return [input, output, error];
+  } catch {
+    for (const fd of [input, output, error]) {
+      if (fd !== null) {
+        closeSync(fd);
+      }
+    }
+    return null;
+  }
+}
+
+function closeTerminalStdio(
+  stdio: StdioOption | ['ignore', 'pipe', 'pipe']
+): void {
+  if (Array.isArray(stdio)) {
+    for (const fd of stdio) {
+      if (typeof fd === 'number') {
+        closeSync(fd);
+      }
+    }
+  }
+}
+
+function resolveStdio(options: {
+  inherit?: boolean;
+  preferTerminal?: boolean;
+}): StdioOption | ['ignore', 'pipe', 'pipe'] {
+  if (options.preferTerminal === true) {
+    const terminalStdio = openTerminalStdio();
+    if (terminalStdio !== null) {
+      return terminalStdio;
+    }
+  }
+
+  return options.inherit === true ? 'inherit' : ['ignore', 'pipe', 'pipe'];
+}
+
 function run(
   cmd: string,
   args: readonly string[],
-  options: { cwd?: string; inherit?: boolean } = {}
+  options: { cwd?: string; inherit?: boolean; preferTerminal?: boolean } = {}
 ): string {
+  const stdio = resolveStdio(options);
   const result = spawnSync(cmd, args, {
     cwd: options.cwd ?? process.cwd(),
-    stdio: options.inherit === true ? 'inherit' : ['ignore', 'pipe', 'pipe'],
+    stdio,
     encoding: 'utf8',
   });
+  closeTerminalStdio(stdio);
   if (result.status !== 0) {
     const stdout = result.stdout?.toString() ?? '';
     const stderr = result.stderr?.toString() ?? '';
     throw new Error(
-      `${cmd} ${args.join(' ')} exited with ${result.status}\n${stdout}\n${stderr}`
+      `${cmd} ${redactOtp(args).join(' ')} exited with ${result.status}\n${stdout}\n${stderr}`
     );
   }
   return result.stdout?.toString() ?? '';
@@ -234,32 +369,34 @@ function verifyTarball(tarballPath: string, workDir: string): void {
 
 // Publish the final tarball, not the source package directory. The final tarball
 // has repo-only lifecycle scripts removed before it reaches pnpm publish.
-function publish(tarballPath: string, tag: string): void {
-  console.log(
-    `[publish] pnpm publish ${tarballPath} --tag ${tag} --no-git-checks`
-  );
-  run('pnpm', ['publish', tarballPath, '--tag', tag, '--no-git-checks'], {
+function publish(tarballPath: string, tag: string, otp: string | null): void {
+  const args = publishArgs(tarballPath, tag, otp);
+  console.log(`[publish] pnpm ${redactOtp(args).join(' ')}`);
+  run('pnpm', args, {
+    inherit: true,
+    preferTerminal: true,
+  });
+}
+
+function dryRunPublish(
+  tarballPath: string,
+  tag: string,
+  otp: string | null
+): void {
+  const args = dryRunPublishArgs(tarballPath, tag, otp);
+  console.log(`[publish] pnpm ${redactOtp(args).join(' ')}`);
+  run('pnpm', args, {
     inherit: true,
   });
 }
 
-function dryRunPublish(tarballPath: string, tag: string): void {
-  console.log(
-    `[publish] pnpm publish ${tarballPath} --dry-run --tag ${tag} --no-git-checks`
-  );
-  run(
-    'pnpm',
-    ['publish', tarballPath, '--dry-run', '--tag', tag, '--no-git-checks'],
-    {
-      inherit: true,
-    }
-  );
-}
-
-function promoteLatest(version: string): void {
+function promoteLatest(version: string, otp: string | null): void {
   console.log(`[publish] promoting @pierre/trees@${version} to latest`);
-  run('pnpm', ['dist-tag', 'add', `@pierre/trees@${version}`, 'latest'], {
+  const args = distTagAddArgs(version, otp);
+  console.log(`[publish] pnpm ${redactOtp(args).join(' ')}`);
+  run('pnpm', args, {
     inherit: true,
+    preferTerminal: true,
   });
 }
 
@@ -295,7 +432,7 @@ function main(): void {
   const version = JSON.parse(after).version;
 
   if (flags.dryRun) {
-    dryRunPublish(finalTarballPath, flags.tag);
+    dryRunPublish(finalTarballPath, flags.tag, flags.otp);
     console.log('\n--- package.json diff ---');
     console.log(describeDiff(before, after));
     console.log('\n--- final tarball listing ---');
@@ -306,10 +443,10 @@ function main(): void {
     return;
   }
 
-  publish(finalTarballPath, flags.tag);
+  publish(finalTarballPath, flags.tag, flags.otp);
 
   if (flags.promoteLatest) {
-    promoteLatest(version);
+    promoteLatest(version, flags.otp);
   }
 
   if (flags.tagRelease) {
@@ -321,4 +458,6 @@ function main(): void {
   );
 }
 
-main();
+if (import.meta.main) {
+  main();
+}
