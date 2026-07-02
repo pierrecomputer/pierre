@@ -193,6 +193,21 @@ function preserveTrailingEditorBlankLine(
     return;
   }
 
+  for (const content of lastHunk.hunkContent) {
+    if (
+      content.type === 'change' &&
+      content.additions === 0 &&
+      content.deletions > 0 &&
+      content.additionLineIndex === extraAdditionLineIndex
+    ) {
+      content.additions += extraLineCount;
+      lastHunk.additionCount += extraLineCount;
+      lastHunk.additionLines += extraLineCount;
+      recomputeDiffRenderLineCounts(recomputed);
+      return;
+    }
+  }
+
   lastHunk.hunkContent.push({
     type: 'change',
     additions: extraLineCount,

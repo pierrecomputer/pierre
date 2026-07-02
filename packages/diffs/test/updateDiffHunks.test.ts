@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { FileDiffMetadata, Hunk } from '../src/types';
 import { cleanLastNewline } from '../src/utils/cleanLastNewline';
+import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
   recomputeDiffHunks,
@@ -296,7 +297,7 @@ describe('updateDiffHunks', () => {
     const recomputed = recomputeDiffHunksForEdit(diff, { context: 3 });
 
     expect(recomputed.additionLines).toEqual(['kept\n', '']);
-    expect(recomputed.splitLineCount).toBe(4);
+    expect(recomputed.splitLineCount).toBe(3);
     expect(recomputed.unifiedLineCount).toBe(4);
     expect(recomputed.hunks[0]?.hunkContent).toEqual([
       {
@@ -314,18 +315,33 @@ describe('updateDiffHunks', () => {
       },
       {
         type: 'change',
-        additions: 0,
+        additions: 1,
         deletions: 1,
         additionLineIndex: 1,
         deletionLineIndex: 2,
       },
-      {
-        type: 'change',
-        additions: 1,
-        deletions: 0,
-        additionLineIndex: 1,
-        deletionLineIndex: 3,
+    ]);
+
+    Object.assign(diff, recomputed);
+    const splitRows: Array<{
+      deletionLineIndex: number | undefined;
+      additionLineIndex: number | undefined;
+    }> = [];
+    iterateOverDiff({
+      diff,
+      diffStyle: 'split',
+      callback(row) {
+        splitRows.push({
+          deletionLineIndex: row.deletionLine?.lineIndex,
+          additionLineIndex: row.additionLine?.lineIndex,
+        });
       },
+    });
+
+    expect(splitRows).toEqual([
+      { deletionLineIndex: 0, additionLineIndex: undefined },
+      { deletionLineIndex: 1, additionLineIndex: 0 },
+      { deletionLineIndex: 2, additionLineIndex: 1 },
     ]);
   });
 
