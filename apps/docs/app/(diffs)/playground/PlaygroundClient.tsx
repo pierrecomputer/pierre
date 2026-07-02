@@ -266,10 +266,6 @@ function PlaygroundControlsContent({
     setEnableGutterUtility(false);
   };
 
-  // Edit mode and lint markers attach to the single-FileDiff editor, which only
-  // exists in the Normal view, so those controls are disabled elsewhere.
-  const editorControlsDisabled = viewMode !== 'normal';
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -315,37 +311,30 @@ function PlaygroundControlsContent({
           </ButtonGroupItem>
         </ButtonGroup>
 
-        <div className="bg-border h-6 w-px" />
+        {/*
+          The single global Edit toggle only makes sense for the one-file Normal
+          view. Virtualizer/CodeView show a per-file edit control in each header
+          instead (Virtualizer today; CodeView is read-only for now).
+        */}
+        {viewMode === 'normal' && (
+          <>
+            <div className="bg-border h-6 w-px" />
 
-        <ButtonGroup
-          value={editorMode}
-          onValueChange={(value) => setEditorMode(value as EditorMode)}
-          aria-label="Editor mode"
-          size="icon"
-        >
-          <ButtonGroupItem
-            value="review"
-            disabled={editorControlsDisabled}
-            title={
-              editorControlsDisabled
-                ? 'Editing is only available in the Normal view'
-                : undefined
-            }
-          >
-            <IconEye />
-          </ButtonGroupItem>
-          <ButtonGroupItem
-            value="edit"
-            disabled={editorControlsDisabled}
-            title={
-              editorControlsDisabled
-                ? 'Editing is only available in the Normal view'
-                : undefined
-            }
-          >
-            <IconPencil />
-          </ButtonGroupItem>
-        </ButtonGroup>
+            <ButtonGroup
+              value={editorMode}
+              onValueChange={(value) => setEditorMode(value as EditorMode)}
+              aria-label="Editor mode"
+              size="icon"
+            >
+              <ButtonGroupItem value="review">
+                <IconEye />
+              </ButtonGroupItem>
+              <ButtonGroupItem value="edit">
+                <IconPencil />
+              </ButtonGroupItem>
+            </ButtonGroup>
+          </>
+        )}
 
         <div className="bg-border h-6 w-px" />
 
@@ -522,22 +511,22 @@ function PlaygroundControlsContent({
           onCheckedChange={setShowAnnotations}
         />
 
-        <ToggleButton
-          icon={<IconCiWarning />}
-          label="Markers"
-          checked={showMarkers}
-          onCheckedChange={setShowMarkers}
-          // Markers come from an attached editor, so they only render in Edit
-          // mode within the Normal view.
-          disabled={editorControlsDisabled || editorMode !== 'edit'}
-          title={
-            editorControlsDisabled
-              ? 'Markers are only available in the Normal view'
-              : editorMode !== 'edit'
+        {/* Markers come from the global editor, which only exists in Normal. */}
+        {viewMode === 'normal' && (
+          <ToggleButton
+            icon={<IconCiWarning />}
+            label="Markers"
+            checked={showMarkers}
+            onCheckedChange={setShowMarkers}
+            // Markers require an attached editor, so they only apply in Edit mode.
+            disabled={editorMode !== 'edit'}
+            title={
+              editorMode !== 'edit'
                 ? 'Switch to Edit mode to show lint markers'
                 : undefined
-          }
-        />
+            }
+          />
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
