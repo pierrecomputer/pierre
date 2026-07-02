@@ -263,7 +263,7 @@ type CodeViewOptionCallback<
   ): CallbackReturn<NonNullable<FileDiffOptions<LAnnotation>[TKey]>>;
 };
 
-const CODE_VIEW_DIFF_OPTION_KEYS = [
+export const CODE_VIEW_DIFF_OPTION_KEYS = [
   'theme',
   'disableLineNumbers',
   'overflow',
@@ -296,7 +296,7 @@ const CODE_VIEW_DIFF_OPTION_KEYS = [
 
 type CodeViewDiffOptionKeys = (typeof CODE_VIEW_DIFF_OPTION_KEYS)[number];
 
-const CODE_VIEW_FILE_OPTION_KEYS = [
+export const CODE_VIEW_FILE_OPTION_KEYS = [
   'theme',
   'disableLineNumbers',
   'overflow',

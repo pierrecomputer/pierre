@@ -1,0 +1,510 @@
+import { describe, expect, test } from 'bun:test';
+
+import { CodeView } from '../src/components/CodeView';
+import type {
+  CodeViewCreateEditorOptions,
+  CodeViewItem,
+  DiffLineAnnotation,
+  DiffsEditableComponent,
+  DiffsEditorHost,
+  FileContents,
+} from '../src/types';
+import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import {
+  createRoot,
+  dispatchScroll,
+  installDom,
+  makeFile,
+  renderItems,
+  wait,
+} from './domHarness';
+
+interface StubEditor extends DiffsEditorHost<undefined> {
+  /** Instances passed to edit(), in order. */
+  edits: DiffsEditableComponent<undefined>[];
+  fullCleanUps: number;
+  recycleCleanUps: number;
+  /** The CodeView-built onChange handed to the factory. */
+  emitChange(
+    file: FileContents,
+    lineAnnotations?: DiffLineAnnotation<undefined>[]
+  ): void;
+}
+
+// Recording stand-in for the Editor class. It attaches to the instance like
+// the real editor does (so virtualization release reaches editor.cleanUp via
+// the instance) but performs no document or DOM work.
+function createEditorHarness() {
+  const editors: StubEditor[] = [];
+  const createEditor = (
+    options: CodeViewCreateEditorOptions<undefined>
+  ): StubEditor => {
+    let detach: (() => void) | undefined;
+    const editor: StubEditor = {
+      edits: [],
+      fullCleanUps: 0,
+      recycleCleanUps: 0,
+      emitChange: options.onChange,
+      edit(instance) {
+        editor.edits.push(instance);
+        detach = instance.attachEditor(editor);
+        return () => editor.cleanUp();
+      },
+      cleanUp(recycle = false) {
+        if (recycle) {
+          editor.recycleCleanUps += 1;
+        } else {
+          editor.fullCleanUps += 1;
+        }
+        detach?.();
+        detach = undefined;
+      },
+      __postponeBgTokenizeToNextFrame() {},
+      __syncRenderView() {},
+    };
+    editors.push(editor);
+    return editor;
+  };
+  return { editors, createEditor };
+}
+
+function makeEditFileItem(
+  id: string,
+  edit = true,
+  lineCount = 20
+): CodeViewItem<undefined> {
+  return {
+    id,
+    type: 'file',
+    file: makeFile(`${id}.ts`, lineCount),
+    version: 0,
+    edit,
+  };
+}
+
+function makeEditDiffItem(id: string, edit = true): CodeViewItem<undefined> {
+  return {
+    id,
+    type: 'diff',
+    fileDiff: parseDiffFromFile(
+      { name: `${id}.txt`, contents: 'one\ntwo\nthree\n' },
+      { name: `${id}.txt`, contents: 'one\ntwo changed\nthree\n' }
+    ),
+    version: 0,
+    edit,
+  };
+}
+
+// Applies an item update and flushes the render pass that performs editor
+// attachment.
+async function applyItemUpdate(
+  viewer: CodeView,
+  item: CodeViewItem<undefined>
+): Promise<void> {
+  expect(viewer.updateItem(item)).toBe(true);
+  viewer.render(true);
+  await wait(0);
+}
+
+describe('CodeView item edit mode', () => {
+  test('attaches factory editors to edit-mode items on mount', async () => {
+    const { cleanup } = installDom();
+    const { editors, createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [
+        makeEditFileItem('a'),
+        makeEditFileItem('b', false),
+      ]);
+
+      expect(editors.length).toBe(1);
+      const renderedA = viewer
+        .getRenderedItems()
+        .find((item) => item.id === 'a');
+      expect(editors[0].edits).toEqual([renderedA!.instance]);
+      expect(viewer.getEditor('a')).toBe(editors[0]);
+      expect(viewer.getEditor('b')).toBeUndefined();
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('supports multiple simultaneously edited items', async () => {
+    const { cleanup } = installDom();
+    const { editors, createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [makeEditFileItem('a'), makeEditDiffItem('b')]);
+
+      expect(editors.length).toBe(2);
+      expect(viewer.getEditor('a')).toBeDefined();
+      expect(viewer.getEditor('b')).toBeDefined();
+      expect(viewer.getEditor('a')).not.toBe(viewer.getEditor('b')!);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('serves editor-required option values while an item is edited', async () => {
+    const { cleanup } = installDom();
+    const { createEditor } = createEditorHarness();
+    const viewer = new CodeView({
+      createEditor,
+      enableLineSelection: true,
+      enableGutterUtility: true,
+      lineHoverHighlight: 'both',
+      expandUnchanged: false,
+      useTokenTransformer: false,
+    });
+    const editedFile = makeEditFileItem('a');
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [
+        editedFile,
+        makeEditDiffItem('b'),
+        makeEditFileItem('c', false),
+      ]);
+
+      const [renderedA, renderedB, renderedC] = viewer.getRenderedItems();
+      // Edited items read the values Editor.edit requires...
+      for (const rendered of [renderedA, renderedB]) {
+        expect(rendered.instance.options.useTokenTransformer).toBe(true);
+        expect(rendered.instance.options.enableLineSelection).toBe(false);
+        expect(rendered.instance.options.enableGutterUtility).toBe(false);
+        expect(rendered.instance.options.lineHoverHighlight).toBe('disabled');
+      }
+      if (renderedB.type !== 'diff') {
+        throw new Error('expected a rendered diff item');
+      }
+      expect(renderedB.instance.options.expandUnchanged).toBe(true);
+      // ...while non-edited siblings keep the parent options.
+      expect(renderedC.instance.options.useTokenTransformer).toBe(false);
+      expect(renderedC.instance.options.enableLineSelection).toBe(true);
+      expect(renderedC.instance.options.enableGutterUtility).toBe(true);
+      expect(renderedC.instance.options.lineHoverHighlight).toBe('both');
+
+      // Toggling edit off restores the pass-through values.
+      await applyItemUpdate(viewer, { ...editedFile, edit: false, version: 1 });
+      const restoredA = viewer.getRenderedItems()[0];
+      expect(restoredA.instance.options.useTokenTransformer).toBe(false);
+      expect(restoredA.instance.options.enableLineSelection).toBe(true);
+      expect(restoredA.instance.options.enableGutterUtility).toBe(true);
+      expect(restoredA.instance.options.lineHoverHighlight).toBe('both');
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('toggling edit off discards the editor; re-toggling creates a fresh one', async () => {
+    const { cleanup } = installDom();
+    const { editors, createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    const item = makeEditFileItem('a');
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [item]);
+      expect(editors.length).toBe(1);
+
+      await applyItemUpdate(viewer, { ...item, edit: false, version: 1 });
+      expect(editors[0].fullCleanUps).toBe(1);
+      expect(viewer.getEditor('a')).toBeUndefined();
+
+      await applyItemUpdate(viewer, { ...item, edit: true, version: 2 });
+      expect(editors.length).toBe(2);
+      expect(viewer.getEditor('a')).toBe(editors[1]);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('collapsed wins over edit', async () => {
+    const { cleanup } = installDom();
+    const { editors, createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    const item = makeEditFileItem('a');
+    try {
+      viewer.setup(createRoot());
+      // A collapsed edit-mode item never attaches an editor.
+      await renderItems(viewer, [{ ...item, collapsed: true }]);
+      expect(editors.length).toBe(0);
+
+      // Expanding it attaches; collapsing it again detaches and discards.
+      await applyItemUpdate(viewer, { ...item, collapsed: false, version: 1 });
+      expect(editors.length).toBe(1);
+      expect(viewer.getEditor('a')).toBe(editors[0]);
+
+      await applyItemUpdate(viewer, { ...item, collapsed: true, version: 2 });
+      expect(editors[0].fullCleanUps).toBe(1);
+      expect(viewer.getEditor('a')).toBeUndefined();
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('entering edit mode clears the item line selection', async () => {
+    const { cleanup } = installDom();
+    const { createEditor } = createEditorHarness();
+    const viewer = new CodeView({
+      createEditor,
+      enableLineSelection: true,
+      onLineSelectionChange() {},
+    });
+    const item = makeEditFileItem('a', false);
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [item]);
+
+      viewer.setSelectedLines({ id: 'a', range: { start: 1, end: 2 } });
+      expect(viewer.getSelectedLines()).not.toBeNull();
+      const rendered = viewer.getRenderedItems()[0];
+      expect(rendered.instance.options.onLineSelectionChange).toBeDefined();
+
+      await applyItemUpdate(viewer, { ...item, edit: true, version: 1 });
+      expect(viewer.getSelectedLines()).toBeNull();
+      // Edited items also stop resolving selection callbacks.
+      expect(rendered.instance.options.onLineSelectionChange).toBeUndefined();
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('removing an edited item cleans up its editor', async () => {
+    const { cleanup } = installDom();
+    const { editors, createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    const kept = makeEditFileItem('kept', false);
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [makeEditFileItem('a'), kept]);
+      expect(editors.length).toBe(1);
+
+      await renderItems(viewer, [kept]);
+      expect(editors[0].fullCleanUps).toBeGreaterThanOrEqual(1);
+      expect(viewer.getEditor('a')).toBeUndefined();
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('reuses the same editor across virtualization unmount and remount', async () => {
+    const { cleanup } = installDom();
+    const { editors, createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    const items: CodeViewItem<undefined>[] = [
+      makeEditFileItem('edited', true, 30),
+      ...Array.from({ length: 39 }, (_, index) =>
+        makeEditFileItem(`file-${index}`, false, 30)
+      ),
+    ];
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, items);
+      expect(editors.length).toBe(1);
+      const [editor] = editors;
+      expect(editor.edits.length).toBe(1);
+
+      // Scroll the edited item out of the render window: the instance recycles
+      // and detaches the editor non-destructively.
+      root.scrollTop = 20_000;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+      expect(editor.recycleCleanUps).toBe(1);
+      expect(editor.fullCleanUps).toBe(0);
+      expect(viewer.getEditor('edited')).toBe(editor);
+
+      // Scrolling back re-attaches the same editor to the same instance.
+      root.scrollTop = 0;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+      expect(editors.length).toBe(1);
+      expect(editor.edits.length).toBe(2);
+      expect(editor.edits[1]).toBe(editor.edits[0]);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('updateItemId keeps the editor and routes changes to the renamed item', async () => {
+    const { cleanup } = installDom();
+    const { editors, createEditor } = createEditorHarness();
+    const changes: string[] = [];
+    const viewer = new CodeView({
+      createEditor,
+      onItemEditChange(item) {
+        changes.push(item.id);
+      },
+    });
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [makeEditFileItem('a')]);
+
+      expect(viewer.updateItemId('a', 'a2')).toBe(true);
+      expect(viewer.getEditor('a')).toBeUndefined();
+      expect(viewer.getEditor('a2')).toBe(editors[0]);
+
+      editors[0].emitChange(makeFile('a2.ts'));
+      expect(changes).toEqual(['a2']);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('onItemEditChange receives the owning item and contents', async () => {
+    const { cleanup } = installDom();
+    const { editors, createEditor } = createEditorHarness();
+    const changes: Array<[string, string]> = [];
+    const viewer = new CodeView({
+      createEditor,
+      onItemEditChange(item, file) {
+        changes.push([item.id, file.contents]);
+      },
+    });
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [makeEditFileItem('a')]);
+
+      editors[0].emitChange({ name: 'a.ts', contents: 'edited' });
+      expect(changes).toEqual([['a', 'edited']]);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  describe('onItemEditComplete', () => {
+    test('fires once with the final contents when edit is turned off', async () => {
+      const { cleanup } = installDom();
+      const { editors, createEditor } = createEditorHarness();
+      const completions: Array<{
+        item: CodeViewItem<undefined>;
+        contents: string;
+      }> = [];
+      const viewer = new CodeView({
+        createEditor,
+        onItemEditComplete(item, file) {
+          completions.push({ item, contents: file.contents });
+        },
+      });
+      const item = makeEditFileItem('a');
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [item]);
+
+        editors[0].emitChange({ name: 'a.ts', contents: 'draft' });
+        editors[0].emitChange({ name: 'a.ts', contents: 'final' });
+        expect(completions.length).toBe(0);
+
+        await applyItemUpdate(viewer, { ...item, edit: false, version: 1 });
+        expect(completions.length).toBe(1);
+        expect(completions[0].contents).toBe('final');
+        // The item handed to the callback is the one that ended the session.
+        expect(completions[0].item.edit).toBe(false);
+        expect(completions[0].item.version).toBe(1);
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+
+    test('fires with the last-change snapshot when the item is removed', async () => {
+      const { cleanup } = installDom();
+      const { editors, createEditor } = createEditorHarness();
+      const completions: Array<{ id: string; contents: string }> = [];
+      const viewer = new CodeView({
+        createEditor,
+        onItemEditComplete(item, file) {
+          completions.push({ id: item.id, contents: file.contents });
+        },
+      });
+      const kept = makeEditFileItem('kept', false);
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [makeEditFileItem('a'), kept]);
+
+        editors[0].emitChange({ name: 'a.ts', contents: 'unsaved' });
+        await renderItems(viewer, [kept]);
+
+        expect(completions).toEqual([{ id: 'a', contents: 'unsaved' }]);
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+
+    test('does not fire for sessions without changes', async () => {
+      const { cleanup } = installDom();
+      const { createEditor } = createEditorHarness();
+      let completions = 0;
+      const viewer = new CodeView({
+        createEditor,
+        onItemEditComplete() {
+          completions += 1;
+        },
+      });
+      const item = makeEditFileItem('a');
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [item]);
+
+        await applyItemUpdate(viewer, { ...item, edit: false, version: 1 });
+        expect(completions).toBe(0);
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+
+    test('does not fire on a full reset', async () => {
+      const { cleanup } = installDom();
+      const { editors, createEditor } = createEditorHarness();
+      let completions = 0;
+      const viewer = new CodeView({
+        createEditor,
+        onItemEditComplete() {
+          completions += 1;
+        },
+      });
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [makeEditFileItem('a')]);
+
+        editors[0].emitChange({ name: 'a.ts', contents: 'unsaved' });
+        await renderItems(viewer, []);
+
+        expect(completions).toBe(0);
+        expect(editors[0].fullCleanUps).toBeGreaterThanOrEqual(1);
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+  });
+});
