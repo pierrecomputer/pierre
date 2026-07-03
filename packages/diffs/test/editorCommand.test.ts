@@ -8,7 +8,7 @@ import {
 
 type ShortcutKeyboardEvent = Pick<
   KeyboardEvent,
-  'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'key'
+  'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'key' | 'code'
 >;
 type ShortcutCase = {
   event: Partial<ShortcutKeyboardEvent> & Pick<ShortcutKeyboardEvent, 'key'>;
@@ -73,6 +73,24 @@ describe('resolveEditorShortcutCommand', () => {
         event: { key: 'ArrowDown', metaKey: true },
         expected: 'moveCursorToDocEnd',
       },
+      { event: { key: 'ArrowUp', altKey: true }, expected: 'moveLineUp' },
+      { event: { key: 'ArrowDown', altKey: true }, expected: 'moveLineDown' },
+      {
+        event: { key: 'p', altKey: true, ctrlKey: true },
+        expected: 'moveLineUp',
+      },
+      {
+        event: { key: 'π', code: 'KeyP', altKey: true, ctrlKey: true },
+        expected: 'moveLineUp',
+      },
+      {
+        event: { key: 'n', altKey: true, ctrlKey: true },
+        expected: 'moveLineDown',
+      },
+      {
+        event: { key: '~', code: 'KeyN', altKey: true, ctrlKey: true },
+        expected: 'moveLineDown',
+      },
     ]);
   });
 
@@ -87,6 +105,34 @@ describe('resolveEditorShortcutCommand', () => {
         expected: 'moveCursorToDocStart',
       },
       { event: { key: 'End', ctrlKey: true }, expected: 'moveCursorToDocEnd' },
+      { event: { key: 'ArrowUp', altKey: true }, expected: 'moveLineUp' },
+      { event: { key: 'ArrowDown', altKey: true }, expected: 'moveLineDown' },
+      {
+        event: { key: 'p', altKey: true, ctrlKey: true },
+        expected: 'moveLineUp',
+      },
+      {
+        event: {
+          key: 'Unidentified',
+          code: 'KeyP',
+          altKey: true,
+          ctrlKey: true,
+        },
+        expected: 'moveLineUp',
+      },
+      {
+        event: { key: 'n', altKey: true, ctrlKey: true },
+        expected: 'moveLineDown',
+      },
+      {
+        event: {
+          key: 'Unidentified',
+          code: 'KeyN',
+          altKey: true,
+          ctrlKey: true,
+        },
+        expected: 'moveLineDown',
+      },
     ]);
   });
 

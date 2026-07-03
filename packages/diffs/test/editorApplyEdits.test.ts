@@ -96,6 +96,22 @@ function pressUndoRedo(
   );
 }
 
+function pressMoveLine(
+  window: EditorTestWindow,
+  content: HTMLElement,
+  direction: 'up' | 'down'
+): void {
+  content.dispatchEvent(
+    new window.KeyboardEvent('keydown', {
+      key: direction === 'up' ? 'ArrowUp' : 'ArrowDown',
+      altKey: true,
+      bubbles: true,
+      composed: true,
+      cancelable: true,
+    })
+  );
+}
+
 describe('Editor.applyEdits selection sync', () => {
   test('shifts the caret down when an edit inserts lines above it', async () => {
     const { cleanup, editor } = await createEditorFixture(
@@ -591,6 +607,169 @@ describe('Editor.applyEdits selection sync', () => {
       expect(setBaseAndExtent).not.toHaveBeenCalled();
     } finally {
       getSelectionStub.mockRestore();
+      cleanup();
+    }
+  });
+});
+
+describe('Editor move line commands', () => {
+  test('moves the current line up and down', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 2 },
+          direction: 'none',
+        },
+      ]);
+
+      pressMoveLine(window, content, 'up');
+      expect(editor.getState().file.contents).toBe('bravo\nalpha\ncharlie');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 0,
+        },
+      ]);
+
+      pressMoveLine(window, content, 'down');
+      expect(editor.getState().file.contents).toBe('alpha\nbravo\ncharlie');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 2 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('moves the final line up without adding a trailing newline', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 2, character: 3 },
+          end: { line: 2, character: 3 },
+          direction: 'none',
+        },
+      ]);
+
+      pressMoveLine(window, content, 'up');
+      expect(editor.getState().file.contents).toBe('alpha\ncharlie\nbravo');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 1, character: 3 },
+          end: { line: 1, character: 3 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('moves every selected line in a range', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture(
+      'zero\none\ntwo\nthree\nfour'
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 1, character: 1 },
+          end: { line: 3, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+
+      pressMoveLine(window, content, 'down');
+      expect(editor.getState().file.contents).toBe(
+        'zero\nfour\none\ntwo\nthree'
+      );
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 2, character: 1 },
+          end: { line: 4, character: 2 },
+          direction: 1,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('clamps an exclusive selection end when moving to EOF', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture(
+      'alpha\nbravo\ncharlie'
+    );
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 2, character: 0 },
+          direction: 'forward',
+        },
+      ]);
+
+      pressMoveLine(window, content, 'down');
+      expect(editor.getState().file.contents).toBe('alpha\ncharlie\nbravo');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 5 },
+          direction: 1,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('moves multiple selections as separate line blocks', async () => {
+    const { cleanup, content, editor, window } =
+      await createEditorFixture('a\nb\nc\nd\ne\nf');
+
+    try {
+      editor.setSelections([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 1 },
+          direction: 'forward',
+        },
+        {
+          start: { line: 4, character: 0 },
+          end: { line: 4, character: 1 },
+          direction: 'forward',
+        },
+      ]);
+
+      pressMoveLine(window, content, 'up');
+      expect(editor.getState().file.contents).toBe('b\na\nc\ne\nd\nf');
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 1 },
+          direction: 1,
+        },
+        {
+          start: { line: 3, character: 0 },
+          end: { line: 3, character: 1 },
+          direction: 1,
+        },
+      ]);
+    } finally {
       cleanup();
     }
   });

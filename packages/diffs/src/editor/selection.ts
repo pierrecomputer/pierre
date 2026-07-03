@@ -1326,6 +1326,78 @@ export function mergeOverlappingSelections(
 }
 
 /**
+ * Converts selections into merged line blocks for line-based commands.
+ */
+export function getSelectedLineBlocks(
+  selections: EditorSelection[]
+): { startLine: number; endLine: number }[] {
+  const blocks = selections
+    .map((selection) => {
+      let endLine = selection.end.line;
+      if (
+        selection.end.character === 0 &&
+        comparePosition(selection.start, selection.end) !== 0
+      ) {
+        endLine--;
+      }
+      return {
+        startLine: selection.start.line,
+        endLine: Math.max(selection.start.line, endLine),
+      };
+    })
+    .sort((a, b) => {
+      const startOrder = a.startLine - b.startLine;
+      return startOrder !== 0 ? startOrder : a.endLine - b.endLine;
+    });
+
+  const merged: { startLine: number; endLine: number }[] = [];
+  for (const block of blocks) {
+    const previous = merged.at(-1);
+    if (previous !== undefined && block.startLine <= previous.endLine + 1) {
+      previous.endLine = Math.max(previous.endLine, block.endLine);
+    } else {
+      merged.push({ ...block });
+    }
+  }
+  return merged;
+}
+
+/**
+ * Moves a selection's line positions after its lines are shifted, clamping to
+ * the target document bounds.
+ */
+export function shiftSelectionLines(
+  selection: EditorSelection,
+  direction: -1 | 1,
+  lineCount: number,
+  getLineLength: (line: number) => number
+): EditorSelection {
+  const shiftPosition = (position: Position): Position => {
+    const line = position.line + direction;
+    if (line >= lineCount) {
+      const lastLine = Math.max(0, lineCount - 1);
+      return {
+        line: lastLine,
+        character: getLineLength(lastLine),
+      };
+    }
+    if (line < 0) {
+      return { line: 0, character: 0 };
+    }
+    return {
+      line,
+      character: position.character,
+    };
+  };
+
+  return {
+    start: shiftPosition(selection.start),
+    end: shiftPosition(selection.end),
+    direction: selection.direction,
+  };
+}
+
+/**
  * Finds the next matching word and updates the selections.
  */
 export function findNexMatch(
