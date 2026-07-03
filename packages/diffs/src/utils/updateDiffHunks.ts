@@ -178,18 +178,15 @@ function preserveTrailingEditorBlankLine(
     return;
   }
   const extraAdditionLineIndex = recomputed.additionLines.length;
-  recomputed.additionLines = additionLines;
 
   const lastHunk = recomputed.hunks.at(-1);
   if (lastHunk == null) {
-    recomputeDiffRenderLineCounts(recomputed);
     return;
   }
 
   const lastHunkAdditionEnd =
     lastHunk.additionLineIndex + lastHunk.additionCount;
   if (lastHunkAdditionEnd !== extraAdditionLineIndex) {
-    recomputeDiffRenderLineCounts(recomputed);
     return;
   }
 
@@ -199,6 +196,7 @@ function preserveTrailingEditorBlankLine(
       content.additions < content.deletions &&
       content.additionLineIndex + content.additions === extraAdditionLineIndex
     ) {
+      recomputed.additionLines = additionLines;
       content.additions += extraLineCount;
       lastHunk.additionCount += extraLineCount;
       lastHunk.additionLines += extraLineCount;
@@ -206,17 +204,6 @@ function preserveTrailingEditorBlankLine(
       return;
     }
   }
-
-  lastHunk.hunkContent.push({
-    type: 'change',
-    additions: extraLineCount,
-    deletions: 0,
-    additionLineIndex: extraAdditionLineIndex,
-    deletionLineIndex: lastHunk.deletionLineIndex + lastHunk.deletionCount,
-  });
-  lastHunk.additionCount += extraLineCount;
-  lastHunk.additionLines += extraLineCount;
-  recomputeDiffRenderLineCounts(recomputed);
 }
 
 /** Updates hunk metadata after addition lines change; re-parses affected hunks only. */

@@ -397,6 +397,79 @@ describe('updateDiffHunks', () => {
     ]);
   });
 
+  test('does not append an editor-only trailing blank line as an EOF change addition', () => {
+    const oldContents = ['line 1', 'remove me', 'line 3', ''].join('\n');
+    const diff = parseDiffFromFile(
+      { name: 'example.ts', contents: oldContents },
+      {
+        name: 'example.ts',
+        contents: ['line 1', 'add me', 'line 3', ''].join('\n'),
+      },
+      { context: 3 }
+    );
+
+    // The editor exposes the final logical empty row for a file ending in a
+    // newline. That row belongs to document state, not to diff hunk metadata.
+    diff.additionLines = ['line 1\n', 'add me\n', 'line 3\n', ''];
+
+    const recomputed = recomputeDiffHunksForEdit(diff, { context: 3 });
+
+    expect(recomputed.additionLines).toEqual([
+      'line 1\n',
+      'add me\n',
+      'line 3\n',
+    ]);
+    expect(recomputed.hunks[0]?.hunkContent).toEqual([
+      {
+        type: 'context',
+        lines: 1,
+        additionLineIndex: 0,
+        deletionLineIndex: 0,
+      },
+      {
+        type: 'change',
+        additions: 1,
+        deletions: 1,
+        additionLineIndex: 1,
+        deletionLineIndex: 1,
+      },
+      {
+        type: 'context',
+        lines: 1,
+        additionLineIndex: 2,
+        deletionLineIndex: 2,
+      },
+    ]);
+
+    Object.assign(diff, recomputed);
+    const rows: Array<{
+      type: string;
+      deletionLineIndex: number | undefined;
+      additionLineIndex: number | undefined;
+    }> = [];
+    iterateOverDiff({
+      diff,
+      diffStyle: 'both',
+      expandedHunks: true,
+      callback(row) {
+        rows.push({
+          type: row.type,
+          deletionLineIndex: row.deletionLine?.lineIndex,
+          additionLineIndex: row.additionLine?.lineIndex,
+        });
+      },
+    });
+
+    expect(
+      rows.some(
+        (row) =>
+          row.type === 'change' &&
+          row.deletionLineIndex == null &&
+          row.additionLineIndex === 3
+      )
+    ).toBe(false);
+  });
+
   test('translates reparsed hunk coordinates when context lines become changes', () => {
     const oldContents = [
       'ctx01',
