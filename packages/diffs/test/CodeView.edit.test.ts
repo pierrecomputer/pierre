@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
+import { Editor } from '../src/editor/editor';
 import type {
   CodeViewCreateEditorOptions,
   CodeViewItem,
@@ -338,6 +339,140 @@ describe('CodeView item edit mode', () => {
       expect(editors.length).toBe(1);
       expect(editor.edits.length).toBe(2);
       expect(editor.edits[1]).toBe(editor.edits[0]);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('remounts an edited file whose document grew without crashing', async () => {
+    const { cleanup } = installDom();
+    const { createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    const items: CodeViewItem<undefined>[] = [
+      makeEditFileItem('edited', true, 30),
+      ...Array.from({ length: 39 }, (_, index) =>
+        makeEditFileItem(`file-${index}`, false, 30)
+      ),
+    ];
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, items);
+
+      // Mimic an edit session that grew the document: the editor pushes the
+      // larger document into the host, which patches its render caches and
+      // remembers the document's line count.
+      const edited = viewer.getRenderedItems()[0];
+      const lineCount = 40;
+      const documentText = Array.from(
+        { length: lineCount },
+        (_, i) => `edited ${i}`
+      ).join('\n');
+      edited.instance.applyDocumentChange({
+        lineCount,
+        getLineText: (lineNumber: number) => `edited ${lineNumber}`,
+        getText: () => documentText,
+      });
+
+      // Scroll the edited item out (recycle) and back in. The remount renders
+      // from the item's own 30-line contents; a document line count retained
+      // across the recycle used to make this render throw
+      // "FileRenderer.processFileResult: Line doesnt exist".
+      root.scrollTop = 20_000;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+
+      root.scrollTop = 0;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+
+      const remounted = viewer.getRenderedItems()[0];
+      expect(remounted.id).toBe('edited');
+      // Render errors are caught and rendered as an error wrapper instead of
+      // propagating, so assert on the rendered result: no error panel, and
+      // the item's own 30 lines rendered.
+      const shadowRoot = remounted.element.shadowRoot;
+      expect(shadowRoot?.querySelector('[data-error-wrapper]')).toBeNull();
+      expect(shadowRoot?.querySelectorAll('[data-line]').length).toBe(30);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('user-space onItemEditComplete handler commits a finished session', async () => {
+    const { cleanup } = installDom();
+    // Committing is a user-space concern: CodeView never writes item data
+    // itself, it only ends the editor session and reports the final contents.
+    // This handler models the recommended app shape — one combined item write
+    // carrying the new file (with a fresh cacheKey, since the contents
+    // changed) and `edit: false`.
+    const viewer: CodeView = new CodeView({
+      createEditor: (options) => new Editor<undefined>({ ...options }),
+      onItemEditComplete(item, file) {
+        if (item.type !== 'file') {
+          return;
+        }
+        const version = (item.version ?? 0) + 1;
+        viewer.updateItem({
+          ...item,
+          file: {
+            ...item.file,
+            contents: file.contents,
+            cacheKey: `${item.id}:v${version}`,
+          },
+          edit: false,
+          version,
+        });
+      },
+    });
+    const item = makeEditFileItem('edited', true, 30);
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [item]);
+      await wait(10);
+
+      const editor = viewer.getEditor('edited') as Editor<undefined>;
+      expect(editor).toBeDefined();
+      // Insert ten lines at the top of the document.
+      editor.applyEdits(
+        [
+          {
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: 0 },
+            },
+            newText:
+              Array.from({ length: 10 }, (_, i) => `inserted ${i}`).join('\n') +
+              '\n',
+          },
+        ],
+        true
+      );
+      await wait(10);
+
+      // Turning edit off ends the session; the completion handler above
+      // commits the final contents back into the item.
+      await applyItemUpdate(viewer, { ...item, edit: false, version: 1 });
+      expect(viewer.getEditor('edited')).toBeUndefined();
+      const committed = viewer.getItem('edited');
+      expect(committed?.type === 'file' && committed.file.contents).toContain(
+        'inserted 0'
+      );
+
+      // The committed contents render in review mode, error-free.
+      viewer.render(true);
+      await wait(10);
+      const rendered = viewer.getRenderedItems()[0];
+      const shadowRoot = rendered.element.shadowRoot;
+      expect(shadowRoot?.querySelector('[data-error-wrapper]')).toBeNull();
+      expect(shadowRoot?.querySelectorAll('[data-line]').length).toBe(40);
+      expect(shadowRoot?.textContent).toContain('inserted 0');
     } finally {
       viewer.cleanUp();
       await wait(0);

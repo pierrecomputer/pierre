@@ -80,7 +80,9 @@ interface CodeViewBaseProps<LAnnotation> {
   /**
    * Called once with the final contents when an item's edit session ends
    * (edit turned off, item removed or collapsed). Not called for sessions
-   * that produced no changes.
+   * that produced no changes. Committing is user-space: make one combined
+   * item write carrying the new file/fileDiff (with a fresh `cacheKey`,
+   * since the contents changed) along with `edit: false`.
    */
   onItemEditComplete?(
     item: CodeViewItem<LAnnotation>,

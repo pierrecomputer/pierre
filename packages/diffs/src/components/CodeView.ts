@@ -533,9 +533,9 @@ export interface CodeViewOptions<LAnnotation>
   layout?: CodeViewLayout;
   /**
    * Create an editor for an item entering edit mode (`edit: true`). Providing
-   * this option is what enables item editing. Spread the given options into
-   * the editor constructor — `new Editor({ ...options })` — so CodeView can
-   * route document changes to `onItemEditChange`. CodeView owns the returned
+   * this option is what enables item editing. Pass the given options into the
+   * editor constructor — `new Editor(options)` — so CodeView can route
+   * document changes to `onItemEditChange`. CodeView owns the returned
    * editor's lifecycle: it attaches when the edited item mounts, re-attaches
    * across virtualization unmounts, and cleans the editor up once the item
    * stops being editable (edit off, collapsed, or removed). Returning
@@ -546,11 +546,7 @@ export interface CodeViewOptions<LAnnotation>
   ): DiffsEditorHost<LAnnotation> | undefined;
   /**
    * Called when an edited item's document changes, with the owning item
-   * resolved by CodeView. Editors are recycled across virtualization
-   * unmounts, so unsaved buffer contents and undo history survive scrolling
-   * as long as the item keeps the same `name`/`lang`/`cacheKey`. Persisting
-   * `file` back into the item via `updateItem` (with a `version` bump) is
-   * still how edits become part of the item data itself.
+   * resolved by CodeView.
    */
   onItemEditChange?(
     item: CodeViewItem<LAnnotation>,
@@ -558,12 +554,16 @@ export interface CodeViewOptions<LAnnotation>
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void;
   /**
-   * Called once when an item's edit session ends (edit turned off, item
-   * removed, item collapsed, or `createEditor` unset), with the final
+   * Called once when an item's edit session ends — edit turned off, item
+   * removed, item collapsed, or `createEditor` unset — with the final
    * contents from the session's last document change. Not called when the
-   * session produced no changes, nor on a full CodeView reset/cleanUp. Use
-   * this to persist a finished edit back into the item (`updateItem` with a
-   * `version` bump) without tracking every `onItemEditChange`.
+   * session produced no changes, nor on a full CodeView reset/cleanUp.
+   *
+   * Committing is user-space: CodeView never writes item data itself. The
+   * recommended handler makes one combined item write (`updateItem` with a
+   * `version` bump) carrying the new file/fileDiff — with a fresh `cacheKey`,
+   * since the delivered contents differ from what the old key cached — along
+   * with `edit: false`.
    */
   onItemEditComplete?(
     item: CodeViewItem<LAnnotation>,
@@ -2005,11 +2005,9 @@ export class CodeView<LAnnotation = undefined> {
    * Attach (or lazily create) the editor for a mounted edit-mode item. Called
    * from the render loop so every mounted item passes through it: fresh
    * mounts, remounts after virtualization released the item, and items whose
-   * edit flag was just turned on. Editors are recycled across unmounts
-   * (instance cleanUp passes recycle through to editor.cleanUp), so a
+   * edit flag was just turned on. Editors persist across unmounts, so a
    * remounted item re-attaches its existing editor and resumes the retained
-   * document — including unsaved edits and undo history — as long as the
-   * file identity (name/lang/cacheKey) is unchanged.
+   * document (see the FIXME on `createEditor` about file-item resume).
    */
   private attachItemEditor(item: CodeViewContextItem<LAnnotation>): void {
     const { id } = item.item;

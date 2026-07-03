@@ -100,7 +100,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
   private lineCache: LineCache | undefined;
-  private textDoucmentCache = new WeakMap<FileContents, DiffsTextDocument>();
+  private textDocumentCache = new WeakMap<FileContents, DiffsTextDocument>();
 
   constructor(
     public options: FileRendererOptions = { theme: DEFAULT_THEMES },
@@ -144,6 +144,12 @@ export class FileRenderer<LAnnotation = undefined> {
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
     this.lineCache = undefined;
+    // The edited-document cache is only coherent alongside the render cache
+    // it patched. Keeping it across a recycle would let getLineCount report
+    // editor-session line counts (keyed by the long-lived file object) against
+    // a result rebuilt from the file's own contents, which processFileResult
+    // treats as a missing-line error.
+    this.textDocumentCache = new WeakMap();
   }
 
   public clearRenderCache(): void {
@@ -241,7 +247,7 @@ export class FileRenderer<LAnnotation = undefined> {
   // calculate the line count using the cached text document
   public getLineCount(file: FileContents): number {
     return (
-      this.textDoucmentCache.get(file)?.lineCount ??
+      this.textDocumentCache.get(file)?.lineCount ??
       this.getOrCreateLineCache(file).length
     );
   }
@@ -301,7 +307,14 @@ export class FileRenderer<LAnnotation = undefined> {
       return undefined;
     }
     const { file, result } = this.renderCache;
-    if (result != null && result.code.length !== textDocument.lineCount) {
+    // Without a result there is nothing to reconcile the document against, so
+    // do not record it either: the document cache must never claim line
+    // counts the (possibly still highlighting) result cannot back, or the
+    // async highlight pass would process lines that do not exist.
+    if (result == null) {
+      return undefined;
+    }
+    if (result.code.length !== textDocument.lineCount) {
       result.code.length = Math.min(result.code.length, textDocument.lineCount);
       for (let i = result.code.length; i < textDocument.lineCount; i++) {
         // prefill lines with plain text content
@@ -332,7 +345,7 @@ export class FileRenderer<LAnnotation = undefined> {
       }
       this.renderCache.isDirty = true;
     }
-    this.textDoucmentCache.set(file, textDocument);
+    this.textDocumentCache.set(file, textDocument);
   }
 
   public renderFile(
