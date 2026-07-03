@@ -24,6 +24,9 @@ CodeView to avoid handling scaling yourself.
 - `scrollTo` APIs for items, line targets, and raw scroll positions.
 - Unified selection API, support for custom annotations, custom headers, and
   gutter utilities across the entire viewer.
+- Optional non-virtualized [header and footer regions](#codeview-header-footer)
+  rendered inside the scroll container — ideal for PR summary cards and approval
+  bars.
 
 ### Core Model
 
@@ -60,6 +63,40 @@ For controlling layout inside and between items in `CodeView`, you can use the
 and adjust the layout. You should not apply these values with CSS yourself.
 
 <DocsCodeExample {...codeViewLayoutOptionsExample} />
+
+### Header &amp; Footer
+
+Use the `renderCodeViewHeader` and `renderCodeViewFooter` options to render your
+own element at the start and end of the scroll content; before the first item
+and after the last one.
+
+- Headers and footers are not virtualized. Unlike items, they are always in the
+  DOM while the viewer is mounted.
+- They are rendered inside the scroll container, as part of the scrollable
+  content. `CodeView` doesn't apply any positioning of its own, and they don't
+  affect `stickyHeaders` behavior for item headers.
+- You never declare a height. `CodeView` measures the element on mount and
+  tracks later size changes with a `ResizeObserver`, so async content, font
+  loads, and late-arriving React portals stay coherent, and scroll position is
+  re-anchored when a header's height changes.
+- Both render even when the item list is empty, which makes them useful for
+  loading or empty states in review UIs.
+- In React, return plain JSX from the `renderCodeViewHeader` /
+  `renderCodeViewFooter` props. The node is portaled into a host element the
+  viewer manages, so state-driven updates just work. Memoize the callbacks with
+  `useCallback` (listing any state they read as deps) so the header and footer
+  don't re-render on every parent render (don't trust React Compiler).
+- In Vanilla JS, return the same element across calls and mutate it in place to
+  update; returning `undefined` empties the host. The callback's presence
+  controls whether the host element exists at all.
+- The host elements carry `data-diffs-code-view-header` and
+  `data-diffs-code-view-footer` attributes for styling, and are exposed via
+  `getHeaderElement()` / `getFooterElement()` on the instance.
+
+<CodeViewExampleTabs
+  reactExample={codeViewHeaderFooterReactExample}
+  vanillaExample={codeViewHeaderFooterVanillaExample}
+/>
 
 ### File &amp; Diff Size Estimation
 

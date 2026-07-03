@@ -9,6 +9,8 @@ import type { Metadata } from 'next';
 import { MERGE_CONFLICT_EXAMPLE } from '../_examples/MergeConflict/constants';
 import { MergeConflict } from '../_examples/MergeConflict/MergeConflict';
 import {
+  CODE_VIEW_HEADER_FOOTER_REACT_EXAMPLE,
+  CODE_VIEW_HEADER_FOOTER_VANILLA_EXAMPLE,
   CODE_VIEW_ITEM_METRICS_OPTIONS_EXAMPLE,
   CODE_VIEW_ITEM_TYPE_EXAMPLE,
   CODE_VIEW_LAYOUT_OPTIONS_EXAMPLE,
@@ -384,6 +386,8 @@ async function CodeViewSection() {
     codeViewReactExample,
     codeViewScrollTargetsExample,
     codeViewVanillaExample,
+    codeViewHeaderFooterReactExample,
+    codeViewHeaderFooterVanillaExample,
   ] = await Promise.all([
     preloadFile(CODE_VIEW_ITEM_TYPE_EXAMPLE),
     preloadFile(CODE_VIEW_LAYOUT_OPTIONS_EXAMPLE),
@@ -391,6 +395,8 @@ async function CodeViewSection() {
     preloadFile(CODE_VIEW_REACT_EXAMPLE),
     preloadFile(CODE_VIEW_SCROLL_TARGETS_EXAMPLE),
     preloadFile(CODE_VIEW_VANILLA_EXAMPLE),
+    preloadFile(CODE_VIEW_HEADER_FOOTER_REACT_EXAMPLE),
+    preloadFile(CODE_VIEW_HEADER_FOOTER_VANILLA_EXAMPLE),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/CodeView/content.mdx',
@@ -401,6 +407,8 @@ async function CodeViewSection() {
       codeViewReactExample,
       codeViewScrollTargetsExample,
       codeViewVanillaExample,
+      codeViewHeaderFooterReactExample,
+      codeViewHeaderFooterVanillaExample,
     },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
