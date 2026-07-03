@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'fs';
 import { dirname, extname, join } from 'path';
 import { pathToFileURL } from 'url';
 
@@ -42,17 +48,20 @@ const DIFFS_SECTIONS = [
   'CoreTypes',
   'ReactAPI',
   'VanillaAPI',
+  'CodeView',
   'Editor',
   'Virtualization',
   'CustomHunkSeparators',
   'Utilities',
   'Styling',
   'Theming',
+  'TokenHooks',
   'WorkerPool',
   'SSR',
 ] as const;
 
 const TREES_SECTIONS = [
+  'Overview',
   'Guides/ChooseYourIntegration',
   'Guides/GetStartedWithReact',
   'Guides/GetStartedWithVanilla',
@@ -82,6 +91,8 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
       'MultiFileDiff, PatchDiff, FileDiff, File components and shared props',
     VanillaAPI:
       'FileDiff and File classes, props, deprecated vanilla custom hunk separators, and low-level renderers',
+    CodeView:
+      'One virtualized scroll region for mixed file and diff lists, with scrollTo targeting, viewer-wide selection, sticky headers, and header/footer regions',
     Editor:
       'Pluggable editing for File surfaces, including text editing, native selections, history, search, selection action, and shortcuts',
     Virtualization: 'Virtual scrolling for large diffs and files',
@@ -92,11 +103,15 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     Styling: 'CSS variables, inline styles, and unsafe CSS injection',
     Theming:
       'Pierre Light/Dark themes, custom theme creation, and registration',
+    TokenHooks:
+      'Experimental token-level enter/leave/click callbacks for hover UI and LSP integrations',
     WorkerPool:
       'Off-main-thread syntax highlighting with configurable worker pools',
     SSR: 'Server-side rendering with preload functions for instant first paint',
   },
   trees: {
+    Overview:
+      'What trees is, the path-first model, and the React, vanilla, and SSR entry points',
     'Guides/ChooseYourIntegration':
       'Choosing between React and vanilla, with the shared path-first model',
     'Guides/GetStartedWithReact':
@@ -290,10 +305,15 @@ function stripJsx(mdx: string): string {
 }
 
 function cleanMarkdown(md: string): string {
-  return md
-    .replace(/\s*\[toc-ignore\]/g, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  return (
+    md
+      .replace(/\s*\[toc-ignore\]/g, '')
+      // MDX headings escape `&` as an HTML entity; decode it so the plain-text
+      // output reads as markdown, not markup.
+      .replace(/&amp;/g, '&')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  );
 }
 
 function processMdx(raw: string): string {
@@ -511,6 +531,86 @@ const LLMS_DOCS_URL: Record<ProductId, string> = {
   trees: 'https://trees.software/docs',
 };
 
+// A docs dir is a section when it contains its section MDX file (content.mdx,
+// or the MDX_FILENAME_OVERRIDES filename for that dir).
+function isSectionDir(docsPrefix: string, dirName: string): boolean {
+  const mdxFilename =
+    MDX_FILENAME_OVERRIDES[`${docsPrefix}/${dirName}`] ?? 'content.mdx';
+  return existsSync(join(ROOT, 'app', docsPrefix, dirName, mdxFilename));
+}
+
+// Discover a product's section dirs by scanning `app/<docsPrefix>`. A dir
+// containing its section MDX is a section; anything else is treated as a
+// grouping dir (trees' Guides/Reference) and its immediate children are
+// checked one level deep.
+function discoverSectionDirs(docsPrefix: string): string[] {
+  const base = join(ROOT, 'app', docsPrefix);
+  const discovered: string[] = [];
+  for (const entry of readdirSync(base, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (isSectionDir(docsPrefix, entry.name)) {
+      discovered.push(entry.name);
+      continue;
+    }
+    for (const child of readdirSync(join(base, entry.name), {
+      withFileTypes: true,
+    })) {
+      if (!child.isDirectory()) continue;
+      const nested = `${entry.name}/${child.name}`;
+      if (isSectionDir(docsPrefix, nested)) discovered.push(nested);
+    }
+  }
+  return discovered;
+}
+
+// Fail the build when the hardcoded section registries drift from the docs
+// dirs on disk. Section order must stay hand-maintained (it mirrors each
+// page's render order, which a filesystem scan cannot derive), so this guard
+// keeps the second source of truth honest: an unregistered dir, a stale
+// entry, or a missing description fails the very next build. Both products
+// are checked regardless of NEXT_PUBLIC_SITE, so a diffs build catches trees
+// drift too.
+function assertSectionRegistriesComplete(): void {
+  const problems: string[] = [];
+  for (const productId of ['diffs', 'trees'] as const) {
+    const listName =
+      productId === 'diffs' ? 'DIFFS_SECTIONS' : 'TREES_SECTIONS';
+    const registered = PRODUCT_SECTIONS[productId];
+    const registeredSet = new Set(registered);
+    const discovered = new Set(discoverSectionDirs(DOCS_PREFIX[productId]));
+
+    const missing = [...discovered].filter((dir) => !registeredSet.has(dir));
+    const stale = registered.filter((dir) => !discovered.has(dir));
+    const undescribed = registered.filter(
+      (dir) => SECTION_DESCRIPTIONS[productId]?.[dir] == null
+    );
+
+    if (missing.length > 0) {
+      problems.push(
+        `[${productId}] docs dirs not registered in ${listName}: ${missing.join(', ')}`
+      );
+    }
+    if (stale.length > 0) {
+      problems.push(
+        `[${productId}] ${listName} entries with no MDX on disk: ${stale.join(', ')}`
+      );
+    }
+    if (undescribed.length > 0) {
+      problems.push(
+        `[${productId}] sections missing SECTION_DESCRIPTIONS entries: ${undescribed.join(', ')}`
+      );
+    }
+  }
+
+  if (problems.length > 0) {
+    throw new Error(
+      'generate-llms-txt: section registries drifted from the docs dirs on disk.\n' +
+        problems.map((problem) => `  - ${problem}`).join('\n') +
+        '\nRegister each new docs dir in its section list (in page render order) and add a SECTION_DESCRIPTIONS entry.'
+    );
+  }
+}
+
 function resolveProductId(): ProductId {
   const site = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
   if (site !== 'diffs' && site !== 'trees') {
@@ -522,6 +622,8 @@ function resolveProductId(): ProductId {
 }
 
 async function main() {
+  assertSectionRegistriesComplete();
+
   // Each Vercel deployment (diffs.com vs trees.software) builds from the same
   // codebase with NEXT_PUBLIC_SITE selecting the active product. Both sites
   // share `public/`, so we generate exactly one product's files per build and
