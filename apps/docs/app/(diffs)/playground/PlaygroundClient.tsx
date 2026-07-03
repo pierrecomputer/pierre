@@ -9,7 +9,7 @@ import type {
   SelectedLineRange,
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, FileDiff } from '@pierre/diffs/react';
+import { EditorProvider, FileDiff, useWorkerPool } from '@pierre/diffs/react';
 import type { PreloadFileDiffResult } from '@pierre/diffs/ssr';
 import {
   IconCheck,
@@ -1010,6 +1010,19 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       selectedLightTheme,
     ]
   );
+
+  // With a worker pool, highlight render options (theme, line-diff granularity)
+  // are pool-global — the workers render with the pool's config, not each
+  // component's options — so picker changes must be pushed into the pool.
+  // setRenderOptions no-ops when nothing changed, re-resolves themes, updates
+  // every worker, drops stale AST caches, and notifies mounted instances.
+  const workerPool = useWorkerPool();
+  useEffect(() => {
+    void workerPool?.setRenderOptions({
+      theme: renderOptions.theme,
+      lineDiffType: renderOptions.lineDiffType,
+    });
+  }, [workerPool, renderOptions.theme, renderOptions.lineDiffType]);
 
   // CodeView adds its own layout/sticky-header options on top of the shared
   // rendering options; its scrollbar styling mirrors the Normal view's.
