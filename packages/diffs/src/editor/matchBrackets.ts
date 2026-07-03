@@ -93,6 +93,8 @@ function getBracketIgnoredOffsets(text: string): Uint8Array {
     const char = text[offset];
     const nextChar = text[offset + 1];
 
+    // TODO(@ije): use token type of shiki to match string/comment/etc.
+    // see https://github.com/shikijs/shiki/pull/1293
     if (char === '/' && nextChar === '/') {
       offset = markIgnoredLineComment(text, offset, ignoredOffsets);
     } else if (char === '/' && nextChar === '*') {
