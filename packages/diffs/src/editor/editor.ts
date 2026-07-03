@@ -27,6 +27,7 @@ import {
   MarkerRenderer,
   markerSeverityDatasetKey,
 } from './marker';
+import { findBracketMatchRanges } from './matchBrackets';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import {
   POPOVER_BOUNDARY_LINES,
@@ -110,6 +111,8 @@ export interface EditorOptions<LAnnotation> {
   historyMaxEntries?: number;
   /** Render rounded corners for selection ranges, default is true. */
   roundedSelection?: boolean;
+  /** Highlight matching brackets near the caret, default is true. */
+  matchBrackets?: boolean;
   /**
    * Controls auto-surround when typing quotes or brackets over a selection.
    * Default is `"default"` (both quotes and brackets).
@@ -2795,6 +2798,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         }
         this.#renderCaret(renderCtx, selection, selection === primarySelection);
       }
+
+      const bracketMatchRanges =
+        this.#options.matchBrackets === false ||
+        this.#textDocument === undefined
+          ? undefined
+          : findBracketMatchRanges(this.#textDocument, primarySelection);
+      if (bracketMatchRanges !== undefined) {
+        for (const range of bracketMatchRanges) {
+          this.#renderSelection(renderCtx, 'bracketMatch', range);
+        }
+      }
     }
 
     const textDocument = this.#textDocument;
@@ -2848,7 +2862,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       fragment: DocumentFragment;
       elements: Map<string, HTMLElement>;
     },
-    type: 'selection' | 'match' | 'marker',
+    type: 'selection' | 'match' | 'marker' | 'bracketMatch',
     range: Range,
     extraDataset?: string
   ) {
@@ -2938,7 +2952,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     startChar: number,
     endChar: number,
     isLastLine: boolean,
-    type: 'selection' | 'match' | 'marker',
+    type: 'selection' | 'match' | 'marker' | 'bracketMatch',
     extraDataset?: string
   ) {
     const wrapOffsets = this.#wrapLineText(line);
@@ -3034,7 +3048,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         width: number;
       };
     },
-    type: 'selection' | 'match' | 'marker',
+    type: 'selection' | 'match' | 'marker' | 'bracketMatch',
     line: number,
     wrapLine: number,
     left: number,

@@ -218,6 +218,8 @@ export class EditorTokenizer {
     const findMatchBackground = colors['editor.findMatchBackground'];
     const findMatchHighlightBackground =
       colors['editor.findMatchHighlightBackground'];
+    const bracketMatchBackground = colors['editorBracketMatch.background'];
+    const bracketMatchBorder = colors['editorBracketMatch.border'];
     const hintForeground = colors['editorHint.foreground'];
     const infoForeground = colors['editorInfo.foreground'];
     const warningForeground = colors['editorWarning.foreground'];
@@ -227,6 +229,8 @@ export class EditorTokenizer {
       --diffs-editor-line-highlight-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg)'};
       --diffs-editor-match-bg: ${findMatchBackground ?? 'unset'};
       --diffs-editor-match-highlight-bg: ${findMatchHighlightBackground ?? 'unset'};
+      --diffs-editor-bracket-match-bg: ${bracketMatchBackground ?? 'unset'};
+      --diffs-editor-bracket-match-border: ${bracketMatchBorder ?? 'unset'};
       --diffs-editor-cursor-fg: ${cursorForeground ?? 'unset'};
       --diffs-editor-hint-fg: ${hintForeground ?? 'unset'};
       --diffs-editor-info-fg: ${infoForeground ?? 'unset'};

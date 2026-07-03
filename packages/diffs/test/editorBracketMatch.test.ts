@@ -1,0 +1,196 @@
+import { afterAll, describe, expect, test } from 'bun:test';
+
+import { File } from '../src/components/File';
+import { DEFAULT_THEMES } from '../src/constants';
+import { Editor, type EditorOptions } from '../src/editor/editor';
+import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import type { FileContents } from '../src/types';
+import { installDom, wait } from './domHarness';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
+
+async function waitForEditableContent(
+  container: HTMLElement
+): Promise<HTMLElement> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const content = container.shadowRoot?.querySelector('[data-content]');
+    if (
+      content instanceof HTMLElement &&
+      (content.contentEditable === 'true' ||
+        content.getAttribute('contenteditable') === 'true')
+    ) {
+      return content;
+    }
+    await wait(0);
+  }
+
+  throw new Error('editor content did not become editable');
+}
+
+interface BracketMatchFixture {
+  cleanup(): void;
+  content: HTMLElement;
+  editor: Editor<undefined>;
+}
+
+async function createBracketMatchFixture(
+  contents: string,
+  editorOptions: EditorOptions<undefined> = {}
+): Promise<BracketMatchFixture> {
+  const dom = installDom();
+  const fileContainer = document.createElement('div');
+  document.body.appendChild(fileContainer);
+
+  const file = new File<undefined>({
+    disableFileHeader: true,
+    theme: DEFAULT_THEMES,
+  });
+  const editor = new Editor<undefined>(editorOptions);
+  const initialFile: FileContents = { name: 'brackets.ts', contents };
+
+  file.render({ file: initialFile, fileContainer, forceRender: true });
+  editor.edit(file);
+
+  const content = await waitForEditableContent(fileContainer);
+
+  return {
+    cleanup() {
+      editor.cleanUp();
+      file.cleanUp();
+      dom.cleanup();
+    },
+    content,
+    editor,
+  };
+}
+
+function bracketMatchCount(content: HTMLElement): number {
+  const root = content.getRootNode() as ShadowRoot;
+  return root.querySelectorAll('[data-bracket-match-range]').length;
+}
+
+describe('editor bracket matching', () => {
+  test('highlights the matching pair when the caret is after an opening bracket', async () => {
+    const { cleanup, content, editor } =
+      await createBracketMatchFixture('a(b[c]{d})');
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ]);
+
+      expect(bracketMatchCount(content)).toBe(2);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('highlights the matching pair when the caret is after a closing bracket', async () => {
+    const { cleanup, content, editor } =
+      await createBracketMatchFixture('a(b[c]{d})');
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 10 },
+          end: { line: 0, character: 10 },
+          direction: 'none',
+        },
+      ]);
+
+      expect(bracketMatchCount(content)).toBe(2);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('does not render bracket matches when disabled', async () => {
+    const { cleanup, content, editor } = await createBracketMatchFixture(
+      'a(b)',
+      { matchBrackets: false }
+    );
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ]);
+
+      expect(bracketMatchCount(content)).toBe(0);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('does not render bracket matches for unmatched brackets', async () => {
+    const { cleanup, content, editor } = await createBracketMatchFixture('a(b');
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ]);
+
+      expect(bracketMatchCount(content)).toBe(0);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('ignores brackets inside quoted strings and template literals', async () => {
+    const { cleanup, content, editor } = await createBracketMatchFixture(
+      '[ \'abc[\' ]\n[ "abc[" ]\n[ `abc[` ]'
+    );
+    try {
+      for (const line of [0, 1, 2]) {
+        editor.setSelections([
+          {
+            start: { line, character: 7 },
+            end: { line, character: 7 },
+            direction: 'none',
+          },
+        ]);
+
+        expect(bracketMatchCount(content)).toBe(0);
+      }
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('ignores brackets inside block comments', async () => {
+    const { cleanup, content, editor } =
+      await createBracketMatchFixture('{ /*{*/ }');
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: 'none',
+        },
+      ]);
+
+      expect(bracketMatchCount(content)).toBe(0);
+
+      editor.setSelections([
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+          direction: 'none',
+        },
+      ]);
+
+      expect(bracketMatchCount(content)).toBe(2);
+    } finally {
+      cleanup();
+    }
+  });
+});
