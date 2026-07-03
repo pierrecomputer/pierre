@@ -293,7 +293,7 @@ viewer.addItems([
     type: 'file',
     file: {
       name: 'CHANGELOG.md',
-      contents: '# Changelog\n\n- Added personalized greetings.',
+      contents: '# Changelog\\n\\n- Added personalized greetings.',
     },
   },
 ]);

@@ -54,6 +54,8 @@ export const THEME_CSS_ATTRIBUTE = 'data-theme-css';
 export const UNSAFE_CSS_ATTRIBUTE = 'data-unsafe-css';
 export const CORE_CSS_ATTRIBUTE = 'data-core-css';
 export const DIFFS_SCROLLBAR_MEASURE_ATTRIBUTE = 'data-diffs-scrollbar-measure';
+export const CODE_VIEW_HEADER_ATTRIBUTE = 'data-diffs-code-view-header';
+export const CODE_VIEW_FOOTER_ATTRIBUTE = 'data-diffs-code-view-footer';
 export const DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY =
   '--diffs-scrollbar-gutter-measured';
 

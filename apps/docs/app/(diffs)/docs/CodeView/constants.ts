@@ -396,7 +396,7 @@ viewer.addItems([
     type: 'file',
     file: {
       name: 'CHANGELOG.md',
-      contents: '# Changelog\n\n- Added personalized greetings.',
+      contents: '# Changelog\\n\\n- Added personalized greetings.',
     },
   },
 ]);
@@ -407,3 +407,162 @@ window.addEventListener('beforeunload', () => {
   },
   options,
 };
+
+export const CODE_VIEW_HEADER_FOOTER_REACT_EXAMPLE: PreloadFileOptions<undefined> =
+  {
+    file: {
+      name: 'code_view_header_footer.tsx',
+      contents: `import { parseDiffFromFile, type CodeViewItem } from '@pierre/diffs';
+import { CodeView } from '@pierre/diffs/react';
+import { useCallback, useMemo, useState } from 'react';
+
+const oldAppFile = {
+  name: 'src/app.ts',
+  contents: \`export function greet() {\n  return "hello";\n}\`,
+};
+
+const newAppFile = {
+  name: 'src/app.ts',
+  contents:
+    \`export function greet(name: string) {\n  return "hello " + name;\n}\`,
+};
+
+export function ReviewSurface() {
+  const [approved, setApproved] = useState(false);
+
+  const items = useMemo<CodeViewItem[]>(
+    () => [
+      {
+        id: 'diff:src/app.ts',
+        type: 'diff',
+        fileDiff: parseDiffFromFile(oldAppFile, newAppFile),
+      },
+    ],
+    []
+  );
+
+  // Rendered before the first item and portaled into a host element the
+  // viewer manages inside the scroll container. Not virtualized: always in
+  // the DOM. Memoize render callbacks so the viewer doesn't re-render the
+  // header on every parent render. (don't trust react compiler).
+  const renderHeader = useCallback(() => {
+    return (
+      <section className="pr-summary">
+        <h2>Add personalized greetings</h2>
+        <p>Threads a name through greet() so callers control the message.</p>
+        <span>1 file changed</span>
+      </section>
+    );
+  }, []);
+
+  // Rendered after the last item. Plain state-driven JSX: when it re-renders
+  // at a different height, the viewer re-measures automatically. List the
+  // state the callback reads in the deps so updates flow through. (don't trust
+  // react compiler).
+  const renderFooter = useCallback(() => {
+    return (
+      <div className="review-actions">
+        <span>{approved ? 'Approved' : 'Reviewed 1 of 1 files'}</span>
+        <button type="button" onClick={() => setApproved(true)}>
+          Approve changes
+        </button>
+      </div>
+    );
+  }, [approved]);
+
+  return (
+    <CodeView
+      items={items}
+      style={{ height: 600, overflow: 'auto' }}
+      options={{
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        stickyHeaders: true,
+        layout: { paddingTop: 16, paddingBottom: 16, gap: 12 },
+      }}
+      renderCodeViewHeader={renderHeader}
+      renderCodeViewFooter={renderFooter}
+    />
+  );
+}`,
+    },
+    options,
+  };
+
+export const CODE_VIEW_HEADER_FOOTER_VANILLA_EXAMPLE: PreloadFileOptions<undefined> =
+  {
+    file: {
+      name: 'code_view_header_footer.ts',
+      contents: `import { CodeView, parseDiffFromFile } from '@pierre/diffs';
+
+const root = document.getElementById('review-root');
+if (root == null) {
+  throw new Error('Expected #review-root to exist');
+}
+
+root.style.height = '600px';
+root.style.overflow = 'auto';
+
+// Create the header element once, outside the callback. To update it later,
+// mutate it in place: the viewer observes the host and re-measures height
+// changes automatically.
+const summaryCard = document.createElement('section');
+summaryCard.className = 'pr-summary';
+const summaryTitle = document.createElement('h2');
+summaryTitle.textContent = 'Add personalized greetings';
+const summaryBody = document.createElement('p');
+summaryBody.textContent =
+  'Threads a name through greet() so callers control the message.';
+summaryCard.append(summaryTitle, summaryBody);
+
+const approveBar = document.createElement('div');
+approveBar.className = 'review-actions';
+const approveButton = document.createElement('button');
+approveButton.type = 'button';
+approveButton.textContent = 'Approve changes';
+approveButton.addEventListener('click', () => {
+  // Mutating the existing element is the whole update model; no re-render
+  // call is needed, and the new height is measured automatically.
+  approveBar.textContent = 'Approved';
+});
+approveBar.append('Reviewed 1 of 1 files — ', approveButton);
+
+const viewer = new CodeView({
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  stickyHeaders: true,
+  layout: { paddingTop: 16, paddingBottom: 16, gap: 12 },
+  // Return the same element across calls. Returning undefined instead would
+  // empty the host; removing the callback removes the host entirely.
+  renderCodeViewHeader() {
+    return summaryCard;
+  },
+  renderCodeViewFooter() {
+    return approveBar;
+  },
+});
+
+viewer.setup(root);
+
+viewer.setItems([
+  {
+    id: 'diff:src/app.ts',
+    type: 'diff',
+    fileDiff: parseDiffFromFile(
+      {
+        name: 'src/app.ts',
+        contents: 'export function greet() {\\n  return "hello";\\n}',
+      },
+      {
+        name: 'src/app.ts',
+        contents:
+          'export function greet(name: string) {\\n  return "hello " + name;\\n}',
+      }
+    ),
+  },
+]);
+
+window.addEventListener('beforeunload', () => {
+  viewer.cleanUp();
+});`,
+    },
+    options,
+  };

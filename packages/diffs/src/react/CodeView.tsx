@@ -26,6 +26,7 @@ import {
   type CodeViewOptions,
   type CodeViewRenderedItem,
   type CodeViewScrollTarget,
+  type CodeViewSlotSnapshot,
   type DiffLineAnnotation,
   type GetHoveredLineResult,
   type LineAnnotation,
@@ -52,6 +53,12 @@ interface CodeViewBaseProps<LAnnotation> {
   selectedLines?: CodeViewLineSelection | null;
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   onScroll?(scrollTop: number, viewer: CodeViewClass<LAnnotation>): void;
+  /** Render a non-virtualized node at the very start of the scroll content,
+   * before the first item. Always rendered; scrolls with the content. */
+  renderCodeViewHeader?(): ReactNode;
+  /** Render a non-virtualized node at the very end of the scroll content, after
+   * the last item. Always rendered; scrolls with the content. */
+  renderCodeViewFooter?(): ReactNode;
   renderCustomHeader?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderPrefix?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderFilenameSuffix?(item: CodeViewItem<LAnnotation>): ReactNode;
@@ -109,8 +116,8 @@ type SlotPortalsComponent = <LAnnotation = undefined>(
 ) => React.JSX.Element;
 
 interface ManagedContentStore<LAnnotation> {
-  getSnapshot(): CodeViewRenderedItem<LAnnotation>[] | undefined;
-  publish(snapshot: CodeViewRenderedItem<LAnnotation>[] | undefined): void;
+  getSnapshot(): CodeViewSlotSnapshot<LAnnotation> | undefined;
+  publish(snapshot: CodeViewSlotSnapshot<LAnnotation> | undefined): void;
   subscribe(listener: () => void): () => void;
 }
 
@@ -150,6 +157,8 @@ function CodeViewInner<LAnnotation = undefined>(
     onSelectedLinesChange,
     options,
     renderAnnotation,
+    renderCodeViewFooter,
+    renderCodeViewHeader,
     renderCustomHeader,
     renderGutterUtility,
     renderHeaderFilenameSuffix,
@@ -173,6 +182,8 @@ function CodeViewInner<LAnnotation = undefined>(
     renderHeaderMetadata != null;
   const hasRenderers =
     hasHeaderRenderers || hasAnnotationRenderer || hasGutterRenderer;
+  const hasCodeViewHeader = renderCodeViewHeader != null;
+  const hasCodeViewFooter = renderCodeViewFooter != null;
   const emitSelectedLinesChange = useStableCallback(
     (selection: CodeViewLineSelection | null) => {
       onSelectedLinesChange?.(selection);
@@ -186,6 +197,8 @@ function CodeViewInner<LAnnotation = undefined>(
         options,
         hasCustomHeader,
         hasGutterRenderer,
+        hasCodeViewHeader,
+        hasCodeViewFooter,
         onSelectedLinesChange:
           onSelectedLinesChange != null ? emitSelectedLinesChange : undefined,
         controlledSelection,
@@ -194,6 +207,8 @@ function CodeViewInner<LAnnotation = undefined>(
       options,
       hasCustomHeader,
       hasGutterRenderer,
+      hasCodeViewHeader,
+      hasCodeViewFooter,
       onSelectedLinesChange,
       emitSelectedLinesChange,
       controlledSelection,
@@ -243,7 +258,7 @@ function CodeViewInner<LAnnotation = undefined>(
   });
 
   const onSnapshotChange = useStableCallback(
-    (snapshot: CodeViewRenderedItem<LAnnotation>[] | undefined) => {
+    (snapshot: CodeViewSlotSnapshot<LAnnotation> | undefined) => {
       if (cachedDataRef.current.disableFlushSync) {
         slotContentStore.publish(snapshot);
       } else {
@@ -256,7 +271,15 @@ function CodeViewInner<LAnnotation = undefined>(
 
   const slotCoordinator: CodeViewCoordinator<LAnnotation> | undefined =
     useMemo(() => {
-      if (!hasHeaderRenderers && !hasAnnotationRenderer && !hasGutterRenderer) {
+      // A coordinator is needed whenever React portals anything — per-item
+      // slots and codeview header and footer
+      if (
+        !hasHeaderRenderers &&
+        !hasAnnotationRenderer &&
+        !hasGutterRenderer &&
+        !hasCodeViewHeader &&
+        !hasCodeViewFooter
+      ) {
         return undefined;
       } else {
         return {
@@ -271,6 +294,8 @@ function CodeViewInner<LAnnotation = undefined>(
       hasAnnotationRenderer,
       hasGutterRenderer,
       hasHeaderRenderers,
+      hasCodeViewHeader,
+      hasCodeViewFooter,
     ]);
 
   useIsometricEffect(() => {
@@ -471,7 +496,7 @@ function CodeViewInner<LAnnotation = undefined>(
   return (
     <>
       <div ref={nodeRef} className={className} style={style} />
-      {hasRenderers && (
+      {(hasRenderers || hasCodeViewHeader || hasCodeViewFooter) && (
         <SlotPortals<LAnnotation>
           managedContentStore={slotContentStore}
           renderCustomHeader={renderCustomHeader}
@@ -480,6 +505,8 @@ function CodeViewInner<LAnnotation = undefined>(
           renderHeaderMetadata={renderHeaderMetadata}
           renderAnnotation={renderAnnotation}
           renderGutterUtility={renderGutterUtility}
+          renderCodeViewHeader={renderCodeViewHeader}
+          renderCodeViewFooter={renderCodeViewFooter}
         />
       )}
     </>
@@ -543,7 +570,7 @@ function assertUncontrolledCodeViewAction(
 function createSlotContentStore<
   LAnnotation,
 >(): ManagedContentStore<LAnnotation> {
-  let snapshot: CodeViewRenderedItem<LAnnotation>[] | undefined;
+  let snapshot: CodeViewSlotSnapshot<LAnnotation> | undefined;
   const listeners = new Set<() => void>();
 
   return {
@@ -573,6 +600,8 @@ interface CreateManagedCodeViewOptionsProps<LAnnotation> {
   options: CodeViewOptions<LAnnotation> | undefined;
   hasCustomHeader: boolean;
   hasGutterRenderer: boolean;
+  hasCodeViewHeader: boolean;
+  hasCodeViewFooter: boolean;
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   controlledSelection: boolean;
 }
@@ -581,6 +610,8 @@ function createManagedCodeViewOptions<LAnnotation>({
   options,
   hasCustomHeader,
   hasGutterRenderer,
+  hasCodeViewHeader,
+  hasCodeViewFooter,
   onSelectedLinesChange,
   controlledSelection,
 }: CreateManagedCodeViewOptionsProps<LAnnotation>):
@@ -589,10 +620,12 @@ function createManagedCodeViewOptions<LAnnotation>({
   if (
     !hasCustomHeader &&
     !hasGutterRenderer &&
+    !hasCodeViewHeader &&
+    !hasCodeViewFooter &&
     onSelectedLinesChange == null &&
     !controlledSelection
   ) {
-    return options;
+    return options ?? {};
   }
   options = { ...options, controlledSelection, onSelectedLinesChange };
 
@@ -609,6 +642,16 @@ function createManagedCodeViewOptions<LAnnotation>({
   // actual content, so this placeholder intentionally returns nothing.
   if (hasGutterRenderer) {
     options.renderGutterUtility = noopRender;
+  }
+
+  // The imperative CodeView adapters use these callbacks' presence to create the
+  // header/footer host elements. React portals the actual content into them (via
+  // the slot snapshot), so these placeholders intentionally return nothing.
+  if (hasCodeViewHeader) {
+    options.renderCodeViewHeader = noopRender;
+  }
+  if (hasCodeViewFooter) {
+    options.renderCodeViewFooter = noopRender;
   }
 
   return options;
@@ -632,6 +675,8 @@ interface SlotPortalsProps<LAnnotation> {
   renderHeaderMetadata: CodeViewBaseProps<LAnnotation>['renderHeaderMetadata'];
   renderAnnotation: CodeViewBaseProps<LAnnotation>['renderAnnotation'];
   renderGutterUtility: CodeViewBaseProps<LAnnotation>['renderGutterUtility'];
+  renderCodeViewHeader: CodeViewBaseProps<LAnnotation>['renderCodeViewHeader'];
+  renderCodeViewFooter: CodeViewBaseProps<LAnnotation>['renderCodeViewFooter'];
 }
 
 const SlotPortals = memo(function SlotPortals<LAnnotation>({
@@ -642,31 +687,72 @@ const SlotPortals = memo(function SlotPortals<LAnnotation>({
   renderHeaderMetadata,
   renderAnnotation,
   renderGutterUtility,
+  renderCodeViewHeader,
+  renderCodeViewFooter,
 }: SlotPortalsProps<LAnnotation>) {
+  'use no memo';
   const subscribe = useStableCallback((listener: () => void) =>
     managedContentStore.subscribe(listener)
   );
   const getSnapshot = useStableCallback(() =>
     managedContentStore.getSnapshot()
   );
-  const renderedItems = useSyncExternalStore<
-    CodeViewRenderedItem<LAnnotation>[] | undefined
+  const snapshot = useSyncExternalStore<
+    CodeViewSlotSnapshot<LAnnotation> | undefined
   >(subscribe, getSnapshot, getSnapshot);
-  return renderedItems?.map((renderedItem) => {
-    return createPortal(
-      renderCodeViewItemChildren({
-        renderedItem,
-        renderCustomHeader,
-        renderHeaderPrefix,
-        renderHeaderFilenameSuffix,
-        renderHeaderMetadata,
-        renderAnnotation,
-        renderGutterUtility,
-      }),
-      renderedItem.element,
-      renderedItem.id
-    );
-  });
+  let itemKeys = '';
+  for (const item of snapshot?.items ?? []) {
+    itemKeys += `${item.id}:${item.version}:${item.type}`;
+  }
+  // NOTE(amadeus): And just like that, the react compiler do be failing us
+  // lol... we need to pre-render everything for items, headers and footers to
+  // not trigger needless renders while scrolling
+  const renderedItems = useMemo(
+    () => {
+      return snapshot?.items?.map((renderedItem) =>
+        createPortal(
+          renderCodeViewItemChildren({
+            renderedItem,
+            renderCustomHeader,
+            renderHeaderPrefix,
+            renderHeaderFilenameSuffix,
+            renderHeaderMetadata,
+            renderAnnotation,
+            renderGutterUtility,
+          }),
+          renderedItem.element,
+          renderedItem.id
+        )
+      );
+    },
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [
+      renderCustomHeader,
+      renderHeaderPrefix,
+      renderHeaderFilenameSuffix,
+      renderHeaderMetadata,
+      renderAnnotation,
+      renderGutterUtility,
+      itemKeys,
+    ]
+  );
+  const renderedHeader = useMemo(() => {
+    return renderCodeViewHeader != null && snapshot?.header != null
+      ? createPortal(renderCodeViewHeader(), snapshot.header)
+      : null;
+  }, [renderCodeViewHeader, snapshot?.header]);
+  const renderedFooter = useMemo(() => {
+    return renderCodeViewFooter != null && snapshot?.footer != null
+      ? createPortal(renderCodeViewFooter(), snapshot.footer)
+      : null;
+  }, [renderCodeViewFooter, snapshot?.footer]);
+  return (
+    <>
+      {renderedItems}
+      {renderedHeader}
+      {renderedFooter}
+    </>
+  );
 }) as SlotPortalsComponent;
 
 function renderCodeViewItemChildren<LAnnotation>({
