@@ -36,6 +36,7 @@ interface SelectionActionFixture {
   cleanup(): void;
   content: HTMLElement;
   editor: Editor<undefined>;
+  triggerResizeObserver(target: Element): void;
   window: Window & {
     CompositionEvent: {
       new (
@@ -80,6 +81,7 @@ async function createSelectionActionFixture(
     },
     content,
     editor,
+    triggerResizeObserver: dom.triggerResizeObserver,
     window: dom.window as unknown as SelectionActionFixture['window'],
   };
 }
@@ -444,6 +446,144 @@ describe('Editor selection action', () => {
       );
 
       const popover = findSelectionActionPopover(content);
+      expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
+        '0px'
+      );
+    } finally {
+      if (originalOffsetTop !== undefined) {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          'offsetTop',
+          originalOffsetTop
+        );
+      }
+      if (originalOffsetHeight !== undefined) {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          'offsetHeight',
+          originalOffsetHeight
+        );
+      }
+      globalThis.getComputedStyle = realGetComputedStyle;
+      cleanup();
+    }
+  });
+
+  // Regression test: consumer-rendered action content can change height after
+  // mount (async content, loaded icons, wrapping). A resize must re-run the
+  // placement decision, not only refresh the cached height, otherwise a popover
+  // that grew near the scrollport edge can remain clipped until another scroll
+  // or selection update happens.
+  test('recomputes popover placement when selection action content resizes', async () => {
+    const LINE_COUNT = 30;
+    const contents = Array.from(
+      { length: LINE_COUNT },
+      (_, i) => `line${i}`
+    ).join('\n');
+    const { cleanup, editor, content, triggerResizeObserver } =
+      await createSelectionActionFixture(contents, {
+        enabledSelectionAction: true,
+        renderSelectionAction() {
+          const action = document.createElement('div');
+          action.textContent = 'action';
+          return action;
+        },
+      });
+
+    const ROW_HEIGHT = 20;
+    let popoverHeight = 20;
+    const originalOffsetTop = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'offsetTop'
+    );
+    const originalOffsetHeight = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'offsetHeight'
+    );
+    const realGetComputedStyle = globalThis.getComputedStyle;
+
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+      configurable: true,
+      get(this: HTMLElement) {
+        const lineAttr = this.dataset.line;
+        return lineAttr != null ? Number(lineAttr) * ROW_HEIGHT : 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.dataset.selectionActionPopover != null
+          ? popoverHeight
+          : ROW_HEIGHT;
+      },
+    });
+    globalThis.getComputedStyle = (() =>
+      ({
+        overflowY: 'auto',
+      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+
+    try {
+      const shadowRoot = content.getRootNode() as ShadowRoot;
+      const fileContainer = shadowRoot.host as HTMLElement;
+      const scrollContainer = document.createElement('div');
+      document.body.appendChild(scrollContainer);
+      scrollContainer.appendChild(fileContainer);
+
+      const stubRect = (top: number, bottom: number): DOMRect =>
+        ({
+          top,
+          bottom,
+          left: 0,
+          right: 0,
+          width: 0,
+          height: bottom - top,
+          x: 0,
+          y: top,
+          toJSON() {
+            return {};
+          },
+        }) as DOMRect;
+
+      Object.defineProperty(scrollContainer, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => stubRect(0, 200),
+      });
+
+      const codeElement = content.closest<HTMLElement>('[data-code]')!;
+      const lineElements = Array.from(
+        content.querySelectorAll<HTMLElement>('[data-line]')
+      );
+      const headLineElement = lineElements[10];
+      const headY = Number(headLineElement.dataset.line) * ROW_HEIGHT;
+      Object.defineProperty(codeElement, 'getBoundingClientRect', {
+        configurable: true,
+        value: () =>
+          stubRect(
+            -(headY - popoverHeight),
+            -(headY - popoverHeight) + LINE_COUNT * ROW_HEIGHT
+          ),
+      });
+
+      editor.setSelections([
+        {
+          start: { line: 10, character: 0 },
+          end: { line: 12, character: 2 },
+          direction: 'backward',
+        },
+      ]);
+
+      const popover = findSelectionActionPopover(content);
+      // The initial 20px height fits above the head row: top is 10px inside
+      // the viewport.
+      expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
+        '-100%'
+      );
+
+      popoverHeight = 40;
+      triggerResizeObserver(popover);
+
+      // After the resize, above-placement would paint from -10px and clip, so
+      // the popover must flip below the selection's other edge.
       expect(popover.style.getPropertyValue('--popover-y-shift').trim()).toBe(
         '0px'
       );

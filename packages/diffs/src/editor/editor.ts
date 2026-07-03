@@ -3042,18 +3042,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  // Keeps the floating selection-action popover in sync with the current
-  // selection. Called at the end of every overlay render so the popover appears
-  // as soon as a ranged selection settles, follows it while it stays open, and
-  // tears down when the selection collapses, the option is off, or the anchor
-  // line scrolls out of view. Creation is suppressed while the mouse is down so
-  // the popover doesn't flicker under the cursor mid-drag; the pointerup handler
-  // re-runs this once the drag ends.
   #updateSelectionActionPopover(): void {
     const primarySelection = this.#selections?.at(-1);
     const overlayElement = this.#overlayElement;
     const textDocument = this.#textDocument;
     const renderSelectionAction = this.#options.renderSelectionAction;
+    const cleanup = () => {
+      this.#selectionAction?.cleanup();
+      this.#selectionAction = undefined;
+    };
+
     if (
       this.#options.enabledSelectionAction !== true ||
       renderSelectionAction === undefined ||
@@ -3063,31 +3061,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       overlayElement === undefined ||
       textDocument === undefined
     ) {
-      this.#selectionAction?.cleanup();
-      this.#selectionAction = undefined;
+      cleanup();
       return;
     }
 
     const head = getCaretPosition(primarySelection);
     if (!this.#isLineVisible(head.line)) {
-      this.#selectionAction?.cleanup();
-      this.#selectionAction = undefined;
+      cleanup();
       return;
     }
 
     if (this.#selectionAction === undefined) {
-      // The popover element is reused while a selection stays open, so its
-      // action handlers read the live primary selection rather than the
-      // snapshot taken at creation time (extending the selection by keyboard
-      // would otherwise leave them acting on the original range). A fresh drag
-      // tears the popover down (see #isContentMouseDown above) and pointerup
-      // recreates it, so the reuse only spans keyboard-driven selection changes.
       const getActiveSelection = (): EditorSelection =>
         this.#selections?.at(-1) ?? primarySelection;
       const selectionActionElement = renderSelectionAction({
         textDocument,
-        // Live getter so consumers reading `selection` always see the current
-        // range, matching getSelectionText/replaceSelectionText below.
         get selection(): EditorSelection {
           return getActiveSelection();
         },
@@ -3098,29 +3086,19 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#replaceSelectionText(text, [getActiveSelection()]);
         },
         close: () => {
-          this.#selectionAction?.cleanup();
-          this.#selectionAction = undefined;
+          cleanup();
           this.#scrollToPrimaryCaret();
         },
       });
       this.#selectionAction = new SelectionActionWidget(
-        head.line,
         selectionActionElement,
-        overlayElement
+        overlayElement,
+        () => this.#updateSelectionActionPopover()
       );
       // Avoid biasing the first decision with a stale side from a prior popover.
       this.#getPopoverManager().resetPlacement();
     }
 
-    // Pick which selection edge the popover anchors to and whether it sits above
-    // or below that edge. The preferred side mirrors the marker hover popover: a
-    // top-down (forward) selection anchors just below its head (the bottom edge),
-    // while a bottom-up (backward) selection anchors at the top edge of its head
-    // and is shifted up by its own height so it sits above the selection instead
-    // of covering its first line. When the preferred side has no room the popover
-    // would be clipped by the scrollport, so we flip to the selection's opposite
-    // edge: a backward selection drops below its bottom edge, and a forward
-    // selection rises above its top edge.
     const lineHeight = this.#metrics.lineHeight;
     const isBackward = primarySelection.direction === DirectionBackward;
     const preferred = {
@@ -3147,12 +3125,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       );
       const rowTop =
         this.#getLineY(candidate.anchor.line) + candidateWrapLine * lineHeight;
-      // `anchorTop` is the value reposition() consumes: the anchor row's top
-      // edge for an above placement (reposition then lifts the popover by its
-      // own height via `--popover-y-shift: -100%`), or the row just below it for
-      // a below placement. `top`/`bottom` describe where the popover actually
-      // paints, so the above case subtracts that height back out — the
-      // viewport fit-check needs the rendered rect, not the pre-shift anchor.
       const anchorTop = candidate.placeAbove ? rowTop : rowTop + lineHeight;
       const top = candidate.placeAbove ? anchorTop - popoverHeight : anchorTop;
       return { top, bottom: top + popoverHeight, left, anchorTop };
@@ -3160,18 +3132,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     const preferredGeometry = candidateGeometry(preferred);
     const fallbackGeometry = candidateGeometry(fallback);
 
-    // Prefer the real scroll viewport so a mid-document selection near the
-    // top/bottom of a scrolled window flips instead of rendering off-screen; the
-    // document-edge signal is the fallback for environments without layout
-    // geometry (e.g. a detached unit-test DOM).
     const lineCount = textDocument.lineCount;
     const atDocumentEdge = isBackward
       ? head.line < POPOVER_BOUNDARY_LINES
       : head.line >= lineCount - POPOVER_BOUNDARY_LINES;
-    // The fallback anchor is the selection's other edge, which can sit outside
-    // the virtualized render window even when the head is visible; #getLineY
-    // returns -1 for an unrendered line, so only consider the fallback once we
-    // know its anchor line actually has layout to measure.
     const canUseFallback = this.#isLineVisible(fallback.anchor.line);
     const popoverManager = this.#getPopoverManager();
     const useFallback =
@@ -3186,12 +3150,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (!canUseFallback) {
       popoverManager.setPlacement('preferred');
     }
-    const { placeAbove, anchor } = useFallback ? fallback : preferred;
+    const { placeAbove } = useFallback ? fallback : preferred;
     const { left, anchorTop } = useFallback
       ? fallbackGeometry
       : preferredGeometry;
 
-    this.#selectionAction.line = anchor.line;
     this.#selectionAction.reposition(
       left,
       anchorTop,
