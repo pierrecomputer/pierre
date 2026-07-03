@@ -10,6 +10,8 @@ import { Editor } from '@pierre/diffs/editor';
 import { useWorkerPool } from '@pierre/diffs/react';
 import { useEffect, useRef } from 'react';
 
+import { ITEM_UNSAFE_CSS } from './constants';
+
 interface PlaygroundVirtualizerViewProps {
   diffs: FileDiffMetadata[];
   options: FileDiffOptions<undefined>;
@@ -38,6 +40,12 @@ function createEditToggle(): { element: HTMLElement; input: HTMLInputElement } {
   label.append(input, text);
   return { element: label, input };
 }
+
+const VIRTUALIZER_CUSTOM_CSS = `${ITEM_UNSAFE_CSS}
+[data-diffs-header] {
+  top: 60px;
+}
+`;
 
 // Renders a list of full diffs through the vanilla Virtualizer using the
 // document/window as the scroll container, so the list flows in the page (like
@@ -85,7 +93,12 @@ export function PlaygroundVirtualizerView({
       const { element: editToggle, input } = createEditToggle();
 
       const instance = new VirtualizedFileDiff(
-        { ...options, renderHeaderMetadata: () => editToggle },
+        {
+          ...options,
+          renderHeaderMetadata: () => editToggle,
+          stickyHeader: true,
+          unsafeCSS: VIRTUALIZER_CUSTOM_CSS,
+        },
         virtualizer,
         undefined,
         pool
@@ -132,5 +145,10 @@ export function PlaygroundVirtualizerView({
     }
   }, [options]);
 
-  return <div ref={contentRef} className="space-y-4" />;
+  return (
+    <div
+      ref={contentRef}
+      className="space-y-4 overflow-clip rounded-lg border"
+    />
+  );
 }

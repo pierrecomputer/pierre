@@ -43,12 +43,12 @@ import { toast } from 'sonner';
 import type { PlaygroundAnnotationMetadata } from './constants';
 import {
   CODE_VIEW_ITEMS,
+  ITEM_UNSAFE_CSS,
   PLAYGROUND_MARKERS,
   VIRTUALIZER_FILE_DIFFS,
 } from './constants';
 import { PlaygroundCodeView } from './PlaygroundCodeView';
 import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
-import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 import { useTheme } from '@/components/theme-provider';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -1017,8 +1017,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     () => ({
       ...renderOptions,
       stickyHeaders: true,
-      layout: { paddingTop: 16, paddingBottom: 16, gap: 12 },
-      unsafeCSS: CustomScrollbarCSS,
+      layout: { paddingTop: 0, paddingBottom: 0, gap: 1 },
+      unsafeCSS: ITEM_UNSAFE_CSS,
     }),
     [renderOptions]
   );

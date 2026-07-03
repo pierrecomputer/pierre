@@ -341,3 +341,26 @@ export const CODE_VIEW_ITEMS: CodeViewItem[] = Array.from(
     ];
   }
 ).flat();
+
+export const ITEM_UNSAFE_CSS = `${CustomScrollbarCSS}
+[data-diffs-header] {
+  box-shadow: 0 -1px 0 var(--color-border);
+}
+
+[data-diffs-header] {
+  container-type: scroll-state;
+  container-name: sticky-header;
+}
+
+@container sticky-header scroll-state(stuck: top) {
+  [data-diffs-header]::after {
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    content: '';
+    background-color: var(--color-border);
+  }
+}
+`;
