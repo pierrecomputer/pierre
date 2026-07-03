@@ -318,29 +318,30 @@ export const VIRTUALIZER_FILE_DIFFS: FileDiffMetadata[] = Array.from(
 // Items rendered in the CodeView mode: each variant contributes two diffs and a
 // plain file so the demo shows both item types scrolling within CodeView's own
 // scroll container.
-export const CODE_VIEW_ITEMS: CodeViewItem[] = Array.from(
-  { length: DIFF_VARIANT_COUNT },
-  (_, index): CodeViewItem[] => {
-    const readmeName = variantName('README.md', index);
-    return [
-      {
-        id: `diff:${variantName(USERS_BASE.name, index)}`,
-        type: 'diff',
-        fileDiff: variantDiff(USERS_BASE, index),
-      },
-      {
-        id: `file:${readmeName}`,
-        type: 'file',
-        file: { name: readmeName, contents: NEW_README_CONTENT },
-      },
-      {
-        id: `diff:${variantName(STYLES_BASE.name, index)}`,
-        type: 'diff',
-        fileDiff: variantDiff(STYLES_BASE, index),
-      },
-    ];
-  }
-).flat();
+export const CODE_VIEW_ITEMS: CodeViewItem<PlaygroundAnnotationMetadata>[] =
+  Array.from(
+    { length: DIFF_VARIANT_COUNT },
+    (_, index): CodeViewItem<PlaygroundAnnotationMetadata>[] => {
+      const readmeName = variantName('README.md', index);
+      return [
+        {
+          id: `diff:${variantName(USERS_BASE.name, index)}`,
+          type: 'diff',
+          fileDiff: variantDiff(USERS_BASE, index),
+        },
+        {
+          id: `file:${readmeName}`,
+          type: 'file',
+          file: { name: readmeName, contents: NEW_README_CONTENT },
+        },
+        {
+          id: `diff:${variantName(STYLES_BASE.name, index)}`,
+          type: 'diff',
+          fileDiff: variantDiff(STYLES_BASE, index),
+        },
+      ];
+    }
+  ).flat();
 
 export const ITEM_UNSAFE_CSS = `${CustomScrollbarCSS}
 [data-diffs-header] {
