@@ -559,11 +559,15 @@ export class FileDiff<
     this.headerFilenameSuffix = undefined;
     this.headerMetadata = undefined;
     this.headerCustom = undefined;
+    this.placeHolder?.remove();
     this.placeHolder = undefined;
     this.lastRenderedHeaderHTML = undefined;
     if (!recycle) {
       this.cachedHeaderHTML = undefined;
     }
+    // The error wrapper is not part of the hydration adoption list, so it
+    // must be removed here or it lingers next to remounted content.
+    this.errorWrapper?.remove();
     this.errorWrapper = undefined;
     this.spriteSVG = undefined;
     this.lastRowCount = undefined;

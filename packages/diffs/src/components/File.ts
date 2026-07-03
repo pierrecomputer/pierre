@@ -314,7 +314,10 @@ export class File<
     if (!recycle) {
       this.lineAnnotations = [];
     }
-    this.annotationCache.clear();
+    // Removes annotation elements and the gutter utility content along with
+    // clearing their caches — bare cache clears would leave the elements
+    // behind in the (host-owned) container.
+    this.clearAuxiliaryNodes();
     this.pre = undefined;
     this.bufferBefore?.remove();
     this.bufferBefore = undefined;
@@ -331,12 +334,16 @@ export class File<
     if (!recycle) {
       this.cachedHeaderHTML = undefined;
     }
+    // The error wrapper is not part of the hydration adoption list, so it
+    // must be removed here or it lingers next to remounted content.
+    this.errorWrapper?.remove();
     this.errorWrapper = undefined;
     this.themeCSSStyle = undefined;
     this.appliedThemeCSS = undefined;
     this.hasAdoptedThemeCSS = false;
     this.unsafeCSSStyle = undefined;
     this.appliedUnsafeCSS = undefined;
+    this.placeHolder?.remove();
     this.placeHolder = undefined;
     this.unsafeCSSStyle = undefined;
 
