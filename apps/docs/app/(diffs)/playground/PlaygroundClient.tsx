@@ -49,6 +49,7 @@ import {
 } from './constants';
 import { PlaygroundCodeView } from './PlaygroundCodeView';
 import { CommentForm, ExampleThread } from './PlaygroundComments';
+import { PlaygroundVirtualizerElementView } from './PlaygroundVirtualizerElementView';
 import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
 import { useTheme } from '@/components/theme-provider';
 import { Button } from '@/components/ui/button';
@@ -103,12 +104,15 @@ type EditorMode = 'review' | 'edit';
 
 // The rendering surface the playground diff(s) are drawn with. 'normal' is the
 // single editable FileDiff; 'virtualizer' renders several diffs with window
-// scroll; 'codeview' renders a mix of diff/file items in CodeView's own scroller.
-type ViewMode = 'normal' | 'virtualizer' | 'codeview';
+// scroll (vanilla Virtualizer); 'virtualizer-element' renders them with the
+// React <Virtualizer> inside its own scroll region; 'codeview' renders a mix
+// of diff/file items in CodeView's own scroller.
+type ViewMode = 'normal' | 'virtualizer' | 'virtualizer-element' | 'codeview';
 
 const VIEW_MODE_OPTIONS = [
   { value: 'normal', label: 'Normal' },
-  { value: 'virtualizer', label: 'Virtualizer' },
+  { value: 'virtualizer', label: 'Virtualizer (win)' },
+  { value: 'virtualizer-element', label: 'Virtualizer (el)' },
   { value: 'codeview', label: 'CodeView' },
 ] as const;
 
@@ -655,7 +659,11 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const value = getParam('view', DEFAULTS.viewMode);
-    return value === 'virtualizer' || value === 'codeview' ? value : 'normal';
+    return value === 'virtualizer' ||
+      value === 'virtualizer-element' ||
+      value === 'codeview'
+      ? value
+      : 'normal';
   });
 
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>(
@@ -1147,6 +1155,13 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
         <EditorProvider editor={editor}>{fileDiff}</EditorProvider>
       ) : viewMode === 'virtualizer' ? (
         <PlaygroundVirtualizerView
+          diffs={VIRTUALIZER_FILE_DIFFS}
+          options={renderOptions}
+          enableGutterComments={enableGutterUtility}
+          showAnnotations={showAnnotations}
+        />
+      ) : viewMode === 'virtualizer-element' ? (
+        <PlaygroundVirtualizerElementView
           diffs={VIRTUALIZER_FILE_DIFFS}
           options={renderOptions}
           enableGutterComments={enableGutterUtility}

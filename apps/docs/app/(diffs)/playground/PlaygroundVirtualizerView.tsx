@@ -59,11 +59,13 @@ function annotationKey(
   return `${index}:${annotation.side}:${annotation.lineNumber}`;
 }
 
-// Renders a list of full diffs through the vanilla Virtualizer using the
-// document/window as the scroll container, so the list flows in the page (like
-// the Normal view) rather than scrolling inside its own box. The React
-// <Virtualizer> wrapper always scrolls inside its own element, so we drive the
-// imperative API directly to get window/body scroll.
+// The "Virtualizer (window)" mode: renders a list of full diffs through the
+// vanilla Virtualizer using the document/window as the scroll container, so
+// the list flows in the page (like the Normal view) rather than scrolling
+// inside its own box. The React <Virtualizer> wrapper always scrolls inside
+// its own element — that variant is demoed by
+// PlaygroundVirtualizerElementView — so this view drives the imperative API
+// directly to get window/body scroll.
 //
 // Each diff header carries its own "Edit" checkbox (in the header metadata
 // slot); toggling it attaches a per-file Editor to that diff and flips its
