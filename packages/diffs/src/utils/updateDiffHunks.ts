@@ -196,9 +196,8 @@ function preserveTrailingEditorBlankLine(
   for (const content of lastHunk.hunkContent) {
     if (
       content.type === 'change' &&
-      content.additions === 0 &&
-      content.deletions > 0 &&
-      content.additionLineIndex === extraAdditionLineIndex
+      content.additions < content.deletions &&
+      content.additionLineIndex + content.additions === extraAdditionLineIndex
     ) {
       content.additions += extraLineCount;
       lastHunk.additionCount += extraLineCount;
