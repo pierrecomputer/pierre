@@ -280,8 +280,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#options = options;
   }
 
-  setOptions(options: EditorOptions<LAnnotation> | undefined): void {
-    if (options == null) return;
+  setOptions(options: EditorOptions<LAnnotation>): void {
     this.#options = {
       ...this.#options,
       ...options,
