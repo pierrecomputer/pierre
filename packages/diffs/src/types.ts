@@ -1036,3 +1036,34 @@ export interface DiffsTextDocument {
   getLineText: (lineNumber: number, includeLineBreak?: boolean) => string;
   getText: () => string;
 }
+
+export interface WorkspaceFileSystem {
+  read: (filename: string) => Promise<string | undefined>;
+  write: (filename: string, contents: string) => Promise<void>;
+  rename: (
+    fromFilename: string,
+    toFilename: string,
+    options?: { recursive?: boolean }
+  ) => Promise<void>;
+  delete: (
+    filename: string,
+    options?: { recursive?: boolean }
+  ) => Promise<void>;
+}
+
+export interface WorkspaceStorage {
+  get: (key: string) => Promise<string | undefined>;
+  set: (key: string, value: string) => Promise<void>;
+  remove: (key: string) => Promise<void>;
+}
+
+export interface Workspace {
+  id: string;
+  storage: 'localStorage' | 'indexedDB' | 'inMemory' | WorkspaceStorage;
+  fs: WorkspaceFileSystem;
+}
+
+export interface OpenedFile {
+  name: string;
+  isEdited: boolean;
+}
