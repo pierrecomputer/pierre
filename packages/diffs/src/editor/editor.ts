@@ -656,8 +656,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     // Whether this sync replaces the document with a freshly parsed one (a new
     // file, language, or cache key) versus reusing the existing one. A reused
-    // document keeps any edits the host's file contents do not have, which the
-    // rebuilt line DOM below must be reconciled against.
+    // document matches the DOM the host just rebuilt: renderers persist edit
+    // sessions into the host's own data (DiffHunksRenderer keeps
+    // `diff.additionLines` in sync per edit; FileRenderer writes the session
+    // contents back into the file on recycle), so an unchanged
+    // name/lang/cacheKey re-attach renders the same text the document holds.
     const shouldRebuildDocument =
       this.#textDocument === undefined ||
       this.#fileInfo === undefined ||

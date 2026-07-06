@@ -2007,7 +2007,8 @@ export class CodeView<LAnnotation = undefined> {
    * mounts, remounts after virtualization released the item, and items whose
    * edit flag was just turned on. Editors persist across unmounts, so a
    * remounted item re-attaches its existing editor and resumes the retained
-   * document (see the FIXME on `createEditor` about file-item resume).
+   * document; the renderers keep the host's file/diff data in sync with the
+   * session so the remount paints the edited text.
    */
   private attachItemEditor(item: CodeViewContextItem<LAnnotation>): void {
     const { id } = item.item;

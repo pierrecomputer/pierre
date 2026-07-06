@@ -28,6 +28,7 @@ import type {
   SupportedLanguages,
   ThemedFileResult,
 } from '../types';
+import { applyLineTextWithNewline } from '../utils/applyLineTextWithNewline';
 import { areFileRenderOptionsEqual } from '../utils/areFileRenderOptionsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
@@ -140,6 +141,7 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public recycle(): void {
+    this.syncEditedContentsToFile();
     this.clearRenderCache();
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
@@ -150,6 +152,26 @@ export class FileRenderer<LAnnotation = undefined> {
     // a result rebuilt from the file's own contents, which processFileResult
     // treats as a missing-line error.
     this.textDocumentCache = new WeakMap();
+  }
+
+  // An edit session patches the render caches in place but never rewrites
+  // `file.contents`, so a recycled host would otherwise rebuild from the
+  // pre-edit text while the editor resumes its retained (edited) document.
+  // Diffs don't have this problem because DiffHunksRenderer keeps
+  // `diff.additionLines` in sync during the session; the file equivalent is
+  // joining the session-synced line cache back into the file object before
+  // the caches are dropped.
+  private syncEditedContentsToFile(): void {
+    const { renderCache, lineCache } = this;
+    if (
+      renderCache?.isDirty !== true ||
+      lineCache == null ||
+      renderCache.file.cacheKey == null ||
+      renderCache.file.cacheKey !== lineCache.cacheKey
+    ) {
+      return;
+    }
+    renderCache.file.contents = lineCache.lines.join('');
   }
 
   public clearRenderCache(): void {
@@ -259,11 +281,30 @@ export class FileRenderer<LAnnotation = undefined> {
     if (this.renderCache == null) {
       return;
     }
-    const { result } = this.renderCache;
+    const { file, result } = this.renderCache;
     if (result == null) {
       return;
     }
+    // Mirror DiffHunksRenderer keeping `diff.additionLines` in sync during an
+    // edit session: patch the split-line cache with the edited line text so
+    // recycle() can persist the session's contents into the file. The line
+    // cache includes the document's trailing empty line, so editor line
+    // indexes map 1:1; lines past the cache (document grew) are handled by
+    // applyDocumentChange instead.
+    const lineCache =
+      this.lineCache != null &&
+      file.cacheKey != null &&
+      this.lineCache.cacheKey === file.cacheKey
+        ? this.lineCache
+        : undefined;
     for (const [line, tokens] of dirtyLines) {
+      if (lineCache != null && line < lineCache.lines.length) {
+        const lineText = tokens.map((token) => token[2]).join('');
+        lineCache.lines[line] = applyLineTextWithNewline(
+          lineCache.lines[line] ?? '',
+          lineText
+        );
+      }
       result.code[line] = {
         type: 'element',
         tagName: 'div',
@@ -344,6 +385,15 @@ export class FileRenderer<LAnnotation = undefined> {
         });
       }
       this.renderCache.isDirty = true;
+    }
+    // A line-count change invalidates the per-line sync updateRenderCache
+    // performs, so rebuild the split-line cache from the document wholesale
+    // (the file analog of DiffHunksRenderer re-splitting `additionLines`).
+    if (file.cacheKey != null) {
+      this.lineCache = {
+        cacheKey: file.cacheKey,
+        lines: linesFromFileContents(textDocument.getText()),
+      };
     }
     this.textDocumentCache.set(file, textDocument);
   }

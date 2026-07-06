@@ -9,6 +9,7 @@ import type {
   DiffsEditableComponent,
   DiffsEditorHost,
   FileContents,
+  HighlightedToken,
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
@@ -376,10 +377,12 @@ describe('CodeView item edit mode', () => {
         getText: () => documentText,
       });
 
-      // Scroll the edited item out (recycle) and back in. The remount renders
-      // from the item's own 30-line contents; a document line count retained
-      // across the recycle used to make this render throw
-      // "FileRenderer.processFileResult: Line doesnt exist".
+      // Scroll the edited item out (recycle) and back in. The recycle
+      // persists the session document into the item's file (diff parity via
+      // FileRenderer.syncEditedContentsToFile), so the remount renders the
+      // grown 40-line contents instead of the pre-edit 30 lines — and no
+      // longer throws "FileRenderer.processFileResult: Line doesnt exist"
+      // from a retained document line count disagreeing with the render.
       root.scrollTop = 20_000;
       dispatchScroll(root);
       viewer.render(true);
@@ -394,10 +397,67 @@ describe('CodeView item edit mode', () => {
       expect(remounted.id).toBe('edited');
       // Render errors are caught and rendered as an error wrapper instead of
       // propagating, so assert on the rendered result: no error panel, and
-      // the item's own 30 lines rendered.
+      // the session's 40 lines rendered.
       const shadowRoot = remounted.element.shadowRoot;
       expect(shadowRoot?.querySelector('[data-error-wrapper]')).toBeNull();
-      expect(shadowRoot?.querySelectorAll('[data-line]').length).toBe(30);
+      expect(shadowRoot?.querySelectorAll('[data-line]').length).toBe(
+        lineCount
+      );
+      expect(items[0].type === 'file' && items[0].file.contents).toBe(
+        documentText
+      );
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('remounts an edited file with the session text after a recycle', async () => {
+    const { cleanup } = installDom();
+    const { createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    const items: CodeViewItem<undefined>[] = [
+      makeEditFileItem('edited', true, 30),
+      ...Array.from({ length: 39 }, (_, index) =>
+        makeEditFileItem(`file-${index}`, false, 30)
+      ),
+    ];
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, items);
+
+      // Mimic a same-line-count edit: the editor pushes the dirty line's
+      // tokens into the host render caches, exactly like #applyChange does
+      // after a keystroke.
+      const edited = viewer.getRenderedItems()[0];
+      const tokens: HighlightedToken[] = [[0, '', 'edited marker line']];
+      edited.instance.updateRenderCache(new Map([[0, tokens]]), 'light', false);
+
+      // Scroll the edited item out (recycle) and back in. The recycle joins
+      // the session-synced line cache back into the item's file, so the
+      // remount paints the edited text instead of the pre-edit contents.
+      root.scrollTop = 20_000;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+
+      root.scrollTop = 0;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+
+      const remounted = viewer.getRenderedItems()[0];
+      expect(remounted.id).toBe('edited');
+      const shadowRoot = remounted.element.shadowRoot;
+      expect(shadowRoot?.querySelector('[data-error-wrapper]')).toBeNull();
+      expect(shadowRoot?.textContent).toContain('edited marker line');
+      // The remaining lines are untouched and the item's file object now
+      // carries the session text.
+      const file = items[0].type === 'file' ? items[0].file : undefined;
+      expect(file?.contents.startsWith('edited marker line\n')).toBe(true);
+      expect(file?.contents).toContain('line 2');
     } finally {
       viewer.cleanUp();
       await wait(0);
