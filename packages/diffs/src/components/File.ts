@@ -491,6 +491,14 @@ export class File<
     const renderRange = this.renderRange;
     if (editor != null && fileContainer != null && file != null) {
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
+        if (
+          !this.enabled ||
+          this.editor !== editor ||
+          this.fileContainer !== fileContainer ||
+          this.file !== file
+        ) {
+          return;
+        }
         editor.__syncRenderView(
           highlighter,
           fileContainer,

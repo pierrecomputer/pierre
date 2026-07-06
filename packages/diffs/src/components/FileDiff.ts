@@ -318,7 +318,7 @@ export class FileDiff<
   ) => {
     // use the fileDiff from the hunksRenderer if it exists, it maybe updated
     // by the host
-    const fileDiff = this.hunksRenderer.getDiffCache() ?? this.fileDiff;
+    const fileDiff = this.fileDiffCache;
     if (fileDiff == null) {
       return undefined;
     }
@@ -1134,10 +1134,14 @@ export class FileDiff<
     onPostRender?.(fileContainer, this, phase);
   }
 
+  private get fileDiffCache(): FileDiffMetadata | undefined {
+    return this.hunksRenderer.diffCache ?? this.fileDiff;
+  }
+
   private syncRenderViewToEditor(): void {
     const editor = this.editor;
     const fileContainer = this.fileContainer;
-    const fileDiff = this.hunksRenderer.getDiffCache() ?? this.fileDiff;
+    const fileDiff = this.fileDiffCache;
     const lineAnnotations = this.lineAnnotations;
     const renderRange = this.renderRange;
     if (
@@ -1147,6 +1151,14 @@ export class FileDiff<
       !fileDiff.isPartial
     ) {
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
+        if (
+          !this.enabled ||
+          this.editor !== editor ||
+          this.fileContainer !== fileContainer ||
+          this.fileDiffCache !== fileDiff
+        ) {
+          return;
+        }
         editor.__syncRenderView(
           highlighter,
           fileContainer,
@@ -1175,7 +1187,7 @@ export class FileDiff<
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): void {
     this.hunksRenderer.applyDocumentChange(textDocument);
-    const fileDiff = this.hunksRenderer.getDiffCache();
+    const fileDiff = this.hunksRenderer.diffCache;
     if (fileDiff != null) {
       const cacheKey = this.fileDiff?.cacheKey;
       if (cacheKey != null && fileDiff.cacheKey == null) {
