@@ -1,5 +1,6 @@
 'use client';
 
+import { cloneFileDiffMetadata } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
 import { EditorProvider, File, FileDiff } from '@pierre/diffs/react';
 import type {
@@ -56,6 +57,21 @@ export function LiveEditing({
   // Bumping this value remounts the editable surface, which is how Reset works
   // (see `handleReset`).
   const [resetKey, setResetKey] = useState(0);
+  // Editing a FileDiff updates the diff metadata it renders from so the live
+  // hunks stay in sync. Keep an untouched baseline and hand FileDiff a fresh
+  // clone for each remount; Reset must rebuild from the original additions, not
+  // a previously edited object.
+  const pristineFileDiff = useMemo(
+    () => cloneFileDiffMetadata(prerenderedDiff.fileDiff),
+    [prerenderedDiff.fileDiff]
+  );
+  const liveFileDiff = useMemo(
+    () => ({
+      ...cloneFileDiffMetadata(pristineFileDiff),
+      cacheKey: pristineFileDiff.name + resetKey,
+    }),
+    [pristineFileDiff, resetKey]
+  );
   // Edits emit through the editor's debounced `onChange`. After a remount (reset
   // or a control change) a change scheduled just before can still fire ~500ms
   // later carrying the pre-remount (edited) contents, which would flip
@@ -232,10 +248,7 @@ export function LiveEditing({
             <FileDiff
               key={resetKey}
               {...prerenderedDiff}
-              fileDiff={{
-                ...prerenderedDiff.fileDiff,
-                cacheKey: prerenderedDiff.fileDiff.name + resetKey,
-              }}
+              fileDiff={liveFileDiff}
               options={{ ...prerenderedDiff.options, diffStyle: diffLayout }}
               className="diff-container"
               renderHeaderMetadata={headerMetadata}

@@ -487,14 +487,24 @@ export class File<
     const editor = this.editor;
     const fileContainer = this.fileContainer;
     const file = this.file;
+    const lineAnnotations = this.lineAnnotations;
+    const renderRange = this.renderRange;
     if (editor != null && fileContainer != null && file != null) {
       void this.fileRenderer.initializeHighlighter().then((highlighter) => {
+        if (
+          !this.enabled ||
+          this.editor !== editor ||
+          this.fileContainer !== fileContainer ||
+          this.file !== file
+        ) {
+          return;
+        }
         editor.__syncRenderView(
           highlighter,
           fileContainer,
           file,
-          this.lineAnnotations,
-          this.renderRange
+          lineAnnotations,
+          renderRange
         );
       });
     }

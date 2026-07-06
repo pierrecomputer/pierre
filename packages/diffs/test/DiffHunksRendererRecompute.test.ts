@@ -84,17 +84,17 @@ async function createPrimedRenderer(
 describe('DiffHunksRenderer content-edit recompute split', () => {
   test('updateRenderCache recomputes hunk metadata for changed addition lines', async () => {
     const renderer = await createPrimedRenderer();
-    const cacheDiff = renderer.getDiffCache();
-    expect(cacheDiff).toBeDefined();
-    if (cacheDiff == null) return;
+    const diffCache = renderer.diffCache;
+    expect(diffCache).toBeDefined();
+    if (diffCache == null) return;
 
-    const hunksBefore = cacheDiff.hunks;
+    const hunksBefore = diffCache.hunks;
     // In-place edit of an existing line (no line-count change).
     renderer.updateRenderCache(
       makeDirtyLines([[1, '  console.log(msg) // edited']]),
       'light'
     );
-    expect(cacheDiff.hunks).not.toBe(hunksBefore);
+    expect(diffCache.hunks).not.toBe(hunksBefore);
   });
 
   test('updateRenderCache matches a full recompute for a content-only edit', async () => {
@@ -103,7 +103,7 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
       makeDirtyLines([[1, '  console.log(msg) // edited']]),
       'light'
     );
-    const incremental = split.getDiffCache();
+    const incremental = split.diffCache;
 
     // Expected result: a full re-parse of the same edited content from scratch.
     const full = parseDiffFromFile(
@@ -135,7 +135,7 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
       makeTextDocumentFromText(EDITED_LINES.join('\n'))
     );
 
-    const rendered = renderer.getDiffCache();
+    const rendered = renderer.diffCache;
     expect(rendered).toBeDefined();
     if (rendered == null) return;
 
@@ -189,7 +189,7 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       const renderer = await createPrimedRenderer(diffStyle);
       renderer.applyDocumentChange(EMPTY_DOCUMENT);
 
-      const diff = renderer.getDiffCache();
+      const diff = renderer.diffCache;
       expect(diff).toBeDefined();
       if (diff == null) return;
 
@@ -228,7 +228,7 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       renderer.renderDiff(diff);
       renderer.applyDocumentChange(EMPTY_DOCUMENT);
 
-      const rendered = renderer.getDiffCache();
+      const rendered = renderer.diffCache;
       expect(rendered).toBeDefined();
       if (rendered == null) return;
 
@@ -275,7 +275,7 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       renderer.applyDocumentChange(EMPTY_DOCUMENT);
       renderer.applyDocumentChange(makeTextDocumentFromText('\n'));
 
-      const rendered = renderer.getDiffCache();
+      const rendered = renderer.diffCache;
       expect(rendered).toBeDefined();
       if (rendered == null) return;
 
@@ -322,7 +322,7 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       renderer.applyDocumentChange(EMPTY_DOCUMENT);
       renderer.applyDocumentChange(makeTextDocumentFromText('\n\n'));
 
-      const rendered = renderer.getDiffCache();
+      const rendered = renderer.diffCache;
       expect(rendered).toBeDefined();
       if (rendered == null) return;
 
@@ -369,7 +369,7 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       renderer.applyDocumentChange(EMPTY_DOCUMENT);
       renderer.applyDocumentChange(makeTextDocumentFromText('\n'));
 
-      const rendered = renderer.getDiffCache();
+      const rendered = renderer.diffCache;
       expect(rendered).toBeDefined();
       if (rendered == null) return;
       expect(rendered.additionLines).toEqual(['\n', '']);
@@ -404,7 +404,7 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
 
       renderer.applyDocumentChange(EMPTY_DOCUMENT);
 
-      const rendered = renderer.getDiffCache();
+      const rendered = renderer.diffCache;
       expect(rendered).toBeDefined();
       if (rendered == null) return;
       expect(rendered.additionLines).toEqual(['']);
