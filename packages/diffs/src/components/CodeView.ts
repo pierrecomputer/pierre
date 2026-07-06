@@ -555,9 +555,10 @@ export interface CodeViewOptions<LAnnotation>
   ): void;
   /**
    * Called once when an item's edit session ends — edit turned off, item
-   * removed, item collapsed, or `createEditor` unset — with the final
-   * contents from the session's last document change. Not called when the
-   * session produced no changes, nor on a full CodeView reset/cleanUp.
+   * removed (including a controlled `setItems([])` that empties the list),
+   * item collapsed, or `createEditor` unset — with the final contents from
+   * the session's last document change. Not called when the session produced
+   * no changes, nor on a direct `reset()`/`cleanUp()` teardown.
    *
    * Committing is user-space: CodeView never writes item data itself. The
    * recommended handler makes one combined item write (`updateItem` with a
@@ -1547,7 +1548,24 @@ export class CodeView<LAnnotation = undefined> {
 
   public setItems(items: readonly CodeViewItem<LAnnotation>[]): void {
     if (items.length === 0) {
+      // An empty controlled list removes every item, so end active edit
+      // sessions the way reconcile removals do: publish each session's final
+      // contents (from its last change) through onItemEditComplete. Direct
+      // reset()/cleanUp() calls stay silent — those are teardowns, not item
+      // data updates.
+      const completions: CodeViewItemEditChange<LAnnotation>[] = [];
+      for (const record of this.itemEditors.values()) {
+        const { lastChange } = record.state;
+        if (lastChange != null) {
+          completions.push(lastChange);
+        }
+      }
       this.reset();
+      // Fired after reset so a handler that calls back into setItems/addItems
+      // runs against clean state (mirrors syncItemEditors' post-loop firing).
+      for (const { item, file, lineAnnotations } of completions) {
+        this.options.onItemEditComplete?.(item, file, lineAnnotations);
+      }
     } else if (this.items.length === 0) {
       this.appendItemsInternal(items);
     } else if (!this.tryAppendItems(items)) {

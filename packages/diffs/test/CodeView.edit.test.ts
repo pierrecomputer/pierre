@@ -676,7 +676,36 @@ describe('CodeView item edit mode', () => {
       }
     });
 
-    test('does not fire on a full reset', async () => {
+    test('fires when a controlled empty list removes the edited item', async () => {
+      const { cleanup } = installDom();
+      const { editors, createEditor } = createEditorHarness();
+      const completions: Array<{ id: string; contents: string }> = [];
+      const viewer = new CodeView({
+        createEditor,
+        onItemEditComplete(item, file) {
+          completions.push({ id: item.id, contents: file.contents });
+        },
+      });
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [makeEditFileItem('a')]);
+
+        // setItems([]) is a removal like any other controlled update, so the
+        // session completes with its last-change snapshot even though the
+        // internal path is a full reset.
+        editors[0].emitChange({ name: 'a.ts', contents: 'unsaved' });
+        await renderItems(viewer, []);
+
+        expect(completions).toEqual([{ id: 'a', contents: 'unsaved' }]);
+        expect(editors[0].fullCleanUps).toBeGreaterThanOrEqual(1);
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+
+    test('does not fire on a direct cleanUp teardown', async () => {
       const { cleanup } = installDom();
       const { editors, createEditor } = createEditorHarness();
       let completions = 0;
@@ -691,7 +720,35 @@ describe('CodeView item edit mode', () => {
         await renderItems(viewer, [makeEditFileItem('a')]);
 
         editors[0].emitChange({ name: 'a.ts', contents: 'unsaved' });
-        await renderItems(viewer, []);
+        viewer.cleanUp();
+        await wait(0);
+
+        expect(completions).toBe(0);
+        expect(editors[0].fullCleanUps).toBeGreaterThanOrEqual(1);
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+
+    test('does not fire on a direct reset', async () => {
+      const { cleanup } = installDom();
+      const { editors, createEditor } = createEditorHarness();
+      let completions = 0;
+      const viewer = new CodeView({
+        createEditor,
+        onItemEditComplete() {
+          completions += 1;
+        },
+      });
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [makeEditFileItem('a')]);
+
+        editors[0].emitChange({ name: 'a.ts', contents: 'unsaved' });
+        viewer.reset();
+        await wait(0);
 
         expect(completions).toBe(0);
         expect(editors[0].fullCleanUps).toBeGreaterThanOrEqual(1);
