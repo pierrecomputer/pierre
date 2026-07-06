@@ -730,8 +730,12 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const [showAnnotations, setShowAnnotations] = useState(
     getBoolParam('annot', DEFAULTS.annotations)
   );
+  // Edit mode only exists in the Normal view (other views render per-file
+  // edit controls instead), so only honor `?edit=edit` when starting there.
   const [editorMode, setEditorMode] = useState<EditorMode>(
-    getParam('edit', DEFAULTS.editorMode) === 'edit' ? 'edit' : 'review'
+    viewMode === 'normal' && getParam('edit', DEFAULTS.editorMode) === 'edit'
+      ? 'edit'
+      : 'review'
   );
   const [showMarkers, setShowMarkers] = useState(
     getBoolParam('markers', DEFAULTS.markers)
@@ -942,9 +946,17 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     return () => document.body.classList.remove('overflow-hidden');
   }, [isControlsOpen]);
 
+  // Leaving the Normal view drops back to Review: the global Edit toggle only
+  // exists there, and a stale 'edit' would keep `contentEditable` true with no
+  // mounted editor to attach to, so the marker effect would retry forever.
+  const setViewModeAndResetEditor = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    if (mode !== 'normal') setEditorMode('review');
+  }, []);
+
   const controlsContentProps = {
     viewMode,
-    setViewMode,
+    setViewMode: setViewModeAndResetEditor,
     diffStyle,
     setDiffStyle,
     colorMode,
