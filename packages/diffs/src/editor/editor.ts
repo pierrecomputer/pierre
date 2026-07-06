@@ -1229,17 +1229,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
         const normalizedKey = e.key.length === 1 ? e.key.toLowerCase() : e.key;
         if (normalizedKey === 'v' && isPrimaryModifier(e)) {
-          // Holding paste can enqueue a costly full diff recompute for every
-          // keyboard repeat. Accept the first paste and suppress repeats.
-          if (e.repeat) {
-            e.preventDefault();
-            return;
-          }
-
           // Handle the 'paste' event manually with the custom clipboard API.
           if (this.#options.clipboard !== undefined) {
             e.preventDefault();
             queueRender(this.#handleCustomPasteEvent);
+            return;
+          }
+
+          // Holding paste can enqueue a costly full diff recompute for every
+          // keyboard repeat. Accept the first paste and suppress repeats.
+          if (e.repeat && this.#isDiff) {
+            e.preventDefault();
             return;
           }
         }
