@@ -8,6 +8,7 @@ import {
   type FileTreeMutationEvent,
 } from '@pierre/trees';
 import type { FileTreePathOptions } from '@trees/_lib/fileTreePathOptions';
+import { useWindowScrollLock } from '@trees/_lib/useWindowScrollLock';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   memo,
@@ -300,6 +301,9 @@ function DemoMutationContextMenu({
   onDelete: () => void;
   onRename: () => void;
 }) {
+  // Keep the portaled menu anchored: the tree already blocks its own pane's
+  // scroll, and this blocks the window-level scroll the page owns.
+  useWindowScrollLock();
   const itemType = item.kind === 'directory' ? 'Folder' : 'File';
 
   return (
