@@ -1138,6 +1138,8 @@ export class FileDiff<
     const editor = this.editor;
     const fileContainer = this.fileContainer;
     const fileDiff = this.hunksRenderer.getDiffCache() ?? this.fileDiff;
+    const lineAnnotations = this.lineAnnotations;
+    const renderRange = this.renderRange;
     if (
       editor != null &&
       fileContainer != null &&
@@ -1145,20 +1147,12 @@ export class FileDiff<
       !fileDiff.isPartial
     ) {
       void this.hunksRenderer.initializeHighlighter().then((highlighter) => {
-        if (
-          !this.enabled ||
-          this.editor !== editor ||
-          this.fileContainer !== fileContainer ||
-          (this.hunksRenderer.getDiffCache() ?? this.fileDiff) !== fileDiff
-        ) {
-          return;
-        }
         editor.__syncRenderView(
           highlighter,
           fileContainer,
           fileDiff,
-          this.lineAnnotations,
-          this.renderRange
+          lineAnnotations,
+          renderRange
         );
       });
     }
