@@ -29,6 +29,11 @@ import {
 } from './marker';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import {
+  POPOVER_BOUNDARY_LINES,
+  PopoverManager,
+  type PopoverPlacementBounds,
+} from './popover';
+import {
   type MatchRange,
   type SearchPanelMode,
   SearchPanelWidget,
@@ -158,6 +163,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #options: EditorOptions<LAnnotation>;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
+  #popoverManager?: PopoverManager;
 
   // event disposes
   #editorEventDisposes?: (() => void)[];
@@ -469,6 +475,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     this.#markerRenderer ??= new MarkerRenderer({
+      popoverManager: this.#getPopoverManager(),
       getLineHeight: () => this.#metrics.lineHeight,
       getOverlayElement: () => this.#overlayElement,
       getGutterWidth: () => this.#getGutterWidth(),
@@ -544,6 +551,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#spriteElement?.remove();
     this.#spriteElement = undefined;
     this.#fileContainer = undefined;
+    this.#popoverManager?.cleanUp();
+    this.#popoverManager = undefined;
     this.#gutterElement = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
     this.#contentElement = undefined;
@@ -609,6 +618,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (codeElement === undefined || contentEl === undefined) {
       return;
     }
+
+    this.#getPopoverManager().setViewportElements(fileContainer, codeElement);
 
     // inject editor&theme style to the file container
     if (this.#fileContainer !== fileContainer) {
@@ -808,6 +819,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return this.#fileInstance?.options.overflow === 'wrap';
   }
 
+  #getPopoverManager(): PopoverManager {
+    return (this.#popoverManager ??= new PopoverManager({
+      hasActivePopover: () => this.#selectionAction !== undefined,
+      updateActivePopover: () => this.#updateSelectionActionPopover(),
+    }));
+  }
+
   #resetCache(): void {
     this.#lineYCache.clear();
     this.#wrapLineOffsetsCache.clear();
@@ -943,6 +961,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               this.#selectionStart,
               selection
             ).direction;
+          } else if (
+            this.#selections !== undefined &&
+            this.#selections.length === 1
+          ) {
+            // getComposedRanges only reports an ordered start/end range, so a
+            // selectionchange fired by a refocus (or by our own focus-handler
+            // setBaseAndExtent) carries no direction and would otherwise flip a
+            // backward selection to DirectionNone, jumping the caret/popover to
+            // the bottom. When the bounds are unchanged, keep the prior
+            // direction; a genuine change (different bounds) still resets it.
+            const previous = this.#selections[0];
+            if (
+              comparePosition(previous.start, selection.start) === 0 &&
+              comparePosition(previous.end, selection.end) === 0
+            ) {
+              selection.direction = previous.direction;
+            }
           }
 
           if (this.#reservedSelections !== undefined) {
@@ -3163,18 +3198,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  // Keeps the floating selection-action popover in sync with the current
-  // selection. Called at the end of every overlay render so the popover appears
-  // as soon as a ranged selection settles, follows it while it stays open, and
-  // tears down when the selection collapses, the option is off, or the anchor
-  // line scrolls out of view. Creation is suppressed while the mouse is down so
-  // the popover doesn't flicker under the cursor mid-drag; the pointerup handler
-  // re-runs this once the drag ends.
   #updateSelectionActionPopover(): void {
     const primarySelection = this.#selections?.at(-1);
     const overlayElement = this.#overlayElement;
     const textDocument = this.#textDocument;
     const renderSelectionAction = this.#options.renderSelectionAction;
+    const cleanup = () => {
+      this.#selectionAction?.cleanup();
+      this.#selectionAction = undefined;
+    };
+
     if (
       this.#options.enabledSelectionAction !== true ||
       renderSelectionAction === undefined ||
@@ -3184,31 +3217,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       overlayElement === undefined ||
       textDocument === undefined
     ) {
-      this.#selectionAction?.cleanup();
-      this.#selectionAction = undefined;
+      cleanup();
       return;
     }
 
     const head = getCaretPosition(primarySelection);
     if (!this.#isLineVisible(head.line)) {
-      this.#selectionAction?.cleanup();
-      this.#selectionAction = undefined;
+      cleanup();
       return;
     }
 
     if (this.#selectionAction === undefined) {
-      // The popover element is reused while a selection stays open, so its
-      // action handlers read the live primary selection rather than the
-      // snapshot taken at creation time (extending the selection by keyboard
-      // would otherwise leave them acting on the original range). A fresh drag
-      // tears the popover down (see #isContentMouseDown above) and pointerup
-      // recreates it, so the reuse only spans keyboard-driven selection changes.
       const getActiveSelection = (): EditorSelection =>
         this.#selections?.at(-1) ?? primarySelection;
       const selectionActionElement = renderSelectionAction({
         textDocument,
-        // Live getter so consumers reading `selection` always see the current
-        // range, matching getSelectionText/replaceSelectionText below.
         get selection(): EditorSelection {
           return getActiveSelection();
         },
@@ -3219,25 +3242,81 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#replaceSelectionText(text, [getActiveSelection()]);
         },
         close: () => {
-          this.#selectionAction?.cleanup();
-          this.#selectionAction = undefined;
+          cleanup();
           this.#scrollToPrimaryCaret();
         },
       });
       this.#selectionAction = new SelectionActionWidget(
-        head.line,
         selectionActionElement,
-        overlayElement
+        overlayElement,
+        () => this.#updateSelectionActionPopover()
       );
+      // Avoid biasing the first decision with a stale side from a prior popover.
+      this.#getPopoverManager().resetPlacement();
     }
 
-    // Anchor just below the selection's head line, mirroring the marker hover
-    // popover's geometry.
-    const [left, wrapLine] = this.#getCharX(head.line, head.character);
     const lineHeight = this.#metrics.lineHeight;
-    const top = this.#getLineY(head.line) + wrapLine * lineHeight + lineHeight;
-    this.#selectionAction.line = head.line;
-    this.#selectionAction.reposition(left, top, this.#getGutterWidth());
+    const isBackward = primarySelection.direction === DirectionBackward;
+    const preferred = {
+      placeAbove: isBackward,
+      anchor: head,
+    };
+    const fallback: typeof preferred = isBackward
+      ? { placeAbove: false, anchor: primarySelection.end }
+      : { placeAbove: true, anchor: primarySelection.start };
+
+    // Resolve each candidate's [left, top, bottom] in overlay coordinate space
+    // up front so both the viewport fit-check and the final reposition() call
+    // below can reuse them without re-deriving the same line/char geometry
+    // twice. For an above placement the CSS `--popover-y-shift: -100%` lifts
+    // the popover by its own height, so its top is the anchor row's top minus
+    // that height.
+    const popoverHeight = this.#selectionAction.height;
+    const candidateGeometry = (
+      candidate: typeof preferred
+    ): PopoverPlacementBounds & { left: number; anchorTop: number } => {
+      const [left, candidateWrapLine] = this.#getCharX(
+        candidate.anchor.line,
+        candidate.anchor.character
+      );
+      const rowTop =
+        this.#getLineY(candidate.anchor.line) + candidateWrapLine * lineHeight;
+      const anchorTop = candidate.placeAbove ? rowTop : rowTop + lineHeight;
+      const top = candidate.placeAbove ? anchorTop - popoverHeight : anchorTop;
+      return { top, bottom: top + popoverHeight, left, anchorTop };
+    };
+    const preferredGeometry = candidateGeometry(preferred);
+    const fallbackGeometry = candidateGeometry(fallback);
+
+    const lineCount = textDocument.lineCount;
+    const atDocumentEdge = isBackward
+      ? head.line < POPOVER_BOUNDARY_LINES
+      : head.line >= lineCount - POPOVER_BOUNDARY_LINES;
+    const canUseFallback = this.#isLineVisible(fallback.anchor.line);
+    const popoverManager = this.#getPopoverManager();
+    const useFallback =
+      canUseFallback &&
+      popoverManager.choosePlacement({
+        preferred: preferredGeometry,
+        fallback: fallbackGeometry,
+        viewport: popoverManager.getPlacementBounds(),
+        popoverHeight,
+        atDocumentEdge,
+      }) === 'fallback';
+    if (!canUseFallback) {
+      popoverManager.setPlacement('preferred');
+    }
+    const { placeAbove } = useFallback ? fallback : preferred;
+    const { left, anchorTop } = useFallback
+      ? fallbackGeometry
+      : preferredGeometry;
+
+    this.#selectionAction.reposition(
+      left,
+      anchorTop,
+      this.#getGutterWidth(),
+      placeAbove
+    );
   }
 
   // Opens the search panel in the requested mode. If a panel is already open,
@@ -3798,12 +3877,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return undefined;
   }
 
+  // TODO(@ije): remove this
   // Painted background color of a line, read from the [data-line]::after layer
   // (the line element itself is transparent in edit mode). Returns undefined when
   // that layer is transparent (e.g. context lines).
   #lineBackgroundColor(line: number): string | undefined {
     const lineElement = this.#getLineElement(line);
     if (lineElement === undefined) {
+      return undefined;
+    }
+    // testing environment like jsdom doesn't implement the getComputedStyle API
+    if (navigator.userAgent.includes('jsdom')) {
       return undefined;
     }
     const backgroundColor = getComputedStyle(

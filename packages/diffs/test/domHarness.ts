@@ -29,6 +29,7 @@ export interface DomHandle {
    * (e.g. gutter drag selection) must declare their targets explicitly.
    */
   setElementFromPoint(x: number, y: number, element: Element): void;
+  triggerResizeObserver(target: Element): void;
 }
 
 // Installs a jsdom-backed DOM environment on globalThis for component tests.
@@ -86,10 +87,38 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     }
   }
 
+  const resizeObservers = new Set<MockResizeObserver>();
   class MockResizeObserver {
-    observe(_target: Element): void {}
-    unobserve(_target: Element): void {}
-    disconnect(): void {}
+    #callback: ResizeObserverCallback;
+    #targets = new Set<Element>();
+
+    constructor(callback: ResizeObserverCallback) {
+      this.#callback = callback;
+      resizeObservers.add(this);
+    }
+
+    observe(target: Element): void {
+      this.#targets.add(target);
+    }
+
+    unobserve(target: Element): void {
+      this.#targets.delete(target);
+    }
+
+    disconnect(): void {
+      this.#targets.clear();
+      resizeObservers.delete(this);
+    }
+
+    trigger(target: Element): void {
+      if (!this.#targets.has(target)) {
+        return;
+      }
+      this.#callback(
+        [{ target } as ResizeObserverEntry],
+        this as unknown as ResizeObserver
+      );
+    }
   }
 
   const matchMedia = ((query: string) => ({
@@ -211,11 +240,17 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     setElementFromPoint(x: number, y: number, element: Element): void {
       pointTargets.set(`${x},${y}`, element);
     },
+    triggerResizeObserver(target: Element): void {
+      for (const resizeObserver of resizeObservers) {
+        resizeObserver.trigger(target);
+      }
+    },
     cleanup() {
       for (const timeout of frames.values()) {
         clearTimeout(timeout);
       }
       frames.clear();
+      resizeObservers.clear();
 
       for (const [key, value] of Object.entries(originalValues)) {
         if (value === undefined) {

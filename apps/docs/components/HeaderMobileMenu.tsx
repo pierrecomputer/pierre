@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { MobileNavLink } from './MobileNavLink';
@@ -34,6 +35,14 @@ export function HeaderMobileMenu({
   onClose,
   product,
 }: HeaderMobileMenuProps) {
+  const pathname = usePathname();
+
+  // Mirror the desktop nav's active treatment: home matches exactly, while
+  // section links (Edit, Docs, Theme) match their path prefix.
+  const homePath = product.basePath !== '' ? product.basePath : '/';
+  const isActivePath = (target: string) =>
+    target === homePath ? pathname === target : pathname.startsWith(target);
+
   useEffect(() => {
     if (isOpen) {
       document.body.classList.add('overflow-hidden');
@@ -59,15 +68,30 @@ export function HeaderMobileMenu({
         className={`mobile-popover md:hidden ${isOpen ? 'is-open' : ''}`}
         onClick={onClose}
       >
-        <MobileNavLink href={product.basePath !== '' ? product.basePath : '/'}>
+        <MobileNavLink href={homePath} active={isActivePath(homePath)}>
           Home
         </MobileNavLink>
         {product.id === 'diffs' && (
-          <MobileNavLink href={`${product.basePath}/edit`}>Edit</MobileNavLink>
+          <MobileNavLink
+            href={`${product.basePath}/edit`}
+            active={isActivePath(`${product.basePath}/edit`)}
+          >
+            Edit
+          </MobileNavLink>
         )}
-        <MobileNavLink href={product.docsPath}>Docs</MobileNavLink>
+        <MobileNavLink
+          href={product.docsPath}
+          active={isActivePath(product.docsPath)}
+        >
+          Docs
+        </MobileNavLink>
         {product.themePath != null && (
-          <MobileNavLink href={product.themePath}>Theme</MobileNavLink>
+          <MobileNavLink
+            href={product.themePath}
+            active={isActivePath(product.themePath)}
+          >
+            Theme
+          </MobileNavLink>
         )}
         {OTHER_PRODUCT_IDS.filter((id) => id !== product.id).map((id) => (
           <MobileNavLink key={id} href={getExternalUrl(id)} external>
