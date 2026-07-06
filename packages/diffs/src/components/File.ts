@@ -314,9 +314,6 @@ export class File<
     if (!recycle) {
       this.lineAnnotations = [];
     }
-    // Removes annotation elements and the gutter utility content along with
-    // clearing their caches — bare cache clears would leave the elements
-    // behind in the (host-owned) container.
     this.clearAuxiliaryNodes();
     this.pre = undefined;
     this.bufferBefore?.remove();
@@ -334,8 +331,6 @@ export class File<
     if (!recycle) {
       this.cachedHeaderHTML = undefined;
     }
-    // The error wrapper is not part of the hydration adoption list, so it
-    // must be removed here or it lingers next to remounted content.
     this.errorWrapper?.remove();
     this.errorWrapper = undefined;
     this.themeCSSStyle = undefined;
@@ -357,8 +352,6 @@ export class File<
 
     this.enabled = false;
 
-    // Clean up the editor. Recycling keeps the editor's document/undo state
-    // so the host that owns the editor can re-attach it on remount.
     this.editor?.cleanUp(recycle);
     this.editor = undefined;
   }

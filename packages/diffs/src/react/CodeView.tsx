@@ -63,10 +63,10 @@ interface CodeViewBaseProps<LAnnotation> {
    * the last item. Always rendered; scrolls with the content. */
   renderCodeViewFooter?(): ReactNode;
   /**
-   * Enables editing for items with `edit: true`. Spread the given options
-   * into the editor constructor — `new Editor({ ...options })` from
-   * `@pierre/diffs/editor` — so document changes route to `onItemEditChange`
-   * and `onItemEditComplete`. CodeView owns the returned editor's lifecycle.
+   * Enables editing for items with `edit: true`. Pass the given options into
+   * the editor constructor — `new Editor(options)` from `@pierre/diffs/editor`
+   * — so document changes route to `onItemEditChange` and
+   * `onItemEditComplete`. CodeView owns the returned editor's lifecycle.
    */
   createEditor?(
     options: CodeViewCreateEditorOptions<LAnnotation>

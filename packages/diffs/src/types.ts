@@ -546,8 +546,8 @@ export type CodeViewFileItem<T = undefined> = {
   collapsed?: boolean;
   /**
    * Put this item into edit mode. Requires the CodeView `createEditor` option;
-   * ignored while `collapsed` is true. Like `collapsed`, toggling via
-   * `updateItem` only applies when `version` is bumped.
+   * ignored while `collapsed` is true. Make sure you bump the version when
+   * also changing the value.
    */
   edit?: boolean;
 };
@@ -561,8 +561,8 @@ export type CodeViewDiffItem<T = undefined> = {
   collapsed?: boolean;
   /**
    * Put this item into edit mode. Requires the CodeView `createEditor` option;
-   * ignored while `collapsed` is true. Like `collapsed`, toggling via
-   * `updateItem` only applies when `version` is bumped.
+   * ignored while `collapsed` is true. Make sure you bump the version when
+   * also changing the value.
    */
   edit?: boolean;
 };

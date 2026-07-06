@@ -709,7 +709,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     // document (rather than the rebuild) is what keeps a re-attach with an
     // unchanged cacheKey — which skips the rebuild — able to paint edits.
     const textDocument = this.#textDocument;
-    if (this.#tokenizer === undefined && textDocument !== undefined) {
+    if (this.#tokenizer == null && textDocument != null) {
       this.#tokenizer = new EditorTokenizer({
         highlighter,
         textDocument,

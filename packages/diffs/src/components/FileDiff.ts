@@ -565,8 +565,6 @@ export class FileDiff<
     if (!recycle) {
       this.cachedHeaderHTML = undefined;
     }
-    // The error wrapper is not part of the hydration adoption list, so it
-    // must be removed here or it lingers next to remounted content.
     this.errorWrapper?.remove();
     this.errorWrapper = undefined;
     this.spriteSVG = undefined;
@@ -590,8 +588,6 @@ export class FileDiff<
 
     this.enabled = false;
 
-    // Clean up the editor. Recycling keeps the editor's document/undo state
-    // so the host that owns the editor can re-attach it on remount.
     this.editor?.cleanUp(recycle);
     this.editor = undefined;
     if (this.refreshViewTimeout != null) {
