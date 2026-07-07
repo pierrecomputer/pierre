@@ -465,6 +465,50 @@ describe('CodeView item edit mode', () => {
     }
   });
 
+  test('layout height tracks the edit-forced expandUnchanged expansion', async () => {
+    const { cleanup } = installDom();
+    const { createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    // A diff with a large unchanged region, so expandUnchanged materially
+    // changes the item's height (collapsed context rows become real rows).
+    const oldContents = Array.from(
+      { length: 60 },
+      (_, index) => `line ${index}`
+    ).join('\n');
+    const newContents = oldContents.replace('line 30', 'line 30 changed');
+    const item: CodeViewItem<undefined> = {
+      id: 'd',
+      type: 'diff',
+      fileDiff: parseDiffFromFile(
+        { name: 'd.txt', contents: oldContents },
+        { name: 'd.txt', contents: newContents }
+      ),
+      version: 0,
+      edit: false,
+    };
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [item]);
+      const collapsedHeight = viewer.getScrollHeight();
+
+      // Edit mode forces expandUnchanged for the item, which must flow into
+      // the computed layout height immediately — a stale collapsed height is
+      // what made remounts render taller than their layout slot (the scroll
+      // jump this pins).
+      await applyItemUpdate(viewer, { ...item, edit: true, version: 1 });
+      const expandedHeight = viewer.getScrollHeight();
+      expect(expandedHeight).toBeGreaterThan(collapsedHeight);
+
+      // Toggling edit off restores the collapsed layout.
+      await applyItemUpdate(viewer, { ...item, edit: false, version: 2 });
+      expect(viewer.getScrollHeight()).toBe(collapsedHeight);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('user-space onItemEditComplete handler commits a finished session', async () => {
     const { cleanup } = installDom();
     // Committing is a user-space concern: CodeView never writes item data
