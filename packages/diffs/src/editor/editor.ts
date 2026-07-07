@@ -2801,9 +2801,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
       const bracketMatchRanges =
         this.#options.matchBrackets === false ||
-        this.#textDocument === undefined
+        this.#textDocument === undefined ||
+        !isCollapsedSelection(primarySelection)
           ? undefined
-          : findBracketMatchRanges(this.#textDocument, primarySelection);
+          : findBracketMatchRanges(this.#textDocument, primarySelection.start);
       if (bracketMatchRanges !== undefined) {
         for (const range of bracketMatchRanges) {
           this.#renderSelection(renderCtx, 'bracketMatch', range);

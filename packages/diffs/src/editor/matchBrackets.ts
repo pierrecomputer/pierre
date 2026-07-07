@@ -1,6 +1,4 @@
-import type { EditorSelection } from './selection';
-import { isCollapsedSelection } from './selection';
-import type { Range, TextDocument } from './textDocument';
+import type { Position, Range, TextDocument } from './textDocument';
 
 const OPEN_BRACKETS = new Map([
   ['(', ')'],
@@ -14,13 +12,9 @@ const CLOSE_BRACKETS = new Map(
 
 export function findBracketMatchRanges<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
-  selection: EditorSelection
-): Range[] | undefined {
-  if (!isCollapsedSelection(selection)) {
-    return;
-  }
-
-  const offset = textDocument.offsetAt(selection.start);
+  position: Position
+): [open: Range, close: Range] | undefined {
+  const offset = textDocument.offsetAt(position);
   const previousOffset = offset - 1;
   let text: string | undefined;
   let ignoredOffsets: Uint8Array | undefined;
@@ -55,7 +49,7 @@ function findBracketMatchRangesAtOffset<LAnnotation>(
   text: string,
   bracketOffset: number,
   ignoredOffsets: Uint8Array
-): Range[] | undefined {
+): [open: Range, close: Range] | undefined {
   if (ignoredOffsets[bracketOffset] === 1) {
     return undefined;
   }
@@ -84,6 +78,20 @@ function findBracketMatchRangesAtOffset<LAnnotation>(
     return createBracketMatchRanges(textDocument, matchOffset, bracketOffset);
   }
   return undefined;
+}
+
+function createBracketMatchRanges<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  firstOffset: number | undefined,
+  secondOffset: number | undefined
+): [open: Range, close: Range] | undefined {
+  if (firstOffset === undefined || secondOffset === undefined) {
+    return;
+  }
+  return [firstOffset, secondOffset].map((offset) => ({
+    start: textDocument.positionAt(offset),
+    end: textDocument.positionAt(offset + 1),
+  })) as [Range, Range];
 }
 
 function getBracketIgnoredOffsets(text: string): Uint8Array {
@@ -215,18 +223,4 @@ function findOpeningBracket(
     }
   }
   return undefined;
-}
-
-function createBracketMatchRanges<LAnnotation>(
-  textDocument: TextDocument<LAnnotation>,
-  firstOffset: number | undefined,
-  secondOffset: number | undefined
-): Range[] | undefined {
-  if (firstOffset === undefined || secondOffset === undefined) {
-    return;
-  }
-  return [firstOffset, secondOffset].map((offset) => ({
-    start: textDocument.positionAt(offset),
-    end: textDocument.positionAt(offset + 1),
-  }));
 }
