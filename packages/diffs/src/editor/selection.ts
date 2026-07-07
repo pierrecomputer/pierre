@@ -397,7 +397,7 @@ function getNextSelectionOffsetPairAfterReplace(
   const insertEnd = insertStart + newText.length;
   const originalLength = entry.end - entry.start;
   if (originalLength > 0) {
-    const originalText = textDocument.getText().slice(entry.start, entry.end);
+    const originalText = textDocument.getTextSlice(entry.start, entry.end);
     const preservedOffset = newText.indexOf(originalText);
     if (
       preservedOffset !== -1 &&
@@ -660,7 +660,6 @@ export function applyTransposeToSelections<LAnnotation>(
   nextSelections: EditorSelection[];
   change?: TextDocumentChange;
 } {
-  const text = textDocument.getText();
   const edits: ResolvedTextEdit[] = [];
   const nextOffsetPairs: Array<[number, number]> = [];
 
@@ -736,7 +735,7 @@ export function applyTransposeToSelections<LAnnotation>(
       const prevStart = prevEnd - (prevLength - prevGraphemeStart);
       const newText =
         lineText.slice(0, firstEnd) +
-        text.slice(prevEnd, offset) +
+        textDocument.getTextSlice(prevEnd, offset) +
         prevLineText.slice(prevGraphemeStart, prevLength);
       edit = {
         start: prevStart,
