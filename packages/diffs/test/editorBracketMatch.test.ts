@@ -134,7 +134,7 @@ describe('editor bracket matching', () => {
   test('does not read ignored token ranges when disabled', async () => {
     const getIgnoredRangesSpy = spyOn(
       EditorTokenizer.prototype,
-      'getStringCommentRegexRanges'
+      'getStringCommentRegexpRangesInLine'
     );
     const { cleanup, editor } = await createBracketMatchFixture('{ /{/ }', {
       matchBrackets: false,
@@ -224,7 +224,9 @@ describe('editor bracket matching', () => {
   test('findBracketMatchRanges ignores brackets inside regex ranges', () => {
     const textDocument = new TextDocument('inmemory://1', '{ /{/ }', 'ts');
     const tokenizer = {
-      getStringCommentRegexRanges(lineIndex: number): [number, number][] {
+      getStringCommentRegexpRangesInLine(
+        lineIndex: number
+      ): [number, number][] {
         return lineIndex === 0 ? [[2, 5]] : [];
       },
     } as EditorTokenizer;

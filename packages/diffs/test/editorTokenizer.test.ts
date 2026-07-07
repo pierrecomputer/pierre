@@ -196,10 +196,12 @@ describe('EditorTokenizer', () => {
       return tokenizer;
     };
 
-    expect(createTokenizer(true).getStringCommentRegexRanges(0)).toEqual([
-      [0, 6],
-    ]);
-    expect(createTokenizer(false).getStringCommentRegexRanges(0)).toEqual([]);
+    expect(createTokenizer(true).getStringCommentRegexpRangesInLine(0)).toEqual(
+      [[0, 6]]
+    );
+    expect(createTokenizer(false).getStringCommentRegexpRangesInLine(0)).toBe(
+      null
+    );
   });
 
   test('limits foreground tokenization to the render range after prepending lines', () => {

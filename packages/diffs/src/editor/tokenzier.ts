@@ -59,7 +59,7 @@ export class EditorTokenizer {
   #backgroundJobId: number = 0;
   #backgroundChangedLineRanges: readonly [number, number][] | undefined;
   #backgroundChangedRangeIndex: number = 0;
-  #stringCommentRegexpRanges: Map<number, [number, number][]> = new Map();
+  #bracketIgnoredRanges: Map<number, [number, number][] | null> = new Map();
   #isMessageListenerAttached: boolean = false;
 
   #prebuildStateStack = debounce(async (renderRange?: RenderRange) => {
@@ -101,21 +101,23 @@ export class EditorTokenizer {
     return this.#themeType;
   }
 
-  getStringCommentRegexRanges(lineIndex: number): [number, number][] {
+  getStringCommentRegexpRangesInLine(
+    lineIndex: number
+  ): [number, number][] | null {
     if (
       !this.#matchBrackets ||
       lineIndex < 0 ||
       lineIndex >= this.#textDocument.lineCount
     ) {
-      return [];
+      return null;
     }
-    this.#buildStateStack(lineIndex);
-    if (!this.#stringCommentRegexpRanges.has(lineIndex)) {
+    if (!this.#bracketIgnoredRanges.has(lineIndex)) {
+      this.#buildStateStack(lineIndex);
       const state = this.#stateStack[lineIndex] ?? INITIAL;
       const result = this.#tokenizeLineAt(lineIndex, state);
       this.#stateStack[lineIndex + 1] = result.state;
     }
-    return this.#stringCommentRegexpRanges.get(lineIndex) ?? [];
+    return this.#bracketIgnoredRanges.get(lineIndex) ?? null;
   }
 
   constructor({
@@ -282,10 +284,10 @@ export class EditorTokenizer {
     }
 
     if (this.#matchBrackets) {
-      // Clear string/comment/regex ranges for deleted lines.
-      for (const line of this.#stringCommentRegexpRanges.keys()) {
+      // Clear ignored token ranges for lines invalidated by the edit.
+      for (const line of this.#bracketIgnoredRanges.keys()) {
         if (line >= change.startLine) {
-          this.#stringCommentRegexpRanges.delete(line);
+          this.#bracketIgnoredRanges.delete(line);
         }
       }
     }
@@ -585,7 +587,7 @@ export class EditorTokenizer {
       console.warn(
         `[diffs] Line(${line}) too long to tokenize: ${lineText.length}`
       );
-      this.#setStringCommentRegexRanges(line, []);
+      this.#cacheBracketIgnoredRanges(line, null);
       return { resolvedTokens: [[0, '', lineText]], state };
     }
     if (
@@ -593,7 +595,7 @@ export class EditorTokenizer {
       lineText === '' ||
       lineText.trim() === ''
     ) {
-      this.#setStringCommentRegexRanges(line, []);
+      this.#cacheBracketIgnoredRanges(line, null);
       return { resolvedTokens: [[0, '', lineText]], state };
     }
     const result = tokenizeLine(
@@ -604,16 +606,19 @@ export class EditorTokenizer {
       TOKENIZE_TIME_LIMIT,
       this.#matchBrackets
     );
-    this.#setStringCommentRegexRanges(line, result.stringCommentRegexRanges);
+    this.#cacheBracketIgnoredRanges(line, result.bracketIgnoredRanges);
     return {
       resolvedTokens: result.resolvedTokens,
       state: result.ruleStack,
     };
   }
 
-  #setStringCommentRegexRanges(line: number, ranges: [number, number][]): void {
+  #cacheBracketIgnoredRanges(
+    line: number,
+    ranges: [number, number][] | null
+  ): void {
     if (this.#matchBrackets) {
-      this.#stringCommentRegexpRanges.set(line, ranges);
+      this.#bracketIgnoredRanges.set(line, ranges);
     }
   }
 
@@ -643,13 +648,10 @@ export class EditorTokenizer {
           TOKENIZE_TIME_LIMIT,
           this.#matchBrackets
         );
-        this.#setStringCommentRegexRanges(
-          line,
-          result.stringCommentRegexRanges
-        );
+        this.#cacheBracketIgnoredRanges(line, result.bracketIgnoredRanges);
         state = result.ruleStack;
       } else {
-        this.#setStringCommentRegexRanges(line, []);
+        this.#cacheBracketIgnoredRanges(line, null);
       }
     }
     this.#stateStack[line] = state;
@@ -688,10 +690,10 @@ export class EditorTokenizer {
           `[diffs] Line(${line}) too long to tokenize: ${lineText.length}`
         );
         lines.set(line, [[0, '', lineText]]);
-        this.#setStringCommentRegexRanges(line, []);
+        this.#cacheBracketIgnoredRanges(line, null);
       } else if (lineText === '' || lineText.trim() === '') {
         lines.set(line, [[0, '', lineText]]);
-        this.#setStringCommentRegexRanges(line, []);
+        this.#cacheBracketIgnoredRanges(line, null);
       } else {
         const ret = tokenizeLine(
           this.#grammar,
@@ -702,7 +704,7 @@ export class EditorTokenizer {
           this.#matchBrackets
         );
         lines.set(line, ret.resolvedTokens);
-        this.#setStringCommentRegexRanges(line, ret.stringCommentRegexRanges);
+        this.#cacheBracketIgnoredRanges(line, ret.bracketIgnoredRanges);
         state = ret.ruleStack;
       }
 
@@ -758,11 +760,11 @@ function tokenizeLine(
   lineText: string,
   stateStack: StateStack,
   timeLimit?: number,
-  collectStringCommentRegexRanges = true
+  collectBracketIgnoredRanges = true
 ): {
   ruleStack: StateStack;
   resolvedTokens: Array<HighlightedToken>;
-  stringCommentRegexRanges: [number, number][];
+  bracketIgnoredRanges: [number, number][];
 } {
   const result = grammar.tokenizeLine2(lineText, stateStack, timeLimit);
   if (result.stoppedEarly) {
@@ -773,7 +775,7 @@ function tokenizeLine(
   const rawTokens = result.tokens;
   const tokensLength = rawTokens.length / 2;
   const resolvedTokens: Array<HighlightedToken> = [];
-  const stringCommentRegexRanges: [number, number][] = [];
+  const bracketIgnoredRanges: [number, number][] = [];
   for (let j = 0; j < tokensLength; j++) {
     const offset = rawTokens[2 * j];
     const nextOffset =
@@ -787,16 +789,16 @@ function tokenizeLine(
     const tokenText = lineText.slice(offset, nextOffset);
     resolvedTokens.push([offset, colorMap[fg], tokenText]);
     if (
-      collectStringCommentRegexRanges &&
+      collectBracketIgnoredRanges &&
       EncodedTokenMetadata.getTokenType(metadata) > 0
     ) {
-      stringCommentRegexRanges.push([offset, nextOffset]);
+      bracketIgnoredRanges.push([offset, nextOffset]);
     }
   }
   return {
     ruleStack: result.ruleStack,
     resolvedTokens,
-    stringCommentRegexRanges,
+    bracketIgnoredRanges,
   };
 }
 

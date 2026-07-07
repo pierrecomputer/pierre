@@ -99,7 +99,7 @@ function getBracketAtPosition<LAnnotation>(
   if (
     char === undefined ||
     (!OPEN_BRACKETS.has(char) && !CLOSE_BRACKETS.has(char)) ||
-    isIgnoredCharacter(tokenizer, position)
+    isInIgnoredTokenRange(tokenizer, position)
   ) {
     return undefined;
   }
@@ -122,7 +122,7 @@ function findClosingBracket<LAnnotation>(
       character < lineText.length;
       character++
     ) {
-      if (isIgnoredCharacter(tokenizer, { line, character })) {
+      if (isInIgnoredTokenRange(tokenizer, { line, character })) {
         continue;
       }
       const char = lineText[character];
@@ -131,7 +131,7 @@ function findClosingBracket<LAnnotation>(
       } else if (char === closingBracket) {
         depth--;
         if (depth === 0) {
-          return { line, character, char: char };
+          return { line, character, char };
         }
       }
     }
@@ -153,7 +153,7 @@ function findOpeningBracket<LAnnotation>(
         ? bracketPosition.character
         : lineText.length - 1;
     for (let character = startCharacter; character >= 0; character--) {
-      if (isIgnoredCharacter(tokenizer, { line, character })) {
+      if (isInIgnoredTokenRange(tokenizer, { line, character })) {
         continue;
       }
       const char = lineText[character];
@@ -162,7 +162,7 @@ function findOpeningBracket<LAnnotation>(
       } else if (char === openingBracket) {
         depth--;
         if (depth === 0) {
-          return { line, character, char: char };
+          return { line, character, char };
         }
       }
     }
@@ -170,15 +170,17 @@ function findOpeningBracket<LAnnotation>(
   return undefined;
 }
 
-function isIgnoredCharacter(
+function isInIgnoredTokenRange(
   tokenizer: EditorTokenizer,
   position: Position
 ): boolean {
-  return tokenizer
-    .getStringCommentRegexRanges(position.line)
-    .some(
-      ([start, end]) => position.character >= start && position.character < end
-    );
+  const ranges = tokenizer.getStringCommentRegexpRangesInLine(position.line);
+  if (ranges === null) {
+    return false;
+  }
+  return ranges.some(
+    ([start, end]) => position.character >= start && position.character < end
+  );
 }
 
 function createBracketMatchRanges(
@@ -188,8 +190,15 @@ function createBracketMatchRanges(
   if (firstPosition === undefined || secondPosition === undefined) {
     return;
   }
-  return [firstPosition, secondPosition].map((position) => ({
+  return [
+    createCharacterRange(firstPosition),
+    createCharacterRange(secondPosition),
+  ];
+}
+
+function createCharacterRange(position: Position): Range {
+  return {
     start: { line: position.line, character: position.character },
     end: { line: position.line, character: position.character + 1 },
-  })) as [Range, Range];
+  };
 }
