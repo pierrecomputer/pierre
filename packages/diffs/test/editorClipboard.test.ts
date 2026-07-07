@@ -1,7 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 
+import { FileDiff } from '../src/components/FileDiff';
+import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { DirectionNone } from '../src/editor/selection';
+import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
@@ -13,6 +16,84 @@ import type {
   RenderRange,
 } from '../src/types';
 import { installDom, wait } from './domHarness';
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
+
+// The editor attaches to the additions (new-file) side of a diff. That column
+// is the `[data-code]` element without `data-deletions`; its editable lines
+// live in the child marked `data-content`.
+function findAdditionContent(container: HTMLElement): HTMLElement | undefined {
+  const shadow = container.shadowRoot;
+  if (shadow == null) {
+    return undefined;
+  }
+  for (const code of shadow.querySelectorAll<HTMLElement>('[data-code]')) {
+    if (code.dataset.deletions !== undefined) {
+      continue;
+    }
+    for (const child of code.children) {
+      const el = child as HTMLElement;
+      if (el.dataset.content !== undefined) {
+        return el;
+      }
+    }
+  }
+  return undefined;
+}
+
+interface DiffEditorFixture {
+  container: HTMLElement;
+  editor: Editor<undefined>;
+  cleanup(): Promise<void>;
+}
+
+async function createDiffEditorFixture(
+  oldContents: string,
+  newContents: string
+): Promise<DiffEditorFixture> {
+  const dom = installDom();
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+
+  const fileDiff = new FileDiff<undefined>({
+    disableFileHeader: true,
+    theme: DEFAULT_THEMES,
+    diffStyle: 'split',
+  });
+  const editor = new Editor<undefined>();
+  const oldFile: FileContents = { name: 'example.txt', contents: oldContents };
+  const newFile: FileContents = { name: 'example.txt', contents: newContents };
+
+  fileDiff.render({
+    oldFile,
+    newFile,
+    fileContainer: container,
+    forceRender: true,
+  });
+  editor.edit(fileDiff);
+
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const content = findAdditionContent(container);
+    if (content != null && content.getAttribute('contenteditable') === 'true') {
+      break;
+    }
+    await wait(0);
+  }
+
+  return {
+    container,
+    editor,
+    async cleanup() {
+      await wait(10);
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      dom.cleanup();
+      await disposeHighlighter();
+    },
+  };
+}
 
 function createTestHighlighter(): DiffsHighlighter {
   return {
@@ -514,18 +595,17 @@ describe('Editor clipboard events', () => {
     }
   });
 
-  test('allows the first browser paste shortcut and suppresses repeat paste', () => {
-    const { cleanup } = installDom();
-
-    const editor = new Editor<undefined>();
-    const component = new TestEditableComponent({
-      name: 'example.txt',
-      contents: 'alpha',
-      lang: 'text',
-    });
+  test('allows the first browser paste shortcut in a diff and suppresses repeat paste', async () => {
+    const fixture = await createDiffEditorFixture('alpha\nold', 'alpha\nnew');
+    const { editor, container } = fixture;
 
     try {
-      editor.edit(component);
+      const content = findAdditionContent(container);
+      expect(content).toBeDefined();
+      if (content == null) {
+        return;
+      }
+
       editor.setSelections([
         {
           start: { line: 0, character: 5 },
@@ -534,29 +614,26 @@ describe('Editor clipboard events', () => {
         },
       ]);
 
-      const firstKeydown = dispatchPasteShortcutKeydown(
-        component.contentElement,
-        false,
-        { key: 'V', shiftKey: true }
-      );
+      const firstKeydown = dispatchPasteShortcutKeydown(content, false, {
+        key: 'V',
+        shiftKey: true,
+      });
       expect(firstKeydown.defaultPrevented).toBe(false);
-      dispatchPaste(component.contentElement, ' bravo');
-      expect(editor.getState().file.contents).toBe('alpha bravo');
+      dispatchPaste(content, ' bravo');
+      expect(editor.getState().file.contents).toBe('alpha bravo\nnew');
 
-      const repeatKeydown = dispatchPasteShortcutKeydown(
-        component.contentElement,
-        true,
-        { key: 'V', shiftKey: true }
-      );
+      const repeatKeydown = dispatchPasteShortcutKeydown(content, true, {
+        key: 'V',
+        shiftKey: true,
+      });
       expect(repeatKeydown.defaultPrevented).toBe(true);
-      expect(editor.getState().file.contents).toBe('alpha bravo');
+      expect(editor.getState().file.contents).toBe('alpha bravo\nnew');
     } finally {
-      editor.cleanUp();
-      cleanup();
+      await fixture.cleanup();
     }
   });
 
-  test('does not read from a custom clipboard provider on repeat paste', async () => {
+  test('reads from a custom clipboard provider on repeat paste shortcut', async () => {
     const { cleanup } = installDom();
     let reads = 0;
 
@@ -591,8 +668,8 @@ describe('Editor clipboard events', () => {
       await wait();
 
       expect(repeatKeydown.defaultPrevented).toBe(true);
-      expect(reads).toBe(0);
-      expect(editor.getState().file.contents).toBe('alpha');
+      expect(reads).toBe(1);
+      expect(editor.getState().file.contents).toBe('alpha bravo');
     } finally {
       editor.cleanUp();
       cleanup();

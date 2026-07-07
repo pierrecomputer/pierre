@@ -542,6 +542,12 @@ interface EditorOptions<LAnnotation> {
     file: FileContents,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ) => void;
+
+  // Fires when the editable content area gains focus (tab, click, or editor.focus()).
+  onFocus?: () => void;
+
+  // Fires when the editable content area loses focus.
+  onBlur?: () => void;
 }`,
   },
   options,
@@ -553,6 +559,15 @@ export const EDITOR_PUBLIC_API: PreloadFileOptions<undefined> = {
     contents: `import { Editor } from '@pierre/diffs/editor';
 
 const editor = new Editor();
+
+// Merge partial options at runtime. Existing fields are preserved.
+// onChange and similar handlers read from the latest options on each call;
+// pass onFocus/onBlur before edit() attaches, or set them in the constructor.
+editor.setOptions({
+  onChange(file, lineAnnotations) {
+    console.log('change', file.name, lineAnnotations);
+  },
+});
 
 // Attach to a rendered File, FileDiff, or virtualized variant.
 // Normalizes conflicting fileInstance options and returns a dispose function.
@@ -570,6 +585,7 @@ editor.applyEdits([
     newText: 'Hello, world!',
   },
 ])
+
 // Apply text edits and update the undo stack
 editor.applyEdits([
   {

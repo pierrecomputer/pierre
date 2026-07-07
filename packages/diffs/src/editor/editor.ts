@@ -142,6 +142,11 @@ export interface EditorOptions<LAnnotation> {
     file: FileContents,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ) => void;
+  /** Callback when the editor gains focus. */
+  onFocus?: () => void;
+  /** Callback when the editor loses focus. */
+  onBlur?: () => void;
+  // debug flag
   __debug?: boolean;
 }
 
@@ -279,6 +284,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   constructor(options: EditorOptions<LAnnotation> = {}) {
     this.#options = options;
+  }
+
+  setOptions(options: EditorOptions<LAnnotation>): void {
+    this.#options = {
+      ...this.#options,
+      ...options,
+    };
   }
 
   edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void {
@@ -1067,6 +1079,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   #listenContentElement(contentEl: HTMLElement, gutterEl?: HTMLElement): void {
+    const { onFocus, onBlur } = this.#options;
     const targetIsContentElement = (e: Event) => {
       const target = e.composedPath()[0] as HTMLElement | undefined;
       return (
@@ -1082,6 +1095,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         'focus',
         () => {
           this.#contentHasFocus = true;
+          onFocus?.();
           // A keyboard or direct programmatic refocus restores a stale native
           // Selection that the selectionchange handler would apply over the
           // remapped #selections (after an applyEdits inserted a line above the
@@ -1104,6 +1118,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         'blur',
         () => {
           this.#contentHasFocus = false;
+          onBlur?.();
         },
         { passive: true }
       ),
@@ -1250,7 +1265,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         if (normalizedKey === 'v' && isPrimaryModifier(e)) {
           // Holding paste can enqueue a costly full diff recompute for every
           // keyboard repeat. Accept the first paste and suppress repeats.
-          if (e.repeat) {
+          if (e.repeat && this.#isDiff) {
             e.preventDefault();
             return;
           }
