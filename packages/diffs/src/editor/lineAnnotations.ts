@@ -83,6 +83,27 @@ function getLineAnnotationChanges(
   change: TextDocumentChange
 ): readonly LineAnnotationChange[] {
   if (change.lineDelta === 0) {
+    if (change.changedLineChanges !== undefined) {
+      return change.changedLineChanges.flatMap(
+        ([startLine, _endLine, lineDelta]) => {
+          if (lineDelta === 0) {
+            return [];
+          }
+          const removedLineCount = Math.max(0, -lineDelta);
+          return [
+            {
+              startLine,
+              startCharacter: 0,
+              endLine: startLine + removedLineCount,
+              deletesEndLine: false,
+              insertedLineBreaks: Math.max(0, lineDelta),
+              lineDelta,
+            },
+          ];
+        }
+      );
+    }
+
     return change.changedLineRanges.flatMap(([startLine, endLine]) => {
       const insertedLineBreaks = endLine - startLine;
       if (insertedLineBreaks <= 0) {

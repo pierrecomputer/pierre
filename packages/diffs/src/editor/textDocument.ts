@@ -111,6 +111,12 @@ export interface TextDocumentChange {
   readonly lineDelta: number;
   /** Exact rendered line ranges touched by each edit after the edit was applied. */
   readonly changedLineRanges: readonly [startLine: number, endLine: number][];
+  /** Per-edit rendered line ranges before adjacent ranges are coalesced. */
+  readonly changedLineChanges?: readonly [
+    startLine: number,
+    endLine: number,
+    lineDelta: number,
+  ][];
 }
 
 /**
@@ -420,6 +426,7 @@ export class TextDocument<LAnnotation> {
       lineCount,
       lineDelta: lineCount - previousLineCount,
       changedLineRanges: changedLineRange.ranges,
+      changedLineChanges: changedLineRange.changes,
     };
     return change;
   }
@@ -431,11 +438,14 @@ export class TextDocument<LAnnotation> {
     startLine: number;
     endLine: number;
     ranges: [number, number][];
+    changes: [startLine: number, endLine: number, lineDelta: number][];
   } {
     let startLine = Infinity;
     let endLine = 0;
     let lineDeltaBeforeEdit = 0;
     const ranges: [number, number][] = [];
+    const changes: [startLine: number, endLine: number, lineDelta: number][] =
+      [];
     for (let i = 0; i < edits.length; i++) {
       const edit = edits[i];
       const editStart = editPositions[i * 2];
@@ -457,6 +467,7 @@ export class TextDocument<LAnnotation> {
       } else {
         ranges.push([changedStartLine, changedEndLine]);
       }
+      changes.push([changedStartLine, changedEndLine, lineDelta]);
       lineDeltaBeforeEdit += lineDelta;
     }
     if (startLine === Infinity) {
@@ -464,8 +475,9 @@ export class TextDocument<LAnnotation> {
         startLine: 0,
         endLine: 0,
         ranges: [[0, 0]],
+        changes: [[0, 0, 0]],
       };
     }
-    return { startLine, endLine, ranges };
+    return { startLine, endLine, ranges, changes };
   }
 }

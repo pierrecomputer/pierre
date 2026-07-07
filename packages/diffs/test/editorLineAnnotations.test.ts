@@ -194,6 +194,8 @@ describe('applyDocumentChangeToLineAnnotations', () => {
     const annotations: DiffLineAnnotation<string>[] = [
       { side: 'additions', lineNumber: 2, metadata: 'two' },
       { side: 'additions', lineNumber: 3, metadata: 'three' },
+      { side: 'additions', lineNumber: 4, metadata: 'four' },
+      { side: 'additions', lineNumber: 5, metadata: 'five' },
     ];
 
     const change = textDocument.applyEdits([
@@ -217,6 +219,43 @@ describe('applyDocumentChangeToLineAnnotations', () => {
     expect(applyDocumentChangeToLineAnnotations(change!, annotations)).toEqual([
       { side: 'additions', lineNumber: 3, metadata: 'two' },
       { side: 'additions', lineNumber: 4, metadata: 'three' },
+      { side: 'additions', lineNumber: 5, metadata: 'five' },
+    ]);
+  });
+
+  test('preserves deletions in coalesced net-zero multi-edits', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'one\ntwo\nthree\nfour'
+    );
+    const annotations: DiffLineAnnotation<string>[] = [
+      { side: 'additions', lineNumber: 2, metadata: 'two' },
+      { side: 'additions', lineNumber: 3, metadata: 'three' },
+      { side: 'additions', lineNumber: 4, metadata: 'four' },
+    ];
+
+    const change = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 0 },
+        },
+        newText: 'inserted\n',
+      },
+      {
+        range: {
+          start: { line: 2, character: 0 },
+          end: { line: 3, character: 0 },
+        },
+        newText: '',
+      },
+    ]);
+
+    expect(change?.lineDelta).toBe(0);
+    expect(change?.changedLineRanges).toEqual([[1, 3]]);
+    expect(applyDocumentChangeToLineAnnotations(change!, annotations)).toEqual([
+      { side: 'additions', lineNumber: 3, metadata: 'two' },
+      { side: 'additions', lineNumber: 4, metadata: 'four' },
     ]);
   });
 });

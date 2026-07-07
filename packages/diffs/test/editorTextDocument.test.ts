@@ -54,6 +54,7 @@ describe('TextDocument', () => {
       lineCount: 1,
       lineDelta: -1,
       changedLineRanges: [[0, 0]],
+      changedLineChanges: [[0, 0, -1]],
     });
   });
 
@@ -158,6 +159,7 @@ describe('TextDocument', () => {
       lineCount: 1,
       lineDelta: 0,
       changedLineRanges: [[0, 0]],
+      changedLineChanges: [[0, 0, 0]],
     });
   });
 
@@ -218,6 +220,7 @@ describe('TextDocument', () => {
       lineCount: 3,
       lineDelta: 0,
       changedLineRanges: [[1, 1]],
+      changedLineChanges: [[1, 1, 0]],
     });
   });
 
@@ -241,6 +244,7 @@ describe('TextDocument', () => {
       lineCount: 2,
       lineDelta: 1,
       changedLineRanges: [[0, 1]],
+      changedLineChanges: [[0, 1, 1]],
     });
   });
 
@@ -264,6 +268,7 @@ describe('TextDocument', () => {
       lineCount: 1,
       lineDelta: -2,
       changedLineRanges: [[0, 0]],
+      changedLineChanges: [[0, 0, -2]],
     });
   });
 
@@ -302,6 +307,7 @@ describe('TextDocument', () => {
       lineCount: 2,
       lineDelta: 1,
       changedLineRanges: [[0, 1]],
+      changedLineChanges: [[0, 1, 1]],
     });
   });
 
@@ -326,6 +332,7 @@ describe('TextDocument', () => {
       lineCount: 3,
       lineDelta: 2,
       changedLineRanges: [[0, 2]],
+      changedLineChanges: [[0, 2, 2]],
     });
   });
 
@@ -969,6 +976,7 @@ describe('TextDocument', () => {
       lineCount: 1,
       lineDelta: 0,
       changedLineRanges: [[0, 0]],
+      changedLineChanges: [[0, 0, 0]],
     });
     expect(d.canUndo).toBe(false);
     expect(d.canRedo).toBe(true);
@@ -983,6 +991,7 @@ describe('TextDocument', () => {
       lineCount: 1,
       lineDelta: 0,
       changedLineRanges: [[0, 0]],
+      changedLineChanges: [[0, 0, 0]],
     });
     expect(d.canUndo).toBe(true);
     expect(d.canRedo).toBe(false);
