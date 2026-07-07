@@ -124,6 +124,8 @@ function findClosingBracket<LAnnotation>(
     }
     scannedLines++;
     const lineText = textDocument.getLineText(line);
+    const ignoredRanges = tokenizer.getStringCommentRegexpRangesInLine(line);
+    const ignoredRangeCursor = { index: 0 };
     const startCharacter =
       line === bracketPosition.line ? bracketPosition.character : 0;
     for (
@@ -135,7 +137,9 @@ function findClosingBracket<LAnnotation>(
         return undefined;
       }
       scannedCharacters++;
-      if (isInIgnoredTokenRange(tokenizer, { line, character })) {
+      if (
+        isCharacterIgnoredForward(ignoredRanges, character, ignoredRangeCursor)
+      ) {
         continue;
       }
       const char = lineText[character];
@@ -167,6 +171,10 @@ function findOpeningBracket<LAnnotation>(
     }
     scannedLines++;
     const lineText = textDocument.getLineText(line);
+    const ignoredRanges = tokenizer.getStringCommentRegexpRangesInLine(line);
+    const ignoredRangeCursor = {
+      index: ignoredRanges === null ? -1 : ignoredRanges.length - 1,
+    };
     const startCharacter =
       line === bracketPosition.line
         ? bracketPosition.character
@@ -176,7 +184,9 @@ function findOpeningBracket<LAnnotation>(
         return undefined;
       }
       scannedCharacters++;
-      if (isInIgnoredTokenRange(tokenizer, { line, character })) {
+      if (
+        isCharacterIgnoredBackward(ignoredRanges, character, ignoredRangeCursor)
+      ) {
         continue;
       }
       const char = lineText[character];
@@ -198,12 +208,55 @@ function isInIgnoredTokenRange(
   position: Position
 ): boolean {
   const ranges = tokenizer.getStringCommentRegexpRangesInLine(position.line);
+  return isCharacterInIgnoredRanges(ranges, position.character);
+}
+
+function isCharacterInIgnoredRanges(
+  ranges: [start: number, end: number][] | null,
+  character: number
+): boolean {
   if (ranges === null) {
     return false;
   }
-  return ranges.some(
-    ([start, end]) => position.character >= start && position.character < end
-  );
+  for (const [start, end] of ranges) {
+    if (character < start) {
+      return false;
+    }
+    if (character < end) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isCharacterIgnoredForward(
+  ranges: [start: number, end: number][] | null,
+  character: number,
+  cursor: { index: number }
+): boolean {
+  if (ranges === null) {
+    return false;
+  }
+  while (cursor.index < ranges.length && character >= ranges[cursor.index][1]) {
+    cursor.index++;
+  }
+  const range = ranges[cursor.index];
+  return range !== undefined && character >= range[0];
+}
+
+function isCharacterIgnoredBackward(
+  ranges: [start: number, end: number][] | null,
+  character: number,
+  cursor: { index: number }
+): boolean {
+  if (ranges === null) {
+    return false;
+  }
+  while (cursor.index >= 0 && character < ranges[cursor.index][0]) {
+    cursor.index--;
+  }
+  const range = ranges[cursor.index];
+  return range !== undefined && character < range[1];
 }
 
 function createBracketMatchRanges(

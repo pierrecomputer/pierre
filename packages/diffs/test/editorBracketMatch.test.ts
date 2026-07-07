@@ -298,4 +298,27 @@ describe('editor bracket matching', () => {
     ).toBeUndefined();
     expect(checkedLines.size).toBeLessThan(textDocument.lineCount);
   });
+
+  test('loads ignored ranges once per scanned line', () => {
+    const contents = `(${Array.from({ length: 1_000 }, () => 'x').join('')}`;
+    const textDocument = new TextDocument('inmemory://1', contents, 'ts');
+    let getIgnoredRangesCount = 0;
+    const tokenizer = {
+      getStringCommentRegexpRangesInLine() {
+        getIgnoredRangesCount++;
+        return Array.from({ length: 250 }, (_, index) => {
+          const start = index * 4 + 2;
+          return [start, start + 1] as [number, number];
+        });
+      },
+    } as unknown as EditorTokenizer;
+
+    expect(
+      findBracketMatchRanges(textDocument, tokenizer, {
+        line: 0,
+        character: 1,
+      })
+    ).toBeUndefined();
+    expect(getIgnoredRangesCount).toBe(2);
+  });
 });
