@@ -2361,13 +2361,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   // add scroll margin to the primary caret element to prevent
-  // the caret from being hidden by the gutter
+  // the caret from being hidden by the gutter (and the search panel when
+  // open). The margin must only reserve viewport space above the caret —
+  // never include the host's virtualized `top` offset: that is a scroll-space
+  // coordinate, and folding it in makes every caret scrollIntoView treat the
+  // caret as thousands of pixels tall once the host is scrolled down, which
+  // mis-scrolls the caret line (e.g. pinning it to the viewport bottom).
   #getScrollMargin() {
-    const componentTop = this.#fileInstance?.top ?? 0;
     const top = this.#searchPanel !== undefined ? 48 : 0;
     const start = this.#getGutterWidth() + this.#metrics.ch;
     const end = this.#metrics.ch;
-    return `${componentTop + top}px ${end}px 0 ${start}px`;
+    return `${top}px ${end}px 0 ${start}px`;
   }
 
   #scrollToLine(line: number, char = 0, noFocus = false) {
