@@ -10,6 +10,7 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import { resolveFindAgainShortcut } from '../editor/command';
 import { isPrimaryModifier } from '../editor/platform';
 import { SearchPanelWidget } from '../editor/searchPanel';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
@@ -1351,7 +1352,7 @@ export class CodeView<LAnnotation = undefined> {
       scrollToMatch: (match) => {
         this.scrollToSearchMatch(match);
       },
-      onUpdate: (matches) => {
+      onUpdate: (matches, options) => {
         const current = this.searchState.current;
         if (current !== undefined) {
           const nextCurrent = matches.find((match) =>
@@ -1362,8 +1363,15 @@ export class CodeView<LAnnotation = undefined> {
             return nextCurrent;
           }
         }
-        this.setSearchResults(matches, undefined);
-        return undefined;
+        if (matches.length === 0 || options?.syncSelection === false) {
+          this.setSearchResults(matches, undefined);
+          return undefined;
+        }
+
+        const nextCurrent = matches[0];
+        this.setSearchResults(matches, nextCurrent);
+        this.scrollToSearchMatch(nextCurrent);
+        return nextCurrent;
       },
       onClose: () => {
         this.searchPanel = undefined;
@@ -4115,10 +4123,12 @@ export class CodeView<LAnnotation = undefined> {
     this.render();
   };
 
-  // Abort any in-flight programmatic scroll when the user takes over.
-  // Attached to root as a passive listener for wheel / touchstart /
-  // pointerdown / keydown; we never mutate the event, just drop our state.
-  private clearPendingScroll = (): void => {
+  // Abort any in-flight programmatic scroll when the user takes over. Handled
+  // shortcuts may start their own programmatic scroll, so leave those intact.
+  private clearPendingScroll = (event?: Event): void => {
+    if (event?.defaultPrevented === true) {
+      return;
+    }
     this.pendingScrollTarget = undefined;
     this.pendingLayoutAnchor = undefined;
     this.scrollAnimation = undefined;
@@ -4133,6 +4143,15 @@ export class CodeView<LAnnotation = undefined> {
       event.preventDefault();
       this.closeSearchPanel();
       return;
+    }
+
+    if (this.searchPanel !== undefined) {
+      const findAgain = resolveFindAgainShortcut(event);
+      if (findAgain !== undefined) {
+        event.preventDefault();
+        this.searchPanel.navigate(findAgain === 'previous');
+        return;
+      }
     }
 
     if (

@@ -124,10 +124,14 @@
 }
 [data-match-range] {
   z-index: -10;
+  border: 0;
+  border-radius: 3px;
   background-color: var(
     --diffs-editor-match-bg,
     var(--diffs-editor-selection-bg)
   );
+  outline: none;
+  box-decoration-break: clone;
 }
 [data-match-range]:not([data-focus]) {
   background-color: var(

@@ -1479,16 +1479,21 @@
     box-decoration-break: clone;
     background-color: var(
       --diffs-bg-search-match-override,
-      color-mix(in lab, var(--diffs-modified-base) 28%, transparent)
+      var(--diffs-editor-match-highlight-bg, light-dark(#ff963288, #ff963266))
     );
   }
 
   :is([data-line], [data-no-newline]) [data-search-match-current] {
     background-color: var(
       --diffs-bg-search-match-current-override,
-      color-mix(in lab, var(--diffs-modified-base) 52%, transparent)
+      var(
+        --diffs-editor-match-bg,
+        var(
+          --diffs-editor-selection-bg,
+          color-mix(in lab, var(--diffs-modified-base) 52%, transparent)
+        )
+      )
     );
-    outline: 1px solid var(--diffs-modified-base);
   }
 
   [data-line-type='change-addition'] [data-diff-span] {
