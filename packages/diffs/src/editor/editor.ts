@@ -717,6 +717,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         highlighter,
         textDocument,
         codeOptions: this.#fileInstance?.options ?? {},
+        matchBrackets: this.#options.matchBrackets,
         onDeferTokenize: this.#onDeferTokenize,
         onThemeChange: () => this.#scheduleThemeSelectionRefresh(),
         setStyle: (css) => {
@@ -2800,11 +2801,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       }
 
       const bracketMatchRanges =
-        this.#options.matchBrackets === false ||
-        this.#textDocument === undefined ||
-        !isCollapsedSelection(primarySelection)
-          ? undefined
-          : findBracketMatchRanges(this.#textDocument, primarySelection.start);
+        this.#options.matchBrackets !== false &&
+        this.#textDocument !== undefined &&
+        this.#tokenizer !== undefined &&
+        isCollapsedSelection(primarySelection)
+          ? findBracketMatchRanges(
+              this.#textDocument,
+              this.#tokenizer,
+              primarySelection.start
+            )
+          : undefined;
       if (bracketMatchRanges !== undefined) {
         for (const range of bracketMatchRanges) {
           this.#renderSelection(renderCtx, 'bracketMatch', range);

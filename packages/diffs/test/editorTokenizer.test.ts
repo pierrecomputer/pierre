@@ -160,6 +160,48 @@ describe('EditorTokenizer', () => {
     expect(() => tokenizer.tokenize(change)).not.toThrow();
   });
 
+  test('does not record string/comment/regex ranges when bracket matching is disabled', () => {
+    const stringTokenMetadata = 2 << 8;
+    const grammar = {
+      tokenizeLine2(lineText: string, ruleStack: StateStack) {
+        return {
+          tokens: new Uint32Array([0, stringTokenMetadata]),
+          ruleStack,
+          stoppedEarly: false,
+          lineText,
+        };
+      },
+    } as unknown as IGrammar;
+    const createTokenizer = (matchBrackets: boolean) => {
+      const textDocument = new TextDocument('test.ts', "'abc['", 'typescript');
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({
+          getLanguage: () => grammar,
+        }),
+        textDocument,
+        codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        matchBrackets,
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+      tokenizer.tokenize({
+        startLine: 0,
+        startCharacter: 0,
+        endLine: 0,
+        previousLineCount: textDocument.lineCount,
+        lineCount: textDocument.lineCount,
+        lineDelta: 0,
+        changedLineRanges: [[0, 0]],
+      });
+      return tokenizer;
+    };
+
+    expect(createTokenizer(true).getStringCommentRegexRanges(0)).toEqual([
+      [0, 6],
+    ]);
+    expect(createTokenizer(false).getStringCommentRegexRanges(0)).toEqual([]);
+  });
+
   test('limits foreground tokenization to the render range after prepending lines', () => {
     const originalAddEventListener = globalThis.addEventListener;
     const originalPostMessage = globalThis.postMessage;

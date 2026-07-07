@@ -1,8 +1,11 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
+import { findBracketMatchRanges } from '../src/editor/matchBrackets';
+import { TextDocument } from '../src/editor/textDocument';
+import { EditorTokenizer } from '../src/editor/tokenzier';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
@@ -128,6 +131,30 @@ describe('editor bracket matching', () => {
     }
   });
 
+  test('does not read ignored token ranges when disabled', async () => {
+    const getIgnoredRangesSpy = spyOn(
+      EditorTokenizer.prototype,
+      'getStringCommentRegexRanges'
+    );
+    const { cleanup, editor } = await createBracketMatchFixture('{ /{/ }', {
+      matchBrackets: false,
+    });
+    try {
+      editor.setSelections([
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 1 },
+          direction: 'none',
+        },
+      ]);
+
+      expect(getIgnoredRangesSpy).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+      getIgnoredRangesSpy.mockRestore();
+    }
+  });
+
   test('does not render bracket matches for unmatched brackets', async () => {
     const { cleanup, content, editor } = await createBracketMatchFixture('a(b');
     try {
@@ -192,5 +219,37 @@ describe('editor bracket matching', () => {
     } finally {
       cleanup();
     }
+  });
+
+  test('findBracketMatchRanges ignores brackets inside regex ranges', () => {
+    const textDocument = new TextDocument('inmemory://1', '{ /{/ }', 'ts');
+    const tokenizer = {
+      getStringCommentRegexRanges(lineIndex: number): [number, number][] {
+        return lineIndex === 0 ? [[2, 5]] : [];
+      },
+    } as EditorTokenizer;
+
+    expect(
+      findBracketMatchRanges(textDocument, tokenizer, {
+        line: 0,
+        character: 4,
+      })
+    ).toBeUndefined();
+
+    expect(
+      findBracketMatchRanges(textDocument, tokenizer, {
+        line: 0,
+        character: 1,
+      })
+    ).toEqual([
+      {
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 1 },
+      },
+      {
+        start: { line: 0, character: 6 },
+        end: { line: 0, character: 7 },
+      },
+    ]);
   });
 });

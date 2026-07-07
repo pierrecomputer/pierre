@@ -15,10 +15,13 @@ import type {
 import type { TextDocument, TextDocumentChange } from './textDocument';
 import { addEventListener, debounce, h } from './utils';
 
+const TOKENIZE_TIME_LIMIT = 500;
+
 export interface EditorTokenizerProps {
   highlighter: DiffsHighlighter;
   textDocument: TextDocument<unknown>;
   codeOptions: BaseCodeOptions;
+  matchBrackets?: boolean;
   setStyle: (style: string) => void;
   onDeferTokenize: (
     lines: Map<number, Array<HighlightedToken>>,
@@ -33,15 +36,10 @@ export interface EditorTokenizerProps {
 
 /** Stoppable code tokenizer for the editor */
 export class EditorTokenizer {
-  static TOKENIZE_TIME_LIMIT = 500;
-
   #highlighter: DiffsHighlighter;
   #grammar: IGrammar | undefined;
   #mediaQueryList: MediaQueryList;
   #themeType: 'light' | 'dark';
-  // The resolved name of the theme currently applied to the editor (e.g.
-  // `github-light`). Tracked so `syncTheme` can detect a host-driven theme swap
-  // even when the light/dark mode itself is unchanged.
   #themeName = '';
   #colorMap: string[];
   #textDocument: TextDocument<unknown>;
@@ -49,6 +47,7 @@ export class EditorTokenizer {
   #setStyle: EditorTokenizerProps['setStyle'];
   #onDeferTokenize: EditorTokenizerProps['onDeferTokenize'];
   #onThemeChange: EditorTokenizerProps['onThemeChange'];
+  #matchBrackets: boolean;
   #debug: boolean;
   #disposes?: (() => void)[];
 
@@ -60,6 +59,7 @@ export class EditorTokenizer {
   #backgroundJobId: number = 0;
   #backgroundChangedLineRanges: readonly [number, number][] | undefined;
   #backgroundChangedRangeIndex: number = 0;
+  #stringCommentRegexpRanges: Map<number, [number, number][]> = new Map();
   #isMessageListenerAttached: boolean = false;
 
   #prebuildStateStack = debounce(async (renderRange?: RenderRange) => {
@@ -101,10 +101,28 @@ export class EditorTokenizer {
     return this.#themeType;
   }
 
+  getStringCommentRegexRanges(lineIndex: number): [number, number][] {
+    if (
+      !this.#matchBrackets ||
+      lineIndex < 0 ||
+      lineIndex >= this.#textDocument.lineCount
+    ) {
+      return [];
+    }
+    this.#buildStateStack(lineIndex);
+    if (!this.#stringCommentRegexpRanges.has(lineIndex)) {
+      const state = this.#stateStack[lineIndex] ?? INITIAL;
+      const result = this.#tokenizeLineAt(lineIndex, state);
+      this.#stateStack[lineIndex + 1] = result.state;
+    }
+    return this.#stringCommentRegexpRanges.get(lineIndex) ?? [];
+  }
+
   constructor({
     codeOptions,
     highlighter,
     textDocument,
+    matchBrackets,
     setStyle,
     onDeferTokenize,
     onThemeChange,
@@ -159,6 +177,7 @@ export class EditorTokenizer {
     this.#setStyle = setStyle;
     this.#onDeferTokenize = onDeferTokenize;
     this.#onThemeChange = onThemeChange;
+    this.#matchBrackets = matchBrackets !== false;
     this.#debug = __debug ?? false;
     this.#ensureGrammar();
     this.#colorMap = [];
@@ -260,6 +279,15 @@ export class EditorTokenizer {
       throw new Error(
         `Grammar for language "${this.#textDocument.languageId}" not loaded`
       );
+    }
+
+    if (this.#matchBrackets) {
+      // Clear string/comment/regex ranges for deleted lines.
+      for (const line of this.#stringCommentRegexpRanges.keys()) {
+        if (line >= change.startLine) {
+          this.#stringCommentRegexpRanges.delete(line);
+        }
+      }
     }
 
     const { lineCount } = this.#textDocument;
@@ -442,20 +470,6 @@ export class EditorTokenizer {
     this.#prebuildStateStack(renderRange);
   }
 
-  #ensureGrammar(): void {
-    if (
-      this.#grammar === undefined &&
-      !isGrammarlessLanguage(this.#textDocument.languageId) &&
-      this.#highlighter
-        .getLoadedLanguages()
-        .includes(this.#textDocument.languageId)
-    ) {
-      this.#grammar = this.#highlighter.getLanguage(
-        this.#textDocument.languageId
-      );
-    }
-  }
-
   stopBackgroundTokenize(): void {
     if (this.#isStopped) {
       return;
@@ -496,6 +510,20 @@ export class EditorTokenizer {
     }
     this.#isPaused = false;
     this.#postTokenizeMessage(this.#backgroundJobId);
+  }
+
+  #ensureGrammar(): void {
+    if (
+      this.#grammar === undefined &&
+      !isGrammarlessLanguage(this.#textDocument.languageId) &&
+      this.#highlighter
+        .getLoadedLanguages()
+        .includes(this.#textDocument.languageId)
+    ) {
+      this.#grammar = this.#highlighter.getLanguage(
+        this.#textDocument.languageId
+      );
+    }
   }
 
   #attachMessageListener(): void {
@@ -557,6 +585,7 @@ export class EditorTokenizer {
       console.warn(
         `[diffs] Line(${line}) too long to tokenize: ${lineText.length}`
       );
+      this.#setStringCommentRegexRanges(line, []);
       return { resolvedTokens: [[0, '', lineText]], state };
     }
     if (
@@ -564,6 +593,7 @@ export class EditorTokenizer {
       lineText === '' ||
       lineText.trim() === ''
     ) {
+      this.#setStringCommentRegexRanges(line, []);
       return { resolvedTokens: [[0, '', lineText]], state };
     }
     const result = tokenizeLine(
@@ -571,12 +601,20 @@ export class EditorTokenizer {
       this.#colorMap,
       lineText,
       state,
-      EditorTokenizer.TOKENIZE_TIME_LIMIT
+      TOKENIZE_TIME_LIMIT,
+      this.#matchBrackets
     );
+    this.#setStringCommentRegexRanges(line, result.stringCommentRegexRanges);
     return {
       resolvedTokens: result.resolvedTokens,
       state: result.ruleStack,
     };
+  }
+
+  #setStringCommentRegexRanges(line: number, ranges: [number, number][]): void {
+    if (this.#matchBrackets) {
+      this.#stringCommentRegexpRanges.set(line, ranges);
+    }
   }
 
   #buildStateStack(endAt: number) {
@@ -597,11 +635,21 @@ export class EditorTokenizer {
         lineText !== '' &&
         lineText.trim() !== ''
       ) {
-        state = this.#grammar.tokenizeLine2(
+        const result = tokenizeLine(
+          this.#grammar,
+          this.#colorMap,
           lineText,
           state,
-          EditorTokenizer.TOKENIZE_TIME_LIMIT
-        ).ruleStack;
+          TOKENIZE_TIME_LIMIT,
+          this.#matchBrackets
+        );
+        this.#setStringCommentRegexRanges(
+          line,
+          result.stringCommentRegexRanges
+        );
+        state = result.ruleStack;
+      } else {
+        this.#setStringCommentRegexRanges(line, []);
       }
     }
     this.#stateStack[line] = state;
@@ -640,17 +688,21 @@ export class EditorTokenizer {
           `[diffs] Line(${line}) too long to tokenize: ${lineText.length}`
         );
         lines.set(line, [[0, '', lineText]]);
+        this.#setStringCommentRegexRanges(line, []);
       } else if (lineText === '' || lineText.trim() === '') {
         lines.set(line, [[0, '', lineText]]);
+        this.#setStringCommentRegexRanges(line, []);
       } else {
         const ret = tokenizeLine(
           this.#grammar,
           this.#colorMap,
           lineText,
           state,
-          EditorTokenizer.TOKENIZE_TIME_LIMIT
+          TOKENIZE_TIME_LIMIT,
+          this.#matchBrackets
         );
         lines.set(line, ret.resolvedTokens);
+        this.#setStringCommentRegexRanges(line, ret.stringCommentRegexRanges);
         state = ret.ruleStack;
       }
 
@@ -700,15 +752,17 @@ export class EditorTokenizer {
   }
 }
 
-export function tokenizeLine(
+function tokenizeLine(
   grammar: IGrammar,
   colorMap: string[],
   lineText: string,
   stateStack: StateStack,
-  timeLimit?: number
+  timeLimit?: number,
+  collectStringCommentRegexRanges = true
 ): {
   ruleStack: StateStack;
   resolvedTokens: Array<HighlightedToken>;
+  stringCommentRegexRanges: [number, number][];
 } {
   const result = grammar.tokenizeLine2(lineText, stateStack, timeLimit);
   if (result.stoppedEarly) {
@@ -719,6 +773,7 @@ export function tokenizeLine(
   const rawTokens = result.tokens;
   const tokensLength = rawTokens.length / 2;
   const resolvedTokens: Array<HighlightedToken> = [];
+  const stringCommentRegexRanges: [number, number][] = [];
   for (let j = 0; j < tokensLength; j++) {
     const offset = rawTokens[2 * j];
     const nextOffset =
@@ -728,14 +783,20 @@ export function tokenizeLine(
       continue;
     }
     const metadata = rawTokens[2 * j + 1];
-    const bg = EncodedTokenMetadata.getForeground(metadata);
-    const fg = colorMap[bg];
+    const fg = EncodedTokenMetadata.getForeground(metadata);
     const tokenText = lineText.slice(offset, nextOffset);
-    resolvedTokens.push([offset, fg, tokenText]);
+    resolvedTokens.push([offset, colorMap[fg], tokenText]);
+    if (
+      collectStringCommentRegexRanges &&
+      EncodedTokenMetadata.getTokenType(metadata) > 0
+    ) {
+      stringCommentRegexRanges.push([offset, nextOffset]);
+    }
   }
   return {
     ruleStack: result.ruleStack,
     resolvedTokens,
+    stringCommentRegexRanges,
   };
 }
 

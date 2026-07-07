@@ -1,4 +1,5 @@
 import type { Position, Range, TextDocument } from './textDocument';
+import type { EditorTokenizer } from './tokenzier';
 
 const OPEN_BRACKETS = new Map([
   ['(', ')'],
@@ -10,217 +11,185 @@ const CLOSE_BRACKETS = new Map(
   [...OPEN_BRACKETS].map(([open, close]) => [close, open])
 );
 
-export function findBracketMatchRanges<LAnnotation>(
-  textDocument: TextDocument<LAnnotation>,
-  position: Position
-): [open: Range, close: Range] | undefined {
-  const offset = textDocument.offsetAt(position);
-  const previousOffset = offset - 1;
-  let text: string | undefined;
-  let ignoredOffsets: Uint8Array | undefined;
-  const getMatchRanges = (bracketOffset: number) => {
-    text ??= textDocument.getText();
-    ignoredOffsets ??= getBracketIgnoredOffsets(text);
-    return findBracketMatchRangesAtOffset(
-      textDocument,
-      text,
-      bracketOffset,
-      ignoredOffsets
-    );
-  };
-  if (previousOffset >= 0) {
-    const previousChar = textDocument.charAt(previousOffset);
-    if (OPEN_BRACKETS.has(previousChar) || CLOSE_BRACKETS.has(previousChar)) {
-      const ranges = getMatchRanges(previousOffset);
-      if (ranges !== undefined) {
-        return ranges;
-      }
-    }
-  }
-  const nextChar = textDocument.charAt(offset);
-  if (OPEN_BRACKETS.has(nextChar) || CLOSE_BRACKETS.has(nextChar)) {
-    return getMatchRanges(offset);
-  }
-  return undefined;
+interface BracketPosition extends Position {
+  char: string;
 }
 
-function findBracketMatchRangesAtOffset<LAnnotation>(
+export function findBracketMatchRanges<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
-  text: string,
-  bracketOffset: number,
-  ignoredOffsets: Uint8Array
+  tokenizer: EditorTokenizer,
+  position: Position
 ): [open: Range, close: Range] | undefined {
-  if (ignoredOffsets[bracketOffset] === 1) {
+  const bracketPosition = findAdjacentBracket(
+    textDocument,
+    tokenizer,
+    position
+  );
+  if (bracketPosition === undefined) {
     return undefined;
   }
 
-  const bracket = text[bracketOffset];
-  const closingBracket = OPEN_BRACKETS.get(bracket);
-  const openingBracket = CLOSE_BRACKETS.get(bracket);
+  const closingBracket = OPEN_BRACKETS.get(bracketPosition.char);
+  const openingBracket = CLOSE_BRACKETS.get(bracketPosition.char);
   if (closingBracket !== undefined) {
-    const matchOffset = findClosingBracket(
-      text,
-      bracketOffset,
-      bracket,
-      closingBracket,
-      ignoredOffsets
+    const matchPosition = findClosingBracket(
+      textDocument,
+      tokenizer,
+      bracketPosition,
+      closingBracket
     );
-    return createBracketMatchRanges(textDocument, bracketOffset, matchOffset);
+    return createBracketMatchRanges(bracketPosition, matchPosition);
   }
   if (openingBracket !== undefined) {
-    const matchOffset = findOpeningBracket(
-      text,
-      bracketOffset,
-      openingBracket,
-      bracket,
-      ignoredOffsets
+    const matchPosition = findOpeningBracket(
+      textDocument,
+      tokenizer,
+      bracketPosition,
+      openingBracket
     );
-    return createBracketMatchRanges(textDocument, matchOffset, bracketOffset);
+    return createBracketMatchRanges(matchPosition, bracketPosition);
   }
   return undefined;
 }
 
-function createBracketMatchRanges<LAnnotation>(
+function findAdjacentBracket<LAnnotation>(
   textDocument: TextDocument<LAnnotation>,
-  firstOffset: number | undefined,
-  secondOffset: number | undefined
+  tokenizer: EditorTokenizer,
+  position: Position
+): BracketPosition | undefined {
+  const previousPosition = getPreviousCharacterPosition(textDocument, position);
+  if (previousPosition !== undefined) {
+    const previousBracket = getBracketAtPosition(
+      textDocument,
+      tokenizer,
+      previousPosition
+    );
+    if (previousBracket !== undefined) {
+      return previousBracket;
+    }
+  }
+  return getBracketAtPosition(textDocument, tokenizer, position);
+}
+
+function getPreviousCharacterPosition<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  position: Position
+): Position | undefined {
+  if (position.character > 0) {
+    return { line: position.line, character: position.character - 1 };
+  }
+  if (position.line <= 0) {
+    return undefined;
+  }
+  const previousLine = position.line - 1;
+  const previousLineLength = textDocument.getLineText(previousLine).length;
+  if (previousLineLength === 0) {
+    return undefined;
+  }
+  return { line: previousLine, character: previousLineLength - 1 };
+}
+
+function getBracketAtPosition<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  tokenizer: EditorTokenizer,
+  position: Position
+): BracketPosition | undefined {
+  const lineText = textDocument.getLineText(position.line);
+  const char = lineText[position.character];
+  if (
+    char === undefined ||
+    (!OPEN_BRACKETS.has(char) && !CLOSE_BRACKETS.has(char)) ||
+    isIgnoredCharacter(tokenizer, position)
+  ) {
+    return undefined;
+  }
+  return { ...position, char };
+}
+
+function findClosingBracket<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  tokenizer: EditorTokenizer,
+  bracketPosition: BracketPosition,
+  closingBracket: string
+): BracketPosition | undefined {
+  let depth = 0;
+  for (let line = bracketPosition.line; line < textDocument.lineCount; line++) {
+    const lineText = textDocument.getLineText(line);
+    const startCharacter =
+      line === bracketPosition.line ? bracketPosition.character : 0;
+    for (
+      let character = startCharacter;
+      character < lineText.length;
+      character++
+    ) {
+      if (isIgnoredCharacter(tokenizer, { line, character })) {
+        continue;
+      }
+      const char = lineText[character];
+      if (char === bracketPosition.char) {
+        depth++;
+      } else if (char === closingBracket) {
+        depth--;
+        if (depth === 0) {
+          return { line, character, char: char };
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+function findOpeningBracket<LAnnotation>(
+  textDocument: TextDocument<LAnnotation>,
+  tokenizer: EditorTokenizer,
+  bracketPosition: BracketPosition,
+  openingBracket: string
+): BracketPosition | undefined {
+  let depth = 0;
+  for (let line = bracketPosition.line; line >= 0; line--) {
+    const lineText = textDocument.getLineText(line);
+    const startCharacter =
+      line === bracketPosition.line
+        ? bracketPosition.character
+        : lineText.length - 1;
+    for (let character = startCharacter; character >= 0; character--) {
+      if (isIgnoredCharacter(tokenizer, { line, character })) {
+        continue;
+      }
+      const char = lineText[character];
+      if (char === bracketPosition.char) {
+        depth++;
+      } else if (char === openingBracket) {
+        depth--;
+        if (depth === 0) {
+          return { line, character, char: char };
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+function isIgnoredCharacter(
+  tokenizer: EditorTokenizer,
+  position: Position
+): boolean {
+  return tokenizer
+    .getStringCommentRegexRanges(position.line)
+    .some(
+      ([start, end]) => position.character >= start && position.character < end
+    );
+}
+
+function createBracketMatchRanges(
+  firstPosition: Position | undefined,
+  secondPosition: Position | undefined
 ): [open: Range, close: Range] | undefined {
-  if (firstOffset === undefined || secondOffset === undefined) {
+  if (firstPosition === undefined || secondPosition === undefined) {
     return;
   }
-  return [firstOffset, secondOffset].map((offset) => ({
-    start: textDocument.positionAt(offset),
-    end: textDocument.positionAt(offset + 1),
+  return [firstPosition, secondPosition].map((position) => ({
+    start: { line: position.line, character: position.character },
+    end: { line: position.line, character: position.character + 1 },
   })) as [Range, Range];
-}
-
-function getBracketIgnoredOffsets(text: string): Uint8Array {
-  const ignoredOffsets = new Uint8Array(text.length);
-  let offset = 0;
-  while (offset < text.length) {
-    const char = text[offset];
-    const nextChar = text[offset + 1];
-
-    // TODO(@ije): use token type of shiki to match string/comment/etc.
-    // see https://github.com/shikijs/shiki/pull/1293
-    if (char === '/' && nextChar === '/') {
-      offset = markIgnoredLineComment(text, offset, ignoredOffsets);
-    } else if (char === '/' && nextChar === '*') {
-      offset = markIgnoredBlockComment(text, offset, ignoredOffsets);
-    } else if (char === "'" || char === '"' || char === '`') {
-      offset = markIgnoredQuotedText(text, offset, char, ignoredOffsets);
-    } else {
-      offset++;
-    }
-  }
-  return ignoredOffsets;
-}
-
-function markIgnoredLineComment(
-  text: string,
-  startOffset: number,
-  ignoredOffsets: Uint8Array
-): number {
-  let offset = startOffset;
-  while (offset < text.length) {
-    const char = text[offset];
-    if (char === '\n' || char === '\r') {
-      return offset;
-    }
-    ignoredOffsets[offset] = 1;
-    offset++;
-  }
-  return offset;
-}
-
-function markIgnoredBlockComment(
-  text: string,
-  startOffset: number,
-  ignoredOffsets: Uint8Array
-): number {
-  let offset = startOffset;
-  while (offset < text.length) {
-    ignoredOffsets[offset] = 1;
-    if (text[offset] === '*' && text[offset + 1] === '/') {
-      ignoredOffsets[offset + 1] = 1;
-      return offset + 2;
-    }
-    offset++;
-  }
-  return offset;
-}
-
-function markIgnoredQuotedText(
-  text: string,
-  startOffset: number,
-  quote: string,
-  ignoredOffsets: Uint8Array
-): number {
-  let offset = startOffset;
-  while (offset < text.length) {
-    ignoredOffsets[offset] = 1;
-    const char = text[offset];
-    if (char === '\\') {
-      offset++;
-      if (offset < text.length) {
-        ignoredOffsets[offset] = 1;
-      }
-    } else if (offset > startOffset && char === quote) {
-      return offset + 1;
-    } else if (quote !== '`' && (char === '\n' || char === '\r')) {
-      return offset;
-    }
-    offset++;
-  }
-  return offset;
-}
-
-function findClosingBracket(
-  text: string,
-  bracketOffset: number,
-  openingBracket: string,
-  closingBracket: string,
-  ignoredOffsets: Uint8Array
-): number | undefined {
-  let depth = 0;
-  for (let offset = bracketOffset; offset < text.length; offset++) {
-    if (ignoredOffsets[offset] === 1) {
-      continue;
-    }
-    const char = text[offset];
-    if (char === openingBracket) {
-      depth++;
-    } else if (char === closingBracket) {
-      depth--;
-      if (depth === 0) {
-        return offset;
-      }
-    }
-  }
-  return undefined;
-}
-
-function findOpeningBracket(
-  text: string,
-  bracketOffset: number,
-  openingBracket: string,
-  closingBracket: string,
-  ignoredOffsets: Uint8Array
-): number | undefined {
-  let depth = 0;
-  for (let offset = bracketOffset; offset >= 0; offset--) {
-    if (ignoredOffsets[offset] === 1) {
-      continue;
-    }
-    const char = text[offset];
-    if (char === closingBracket) {
-      depth++;
-    } else if (char === openingBracket) {
-      depth--;
-      if (depth === 0) {
-        return offset;
-      }
-    }
-  }
-  return undefined;
 }
