@@ -39,6 +39,7 @@ import type {
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
+import { applyLineTextWithNewline } from '../utils/applyLineTextWithNewline';
 import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
@@ -637,7 +638,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (diff == null) {
       return undefined;
     }
-    const { expandUnchanged = false, collapsedContextThreshold } =
+    const { expandUnchanged, collapsedContextThreshold } =
       this.getOptionsWithDefaults();
     let { options, forceHighlight } = this.getRenderOptions(diff);
     const cache = this.getMatchingWorkerResultCache(diff, options);
@@ -2031,20 +2032,6 @@ function getFallbackLineBreak(lines: string[]): string {
     }
   }
   return '\n';
-}
-
-// Host line text omits line endings; diff line arrays keep the suffix from parsing.
-function applyLineTextWithNewline(line: string, lineText: string): string {
-  if (line.endsWith('\r\n')) {
-    return lineText + '\r\n';
-  }
-  if (line.endsWith('\r')) {
-    return lineText + '\r';
-  }
-  if (line.endsWith('\n')) {
-    return lineText + '\n';
-  }
-  return lineText;
 }
 
 function isDiffMassive(

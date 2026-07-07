@@ -314,7 +314,7 @@ export class File<
     if (!recycle) {
       this.lineAnnotations = [];
     }
-    this.annotationCache.clear();
+    this.clearAuxiliaryNodes();
     this.pre = undefined;
     this.bufferBefore?.remove();
     this.bufferBefore = undefined;
@@ -331,12 +331,14 @@ export class File<
     if (!recycle) {
       this.cachedHeaderHTML = undefined;
     }
+    this.errorWrapper?.remove();
     this.errorWrapper = undefined;
     this.themeCSSStyle = undefined;
     this.appliedThemeCSS = undefined;
     this.hasAdoptedThemeCSS = false;
     this.unsafeCSSStyle = undefined;
     this.appliedUnsafeCSS = undefined;
+    this.placeHolder?.remove();
     this.placeHolder = undefined;
     this.unsafeCSSStyle = undefined;
 
@@ -350,8 +352,7 @@ export class File<
 
     this.enabled = false;
 
-    // Clean up the editor
-    this.editor?.cleanUp();
+    this.editor?.cleanUp(recycle);
     this.editor = undefined;
   }
 

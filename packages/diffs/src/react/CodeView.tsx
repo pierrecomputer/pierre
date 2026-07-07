@@ -21,6 +21,7 @@ import {
   areOptionsEqual,
   CodeView as CodeViewClass,
   type CodeViewCoordinator,
+  type CodeViewCreateEditorOptions,
   type CodeViewItem,
   type CodeViewLineSelection,
   type CodeViewOptions,
@@ -28,6 +29,8 @@ import {
   type CodeViewScrollTarget,
   type CodeViewSlotSnapshot,
   type DiffLineAnnotation,
+  type DiffsEditorHost,
+  type FileContents,
   type GetHoveredLineResult,
   type LineAnnotation,
 } from '../index';
@@ -59,6 +62,33 @@ interface CodeViewBaseProps<LAnnotation> {
   /** Render a non-virtualized node at the very end of the scroll content, after
    * the last item. Always rendered; scrolls with the content. */
   renderCodeViewFooter?(): ReactNode;
+  /**
+   * Enables editing for items with `edit: true`. Pass the given options into
+   * the editor constructor — `new Editor(options)` from `@pierre/diffs/editor`
+   * — so document changes route to `onItemEditChange` and
+   * `onItemEditComplete`. CodeView owns the returned editor's lifecycle.
+   */
+  createEditor?(
+    options: CodeViewCreateEditorOptions<LAnnotation>
+  ): DiffsEditorHost<LAnnotation> | undefined;
+  /** Called with the owning item on every edited-document change. */
+  onItemEditChange?(
+    item: CodeViewItem<LAnnotation>,
+    file: FileContents,
+    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  ): void;
+  /**
+   * Called once with the final contents when an item's edit session ends
+   * (edit turned off, item removed or collapsed). Not called for sessions
+   * that produced no changes. Committing is user-space: make one combined
+   * item write carrying the new file/fileDiff (with a fresh `cacheKey`,
+   * since the contents changed) along with `edit: false`.
+   */
+  onItemEditComplete?(
+    item: CodeViewItem<LAnnotation>,
+    file: FileContents,
+    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  ): void;
   renderCustomHeader?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderPrefix?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderFilenameSuffix?(item: CodeViewItem<LAnnotation>): ReactNode;
@@ -102,6 +132,7 @@ export interface CodeViewHandle<LAnnotation> {
   setSelectedLines(selection: CodeViewLineSelection | null): void;
   getSelectedLines(): CodeViewLineSelection | null;
   clearSelectedLines(): void;
+  getEditor(id: string): DiffsEditorHost<LAnnotation> | undefined;
   getInstance(): CodeViewClass<LAnnotation> | undefined;
 }
 
@@ -150,9 +181,12 @@ function CodeViewInner<LAnnotation = undefined>(
   const {
     className,
     containerRef,
+    createEditor,
     disableWorkerPool = false,
     initialItems,
     items: controlledItems,
+    onItemEditChange,
+    onItemEditComplete,
     onScroll,
     onSelectedLinesChange,
     options,
@@ -191,6 +225,31 @@ function CodeViewInner<LAnnotation = undefined>(
   );
   const controlledSelection = selectedLines !== undefined;
 
+  // Stable identities for the editor callbacks so inline props don't churn
+  // managedOptions (a changed options object forces a full item re-render).
+  const stableCreateEditor = useStableCallback(
+    (editorOptions: CodeViewCreateEditorOptions<LAnnotation>) =>
+      createEditor?.(editorOptions)
+  );
+  const emitItemEditChange = useStableCallback(
+    (
+      item: CodeViewItem<LAnnotation>,
+      file: FileContents,
+      lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    ) => {
+      onItemEditChange?.(item, file, lineAnnotations);
+    }
+  );
+  const emitItemEditComplete = useStableCallback(
+    (
+      item: CodeViewItem<LAnnotation>,
+      file: FileContents,
+      lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+    ) => {
+      onItemEditComplete?.(item, file, lineAnnotations);
+    }
+  );
+
   const managedOptions = useMemo(
     () =>
       createManagedCodeViewOptions({
@@ -202,6 +261,11 @@ function CodeViewInner<LAnnotation = undefined>(
         onSelectedLinesChange:
           onSelectedLinesChange != null ? emitSelectedLinesChange : undefined,
         controlledSelection,
+        createEditor: createEditor != null ? stableCreateEditor : undefined,
+        onItemEditChange:
+          onItemEditChange != null ? emitItemEditChange : undefined,
+        onItemEditComplete:
+          onItemEditComplete != null ? emitItemEditComplete : undefined,
       }),
     [
       options,
@@ -212,6 +276,12 @@ function CodeViewInner<LAnnotation = undefined>(
       onSelectedLinesChange,
       emitSelectedLinesChange,
       controlledSelection,
+      createEditor,
+      stableCreateEditor,
+      onItemEditChange,
+      emitItemEditChange,
+      onItemEditComplete,
+      emitItemEditComplete,
     ]
   );
 
@@ -486,6 +556,15 @@ function CodeViewInner<LAnnotation = undefined>(
           emitSelectedLinesChange(null);
         }
       },
+      getEditor(id) {
+        const { instance } = cachedDataRef.current;
+        if (instance == null) {
+          console.error('CodeView.getEditor: no valid instance exists', id);
+          return undefined;
+        }
+
+        return instance.getEditor(id);
+      },
       getInstance() {
         return cachedDataRef.current.instance;
       },
@@ -604,6 +683,9 @@ interface CreateManagedCodeViewOptionsProps<LAnnotation> {
   hasCodeViewFooter: boolean;
   onSelectedLinesChange?(selection: CodeViewLineSelection | null): void;
   controlledSelection: boolean;
+  createEditor: CodeViewOptions<LAnnotation>['createEditor'];
+  onItemEditChange: CodeViewOptions<LAnnotation>['onItemEditChange'];
+  onItemEditComplete: CodeViewOptions<LAnnotation>['onItemEditComplete'];
 }
 
 function createManagedCodeViewOptions<LAnnotation>({
@@ -614,6 +696,9 @@ function createManagedCodeViewOptions<LAnnotation>({
   hasCodeViewFooter,
   onSelectedLinesChange,
   controlledSelection,
+  createEditor,
+  onItemEditChange,
+  onItemEditComplete,
 }: CreateManagedCodeViewOptionsProps<LAnnotation>):
   | CodeViewOptions<LAnnotation>
   | undefined {
@@ -623,11 +708,26 @@ function createManagedCodeViewOptions<LAnnotation>({
     !hasCodeViewHeader &&
     !hasCodeViewFooter &&
     onSelectedLinesChange == null &&
-    !controlledSelection
+    !controlledSelection &&
+    createEditor == null &&
+    onItemEditChange == null &&
+    onItemEditComplete == null
   ) {
     return options ?? {};
   }
   options = { ...options, controlledSelection, onSelectedLinesChange };
+
+  // Prop-level editor callbacks win over their options-object counterparts,
+  // but an absent prop must not clobber a value provided via `options`.
+  if (createEditor != null) {
+    options.createEditor = createEditor;
+  }
+  if (onItemEditChange != null) {
+    options.onItemEditChange = onItemEditChange;
+  }
+  if (onItemEditComplete != null) {
+    options.onItemEditComplete = onItemEditComplete;
+  }
 
   // The imperative CodeView adapters use this callback's presence to
   // switch file and diff headers into custom-slot mode. React portals

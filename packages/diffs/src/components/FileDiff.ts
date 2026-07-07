@@ -559,11 +559,13 @@ export class FileDiff<
     this.headerFilenameSuffix = undefined;
     this.headerMetadata = undefined;
     this.headerCustom = undefined;
+    this.placeHolder?.remove();
     this.placeHolder = undefined;
     this.lastRenderedHeaderHTML = undefined;
     if (!recycle) {
       this.cachedHeaderHTML = undefined;
     }
+    this.errorWrapper?.remove();
     this.errorWrapper = undefined;
     this.spriteSVG = undefined;
     this.lastRowCount = undefined;
@@ -586,7 +588,7 @@ export class FileDiff<
 
     this.enabled = false;
 
-    this.editor?.cleanUp();
+    this.editor?.cleanUp(recycle);
     this.editor = undefined;
     if (this.refreshViewTimeout != null) {
       clearTimeout(this.refreshViewTimeout);

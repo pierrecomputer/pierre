@@ -130,6 +130,7 @@ export class VirtualizedFileDiff<
   private layoutDirty = true;
   private forceRenderOverride: true | undefined;
   private currentCollapsed: boolean | undefined;
+  private currentExpandUnchanged: boolean | undefined;
   private pendingHydratedDiff: PendingLoadedDiff | undefined;
   private pendingExpansions: PendingExpansion[] | undefined;
 
@@ -448,10 +449,22 @@ export class VirtualizedFileDiff<
       includeEstimatedHeights = true;
     }
 
-    const { collapsed = false } = this.options;
+    const { collapsed = false, expandUnchanged = false } = this.options;
     if (this.currentCollapsed !== collapsed) {
       this.currentCollapsed = collapsed;
       shouldResetLayoutCache = true;
+    }
+
+    // CodeView's options facade forces expandUnchanged on while this item is
+    // in edit mode, so the effective value can flip without any option or
+    // target change reaching this instance. The estimated heights bake
+    // expansion in, so a flip must rebuild the layout caches just like a
+    // collapsed change — otherwise the item keeps its collapsed-layout height
+    // while (re)mounts render the expanded rows, overlapping the items below.
+    if (this.currentExpandUnchanged !== expandUnchanged) {
+      this.currentExpandUnchanged = expandUnchanged;
+      shouldResetLayoutCache = true;
+      includeEstimatedHeights = true;
     }
 
     if (shouldResetLayoutCache) {
@@ -1165,7 +1178,7 @@ export class VirtualizedFileDiff<
       fileTop,
       windowSpecs
     );
-    return super.render({
+    const rendered = super.render({
       fileDiff: nextFileDiff,
       fileContainer,
       renderRange,
@@ -1177,6 +1190,15 @@ export class VirtualizedFileDiff<
       ...fileInput,
       ...fileInputProps,
     });
+    // Renders can be driven from outside the virtualizer (host/React render
+    // calls, async highlight completions), and the virtualizer only
+    // auto-reconciles renders it initiated. Queue a measured-height
+    // reconciliation for every applied content render so line deltas
+    // (wrapped lines, annotation heights) survive layout resets.
+    if (this.isSimpleMode() && rendered) {
+      this.getSimpleVirtualizer()?.requestHeightReconcile(this);
+    }
+    return rendered;
   }
 
   public syncVirtualizedTop(): void {

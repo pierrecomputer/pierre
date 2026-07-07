@@ -544,6 +544,12 @@ export type CodeViewFileItem<T = undefined> = {
   annotations?: LineAnnotation<T>[];
   version?: number;
   collapsed?: boolean;
+  /**
+   * Put this item into edit mode. Requires the CodeView `createEditor` option;
+   * ignored while `collapsed` is true. Make sure you bump the version when
+   * also changing the value.
+   */
+  edit?: boolean;
 };
 
 export type CodeViewDiffItem<T = undefined> = {
@@ -553,6 +559,12 @@ export type CodeViewDiffItem<T = undefined> = {
   annotations?: DiffLineAnnotation<T>[];
   version?: number;
   collapsed?: boolean;
+  /**
+   * Put this item into edit mode. Requires the CodeView `createEditor` option;
+   * ignored while `collapsed` is true. Make sure you bump the version when
+   * also changing the value.
+   */
+  edit?: boolean;
 };
 
 export type CodeViewItem<T = undefined> =
@@ -1016,7 +1028,39 @@ export interface DiffsEditor<LAnnotation> {
       | undefined,
     renderRange: RenderRange | undefined
   ): void;
-  cleanUp(): void;
+  /**
+   * Detach from the host component and release all DOM-bound state. With
+   * `recycle` the editor keeps its parsed document, undo history, and file
+   * identity so a later `edit()` against the same file resumes where it left
+   * off — used when a virtualized host temporarily unmounts. Without it the
+   * editor fully resets and the next `edit()` rebuilds from host contents.
+   */
+  cleanUp(recycle?: boolean): void;
+}
+
+/**
+ * The editor surface CodeView drives for items in edit mode. Structurally
+ * matches the `Editor` class from `@pierre/diffs/editor` without importing it,
+ * keeping editor code out of the main entry. Apps supply instances through the
+ * CodeView `createEditor` option.
+ */
+export interface DiffsEditorHost<LAnnotation> extends DiffsEditor<LAnnotation> {
+  edit(fileInstance: DiffsEditableComponent<LAnnotation>): () => void;
+}
+
+/**
+ * Options CodeView passes to its `createEditor` factory. A structural subset
+ * of `EditorOptions` from `@pierre/diffs/editor`, so factories can spread
+ * them straight into the constructor — `new Editor({ ...options })` — and
+ * layer any editor configuration of their own on top. Forwarding `onChange`
+ * is what lets CodeView resolve document changes back to the owning item and
+ * emit them through its own `onItemEditChange` option.
+ */
+export interface CodeViewCreateEditorOptions<LAnnotation> {
+  onChange: (
+    file: FileContents,
+    lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
+  ) => void;
 }
 
 export interface DiffsEditorSelection {

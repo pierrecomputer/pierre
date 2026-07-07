@@ -1,4 +1,8 @@
-import { parseDiffFromFile } from '@pierre/diffs';
+import {
+  type CodeViewItem,
+  type FileDiffMetadata,
+  parseDiffFromFile,
+} from '@pierre/diffs';
 import type { PreloadFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
@@ -178,3 +182,186 @@ export const PLAYGROUND_DIFF: PreloadFileDiffOptions<PlaygroundAnnotationMetadat
       },
     ],
   };
+
+// -----------------------------------------------------------------------------
+// Multi-item fixtures for the Virtualizer and CodeView playground modes.
+//
+// Every diff below is built with `parseDiffFromFile` from complete old/new file
+// contents, so they are full (non-partial) diffs. Partial diffs (e.g. from
+// `parsePatchFiles`) would need a `loadDiffFiles` loader to hydrate, which these
+// demo surfaces intentionally avoid.
+// -----------------------------------------------------------------------------
+
+const OLD_STYLES_CONTENT = `.button {
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+.button:hover {
+  background: #2563eb;
+}
+
+.card {
+  border: 1px solid #e5e7eb;
+  padding: 16px;
+}
+`;
+
+const NEW_STYLES_CONTENT = `.button {
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #6366f1;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.button:hover {
+  background: #4f46e5;
+  transform: translateY(-1px);
+}
+
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+`;
+
+const OLD_README_CONTENT = `# users API
+
+Basic CRUD helpers for user records.
+
+- getUser
+- createUser
+- deleteUser
+`;
+
+const NEW_README_CONTENT = `# Users API
+
+CRUD helpers for user records, backed by the shared database client.
+
+## API
+
+- \`getUser(id)\` – fetch a single user, throws when missing
+- \`createUser(email, name)\` – validates the email before insert
+- \`deleteUser(id)\` – idempotent delete
+
+## Usage
+
+\`\`\`ts
+import { getUser } from './api/users';
+
+const user = await getUser('123');
+\`\`\`
+`;
+
+// The base files are replicated into several uniquely-named variants so the
+// Virtualizer and CodeView demos have enough content to scroll through. Each
+// variant is a full (non-partial) diff parsed from complete old/new contents.
+const DIFF_VARIANT_COUNT = 4;
+
+interface BaseDiff {
+  name: string;
+  oldContents: string;
+  newContents: string;
+}
+
+const USERS_BASE: BaseDiff = {
+  name: 'api/users.ts',
+  oldContents: OLD_USERS_CONTENT,
+  newContents: NEW_USERS_CONTENT,
+};
+
+const STYLES_BASE: BaseDiff = {
+  name: 'ui/button.css',
+  oldContents: OLD_STYLES_CONTENT,
+  newContents: NEW_STYLES_CONTENT,
+};
+
+const README_BASE: BaseDiff = {
+  name: 'README.md',
+  oldContents: OLD_README_CONTENT,
+  newContents: NEW_README_CONTENT,
+};
+
+const BASE_DIFFS: BaseDiff[] = [USERS_BASE, STYLES_BASE, README_BASE];
+
+// Appends a variant index before the file extension (e.g. `users.ts` ->
+// `users-2.ts`) so each replicated file has a distinct name and id.
+function variantName(name: string, index: number): string {
+  if (index === 0) {
+    return name;
+  }
+  const dot = name.lastIndexOf('.');
+  return dot === -1
+    ? `${name}-${index}`
+    : `${name.slice(0, dot)}-${index}${name.slice(dot)}`;
+}
+
+function variantDiff(base: BaseDiff, index: number): FileDiffMetadata {
+  const name = variantName(base.name, index);
+  return parseDiffFromFile(
+    { name, contents: base.oldContents },
+    { name, contents: base.newContents }
+  );
+}
+
+// Diffs rendered as a list in the Virtualizer (window/body scroll) mode.
+export const VIRTUALIZER_FILE_DIFFS: FileDiffMetadata[] = Array.from(
+  { length: DIFF_VARIANT_COUNT },
+  (_, index) => BASE_DIFFS.map((base) => variantDiff(base, index))
+).flat();
+
+// Items rendered in the CodeView mode: each variant contributes two diffs and a
+// plain file so the demo shows both item types scrolling within CodeView's own
+// scroll container.
+export const CODE_VIEW_ITEMS: CodeViewItem<PlaygroundAnnotationMetadata>[] =
+  Array.from(
+    { length: DIFF_VARIANT_COUNT },
+    (_, index): CodeViewItem<PlaygroundAnnotationMetadata>[] => {
+      const readmeName = variantName('README.md', index);
+      return [
+        {
+          id: `diff:${variantName(USERS_BASE.name, index)}`,
+          type: 'diff',
+          fileDiff: variantDiff(USERS_BASE, index),
+        },
+        {
+          id: `file:${readmeName}`,
+          type: 'file',
+          file: { name: readmeName, contents: NEW_README_CONTENT },
+        },
+        {
+          id: `diff:${variantName(STYLES_BASE.name, index)}`,
+          type: 'diff',
+          fileDiff: variantDiff(STYLES_BASE, index),
+        },
+      ];
+    }
+  ).flat();
+
+export const ITEM_UNSAFE_CSS = `${CustomScrollbarCSS}
+[data-diffs-header] {
+  box-shadow: 0 -1px 0 var(--color-border);
+}
+
+[data-diffs-header] {
+  container-type: scroll-state;
+  container-name: sticky-header;
+}
+
+@container sticky-header scroll-state(stuck: top) {
+  [data-diffs-header]::after {
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    content: '';
+    background-color: var(--color-border);
+  }
+}
+`;

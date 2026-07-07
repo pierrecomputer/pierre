@@ -520,20 +520,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#contentElement?.blur();
   }
 
-  cleanUp(): void {
+  cleanUp(recycle = false): void {
+    // The tokenizer is destroyed in both modes: it holds highlighter/worker
+    // resources and writes into the (removed below) theme style element.
+    // __syncRenderView recreates one for a retained document on re-attach.
     this.#tokenizer?.cleanUp();
     this.#tokenizer = undefined;
 
-    // cleanUp is a full detach (Edit-mode off, surface switch, unmount), so drop
-    // the parsed document and its file identity. The tokenizer is destroyed just
-    // above and is only ever (re)created when __syncRenderView rebuilds the
-    // document, gated on the file name/lang/cacheKey. Keeping the document here
-    // would make a re-attach with the same cacheKey skip that rebuild, leaving
-    // the editor with no tokenizer — #rerender then bails and typed edits never
-    // paint, even though the model records them. Releasing it forces the next
-    // edit() to rebuild from the host's current contents.
-    this.#textDocument = undefined;
-    this.#fileInfo = undefined;
+    // A full cleanUp (Edit-mode off, surface switch, unmount) drops the parsed
+    // document and its file identity so the next edit() rebuilds from the
+    // host's current contents. A recycle cleanUp — a virtualized host
+    // temporarily unmounting — keeps them, along with the undo history living
+    // inside the document, so a later edit() against the same
+    // name/lang/cacheKey resumes the session via __syncRenderView's
+    // reused-document path.
+    if (!recycle) {
+      this.#textDocument = undefined;
+      this.#fileInfo = undefined;
+    }
 
     // dispse event listeners
     this.#globalEventDisposes?.forEach((dispose) => dispose());
@@ -652,8 +656,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     // Whether this sync replaces the document with a freshly parsed one (a new
     // file, language, or cache key) versus reusing the existing one. A reused
-    // document keeps any edits the host's file contents do not have, which the
-    // rebuilt line DOM below must be reconciled against.
+    // document matches the DOM the host just rebuilt: renderers persist edit
+    // sessions into the host's own data (DiffHunksRenderer keeps
+    // `diff.additionLines` in sync per edit; FileRenderer writes the session
+    // contents back into the file on recycle), so an unchanged
+    // name/lang/cacheKey re-attach renders the same text the document holds.
     const shouldRebuildDocument =
       this.#textDocument === undefined ||
       this.#fileInfo === undefined ||
@@ -682,17 +689,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInfo = { name, lang, cacheKey };
       this.#textDocument = textDocument;
       this.#tokenizer?.cleanUp();
-      this.#tokenizer = new EditorTokenizer({
-        highlighter,
-        textDocument,
-        codeOptions: this.#fileInstance?.options ?? {},
-        onDeferTokenize: this.#onDeferTokenize,
-        onThemeChange: () => this.#scheduleThemeSelectionRefresh(),
-        setStyle: (css) => {
-          this.#themeStyleElement!.textContent = css;
-        },
-        __debug: this.#options.__debug,
-      });
+      this.#tokenizer = undefined;
       this.#resetState();
       this.#selections = this.#initSelections;
       requestAnimationFrame(() => {
@@ -704,6 +701,26 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           fileOrDiff.name
         );
       }
+    }
+
+    // The tokenizer is (re)created whenever the current document lacks one:
+    // right after a fresh document build above, or on the first sync after a
+    // recycle cleanUp re-attached a retained document. Tying it to the
+    // document (rather than the rebuild) is what keeps a re-attach with an
+    // unchanged cacheKey — which skips the rebuild — able to paint edits.
+    const textDocument = this.#textDocument;
+    if (this.#tokenizer == null && textDocument != null) {
+      this.#tokenizer = new EditorTokenizer({
+        highlighter,
+        textDocument,
+        codeOptions: this.#fileInstance?.options ?? {},
+        onDeferTokenize: this.#onDeferTokenize,
+        onThemeChange: () => this.#scheduleThemeSelectionRefresh(),
+        setStyle: (css) => {
+          this.#themeStyleElement!.textContent = css;
+        },
+        __debug: this.#options.__debug,
+      });
     }
 
     if (this.#contentElement !== contentEl) {
@@ -2344,13 +2361,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   // add scroll margin to the primary caret element to prevent
-  // the caret from being hidden by the gutter
+  // the caret from being hidden by the gutter (and the search panel when
+  // open). The margin must only reserve viewport space above the caret —
+  // never include the host's virtualized `top` offset: that is a scroll-space
+  // coordinate, and folding it in makes every caret scrollIntoView treat the
+  // caret as thousands of pixels tall once the host is scrolled down, which
+  // mis-scrolls the caret line (e.g. pinning it to the viewport bottom).
   #getScrollMargin() {
-    const componentTop = this.#fileInstance?.top ?? 0;
     const top = this.#searchPanel !== undefined ? 48 : 0;
     const start = this.#getGutterWidth() + this.#metrics.ch;
     const end = this.#metrics.ch;
-    return `${componentTop + top}px ${end}px 0 ${start}px`;
+    return `${top}px ${end}px 0 ${start}px`;
   }
 
   #scrollToLine(line: number, char = 0, noFocus = false) {
