@@ -170,6 +170,30 @@ describe('DiffHunksRenderer content-edit recompute split', () => {
       additionLineNumber: 1,
     });
   });
+
+  test('line-count edits preserve line breaks from legacy host documents', async () => {
+    const renderer = await createPrimedRenderer('split');
+
+    renderer.applyDocumentChange({
+      ...makeTextDocument(EDITED_LINES),
+      getText: () => {
+        throw new Error('getText should not be called for line-count edits');
+      },
+    });
+
+    const rendered = renderer.diffCache;
+    expect(rendered).toBeDefined();
+    if (rendered == null) return;
+
+    expect(rendered.additionLines).toEqual([
+      'function greet(name) {\n',
+      '  console.log(\n',
+      'msg);\n',
+      '  return msg;\n',
+      '}\n',
+    ]);
+    expect(rendered.additionLines.join('')).toBe(EDITED_LINES.join('\n'));
+  });
 });
 
 // Deleting every character empties the editor's document, whose text is "".

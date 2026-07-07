@@ -38,7 +38,10 @@ function makeTextDocument(lines: string[]): DiffsTextDocument {
   return {
     lineCount: lines.length,
     getText: () => text,
-    getLineText: (lineNumber: number) => lines[lineNumber] ?? '',
+    getLineText: (lineNumber: number, includeLineBreak = false) => {
+      const line = lines[lineNumber] ?? '';
+      return includeLineBreak ? line : line.replace(/\r?\n$/, '');
+    },
   };
 }
 
@@ -88,13 +91,7 @@ describe('FileDiff unified edit separators', () => {
 
       expect(countSeparatorSlots(fileContainer)).toBeGreaterThan(0);
 
-      const editedLines = [...fileDiff.additionLines];
-      const line = editedLines[40];
-      if (line == null) {
-        throw new Error('Expected a line to split');
-      }
-      editedLines.splice(40, 1, line.slice(0, 5), line.slice(5));
-      instance.applyDocumentChange(makeTextDocument(editedLines));
+      instance.applyDocumentChange(makeTextDocument(fileDiff.deletionLines));
 
       expect(countSeparatorSlots(fileContainer)).toBe(0);
     } finally {

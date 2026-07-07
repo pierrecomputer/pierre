@@ -73,7 +73,6 @@ import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
-import { splitFileContents } from '../utils/splitFileContents';
 import {
   recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
@@ -430,21 +429,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     // updateRenderCache may already have extended diff.additionLines for the
     // same edit pass, so never bail out purely on matching lengths here.
-    const documentText = textDocument.getText();
-    if (documentText.trim().length === 0) {
-      // Blank documents need the editor's logical line count: `"\n"` is two
-      // editable rows even though the diff parser sees one newline token.
-      diff.additionLines = getEditorDocumentLines(textDocument);
-    } else {
-      const parsedLines = splitFileContents(documentText);
-      // A non-empty document ending in a line break has a final logical empty
-      // line in the editor. Patch-style splitting drops that row, but edit mode
-      // still needs it as a caret host after pressing Enter.
-      diff.additionLines =
-        parsedLines.length < textDocument.lineCount
-          ? getEditorDocumentLines(textDocument)
-          : parsedLines;
-    }
+    // Read line-by-line from the editor document instead of materializing the
+    // entire text. This preserves blank documents and the final editable empty
+    // row after a trailing line break.
+    diff.additionLines = getEditorDocumentLines(
+      textDocument,
+      diff.additionLines
+    );
 
     const newLength = diff.additionLines.length;
     const additionHastLines = result.code.additionLines;
@@ -2006,12 +1997,40 @@ function createPlainAdditionLineElement(
   };
 }
 
-function getEditorDocumentLines(textDocument: DiffsTextDocument): string[] {
+function getEditorDocumentLines(
+  textDocument: DiffsTextDocument,
+  previousLines: string[]
+): string[] {
   const lines: string[] = [];
+  const fallbackLineBreak = getFallbackLineBreak(previousLines);
   for (let line = 0; line < textDocument.lineCount; line++) {
-    lines.push(textDocument.getLineText(line, true));
+    const lineText = textDocument.getLineText(line, true);
+    lines.push(
+      line < textDocument.lineCount - 1 && !hasLineBreakSuffix(lineText)
+        ? lineText + fallbackLineBreak
+        : lineText
+    );
   }
   return lines;
+}
+
+function hasLineBreakSuffix(line: string): boolean {
+  return line.endsWith('\n') || line.endsWith('\r');
+}
+
+function getFallbackLineBreak(lines: string[]): string {
+  for (const line of lines) {
+    if (line.endsWith('\r\n')) {
+      return '\r\n';
+    }
+    if (line.endsWith('\n')) {
+      return '\n';
+    }
+    if (line.endsWith('\r')) {
+      return '\r';
+    }
+  }
+  return '\n';
 }
 
 // Host line text omits line endings; diff line arrays keep the suffix from parsing.
