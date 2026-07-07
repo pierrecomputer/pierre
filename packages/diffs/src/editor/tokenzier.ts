@@ -227,15 +227,15 @@ export class EditorTokenizer {
     this.#setStyle(`:host {
       --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
       --diffs-editor-line-highlight-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg)'};
-      --diffs-editor-match-bg: ${findMatchBackground ?? 'unset'};
-      --diffs-editor-match-highlight-bg: ${findMatchHighlightBackground ?? 'unset'};
-      --diffs-editor-bracket-match-bg: ${bracketMatchBackground ?? 'unset'};
-      --diffs-editor-bracket-match-border: ${bracketMatchBorder ?? 'unset'};
-      --diffs-editor-cursor-fg: ${cursorForeground ?? 'unset'};
-      --diffs-editor-hint-fg: ${hintForeground ?? 'unset'};
-      --diffs-editor-info-fg: ${infoForeground ?? 'unset'};
-      --diffs-editor-warning-fg: ${warningForeground ?? 'unset'};
-      --diffs-editor-error-fg: ${errorForeground ?? 'unset'};
+      --diffs-editor-match-bg: ${findMatchBackground ?? 'initial'};
+      --diffs-editor-match-highlight-bg: ${findMatchHighlightBackground ?? 'initial'};
+      --diffs-editor-bracket-match-bg: ${bracketMatchBackground ?? 'initial'};
+      --diffs-editor-bracket-match-border: ${bracketMatchBorder ?? 'initial'};
+      --diffs-editor-cursor-fg: ${cursorForeground ?? 'initial'};
+      --diffs-editor-hint-fg: ${hintForeground ?? 'initial'};
+      --diffs-editor-info-fg: ${infoForeground ?? 'initial'};
+      --diffs-editor-warning-fg: ${warningForeground ?? 'initial'};
+      --diffs-editor-error-fg: ${errorForeground ?? 'initial'};
     }`);
   }
 
