@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs E2E fixtures</title>
+    <style>
+      body {
+        margin: 0 auto;
+        padding: 32px 24px;
+        max-width: 720px;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        color: #1a1a1a;
+      }
+      h1 {
+        font-size: 20px;
+      }
+      p {
+        color: #555;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+      }
+      li {
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 12px;
+      }
+      a {
+        font-size: 16px;
+        font-weight: 600;
+        text-decoration: none;
+        color: #0b62d6;
+      }
+      .desc {
+        margin: 6px 0 0;
+        font-size: 14px;
+      }
+      code {
+        font-family: ui-monospace, monospace;
+        background: #f2f2f2;
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>@pierre/diffs — E2E fixtures</h1>
+    <p>
+      These are the standalone pages the Playwright suite drives against the
+      built <code>/dist</code>. Open one and interact with it exactly as a test
+      would. Each fixture sets a readiness flag on <code>window</code> once its
+      content has rendered.
+    </p>
+    <ul>
+      <li>
+        <a href="/test/e2e/fixtures/diff-render.html">diff-render.html</a>
+        <p class="desc">
+          A <code>FileDiff</code> (split view) with two changed regions and a
+          collapsed unchanged block. Buttons toggle split/unified and reject the
+          first hunk. Drives <code>diff-render.pw.ts</code> (rendering,
+          split/unified, expand context, accept/reject). Ready flag:
+          <code>window.__diffReady</code>.
+        </p>
+      </li>
+      <li>
+        <a href="/test/e2e/fixtures/edit.html">edit.html</a>
+        <p class="desc">
+          A <code>FileDiff</code> attached to the <code>Editor</code> (edit
+          mode). The additions column is editable; deletions are read-only.
+          Drives <code>edit.pw.ts</code> (typing, onChange, undo/redo). Ready
+          flag: <code>window.__editReady</code>; edits are logged to
+          <code>window.__editorEvents</code>.
+        </p>
+      </li>
+      <li>
+        <a href="/test/e2e/fixtures/conflict.html">conflict.html</a>
+        <p class="desc">
+          An <code>UnresolvedFile</code> with two merge conflicts. Clicking the
+          accept-current/incoming/both buttons resolves each conflict. Drives
+          <code>conflict.pw.ts</code>. Ready flag:
+          <code>window.__conflictReady</code>.
+        </p>
+      </li>
+      <li>
+        <a href="/test/e2e/fixtures/file-states.html">file-states.html</a>
+        <p class="desc">
+          An added file (<code>oldFile: null</code>) and a deleted file (<code
+            >newFile: null</code
+          >), showing additions-only and deletions-only rendering. Drives
+          <code>file-states.pw.ts</code>. Ready flag:
+          <code>window.__fileStatesReady</code>.
+        </p>
+      </li>
+      <li>
+        <a href="/test/e2e/fixtures/editable.html">editable.html</a>
+        <p class="desc">
+          A single editable <code>File</code> + <code>Editor</code>. Drives
+          <code>find-replace.pw.ts</code> (Cmd/Ctrl+F, Replace All),
+          <code>multi-edit.pw.ts</code> (multi-caret, Tab/Shift+Tab), and
+          <code>edit-rewrite.pw.ts</code> (select-all rewrite). Ready flag:
+          <code>window.__editableReady</code>.
+        </p>
+      </li>
+      <li>
+        <a href="/test/e2e/fixtures/markers.html">markers.html</a>
+        <p class="desc">
+          An editor with <code>setMarkers</code> squiggles (error/warning/info),
+          hover popups, and boundary containment. Drives
+          <code>markers.pw.ts</code>. Ready flag:
+          <code>window.__markersReady</code>.
+        </p>
+      </li>
+      <li>
+        <a href="/test/e2e/fixtures/line-select.html">line-select.html</a>
+        <p class="desc">
+          A read-only <code>File</code> with line selection and the gutter
+          utility button. Drives <code>line-select.pw.ts</code> (click/drag
+          selection, utility click). Ready flag:
+          <code>window.__lineSelectReady</code>.
+        </p>
+      </li>
+      <li>
+        <a href="/test/e2e/fixtures/annotations.html">annotations.html</a>
+        <p class="desc">
+          A <code>File</code> with a custom inline
+          <code>renderAnnotation</code> row anchored to a line. Drives
+          <code>annotations.pw.ts</code>. Ready flag:
+          <code>window.__annotationsReady</code>.
+        </p>
+      </li>
+      <li>
+        <a href="/test/e2e/fixtures/theme.html">theme.html</a>
+        <p class="desc">
+          An editor that toggles between the dark and light themes; verifies
+          token colors change and a selection survives the switch. Drives
+          <code>theme.pw.ts</code>. Ready flag:
+          <code>window.__themeReady</code>.
+        </p>
+      </li>
+      <li>
+        <a href="/test/e2e/fixtures/selection-action.html"
+          >selection-action.html</a
+        >
+        <p class="desc">
+          An editor with <code>enabledSelectionAction</code> and a custom
+          <code>renderSelectionAction</code> popover; verifies it appears on a
+          selection, stays in bounds, and reports the selected text. Drives
+          <code>selection-action.pw.ts</code>. Ready flag:
+          <code>window.__selectionActionReady</code>.
+        </p>
+      </li>
+    </ul>
+  </body>
+</html>

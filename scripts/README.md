@@ -189,6 +189,7 @@ Each of our dev/test services has a **base port**:
 | `apps/docs` diffshub dev/prod | 3692      |
 | `apps/docs` E2E               | 4174      |
 | `packages/trees` E2E          | 4173      |
+| `packages/diffs` E2E          | 4175      |
 | `packages/path-store` E2E     | 4176      |
 | Chrome remote debug           | 9222      |
 

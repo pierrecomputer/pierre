@@ -611,6 +611,9 @@ importers:
       '@arethetypeswrong/core':
         specifier: 'catalog:'
         version: 0.18.2
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.51.1
       '@tsdown/css':
         specifier: 'catalog:'
         version: 0.22.3(jiti@2.7.0)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(tsdown@0.22.3)(yaml@2.9.0)
@@ -656,6 +659,9 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.1.0(@types/node@25.9.3)(jiti@2.7.0)(yaml@2.9.0)
 
   packages/path-store:
     devDependencies:
