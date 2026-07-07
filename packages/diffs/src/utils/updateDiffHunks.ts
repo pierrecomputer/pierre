@@ -154,7 +154,56 @@ export function recomputeDiffHunksForEdit(
       parseDiffOptions
     );
   }
-  return recomputeDiffHunks(diff, parseDiffOptions);
+  const additionLines = diff.additionLines;
+  const recomputed = recomputeDiffHunks(diff, parseDiffOptions);
+  if (
+    additionLines.length > recomputed.additionLines.length &&
+    hasTrailingEditorBlankLine(additionLines)
+  ) {
+    preserveTrailingEditorBlankLine(recomputed, additionLines);
+  }
+  return recomputed;
+}
+
+function hasTrailingEditorBlankLine(additionLines: string[]): boolean {
+  return additionLines.length > 1 && additionLines.at(-1) === '';
+}
+
+function preserveTrailingEditorBlankLine(
+  recomputed: FullDiffHunkUpdate,
+  additionLines: string[]
+): void {
+  const extraLineCount = additionLines.length - recomputed.additionLines.length;
+  if (extraLineCount <= 0) {
+    return;
+  }
+  const extraAdditionLineIndex = recomputed.additionLines.length;
+
+  const lastHunk = recomputed.hunks.at(-1);
+  if (lastHunk == null) {
+    return;
+  }
+
+  const lastHunkAdditionEnd =
+    lastHunk.additionLineIndex + lastHunk.additionCount;
+  if (lastHunkAdditionEnd !== extraAdditionLineIndex) {
+    return;
+  }
+
+  for (const content of lastHunk.hunkContent) {
+    if (
+      content.type === 'change' &&
+      content.additions < content.deletions &&
+      content.additionLineIndex + content.additions === extraAdditionLineIndex
+    ) {
+      recomputed.additionLines = additionLines;
+      content.additions += extraLineCount;
+      lastHunk.additionCount += extraLineCount;
+      lastHunk.additionLines += extraLineCount;
+      recomputeDiffRenderLineCounts(recomputed);
+      return;
+    }
+  }
 }
 
 /** Updates hunk metadata after addition lines change; re-parses affected hunks only. */
@@ -398,7 +447,9 @@ function recomputeHunkRenderLineCounts(hunk: Hunk): void {
   hunk.unifiedLineCount = unifiedLineCount;
 }
 
-function recomputeDiffRenderLineCounts(diff: FileDiffMetadata): void {
+function recomputeDiffRenderLineCounts(
+  diff: HunkMetadataUpdate & Pick<FileDiffMetadata, 'additionLines'>
+): void {
   let splitTotal = 0;
   let unifiedTotal = 0;
   let lastHunkAdditionEnd = 0;

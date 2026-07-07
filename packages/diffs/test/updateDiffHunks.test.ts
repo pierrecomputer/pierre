@@ -2,9 +2,11 @@ import { describe, expect, test } from 'bun:test';
 
 import type { FileDiffMetadata, Hunk } from '../src/types';
 import { cleanLastNewline } from '../src/utils/cleanLastNewline';
+import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
   recomputeDiffHunks,
+  recomputeDiffHunksForEdit,
   updateDiffHunks,
 } from '../src/utils/updateDiffHunks';
 import { hasTrailingContextMismatch } from '../src/utils/virtualDiffLayout';
@@ -277,6 +279,195 @@ describe('updateDiffHunks', () => {
       diff,
       runFullRecomputeEdit(base, line, 'line 10 replace newer')
     );
+  });
+
+  test('preserves context when a contentful edit has an editor-only trailing blank line', () => {
+    const oldContents = ['drop 1', 'kept', 'drop 2', ''].join('\n');
+    const diff = parseDiffFromFile(
+      { name: 'example.ts', contents: oldContents },
+      { name: 'example.ts', contents: 'kept\n' },
+      { context: 3 }
+    );
+
+    // Mirrors edit mode after deleting all but one matching line in a longer
+    // file and pressing Enter: the editor has a final logical empty line that
+    // patch-style splitting would normally drop.
+    diff.additionLines = ['kept\n', ''];
+
+    const recomputed = recomputeDiffHunksForEdit(diff, { context: 3 });
+
+    expect(recomputed.additionLines).toEqual(['kept\n', '']);
+    expect(recomputed.splitLineCount).toBe(3);
+    expect(recomputed.unifiedLineCount).toBe(4);
+    expect(recomputed.hunks[0]?.hunkContent).toEqual([
+      {
+        type: 'change',
+        additions: 0,
+        deletions: 1,
+        additionLineIndex: 0,
+        deletionLineIndex: 0,
+      },
+      {
+        type: 'context',
+        lines: 1,
+        additionLineIndex: 0,
+        deletionLineIndex: 1,
+      },
+      {
+        type: 'change',
+        additions: 1,
+        deletions: 1,
+        additionLineIndex: 1,
+        deletionLineIndex: 2,
+      },
+    ]);
+
+    Object.assign(diff, recomputed);
+    const splitRows: Array<{
+      deletionLineIndex: number | undefined;
+      additionLineIndex: number | undefined;
+    }> = [];
+    iterateOverDiff({
+      diff,
+      diffStyle: 'split',
+      callback(row) {
+        splitRows.push({
+          deletionLineIndex: row.deletionLine?.lineIndex,
+          additionLineIndex: row.additionLine?.lineIndex,
+        });
+      },
+    });
+
+    expect(splitRows).toEqual([
+      { deletionLineIndex: 0, additionLineIndex: undefined },
+      { deletionLineIndex: 1, additionLineIndex: 0 },
+      { deletionLineIndex: 2, additionLineIndex: 1 },
+    ]);
+  });
+
+  test('top-aligns an editor-only trailing blank line after replacing a longer file', () => {
+    const oldContents = ['old 1', 'old 2', 'old 3', 'old 4', ''].join('\n');
+    const diff = parseDiffFromFile(
+      { name: 'example.ts', contents: oldContents },
+      { name: 'example.ts', contents: 'a\n' },
+      { context: 3 }
+    );
+
+    // Mirrors select-all, type "a", then press Enter: the editor has a second
+    // logical row for the trailing blank line before tokenization sees content
+    // on that row.
+    diff.additionLines = ['a\n', ''];
+
+    const recomputed = recomputeDiffHunksForEdit(diff, { context: 3 });
+
+    expect(recomputed.additionLines).toEqual(['a\n', '']);
+    expect(recomputed.splitLineCount).toBe(4);
+    expect(recomputed.unifiedLineCount).toBe(6);
+    expect(recomputed.hunks[0]?.hunkContent).toEqual([
+      {
+        type: 'change',
+        additions: 2,
+        deletions: 4,
+        additionLineIndex: 0,
+        deletionLineIndex: 0,
+      },
+    ]);
+
+    Object.assign(diff, recomputed);
+    const splitRows: Array<{
+      deletionLineIndex: number | undefined;
+      additionLineIndex: number | undefined;
+    }> = [];
+    iterateOverDiff({
+      diff,
+      diffStyle: 'split',
+      callback(row) {
+        splitRows.push({
+          deletionLineIndex: row.deletionLine?.lineIndex,
+          additionLineIndex: row.additionLine?.lineIndex,
+        });
+      },
+    });
+
+    expect(splitRows).toEqual([
+      { deletionLineIndex: 0, additionLineIndex: 0 },
+      { deletionLineIndex: 1, additionLineIndex: 1 },
+      { deletionLineIndex: 2, additionLineIndex: undefined },
+      { deletionLineIndex: 3, additionLineIndex: undefined },
+    ]);
+  });
+
+  test('does not append an editor-only trailing blank line as an EOF change addition', () => {
+    const oldContents = ['line 1', 'remove me', 'line 3', ''].join('\n');
+    const diff = parseDiffFromFile(
+      { name: 'example.ts', contents: oldContents },
+      {
+        name: 'example.ts',
+        contents: ['line 1', 'add me', 'line 3', ''].join('\n'),
+      },
+      { context: 3 }
+    );
+
+    // The editor exposes the final logical empty row for a file ending in a
+    // newline. That row belongs to document state, not to diff hunk metadata.
+    diff.additionLines = ['line 1\n', 'add me\n', 'line 3\n', ''];
+
+    const recomputed = recomputeDiffHunksForEdit(diff, { context: 3 });
+
+    expect(recomputed.additionLines).toEqual([
+      'line 1\n',
+      'add me\n',
+      'line 3\n',
+    ]);
+    expect(recomputed.hunks[0]?.hunkContent).toEqual([
+      {
+        type: 'context',
+        lines: 1,
+        additionLineIndex: 0,
+        deletionLineIndex: 0,
+      },
+      {
+        type: 'change',
+        additions: 1,
+        deletions: 1,
+        additionLineIndex: 1,
+        deletionLineIndex: 1,
+      },
+      {
+        type: 'context',
+        lines: 1,
+        additionLineIndex: 2,
+        deletionLineIndex: 2,
+      },
+    ]);
+
+    Object.assign(diff, recomputed);
+    const rows: Array<{
+      type: string;
+      deletionLineIndex: number | undefined;
+      additionLineIndex: number | undefined;
+    }> = [];
+    iterateOverDiff({
+      diff,
+      diffStyle: 'both',
+      expandedHunks: true,
+      callback(row) {
+        rows.push({
+          type: row.type,
+          deletionLineIndex: row.deletionLine?.lineIndex,
+          additionLineIndex: row.additionLine?.lineIndex,
+        });
+      },
+    });
+
+    expect(
+      rows.some(
+        (row) =>
+          row.type === 'change' &&
+          row.deletionLineIndex == null &&
+          row.additionLineIndex === 3
+      )
+    ).toBe(false);
   });
 
   test('translates reparsed hunk coordinates when context lines become changes', () => {

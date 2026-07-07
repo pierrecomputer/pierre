@@ -2416,14 +2416,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
         virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
 
-        if (this.#scrollingToLine === line && yFix === 0) {
-          this.#scrollingToLine = undefined;
-          this.#scrollingToLineChar = undefined;
-          this.#scrollingToLineFixed = false;
-          this.#scrollingToLineNoFocus = false;
-        } else if (
+        if (
           this.#scrollingToLine === line &&
-          this.#scrollingToLineFixed
+          (yFix === 0 || this.#scrollingToLineFixed)
         ) {
           this.#scrollingToLine = undefined;
           this.#scrollingToLineChar = undefined;

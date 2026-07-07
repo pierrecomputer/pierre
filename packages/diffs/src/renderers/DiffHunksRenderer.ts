@@ -434,13 +434,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (documentText.trim().length === 0) {
       // Blank documents need the editor's logical line count: `"\n"` is two
       // editable rows even though the diff parser sees one newline token.
-      const lines: string[] = [];
-      for (let line = 0; line < textDocument.lineCount; line++) {
-        lines.push(textDocument.getLineText(line, true));
-      }
-      diff.additionLines = lines;
+      diff.additionLines = getEditorDocumentLines(textDocument);
     } else {
-      diff.additionLines = splitFileContents(documentText);
+      const parsedLines = splitFileContents(documentText);
+      // A non-empty document ending in a line break has a final logical empty
+      // line in the editor. Patch-style splitting drops that row, but edit mode
+      // still needs it as a caret host after pressing Enter.
+      diff.additionLines =
+        parsedLines.length < textDocument.lineCount
+          ? getEditorDocumentLines(textDocument)
+          : parsedLines;
     }
 
     const newLength = diff.additionLines.length;
@@ -1212,10 +1215,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               pendingSplitContext.side != null &&
               pendingSplitContext.side !== missingSide
             ) {
-              // NOTE(amadeus): If we see this error, we might need to bring back: flushSplitSpan();
-              throw new Error(
-                'DiffHunksRenderer.processDiffResult: iterateOverDiff, invalid pending splits'
-              );
+              pendingSplitContext.flush();
             }
             pendingSplitContext.side = missingSide;
             pendingSplitContext.increment();
@@ -2004,6 +2004,14 @@ function createPlainAdditionLineElement(
       },
     ],
   };
+}
+
+function getEditorDocumentLines(textDocument: DiffsTextDocument): string[] {
+  const lines: string[] = [];
+  for (let line = 0; line < textDocument.lineCount; line++) {
+    lines.push(textDocument.getLineText(line, true));
+  }
+  return lines;
 }
 
 // Host line text omits line endings; diff line arrays keep the suffix from parsing.

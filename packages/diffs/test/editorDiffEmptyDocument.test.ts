@@ -248,6 +248,89 @@ describe('diff editor: select-all then delete', () => {
         await fixture.cleanup();
       }
     });
+
+    test(`keeps the trailing blank line and caret after typing text then Enter (${diffStyle})`, async () => {
+      const oldContents =
+        Array.from({ length: 8 }, (_, index) => `old ${index + 1}`).join('\n') +
+        '\n';
+      const newContents = [
+        'old 1\n',
+        'old 2\n',
+        'old 3 changed\n',
+        'old 4\n',
+        'inserted\n',
+        'old 5\n',
+        'old 6\n',
+        'old 7\n',
+        'old 8\n',
+        'appended\n',
+      ].join('');
+      const fixture = await createDiffEditorFixture(
+        diffStyle,
+        oldContents,
+        newContents
+      );
+      const { editor, container } = fixture;
+
+      try {
+        replaceAll(editor, '');
+        await wait(0);
+        expect(editor.getState().file.contents).toBe('');
+
+        editor.setSelections([
+          {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+            direction: 'none',
+          },
+        ]);
+        editor.applyEdits(
+          [
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: 'a',
+            },
+          ],
+          true
+        );
+        await wait(0);
+
+        const content = findAdditionContent(container);
+        expect(content).toBeDefined();
+        if (content == null) return;
+        dispatchBeforeInput(content, 'insertLineBreak');
+
+        for (let attempt = 0; attempt < 40; attempt++) {
+          const hasLine2 = [...content.children].some(
+            (child) => (child as HTMLElement).dataset.line === '2'
+          );
+          const hasCaret =
+            container.shadowRoot?.querySelector('[data-caret]') != null;
+          if (hasLine2 && hasCaret) {
+            break;
+          }
+          await wait(10);
+        }
+
+        expect(editor.getState().file.contents).toBe('a\n');
+        const freshContent = findAdditionContent(container);
+        expect(freshContent).toBeDefined();
+        if (freshContent == null) return;
+        expect(
+          [...freshContent.children].some(
+            (child) => (child as HTMLElement).dataset.line === '2'
+          )
+        ).toBe(true);
+        expect(
+          container.shadowRoot?.querySelector('[data-caret]') != null
+        ).toBe(true);
+      } finally {
+        await fixture.cleanup();
+      }
+    });
   }
 });
 
