@@ -46,6 +46,34 @@ function dispatchPrimaryFind(root: HTMLElement, altKey = false): KeyboardEvent {
   return lastEvent!;
 }
 
+function dispatchFindAgain(
+  target: EventTarget,
+  options: { previous?: boolean; composed?: boolean } = {}
+): KeyboardEvent {
+  const attempts = [
+    { metaKey: true, ctrlKey: false },
+    { metaKey: false, ctrlKey: true },
+  ];
+  let lastEvent: KeyboardEvent | undefined;
+  for (const modifiers of attempts) {
+    const event = new window.KeyboardEvent('keydown', {
+      key: 'g',
+      code: 'KeyG',
+      shiftKey: options.previous === true,
+      bubbles: true,
+      cancelable: true,
+      composed: options.composed === true,
+      ...modifiers,
+    });
+    target.dispatchEvent(event);
+    lastEvent = event;
+    if (event.defaultPrevented) {
+      return event;
+    }
+  }
+  return lastEvent!;
+}
+
 function dispatchEscape(root: HTMLElement): KeyboardEvent {
   const event = new window.KeyboardEvent('keydown', {
     key: 'Escape',
@@ -99,6 +127,18 @@ function pressSearchEnter(root: HTMLElement): KeyboardEvent {
   });
   getSearchInput(root).dispatchEvent(event);
   return event;
+}
+
+function makeSearchScrollContents(): string {
+  return Array.from({ length: 600 }, (_, index) => {
+    if (index === 0) {
+      return 'target first';
+    }
+    if (index === 499) {
+      return 'target second';
+    }
+    return `line ${index + 1}`;
+  }).join('\n');
 }
 
 function getSearchState(viewer: CodeView): SearchStateProbe['searchState'] {
@@ -213,7 +253,7 @@ describe('CodeView search panel', () => {
       ]);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
-      ).toBe('3 results');
+      ).toBe('1 of 3');
     } finally {
       viewer.cleanUp();
       dom.cleanup();
@@ -246,7 +286,11 @@ describe('CodeView search panel', () => {
       expect(
         getRenderedSearchMatches(root).map((element) => element.textContent)
       ).toEqual(['hit', 'HIT', 'hit']);
-      expect(getRenderedCurrentSearchMatches(root)).toEqual([]);
+      expect(
+        getRenderedCurrentSearchMatches(root).map(
+          (element) => element.textContent
+        )
+      ).toEqual(['hit']);
 
       pressSearchEnter(root);
       await wait(0);
@@ -256,7 +300,7 @@ describe('CodeView search panel', () => {
         getRenderedCurrentSearchMatches(root).map(
           (element) => element.textContent
         )
-      ).toEqual(['hit']);
+      ).toEqual(['HIT']);
 
       dispatchEscape(root);
       await wait(0);
@@ -414,24 +458,95 @@ describe('CodeView search panel', () => {
       await wait(0);
       fillSearch(root, 'hit');
 
-      expect(getSearchState(viewer).current).toBeUndefined();
-
-      const firstEnter = pressSearchEnter(root);
-      expect(firstEnter.defaultPrevented).toBe(true);
       expect(getSearchState(viewer).current?.lineNumber).toBe(1);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
       ).toBe('1 of 2');
 
-      pressSearchEnter(root);
+      const firstEnter = pressSearchEnter(root);
+      expect(firstEnter.defaultPrevented).toBe(true);
       expect(getSearchState(viewer).current?.lineNumber).toBe(3);
       expect(
         getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
       ).toBe('2 of 2');
 
+      pressSearchEnter(root);
+      expect(getSearchState(viewer).current?.lineNumber).toBe(1);
+      expect(
+        getSearchPanelRoot(root).querySelector('[data-matches]')?.textContent
+      ).toBe('1 of 2');
+
       fillSearch(root, '');
       expect(getSearchState(viewer).matches).toEqual([]);
       expect(getSearchState(viewer).current).toBeUndefined();
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('navigates and scrolls from the root find-again shortcut', async () => {
+    const dom = installDom();
+    const viewer = new CodeView();
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'file-a',
+          type: 'file',
+          file: {
+            name: 'file-a.ts',
+            contents: makeSearchScrollContents(),
+          },
+        },
+      ]);
+
+      dispatchPrimaryFind(root);
+      await wait(0);
+      fillSearch(root, 'target');
+      expect(getSearchState(viewer).current?.lineNumber).toBe(1);
+
+      const event = dispatchFindAgain(root);
+      expect(event.defaultPrevented).toBe(true);
+      expect(getSearchState(viewer).current?.lineNumber).toBe(500);
+
+      viewer.render(true);
+      expect(root.scrollTop).toBeGreaterThan(0);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('keeps composed input find-again shortcut scrolls pending', async () => {
+    const dom = installDom();
+    const viewer = new CodeView();
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'file-a',
+          type: 'file',
+          file: {
+            name: 'file-a.ts',
+            contents: makeSearchScrollContents(),
+          },
+        },
+      ]);
+
+      dispatchPrimaryFind(root);
+      await wait(0);
+      fillSearch(root, 'target');
+      expect(getSearchState(viewer).current?.lineNumber).toBe(1);
+
+      const event = dispatchFindAgain(getSearchInput(root), { composed: true });
+      expect(event.defaultPrevented).toBe(true);
+      expect(getSearchState(viewer).current?.lineNumber).toBe(500);
+
+      viewer.render(true);
+      expect(root.scrollTop).toBeGreaterThan(0);
     } finally {
       viewer.cleanUp();
       dom.cleanup();

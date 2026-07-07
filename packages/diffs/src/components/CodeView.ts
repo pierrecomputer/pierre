@@ -10,6 +10,7 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import { resolveFindAgainShortcut } from '../editor/command';
 import type { Editor, EditorOptions } from '../editor/editor';
 import { isPrimaryModifier } from '../editor/platform';
 import { SearchPanelWidget } from '../editor/searchPanel';
@@ -45,8 +46,8 @@ import type {
   CodeViewRangeScrollTarget,
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
-  DiffsThemeNames,
   DiffSearchLineDecoration,
+  DiffsThemeNames,
   HunkSeparators,
   PendingCodeViewLayoutReset,
   SearchLineDecoration,
@@ -145,7 +146,7 @@ interface PagedScrollPosition {
 interface CodeViewSearchLineMetadata {
   itemId: string;
   itemIndex: number;
-  itemType: CodeViewItem['type'];
+  itemType: CodeViewItem<unknown>['type'];
   side: SelectionSide | undefined;
   lineNumber: number;
   lineIndex: number;
@@ -1462,7 +1463,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       scrollToMatch: (match) => {
         this.scrollToSearchMatch(match);
       },
-      onUpdate: (matches) => {
+      onUpdate: (matches, options) => {
         const current = this.searchState.current;
         if (current !== undefined) {
           const nextCurrent = matches.find((match) =>
@@ -1473,8 +1474,15 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
             return nextCurrent;
           }
         }
-        this.setSearchResults(matches, undefined);
-        return undefined;
+        if (matches.length === 0 || options?.syncSelection === false) {
+          this.setSearchResults(matches, undefined);
+          return undefined;
+        }
+
+        const nextCurrent = matches[0];
+        this.setSearchResults(matches, nextCurrent);
+        this.scrollToSearchMatch(nextCurrent);
+        return nextCurrent;
       },
       onClose: () => {
         this.searchPanel = undefined;
@@ -1587,7 +1595,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private getSearchDecorationsForItem(
-    item: CodeViewContextItem<LAnnotation>
+    item: CodeViewContextItem<LAnnotation, Caret>
   ):
     | readonly SearchLineDecoration[]
     | readonly DiffSearchLineDecoration[]
@@ -1647,7 +1655,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private searchFileItem(
-    item: CodeViewFileItemContext<LAnnotation>,
+    item: CodeViewFileItemContext<LAnnotation, Caret>,
     searchParams: SearchParams,
     limit: number
   ): CodeViewSearchMatch[] {
@@ -1674,7 +1682,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private searchDiffItem(
-    item: CodeViewDiffItemContext<LAnnotation>,
+    item: CodeViewDiffItemContext<LAnnotation, Caret>,
     searchParams: SearchParams,
     limit: number
   ): CodeViewSearchMatch[] {
@@ -4324,10 +4332,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.render();
   };
 
-  // Abort any in-flight programmatic scroll when the user takes over.
-  // Attached to root as a passive listener for wheel / touchstart /
-  // pointerdown / keydown; we never mutate the event, just drop our state.
-  private clearPendingScroll = (): void => {
+  // Abort any in-flight programmatic scroll when the user takes over. Handled
+  // shortcuts may start their own programmatic scroll, so leave those intact.
+  private clearPendingScroll = (event?: Event): void => {
+    if (event?.defaultPrevented === true) {
+      return;
+    }
     this.pendingScrollTarget = undefined;
     this.pendingLayoutAnchor = undefined;
     this.scrollAnimation = undefined;
@@ -4342,6 +4352,15 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       event.preventDefault();
       this.closeSearchPanel();
       return;
+    }
+
+    if (this.searchPanel !== undefined) {
+      const findAgain = resolveFindAgainShortcut(event);
+      if (findAgain !== undefined) {
+        event.preventDefault();
+        this.searchPanel.navigate(findAgain === 'previous');
+        return;
+      }
     }
 
     if (
@@ -5199,9 +5218,7 @@ function renderItem<LAnnotation, Caret>(
       file: item.item.file,
       forceRender,
       lineAnnotations: item.item.annotations ?? [],
-      searchDecorations: searchDecorations as
-        | readonly SearchLineDecoration[]
-        | undefined,
+      searchDecorations,
     });
   }
 }

@@ -3,8 +3,8 @@ import {
   searchLineByLine,
   type SearchParams,
 } from '../search';
-import type { Position, Range, ResolvedTextEdit } from './types';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
+import type { Position, Range, ResolvedTextEdit } from './types';
 
 const LINE_FEED = 10;
 const CARRIAGE_RETURN = 13;
