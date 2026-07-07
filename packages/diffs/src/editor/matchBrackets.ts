@@ -11,6 +11,9 @@ const CLOSE_BRACKETS = new Map(
   [...OPEN_BRACKETS].map(([open, close]) => [close, open])
 );
 
+const MAX_BRACKET_SCAN_LINES = 1_000;
+const MAX_BRACKET_SCAN_CHARACTERS = 50_000;
+
 interface BracketPosition extends Position {
   char: string;
 }
@@ -113,7 +116,13 @@ function findClosingBracket<LAnnotation>(
   closingBracket: string
 ): BracketPosition | undefined {
   let depth = 0;
+  let scannedLines = 0;
+  let scannedCharacters = 0;
   for (let line = bracketPosition.line; line < textDocument.lineCount; line++) {
+    if (scannedLines >= MAX_BRACKET_SCAN_LINES) {
+      return undefined;
+    }
+    scannedLines++;
     const lineText = textDocument.getLineText(line);
     const startCharacter =
       line === bracketPosition.line ? bracketPosition.character : 0;
@@ -122,6 +131,10 @@ function findClosingBracket<LAnnotation>(
       character < lineText.length;
       character++
     ) {
+      if (scannedCharacters >= MAX_BRACKET_SCAN_CHARACTERS) {
+        return undefined;
+      }
+      scannedCharacters++;
       if (isInIgnoredTokenRange(tokenizer, { line, character })) {
         continue;
       }
@@ -146,13 +159,23 @@ function findOpeningBracket<LAnnotation>(
   openingBracket: string
 ): BracketPosition | undefined {
   let depth = 0;
+  let scannedLines = 0;
+  let scannedCharacters = 0;
   for (let line = bracketPosition.line; line >= 0; line--) {
+    if (scannedLines >= MAX_BRACKET_SCAN_LINES) {
+      return undefined;
+    }
+    scannedLines++;
     const lineText = textDocument.getLineText(line);
     const startCharacter =
       line === bracketPosition.line
         ? bracketPosition.character
         : lineText.length - 1;
     for (let character = startCharacter; character >= 0; character--) {
+      if (scannedCharacters >= MAX_BRACKET_SCAN_CHARACTERS) {
+        return undefined;
+      }
+      scannedCharacters++;
       if (isInIgnoredTokenRange(tokenizer, { line, character })) {
         continue;
       }

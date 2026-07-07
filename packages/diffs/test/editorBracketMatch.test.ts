@@ -254,4 +254,48 @@ describe('editor bracket matching', () => {
       },
     ]);
   });
+
+  test('bounds forward scans for unmatched opening brackets', () => {
+    const contents = ['(', ...Array.from({ length: 1_199 }, () => 'x')].join(
+      '\n'
+    );
+    const textDocument = new TextDocument('inmemory://1', contents, 'ts');
+    const checkedLines = new Set<number>();
+    const tokenizer = {
+      getStringCommentRegexpRangesInLine(lineIndex: number) {
+        checkedLines.add(lineIndex);
+        return null;
+      },
+    } as EditorTokenizer;
+
+    expect(
+      findBracketMatchRanges(textDocument, tokenizer, {
+        line: 0,
+        character: 1,
+      })
+    ).toBeUndefined();
+    expect(checkedLines.size).toBeLessThan(textDocument.lineCount);
+  });
+
+  test('bounds backward scans for unmatched closing brackets', () => {
+    const contents = [...Array.from({ length: 1_199 }, () => 'x'), ')'].join(
+      '\n'
+    );
+    const textDocument = new TextDocument('inmemory://1', contents, 'ts');
+    const checkedLines = new Set<number>();
+    const tokenizer = {
+      getStringCommentRegexpRangesInLine(lineIndex: number) {
+        checkedLines.add(lineIndex);
+        return null;
+      },
+    } as EditorTokenizer;
+
+    expect(
+      findBracketMatchRanges(textDocument, tokenizer, {
+        line: textDocument.lineCount - 1,
+        character: 1,
+      })
+    ).toBeUndefined();
+    expect(checkedLines.size).toBeLessThan(textDocument.lineCount);
+  });
 });
