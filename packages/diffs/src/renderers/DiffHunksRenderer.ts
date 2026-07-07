@@ -432,7 +432,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // Read line-by-line from the editor document instead of materializing the
     // entire text. This preserves blank documents and the final editable empty
     // row after a trailing line break.
-    diff.additionLines = getEditorDocumentLines(textDocument);
+    diff.additionLines = getEditorDocumentLines(
+      textDocument,
+      diff.additionLines
+    );
 
     const newLength = diff.additionLines.length;
     const additionHastLines = result.code.additionLines;
@@ -1994,12 +1997,40 @@ function createPlainAdditionLineElement(
   };
 }
 
-function getEditorDocumentLines(textDocument: DiffsTextDocument): string[] {
+function getEditorDocumentLines(
+  textDocument: DiffsTextDocument,
+  previousLines: string[]
+): string[] {
   const lines: string[] = [];
+  const fallbackLineBreak = getFallbackLineBreak(previousLines);
   for (let line = 0; line < textDocument.lineCount; line++) {
-    lines.push(textDocument.getLineText(line, true));
+    const lineText = textDocument.getLineText(line, true);
+    lines.push(
+      line < textDocument.lineCount - 1 && !hasLineBreakSuffix(lineText)
+        ? lineText + fallbackLineBreak
+        : lineText
+    );
   }
   return lines;
+}
+
+function hasLineBreakSuffix(line: string): boolean {
+  return line.endsWith('\n') || line.endsWith('\r');
+}
+
+function getFallbackLineBreak(lines: string[]): string {
+  for (const line of lines) {
+    if (line.endsWith('\r\n')) {
+      return '\r\n';
+    }
+    if (line.endsWith('\n')) {
+      return '\n';
+    }
+    if (line.endsWith('\r')) {
+      return '\r';
+    }
+  }
+  return '\n';
 }
 
 // Host line text omits line endings; diff line arrays keep the suffix from parsing.
