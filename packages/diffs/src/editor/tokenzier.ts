@@ -111,6 +111,10 @@ export class EditorTokenizer {
     ) {
       return null;
     }
+    this.#ensureGrammar();
+    if (this.#grammar === undefined) {
+      return null;
+    }
     if (!this.#bracketIgnoredRanges.has(lineIndex)) {
       this.#buildStateStack(lineIndex);
       const state = this.#stateStack[lineIndex] ?? INITIAL;
