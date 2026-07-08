@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": ["src/**/*.ts", "tsdown.config.ts", "vite.config.ts"],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "isolatedDeclarations": true,
+    "allowJs": false,
+    "checkJs": false,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "rootDir": ".",
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo",
+    "resolveJsonModule": true
+  }
+}

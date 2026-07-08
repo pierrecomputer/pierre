@@ -1,0 +1,35 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+tags: ['tsdown', 'publishable']
+
+workspace:
+  inheritedTasks:
+    # No test suite in this package.
+    exclude: ['test']
+
+tasks:
+  # Dev server for the index.html demo page; the npm library itself builds
+  # through the inherited tsdown tasks. No graph edges (the demo imports
+  # src directly), so runInCI: 'always' is safe and keeps the task runnable
+  # from CI-marked shells like agent harnesses.
+  demo:
+    command: 'vite --host --clearScreen=false'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'always'
+
+  # Static build of the demo page into site/, deployed standalone to Vercel
+  # via vercel.json.
+  build-site:
+    command: 'vite build'
+    inputs:
+      - 'index.html'
+      - 'src/**/*'
+      - 'vite.config.ts'
+    outputs:
+      - 'site'
+    options:
+      runInCI: 'always'
