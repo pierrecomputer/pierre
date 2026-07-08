@@ -15,10 +15,13 @@ import type {
 import type { TextDocument, TextDocumentChange } from './textDocument';
 import { addEventListener, debounce, h } from './utils';
 
+const TOKENIZE_TIME_LIMIT = 500;
+
 export interface EditorTokenizerProps {
   highlighter: DiffsHighlighter;
   textDocument: TextDocument<unknown>;
   codeOptions: BaseCodeOptions;
+  matchBrackets?: boolean;
   setStyle: (style: string) => void;
   onDeferTokenize: (
     lines: Map<number, Array<HighlightedToken>>,
@@ -33,15 +36,10 @@ export interface EditorTokenizerProps {
 
 /** Stoppable code tokenizer for the editor */
 export class EditorTokenizer {
-  static TOKENIZE_TIME_LIMIT = 500;
-
   #highlighter: DiffsHighlighter;
   #grammar: IGrammar | undefined;
   #mediaQueryList: MediaQueryList;
   #themeType: 'light' | 'dark';
-  // The resolved name of the theme currently applied to the editor (e.g.
-  // `github-light`). Tracked so `syncTheme` can detect a host-driven theme swap
-  // even when the light/dark mode itself is unchanged.
   #themeName = '';
   #colorMap: string[];
   #textDocument: TextDocument<unknown>;
@@ -49,6 +47,7 @@ export class EditorTokenizer {
   #setStyle: EditorTokenizerProps['setStyle'];
   #onDeferTokenize: EditorTokenizerProps['onDeferTokenize'];
   #onThemeChange: EditorTokenizerProps['onThemeChange'];
+  #matchBrackets: boolean;
   #debug: boolean;
   #disposes?: (() => void)[];
 
@@ -60,6 +59,7 @@ export class EditorTokenizer {
   #backgroundJobId: number = 0;
   #backgroundChangedLineRanges: readonly [number, number][] | undefined;
   #backgroundChangedRangeIndex: number = 0;
+  #bracketIgnoredRanges: Map<number, [number, number][] | null> = new Map();
   #isMessageListenerAttached: boolean = false;
 
   #prebuildStateStack = debounce(async (renderRange?: RenderRange) => {
@@ -101,10 +101,34 @@ export class EditorTokenizer {
     return this.#themeType;
   }
 
+  getStringCommentRegexpRangesInLine(
+    lineIndex: number
+  ): [number, number][] | null {
+    if (
+      !this.#matchBrackets ||
+      lineIndex < 0 ||
+      lineIndex >= this.#textDocument.lineCount
+    ) {
+      return null;
+    }
+    this.#ensureGrammar();
+    if (this.#grammar === undefined) {
+      return null;
+    }
+    if (!this.#bracketIgnoredRanges.has(lineIndex)) {
+      this.#buildStateStack(lineIndex);
+      const state = this.#stateStack[lineIndex] ?? INITIAL;
+      const result = this.#tokenizeLineAt(lineIndex, state);
+      this.#stateStack[lineIndex + 1] = result.state;
+    }
+    return this.#bracketIgnoredRanges.get(lineIndex) ?? null;
+  }
+
   constructor({
     codeOptions,
     highlighter,
     textDocument,
+    matchBrackets,
     setStyle,
     onDeferTokenize,
     onThemeChange,
@@ -159,6 +183,7 @@ export class EditorTokenizer {
     this.#setStyle = setStyle;
     this.#onDeferTokenize = onDeferTokenize;
     this.#onThemeChange = onThemeChange;
+    this.#matchBrackets = matchBrackets !== false;
     this.#debug = __debug ?? false;
     this.#ensureGrammar();
     this.#colorMap = [];
@@ -218,6 +243,8 @@ export class EditorTokenizer {
     const findMatchBackground = colors['editor.findMatchBackground'];
     const findMatchHighlightBackground =
       colors['editor.findMatchHighlightBackground'];
+    const bracketMatchBackground = colors['editorBracketMatch.background'];
+    const bracketMatchBorder = colors['editorBracketMatch.border'];
     const hintForeground = colors['editorHint.foreground'];
     const infoForeground = colors['editorInfo.foreground'];
     const warningForeground = colors['editorWarning.foreground'];
@@ -225,13 +252,15 @@ export class EditorTokenizer {
     this.#setStyle(`:host {
       --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
       --diffs-editor-line-highlight-bg: ${lineHighlightBackground ?? 'var(--diffs-line-bg)'};
-      --diffs-editor-match-bg: ${findMatchBackground ?? 'unset'};
-      --diffs-editor-match-highlight-bg: ${findMatchHighlightBackground ?? 'unset'};
-      --diffs-editor-cursor-fg: ${cursorForeground ?? 'unset'};
-      --diffs-editor-hint-fg: ${hintForeground ?? 'unset'};
-      --diffs-editor-info-fg: ${infoForeground ?? 'unset'};
-      --diffs-editor-warning-fg: ${warningForeground ?? 'unset'};
-      --diffs-editor-error-fg: ${errorForeground ?? 'unset'};
+      --diffs-editor-match-bg: ${findMatchBackground ?? 'initial'};
+      --diffs-editor-match-highlight-bg: ${findMatchHighlightBackground ?? 'initial'};
+      --diffs-editor-bracket-match-bg: ${bracketMatchBackground ?? 'initial'};
+      --diffs-editor-bracket-match-border: ${bracketMatchBorder ?? 'initial'};
+      --diffs-editor-cursor-fg: ${cursorForeground ?? 'initial'};
+      --diffs-editor-hint-fg: ${hintForeground ?? 'initial'};
+      --diffs-editor-info-fg: ${infoForeground ?? 'initial'};
+      --diffs-editor-warning-fg: ${warningForeground ?? 'initial'};
+      --diffs-editor-error-fg: ${errorForeground ?? 'initial'};
     }`);
   }
 
@@ -256,6 +285,15 @@ export class EditorTokenizer {
       throw new Error(
         `Grammar for language "${this.#textDocument.languageId}" not loaded`
       );
+    }
+
+    if (this.#matchBrackets) {
+      // Clear ignored token ranges for lines invalidated by the edit.
+      for (const line of this.#bracketIgnoredRanges.keys()) {
+        if (line >= change.startLine) {
+          this.#bracketIgnoredRanges.delete(line);
+        }
+      }
     }
 
     const { lineCount } = this.#textDocument;
@@ -438,20 +476,6 @@ export class EditorTokenizer {
     this.#prebuildStateStack(renderRange);
   }
 
-  #ensureGrammar(): void {
-    if (
-      this.#grammar === undefined &&
-      !isGrammarlessLanguage(this.#textDocument.languageId) &&
-      this.#highlighter
-        .getLoadedLanguages()
-        .includes(this.#textDocument.languageId)
-    ) {
-      this.#grammar = this.#highlighter.getLanguage(
-        this.#textDocument.languageId
-      );
-    }
-  }
-
   stopBackgroundTokenize(): void {
     if (this.#isStopped) {
       return;
@@ -492,6 +516,20 @@ export class EditorTokenizer {
     }
     this.#isPaused = false;
     this.#postTokenizeMessage(this.#backgroundJobId);
+  }
+
+  #ensureGrammar(): void {
+    if (
+      this.#grammar === undefined &&
+      !isGrammarlessLanguage(this.#textDocument.languageId) &&
+      this.#highlighter
+        .getLoadedLanguages()
+        .includes(this.#textDocument.languageId)
+    ) {
+      this.#grammar = this.#highlighter.getLanguage(
+        this.#textDocument.languageId
+      );
+    }
   }
 
   #attachMessageListener(): void {
@@ -553,6 +591,7 @@ export class EditorTokenizer {
       console.warn(
         `[diffs] Line(${line}) too long to tokenize: ${lineText.length}`
       );
+      this.#cacheBracketIgnoredRanges(line, null);
       return { resolvedTokens: [[0, '', lineText]], state };
     }
     if (
@@ -560,6 +599,7 @@ export class EditorTokenizer {
       lineText === '' ||
       lineText.trim() === ''
     ) {
+      this.#cacheBracketIgnoredRanges(line, null);
       return { resolvedTokens: [[0, '', lineText]], state };
     }
     const result = tokenizeLine(
@@ -567,12 +607,23 @@ export class EditorTokenizer {
       this.#colorMap,
       lineText,
       state,
-      EditorTokenizer.TOKENIZE_TIME_LIMIT
+      TOKENIZE_TIME_LIMIT,
+      this.#matchBrackets
     );
+    this.#cacheBracketIgnoredRanges(line, result.bracketIgnoredRanges);
     return {
       resolvedTokens: result.resolvedTokens,
       state: result.ruleStack,
     };
+  }
+
+  #cacheBracketIgnoredRanges(
+    line: number,
+    ranges: [number, number][] | null
+  ): void {
+    if (this.#matchBrackets) {
+      this.#bracketIgnoredRanges.set(line, ranges);
+    }
   }
 
   #buildStateStack(endAt: number) {
@@ -593,11 +644,18 @@ export class EditorTokenizer {
         lineText !== '' &&
         lineText.trim() !== ''
       ) {
-        state = this.#grammar.tokenizeLine2(
+        const result = tokenizeLine(
+          this.#grammar,
+          this.#colorMap,
           lineText,
           state,
-          EditorTokenizer.TOKENIZE_TIME_LIMIT
-        ).ruleStack;
+          TOKENIZE_TIME_LIMIT,
+          this.#matchBrackets
+        );
+        this.#cacheBracketIgnoredRanges(line, result.bracketIgnoredRanges);
+        state = result.ruleStack;
+      } else {
+        this.#cacheBracketIgnoredRanges(line, null);
       }
     }
     this.#stateStack[line] = state;
@@ -636,17 +694,21 @@ export class EditorTokenizer {
           `[diffs] Line(${line}) too long to tokenize: ${lineText.length}`
         );
         lines.set(line, [[0, '', lineText]]);
+        this.#cacheBracketIgnoredRanges(line, null);
       } else if (lineText === '' || lineText.trim() === '') {
         lines.set(line, [[0, '', lineText]]);
+        this.#cacheBracketIgnoredRanges(line, null);
       } else {
         const ret = tokenizeLine(
           this.#grammar,
           this.#colorMap,
           lineText,
           state,
-          EditorTokenizer.TOKENIZE_TIME_LIMIT
+          TOKENIZE_TIME_LIMIT,
+          this.#matchBrackets
         );
         lines.set(line, ret.resolvedTokens);
+        this.#cacheBracketIgnoredRanges(line, ret.bracketIgnoredRanges);
         state = ret.ruleStack;
       }
 
@@ -696,15 +758,17 @@ export class EditorTokenizer {
   }
 }
 
-export function tokenizeLine(
+function tokenizeLine(
   grammar: IGrammar,
   colorMap: string[],
   lineText: string,
   stateStack: StateStack,
-  timeLimit?: number
+  timeLimit?: number,
+  collectBracketIgnoredRanges = true
 ): {
   ruleStack: StateStack;
   resolvedTokens: Array<HighlightedToken>;
+  bracketIgnoredRanges: [number, number][];
 } {
   const result = grammar.tokenizeLine2(lineText, stateStack, timeLimit);
   if (result.stoppedEarly) {
@@ -715,6 +779,7 @@ export function tokenizeLine(
   const rawTokens = result.tokens;
   const tokensLength = rawTokens.length / 2;
   const resolvedTokens: Array<HighlightedToken> = [];
+  const bracketIgnoredRanges: [number, number][] = [];
   for (let j = 0; j < tokensLength; j++) {
     const offset = rawTokens[2 * j];
     const nextOffset =
@@ -724,14 +789,20 @@ export function tokenizeLine(
       continue;
     }
     const metadata = rawTokens[2 * j + 1];
-    const bg = EncodedTokenMetadata.getForeground(metadata);
-    const fg = colorMap[bg];
+    const fg = EncodedTokenMetadata.getForeground(metadata);
     const tokenText = lineText.slice(offset, nextOffset);
-    resolvedTokens.push([offset, fg, tokenText]);
+    resolvedTokens.push([offset, colorMap[fg], tokenText]);
+    if (
+      collectBracketIgnoredRanges &&
+      EncodedTokenMetadata.getTokenType(metadata) > 0
+    ) {
+      bracketIgnoredRanges.push([offset, nextOffset]);
+    }
   }
   return {
     ruleStack: result.ruleStack,
     resolvedTokens,
+    bracketIgnoredRanges,
   };
 }
 

@@ -513,6 +513,9 @@ interface EditorOptions<LAnnotation> {
   // Render rounded corners on selection ranges (default: true)
   roundedSelection?: boolean;
 
+  // Highlight matching brackets near the caret (default: true)
+  matchBrackets?: boolean;
+
   // Auto-surround selected text when typing a quote or bracket.
   // Values: 'default' | 'never' | 'brackets' | 'quotes' | 'languageDefined'
   // (default: 'default' — both quotes and brackets)
