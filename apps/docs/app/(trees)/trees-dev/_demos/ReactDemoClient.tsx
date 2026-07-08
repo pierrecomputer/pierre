@@ -12,6 +12,7 @@ import {
   useFileTreeSearch,
   useFileTreeSelection,
 } from '@pierre/trees/react';
+import { useWindowScrollLock } from '@trees/_lib/useWindowScrollLock';
 import { useState } from 'react';
 
 import { ExampleCard } from '../_components/ExampleCard';
@@ -47,6 +48,9 @@ function ClientRenderedContextMenu({
   >;
   item: ContextMenuItem;
 }) {
+  // Keep the portaled menu anchored: the tree already blocks its own pane's
+  // scroll, and this blocks the window-level scroll the page owns.
+  useWindowScrollLock();
   const itemType = item.kind === 'directory' ? 'Folder' : 'File';
 
   return (

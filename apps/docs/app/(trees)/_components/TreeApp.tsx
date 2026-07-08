@@ -26,6 +26,7 @@ import {
   useFileTreeSearch,
   useFileTreeSelection,
 } from '@pierre/trees/react';
+import { useWindowScrollLock } from '@trees/_lib/useWindowScrollLock';
 import type {
   CSSProperties,
   ReactNode,
@@ -887,6 +888,10 @@ function DefaultContextMenu({
   context: ContextMenuOpenContext;
   portalContainer: HTMLElement | null | undefined;
 }): React.JSX.Element {
+  // The tree blocks scrolling in its own pane while the menu is open; locking
+  // window scroll keeps the portaled menu anchored when the page could scroll
+  // independently of the tree.
+  useWindowScrollLock();
   const closeAfter = (action: () => void) => {
     action();
     context.close();
