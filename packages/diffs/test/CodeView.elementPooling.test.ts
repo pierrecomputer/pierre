@@ -148,6 +148,54 @@ describe('CodeView element pooling', () => {
     }
   });
 
+  // Header slot nodes produced by options callbacks (renderHeaderPrefix and
+  // friends) are light-DOM children of the host element, owned by the
+  // File/FileDiff instance rather than the host application. Releasing a row
+  // must remove them — a shell with leftover light-DOM children never
+  // qualifies as clean, which would exclude it from pooled reuse.
+  test('reuses shells for rows that render header slot content', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView({
+      theme: DEFAULT_THEMES,
+      renderHeaderPrefix: () => 'prefix content',
+    });
+    const root = createRoot({ height: 120 });
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [
+        makeFileItem('file:first', 'first slotted content', 100),
+        makeFileItem('file:second', 'second slotted content', 100),
+      ]);
+
+      let renderedItems = viewer.getRenderedItems();
+      expect(renderedItems.map((item) => item.id)).toEqual(['file:first']);
+      const firstElement = renderedItems[0].element;
+      await waitFor(
+        () => firstElement.querySelector('[slot="header-prefix"]') != null
+      );
+      expect(
+        firstElement.querySelectorAll('[slot="header-prefix"]')
+      ).toHaveLength(1);
+
+      root.scrollTop = 2_400;
+      dispatchScroll(root);
+      viewer.render(true);
+      await wait(0);
+
+      renderedItems = viewer.getRenderedItems();
+      expect(renderedItems.map((item) => item.id)).toEqual(['file:second']);
+      expect(renderedItems[0].element).toBe(firstElement);
+      expect(
+        firstElement.querySelectorAll('[slot="header-prefix"]')
+      ).toHaveLength(1);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('clears pooled shells when shared css options change', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({
