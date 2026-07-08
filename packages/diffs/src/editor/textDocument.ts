@@ -64,7 +64,7 @@ export class TextDocument<LAnnotation> {
   constructor(
     uri: string,
     text: string,
-    languageId = 'plaintext',
+    languageId = 'text',
     version = 0,
     editStack: EditStack<LAnnotation> = new EditStack()
   ) {

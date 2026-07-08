@@ -1,6 +1,5 @@
 import { DIFFS_TAG_NAME } from '../constants';
-import { Editor, type EditorOptions, TextDocument } from '../editor';
-import type { EditStack } from '../editor/editStack';
+import { Editor, type EditorOptions } from '../editor';
 import type { FileContents, LineAnnotation } from '../types';
 import type { WorkerPoolManager } from '../worker';
 import type { FileOptions } from './File';
@@ -23,9 +22,9 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
   private file?: FileContents;
   private scrollContainer: HTMLElement;
   private fileContainer: HTMLElement;
+  private virtualizer: Virtualizer;
   private fileInstance: VirtualizedFile<LAnnotation>;
   private renderPlaceholder?: () => HTMLElement;
-  private documentCache = new Map<string, TextDocument<LAnnotation>>();
 
   constructor(options: CodeEditorOptions<LAnnotation> = {}) {
     const {
@@ -39,33 +38,9 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
       ...editorOptions
     } = options;
 
-    super({
-      ...editorOptions,
-      __createTextDocument: (
-        filename: string,
-        contents: string,
-        languageId: string,
-        cacheKey: string | undefined,
-        editStack: EditStack<LAnnotation>
-      ) => {
-        const documentCache = this.documentCache;
-        cacheKey = (cacheKey ?? filename) + '(' + languageId + ')';
-        if (documentCache.has(cacheKey)) {
-          return documentCache.get(cacheKey)!;
-        }
-        const document = new TextDocument<LAnnotation>(
-          filename,
-          contents,
-          languageId,
-          0,
-          editStack
-        );
-        documentCache.set(cacheKey, document);
-        return document;
-      },
-    });
+    super(editorOptions);
 
-    const virtualizer = new Virtualizer({
+    this.virtualizer = new Virtualizer({
       overscrollSize,
       intersectionObserverMargin: overscrollSize * 4,
     });
@@ -81,12 +56,12 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
         useTokenTransformer: true,
         disableFileHeader: true,
       },
-      virtualizer,
+      this.virtualizer,
       undefined,
       workerPoolManager
     );
 
-    virtualizer.setup(this.scrollContainer);
+    this.virtualizer.setup(this.scrollContainer);
     this.scrollContainer.style.cssText =
       'width:100%;height:100%;overflow:auto;';
     this.edit(this.fileInstance);
@@ -146,6 +121,16 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
         file: this.file,
         lineAnnotations,
       });
+    }
+  }
+
+  override cleanUp(recycle = false): void {
+    super.cleanUp(recycle);
+    this.fileInstance.cleanUp(recycle);
+    this.virtualizer.cleanUp();
+    this.scrollContainer.remove();
+    if (!recycle) {
+      this.file = undefined;
     }
   }
 }
