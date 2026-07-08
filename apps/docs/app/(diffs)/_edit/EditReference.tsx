@@ -84,9 +84,15 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
     headingClassName: 'border-purple-500/30 text-purple-500',
     items: [
       {
-        term: 'Line wrapping',
-        description:
-          'Carets, selections, and matches render correctly across wrapped visual lines.',
+        term: 'Works with CodeView',
+        description: (
+          <>
+            Edit virtualized <code>CodeView</code> instances with{' '}
+            <code>edit: true</code>. Your <code>createEditor</code> function
+            creates the editor instance on demand, and editors persist as files
+            scroll in and out.
+          </>
+        ),
       },
       {
         term: 'Virtualized files',
@@ -116,6 +122,11 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
             <code>onFocus</code>, and <code>onBlur</code> callbacks.
           </>
         ),
+      },
+      {
+        term: 'Line wrapping',
+        description:
+          'Carets, selections, and matches render correctly across wrapped visual lines.',
       },
     ],
   },
