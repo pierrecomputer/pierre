@@ -3,12 +3,14 @@ import { describe, expect, test } from 'bun:test';
 import { CodeView, type CodeViewCoordinator } from '../src/components/CodeView';
 import { DEFAULT_THEMES } from '../src/constants';
 import type { CodeViewItem, FileContents } from '../src/types';
+import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
   createRoot,
   dispatchScroll,
   installDom,
   renderItems,
   wait,
+  waitFor,
 } from './domHarness';
 
 // Kept local: the shared makeFile/makeFileItem helpers have no label
@@ -39,8 +41,25 @@ function makeFileItem(
   };
 }
 
+function makeDiffItem(id: string, name: string): CodeViewItem<undefined> {
+  return {
+    id,
+    type: 'diff',
+    fileDiff: parseDiffFromFile(
+      { name, contents: 'one\ntwo\nthree\n' },
+      { name, contents: 'one\ntwo changed\nthree\n' }
+    ),
+  };
+}
+
 function getShadowText(element: HTMLElement): string {
   return element.shadowRoot?.textContent ?? '';
+}
+
+function getHeaderCount(element: HTMLElement): number {
+  return (
+    element.shadowRoot?.querySelectorAll('[data-diffs-header]').length ?? 0
+  );
 }
 
 function getShellCounts(element: HTMLElement): {
@@ -162,6 +181,56 @@ describe('CodeView element pooling', () => {
       const nextElement = viewer.getRenderedItems()[0]?.element;
       expect(nextElement).toBeDefined();
       expect(pooledCandidates).not.toContain(nextElement);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  // Toggling disableFileHeader does not clear the element pool. A row
+  // remounted from a pooled shell must not display a header carried over
+  // from the shell's previous occupant.
+  test('drops stale pooled headers when disableFileHeader is enabled', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView({ theme: DEFAULT_THEMES });
+
+    try {
+      viewer.setup(createRoot({ height: 1000 }));
+      await renderItems(viewer, [
+        makeDiffItem('diff:first', 'first.ts'),
+        makeFileItem('file:second', 'second pooled header', 5),
+      ]);
+
+      const pooledCandidates = viewer
+        .getRenderedItems()
+        .map((item) => item.element);
+      expect(pooledCandidates).toHaveLength(2);
+      for (const element of pooledCandidates) {
+        await waitFor(() => getHeaderCount(element) === 1);
+        expect(getHeaderCount(element)).toBe(1);
+      }
+
+      // Release both rows into the pool, then disable headers — this option
+      // change intentionally keeps the pool.
+      viewer.setItems([]);
+      viewer.setOptions({ disableFileHeader: true, theme: DEFAULT_THEMES });
+      await renderItems(viewer, [
+        makeDiffItem('diff:third', 'third.ts'),
+        makeFileItem('file:fourth', 'fourth pooled header', 5),
+      ]);
+
+      const remountedItems = viewer.getRenderedItems();
+      expect(remountedItems.map((item) => item.id)).toEqual([
+        'diff:third',
+        'file:fourth',
+      ]);
+      for (const item of remountedItems) {
+        // The rows must reuse pooled shells, otherwise this test would not
+        // exercise pooled reuse at all.
+        expect(pooledCandidates).toContain(item.element);
+        expect(getHeaderCount(item.element)).toBe(0);
+      }
     } finally {
       viewer.cleanUp();
       await wait(0);
