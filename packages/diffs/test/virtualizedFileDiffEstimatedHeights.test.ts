@@ -46,6 +46,7 @@ const virtualizer = {
   isInstanceVisible() {
     return true;
   },
+  requestHeightReconcile() {},
 } as never;
 
 interface InspectableVirtualizedFileDiff {
