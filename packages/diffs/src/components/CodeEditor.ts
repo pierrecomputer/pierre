@@ -11,7 +11,11 @@ export interface CodeEditorOptions<LAnnotation>
     EditorOptions<LAnnotation>,
     Pick<
       FileOptions<LAnnotation>,
-      'theme' | 'overflow' | 'themeType' | 'renderAnnotation'
+      | 'theme'
+      | 'overflow'
+      | 'themeType'
+      | 'renderAnnotation'
+      | 'disableErrorHandling'
     > {
   overscrollSize?: number;
   workerPoolManager?: WorkerPoolManager;
@@ -32,6 +36,7 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
       overflow,
       themeType,
       renderAnnotation,
+      disableErrorHandling,
       overscrollSize = 0,
       workerPoolManager,
       renderPlaceholder,
@@ -53,6 +58,7 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
         overflow,
         themeType,
         renderAnnotation,
+        disableErrorHandling,
         useTokenTransformer: true,
         disableFileHeader: true,
       },
