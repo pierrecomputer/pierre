@@ -94,14 +94,16 @@ export const GitHubTokenControl = memo(function GitHubTokenControl({
             >
               a classic token
             </a>{' '}
-            with repo scope. Saves to localStorage.
+            with repo scope. Saved only in localStorage.
           </p>
           <form className="mt-2 flex gap-1.5" onSubmit={handleSubmit}>
             <Input
-              className="flex-1"
+              className="bg-background flex-1"
               inputSize="sm"
               type="password"
               autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
               placeholder="Paste token"
               value={draftToken}
               onChange={({ currentTarget }) =>
