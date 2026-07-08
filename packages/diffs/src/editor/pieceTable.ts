@@ -1,6 +1,7 @@
+import type { Position, Range } from '../types';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
 import type { SearchParams } from './searchPanel';
-import type { Position, Range, ResolvedTextEdit } from './textDocument';
+import type { ResolvedTextEdit } from './textDocument';
 
 const MAX_FIND_MATCHES = 100000;
 // TODO(ije): use Intl.Segmenter instead of regex for word separators

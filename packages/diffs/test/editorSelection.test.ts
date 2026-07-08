@@ -12,7 +12,6 @@ import {
   createSelectionFrom,
   DirectionForward,
   DirectionNone,
-  type EditorSelection,
   expandCollapsedSelectionToWord,
   extendSelection,
   findNexMatch,
@@ -28,11 +27,9 @@ import {
   resolveIndentEdits,
   selectionIntersects,
 } from '../src/editor/selection';
-import {
-  DirectionBackward,
-  type SelectionDirection,
-} from '../src/editor/selection';
+import { DirectionBackward } from '../src/editor/selection';
 import { TextDocument } from '../src/editor/textDocument';
+import type { EditorSelection, SelectionDirection } from '../src/types';
 
 type MockNode = {
   nodeType: number;

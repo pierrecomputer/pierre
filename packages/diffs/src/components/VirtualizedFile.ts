@@ -390,6 +390,11 @@ export class VirtualizedFile<
     };
   }
 
+  public getScrollContainer(): HTMLElement | undefined {
+    const root = this.getSimpleVirtualizer()?.getRoot();
+    return root instanceof HTMLElement ? root : root?.documentElement;
+  }
+
   public getNumericScrollAnchor(
     localViewportTop: number
   ): NumericScrollLineAnchor | undefined {

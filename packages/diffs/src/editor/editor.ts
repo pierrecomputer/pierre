@@ -3,12 +3,16 @@ import type {
   DiffLineAnnotation,
   DiffsEditableComponent,
   DiffsEditor,
-  DiffsEditorSelection,
   DiffsHighlighter,
+  EditorSelection,
+  EditorState,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
+  Position,
+  Range,
   RenderRange,
+  TextEdit,
 } from '../types';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import {
@@ -38,7 +42,7 @@ import {
   type SearchPanelMode,
   SearchPanelWidget,
 } from './searchPanel';
-import type { AutoSurround, EditorSelection } from './selection';
+import type { AutoSurround } from './selection';
 import {
   applyDeleteCharacterToSelections,
   applyDeleteHardLineForwardToSelections,
@@ -82,12 +86,9 @@ import {
 } from './selectionAction';
 import { createSpriteElement } from './sprite';
 import {
-  type Position,
-  type Range,
   type ResolvedTextEdit,
   TextDocument,
   type TextDocumentChange,
-  type TextEdit,
 } from './textDocument';
 import {
   getExpandedAsciiTextColumns,
@@ -148,13 +149,6 @@ export interface EditorOptions<LAnnotation> {
   onBlur?: () => void;
   // debug flag
   __debug?: boolean;
-}
-
-export interface EditorState<LAnnotation> {
-  file: FileContents;
-  lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
-  selections?: EditorSelection[];
-  renderRange?: RenderRange;
 }
 
 // Cap on how far an edit may widen the virtualized render window, as a multiple
@@ -424,36 +418,45 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#runCommand('redo');
   }
 
-  getState(): EditorState<LAnnotation> {
-    const fileRef = this.#getFileRef();
-    if (fileRef === undefined) {
-      throw new Error('Editor is not attached');
-    }
+  getContent(): FileContents | undefined {
+    return this.#getFileRef();
+  }
+
+  getState(): EditorState {
+    const scrollContainer = this.#fileInstance?.getScrollContainer?.();
     return {
-      file: { ...fileRef, cacheKey: 'edited-at-' + Date.now() },
       selections: this.#selections,
-      lineAnnotations: this.#lineAnnotations,
-      renderRange: this.#renderRange,
+      view:
+        scrollContainer !== undefined
+          ? {
+              scrollLeft: scrollContainer.scrollLeft,
+              scrollTop: scrollContainer.scrollTop,
+            }
+          : undefined,
     };
   }
 
-  setState({
-    file,
-    lineAnnotations,
-    renderRange,
-    selections,
-  }: EditorState<LAnnotation>): void {
-    this.#resetCache();
-    this.#resetState();
-    this.#initSelections = selections;
-    this.#fileInstance?.render({
-      file: { ...file, cacheKey: 'edited-at-' + Date.now() },
-      lineAnnotations,
-      renderRange,
-    });
+  setState({ selections, view }: EditorState): void {
+    if (this.#fileInstance === undefined || this.#textDocument === undefined) {
+      throw new Error('Editor is not attached');
+    }
+    if (view !== undefined) {
+      const scrollContainer = this.#fileInstance.getScrollContainer?.();
+      if (scrollContainer !== undefined) {
+        scrollContainer.scrollTo({
+          left: view.scrollLeft,
+          top: view.scrollTop,
+          behavior: 'instant',
+        });
+      }
+    }
+    this.#updateSelections(selections ?? []);
+    this.#scrollToPrimaryCaret();
   }
 
-  setSelections(selections: DiffsEditorSelection[]): void {
+  setSelections(
+    selections: (Range & { direction: 'none' | 'backward' | 'forward' })[]
+  ): void {
     const textDocument = this.#textDocument;
     if (textDocument === undefined) {
       throw new Error('Text document is not initialized');

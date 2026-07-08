@@ -5,12 +5,9 @@ import {
   EditStack,
   shouldCoalesceEditStackEntry,
 } from '../src/editor/editStack';
-import type { EditorSelection } from '../src/editor/selection';
-import {
-  DirectionNone,
-  type SelectionDirection,
-} from '../src/editor/selection';
+import { DirectionNone } from '../src/editor/selection';
 import { TextDocument } from '../src/editor/textDocument';
+import type { EditorSelection, SelectionDirection } from '../src/types';
 
 function createSelection(
   startLine: number,

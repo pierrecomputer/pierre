@@ -4,11 +4,7 @@ import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type {
-  DiffsEditorSelection,
-  FileContents,
-  RenderRange,
-} from '../src/types';
+import type { FileContents, RenderRange } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -55,7 +51,11 @@ function renderedLineNumbers(content: HTMLElement): number[] {
   return out.sort((a, b) => a - b);
 }
 
-function collapsedCaret(line: number): DiffsEditorSelection {
+type EditableSelection = Parameters<
+  Editor<undefined>['setSelections']
+>[0][number];
+
+function collapsedCaret(line: number): EditableSelection {
   return {
     start: { line, character: 0 },
     end: { line, character: 0 },

@@ -1,5 +1,5 @@
-import type { EditorSelection } from './selection';
-import type { TextDocument, TextEdit } from './textDocument';
+import type { EditorSelection, TextEdit } from '../types';
+import type { TextDocument } from './textDocument';
 import { h } from './utils';
 
 export interface SelectionActionContext<LAnnotation> {
