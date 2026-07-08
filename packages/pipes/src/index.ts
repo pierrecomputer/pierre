@@ -1,10 +1,28 @@
-import { advanceCamera, cameraEye, cameraViewProj, createCamera } from './camera';
-import type { GridDims, JointStyle, PipeMaterial } from './pipes';
-import { CLASSIC_MATERIALS, createSim, resetSim, simShouldReset, simUpdate, suspendSim } from './pipes';
-import { createFlexSim, flexShouldReset, flexUpdate, resetFlexSim, suspendFlexSim } from './flex';
-import { createRenderer, resetBatch, resetFlexBuffer } from './renderer';
+import {
+  advanceCamera,
+  cameraEye,
+  cameraViewProj,
+  createCamera,
+} from './camera';
+import {
+  createFlexSim,
+  flexShouldReset,
+  flexUpdate,
+  resetFlexSim,
+  suspendFlexSim,
+} from './flex';
 import type { Vec3 } from './math';
 import { v3cross, v3normalize, v3scale } from './math';
+import type { GridDims, JointStyle, PipeMaterial } from './pipes';
+import {
+  CLASSIC_MATERIALS,
+  createSim,
+  resetSim,
+  simShouldReset,
+  simUpdate,
+  suspendSim,
+} from './pipes';
+import { createRenderer, resetBatch, resetFlexBuffer } from './renderer';
 
 export { CLASSIC_MATERIALS } from './pipes';
 export type { PipeMaterial, JointStyle } from './pipes';
@@ -110,18 +128,32 @@ const HALF_EYE: Vec3 = [0.24367, 0.24367, 0.93875];
 
 const TILT_RANGE = (5 * Math.PI) / 180;
 
-const DEFAULTS = {
+// Options whose absence is meaningful stay optional (straightBias switches
+// to the original's weighted algorithm; the radii and palettes derive their
+// defaults from other options); everything else gets a concrete default.
+type OptionDefaults = Required<
+  Omit<
+    PipesOptions,
+    'straightBias' | 'bendRadius' | 'capRadius' | 'colors' | 'materials'
+  >
+> &
+  Pick<
+    PipesOptions,
+    'straightBias' | 'bendRadius' | 'capRadius' | 'colors' | 'materials'
+  >;
+
+const DEFAULTS: OptionDefaults = {
   pipeCount: 4,
   gridSize: 20,
   speed: 11,
-  straightBias: undefined as number | undefined,
+  straightBias: undefined,
   pipeRadius: 1 / 7,
-  bendRadius: undefined as number | undefined,
-  capRadius: undefined as number | undefined,
-  jointStyle: 'elbow' as JointStyle,
+  bendRadius: undefined,
+  capRadius: undefined,
+  jointStyle: 'elbow',
   teapotChance: 1 / 1000,
-  pipeStyle: 'normal' as 'normal' | 'flex' | 'mixed',
-  growth: 'smooth' as 'smooth' | 'step',
+  pipeStyle: 'normal',
+  growth: 'smooth',
   multiPipes: true,
   pipesPerRound: 5,
   chase: true,
@@ -130,9 +162,9 @@ const DEFAULTS = {
   fadeSeconds: 1.2,
   cameraDrift: false,
   pixelSize: 2,
-  backgroundColor: [0, 0, 0] as Vec3 | 'transparent',
-  colors: undefined as Vec3[] | undefined,
-  materials: undefined as PipeMaterial[] | undefined,
+  backgroundColor: [0, 0, 0],
+  colors: undefined,
+  materials: undefined,
 };
 
 type Phase = 'running' | 'fadeOut' | 'fadeIn';
@@ -147,7 +179,10 @@ function calcGridDims(gridSize: number, aspect: number): GridDims {
   return [Math.max(2, Math.round(gridSize * aspect)), gridSize, gridSize];
 }
 
-export function createPipes(canvas: HTMLCanvasElement, options: PipesOptions = {}): PipesInstance {
+export function createPipes(
+  canvas: HTMLCanvasElement,
+  options: PipesOptions = {}
+): PipesInstance {
   const opts = { ...DEFAULTS, ...options };
   const pipeRadius = opts.pipeRadius;
   const bendRadius = opts.bendRadius ?? pipeRadius;
@@ -155,20 +190,23 @@ export function createPipes(canvas: HTMLCanvasElement, options: PipesOptions = {
 
   const materials: PipeMaterial[] =
     opts.materials ??
-    (opts.colors?.length
-      ? opts.colors.map((c): PipeMaterial => ({
-          ambient: [0, 0, 0],
-          diffuse: c,
-          specular: [0.5, 0.5, 0.5],
-          shininess: 32,
-        }))
+    (opts.colors != null && opts.colors.length > 0
+      ? opts.colors.map(
+          (c): PipeMaterial => ({
+            ambient: [0, 0, 0],
+            diffuse: c,
+            specular: [0.5, 0.5, 0.5],
+            shininess: 32,
+          })
+        )
       : CLASSIC_MATERIALS);
   const materialCount = Math.min(materials.length, 24);
 
   function applySize(): boolean {
     // The backing store is always full resolution; the renderer's offscreen
     // target handles retro downscaling, so pixelSize can change live.
-    const scale = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = window.devicePixelRatio;
+    const scale = Math.min(dpr > 0 ? dpr : 1, 2);
     const w = Math.max(1, Math.round(canvas.clientWidth * scale));
     const h = Math.max(1, Math.round(canvas.clientHeight * scale));
     if (canvas.width === w && canvas.height === h) return false;
@@ -180,7 +218,14 @@ export function createPipes(canvas: HTMLCanvasElement, options: PipesOptions = {
 
   const aspect = () => canvas.width / Math.max(canvas.height, 1);
 
-  const renderer = createRenderer(canvas, opts.backgroundColor, pipeRadius, bendRadius, opts.pixelSize, materials);
+  const renderer = createRenderer(
+    canvas,
+    opts.backgroundColor,
+    pipeRadius,
+    bendRadius,
+    opts.pixelSize,
+    materials
+  );
   let pendingDims = calcGridDims(opts.gridSize, aspect());
 
   const sim = createSim(
@@ -205,7 +250,7 @@ export function createPipes(canvas: HTMLCanvasElement, options: PipesOptions = {
     renderer.elbows,
     renderer.spheres,
     renderer.discs,
-    renderer.teapots,
+    renderer.teapots
   );
   const flexSim = createFlexSim(
     {
@@ -223,7 +268,7 @@ export function createPipes(canvas: HTMLCanvasElement, options: PipesOptions = {
     pendingDims,
     renderer.flex,
     renderer.spheres,
-    renderer.teapots,
+    renderer.teapots
   );
   const cam = createCamera(opts.gridSize);
 
@@ -243,12 +288,20 @@ export function createPipes(canvas: HTMLCanvasElement, options: PipesOptions = {
   const fadeInSeconds = () => fadeOutSeconds() * 0.83;
 
   function hardReset(): void {
-    for (const batch of [renderer.cylinders, renderer.elbows, renderer.spheres, renderer.discs, renderer.teapots]) {
+    for (const batch of [
+      renderer.cylinders,
+      renderer.elbows,
+      renderer.spheres,
+      renderer.discs,
+      renderer.teapots,
+    ]) {
       resetBatch(batch);
     }
     resetFlexBuffer(renderer.flex);
 
-    const flexRound = opts.pipeStyle === 'flex' || (opts.pipeStyle === 'mixed' && Math.random() < 0.5);
+    const flexRound =
+      opts.pipeStyle === 'flex' ||
+      (opts.pipeStyle === 'mixed' && Math.random() < 0.5);
     if (flexRound) {
       suspendSim(sim);
       resetFlexSim(flexSim, pendingDims);
@@ -327,7 +380,8 @@ export function createPipes(canvas: HTMLCanvasElement, options: PipesOptions = {
     if (phase === 'running') {
       fade = 1;
       update(dt);
-      if (roundOver() || roundAge > opts.roundDuration || dimsResetRequested) beginReset();
+      if (roundOver() || roundAge > opts.roundDuration || dimsResetRequested)
+        beginReset();
     } else if (phase === 'fadeOut') {
       update(dt);
       fadeT += dt / Math.max(fadeOutSeconds(), 0.001);
@@ -373,25 +427,48 @@ export function createPipes(canvas: HTMLCanvasElement, options: PipesOptions = {
     if (destroyed) return;
     if (partial.speed !== undefined) {
       opts.speed = sim.config.speed = flexSim.config.speed = partial.speed;
-      for (const p of sim.pipes) if (p.alive) p.speed = partial.speed * (0.9 + Math.random() * 0.2);
-      for (const p of flexSim.pipes) if (p.alive) p.speed = partial.speed * (0.9 + Math.random() * 0.2);
+      for (const p of sim.pipes)
+        if (p.alive) p.speed = partial.speed * (0.9 + Math.random() * 0.2);
+      for (const p of flexSim.pipes)
+        if (p.alive) p.speed = partial.speed * (0.9 + Math.random() * 0.2);
     }
     if ('straightBias' in partial) {
-      opts.straightBias = sim.config.straightBias = flexSim.config.straightBias = partial.straightBias;
+      opts.straightBias =
+        sim.config.straightBias =
+        flexSim.config.straightBias =
+          partial.straightBias;
     }
     if (partial.pipeStyle !== undefined) opts.pipeStyle = partial.pipeStyle;
-    if (partial.jointStyle !== undefined) opts.jointStyle = sim.config.jointStyle = partial.jointStyle;
-    if (partial.teapotChance !== undefined) opts.teapotChance = sim.config.teapotChance = partial.teapotChance;
-    if (partial.growth !== undefined) opts.growth = sim.config.growth = flexSim.config.growth = partial.growth;
-    if (partial.multiPipes !== undefined) opts.multiPipes = sim.config.multiPipes = flexSim.config.multiPipes = partial.multiPipes;
-    if (partial.pipesPerRound !== undefined) opts.pipesPerRound = sim.config.pipesPerRound = flexSim.config.pipesPerRound = partial.pipesPerRound;
-    if (partial.chase !== undefined) opts.chase = sim.config.chase = flexSim.config.chase = partial.chase;
+    if (partial.jointStyle !== undefined)
+      opts.jointStyle = sim.config.jointStyle = partial.jointStyle;
+    if (partial.teapotChance !== undefined)
+      opts.teapotChance = sim.config.teapotChance = partial.teapotChance;
+    if (partial.growth !== undefined)
+      opts.growth = sim.config.growth = flexSim.config.growth = partial.growth;
+    if (partial.multiPipes !== undefined)
+      opts.multiPipes =
+        sim.config.multiPipes =
+        flexSim.config.multiPipes =
+          partial.multiPipes;
+    if (partial.pipesPerRound !== undefined)
+      opts.pipesPerRound =
+        sim.config.pipesPerRound =
+        flexSim.config.pipesPerRound =
+          partial.pipesPerRound;
+    if (partial.chase !== undefined)
+      opts.chase = sim.config.chase = flexSim.config.chase = partial.chase;
     if (partial.resetThreshold !== undefined) {
-      opts.resetThreshold = sim.config.resetThreshold = flexSim.config.resetThreshold = partial.resetThreshold;
+      opts.resetThreshold =
+        sim.config.resetThreshold =
+        flexSim.config.resetThreshold =
+          partial.resetThreshold;
     }
-    if (partial.roundDuration !== undefined) opts.roundDuration = partial.roundDuration;
-    if (partial.fadeSeconds !== undefined) opts.fadeSeconds = partial.fadeSeconds;
-    if (partial.cameraDrift !== undefined) opts.cameraDrift = partial.cameraDrift;
+    if (partial.roundDuration !== undefined)
+      opts.roundDuration = partial.roundDuration;
+    if (partial.fadeSeconds !== undefined)
+      opts.fadeSeconds = partial.fadeSeconds;
+    if (partial.cameraDrift !== undefined)
+      opts.cameraDrift = partial.cameraDrift;
     if (partial.backgroundColor !== undefined) {
       opts.backgroundColor = partial.backgroundColor;
       renderer.setBackground(partial.backgroundColor);

@@ -18,6 +18,9 @@
       "path": "packages/path-store/tsconfig.json"
     },
     {
+      "path": "packages/pipes/tsconfig.json"
+    },
+    {
       "path": "packages/theme/tsconfig.json"
     },
     {

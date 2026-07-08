@@ -1,5 +1,11 @@
 import type { Mat4, Vec3 } from './math';
-import { mat4LookAt, mat4Multiply, mat4Perspective, mat4RotateX, mat4RotateZ } from './math';
+import {
+  mat4LookAt,
+  mat4Multiply,
+  mat4Perspective,
+  mat4RotateX,
+  mat4RotateZ,
+} from './math';
 
 // The original (VIEW.CXX / STATE.CXX) never moves the camera into the pipe
 // volume: the eye sits at a fixed distance where the whole node box is always
@@ -8,7 +14,7 @@ import { mat4LookAt, mat4Multiply, mat4Perspective, mat4RotateX, mat4RotateZ } f
 // Orbiting the eye at elevation 0 is the equivalent transform.
 
 // STATE::IncrementSceneRotation's magic constant, in radians.
-export const SCENE_ROTATION_STEP = (9.73156 * Math.PI) / 180;
+export const SCENE_ROTATION_STEP: number = (9.73156 * Math.PI) / 180;
 
 // Original proportions: eye distance 75 against a node-corner distance of
 // ~69.3 (a margin ratio of 1.082), so pipes can never reach the camera.
@@ -59,7 +65,12 @@ const VIEW = new Float32Array(16);
 const ROT = new Float32Array(16);
 const TMP = new Float32Array(16);
 
-export function cameraViewProj(out: Mat4, cam: Camera, aspect: number, eye: Vec3): Mat4 {
+export function cameraViewProj(
+  out: Mat4,
+  cam: Camera,
+  aspect: number,
+  eye: Vec3
+): Mat4 {
   mat4Perspective(PROJ, cam.fov, aspect, 0.5, cam.far);
   mat4LookAt(VIEW, eye, [0, 0, 0], [0, 1, 0]);
   if (cam.tiltX !== 0 || cam.tiltZ !== 0) {

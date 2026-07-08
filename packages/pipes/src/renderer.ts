@@ -1,5 +1,10 @@
 import type { Mesh } from './geometry';
-import { createCylinderMesh, createDiscMesh, createElbowMesh, createSphereMesh } from './geometry';
+import {
+  createCylinderMesh,
+  createDiscMesh,
+  createElbowMesh,
+  createSphereMesh,
+} from './geometry';
 import type { Mat4, Vec3 } from './math';
 import type { PipeMaterial } from './pipes';
 import { createTeapotMesh } from './teapot';
@@ -130,61 +135,85 @@ const FLEX_CHUNK_VERTS = 24_000;
 const FLEX_CHUNK_INDICES = 80_000;
 const FLEX_MAX_CHUNKS = 16;
 
-function compileShader(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
+function compileShader(
+  gl: WebGL2RenderingContext,
+  type: number,
+  source: string
+): WebGLShader {
   const shader = gl.createShader(type)!;
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+  const compiled = gl.getShaderParameter(shader, gl.COMPILE_STATUS) === true;
+  if (!compiled) {
     const log = gl.getShaderInfoLog(shader);
     gl.deleteShader(shader);
-    throw new Error(`canvas-pipes: shader compile failed: ${log}`);
+    throw new Error(`@pierre/pipes: shader compile failed: ${log}`);
   }
   return shader;
 }
 
-function createProgram(gl: WebGL2RenderingContext, vertSrc: string): WebGLProgram {
+function createProgram(
+  gl: WebGL2RenderingContext,
+  vertSrc: string
+): WebGLProgram {
   const vs = compileShader(gl, gl.VERTEX_SHADER, vertSrc);
   const fs = compileShader(gl, gl.FRAGMENT_SHADER, FRAG);
-  const program = gl.createProgram()!;
+  const program = gl.createProgram();
   gl.attachShader(program, vs);
   gl.attachShader(program, fs);
   gl.linkProgram(program);
   gl.deleteShader(vs);
   gl.deleteShader(fs);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+  const linked = gl.getProgramParameter(program, gl.LINK_STATUS) === true;
+  if (!linked) {
     const log = gl.getProgramInfoLog(program);
     gl.deleteProgram(program);
-    throw new Error(`canvas-pipes: program link failed: ${log}`);
+    throw new Error(`@pierre/pipes: program link failed: ${log}`);
   }
   return program;
 }
 
-export function createBatch(gl: WebGL2RenderingContext, mesh: Mesh, capacity: number): Batch {
-  const vao = gl.createVertexArray()!;
+export function createBatch(
+  gl: WebGL2RenderingContext,
+  mesh: Mesh,
+  capacity: number
+): Batch {
+  const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
 
-  const posBuf = gl.createBuffer()!;
+  const posBuf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
   gl.bufferData(gl.ARRAY_BUFFER, mesh.positions, gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
-  const nrmBuf = gl.createBuffer()!;
+  const nrmBuf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, nrmBuf);
   gl.bufferData(gl.ARRAY_BUFFER, mesh.normals, gl.STATIC_DRAW);
   gl.enableVertexAttribArray(1);
   gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
 
-  const idxBuf = gl.createBuffer()!;
+  const idxBuf = gl.createBuffer();
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
 
-  const instanceBuf = gl.createBuffer()!;
+  const instanceBuf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, instanceBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, capacity * BYTES_PER_INSTANCE, gl.DYNAMIC_DRAW);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    capacity * BYTES_PER_INSTANCE,
+    gl.DYNAMIC_DRAW
+  );
   for (let i = 0; i < 4; i++) {
     gl.enableVertexAttribArray(2 + i);
-    gl.vertexAttribPointer(2 + i, 4, gl.FLOAT, false, BYTES_PER_INSTANCE, i * 16);
+    gl.vertexAttribPointer(
+      2 + i,
+      4,
+      gl.FLOAT,
+      false,
+      BYTES_PER_INSTANCE,
+      i * 16
+    );
     gl.vertexAttribDivisor(2 + i, 1);
   }
   gl.enableVertexAttribArray(6);
@@ -212,7 +241,11 @@ function markDirty(batch: Batch, index: number): void {
 }
 
 // Returns the instance index, or -1 if the batch is full.
-export function pushInstance(batch: Batch, mat: Mat4, matIndex: number): number {
+export function pushInstance(
+  batch: Batch,
+  mat: Mat4,
+  matIndex: number
+): number {
   if (batch.count >= batch.capacity) return -1;
   const i = batch.count++;
   const o = i * FLOATS_PER_INSTANCE;
@@ -240,19 +273,26 @@ function flushBatch(gl: WebGL2RenderingContext, batch: Batch): void {
   gl.bufferSubData(
     gl.ARRAY_BUFFER,
     batch.dirtyLo * BYTES_PER_INSTANCE,
-    batch.data.subarray(batch.dirtyLo * FLOATS_PER_INSTANCE, batch.dirtyHi * FLOATS_PER_INSTANCE),
+    batch.data.subarray(
+      batch.dirtyLo * FLOATS_PER_INSTANCE,
+      batch.dirtyHi * FLOATS_PER_INSTANCE
+    )
   );
   batch.dirtyLo = Infinity;
   batch.dirtyHi = 0;
 }
 
 function createFlexChunk(gl: WebGL2RenderingContext): FlexChunk {
-  const vao = gl.createVertexArray()!;
+  const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
 
-  const vertBuf = gl.createBuffer()!;
+  const vertBuf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, FLEX_CHUNK_VERTS * FLEX_FLOATS_PER_VERT * 4, gl.DYNAMIC_DRAW);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    FLEX_CHUNK_VERTS * FLEX_FLOATS_PER_VERT * 4,
+    gl.DYNAMIC_DRAW
+  );
   const stride = FLEX_FLOATS_PER_VERT * 4;
   gl.enableVertexAttribArray(0);
   gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, 0);
@@ -261,9 +301,13 @@ function createFlexChunk(gl: WebGL2RenderingContext): FlexChunk {
   gl.enableVertexAttribArray(2);
   gl.vertexAttribPointer(2, 1, gl.FLOAT, false, stride, 24);
 
-  const idxBuf = gl.createBuffer()!;
+  const idxBuf = gl.createBuffer();
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, FLEX_CHUNK_INDICES * 4, gl.DYNAMIC_DRAW);
+  gl.bufferData(
+    gl.ELEMENT_ARRAY_BUFFER,
+    FLEX_CHUNK_INDICES * 4,
+    gl.DYNAMIC_DRAW
+  );
 
   gl.bindVertexArray(null);
 
@@ -281,7 +325,12 @@ function createFlexChunk(gl: WebGL2RenderingContext): FlexChunk {
 }
 
 function createFlexBuffer(gl: WebGL2RenderingContext): FlexBuffer {
-  return { gl, chunks: [createFlexChunk(gl)], active: 0, tail: createFlexChunk(gl) };
+  return {
+    gl,
+    chunks: [createFlexChunk(gl)],
+    active: 0,
+    tail: createFlexChunk(gl),
+  };
 }
 
 // Append world-space vertices (x,y,z,nx,ny,nz per vertex) and local indices.
@@ -290,14 +339,18 @@ export function pushFlexGeometry(
   fb: FlexBuffer,
   verts: number[],
   localIndices: number[],
-  matIndex: number,
+  matIndex: number
 ): boolean {
   const nVerts = verts.length / 6;
   let chunk = fb.chunks[fb.active];
-  if (chunk.vertCount + nVerts > FLEX_CHUNK_VERTS || chunk.indexCount + localIndices.length > FLEX_CHUNK_INDICES) {
+  if (
+    chunk.vertCount + nVerts > FLEX_CHUNK_VERTS ||
+    chunk.indexCount + localIndices.length > FLEX_CHUNK_INDICES
+  ) {
     if (fb.active + 1 >= FLEX_MAX_CHUNKS) return false;
     fb.active++;
-    if (!fb.chunks[fb.active]) fb.chunks[fb.active] = createFlexChunk(fb.gl);
+    if (fb.chunks.length <= fb.active)
+      fb.chunks[fb.active] = createFlexChunk(fb.gl);
     chunk = fb.chunks[fb.active];
   }
   const base = chunk.vertCount;
@@ -336,7 +389,12 @@ export function resetFlexTail(fb: FlexBuffer): void {
 }
 
 // Append to the per-frame tail chunk (same packing as pushFlexGeometry).
-export function pushFlexTail(fb: FlexBuffer, verts: number[], localIndices: number[], matIndex: number): boolean {
+export function pushFlexTail(
+  fb: FlexBuffer,
+  verts: number[],
+  localIndices: number[],
+  matIndex: number
+): boolean {
   const chunk = fb.tail;
   const nVerts = verts.length / 6;
   if (chunk.vertCount + nVerts > FLEX_CHUNK_VERTS) return false;
@@ -362,11 +420,16 @@ export function pushFlexTail(fb: FlexBuffer, verts: number[], localIndices: numb
 
 // Fraction of total flex capacity in use (for the round-reset backstop).
 export function flexUsage(fb: FlexBuffer): number {
-  return (fb.active + fb.chunks[fb.active].vertCount / FLEX_CHUNK_VERTS) / FLEX_MAX_CHUNKS;
+  return (
+    (fb.active + fb.chunks[fb.active].vertCount / FLEX_CHUNK_VERTS) /
+    FLEX_MAX_CHUNKS
+  );
 }
 
 export function flexIsEmpty(fb: FlexBuffer): boolean {
-  return fb.active === 0 && fb.chunks[0].indexCount === 0 && fb.tail.indexCount === 0;
+  return (
+    fb.active === 0 && fb.chunks[0].indexCount === 0 && fb.tail.indexCount === 0
+  );
 }
 
 function flushAndDrawFlex(gl: WebGL2RenderingContext, fb: FlexBuffer): void {
@@ -380,7 +443,10 @@ function flushAndDrawFlex(gl: WebGL2RenderingContext, fb: FlexBuffer): void {
       gl.bufferSubData(
         gl.ARRAY_BUFFER,
         chunk.flushedVerts * FLEX_FLOATS_PER_VERT * 4,
-        chunk.data.subarray(chunk.flushedVerts * FLEX_FLOATS_PER_VERT, chunk.vertCount * FLEX_FLOATS_PER_VERT),
+        chunk.data.subarray(
+          chunk.flushedVerts * FLEX_FLOATS_PER_VERT,
+          chunk.vertCount * FLEX_FLOATS_PER_VERT
+        )
       );
       chunk.flushedVerts = chunk.vertCount;
     }
@@ -388,7 +454,7 @@ function flushAndDrawFlex(gl: WebGL2RenderingContext, fb: FlexBuffer): void {
       gl.bufferSubData(
         gl.ELEMENT_ARRAY_BUFFER,
         chunk.flushedIndices * 4,
-        chunk.indices.subarray(chunk.flushedIndices, chunk.indexCount),
+        chunk.indices.subarray(chunk.flushedIndices, chunk.indexCount)
       );
       chunk.flushedIndices = chunk.indexCount;
     }
@@ -400,8 +466,16 @@ function flushAndDrawFlex(gl: WebGL2RenderingContext, fb: FlexBuffer): void {
   if (tail.indexCount > 0) {
     gl.bindVertexArray(tail.vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, tail.vertBuf);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, tail.data.subarray(0, tail.vertCount * FLEX_FLOATS_PER_VERT));
-    gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, tail.indices.subarray(0, tail.indexCount));
+    gl.bufferSubData(
+      gl.ARRAY_BUFFER,
+      0,
+      tail.data.subarray(0, tail.vertCount * FLEX_FLOATS_PER_VERT)
+    );
+    gl.bufferSubData(
+      gl.ELEMENT_ARRAY_BUFFER,
+      0,
+      tail.indices.subarray(0, tail.indexCount)
+    );
     gl.drawElements(gl.TRIANGLES, tail.indexCount, gl.UNSIGNED_INT, 0);
   }
 }
@@ -431,42 +505,62 @@ export interface Renderer {
   destroy(): void;
 }
 
+// The offscreen framebuffer the scene renders into before blitting to the
+// canvas; all-null until ensureTarget allocates it at the first draw.
+interface OffscreenTarget {
+  fbo: WebGLFramebuffer | null;
+  colorRb: WebGLRenderbuffer | null;
+  depthRb: WebGLRenderbuffer | null;
+  width: number;
+  height: number;
+  samples: number;
+}
+
 export function createRenderer(
   canvas: HTMLCanvasElement,
   background: Vec3 | 'transparent',
   pipeRadius: number,
   bendRadius: number,
   pixelSize: number,
-  materials: PipeMaterial[],
+  materials: PipeMaterial[]
 ): Renderer {
   let transparent = background === 'transparent';
-  let bg: Vec3 = transparent ? [0, 0, 0] : (background as Vec3);
+  let bg: Vec3 = background === 'transparent' ? [0, 0, 0] : background;
   let pxSize = Math.max(1, pixelSize);
   // Context attributes are immutable, so nothing quality-related lives there:
   // the scene renders into an offscreen framebuffer we can resize and
   // multisample at will (MSAA at pixelSize 1, chunky low-res otherwise), then
   // blits to the canvas with nearest-neighbor scaling. The alpha channel is
   // always present so transparency can be toggled live too.
-  const gl = canvas.getContext('webgl2', { antialias: false, alpha: true, premultipliedAlpha: true });
-  if (!gl) throw new Error('canvas-pipes: WebGL2 is not supported');
-  const maxSamples = Math.min(4, gl.getParameter(gl.MAX_SAMPLES) as number);
+  const gl = canvas.getContext('webgl2', {
+    antialias: false,
+    alpha: true,
+    premultipliedAlpha: true,
+  });
+  if (gl == null) throw new Error('@pierre/pipes: WebGL2 is not supported');
+  const maxSamples = Math.min(4, Number(gl.getParameter(gl.MAX_SAMPLES)));
 
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.CULL_FACE);
 
   // Offscreen render target, recreated on demand when size/samples change.
-  const target = {
-    fbo: null as WebGLFramebuffer | null,
-    colorRb: null as WebGLRenderbuffer | null,
-    depthRb: null as WebGLRenderbuffer | null,
+  const target: OffscreenTarget = {
+    fbo: null,
+    colorRb: null,
+    depthRb: null,
     width: 0,
     height: 0,
     samples: -1,
   };
 
   function ensureTarget(width: number, height: number, samples: number): void {
-    if (target.width === width && target.height === height && target.samples === samples) return;
-    if (target.fbo) {
+    if (
+      target.width === width &&
+      target.height === height &&
+      target.samples === samples
+    )
+      return;
+    if (target.fbo != null) {
       gl!.deleteFramebuffer(target.fbo);
       gl!.deleteRenderbuffer(target.colorRb);
       gl!.deleteRenderbuffer(target.depthRb);
@@ -475,14 +569,44 @@ export function createRenderer(
     target.colorRb = gl!.createRenderbuffer();
     target.depthRb = gl!.createRenderbuffer();
     gl!.bindRenderbuffer(gl!.RENDERBUFFER, target.colorRb);
-    if (samples > 0) gl!.renderbufferStorageMultisample(gl!.RENDERBUFFER, samples, gl!.RGBA8, width, height);
+    if (samples > 0)
+      gl!.renderbufferStorageMultisample(
+        gl!.RENDERBUFFER,
+        samples,
+        gl!.RGBA8,
+        width,
+        height
+      );
     else gl!.renderbufferStorage(gl!.RENDERBUFFER, gl!.RGBA8, width, height);
     gl!.bindRenderbuffer(gl!.RENDERBUFFER, target.depthRb);
-    if (samples > 0) gl!.renderbufferStorageMultisample(gl!.RENDERBUFFER, samples, gl!.DEPTH_COMPONENT24, width, height);
-    else gl!.renderbufferStorage(gl!.RENDERBUFFER, gl!.DEPTH_COMPONENT24, width, height);
+    if (samples > 0)
+      gl!.renderbufferStorageMultisample(
+        gl!.RENDERBUFFER,
+        samples,
+        gl!.DEPTH_COMPONENT24,
+        width,
+        height
+      );
+    else
+      gl!.renderbufferStorage(
+        gl!.RENDERBUFFER,
+        gl!.DEPTH_COMPONENT24,
+        width,
+        height
+      );
     gl!.bindFramebuffer(gl!.FRAMEBUFFER, target.fbo);
-    gl!.framebufferRenderbuffer(gl!.FRAMEBUFFER, gl!.COLOR_ATTACHMENT0, gl!.RENDERBUFFER, target.colorRb);
-    gl!.framebufferRenderbuffer(gl!.FRAMEBUFFER, gl!.DEPTH_ATTACHMENT, gl!.RENDERBUFFER, target.depthRb);
+    gl!.framebufferRenderbuffer(
+      gl!.FRAMEBUFFER,
+      gl!.COLOR_ATTACHMENT0,
+      gl!.RENDERBUFFER,
+      target.colorRb
+    );
+    gl!.framebufferRenderbuffer(
+      gl!.FRAMEBUFFER,
+      gl!.DEPTH_ATTACHMENT,
+      gl!.RENDERBUFFER,
+      target.depthRb
+    );
     target.width = width;
     target.height = height;
     target.samples = samples;
@@ -528,7 +652,13 @@ export function createRenderer(
   const teapots = createBatch(gl, createTeapotMesh(), 64);
   const flex = createFlexBuffer(gl);
 
-  function setSharedUniforms(p: ProgramInfo, viewProj: Mat4, lightDir: Vec3, halfVec: Vec3, fade: number): void {
+  function setSharedUniforms(
+    p: ProgramInfo,
+    viewProj: Mat4,
+    lightDir: Vec3,
+    halfVec: Vec3,
+    fade: number
+  ): void {
     gl!.useProgram(p.program);
     gl!.uniformMatrix4fv(p.uViewProj, false, viewProj);
     gl!.uniform3fv(p.uLightDir, lightDir);
@@ -548,8 +678,14 @@ export function createRenderer(
     draw(viewProj, lightDir, halfVec, fade) {
       // Fat pixels are sized in CSS pixels (matching the old CSS-upscale
       // behavior); full resolution renders at the backing-store size + MSAA.
-      const pw = pxSize > 1 ? Math.max(1, Math.round(canvas.clientWidth / pxSize)) : canvas.width;
-      const ph = pxSize > 1 ? Math.max(1, Math.round(canvas.clientHeight / pxSize)) : canvas.height;
+      const pw =
+        pxSize > 1
+          ? Math.max(1, Math.round(canvas.clientWidth / pxSize))
+          : canvas.width;
+      const ph =
+        pxSize > 1
+          ? Math.max(1, Math.round(canvas.clientHeight / pxSize))
+          : canvas.height;
       ensureTarget(pw, ph, pxSize > 1 ? 0 : maxSamples);
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
@@ -563,7 +699,13 @@ export function createRenderer(
         flushBatch(gl, batch);
         if (batch.count === 0) continue;
         gl.bindVertexArray(batch.vao);
-        gl.drawElementsInstanced(gl.TRIANGLES, batch.indexCount, gl.UNSIGNED_SHORT, 0, batch.count);
+        gl.drawElementsInstanced(
+          gl.TRIANGLES,
+          batch.indexCount,
+          gl.UNSIGNED_SHORT,
+          0,
+          batch.count
+        );
       }
 
       if (!flexIsEmpty(flex)) {
@@ -575,12 +717,23 @@ export function createRenderer(
       // Present: nearest-neighbor stretch (or 1:1 MSAA resolve) to the canvas.
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, target.fbo);
       gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-      gl.blitFramebuffer(0, 0, pw, ph, 0, 0, canvas.width, canvas.height, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+      gl.blitFramebuffer(
+        0,
+        0,
+        pw,
+        ph,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+        gl.COLOR_BUFFER_BIT,
+        gl.NEAREST
+      );
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     },
     setBackground(color) {
       transparent = color === 'transparent';
-      if (!transparent) bg = color as Vec3;
+      if (color !== 'transparent') bg = color;
     },
     setPixelSize(size) {
       pxSize = Math.max(1, size);
@@ -597,7 +750,7 @@ export function createRenderer(
       }
       gl.deleteProgram(instanced.program);
       gl.deleteProgram(flexProg.program);
-      if (target.fbo) {
+      if (target.fbo != null) {
         gl.deleteFramebuffer(target.fbo);
         gl.deleteRenderbuffer(target.colorRb);
         gl.deleteRenderbuffer(target.depthRb);

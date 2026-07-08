@@ -669,6 +669,18 @@ importers:
         specifier: 'catalog:'
         version: 8.1.0(@types/node@25.9.3)(jiti@2.7.0)(yaml@2.9.0)
 
+  packages/pipes:
+    devDependencies:
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.3(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.22.3)(@typescript/native-preview@7.0.0-dev.20260622.1)(typescript@6.0.3)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.1.0(@types/node@25.9.3)(jiti@2.7.0)(yaml@2.9.0)
+
   packages/theme:
     devDependencies:
       '@types/bun':

@@ -1,38 +1,41 @@
 {
-  "name": "canvas-pipes",
-  "version": "0.1.0",
+  "name": "@pierre/pipes",
+  "version": "1.0.0",
   "description": "The classic Windows 3D Pipes screensaver, recreated from scratch in raw WebGL2. Zero dependencies.",
-  "type": "module",
-  "license": "MIT",
-  "files": [
-    "dist"
+  "keywords": [
+    "animation",
+    "canvas",
+    "pipes",
+    "screensaver",
+    "webgl",
+    "webgl2"
   ],
-  "main": "./dist/canvas-pipes.js",
-  "module": "./dist/canvas-pipes.js",
+  "license": "apache-2.0",
+  "files": [
+    "dist",
+    "LICENSE.md",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/canvas-pipes.js"
+      "import": "./dist/index.js"
     }
   },
-  "sideEffects": false,
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build && tsc",
-    "build:site": "vite build --mode site",
-    "preview": "vite preview --mode site"
+  "publishConfig": {
+    "access": "public"
   },
-  "keywords": [
-    "webgl",
-    "webgl2",
-    "screensaver",
-    "pipes",
-    "canvas",
-    "animation"
-  ],
+  "scripts": {
+    "prepublishOnly": "moon run pipes:prepublish"
+  },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "vite": "^6.0.0"
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
   }
 }

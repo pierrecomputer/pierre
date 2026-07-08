@@ -1,5 +1,11 @@
 import type { Vec3 } from './math';
-import { mat4FromBasis, mat4ScaleTranslate, v3add, v3cross, v3scale } from './math';
+import {
+  mat4FromBasis,
+  mat4ScaleTranslate,
+  v3add,
+  v3cross,
+  v3scale,
+} from './math';
 import type { Batch } from './renderer';
 import { pushInstance, updateInstance } from './renderer';
 
@@ -15,22 +21,102 @@ export interface PipeMaterial {
 // teaMaterialData[] in MATERIAL.C of the NT4 SDK sspipes source). Rendered
 // with the fixed-function formula: ka*1.1 + kd*NdotL + ks*NdotH^shine.
 export const CLASSIC_MATERIALS: PipeMaterial[] = [
-  { ambient: [0.0215, 0.1745, 0.0215], diffuse: [0.07568, 0.61424, 0.07568], specular: [0.633, 0.727811, 0.633], shininess: 76.8 }, // emerald
-  { ambient: [0.135, 0.2225, 0.1575], diffuse: [0.54, 0.89, 0.63], specular: [0.316228, 0.316228, 0.316228], shininess: 12.8 }, // jade
-  { ambient: [0.25, 0.20725, 0.20725], diffuse: [1.0, 0.829, 0.829], specular: [0.296648, 0.296648, 0.296648], shininess: 11.264 }, // pearl
-  { ambient: [0.1745, 0.01175, 0.01175], diffuse: [0.61424, 0.04136, 0.04136], specular: [0.727811, 0.626959, 0.626959], shininess: 76.8 }, // ruby
-  { ambient: [0.1, 0.18725, 0.1745], diffuse: [0.396, 0.74151, 0.69102], specular: [0.297254, 0.30829, 0.306678], shininess: 12.8 }, // turquoise
-  { ambient: [0.329412, 0.223529, 0.027451], diffuse: [0.780392, 0.568627, 0.113725], specular: [0.992157, 0.941176, 0.807843], shininess: 27.9 }, // brass
-  { ambient: [0.2125, 0.1275, 0.054], diffuse: [0.714, 0.4284, 0.18144], specular: [0.393548, 0.271906, 0.166721], shininess: 25.6 }, // bronze
-  { ambient: [0.19125, 0.0735, 0.0225], diffuse: [0.7038, 0.27048, 0.0828], specular: [0.256777, 0.137622, 0.086014], shininess: 12.8 }, // copper
-  { ambient: [0.24725, 0.1995, 0.0745], diffuse: [0.75164, 0.60648, 0.22648], specular: [0.628281, 0.555802, 0.366065], shininess: 51.2 }, // gold
-  { ambient: [0.19225, 0.19225, 0.19225], diffuse: [0.50754, 0.50754, 0.50754], specular: [0.508273, 0.508273, 0.508273], shininess: 51.2 }, // silver
-  { ambient: [0.0, 0.1, 0.06], diffuse: [0.0, 0.5098, 0.5098], specular: [0.50196, 0.50196, 0.50196], shininess: 32 }, // cyan plastic
-  { ambient: [0, 0, 0], diffuse: [0.55, 0.55, 0.55], specular: [0.7, 0.7, 0.7], shininess: 32 }, // white plastic
-  { ambient: [0, 0, 0], diffuse: [0.5, 0.5, 0.0], specular: [0.6, 0.6, 0.5], shininess: 32 }, // yellow plastic
-  { ambient: [0.0, 0.05, 0.05], diffuse: [0.4, 0.5, 0.5], specular: [0.04, 0.7, 0.7], shininess: 10 }, // cyan rubber
-  { ambient: [0.0, 0.05, 0.0], diffuse: [0.4, 0.5, 0.4], specular: [0.04, 0.7, 0.04], shininess: 10 }, // green rubber
-  { ambient: [0.05, 0.05, 0.05], diffuse: [0.5, 0.5, 0.5], specular: [0.7, 0.7, 0.7], shininess: 10 }, // white rubber
+  {
+    ambient: [0.0215, 0.1745, 0.0215],
+    diffuse: [0.07568, 0.61424, 0.07568],
+    specular: [0.633, 0.727811, 0.633],
+    shininess: 76.8,
+  }, // emerald
+  {
+    ambient: [0.135, 0.2225, 0.1575],
+    diffuse: [0.54, 0.89, 0.63],
+    specular: [0.316228, 0.316228, 0.316228],
+    shininess: 12.8,
+  }, // jade
+  {
+    ambient: [0.25, 0.20725, 0.20725],
+    diffuse: [1.0, 0.829, 0.829],
+    specular: [0.296648, 0.296648, 0.296648],
+    shininess: 11.264,
+  }, // pearl
+  {
+    ambient: [0.1745, 0.01175, 0.01175],
+    diffuse: [0.61424, 0.04136, 0.04136],
+    specular: [0.727811, 0.626959, 0.626959],
+    shininess: 76.8,
+  }, // ruby
+  {
+    ambient: [0.1, 0.18725, 0.1745],
+    diffuse: [0.396, 0.74151, 0.69102],
+    specular: [0.297254, 0.30829, 0.306678],
+    shininess: 12.8,
+  }, // turquoise
+  {
+    ambient: [0.329412, 0.223529, 0.027451],
+    diffuse: [0.780392, 0.568627, 0.113725],
+    specular: [0.992157, 0.941176, 0.807843],
+    shininess: 27.9,
+  }, // brass
+  {
+    ambient: [0.2125, 0.1275, 0.054],
+    diffuse: [0.714, 0.4284, 0.18144],
+    specular: [0.393548, 0.271906, 0.166721],
+    shininess: 25.6,
+  }, // bronze
+  {
+    ambient: [0.19125, 0.0735, 0.0225],
+    diffuse: [0.7038, 0.27048, 0.0828],
+    specular: [0.256777, 0.137622, 0.086014],
+    shininess: 12.8,
+  }, // copper
+  {
+    ambient: [0.24725, 0.1995, 0.0745],
+    diffuse: [0.75164, 0.60648, 0.22648],
+    specular: [0.628281, 0.555802, 0.366065],
+    shininess: 51.2,
+  }, // gold
+  {
+    ambient: [0.19225, 0.19225, 0.19225],
+    diffuse: [0.50754, 0.50754, 0.50754],
+    specular: [0.508273, 0.508273, 0.508273],
+    shininess: 51.2,
+  }, // silver
+  {
+    ambient: [0.0, 0.1, 0.06],
+    diffuse: [0.0, 0.5098, 0.5098],
+    specular: [0.50196, 0.50196, 0.50196],
+    shininess: 32,
+  }, // cyan plastic
+  {
+    ambient: [0, 0, 0],
+    diffuse: [0.55, 0.55, 0.55],
+    specular: [0.7, 0.7, 0.7],
+    shininess: 32,
+  }, // white plastic
+  {
+    ambient: [0, 0, 0],
+    diffuse: [0.5, 0.5, 0.0],
+    specular: [0.6, 0.6, 0.5],
+    shininess: 32,
+  }, // yellow plastic
+  {
+    ambient: [0.0, 0.05, 0.05],
+    diffuse: [0.4, 0.5, 0.5],
+    specular: [0.04, 0.7, 0.7],
+    shininess: 10,
+  }, // cyan rubber
+  {
+    ambient: [0.0, 0.05, 0.0],
+    diffuse: [0.4, 0.5, 0.4],
+    specular: [0.04, 0.7, 0.04],
+    shininess: 10,
+  }, // green rubber
+  {
+    ambient: [0.05, 0.05, 0.05],
+    diffuse: [0.5, 0.5, 0.5],
+    specular: [0.7, 0.7, 0.7],
+    shininess: 10,
+  }, // white rubber
 ];
 
 export type JointStyle = 'elbow' | 'ball' | 'mixed' | 'cycle';
@@ -74,9 +160,12 @@ const TEAPOT_FACTOR = 2.5;
 
 // Paired so that reverse(i) === i ^ 1.
 export const DIRS: Vec3[] = [
-  [1, 0, 0], [-1, 0, 0],
-  [0, 1, 0], [0, -1, 0],
-  [0, 0, 1], [0, 0, -1],
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 1, 0],
+  [0, -1, 0],
+  [0, 0, 1],
+  [0, 0, -1],
 ];
 
 interface Pipe {
@@ -125,7 +214,15 @@ function cellIndex(sim: Sim, c: Vec3): number {
 
 function isFree(sim: Sim, c: Vec3): boolean {
   const [nx, ny, nz] = sim.dims;
-  if (c[0] < 0 || c[0] >= nx || c[1] < 0 || c[1] >= ny || c[2] < 0 || c[2] >= nz) return false;
+  if (
+    c[0] < 0 ||
+    c[0] >= nx ||
+    c[1] < 0 ||
+    c[1] >= ny ||
+    c[2] < 0 ||
+    c[2] >= nz
+  )
+    return false;
   return sim.occ[cellIndex(sim, c)] === 0;
 }
 
@@ -144,7 +241,13 @@ function cellToWorld(sim: Sim, c: Vec3): Vec3 {
 
 // Model matrix for the unit cylinder: starts startOffset cells past runStart
 // along dir (to clear a joint at the run's start) and extends len cells.
-function cylinderMatrix(sim: Sim, runStart: Vec3, dirIdx: number, startOffset: number, len: number): Float32Array {
+function cylinderMatrix(
+  sim: Sim,
+  runStart: Vec3,
+  dirIdx: number,
+  startOffset: number,
+  len: number
+): Float32Array {
   const d = DIRS[dirIdx];
   const helper: Vec3 = Math.abs(d[1]) > 0.5 ? [1, 0, 0] : [0, 1, 0];
   const x = v3cross(helper, d);
@@ -156,13 +259,22 @@ function cylinderMatrix(sim: Sim, runStart: Vec3, dirIdx: number, startOffset: n
     v3scale(x, r),
     v3scale(d, Math.max(len, 0.001)),
     v3scale(z, r),
-    [w[0] + d[0] * startOffset, w[1] + d[1] * startOffset, w[2] + d[2] * startOffset],
+    [
+      w[0] + d[0] * startOffset,
+      w[1] + d[1] * startOffset,
+      w[2] + d[2] * startOffset,
+    ]
   );
 }
 
 // The canonical elbow mesh enters the corner along +X and leaves along +Y,
 // so mapping (+X, +Y) onto (dirIn, dirOut) is a pure rotation.
-function elbowMatrix(sim: Sim, corner: Vec3, dirInIdx: number, dirOutIdx: number): Float32Array {
+function elbowMatrix(
+  sim: Sim,
+  corner: Vec3,
+  dirInIdx: number,
+  dirOutIdx: number
+): Float32Array {
   const x = DIRS[dirInIdx];
   const y = DIRS[dirOutIdx];
   return mat4FromBasis(MAT, x, y, v3cross(x, y), cellToWorld(sim, corner));
@@ -218,9 +330,21 @@ function initPipe(sim: Sim, pipe: Pipe): boolean {
     const world = cellToWorld(sim, cell);
     // The starting spot gets its ball right away; the growing tip is a flat
     // disc sealing the open tube until the pipe finishes.
-    const capIndex = pushInstance(sim.sph, sphereMatrix(sim.config.capRadius, world), matIndex);
-    const cylIndex = pushInstance(sim.cyl, cylinderMatrix(sim, cell, dirIdx, 0, 0.001), matIndex);
-    const tipIndex = pushInstance(sim.disc, discMatrix(sim, world, dirIdx), matIndex);
+    const capIndex = pushInstance(
+      sim.sph,
+      sphereMatrix(sim.config.capRadius, world),
+      matIndex
+    );
+    const cylIndex = pushInstance(
+      sim.cyl,
+      cylinderMatrix(sim, cell, dirIdx, 0, 0.001),
+      matIndex
+    );
+    const tipIndex = pushInstance(
+      sim.disc,
+      discMatrix(sim, world, dirIdx),
+      matIndex
+    );
     if (capIndex < 0 || cylIndex < 0 || tipIndex < 0) {
       sim.stuck = true;
       return false;
@@ -248,9 +372,20 @@ function initPipe(sim: Sim, pipe: Pipe): boolean {
 function die(sim: Sim, pipe: Pipe): void {
   const off = startOffset(sim, pipe);
   const end = cellToWorld(sim, pipe.head);
-  updateInstance(sim.cyl, pipe.cylIndex, cylinderMatrix(sim, pipe.runStart, pipe.dirIdx, off, pipe.runLen - off));
+  updateInstance(
+    sim.cyl,
+    pipe.cylIndex,
+    cylinderMatrix(sim, pipe.runStart, pipe.dirIdx, off, pipe.runLen - off)
+  );
   updateInstance(sim.disc, pipe.tipIndex, discMatrix(sim, end, pipe.dirIdx));
-  if (pushInstance(sim.sph, sphereMatrix(sim.config.capRadius, end), pipe.matIndex) < 0) sim.stuck = true;
+  if (
+    pushInstance(
+      sim.sph,
+      sphereMatrix(sim.config.capRadius, end),
+      pipe.matIndex
+    ) < 0
+  )
+    sim.stuck = true;
   pipe.alive = false;
   sim.pipesDrawn++;
   if (sim.chaseMode && sim.leadIndex === sim.pipes.indexOf(pipe)) {
@@ -259,14 +394,22 @@ function die(sim: Sim, pipe: Pipe): void {
   }
 }
 
+// The per-round rotation order that jointStyle: 'cycle' steps through
+// (sim.cycleStyle holds the current index).
+const CYCLE_ORDER: readonly Exclude<JointStyle, 'cycle'>[] = [
+  'elbow',
+  'ball',
+  'mixed',
+];
+
 // NORMAL_STATE::ChooseJointType, with the 1-in-1000 teapot in mixed mode.
 function chooseJointType(sim: Sim): 'elbow' | 'ball' | 'teapot' {
   let style = sim.config.jointStyle;
-  if (style === 'cycle') style = (['elbow', 'ball', 'mixed'] as const)[sim.cycleStyle];
+  if (style === 'cycle') style = CYCLE_ORDER[sim.cycleStyle];
   if (style === 'elbow') return 'elbow';
   if (style === 'ball') return 'ball';
   if (Math.random() < sim.config.teapotChance) return 'teapot';
-  return (Math.random() * 3) | 0 ? 'elbow' : 'ball';
+  return ((Math.random() * 3) | 0) !== 0 ? 'elbow' : 'ball';
 }
 
 // The tip just reached the center of pipe.head; pick where to go next.
@@ -274,7 +417,7 @@ function chooseJointType(sim: Sim): 'elbow' | 'ball' | 'teapot' {
 // ChoosePreferredDirection (chase mode) from the original.
 function chooseDirection(sim: Sim, pipe: Pipe): number {
   const lead = sim.chaseMode ? sim.pipes[sim.leadIndex] : undefined;
-  if (lead && lead !== pipe && lead.alive) {
+  if (lead != null && lead !== pipe && lead.alive) {
     const pref: number[] = [];
     for (let axis = 0; axis < 3; axis++) {
       const delta = lead.head[axis] - pipe.head[axis];
@@ -331,7 +474,13 @@ function step(sim: Sim, pipe: Pipe): void {
   updateInstance(
     sim.cyl,
     pipe.cylIndex,
-    cylinderMatrix(sim, pipe.runStart, pipe.dirIdx, off, pipe.runLen - off - bend),
+    cylinderMatrix(
+      sim,
+      pipe.runStart,
+      pipe.dirIdx,
+      off,
+      pipe.runLen - off - bend
+    )
   );
 
   const joint = chooseJointType(sim);
@@ -341,7 +490,7 @@ function step(sim: Sim, pipe: Pipe): void {
     jointIndex = pushInstance(
       sim.sph,
       sphereMatrix(BALL_JOINT_FACTOR * sim.config.pipeRadius, corner),
-      pipe.matIndex,
+      pipe.matIndex
     );
   } else if (joint === 'teapot') {
     // Upright in scene space, like the original's un-aligned auxSolidTeapot.
@@ -349,10 +498,14 @@ function step(sim: Sim, pipe: Pipe): void {
     jointIndex = pushInstance(
       sim.tea,
       mat4ScaleTranslate(MAT, s, s, s, corner[0], corner[1], corner[2]),
-      pipe.matIndex,
+      pipe.matIndex
     );
   } else {
-    jointIndex = pushInstance(sim.elb, elbowMatrix(sim, pipe.head, pipe.dirIdx, nextIdx), pipe.matIndex);
+    jointIndex = pushInstance(
+      sim.elb,
+      elbowMatrix(sim, pipe.head, pipe.dirIdx, nextIdx),
+      pipe.matIndex
+    );
   }
 
   pipe.runStart = pipe.head;
@@ -361,7 +514,11 @@ function step(sim: Sim, pipe: Pipe): void {
   occupy(sim, pipe.head);
   pipe.runLen = 1;
   pipe.startsAtBend = true;
-  const cylIndex = pushInstance(sim.cyl, cylinderMatrix(sim, pipe.runStart, nextIdx, bend, 0.001), pipe.matIndex);
+  const cylIndex = pushInstance(
+    sim.cyl,
+    cylinderMatrix(sim, pipe.runStart, nextIdx, bend, 0.001),
+    pipe.matIndex
+  );
   if (jointIndex < 0 || cylIndex < 0) {
     sim.stuck = true;
     die(sim, pipe);
@@ -389,11 +546,20 @@ export function simUpdate(sim: Sim, dt: number): void {
     // Growth: 'smooth' stretches the tube continuously; 'step' pops whole
     // cells like the original did each draw tick.
     const off = startOffset(sim, pipe);
-    const extent = sim.config.growth === 'step' ? pipe.runLen : pipe.runLen - 1 + pipe.t;
-    updateInstance(sim.cyl, pipe.cylIndex, cylinderMatrix(sim, pipe.runStart, pipe.dirIdx, off, extent - off));
+    const extent =
+      sim.config.growth === 'step' ? pipe.runLen : pipe.runLen - 1 + pipe.t;
+    updateInstance(
+      sim.cyl,
+      pipe.cylIndex,
+      cylinderMatrix(sim, pipe.runStart, pipe.dirIdx, off, extent - off)
+    );
     const d = DIRS[pipe.dirIdx];
     const start = cellToWorld(sim, pipe.runStart);
-    const tip: Vec3 = [start[0] + d[0] * extent, start[1] + d[1] * extent, start[2] + d[2] * extent];
+    const tip: Vec3 = [
+      start[0] + d[0] * extent,
+      start[1] + d[1] * extent,
+      start[2] + d[2] * extent,
+    ];
     updateInstance(sim.disc, pipe.tipIndex, discMatrix(sim, tip, pipe.dirIdx));
   }
 }
@@ -414,7 +580,12 @@ export function simShouldReset(sim: Sim): boolean {
 // Does NOT reset the GL batches — the caller owns those, since flex rounds
 // share the sphere/teapot batches.
 export function resetSim(sim: Sim, dims?: GridDims): void {
-  if (dims && (dims[0] !== sim.dims[0] || dims[1] !== sim.dims[1] || dims[2] !== sim.dims[2])) {
+  if (
+    dims != null &&
+    (dims[0] !== sim.dims[0] ||
+      dims[1] !== sim.dims[1] ||
+      dims[2] !== sim.dims[2])
+  ) {
     sim.dims = [...dims];
     sim.occ = new Uint8Array(dims[0] * dims[1] * dims[2]);
   } else {
@@ -427,11 +598,18 @@ export function resetSim(sim: Sim, dims?: GridDims): void {
   const cfg = sim.config;
   // STATE::FrameReset: 2..maxDrawThreads simultaneous pipes when multi,
   // pipe budget ×1.5; chase mode every now and then (1 in 5).
-  const threads = cfg.multiPipes && cfg.pipeCount >= 2
-    ? 2 + ((Math.random() * (cfg.pipeCount - 1)) | 0)
-    : 1;
-  sim.maxPipesThisRound = cfg.multiPipes ? Math.floor(cfg.pipesPerRound * 1.5) : cfg.pipesPerRound;
-  sim.chaseMode = cfg.chase && cfg.multiPipes && threads >= 2 && ((Math.random() * 5) | 0) === 0;
+  const threads =
+    cfg.multiPipes && cfg.pipeCount >= 2
+      ? 2 + ((Math.random() * (cfg.pipeCount - 1)) | 0)
+      : 1;
+  sim.maxPipesThisRound = cfg.multiPipes
+    ? Math.floor(cfg.pipesPerRound * 1.5)
+    : cfg.pipesPerRound;
+  sim.chaseMode =
+    cfg.chase &&
+    cfg.multiPipes &&
+    threads >= 2 &&
+    ((Math.random() * 5) | 0) === 0;
   sim.leadIndex = 0;
   if (cfg.jointStyle === 'cycle') sim.cycleStyle = (sim.cycleStyle + 1) % 3;
 
@@ -458,7 +636,7 @@ export function createSim(
   elb: Batch,
   sph: Batch,
   disc: Batch,
-  tea: Batch,
+  tea: Batch
 ): Sim {
   const sim: Sim = {
     config,

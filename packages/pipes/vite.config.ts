@@ -1,22 +1,12 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type UserConfig } from 'vite';
 
-// Two build flavors:
-//  - default: the npm library (dist/canvas-pipes.js + type declarations)
-//  - --mode site: the demo page as a static site (site/), for deployment
-export default defineConfig(({ mode }) =>
-  mode === 'site'
-    ? {
-        build: {
-          outDir: 'site',
-        },
-      }
-    : {
-        build: {
-          lib: {
-            entry: 'src/index.ts',
-            formats: ['es'],
-            fileName: 'canvas-pipes',
-          },
-        },
-      },
-);
+// Vite only serves and builds the index.html demo page (output: site/, for
+// the standalone Vercel deploy). The npm library is built by tsdown — see
+// tsdown.config.ts.
+const config: UserConfig = defineConfig({
+  build: {
+    outDir: 'site',
+  },
+});
+
+export default config;

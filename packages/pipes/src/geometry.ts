@@ -41,7 +41,12 @@ export function createCylinderMesh(radialSegments = 24): Mesh {
 // and exits along +Y. Incoming cylinder ends at (-bend, 0, 0), outgoing starts
 // at (0, bend, 0). Real radii are baked in so instances are pure rotations.
 // The tube profile must match createCylinderMesh so the seams line up.
-export function createElbowMesh(bendRadius: number, tubeRadius: number, arcSegments = 14, radialSegments = 24): Mesh {
+export function createElbowMesh(
+  bendRadius: number,
+  tubeRadius: number,
+  arcSegments = 14,
+  radialSegments = 24
+): Mesh {
   const positions: number[] = [];
   const normals: number[] = [];
   const indices: number[] = [];
@@ -65,7 +70,11 @@ export function createElbowMesh(bendRadius: number, tubeRadius: number, arcSegme
       const nx = cp * ux;
       const ny = cp * uy;
       const nz = sp;
-      positions.push(cx + tubeRadius * nx, cy + tubeRadius * ny, tubeRadius * nz);
+      positions.push(
+        cx + tubeRadius * nx,
+        cy + tubeRadius * ny,
+        tubeRadius * nz
+      );
       normals.push(nx, ny, nz);
     }
   }

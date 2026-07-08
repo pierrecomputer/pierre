@@ -1,9 +1,22 @@
 import type { Vec3 } from './math';
-import { mat4ScaleTranslate, v3add, v3cross, v3dot, v3normalize, v3scale } from './math';
-import type { Batch, FlexBuffer } from './renderer';
-import { flexUsage, pushFlexGeometry, pushFlexTail, pushInstance, resetFlexTail } from './renderer';
+import {
+  mat4ScaleTranslate,
+  v3add,
+  v3cross,
+  v3dot,
+  v3normalize,
+  v3scale,
+} from './math';
 import type { GridDims } from './pipes';
 import { DIRS } from './pipes';
+import type { Batch, FlexBuffer } from './renderer';
+import {
+  flexUsage,
+  pushFlexGeometry,
+  pushFlexTail,
+  pushInstance,
+  resetFlexTail,
+} from './renderer';
 
 // Flex pipes (FPIPE.CXX): tubes with an extruded cross-section ("XC") that
 // sweep through variable-radius bends. Two schemes, chosen 50/50 per round
@@ -102,7 +115,15 @@ function cellIndex(sim: FlexSim, c: Vec3): number {
 
 function isFree(sim: FlexSim, c: Vec3): boolean {
   const [nx, ny, nz] = sim.dims;
-  if (c[0] < 0 || c[0] >= nx || c[1] < 0 || c[1] >= ny || c[2] < 0 || c[2] >= nz) return false;
+  if (
+    c[0] < 0 ||
+    c[0] >= nx ||
+    c[1] < 0 ||
+    c[1] >= ny ||
+    c[2] < 0 ||
+    c[2] >= nz
+  )
+    return false;
   return sim.occ[cellIndex(sim, c)] === 0;
 }
 
@@ -147,7 +168,8 @@ function makeXC(r: number): XC {
       const cp = Math.cos(phi);
       const sp = Math.sin(phi);
       points.push(a * cp, b * sp);
-      const nl = Math.hypot(b * cp, a * sp) || 1;
+      const hyp = Math.hypot(b * cp, a * sp);
+      const nl = hyp === 0 ? 1 : hyp;
       normals.push((b * cp) / nl, (a * sp) / nl);
     }
     maxExtent = a;
@@ -155,7 +177,9 @@ function makeXC(r: number): XC {
     const base = (1.5 + Math.random() * 0.5) * r * 0.75;
     const p1 = Math.random() * Math.PI * 2;
     const p2 = Math.random() * Math.PI * 2;
-    const radial = (phi: number) => base * (1 + 0.25 * Math.sin(2 * phi + p1) + 0.15 * Math.sin(3 * phi + p2));
+    const radial = (phi: number) =>
+      base *
+      (1 + 0.25 * Math.sin(2 * phi + p1) + 0.15 * Math.sin(3 * phi + p2));
     for (let i = 0; i <= SLICES; i++) {
       const phi = (i / SLICES) * Math.PI * 2;
       const rr = radial(phi);
@@ -166,7 +190,8 @@ function makeXC(r: number): XC {
       const r2 = radial(phi + e);
       const tx = r2 * Math.cos(phi + e) - rr * Math.cos(phi);
       const ty = r2 * Math.sin(phi + e) - rr * Math.sin(phi);
-      const nl = Math.hypot(ty, tx) || 1;
+      const hyp = Math.hypot(ty, tx);
+      const nl = hyp === 0 ? 1 : hyp;
       normals.push(ty / nl, -tx / nl);
     }
   }
@@ -174,7 +199,10 @@ function makeXC(r: number): XC {
 }
 
 // Interleaved (pos, normal) vertex arrays for the XC swept through stations.
-function tubeArrays(xc: XC, stations: Station[]): { verts: number[]; idx: number[] } {
+function tubeArrays(
+  xc: XC,
+  stations: Station[]
+): { verts: number[]; idx: number[] } {
   const S = SLICES + 1;
   const verts: number[] = [];
   for (const st of stations) {
@@ -189,7 +217,7 @@ function tubeArrays(xc: XC, stations: Station[]): { verts: number[]; idx: number
         st.c[2] + px * st.right[2] + py * st.up[2],
         nx * st.right[0] + ny * st.up[0],
         nx * st.right[1] + ny * st.up[1],
-        nx * st.right[2] + ny * st.up[2],
+        nx * st.right[2] + ny * st.up[2]
       );
     }
   }
@@ -219,7 +247,9 @@ function plugArrays(xc: XC, st: Station): { verts: number[]; idx: number[] } {
       st.c[0] + px * st.right[0] + py * st.up[0],
       st.c[1] + px * st.right[1] + py * st.up[1],
       st.c[2] + px * st.right[2] + py * st.up[2],
-      d[0], d[1], d[2],
+      d[0],
+      d[1],
+      d[2]
     );
   }
   const idx: number[] = [];
@@ -251,11 +281,18 @@ function advanceArc(pipe: FlexPipe, newDir: number, radius: number): Station[] {
   for (let i = 0; i <= ARC_STEPS; i++) {
     const theta = ((Math.PI / 2) * i) / ARC_STEPS;
     const c: Vec3 = [
-      center[0] + radius * (Math.sin(theta) * dOld[0] - Math.cos(theta) * dNew[0]),
-      center[1] + radius * (Math.sin(theta) * dOld[1] - Math.cos(theta) * dNew[1]),
-      center[2] + radius * (Math.sin(theta) * dOld[2] - Math.cos(theta) * dNew[2]),
+      center[0] +
+        radius * (Math.sin(theta) * dOld[0] - Math.cos(theta) * dNew[0]),
+      center[1] +
+        radius * (Math.sin(theta) * dOld[1] - Math.cos(theta) * dNew[1]),
+      center[2] +
+        radius * (Math.sin(theta) * dOld[2] - Math.cos(theta) * dNew[2]),
     ];
-    stations.push({ c, right: rotate(pipe.right, w, theta), up: rotate(pipe.up, w, theta) });
+    stations.push({
+      c,
+      right: rotate(pipe.right, w, theta),
+      up: rotate(pipe.up, w, theta),
+    });
   }
   const last = stations[stations.length - 1];
   pipe.endPos = last.c;
@@ -267,11 +304,12 @@ function advanceArc(pipe: FlexPipe, newDir: number, radius: number): Station[] {
 function bakeStations(sim: FlexSim, pipe: FlexPipe, stations: Station[]): void {
   if (stations.length < 2) return;
   const tube = tubeArrays(pipe.xc, stations);
-  if (!pushFlexGeometry(sim.fb, tube.verts, tube.idx, pipe.matIndex)) sim.stuck = true;
+  if (!pushFlexGeometry(sim.fb, tube.verts, tube.idx, pipe.matIndex))
+    sim.stuck = true;
 }
 
 function bakePending(sim: FlexSim, pipe: FlexPipe): void {
-  if (!pipe.pending) return;
+  if (pipe.pending == null) return;
   bakeStations(sim, pipe, pipe.pending.stations);
   pipe.pending = undefined;
 }
@@ -283,7 +321,8 @@ function deliver(sim: FlexSim, pipe: FlexPipe, stations: Station[]): void {
   if (sim.config.growth === 'step') {
     bakeStations(sim, pipe, stations);
     const plug = plugArrays(pipe.xc, stations[stations.length - 1]);
-    if (!pushFlexGeometry(sim.fb, plug.verts, plug.idx, pipe.matIndex)) sim.stuck = true;
+    if (!pushFlexGeometry(sim.fb, plug.verts, plug.idx, pipe.matIndex))
+      sim.stuck = true;
     return;
   }
   const cum: number[] = [0];
@@ -301,7 +340,7 @@ function deliver(sim: FlexSim, pipe: FlexPipe, stations: Station[]): void {
 // fraction f, cut with an interpolated station and sealed with a plug.
 function appendTail(sim: FlexSim, pipe: FlexPipe, f: number): void {
   const pending = pipe.pending;
-  if (!pending) return;
+  if (pending == null) return;
   const target = Math.max(f * pending.total, 0.002);
   const stations = pending.stations;
   let k = 0;
@@ -336,14 +375,26 @@ function appendTail(sim: FlexSim, pipe: FlexPipe, f: number): void {
 
 function emitCap(sim: FlexSim, pipe: FlexPipe, at: Vec3): void {
   const r = 1.15 * pipe.xc.maxExtent;
-  if (pushInstance(sim.sph, mat4ScaleTranslate(MAT, r, r, r, at[0], at[1], at[2]), pipe.matIndex) < 0) {
+  if (
+    pushInstance(
+      sim.sph,
+      mat4ScaleTranslate(MAT, r, r, r, at[0], at[1], at[2]),
+      pipe.matIndex
+    ) < 0
+  ) {
     sim.stuck = true;
   }
 }
 
 function emitTeapot(sim: FlexSim, pipe: FlexPipe, at: Vec3): void {
   const s = TEAPOT_FACTOR * sim.config.pipeRadius;
-  if (pushInstance(sim.tea, mat4ScaleTranslate(MAT, s, s, s, at[0], at[1], at[2]), pipe.matIndex) < 0) {
+  if (
+    pushInstance(
+      sim.tea,
+      mat4ScaleTranslate(MAT, s, s, s, at[0], at[1], at[2]),
+      pipe.matIndex
+    ) < 0
+  ) {
     sim.stuck = true;
   }
 }
@@ -373,7 +424,7 @@ function dieWithCap(sim: FlexSim, pipe: FlexPipe): void {
 // REGULAR_FLEX uses weight 0–3 (can be turn-crazy).
 function chooseDirection(sim: FlexSim, pipe: FlexPipe): number {
   const lead = sim.chaseMode ? sim.pipes[sim.leadIndex] : undefined;
-  if (lead && lead !== pipe && lead.alive) {
+  if (lead != null && lead !== pipe && lead.alive) {
     const pref: number[] = [];
     for (let axis = 0; axis < 3; axis++) {
       const delta = lead.cell[axis] - pipe.cell[axis];
@@ -426,9 +477,10 @@ function initFlexPipe(sim: FlexSim, pipe: FlexPipe): boolean {
 
     pipe.matIndex = (Math.random() * sim.config.materialCount) | 0;
     // REGULAR_FLEX_PIPE constructor: weight 0–3, with the 1-in-20 runner.
-    pipe.weight = Math.random() < 0.05
-      ? 25 + ((Math.random() * (MAX_WEIGHT_STRAIGHT - 25 + 1)) | 0)
-      : (Math.random() * 4) | 0;
+    pipe.weight =
+      Math.random() < 0.05
+        ? 25 + ((Math.random() * (MAX_WEIGHT_STRAIGHT - 25 + 1)) | 0)
+        : (Math.random() * 4) | 0;
     const avgTurn = 0.11 + Math.random() * 0.7;
     pipe.turnFactorMin = Math.max(avgTurn - 0.1, 0);
     pipe.turnFactorMax = Math.min(avgTurn + 0.1, 1);
@@ -471,7 +523,10 @@ function stepXC(sim: FlexSim, pipe: FlexPipe): void {
   occupy(sim, v3add(pipe.cell, DIRS[newDir]));
 
   const ext = pipe.xc.maxExtent;
-  const mix = 1 - (pipe.turnFactorMin + Math.random() * (pipe.turnFactorMax - pipe.turnFactorMin));
+  const mix =
+    1 -
+    (pipe.turnFactorMin +
+      Math.random() * (pipe.turnFactorMax - pipe.turnFactorMin));
 
   if (newDir !== pipe.lastDir) {
     const minTurnRadius = ext;
@@ -484,7 +539,11 @@ function stepXC(sim: FlexSim, pipe: FlexPipe): void {
 
     const straight = advanceStraight(pipe, pipeLen);
     const arc = advanceArc(pipe, newDir, turnRadius);
-    deliver(sim, pipe, straight.length > 0 ? [...straight, ...arc.slice(1)] : arc);
+    deliver(
+      sim,
+      pipe,
+      straight.length > 0 ? [...straight, ...arc.slice(1)] : arc
+    );
     pipe.zTrans = -(1 - turnRadius);
   } else {
     const minPipeLen = -pipe.zTrans;
@@ -549,7 +608,8 @@ export function flexUpdate(sim: FlexSim, dt: number): void {
   resetFlexTail(sim.fb);
   if (sim.config.growth === 'smooth') {
     for (const pipe of sim.pipes) {
-      if (pipe.enabled && pipe.alive) appendTail(sim, pipe, Math.min(Math.max(pipe.t, 0), 1));
+      if (pipe.enabled && pipe.alive)
+        appendTail(sim, pipe, Math.min(Math.max(pipe.t, 0), 1));
     }
   }
 }
@@ -564,7 +624,12 @@ export function flexShouldReset(sim: FlexSim): boolean {
 
 // Start a flex round. The caller has already cleared the GL batches.
 export function resetFlexSim(sim: FlexSim, dims?: GridDims): void {
-  if (dims && (dims[0] !== sim.dims[0] || dims[1] !== sim.dims[1] || dims[2] !== sim.dims[2])) {
+  if (
+    dims != null &&
+    (dims[0] !== sim.dims[0] ||
+      dims[1] !== sim.dims[1] ||
+      dims[2] !== sim.dims[2])
+  ) {
     sim.dims = [...dims];
     sim.occ = new Uint8Array(dims[0] * dims[1] * dims[2]);
   } else {
@@ -577,14 +642,22 @@ export function resetFlexSim(sim: FlexSim, dims?: GridDims): void {
   sim.scheme = Math.random() < 0.5 ? 'xc' : 'turnomania';
 
   const cfg = sim.config;
-  const perRound = sim.scheme === 'turnomania' ? TURNOMANIA_PIPE_COUNT : cfg.pipesPerRound;
-  const threads = cfg.multiPipes && cfg.pipeCount >= 2
-    ? 2 + ((Math.random() * (cfg.pipeCount - 1)) | 0)
-    : 1;
-  sim.maxPipesThisRound = cfg.multiPipes ? Math.floor(perRound * 1.5) : perRound;
+  const perRound =
+    sim.scheme === 'turnomania' ? TURNOMANIA_PIPE_COUNT : cfg.pipesPerRound;
+  const threads =
+    cfg.multiPipes && cfg.pipeCount >= 2
+      ? 2 + ((Math.random() * (cfg.pipeCount - 1)) | 0)
+      : 1;
+  sim.maxPipesThisRound = cfg.multiPipes
+    ? Math.floor(perRound * 1.5)
+    : perRound;
   // FLEX_STATE::OKToUseChase: no chase during turnomania.
   sim.chaseMode =
-    cfg.chase && cfg.multiPipes && threads >= 2 && sim.scheme === 'xc' && ((Math.random() * 5) | 0) === 0;
+    cfg.chase &&
+    cfg.multiPipes &&
+    threads >= 2 &&
+    sim.scheme === 'xc' &&
+    ((Math.random() * 5) | 0) === 0;
   sim.leadIndex = 0;
 
   for (let i = 0; i < sim.pipes.length; i++) {
@@ -615,7 +688,7 @@ export function createFlexSim(
   dims: GridDims,
   fb: FlexBuffer,
   sph: Batch,
-  tea: Batch,
+  tea: Batch
 ): FlexSim {
   const sim: FlexSim = {
     config,

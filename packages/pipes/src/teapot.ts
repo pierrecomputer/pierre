@@ -29,11 +29,20 @@ export function createTeapotMesh(segments = 6): Mesh {
     const cp: number[][] = [];
     for (let i = 0; i < 16; i++) {
       const vi = TEAPOT_PATCHES[patch * 16 + i] * 3;
-      cp.push([TEAPOT_VERTICES[vi], TEAPOT_VERTICES[vi + 1], TEAPOT_VERTICES[vi + 2]]);
+      cp.push([
+        TEAPOT_VERTICES[vi],
+        TEAPOT_VERTICES[vi + 1],
+        TEAPOT_VERTICES[vi + 2],
+      ]);
     }
 
-    const evalPoint = (bu: number[], bv: number[]): [number, number, number] => {
-      let x = 0, y = 0, z = 0;
+    const evalPoint = (
+      bu: number[],
+      bv: number[]
+    ): [number, number, number] => {
+      let x = 0,
+        y = 0,
+        z = 0;
       for (let r = 0; r < 4; r++) {
         for (let c = 0; c < 4; c++) {
           const w = bu[r] * bv[c];
@@ -62,8 +71,11 @@ export function createTeapotMesh(segments = 6): Mesh {
         let nx = dv[1] * du[2] - dv[2] * du[1];
         let ny = dv[2] * du[0] - dv[0] * du[2];
         let nz = dv[0] * du[1] - dv[1] * du[0];
-        const len = Math.hypot(nx, ny, nz) || 1;
-        nx /= len; ny /= len; nz /= len;
+        const hyp = Math.hypot(nx, ny, nz);
+        const len = hyp === 0 ? 1 : hyp;
+        nx /= len;
+        ny /= len;
+        nz /= len;
         // Z-up data -> Y-up mesh: (x, y, z) -> (x, z, -y)
         positions.push(p[0], p[2], -p[1]);
         normals.push(nx, nz, -ny);
@@ -83,7 +95,8 @@ export function createTeapotMesh(segments = 6): Mesh {
   }
 
   // Normalize: center vertically and scale to height 2.
-  let minY = Infinity, maxY = -Infinity;
+  let minY = Infinity,
+    maxY = -Infinity;
   for (let i = 1; i < positions.length; i += 3) {
     if (positions[i] < minY) minY = positions[i];
     if (positions[i] > maxY) maxY = positions[i];
