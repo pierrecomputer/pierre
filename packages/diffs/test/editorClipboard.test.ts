@@ -345,7 +345,7 @@ describe('Editor clipboard events', () => {
       const writes = dispatchCut(component.contentElement);
 
       expect(writes).toEqual([['text', 'bravo\n']]);
-      expect(editor.getContent()!.contents).toBe('alpha\ncharlie');
+      expect(editor.getText()).toBe('alpha\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
@@ -387,7 +387,7 @@ describe('Editor clipboard events', () => {
       const writes = dispatchCut(component.contentElement);
 
       expect(writes).toEqual([['text', 'alpha\ncharlie\n']]);
-      expect(editor.getContent()!.contents).toBe('bravo\ndelta');
+      expect(editor.getText()).toBe('bravo\ndelta');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
@@ -434,7 +434,7 @@ describe('Editor clipboard events', () => {
       const writes = dispatchCut(component.contentElement);
 
       expect(writes).toEqual([['text', 'rav\ncharlie\n']]);
-      expect(editor.getContent()!.contents).toBe('alpha\nbo\ndelta');
+      expect(editor.getText()).toBe('alpha\nbo\ndelta');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 1, character: 1 },
@@ -481,7 +481,7 @@ describe('Editor clipboard events', () => {
       const writes = dispatchCut(component.contentElement);
 
       expect(writes).toEqual([['text', 'bravo\n']]);
-      expect(editor.getContent()!.contents).toBe('alpha\ncharlie');
+      expect(editor.getText()).toBe('alpha\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
@@ -523,7 +523,7 @@ describe('Editor clipboard events', () => {
       const writes = dispatchCut(component.contentElement);
 
       expect(writes).toEqual([['text', 'bravo\n']]);
-      expect(editor.getContent()!.contents).toBe('alpha\ncharlie');
+      expect(editor.getText()).toBe('alpha\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 1, character: 0 },
@@ -561,7 +561,7 @@ describe('Editor clipboard events', () => {
 
       // Copy matches cut: a collapsed caret yields the whole logical line.
       expect(writes).toEqual([['text', 'bravo\n']]);
-      expect(editor.getContent()!.contents).toBe('alpha\nbravo\ncharlie');
+      expect(editor.getText()).toBe('alpha\nbravo\ncharlie');
     } finally {
       editor.cleanUp();
       cleanup();
@@ -622,14 +622,14 @@ describe('Editor clipboard events', () => {
       });
       expect(firstKeydown.defaultPrevented).toBe(false);
       dispatchPaste(content, ' bravo');
-      expect(editor.getContent()!.contents).toBe('alpha bravo\nnew');
+      expect(editor.getText()).toBe('alpha bravo\nnew');
 
       const repeatKeydown = dispatchPasteShortcutKeydown(content, true, {
         key: 'V',
         shiftKey: true,
       });
       expect(repeatKeydown.defaultPrevented).toBe(true);
-      expect(editor.getContent()!.contents).toBe('alpha bravo\nnew');
+      expect(editor.getText()).toBe('alpha bravo\nnew');
     } finally {
       await fixture.cleanup();
     }
@@ -671,7 +671,7 @@ describe('Editor clipboard events', () => {
 
       expect(repeatKeydown.defaultPrevented).toBe(true);
       expect(reads).toBe(1);
-      expect(editor.getContent()!.contents).toBe('alpha bravo');
+      expect(editor.getText()).toBe('alpha bravo');
     } finally {
       editor.cleanUp();
       cleanup();
@@ -711,7 +711,7 @@ describe('Editor clipboard events', () => {
 
       expect(keydown.defaultPrevented).toBe(true);
       expect(reads).toBe(1);
-      expect(editor.getContent()!.contents).toBe('alpha bravo');
+      expect(editor.getText()).toBe('alpha bravo');
     } finally {
       editor.cleanUp();
       cleanup();
@@ -742,8 +742,8 @@ describe('Editor clipboard events', () => {
 
       // The clipboard \r\n is rewritten to the document's \n, so no stray
       // carriage return survives in the file.
-      expect(editor.getContent()!.contents).toBe('alpha\nbravo\ncharlieX\nY');
-      expect(editor.getContent()!.contents).not.toContain('\r');
+      expect(editor.getText()).toBe('alpha\nbravo\ncharlieX\nY');
+      expect(editor.getText()).not.toContain('\r');
     } finally {
       editor.cleanUp();
       cleanup();
@@ -772,8 +772,8 @@ describe('Editor clipboard events', () => {
 
       dispatchPaste(component.contentElement, 'X\rY');
 
-      expect(editor.getContent()!.contents).toBe('alpha\nbravoX\nY');
-      expect(editor.getContent()!.contents).not.toContain('\r');
+      expect(editor.getText()).toBe('alpha\nbravoX\nY');
+      expect(editor.getText()).not.toContain('\r');
     } finally {
       editor.cleanUp();
       cleanup();
@@ -804,7 +804,7 @@ describe('Editor clipboard events', () => {
       // is rewritten to \r\n rather than left as a mismatched \n.
       dispatchPaste(component.contentElement, 'X\nY');
 
-      expect(editor.getContent()!.contents).toBe('alpha\r\nbravoX\r\nY');
+      expect(editor.getText()).toBe('alpha\r\nbravoX\r\nY');
     } finally {
       editor.cleanUp();
       cleanup();
@@ -835,8 +835,8 @@ describe('Editor clipboard events', () => {
       // to \r rather than left as a mismatched \n.
       dispatchPaste(component.contentElement, 'x\ny');
 
-      expect(editor.getContent()!.contents).toBe('a\rbx\ry');
-      expect(editor.getContent()!.contents).not.toContain('\n');
+      expect(editor.getText()).toBe('a\rbx\ry');
+      expect(editor.getText()).not.toContain('\n');
     } finally {
       editor.cleanUp();
       cleanup();

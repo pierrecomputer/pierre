@@ -137,7 +137,7 @@ describe('Editor.applyEdits selection sync', () => {
         },
       ]);
 
-      expect(editor.getContent()!.contents).toBe('NEW\nalpha\nbravo\ncharlie');
+      expect(editor.getText()).toBe('NEW\nalpha\nbravo\ncharlie');
       // The caret was inside "charlie"; inserting a line above must move it down
       // one line so it still points at the same character of "charlie".
       expect(editor.getState().selections).toEqual([
@@ -174,7 +174,7 @@ describe('Editor.applyEdits selection sync', () => {
         },
       ]);
 
-      expect(editor.getContent()!.contents).toBe('alXYZpha\nbravo');
+      expect(editor.getText()).toBe('alXYZpha\nbravo');
       // The caret must follow the inserted text so the next keystroke lands
       // after it, not in front of it.
       expect(editor.getState().selections).toEqual([
@@ -249,7 +249,7 @@ describe('Editor.applyEdits selection sync', () => {
         },
       ]);
 
-      expect(editor.getContent()!.contents).toBe('alpha\nbravo\nNEW\ncharlie');
+      expect(editor.getText()).toBe('alpha\nbravo\nNEW\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
@@ -290,7 +290,7 @@ describe('Editor.applyEdits selection sync', () => {
       );
 
       pressUndoRedo(window, content, false);
-      expect(editor.getContent()!.contents).toBe('alpha\nbravo\ncharlie');
+      expect(editor.getText()).toBe('alpha\nbravo\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 2, character: 3 },
@@ -300,7 +300,7 @@ describe('Editor.applyEdits selection sync', () => {
       ]);
 
       pressUndoRedo(window, content, true);
-      expect(editor.getContent()!.contents).toBe('NEW\nalpha\nbravo\ncharlie');
+      expect(editor.getText()).toBe('NEW\nalpha\nbravo\ncharlie');
       // Redo must restore the caret to the post-edit (remapped) position, not
       // leave it where undo placed it.
       expect(editor.getState().selections).toEqual([
@@ -622,7 +622,7 @@ describe('Editor move line commands', () => {
       ]);
 
       pressMoveLine(window, content, 'up');
-      expect(editor.getContent()!.contents).toBe('bravo\nalpha\ncharlie');
+      expect(editor.getText()).toBe('bravo\nalpha\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
@@ -632,7 +632,7 @@ describe('Editor move line commands', () => {
       ]);
 
       pressMoveLine(window, content, 'down');
-      expect(editor.getContent()!.contents).toBe('alpha\nbravo\ncharlie');
+      expect(editor.getText()).toBe('alpha\nbravo\ncharlie');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 1, character: 2 },
@@ -660,7 +660,7 @@ describe('Editor move line commands', () => {
       ]);
 
       pressMoveLine(window, content, 'up');
-      expect(editor.getContent()!.contents).toBe('alpha\ncharlie\nbravo');
+      expect(editor.getText()).toBe('alpha\ncharlie\nbravo');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 1, character: 3 },
@@ -688,7 +688,7 @@ describe('Editor move line commands', () => {
       ]);
 
       pressMoveLine(window, content, 'down');
-      expect(editor.getContent()!.contents).toBe('zero\nfour\none\ntwo\nthree');
+      expect(editor.getText()).toBe('zero\nfour\none\ntwo\nthree');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 2, character: 1 },
@@ -716,7 +716,7 @@ describe('Editor move line commands', () => {
       ]);
 
       pressMoveLine(window, content, 'down');
-      expect(editor.getContent()!.contents).toBe('alpha\ncharlie\nbravo');
+      expect(editor.getText()).toBe('alpha\ncharlie\nbravo');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 2, character: 0 },
@@ -748,7 +748,7 @@ describe('Editor move line commands', () => {
       ]);
 
       pressMoveLine(window, content, 'up');
-      expect(editor.getContent()!.contents).toBe('b\na\nc\ne\nd\nf');
+      expect(editor.getText()).toBe('b\na\nc\ne\nd\nf');
       expect(editor.getState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
@@ -787,7 +787,7 @@ describe('Editor undo/redo API', () => {
 
       editor.applyEdits(insertBang, true);
 
-      expect(editor.getContent()!.contents).toBe('alpha!');
+      expect(editor.getText()).toBe('alpha!');
       expect(editor.canUndo).toBe(true);
       expect(editor.canRedo).toBe(false);
     } finally {
@@ -800,15 +800,15 @@ describe('Editor undo/redo API', () => {
 
     try {
       editor.applyEdits(insertBang, true);
-      expect(editor.getContent()!.contents).toBe('alpha!');
+      expect(editor.getText()).toBe('alpha!');
 
       editor.undo();
-      expect(editor.getContent()!.contents).toBe('alpha');
+      expect(editor.getText()).toBe('alpha');
       expect(editor.canUndo).toBe(false);
       expect(editor.canRedo).toBe(true);
 
       editor.redo();
-      expect(editor.getContent()!.contents).toBe('alpha!');
+      expect(editor.getText()).toBe('alpha!');
       expect(editor.canUndo).toBe(true);
       expect(editor.canRedo).toBe(false);
     } finally {
@@ -823,7 +823,7 @@ describe('Editor undo/redo API', () => {
       editor.undo();
       editor.redo();
 
-      expect(editor.getContent()!.contents).toBe('alpha');
+      expect(editor.getText()).toBe('alpha');
       expect(editor.canUndo).toBe(false);
       expect(editor.canRedo).toBe(false);
     } finally {
@@ -848,13 +848,13 @@ describe('Editor undo/redo API', () => {
 
       editor.applyEdits(edit, true);
       pressUndoRedo(window, content, false);
-      const keyboardResult = editor.getContent()!.contents;
+      const keyboardResult = editor.getText();
 
       pressUndoRedo(window, content, true);
-      expect(editor.getContent()!.contents).toBe('Xalpha');
+      expect(editor.getText()).toBe('Xalpha');
 
       editor.undo();
-      expect(editor.getContent()!.contents).toBe(keyboardResult);
+      expect(editor.getText()).toBe(keyboardResult);
     } finally {
       cleanup();
     }

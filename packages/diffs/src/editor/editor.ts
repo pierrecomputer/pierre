@@ -418,8 +418,22 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#runCommand('redo');
   }
 
-  getContent(): FileContents | undefined {
-    return this.#getFileRef();
+  getFile(): FileContents | undefined {
+    const fileInfo = this.#fileInfo;
+    const textDocument = this.#textDocument;
+    if (fileInfo === undefined || textDocument === undefined) {
+      return undefined;
+    }
+    const file = { ...fileInfo }; // copy
+    Object.defineProperty(file, 'contents', {
+      enumerable: true,
+      get: () => textDocument.getText(),
+    });
+    return file as FileContents;
+  }
+
+  getText(): string {
+    return this.#textDocument?.getText() ?? '';
   }
 
   getState(): EditorState {
@@ -3742,27 +3756,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  #getFileRef(): FileContents | undefined {
-    const fileInfo = this.#fileInfo;
-    const textDocument = this.#textDocument;
-    if (fileInfo === undefined || textDocument === undefined) {
-      return undefined;
-    }
-    const file = { ...fileInfo }; // copy
-    Object.defineProperty(file, 'contents', {
-      enumerable: true,
-      get: () => textDocument.getText(),
-    });
-    return file as FileContents;
-  }
-
   #applyChange(
     change: TextDocumentChange,
     newSelections?: EditorSelection[],
     newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
     options?: { skipSearchRefresh?: boolean; skipFocus?: boolean }
   ) {
-    const fileRef = this.#getFileRef();
+    const fileRef = this.getFile();
     const onChange = this.#options.onChange;
     if (fileRef !== undefined && onChange !== undefined) {
       onChange(fileRef, newLineAnnotations ?? this.#lineAnnotations);

@@ -72,7 +72,7 @@ export function CodeEditor<LAnnotation = undefined>({
     if (file == null) {
       editorRef.current.render(root);
     } else {
-      editorRef.current.setContent(file, lineAnnotations);
+      editorRef.current.setFile(file, lineAnnotations);
     }
   });
 

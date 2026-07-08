@@ -114,7 +114,7 @@ describe('CodeEditor', () => {
         scrollContainer?.querySelector('[data-placeholder]')
       ).not.toBeNull();
 
-      editor.setContent(makeFile('editor.txt', 'alpha\nbravo\n'));
+      editor.setFile(makeFile('editor.txt', 'alpha\nbravo\n'));
       const fileContainer = scrollContainer?.querySelector('diffs-container');
       expect(fileContainer).not.toBeNull();
       expect(scrollContainer?.querySelector('[data-placeholder]')).toBeNull();
@@ -159,7 +159,7 @@ describe('CodeEditor', () => {
           ?.getAttribute('slot')
       ).toBe('annotation-2');
 
-      editor.setContent(makeFile('editor.txt', 'three\nfour\n'), [
+      editor.setFile(makeFile('editor.txt', 'three\nfour\n'), [
         { lineNumber: 1, metadata: 'updated note' },
       ]);
       await waitForRenderedText(fileContainer!, 'four');

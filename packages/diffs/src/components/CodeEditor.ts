@@ -104,7 +104,7 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
     });
   }
 
-  setContent(
+  setFile(
     file: FileContents,
     lineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {

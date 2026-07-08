@@ -190,7 +190,7 @@ describe('Editor recycle cleanUp', () => {
       const first = new TestEditableComponent(createFile());
       editor.edit(first);
       insertAtStart(editor, 'X');
-      expect(editor.getContent()!.contents).toBe(`X${FILE_CONTENTS}`);
+      expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
 
       // Simulate a virtualized unmount: the host recycles, the editor is
       // detached non-destructively.
@@ -201,11 +201,11 @@ describe('Editor recycle cleanUp', () => {
       // document (holding the unsaved edit) must win over host contents.
       const second = new TestEditableComponent(createFile());
       editor.edit(second);
-      expect(editor.getContent()!.contents).toBe(`X${FILE_CONTENTS}`);
+      expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
 
       // Undo history lives in the retained document and survives with it.
       editor.undo();
-      expect(editor.getContent()!.contents).toBe(FILE_CONTENTS);
+      expect(editor.getText()).toBe(FILE_CONTENTS);
 
       editor.cleanUp();
     } finally {
@@ -230,7 +230,7 @@ describe('Editor recycle cleanUp', () => {
       editor.edit(second);
       insertAtStart(editor, 'Y');
 
-      expect(editor.getContent()!.contents).toBe(`Y${FILE_CONTENTS}`);
+      expect(editor.getText()).toBe(`Y${FILE_CONTENTS}`);
       const firstLine = second.contentElement.children[0] as HTMLElement;
       expect(firstLine.textContent).toBe('Yalpha');
 
@@ -247,7 +247,7 @@ describe('Editor recycle cleanUp', () => {
       const first = new TestEditableComponent(createFile());
       editor.edit(first);
       insertAtStart(editor, 'X');
-      expect(editor.getContent()!.contents).toBe(`X${FILE_CONTENTS}`);
+      expect(editor.getText()).toBe(`X${FILE_CONTENTS}`);
 
       editor.cleanUp();
       first.cleanUp();
