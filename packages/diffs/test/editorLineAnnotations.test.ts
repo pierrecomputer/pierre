@@ -5,7 +5,7 @@ import { TextDocument } from '../src/editor/textDocument';
 import type { DiffLineAnnotation } from '../src/types';
 
 describe('applyDocumentChangeToLineAnnotations', () => {
-  test('keeps annotations attached to the nearest line when their line is deleted', () => {
+  test('drops annotations attached to deleted lines', () => {
     const textDocument = new TextDocument('inmemory://1', 'one\ntwo\nthree');
     const annotations: DiffLineAnnotation<string>[] = [
       { side: 'additions', lineNumber: 1, metadata: 'one' },
@@ -25,12 +25,11 @@ describe('applyDocumentChangeToLineAnnotations', () => {
 
     expect(applyDocumentChangeToLineAnnotations(change!, annotations)).toEqual([
       { side: 'additions', lineNumber: 1, metadata: 'one' },
-      { side: 'additions', lineNumber: 2, metadata: 'two' },
       { side: 'additions', lineNumber: 2, metadata: 'three' },
     ]);
   });
 
-  test('returns a refreshed annotation list when a deleted line keeps the same line number', () => {
+  test('drops a deleted line annotation when later lines keep its line number', () => {
     const textDocument = new TextDocument('inmemory://1', 'one\ntwo\nthree');
     const annotations: DiffLineAnnotation<string>[] = [
       { side: 'additions', lineNumber: 2, metadata: 'two' },
@@ -51,9 +50,71 @@ describe('applyDocumentChangeToLineAnnotations', () => {
     );
 
     expect(nextAnnotations).not.toBe(annotations);
-    expect(nextAnnotations).toEqual([
+    expect(nextAnnotations).toEqual([]);
+  });
+
+  test('drops all addition annotations when all document text is deleted', () => {
+    const textDocument = new TextDocument('inmemory://1', 'one\ntwo\nthree');
+    const annotations: DiffLineAnnotation<string>[] = [
+      { side: 'additions', lineNumber: 1, metadata: 'one' },
       { side: 'additions', lineNumber: 2, metadata: 'two' },
+      { side: 'additions', lineNumber: 3, metadata: 'three' },
+      { side: 'deletions', lineNumber: 1, metadata: 'old one' },
+    ];
+
+    const change = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 2, character: 5 },
+        },
+        newText: '',
+      },
     ]);
+
+    expect(textDocument.getText()).toBe('');
+    expect(applyDocumentChangeToLineAnnotations(change!, annotations)).toEqual([
+      { side: 'deletions', lineNumber: 1, metadata: 'old one' },
+    ]);
+  });
+
+  test('does not restore deleted addition annotations when new lines are inserted', () => {
+    const textDocument = new TextDocument('inmemory://1', 'one\ntwo\nthree');
+    const annotations: DiffLineAnnotation<string>[] = [
+      { side: 'additions', lineNumber: 1, metadata: 'one' },
+      { side: 'additions', lineNumber: 2, metadata: 'two' },
+      { side: 'additions', lineNumber: 3, metadata: 'three' },
+      { side: 'deletions', lineNumber: 1, metadata: 'old one' },
+    ];
+
+    const deleteChange = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 2, character: 5 },
+        },
+        newText: '',
+      },
+    ]);
+    const afterDelete = applyDocumentChangeToLineAnnotations(
+      deleteChange!,
+      annotations
+    )!;
+
+    const insertChange = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+        newText: 'new one\nnew two',
+      },
+    ]);
+
+    expect(
+      applyDocumentChangeToLineAnnotations(insertChange!, afterDelete) ??
+        afterDelete
+    ).toEqual([{ side: 'deletions', lineNumber: 1, metadata: 'old one' }]);
   });
 
   test('moves annotations on a merged line instead of deleting them', () => {
@@ -133,6 +194,8 @@ describe('applyDocumentChangeToLineAnnotations', () => {
     const annotations: DiffLineAnnotation<string>[] = [
       { side: 'additions', lineNumber: 2, metadata: 'two' },
       { side: 'additions', lineNumber: 3, metadata: 'three' },
+      { side: 'additions', lineNumber: 4, metadata: 'four' },
+      { side: 'additions', lineNumber: 5, metadata: 'five' },
     ];
 
     const change = textDocument.applyEdits([
@@ -156,6 +219,43 @@ describe('applyDocumentChangeToLineAnnotations', () => {
     expect(applyDocumentChangeToLineAnnotations(change!, annotations)).toEqual([
       { side: 'additions', lineNumber: 3, metadata: 'two' },
       { side: 'additions', lineNumber: 4, metadata: 'three' },
+      { side: 'additions', lineNumber: 5, metadata: 'five' },
+    ]);
+  });
+
+  test('preserves deletions in coalesced net-zero multi-edits', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'one\ntwo\nthree\nfour'
+    );
+    const annotations: DiffLineAnnotation<string>[] = [
+      { side: 'additions', lineNumber: 2, metadata: 'two' },
+      { side: 'additions', lineNumber: 3, metadata: 'three' },
+      { side: 'additions', lineNumber: 4, metadata: 'four' },
+    ];
+
+    const change = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 0 },
+        },
+        newText: 'inserted\n',
+      },
+      {
+        range: {
+          start: { line: 2, character: 0 },
+          end: { line: 3, character: 0 },
+        },
+        newText: '',
+      },
+    ]);
+
+    expect(change?.lineDelta).toBe(0);
+    expect(change?.changedLineRanges).toEqual([[1, 3]]);
+    expect(applyDocumentChangeToLineAnnotations(change!, annotations)).toEqual([
+      { side: 'additions', lineNumber: 3, metadata: 'two' },
+      { side: 'additions', lineNumber: 4, metadata: 'four' },
     ]);
   });
 });

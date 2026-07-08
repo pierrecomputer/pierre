@@ -39,6 +39,7 @@ import type {
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
+import { applyLineTextWithNewline } from '../utils/applyLineTextWithNewline';
 import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
@@ -73,7 +74,6 @@ import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
-import { splitFileContents } from '../utils/splitFileContents';
 import {
   recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
@@ -430,18 +430,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     // updateRenderCache may already have extended diff.additionLines for the
     // same edit pass, so never bail out purely on matching lengths here.
-    const documentText = textDocument.getText();
-    if (documentText.trim().length === 0) {
-      // Blank documents need the editor's logical line count: `"\n"` is two
-      // editable rows even though the diff parser sees one newline token.
-      const lines: string[] = [];
-      for (let line = 0; line < textDocument.lineCount; line++) {
-        lines.push(textDocument.getLineText(line, true));
-      }
-      diff.additionLines = lines;
-    } else {
-      diff.additionLines = splitFileContents(documentText);
-    }
+    // Read line-by-line from the editor document instead of materializing the
+    // entire text. This preserves blank documents and the final editable empty
+    // row after a trailing line break.
+    diff.additionLines = getEditorDocumentLines(
+      textDocument,
+      diff.additionLines
+    );
 
     const newLength = diff.additionLines.length;
     const additionHastLines = result.code.additionLines;
@@ -643,7 +638,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (diff == null) {
       return undefined;
     }
-    const { expandUnchanged = false, collapsedContextThreshold } =
+    const { expandUnchanged, collapsedContextThreshold } =
       this.getOptionsWithDefaults();
     let { options, forceHighlight } = this.getRenderOptions(diff);
     const cache = this.getMatchingWorkerResultCache(diff, options);
@@ -1212,10 +1207,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               pendingSplitContext.side != null &&
               pendingSplitContext.side !== missingSide
             ) {
-              // NOTE(amadeus): If we see this error, we might need to bring back: flushSplitSpan();
-              throw new Error(
-                'DiffHunksRenderer.processDiffResult: iterateOverDiff, invalid pending splits'
-              );
+              pendingSplitContext.flush();
             }
             pendingSplitContext.side = missingSide;
             pendingSplitContext.increment();
@@ -2006,18 +1998,40 @@ function createPlainAdditionLineElement(
   };
 }
 
-// Host line text omits line endings; diff line arrays keep the suffix from parsing.
-function applyLineTextWithNewline(line: string, lineText: string): string {
-  if (line.endsWith('\r\n')) {
-    return lineText + '\r\n';
+function getEditorDocumentLines(
+  textDocument: DiffsTextDocument,
+  previousLines: string[]
+): string[] {
+  const lines: string[] = [];
+  const fallbackLineBreak = getFallbackLineBreak(previousLines);
+  for (let line = 0; line < textDocument.lineCount; line++) {
+    const lineText = textDocument.getLineText(line, true);
+    lines.push(
+      line < textDocument.lineCount - 1 && !hasLineBreakSuffix(lineText)
+        ? lineText + fallbackLineBreak
+        : lineText
+    );
   }
-  if (line.endsWith('\r')) {
-    return lineText + '\r';
+  return lines;
+}
+
+function hasLineBreakSuffix(line: string): boolean {
+  return line.endsWith('\n') || line.endsWith('\r');
+}
+
+function getFallbackLineBreak(lines: string[]): string {
+  for (const line of lines) {
+    if (line.endsWith('\r\n')) {
+      return '\r\n';
+    }
+    if (line.endsWith('\n')) {
+      return '\n';
+    }
+    if (line.endsWith('\r')) {
+      return '\r';
+    }
   }
-  if (line.endsWith('\n')) {
-    return lineText + '\n';
-  }
-  return lineText;
+  return '\n';
 }
 
 function isDiffMassive(

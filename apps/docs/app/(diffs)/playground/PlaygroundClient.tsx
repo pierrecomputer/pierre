@@ -2,12 +2,14 @@
 
 import type {
   AnnotationSide,
+  CodeViewOptions,
   DiffIndicators,
   DiffLineAnnotation,
+  FileDiffOptions,
   SelectedLineRange,
 } from '@pierre/diffs';
 import { Editor } from '@pierre/diffs/editor';
-import { EditorProvider, FileDiff } from '@pierre/diffs/react';
+import { EditorProvider, FileDiff, useWorkerPool } from '@pierre/diffs/react';
 import type { PreloadFileDiffResult } from '@pierre/diffs/ssr';
 import {
   IconCheck,
@@ -25,6 +27,7 @@ import {
   IconEye,
   IconHunkDivider,
   IconInReview,
+  IconLayers,
   IconLink,
   IconListOrdered,
   IconParagraph,
@@ -34,13 +37,21 @@ import {
   IconXSquircle,
 } from '@pierre/icons';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
-import { PLAYGROUND_MARKERS } from './constants';
+import {
+  CODE_VIEW_ITEMS,
+  ITEM_UNSAFE_CSS,
+  PLAYGROUND_MARKERS,
+  VIRTUALIZER_FILE_DIFFS,
+} from './constants';
+import { PlaygroundCodeView } from './PlaygroundCodeView';
+import { CommentForm, ExampleThread } from './PlaygroundComments';
+import { PlaygroundVirtualizerElementView } from './PlaygroundVirtualizerElementView';
+import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
 import { useTheme } from '@/components/theme-provider';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -91,8 +102,45 @@ type HunkSeparatorValue = (typeof HUNK_SEPARATOR_OPTIONS)[number]['value'];
 // editor (Edit). Markers are diagnostics shown only while editing.
 type EditorMode = 'review' | 'edit';
 
+// The rendering surface the playground diff(s) are drawn with. 'normal' is the
+// single editable FileDiff; 'virtualizer' renders several diffs with window
+// scroll (vanilla Virtualizer); 'virtualizer-element' renders them with the
+// React <Virtualizer> inside its own scroll region; 'codeview' renders a mix
+// of diff/file items in CodeView's own scroller.
+type ViewMode = 'normal' | 'virtualizer' | 'virtualizer-element' | 'codeview';
+
+const VIEW_MODE_OPTIONS = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'virtualizer', label: 'Virtualizer (win)' },
+  { value: 'virtualizer-element', label: 'Virtualizer (el)' },
+  { value: 'codeview', label: 'CodeView' },
+] as const;
+
+// Pure rendering options shared by all three view modes. These keys don't depend
+// on the annotation metadata generic, so a single annotation-agnostic type keeps
+// them assignable to FileDiff, VirtualizedFileDiff, and CodeView alike (spreading
+// a `<undefined>`-typed options object into an annotated FileDiff would otherwise
+// widen its annotation callbacks to `undefined`).
+type SharedRenderOptions = Pick<
+  FileDiffOptions<undefined>,
+  | 'diffStyle'
+  | 'diffIndicators'
+  | 'lineDiffType'
+  | 'disableBackground'
+  | 'disableLineNumbers'
+  | 'overflow'
+  | 'themeType'
+  | 'theme'
+> & {
+  // The full `hunkSeparators` type includes an LAnnotation-typed render
+  // callback; the playground only uses the string presets, so narrow it here to
+  // stay annotation-agnostic.
+  hunkSeparators: HunkSeparatorValue;
+};
+
 // Default values for URL param comparison
 const DEFAULTS = {
+  viewMode: 'normal' as ViewMode,
   diffStyle: 'split',
   colorMode: 'system',
   lightTheme: 'pierre-light',
@@ -116,6 +164,8 @@ interface PlaygroundClientProps {
 }
 
 interface PlaygroundControlsContentProps {
+  viewMode: ViewMode;
+  setViewMode: (v: ViewMode) => void;
   diffStyle: 'split' | 'unified';
   setDiffStyle: (v: 'split' | 'unified') => void;
   colorMode: 'system' | 'light' | 'dark';
@@ -156,6 +206,8 @@ interface PlaygroundControlsContentProps {
 }
 
 function PlaygroundControlsContent({
+  viewMode,
+  setViewMode,
   diffStyle,
   setDiffStyle,
   colorMode,
@@ -221,6 +273,35 @@ function PlaygroundControlsContent({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="justify-start px-3">
+              <IconLayers />
+              {VIEW_MODE_OPTIONS.find((opt) => opt.value === viewMode)?.label ??
+                viewMode}
+              <IconChevronSm className="text-muted-foreground ml-auto" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
+            {VIEW_MODE_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => setViewMode(option.value)}
+                selected={viewMode === option.value}
+              >
+                {option.label}
+                {viewMode === option.value && <IconCheck className="ml-auto" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="bg-border h-6 w-px" />
+
         <ButtonGroup
           value={diffStyle}
           onValueChange={(value) => setDiffStyle(value as 'split' | 'unified')}
@@ -234,21 +315,30 @@ function PlaygroundControlsContent({
           </ButtonGroupItem>
         </ButtonGroup>
 
-        <div className="bg-border h-6 w-px" />
+        {/*
+          The single global Edit toggle only makes sense for the one-file Normal
+          view. Virtualizer/CodeView show a per-file edit control in each header
+          instead (Virtualizer today; CodeView is read-only for now).
+        */}
+        {viewMode === 'normal' && (
+          <>
+            <div className="bg-border h-6 w-px" />
 
-        <ButtonGroup
-          value={editorMode}
-          onValueChange={(value) => setEditorMode(value as EditorMode)}
-          aria-label="Editor mode"
-          size="icon"
-        >
-          <ButtonGroupItem value="review">
-            <IconEye />
-          </ButtonGroupItem>
-          <ButtonGroupItem value="edit">
-            <IconPencil />
-          </ButtonGroupItem>
-        </ButtonGroup>
+            <ButtonGroup
+              value={editorMode}
+              onValueChange={(value) => setEditorMode(value as EditorMode)}
+              aria-label="Editor mode"
+              size="icon"
+            >
+              <ButtonGroupItem value="review">
+                <IconEye />
+              </ButtonGroupItem>
+              <ButtonGroupItem value="edit">
+                <IconPencil />
+              </ButtonGroupItem>
+            </ButtonGroup>
+          </>
+        )}
 
         <div className="bg-border h-6 w-px" />
 
@@ -425,19 +515,22 @@ function PlaygroundControlsContent({
           onCheckedChange={setShowAnnotations}
         />
 
-        <ToggleButton
-          icon={<IconCiWarning />}
-          label="Markers"
-          checked={showMarkers}
-          onCheckedChange={setShowMarkers}
-          // Markers come from an attached editor, so they only render in Edit.
-          disabled={editorMode !== 'edit'}
-          title={
-            editorMode !== 'edit'
-              ? 'Switch to Edit mode to show lint markers'
-              : undefined
-          }
-        />
+        {/* Markers come from the global editor, which only exists in Normal. */}
+        {viewMode === 'normal' && (
+          <ToggleButton
+            icon={<IconCiWarning />}
+            label="Markers"
+            checked={showMarkers}
+            onCheckedChange={setShowMarkers}
+            // Markers require an attached editor, so they only apply in Edit mode.
+            disabled={editorMode !== 'edit'}
+            title={
+              editorMode !== 'edit'
+                ? 'Switch to Edit mode to show lint markers'
+                : undefined
+            }
+          />
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -564,6 +657,15 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     return null;
   };
 
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const value = getParam('view', DEFAULTS.viewMode);
+    return value === 'virtualizer' ||
+      value === 'virtualizer-element' ||
+      value === 'codeview'
+      ? value
+      : 'normal';
+  });
+
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>(
     getParam('layout', DEFAULTS.diffStyle) as 'split' | 'unified'
   );
@@ -628,8 +730,12 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const [showAnnotations, setShowAnnotations] = useState(
     getBoolParam('annot', DEFAULTS.annotations)
   );
+  // Edit mode only exists in the Normal view (other views render per-file
+  // edit controls instead), so only honor `?edit=edit` when starting there.
   const [editorMode, setEditorMode] = useState<EditorMode>(
-    getParam('edit', DEFAULTS.editorMode) === 'edit' ? 'edit' : 'review'
+    viewMode === 'normal' && getParam('edit', DEFAULTS.editorMode) === 'edit'
+      ? 'edit'
+      : 'review'
   );
   const [showMarkers, setShowMarkers] = useState(
     getBoolParam('markers', DEFAULTS.markers)
@@ -698,6 +804,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     const params = new URLSearchParams();
 
     // Only add non-default values to keep URL clean
+    if (viewMode !== DEFAULTS.viewMode) params.set('view', viewMode);
     if (diffStyle !== DEFAULTS.diffStyle) params.set('layout', diffStyle);
     if (colorMode !== DEFAULTS.colorMode) params.set('mode', colorMode);
     if (selectedLightTheme !== DEFAULTS.lightTheme)
@@ -742,6 +849,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       ? `/playground?${queryString}`
       : '/playground';
   }, [
+    viewMode,
     diffStyle,
     colorMode,
     selectedLightTheme,
@@ -805,7 +913,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   );
 
   const handleCancelComment = useCallback(
-    (side: AnnotationSide, lineNumber: number) => {
+    (side: AnnotationSide | undefined, lineNumber: number) => {
       setAnnotations((prev) =>
         prev.filter(
           (ann) => !(ann.side === side && ann.lineNumber === lineNumber)
@@ -838,7 +946,17 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     return () => document.body.classList.remove('overflow-hidden');
   }, [isControlsOpen]);
 
+  // Leaving the Normal view drops back to Review: the global Edit toggle only
+  // exists there, and a stale 'edit' would keep `contentEditable` true with no
+  // mounted editor to attach to, so the marker effect would retry forever.
+  const setViewModeAndResetEditor = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    if (mode !== 'normal') setEditorMode('review');
+  }, []);
+
   const controlsContentProps = {
+    viewMode,
+    setViewMode: setViewModeAndResetEditor,
     diffStyle,
     setDiffStyle,
     colorMode,
@@ -885,6 +1003,61 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const effectiveColorMode =
     colorMode === 'system' ? (resolvedColorScheme ?? 'system') : colorMode;
 
+  // Pure rendering options shared by all three view modes. Interaction and
+  // edit-specific options are layered on per surface below.
+  const renderOptions = useMemo<SharedRenderOptions>(
+    () => ({
+      diffStyle,
+      diffIndicators,
+      lineDiffType,
+      hunkSeparators,
+      disableBackground,
+      disableLineNumbers,
+      overflow,
+      themeType: effectiveColorMode,
+      theme: { dark: selectedDarkTheme, light: selectedLightTheme },
+    }),
+    [
+      diffStyle,
+      diffIndicators,
+      lineDiffType,
+      hunkSeparators,
+      disableBackground,
+      disableLineNumbers,
+      overflow,
+      effectiveColorMode,
+      selectedDarkTheme,
+      selectedLightTheme,
+    ]
+  );
+
+  // With a worker pool, highlight render options (theme, line-diff granularity)
+  // are pool-global — the workers render with the pool's config, not each
+  // component's options — so picker changes must be pushed into the pool.
+  // setRenderOptions no-ops when nothing changed, re-resolves themes, updates
+  // every worker, drops stale AST caches, and notifies mounted instances.
+  const workerPool = useWorkerPool();
+  useEffect(() => {
+    void workerPool?.setRenderOptions({
+      theme: renderOptions.theme,
+      lineDiffType: renderOptions.lineDiffType,
+    });
+  }, [workerPool, renderOptions.theme, renderOptions.lineDiffType]);
+
+  // CodeView adds its own layout/sticky-header options on top of the shared
+  // rendering options; its scrollbar styling mirrors the Normal view's.
+  const codeViewOptions = useMemo<
+    CodeViewOptions<PlaygroundAnnotationMetadata>
+  >(
+    () => ({
+      ...renderOptions,
+      stickyHeaders: true,
+      layout: { paddingTop: 0, paddingBottom: 0, gap: 1 },
+      unsafeCSS: ITEM_UNSAFE_CSS,
+    }),
+    [renderOptions]
+  );
+
   // Editing takes over click targets, so line selection and gutter comments are
   // disabled while in Edit mode (they only make sense in read-only Review).
   const fileDiff = (
@@ -896,15 +1069,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       lineAnnotations={showAnnotations ? annotations : []}
       options={{
         ...prerenderedDiff.options,
-        diffStyle,
-        diffIndicators,
-        lineDiffType,
-        hunkSeparators,
-        disableBackground,
-        disableLineNumbers,
-        overflow,
-        themeType: effectiveColorMode,
-        theme: { dark: selectedDarkTheme, light: selectedLightTheme },
+        ...renderOptions,
         enableLineSelection: contentEditable ? false : canSelectLines,
         enableGutterUtility: contentEditable ? false : canUseGutterComments,
         onLineSelectionEnd: handleLineSelectionEnd,
@@ -991,14 +1156,37 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       </div>
 
       {/*
-        Keep EditorProvider mounted in both Review and Edit so toggling modes
-        only flips `contentEditable` (the editor attaches lazily when that turns
-        true). Conditionally wrapping would change the child component type and
-        remount FileDiff, which recreates the shadow root and re-injects the
-        dark SSR HTML for a frame — the light->dark flash we're avoiding here.
-        Mirrors the LiveEditing demo.
+        Normal view keeps EditorProvider mounted in both Review and Edit so
+        toggling modes only flips `contentEditable` (the editor attaches lazily
+        when that turns true). Conditionally wrapping would change the child
+        component type and remount FileDiff, which recreates the shadow root and
+        re-injects the dark SSR HTML for a frame — the light->dark flash we're
+        avoiding here. Mirrors the LiveEditing demo.
       */}
-      <EditorProvider editor={editor}>{fileDiff}</EditorProvider>
+      {viewMode === 'normal' ? (
+        <EditorProvider editor={editor}>{fileDiff}</EditorProvider>
+      ) : viewMode === 'virtualizer' ? (
+        <PlaygroundVirtualizerView
+          diffs={VIRTUALIZER_FILE_DIFFS}
+          options={renderOptions}
+          enableGutterComments={enableGutterUtility}
+          showAnnotations={showAnnotations}
+        />
+      ) : viewMode === 'virtualizer-element' ? (
+        <PlaygroundVirtualizerElementView
+          diffs={VIRTUALIZER_FILE_DIFFS}
+          options={renderOptions}
+          enableGutterComments={enableGutterUtility}
+          showAnnotations={showAnnotations}
+        />
+      ) : (
+        <PlaygroundCodeView
+          items={CODE_VIEW_ITEMS}
+          options={codeViewOptions}
+          enableGutterComments={enableGutterUtility}
+          showAnnotations={showAnnotations}
+        />
+      )}
     </div>
   );
 }
@@ -1038,154 +1226,6 @@ function ToggleButton({
         onClick={(e) => e.stopPropagation()}
         className="pointer-events-none mr-3 place-self-center justify-self-end"
       />
-    </div>
-  );
-}
-
-function CommentForm({
-  side,
-  lineNumber,
-  onCancel,
-}: {
-  side: AnnotationSide;
-  lineNumber: number;
-  onCancel: (side: AnnotationSide, lineNumber: number) => void;
-}) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    setTimeout(() => {
-      textareaRef.current?.focus();
-    }, 0);
-  }, []);
-
-  const handleCancel = useCallback(() => {
-    onCancel(side, lineNumber);
-  }, [side, lineNumber, onCancel]);
-
-  return (
-    <div
-      style={{
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'row',
-        gap: 1,
-      }}
-    >
-      <div style={{ width: '100%' }}>
-        <div
-          className="max-w-[95%] sm:max-w-[70%]"
-          style={{
-            whiteSpace: 'normal',
-            margin: 10,
-            fontFamily: 'Geist',
-          }}
-        >
-          <div className="bg-card rounded-lg border p-3 shadow-[0_2px_4px_rgba(0,0,0,0.05)]">
-            <div className="flex gap-2">
-              <div className="relative -mt-0.5 flex-shrink-0">
-                <Avatar className="h-6 w-6">
-                  <AvatarImage src="/avatars/avatar_fat.jpg" alt="You" />
-                  <AvatarFallback>Y</AvatarFallback>
-                </Avatar>
-              </div>
-              <div className="flex-1">
-                <textarea
-                  ref={textareaRef}
-                  placeholder="Leave a comment…"
-                  className="text-foreground bg-background min-h-[60px] w-full resize-none rounded-md border p-2 text-sm focus:ring-2 focus:ring-offset-[-1px]"
-                />
-                <div className="mt-1 flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    className="cursor-pointer"
-                    onClick={() => {
-                      console.log('Comment submitted at', side, lineNumber);
-                      handleCancel();
-                    }}
-                  >
-                    Comment
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleCancel}
-                    variant="outline"
-                    style={{
-                      boxShadow: 'none',
-                      color: 'var(--color-foreground)',
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ExampleThread() {
-  return (
-    <div
-      className="max-w-[95%] sm:max-w-[70%]"
-      style={{
-        whiteSpace: 'normal',
-        margin: 10,
-        fontFamily: 'Geist',
-      }}
-    >
-      <div className="bg-card rounded-lg border p-3 shadow-[0_2px_4px_rgba(0,0,0,0.05)]">
-        <div className="flex gap-2">
-          <div className="relative -mt-0.5 flex-shrink-0">
-            <Avatar className="h-6 w-6">
-              <AvatarImage src="/avatars/avatar_fat.jpg" alt="Author" />
-              <AvatarFallback>A</AvatarFallback>
-            </Avatar>
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-2">
-              <span className="text-foreground font-semibold">Alex</span>
-              <span className="text-muted-foreground text-sm">2h ago</span>
-            </div>
-            <p className="text-foreground leading-relaxed">
-              Should we add rate limiting to this endpoint? We might want to
-              prevent abuse.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4 ml-8 space-y-4">
-          <div className="flex gap-2">
-            <div className="relative -mt-0.5 flex-shrink-0">
-              <Avatar className="h-6 w-6">
-                <AvatarImage src="/avatars/avatar_mdo.jpg" alt="Author" />
-                <AvatarFallback>M</AvatarFallback>
-              </Avatar>
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-baseline gap-2">
-                <span className="text-foreground font-semibold">Mark</span>
-                <span className="text-muted-foreground text-sm">1h ago</span>
-              </div>
-              <p className="text-foreground leading-relaxed">
-                Good idea! I'll add that in a follow-up PR.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 ml-8 flex items-center gap-4">
-          <button className="flex items-center gap-1.5 text-sm text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
-            Add reply…
-          </button>
-          <button className="text-sm text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
-            Resolve
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

@@ -1,3 +1,8 @@
+import {
+  POPOVER_BOUNDARY_LINES,
+  type PopoverManager,
+  type PopoverPlacementBounds,
+} from './popover';
 import { selectionIntersects } from './selection';
 import type { Position, Range, TextDocument } from './textDocument';
 import { addEventListener, getLineNumberAttr, h } from './utils';
@@ -14,7 +19,8 @@ export interface Marker extends Range {
   metadata?: Record<string, unknown>;
 }
 
-export interface EditorStub {
+export interface MarkerRenderOptions {
+  popoverManager: PopoverManager;
   getLineHeight: () => number;
   getOverlayElement: () => HTMLElement | undefined;
   getGutterWidth: () => number;
@@ -24,8 +30,10 @@ export interface EditorStub {
 }
 
 export class MarkerRenderer {
-  #editor: EditorStub;
+  #options: MarkerRenderOptions;
   #markers: Marker[] = [];
+  // Document line count, used only by the no-viewport document-edge fallback.
+  #lineCount = 0;
   #markerPopupElement?: HTMLElement;
   #markerPopupEventDisposes?: (() => void)[];
   #markerEventDisposes?: (() => void)[];
@@ -35,8 +43,8 @@ export class MarkerRenderer {
   #hoveredMarkerIndex?: number;
   #isMarkerPopupHovered = false;
 
-  constructor(editor: EditorStub) {
-    this.#editor = editor;
+  constructor(editor: MarkerRenderOptions) {
+    this.#options = editor;
   }
 
   get markers(): readonly Marker[] {
@@ -51,6 +59,7 @@ export class MarkerRenderer {
     markers: Marker[],
     textDocument: TextDocument<LAnnotation>
   ): void {
+    this.#lineCount = textDocument.lineCount;
     this.#markers = markers.map((marker) => ({
       ...marker,
       start: textDocument.normalizePosition(marker.start),
@@ -68,7 +77,7 @@ export class MarkerRenderer {
 
     this.#markerEventDisposes = [
       addEventListener(contentEl, 'mouseover', (e) => {
-        if (this.#editor.isMouseDown()) {
+        if (this.#options.isMouseDown()) {
           return;
         }
         const target = e.composedPath()[0] as HTMLElement | undefined;
@@ -198,16 +207,64 @@ export class MarkerRenderer {
     }, MARKER_POPUP_HIDE_DELAY_MS);
   }
 
-  // Positions the popup in overlay coordinate space and feeds the current gutter
-  // width to CSS so the shared popover rule can keep the popup clear of the
-  // line-number gutter (see [data-marker-popup] in editor.css).
-  #setMarkerPopupPosition(popup: HTMLElement, x: number, y: number): void {
+  // Positions the popup in overlay coordinate space (see [data-marker-popup]
+  // in editor.css). When `placeAbove` is true, `y` is the top edge of the
+  // marker's row and the popup is shifted up by its own height.
+  #setMarkerPopupPosition(
+    popup: HTMLElement,
+    x: number,
+    y: number,
+    placeAbove: boolean
+  ): void {
     popup.style.setProperty(
       '--gutter-width',
-      this.#editor.getGutterWidth() + 'px'
+      this.#options.getGutterWidth() + 'px'
     );
     popup.style.setProperty('--popover-x', x + 'px');
     popup.style.setProperty('--popover-y', y + 'px');
+    popup.style.setProperty('--popover-y-shift', placeAbove ? '-100%' : '0px');
+  }
+
+  // Positions the popup for a marker at `(line, character)`: prefers below
+  // (the default), flipping above when below would be clipped by the visible
+  // scrollport. Must run after the popup's content is final, since it reads
+  // the popup's rendered height to decide whether either side fits.
+  #positionMarkerPopup(
+    popup: HTMLElement,
+    line: number,
+    character: number
+  ): void {
+    const { getCharX, getLineY, getLineHeight, popoverManager } = this.#options;
+    const [left, wrapLine] = getCharX(line, character);
+    const lineHeight = getLineHeight();
+    const rowTop = getLineY(line) + wrapLine * lineHeight;
+    const popoverHeight = popup.offsetHeight;
+
+    const preferred: PopoverPlacementBounds = {
+      top: rowTop + lineHeight,
+      bottom: rowTop + lineHeight + popoverHeight,
+    };
+    const fallback: PopoverPlacementBounds = {
+      top: rowTop - popoverHeight,
+      bottom: rowTop,
+    };
+    const atDocumentEdge = line >= this.#lineCount - POPOVER_BOUNDARY_LINES;
+    const viewport = popoverManager.getPlacementBounds();
+    let placeAbove: boolean;
+    if (viewport !== undefined && popoverHeight > 0) {
+      const fits = (bounds: PopoverPlacementBounds): boolean =>
+        bounds.top >= viewport.top && bounds.bottom <= viewport.bottom;
+      placeAbove = !fits(preferred) && fits(fallback);
+    } else {
+      placeAbove = atDocumentEdge;
+    }
+
+    this.#setMarkerPopupPosition(
+      popup,
+      left,
+      placeAbove ? rowTop : rowTop + lineHeight,
+      placeAbove
+    );
   }
 
   #dismissMarkerPopup(): void {
@@ -224,21 +281,16 @@ export class MarkerRenderer {
       return;
     }
 
-    const overlayElement = this.#editor.getOverlayElement();
+    const overlayElement = this.#options.getOverlayElement();
     if (hoveredMarkerIndex >= this.#markers.length || overlayElement == null) {
       return;
     }
 
     const { start, message, severity } = this.#markers[hoveredMarkerIndex];
     const { line, character } = start;
-    const { getCharX, getLineY, getLineHeight } = this.#editor;
-    const [left, wrapLine] = getCharX(line, character);
-    const lineHeight = getLineHeight();
-    const y = getLineY(line) + wrapLine * lineHeight + lineHeight;
     const popup = this.#markerPopupElement;
 
     if (popup !== undefined) {
-      this.#setMarkerPopupPosition(popup, left, y);
       setMarkerPopupSeverity(popup, severity);
       const content = popup.firstElementChild as HTMLElement | null;
       if (content?.dataset.markerMessage !== undefined) {
@@ -250,6 +302,9 @@ export class MarkerRenderer {
           content.innerHTML = message.html;
         }
       }
+      // Position after updating content: a different message size changes
+      // the offsetHeight #positionMarkerPopup reads to decide placement.
+      this.#positionMarkerPopup(popup, line, character);
       this.#hoveredMarkerIndex = hoveredMarkerIndex;
       return;
     }
@@ -275,7 +330,7 @@ export class MarkerRenderer {
       },
       overlayElement
     );
-    this.#setMarkerPopupPosition(this.#markerPopupElement, left, y);
+    this.#positionMarkerPopup(this.#markerPopupElement, line, character);
     this.#hoveredMarkerIndex = hoveredMarkerIndex;
     this.#markerPopupEventDisposes = [
       addEventListener(this.#markerPopupElement, 'mouseenter', () => {

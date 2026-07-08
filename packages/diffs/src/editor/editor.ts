@@ -29,6 +29,11 @@ import {
 } from './marker';
 import { isMoveCursorShortcut, isPrimaryModifier, isSafari } from './platform';
 import {
+  POPOVER_BOUNDARY_LINES,
+  PopoverManager,
+  type PopoverPlacementBounds,
+} from './popover';
+import {
   type MatchRange,
   type SearchPanelMode,
   SearchPanelWidget,
@@ -163,6 +168,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   #options: EditorOptions<LAnnotation>;
   #metrics = new Metrics();
   #tokenizer?: EditorTokenizer;
+  #popoverManager?: PopoverManager;
 
   // event disposes
   #editorEventDisposes?: (() => void)[];
@@ -481,6 +487,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
 
     this.#markerRenderer ??= new MarkerRenderer({
+      popoverManager: this.#getPopoverManager(),
       getLineHeight: () => this.#metrics.lineHeight,
       getOverlayElement: () => this.#overlayElement,
       getGutterWidth: () => this.#getGutterWidth(),
@@ -513,20 +520,24 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#contentElement?.blur();
   }
 
-  cleanUp(): void {
+  cleanUp(recycle = false): void {
+    // The tokenizer is destroyed in both modes: it holds highlighter/worker
+    // resources and writes into the (removed below) theme style element.
+    // __syncRenderView recreates one for a retained document on re-attach.
     this.#tokenizer?.cleanUp();
     this.#tokenizer = undefined;
 
-    // cleanUp is a full detach (Edit-mode off, surface switch, unmount), so drop
-    // the parsed document and its file identity. The tokenizer is destroyed just
-    // above and is only ever (re)created when __syncRenderView rebuilds the
-    // document, gated on the file name/lang/cacheKey. Keeping the document here
-    // would make a re-attach with the same cacheKey skip that rebuild, leaving
-    // the editor with no tokenizer — #rerender then bails and typed edits never
-    // paint, even though the model records them. Releasing it forces the next
-    // edit() to rebuild from the host's current contents.
-    this.#textDocument = undefined;
-    this.#fileInfo = undefined;
+    // A full cleanUp (Edit-mode off, surface switch, unmount) drops the parsed
+    // document and its file identity so the next edit() rebuilds from the
+    // host's current contents. A recycle cleanUp — a virtualized host
+    // temporarily unmounting — keeps them, along with the undo history living
+    // inside the document, so a later edit() against the same
+    // name/lang/cacheKey resumes the session via __syncRenderView's
+    // reused-document path.
+    if (!recycle) {
+      this.#textDocument = undefined;
+      this.#fileInfo = undefined;
+    }
 
     // dispse event listeners
     this.#globalEventDisposes?.forEach((dispose) => dispose());
@@ -556,6 +567,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     this.#spriteElement?.remove();
     this.#spriteElement = undefined;
     this.#fileContainer = undefined;
+    this.#popoverManager?.cleanUp();
+    this.#popoverManager = undefined;
     this.#gutterElement = undefined;
     this.#contentElement?.removeAttribute('contentEditable');
     this.#contentElement = undefined;
@@ -622,6 +635,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       return;
     }
 
+    this.#getPopoverManager().setViewportElements(fileContainer, codeElement);
+
     // inject editor&theme style to the file container
     if (this.#fileContainer !== fileContainer) {
       this.#fileContainer = fileContainer;
@@ -641,8 +656,11 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
     // Whether this sync replaces the document with a freshly parsed one (a new
     // file, language, or cache key) versus reusing the existing one. A reused
-    // document keeps any edits the host's file contents do not have, which the
-    // rebuilt line DOM below must be reconciled against.
+    // document matches the DOM the host just rebuilt: renderers persist edit
+    // sessions into the host's own data (DiffHunksRenderer keeps
+    // `diff.additionLines` in sync per edit; FileRenderer writes the session
+    // contents back into the file on recycle), so an unchanged
+    // name/lang/cacheKey re-attach renders the same text the document holds.
     const shouldRebuildDocument =
       this.#textDocument === undefined ||
       this.#fileInfo === undefined ||
@@ -671,17 +689,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       this.#fileInfo = { name, lang, cacheKey };
       this.#textDocument = textDocument;
       this.#tokenizer?.cleanUp();
-      this.#tokenizer = new EditorTokenizer({
-        highlighter,
-        textDocument,
-        codeOptions: this.#fileInstance?.options ?? {},
-        onDeferTokenize: this.#onDeferTokenize,
-        onThemeChange: () => this.#scheduleThemeSelectionRefresh(),
-        setStyle: (css) => {
-          this.#themeStyleElement!.textContent = css;
-        },
-        __debug: this.#options.__debug,
-      });
+      this.#tokenizer = undefined;
       this.#resetState();
       this.#selections = this.#initSelections;
       requestAnimationFrame(() => {
@@ -693,6 +701,26 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           fileOrDiff.name
         );
       }
+    }
+
+    // The tokenizer is (re)created whenever the current document lacks one:
+    // right after a fresh document build above, or on the first sync after a
+    // recycle cleanUp re-attached a retained document. Tying it to the
+    // document (rather than the rebuild) is what keeps a re-attach with an
+    // unchanged cacheKey — which skips the rebuild — able to paint edits.
+    const textDocument = this.#textDocument;
+    if (this.#tokenizer == null && textDocument != null) {
+      this.#tokenizer = new EditorTokenizer({
+        highlighter,
+        textDocument,
+        codeOptions: this.#fileInstance?.options ?? {},
+        onDeferTokenize: this.#onDeferTokenize,
+        onThemeChange: () => this.#scheduleThemeSelectionRefresh(),
+        setStyle: (css) => {
+          this.#themeStyleElement!.textContent = css;
+        },
+        __debug: this.#options.__debug,
+      });
     }
 
     if (this.#contentElement !== contentEl) {
@@ -818,6 +846,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   get #isWrap(): boolean {
     return this.#fileInstance?.options.overflow === 'wrap';
+  }
+
+  #getPopoverManager(): PopoverManager {
+    return (this.#popoverManager ??= new PopoverManager({
+      hasActivePopover: () => this.#selectionAction !== undefined,
+      updateActivePopover: () => this.#updateSelectionActionPopover(),
+    }));
   }
 
   #resetCache(): void {
@@ -955,6 +990,23 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
               this.#selectionStart,
               selection
             ).direction;
+          } else if (
+            this.#selections !== undefined &&
+            this.#selections.length === 1
+          ) {
+            // getComposedRanges only reports an ordered start/end range, so a
+            // selectionchange fired by a refocus (or by our own focus-handler
+            // setBaseAndExtent) carries no direction and would otherwise flip a
+            // backward selection to DirectionNone, jumping the caret/popover to
+            // the bottom. When the bounds are unchanged, keep the prior
+            // direction; a genuine change (different bounds) still resets it.
+            const previous = this.#selections[0];
+            if (
+              comparePosition(previous.start, selection.start) === 0 &&
+              comparePosition(previous.end, selection.end) === 0
+            ) {
+              selection.direction = previous.direction;
+            }
           }
 
           if (this.#reservedSelections !== undefined) {
@@ -1228,6 +1280,13 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
         const normalizedKey = e.key.length === 1 ? e.key.toLowerCase() : e.key;
         if (normalizedKey === 'v' && isPrimaryModifier(e)) {
+          // Holding paste can enqueue a costly full diff recompute for every
+          // keyboard repeat. Accept the first paste and suppress repeats.
+          if (e.repeat && this.#isDiff) {
+            e.preventDefault();
+            return;
+          }
+
           // Handle the 'paste' event manually with the custom clipboard API.
           if (this.#options.clipboard !== undefined) {
             e.preventDefault();
@@ -2309,13 +2368,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
   }
 
   // add scroll margin to the primary caret element to prevent
-  // the caret from being hidden by the gutter
+  // the caret from being hidden by the gutter (and the search panel when
+  // open). The margin must only reserve viewport space above the caret —
+  // never include the host's virtualized `top` offset: that is a scroll-space
+  // coordinate, and folding it in makes every caret scrollIntoView treat the
+  // caret as thousands of pixels tall once the host is scrolled down, which
+  // mis-scrolls the caret line (e.g. pinning it to the viewport bottom).
   #getScrollMargin() {
-    const componentTop = this.#fileInstance?.top ?? 0;
     const top = this.#searchPanel !== undefined ? 48 : 0;
     const start = this.#getGutterWidth() + this.#metrics.ch;
     const end = this.#metrics.ch;
-    return `${componentTop + top}px ${end}px 0 ${start}px`;
+    return `${top}px ${end}px 0 ${start}px`;
   }
 
   #scrollToLine(line: number, char = 0, noFocus = false) {
@@ -2396,14 +2459,9 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
         this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
         virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
 
-        if (this.#scrollingToLine === line && yFix === 0) {
-          this.#scrollingToLine = undefined;
-          this.#scrollingToLineChar = undefined;
-          this.#scrollingToLineFixed = false;
-          this.#scrollingToLineNoFocus = false;
-        } else if (
+        if (
           this.#scrollingToLine === line &&
-          this.#scrollingToLineFixed
+          (yFix === 0 || this.#scrollingToLineFixed)
         ) {
           this.#scrollingToLine = undefined;
           this.#scrollingToLineChar = undefined;
@@ -3178,18 +3236,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     }
   }
 
-  // Keeps the floating selection-action popover in sync with the current
-  // selection. Called at the end of every overlay render so the popover appears
-  // as soon as a ranged selection settles, follows it while it stays open, and
-  // tears down when the selection collapses, the option is off, or the anchor
-  // line scrolls out of view. Creation is suppressed while the mouse is down so
-  // the popover doesn't flicker under the cursor mid-drag; the pointerup handler
-  // re-runs this once the drag ends.
   #updateSelectionActionPopover(): void {
     const primarySelection = this.#selections?.at(-1);
     const overlayElement = this.#overlayElement;
     const textDocument = this.#textDocument;
     const renderSelectionAction = this.#options.renderSelectionAction;
+    const cleanup = () => {
+      this.#selectionAction?.cleanup();
+      this.#selectionAction = undefined;
+    };
+
     if (
       this.#options.enabledSelectionAction !== true ||
       renderSelectionAction === undefined ||
@@ -3199,31 +3255,21 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       overlayElement === undefined ||
       textDocument === undefined
     ) {
-      this.#selectionAction?.cleanup();
-      this.#selectionAction = undefined;
+      cleanup();
       return;
     }
 
     const head = getCaretPosition(primarySelection);
     if (!this.#isLineVisible(head.line)) {
-      this.#selectionAction?.cleanup();
-      this.#selectionAction = undefined;
+      cleanup();
       return;
     }
 
     if (this.#selectionAction === undefined) {
-      // The popover element is reused while a selection stays open, so its
-      // action handlers read the live primary selection rather than the
-      // snapshot taken at creation time (extending the selection by keyboard
-      // would otherwise leave them acting on the original range). A fresh drag
-      // tears the popover down (see #isContentMouseDown above) and pointerup
-      // recreates it, so the reuse only spans keyboard-driven selection changes.
       const getActiveSelection = (): EditorSelection =>
         this.#selections?.at(-1) ?? primarySelection;
       const selectionActionElement = renderSelectionAction({
         textDocument,
-        // Live getter so consumers reading `selection` always see the current
-        // range, matching getSelectionText/replaceSelectionText below.
         get selection(): EditorSelection {
           return getActiveSelection();
         },
@@ -3234,25 +3280,81 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           this.#replaceSelectionText(text, [getActiveSelection()]);
         },
         close: () => {
-          this.#selectionAction?.cleanup();
-          this.#selectionAction = undefined;
+          cleanup();
           this.#scrollToPrimaryCaret();
         },
       });
       this.#selectionAction = new SelectionActionWidget(
-        head.line,
         selectionActionElement,
-        overlayElement
+        overlayElement,
+        () => this.#updateSelectionActionPopover()
       );
+      // Avoid biasing the first decision with a stale side from a prior popover.
+      this.#getPopoverManager().resetPlacement();
     }
 
-    // Anchor just below the selection's head line, mirroring the marker hover
-    // popover's geometry.
-    const [left, wrapLine] = this.#getCharX(head.line, head.character);
     const lineHeight = this.#metrics.lineHeight;
-    const top = this.#getLineY(head.line) + wrapLine * lineHeight + lineHeight;
-    this.#selectionAction.line = head.line;
-    this.#selectionAction.reposition(left, top, this.#getGutterWidth());
+    const isBackward = primarySelection.direction === DirectionBackward;
+    const preferred = {
+      placeAbove: isBackward,
+      anchor: head,
+    };
+    const fallback: typeof preferred = isBackward
+      ? { placeAbove: false, anchor: primarySelection.end }
+      : { placeAbove: true, anchor: primarySelection.start };
+
+    // Resolve each candidate's [left, top, bottom] in overlay coordinate space
+    // up front so both the viewport fit-check and the final reposition() call
+    // below can reuse them without re-deriving the same line/char geometry
+    // twice. For an above placement the CSS `--popover-y-shift: -100%` lifts
+    // the popover by its own height, so its top is the anchor row's top minus
+    // that height.
+    const popoverHeight = this.#selectionAction.height;
+    const candidateGeometry = (
+      candidate: typeof preferred
+    ): PopoverPlacementBounds & { left: number; anchorTop: number } => {
+      const [left, candidateWrapLine] = this.#getCharX(
+        candidate.anchor.line,
+        candidate.anchor.character
+      );
+      const rowTop =
+        this.#getLineY(candidate.anchor.line) + candidateWrapLine * lineHeight;
+      const anchorTop = candidate.placeAbove ? rowTop : rowTop + lineHeight;
+      const top = candidate.placeAbove ? anchorTop - popoverHeight : anchorTop;
+      return { top, bottom: top + popoverHeight, left, anchorTop };
+    };
+    const preferredGeometry = candidateGeometry(preferred);
+    const fallbackGeometry = candidateGeometry(fallback);
+
+    const lineCount = textDocument.lineCount;
+    const atDocumentEdge = isBackward
+      ? head.line < POPOVER_BOUNDARY_LINES
+      : head.line >= lineCount - POPOVER_BOUNDARY_LINES;
+    const canUseFallback = this.#isLineVisible(fallback.anchor.line);
+    const popoverManager = this.#getPopoverManager();
+    const useFallback =
+      canUseFallback &&
+      popoverManager.choosePlacement({
+        preferred: preferredGeometry,
+        fallback: fallbackGeometry,
+        viewport: popoverManager.getPlacementBounds(),
+        popoverHeight,
+        atDocumentEdge,
+      }) === 'fallback';
+    if (!canUseFallback) {
+      popoverManager.setPlacement('preferred');
+    }
+    const { placeAbove } = useFallback ? fallback : preferred;
+    const { left, anchorTop } = useFallback
+      ? fallbackGeometry
+      : preferredGeometry;
+
+    this.#selectionAction.reposition(
+      left,
+      anchorTop,
+      this.#getGutterWidth(),
+      placeAbove
+    );
   }
 
   // Opens the search panel in the requested mode. If a panel is already open,
@@ -3813,12 +3915,17 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     return undefined;
   }
 
+  // TODO(@ije): remove this
   // Painted background color of a line, read from the [data-line]::after layer
   // (the line element itself is transparent in edit mode). Returns undefined when
   // that layer is transparent (e.g. context lines).
   #lineBackgroundColor(line: number): string | undefined {
     const lineElement = this.#getLineElement(line);
     if (lineElement === undefined) {
+      return undefined;
+    }
+    // testing environment like jsdom doesn't implement the getComputedStyle API
+    if (navigator.userAgent.includes('jsdom')) {
       return undefined;
     }
     const backgroundColor = getComputedStyle(

@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { CodeView } from '../src/components/CodeView';
+import {
+  CODE_VIEW_DIFF_OPTION_KEYS,
+  CODE_VIEW_FILE_OPTION_KEYS,
+  CodeView,
+} from '../src/components/CodeView';
 import { installDom } from './domHarness';
 
 type CodeViewOptionPrototypeInternals = {
@@ -36,6 +40,19 @@ describe('CodeView item option prototypes', () => {
         Object.getOwnPropertyDescriptor(diffOptionsPrototype, 'collapsed')
           ?.enumerable
       ).toBe(true);
+
+      // Every declared pass-through key must resolve to an enumerable
+      // accessor on its prototype — whether the plain loops define it or a
+      // hand-written getter does (e.g. the edit-forced options). A key that
+      // is skipped from the loops without a replacement getter fails here.
+      const fileKeys = Object.keys(fileOptionsPrototype);
+      for (const key of CODE_VIEW_FILE_OPTION_KEYS) {
+        expect(fileKeys).toContain(key);
+      }
+      const diffKeys = Object.keys(diffOptionsPrototype);
+      for (const key of CODE_VIEW_DIFF_OPTION_KEYS) {
+        expect(diffKeys).toContain(key);
+      }
 
       expect(() => readEnumerableValues(fileOptionsPrototype)).not.toThrow();
       expect(() => readEnumerableValues(diffOptionsPrototype)).not.toThrow();

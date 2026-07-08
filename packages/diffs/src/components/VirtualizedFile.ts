@@ -720,7 +720,7 @@ export class VirtualizedFile<
       fileTop,
       windowSpecs
     );
-    return super.render({
+    const rendered = super.render({
       file: this.file,
       fileContainer,
       renderRange,
@@ -728,6 +728,15 @@ export class VirtualizedFile<
       forceRender: (forceRenderOverride ?? forceRender) || annotationsChanged,
       ...props,
     });
+    // Renders can be driven from outside the virtualizer (host/React render
+    // calls, async highlight completions), and the virtualizer only
+    // auto-reconciles renders it initiated. Queue a measured-height
+    // reconciliation for every applied content render so line deltas
+    // (wrapped lines, annotation heights) survive layout resets.
+    if (this.isSimpleMode() && rendered) {
+      this.getSimpleVirtualizer()?.requestHeightReconcile(this);
+    }
+    return rendered;
   }
 
   public syncVirtualizedTop(): void {

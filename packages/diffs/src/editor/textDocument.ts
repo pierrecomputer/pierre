@@ -96,21 +96,6 @@ export interface ResolvedTextEdit {
   readonly text: string;
 }
 
-export interface TextDocumentLineChange {
-  /** Line where this edit starts, adjusted for previous edits in the batch. */
-  readonly startLine: number;
-  /** Character on the start line where this edit begins. */
-  readonly startCharacter: number;
-  /** Line where this edit ends, adjusted for previous edits in the batch. */
-  readonly endLine: number;
-  /** Character on the end line where this edit ends. */
-  readonly endCharacter: number;
-  /** Number of line breaks inserted by this edit's replacement text. */
-  readonly insertedLineBreaks: number;
-  /** Difference between old and new line counts for this edit. */
-  readonly lineDelta: number;
-}
-
 export interface TextDocumentChange {
   /** First line whose rendered content or tokenizer state may have changed. */
   readonly startLine: number;
@@ -126,11 +111,12 @@ export interface TextDocumentChange {
   readonly lineDelta: number;
   /** Exact rendered line ranges touched by each edit after the edit was applied. */
   readonly changedLineRanges: readonly [startLine: number, endLine: number][];
-  /**
-   * Per-edit line changes, stored non-enumerably by TextDocument so exact
-   * object assertions and public logging keep the compact change shape.
-   */
-  readonly lineChanges?: readonly TextDocumentLineChange[];
+  /** Per-edit rendered line ranges before adjacent ranges are coalesced. */
+  readonly changedLineChanges?: readonly [
+    startLine: number,
+    endLine: number,
+    lineDelta: number,
+  ][];
 }
 
 /**
@@ -440,13 +426,8 @@ export class TextDocument<LAnnotation> {
       lineCount,
       lineDelta: lineCount - previousLineCount,
       changedLineRanges: changedLineRange.ranges,
+      changedLineChanges: changedLineRange.changes,
     };
-    Object.defineProperty(change, 'lineChanges', {
-      value: changedLineRange.lineChanges,
-      enumerable: false,
-      configurable: false,
-      writable: false,
-    });
     return change;
   }
 
@@ -457,13 +438,14 @@ export class TextDocument<LAnnotation> {
     startLine: number;
     endLine: number;
     ranges: [number, number][];
-    lineChanges: TextDocumentLineChange[];
+    changes: [startLine: number, endLine: number, lineDelta: number][];
   } {
     let startLine = Infinity;
     let endLine = 0;
     let lineDeltaBeforeEdit = 0;
     const ranges: [number, number][] = [];
-    const lineChanges: TextDocumentLineChange[] = [];
+    const changes: [startLine: number, endLine: number, lineDelta: number][] =
+      [];
     for (let i = 0; i < edits.length; i++) {
       const edit = edits[i];
       const editStart = editPositions[i * 2];
@@ -476,14 +458,6 @@ export class TextDocument<LAnnotation> {
       const lineDelta = insertedLineSpan - (editEndLine - editStartLine);
       startLine = Math.min(startLine, editStartLine);
       endLine = Math.max(endLine, changedEndLine);
-      lineChanges.push({
-        startLine: changedStartLine,
-        startCharacter: editStart.character,
-        endLine: editEndLine + lineDeltaBeforeEdit,
-        endCharacter: editEnd.character,
-        insertedLineBreaks: insertedLineSpan,
-        lineDelta,
-      });
       const lastRange = ranges[ranges.length - 1];
       if (lastRange !== undefined && changedStartLine <= lastRange[1] + 1) {
         ranges[ranges.length - 1] = [
@@ -493,6 +467,7 @@ export class TextDocument<LAnnotation> {
       } else {
         ranges.push([changedStartLine, changedEndLine]);
       }
+      changes.push([changedStartLine, changedEndLine, lineDelta]);
       lineDeltaBeforeEdit += lineDelta;
     }
     if (startLine === Infinity) {
@@ -500,9 +475,9 @@ export class TextDocument<LAnnotation> {
         startLine: 0,
         endLine: 0,
         ranges: [[0, 0]],
-        lineChanges: [],
+        changes: [[0, 0, 0]],
       };
     }
-    return { startLine, endLine, ranges, lineChanges };
+    return { startLine, endLine, ranges, changes };
   }
 }

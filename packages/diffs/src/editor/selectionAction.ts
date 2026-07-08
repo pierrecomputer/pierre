@@ -17,25 +17,22 @@ export interface SelectionActionContext<LAnnotation> {
   close: () => void;
 }
 
-// Floating popover that hosts the consumer's selection-action element. It mounts
-// into the editor's overlay layer and is positioned via CSS custom properties
-// (the shared popover rule in editor.css), mirroring the marker hover popover, so
-// it never reflows the document the way the old inline gutter-triggered row did.
-// The consumer's element can hold any number of actions; the editor only owns
-// where the popover sits.
+/**
+ * Selection action widget.
+ */
 export class SelectionActionWidget {
-  // The line the popover is anchored to (the selection's head). The editor reads
-  // this to decide whether the anchor is still on a visible line.
-  line: number;
-  #popover: HTMLElement;
+  #root: HTMLElement;
+  // Cached border-box height, refreshed only when the popover's own size
+  // actually changes (via #resizeObserver below)
+  #height: number;
+  #resizeObserver: ResizeObserver;
 
   constructor(
-    line: number,
     selectionActionElement: HTMLElement,
-    overlayElement: HTMLElement
+    overlayElement: HTMLElement,
+    onHeightChange: () => void
   ) {
-    this.line = line;
-    this.#popover = h(
+    this.#root = h(
       'div',
       {
         dataset: { editorWidget: '', selectionActionPopover: '' },
@@ -44,19 +41,52 @@ export class SelectionActionWidget {
       },
       overlayElement
     );
+    this.#height = this.#root.offsetHeight;
+    this.#resizeObserver = new ResizeObserver(() => {
+      const height = this.#root.offsetHeight;
+      if (height !== this.#height) {
+        this.#height = height;
+        onHeightChange();
+      }
+    });
+    this.#resizeObserver.observe(this.#root);
   }
 
-  // Anchor the popover at `(left, top)`, expressed in the overlay's coordinate
-  // space (the same space caret/selection overlays use). Horizontal placement and
-  // sizing are handled in CSS via the shared popover rule; `gutterWidth` lets it
-  // keep the popover clear of the line-number gutter.
-  reposition(left: number, top: number, gutterWidth: number): void {
-    this.#popover.style.setProperty('--gutter-width', gutterWidth + 'px');
-    this.#popover.style.setProperty('--popover-x', left + 'px');
-    this.#popover.style.setProperty('--popover-y', top + 'px');
+  /**
+   * Repositions the selection action widget.
+   * @param left - The left position of the selection action widget.
+   * @param top - The top position of the selection action widget.
+   * @param gutterWidth - The width of the gutter.
+   * @param placeAbove - Whether the selection action widget should be placed above the anchor.
+   */
+  reposition(
+    left: number,
+    top: number,
+    gutterWidth: number,
+    placeAbove: boolean
+  ): void {
+    this.#root.style.setProperty('--gutter-width', gutterWidth + 'px');
+    this.#root.style.setProperty('--popover-x', left + 'px');
+    this.#root.style.setProperty('--popover-y', top + 'px');
+    this.#root.style.setProperty(
+      '--popover-y-shift',
+      placeAbove ? '-100%' : '0px'
+    );
   }
 
+  /**
+   * Gets the height of the selection action widget.
+   * @returns The height of the selection action widget.
+   */
+  get height(): number {
+    return this.#height;
+  }
+
+  /**
+   * Cleans up the selection action widget.
+   */
   cleanup(): void {
-    this.#popover.remove();
+    this.#resizeObserver.disconnect();
+    this.#root.remove();
   }
 }

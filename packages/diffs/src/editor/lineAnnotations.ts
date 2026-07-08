@@ -1,17 +1,23 @@
 import type { DiffLineAnnotation } from '../types';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
-import type {
-  TextDocumentChange,
-  TextDocumentLineChange,
-} from './textDocument';
+import type { TextDocumentChange } from './textDocument';
 import { getLineNumberAttr, h } from './utils';
+
+interface LineAnnotationChange {
+  readonly startLine: number;
+  readonly startCharacter: number;
+  readonly endLine: number;
+  readonly deletesEndLine: boolean;
+  readonly insertedLineBreaks: number;
+  readonly lineDelta: number;
+}
 
 export function applyDocumentChangeToLineAnnotations<T>(
   change: TextDocumentChange,
   lineAnnotations: DiffLineAnnotation<T>[]
 ): DiffLineAnnotation<T>[] | undefined {
-  const lineChanges = getLineChanges(change);
-  if (lineChanges.length === 0) {
+  const annotationChanges = getLineAnnotationChanges(change);
+  if (annotationChanges.length === 0) {
     return undefined;
   }
 
@@ -23,16 +29,21 @@ export function applyDocumentChangeToLineAnnotations<T>(
       continue;
     }
 
-    let line = annotation.lineNumber - 1;
+    let line: number | undefined = annotation.lineNumber - 1;
     let lineCount = change.previousLineCount;
     let annotationChanged = false;
-    for (const lineChange of lineChanges) {
+    for (const lineChange of annotationChanges) {
       const nextLineCount = Math.max(1, lineCount + lineChange.lineDelta);
       const nextLine = mapLineThroughLineChange(
         line,
         lineChange,
         nextLineCount
       );
+      if (nextLine === undefined) {
+        annotationChanged = true;
+        line = undefined;
+        break;
+      }
       if (
         nextLine !== line ||
         lineChangeTouchesAnnotationLine(line, lineChange)
@@ -41,6 +52,11 @@ export function applyDocumentChangeToLineAnnotations<T>(
       }
       line = nextLine;
       lineCount = nextLineCount;
+    }
+
+    if (line === undefined) {
+      changed = true;
+      continue;
     }
 
     const lineNumber = line + 1;
@@ -63,26 +79,60 @@ export function applyDocumentChangeToLineAnnotations<T>(
   return changed ? nextLineAnnotations : undefined;
 }
 
-function getLineChanges(
+function getLineAnnotationChanges(
   change: TextDocumentChange
-): readonly TextDocumentLineChange[] {
-  if (change.lineChanges !== undefined) {
-    return change.lineChanges;
-  }
+): readonly LineAnnotationChange[] {
   if (change.lineDelta === 0) {
-    return [];
+    if (change.changedLineChanges !== undefined) {
+      return change.changedLineChanges.flatMap(
+        ([startLine, _endLine, lineDelta]) => {
+          if (lineDelta === 0) {
+            return [];
+          }
+          const removedLineCount = Math.max(0, -lineDelta);
+          return [
+            {
+              startLine,
+              startCharacter: 0,
+              endLine: startLine + removedLineCount,
+              deletesEndLine: false,
+              insertedLineBreaks: Math.max(0, lineDelta),
+              lineDelta,
+            },
+          ];
+        }
+      );
+    }
+
+    return change.changedLineRanges.flatMap(([startLine, endLine]) => {
+      const insertedLineBreaks = endLine - startLine;
+      if (insertedLineBreaks <= 0) {
+        return [];
+      }
+      return [
+        {
+          startLine,
+          startCharacter: 0,
+          endLine: startLine,
+          deletesEndLine: false,
+          insertedLineBreaks,
+          lineDelta: insertedLineBreaks,
+        },
+      ];
+    });
   }
   const removedLineCount = Math.max(0, -change.lineDelta);
-  const startLine =
-    removedLineCount > 0 && change.startCharacter > 0
-      ? change.startLine + 1
-      : change.startLine;
+  const deletedToDocumentEnd =
+    change.startLine === 0 &&
+    change.startCharacter === 0 &&
+    change.lineCount === 1 &&
+    change.lineDelta === 1 - change.previousLineCount;
   return [
     {
-      startLine,
+      startLine: change.startLine,
       startCharacter: change.startCharacter,
-      endLine: startLine + removedLineCount,
-      endCharacter: 0,
+      endLine: change.startLine + removedLineCount,
+      deletesEndLine: deletedToDocumentEnd,
       insertedLineBreaks: Math.max(0, change.lineDelta),
       lineDelta: change.lineDelta,
     },
@@ -91,9 +141,9 @@ function getLineChanges(
 
 function mapLineThroughLineChange(
   line: number,
-  lineChange: TextDocumentLineChange,
+  lineChange: LineAnnotationChange,
   nextLineCount: number
-): number {
+): number | undefined {
   if (line < lineChange.startLine) {
     return line;
   }
@@ -102,7 +152,7 @@ function mapLineThroughLineChange(
     line > lineChange.endLine ||
     (lineChange.endLine > lineChange.startLine &&
       line === lineChange.endLine &&
-      lineChange.endCharacter === 0)
+      !lineChange.deletesEndLine)
   ) {
     return line + lineChange.lineDelta;
   }
@@ -114,6 +164,10 @@ function mapLineThroughLineChange(
     return line;
   }
 
+  if (lineChangeDeletesAnnotationLine(line, lineChange)) {
+    return undefined;
+  }
+
   const replacementLineOffset = Math.min(
     Math.max(0, line - lineChange.startLine),
     lineChange.insertedLineBreaks
@@ -121,9 +175,29 @@ function mapLineThroughLineChange(
   return clampLine(lineChange.startLine + replacementLineOffset, nextLineCount);
 }
 
+function lineChangeDeletesAnnotationLine(
+  line: number,
+  lineChange: LineAnnotationChange
+): boolean {
+  if (
+    lineChange.lineDelta >= 0 ||
+    line < lineChange.startLine ||
+    line > lineChange.endLine
+  ) {
+    return false;
+  }
+  if (line === lineChange.startLine && lineChange.startCharacter > 0) {
+    return false;
+  }
+  if (line === lineChange.endLine && !lineChange.deletesEndLine) {
+    return false;
+  }
+  return true;
+}
+
 function lineChangeTouchesAnnotationLine(
   line: number,
-  lineChange: TextDocumentLineChange
+  lineChange: LineAnnotationChange
 ): boolean {
   if (
     lineChange.lineDelta === 0 ||
@@ -135,7 +209,7 @@ function lineChangeTouchesAnnotationLine(
   return !(
     lineChange.endLine > lineChange.startLine &&
     line === lineChange.endLine &&
-    lineChange.endCharacter === 0
+    !lineChange.deletesEndLine
   );
 }
 

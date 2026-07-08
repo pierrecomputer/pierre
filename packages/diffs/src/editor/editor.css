@@ -232,7 +232,7 @@
       var(--popover-x, var(--popover-min-left)),
       calc(100cqw - 8px - 100%)
     )
-    var(--popover-y, 0);
+    calc(var(--popover-y, 0px) + var(--popover-y-shift, 0px));
 }
 
 [data-marker-popup] {

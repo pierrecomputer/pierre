@@ -29,6 +29,7 @@ export interface DomHandle {
    * (e.g. gutter drag selection) must declare their targets explicitly.
    */
   setElementFromPoint(x: number, y: number, element: Element): void;
+  triggerResizeObserver(target: Element): void;
 }
 
 // Installs a jsdom-backed DOM environment on globalThis for component tests.
@@ -46,6 +47,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
   const originalValues = {
     cancelAnimationFrame: Reflect.get(globalThis, 'cancelAnimationFrame'),
     document: Reflect.get(globalThis, 'document'),
+    Document: Reflect.get(globalThis, 'Document'),
     DocumentFragment: Reflect.get(globalThis, 'DocumentFragment'),
     Element: Reflect.get(globalThis, 'Element'),
     Event: Reflect.get(globalThis, 'Event'),
@@ -56,6 +58,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
     HTMLPreElement: Reflect.get(globalThis, 'HTMLPreElement'),
     HTMLStyleElement: Reflect.get(globalThis, 'HTMLStyleElement'),
+    IntersectionObserver: Reflect.get(globalThis, 'IntersectionObserver'),
     matchMedia: Reflect.get(globalThis, 'matchMedia'),
     MouseEvent: Reflect.get(globalThis, 'MouseEvent'),
     MutationObserver: Reflect.get(globalThis, 'MutationObserver'),
@@ -86,10 +89,59 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     }
   }
 
+  const resizeObservers = new Set<MockResizeObserver>();
   class MockResizeObserver {
-    observe(_target: Element): void {}
-    unobserve(_target: Element): void {}
-    disconnect(): void {}
+    #callback: ResizeObserverCallback;
+    #targets = new Set<Element>();
+
+    constructor(callback: ResizeObserverCallback) {
+      this.#callback = callback;
+      resizeObservers.add(this);
+    }
+
+    observe(target: Element): void {
+      this.#targets.add(target);
+    }
+
+    unobserve(target: Element): void {
+      this.#targets.delete(target);
+    }
+
+    disconnect(): void {
+      this.#targets.clear();
+      resizeObservers.delete(this);
+    }
+
+    trigger(target: Element): void {
+      if (!this.#targets.has(target)) {
+        return;
+      }
+      this.#callback(
+        [{ target } as ResizeObserverEntry],
+        this as unknown as ResizeObserver
+      );
+    }
+  }
+
+  // jsdom does not implement IntersectionObserver either; observation
+  // bookkeeping is enough for components (e.g. the Virtualizer) to construct
+  // and manage observers. Entries never intersect on their own — tests drive
+  // visibility through explicit renders and scroll events instead.
+  class MockIntersectionObserver {
+    observed = new Set<Element>();
+    constructor(public callback: IntersectionObserverCallback) {}
+    observe(target: Element): void {
+      this.observed.add(target);
+    }
+    unobserve(target: Element): void {
+      this.observed.delete(target);
+    }
+    disconnect(): void {
+      this.observed.clear();
+    }
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
   }
 
   const matchMedia = ((query: string) => ({
@@ -167,6 +219,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
       }
     }) as typeof cancelAnimationFrame,
     document: dom.window.document,
+    Document: dom.window.Document,
     DocumentFragment: dom.window.DocumentFragment,
     Element: dom.window.Element,
     Event: dom.window.Event,
@@ -177,6 +230,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     HTMLElement: dom.window.HTMLElement,
     HTMLPreElement: dom.window.HTMLPreElement,
     HTMLStyleElement: dom.window.HTMLStyleElement,
+    IntersectionObserver: MockIntersectionObserver,
     matchMedia,
     MouseEvent: dom.window.MouseEvent,
     MutationObserver: dom.window.MutationObserver,
@@ -196,7 +250,11 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     SVGSVGElement: dom.window.SVGSVGElement,
     window: dom.window,
   });
-  Object.assign(dom.window, { matchMedia, PointerEvent: MockPointerEvent });
+  Object.assign(dom.window, {
+    matchMedia,
+    PointerEvent: MockPointerEvent,
+    IntersectionObserver: MockIntersectionObserver,
+  });
   Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
     value: navigator,
@@ -211,11 +269,17 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     setElementFromPoint(x: number, y: number, element: Element): void {
       pointTargets.set(`${x},${y}`, element);
     },
+    triggerResizeObserver(target: Element): void {
+      for (const resizeObserver of resizeObservers) {
+        resizeObserver.trigger(target);
+      }
+    },
     cleanup() {
       for (const timeout of frames.values()) {
         clearTimeout(timeout);
       }
       frames.clear();
+      resizeObservers.clear();
 
       for (const [key, value] of Object.entries(originalValues)) {
         if (value === undefined) {
