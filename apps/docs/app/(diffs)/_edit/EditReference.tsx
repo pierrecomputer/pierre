@@ -50,9 +50,31 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
           "Indent or outdent whole selections, with tab vs. space inferred from each line's existing indentation.",
       },
       {
-        term: 'International input',
-        description:
-          'Compose CJK and other scripts, dictation, and emoji through the IME.',
+        term: 'Bracket matching',
+        description: (
+          <>
+            Highlight matching bracket pairs across code as you type with the{' '}
+            <code>matchBrackets</code> option.
+          </>
+        ),
+      },
+      {
+        term: 'Auto-surround',
+        description: (
+          <>
+            Wrap a selection in quotes or brackets by typing the opening
+            character, tunable with the <code>autoSurround</code> option.
+          </>
+        ),
+      },
+      {
+        term: 'Move lines',
+        description: (
+          <>
+            Shift lines or selections up and down with <code>Alt-↑</code> /{' '}
+            <code>↓</code>.
+          </>
+        ),
       },
     ],
   },
@@ -85,6 +107,15 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
         term: 'UI adapts to container',
         description:
           'Container queries reflow find & replace panel and marker popovers at narrow widths for a smoother experience, no matter the layout.',
+      },
+      {
+        term: 'Change & focus events',
+        description: (
+          <>
+            React to edits and focus changes with the <code>onChange</code>,{' '}
+            <code>onFocus</code>, and <code>onBlur</code> callbacks.
+          </>
+        ),
       },
     ],
   },
@@ -119,6 +150,15 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
           <>
             Standalone <code>@pierre/diffs/editor</code> entry point—import it
             only when editing begins.
+          </>
+        ),
+      },
+      {
+        term: 'Custom clipboard',
+        description: (
+          <>
+            Provide your own <code>clipboard</code> reader—handy for native
+            copy/paste in Electron apps.
           </>
         ),
       },
