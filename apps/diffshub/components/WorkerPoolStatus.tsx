@@ -5,7 +5,7 @@ import {
   DEFAULT_CODE_VIEW_FILE_METRICS,
   queueRender,
 } from '@pierre/diffs';
-import { useWorkerPool } from '@pierre/diffs/react';
+import { type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
 import type { WorkerStats } from '@pierre/diffs/worker';
 import {
   IconCircleFill,
@@ -29,13 +29,14 @@ import { StatItem } from './StatItem';
 import { StatusRow } from './StatusRow';
 import type { ThemeCycleControls } from './useThemeCycle';
 import { cn } from '@/lib/cn';
+import type { CommentMetadata } from '@/lib/types';
 
-class AutoScrollTester {
+class AutoScrollTester<LAnnotation> {
   private running: 0 | 1 | 2 = 0;
   private direction = 1;
 
   constructor(
-    private scrollRef: RefObject<HTMLDivElement | null>,
+    private viewerRef: RefObject<CodeViewHandle<LAnnotation> | null>,
     private onStateChange?: (running: boolean) => unknown
   ) {}
 
@@ -47,10 +48,17 @@ class AutoScrollTester {
   }
 
   render = () => {
-    if (this.running === 0 || this.scrollRef.current == null) {
+    const { current: viewerHandle } = this.viewerRef;
+    if (this.running === 0 || viewerHandle == null) {
       return;
     }
-    const { scrollHeight, scrollTop, clientHeight } = this.scrollRef.current;
+    const viewer = viewerHandle.getInstance();
+    if (viewer == null) {
+      return;
+    }
+    const scrollHeight = viewer.getScrollHeight();
+    const scrollTop = viewer.getScrollTop();
+    const clientHeight = viewer.getHeight();
 
     // The first scroll tick should always attempt to scroll
     if (this.running === 1) {
@@ -66,8 +74,9 @@ class AutoScrollTester {
       this.stop();
       return;
     }
-    this.scrollRef.current.scrollTo({
-      top:
+    viewerHandle.scrollTo({
+      type: 'position',
+      position:
         scrollTop +
         clientHeight * 2 * this.direction +
         Math.random() * DEFAULT_CODE_VIEW_FILE_METRICS.lineHeight,
@@ -92,15 +101,15 @@ class AutoScrollTester {
 interface WorkerPoolStatusProps {
   expanded: boolean;
   onToggle(): void;
-  scrollRef: RefObject<HTMLDivElement | null>;
   themeCycle: ThemeCycleControls;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
 }
 
 export const WorkerPoolStatus = memo(function WorkerPoolStatus({
   expanded,
   onToggle,
-  scrollRef,
   themeCycle,
+  viewerRef,
 }: WorkerPoolStatusProps) {
   const pool = useWorkerPool();
   const [stats, setStats] = useState<WorkerStats | undefined>(undefined);
@@ -125,8 +134,8 @@ export const WorkerPoolStatus = memo(function WorkerPoolStatus({
         expanded={expanded}
         onToggle={onToggle}
         stats={stats}
-        scrollRef={scrollRef}
         themeCycle={themeCycle}
+        viewerRef={viewerRef}
       />
     )
   );
@@ -136,8 +145,8 @@ interface StatsDisplayProps {
   expanded: boolean;
   onToggle(): void;
   stats: WorkerStats;
-  scrollRef: RefObject<HTMLDivElement | null>;
   themeCycle: ThemeCycleControls;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
 }
 
 // Map worker pool status to a single icon component + color so the legend row
@@ -159,12 +168,12 @@ function StatsDisplay({
   expanded,
   onToggle,
   stats,
-  scrollRef,
   themeCycle,
+  viewerRef,
 }: StatsDisplayProps) {
   const [isBrrt, setIsBrrt] = useState(false);
   const [scrollTester] = useState(
-    () => new AutoScrollTester(scrollRef, setIsBrrt)
+    () => new AutoScrollTester(viewerRef, setIsBrrt)
   );
 
   // Mirror the inline (F3) hint with an actual keybinding so the label

@@ -511,7 +511,12 @@ export class FileDiff<
 
     const { diffStyle = 'split', overflow = 'scroll' } = this.options;
     this.interactionManager.setup(this.pre);
-    this.resizeManager.setup(this.pre, overflow === 'wrap');
+    this.resizeManager.setup(this.pre, {
+      disableAnnotations: overflow === 'wrap',
+      columnVariables: this.shouldApplyColumnVariables(overflow)
+        ? 'apply'
+        : 'measure',
+    });
     if (overflow === 'scroll' && diffStyle === 'split') {
       this.scrollSyncManager.setup(
         this.pre,
@@ -522,6 +527,17 @@ export class FileDiff<
       this.scrollSyncManager.cleanUp();
     }
     this.managersDirty = false;
+  }
+
+  protected shouldApplyColumnVariables(overflow: 'scroll' | 'wrap'): boolean {
+    if (typeof this.options.hunkSeparators === 'function') {
+      return true;
+    }
+    return (
+      overflow === 'scroll' &&
+      (this.lineAnnotations.length > 0 ||
+        this.pre?.hasAttribute('data-has-merge-conflict') === true)
+    );
   }
 
   public cleanUp(recycle: boolean = false): void {
