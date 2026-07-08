@@ -14,10 +14,6 @@ export const HomeGitHubTokenForm = memo(function HomeGitHubTokenForm() {
       onClear={clearToken}
       onSave={setToken}
       title="Private GitHub access"
-    >
-      Add a token to open private pull requests. Fine-grained tokens need repo
-      access with Contents: read and Pull requests: read; a classic token with
-      only the top-level repo scope should also work.
-    </GitHubTokenControl>
+    />
   );
 });
