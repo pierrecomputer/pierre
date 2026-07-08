@@ -48,7 +48,7 @@ export const GitHubTokenControl = memo(function GitHubTokenControl({
           className={cn(
             'rounded-full border px-1.5 py-0.5 text-[10px] leading-none tracking-wide uppercase',
             active
-              ? 'bg-green-500 text-white dark:text-black dark:bg-green-400'
+              ? 'border-green-600 bg-green-500 text-white dark:border-green-500 dark:bg-green-400 dark:text-black'
               : 'text-muted-foreground border-current/20'
           )}
         >
