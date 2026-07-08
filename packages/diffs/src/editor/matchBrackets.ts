@@ -26,7 +26,7 @@ export function findBracketMatchRanges<LAnnotation>(
   const bracketPosition = findAdjacentBracket(
     textDocument,
     tokenizer,
-    position
+    textDocument.normalizePosition(position)
   );
   if (bracketPosition === undefined) {
     return undefined;
