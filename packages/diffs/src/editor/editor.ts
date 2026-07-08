@@ -147,6 +147,14 @@ export interface EditorOptions<LAnnotation> {
   onFocus?: () => void;
   /** Callback when the editor loses focus. */
   onBlur?: () => void;
+  // custom text document creation function
+  __createTextDocument?: (
+    filename: string,
+    contents: string,
+    languageId: string,
+    cacheKey: string | undefined,
+    editStack: EditStack<LAnnotation>
+  ) => TextDocument<LAnnotation>;
   // debug flag
   __debug?: boolean;
 }
@@ -199,7 +207,7 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
 
   // state
   #fileInstance?: DiffsEditableComponent<LAnnotation>;
-  #fileInfo?: Omit<FileContents, 'contents'>;
+  #fileInfo?: Omit<FileContents, 'contents' | 'header'>;
   #lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   #textDocument?: TextDocument<LAnnotation>;
   #renderRange?: RenderRange;
@@ -678,17 +686,16 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
       } else {
         contents = fileOrDiff.additionLines.join('');
       }
+      const createTextDocument = this.#options.__createTextDocument;
       const editStack = new EditStack<LAnnotation>({
         maxEntries: this.#options.historyMaxEntries,
       });
-      const textDocument = new TextDocument<LAnnotation>(
-        fileOrDiff.name,
-        contents,
-        fileOrDiff.lang ?? getFiletypeFromFileName(fileOrDiff.name),
-        0,
-        editStack
-      );
       const { name, lang, cacheKey } = fileOrDiff;
+      const languageId =
+        fileOrDiff.lang ?? getFiletypeFromFileName(fileOrDiff.name);
+      const textDocument =
+        createTextDocument?.(name, contents, languageId, cacheKey, editStack) ??
+        new TextDocument(fileOrDiff.name, contents, languageId, 0, editStack);
       this.#fileInfo = { name, lang, cacheKey };
       this.#textDocument = textDocument;
       this.#tokenizer?.cleanUp();

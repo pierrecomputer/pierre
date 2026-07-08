@@ -1,22 +1,19 @@
 import { DIFFS_TAG_NAME } from '../constants';
-import { Editor, type EditorOptions } from '../editor';
-import type {
-  DiffsThemeNames,
-  FileContents,
-  LineAnnotation,
-  ThemesType,
-  ThemeTypes,
-} from '../types';
+import { Editor, type EditorOptions, TextDocument } from '../editor';
+import type { EditStack } from '../editor/editStack';
+import type { FileContents, LineAnnotation } from '../types';
 import type { WorkerPoolManager } from '../worker';
+import type { FileOptions } from './File';
 import { VirtualizedFile } from './VirtualizedFile';
 import { Virtualizer } from './Virtualizer';
 
-export interface CodeEditorOptions<
-  LAnnotation,
-> extends EditorOptions<LAnnotation> {
-  theme?: DiffsThemeNames | ThemesType;
-  overflow?: 'scroll' | 'wrap'; // 'scroll' is default
-  themeType?: ThemeTypes; // 'system' is default
+export interface CodeEditorOptions<LAnnotation>
+  extends
+    EditorOptions<LAnnotation>,
+    Pick<
+      FileOptions<LAnnotation>,
+      'theme' | 'overflow' | 'themeType' | 'renderAnnotation'
+    > {
   overscrollSize?: number;
   workerPoolManager?: WorkerPoolManager;
   renderPlaceholder?: () => HTMLElement;
@@ -24,23 +21,49 @@ export interface CodeEditorOptions<
 
 export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
   private file?: FileContents;
-  private root?: HTMLElement;
   private scrollContainer: HTMLElement;
   private fileContainer: HTMLElement;
   private fileInstance: VirtualizedFile<LAnnotation>;
   private renderPlaceholder?: () => HTMLElement;
+  private documentCache = new Map<string, TextDocument<LAnnotation>>();
 
   constructor(options: CodeEditorOptions<LAnnotation> = {}) {
     const {
       theme,
       overflow,
       themeType,
+      renderAnnotation,
       overscrollSize = 0,
       workerPoolManager,
       renderPlaceholder,
       ...editorOptions
     } = options;
-    super(editorOptions);
+
+    super({
+      ...editorOptions,
+      __createTextDocument: (
+        filename: string,
+        contents: string,
+        languageId: string,
+        cacheKey: string | undefined,
+        editStack: EditStack<LAnnotation>
+      ) => {
+        const documentCache = this.documentCache;
+        cacheKey = (cacheKey ?? filename) + '(' + languageId + ')';
+        if (documentCache.has(cacheKey)) {
+          return documentCache.get(cacheKey)!;
+        }
+        const document = new TextDocument<LAnnotation>(
+          filename,
+          contents,
+          languageId,
+          0,
+          editStack
+        );
+        documentCache.set(cacheKey, document);
+        return document;
+      },
+    });
 
     const virtualizer = new Virtualizer({
       overscrollSize,
@@ -51,9 +74,10 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
     this.fileContainer = document.createElement(DIFFS_TAG_NAME);
     this.fileInstance = new VirtualizedFile<LAnnotation>(
       {
-        theme: theme,
-        overflow: overflow,
-        themeType: themeType,
+        theme,
+        overflow,
+        themeType,
+        renderAnnotation,
         useTokenTransformer: true,
         disableFileHeader: true,
       },
@@ -63,12 +87,8 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
     );
 
     virtualizer.setup(this.scrollContainer);
-    Object.assign(this.scrollContainer.style, {
-      width: '100%',
-      height: '100%',
-      minHeight: '0',
-      overflow: 'auto',
-    });
+    this.scrollContainer.style.cssText =
+      'width:100%;height:100%;overflow:auto;';
     this.edit(this.fileInstance);
     this.renderPlaceholder = renderPlaceholder;
   }
@@ -81,8 +101,7 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
     file?: FileContents,
     lineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {
-    this.root = root;
-    this.root.appendChild(this.scrollContainer);
+    root.appendChild(this.scrollContainer);
 
     if (file == null) {
       if (this.renderPlaceholder != null) {
@@ -92,8 +111,11 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
       return;
     }
 
+    if (this.scrollContainer.firstChild !== this.fileContainer) {
+      this.scrollContainer.replaceChildren(this.fileContainer);
+    }
+
     this.file = file;
-    this.scrollContainer.replaceChildren(this.fileContainer);
     this.fileInstance.render({
       fileContainer: this.fileContainer,
       file,
@@ -105,8 +127,11 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
     file: FileContents,
     lineAnnotations?: LineAnnotation<LAnnotation>[]
   ): void {
+    if (this.scrollContainer.firstChild !== this.fileContainer) {
+      this.scrollContainer.replaceChildren(this.fileContainer);
+    }
+
     this.file = file;
-    this.scrollContainer.replaceChildren(this.fileContainer);
     this.fileInstance.render({
       fileContainer: this.fileContainer,
       file,
