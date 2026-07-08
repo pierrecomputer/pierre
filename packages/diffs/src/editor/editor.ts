@@ -1293,13 +1293,6 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
             queueRender(this.#handleCustomPasteEvent);
             return;
           }
-
-          // Holding paste can enqueue a costly full diff recompute for every
-          // keyboard repeat. Accept the first paste and suppress repeats.
-          if (e.repeat && this.#isDiff) {
-            e.preventDefault();
-            return;
-          }
         }
 
         // Only hijack the native find-again shortcut while the panel is open
