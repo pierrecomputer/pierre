@@ -8,10 +8,10 @@ import { Input } from '@/components/Input';
 import { cn } from '@/lib/cn';
 
 export const CREATE_TOKEN_URL =
-  'https://github.com/settings/personal-access-tokens/new?name=DiffsHub&description=Read+private+diffs+and+post+review+comments+from+DiffsHub&expires_in=90&contents=read&pull_requests=write&issues=write';
+  'https://github.com/settings/personal-access-tokens/new?name=DiffsHub%20Private%20Repo%20Read%20Access&description=Read+private+PRs+and+expand+collapsed+hunks&expires_in=90&contents=read&pull_requests=write&issues=write';
 
 export const CLASSIC_TOKEN_URL =
-  'https://github.com/settings/tokens/new?description=DiffsHub%20private%20diffs&scopes=repo&default_expires_at=90';
+  'https://github.com/settings/tokens/new?description=DiffsHub%20Private%20Repo%20Read%20Access&scopes=repo&default_expires_at=90';
 
 interface GitHubTokenControlProps {
   active: boolean;
