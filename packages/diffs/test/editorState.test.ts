@@ -184,4 +184,72 @@ describe('Editor state', () => {
       dom.cleanup();
     }
   });
+
+  // A remount restore often carries both a viewport and a caret that sits
+  // outside that viewport. The saved view must win; scrolling the caret into
+  // view would overwrite scrollTop/scrollLeft. jsdom's scrollIntoView is a
+  // no-op, so stub it to mutate the scroll container the way a real browser
+  // would when bringing an offscreen caret into view.
+  test('setState keeps the saved view when the caret is outside it', () => {
+    const dom = installDom();
+    const scrollContainer = document.createElement('div');
+    document.body.appendChild(scrollContainer);
+
+    scrollContainer.scrollTo = (
+      options?: ScrollToOptions | number,
+      y?: number
+    ) => {
+      const left =
+        typeof options === 'number'
+          ? options
+          : (options?.left ?? scrollContainer.scrollLeft);
+      const top =
+        typeof options === 'number'
+          ? (y ?? scrollContainer.scrollTop)
+          : (options?.top ?? scrollContainer.scrollTop);
+      scrollContainer.scrollLeft = left;
+      scrollContainer.scrollTop = top;
+    };
+
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView() {
+      scrollContainer.scrollTop = 999;
+      scrollContainer.scrollLeft = 999;
+    };
+
+    const editor = new Editor<undefined>();
+    const component = new TestEditableComponent(scrollContainer, {
+      name: 'state.ts',
+      contents: 'alpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\n',
+    });
+
+    try {
+      editor.edit(component);
+      editor.setState({
+        selections: [
+          {
+            start: { line: 5, character: 0 },
+            end: { line: 5, character: 0 },
+            direction: 0,
+          },
+        ],
+        view: { scrollLeft: 12, scrollTop: 40 },
+      });
+
+      expect(scrollContainer.scrollLeft).toBe(12);
+      expect(scrollContainer.scrollTop).toBe(40);
+      expect(editor.getState().selections).toEqual([
+        {
+          start: { line: 5, character: 0 },
+          end: { line: 5, character: 0 },
+          direction: 0,
+        },
+      ]);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      editor.cleanUp();
+      component.cleanUp();
+      dom.cleanup();
+    }
+  });
 });

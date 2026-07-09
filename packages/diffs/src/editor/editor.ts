@@ -486,6 +486,10 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
     if (this.#fileInstance === undefined || this.#textDocument === undefined) {
       throw new Error('Editor is not attached');
     }
+    this.#updateSelections(selections ?? []);
+    // When a saved view is present, honor its scroll offsets exactly. Scrolling
+    // the caret into view afterward would overwrite them whenever the caret
+    // sits outside that viewport (e.g. TreeApp remount restore).
     if (view !== undefined) {
       const scrollContainer = this.#fileInstance.getScrollContainer?.();
       if (scrollContainer !== undefined) {
@@ -495,8 +499,8 @@ export class Editor<LAnnotation> implements DiffsEditor<LAnnotation> {
           behavior: 'instant',
         });
       }
+      return;
     }
-    this.#updateSelections(selections ?? []);
     this.#scrollToPrimaryCaret();
   }
 
