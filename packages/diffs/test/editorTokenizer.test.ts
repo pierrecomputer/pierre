@@ -599,6 +599,120 @@ describe('EditorTokenizer', () => {
     }
   });
 
+  test('settles background tokenization after newline insertions reconverge', () => {
+    const originalAddEventListener = globalThis.addEventListener;
+    const originalRemoveEventListener = globalThis.removeEventListener;
+    const originalPostMessage = globalThis.postMessage;
+    const originalPerformanceNow = performance.now;
+    let messageListener: ((event: MessageEvent) => void) | undefined;
+    const postedMessages: unknown[] = [];
+
+    globalThis.addEventListener = ((
+      type: string,
+      listener: EventListenerOrEventListenerObject
+    ) => {
+      if (type === 'message' && typeof listener === 'function') {
+        messageListener = listener as (event: MessageEvent) => void;
+      }
+    }) as typeof globalThis.addEventListener;
+    globalThis.removeEventListener = ((
+      type: string,
+      listener: EventListenerOrEventListenerObject
+    ) => {
+      if (type === 'message' && listener === messageListener) {
+        messageListener = undefined;
+      }
+    }) as typeof globalThis.removeEventListener;
+    globalThis.postMessage = ((message: unknown) => {
+      postedMessages.push(message);
+    }) as typeof globalThis.postMessage;
+    Object.defineProperty(performance, 'now', {
+      configurable: true,
+      value: () => 0,
+    });
+
+    try {
+      let tokenizeLineCount = 0;
+      const grammar = {
+        tokenizeLine2(lineText: string, ruleStack: StateStack) {
+          tokenizeLineCount++;
+          return {
+            tokens: new Uint32Array([0, 0]),
+            ruleStack,
+            stoppedEarly: false,
+            lineText,
+          };
+        },
+      } as unknown as IGrammar;
+      const textDocument = new TextDocument(
+        'test.ts',
+        Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n'),
+        'typescript'
+      );
+      const tokenizer = new EditorTokenizer({
+        highlighter: createTestHighlighter({
+          getLanguage: () => grammar,
+        }),
+        textDocument,
+        codeOptions: { theme: 'test-theme', themeType: 'dark' },
+        setStyle: noopSetStyle,
+        onDeferTokenize: () => {},
+      });
+
+      tokenizer.tokenize(
+        {
+          startLine: 0,
+          startCharacter: 0,
+          endLine: textDocument.lineCount - 1,
+          previousLineCount: textDocument.lineCount,
+          lineCount: textDocument.lineCount,
+          lineDelta: 0,
+          changedLineRanges: [[0, textDocument.lineCount - 1]],
+        },
+        {
+          startingLine: 0,
+          totalLines: textDocument.lineCount,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        }
+      );
+      tokenizeLineCount = 0;
+      postedMessages.length = 0;
+
+      const change = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 'line 0'.length },
+            end: { line: 0, character: 'line 0'.length },
+          },
+          newText: '\ninserted line',
+        },
+      ])!;
+      tokenizer.tokenize(change, {
+        startingLine: 0,
+        totalLines: 1,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      const activeJobMessage = postedMessages.at(-1);
+      tokenizeLineCount = 0;
+
+      expect(activeJobMessage).toBeDefined();
+      messageListener?.({ data: activeJobMessage } as MessageEvent);
+
+      expect(tokenizeLineCount).toBe(1);
+      expect(messageListener).toBeUndefined();
+    } finally {
+      globalThis.addEventListener = originalAddEventListener;
+      globalThis.removeEventListener = originalRemoveEventListener;
+      globalThis.postMessage = originalPostMessage;
+      Object.defineProperty(performance, 'now', {
+        configurable: true,
+        value: originalPerformanceNow,
+      });
+    }
+  });
+
   test('registers global message listener only while background tokenization runs', () => {
     const originalAddEventListener = globalThis.addEventListener;
     const originalRemoveEventListener = globalThis.removeEventListener;
