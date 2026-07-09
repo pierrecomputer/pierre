@@ -330,15 +330,14 @@ function remapMovedPaths(
   return remapped;
 }
 
-// Remaps per-file editor state (scroll + selections) after a tree move so
-// returning to a renamed/moved tab restores the same caret and viewport.
-function remapEditorStateMap(
-  stateByPath: Map<string, EditorState>,
+// Remaps path-keyed state after a tree move so it follows renamed files.
+function remapPathMap<T>(
+  stateByPath: Map<string, T>,
   fromPath: string,
   toPath: string
-): Map<string, EditorState> {
+): Map<string, T> {
   let changed = false;
-  const next = new Map<string, EditorState>();
+  const next = new Map<string, T>();
   for (const [path, state] of stateByPath) {
     const nextPath = remapMovedPath(path, fromPath, toPath);
     if (nextPath !== path) {
@@ -1226,6 +1225,12 @@ export function TreeApp<LAnnotation = unknown>({
   const [savedBaselinesByPath, setSavedBaselinesByPath] = useState<
     Readonly<Record<string, FileContents>>
   >({});
+  // A clean local snapshot only bridges the time between save and the host
+  // replacing its file entry. Once that exact entry changes, the host owns the
+  // canonical contents and cache key again.
+  const hostFilesAtSaveByPathRef = useRef(
+    new Map<string, FileContents | undefined>()
+  );
   const unsavedPathsRef = useRef(unsavedPaths);
   unsavedPathsRef.current = unsavedPaths;
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -1361,6 +1366,7 @@ export function TreeApp<LAnnotation = unknown>({
       ...current,
       [path]: snapshot,
     }));
+    hostFilesAtSaveByPathRef.current.set(path, files?.[path]);
     if (unsavedPathsRef.current.has(path)) {
       const next = new Set(unsavedPathsRef.current);
       next.delete(path);
@@ -1370,6 +1376,42 @@ export function TreeApp<LAnnotation = unknown>({
     onSave?.(path, snapshot);
     return true;
   }, [editedFilesByPath, files, onSave]);
+
+  useEffect(() => {
+    const acknowledgedPaths = new Set<string>();
+    for (const [path, hostFileAtSave] of hostFilesAtSaveByPathRef.current) {
+      if (files?.[path] !== hostFileAtSave) {
+        acknowledgedPaths.add(path);
+        hostFilesAtSaveByPathRef.current.delete(path);
+      }
+    }
+    if (acknowledgedPaths.size === 0) {
+      return;
+    }
+
+    setEditedFilesByPath((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const path of acknowledgedPaths) {
+        if (!unsavedPathsRef.current.has(path) && path in next) {
+          delete next[path];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+    setSavedBaselinesByPath((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const path of acknowledgedPaths) {
+        if (path in next) {
+          delete next[path];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [files]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -1436,13 +1478,23 @@ export function TreeApp<LAnnotation = unknown>({
 
         let nextStateByPath = editorStateByPathRef.current;
         for (const moveEvent of moveEvents) {
-          nextStateByPath = remapEditorStateMap(
+          nextStateByPath = remapPathMap(
             nextStateByPath,
             moveEvent.from,
             moveEvent.to
           );
         }
         editorStateByPathRef.current = nextStateByPath;
+
+        let nextHostFilesAtSave = hostFilesAtSaveByPathRef.current;
+        for (const moveEvent of moveEvents) {
+          nextHostFilesAtSave = remapPathMap(
+            nextHostFilesAtSave,
+            moveEvent.from,
+            moveEvent.to
+          );
+        }
+        hostFilesAtSaveByPathRef.current = nextHostFilesAtSave;
 
         setUnsavedPaths((current) => {
           let next = current;
@@ -1670,14 +1722,19 @@ export function TreeApp<LAnnotation = unknown>({
     [buildContextMenuActions, contextMenuPortalContainer, renderContextMenu]
   );
 
+  const activeHostFile = activePath == null ? undefined : files?.[activePath];
+  const usesLocalFile =
+    activePath != null &&
+    (unsavedPaths.has(activePath) ||
+      (hostFilesAtSaveByPathRef.current.has(activePath) &&
+        hostFilesAtSaveByPathRef.current.get(activePath) === activeHostFile));
   const activeFile =
-    activePath == null
-      ? undefined
-      : (editedFilesByPath[activePath] ?? files?.[activePath]);
-  // Skip stale prerendered HTML for unsaved buffers so the remount paints from
-  // the live edited contents instead of the original highlighted snapshot.
+    activePath != null && usesLocalFile
+      ? (editedFilesByPath[activePath] ?? activeHostFile)
+      : activeHostFile;
+  // Skip stale prerendered HTML while the editor is showing local contents.
   const activePrerenderedHTML =
-    activePath == null || unsavedPaths.has(activePath)
+    activePath == null || usesLocalFile
       ? undefined
       : resolvedPrerenderedHTMLByPath?.[activePath];
 

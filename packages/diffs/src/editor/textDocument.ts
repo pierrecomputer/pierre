@@ -15,6 +15,8 @@ import {
 import { PieceTable } from './pieceTable';
 import type { SearchParams } from './searchPanel';
 
+export type { Position, Range, TextEdit } from '../types';
+
 /** Different with `TextEdit`, the range has been resolved to offsets. */
 export interface ResolvedTextEdit {
   /** The start offset of the text change. */

@@ -201,6 +201,37 @@ describe('CodeEditor', () => {
     }
   });
 
+  test('clears rendered content when no file is provided', async () => {
+    const { cleanup } = installDom();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    const editor = new CodeEditor<string>({
+      disableErrorHandling: true,
+      renderAnnotation,
+    });
+
+    try {
+      editor.render(root, makeFile('editor.txt', 'one\ntwo\n'));
+
+      const scrollContainer = root.firstElementChild as HTMLElement | null;
+      const fileContainer = scrollContainer?.querySelector('diffs-container');
+      expect(fileContainer).not.toBeNull();
+      await waitForRenderedText(fileContainer!, 'two');
+
+      editor.render(root);
+      expect(scrollContainer?.childElementCount).toBe(0);
+
+      editor.setLineAnnotations([
+        { lineNumber: 1, metadata: 'stale annotation' },
+      ]);
+      expect(fileContainer!.querySelector('[data-test-annotation]')).toBeNull();
+    } finally {
+      editor.cleanUp();
+      await waitForPendingRenders();
+      cleanup();
+    }
+  });
+
   test('cleanup removes the managed scroll container', async () => {
     const { cleanup } = installDom();
     const root = document.createElement('div');

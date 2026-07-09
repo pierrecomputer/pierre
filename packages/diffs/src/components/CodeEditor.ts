@@ -83,9 +83,12 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
     root.appendChild(this.scrollContainer);
 
     if (file == null) {
+      this.file = undefined;
       if (this.renderPlaceholder != null) {
         const placeholder = this.renderPlaceholder();
         this.scrollContainer.replaceChildren(placeholder);
+      } else {
+        this.scrollContainer.replaceChildren();
       }
       return;
     }
