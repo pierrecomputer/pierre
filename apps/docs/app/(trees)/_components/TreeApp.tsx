@@ -149,6 +149,8 @@ export interface TreeAppTabRenderContext {
   activate: () => void;
   close: () => void;
   isActive: boolean;
+  // True when the tab's buffer differs from the caller-supplied `files` entry.
+  isUnsaved: boolean;
   path: string;
 }
 
@@ -203,6 +205,10 @@ export interface TreeAppProps<LAnnotation = unknown> {
   files?: Readonly<Record<string, FileContents>>;
   prerenderedHTMLByPath?: TreeAppThemeValue<Readonly<Record<string, string>>>;
   editorOptions?: TreeAppThemeValue<CodeEditorProps<LAnnotation>>;
+  // Fired on Cmd/Ctrl+S after TreeApp clears the tab's unsaved indicator.
+  // Hosts that own the `files` map should update it here so the next edit
+  // cycle compares against the saved contents.
+  onSave?: (path: string, file: FileContents) => void;
 
   // Light/dark theming. TreeApp owns the state by default; callers can observe
   // changes via `onThemeChange` or drive it externally by passing `theme`.
@@ -340,6 +346,45 @@ function remapEditorStateMap(
     next.set(nextPath, state);
   }
   return changed ? next : stateByPath;
+}
+
+// Remaps a path set after a tree move so unsaved tabs keep following files.
+function remapPathSet(
+  paths: ReadonlySet<string>,
+  fromPath: string,
+  toPath: string
+): Set<string> {
+  let changed = false;
+  const next = new Set<string>();
+  for (const path of paths) {
+    const nextPath = remapMovedPath(path, fromPath, toPath);
+    if (nextPath !== path) {
+      changed = true;
+    }
+    next.add(nextPath);
+  }
+  return changed ? next : (paths as Set<string>);
+}
+
+// Remaps the in-memory edited-file overlay after a tree move so dirty buffers
+// keep following the same files as the tree paths.
+function remapFileContentsMap(
+  filesByPath: Readonly<Record<string, FileContents>>,
+  fromPath: string,
+  toPath: string
+): Readonly<Record<string, FileContents>> {
+  let changed = false;
+  const next: Record<string, FileContents> = {};
+  for (const [path, file] of Object.entries(filesByPath)) {
+    const nextPath = remapMovedPath(path, fromPath, toPath);
+    if (nextPath !== path) {
+      changed = true;
+      next[nextPath] = { ...file, name: basename(nextPath) };
+    } else {
+      next[path] = file;
+    }
+  }
+  return changed ? next : filesByPath;
 }
 
 // Walks an integer suffix until we find a path that does not collide with an
@@ -1054,6 +1099,7 @@ function DefaultTab({
   iconsColored,
   isActive,
   isMobile,
+  isUnsaved,
   path,
   theme,
 }: DefaultTabProps & {
@@ -1074,11 +1120,18 @@ function DefaultTab({
       <button
         type="button"
         onClick={activate}
-        title={path}
+        title={isUnsaved ? `${path} (unsaved)` : path}
         className="relative z-0 flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md pr-3 pl-2 text-left"
       >
         <TreeAppTabIcon colored={iconsColored} icon={icon} />
         <span className="block truncate">{label}</span>
+        {isUnsaved ? (
+          <span
+            aria-label="Unsaved changes"
+            className="ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#3b82f6]"
+            title="Unsaved changes"
+          />
+        ) : null}
       </button>
       {isMobile ? null : (
         <>
@@ -1122,6 +1175,7 @@ export function TreeApp<LAnnotation = unknown>({
   model,
   newFileTemplateName = DEFAULT_NEW_FILE_NAME,
   newFolderTemplateName = DEFAULT_NEW_FOLDER_NAME,
+  onSave,
   onThemeChange,
   preloadedTreeData,
   prerenderedHTMLByPath,
@@ -1151,6 +1205,25 @@ export function TreeApp<LAnnotation = unknown>({
   const editorRef = useRef<Editor<LAnnotation> | null>(null);
   const editorStateByPathRef = useRef(new Map<string, EditorState>());
   const activePathRef = useRef<string | null>(initialActivePath ?? null);
+  // Edited buffers keyed by path. Prefer these over the caller-supplied `files`
+  // map so tab switches keep unsaved text without requiring the host to own
+  // the edit loop.
+  const [editedFilesByPath, setEditedFilesByPath] = useState<
+    Readonly<Record<string, FileContents>>
+  >({});
+  const [unsavedPaths, setUnsavedPaths] = useState<ReadonlySet<string>>(
+    () => new Set()
+  );
+  // Per-path baselines established by Cmd/Ctrl+S. Preferred over the caller
+  // `files` entry when deciding whether the buffer is still unsaved, so save
+  // clears the blue tab dot without requiring the host to update `files`
+  // synchronously.
+  const [savedBaselinesByPath, setSavedBaselinesByPath] = useState<
+    Readonly<Record<string, FileContents>>
+  >({});
+  const unsavedPathsRef = useRef(unsavedPaths);
+  unsavedPathsRef.current = unsavedPaths;
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const saveActiveEditorState = useCallback(() => {
     const path = activePathRef.current;
@@ -1164,6 +1237,48 @@ export function TreeApp<LAnnotation = unknown>({
       // Editor may already be detached mid-unmount; skip the snapshot.
     }
   }, []);
+
+  // Marks a path unsaved (or clean). Snapshots edited contents so tab switches
+  // keep the dirty buffer.
+  const syncUnsavedPath = useCallback(
+    (path: string, nextFile: FileContents, isUnsaved: boolean) => {
+      const alreadyUnsaved = unsavedPathsRef.current.has(path);
+      if (isUnsaved !== alreadyUnsaved) {
+        const next = new Set(unsavedPathsRef.current);
+        if (isUnsaved) {
+          next.add(path);
+        } else {
+          next.delete(path);
+        }
+        unsavedPathsRef.current = next;
+        setUnsavedPaths(next);
+      }
+
+      if (isUnsaved) {
+        // Snapshot contents now: editor `onChange` may hand back a FileContents
+        // whose `contents` is a live getter over the current TextDocument.
+        const snapshot: FileContents = {
+          ...nextFile,
+          contents: nextFile.contents,
+          name: nextFile.name ?? basename(path),
+        };
+        setEditedFilesByPath((current) => ({
+          ...current,
+          [path]: snapshot,
+        }));
+        return;
+      }
+
+      setEditedFilesByPath((current) => {
+        if (!(path in current)) {
+          return current;
+        }
+        const { [path]: _removed, ...rest } = current;
+        return rest;
+      });
+    },
+    []
+  );
 
   const toggleTheme = useCallback(() => {
     // Theme remounts CodeEditor (keyed by path:theme); snapshot first so the
@@ -1185,6 +1300,102 @@ export function TreeApp<LAnnotation = unknown>({
     prerenderedHTMLByPath,
     theme
   );
+
+  const handleEditorChange = useCallback(
+    (
+      file: FileContents,
+      lineAnnotations?: Parameters<
+        NonNullable<CodeEditorProps<LAnnotation>['onChange']>
+      >[1]
+    ) => {
+      const path = activePathRef.current;
+      if (path == null) {
+        resolvedEditorOptions?.onChange?.(file, lineAnnotations);
+        return;
+      }
+
+      const baseline = savedBaselinesByPath[path] ?? files?.[path];
+      const isUnsaved = baseline == null || file.contents !== baseline.contents;
+      syncUnsavedPath(path, file, isUnsaved);
+      resolvedEditorOptions?.onChange?.(file, lineAnnotations);
+    },
+    [files, resolvedEditorOptions, savedBaselinesByPath, syncUnsavedPath]
+  );
+
+  // Cmd/Ctrl+S: treat the current buffer as saved. Clears the tab's unsaved
+  // dot, updates the local baseline so further typing can re-dirty the tab,
+  // and notifies the host via `onSave`.
+  const saveActiveFile = useCallback(() => {
+    const path = activePathRef.current;
+    if (path == null) {
+      return false;
+    }
+
+    const editor = editorRef.current;
+    let file: FileContents | undefined;
+    try {
+      file = editor?.getFile() ?? editedFilesByPath[path] ?? files?.[path];
+    } catch {
+      file = editedFilesByPath[path] ?? files?.[path];
+    }
+    if (file == null) {
+      return false;
+    }
+
+    const snapshot: FileContents = {
+      ...file,
+      contents: file.contents,
+      name: file.name ?? basename(path),
+    };
+
+    setSavedBaselinesByPath((current) => ({
+      ...current,
+      [path]: snapshot,
+    }));
+    setEditedFilesByPath((current) => ({
+      ...current,
+      [path]: snapshot,
+    }));
+    if (unsavedPathsRef.current.has(path)) {
+      const next = new Set(unsavedPathsRef.current);
+      next.delete(path);
+      unsavedPathsRef.current = next;
+      setUnsavedPaths(next);
+    }
+    onSave?.(path, snapshot);
+    return true;
+  }, [editedFilesByPath, files, onSave]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container == null) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.shiftKey) {
+        return;
+      }
+      if (!(event.metaKey || event.ctrlKey)) {
+        return;
+      }
+      if (event.key !== 's' && event.key !== 'S') {
+        return;
+      }
+      // composedPath crosses shadow roots (editor + tree), which `contains`
+      // does not. Only handle when the event originated inside TreeApp.
+      if (!event.composedPath().includes(container)) {
+        return;
+      }
+      event.preventDefault();
+      saveActiveFile();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [saveActiveFile]);
 
   const treeStyleRecord = resolvedTreeStyle as
     | Record<string, string | number>
@@ -1227,6 +1438,29 @@ export function TreeApp<LAnnotation = unknown>({
           );
         }
         editorStateByPathRef.current = nextStateByPath;
+
+        setUnsavedPaths((current) => {
+          let next = current;
+          for (const moveEvent of moveEvents) {
+            next = remapPathSet(next, moveEvent.from, moveEvent.to);
+          }
+          unsavedPathsRef.current = next;
+          return next;
+        });
+        setEditedFilesByPath((current) => {
+          let next = current;
+          for (const moveEvent of moveEvents) {
+            next = remapFileContentsMap(next, moveEvent.from, moveEvent.to);
+          }
+          return next;
+        });
+        setSavedBaselinesByPath((current) => {
+          let next = current;
+          for (const moveEvent of moveEvents) {
+            next = remapFileContentsMap(next, moveEvent.from, moveEvent.to);
+          }
+          return next;
+        });
       }),
     [model]
   );
@@ -1265,10 +1499,17 @@ export function TreeApp<LAnnotation = unknown>({
         handleEditorAttach(editor);
         resolvedEditorOptions?.onAttach?.(editor, fileInstance);
       },
+      onChange: handleEditorChange,
       renderPlaceholder: () =>
         renderEmpty?.() ?? <DefaultEmpty theme={theme} />,
     }),
-    [handleEditorAttach, renderEmpty, theme, resolvedEditorOptions]
+    [
+      handleEditorAttach,
+      handleEditorChange,
+      renderEmpty,
+      theme,
+      resolvedEditorOptions,
+    ]
   );
 
   const treeSurfaceColor = useMemo(() => {
@@ -1424,9 +1665,14 @@ export function TreeApp<LAnnotation = unknown>({
     [buildContextMenuActions, contextMenuPortalContainer, renderContextMenu]
   );
 
-  const activeFile = activePath == null ? undefined : files?.[activePath];
-  const activePrerenderedHTML =
+  const activeFile =
     activePath == null
+      ? undefined
+      : (editedFilesByPath[activePath] ?? files?.[activePath]);
+  // Skip stale prerendered HTML for unsaved buffers so the remount paints from
+  // the live edited contents instead of the original highlighted snapshot.
+  const activePrerenderedHTML =
+    activePath == null || unsavedPaths.has(activePath)
       ? undefined
       : resolvedPrerenderedHTMLByPath?.[activePath];
 
@@ -1499,6 +1745,7 @@ export function TreeApp<LAnnotation = unknown>({
 
   return (
     <div
+      ref={containerRef}
       className={[
         'relative flex flex-col overflow-hidden rounded-xl bg-clip-padding border border-[rgb(0_0_0_/0.1)] dark:border-[rgb(255_255_255_/0.1)] shadow-lg p-1.5 h-[var(--tree-app-height)]',
         chrome.container,
@@ -1564,6 +1811,7 @@ export function TreeApp<LAnnotation = unknown>({
                             closeTab(path);
                           },
                           isActive,
+                          isUnsaved: unsavedPaths.has(path),
                           path,
                         };
                         const tabIcon = resolveTabIcon(

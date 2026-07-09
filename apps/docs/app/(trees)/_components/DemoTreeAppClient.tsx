@@ -305,6 +305,12 @@ export function DemoTreeAppClient({
         height={TREE_NEW_VIEWPORT_HEIGHTS.treeApp}
         initialActivePath={initialActivePath}
         model={model}
+        onSave={(path, file) => {
+          setFilesByPath((current) => ({
+            ...current,
+            [path]: file,
+          }));
+        }}
         onThemeChange={setTheme}
         preloadedTreeData={treePreloadedData}
         prerenderedHTMLByPath={prerenderedHtmlByPathState}
