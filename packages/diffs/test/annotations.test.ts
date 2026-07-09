@@ -114,37 +114,44 @@ describe('Annotation Rendering', () => {
       ]);
     });
 
-    test('render paired top rows in split style', async () => {
-      const annotations: DiffLineAnnotation<string>[] = [
-        { side: 'deletions', lineNumber: 0, metadata: 'old-file' },
-        { side: 'additions', lineNumber: 0, metadata: 'new-file' },
-      ];
-      const renderer = new DiffHunksRenderer<string>({
-        diffStyle: 'split',
-        expandUnchanged: true,
-      });
-      renderer.setLineAnnotations(annotations);
+    // Highlights every line of the ~700-line fixture on both sides
+    // (`expandUnchanged` split render), so it needs more than bun's default 5s
+    // per-test timeout to stay reliable under CI contention.
+    test(
+      'render paired top rows in split style',
+      async () => {
+        const annotations: DiffLineAnnotation<string>[] = [
+          { side: 'deletions', lineNumber: 0, metadata: 'old-file' },
+          { side: 'additions', lineNumber: 0, metadata: 'new-file' },
+        ];
+        const renderer = new DiffHunksRenderer<string>({
+          diffStyle: 'split',
+          expandUnchanged: true,
+        });
+        renderer.setLineAnnotations(annotations);
 
-      const { additionsContentAST, deletionsContentAST } =
-        await renderer.asyncRender(diff);
-      assertDefined(
-        additionsContentAST,
-        'additionsContentAST should be defined'
-      );
-      assertDefined(
-        deletionsContentAST,
-        'deletionsContentAST should be defined'
-      );
-      const firstAddition = additionsContentAST[0];
-      const firstDeletion = deletionsContentAST[0];
-      assertDefined(firstAddition, 'firstAddition should be defined');
-      assertDefined(firstDeletion, 'firstDeletion should be defined');
+        const { additionsContentAST, deletionsContentAST } =
+          await renderer.asyncRender(diff);
+        assertDefined(
+          additionsContentAST,
+          'additionsContentAST should be defined'
+        );
+        assertDefined(
+          deletionsContentAST,
+          'deletionsContentAST should be defined'
+        );
+        const firstAddition = additionsContentAST[0];
+        const firstDeletion = deletionsContentAST[0];
+        assertDefined(firstAddition, 'firstAddition should be defined');
+        assertDefined(firstDeletion, 'firstDeletion should be defined');
 
-      expect(getHastAnnotationIndex(firstAddition)).toBe('-1,-1');
-      expect(getHastAnnotationIndex(firstDeletion)).toBe('-1,-1');
-      expect(getSlotNames(firstAddition)).toEqual(['annotation-additions-0']);
-      expect(getSlotNames(firstDeletion)).toEqual(['annotation-deletions-0']);
-    });
+        expect(getHastAnnotationIndex(firstAddition)).toBe('-1,-1');
+        expect(getHastAnnotationIndex(firstDeletion)).toBe('-1,-1');
+        expect(getSlotNames(firstAddition)).toEqual(['annotation-additions-0']);
+        expect(getSlotNames(firstDeletion)).toEqual(['annotation-deletions-0']);
+      },
+      { timeout: 15000 }
+    );
 
     test('do not collide with first-row annotation keys in split style', async () => {
       const renderer = new DiffHunksRenderer<string>({ diffStyle: 'split' });

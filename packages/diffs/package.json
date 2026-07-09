@@ -75,6 +75,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "catalog:",
+    "@playwright/test": "catalog:",
     "@tsdown/css": "catalog:",
     "@types/hast": "catalog:",
     "@types/jsdom": "catalog:",
@@ -89,7 +90,8 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "tsdown": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:"
   },
   "peerDependencies": {
     "react": "^18.3.1 || ^19.0.0",

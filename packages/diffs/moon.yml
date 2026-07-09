@@ -20,3 +20,31 @@ tasks:
     options:
       cache: false
       runInCI: 'always'
+
+  # Browser E2E for shadow-DOM rendering and contentEditable edit mode, which
+  # the jsdom unit suite cannot exercise. Mirrors the trees E2E setup: a Vite
+  # fixture server serves the built dist and Playwright drives real Chromium.
+  test-e2e:
+    script:
+      '(bun ./test/e2e/check-playwright-binary.ts || pnpm exec playwright
+      install chromium) && pnpm exec playwright test -c
+      test/e2e/playwright.config.ts'
+    deps:
+      - 'build'
+    inputs:
+      - 'src/**/*'
+      - 'test/e2e/**/*'
+    options:
+      envFile: '/.env.worktree'
+
+  # Spawned by playwright's webServer (also under CI); DIFFS_E2E_PORT is
+  # provided by the caller, with a worktree-offset default for manual runs.
+  test-e2e-server:
+    script:
+      'DIFFS_E2E_PORT=${DIFFS_E2E_PORT:-$(( ${PIERRE_PORT_OFFSET:-0} + 4175 ))}
+      vite --config test/e2e/vite.config.ts'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'always'
+      envFile: '/.env.worktree'

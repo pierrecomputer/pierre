@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs markers fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-diff-mount] {
+        max-width: 900px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-diff-mount></div>
+
+    <script type="module">
+      import { File } from '/dist/index.js';
+      import { Editor } from '/dist/editor/index.js';
+
+      const mount = document.querySelector('[data-diff-mount]');
+      if (!(mount instanceof HTMLElement)) {
+        throw new Error('Missing markers fixture mount.');
+      }
+
+      const file = {
+        name: 'markers.ts',
+        contents: `function total(items) {
+  const count = items.length;
+  return conut;
+}
+var label = 'x';
+`,
+      };
+
+      const editor = new Editor({});
+      window.__editor = editor;
+
+      const instance = new File({
+        disableFileHeader: true,
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        useTokenTransformer: true,
+      });
+      instance.render({ file, containerWrapper: mount });
+      editor.edit(instance);
+
+      // Ranges are 0-based line/character. One of each severity so the test can
+      // assert per-severity rendering.
+      const markers = [
+        {
+          severity: 'info',
+          message: 'count is never read',
+          start: { line: 1, character: 8 },
+          end: { line: 1, character: 13 },
+        },
+        {
+          severity: 'error',
+          message: 'Cannot find name conut',
+          start: { line: 2, character: 9 },
+          end: { line: 2, character: 14 },
+        },
+        {
+          severity: 'warning',
+          message: 'Unexpected var, use let or const',
+          start: { line: 4, character: 0 },
+          end: { line: 4, character: 3 },
+        },
+      ];
+
+      // setMarkers throws until the editor attaches to its surface (async), so
+      // retry each frame until it sticks and the squiggles are in the DOM.
+      const applyMarkers = async () => {
+        const started = performance.now();
+        while (true) {
+          try {
+            editor.setMarkers(markers);
+            const host = mount.querySelector('diffs-container');
+            const rendered = host?.shadowRoot?.querySelector(
+              '[data-marker-range]'
+            );
+            if (rendered != null) {
+              return;
+            }
+          } catch {
+            // editor not attached yet
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for markers.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      await applyMarkers();
+      window.__markersReady = true;
+    </script>
+  </body>
+</html>

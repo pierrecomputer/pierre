@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs file-states fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      section {
+        max-width: 900px;
+        margin-bottom: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <section>
+      <h2>Added</h2>
+      <div data-added-mount></div>
+    </section>
+    <section>
+      <h2>Deleted</h2>
+      <div data-deleted-mount></div>
+    </section>
+
+    <script type="module">
+      import { FileDiff } from '/dist/index.js';
+
+      const addedMount = document.querySelector('[data-added-mount]');
+      const deletedMount = document.querySelector('[data-deleted-mount]');
+      if (
+        !(addedMount instanceof HTMLElement) ||
+        !(deletedMount instanceof HTMLElement)
+      ) {
+        throw new Error('Missing file-states fixture nodes.');
+      }
+
+      const theme = { dark: 'pierre-dark', light: 'pierre-light' };
+
+      const createdFile = {
+        name: 'created.ts',
+        contents: `export const created = true;
+export function hello() {
+  return 'world';
+}
+`,
+      };
+
+      const removedFile = {
+        name: 'removed.ts',
+        contents: `export const removed = true;
+export function goodbye() {
+  return 'world';
+}
+`,
+      };
+
+      // Added file: no old side. Deleted file: no new side. Both keys are
+      // required and the absent side must be explicit null.
+      const added = new FileDiff({
+        theme,
+        themeType: 'dark',
+        diffStyle: 'split',
+      });
+      added.render({
+        oldFile: null,
+        newFile: createdFile,
+        containerWrapper: addedMount,
+      });
+
+      const deleted = new FileDiff({
+        theme,
+        themeType: 'dark',
+        diffStyle: 'split',
+      });
+      deleted.render({
+        oldFile: removedFile,
+        newFile: null,
+        containerWrapper: deletedMount,
+      });
+
+      const waitForRows = async (mount) => {
+        const started = performance.now();
+        while (true) {
+          const host = mount.querySelector('diffs-container');
+          const row = host?.shadowRoot?.querySelector('[data-line-type]');
+          if (row != null) {
+            return;
+          }
+          if (performance.now() - started > 5000) {
+            throw new Error('Timed out waiting for diff rows.');
+          }
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      };
+
+      await Promise.all([waitForRows(addedMount), waitForRows(deletedMount)]);
+      window.__fileStatesReady = true;
+    </script>
+  </body>
+</html>
