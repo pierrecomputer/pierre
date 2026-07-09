@@ -16,12 +16,19 @@ class Piece {
     public readonly offset: number,
     public readonly length: number,
     public readonly lineOffsetStart: number,
-    public readonly lineOffsetEnd: number
+    public readonly lineOffsetEnd: number,
+    // Line breaks counted as if this piece's text stood on its own: `\r`, `\n`,
+    // and `\r\n` each count once, and a `\r` at the very end counts as a lone
+    // break even when the shared buffer paired it with a following `\n` that
+    // now lives in a different piece. Pairs that straddle a piece boundary are
+    // reconciled by the tree (see PieceNode.updateSubtreeLength).
+    public readonly standaloneBreakCount: number,
+    // Whether the piece's first char is `\n` and its last char is `\r`. Used to
+    // fold a `\r` ending one piece with a `\n` starting the next into a single
+    // `\r\n` line break.
+    public readonly startsWithLF: boolean,
+    public readonly endsWithCR: boolean
   ) {}
-
-  get lineBreakCount(): number {
-    return this.lineOffsetEnd - this.lineOffsetStart;
-  }
 }
 
 // A text buffer is a string with its line offsets.
@@ -36,6 +43,21 @@ class TextBuffer {
   // elements to the lineOffsets array in the end
   append(text: string): number {
     const offset = this.text.length;
+    // If the buffer ends with a lone `\r` and the appended text begins with
+    // `\n`, the two now form a single `\r\n`. The previous append recorded that
+    // trailing `\r` as its own break at `offset`; drop that entry so the pair
+    // counts once, at the position after the `\n` (which computeLineOffsets
+    // below re-adds as `offset + 1`). Without this, a `\r\n` split across two
+    // appends would be counted as two line breaks. Only a piece ending exactly
+    // on that `\r` referenced the dropped entry, and callers derive that
+    // piece's break count from the live buffer, so the array stays consistent.
+    if (
+      offset > 0 &&
+      this.text.charCodeAt(offset - 1) === /* \r */ 13 &&
+      text.charCodeAt(0) === /* \n */ 10
+    ) {
+      this.lineOffsets.pop();
+    }
     const appendedLineOffsets = computeLineOffsets(text);
     for (let i = 1; i < appendedLineOffsets.length; i++) {
       this.lineOffsets.push(offset + appendedLineOffsets[i]);
@@ -57,18 +79,39 @@ class PieceNode {
   constructor(
     public piece: Piece,
     public subtreeLength: number = piece.length,
-    public subtreeLineBreakCount: number = piece.lineBreakCount
+    public subtreeLineBreakCount: number = piece.standaloneBreakCount,
+    public subtreeStartsWithLF: boolean = piece.startsWithLF,
+    public subtreeEndsWithCR: boolean = piece.endsWithCR
   ) {}
 
   updateSubtreeLength(): void {
+    const left = this.left;
+    const right = this.right;
     this.subtreeLength =
-      (this.left?.subtreeLength ?? 0) +
+      (left?.subtreeLength ?? 0) +
       this.piece.length +
-      (this.right?.subtreeLength ?? 0);
-    this.subtreeLineBreakCount =
-      (this.left?.subtreeLineBreakCount ?? 0) +
-      this.piece.lineBreakCount +
-      (this.right?.subtreeLineBreakCount ?? 0);
+      (right?.subtreeLength ?? 0);
+
+    // Sum each piece's standalone breaks, then fold every `\r`/`\n` pair that
+    // straddles a piece boundary: the `\r` ending the left side and the `\n`
+    // starting the right side were each counted once, but at runtime they read
+    // as a single `\r\n` break, so drop the duplicate.
+    let breakCount =
+      (left?.subtreeLineBreakCount ?? 0) +
+      this.piece.standaloneBreakCount +
+      (right?.subtreeLineBreakCount ?? 0);
+    if ((left?.subtreeEndsWithCR ?? false) && this.piece.startsWithLF) {
+      breakCount--;
+    }
+    if (this.piece.endsWithCR && (right?.subtreeStartsWithLF ?? false)) {
+      breakCount--;
+    }
+    this.subtreeLineBreakCount = breakCount;
+
+    this.subtreeStartsWithLF =
+      left !== null ? left.subtreeStartsWithLF : this.piece.startsWithLF;
+    this.subtreeEndsWithCR =
+      right !== null ? right.subtreeEndsWithCR : this.piece.endsWithCR;
   }
 }
 
@@ -194,19 +237,24 @@ export class PieceTable {
       const takeLength = Math.min(node.piece.length - offsetInPiece, remaining);
       const buffer = this.#bufferFor(node.piece.source);
       const start = node.piece.offset + offsetInPiece;
-      let end = start + takeLength;
-      if (trimEOF) {
-        while (end > start && isEOL(buffer.text.charCodeAt(end - 1))) {
-          end--;
-        }
-      }
-      chunks.push(buffer.text.slice(start, end));
+      chunks.push(buffer.text.slice(start, start + takeLength));
       remaining -= takeLength;
       offsetInPiece = 0;
       node = this.#nextNode(node);
     }
 
-    return chunks.join('');
+    let result = chunks.join('');
+    if (trimEOF) {
+      // Trim trailing CR/LF from the end of the whole slice only. Trimming each
+      // piece chunk instead would drop an interior line break that lands on a
+      // piece boundary (e.g. a lone `\r` mid-line split across two pieces).
+      let end = result.length;
+      while (end > 0 && isEOL(result.charCodeAt(end - 1))) {
+        end--;
+      }
+      result = result.slice(0, end);
+    }
+    return result;
   }
 
   charAt(offset: number): string {
@@ -523,9 +571,20 @@ export class PieceTable {
         continue;
       }
 
+      // Account the whole left subtree, then fold a `\r`/`\n` pair straddling
+      // the left-subtree/this-piece boundary; the subtree count only reconciles
+      // boundaries internal to itself.
       line += node.left?.subtreeLineBreakCount ?? 0;
+      if ((node.left?.subtreeEndsWithCR ?? false) && node.piece.startsWithLF) {
+        line--;
+      }
       remaining -= leftLength;
-      if (remaining <= node.piece.length) {
+
+      if (remaining < node.piece.length) {
+        // Breaks the buffer records within the first `remaining` chars of the
+        // piece. A trailing lone `\r` only matters at the piece's very end,
+        // which lands in the whole-piece branch below, so the owned-break scan
+        // is exact for a strict prefix.
         const buffer = this.#bufferFor(node.piece.source);
         line +=
           upperBound(buffer.lineOffsets, node.piece.offset + remaining) -
@@ -533,12 +592,15 @@ export class PieceTable {
         return line;
       }
 
-      line += node.piece.lineBreakCount;
+      line += node.piece.standaloneBreakCount;
+      if (node.piece.endsWithCR && (node.right?.subtreeStartsWithLF ?? false)) {
+        line--;
+      }
       remaining -= node.piece.length;
       node = node.right;
     }
 
-    return this.#lineCount - 1;
+    return line;
   }
 
   #lineBreakOffset(lineBreakIndex: number): number {
@@ -547,25 +609,54 @@ export class PieceTable {
     let documentOffset = 0;
 
     while (node !== null) {
-      const leftLineBreakCount = node.left?.subtreeLineBreakCount ?? 0;
-      if (remaining < leftLineBreakCount) {
+      // A `\r` ending the left subtree that folds into this piece's leading
+      // `\n` is not separately addressable: the merged `\r\n` break is reached
+      // through this piece's `\n` below, so drop it from the left count.
+      const leftBreakCount = node.left?.subtreeLineBreakCount ?? 0;
+      const leftFold =
+        (node.left?.subtreeEndsWithCR ?? false) && node.piece.startsWithLF
+          ? 1
+          : 0;
+      const addressableLeftCount = leftBreakCount - leftFold;
+      if (remaining < addressableLeftCount) {
         node = node.left;
         continue;
       }
 
-      const leftLength = node.left?.subtreeLength ?? 0;
-      documentOffset += leftLength;
-      remaining -= leftLineBreakCount;
+      documentOffset += node.left?.subtreeLength ?? 0;
+      remaining -= addressableLeftCount;
 
-      if (remaining < node.piece.lineBreakCount) {
-        const bufferLineOffset = this.#bufferFor(node.piece.source).lineOffsets[
-          node.piece.lineOffsetStart + remaining
-        ];
-        return documentOffset + (bufferLineOffset - node.piece.offset);
+      // Likewise a `\r` ending this piece folds into the right subtree's
+      // leading `\n`, so it is not addressable here.
+      const pieceFold =
+        node.piece.endsWithCR && (node.right?.subtreeStartsWithLF ?? false)
+          ? 1
+          : 0;
+      const addressablePieceCount = node.piece.standaloneBreakCount - pieceFold;
+      if (remaining < addressablePieceCount) {
+        const buffer = this.#bufferFor(node.piece.source);
+        // Count owned breaks from the live buffer offsets rather than the
+        // piece's cached end index: a later append that merged a seam `\r\n`
+        // can shift that index for a piece ending on the `\r`, but the live
+        // count stays correct (lineOffsetStart never shifts, since appends only
+        // add entries past the piece).
+        const ownedBreaks =
+          upperBound(
+            buffer.lineOffsets,
+            node.piece.offset + node.piece.length
+          ) - node.piece.lineOffsetStart;
+        if (remaining < ownedBreaks) {
+          const bufferLineOffset =
+            buffer.lineOffsets[node.piece.lineOffsetStart + remaining];
+          return documentOffset + (bufferLineOffset - node.piece.offset);
+        }
+        // The break past every owned one is a trailing lone `\r` the buffer
+        // paired away; the next line starts one char later, at the piece end.
+        return documentOffset + node.piece.length;
       }
 
       documentOffset += node.piece.length;
-      remaining -= node.piece.lineBreakCount;
+      remaining -= addressablePieceCount;
       node = node.right;
     }
 
@@ -609,12 +700,30 @@ export class PieceTable {
 
   #createPiece(source: number, offset: number, length: number): Piece {
     const buffer = this.#bufferFor(source);
+    const lineOffsetStart = upperBound(buffer.lineOffsets, offset);
+    const lineOffsetEnd = upperBound(buffer.lineOffsets, offset + length);
+    const startsWithLF =
+      length > 0 && buffer.text.charCodeAt(offset) === /* \n */ 10;
+    const endsWithCR =
+      length > 0 && buffer.text.charCodeAt(offset + length - 1) === /* \r */ 13;
+    // The buffer counts a `\r\n` as one break positioned after the `\n`. When a
+    // piece ends on the `\r` of such a pair, the buffer attributed that break to
+    // the piece holding the `\n`, so this piece's owned count misses it. On its
+    // own the trailing `\r` is a line break, so add it back for the standalone
+    // count. (charCodeAt past the buffer end returns NaN, which is not `\n`.)
+    const trailingCRPaired =
+      endsWithCR && buffer.text.charCodeAt(offset + length) === /* \n */ 10;
+    const standaloneBreakCount =
+      lineOffsetEnd - lineOffsetStart + (trailingCRPaired ? 1 : 0);
     return new Piece(
       source,
       offset,
       length,
-      upperBound(buffer.lineOffsets, offset),
-      upperBound(buffer.lineOffsets, offset + length)
+      lineOffsetStart,
+      lineOffsetEnd,
+      standaloneBreakCount,
+      startsWithLF,
+      endsWithCR
     );
   }
 
@@ -785,7 +894,15 @@ export class PieceTable {
       last = last.right;
     }
     if (canCoalescePieces(last.piece, piece)) {
-      last.piece = coalesceTwoPieces(last.piece, piece);
+      // Rebuild the merged piece from its combined byte range so its line-break
+      // count and CR/LF edge flags are recomputed rather than naively summed;
+      // the two pieces are adjacent in the same buffer, so the range is
+      // contiguous and a fresh `#createPiece` is exact.
+      last.piece = this.#createPiece(
+        last.piece.source,
+        last.piece.offset,
+        last.piece.length + piece.length
+      );
       // The last piece grew, so refresh aggregates from it up to the root.
       for (let node: PieceNode | null = last; node !== null; ) {
         node.updateSubtreeLength();
@@ -910,19 +1027,6 @@ function rangeOverlaps(
 function canCoalescePieces(prev: Piece, next: Piece): boolean {
   return (
     prev.source === next.source && prev.offset + prev.length === next.offset
-  );
-}
-
-// Joins two adjacent pieces (see canCoalescePieces) into one. Keeping the table
-// compact after every edit is what stops the piece count from growing without
-// bound during normal typing.
-function coalesceTwoPieces(prev: Piece, next: Piece): Piece {
-  return new Piece(
-    prev.source,
-    prev.offset,
-    prev.length + next.length,
-    prev.lineOffsetStart,
-    next.lineOffsetEnd
   );
 }
 

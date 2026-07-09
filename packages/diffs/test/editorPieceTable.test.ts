@@ -2,24 +2,17 @@ import { describe, expect, test } from 'bun:test';
 
 import { PieceTable } from '../src/editor/pieceTable';
 import type { Position } from '../src/editor/textDocument';
+import { computeLineOffsets } from '../src/utils/computeFileOffsets';
 
+// Splits into lines the way the piece table does: `\r`, `\n`, and `\r\n` (as
+// one) all terminate a line, and each returned line keeps its trailing break.
+// Reuses computeLineOffsets so the oracle stays in lockstep with construction,
+// including lone `\r` (which a `\n`-only split would miscount).
 function lineTexts(text: string): string[] {
-  if (text === '') {
-    return [''];
-  }
-
-  const lines: string[] = [];
-  let start = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === 10) {
-      lines.push(text.slice(start, i + 1));
-      start = i + 1;
-    }
-  }
-  if (start <= text.length) {
-    lines.push(text.slice(start));
-  }
-  return lines;
+  const starts = computeLineOffsets(text);
+  return starts.map((start, i) =>
+    text.slice(start, starts[i + 1] ?? text.length)
+  );
 }
 
 /** Trailing CR/LF removed, matching `PieceTable.getLineText` / `getTextSlice(..., true)`. */
@@ -37,26 +30,15 @@ function isLineEnding(c: number): boolean {
 
 function positionAt(text: string, offset: number): Position {
   const clampedOffset = Math.min(Math.max(offset, 0), text.length);
+  const starts = computeLineOffsets(text);
+  // The line is the last one whose start offset is at or before `offset`; a
+  // `\r\n` pair contributes a single start (after the `\n`), so an offset
+  // between the `\r` and `\n` stays on the earlier line.
   let line = 0;
-  let lineStart = 0;
-
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) !== 10) {
-      continue;
-    }
-
-    const lineEnd = i + 1;
-    if (clampedOffset < lineEnd) {
-      return { line, character: clampedOffset - lineStart };
-    }
-    line++;
-    lineStart = lineEnd;
+  for (let i = 0; i < starts.length && starts[i] <= clampedOffset; i++) {
+    line = i;
   }
-
-  return {
-    line,
-    character: clampedOffset - lineStart,
-  };
+  return { line, character: clampedOffset - starts[line] };
 }
 
 function offsetAt(text: string, position: Position): number {
@@ -283,6 +265,10 @@ describe('PieceTable', () => {
 
     table.insert('\r', 1);
 
+    // The inserted `\r` and the original `\n` now read as a single `\r\n`
+    // break, so the document still has two lines (not three).
+    expect(table.getText()).toBe('a\r\nb');
+    expect(table.lineCount).toBe(2);
     expect(table.includes('\r\n')).toBe(true);
     expect(table.includes('missing')).toBe(false);
     expect(table.includes('')).toBe(true);
