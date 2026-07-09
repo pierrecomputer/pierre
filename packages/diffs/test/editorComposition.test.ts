@@ -357,6 +357,36 @@ describe('Editor keyboard editing', () => {
     }
   });
 
+  test('lets composing Enter commit IME text in the replace input', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: 'alpha beta',
+      selections: [
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const panel = await openSearchReplacePanel({ content, window });
+      const replaceInput = findReplaceInput(panel);
+      updateInputValue(replaceInput, 'omega');
+
+      const event = dispatchKeydown(window, replaceInput, {
+        key: 'Enter',
+        isComposing: true,
+      });
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(panel.isConnected).toBe(true);
+      expect(editor.getState().file.contents).toBe('alpha beta');
+    } finally {
+      cleanup();
+    }
+  });
+
   test('closes the search panel on Escape from the replace input', async () => {
     const { cleanup, content, window } = await createEditorFixture({
       contents: 'alpha beta',
