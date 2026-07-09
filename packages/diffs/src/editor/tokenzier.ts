@@ -316,9 +316,8 @@ export class EditorTokenizer {
       canReuseCachedStates ||
       renderRange === undefined ||
       dirtyStart >= viewStart;
-    const changedLineRanges: readonly [number, number][] = canReuseCachedStates
-      ? (change.changedLineRanges ?? [[dirtyStart, change.endLine]])
-      : [[dirtyStart, change.endLine]];
+    const changedLineRanges: readonly [number, number][] =
+      change.changedLineRanges ?? [[dirtyStart, change.endLine]];
     let offscreenSyncEnd = -1;
     if (dirtyStart < viewStart) {
       for (const [rangeStart, rangeEnd] of changedLineRanges) {
@@ -336,10 +335,7 @@ export class EditorTokenizer {
     if (canReuseCachedStates) {
       this.#buildStateStack(dirtyStart);
     } else {
-      this.#stateStack.length = Math.min(
-        this.#stateStack.length,
-        dirtyStart + 1
-      );
+      this.#shiftCachedStateStack(change);
       if (renderRange === undefined || dirtyStart >= viewStart) {
         this.#buildStateStack(viewStart);
       }
@@ -372,9 +368,7 @@ export class EditorTokenizer {
           offscreenState = resolved.state;
           offscreenDirtyLines.set(offscreenLine, resolved.resolvedTokens);
         }
-        if (canCacheTokenizedStates) {
-          this.#stateStack[offscreenEnd] = offscreenState;
-        }
+        this.#stateStack[offscreenEnd] = offscreenState;
       }
     }
     // Seed the loop's grammar state after the offscreen flush, not before it.
@@ -463,7 +457,7 @@ export class EditorTokenizer {
             : line;
       this.#scheduleBackgroundTokenize(
         backgroundLine,
-        canReuseCachedStates ? changedLineRanges : undefined,
+        changedLineRanges,
         changedRangeIndex
       );
     }
@@ -623,6 +617,57 @@ export class EditorTokenizer {
   ): void {
     if (this.#matchBrackets) {
       this.#bracketIgnoredRanges.set(line, ranges);
+    }
+  }
+
+  // Preserve old end states past a line-count edit at their new indexes. Those
+  // shifted states let background tokenization stop once the grammar state
+  // matches the pre-edit tail again instead of scanning to EOF.
+  #shiftCachedStateStack(change: TextDocumentChange): void {
+    const lineChanges: readonly [number, number, number][] =
+      change.changedLineChanges ?? [
+        [change.startLine, change.endLine, change.lineDelta],
+      ];
+
+    for (const [startLine, endLine, lineDelta] of lineChanges) {
+      if (lineDelta === 0) {
+        continue;
+      }
+
+      const insertedLineSpan = endLine - startLine;
+      const oldLineSpan = insertedLineSpan - lineDelta;
+      const sourceStart = startLine + oldLineSpan + 1;
+      const targetStart = startLine + insertedLineSpan + 1;
+      const originalLength = this.#stateStack.length;
+
+      if (lineDelta > 0) {
+        for (let line = originalLength - 1; line >= sourceStart; line--) {
+          const targetLine = line + lineDelta;
+          if (line in this.#stateStack) {
+            this.#stateStack[targetLine] = this.#stateStack[line];
+          } else {
+            Reflect.deleteProperty(this.#stateStack, targetLine);
+          }
+        }
+      } else {
+        for (let line = sourceStart; line < originalLength; line++) {
+          const targetLine = line + lineDelta;
+          if (line in this.#stateStack) {
+            this.#stateStack[targetLine] = this.#stateStack[line];
+          } else {
+            Reflect.deleteProperty(this.#stateStack, targetLine);
+          }
+        }
+        const retainedPrefixLength = Math.min(originalLength, startLine + 1);
+        this.#stateStack.length = Math.max(
+          retainedPrefixLength,
+          originalLength + lineDelta
+        );
+      }
+
+      for (let line = startLine + 1; line < targetStart; line++) {
+        Reflect.deleteProperty(this.#stateStack, line);
+      }
     }
   }
 
