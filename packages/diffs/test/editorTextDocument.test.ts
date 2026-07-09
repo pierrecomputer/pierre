@@ -89,7 +89,9 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 0,
       startCharacter: 0,
+      endCharacter: 5,
       endLine: 0,
+      endedAtDocumentEnd: true,
       previousLineCount: 2,
       lineCount: 1,
       lineDelta: -1,
@@ -194,7 +196,9 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 0,
       startCharacter: 6,
+      endCharacter: 11,
       endLine: 0,
+      endedAtDocumentEnd: true,
       previousLineCount: 1,
       lineCount: 1,
       lineDelta: 0,
@@ -255,7 +259,9 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 1,
       startCharacter: 0,
+      endCharacter: 1,
       endLine: 1,
+      endedAtDocumentEnd: false,
       previousLineCount: 3,
       lineCount: 3,
       lineDelta: 0,
@@ -279,7 +285,9 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 0,
       startCharacter: 1,
+      endCharacter: 1,
       endLine: 1,
+      endedAtDocumentEnd: true,
       previousLineCount: 1,
       lineCount: 2,
       lineDelta: 1,
@@ -303,7 +311,9 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 0,
       startCharacter: 1,
+      endCharacter: 0,
       endLine: 0,
+      endedAtDocumentEnd: false,
       previousLineCount: 3,
       lineCount: 1,
       lineDelta: -2,
@@ -342,7 +352,9 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 0,
       startCharacter: 1,
+      endCharacter: 1,
       endLine: 1,
+      endedAtDocumentEnd: true,
       previousLineCount: 1,
       lineCount: 2,
       lineDelta: 1,
@@ -367,7 +379,9 @@ describe('TextDocument', () => {
     expect(change).toEqual({
       startLine: 0,
       startCharacter: 5,
+      endCharacter: 5,
       endLine: 2,
+      endedAtDocumentEnd: true,
       previousLineCount: 1,
       lineCount: 3,
       lineDelta: 2,
@@ -1054,7 +1068,9 @@ describe('TextDocument', () => {
     expect(undoResult?.[0]).toEqual({
       startLine: 0,
       startCharacter: 1,
+      endCharacter: 2,
       endLine: 0,
+      endedAtDocumentEnd: true,
       previousLineCount: 1,
       lineCount: 1,
       lineDelta: 0,
@@ -1069,7 +1085,9 @@ describe('TextDocument', () => {
     expect(redoResult?.[0]).toEqual({
       startLine: 0,
       startCharacter: 1,
+      endCharacter: 1,
       endLine: 0,
+      endedAtDocumentEnd: true,
       previousLineCount: 1,
       lineCount: 1,
       lineDelta: 0,
