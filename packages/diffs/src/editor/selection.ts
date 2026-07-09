@@ -27,6 +27,17 @@ export interface EditorSelection extends Range {
   direction: SelectionDirection;
 }
 
+export interface CursorMoveOptions {
+  getSoftLineOffsets?: (line: number) => ArrayLike<number> | undefined;
+}
+
+interface SoftLineInfo {
+  start: number;
+  end: number;
+  index: number;
+  count: number;
+}
+
 /**
  * Converts a selection from a web selection to an editor selection.
  */
@@ -122,7 +133,8 @@ export function resolveIndentEdits(
 export function mapCursorMove(
   textDocument: TextDocument<unknown>,
   selections: EditorSelection[],
-  shortcut: 'textStart' | 'start' | 'end' | 'up' | 'down' | 'left' | 'right'
+  shortcut: 'textStart' | 'start' | 'end' | 'up' | 'down' | 'left' | 'right',
+  options: CursorMoveOptions = {}
 ): EditorSelection[] {
   const lineCount = textDocument.lineCount;
   return selections.map((selection) => {
@@ -138,16 +150,32 @@ export function mapCursorMove(
       const caret = getCaretPosition(selection);
       line = caret.line;
       character = caret.character;
+      const softLine = getSoftLineInfo(textDocument, line, character, options);
       if (shortcut === 'textStart') {
-        const indent = getLeadingSpaces(textDocument.getLineText(line));
-        character = character === indent ? 0 : indent;
+        const softLineText = textDocument
+          .getLineText(line)
+          .slice(softLine.start, softLine.end);
+        const indent = softLine.start + getLeadingSpaces(softLineText);
+        character = character === indent ? softLine.start : indent;
       } else {
-        character = shortcut === 'start' ? 0 : textDocument.getLineLength(line);
+        character = shortcut === 'start' ? softLine.start : softLine.end;
       }
     } else if (shortcut === 'up') {
-      line = Math.max(0, line - 1);
+      const moved = moveBySoftLine(textDocument, line, character, -1, options);
+      if (moved !== undefined) {
+        line = moved.line;
+        character = moved.character;
+      } else {
+        line = Math.max(0, line - 1);
+      }
     } else if (shortcut === 'down') {
-      line = Math.min(Math.max(lineCount - 1, 0), line + 1);
+      const moved = moveBySoftLine(textDocument, line, character, 1, options);
+      if (moved !== undefined) {
+        line = moved.line;
+        character = moved.character;
+      } else {
+        line = Math.min(Math.max(lineCount - 1, 0), line + 1);
+      }
     } else if (isCollapsedSelection(selection)) {
       const lineLength = textDocument.getLineLength(line);
       character = Math.min(character, lineLength);
@@ -186,13 +214,122 @@ export function mapCursorMove(
   });
 }
 
+function moveBySoftLine(
+  textDocument: TextDocument<unknown>,
+  line: number,
+  character: number,
+  direction: -1 | 1,
+  options: CursorMoveOptions
+): Position | undefined {
+  if (options.getSoftLineOffsets === undefined) {
+    return undefined;
+  }
+
+  const current = getSoftLineInfo(textDocument, line, character, options);
+  const targetIndex = current.index + direction;
+  let targetLine = line;
+  let target: SoftLineInfo;
+
+  if (targetIndex >= 0 && targetIndex < current.count) {
+    target = getSoftLineInfoAtIndex(
+      textDocument,
+      targetLine,
+      targetIndex,
+      options
+    );
+  } else {
+    const nextLine = line + direction;
+    if (nextLine < 0 || nextLine >= textDocument.lineCount) {
+      return { line, character };
+    }
+
+    targetLine = nextLine;
+    const targetCount = getSoftLineCount(textDocument, targetLine, options);
+    target = getSoftLineInfoAtIndex(
+      textDocument,
+      targetLine,
+      direction < 0 ? targetCount - 1 : 0,
+      options
+    );
+  }
+
+  const column = Math.max(0, character - current.start);
+  const targetCharacter = target.start + column;
+  return {
+    line: targetLine,
+    character:
+      target.index === target.count - 1
+        ? targetCharacter
+        : Math.min(targetCharacter, target.end),
+  };
+}
+
+function getSoftLineInfo(
+  textDocument: TextDocument<unknown>,
+  line: number,
+  character: number,
+  options: CursorMoveOptions
+): SoftLineInfo {
+  const lineLength = textDocument.getLineLength(line);
+  const offsets = options.getSoftLineOffsets?.(line);
+  if (offsets === undefined || offsets.length < 2) {
+    return { start: 0, end: lineLength, index: 0, count: 1 };
+  }
+
+  for (let index = 0; index + 1 < offsets.length; index++) {
+    const softLine = getSoftLineInfoAtIndex(textDocument, line, index, options);
+    if (character >= softLine.start && character <= softLine.end) {
+      return softLine;
+    }
+  }
+
+  return getSoftLineInfoAtIndex(
+    textDocument,
+    line,
+    character < (offsets[0] ?? 0) ? 0 : offsets.length - 2,
+    options
+  );
+}
+
+function getSoftLineCount(
+  textDocument: TextDocument<unknown>,
+  line: number,
+  options: CursorMoveOptions
+): number {
+  const offsets = options.getSoftLineOffsets?.(line);
+  return offsets === undefined || offsets.length < 2 ? 1 : offsets.length - 1;
+}
+
+function getSoftLineInfoAtIndex(
+  textDocument: TextDocument<unknown>,
+  line: number,
+  index: number,
+  options: CursorMoveOptions
+): SoftLineInfo {
+  const lineLength = textDocument.getLineLength(line);
+  const offsets = options.getSoftLineOffsets?.(line);
+  if (offsets === undefined || offsets.length < 2) {
+    return { start: 0, end: lineLength, index: 0, count: 1 };
+  }
+
+  const count = offsets.length - 1;
+  const boundedIndex = Math.max(0, Math.min(index, count - 1));
+  const start = Math.max(0, Math.min(lineLength, offsets[boundedIndex] ?? 0));
+  const end = Math.max(
+    start,
+    Math.min(lineLength, offsets[boundedIndex + 1] ?? lineLength)
+  );
+  return { start, end, index: boundedIndex, count };
+}
+
 /**
  * Same as mapCursorMove, but with shift key pressed.
  */
 export function mapSelectionShift(
   textDocument: TextDocument<unknown>,
   selections: EditorSelection[],
-  shortcut: 'textStart' | 'start' | 'end' | 'up' | 'down' | 'left' | 'right'
+  shortcut: 'textStart' | 'start' | 'end' | 'up' | 'down' | 'left' | 'right',
+  options: CursorMoveOptions = {}
 ): EditorSelection[] {
   return selections.map((selection) => {
     const focusPosition =
@@ -208,7 +345,8 @@ export function mapSelectionShift(
           direction: DirectionNone,
         },
       ],
-      shortcut
+      shortcut,
+      options
     );
     return createSelectionFrom(selection, movedFocusSelection);
   });

@@ -10,6 +10,7 @@ import {
   applyTransposeToSelections,
   convertSelection,
   createSelectionFrom,
+  type CursorMoveOptions,
   DirectionForward,
   DirectionNone,
   type EditorSelection,
@@ -1443,6 +1444,80 @@ describe('mapSelectionMove', () => {
     expect(mapCursorMove(textDocument, lineEnd, 'left')).toEqual([
       createSelection(0, 1, 0, 1),
     ]);
+  });
+
+  test('moves vertically by wrapped visual rows', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      '012345678901234567890123456789\nshort'
+    );
+    const wrapOptions: CursorMoveOptions = {
+      getSoftLineOffsets: (line) =>
+        line === 0 ? new Uint32Array([0, 10, 20, 30]) : undefined,
+    };
+    const middleVisualRow = [createSelection(0, 15, 0, 15)];
+
+    expect(
+      mapCursorMove(textDocument, middleVisualRow, 'down', wrapOptions)
+    ).toEqual([createSelection(0, 25, 0, 25)]);
+    expect(
+      mapCursorMove(textDocument, middleVisualRow, 'up', wrapOptions)
+    ).toEqual([createSelection(0, 5, 0, 5)]);
+    expect(
+      mapCursorMove(
+        textDocument,
+        [createSelection(0, 25, 0, 25)],
+        'down',
+        wrapOptions
+      )
+    ).toEqual([createSelection(1, 5, 1, 5)]);
+  });
+
+  test('moves to wrapped visual row boundaries', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      '  abcdefghij  klmnop'
+    );
+    const wrapOptions: CursorMoveOptions = {
+      getSoftLineOffsets: () => new Uint32Array([0, 12, 20]),
+    };
+    const continuationRow = [createSelection(0, 16, 0, 16)];
+    const textStart = mapCursorMove(
+      textDocument,
+      continuationRow,
+      'textStart',
+      wrapOptions
+    );
+
+    expect(
+      mapCursorMove(textDocument, continuationRow, 'start', wrapOptions)
+    ).toEqual([createSelection(0, 12, 0, 12)]);
+    expect(
+      mapCursorMove(textDocument, continuationRow, 'end', wrapOptions)
+    ).toEqual([createSelection(0, 20, 0, 20)]);
+    expect(textStart).toEqual([createSelection(0, 14, 0, 14)]);
+    expect(
+      mapCursorMove(textDocument, textStart, 'textStart', wrapOptions)
+    ).toEqual([createSelection(0, 12, 0, 12)]);
+  });
+
+  test('extends selections by wrapped visual rows', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      '012345678901234567890123456789'
+    );
+    const wrapOptions: CursorMoveOptions = {
+      getSoftLineOffsets: () => new Uint32Array([0, 10, 20, 30]),
+    };
+
+    expect(
+      mapSelectionShift(
+        textDocument,
+        [createSelection(0, 15, 0, 15)],
+        'down',
+        wrapOptions
+      )
+    ).toEqual([createSelection(0, 15, 0, 25, DirectionForward)]);
   });
 });
 
