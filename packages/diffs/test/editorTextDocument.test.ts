@@ -18,6 +18,46 @@ function caret(line: number, character: number) {
   } satisfies EditorSelection;
 }
 
+// Inserts `text` at `character` on line 0 with history recording enabled, like a
+// single keystroke. `caretCharacter` is where the caret sits before the insert
+// (defaults to the insert position); pass a different value to model a caret
+// that moved away from the previous edit before typing.
+function typeAt(
+  d: ReturnType<typeof doc>,
+  character: number,
+  text: string,
+  caretCharacter = character
+) {
+  d.applyEdits(
+    [
+      {
+        range: {
+          start: { line: 0, character },
+          end: { line: 0, character },
+        },
+        newText: text,
+      },
+    ],
+    true,
+    [caret(0, caretCharacter)]
+  );
+}
+
+// Runs undo (or redo) to exhaustion. The number of history steps depends on how
+// edits coalesced, so tests that only care about the end-to-end result use these
+// instead of asserting a fixed step count.
+function undoAll(d: ReturnType<typeof doc>) {
+  while (d.canUndo) {
+    d.undo();
+  }
+}
+
+function redoAll(d: ReturnType<typeof doc>) {
+  while (d.canRedo) {
+    d.redo();
+  }
+}
+
 describe('TextDocument', () => {
   test('lang and lineCount', () => {
     const d = doc('a\nb\nc');
@@ -590,6 +630,49 @@ describe('TextDocument', () => {
 
     d.undo();
     expect(d.getText()).toBe('hello');
+  });
+
+  test('redo restores buffer order after typing at the left edge of an insert', () => {
+    const d = doc('');
+    typeAt(d, 0, 'a'); // "a", caret now after it
+    typeAt(d, 0, 'b', 0); // caret moved to the far left, type "b" -> "ba"
+
+    expect(d.getText()).toBe('ba');
+
+    undoAll(d);
+    expect(d.getText()).toBe('');
+
+    redoAll(d);
+    expect(d.getText()).toBe('ba');
+  });
+
+  test('redo restores buffer order after typing inside a coalesced insert run', () => {
+    const d = doc('');
+    typeAt(d, 0, 'a'); // "a"
+    typeAt(d, 1, 'b'); // "ab" (normal contiguous typing, coalesces)
+    typeAt(d, 1, 'c', 1); // caret moved between a and b, type "c" -> "acb"
+
+    expect(d.getText()).toBe('acb');
+
+    undoAll(d);
+    expect(d.getText()).toBe('');
+
+    redoAll(d);
+    expect(d.getText()).toBe('acb');
+  });
+
+  test('redo restores buffer after typing at the end of an insert run', () => {
+    const d = doc('');
+    typeAt(d, 0, 'a'); // "a"
+    typeAt(d, 1, 'b'); // "ab", continuing at the end
+
+    expect(d.getText()).toBe('ab');
+
+    undoAll(d);
+    expect(d.getText()).toBe('');
+
+    redoAll(d);
+    expect(d.getText()).toBe('ab');
   });
 
   test('paste does not coalesce into the preceding typed character', () => {

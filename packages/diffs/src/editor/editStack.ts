@@ -212,10 +212,14 @@ export function shouldCoalesceEditStackEntry<LAnnotation>(
       !nextForward.text.includes('\n') &&
       nextInverse.text.length === 0;
     if (previousWasInsert && nextIsInsert) {
-      const expectedMappedNextStart = previousForward.end;
-      // Allow continuing typing after replacing a selection (e.g. "hello" -> "w")
-      // while still requiring that the cursor extension maps inside the same base range.
-      if (mappedNextStart !== expectedMappedNextStart) {
+      // Merge only when the next insert starts exactly where the previous
+      // inserted text ends, in after-edit offsets. `previousInverse.end` marks
+      // that point, since undo replaces exactly the inserted range. A
+      // base-offset check can't tell this apart from a caret that jumped to the
+      // left edge: both edges of a pure insert map back to the same base offset,
+      // so typing "a" then "b" at the left edge would merge as "ab" while the
+      // buffer holds "ba", corrupting redo.
+      if (nextForward.start !== previousInverse.end) {
         return false;
       }
       mode ??= 'insert';
