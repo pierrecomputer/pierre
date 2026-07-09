@@ -71,7 +71,7 @@ function CodeEditorImpl<LAnnotation = undefined>(
         key={overscrollSize ?? 'default'}
         config={virtualizerConfig}
         className={className}
-        style={style}
+        style={{ ...style, overflow: 'auto' }}
         contentStyle={{
           display: 'flex',
           minHeight: '100%',

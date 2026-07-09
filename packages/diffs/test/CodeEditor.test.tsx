@@ -62,6 +62,19 @@ async function waitForRenderedText(
   throw new Error(`Timed out waiting for rendered text: ${text}`);
 }
 
+async function waitForEditorText(
+  editor: CodeEditor<string>,
+  text: string
+): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (editor.getText() === text) {
+      return;
+    }
+    await wait(10);
+  }
+  throw new Error(`Timed out waiting for editor text: ${text}`);
+}
+
 function installReactActEnvironment(): () => void {
   const hadValue = Reflect.has(globalThis, 'IS_REACT_ACT_ENVIRONMENT');
   const previousValue = Reflect.get(globalThis, 'IS_REACT_ACT_ENVIRONMENT');
@@ -211,20 +224,39 @@ describe('CodeEditor', () => {
     });
 
     try {
-      editor.render(root, makeFile('editor.txt', 'one\ntwo\n'));
+      const initialFile = {
+        name: 'editor.txt',
+        contents: 'one\ntwo\n',
+        cacheKey: 'stable-editor-cache',
+      };
+      editor.render(root, initialFile);
 
       const scrollContainer = root.firstElementChild as HTMLElement | null;
       const fileContainer = scrollContainer?.querySelector('diffs-container');
       expect(fileContainer).not.toBeNull();
       await waitForRenderedText(fileContainer!, 'two');
+      await waitForEditorText(editor, 'one\ntwo\n');
+      expect(editor.getText()).toBe('one\ntwo\n');
 
       editor.render(root);
       expect(scrollContainer?.childElementCount).toBe(0);
+      expect(editor.getFile()).toBeUndefined();
+      expect(editor.getText()).toBe('');
 
       editor.setLineAnnotations([
         { lineNumber: 1, metadata: 'stale annotation' },
       ]);
       expect(fileContainer!.querySelector('[data-test-annotation]')).toBeNull();
+
+      editor.setFile({
+        name: 'editor.txt',
+        contents: 'fresh\ntext\n',
+        cacheKey: initialFile.cacheKey,
+      });
+      await waitForRenderedText(fileContainer!, 'fresh');
+      await waitForEditorText(editor, 'fresh\ntext\n');
+      expect(editor.getText()).toBe('fresh\ntext\n');
+      expect(fileContainer!.shadowRoot?.textContent).not.toContain('two');
     } finally {
       editor.cleanUp();
       await waitForPendingRenders();
@@ -253,6 +285,35 @@ describe('CodeEditor', () => {
 });
 
 describe('React CodeEditor', () => {
+  test('makes the virtualizer root scrollable by default', async () => {
+    const { cleanup } = installDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      await renderReactElement(
+        root,
+        createElement(ReactCodeEditorComponent, {
+          disableWorkerPool: true,
+          disableErrorHandling: true,
+          style: { height: 320, overflow: 'hidden' },
+        })
+      );
+
+      const scrollContainer = container.firstElementChild as HTMLElement | null;
+      expect(scrollContainer?.style.height).toBe('320px');
+      expect(scrollContainer?.style.overflow).toBe('auto');
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      await waitForPendingRenders();
+      cleanup();
+    }
+  });
+
   test('updates content without recreating the editor for stable options', async () => {
     const { cleanup } = installDom();
     const cleanupActEnvironment = installReactActEnvironment();

@@ -776,7 +776,6 @@ export function CodeEditorComponent() {
       style={{
         height: '16rem',
         borderRadius: '0.5rem',
-        overflow: 'hidden',
       }}
       onChange={(nextFile, lineAnnotations) => {
         console.log('change', nextFile.name, lineAnnotations);

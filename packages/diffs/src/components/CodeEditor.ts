@@ -33,6 +33,7 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
   private virtualizer: Virtualizer;
   private fileInstance: VirtualizedFile<LAnnotation>;
   private renderPlaceholder?: () => HTMLElement;
+  private isEditorAttached = false;
 
   constructor(options: CodeEditorOptions<LAnnotation, HTMLElement> = {}) {
     const {
@@ -68,7 +69,7 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
     this.virtualizer.setup(this.scrollContainer);
     this.scrollContainer.style.cssText =
       'width:100%;height:100%;overflow:auto;';
-    this.edit(this.fileInstance);
+    this.attachEditor();
     this.renderPlaceholder = renderPlaceholder;
   }
 
@@ -84,6 +85,7 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
 
     if (file == null) {
       this.file = undefined;
+      this.detachEditor();
       if (this.renderPlaceholder != null) {
         const placeholder = this.renderPlaceholder();
         this.scrollContainer.replaceChildren(placeholder);
@@ -103,6 +105,7 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
       file,
       lineAnnotations,
     });
+    this.attachEditor();
   }
 
   setFile(
@@ -119,6 +122,7 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
       file,
       lineAnnotations,
     });
+    this.attachEditor();
   }
 
   setLineAnnotations(lineAnnotations: LineAnnotation<LAnnotation>[]): void {
@@ -133,11 +137,26 @@ export class CodeEditor<LAnnotation> extends Editor<LAnnotation> {
 
   override cleanUp(recycle = false): void {
     super.cleanUp(recycle);
+    this.isEditorAttached = false;
     this.fileInstance.cleanUp(recycle);
     this.virtualizer.cleanUp();
     this.scrollContainer.remove();
     if (!recycle) {
       this.file = undefined;
+    }
+  }
+
+  private attachEditor(): void {
+    if (!this.isEditorAttached) {
+      this.edit(this.fileInstance);
+      this.isEditorAttached = true;
+    }
+  }
+
+  private detachEditor(): void {
+    if (this.isEditorAttached) {
+      super.cleanUp();
+      this.isEditorAttached = false;
     }
   }
 }
