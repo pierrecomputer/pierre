@@ -278,7 +278,13 @@ export class SearchPanelWidget {
       },
       onkeydown: (e: KeyboardEvent) => {
         const findAgain = resolveFindAgainShortcut(e);
-        if (findAgain !== undefined) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          close();
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          replace();
+        } else if (findAgain !== undefined) {
           e.preventDefault();
           findNextMatch(findAgain === 'previous', true);
         }

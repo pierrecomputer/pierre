@@ -133,6 +133,40 @@ function dispatchBackspace(
   return event;
 }
 
+async function openSearchReplacePanel({
+  content,
+  window,
+}: Pick<EditorFixture, 'content' | 'window'>): Promise<HTMLElement> {
+  dispatchKeydown(window, content, {
+    key: 'f',
+    code: 'KeyF',
+    metaKey: true,
+    altKey: true,
+  });
+  await wait(0);
+
+  const panel = (
+    content.getRootNode() as ParentNode
+  ).querySelector<HTMLElement>('[data-search-panel]');
+  if (panel == null) {
+    throw new Error('search replace panel did not open');
+  }
+  return panel;
+}
+
+function findReplaceInput(panel: HTMLElement): HTMLInputElement {
+  const input = panel.querySelector<HTMLInputElement>('input[data-replace]');
+  if (input == null) {
+    throw new Error('replace input was not rendered');
+  }
+  return input;
+}
+
+function updateInputValue(input: HTMLInputElement, value: string): void {
+  input.value = value;
+  input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+}
+
 describe('Editor composition input', () => {
   test('lets the browser own IME preview before committing composition text', async () => {
     const { cleanup, content, editor, window } = await createEditorFixture();
@@ -292,6 +326,62 @@ describe('Editor keyboard editing', () => {
           '[data-search-panel]'
         )
       ).toBeInstanceOf(HTMLElement);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('replaces the current match on Enter from the replace input', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: 'alpha beta alpha',
+      selections: [
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const panel = await openSearchReplacePanel({ content, window });
+      const replaceInput = findReplaceInput(panel);
+      updateInputValue(replaceInput, 'omega');
+
+      const event = dispatchKeydown(window, replaceInput, { key: 'Enter' });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(editor.getState().file.contents).toBe('omega beta alpha');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('closes the search panel on Escape from the replace input', async () => {
+    const { cleanup, content, window } = await createEditorFixture({
+      contents: 'alpha beta',
+      selections: [
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const panel = await openSearchReplacePanel({ content, window });
+      const replaceInput = findReplaceInput(panel);
+
+      const event = dispatchKeydown(window, replaceInput, { key: 'Escape' });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(panel.isConnected).toBe(false);
+      expect(
+        (content.getRootNode() as ParentNode).querySelector(
+          '[data-search-panel]'
+        )
+      ).toBeNull();
     } finally {
       cleanup();
     }
