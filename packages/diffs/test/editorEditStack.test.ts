@@ -207,4 +207,46 @@ describe('shouldCoalesceEditStackEntry', () => {
     const next = stackEntry('a', [{ start: 1, end: 1, text: '\n' }], 1, 2);
     expect(shouldCoalesceEditStackEntry(previous, next)).toBe(false);
   });
+
+  // Both edges of a pure insert map back to the same base offset, so the
+  // left-edge case is rejected by after-edit position, not base offset.
+  test('does not coalesce an insert typed at the left edge of the previous insert', () => {
+    const previous = stackEntry('', [{ start: 0, end: 0, text: 'a' }], 0, 1);
+    const next = stackEntry('a', [{ start: 0, end: 0, text: 'b' }], 1, 2);
+    expect(shouldCoalesceEditStackEntry(previous, next)).toBe(false);
+  });
+
+  test('does not coalesce an insert typed inside a previous multi-character insert', () => {
+    const previous = stackEntry('', [{ start: 0, end: 0, text: 'ab' }], 0, 1);
+    const next = stackEntry('ab', [{ start: 1, end: 1, text: 'c' }], 1, 2);
+    expect(shouldCoalesceEditStackEntry(previous, next)).toBe(false);
+  });
+
+  test('coalesces an insert that continues at the end of a multi-character insert run', () => {
+    const previous = stackEntry('', [{ start: 0, end: 0, text: 'ab' }], 0, 1);
+    const next = stackEntry('ab', [{ start: 2, end: 2, text: 'c' }], 1, 2);
+    expect(shouldCoalesceEditStackEntry(previous, next)).toBe(true);
+  });
+
+  test('does not coalesce typing before a just-replaced selection', () => {
+    const previous = stackEntry(
+      'hello',
+      [{ start: 0, end: 5, text: 'w' }],
+      0,
+      1
+    );
+    const next = stackEntry('w', [{ start: 0, end: 0, text: 'o' }], 1, 2);
+    expect(shouldCoalesceEditStackEntry(previous, next)).toBe(false);
+  });
+
+  test('coalesces typing after a just-replaced selection', () => {
+    const previous = stackEntry(
+      'hello',
+      [{ start: 0, end: 5, text: 'w' }],
+      0,
+      1
+    );
+    const next = stackEntry('w', [{ start: 1, end: 1, text: 'o' }], 1, 2);
+    expect(shouldCoalesceEditStackEntry(previous, next)).toBe(true);
+  });
 });
