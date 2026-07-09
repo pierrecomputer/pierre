@@ -82,28 +82,36 @@ export function applyDocumentChangeToLineAnnotations<T>(
 function getLineAnnotationChanges(
   change: TextDocumentChange
 ): readonly LineAnnotationChange[] {
-  if (change.lineDelta === 0) {
-    if (change.changedLineChanges !== undefined) {
-      return change.changedLineChanges.flatMap(
-        ([startLine, _endLine, lineDelta]) => {
-          if (lineDelta === 0) {
-            return [];
-          }
-          const removedLineCount = Math.max(0, -lineDelta);
-          return [
-            {
-              startLine,
-              startCharacter: 0,
-              endLine: startLine + removedLineCount,
-              deletesEndLine: false,
-              insertedLineBreaks: Math.max(0, lineDelta),
-              lineDelta,
-            },
-          ];
+  if (change.changedLineChanges !== undefined) {
+    return change.changedLineChanges.flatMap(
+      ([
+        startLine,
+        changedEndLine,
+        lineDelta,
+        startCharacter = 0,
+        _endCharacter = 0,
+        endedAtDocumentEnd = false,
+      ]) => {
+        if (lineDelta === 0) {
+          return [];
         }
-      );
-    }
+        const insertedLineBreaks = Math.max(0, changedEndLine - startLine);
+        const removedLineCount = Math.max(0, insertedLineBreaks - lineDelta);
+        return [
+          {
+            startLine,
+            startCharacter,
+            endLine: startLine + removedLineCount,
+            deletesEndLine: lineDelta < 0 && endedAtDocumentEnd,
+            insertedLineBreaks,
+            lineDelta,
+          },
+        ];
+      }
+    );
+  }
 
+  if (change.lineDelta === 0) {
     return change.changedLineRanges.flatMap(([startLine, endLine]) => {
       const insertedLineBreaks = endLine - startLine;
       if (insertedLineBreaks <= 0) {

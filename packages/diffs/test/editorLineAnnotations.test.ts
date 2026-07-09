@@ -129,6 +129,35 @@ describe('applyDocumentChangeToLineAnnotations', () => {
     ]);
   });
 
+  test('does not borrow EOF from a later insertion when remapping deleted lines', () => {
+    const textDocument = new TextDocument('inmemory://1', 'l0\nl1\nl2\nl3');
+    const annotations: DiffLineAnnotation<string>[] = [
+      { side: 'additions', lineNumber: 4, metadata: 'l3' },
+    ];
+
+    const change = textDocument.applyEdits([
+      {
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 3, character: 0 },
+        },
+        newText: '',
+      },
+      {
+        range: {
+          start: { line: 3, character: 2 },
+          end: { line: 3, character: 2 },
+        },
+        newText: '!',
+      },
+    ]);
+
+    expect(textDocument.getText()).toBe('l0\nl3!');
+    expect(applyDocumentChangeToLineAnnotations(change!, annotations)).toEqual([
+      { side: 'additions', lineNumber: 2, metadata: 'l3' },
+    ]);
+  });
+
   test('does not restore deleted addition annotations when new lines are inserted', () => {
     const textDocument = new TextDocument('inmemory://1', 'one\ntwo\nthree');
     const annotations: DiffLineAnnotation<string>[] = [

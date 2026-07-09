@@ -120,6 +120,9 @@ export interface TextDocumentChange {
     startLine: number,
     endLine: number,
     lineDelta: number,
+    startCharacter?: number,
+    endCharacter?: number,
+    endedAtDocumentEnd?: boolean,
   ][];
 }
 
@@ -449,14 +452,30 @@ export class TextDocument<LAnnotation> {
     startLine: number;
     endLine: number;
     ranges: [number, number][];
-    changes: [startLine: number, endLine: number, lineDelta: number][];
+    changes: [
+      startLine: number,
+      endLine: number,
+      lineDelta: number,
+      startCharacter: number,
+      endCharacter: number,
+      endedAtDocumentEnd: boolean,
+    ][];
   } {
     let startLine = Infinity;
     let endLine = 0;
     let lineDeltaBeforeEdit = 0;
     const ranges: [number, number][] = [];
-    const changes: [startLine: number, endLine: number, lineDelta: number][] =
-      [];
+    const changes: [
+      startLine: number,
+      endLine: number,
+      lineDelta: number,
+      startCharacter: number,
+      endCharacter: number,
+      endedAtDocumentEnd: boolean,
+    ][] = [];
+    const previousLastLine = this.#pieceTable.lineCount - 1;
+    const previousLastLineLength =
+      this.#pieceTable.getLineLength(previousLastLine);
     for (let i = 0; i < edits.length; i++) {
       const edit = edits[i];
       const editStart = editPositions[i * 2];
@@ -478,7 +497,15 @@ export class TextDocument<LAnnotation> {
       } else {
         ranges.push([changedStartLine, changedEndLine]);
       }
-      changes.push([changedStartLine, changedEndLine, lineDelta]);
+      changes.push([
+        changedStartLine,
+        changedEndLine,
+        lineDelta,
+        editStart.character,
+        editEnd.character,
+        editEndLine === previousLastLine &&
+          editEnd.character === previousLastLineLength,
+      ]);
       lineDeltaBeforeEdit += lineDelta;
     }
     if (startLine === Infinity) {
@@ -486,7 +513,7 @@ export class TextDocument<LAnnotation> {
         startLine: 0,
         endLine: 0,
         ranges: [[0, 0]],
-        changes: [[0, 0, 0]],
+        changes: [[0, 0, 0, 0, 0, false]],
       };
     }
     return { startLine, endLine, ranges, changes };

@@ -96,7 +96,7 @@ describe('TextDocument', () => {
       lineCount: 1,
       lineDelta: -1,
       changedLineRanges: [[0, 0]],
-      changedLineChanges: [[0, 0, -1]],
+      changedLineChanges: [[0, 0, -1, 0, 5, true]],
     });
   });
 
@@ -203,7 +203,7 @@ describe('TextDocument', () => {
       lineCount: 1,
       lineDelta: 0,
       changedLineRanges: [[0, 0]],
-      changedLineChanges: [[0, 0, 0]],
+      changedLineChanges: [[0, 0, 0, 6, 11, true]],
     });
   });
 
@@ -266,7 +266,7 @@ describe('TextDocument', () => {
       lineCount: 3,
       lineDelta: 0,
       changedLineRanges: [[1, 1]],
-      changedLineChanges: [[1, 1, 0]],
+      changedLineChanges: [[1, 1, 0, 0, 1, false]],
     });
   });
 
@@ -292,7 +292,7 @@ describe('TextDocument', () => {
       lineCount: 2,
       lineDelta: 1,
       changedLineRanges: [[0, 1]],
-      changedLineChanges: [[0, 1, 1]],
+      changedLineChanges: [[0, 1, 1, 1, 1, true]],
     });
   });
 
@@ -318,7 +318,7 @@ describe('TextDocument', () => {
       lineCount: 1,
       lineDelta: -2,
       changedLineRanges: [[0, 0]],
-      changedLineChanges: [[0, 0, -2]],
+      changedLineChanges: [[0, 0, -2, 1, 0, false]],
     });
   });
 
@@ -359,7 +359,7 @@ describe('TextDocument', () => {
       lineCount: 2,
       lineDelta: 1,
       changedLineRanges: [[0, 1]],
-      changedLineChanges: [[0, 1, 1]],
+      changedLineChanges: [[0, 1, 1, 1, 1, true]],
     });
   });
 
@@ -386,7 +386,7 @@ describe('TextDocument', () => {
       lineCount: 3,
       lineDelta: 2,
       changedLineRanges: [[0, 2]],
-      changedLineChanges: [[0, 2, 2]],
+      changedLineChanges: [[0, 2, 2, 5, 5, true]],
     });
   });
 
@@ -1075,7 +1075,7 @@ describe('TextDocument', () => {
       lineCount: 1,
       lineDelta: 0,
       changedLineRanges: [[0, 0]],
-      changedLineChanges: [[0, 0, 0]],
+      changedLineChanges: [[0, 0, 0, 1, 2, true]],
     });
     expect(d.canUndo).toBe(false);
     expect(d.canRedo).toBe(true);
@@ -1092,7 +1092,7 @@ describe('TextDocument', () => {
       lineCount: 1,
       lineDelta: 0,
       changedLineRanges: [[0, 0]],
-      changedLineChanges: [[0, 0, 0]],
+      changedLineChanges: [[0, 0, 0, 1, 1, true]],
     });
     expect(d.canUndo).toBe(true);
     expect(d.canRedo).toBe(false);
